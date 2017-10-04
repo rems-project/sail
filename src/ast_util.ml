@@ -61,6 +61,7 @@ let mk_exp exp_aux = E_aux (exp_aux, no_annot)
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
 
 let mk_pat pat_aux = P_aux (pat_aux, no_annot)
+let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
@@ -85,7 +86,7 @@ let mk_fundef funcls =
   DEF_fundef
    (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), no_annot))
 
-let mk_letbind pat exp = LB_aux (LB_val_implicit (pat, exp), no_annot)
+let mk_letbind pat exp = LB_aux (LB_val (pat, exp), no_annot)
 
 let mk_val_spec vs_aux =
   DEF_spec (VS_aux (vs_aux, no_annot))
@@ -183,8 +184,8 @@ let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
 
-let nc_set kid ints = mk_nc (NC_nat_set_bounded (kid, ints))
-let nc_eq n1 n2 = mk_nc (NC_fixed (n1, n2))
+let nc_set kid ints = mk_nc (NC_set (kid, ints))
+let nc_eq n1 n2 = mk_nc (NC_equal (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
@@ -223,8 +224,6 @@ and map_exp_annot_aux f = function
   | E_for (v, e1, e2, e3, o, e4) -> E_for (v, map_exp_annot f e1, map_exp_annot f e2, map_exp_annot f e3, o, map_exp_annot f e4)
   | E_loop (loop_type, e1, e2) -> E_loop (loop_type, map_exp_annot f e1, map_exp_annot f e2)
   | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
-  | E_vector_indexed (iexps, opt_default) ->
-     E_vector_indexed (List.map (fun (i, exp) -> (i, map_exp_annot f exp)) iexps, map_opt_default_annot f opt_default)
   | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
   | E_vector_update (exp1, exp2, exp3) -> E_vector_update (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
@@ -272,20 +271,18 @@ and map_pat_annot_aux f = function
   | P_as (pat, id) -> P_as (map_pat_annot f pat, id)
   | P_typ (typ, pat) -> P_typ (typ, map_pat_annot f pat)
   | P_id id -> P_id id
-  | P_var kid -> P_var kid
+  | P_var (pat, kid) -> P_var (map_pat_annot f pat, kid)
   | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
   | P_record (fpats, b) -> P_record (List.map (map_fpat_annot f) fpats, b)
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
   | P_list pats -> P_list (List.map (map_pat_annot f) pats)
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
-  | P_vector_indexed ipats -> P_vector_indexed (List.map (fun (i, pat) -> (i, map_pat_annot f pat)) ipats)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
-  | LB_val_explicit (typschm, pat, exp) -> LB_val_explicit (typschm, map_pat_annot f pat, map_exp_annot f exp)
-  | LB_val_implicit (pat, exp) -> LB_val_implicit (map_pat_annot f pat, map_exp_annot f exp)
+  | LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
 and map_lexp_annot f (LEXP_aux (lexp, annot)) = LEXP_aux (map_lexp_annot_aux f lexp, f annot)
 and map_lexp_annot_aux f = function
   | LEXP_id id -> LEXP_id id
@@ -395,7 +392,7 @@ and string_of_typ_arg_aux = function
   | Typ_arg_typ typ -> string_of_typ typ
   | Typ_arg_order o -> string_of_order o
 and string_of_n_constraint = function
-  | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
+  | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
   | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
   | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2
@@ -403,7 +400,7 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_and (nc1, nc2), _) ->
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
-  | NC_aux (NC_nat_set_bounded (kid, ns), _) ->
+  | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
@@ -509,7 +506,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_lit lit -> string_of_lit lit
   | P_wild -> "_"
   | P_id v -> string_of_id v
-  | P_var kid -> string_of_kid kid
+  | P_var (pat, kid) -> string_of_pat pat ^ " as " ^ string_of_kid kid
   | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
@@ -532,9 +529,7 @@ and string_of_lexp (LEXP_aux (lexp, _)) =
   | _ -> "LEXP"
 and string_of_letbind (LB_aux (lb, l)) =
   match lb with
-  | LB_val_implicit (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
-  | LB_val_explicit (typschm, pat, exp) ->
-     string_of_typschm typschm ^ " " ^ string_of_pat pat ^ " = " ^ string_of_exp exp
+  | LB_val (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
 
 let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with

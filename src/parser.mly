@@ -49,7 +49,14 @@ open Parse_ast
 let loc () = Range(Parsing.symbol_start_pos(),Parsing.symbol_end_pos())
 let locn m n = Range(Parsing.rhs_start_pos m,Parsing.rhs_end_pos n)
 
+let id_of_kid = function
+  | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
+
 let idl i = Id_aux(i, loc())
+
+let string_of_id = function
+  | Id_aux (Id str, _) -> str
+  | Id_aux (DeIid str, _) -> str
 
 let efl e = BE_aux(e, loc())
 
@@ -503,7 +510,7 @@ atomic_pat:
   | id
     { ploc (P_app($1,[])) }
   | tyvar
-    { ploc (P_var $1) }
+    { ploc (P_var (ploc (P_id (id_of_kid $1)), $1)) }
   | Lcurly fpats Rcurly
     { ploc (P_record((fst $2, snd $2))) }
   | Lsquare comma_pats Rsquare
@@ -512,8 +519,6 @@ atomic_pat:
     { ploc (P_vector([$2])) }
   | Lsquare Rsquare
     { ploc (P_vector []) }
-  | Lsquare npats Rsquare
-    { ploc (P_vector_indexed($2)) }
   | Lparen comma_pats Rparen
     { ploc (P_tup($2)) }
   | SquareBarBar BarBarSquare
@@ -604,8 +609,6 @@ atomic_exp:
     { eloc (E_vector([$2])) }
   | Lsquare comma_exps Rsquare
     { eloc (E_vector($2)) }
-  | Lsquare comma_exps Semi Default Eq exp Rsquare
-    { eloc (E_vector_indexed($2,(Def_val_aux(Def_val_dec $6, locn 3 6)))) }
   | Lsquare exp With atomic_exp Eq exp Rsquare
     { eloc (E_vector_update($2,$4,$6)) }
   | Lsquare exp With atomic_exp Colon atomic_exp Eq exp Rsquare
@@ -1006,12 +1009,7 @@ patsexp:
 
 letbind:
   | Let_ atomic_pat Eq exp
-    { lbloc (LB_val_implicit($2,$4)) }
-  | Let_ typquant atomic_typ atomic_pat Eq exp
-    { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,$6)) }
-/* This introduces one shift reduce conflict, that basically points out that an atomic_pat with a type declared is the Same as this
-  | Let_ Lparen typ Rparen atomic_pat Eq exp 
-    { assert false (* lbloc (LB_val_explicit((mk_typschm (mk_typqn ()) $2 2 2),$3,$5)) *)} */
+    { lbloc (LB_val($2,$4)) }
 
 funcl:
   | id atomic_pat Eq exp
@@ -1053,21 +1051,21 @@ fun_def:
 
 val_spec:
   | Val typquant typ id
-    { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4)) }
+    { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4, None, false)) }
   | Val typ id
-    { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3)) }
+    { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3, None, false)) }
   | Val Cast typquant typ id
-    { vloc (VS_cast_spec (mk_typschm $3 $4 3 4,$5)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, None, true)) }
   | Val Cast typ id
-    { vloc (VS_cast_spec (mk_typschm (mk_typqn ()) $3 3 3, $4)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, None, true)) }
   | Val Extern typquant typ id
-    { vloc (VS_extern_no_rename (mk_typschm $3 $4 3 4,$5)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, Some (string_of_id $5), false)) }
   | Val Extern typ id
-    { vloc (VS_extern_no_rename (mk_typschm (mk_typqn ()) $3 3 3, $4)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, Some (string_of_id $4), false)) }
   | Val Extern typquant typ id Eq String
-    { vloc (VS_extern_spec (mk_typschm $3 $4 3 4,$5,$7)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, Some $7, false)) }
   | Val Extern typ id Eq String
-    { vloc (VS_extern_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, $6)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, Some $6, false)) }
 
 kinded_id:
   | tyvar
@@ -1101,7 +1099,7 @@ nexp_constraint1:
 
 nexp_constraint2:
   | nexp_typ Eq nexp_typ
-    { NC_aux(NC_fixed($1,$3), loc () ) }
+    { NC_aux(NC_equal($1,$3), loc () ) }
   | nexp_typ ExclEq nexp_typ
     { NC_aux (NC_not_equal ($1, $3), loc ()) }
   | nexp_typ GtEq nexp_typ
@@ -1109,9 +1107,9 @@ nexp_constraint2:
   | nexp_typ LtEq nexp_typ
     { NC_aux(NC_bounded_le($1,$3), loc () ) }
   | tyvar In Lcurly nums Rcurly
-    { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
+    { NC_aux(NC_set($1,$4), loc ()) }
   | tyvar IN Lcurly nums Rcurly
-    { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
+    { NC_aux(NC_set($1,$4), loc ()) }
   | True
     { NC_aux (NC_true, loc ()) }
   | False
@@ -1288,30 +1286,7 @@ ktype_def:
     { kdloc (KD_abbrev($2,$3,mk_namesectn (),mk_typschm (mk_typqn ()) $5 5 5)) }
   | Def kind tid Eq Num
     { kdloc (KD_abbrev($2,$3,mk_namesectn (),mk_typschm (mk_typqn ()) (tlocl (ATyp_constant $5) 5 5) 5 5)) }
-  | Def kind tid name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3,$4,$8,fst $10, snd $10)) }
-  | Def kind tid name_sect Eq Const Struct Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3,$4,(mk_typqn ()), fst $9, snd $9)) }
-  | Def kind tid Eq Const Struct typquant Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3,mk_namesectn (), $7, fst $9, snd $9)) }
-  | Def kind tid Eq Const Struct Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3, mk_namesectn (), mk_typqn (), fst $8, snd $8)) }
-  | Def kind tid name_sect Eq Const Union typquant Lcurly union_body Rcurly
-    { kdloc (KD_variant($2,$3,$4, $8, fst $10, snd $10)) }
-  | Def kind tid Eq Const Union typquant Lcurly union_body Rcurly
-    { kdloc (KD_variant($2,$3,mk_namesectn (), $7, fst $9, snd $9)) }
-  | Def kind tid name_sect Eq Const Union Lcurly union_body Rcurly
-    { kdloc (KD_variant($2, $3,$4, mk_typqn (), fst $9, snd $9)) }
-  | Def kind tid Eq Const Union Lcurly union_body Rcurly
-    { kdloc (KD_variant($2,$3, mk_namesectn (), mk_typqn (), fst $8, snd $8)) }
-  | Def kind tid Eq Enumerate Lcurly enum_body Rcurly
-    { kdloc (KD_enum($2,$3, mk_namesectn (), $7,false)) }
-  | Def kind tid name_sect Eq Enumerate Lcurly enum_body Rcurly
-    { kdloc (KD_enum($2,$3,$4,$8,false)) }
-  | Def kind tid Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
-    { kdloc (KD_register($2,$3, $8, $10, $13)) }
 
-    
 def:
   | type_def
       { dloc (DEF_type($1)) }

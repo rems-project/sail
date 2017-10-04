@@ -41,6 +41,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_util
 open PPrint
 open Pretty_print_common
 
@@ -109,13 +110,14 @@ let doc_pat, doc_atomic_pat =
   | P_lit lit  -> doc_lit lit
   | P_wild -> underscore
   | P_id id -> doc_id id
-  | P_var kid -> doc_var kid
+  | P_var (P_aux (P_id id, _), kid) when Id.compare (id_of_kid kid) id == 0 ->
+     doc_var kid
+  | P_var(p,kid) -> parens (separate space [pat p; string "as"; doc_var kid])
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id id])
   | P_typ(typ,p) -> separate space [parens (doc_typ typ); atomic_pat p]
   | P_app(id,[]) -> doc_id id
   | P_record(fpats,_) -> braces (separate_map semi_sp fpat fpats)
   | P_vector pats  -> brackets (separate_map comma_sp atomic_pat pats)
-  | P_vector_indexed ipats  -> brackets (separate_map comma_sp npat ipats)
   | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats  -> squarebarbars (separate_map semi_sp atomic_pat pats)
   | P_cons (pat1, pat2) -> separate space [atomic_pat pat1; coloncolon; pat pat2]
@@ -270,13 +272,6 @@ let doc_exp, doc_let =
                         ((match l with | L_one -> "1" | L_zero -> "0" | L_undef -> "u" | _ -> assert false) ^ rst)
                       | _ -> assert false)) exps ""))
           | _ -> default_print ()))
-  | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
-    let default_string =
-      (match default with
-        | Def_val_empty -> string ""
-        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp e)]) in
-      let iexp (i,e) = doc_op equals (doc_int i) (exp e) in
-      brackets (concat [(separate_map comma iexp iexps); default_string])
   | E_vector_update(v,e1,e2) ->
       brackets (doc_op (string "with") (exp v) (doc_op equals (atomic_exp e1) (exp e2)))
   | E_vector_update_subrange(v,e1,e2,e3) ->
@@ -356,17 +351,7 @@ let doc_exp, doc_let =
       separate space [string "internal let"; doc_lexp lexp; equals; exp exp1; string "in"; exp exp2]
   | _ -> failwith ("Cannot print: " ^ Ast_util.string_of_exp expr)
   and let_exp (LB_aux(lb,_)) = match lb with
-    | LB_val_explicit(ts,pat,e) ->
-      (match ts with
-       | TypSchm_aux (TypSchm_ts (TypQ_aux (TypQ_no_forall,_),_),_) ->
-         prefix 2 1
-           (separate space [string "let"; parens (doc_typscm_atomic ts); doc_atomic_pat pat; equals])
-           (atomic_exp e)
-       | _ ->
-         prefix 2 1
-           (separate space [string "let"; doc_typscm_atomic ts; doc_atomic_pat pat; equals])
-           (atomic_exp e))
-  | LB_val_implicit(pat,e) ->
+  | LB_val(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_atomic_pat pat; equals])
         (atomic_exp e)
@@ -410,15 +395,14 @@ let doc_default (DT_aux(df,_)) = match df with
   | DT_order(ord) -> separate space [string "default"; string "Order"; doc_ord ord]
 
 let doc_spec (VS_aux(v,_)) = match v with
-  | VS_val_spec(ts,id) ->
+  | VS_val_spec(ts,id,None,false) ->
      separate space [string "val"; doc_typscm ts; doc_id id]
-  | VS_cast_spec (ts, id) ->
+  | VS_val_spec (ts, id,None,true) ->
      separate space [string "val"; string "cast"; doc_typscm ts; doc_id id]
-  | VS_extern_no_rename(ts,id) ->
-     separate space [string "val"; string "extern"; doc_typscm ts; doc_id id]
-  | VS_extern_spec(ts,id,s) ->
+  | VS_val_spec(ts,id,Some ext,false) ->
      separate space [string "val"; string "extern"; doc_typscm ts;
-                     doc_op equals (doc_id id) (dquotes (string s))]
+                     doc_op equals (doc_id id) (dquotes (string ext))]
+  | _ -> failwith "Invalid valspec"
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with
   | Name_sect_none -> empty
@@ -461,37 +445,8 @@ let doc_typdef (TD_aux(td,_)) = match td with
         ])
 
 let doc_kindef (KD_aux(kd,_)) = match kd with
-  | KD_abbrev(kind,id,nm,typschm) ->
-    doc_op equals (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm]) (doc_typscm typschm)
   | KD_nabbrev(kind,id,nm,n) ->
     doc_op equals (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm]) (doc_nexp n)
-  | KD_record(kind,id,nm,typq,fs,_) ->
-    let f_pp (typ,id) = concat [doc_typ typ; space; doc_id id; semi] in
-    let fs_doc = group (separate_map (break 1) f_pp fs) in
-    doc_op equals
-      (concat [string "def"; space;doc_kind kind; space; doc_id id; doc_namescm nm])
-      (string "const struct" ^^ space ^^ doc_typquant typq (braces fs_doc))
-  | KD_variant(kind,id,nm,typq,ar,_) ->
-    let ar_doc = group (separate_map (semi ^^ break 1) doc_type_union ar) in
-    doc_op equals
-      (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm])
-      (string "const union" ^^ space ^^ doc_typquant typq (braces ar_doc))
-  | KD_enum(kind,id,nm,enums,_) ->
-      let enums_doc = group (separate_map (semi ^^ break 1) doc_id enums) in
-      doc_op equals
-        (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm])
-        (string "enumerate" ^^ space ^^ braces enums_doc)
-  | KD_register(kind,id,n1,n2,rs) ->
-      let doc_rid (r,id) = separate space [doc_range r; colon; doc_id id] ^^ semi in
-      let doc_rids = group (separate_map (break 1) doc_rid rs) in
-      doc_op equals
-        (string "def" ^^ space ^^ doc_kind kind ^^ space ^^ doc_id id)
-        (separate space [
-          string "register bits";
-          brackets (doc_nexp n1 ^^ colon ^^ doc_nexp n2);
-          braces doc_rids;
-        ])
-
 
 let doc_rec (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty

@@ -168,11 +168,11 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
 
 type
 n_constraint_aux =  (* constraint over kind $_$ *)
-   NC_fixed of nexp * nexp
+   NC_equal of nexp * nexp
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
  | NC_not_equal of nexp * nexp
- | NC_nat_set_bounded of kid * (int) list
+ | NC_set of kid * (int) list
  | NC_or of n_constraint * n_constraint
  | NC_and of n_constraint * n_constraint
  | NC_true
@@ -260,11 +260,10 @@ type
  | P_as of 'a pat * id (* named pattern *)
  | P_typ of typ * 'a pat (* typed pattern *)
  | P_id of id (* identifier *)
- | P_var of kid (* bind identifier and type variable *)
+ | P_var of 'a pat * kid (* bind pattern to type variable *)
  | P_app of id * ('a pat) list (* union constructor pattern *)
  | P_record of ('a fpat) list * bool (* struct pattern *)
  | P_vector of ('a pat) list (* vector pattern *)
- | P_vector_indexed of ((int * 'a pat)) list (* vector pattern (with explicit indices) *)
  | P_vector_concat of ('a pat) list (* concatenated vector pattern *)
  | P_tup of ('a pat) list (* tuple pattern *)
  | P_list of ('a pat) list (* list pattern *)
@@ -305,7 +304,6 @@ type
  | E_for of id * 'a exp * 'a exp * 'a exp * order * 'a exp (* for loop *)
  | E_loop of loop * 'a exp * 'a exp
  | E_vector of ('a exp) list (* vector (indexed from 0) *)
- | E_vector_indexed of ((int * 'a exp)) list * 'a opt_default (* vector (indexed consecutively) *)
  | E_vector_access of 'a exp * 'a exp (* vector access *)
  | E_vector_subrange of 'a exp * 'a exp * 'a exp (* subvector extraction *)
  | E_vector_update of 'a exp * 'a exp * 'a exp (* vector functional update *)
@@ -378,8 +376,7 @@ and 'a pexp =
    Pat_aux of 'a pexp_aux * 'a annot
 
 and 'a letbind_aux =  (* Let binding *)
-   LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
- | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
+   LB_val of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
 
 and 'a letbind =
    LB_aux of 'a letbind_aux * 'a annot
@@ -495,21 +492,11 @@ type_def_aux =  (* Type definition body *)
 
 type
 val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
- | VS_cast_spec of typschm * id
-
+   VS_val_spec of typschm * id * string option * bool
 
 type
 'a kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
    KD_nabbrev of kind * id * name_scm_opt * nexp (* nexp abbreviation *)
- | KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
- | KD_record of kind * id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | KD_variant of kind * id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
- | KD_enum of kind * id * name_scm_opt * (id) list * bool (* enumeration type definition *)
- | KD_register of kind * id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
 
 type
 'a scattered_def_aux =  (* Function and type union definitions that can be spread across

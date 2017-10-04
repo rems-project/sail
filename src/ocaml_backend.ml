@@ -150,7 +150,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
   match lb_aux with
-  | LB_val_implicit (pat, exp) -> separate space [ocaml_pat ctx pat; equals; ocaml_atomic_exp ctx exp]
+  | LB_val (pat, exp) -> separate space [ocaml_pat ctx pat; equals; ocaml_atomic_exp ctx exp]
   | _ -> failwith "Ocaml: Explicit letbind found"
 and ocaml_pexps ctx = function
   | [pexp] -> ocaml_pexp ctx pexp
@@ -287,10 +287,8 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
 let get_externs (Defs defs) =
   let extern_id (VS_aux (vs_aux, _)) =
     match vs_aux with
-    | VS_val_spec (typschm, id) -> []
-    | VS_extern_no_rename (typschm, id) -> [(id, id)]
-    | VS_extern_spec (typschm, id, name) -> [(id, mk_id name)]
-    | VS_cast_spec (typschm, id) -> []
+    | VS_val_spec (typschm, id, None, _) -> []
+    | VS_val_spec (typschm, id, Some ext, _) -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
     | DEF_spec vs :: defs -> extern_id vs :: extern_ids defs

@@ -67,6 +67,7 @@ val mk_fexps : (unit fexp) list -> unit fexps
 val mk_letbind : unit pat -> unit exp -> unit letbind
 
 val unaux_exp : 'a exp -> 'a exp_aux
+val unaux_pat : 'a pat -> 'a pat_aux
 
 val inc_ord : order
 val dec_ord : order

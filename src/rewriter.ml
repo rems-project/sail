@@ -132,9 +132,6 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_for (_,e1,e2,e3,_,e4) -> union_eff_exps [e1;e2;e3;e4]
     | E_loop (_,e1,e2) -> union_eff_exps [e1;e2]
     | E_vector es -> union_eff_exps es
-    | E_vector_indexed (ies,opt_default) ->
-       let (_,es) = List.split ies in
-       union_effects (effect_of_opt_default opt_default) (union_eff_exps es)
     | E_vector_access (e1,e2) -> union_eff_exps [e1;e2]
     | E_vector_subrange (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
     | E_vector_update (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
@@ -216,8 +213,7 @@ let fix_eff_pexp (Pat_aux (pexp,((l,_) as annot))) = match snd annot with
 let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match snd annot with
 | Some (env, typ, eff) ->
   let effsum = match lb with
-    | LB_val_explicit (_,_,e) -> effect_of e
-    | LB_val_implicit (_,e) -> effect_of e in
+    | LB_val (_,e) -> effect_of e in
   LB_aux (lb, (l, Some (env, typ, effsum)))
 | None ->
   LB_aux (lb, (l, None))
@@ -364,7 +360,6 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
     rewrap (P_record(List.map (fun (FP_aux(FP_Fpat(id,pat),pannot)) -> FP_aux(FP_Fpat(id, rewrite pat), pannot)) fpats,
                      false))
   | P_vector pats -> rewrap (P_vector(List.map rewrite pats))
-  | P_vector_indexed ipats -> rewrap (P_vector_indexed(List.map (fun (i,pat) -> (i, rewrite pat)) ipats))
   | P_vector_concat pats -> rewrap (P_vector_concat (List.map rewrite pats))
   | P_tup pats -> rewrap (P_tup (List.map rewrite pats))
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
@@ -392,11 +387,6 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
   | E_loop (loop, e1, e2) ->
     rewrap (E_loop (loop, rewrite e1, rewrite e2))
   | E_vector exps -> rewrap (E_vector (List.map rewrite exps))
-  | E_vector_indexed (exps,(Def_val_aux(default,dannot))) ->
-    let def = match default with
-      | Def_val_empty -> default
-      | Def_val_dec e -> Def_val_dec (rewrite e) in
-    rewrap (E_vector_indexed (List.map (fun (i,e) -> (i, rewrite e)) exps, Def_val_aux(def,dannot)))
   | E_vector_access (vec,index) -> rewrap (E_vector_access (rewrite vec,rewrite index))
   | E_vector_subrange (vec,i1,i2) ->
     rewrap (E_vector_subrange (rewrite vec,rewrite i1,rewrite i2))
@@ -545,11 +535,8 @@ let rewrite_let rewriters (LB_aux(letbind,(l,annot))) =
       | None -> Some(m,s) (*Shouldn't happen*)
       | Some new_m -> Some(new_m,s) in*)
   match letbind with
-  | LB_val_explicit (typschm, pat,exp) ->
-    LB_aux(LB_val_explicit (typschm,rewriters.rewrite_pat rewriters pat,
-                            rewriters.rewrite_exp rewriters exp),(l,annot))
-  | LB_val_implicit ( pat, exp) ->
-    LB_aux(LB_val_implicit (rewriters.rewrite_pat rewriters pat,
+  | LB_val ( pat, exp) ->
+    LB_aux(LB_val (rewriters.rewrite_pat rewriters pat,
                             rewriters.rewrite_exp rewriters exp),(l,annot))
 
 let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
@@ -625,11 +612,10 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux
-  ; p_var            : kid -> 'pat_aux
+  ; p_var            : 'pat * kid -> 'pat_aux
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
-  ; p_vector_indexed : (int * 'pat) list -> 'pat_aux
   ; p_vector_concat  : 'pat list -> 'pat_aux
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
@@ -644,13 +630,12 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_lit lit           -> alg.p_lit lit
   | P_wild              -> alg.p_wild
   | P_id id             -> alg.p_id id
-  | P_var kid           -> alg.p_var kid
-  | P_as (p,id)         -> alg.p_as (fold_pat alg p,id)
+  | P_var (p, kid)      -> alg.p_var (fold_pat alg p, kid)
+  | P_as (p,id)         -> alg.p_as (fold_pat alg p, id)
   | P_typ (typ,p)       -> alg.p_typ (typ,fold_pat alg p)
   | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
   | P_record (ps,b)     -> alg.p_record (List.map (fold_fpat alg) ps, b)
   | P_vector ps         -> alg.p_vector (List.map (fold_pat alg) ps)
-  | P_vector_indexed ps -> alg.p_vector_indexed (List.map (fun (i,p) -> (i, fold_pat alg p)) ps)
   | P_vector_concat ps  -> alg.p_vector_concat (List.map (fold_pat alg) ps)
   | P_tup ps            -> alg.p_tup (List.map (fold_pat alg) ps)
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
@@ -666,7 +651,7 @@ and fold_fpat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat_a
 and fold_fpat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat -> 'fpat =
   function
   | FP_aux (fpat,annot) -> alg.fP_aux (fold_fpat_aux alg fpat,annot)
-                                      
+
 (* identity fold from term alg to term alg *)
 let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg = 
   { p_lit            = (fun lit -> P_lit lit)
@@ -674,11 +659,10 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_as             = (fun (pat,id) -> P_as (pat,id))
   ; p_typ            = (fun (typ,pat) -> P_typ (typ,pat))
   ; p_id             = (fun id -> P_id id)
-  ; p_var            = (fun kid -> P_var kid)
+  ; p_var            = (fun (pat,kid) -> P_var (pat,kid))
   ; p_app            = (fun (id,ps) -> P_app (id,ps))
   ; p_record         = (fun (ps,b) -> P_record (ps,b))
   ; p_vector         = (fun ps -> P_vector ps)
-  ; p_vector_indexed = (fun ps -> P_vector_indexed ps)
   ; p_vector_concat  = (fun ps -> P_vector_concat ps)
   ; p_tup            = (fun ps -> P_tup ps)
   ; p_list           = (fun ps -> P_list ps)
@@ -703,7 +687,6 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
   ; e_loop                   : loop * 'exp * 'exp -> 'exp_aux
   ; e_vector                 : 'exp list -> 'exp_aux
-  ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
   ; e_vector_access          : 'exp * 'exp -> 'exp_aux
   ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
   ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux
@@ -749,8 +732,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
   ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
   ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
-  ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
-  ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux
+  ; lB_val          : 'pat * 'exp -> 'letbind_aux
   ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
   ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
   }
@@ -770,8 +752,6 @@ let rec fold_exp_aux alg = function
   | E_loop (loop_type, e1, e2) ->
      alg.e_loop (loop_type, fold_exp alg e1, fold_exp alg e2)
   | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
-  | E_vector_indexed (es,opt) ->
-     alg.e_vector_indexed (List.map (fun (id,e) -> (id,fold_exp alg e)) es, fold_opt_default alg opt)
   | E_vector_access (e1,e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
   | E_vector_subrange (e1,e2,e3) ->
      alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
@@ -831,8 +811,7 @@ and fold_pexp_aux alg = function
   | Pat_when (pat,e,e') -> alg.pat_when (fold_pat alg.pat_alg pat, fold_exp alg e, fold_exp alg e')
 and fold_pexp alg (Pat_aux (pexp_aux,annot)) = alg.pat_aux (fold_pexp_aux alg pexp_aux, annot)
 and fold_letbind_aux alg = function
-  | LB_val_explicit (t,pat,e) -> alg.lB_val_explicit (t,fold_pat alg.pat_alg pat, fold_exp alg e)
-  | LB_val_implicit (pat,e) -> alg.lB_val_implicit (fold_pat alg.pat_alg pat, fold_exp alg e)
+  | LB_val (pat,e) -> alg.lB_val (fold_pat alg.pat_alg pat, fold_exp alg e)
 and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux alg letbind_aux, annot)
 
 let id_exp_alg =
@@ -848,7 +827,6 @@ let id_exp_alg =
   ; e_for = (fun (id,e1,e2,e3,order,e4) -> E_for (id,e1,e2,e3,order,e4))
   ; e_loop = (fun (lt, e1, e2) -> E_loop (lt, e1, e2))
   ; e_vector = (fun es -> E_vector es)
-  ; e_vector_indexed = (fun (es,opt2) -> E_vector_indexed (es,opt2))
   ; e_vector_access = (fun (e1,e2) -> E_vector_access (e1,e2))
   ; e_vector_subrange =  (fun (e1,e2,e3) -> E_vector_subrange (e1,e2,e3))
   ; e_vector_update = (fun (e1,e2,e3) -> E_vector_update (e1,e2,e3))
@@ -894,8 +872,7 @@ let id_exp_alg =
   ; pat_exp = (fun (pat,e) -> (Pat_exp (pat,e)))
   ; pat_when = (fun (pat,e,e') -> (Pat_when (pat,e,e')))
   ; pat_aux = (fun (pexp,a) -> (Pat_aux (pexp,a)))
-  ; lB_val_explicit = (fun (typ,pat,e) -> LB_val_explicit (typ,pat,e))
-  ; lB_val_implicit = (fun (pat,e) -> LB_val_implicit (pat,e))
+  ; lB_val = (fun (pat,e) -> LB_val (pat,e))
   ; lB_aux = (fun (lb,annot) -> LB_aux (lb,annot))
   ; pat_alg = id_pat_alg
   }
@@ -913,14 +890,10 @@ let compute_pat_alg bot join =
   ; p_as             = (fun ((v,pat),id) -> (v, P_as (pat,id)))
   ; p_typ            = (fun (typ,(v,pat)) -> (v, P_typ (typ,pat)))
   ; p_id             = (fun id -> (bot, P_id id))
-  ; p_var            = (fun kid -> (bot, P_var kid))
+  ; p_var            = (fun ((v,pat),kid) -> (v, P_var (pat,kid)))
   ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
   ; p_record         = (fun (ps,b) -> split_join (fun ps -> P_record (ps,b)) ps)
   ; p_vector         = split_join (fun ps -> P_vector ps)
-  ; p_vector_indexed = (fun ps ->
-                          let (is,ps) = List.split ps in
-                          let (vs,ps) = List.split ps in
-                          (join_list vs, P_vector_indexed (List.combine is ps)))
   ; p_vector_concat  = split_join (fun ps -> P_vector_concat ps)
   ; p_tup            = split_join (fun ps -> P_tup ps)
   ; p_list           = split_join (fun ps -> P_list ps)
@@ -947,10 +920,6 @@ let compute_exp_alg bot join =
   ; e_loop = (fun (lt, (v1, e1), (v2, e2)) ->
     (join_list [v1;v2], E_loop (lt, e1, e2)))
   ; e_vector = split_join (fun es -> E_vector es)
-  ; e_vector_indexed = (fun (es,(v2,opt2)) ->
-    let (is,es) = List.split es in
-    let (vs,es) = List.split es in
-    (join_list (vs @ [v2]), E_vector_indexed (List.combine is es,opt2)))
   ; e_vector_access = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_vector_access (e1,e2)))
   ; e_vector_subrange =  (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_vector_subrange (e1,e2,e3)))
   ; e_vector_update = (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_vector_update (e1,e2,e3)))
@@ -1005,8 +974,7 @@ let compute_exp_alg bot join =
   ; pat_exp = (fun ((vp,pat),(v,e)) -> (join vp v, Pat_exp (pat,e)))
   ; pat_when = (fun ((vp,pat),(v,e),(v',e')) -> (join_list [vp;v;v'], Pat_when (pat,e,e')))
   ; pat_aux = (fun ((v,pexp),a) -> (v, Pat_aux (pexp,a)))
-  ; lB_val_explicit = (fun (typ,(vp,pat),(v,e)) -> (join vp v, LB_val_explicit (typ,pat,e)))
-  ; lB_val_implicit = (fun ((vp,pat),(v,e)) -> (join vp v, LB_val_implicit (pat,e)))
+  ; lB_val = (fun ((vp,pat),(v,e)) -> (join vp v, LB_val (pat,e)))
   ; lB_aux = (fun ((vl,lb),annot) -> (vl,LB_aux (lb,annot)))
   ; pat_alg = compute_pat_alg bot join
   }
@@ -1188,7 +1156,6 @@ let rewrite_sizeof (Defs defs) =
     ; e_for = (fun (id,(e1,e1'),(e2,e2'),(e3,e3'),order,(e4,e4')) -> (E_for (id,e1,e2,e3,order,e4), E_for (id,e1',e2',e3',order,e4')))
     ; e_loop = (fun (lt, (e1, e1'), (e2, e2')) -> (E_loop (lt, e1, e2), E_loop (lt, e1', e2')))
     ; e_vector = (fun es -> let (es, es') = List.split es in (E_vector es, E_vector es'))
-    ; e_vector_indexed = (fun (es,(opt2,opt2')) -> let (is, es) = List.split es in let (es, es') = List.split es in let (es, es') = (List.combine is es, List.combine is es') in (E_vector_indexed (es,opt2), E_vector_indexed (es',opt2')))
     ; e_vector_access = (fun ((e1,e1'),(e2,e2')) -> (E_vector_access (e1,e2), E_vector_access (e1',e2')))
     ; e_vector_subrange =  (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_vector_subrange (e1,e2,e3), E_vector_subrange (e1',e2',e3')))
     ; e_vector_update = (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_vector_update (e1,e2,e3), E_vector_update (e1',e2',e3')))
@@ -1234,8 +1201,7 @@ let rewrite_sizeof (Defs defs) =
     ; pat_exp = (fun (pat,(e,e')) -> (Pat_exp (pat,e), Pat_exp (pat,e')))
     ; pat_when = (fun (pat,(e1,e1'),(e2,e2')) -> (Pat_when (pat,e1,e2), Pat_when (pat,e1',e2')))
     ; pat_aux = (fun ((pexp,pexp'),a) -> (Pat_aux (pexp,a), Pat_aux (pexp',a)))
-    ; lB_val_explicit = (fun (typ,pat,(e,e')) -> (LB_val_explicit (typ,pat,e), LB_val_explicit (typ,pat,e')))
-    ; lB_val_implicit = (fun (pat,(e,e')) -> (LB_val_implicit (pat,e), LB_val_implicit (pat,e')))
+    ; lB_val = (fun (pat,(e,e')) -> (LB_val (pat,e), LB_val (pat,e')))
     ; lB_aux = (fun ((lb,lb'),annot) -> (LB_aux (lb,annot), LB_aux (lb',annot)))
     ; pat_alg = id_pat_alg
     } in
@@ -1307,12 +1273,9 @@ let rewrite_sizeof (Defs defs) =
     | DEF_val (LB_aux (lb, annot)) ->
        begin
          let lb' = match lb with
-         | LB_val_explicit (typschm, pat, exp) ->
+         | LB_val (pat, exp) ->
            let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
-           LB_val_explicit (typschm, pat, exp')
-         | LB_val_implicit (pat, exp) ->
-           let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
-           LB_val_implicit (pat, exp') in
+           LB_val (pat, exp') in
          (params_map, defs @ [DEF_val (LB_aux (lb', annot))])
        end
     | def ->
@@ -1337,15 +1300,10 @@ let rewrite_sizeof (Defs defs) =
         TypSchm_aux (TypSchm_ts (tq, typ'), l)
       else ts in
     match def with
-    | DEF_spec (VS_aux (VS_val_spec (typschm, id), a)) ->
-       DEF_spec (VS_aux (VS_val_spec (rewrite_typschm typschm id, id), a))
-    | DEF_spec (VS_aux (VS_extern_no_rename (typschm, id), a)) ->
-       DEF_spec (VS_aux (VS_extern_no_rename (rewrite_typschm typschm id, id), a))
-    | DEF_spec (VS_aux (VS_extern_spec (typschm, id, e), a)) ->
-       DEF_spec (VS_aux (VS_extern_spec (rewrite_typschm typschm id, id, e), a))
-    | DEF_spec (VS_aux (VS_cast_spec (typschm, id), a)) ->
-       DEF_spec (VS_aux (VS_cast_spec (rewrite_typschm typschm id, id), a))
-    | _ -> def in
+    | DEF_spec (VS_aux (VS_val_spec (typschm, id, ext, is_cast), a)) ->
+       DEF_spec (VS_aux (VS_val_spec (rewrite_typschm typschm id, id, ext, is_cast), a))
+    | def -> def
+  in
 
   let (params_map, defs) = List.fold_left rewrite_sizeof_def
                                           (Bindings.empty, []) defs in
@@ -1383,11 +1341,10 @@ let remove_vector_concat_pat pat =
     ; p_wild = P_wild
     ; p_as = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
-    ; p_var = (fun kid -> P_var kid)
+    ; p_var = (fun (pat,kid) -> P_var (pat true,kid))
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
-    ; p_vector_indexed = (fun ps -> P_vector_indexed (List.map (fun (i,p) -> (i,p false)) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
@@ -1461,7 +1418,7 @@ let remove_vector_concat_pat pat =
         match typ_opt with
         | Some typ -> P_aux (P_typ (typ, P_aux (P_id child,cannot)), cannot)
         | None -> P_aux (P_id child,cannot) in
-      let letbind = fix_eff_lb (LB_aux (LB_val_implicit (id_pat,subv),cannot)) in
+      let letbind = fix_eff_lb (LB_aux (LB_val (id_pat,subv),cannot)) in
       (letbind,
        (fun body -> fix_eff_exp (E_aux (E_let (letbind,body), simple_annot l (typ_of body)))),
        (rootname,childname)) in
@@ -1514,17 +1471,13 @@ let remove_vector_concat_pat pat =
     ; p_as             = (fun ((pat,decls),id) -> (P_as (pat,id),decls))
     ; p_typ            = (fun (typ,(pat,decls)) -> (P_typ (typ,pat),decls))
     ; p_id             = (fun id -> (P_id id,[]))
-    ; p_var            = (fun kid -> (P_var kid, []))
+    ; p_var            = (fun ((pat,decls),kid) -> (P_var (pat,kid),decls))
     ; p_app            = (fun (id,ps) -> let (ps,decls) = List.split ps in
                                          (P_app (id,ps),List.flatten decls))
     ; p_record         = (fun (ps,b) -> let (ps,decls) = List.split ps in
                                         (P_record (ps,b),List.flatten decls))
     ; p_vector         = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_vector ps,List.flatten decls))
-    ; p_vector_indexed = (fun ps -> let (is,ps) = List.split ps in
-                                    let (ps,decls) = List.split ps in
-                                    let ps = List.combine is ps in
-                                    (P_vector_indexed ps,List.flatten decls))
     ; p_vector_concat  = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_vector_concat ps,List.flatten decls))
     ; p_tup            = (fun ps -> let (ps,decls) = List.split ps in
@@ -1648,13 +1601,9 @@ let rewrite_exp_remove_vector_concat_pat rewriters (E_aux (exp,(l,annot)) as ful
        let (pat,_,decls) = remove_vector_concat_pat pat in
        Pat_aux (Pat_when (pat, decls (rewrite_rec guard), decls (rewrite_rec body)),annot') in
      rewrap (E_case (rewrite_rec e, List.map aux ps))
-  | E_let (LB_aux (LB_val_explicit (typ,pat,v),annot'),body) ->
+  | E_let (LB_aux (LB_val (pat,v),annot'),body) ->
      let (pat,_,decls) = remove_vector_concat_pat pat in
-     rewrap (E_let (LB_aux (LB_val_explicit (typ,pat,rewrite_rec v),annot'),
-                    decls (rewrite_rec body)))
-  | E_let (LB_aux (LB_val_implicit (pat,v),annot'),body) ->
-     let (pat,_,decls) = remove_vector_concat_pat pat in
-     rewrap (E_let (LB_aux (LB_val_implicit (pat,rewrite_rec v),annot'),
+     rewrap (E_let (LB_aux (LB_val (pat,rewrite_rec v),annot'),
                     decls (rewrite_rec body)))
   | exp -> rewrite_base full_exp
 
@@ -1678,14 +1627,10 @@ let rewrite_defs_remove_vector_concat (Defs defs) =
   let rewrite_def d =
     let d = rewriters.rewrite_def rewriters d in
     match d with
-    | DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a)) ->
+    | DEF_val (LB_aux (LB_val (pat,exp),a)) ->
        let (pat,letbinds,_) = remove_vector_concat_pat pat in
        let defvals = List.map (fun lb -> DEF_val lb) letbinds in
-       [DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a))] @ defvals
-    | DEF_val (LB_aux (LB_val_implicit (pat,exp),a)) -> 
-       let (pat,letbinds,_) = remove_vector_concat_pat pat in
-       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
-       [DEF_val (LB_aux (LB_val_implicit (pat,exp),a))] @ defvals
+       [DEF_val (LB_aux (LB_val (pat,exp),a))] @ defvals
     | d -> [d] in
   Defs (List.flatten (List.map rewrite_def defs))
 
@@ -1750,10 +1695,6 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
     (match subsumes_pat pat1 pat2, subsumes_pat pats1 pats2 with
     | Some substs1, Some substs2 -> Some (substs1 @ substs2)
     | _ -> None)
-  | P_vector_indexed ips1, P_vector_indexed ips2 ->
-    let (is1,ps1) = List.split ips1 in
-    let (is2,ps2) = List.split ips2 in
-    if is1 = is2 then subsumes_list subsumes_pat ps1 ps2 else None
   | _ -> None
 and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
   if id1 = id2 then subsumes_pat pat1 pat2 else None
@@ -1792,8 +1733,6 @@ let rec pat_to_exp (P_aux (pat,(l,annot))) =
   | P_tup pats -> rewrap (E_tuple (List.map pat_to_exp pats))
   | P_list pats -> rewrap (E_list (List.map pat_to_exp pats))
   | P_cons (p,ps) -> rewrap (E_cons (pat_to_exp p, pat_to_exp ps))
-  | P_vector_indexed ipats -> raise (Reporting_basic.err_unreachable l
-      "pat_to_exp not implemented for P_vector_indexed") (* TODO *)
 and fpat_to_fexp (FP_aux (FP_Fpat (id,pat),(l,annot))) =
   FE_aux (FE_Fexp (id, pat_to_exp pat),(l,annot))
 
@@ -1863,7 +1802,7 @@ let bitwise_and_exp exp1 exp2 =
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_lit _ | P_wild | P_id _ -> false
 | P_as (pat,_) | P_typ (_,pat) -> contains_bitvector_pat pat
-| P_vector _ | P_vector_concat _ | P_vector_indexed _ ->
+| P_vector _ | P_vector_concat _ ->
     let typ = Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) in
     is_bitvector_typ typ
 | P_app (_,pats) | P_tup pats | P_list pats ->
@@ -1887,11 +1826,10 @@ let remove_bitvector_pat pat =
     ; p_wild = P_wild
     ; p_as = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
-    ; p_var = (fun kid -> P_var kid)
+    ; p_var = (fun (pat,kid) -> P_var (pat true,kid))
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
-    ; p_vector_indexed = (fun ps -> P_vector_indexed (List.map (fun (i,p) -> (i,p false)) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
@@ -1903,8 +1841,6 @@ let remove_bitvector_pat pat =
           let (l,_) = annot in
           match pat, is_bitvector_typ t, contained_in_p_as with
           | P_vector _, true, false
-          | P_vector_indexed _, true, false ->
-            P_aux (P_as (P_aux (pat,annot),fresh_id "b__" l), annot)
           | _ -> P_aux (pat,annot)
         )
     ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
@@ -1967,7 +1903,7 @@ let remove_bitvector_pat pat =
     let rannot = simple_annot l typ in
     let elem = access_bit_exp (rootid,rannot) l idx in
     let e = P_aux (P_id id, simple_annot l bit_typ) in
-    let letbind = LB_aux (LB_val_implicit (e,elem), simple_annot l bit_typ) in
+    let letbind = LB_aux (LB_val (e,elem), simple_annot l bit_typ) in
     let letexp = (fun body ->
       let (E_aux (_,(_,bannot))) = body in
       E_aux (E_let (letbind,body), (Parse_ast.Generated l, bannot))) in
@@ -2050,17 +1986,13 @@ let remove_bitvector_pat pat =
     ; p_as             = (fun ((pat,gdls),id) -> (P_as (pat,id), gdls))
     ; p_typ            = (fun (typ,(pat,gdls)) -> (P_typ (typ,pat), gdls))
     ; p_id             = (fun id -> (P_id id, (None, (fun b -> b), [])))
-    ; p_var            = (fun kid -> (P_var kid, (None, (fun b -> b), [])))
+    ; p_var            = (fun ((pat,gdls),kid) -> (P_var (pat,kid), gdls))
     ; p_app            = (fun (id,ps) -> let (ps,gdls) = List.split ps in
                                          (P_app (id,ps), flatten_guards_decls gdls))
     ; p_record         = (fun (ps,b) -> let (ps,gdls) = List.split ps in
                                         (P_record (ps,b), flatten_guards_decls gdls))
     ; p_vector         = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_vector ps, flatten_guards_decls gdls))
-    ; p_vector_indexed = (fun p -> let (is,p) = List.split p in
-                                   let (ps,gdls) = List.split p in
-                                   let ps = List.combine is ps in
-                                   (P_vector_indexed ps, flatten_guards_decls gdls))
     ; p_vector_concat  = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_vector_concat ps, flatten_guards_decls gdls))
     ; p_tup            = (fun ps -> let (ps,gdls) = List.split ps in
@@ -2075,8 +2007,6 @@ let remove_bitvector_pat pat =
                            (match pat, is_bitvector_typ t with
                            | P_as (P_aux (P_vector ps, _), id), true ->
                              (P_aux (P_id id, annot), collect_guards_decls ps id t)
-                           | P_as (P_aux (P_vector_indexed ips, _), id), true ->
-                             (P_aux (P_id id, annot), collect_guards_decls_indexed ips id t)
                            | _, _ -> (P_aux (pat,annot), gdls)))
     ; fP_aux           = (fun ((fpat,gdls),annot) -> (FP_aux (fpat,annot), gdls))
     ; fP_Fpat          = (fun (id,(pat,gdls)) -> (FP_Fpat (id,pat), gdls))
@@ -2104,13 +2034,9 @@ let rewrite_exp_remove_bitvector_pat rewriters (E_aux (exp,(l,annot)) as full_ex
        | Some guard' -> Pat_aux (Pat_when (pat', bitwise_and_exp guard guard', body'), annot')
        | None -> Pat_aux (Pat_when (pat', guard, body'), annot')) in
     rewrap (E_case (e, List.map rewrite_pexp ps))
-  | E_let (LB_aux (LB_val_explicit (typ,pat,v),annot'),body) ->
+  | E_let (LB_aux (LB_val (pat,v),annot'),body) ->
      let (pat,(_,decls,_)) = remove_bitvector_pat pat in
-     rewrap (E_let (LB_aux (LB_val_explicit (typ,pat,rewrite_rec v),annot'),
-                    decls (rewrite_rec body)))
-  | E_let (LB_aux (LB_val_implicit (pat,v),annot'),body) ->
-     let (pat,(_,decls,_)) = remove_bitvector_pat pat in
-     rewrap (E_let (LB_aux (LB_val_implicit (pat,rewrite_rec v),annot'),
+     rewrap (E_let (LB_aux (LB_val (pat,rewrite_rec v),annot'),
                     decls (rewrite_rec body)))
   | _ -> rewrite_base full_exp
 
@@ -2141,14 +2067,10 @@ let rewrite_defs_remove_bitvector_pats (Defs defs) =
   let rewrite_def d =
     let d = rewriters.rewrite_def rewriters d in
     match d with
-    | DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a)) ->
+    | DEF_val (LB_aux (LB_val (pat,exp),a)) ->
        let (pat',(_,_,letbinds)) = remove_bitvector_pat pat in
        let defvals = List.map (fun lb -> DEF_val lb) letbinds in
-       [DEF_val (LB_aux (LB_val_explicit (t,pat',exp),a))] @ defvals
-    | DEF_val (LB_aux (LB_val_implicit (pat,exp),a)) ->
-       let (pat',(_,_,letbinds)) = remove_bitvector_pat pat in
-       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
-       [DEF_val (LB_aux (LB_val_implicit (pat',exp),a))] @ defvals
+       [DEF_val (LB_aux (LB_val (pat',exp),a))] @ defvals
     | d -> [d] in
   (* FIXME See above in rewrite_sizeof *)
   (* fst (check initial_env ( *)
@@ -2179,7 +2101,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       let (E_aux (_,(el,eannot))) = e in
       let pat_e' = fresh_id_pat "p__" (el, Some (env_of e, typ_of e, no_effect)) in
       let exp_e' = pat_to_exp pat_e' in
-      let letbind_e = LB_aux (LB_val_implicit (pat_e',e), (el,eannot)) in
+      let letbind_e = LB_aux (LB_val (pat_e',e), (el,eannot)) in
       let exp' = case_exp exp_e' (typ_of full_exp) clauses in
       rewrap (E_let (letbind_e, exp'))
     else case_exp e (typ_of full_exp) clauses
@@ -2447,13 +2369,13 @@ let rewrite_constraint =
   and rewrite_nc_aux = function
     | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
     | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
-    | NC_fixed (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
+    | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
     | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
     | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc nc1, mk_id "&", rewrite_nc nc2)
     | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc nc1, mk_id "|", rewrite_nc nc2)
     | NC_false -> E_lit (mk_lit L_true)
     | NC_true -> E_lit (mk_lit L_false)
-    | NC_nat_set_bounded (kid, ints) ->
+    | NC_set (kid, ints) ->
        unaux_exp (rewrite_nc (List.fold_left (fun nc int -> nc_or nc (nc_eq (nvar kid) (nconstant int))) nc_true ints))
   in
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
@@ -2493,10 +2415,7 @@ let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
 let rewrite_overload_cast (Defs defs) =
   let remove_cast_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
-    | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
-    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_extern_no_rename (typschm, id), annot)
-    | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (typschm, id, e), annot)
-    | VS_cast_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
+    | VS_val_spec (typschm, id, ext, _) -> VS_aux (VS_val_spec (typschm, id, ext, false), annot)
   in
   let simple_def = function
     | DEF_spec vs -> DEF_spec (remove_cast_vs vs)
@@ -2573,10 +2492,7 @@ let rewrite_simple_types (Defs defs) =
   in
   let simple_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
-    | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (simple_typschm typschm, id), annot)
-    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_extern_no_rename (simple_typschm typschm, id), annot)
-    | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (simple_typschm typschm, id, e), annot)
-    | VS_cast_spec (typschm, id) -> VS_aux (VS_cast_spec (simple_typschm typschm, id), annot)
+    | VS_val_spec (typschm, id, ext, is_cast) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext, is_cast), annot)
   in
   let rec simple_lit (L_aux (lit_aux, l) as lit) =
     match lit_aux with
@@ -2593,7 +2509,7 @@ let rewrite_simple_types (Defs defs) =
   let simple_pat = {
       id_pat_alg with
       p_typ = (fun (typ, pat) -> P_typ (simple_typ typ, pat));
-      p_var = (fun kid -> P_id (id_of_kid kid));
+      p_var = (fun (pat, kid) -> unaux_pat pat);
       p_vector = (fun pats -> P_list pats)
     } in
   let simple_exp = {
@@ -2654,7 +2570,7 @@ let rewrite_defs_remove_blocks =
     let annot_pat = (simple_annot l (typ_of v)) in
     let annot_lb = (Parse_ast.Generated l, tannot) in
     let annot_let = (Parse_ast.Generated l, Some (env_of body, typ_of body, union_eff_exps [v;body])) in
-    E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_wild,annot_pat),v),annot_lb),body),annot_let) in
+    E_aux (E_let (LB_aux (LB_val (P_aux (P_wild,annot_pat),v),annot_lb),body),annot_let) in
 
   let rec f l = function
     | [] -> E_aux (E_lit (L_aux (L_unit,Parse_ast.Generated l)), (simple_annot l unit_typ))
@@ -2691,7 +2607,7 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
      let annot_let = (Parse_ast.Generated l, Some (env, typ_of body, union_eff_exps [v;body])) in
      let pat = P_aux (P_wild,annot_pat) in
      
-     E_aux (E_let (LB_aux (LB_val_implicit (pat,v),annot_lb),body),annot_let)
+     E_aux (E_let (LB_aux (LB_val (pat,v),annot_lb),body),annot_let)
   | Some (env, typ, eff) ->
      let id = fresh_id "w__" l in
      let annot_pat = simple_annot l (typ_of v) in
@@ -2702,7 +2618,7 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
      let annot_let = (Parse_ast.Generated l, Some (env, typ_of body, union_eff_exps [v;body])) in
      let pat = P_aux (P_id id,annot_pat) in
      
-     E_aux (E_let (LB_aux (LB_val_implicit (pat,v),annot_lb),body),annot_let)
+     E_aux (E_let (LB_aux (LB_val (pat,v),annot_lb),body),annot_let)
   | None ->
      raise (Reporting_basic.err_unreachable l "no type information")
 
@@ -2766,12 +2682,9 @@ let rewrite_defs_letbind_effects  =
   and n_lb (lb : 'a letbind) (k : 'a letbind -> 'a exp) : 'a exp =
     let (LB_aux (lb,annot)) = lb in
     match lb with
-    | LB_val_explicit (typ,pat,exp1) ->
+    | LB_val (pat,exp1) ->
        n_exp exp1 (fun exp1 -> 
-       k (fix_eff_lb (LB_aux (LB_val_explicit (typ,pat,exp1),annot))))
-    | LB_val_implicit (pat,exp1) ->
-       n_exp exp1 (fun exp1 -> 
-       k (fix_eff_lb (LB_aux (LB_val_implicit (pat,exp1),annot))))
+       k (fix_eff_lb (LB_aux (LB_val (pat,exp1),annot))))
 
   and n_lexp (lexp : 'a lexp) (k : 'a lexp -> 'a exp) : 'a exp =
     let (LEXP_aux (lexp_aux,annot)) = lexp in
@@ -2857,12 +2770,6 @@ let rewrite_defs_letbind_effects  =
     | E_vector exps ->
        n_exp_nameL exps (fun exps ->
        k (rewrap (E_vector exps)))
-    | E_vector_indexed (exps,opt_default)  ->
-       let (is,exps) = List.split exps in
-       n_exp_nameL exps (fun exps -> 
-       n_opt_default opt_default (fun opt_default ->
-       let exps = List.combine is exps in
-       k (rewrap (E_vector_indexed (exps,opt_default)))))
     | E_vector_access (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
@@ -2966,10 +2873,8 @@ let rewrite_defs_letbind_effects  =
       let rewrap lb = DEF_val (LB_aux (lb, annot)) in
       begin
         match lb with
-        | LB_val_implicit (pat, exp) ->
-          rewrap (LB_val_implicit (pat, n_exp_term (effectful exp) exp))
-        | LB_val_explicit (ts, pat, exp) ->
-          rewrap (LB_val_explicit (ts, pat, n_exp_term (effectful exp) exp))
+        | LB_val (pat, exp) ->
+          rewrap (LB_val (pat, n_exp_term (effectful exp) exp))
       end
     | DEF_fundef fdef -> DEF_fundef (rewrite_fun rewriters fdef)
     | d -> d in
@@ -2993,13 +2898,12 @@ let rewrite_defs_effectful_let_expressions =
 
   let e_let (lb,body) =
     match lb with
-    | LB_aux (LB_val_implicit (P_aux (P_wild, _), E_aux (E_assign ((LEXP_aux (_, annot) as le), exp), _)), _)
+    | LB_aux (LB_val (P_aux (P_wild, _), E_aux (E_assign ((LEXP_aux (_, annot) as le), exp), _)), _)
       when lexp_is_local le (env_of_annot annot) && not (lexp_is_effectful le) ->
       (* Rewrite assignments to local variables into let bindings *)
       let (lhs, rhs) = rewrite_local_lexp le in
-      E_let (LB_aux (LB_val_implicit (pat_of_local_lexp lhs, rhs exp), annot), body)
-    | LB_aux (LB_val_explicit (_,pat,exp'),annot')
-    | LB_aux (LB_val_implicit (pat,exp'),annot') ->
+      E_let (LB_aux (LB_val (pat_of_local_lexp lhs, rhs exp), annot), body)
+    | LB_aux (LB_val (pat,exp'),annot') ->
        if effectful exp'
        then E_internal_plet (pat,exp',body)
        else E_let (lb,body) in
@@ -3011,7 +2915,7 @@ let rewrite_defs_effectful_let_expressions =
        if effectful exp1 then
          E_internal_plet (P_aux (P_id id,annot),exp1,exp2)
        else
-         let lb = LB_aux (LB_val_implicit (P_aux (P_id id,annot), exp1), annot) in
+         let lb = LB_aux (LB_val (P_aux (P_id id,annot), exp1), annot) in
          E_let (lb, exp2)
     | _ -> failwith "E_internal_let with unexpected lexp" in
 
@@ -3294,20 +3198,13 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
   | E_let (lb,body) ->
      let body = rewrite_var_updates body in
      let (eff,lb) = match lb with
-       | LB_aux (LB_val_implicit (pat,v),lbannot) ->
+       | LB_aux (LB_val (pat,v),lbannot) ->
           (match rewrite v pat with
            | Added_vars (v,pat) ->
               let (E_aux (_,(l,_))) = v in
               let lbannot = (simple_annot l (typ_of v)) in
-              (effect_of v,LB_aux (LB_val_implicit (pat,v),lbannot))
-           | Same_vars v -> (effect_of v,LB_aux (LB_val_implicit (pat,v),lbannot)))
-       | LB_aux (LB_val_explicit (typ,pat,v),lbannot) ->
-          (match rewrite v pat with 
-           | Added_vars (v,pat) ->
-              let (E_aux (_,(l,_))) = v in
-              let lbannot = (simple_annot l (typ_of v)) in
-              (effect_of v,LB_aux (LB_val_implicit (pat,v),lbannot))
-           | Same_vars v -> (effect_of v,LB_aux (LB_val_explicit (typ,pat,v),lbannot))) in
+              (effect_of v,LB_aux (LB_val (pat,v),lbannot))
+           | Same_vars v -> (effect_of v,LB_aux (LB_val (pat,v),lbannot))) in
      let tannot = Some (env_of_annot annot, typ_of body, union_effects eff (effect_of body)) in
      E_aux (E_let (lb,body),(Parse_ast.Generated l,tannot))
   | E_internal_let (lexp,v,body) ->
@@ -3323,7 +3220,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
      let bodyeff = effect_of body in
      let pat = P_aux (P_id id, (simple_annot l vtyp)) in
      let lbannot = (Parse_ast.Generated l, Some (env, vtyp, veff)) in
-     let lb = LB_aux (LB_val_implicit (pat,v),lbannot) in
+     let lb = LB_aux (LB_val (pat,v),lbannot) in
      let exp = E_aux (E_let (lb,body),(Parse_ast.Generated l, Some (bodyenv, bodytyp, union_effects veff bodyeff))) in
      rewrite_var_updates exp
   | E_internal_plet (pat,v,body) ->
@@ -3378,21 +3275,15 @@ let rewrite_defs_remove_superfluous_letbinds =
     | E_let (lb,exp2) ->
        begin match lb,exp2 with
        (* 'let x = EXP1 in x' can be replaced with 'EXP1' *)
-       | LB_aux (LB_val_explicit (_,P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+       | LB_aux (LB_val (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
          E_aux (E_id (Id_aux (id',_)),_)
-       | LB_aux (LB_val_explicit (_,P_aux (P_id (Id_aux (id,_)),_),exp1),_),
-         E_aux (E_cast (_,E_aux (E_id (Id_aux (id',_)),_)),_)
-       | LB_aux (LB_val_implicit (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
-         E_aux (E_id (Id_aux (id',_)),_)
-       | LB_aux (LB_val_implicit (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+       | LB_aux (LB_val (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
          E_aux (E_cast (_,E_aux (E_id (Id_aux (id',_)),_)),_)
             when id = id' ->
           exp1
        (* "let x = EXP1 in return x" can be replaced with 'return (EXP1)', at
           least when EXP1 is 'small' enough *)
-       | LB_aux (LB_val_explicit (_,P_aux (P_id (Id_aux (id,_)),_),exp1),_),
-         E_aux (E_internal_return (E_aux (E_id (Id_aux (id',_)),_)),_)
-       | LB_aux (LB_val_implicit (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+       | LB_aux (LB_val (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
          E_aux (E_internal_return (E_aux (E_id (Id_aux (id',_)),_)),_)
             when id = id' && small exp1 ->
           let (E_aux (_,e1annot)) = exp1 in

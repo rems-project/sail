@@ -51,6 +51,9 @@ let loc n m = Range (m, n)
 let mk_id i n m = Id_aux (i, loc m n)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
+let id_of_kid = function
+  | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
+
 let deinfix (Id_aux (Id v, l)) = Id_aux (DeIid v, l)
 
 let mk_effect e n m = BE_aux (e, loc n m)
@@ -266,7 +269,7 @@ atomic_nc:
   | False
     { mk_nc NC_false $startpos $endpos }
   | typ Eq typ
-    { mk_nc (NC_fixed ($1, $3)) $startpos $endpos }
+    { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
   | typ ExclEq typ
     { mk_nc (NC_not_equal ($1, $3)) $startpos $endpos }
   | nc_lchain
@@ -276,7 +279,7 @@ atomic_nc:
   | Lparen nc Rparen
     { $2 }
   | kid In Lcurly num_list Rcurly
-    { mk_nc (NC_nat_set_bounded ($1, $4)) $startpos $endpos }
+    { mk_nc (NC_set ($1, $4)) $startpos $endpos }
 
 num_list:
   | Num
@@ -481,7 +484,7 @@ atomic_typ:
     { let v = mk_kid "n" $startpos $endpos in
       let atom_id = mk_id (Id "atom") $startpos $endpos in
       let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
-      mk_typ (ATyp_exist ([v], NC_aux (NC_nat_set_bounded (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
+      mk_typ (ATyp_exist ([v], NC_aux (NC_set (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
   | Lcurly kid_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kid_list Comma nc Dot typ Rcurly
@@ -604,7 +607,7 @@ atomic_pat:
   | id
     { mk_pat (P_id $1) $startpos $endpos }
   | kid
-    { mk_pat (P_var $1) $startpos $endpos }
+    { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos, $1)) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | pat Colon typ
@@ -836,7 +839,7 @@ block:
 
 %inline letbind:
   | pat Eq exp
-    { LB_aux (LB_val_implicit ($1, $3), loc $startpos $endpos) }
+    { LB_aux (LB_val ($1, $3), loc $startpos $endpos) }
 
 atomic_exp:
   | atomic_exp Colon atomic_typ
@@ -942,7 +945,13 @@ let_def:
 
 val_spec_def:
   | Val id Colon typschm
-    { mk_vs (VS_val_spec ($4, $2)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, $2, None, false)) $startpos $endpos }
+  | Val Cast id Colon typschm
+    { mk_vs (VS_val_spec ($5, $3, None, true)) $startpos $endpos }
+  | Val id Eq String Colon typschm
+    { mk_vs (VS_val_spec ($6, $2, Some $4, false)) $startpos $endpos }
+  | Val Cast id Eq String Colon typschm
+    { mk_vs (VS_val_spec ($7, $3, Some $5, true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

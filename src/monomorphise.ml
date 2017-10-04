@@ -177,7 +177,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
      in
      let find_set (Kid_aux (Var nvar,_) as kid) =
        match list_extract (function
-       | QI_aux (QI_const (NC_aux (NC_nat_set_bounded (Kid_aux (Var nvar',_),vals),_)),_)
+       | QI_aux (QI_const (NC_aux (NC_set (Kid_aux (Var nvar',_),vals),_)),_)
          -> if nvar = nvar' then Some vals else None
        | _ -> None) qs with
        | None ->
@@ -327,8 +327,6 @@ let nexp_subst_fns substs refinements =
       | E_if (e1,e2,e3) -> re (E_if (s_exp e1, s_exp e2, s_exp e3))
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,s_exp e1,s_exp e2,s_exp e3,ord,s_exp e4))
       | E_vector es -> re (E_vector (List.map s_exp es))
-      | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,s_exp e)) ies,
-                                                           s_opt_default ed))
       | E_vector_access (e1,e2) -> re (E_vector_access (s_exp e1,s_exp e2))
       | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (s_exp e1,s_exp e2,s_exp e3))
       | E_vector_update (e1,e2,e3) -> re (E_vector_update (s_exp e1,s_exp e2,s_exp e3))
@@ -365,9 +363,7 @@ let nexp_subst_fns substs refinements =
          Pat_aux (Pat_when ((*s_pat*) p, s_exp e1, s_exp e2),(l,(*s_tannot*) annot))
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
-      | LB_val_explicit (tysch,p,e) ->
-         LB_aux (LB_val_explicit ((*s_typschm*) tysch,(*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
-      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
+      | LB_val (p,e) -> LB_aux (LB_val ((*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
     and s_lexp (LEXP_aux (e,(l,annot))) =
       let re e = LEXP_aux (e,(l,(*s_tannot*) annot)) in
       match e with
@@ -401,7 +397,6 @@ let bindings_from_pat p =
     | P_list ps
       -> List.concat (List.map aux_pat ps)
     | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
-    | P_vector_indexed ips -> List.concat (List.map (fun (_,p) -> aux_pat p) ips)
     | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
   and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
   in aux_pat p
@@ -440,12 +435,6 @@ let rec deexist_exp (E_aux (e,(l,(annot : Type_check.tannot))) as exp) =
   | E_for (id,e1,e2,e3,ord,e4) ->
      re (E_for (id,deexist_exp e1,deexist_exp e2,deexist_exp e3,ord,deexist_exp e4))
   | E_vector es -> re (E_vector (List.map deexist_exp es))
-  | E_vector_indexed (ies,def) ->
-     re (E_vector_indexed
-           (List.map (fun (i,e) -> (i,deexist_exp e)) ies,
-            match def with
-            | Def_val_aux (Def_val_empty,(l,ann)) -> Def_val_aux (Def_val_empty,(l,ann))
-            | Def_val_aux (Def_val_dec e,(l,ann)) -> Def_val_aux (Def_val_dec (deexist_exp e),(l,ann))))
   | E_vector_access (e1,e2) -> re (E_vector_access (deexist_exp e1,deexist_exp e2))
   | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (deexist_exp e1,deexist_exp e2,deexist_exp e3))
   | E_vector_update (e1,e2,e3) -> re (E_vector_update (deexist_exp e1,deexist_exp e2,deexist_exp e3))
@@ -469,8 +458,7 @@ and deexist_pexp (Pat_aux (pe,(l,annot))) =
   | Pat_when (p,e1,e2) -> Pat_aux (Pat_when ((*Type_check.strip_pat*) p,deexist_exp e1,deexist_exp e2),(l,annot))
 and deexist_letbind (LB_aux (lb,(l,annot))) =
   match lb with (* TODO, drop tysc if there's an exist? Do they even appear here? *)
-  | LB_val_explicit (tysc,p,e) -> LB_aux (LB_val_explicit (tysc,(*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
-  | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
+  | LB_val (p,e) -> LB_aux (LB_val ((*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
 and deexist_lexp (LEXP_aux (le,(l,annot))) =
   let re le = LEXP_aux (le,(l,annot)) in
   match le with
@@ -719,8 +707,6 @@ let split_defs splits defs =
        | _ -> re (E_if (e1',e2',e3')))
     | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,ord,const_prop_exp (ISubst.remove id substs) e4))
     | E_vector es -> re (E_vector (List.map (const_prop_exp substs) es))
-    | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,const_prop_exp substs e)) ies,
-                                                         const_prop_opt_default substs ed))
     | E_vector_access (e1,e2) -> re (E_vector_access (const_prop_exp substs e1,const_prop_exp substs e2))
     | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
     | E_vector_update (e1,e2,e3) -> re (E_vector_update (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
@@ -770,11 +756,8 @@ let split_defs splits defs =
        Pat_aux (Pat_when (p, const_prop_exp substs' e1, const_prop_exp substs' e2),l)
   and const_prop_letbind substs (LB_aux (lb,annot)) =
     match lb with
-    | LB_val_explicit (tysch,p,e) ->
-       (LB_aux (LB_val_explicit (tysch,p,const_prop_exp substs e), annot),
-        remove_bound substs p)
-    | LB_val_implicit (p,e) ->
-       (LB_aux (LB_val_implicit (p,const_prop_exp substs e), annot),
+    | LB_val (p,e) ->
+       (LB_aux (LB_val (p,const_prop_exp substs e), annot),
         remove_bound substs p)
   and const_prop_lexp substs ((LEXP_aux (e,annot)) as le) =
     let re e = LEXP_aux (e,annot) in
@@ -828,7 +811,7 @@ let split_defs splits defs =
       let lg = Generated l in
       let id = match subi with Id_aux (i,l) -> Id_aux (i,lg) in
       let p = P_aux (P_id id, subannot) in
-      E_aux (E_let (LB_aux (LB_val_implicit (p,sube),(lg,annot)), exp),(lg,annot))
+      E_aux (E_let (LB_aux (LB_val (p,sube),(lg,annot)), exp),(lg,annot))
     else 
       let substs = isubst_from_list [subst] in
       let () = nexp_substs := [] in
@@ -950,8 +933,6 @@ let split_defs splits defs =
            relist fpat (fun fps -> P_record (fps,flag)) fps
         | P_vector ps ->
            relist spl (fun ps -> P_vector ps) ps
-        | P_vector_indexed ips ->
-           relist ipat (fun ips -> P_vector_indexed ips) ips
         | P_vector_concat ps ->
            relist spl (fun ps -> P_vector_concat ps) ps
         | P_tup ps ->
@@ -1039,8 +1020,6 @@ let split_defs splits defs =
       | E_if (e1,e2,e3) -> re (E_if (map_exp e1, map_exp e2, map_exp e3))
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,map_exp e1,map_exp e2,map_exp e3,ord,map_exp e4))
       | E_vector es -> re (E_vector (List.map map_exp es))
-      | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,map_exp e)) ies,
-                                                           map_opt_default ed))
       | E_vector_access (e1,e2) -> re (E_vector_access (map_exp e1,map_exp e2))
       | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (map_exp e1,map_exp e2,map_exp e3))
       | E_vector_update (e1,e2,e3) -> re (E_vector_update (map_exp e1,map_exp e2,map_exp e3))
@@ -1105,8 +1084,7 @@ let split_defs splits defs =
             ) patnsubsts)
     and map_letbind (LB_aux (lb,annot)) =
       match lb with
-      | LB_val_explicit (tysch,p,e) -> LB_aux (LB_val_explicit (tysch,check_single_pat p,map_exp e), annot)
-      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit (check_single_pat p,map_exp e), annot)
+      | LB_val (p,e) -> LB_aux (LB_val (check_single_pat p,map_exp e), annot)
     and map_lexp ((LEXP_aux (e,annot)) as le) =
       let re e = LEXP_aux (e,annot) in
       match e with
