@@ -73,12 +73,12 @@ let rec catch_early_return m = match m with
   | Return a ->            Done a
 end
 
-val read_mem : bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
+val read_mem : forall 'a 'b. Bitvector 'a, Bitvector 'b => bool -> read_kind -> 'a -> integer -> M 'b
 let read_mem dir rk addr sz =
-  let addr = address_lifted_of_bitv addr in
+  let addr = address_lifted_of_bitv (bits_of addr) in
   let sz = natFromInteger sz in
   let k memory_value =
-    let bitv = internal_mem_value dir memory_value in
+    let bitv = of_bits (internal_mem_value dir memory_value) in
     (Done bitv,Nothing) in
   Read_mem (rk,addr,sz) k
 
@@ -87,22 +87,22 @@ let excl_result () =
   let k successful = (return successful,Nothing) in
   Excl_res k
 
-val write_mem_ea : write_kind -> vector bitU -> integer -> M unit
+val write_mem_ea : forall 'a. Bitvector 'a => write_kind -> 'a -> integer -> M unit
 let write_mem_ea wk addr sz =
-  let addr = address_lifted_of_bitv addr in
+  let addr = address_lifted_of_bitv (bits_of addr) in
   let sz = natFromInteger sz in
   Write_ea (wk,addr,sz) (Done (),Nothing)
 
-val write_mem_val : vector bitU -> M bool
+val write_mem_val : forall 'a. Bitvector 'a => 'a -> M bool
 let write_mem_val v =
-  let v = external_mem_value v in
+  let v = external_mem_value (bits_of v) in
   let k successful = (return successful,Nothing) in
   Write_memv v k
 
-val read_reg_aux : reg_name -> M (vector bitU)
+val read_reg_aux : forall 'a. Bitvector 'a => reg_name -> M 'a
 let read_reg_aux reg = 
   let k reg_value =
-    let v = internal_reg_value reg_value in
+    let v = of_bits (internal_reg_value reg_value) in
     (Done v,Nothing) in
   Read_reg reg k
 
@@ -121,25 +121,29 @@ let read_reg_bitfield reg regfield =
 
 let reg_deref = read_reg
 
-val write_reg_aux : reg_name -> vector bitU -> M unit
+val write_reg_aux : forall 'a. Bitvector 'a => reg_name -> 'a -> M unit
 let write_reg_aux reg_name v =
-  let regval = external_reg_value reg_name v in
+  let regval = external_reg_value reg_name (bits_of v) in
   Write_reg (reg_name,regval) (Done (), Nothing)
 
 let write_reg reg v =
   write_reg_aux (external_reg_whole reg) v
 let write_reg_range reg i j v =
   write_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger j)) v
-let write_reg_bit reg i bit =
+let write_reg_pos reg i v =
   let iN = natFromInteger i in
-  write_reg_aux (external_reg_slice reg (iN,iN)) (Vector [bit] i (is_inc_of_reg reg))
+  write_reg_aux (external_reg_slice reg (iN,iN)) [v]
+let write_reg_bit = write_reg_pos
 let write_reg_field reg regfield v =
   write_reg_aux (external_reg_field_whole reg regfield.field_name) v
-let write_reg_bitfield reg regfield bit =
+(*let write_reg_field_bit reg regfield bit =
   write_reg_aux (external_reg_field_whole reg regfield.field_name)
-                (Vector [bit] 0 (is_inc_of_reg reg))
+                (Vector [bit] 0 (is_inc_of_reg reg))*)
 let write_reg_field_range reg regfield i j v =
   write_reg_aux (external_reg_field_slice reg regfield.field_name (natFromInteger i,natFromInteger j)) v
+let write_reg_field_pos reg regfield i v =
+  write_reg_field_range reg regfield i i [v]
+let write_reg_field_bit = write_reg_field_pos
 
 
 
@@ -170,7 +174,36 @@ let rec foreachM_dec (i,stop,by) vars body =
     foreachM_dec (i - by,stop,by) vars body
   else return vars
 
-let write_two_regs r1 r2 vec =
+val while_PP : forall 'vars. bool -> 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
+let rec while_PP is_while vars cond body =
+  if (cond vars = is_while)
+  then while_PP is_while (body vars) cond body
+  else vars
+
+val while_PM : forall 'vars 'r. bool -> 'vars -> ('vars -> bool) ->
+                ('vars -> MR 'vars 'r) -> MR 'vars 'r
+let rec while_PM is_while vars cond body =
+  if (cond vars = is_while)
+  then body vars >>= fun vars -> while_PM is_while vars cond body
+  else return vars
+
+val while_MP : forall 'vars 'r. bool -> 'vars -> ('vars -> MR bool 'r) ->
+                ('vars -> 'vars) -> MR 'vars 'r
+let rec while_MP is_while vars cond body =
+  cond vars >>= fun continue ->
+  if (continue = is_while)
+  then while_MP is_while (body vars) cond body
+  else return vars
+
+val while_MM : forall 'vars 'r. bool -> 'vars -> ('vars -> MR bool 'r) ->
+                ('vars -> MR 'vars 'r) -> MR 'vars 'r
+let rec while_MM is_while vars cond body =
+  cond vars >>= fun continue ->
+  if (continue = is_while)
+  then body vars >>= fun vars -> while_MM is_while vars cond body
+  else return vars
+
+(*let write_two_regs r1 r2 vec =
   let is_inc =
     let is_inc_r1 = is_inc_of_reg r1 in
     let is_inc_r2 = is_inc_of_reg r2 in
@@ -189,4 +222,4 @@ let write_two_regs r1 r2 vec =
     if is_inc
     then slice vec (size_r1 - start_vec) (size_vec - start_vec)
     else slice vec (start_vec - size_r1) (start_vec - size_vec) in
-  write_reg r1 r1_v >> write_reg r2 r2_v
+  write_reg r1 r1_v >> write_reg r2 r2_v*)

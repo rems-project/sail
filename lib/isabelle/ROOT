@@ -1,0 +1,18 @@
+session "Sail" = "LEM" +
+  options [document = false]
+  theories
+    Sail_values
+    State
+    Prompt
+    Sail_operators
+    Sail_operators_mwords
+
+(*session "Sail" = "Sail_Base" +
+  options [document = false]
+  theories
+    Sail_operators
+
+session "Sail_Word" = "Sail_Base" +
+  options [document = false]
+  theories
+    Sail_operators_mwords*)
