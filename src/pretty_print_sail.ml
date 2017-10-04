@@ -187,6 +187,9 @@ let doc_exp, doc_let =
       string "if" ^^ space ^^ group (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
         string "else" ^^ space ^^ group (exp e)
+  | E_loop (While, c, e) ->
+     separate space [string "while"; atomic_exp c; string "do"] ^/^
+       exp e
   | E_loop (Until, c, e) ->
      (string "repeat"
       ^/^ exp e)
