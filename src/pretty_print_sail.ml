@@ -53,8 +53,7 @@ let doc_bkind (BK_aux(k,_)) =
   string (match k with
   | BK_type -> "Type"
   | BK_nat -> "Nat"
-  | BK_order -> "Order"
-  | BK_effect -> "Effect")
+  | BK_order -> "Order")
 
 let doc_kind (K_aux(K_kind(klst),_)) =
   separate_map (spaces arrow) doc_bkind klst

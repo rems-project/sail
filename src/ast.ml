@@ -57,7 +57,6 @@ base_kind_aux =  (* base kind *)
    BK_type (* kind of types *)
  | BK_nat (* kind of natural number size expressions *)
  | BK_order (* kind of vector order specifications *)
- | BK_effect (* kind of effect sets *)
 
 
 type

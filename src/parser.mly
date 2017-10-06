@@ -309,8 +309,6 @@ atomic_kind:
     { bkloc BK_nat }
   | Order
     { bkloc BK_order }
-  | EFFECT
-    { bkloc BK_effect }
 
 kind_help:
   | atomic_kind

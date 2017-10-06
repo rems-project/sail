@@ -340,7 +340,6 @@ let string_of_base_kind_aux = function
   | BK_type -> "Type"
   | BK_nat -> "Nat"
   | BK_order -> "Order"
-  | BK_effect -> "Effect"
 
 let string_of_base_kind (BK_aux (bk, _)) = string_of_base_kind_aux bk
 

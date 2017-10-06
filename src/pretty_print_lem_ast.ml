@@ -133,8 +133,7 @@ let pp_format_bkind_lem (BK_aux(k,l)) =
   (match k with
     | BK_type -> "BK_type"
     | BK_nat -> "BK_nat"
-    | BK_order -> "BK_order"
-    | BK_effect -> "BK_effect") ^ " " ^
+    | BK_order -> "BK_order") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 
 let pp_lem_bkind ppf bk = base ppf (pp_format_bkind_lem bk)

@@ -128,7 +128,6 @@ let to_ast_base_kind (Parse_ast.BK_aux(k,l')) =
   | Parse_ast.BK_type -> BK_aux(BK_type,l'), { k = K_Typ}
   | Parse_ast.BK_nat -> BK_aux(BK_nat,l'), { k = K_Nat }
   | Parse_ast.BK_order -> BK_aux(BK_order,l'), { k = K_Ord }
-  | Parse_ast.BK_effect -> BK_aux(BK_effect,l'), { k = K_Efct }
 
 let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),l)) : (Ast.kind * kind) =
   match klst with
