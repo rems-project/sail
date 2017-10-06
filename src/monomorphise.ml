@@ -585,8 +585,7 @@ type 'a matchresult =
   | DoesNotMatch
   | GiveUp
 
-let can_match (E_aux (e,(l,annot)) as exp0) cases =
-  let (env,_) = env_typ_expected l annot in
+let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
   let rec findpat_generic check_pat description = function
     | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                ("Failed to find a case for " ^ description); None)
@@ -635,6 +634,10 @@ let can_match (E_aux (e,(l,annot)) as exp0) cases =
              "Unexpected kind of pattern for literal"; GiveUp)
      in findpat_generic checkpat "literal" cases
   | _ -> None
+
+let can_match (E_aux (_,(l,annot)) as exp0) cases =
+  let (env,_) = env_typ_expected l annot in
+  can_match_with_env env exp0 cases
 
 (* Remove top-level casts from an expression.  Useful when we need to look at
    subexpressions to reduce something, but could break type-checking if we used
@@ -882,9 +885,10 @@ let split_defs splits defs =
        re (E_cast (t, e'')) assigns
     | E_app (id,es) ->
        let es',assigns = non_det_exp_list es in
+       let env,_ = env_typ_expected l annot in
        (match try_app (l,annot) (id,es') with
        | None ->
-          (match const_prop_try_fn (id,es') with
+          (match const_prop_try_fn l env (id,es') with
           | None ->
              (let env,_ = env_typ_expected l annot in
               match Env.is_union_constructor id env, refine_constructor refinements l env id es' with
@@ -1087,7 +1091,7 @@ let split_defs splits defs =
      (and 4. the function is not scattered, but that's not terribly important)
      to try and keep execution time and the results managable.
   *)
-  and const_prop_try_fn (id,args) =
+  and const_prop_try_fn l env (id,args) =
     if not (List.for_all is_value args) then
       None
     else
@@ -1100,13 +1104,13 @@ let split_defs splits defs =
       | Some (eff,_) when not (is_pure eff) -> None
       | Some (_,fcls) ->
          let arg = match args with
-           | [] -> E_aux (E_lit (L_aux (L_unit,Unknown)),(Unknown,None))
+           | [] -> E_aux (E_lit (L_aux (L_unit,Generated l)),(Generated l,None))
            | [e] -> e
-           | _ -> E_aux (E_tuple args,(Unknown,None)) in
+           | _ -> E_aux (E_tuple args,(Generated l,None)) in
          let cases = List.map (function
            | FCL_aux (FCL_Funcl (_,pat,exp), ann) -> Pat_aux (Pat_exp (pat,exp),ann))
            fcls in
-         match can_match arg cases with
+         match can_match_with_env env arg cases with
          | Some (exp,bindings,kbindings) ->
             let substs = bindings_from_list bindings in
             let result,_ = const_prop_exp substs Bindings.empty exp in
