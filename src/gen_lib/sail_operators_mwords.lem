@@ -501,6 +501,11 @@ let mod_VIV = arith_op_vec_range_no0 hardware_mod false 1
 let duplicate (bit, length) =
   vec_to_bvec (Vector (repeat [bit] length) (length - 1) false)
 
+(* TODO: replace with better native versions *)
+let replicate_bits (v, count) =
+  let v = bvec_to_vec true 0 v in
+  vec_to_bvec (Vector (repeat (get_elems v) count) ((length v * count) - 1) false)
+
 let compare_op op (l,r) = (op l r)
 
 let lt = compare_op (<)
