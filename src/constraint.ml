@@ -212,7 +212,44 @@ let smtlib_of_constraint constr : string =
 
 type t = nexp constraint_bool
 
-type smt_result = Unknown of t list | Unsat of t
+type smt_result = Unknown | Sat | Unsat
+
+module DigestMap = Map.Make(Digest)
+
+let known_problems = ref (DigestMap.empty)
+
+let load_digests_err () =
+  let in_chan = open_in_bin "z3_problems" in
+  let rec load () =
+    let digest = Digest.input in_chan in
+    let result = input_byte in_chan in
+    begin
+      match result with
+      | 0 -> known_problems := DigestMap.add digest Unknown !known_problems
+      | 1 -> known_problems := DigestMap.add digest Sat !known_problems
+      | 2 -> known_problems := DigestMap.add digest Unsat !known_problems
+      | _ -> assert false
+    end;
+    load ()
+  in
+  try load () with
+  | End_of_file -> close_in in_chan
+
+let load_digests () =
+  try load_digests_err () with
+  | Sys_error _ -> ()
+
+let save_digests () =
+  let out_chan = open_out_bin "z3_problems" in
+  let output digest result =
+    Digest.output out_chan digest;
+    match result with
+    | Unknown -> output_byte out_chan 0
+    | Sat -> output_byte out_chan 1
+    | Unsat -> output_byte out_chan 2
+  in
+  DigestMap.iter output !known_problems;
+  close_out out_chan
 
 let rec call_z3 constraints : smt_result =
   let problems = unbranch constraints in
@@ -235,24 +272,31 @@ let rec call_z3 constraints : smt_result =
        end
   in
 
-  begin
-    let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
-    output_string tmp_chan z3_file;
-    close_out tmp_chan;
-    let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
-    let z3_output = List.combine problems (input_lines z3_chan (List.length problems)) in
-    let _ = Unix.close_process_in z3_chan in
-    Sys.remove input_file;
-    try
-      let (problem, _) = List.find (fun (_, result) -> result = "unsat") z3_output in
-      Unsat problem
-    with
-    | Not_found ->
-       z3_output
-       |> List.filter (fun (_, result) -> result = "unknown")
-       |> List.map fst
-       |> (fun unsolved -> Unknown unsolved)
-  end
+  let digest = Digest.string z3_file in
+  try
+    let result = DigestMap.find digest !known_problems in
+    result
+  with
+  | Not_found ->
+    begin
+      let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
+      output_string tmp_chan z3_file;
+      close_out tmp_chan;
+      let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
+      let z3_output = List.combine problems (input_lines z3_chan (List.length problems)) in
+      let _ = Unix.close_process_in z3_chan in
+      Sys.remove input_file;
+      try
+        let (problem, _) = List.find (fun (_, result) -> result = "unsat") z3_output in
+        known_problems := DigestMap.add digest Unsat !known_problems;
+        Unsat
+      with
+      | Not_found ->
+         let unsolved = List.filter (fun (_, result) -> result = "unknown") z3_output in
+         if unsolved == []
+         then (known_problems := DigestMap.add digest Sat !known_problems; Sat)
+         else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
+    end
 
 let string_of constr =
   constr

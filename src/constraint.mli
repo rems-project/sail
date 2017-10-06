@@ -1,12 +1,15 @@
 type nexp
 type t
 
-type smt_result = Unknown of t list | Unsat of t
-       
+type smt_result = Unknown | Sat | Unsat
+
+val load_digests : unit -> unit
+val save_digests : unit -> unit
+
 val call_z3 : t -> smt_result
 
 val string_of : t -> string
-                                           
+
 val implies : t -> t -> t
 val conj : t -> t -> t
 val disj : t -> t -> t

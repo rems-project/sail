@@ -1105,9 +1105,9 @@ let prove_z3 env nc =
   in
   let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.negate (nc_constraint env var_of nc)) in
   match Constraint.call_z3 constr with
-  | Constraint.Unsat _ -> typ_debug "unsat"; true
-  | Constraint.Unknown [] -> typ_debug "sat"; false
-  | Constraint.Unknown _ -> typ_debug "unknown"; false
+  | Constraint.Unsat -> typ_debug "unsat"; true
+  | Constraint.Sat -> typ_debug "sat"; false
+  | Constraint.Unknown -> typ_debug "unknown"; false
 
 let prove env (NC_aux (nc_aux, _) as nc) =
   let compare_const f (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
@@ -1171,9 +1171,9 @@ let rec subtyp_tnf env tnf1 tnf2 =
        let (prop1, prop2) = props_subst kid1 (Nexp_var kid3) prop1, props_subst kid2 (Nexp_var kid3) prop2 in
        let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.conj (pos_props prop1) (neg_props prop2)) in
        match Constraint.call_z3 constr with
-       | Constraint.Unsat _ -> typ_debug "unsat"; true
-       | Constraint.Unknown [] -> typ_debug "sat"; false
-       | Constraint.Unknown _ -> typ_debug "unknown"; false
+       | Constraint.Unsat -> typ_debug "unsat"; true
+       | Constraint.Sat -> typ_debug "sat"; false
+       | Constraint.Unknown -> typ_debug "unknown"; false
      end
   | _, _ -> false
 

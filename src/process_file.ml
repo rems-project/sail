@@ -82,13 +82,16 @@ let parse_file (f : string) : Parse_ast.defs =
       in
       close_in in_chan; ast
     with
-      | Parsing.Parse_error ->
-          let pos = Lexing.lexeme_start_p lexbuf in
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "main")))
-      | Parse_ast.Parse_error_locn(l,m) ->
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
-      | Lexer.LexError(s,p) ->
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
+    | Parser2.Error ->
+       let pos = Lexing.lexeme_start_p lexbuf in
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "no information")))
+    | Parsing.Parse_error ->
+       let pos = Lexing.lexeme_start_p lexbuf in
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "main")))
+    | Parse_ast.Parse_error_locn(l,m) ->
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
+    | Lexer.LexError(s,p) ->
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
@@ -237,7 +240,11 @@ let rewrite_step defs rewriter =
     | _ -> () in
   defs
 
-let rewrite rewriters defs = List.fold_left rewrite_step defs rewriters
+let rewrite rewriters defs =
+  try List.fold_left rewrite_step defs rewriters with
+  | Type_check.Type_error (_, err) ->
+     prerr_endline (Type_check.string_of_type_error err);
+     exit 1
 
 let rewrite_ast = rewrite [Rewriter.rewrite_defs]
 let rewrite_ast_lem = rewrite Rewriter.rewrite_defs_lem

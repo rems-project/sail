@@ -958,6 +958,8 @@ let generate_undefineds vs_ids (Defs defs) =
      gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
      gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
      gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
+     gen_vs (mk_id "undefined_nat") "unit -> nat effect {undef}";
+     gen_vs (mk_id "undefined_real") "unit -> real effect {undef}";
      gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
      gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
      (* FIXME: How to handle inc/dec order correctly? *)

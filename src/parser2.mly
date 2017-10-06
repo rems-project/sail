@@ -46,9 +46,9 @@ let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
 open Parse_ast
 
-let loc n m = Range (m, n)
+let loc n m = Range (n, m)
 
-let mk_id i n m = Id_aux (i, loc m n)
+let mk_id i n m = Id_aux (i, loc n m)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
 let id_of_kid = function
@@ -434,16 +434,19 @@ typ8:
   | typ8l op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ9 op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 typ8l:
   | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ8l op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 typ8r:
   | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ9 op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 
 typ9:

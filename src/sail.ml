@@ -51,6 +51,7 @@ let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
 let opt_convert = ref false
+let opt_memo_z3 = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -104,6 +105,9 @@ let options = Arg.align ([
   ( "-convert",
     Arg.Set opt_convert,
     " Convert sail to new syntax");
+  ( "-memo_z3",
+    Arg.Set opt_memo_z3,
+    " Memoize calls to z3");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
@@ -143,6 +147,7 @@ let main() =
   if !(opt_print_version)
   then Printf.printf "Sail private release \n"
   else
+    if !opt_memo_z3 then Constraint.load_digests () else ();
 
     let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
     let ast =
@@ -166,6 +171,9 @@ let main() =
     let out_name = match !opt_file_out with
       | None -> fst (List.hd parsed)
       | Some f -> f ^ ".sail" in
+
+    if !opt_memo_z3 then Constraint.save_digests () else ();
+
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
       (if !(opt_print_verbose)
