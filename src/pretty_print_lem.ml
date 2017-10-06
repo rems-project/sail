@@ -162,7 +162,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
          (*let exc_typ = string "string" in*)
          let ret_typ =
            if effectful efct
-           then separate space [string "M";(*parens exc_typ;*) fn_typ sequential mwords true ret]
+           then separate space [string "_M";(*parens exc_typ;*) fn_typ sequential mwords true ret]
            else separate space [fn_typ sequential mwords false ret] in
          let tpp = separate space [tup_typ sequential mwords true arg; arrow;ret_typ] in
          (* once we have proper excetions we need to know what the exceptions type is *)
@@ -304,10 +304,37 @@ let doc_typquant_items_lem (TypQ_aux(tq,_)) = match tq with
 let doc_typquant_lem (TypQ_aux(tq,_)) typ = match tq with
 | TypQ_tq ((_ :: _) as qs) ->
   string "forall " ^^ separate_map space doc_quant_item qs ^^ string ". " ^^ typ
-| _ -> empty
+| _ -> typ
+
+(* Produce Size type constraints for bitvector sizes when using
+   machine words.  Often these will be unnecessary, but this simple
+   approach will do for now. *)
+
+let rec typeclass_vars (Typ_aux(t,_)) = match t with
+| Typ_wild
+| Typ_id _
+| Typ_var _
+  -> []
+| Typ_fn (t1,t2,_) -> typeclass_vars t1 @ typeclass_vars t2
+| Typ_tup ts -> List.concat (List.map typeclass_vars ts)
+| Typ_app (Id_aux (Id "vector",_),
+           [_;Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var v,_)),_);
+            _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+   [v]
+| Typ_app _ -> []
+| Typ_exist (kids,_,t) -> [] (* todo *)
+
+let doc_typclasses_lem mwords t =
+  if mwords then
+    let vars = typeclass_vars t in
+    let vars = List.sort_uniq Kid.compare vars in
+    match vars with
+    | [] -> empty
+    | _ -> separate_map comma_sp (fun var -> string "Size " ^^ doc_var var) vars ^^ string " => "
+  else empty
 
 let doc_typschm_lem sequential mwords quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
-  if quants then (doc_typquant_lem tq (doc_typ_lem sequential mwords t))
+  if quants then (doc_typquant_lem tq (doc_typclasses_lem mwords t ^^ doc_typ_lem sequential mwords t))
   else doc_typ_lem sequential mwords t
 
 let is_ctor env id = match Env.lookup_id id env with
@@ -1572,16 +1599,16 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
-let doc_spec_lem mwords (VS_aux (valspec,annot)) =
+let doc_spec_lem sequential mwords (VS_aux (valspec,annot)) =
   match valspec with
   | VS_extern_no_rename _
   | VS_extern_spec _ -> empty (* ignore these at the moment *)
-  | VS_val_spec (typschm,id) | VS_cast_spec (typschm,id) -> empty
-(* separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem mwords typschm] ^/^ hardline *)
+  | VS_val_spec (typschm,id) | VS_cast_spec (typschm,id) ->
+     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem sequential mwords true typschm] ^/^ hardline 
 
 
 let rec doc_def_lem sequential mwords def = match def with
-  | DEF_spec v_spec -> (doc_spec_lem mwords v_spec,empty)
+  | DEF_spec v_spec -> (empty,doc_spec_lem sequential mwords v_spec)
   | DEF_overload _ -> (empty,empty)
   | DEF_type t_def -> (group (doc_typdef_lem sequential mwords t_def) ^/^ hardline,empty)
   | DEF_reg_dec dec -> (group (doc_dec_lem sequential dec),empty)
