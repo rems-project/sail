@@ -1221,180 +1221,13 @@ let nia_address_of_event nia_reg (event: event) : maybe (maybe address) =
   | _ -> Nothing
   end
 
-let nias_of_instruction
-      top_level
-      thread_ism
-    (nia_address: list (maybe address)) (* Nothing for unknown/undef*)
-    (regs_in:     list reg_name)
-    (instruction: Interp_ast.value)
-    : list nia
-  =
-  let (instruction_name, instruction_fields) = interp_value_to_instr_external top_level instruction in
-
-  let unknown_nia_address = List.elem Nothing nia_address in
-
-  let nias = [NIA_concrete_address addr | forall (addr MEM (List.mapMaybe id nia_address)) | true] in
-
-  (* it's a fact of the Power2.06B instruction pseudocode that in the B and Bc
-     cases there should be no Unknown values in nia_values, while in the Bclr
-     and Bcctr cases nia_values will just be Unknown and the semantics should
-     match the comments in the machineDefTypes definition of nia *)
-  (* All our other analysis is on the pseudocode directly, which is arguably
-     pleasingly robust.  We could replace the nias pattern match on
-     instruction_name with something in that style if the exhaustive interpreter
-     announced register dependencies to register writes (easy) and if it could
-     check the form of the register writes to LR and CTR matches the
-     machineDefTypes nia definition *)
-  match (thread_ism, instruction_name) with
-    | ("PPCGEN_ism", "B") ->
-       let () = ensure (not unknown_nia_address)
-                       "unexpected unknown/undefined address in nia_values 1" in
-       nias
-    | ("PPCGEN_ism", "Bc") ->
-       let () = ensure (not unknown_nia_address)
-                       "unexpected unknown/undefined address in nia_values 2" in
-       NIA_successor :: nias
-    | ("PPCGEN_ism", "Bclr") -> [ NIA_successor; NIA_LR ]
-    | ("PPCGEN_ism", "Bcctr") -> [ NIA_successor; NIA_CTR ]
-    | ("PPCGEN_ism", "Sc") ->
-       let () = ensure (not unknown_nia_address)
-                       "unexpected unknown/undefined address in nia_values 3" in
-       match instruction_fields with
-       | [(_, _, lev)] ->
-          (* LEV field is 7 bits long, pad it with false at beginning *)
-          if lev = [Bitc_zero;Bitc_one;Bitc_one;Bitc_one;Bitc_one;Bitc_one;Bitc_one]
-                     (* (Interp_inter_imp.integer_of_byte_list (Interp_inter_imp.to_bytes (false :: bl))) = 63 *)
-          then []
-          else [NIA_successor]
-       | _ -> [ NIA_successor ]
-       end
-    | ("PPCGEN_ism", s) ->
-        let () = ensure (not unknown_nia_address)
-                  ("unexpected unknown/undefined address in nia_values 4 (\"PPCGEN_ism\", \"" ^ s ^ "\")") in
-        [ NIA_successor ]
-
-    (* AARch64 label branch (i.e. address must be known) although
-    these instructions take the address as an offset from PC, in here
-    we see the absolute address as it was extracted from the micro ops
-    just before write to PC *)
-    | ("AArch64HandSail", "BranchImmediate")   -> nias
-    | ("AArch64HandSail", "BranchConditional") -> NIA_successor :: nias
-    | ("AArch64HandSail", "CompareAndBranch")  -> NIA_successor :: nias
-    | ("AArch64HandSail", "TestBitAndBranch")  -> NIA_successor :: nias
-
-    (* AArch64 calculated address branch *)
-    | ("AArch64HandSail", "BranchRegister") ->
-        (* do some parsing of the ast fields to figure out which register holds
-           the branching address i.e. find n in "BR <Xn>". The ast constructor
-           from armV8.sail: (reg_index,BranchType) BranchRegister; *)
-        let n_integer =
-          match instruction_fields with
-          | [(_, _, n); _] -> integer_of_bit_list n
-          | _ -> fail
-          end
-        in
-        let () = ensure (0 <= n_integer && n_integer <= 31)
-                  "expected register number from 0 to 31"
-        in
-        if n_integer = 31 then
-          nias (* BR XZR *)
-        else
-          (* look for Xn (which we actually call Rn) in regs_in *)
-          let n_reg = "R" ^ (String_extra.stringFromInteger n_integer) in
-          [NIA_register r | forall (r MEM regs_in)
-                          | match r with
-                            | (Reg name _ _ _) -> name = n_reg
-                            | _ -> false
-                            end]
-    | ("AArch64HandSail", s) ->
-        let () = ensure (not unknown_nia_address)
-                  ("unexpected unknown/undefined address in nia_values 4 (\"AArch64HandSail\", \"" ^ s ^ "\")") in
-        [ NIA_successor ]
-
-    (** hacky cut-and-paste for AArch64Gen, duplicating code just to see if this suffices *)
-
-    | ("AArch64GenSail", "BranchImmediate")   -> nias
-    | ("AArch64GenSail", "BranchConditional") -> NIA_successor :: nias
-    | ("AArch64GenSail", "CompareAndBranch")  -> NIA_successor :: nias
-    | ("AArch64GenSail", "TestBitAndBranch")  -> NIA_successor :: nias
-
-    (* AArch64 calculated address branch *)
-    | ("AArch64GenSail", "branch_unconditional_register") ->
-        (* do some parsing of the ast fields to figure out which register holds
-           the branching address i.e. find n in "BR <Xn>". The ast constructor
-           from armV8.sail: (reg_index,BranchType) BranchRegister; *)
-        let n_integer =
-          match instruction_fields with
-          | [(_, _, n); _] -> integer_of_bit_list n
-          | _ -> fail
-          end
-        in
-        let () = ensure (0 <= n_integer && n_integer <= 31)
-                  "expected register number from 0 to 31"
-        in
-        if n_integer = 31 then
-          nias (* BR XZR *)
-        else
-          (* look for Xn (which we actually call Rn) in regs_in *)
-          let n_reg = "R" ^ (String_extra.stringFromInteger n_integer) in
-          [NIA_register r | forall (r MEM regs_in)
-                          | match r with
-                            | (Reg name _ _ _) -> name = n_reg
-                            | _ -> false
-                            end]
-    | ("AArch64GenSail", s) ->
-        let () = ensure (not unknown_nia_address)
-                  ("unexpected unknown/undefined address in nia_values 4 (\"AArch64GenSail\", \"" ^ s ^ "\")") in
-        [ NIA_successor ]
-
-    (** end of hacky *)
-
-    | ("AArch64LitmusSail", "CtrlDep") -> NIA_successor :: nias
-    | ("AArch64LitmusSail", s) ->
-        let () = ensure (not unknown_nia_address)
-                  ("unexpected unknown/undefined address in nia_values 4 (\"AArch64LitmusSail\", \"" ^ s ^ "\")") in
-        [ NIA_successor ]
-
-
-    | ("MIPS_ism", "B") -> fail
-    | ("MIPS_ism", s) ->
-        let () = ensure (not unknown_nia_address)
-                  ("unexpected unknown/undefined address in nia_values 4 (\"MIPS_ism\", \"" ^ s ^ "\")") in
-        [ NIA_successor ]
-
-    | ("RISCV_ism", "JAL") -> nias
-    | ("RISCV_ism", "JALR") ->
-        let rs1_integer =
-          match instruction_fields with
-          | [_; (_, _, rs1); _] -> integer_of_bit_list rs1
-          | _ -> fail
-          end
-        in
-        let () = ensure (0 <= rs1_integer && rs1_integer <= 31)
-                  "expected register number from 0 to 31"
-        in
-        if rs1_integer = 0 then nias
-        else
-          let rs1_reg = "x" ^ (String_extra.stringFromInteger rs1_integer) in
-          [NIA_register r | forall (r MEM regs_in)
-                          | match r with
-                            | (Reg name _ _ _) -> name = rs1_reg
-                            | _ -> false
-                            end]
-    | ("RISCV_ism", "BTYPE") -> NIA_successor :: nias
-    | ("RISCV_ism", s) ->
-        let () = ensure (not unknown_nia_address)
-                  ("unexpected unknown/undefined address in nia_values 4 (\"RISCV_ism\", \"" ^ s ^ "\")") in
-        [ NIA_successor ]
-
-    | (s1, s2) -> failwith ("unexpected (thread_ism, instruction_name): (" ^ s1 ^ ", " ^ s2 ^ ")")
-    end
-
-
 let interp_instruction_analysis 
       top_level
       (interp_exhaustive : ((list (reg_name * register_value)) -> list event))
-      instruction nia_reg ism environment = 
+      instruction 
+      nia_reg 
+      (nias_function : (list (maybe address) -> list reg_name -> list nia))
+      ism environment = 
     
     let es = interp_exhaustive environment in
 
@@ -1405,7 +1238,7 @@ let interp_instruction_analysis
 
     let nia_address = List.mapMaybe (nia_address_of_event nia_reg) es in
 
-    let nias = nias_of_instruction top_level ism nia_address regs_in instruction in
+    let nias = nias_function nia_address regs_in in
 
     let dia = DIA_none in (* FIX THIS! *)
 
@@ -1496,12 +1329,13 @@ let interp_compare_analyses
       interp_exhaustive
       (instruction : Interp_ast.value)
       nia_reg
+      (nias_function : (list (maybe address) -> list reg_name -> list nia))
       ism
       environment
       analysis_function
       reg_info = 
   let (regs_in1,regs_out1,regs_feeding_address1,nias1,dia1,inst_kind1) = 
-    interp_instruction_analysis context interp_exhaustive instruction nia_reg ism 
+    interp_instruction_analysis context interp_exhaustive instruction nia_reg nias_function ism 
                                 environment in
   let (regs_in1S,regs_out1S,regs_feeding_address1S,nias1S) =
     (Set.fromList regs_in1,
