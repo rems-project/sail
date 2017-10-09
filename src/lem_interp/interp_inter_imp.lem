@@ -571,6 +571,21 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
          | Interp_ast.V_ctor (Id_aux (Id "NIAFP_register") _) _ _ reg ->
             NIA_register (reg_to_reg_name reg)
          | _ -> failwith "Register footprint analysis did not return nia of expected type" end in
+       let readk_to_readk = function
+                         | "Read_plain" ->             Read_plain
+                         | "Read_reserve" ->           Read_reserve
+                         | "Read_acquire" ->           Read_acquire
+                         | "Read_exclusive" ->         Read_exclusive
+                         | "Read_exclusive_acquire" -> Read_exclusive_acquire
+                         | "Read_stream" ->            Read_stream 
+                         | r -> failwith ("unknown read kind: " ^ r) end in
+       let writek_to_writek = function
+                         | "Write_plain" ->             Write_plain
+                         | "Write_conditional" ->       Write_conditional
+                         | "Write_release" ->           Write_release
+                         | "Write_exclusive" ->         Write_exclusive
+                         | "Write_exclusive_release" -> Write_exclusive_release 
+                         | w -> failwith ("unknown write kind: " ^ w) end in
        let ik_to_ik = function
          | Interp_ast.V_ctor (Id_aux (Id "IK_barrier") _) _ _
            (Interp_ast.V_ctor (Id_aux (Id b) _) _ _ _) ->
@@ -591,23 +606,14 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
                         end)
          | Interp_ast.V_ctor (Id_aux (Id "IK_mem_read") _) _ _
            (Interp_ast.V_ctor (Id_aux (Id r) _) _ _ _) ->
-            IK_mem_read (match r with
-                         | "Read_plain" ->             Read_plain
-                         | "Read_reserve" ->           Read_reserve
-                         | "Read_acquire" ->           Read_acquire
-                         | "Read_exclusive" ->         Read_exclusive
-                         | "Read_exclusive_acquire" -> Read_exclusive_acquire
-                         | "Read_stream" ->            Read_stream
-                         end)
+            IK_mem_read(readk_to_readk r)
          | Interp_ast.V_ctor (Id_aux (Id "IK_mem_write") _) _ _
            (Interp_ast.V_ctor (Id_aux (Id w) _) _ _ _) ->
-            IK_mem_write (match w with
-                         | "Write_plain" ->             Write_plain
-                         | "Write_conditional" ->       Write_conditional
-                         | "Write_release" ->           Write_release
-                         | "Write_exclusive" ->         Write_exclusive
-                         | "Write_exclusive_release" -> Write_exclusive_release
-                          end)
+            IK_mem_write(writek_to_writek w)
+         | Interp_ast.V_ctor (Id_aux (Id "IK_mem_rmw") _) _ _
+           (Interp_ast.V_tuple [(Interp_ast.V_ctor (Id_aux (Id readk) _) _ _ _) ;
+                                (Interp_ast.V_ctor (Id_aux (Id writek) _) _ _ _)]) ->
+            IK_mem_rmw(readk_to_readk readk, writek_to_writek writek)
          | Interp_ast.V_ctor (Id_aux (Id "IK_cond_branch") _) _ _ _ ->
             IK_cond_branch
          | Interp_ast.V_ctor (Id_aux (Id "IK_simple") _) _ _ _ ->
