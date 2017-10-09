@@ -5,9 +5,9 @@
 
 (defconst sail2-keywords
   '("val" "function" "type" "struct" "union" "enum" "let" "if" "then"
-    "else" "match" "in" "return" "register" "forall" "op" "effect"
+    "else" "match" "in" "return" "register" "forall" "operator" "effect"
     "overload" "cast" "sizeof" "constraint" "default" "assert"
-    "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch"
+    "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and"
     "throw" "clause" "as"))
 
 (defconst sail2-kinds
@@ -16,7 +16,7 @@
     "exmem" "undef" "unspec" "nondet" "escape"))
 
 (defconst sail2-types
-  '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string"))
+  '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits"))
 
 (defconst sail2-special
   '("_prove"))

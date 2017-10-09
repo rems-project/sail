@@ -481,14 +481,18 @@ type
 scattered_def = 
    SD_aux of scattered_def_aux * l
 
+type prec = Infix | InfixL | InfixR
 
-type 
+type fixity_token = (prec * int * string)
+
+type
 def =  (* Top-level definition *)
    DEF_kind of kind_def (* definition of named kind identifiers *)
  | DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_val of letbind (* value definition *)
  | DEF_overload of id * id list (* operator overload specifications *)
+ | DEF_fixity of prec * int * id (* fixity declaration *)
  | DEF_spec of val_spec (* top-level type constraint *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)

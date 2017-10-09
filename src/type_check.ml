@@ -1959,7 +1959,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           let tpat, env = bind_pat env pat (typ_of inferred_bind) in
           annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
      end
-  | E_app_infix (x, op, y), _ when List.length (Env.get_overloads (deinfix op) env) > 0 ->
+  | E_app_infix (x, op, y), _ ->
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "_prove") = 0 ->
      if prove env nc
@@ -2592,7 +2592,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_cast (typ, exp) ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
-  | E_app_infix (x, op, y) when List.length (Env.get_overloads (deinfix op) env) > 0 -> infer_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ())))
+  | E_app_infix (x, op, y) -> infer_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ())))
   | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
@@ -3275,6 +3275,7 @@ let rec check_def env def =
   match def with
   | DEF_kind kdef -> check_kinddef env kdef
   | DEF_type tdef -> check_typedef env tdef
+  | DEF_fixity (prec, n, op) -> [DEF_fixity (prec, n, op)], env
   | DEF_fundef fdef -> check_fundef env fdef
   | DEF_val letdef -> check_letdef env letdef
   | DEF_spec vs -> check_val_spec env vs

@@ -553,6 +553,7 @@ type
 'a dec_spec =
    DEC_aux of 'a dec_spec_aux * 'a annot
 
+type prec = Infix | InfixL | InfixR
 
 type
 'a dec_comm =  (* Top-level generated comments *)
@@ -565,6 +566,7 @@ and 'a def =  (* Top-level definition *)
  | DEF_fundef of 'a fundef (* function definition *)
  | DEF_val of 'a letbind (* value definition *)
  | DEF_spec of 'a val_spec (* top-level type constraint *)
+ | DEF_fixity of prec * int * id (* fixity declaration *)
  | DEF_overload of id * id list (* operator overload specification *)
  | DEF_default of 'a default_spec (* default kind and type assumptions *)
  | DEF_scattered of 'a scattered_def (* scattered function and type definition *)

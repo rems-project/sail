@@ -42,14 +42,13 @@
 
 {
 open Parser2
+open Parse_ast
 module M = Map.Make(String)
 exception LexError of string * Lexing.position
 
 let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
 let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
-
-type prec = Infix | InfixL | InfixR
 
 let mk_operator prec n op =
   match prec, n with
@@ -102,13 +101,14 @@ let kw_table =
      ("clause",                  (fun _ -> Clause));
      ("dec",                     (fun _ -> Dec));
      ("def",                     (fun _ -> Def));
-     ("op",                      (fun _ -> Op));
+     ("operator",                (fun _ -> Op));
      ("default",		 (fun _ -> Default));
      ("effect",                  (fun _ -> Effect));
      ("Effect",                  (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
      ("enum",		         (fun _ -> Enum));
      ("else",                    (fun _ -> Else));
+     ("exit",                    (fun _ -> Exit));
      ("extern",                  (fun _ -> Extern));
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
@@ -172,8 +172,8 @@ let alphanum = letter|digit
 let startident = letter|'_'
 let ident = alphanum|['_''\'']
 let tyvar_start = '\''
-let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|''~']
-let operator = oper_char+ ('_' ident)?
+let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|']
+let operator = (oper_char+ ('_' ident)?)
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 
 rule token = parse
@@ -190,6 +190,9 @@ rule token = parse
   | ","                                 { Comma }
   | ".."                                { DotDot }
   | "."                                 { Dot }
+  | "==" as op
+    { try M.find op !operators
+      with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
   | "="                                 { (Eq(r"=")) }
   | ">"					{ (Gt(r">")) }
   | "-"					{ Minus }
@@ -215,19 +218,20 @@ rule token = parse
   | "<="				{ (LtEq(r"<=")) }
   | "infix" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
-      token lexbuf }
+      Fixity (Infix, int_of_string (Char.escaped p), op) }
   | "infixl" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator InfixL (int_of_string (Char.escaped p)) op) !operators;
-      token lexbuf }
+      Fixity (InfixL, int_of_string (Char.escaped p), op) }
   | "infixr" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator InfixR (int_of_string (Char.escaped p)) op) !operators;
-      token lexbuf }
+      Fixity (InfixR, int_of_string (Char.escaped p), op) }
   | operator as op
     { try M.find op !operators
-      with Not_found -> raise (LexError ("Operator fixity undeclared", Lexing.lexeme_start_p lexbuf)) }
+      with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
   | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
   | "*)"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
   | tyvar_start startident ident* as i  { TyVar(r i) }
+  | "~"                                 { Id(r"~") }
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) ()
 					  (* else if

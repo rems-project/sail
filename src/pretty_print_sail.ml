@@ -526,6 +526,7 @@ let rec doc_def def = group (match def with
       string "overload" ^^ space ^^ doc_id id ^^ space ^^ brackets ids_doc
   | DEF_comm (DC_comm s) -> comment (string s)
   | DEF_comm (DC_comm_struct d) -> comment (doc_def d)
+  | DEF_fixity _ -> empty
   ) ^^ hardline
 
 let doc_defs (Defs(defs)) =

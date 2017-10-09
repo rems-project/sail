@@ -107,8 +107,13 @@ let begin_end doc = group (string "begin" ^^ nest 2 (break 1 ^^ doc) ^/^ string 
 
 let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   match exp_aux with
+  | E_app (f, [x]) when Env.is_union_constructor f (env_of exp) -> zencode_upper ctx f ^^ space ^^ ocaml_atomic_exp ctx x
   | E_app (f, [x]) -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
-  | E_app (f, xs) -> zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) xs)
+  | E_app (f, xs) when Env.is_union_constructor f (env_of exp) ->
+     zencode_upper ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) xs)
+  | E_app (f, xs) ->
+     zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) xs)
+  | E_vector_subrange (exp1, exp2, exp3) -> string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) [exp1; exp2; exp3])
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
   | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
   | E_cast (_, exp) -> ocaml_exp ctx exp
@@ -176,9 +181,8 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
      begin
        match Env.lookup_id id (env_of exp) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
-       | Enum _ -> zencode_upper ctx id
+       | Enum _ | Union _ -> zencode_upper ctx id
        | Register _ | Local (Mutable, _) -> bang ^^ zencode ctx id
-       | _ -> failwith ("Union constructor: " ^ zencode_string (string_of_id id))
      end
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
@@ -255,8 +259,8 @@ let rec ocaml_fields ctx =
 
 let rec ocaml_cases ctx =
   let ocaml_case = function
-    | Tu_aux (Tu_id id, _) -> separate space [bar; zencode ctx id]
-    | Tu_aux (Tu_ty_id (typ, id), _) -> separate space [bar; zencode ctx id; string "of"; ocaml_typ ctx typ]
+    | Tu_aux (Tu_id id, _) -> separate space [bar; zencode_upper ctx id]
+    | Tu_aux (Tu_ty_id (typ, id), _) -> separate space [bar; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
   in
   function
   | [tu] -> ocaml_case tu
