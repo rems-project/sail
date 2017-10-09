@@ -1417,7 +1417,6 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
   ik := IK_simple;
   Nias := [|| NIAFP_successor ||];
   Dia := DIAFP_none;
-  x := (qword) RIP;
   switch instr {
     case(Binop   (locked, binop, sz, ds)) -> {
       let flags = regfp_binop_flags (binop) in
@@ -1451,7 +1450,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     }
     case(CALL    (irm)             ) ->
       let (m, rs, ars) = regfp_imm_rm (irm) in { 
-          iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
+          ik := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
           iR := RFull("RIP") :: RFull("RSP") :: rs;
           oR := RFull("RSP") :: oR;
           aR := ars;
@@ -1470,14 +1469,14 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       let rk = if locked then Read_X86_locked else Read_plain in
       let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rs, aRs) = regfp_rm (r_m) in {
-        iK := if m then IK_mem_rmw (rk, wk) else IK_simple;
+        ik := if m then IK_mem_rmw (rk, wk) else IK_simple;
         iR := RFull("RAX") :: RFull(GPRstr[reg]) :: append(rs, aRs);
         oR := RFull("RAX") :: append(regfp_binop_flags(Cmp),  rs);
         aR := aRs;
       }
     case(DIV    (sz, r_m)             ) ->
       let (m, rs, ars) = regfp_rm (r_m) in {
-        iK := if m then IK_mem_read (Read_plain) else IK_simple;
+        ik := if m then IK_mem_read (Read_plain) else IK_simple;
         iR := RFull("RAX") :: RFull("RDX") :: append(rs, ars);
         oR := RFull("RAX") :: RFull("RDX") :: append(oR, all_flags);
         aR := ars;
@@ -1485,13 +1484,13 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     case(HLT                          ) -> ()
     case(Jcc     (c, imm64)           ) -> 
       let flags = regfp_cond(c) in {
-        iK := IK_cond_branch;
+        ik := IK_cond_branch;
         iR := RFull("RIP") :: flags;
         Nias :=  NIAFP_concrete_address(RIP + imm64) :: Nias;
       }
     case(JMP     (r_m)                 ) ->
       let (m, rs, ars) = regfp_rm (r_m) in {
-        iK := if m then IK_mem_read(Read_plain) else IK_simple;
+        ik := if m then IK_mem_read(Read_plain) else IK_simple;
         iR := RFull("RIP")::append(rs, ars);
         aR := ars;
         (* XXX register name is not important here -- just indicates we don't know the destination yet. *)
@@ -1504,54 +1503,55 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         aR := ars;
       }
     case(LEAVE                        ) -> {
-      iK := IK_mem_read(Read_plain);
+      ik := IK_mem_read(Read_plain);
       iR := RFull("RBP") :: iR;
       oR := RFull("RBP") :: RFull("RSP") :: oR;
       aR := RFull("RBP") :: aR;
     }
     case(LOOP    (c, imm64)           ) -> 
       let flags = regfp_cond(c) in {
-          iK := IK_cond_branch;
+          ik := IK_cond_branch;
           iR := RFull("RCX") :: flags;
           oR := RFull("RCX") :: oR;
           Nias := NIAFP_concrete_address(RIP + imm64) :: Nias;
       }
-    case(MFENCE                       ) -> iK := IK_barrier (Barrier_x86_MFENCE)
+    case(MFENCE                       ) ->
+      ik := IK_barrier (Barrier_x86_MFENCE)
     case(Monop   (locked, monop, sz, r_m)     ) -> 
       let rk = if locked then Read_X86_locked else Read_plain in
       let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rds, ars) = regfp_rm(r_m) in {
-        iK := if m then IK_mem_rmw(rk, wk) else IK_simple;
+        ik := if m then IK_mem_rmw(rk, wk) else IK_simple;
         iR := append(rds, ars);
         oR := append(all_flags_but_cf_of, rds); (* XXX fix flags *)
         aR := ars;
       }
     case(MOV     (c, sz, ds) )       -> 
-      let (ik, irs, ors, ars) = regfp_dest_src (ds) in 
+      let (ik', irs, ors, ars) = regfp_dest_src (ds) in 
       let flags = regfp_cond(c) in
       {
-          iK := ik;
+          ik := ik';
           iR := append(irs, flags);
           oR := ors;
           aR := ars;
       }
     case(MOVSX   (sz1, ds, sz2) ) -> 
-      let (ik, irs, ors, ars) = regfp_dest_src (ds) in {
-          iK := ik;
+      let (ik', irs, ors, ars) = regfp_dest_src (ds) in {
+          ik := ik';
           iR := irs;
           oR := ors;
           aR := ars;
       }
     case(MOVZX   (sz1, ds, sz2) ) -> 
-      let (ik, irs, ors, ars) = regfp_dest_src (ds) in {
-          iK := ik;
+      let (ik', irs, ors, ars) = regfp_dest_src (ds) in {
+          ik := ik';
           iR := irs;
           oR := ors;
           aR := ars;
       }
     case(MUL    (sz, r_m)              ) ->
       let (m, rs, ars) = regfp_rm (r_m) in {
-        iK := if m then IK_mem_read (Read_plain) else IK_simple;
+        ik := if m then IK_mem_read (Read_plain) else IK_simple;
         iR := RFull("RAX") :: append(rs, ars);
         oR := RFull("RAX") :: RFull("RDX") :: append(oR, all_flags);
         aR := ars;
@@ -1559,20 +1559,20 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     case(NOP     (_)                  ) -> ()
     case(POP     (r_m)                ) -> 
       let (m, rd, ars) = regfp_rm (r_m) in {
-        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
+        ik := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
         iR := RFull("RSP") :: ars;
         oR := RFull("RSP") :: rd;
         aR := RFull("RSP") :: ars;
       }
     case(PUSH    (irm)               ) -> 
       let (m, rs, ars) = regfp_imm_rm (irm) in {
-        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
+        ik := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
         iR := RFull("RSP") :: append(rs, ars);
         oR := RFull("RSP") :: oR;
         aR := RFull("RSP") :: ars;
       }
     case(RET     (imm64)              ) -> {
-      iK := IK_mem_read(Read_plain);
+      ik := IK_mem_read(Read_plain);
       iR := RFull("RSP") :: iR;
       oR := RFull("RSP") :: oR;
       aR := RFull("RSP") :: aR;
@@ -1582,7 +1582,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     case(SET     (c, b, r_m)          ) -> 
       let flags = regfp_cond(c) in
       let (m, rs, ars) = regfp_rm(r_m) in {
-        iK := if m then IK_mem_write(Write_plain) else IK_simple;
+        ik := if m then IK_mem_write(Write_plain) else IK_simple;
         iR := append(flags, ars);
         oR := rs;
         aR := ars;
@@ -1592,7 +1592,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       let rk = if locked then Read_X86_locked else Read_plain in
       let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rs, ars) = regfp_rm(r_m) in {
-        iK := if m then IK_mem_rmw(rk, wk) else IK_simple;
+        ik := if m then IK_mem_rmw(rk, wk) else IK_simple;
         iR := RFull(GPRstr[reg]) :: append(rs, ars);
         oR := RFull(GPRstr[reg]) :: append(rs, all_flags);
         aR := ars;
@@ -1601,7 +1601,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       let rk = if locked then Read_X86_locked else Read_plain in
       let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rs, ars) = regfp_rm(r_m) in {
-        iK := if m then IK_mem_rmw(rk, wk) else IK_simple;
+        ik := if m then IK_mem_rmw(rk, wk) else IK_simple;
         iR := RFull(GPRstr[reg]) :: append(rs, ars);
         oR := RFull(GPRstr[reg]) :: rs;
         aR := ars;
