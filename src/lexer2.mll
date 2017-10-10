@@ -121,6 +121,7 @@ let kw_table =
      ("catch",                   (fun _ -> Catch));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
+     ("integer",                 (fun _ -> Integer));
      ("inc",                     (fun _ -> Inc));
      ("IN",                      (fun x -> IN));
      ("let",                     (fun x -> Let_));

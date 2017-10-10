@@ -127,7 +127,7 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone Bits By Match Clause Dec Def Default Effect EFFECT End Op
 %token Enum Else Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Then True TwoCaret Type TYPE Typedef
-%token Undefined Union With Val Constraint Throw Try Catch Exit
+%token Undefined Union With Val Constraint Throw Try Catch Exit Integer
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 
 %nonassoc Then
@@ -662,6 +662,8 @@ lit:
     { mk_lit (L_hex $1) $startpos $endpos }
   | String
     { mk_lit (L_string $1) $startpos $endpos }
+  | Real
+    { mk_lit (L_real $1) $startpos $endpos }
 
 exp:
   | exp0
@@ -820,6 +822,7 @@ exp8:
   | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp8l op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9 Caret exp8r { mk_exp (E_app_infix ($1, mk_id (Id "^") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 exp8l:
@@ -830,6 +833,7 @@ exp8l:
 exp8r:
   | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9 Caret exp8r { mk_exp (E_app_infix ($1, mk_id (Id "^") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 

@@ -172,7 +172,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   (* This is mostly for the -convert option *)
   | E_app_infix (x, id, y) when Id.compare (mk_id "quot") id == 0 ->
      separate space [doc_atomic_exp x; string "/"; doc_atomic_exp y]
-  | E_app_infix (x, id, y) -> doc_op (doc_id id) (doc_atomic_exp x) (doc_atomic_exp y)
+  | E_app_infix (x, id, y) -> separate space [doc_atomic_exp x; doc_id id; doc_atomic_exp y]
   | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
   | E_if (if_exp, then_exp, else_exp) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
@@ -181,6 +181,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_cons (exp1, exp2) -> string "E_cons"
   | E_record fexps -> string "E_record"
   | E_record_update (exp, fexps) -> string "E_record_update"
+  | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
@@ -217,7 +218,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
   | _ -> parens (doc_exp exp)
 and doc_block = function
-  | [] -> assert false
+  | [] -> string "()"
   | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
   | [exp] -> doc_exp exp
@@ -305,25 +306,27 @@ let doc_spec (VS_aux(v,_)) =
      ^^ colon ^^ space
      ^^ doc_typschm ts
 
-(*
-  | VS_cast_spec (ts, id) ->
-     separate space [string "val"; string "cast"; doc_typscm ts; doc_id id]
-  | VS_extern_no_rename(ts,id) ->
-     separate space [string "val"; string "extern"; doc_typscm ts; doc_id id]
-  | VS_extern_spec(ts,id,s) ->
-     separate space [string "val"; string "extern"; doc_typscm ts; doc_op equals (doc_id id) (dquotes (string s))]
-               *)
+let doc_prec = function
+  | Infix -> string "infix"
+  | InfixL -> string "infixl"
+  | InfixR -> string "infixr"
+
+let doc_kind_def (KD_aux (KD_nabbrev (_, id, _, nexp), _)) =
+  separate space [string "integer"; doc_id id; equals; doc_nexp nexp]
+
 let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
-  | DEF_kind k_def -> string "TOPLEVEL"
+  | DEF_kind k_def -> doc_kind_def k_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> string "TOPLEVEL"
+  | DEF_fixity (prec, n, id) ->
+     separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->
-      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
+     separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
   | DEF_comm (DC_comm s) -> string "TOPLEVEL"
   | DEF_comm (DC_comm_struct d) -> string "TOPLEVEL"
   ) ^^ hardline
