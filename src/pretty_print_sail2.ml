@@ -176,10 +176,10 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
   | E_if (if_exp, then_exp, else_exp) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
-  | E_for (id, exp1, exp2, exp3, order, exp4) -> string "E_for"
   | E_list exps -> string "E_list"
   | E_cons (exp1, exp2) -> string "E_cons"
   | E_record fexps -> string "E_record"
+  | E_loop _ -> string "E_loop"
   | E_record_update (exp, fexps) -> string "E_record_update"
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
@@ -188,10 +188,24 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
+  | E_for (id, exp1, exp2, exp3, order, exp4) ->
+      string "foreach" ^^ space ^^
+      group (parens (
+        separate (break 1) [
+          doc_id id;
+          string "from " ^^ doc_atomic_exp exp1;
+          string "to " ^^ doc_atomic_exp exp2;
+          string "by " ^^ doc_atomic_exp exp3;
+          string "in " ^^ doc_ord order
+        ]
+      )) ^^ space ^^
+      doc_exp exp4
   (* Resugar an assert with an empty message *)
   | E_throw exp -> assert false
   | E_try (exp, pexps) -> assert false
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
+  | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
+     separate space [doc_int 2; string "^"; doc_atomic_exp exp]
   | _ -> doc_atomic_exp exp
 and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
@@ -314,6 +328,16 @@ let doc_prec = function
 let doc_kind_def (KD_aux (KD_nabbrev (_, id, _, nexp), _)) =
   separate space [string "integer"; doc_id id; equals; doc_nexp nexp]
 
+let rec doc_scattered (SD_aux (sd_aux, _)) =
+  match sd_aux with
+  | SD_scattered_function (_, _, _, id) ->
+     string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
+  | SD_scattered_funcl funcl ->
+     string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl
+  | SD_scattered_end id ->
+     string "end" ^^ space ^^ doc_id id
+  | _ -> string "SCATTERED"
+
 let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
@@ -322,7 +346,7 @@ let rec doc_def def = group (match def with
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
   | DEF_reg_dec dec -> doc_dec dec
-  | DEF_scattered sdef -> string "TOPLEVEL"
+  | DEF_scattered sdef -> doc_scattered sdef
   | DEF_fixity (prec, n, id) ->
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->

@@ -1025,9 +1025,11 @@ let generate_initialize_registers vs_ids (Defs defs) =
   in
   Defs (defs @ initialize_registers)
 
+let incremental_k_env = ref initial_kind_env
 
 let process_ast order defs =
-  let (ast, _, _) = to_ast Nameset.empty initial_kind_env order defs in
+  let ast, k_env, _= to_ast Nameset.empty !incremental_k_env order defs in
+  incremental_k_env := k_env;
   if not !opt_undefined_gen
   then ast
   else

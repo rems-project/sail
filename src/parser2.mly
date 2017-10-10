@@ -686,6 +686,36 @@ exp:
     { mk_exp (E_case ($2, $4)) $startpos $endpos }
   | Try exp Catch Lcurly case_list Rcurly
     { mk_exp (E_try ($2, $5)) $startpos $endpos }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp In typ Rparen exp
+    { if $4 <> "from" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"from\" in foreach loop"));
+      if $6 <> "to" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"to\" in foreach loop"));
+      mk_exp (E_for ($3, $5, $7, $9, $11, $13)) $startpos $endpos }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp Rparen exp
+    { if $4 <> "from" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"from\" in foreach loop"));
+      if $6 <> "to" && $6 <> "downto" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"to\" or \"downto\" in foreach loop"));
+      let order =
+        if $6 = "to"
+        then ATyp_aux(ATyp_inc,loc $startpos($6) $endpos($6))
+        else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
+      in
+      mk_exp (E_for ($3, $5, $7, $9, order, $11)) $startpos $endpos }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp Rparen exp
+    { if $4 <> "from" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"from\" in foreach loop"));
+      if $6 <> "to" && $6 <> "downto" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"to\" or \"downto\" in foreach loop"));
+      let step = mk_lit_exp (L_num 1) $startpos $endpos in
+      let ord =
+        if $6 = "to"
+        then ATyp_aux(ATyp_inc,loc $startpos($6) $endpos($6))
+        else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
+      in
+      mk_exp (E_for ($3, $5, $7, step, ord, $9)) $startpos $endpos }
+
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */
 
