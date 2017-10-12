@@ -921,14 +921,14 @@ let initial_env =
 
 let ex_counter = ref 0
 
-let fresh_existential () =
-  let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter), Parse_ast.Unknown) in
+let fresh_existential ?name:(n="") () =
+  let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter ^ "#" ^ n), Parse_ast.Unknown) in
   incr ex_counter; fresh
 
 let destruct_exist env typ =
   match Env.expand_synonyms env typ with
   | Typ_aux (Typ_exist (kids, nc, typ), _) ->
-     let fresh_kids = List.map (fun kid -> (kid, fresh_existential ())) kids in
+     let fresh_kids = List.map (fun kid -> (kid, fresh_existential ~name:(string_of_id (id_of_kid kid)) ())) kids in
      let nc = List.fold_left (fun nc (kid, fresh) -> nc_subst_nexp kid (Nexp_var fresh) nc) nc fresh_kids in
      let typ = List.fold_left (fun typ (kid, fresh) -> typ_subst_nexp kid (Nexp_var fresh) typ) typ fresh_kids in
      Some (List.map snd fresh_kids, nc, typ)
@@ -1657,22 +1657,41 @@ let destruct_atom_nexp env typ =
 
 exception Not_a_constraint;;
 
-let rec assert_nexp (E_aux (exp_aux, l)) =
+let rec assert_nexp env (E_aux (exp_aux, _)) =
   match exp_aux with
   | E_sizeof nexp -> nexp
+  | E_id id ->
+     begin
+       match Env.lookup_id id env with
+       | Local (Immutable, typ) ->
+          begin
+            match destruct_atom_nexp env typ with
+            | Some nexp -> nexp
+            | None -> raise Not_a_constraint
+          end
+       | _ -> raise Not_a_constraint
+     end
   | E_lit (L_aux (L_num n, _)) -> nconstant n
   | _ -> raise Not_a_constraint
 
-let rec assert_constraint (E_aux (exp_aux, l)) =
+let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
   match exp_aux with
-  | E_app_infix (x, op, y) when string_of_id op = "|" ->
-     nc_or (assert_constraint x) (assert_constraint y)
-  | E_app_infix (x, op, y) when string_of_id op = "&" ->
-     nc_and (assert_constraint x) (assert_constraint y)
-  | E_app_infix (x, op, y) when string_of_id op = "==" ->
-     nc_eq (assert_nexp x) (assert_nexp y)
-  | E_app_infix (x, op, y) when string_of_id op = ">=" ->
-     nc_gteq (assert_nexp x) (assert_nexp y)
+  | E_app (op, [x; y]) when string_of_id op = "or_bool" ->
+     nc_or (assert_constraint env x) (assert_constraint env y)
+  | E_app (op, [x; y]) when string_of_id op = "and_bool" ->
+     nc_and (assert_constraint env x) (assert_constraint env y)
+  | E_app (op, [x; y]) when string_of_id op = "gteq_atom" ->
+     nc_gteq (assert_nexp env x) (assert_nexp env y)
+  | E_app (op, [x; y]) when string_of_id op = "lteq_atom" ->
+     nc_lteq (assert_nexp env x) (assert_nexp env y)
+  | E_app (op, [x; y]) when string_of_id op = "gt_atom" ->
+     nc_gt (assert_nexp env x) (assert_nexp env y)
+  | E_app (op, [x; y]) when string_of_id op = "lt_atom" ->
+     nc_lt (assert_nexp env x) (assert_nexp env y)
+  | E_app (op, [x; y]) when string_of_id op = "eq_atom" ->
+     nc_eq (assert_nexp env x) (assert_nexp env y)
+  | E_app (op, [x; y]) when string_of_id op = "neq_atom" ->
+     nc_neq (assert_nexp env x) (assert_nexp env y)
   | _ -> nc_true
 
 type flow_constraint =
@@ -1858,10 +1877,11 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
             typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
             let inferred_exp = irule infer_exp env exp in
             inferred_exp :: check_block l (Env.add_constraint nc env) exps typ
-         | ((E_aux (E_assert (const_expr, assert_msg), _) as exp) :: exps) ->
+         | ((E_aux (E_assert (constr_exp, assert_msg), _) as exp) :: exps) ->
             begin
               try
-                let nc = assert_constraint const_expr in
+                let constr_exp = crule check_exp env constr_exp bool_typ in
+                let nc = assert_constraint env constr_exp in
                 let cexp = annot_exp (E_constraint nc) bool_typ in
                 let checked_msg = crule check_exp env assert_msg string_typ in
                 let texp = annot_exp (E_assert (cexp, checked_msg)) unit_typ in
@@ -1877,7 +1897,13 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      end
   | E_case (exp, cases), _ ->
      let inferred_exp = irule infer_exp env exp in
-     let check_case pat typ = match pat with
+     let rec check_case pat typ = match pat with
+       | Pat_aux (Pat_exp (P_aux (P_lit lit, _) as pat, case), annot) ->
+          let guard = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
+          check_case (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
+       | Pat_aux (Pat_when (P_aux (P_lit lit, _) as pat, guard, case), annot) ->
+          let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
+          check_case (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), mk_exp (E_app_infix (guard, mk_id "&", guard')), case), annot)) typ
        | Pat_aux (Pat_exp (pat, case), (l, _)) ->
           let tpat, env = bind_pat env pat (typ_of inferred_exp) in
           Pat_aux (Pat_exp (tpat, crule check_exp env case typ), (l, None))
@@ -2714,7 +2740,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
            let iuargs = List.map2 (fun utyp (n, uarg) -> (n, crule check_exp env uarg utyp)) utyps uargs in
            (iuargs, ret_typ, env)
          else typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
-                           ^ " not resolved during application of " ^ string_of_id f)
+                           ^ " not resolved during application of " ^ string_of_id f ^ " unresolved args: " ^ string_of_list ", " (fun (_, exp) -> string_of_exp exp) uargs)
        end
     | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args))
          when List.for_all (fun kid -> is_bound kid env) (KidSet.elements (typ_frees typ)) ->
@@ -2747,7 +2773,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
            ((n, iarg) :: iargs, ret_typ'', env)
          with
          | Unification_error (l, str) ->
-            typ_debug ("Unification error: " ^ str);
+            typ_print ("Unification error: " ^ str);
             instantiate env quants (typ :: utyps, typs) ret_typ ((n, arg) :: uargs, args)
        end
     | (_, []), _ -> typ_error l ("Function " ^ string_of_id f ^ " applied to too many arguments")

@@ -76,8 +76,10 @@ let rec doc_typ (Typ_aux (typ_aux, _)) =
   | Typ_app (id, []) -> doc_id id
   | Typ_app (Id_aux (DeIid str, _), [x; y]) ->
      separate space [doc_typ_arg x; doc_typ_arg y]
+              (*
   | Typ_app (id, [_; len; _; Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id tid, _)), _)]) when Id.compare (mk_id "vector") id == 0 && Id.compare (mk_id "bit") tid == 0->
      string "bits" ^^ parens (doc_typ_arg len)
+               *)
   | Typ_app (id, typs) -> doc_id id ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_tup typs -> parens (separate_map (string ", ") doc_typ typs)
   | Typ_var kid -> doc_kid kid
@@ -189,17 +191,21 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
   | E_for (id, exp1, exp2, exp3, order, exp4) ->
-      string "foreach" ^^ space ^^
-      group (parens (
-        separate (break 1) [
-          doc_id id;
-          string "from " ^^ doc_atomic_exp exp1;
-          string "to " ^^ doc_atomic_exp exp2;
-          string "by " ^^ doc_atomic_exp exp3;
-          string "in " ^^ doc_ord order
-        ]
-      )) ^^ space ^^
-      doc_exp exp4
+     begin
+       let header =
+         string "foreach" ^^ space ^^
+           group (parens (separate (break 1)
+                                   [ doc_id id;
+                                     string "from " ^^ doc_atomic_exp exp1;
+                                     string "to " ^^ doc_atomic_exp exp2;
+                                     string "by " ^^ doc_atomic_exp exp3;
+                                     string "in " ^^ doc_ord order ]))
+       in
+       match exp4 with
+       | E_aux (E_block [_], _) -> header ^//^ doc_exp exp4
+       | E_aux (E_block _, _) -> header ^^ space ^^ doc_exp exp4
+       | _ -> header ^//^ doc_exp exp4
+     end
   (* Resugar an assert with an empty message *)
   | E_throw exp -> assert false
   | E_try (exp, pexps) -> assert false

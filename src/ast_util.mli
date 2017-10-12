@@ -128,6 +128,7 @@ val nc_false : n_constraint
 val nc_set : kid -> int list -> n_constraint
 
 val quant_items : typquant -> quant_item list
+val quant_kopts : typquant -> kinded_id list
 
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp

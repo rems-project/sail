@@ -210,6 +210,13 @@ let quant_items : typquant -> quant_item list = function
   | TypQ_aux (TypQ_tq qis, _) -> qis
   | TypQ_aux (TypQ_no_forall, _) -> []
 
+let quant_kopts typq =
+  let qi_kopt = function
+    | QI_aux (QI_id kopt, _) -> [kopt]
+    | QI_aux _ -> []
+  in
+  quant_items typq |> List.map qi_kopt |> List.concat
+
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)
