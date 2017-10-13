@@ -83,6 +83,15 @@ let simple_num l n = E_aux (
   simple_annot (Parse_ast.Generated l)
     (atom_typ (Nexp_aux (Nexp_constant n, Parse_ast.Generated l))))
 
+let rec small (E_aux (exp,_)) = match exp with
+  | E_id _
+  | E_lit _ -> true
+  | E_cast (_,e) -> small e
+  | E_list es -> List.for_all small es
+  | E_cons (e1,e2) -> small e1 && small e2
+  | E_sizeof _ -> true
+  | _ -> false
+
 let fresh_name_counter = ref 0
 
 let fresh_name () =
@@ -2581,6 +2590,64 @@ let rewrite_simple_types (Defs defs) =
   let defs = Defs (List.map simple_def defs) in
   rewrite_defs_base simple_defs defs
 
+let rewrite_tuple_vector_assignments defs =
+  let assign_tuple e_aux annot =
+    let env = env_of_annot annot in
+    match e_aux with
+    | E_assign (LEXP_aux (LEXP_tup lexps, lannot), exp) ->
+       let typ = Env.base_typ_of env (typ_of exp) in
+       if is_vector_typ typ then
+         (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
+         let (start, _, ord, etyp) = vector_typ_args_of typ in
+         let len (LEXP_aux (le, lannot)) =
+           let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
+           if is_vector_typ ltyp then
+             let (_, len, _, _) = vector_typ_args_of ltyp in
+             match simplify_nexp len with
+             | Nexp_aux (Nexp_constant len, _) -> len
+             | _ -> 1
+           else 1 in
+         let next i step =
+           if is_order_inc ord
+           then (i + step - 1, i + step)
+           else (i - step + 1, i - step) in
+         let i = match simplify_nexp start with
+         | (Nexp_aux (Nexp_constant i, _)) -> i
+         | _ -> if is_order_inc ord then 0 else List.length lexps - 1 in
+         let l = Parse_ast.Generated (fst annot) in
+         let exp' =
+           if small exp then strip_exp exp
+           else mk_exp (E_id (mk_id "split_vec")) in
+         let lexp_to_exp (i, exps) lexp =
+           let (j, i') = next i (len lexp) in
+           let i_exp = mk_exp (E_lit (mk_lit (L_num i))) in
+           let j_exp = mk_exp (E_lit (mk_lit (L_num j))) in
+           let sub = mk_exp (E_vector_subrange (exp', i_exp, j_exp)) in
+           (i', exps @ [sub]) in
+         let (_, exps) = List.fold_left lexp_to_exp (i, []) lexps in
+         let tup = mk_exp (E_tuple exps) in
+         let lexp = LEXP_aux (LEXP_tup (List.map strip_lexp lexps), (l, ())) in
+         let e_aux =
+           if small exp then mk_exp (E_assign (lexp, tup))
+           else mk_exp (
+             E_let (
+               mk_letbind (mk_pat (P_id (mk_id "split_vec"))) (strip_exp exp),
+               mk_exp (E_assign (lexp, tup)))) in
+         begin
+           try check_exp env e_aux unit_typ with
+           | Type_error (l, err) ->
+             raise (Reporting_basic.err_typ l (string_of_type_error err))
+         end
+       else E_aux (e_aux, annot)
+    | _ -> E_aux (e_aux, annot)
+  in
+  let assign_exp = {
+      id_exp_alg with
+      e_aux = (fun (e_aux, annot) -> assign_tuple e_aux annot)
+    } in
+  let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
+  rewrite_defs_base assign_defs defs
+
 let rewrite_tuple_assignments defs =
   let assign_tuple e_aux annot =
     let env = env_of_annot annot in
@@ -3325,15 +3392,6 @@ let remove_reference_types exp =
 
 let rewrite_defs_remove_superfluous_letbinds =
 
-  let rec small (E_aux (exp,_)) = match exp with
-    | E_id _
-    | E_lit _ -> true
-    | E_cast (_,e) -> small e
-    | E_list es -> List.for_all small es
-    | E_cons (e1,e2) -> small e1 && small e2
-    | E_sizeof _ -> true
-    | _ -> false in
-
   let e_aux (exp,annot) = match exp with
     | E_let (lb,exp2) ->
        begin match lb,exp2 with
@@ -3421,6 +3479,10 @@ let recheck_defs defs = fst (check initial_env defs)
 
 let rewrite_defs_lem = [
   ("top_sort_defs", top_sort_defs);
+  ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
+  ("tuple_assignments", rewrite_tuple_assignments);
+  (* ("simple_assignments", rewrite_simple_assignments); *)
+  ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
   ("sizeof", rewrite_sizeof);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
