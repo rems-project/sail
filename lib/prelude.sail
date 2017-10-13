@@ -125,11 +125,11 @@ val forall Num 'n, Num 'm, Order 'ord. vector<'n, 'm, 'ord, bit> -> bit effect p
 (* Arithmetic *)
 
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
-    ([|'n:'m|], [|'o:'p|]) -> [|'n + 'o:'m + 'p|] effect pure add_range = "add"
+    ([|'n:'m|], [|'o:'p|]) -> [|'n + 'o:'m + 'p|] effect pure add_range = "add_int"
 
-val extern (nat, nat) -> nat effect pure add_nat = "add"
+val extern (nat, nat) -> nat effect pure add_nat = "add_int"
 
-val extern (int, int) -> int effect pure add_int = "add"
+val extern (int, int) -> int effect pure add_int
 
 val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
@@ -144,9 +144,9 @@ val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure add_overflow_vec
 
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
-    ([|'n:'m|], [|'o:'p|]) -> [|'n - 'p:'m - 'o|] effect pure sub_range = "sub"
+    ([|'n:'m|], [|'o:'p|]) -> [|'n - 'p:'m - 'o|] effect pure sub_range = "sub_int"
 
-val extern (int, int) -> int effect pure sub_int = "sub"
+val extern (int, int) -> int effect pure sub_int = "sub_int"
 
 val forall Num 'n, Num 'm, Order 'ord.
     (vector<'n,'m,'ord,bit>, int) -> vector<'n,'m,'ord,bit> effect pure sub_vec_int
@@ -177,7 +177,7 @@ overload (deinfix -) [
 
 val extern bool -> bit effect pure bool_to_bit = "bool_to_bitU"
 
-val (int, int) -> int effect pure mult_int
+val extern (int, int) -> int effect pure mult_int
 val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> [:'n * 'm:] effect pure mult_range = "mult_int"
 val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<2 * 'n - 1, 2 * 'n, 'ord, bit> effect pure mult_vec
@@ -296,7 +296,7 @@ val extern (int, int) -> int effect pure min_int = "min"
 
 overload min [min_range_atom; min_int]
 
-val extern (int, int) -> int effect pure quotient
+val extern (int, int) -> int effect pure quotient = "quotient_int"
 
 overload (deinfix quot) [quotient]
 

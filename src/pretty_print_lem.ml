@@ -289,7 +289,22 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
               (doc_tannot_lem sequential mwords false typ)))
        | _ -> utf8string "(failwith \"undefined value of unsupported type\")")
   | L_string s -> utf8string ("\"" ^ s ^ "\"")
-  | L_real s -> utf8string s (* TODO What's the Lem syntax for reals? *)
+  | L_real s ->
+    (* Lem does not support decimal syntax, so we translate a string
+       of the form "x.y" into the ratio (x * 10^len(y) + y) / 10^len(y).
+       The OCaml library has a conversion function from strings to floats, but
+       not from floats to ratios. ZArith's Q library does have the latter, but
+       using this would require adding a dependency on ZArith to Sail. *)
+    let parts = Util.split_on_char '.' s in
+    let (num, denom) = match parts with
+    | [i] -> (big_int_of_string i, unit_big_int)
+    | [i;f] ->
+      let denom = power_int_positive_int 10 (String.length f) in
+      (add_big_int (mult_big_int (big_int_of_string i) denom) (big_int_of_string f), denom)
+    | _ ->
+      raise (Reporting_basic.Fatal_error
+        (Reporting_basic.Err_syntax_locn (l, "could not parse real literal"))) in
+    separate space (List.map string ["realFromFrac"; string_of_big_int num; string_of_big_int denom])
 
 (* typ_doc is the doc for the type being quantified *)
 let doc_quant_item (QI_aux (qi, _)) = match qi with

@@ -197,18 +197,8 @@ let extz_bl (start, len, bits) = Vector bits start false
 let exts_bl (start, len, bits) = Vector bits start false
 
 
-let add (l,r) = integerAdd l r
-let add_signed (l,r) = integerAdd l r
-let sub (l,r) = integerMinus l r
-let mult (l,r) = integerMult l r
-let quotient (l,r) = integerDiv l r
-let modulo (l,r) = hardware_mod l r
 let quot = hardware_quot
-let power (l,r) = integerPow l r
-
-let add_int = add
-let sub_int = sub
-let mult_int = mult
+let modulo (l,r) = hardware_mod l r
 
 let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in

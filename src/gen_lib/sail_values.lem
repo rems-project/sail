@@ -13,6 +13,26 @@ let pow m n = m ** (natFromInteger n)
 
 let pow2 n = pow 2 n
 
+let add_int (l,r) = integerAdd l r
+let add_signed (l,r) = integerAdd l r
+let sub_int (l,r) = integerMinus l r
+let mult_int (l,r) = integerMult l r
+let quotient_int (l,r) = integerDiv l r
+let quotient_nat (l,r) = natDiv l r
+let power_int_nat (l,r) = integerPow l r
+let power_int_int (l, r) = integerPow l (natFromInteger r)
+let negate_int i = integerNegate i
+let min_int (l, r) = integerMin l r
+let max_int (l, r) = integerMax l r
+
+let add_real (l, r) = realAdd l r
+let sub_real (l, r) = realMinus l r
+let mult_real (l, r) = realMult l r
+let div_real (l, r) = realDiv l r
+let negate_real r = realNegate r
+let abs_real r = realAbs r
+let power_real (b, e) = realPowInteger b e
+
 let bool_or (l, r) = (l || r)
 let bool_and (l, r) = (l && r)
 let bool_xor (l, r) = xor l r
