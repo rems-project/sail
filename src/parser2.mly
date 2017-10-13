@@ -124,18 +124,19 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone Bits By Match Clause Dec Def Default Effect EFFECT End Op
-%token Enum Else Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
-%token Pure Rec Register Return Scattered Sizeof Struct Then True TwoCaret Type TYPE Typedef
-%token Undefined Union With Val Constraint Throw Try Catch Exit Integer
+%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
+%token Enum Else False Forall Foreach Overload Function_ If_ In Inc Let_ Int Order Cast
+%token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
+%token Undefined Union With Val Constraint Throw Try Catch Exit
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
+%token Repeat Until While Do
 
 %nonassoc Then
 %nonassoc Else
 
 %token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar
-%token MinusGt LtBar LtColon SquareBar SquareBarBar
+%token MinusGt
 
 /*Terminals with content*/
 
@@ -143,10 +144,10 @@ let rec desugar_rchain chain s e =
 %token <int> Num
 %token <string> String Bin Hex Real
 
-%token <string> Amp At Caret Div Eq Excl Gt Lt Plus Star EqGt Unit
+%token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
 %token <string> Colon ExclEq
-%token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus
-%token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar
+%token <string> GtEq
+%token <string> LtEq
 
 %token <string> Op0 Op1 Op2 Op3 Op4 Op5 Op6 Op7 Op8 Op9
 %token <string> Op0l Op1l Op2l Op3l Op4l Op5l Op6l Op7l Op8l Op9l
@@ -715,6 +716,10 @@ exp:
         else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
       in
       mk_exp (E_for ($3, $5, $7, step, ord, $9)) $startpos $endpos }
+  | Repeat exp Until exp
+    { mk_exp (E_loop (Until, $4, $2)) $startpos $endpos }
+  | While exp Do exp
+    { mk_exp (E_loop (While, $2, $4)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */

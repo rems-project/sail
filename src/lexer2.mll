@@ -100,16 +100,13 @@ let kw_table =
      ("match",			 (fun _ -> Match));
      ("clause",                  (fun _ -> Clause));
      ("dec",                     (fun _ -> Dec));
-     ("def",                     (fun _ -> Def));
      ("operator",                (fun _ -> Op));
      ("default",		 (fun _ -> Default));
      ("effect",                  (fun _ -> Effect));
-     ("Effect",                  (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
      ("enum",		         (fun _ -> Enum));
      ("else",                    (fun _ -> Else));
      ("exit",                    (fun _ -> Exit));
-     ("extern",                  (fun _ -> Extern));
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
@@ -121,15 +118,11 @@ let kw_table =
      ("catch",                   (fun _ -> Catch));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
-     ("integer",                 (fun _ -> Integer));
      ("inc",                     (fun _ -> Inc));
-     ("IN",                      (fun x -> IN));
      ("let",                     (fun x -> Let_));
-     ("member",                  (fun x -> Member));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
      ("pure",                    (fun x -> Pure));
-     ("rec",			 (fun x -> Rec));
      ("register",		 (fun x -> Register));
      ("return",                  (fun x -> Return));
      ("scattered",               (fun x -> Scattered));
@@ -144,6 +137,10 @@ let kw_table =
      ("union",			 (fun x -> Union));
      ("with",                    (fun x -> With));
      ("val",                     (fun x -> Val));
+     ("repeat",                  (fun _ -> Repeat));
+     ("until",                   (fun _ -> Until));
+     ("while",                   (fun _ -> While));
+     ("do",                      (fun _ -> Do));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));

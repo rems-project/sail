@@ -181,7 +181,10 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_list exps -> string "E_list"
   | E_cons (exp1, exp2) -> string "E_cons"
   | E_record fexps -> string "E_record"
-  | E_loop _ -> string "E_loop"
+  | E_loop (While, cond, exp) ->
+     separate space [string "while"; doc_exp cond; string "do"; doc_exp exp]
+  | E_loop (Until, cond, exp) ->
+     separate space [string "repeat"; doc_exp exp; string "until"; doc_exp cond]
   | E_record_update (exp, fexps) -> string "E_record_update"
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
