@@ -21,7 +21,7 @@ let list_append (l, r) = l ++ r
 
 val repeat : forall 'a. list 'a -> integer -> list 'a
 let rec repeat xs n =
-  if n = 0 then []
+  if n <= 0 then []
   else xs ++ repeat xs (n-1)
 
 let duplicate_to_list (bit, length) = repeat [bit] length

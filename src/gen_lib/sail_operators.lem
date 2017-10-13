@@ -445,11 +445,6 @@ let arith_op_vec_range_no0 op sign size (Vector _ _ is_inc as l) r =
 
 let mod_VIV = arith_op_vec_range_no0 hardware_mod false 1
 
-val repeat : forall 'a. list 'a -> integer -> list 'a
-let rec repeat xs n =
-  if n = 0 then []
-  else xs ++ repeat xs (n-1)
-
 (* Assumes decreasing bit vectors *)
 let duplicate (bit, length) =
   Vector (repeat [bit] length) (length - 1) false
