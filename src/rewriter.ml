@@ -150,7 +150,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_exit e -> union_effects eff (effect_of e)
     | E_return e -> union_effects eff (effect_of e)
     | E_sizeof _ | E_sizeof_internal _ | E_constraint _ -> no_effect
-    | E_assert (c,m) -> eff
+    | E_assert (c,m) -> union_eff_exps [c; m]
     | E_comment _ | E_comment_struc _ -> no_effect
     | E_internal_cast (_,e) -> effect_of e
     | E_internal_exp _ -> no_effect
@@ -2368,6 +2368,55 @@ let rewrite_defs_early_return =
 
   rewrite_defs_base { rewriters_base with rewrite_fun = rewrite_fun_early_return }
 
+(* Propagate effects of functions, if effect checking and propagation
+   have not been performed already by the type checker. *)
+let rewrite_fix_fun_effs (Defs defs) =
+  let e_aux fun_effs (exp, (l, annot)) =
+    match fix_eff_exp (E_aux (exp, (l, annot))) with
+    | E_aux (E_app_infix (_, f, _) as exp, (l, Some (env, typ, eff)))
+    | E_aux (E_app (f, _) as exp, (l, Some (env, typ, eff)))
+      when Bindings.mem f fun_effs ->
+      let eff' = Bindings.find f fun_effs in
+      let env =
+        try
+          match Env.get_val_spec f env with
+          | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff), a)) ->
+            Env.update_val_spec f (tq, Typ_aux (Typ_fn (args_t, ret_t, union_effects eff eff'), a)) env
+          | _ -> env
+        with
+        | _ -> env in
+      E_aux (exp, (l, Some (env, typ, union_effects eff eff')))
+    | e_aux -> e_aux in
+
+  let rewrite_exp fun_effs = fold_exp { id_exp_alg with e_aux = e_aux fun_effs } in
+
+  let rewrite_funcl (fun_effs, funcls) (FCL_aux (FCL_Funcl (id, pat, exp), (l, annot))) =
+    let exp = propagate_exp_effect (rewrite_exp fun_effs exp) in
+    let fun_eff =
+      try union_effects (effect_of exp) (Bindings.find id fun_effs)
+      with Not_found -> (effect_of exp) in
+    let annot =
+      match annot with
+      | Some (env, typ, eff) -> Some (env, typ, union_effects eff fun_eff)
+      | None -> None in
+    (Bindings.add id fun_eff fun_effs,
+     funcls @ [FCL_aux (FCL_Funcl (id, pat, exp), (l, annot))]) in
+
+  let rewrite_def (fun_effs, defs) = function
+  | DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) ->
+    let (fun_effs, funcls) = List.fold_left rewrite_funcl (fun_effs, []) funcls in
+    (* Repeat once for recursive functions:
+       propagates union of effects to all clauses *)
+    let (fun_effs, funcls) = List.fold_left rewrite_funcl (fun_effs, []) funcls in
+    (fun_effs, defs @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a))])
+  | DEF_val (LB_aux (LB_val (pat, exp), a)) ->
+    (fun_effs, defs @ [DEF_val (LB_aux (LB_val (pat, rewrite_exp fun_effs exp), a))])
+  | def -> (fun_effs, defs @ [def]) in
+
+  if !Type_check.opt_no_effects
+  then Defs (snd (List.fold_left rewrite_def (Bindings.empty, []) defs))
+  else Defs defs
+
 (* Turn constraints into numeric expressions with sizeof *)
 let rewrite_constraint =
   let rec rewrite_nc (NC_aux (nc_aux, l)) = mk_exp (rewrite_nc_aux nc_aux)
@@ -2612,20 +2661,22 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
   | Some (env, Typ_aux (Typ_id tid, _), eff) when string_of_id tid = "unit" ->
      let e = E_aux (E_lit (L_aux (L_unit,Parse_ast.Generated l)),(simple_annot l unit_typ))  in
      let body = body e in
+     let body_typ = try typ_of body with _ -> unit_typ in
      let annot_pat = simple_annot l unit_typ in
      let annot_lb = annot_pat in
-     let annot_let = (Parse_ast.Generated l, Some (env, typ_of body, union_eff_exps [v;body])) in
+     let annot_let = (Parse_ast.Generated l, Some (env, body_typ, union_eff_exps [v;body])) in
      let pat = P_aux (P_wild,annot_pat) in
      
      E_aux (E_let (LB_aux (LB_val (pat,v),annot_lb),body),annot_let)
   | Some (env, typ, eff) ->
      let id = fresh_id "w__" l in
-     let annot_pat = simple_annot l (typ_of v) in
+     let annot_pat = simple_annot l typ in
      let e_id = E_aux (E_id id, (Parse_ast.Generated l, Some (env, typ, no_effect))) in
      let body = body e_id in
+     let body_typ = try typ_of body with _ -> unit_typ in
 
      let annot_lb = annot_pat in
-     let annot_let = (Parse_ast.Generated l, Some (env, typ_of body, union_eff_exps [v;body])) in
+     let annot_let = (Parse_ast.Generated l, Some (env, body_typ, union_eff_exps [v;body])) in
      let pat = P_aux (P_id id,annot_pat) in
      
      E_aux (E_let (LB_aux (LB_val (pat,v),annot_lb),body),annot_let)
@@ -2728,7 +2779,7 @@ let rewrite_defs_letbind_effects  =
     let (E_aux (_,(l,tannot))) = exp in
     let exp =
       if newreturn then
-        let typ = typ_of exp in
+        let typ = try typ_of exp with _ -> unit_typ in
         E_aux (E_internal_return exp, simple_annot l typ)
       else
         exp in
@@ -2824,7 +2875,7 @@ let rewrite_defs_letbind_effects  =
     | E_case (exp1,pexps) ->
        let newreturn =
          List.fold_left
-           (fun b pexp -> b || effectful_effs (effect_of_pexp pexp))
+           (fun b pexp -> b || (try effectful_effs (effect_of_pexp pexp) with _ -> false))
            false pexps in
        n_exp_name exp1 (fun exp1 -> 
        n_pexpL newreturn pexps (fun pexps ->
@@ -2873,7 +2924,7 @@ let rewrite_defs_letbind_effects  =
     let newreturn =
       List.fold_left
         (fun b (FCL_aux (FCL_Funcl(id,pat,exp),(_,annot))) ->
-         b || effectful_effs (effect_of_annot annot)) false funcls in
+         b || (try effectful exp with _ -> false)) false funcls in
     let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),annot)) =
       let _ = reset_fresh_name_counter () in
       FCL_aux (FCL_Funcl (id,pat,n_exp_term newreturn exp),annot)
@@ -3323,7 +3374,7 @@ let rewrite_defs_remove_superfluous_returns =
     | _ -> false in
 
   let e_aux (exp,annot) = match exp with
-    | E_internal_plet (pat,exp1,exp2) ->
+    | E_internal_plet (pat,exp1,exp2) when effectful exp1 ->
        begin match pat,exp2 with
        | P_aux (P_lit (L_aux (lit,_)),_),
          E_aux (E_internal_return (E_aux (E_lit (L_aux (lit',_)),_)),_)
@@ -3377,6 +3428,7 @@ let rewrite_defs_lem = [
   ("guarded_pats", rewrite_defs_guarded_pats);
   (* ("recheck_defs", recheck_defs); *)
   ("early_return", rewrite_defs_early_return);
+  ("fix_fun_effs", rewrite_fix_fun_effs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("remove_blocks", rewrite_defs_remove_blocks);
   ("letbind_effects", rewrite_defs_letbind_effects);

@@ -342,6 +342,7 @@ type lvar = Register of typ | Enum of typ | Local of mut * typ | Union of typqua
 module Env : sig
   type t
   val add_val_spec : id -> typquant * typ -> t -> t
+  val update_val_spec : id -> typquant * typ -> t -> t
   val get_val_spec : id -> t -> typquant * typ
   val is_union_constructor : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
@@ -462,14 +463,16 @@ end = struct
     with
     | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
 
+  let update_val_spec id bind env =
+    begin
+      typ_print ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind bind);
+      { env with top_val_specs = Bindings.add id bind env.top_val_specs }
+    end
+
   let add_val_spec id bind env =
     if Bindings.mem id env.top_val_specs
     then typ_error (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound")
-    else
-      begin
-        typ_print ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind bind);
-        { env with top_val_specs = Bindings.add id bind env.top_val_specs }
-      end
+    else update_val_spec id bind env
 
   let is_union_constructor id env =
     let is_ctor id (Tu_aux (tu, _)) = match tu with
@@ -2900,6 +2903,30 @@ and propagate_exp_effect_aux = function
   | E_vector xs ->
      let p_xs = List.map propagate_exp_effect xs in
      E_vector p_xs, collect_effects p_xs
+  | E_vector_access (v, i) ->
+     let p_v = propagate_exp_effect v in
+     let p_i = propagate_exp_effect i in
+     E_vector_access (p_v, p_i), collect_effects [p_v; p_i]
+  | E_vector_subrange (v, i, j) ->
+     let p_v = propagate_exp_effect v in
+     let p_i = propagate_exp_effect i in
+     let p_j = propagate_exp_effect i in
+     E_vector_subrange (p_v, p_i, p_j), collect_effects [p_v; p_i; p_j]
+  | E_vector_update (v, i, x) ->
+     let p_v = propagate_exp_effect v in
+     let p_i = propagate_exp_effect i in
+     let p_x = propagate_exp_effect x in
+     E_vector_update (p_v, p_i, p_x), collect_effects [p_v; p_i; p_x]
+  | E_vector_update_subrange (v, i, j, v') ->
+     let p_v = propagate_exp_effect v in
+     let p_i = propagate_exp_effect i in
+     let p_j = propagate_exp_effect j in
+     let p_v' = propagate_exp_effect v' in
+     E_vector_update_subrange (p_v, p_i, p_j, p_v'), collect_effects [p_v; p_i; p_j; p_v']
+  | E_vector_append (v1, v2) ->
+     let p_v1 = propagate_exp_effect v1 in
+     let p_v2 = propagate_exp_effect v2 in
+     E_vector_append (p_v1, p_v2), collect_effects [p_v1; p_v2]
   | E_tuple xs ->
      let p_xs = List.map propagate_exp_effect xs in
      E_tuple p_xs, collect_effects p_xs

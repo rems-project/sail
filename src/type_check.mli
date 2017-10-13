@@ -72,6 +72,8 @@ module Env : sig
 
   val get_val_spec : id -> t -> typquant * typ
 
+  val update_val_spec : id -> typquant * typ -> t -> t
+
   val get_register : id -> t -> typ
 
   val get_regtyp : id -> t -> int * int * (index_range * id) list
