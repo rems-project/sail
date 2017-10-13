@@ -234,12 +234,16 @@ let output libpath out_arg files =
        output1 libpath out_arg f defs)
     files
 
-let rewrite_step defs rewriter =
+let rewrite_step defs (name,rewriter) =
   let defs = rewriter defs in
   let _ = match !(opt_ddump_rewrite_ast) with
     | Some (f, i) ->
       begin
-        output "" Lem_ast_out [f ^ "_rewrite_" ^ string_of_int i ^ ".sail",defs];
+        let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
+        output "" Lem_ast_out [filename, defs];
+        let ((ot,_, _) as ext_ot) = open_output_with_check_unformatted filename in
+        Pretty_print_sail.pp_defs ot defs;
+        close_output_with_check ext_ot;
         opt_ddump_rewrite_ast := Some (f, i + 1)
       end
     | _ -> () in
@@ -251,6 +255,6 @@ let rewrite rewriters defs =
      prerr_endline (Type_check.string_of_type_error err);
      exit 1
 
-let rewrite_ast = rewrite [Rewriter.rewrite_defs]
+let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_ast_lem = rewrite Rewriter.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewriter.rewrite_defs_ocaml

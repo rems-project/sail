@@ -1516,7 +1516,9 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
 
 let doc_spec_lem mwords (VS_aux (valspec,annot)) = empty
 
-let rec doc_def_lem sequential mwords def = match def with
+let rec doc_def_lem sequential mwords def =
+  (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
+  match def with
   | DEF_spec v_spec -> (doc_spec_lem mwords v_spec,empty)
   | DEF_overload _ -> (empty,empty)
   | DEF_type t_def -> (group (doc_typdef_lem sequential mwords t_def) ^/^ hardline,empty)

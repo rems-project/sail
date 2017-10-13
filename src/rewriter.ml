@@ -1114,7 +1114,10 @@ let rewrite_sizeof (Defs defs) =
        if Bindings.mem f param_map then
          (* Retrieve instantiation of the type variables of the called function
            for the given parameters in the original environment *)
-         let inst = instantiation_of orig_exp in
+         let inst =
+           try instantiation_of orig_exp with
+           | Type_error (l, err) ->
+             raise (Reporting_basic.err_typ l (string_of_type_error err)) in
          (* Rewrite the inst using orig_kid so that each type variable has it's
             original name rather than a mangled typechecker name *)
          let inst = KBindings.fold (fun kid uvar b -> KBindings.add (orig_kid kid) uvar b) inst KBindings.empty in
@@ -1125,7 +1128,9 @@ let rewrite_sizeof (Defs defs) =
              match uvar with
              | Some (U_nexp nexp) ->
                 let sizeof = E_aux (E_sizeof nexp, (l, Some (env, atom_typ nexp, no_effect))) in
-                rewrite_trivial_sizeof_exp sizeof
+                (try rewrite_trivial_sizeof_exp sizeof with
+                | Type_error (l, err) ->
+                  raise (Reporting_basic.err_typ l (string_of_type_error err)))
              (* If the type variable is Not_found then it was probably
                 introduced by a P_var pattern, so it likely exists as
                 a variable in scope. It can't be an existential because the assert rules that out. *)
@@ -2532,12 +2537,17 @@ let rewrite_tuple_assignments defs =
     let env = env_of_annot annot in
     match e_aux with
     | E_assign (LEXP_aux (LEXP_tup lexps, _), exp) ->
+       (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
        let (_, ids) = List.fold_left (fun (n, ids) _ -> (n + 1, ids @ [mk_id ("tup__" ^ string_of_int n)])) (0, []) lexps in
        let block_assign i lexp = mk_exp (E_assign (strip_lexp lexp, mk_exp (E_id (mk_id ("tup__" ^ string_of_int i))))) in
        let block = mk_exp (E_block (List.mapi block_assign lexps)) in
        let letbind = mk_letbind (mk_pat (P_tup (List.map (fun id -> mk_pat (P_id id)) ids))) (strip_exp exp) in
        let let_exp = mk_exp (E_let (letbind, block)) in
-       check_exp env let_exp unit_typ
+       begin
+         try check_exp env let_exp unit_typ with
+         | Type_error (l, err) ->
+           raise (Reporting_basic.err_typ l (string_of_type_error err))
+       end
     | _ -> E_aux (e_aux, annot)
   in
   let assign_exp = {
@@ -2868,7 +2878,9 @@ let rewrite_defs_letbind_effects  =
       let _ = reset_fresh_name_counter () in
       FCL_aux (FCL_Funcl (id,pat,n_exp_term newreturn exp),annot)
     in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),fdannot) in
-  let rewrite_def rewriters = function
+  let rewrite_def rewriters def =
+    (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
+    match def with
     | DEF_val (LB_aux (lb, annot)) ->
       let rewrap lb = DEF_val (LB_aux (lb, annot)) in
       begin
@@ -3356,36 +3368,35 @@ let rewrite_defs_remove_e_assign =
 
 let recheck_defs defs = fst (check initial_env defs)
 
-let rewrite_defs_lem =[
-  top_sort_defs;
-  rewrite_trivial_sizeof;
-  rewrite_sizeof;
-  rewrite_defs_remove_vector_concat;
-  rewrite_defs_remove_bitvector_pats;
-  rewrite_defs_guarded_pats;
-  (* recheck_defs; *)
-  rewrite_defs_early_return;
-  rewrite_defs_exp_lift_assign;
-  rewrite_defs_remove_blocks;
-  rewrite_defs_letbind_effects;
-  rewrite_defs_remove_e_assign;
-  rewrite_defs_effectful_let_expressions;
-  rewrite_defs_remove_superfluous_letbinds;
-  rewrite_defs_remove_superfluous_returns
+let rewrite_defs_lem = [
+  ("top_sort_defs", top_sort_defs);
+  ("trivial_sizeof", rewrite_trivial_sizeof);
+  ("sizeof", rewrite_sizeof);
+  ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+  ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  ("guarded_pats", rewrite_defs_guarded_pats);
+  (* ("recheck_defs", recheck_defs); *)
+  ("early_return", rewrite_defs_early_return);
+  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
+  ("remove_blocks", rewrite_defs_remove_blocks);
+  ("letbind_effects", rewrite_defs_letbind_effects);
+  ("remove_e_assign", rewrite_defs_remove_e_assign);
+  ("effectful_let_expressions", rewrite_defs_effectful_let_expressions);
+  ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
+  ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns)
   ]
 
 let rewrite_defs_ocaml = [
-    (* top_sort_defs; *)
-  rewrite_undefined;
-  rewrite_tuple_assignments;
-  rewrite_simple_assignments;
-  rewrite_defs_remove_vector_concat;
-  rewrite_constraint;
-  rewrite_trivial_sizeof;
-  rewrite_sizeof;
-  rewrite_simple_types;
-  rewrite_overload_cast;
-  rewrite_defs_exp_lift_assign;
-  (* rewrite_defs_exp_lift_assign *)
-  (* rewrite_defs_separate_numbs *)
+    (* ("top_sort_defs", top_sort_defs); *)
+  ("undefined", rewrite_undefined);
+  ("tuple_assignments", rewrite_tuple_assignments);
+  ("simple_assignments", rewrite_simple_assignments);
+  ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+  ("constraint", rewrite_constraint);
+  ("trivial_sizeof", rewrite_trivial_sizeof);
+  ("sizeof", rewrite_sizeof);
+  ("simple_types", rewrite_simple_types);
+  ("overload_cast", rewrite_overload_cast);
+  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
+  (* ("separate_numbs", rewrite_defs_separate_numbs) *)
   ]
