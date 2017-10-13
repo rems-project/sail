@@ -699,7 +699,7 @@ let try_app (l,ann) (Id_aux (id,_),args) =
     match args with
     | [E_aux (E_lit (L_aux (L_num _,_)),_) as exp] -> Some exp
     | _ -> None
-  else if id = Id "vector_access" then
+  else if id = Id "vector_access" || id = Id "bitvector_access" then
     match args with
     | [E_aux (E_lit L_aux ((L_hex _ | L_bin _) as lit,_),_);
        E_aux (E_lit L_aux (L_num i,_),_)] ->
