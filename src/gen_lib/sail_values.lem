@@ -246,8 +246,8 @@ val update : forall 'a. vector 'a -> integer -> integer -> vector 'a -> vector '
 let update (Vector bs start is_inc) i j (Vector bs' _ _) =
   Vector (update_aux is_inc start bs i j bs') start is_inc
 
-let vector_update_inc (start, v, i, j, v') = update v i j v'
-let vector_update_dec (start, v, i, j, v') = update v i j v'
+let vector_update_subrange_inc (start, v, i, j, v') = update v i j v'
+let vector_update_subrange_dec (start, v, i, j, v') = update v i j v'
 
 val access_aux : forall 'a. bool -> integer -> list 'a -> integer -> 'a
 let access_aux is_inc start xs n =
@@ -263,6 +263,9 @@ let vector_access_dec (start, v, i) = access v i
 val update_pos : forall 'a. vector 'a -> integer -> 'a -> vector 'a
 let update_pos v n b =
   update v n n (Vector [b] 0 false)
+
+let vector_update_pos_inc (start, v, i, x) = update_pos v i x
+let vector_update_pos_dec (start, v, i, x) = update_pos v i x
 
 let extract_only_element (Vector elems _ _) = match elems with
   | [] -> failwith "extract_only_element called for empty vector"

@@ -581,7 +581,7 @@ let doc_exp_lem, doc_let_lem =
              currently broken. *)
           let [arg] = args in
           let targ = typ_of arg in
-          let call = if mwords && is_bitvector_typ targ then "bvlength" else "length" in
+          let call = if mwords && is_bitvector_typ targ then "bitvector_length" else "length" in
           let epp = separate space [string call;expY arg] in
           if aexp_needed then parens (align epp) else epp
        (*)| Id_aux (Id "bool_not", _) ->
@@ -620,17 +620,19 @@ let doc_exp_lem, doc_let_lem =
        end
     | E_vector_access (v,e) ->
       let vtyp = Env.base_typ_of (env_of v) (typ_of v) in
-      let (start, _, ord, etyp) = vector_typ_args_of vtyp in
+      let (start, len, ord, etyp) = vector_typ_args_of vtyp in
       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-      let call =
-        if is_bitvector_typ vtyp (*&& mwords*)
-        then "bitvector_access" ^ ord_suffix
-        else "vector_access" ^ ord_suffix in
+      let bit_prefix = if is_bitvector_typ vtyp then "bit" else "" in
+      let call = bit_prefix ^ "vector_access" ^ ord_suffix in
       let start_idx = match simplify_nexp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
-          raise (Reporting_basic.err_unreachable l
-            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+          let nc = nc_eq start (nminus len (nconstant 1)) in
+          if prove (env_of full_exp) nc
+          then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+          else raise (Reporting_basic.err_unreachable l
+            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+            " with non-constant start index")) in
       let epp = string call ^^ space ^^ parens (separate comma_sp [start_idx;expY v;expY e]) in
       if aexp_needed then parens (align epp) else epp
       (* raise (Reporting_basic.err_unreachable l
@@ -646,17 +648,19 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align epp) else epp*)
     | E_vector_subrange (v,e1,e2) ->
       let vtyp = Env.base_typ_of (env_of v) (typ_of v) in
-      let (start, _, ord, etyp) = vector_typ_args_of vtyp in
+      let (start, len, ord, etyp) = vector_typ_args_of vtyp in
       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-      let call =
-        if is_bitvector_typ vtyp (*&& mwords*)
-        then "bitvector_subrange" ^ ord_suffix
-        else "vector_subrange" ^ ord_suffix in
+      let bit_prefix = if is_bitvector_typ vtyp then "bit" else "" in
+      let call = bit_prefix ^ "vector_subrange" ^ ord_suffix in
       let start_idx = match simplify_nexp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
-          raise (Reporting_basic.err_unreachable l
-            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+          let nc = nc_eq start (nminus len (nconstant 1)) in
+          if prove (env_of full_exp) nc
+          then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+          else raise (Reporting_basic.err_unreachable l
+            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+            " with non-constant start index")) in
       let epp = string call ^^ space ^^ parens (separate comma_sp [start_idx;expY v;expY e1;expY e2]) in
       if aexp_needed then parens (align epp) else epp
       (* raise (Reporting_basic.err_unreachable l
@@ -841,33 +845,37 @@ let doc_exp_lem, doc_let_lem =
               if aexp_needed then parens (align epp) else epp
        (* *)
     | E_vector_update(v,e1,e2) ->
-       let t = typ_of full_exp in
-       let (start, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let t = typ_of v in
+       let (start, len, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
        let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-       let call =
-         if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update_pos" ^ ord_suffix
-         else "vector_update_pos" ^ ord_suffix in
+       let bit_prefix = if is_bitvector_typ t then "bit" else "" in
+       let call = bit_prefix ^ "vector_update_pos" ^ ord_suffix in
        let start_idx = match simplify_nexp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
-           raise (Reporting_basic.err_unreachable l
-             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+           let nc = nc_eq start (nminus len (nconstant 1)) in
+           if prove (env_of full_exp) nc
+           then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+           else raise (Reporting_basic.err_unreachable l
+             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+             " with non-constant start index")) in
        let epp = string call ^^ space ^^ parens (separate comma_sp [start_idx;expY v;expY e1;expY e2]) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update_subrange(v,e1,e2,e3) ->
-       let t = typ_of full_exp in
-       let (start, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let t = typ_of v in
+       let (start, len, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
        let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-       let call =
-         if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update_subrange" ^ ord_suffix
-         else "vector_update_subrange" ^ ord_suffix in
+       let bit_prefix = if is_bitvector_typ t then "bit" else "" in
+       let call = bit_prefix ^ "vector_update_subrange" ^ ord_suffix in
        let start_idx = match simplify_nexp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
-           raise (Reporting_basic.err_unreachable l
-             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+           let nc = nc_eq start (nminus len (nconstant 1)) in
+           if prove (env_of full_exp) nc
+           then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+           else raise (Reporting_basic.err_unreachable l
+             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+             " with non-constant start index")) in
        let epp =
          align (string call ^//^
            parens (separate comma_sp

@@ -310,7 +310,7 @@ val extern forall Num 'n. [:'n:] -> [:2** 'n:] effect pure pow2
 val extern forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure vector_length = "length"
 val extern forall Type 'a. list<'a> -> nat effect pure list_length
 
-val extern forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [:'m:] effect pure bitvector_length = "bvlength"
+val extern forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [:'m:] effect pure bitvector_length = "bitvector_length"
 
 overload length [bitvector_length; vector_length; list_length]
 

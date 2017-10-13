@@ -5,7 +5,7 @@ open import Sail_values
 
 (*** Bit vector operations *)
 
-let bvlength bs = integerFromNat (word_length bs)
+let bitvector_length bs = integerFromNat (word_length bs)
 
 (*val set_bitvector_start : forall 'a. (integer * bitvector 'a) -> bitvector 'a
 let set_bitvector_start (new_start, Bitvector bs _ is_inc) =
