@@ -74,6 +74,7 @@ let fix_id remove_tick name = match name with
   | "try"
   | "match"
   | "with"
+  | "check"
   | "field"
   | "LT"
   | "GT"
@@ -344,7 +345,7 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
      begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
-  | P_var(p,kid) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_var_lem kid])
+  | P_var(p,kid) -> doc_pat_lem sequential mwords true p
   | P_as(p,id) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_id_lem id])
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem sequential mwords true p in
@@ -521,12 +522,12 @@ let doc_exp_lem, doc_let_lem =
           let [id;indices;body;e5] = args in
           let varspp = match e5 with
             | E_aux (E_tuple vars,_) ->
-               let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
+               let vars = List.map (fun (E_aux (E_id id,_)) -> doc_id_lem id) vars in
                begin match vars with
                | [v] -> v
                | _ -> parens (separate comma vars) end
-            | E_aux (E_id (Id_aux (Id name,_)),_) ->
-               string name
+            | E_aux (E_id id,_) ->
+               doc_id_lem id
             | E_aux (E_lit (L_aux (L_unit,_)),_) ->
                string "_" in
           parens (
@@ -541,12 +542,12 @@ let doc_exp_lem, doc_let_lem =
           let [is_while;cond;body;e5] = args in
           let varspp = match e5 with
             | E_aux (E_tuple vars,_) ->
-               let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
+               let vars = List.map (fun (E_aux (E_id id,_)) -> doc_id_lem id) vars in
                begin match vars with
                | [v] -> v
                | _ -> parens (separate comma vars) end
-            | E_aux (E_id (Id_aux (Id name,_)),_) ->
-               string name
+            | E_aux (E_id id,_) ->
+               doc_id_lem id
             | E_aux (E_lit (L_aux (L_unit,_)),_) ->
                string "_" in
           parens (

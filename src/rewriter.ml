@@ -1854,7 +1854,8 @@ let remove_bitvector_pat pat =
           let t = Env.base_typ_of env (typ_of_annot annot) in
           let (l,_) = annot in
           match pat, is_bitvector_typ t, contained_in_p_as with
-          | P_vector _, true, false
+          | P_vector _, true, false ->
+            P_aux (P_as (P_aux (pat,annot),fresh_id "b__" l), annot)
           | _ -> P_aux (pat,annot)
         )
     ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
@@ -2332,7 +2333,9 @@ let rewrite_defs_early_return =
     | _ -> E_block es in
 
   let e_if (e1, e2, e3) =
-    if is_return e2 && is_return e3 then E_if (e1, get_return e2, get_return e3)
+    if is_return e2 && is_return e3 then
+      let (E_aux (_, annot)) = e2 in
+      E_return (E_aux (E_if (e1, get_return e2, get_return e3), annot))
     else E_if (e1, e2, e3) in
 
   let e_case (e, pes) =
@@ -2341,8 +2344,12 @@ let rewrite_defs_early_return =
     let get_return_pexp (Pat_aux (pexp, a)) = match pexp with
     | Pat_exp (p, e) -> Pat_aux (Pat_exp (p, get_return e), a)
     | Pat_when (p, g, e) -> Pat_aux (Pat_when (p, g, get_return e), a) in
+    let annot = match pes with
+    | Pat_aux (Pat_exp (_, E_aux (_, annot)), _) :: _ -> annot
+    | Pat_aux (Pat_when (_, _, E_aux (_, annot)), _) :: _ -> annot
+    | [] -> (Parse_ast.Unknown, None) in
     if List.for_all is_return_pexp pes
-    then E_return (E_aux (E_case (e, List.map get_return_pexp pes), (Parse_ast.Unknown, None)))
+    then E_return (E_aux (E_case (e, List.map get_return_pexp pes), annot))
     else E_case (e, pes) in
 
   let e_aux (exp, (l, annot)) =

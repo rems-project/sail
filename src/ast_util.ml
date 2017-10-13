@@ -655,6 +655,8 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
 
 let rec is_number (Typ_aux (t,_)) =
   match t with
+  | Typ_id (Id_aux (Id "int", _))
+  | Typ_id (Id_aux (Id "nat", _))
   | Typ_app (Id_aux (Id "range", _),_)
   | Typ_app (Id_aux (Id "implicit", _),_)
   | Typ_app (Id_aux (Id "atom", _),_) -> true
