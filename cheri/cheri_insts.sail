@@ -133,7 +133,7 @@ function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) c
 function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b011010) = Some(CPtrCmp(rd, cb, cs, CEXEQ))
 function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b100001) = Some(CPtrCmp(rd, cb, cs, CNEXEQ))
 
-(* function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b100000) = Some(CTestSubset(rd, cb, ct)) *)
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b100000) = Some(CTestSubset(rd, cb, ct))
 
 function clause decode (0b010010 : 0b01001 : (regno) cd : (bit[16]) imm) = Some(CBX(cd, imm, true))  (* CBTU *)
 function clause decode (0b010010 : 0b01010 : (regno) cd : (bit[16]) imm) = Some(CBX(cd, imm, false)) (* CBTS *)
@@ -824,6 +824,41 @@ function clause execute (CCheckType(cs, cb)) =
   else
     ()
   (* END_CCheckType *)
+}
+
+union ast member regregreg CTestSubset
+function clause execute (CTestSubset(rd, cb, ct)) =
+{
+  (* START_CTestSubset *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  ct_val := readCapReg(ct);
+  ct_top    := getCapTop(ct_val);
+  ct_base   := getCapBase(ct_val);
+  ct_perms  := getCapPerms(ct_val);
+  cb_top    := getCapTop(cb_val);
+  cb_base   := getCapBase(cb_val);
+  cb_perms  := getCapPerms(cb_val);
+  if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if (register_inaccessible(ct)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
+  else {
+     (bit[64]) result := EXTZ(if (cb_val.tag != ct_val.tag) then
+             0x0
+        else if (cb_val.sealed != ct_val.sealed) then
+             0x0
+        else if (ct_base < cb_base) then
+             0x0
+        else if (ct_top > cb_top) then
+             0x0
+        else if ((ct_perms & cb_perms) != cb_perms) then
+             0x0
+        else
+             0x1);
+     wGPR(rd) := result;
+  }
+  (* END_CTestSubset *)
 }
 
 union ast member regregreg CSeal
