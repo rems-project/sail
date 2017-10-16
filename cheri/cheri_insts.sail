@@ -146,8 +146,8 @@ function clause decode (0b010010 : 0b01111 : 0b00001 : (bit[16]) imm) = Some(Cle
 function clause decode (0b010010 : 0b01111 : 0b00010 : (bit[16]) imm) = Some(ClearRegs(CLo,  imm))
 function clause decode (0b010010 : 0b01111 : 0b00011 : (bit[16]) imm) = Some(ClearRegs(CHi,  imm))
 
-(* XXX CSetBoundsImmediate *)
-(* XXX CIncOffsetImmediate *)
+function clause decode (0b010010 : 0b10011 : (regno) cd : (regno) cb : (bit[11]) imm) = Some(CIncOffsetImmediate(cd, cb, imm))
+function clause decode (0b010010 : 0b10100 : (regno) cd : (regno) cb : (bit[11]) imm) = Some(CSetBoundsImmediate(cd, cb, imm))
 
 function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CLoad(rd, cb, rt, offset, false, B, false)) (* CLBU *)
 function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b00) = Some(CLoad(rd, cb, rt, offset, true,  B, false)) (* CLB *)
@@ -487,6 +487,28 @@ function clause execute (CIncOffset(cd, cb, rt)) =
   (* END_CIncOffset *)
 }
 
+union ast member (regno, regno, bit[11]) CIncOffsetImmediate
+function clause execute (CIncOffsetImmediate(cd, cb, imm)) =
+{
+  (* START_CIncOffsetImmediate *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  let (bit[64]) imm64 = EXTZ(imm) in
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if ((cb_val.tag) & (cb_val.sealed)) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else
+    let (success, newCap) = incCapOffset(cb_val, imm64) in
+    if (success) then
+        writeCapReg(cd, newCap)
+    else
+        writeCapReg(cd, int_to_cap(getCapBase(cb_val) + imm64))
+  (* END_CIncOffsetImmediate *)
+}
+
 union ast member regregreg CSetOffset
 function clause execute (CSetOffset(cd, cb, rt)) =
 {
@@ -538,6 +560,34 @@ function clause execute (CSetBounds(cd, cb, rt)) =
   (* END_CSetBounds *)
 }
 
+union ast member (regno, regno, bit[11]) CSetBoundsImmediate
+function clause execute (CSetBoundsImmediate(cd, cb, imm)) =
+{
+  (* START_CSetBoundsImmedate *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  immU   := unsigned(imm);
+  cursor := getCapCursor(cb_val);
+  base   := getCapBase(cb_val);
+  top    := getCapTop(cb_val);
+  newTop := cursor + immU;
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else if (cursor < base) then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else if (newTop > top) then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else
+    let (_, newCap) = setCapBounds(cb_val, (bit[64]) cursor, (bit[65]) newTop) in
+    writeCapReg(cd, newCap) (* ignore exact *)
+  (* END_CSetBoundsImmediate *)
+}
 
 union ast member regregreg CSetBoundsExact
 function clause execute (CSetBoundsExact(cd, cb, rt)) =
