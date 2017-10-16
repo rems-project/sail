@@ -133,10 +133,10 @@ function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) c
 
 (* function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b100000) = Some(CTestSubset(rd, cb, ct)) *)
 
-function clause decode (0b010010 : 0b01001 : (regno) cd : (bit[16]) imm) = Some(CBX(cd, imm, true)) (* CBTU *)
+function clause decode (0b010010 : 0b01001 : (regno) cd : (bit[16]) imm) = Some(CBX(cd, imm, true))  (* CBTU *)
 function clause decode (0b010010 : 0b01010 : (regno) cd : (bit[16]) imm) = Some(CBX(cd, imm, false)) (* CBTS *)
-(* function clause decode (0b010010 : 0b10001 : (regno) cd : (bit[16]) imm) = Some(CBEZ(cd, imm)) XXX *)
-(* function clause decode (0b010010 : 0b10010 : (regno) cd : (bit[16]) imm) = Some(CBNZ(cd, imm)) XXX *)
+function clause decode (0b010010 : 0b10001 : (regno) cd : (bit[16]) imm) = Some(CBZ(cd, imm, false)) (* CBEZ *)
+function clause decode (0b010010 : 0b10010 : (regno) cd : (bit[16]) imm) = Some(CBZ(cd, imm, true))  (* CBNZ *)
 
 function clause decode (0b010010 : 0b00101 :    0b00000 :    0b00000 : 0b11111111111) = Some(CReturn)
 function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb, selector))
@@ -1004,6 +1004,22 @@ function clause execute (CBX(cb, imm, invert)) =
       branchPending := 1;
     }
   (* END_CBx *)
+}
+
+union ast member (regno, bit[16], bool) CBZ
+function clause execute (CBZ(cb, imm, invert)) =
+{
+  (* START_CBz *)
+  checkCP2usable();
+  if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if (((readCapReg(cb)) == null_cap) ^ invert) then
+    {
+      let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
+      delayedPC     := PC + offset;
+      branchPending := 1;
+    }
+  (* END_CBz *)
 }
 
 union ast member (regno, regno, bool) CJALR
