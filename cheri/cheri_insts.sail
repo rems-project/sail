@@ -86,6 +86,7 @@ function clause decode (0b010010 : 0b00000 : (regno) cd :    0b00000 :    0b1111
 function clause decode (0b010010 : 0b00000 : (regno) cs : (regno) rt :    0b01000 : 0b111111) = Some(CCheckPerm(cs, rt))
 function clause decode (0b010010 : 0b00000 : (regno) cs : (regno) cb :    0b01001 : 0b111111) = Some(CCheckType(cs, cb))
 function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb :    0b01011 : 0b111111) = Some(CClearTag(cd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs :    0b01010 : 0b111111) = Some(CMOVX(cd, cs, 0b00000, false)) (* CMOVE *)
 
 (* Capability Inspection *)
 function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00000 : 0b111111) = Some(CGetPerm(rd, cb))
@@ -117,7 +118,6 @@ function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) c
 function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b010010) = Some(CToPtr(rd, cb, ct))
 function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rs : 0b010011) = Some(CFromPtr(cd, cb, rs))
 function clause decode (0b010010 : 0b00000 : (regno) rt : (regno) cb : (regno) cs : 0b001010) = Some(CSub(rt, cb, cs))
-(* XXX function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs :    0b01010 : 0b111111) = Some(CMove(cd, cs)) *)
 function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rs : 0b011011) = Some(CMOVX(cd, cs, rs, false)) (* CMOVZ *)
 function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rs : 0b011100) = Some(CMOVX(cd, cs, rs, true))  (* CMOVN *)
 
