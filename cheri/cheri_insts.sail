@@ -81,12 +81,14 @@ fields are re-used as additional function codes.
 function clause decode (0b010010 : 0b00000 : (regno) rd :    0b00001 :    0b11111 : 0b111111) = Some(CGetCause(rd))
 function clause decode (0b010010 : 0b00000 : (regno) rs :    0b00010 :    0b11111 : 0b111111) = Some(CSetCause(rs))
 function clause decode (0b010010 : 0b00000 : (regno) cd :    0b00000 :    0b11111 : 0b111111) = Some(CGetPCC(cd))
+function clause decode (0b010010 : 0b00000 : (regno) cb :    0b00011 :    0b11111 : 0b111111) = Some(CJALR(0b00000, cb, false)) (* CJR *)
 
 (* Two arg *)
 function clause decode (0b010010 : 0b00000 : (regno) cs : (regno) rt :    0b01000 : 0b111111) = Some(CCheckPerm(cs, rt))
 function clause decode (0b010010 : 0b00000 : (regno) cs : (regno) cb :    0b01001 : 0b111111) = Some(CCheckType(cs, cb))
 function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb :    0b01011 : 0b111111) = Some(CClearTag(cd, cb))
 function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs :    0b01010 : 0b111111) = Some(CMOVX(cd, cs, 0b00000, false)) (* CMOVE *)
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb :    0b01100 : 0b111111) = Some(CJALR(cd, cb, true)) (* CJALR *)
 
 (* Capability Inspection *)
 function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00000 : 0b111111) = Some(CGetPerm(rd, cb))
