@@ -59,6 +59,8 @@ val rewrite_defs : tannot defs -> tannot defs
 val rewrite_defs_ocaml : (string * (tannot defs -> tannot defs)) list (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
 val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list (*Perform rewrites to exclude AST nodes not supported for lem out*)
 
+val simple_typ : typ -> typ
+
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux

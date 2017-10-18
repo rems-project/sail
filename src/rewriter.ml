@@ -2526,6 +2526,26 @@ let rewrite_undefined =
   let rewrite_exp_undefined = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp_undefined) }
 
+let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
+and simple_typ_aux = function
+  | Typ_wild -> Typ_wild
+  | Typ_id id -> Typ_id id
+  | Typ_app (id, [_; _; _; Typ_arg_aux (Typ_arg_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
+     Typ_app (mk_id "list", [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)])
+  | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 ->
+     Typ_id (mk_id "int")
+  | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
+     Typ_id (mk_id "int")
+  | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
+  | Typ_fn (typ1, typ2, effs) -> Typ_fn (simple_typ typ1, simple_typ typ2, effs)
+  | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
+  | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
+  | typ_aux -> typ_aux
+and simple_typ_arg (Typ_arg_aux (typ_arg_aux, l)) =
+  match typ_arg_aux with
+  | Typ_arg_typ typ -> [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)]
+  | _ -> []
+
 (* This pass aims to remove all the Num quantifiers from the specification. *)
 let rewrite_simple_types (Defs defs) =
   let is_simple = function
@@ -2536,26 +2556,6 @@ let rewrite_simple_types (Defs defs) =
     match tq_aux with
     | TypQ_no_forall -> TypQ_aux (TypQ_no_forall, annot)
     | TypQ_tq quants -> TypQ_aux (TypQ_tq (List.filter (fun q -> is_simple q) quants), annot)
-  in
-  let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
-  and simple_typ_aux = function
-    | Typ_wild -> Typ_wild
-    | Typ_id id -> Typ_id id
-    | Typ_app (id, [_; _; _; Typ_arg_aux (Typ_arg_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
-       Typ_app (mk_id "list", [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)])
-    | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 ->
-       Typ_id (mk_id "int")
-    | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
-       Typ_id (mk_id "int")
-    | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
-    | Typ_fn (typ1, typ2, effs) -> Typ_fn (simple_typ typ1, simple_typ typ2, effs)
-    | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
-    | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
-    | typ_aux -> typ_aux
-  and simple_typ_arg (Typ_arg_aux (typ_arg_aux, l)) =
-    match typ_arg_aux with
-    | Typ_arg_typ typ -> [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)]
-    | _ -> []
   in
   let simple_typschm (TypSchm_aux (TypSchm_ts (typq, typ), annot)) =
     TypSchm_aux (TypSchm_ts (simple_typquant typq, simple_typ typ), annot)
@@ -3510,6 +3510,7 @@ let rewrite_defs_lem = [
 let rewrite_defs_ocaml = [
     (* ("top_sort_defs", top_sort_defs); *)
   ("undefined", rewrite_undefined);
+  ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
