@@ -46,11 +46,11 @@ let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
   let snc nc = subst_nc substs nc in
   let re nc = NC_aux (nc,l) in
   match nc with
-  | NC_fixed (n1,n2) -> re (NC_fixed (snexp n1, snexp n2))
+  | NC_equal (n1,n2) -> re (NC_equal (snexp n1, snexp n2))
   | NC_bounded_ge (n1,n2) -> re (NC_bounded_ge (snexp n1, snexp n2))
   | NC_bounded_le (n1,n2) -> re (NC_bounded_le (snexp n1, snexp n2))
   | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
-  | NC_nat_set_bounded (kid,is) ->
+  | NC_set (kid,is) ->
      begin
        match KBindings.find kid substs with
        | Nexp_aux (Nexp_constant i,_) ->
@@ -181,7 +181,7 @@ let extract_set_nc var (NC_aux (_,l) as nc) =
   let rec aux (NC_aux (nc,l)) =
     let re nc = NC_aux (nc,l) in
     match nc with
-    | NC_nat_set_bounded (id,is) when Kid.compare id var = 0 -> Some (is,re NC_true)
+    | NC_set (id,is) when Kid.compare id var = 0 -> Some (is,re NC_true)
     | NC_and (nc1,nc2) ->
        (match aux nc1, aux nc2 with
        | None, None -> None
@@ -489,8 +489,6 @@ let nexp_subst_fns substs =
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,s_exp e1,s_exp e2,s_exp e3,ord,s_exp e4))
       | E_loop (loop,e1,e2) -> re (E_loop (loop,s_exp e1,s_exp e2))
       | E_vector es -> re (E_vector (List.map s_exp es))
-      | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,s_exp e)) ies,
-                                                           s_opt_default ed))
       | E_vector_access (e1,e2) -> re (E_vector_access (s_exp e1,s_exp e2))
       | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (s_exp e1,s_exp e2,s_exp e3))
       | E_vector_update (e1,e2,e3) -> re (E_vector_update (s_exp e1,s_exp e2,s_exp e3))
@@ -529,9 +527,7 @@ let nexp_subst_fns substs =
          Pat_aux (Pat_when ((*s_pat*) p, s_exp e1, s_exp e2),(l,s_tannot annot))
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
-      | LB_val_explicit (tysch,p,e) ->
-         LB_aux (LB_val_explicit ((*s_typschm*) tysch,(*s_pat*) p,s_exp e), (l,s_tannot annot))
-      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*s_pat*) p,s_exp e), (l,s_tannot annot))
+      | LB_val (p,e) -> LB_aux (LB_val ((*s_pat*) p,s_exp e), (l,s_tannot annot))
     and s_lexp (LEXP_aux (e,(l,annot))) =
       let re e = LEXP_aux (e,(l,s_tannot annot)) in
       match e with
@@ -557,7 +553,7 @@ let bindings_from_pat p =
     | P_typ (_,p) -> aux_pat p
     | P_id id ->
        if pat_id_is_variable env id then [id] else []
-    | P_var kid -> [id_of_kid kid]
+    | P_var (p,kid) -> aux_pat p
     | P_vector ps
     | P_vector_concat ps
     | P_app (_,ps)
@@ -565,7 +561,6 @@ let bindings_from_pat p =
     | P_list ps
       -> List.concat (List.map aux_pat ps)
     | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
-    | P_vector_indexed ips -> List.concat (List.map (fun (_,p) -> aux_pat p) ips)
     | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
   and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
   in aux_pat p
@@ -619,11 +614,11 @@ let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
      let checkpat = function
        | P_aux (P_lit (L_aux (lit_p, _)),_) ->
           if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
-       | P_aux (P_var kid,_) ->
+       | P_aux (P_var (P_aux (P_id id,_), kid),_) ->
           begin
             match lit_e with
             | L_num i ->
-               DoesMatch ([id_of_kid kid, E_aux (e,(l,annot))],
+               DoesMatch ([id, E_aux (e,(l,annot))],
                           [kid,Nexp_aux (Nexp_constant i,Unknown)])
             | _ ->
                (Reporting_basic.print_err false true lit_l "Monomorphisation"
@@ -933,11 +928,6 @@ let split_defs splits defs =
          | None -> re (E_vector es') assigns
          | Some lit -> re (E_lit lit) assigns
        end
-    | E_vector_indexed (ies,(Def_val_aux (ed,edann))) ->
-       let is,es = List.split ies in
-       let es',assigns = non_det_exp_list (match ed with Def_val_empty -> es | Def_val_dec e -> e::es) in
-       let ed',es' = match ed with Def_val_empty -> Def_val_empty,es' | x -> x,es' in
-       re (E_vector_indexed (List.combine is es', Def_val_aux (ed',edann))) assigns
     | E_vector_access (e1,e2) ->
        let e1',e2',assigns = non_det_exp_2 e1 e2 in
        re (E_vector_access (e1',e2')) assigns
@@ -989,17 +979,12 @@ let split_defs splits defs =
     | E_let (lb,e2) ->
        begin
          match lb with
-         | LB_aux (LB_val_explicit (tysch,p,e),annot) ->
-            let substs' = remove_bound substs p in
-            let e',assigns = const_prop_exp substs assigns e in
-            let e2',assigns = const_prop_exp substs' assigns e2 in
-            re (E_let (LB_aux (LB_val_explicit (tysch,p,e'), annot), e2')) assigns
-         | LB_aux (LB_val_implicit (p,e), annot) ->
+         | LB_aux (LB_val (p,e), annot) ->
             let e',assigns = const_prop_exp substs assigns e in
             let substs' = remove_bound substs p in
             let plain () =
               let e2',assigns = const_prop_exp substs' assigns e2 in
-              re (E_let (LB_aux (LB_val_implicit (p,e'), annot),
+              re (E_let (LB_aux (LB_val (p,e'), annot),
                          e2')) assigns in
             if is_value e' && not (is_value e) then
               match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] with
@@ -1245,8 +1230,6 @@ let split_defs splits defs =
            relist fpat (fun fps -> P_record (fps,flag)) fps
         | P_vector ps ->
            relist spl (fun ps -> P_vector ps) ps
-        | P_vector_indexed ips ->
-           relist ipat (fun ips -> P_vector_indexed ips) ips
         | P_vector_concat ps ->
            relist spl (fun ps -> P_vector_concat ps) ps
         | P_tup ps ->
@@ -1279,7 +1262,7 @@ let split_defs splits defs =
             begin
               let kid,kid_annot =
                 match args with
-                | [P_aux (P_var kid,ann)] -> kid,ann
+                | [P_aux (P_var (_,kid),ann)] -> kid,ann
                 | _ -> 
                    raise (Reporting_basic.err_general l
                             "Pattern match not currently supported by monomorphisation")
@@ -1343,8 +1326,6 @@ let split_defs splits defs =
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,map_exp e1,map_exp e2,map_exp e3,ord,map_exp e4))
       | E_loop (loop,e1,e2) -> re (E_loop (loop,map_exp e1,map_exp e2))
       | E_vector es -> re (E_vector (List.map map_exp es))
-      | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,map_exp e)) ies,
-                                                           map_opt_default ed))
       | E_vector_access (e1,e2) -> re (E_vector_access (map_exp e1,map_exp e2))
       | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (map_exp e1,map_exp e2,map_exp e3))
       | E_vector_update (e1,e2,e3) -> re (E_vector_update (map_exp e1,map_exp e2,map_exp e3))
@@ -1409,8 +1390,7 @@ let split_defs splits defs =
             ) patnsubsts)
     and map_letbind (LB_aux (lb,annot)) =
       match lb with
-      | LB_val_explicit (tysch,p,e) -> LB_aux (LB_val_explicit (tysch,check_single_pat p,map_exp e), annot)
-      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit (check_single_pat p,map_exp e), annot)
+      | LB_val (p,e) -> LB_aux (LB_val (check_single_pat p,map_exp e), annot)
     and map_lexp ((LEXP_aux (e,annot)) as le) =
       let re e = LEXP_aux (e,annot) in
       match e with

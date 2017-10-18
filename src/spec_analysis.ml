@@ -291,8 +291,6 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
     List.fold_right (fun (Ast.FP_aux(Ast.FP_Fpat(_,p),_)) (b,n) ->
         pat_bindings consider_var bound used p) fpats (bound,used)
   | P_vector pats | Ast.P_vector_concat pats | Ast.P_tup pats | Ast.P_list pats -> list_fv bound used pats
-  | P_vector_indexed ipats ->
-    List.fold_right (fun (_,p) (b,n) -> pat_bindings consider_var b n p) ipats (bound,used)
   | _ -> bound,used
 
 let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.t * Nameset.t * Nameset.t) =
@@ -317,13 +315,6 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_for(id,from,to_,by,_,body) ->
     let _,used,set = list_fv bound used set [from;to_;by] in
     fv_of_exp consider_var (Nameset.add (string_of_id id) bound) used set body
-  | E_vector_indexed (es_i,(Ast.Def_val_aux(default,_))) ->
-    let bound,used,set =
-      List.fold_right
-        (fun (_,e) (b,u,s) -> fv_of_exp consider_var b u s e) es_i (bound,used,set) in
-    (match default with
-     | Def_val_empty -> bound,used,set
-     | Def_val_dec e -> fv_of_exp consider_var bound used set e)
   | E_vector_access(v,i) -> list_fv bound used set [v;i]
   | E_vector_subrange(v,i1,i2) -> list_fv bound used set [v;i1;i2]
   | E_vector_update(v,i,e) -> list_fv bound used set [v;i;e]
@@ -367,12 +358,7 @@ and fv_of_pes consider_var bound used set pes =
     fv_of_pes consider_var bound us_e set_e pes
     
 and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
-  | LB_val_explicit(typsch,pat,exp) ->
-    let bound_t,us_t = fv_of_typschm consider_var bound used typsch in
-    let bound_p, us_p = pat_bindings consider_var (Nameset.union bound bound_t) used pat in
-    let _,us_e,set_e = fv_of_exp consider_var (Nameset.union bound bound_t) used set exp in
-    (Nameset.union bound_t bound_p),Nameset.union us_t (Nameset.union us_p us_e),set_e
-  | LB_val_implicit(pat,exp) ->
+  | LB_val(pat,exp) ->
     let bound_p, us_p = pat_bindings consider_var bound used pat in
     let _,us_e,set_e = fv_of_exp consider_var bound used set exp in
     bound_p,Nameset.union us_p us_e,set_e
@@ -423,19 +409,6 @@ let typ_variants consider_var bound tunions =
 
 let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
   | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
-  | KD_abbrev(_,id,_,typschm) ->
-    init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
-  | KD_record(_,id,_,typq,tids,_) ->
-    let binds = init_env (string_of_id id) in
-    let bounds = if consider_var then typq_bindings typq else mt in
-    binds, List.fold_right (fun (t,_) n -> fv_of_typ consider_var bounds n t) tids mt
-  | KD_variant(_,id,_,typq,tunions,_) ->
-    let bindings = Nameset.add (string_of_id id) (if consider_var then typq_bindings typq else mt) in
-    typ_variants consider_var bindings tunions
-  | KD_enum(_,id,_,ids,_) ->
-    Nameset.of_list (List.map string_of_id (id::ids)),mt
-  | KD_register(_,id,n1,n2,_) ->
-    init_env (string_of_id id), fv_of_nexp consider_var mt (fv_of_nexp consider_var mt mt n1) n2
 
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
   | TD_abbrev(id,_,typschm) -> init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
@@ -487,8 +460,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
   init_env fun_name,Nameset.union ns ns_r
 
 let fv_of_vspec consider_var (VS_aux(vspec,_)) = match vspec with
-  | VS_val_spec(ts,id) | VS_extern_no_rename (ts,id) | VS_extern_spec(ts,id,_)
-  | VS_cast_spec(ts,id) ->
+  | VS_val_spec(ts,id,_,_) ->
      init_env ("val:" ^ (string_of_id id)), snd (fv_of_typschm consider_var mt mt ts)
 
 let rec find_scattered_of name = function

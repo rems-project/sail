@@ -49,6 +49,7 @@ val opt_no_effects : bool ref
 
 type type_error =
   | Err_no_casts of type_error * type_error list
+  | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list
   | Err_subtype of typ * typ * n_constraint list
   | Err_no_num_ident of id
@@ -70,6 +71,8 @@ module Env : sig
      errors if it doesn't. *)
 
   val get_val_spec : id -> t -> typquant * typ
+
+  val update_val_spec : id -> typquant * typ -> t -> t
 
   val get_register : id -> t -> typ
 

@@ -64,7 +64,6 @@ base_kind_aux =  (* base kind *)
    BK_type (* kind of types *)
  | BK_nat (* kind of natural number size expressions *)
  | BK_order (* kind of vector order specifications *)
- | BK_effect (* kind of effect sets *)
 
 
 type 
@@ -158,11 +157,11 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
 
 and 
 n_constraint_aux =  (* constraint over kind $_$ *)
-   NC_fixed of atyp * atyp
+   NC_equal of atyp * atyp
  | NC_bounded_ge of atyp * atyp
  | NC_bounded_le of atyp * atyp
  | NC_not_equal of atyp * atyp
- | NC_nat_set_bounded of kid * (int) list
+ | NC_set of kid * (int) list
  | NC_or of n_constraint * n_constraint
  | NC_and of n_constraint * n_constraint
  | NC_true
@@ -234,11 +233,10 @@ pat_aux =  (* Pattern *)
  | P_as of pat * id (* named pattern *)
  | P_typ of atyp * pat (* typed pattern *)
  | P_id of id (* identifier *)
- | P_var of kid
+ | P_var of pat * kid (* bind pat to type variable *)
  | P_app of id * (pat) list (* union constructor pattern *)
  | P_record of (fpat) list * bool (* struct pattern *)
  | P_vector of (pat) list (* vector pattern *)
- | P_vector_indexed of ((int * pat)) list (* vector pattern (with explicit indices) *)
  | P_vector_concat of (pat) list (* concatenated vector pattern *)
  | P_tup of (pat) list (* tuple pattern *)
  | P_list of (pat) list (* list pattern *)
@@ -269,7 +267,6 @@ exp_aux =  (* Expression *)
  | E_loop of loop * exp * exp
  | E_for of id * exp * exp * exp * atyp * exp (* loop *)
  | E_vector of (exp) list (* vector (indexed from 0) *)
- | E_vector_indexed of (exp) list * opt_default (* vector (indexed consecutively) *)
  | E_vector_access of exp * exp (* vector access *)
  | E_vector_subrange of exp * exp * exp (* subvector extraction *)
  | E_vector_update of exp * exp * exp (* vector functional update *)
@@ -322,8 +319,7 @@ and pexp =
    Pat_aux of pexp_aux * l
 
 and letbind_aux =  (* Let binding *)
-   LB_val_explicit of typschm * pat * exp (* value binding, explicit type (pat must be total) *)
- | LB_val_implicit of pat * exp (* value binding, implicit type (pat must be total) *)
+   LB_val of pat * exp (* value binding, implicit type (pat must be total) *)
 
 and letbind = 
    LB_aux of letbind_aux * l
@@ -427,20 +423,12 @@ type_def_aux =  (* Type definition body *)
 
 type 
 val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string
- | VS_cast_spec of typschm * id
+   VS_val_spec of typschm * id * string option * bool
 
 
 type 
 kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
    KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
- | KD_record of kind * id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
- | KD_variant of kind * id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
- | KD_enum of kind * id * name_scm_opt * (id) list * bool (* enumeration type definition *)
- | KD_register of kind * id * atyp * atyp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
 
 type 
 dec_spec_aux =  (* Register declarations *)
@@ -493,14 +481,18 @@ type
 scattered_def = 
    SD_aux of scattered_def_aux * l
 
+type prec = Infix | InfixL | InfixR
 
-type 
+type fixity_token = (prec * int * string)
+
+type
 def =  (* Top-level definition *)
    DEF_kind of kind_def (* definition of named kind identifiers *)
  | DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_val of letbind (* value definition *)
  | DEF_overload of id * id list (* operator overload specifications *)
+ | DEF_fixity of prec * int * id (* fixity declaration *)
  | DEF_spec of val_spec (* top-level type constraint *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)

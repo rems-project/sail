@@ -198,7 +198,6 @@ let doc_pat_ocaml =
   | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
   | P_cons (p,p') -> doc_op (string "::") (pat p) (pat p')
   | P_record _ -> raise (Reporting_basic.err_unreachable l "unhandled record pattern")
-  | P_vector_indexed _ -> raise (Reporting_basic.err_unreachable l  "unhandled vector_indexed pattern")
   | P_vector_concat _ -> raise (Reporting_basic.err_unreachable l "unhandled vector_concat pattern")
   in pat
 
@@ -391,42 +390,6 @@ let doc_exp_ocaml, doc_let_ocaml =
            parens (separate space [call; parens (separate comma_sp [squarebars (separate_map semi exp exps);
                                                                    string start;
                                                                    string dir_out])])
-    | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
-      let (start, len, order, _) = vector_typ_args_of (Env.base_typ_of env typ) in
-      (*match annot with
-       | Base((_,t),_,_,_,_,_) ->
-         match t.t with
-         | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])
-         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])})
-         | Tapp("reg", [TA_typ {t =Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}]) ->*)
-           let call =
-             if is_bitvector_typ (Env.base_typ_of env typ)
-             then (string "make_indexed_bitv")
-             else (string "make_indexed_v") in
-           let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-           let start = match start with
-             | Nexp_aux (Nexp_constant i, _) -> string_of_int i
-             | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
-               string_of_int (Util.power 2 i)
-             | _ -> if dir then "0" else string_of_int (List.length iexps) in
-           let size = match len with
-             | Nexp_aux (Nexp_constant i, _) -> string_of_int i
-             | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
-               string_of_int (Util.power 2 i)
-             | _ ->
-               raise (Reporting_basic.err_unreachable l
-                 "indexed vector without known length") in
-           let default_string =
-             (match default with
-              | Def_val_empty -> string "None"
-              | Def_val_dec e -> parens (string "Some " ^^ (exp e))) in
-           let iexp (i,e) = parens (separate_map comma_sp (fun x -> x) [(doc_int i); (exp e)]) in
-           parens (separate space [call;
-                                   (brackets (separate_map semi iexp iexps));
-                                   default_string;
-                                   string start;
-                                   string size;
-                                   string dir_out])
   | E_vector_update(v,e1,e2) ->
     (*Has never happened to date*)
       brackets (doc_op (string "with") (exp v) (doc_op equals (exp e1) (exp e2)))
@@ -476,11 +439,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       "internal expression should have been rewritten before pretty-printing")
   | E_comment _ | E_comment_struc _ -> empty (* TODO Should we output comments? *)
   and let_exp (LB_aux(lb,_)) = match lb with
-  | LB_val_explicit(ts,pat,e) ->
-      prefix 2 1
-        (separate space [string "let"; doc_pat_ocaml pat; equals])
-        (top_exp false e)
-  | LB_val_implicit(pat,e) ->
+  | LB_val(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_pat_ocaml pat; equals])
         (top_exp false e)
@@ -639,55 +598,6 @@ let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
                      doc_id_ocaml id;
                      equals;
                      doc_nexp nexp]
-  | KD_abbrev(_,id,nm,typschm) ->
-      doc_op equals (concat [string "type"; space; doc_id_ocaml_type id;]) (doc_typscm_ocaml typschm)
-  | KD_record(_,id,nm,typq,fs,_) ->
-      let f_pp (typ,id) = concat [doc_id_ocaml_type id; space; colon; doc_typ_ocaml typ; semi] in
-      let fs_doc = group (separate_map (break 1) f_pp fs) in
-      doc_op equals
-        (concat [string "type"; space; doc_id_ocaml_type id;]) (doc_typquant_ocaml typq (braces fs_doc))
-  | KD_variant(_,id,nm,typq,ar,_) ->
-    let n = List.length ar in
-    let ar_doc = group (separate_map (break 1) (doc_type_union_ocaml n) ar) in
-    doc_op equals
-      (concat [string "type"; space; doc_id_ocaml_type id;])
-      (if n > 246
-       then brackets (space ^^(doc_typquant_ocaml typq ar_doc))
-       else (doc_typquant_ocaml typq ar_doc))
-  | KD_enum(_,id,nm,enums,_) ->
-    let n = List.length enums in
-    let enums_doc = group (separate_map (break 1 ^^ pipe) (doc_id_ocaml_ctor) enums) in
-    doc_op equals
-      (concat [string "type"; space; doc_id_ocaml_type id;])
-      (enums_doc)
-  | KD_register(_,id,n1,n2,rs) ->
-    let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id id); doc_range_ocaml r;]) in
-    let doc_rids = group (separate_map (semi ^^ (break 1)) doc_rid rs) in
-    match n1,n2 with
-    | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
-      let dir = i1 < i2 in
-      let size = if dir then i2-i1 +1 else i1-i2 in
-      doc_op equals
-        ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
-        (separate space [string "Vregister";
-                         (parens (separate comma_sp
-                                    [parens (separate space
-                                               [string "match init_val with";
-                                                pipe;
-                                                string "None";
-                                                arrow;
-                                                string "ref";
-                                                string "(Array.make";
-                                                doc_int size;
-                                                string "Vzero)";
-                                                pipe;
-                                                string "Some init_val";
-                                                arrow;
-                                                string "ref init_val";]);
-                                     doc_nexp n1;
-                                     string (if dir then "true" else "false");
-                                     string_lit (doc_id id);
-                                     brackets doc_rids]))])
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty

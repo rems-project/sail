@@ -217,11 +217,11 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
       group (parens (nexp ne))
 
   and nexp_constraint (NC_aux(nc,_)) = match nc with
-    | NC_fixed(n1,n2) -> doc_op equals (nexp n1) (nexp n2)
+    | NC_equal(n1,n2) -> doc_op equals (nexp n1) (nexp n2)
     | NC_not_equal (n1, n2) -> doc_op (string "!=") (nexp n1) (nexp n2)
     | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (nexp n1) (nexp n2)
     | NC_bounded_le(n1,n2) -> doc_op (string "<=") (nexp n1) (nexp n2)
-    | NC_nat_set_bounded(v,bounds) ->
+    | NC_set(v,bounds) ->
        doc_op (string "IN") (doc_var v)
               (braces (separate_map comma_sp doc_int bounds))
     | NC_or (nc1, nc2) ->

@@ -46,10 +46,13 @@ let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
 open Parse_ast
 
-let loc n m = Range (m, n)
+let loc n m = Range (n, m)
 
-let mk_id i n m = Id_aux (i, loc m n)
+let mk_id i n m = Id_aux (i, loc n m)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
+
+let id_of_kid = function
+  | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let deinfix (Id_aux (Id v, l)) = Id_aux (DeIid v, l)
 
@@ -121,21 +124,19 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone Bits By Match Clause Const Dec Def Default Effect EFFECT End Op
-%token Enum Else Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
-%token Pure Rec Register Return Scattered Sizeof Struct Then True TwoCaret Type TYPE Typedef
-%token Undefined Union With Val Constraint Throw Try Catch
+%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
+%token Enum Else False Forall Foreach Overload Function_ If_ In Inc Let_ Int Order Cast
+%token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
+%token Undefined Union With Val Constraint Throw Try Catch Exit
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
+%token Repeat Until While Do
 
 %nonassoc Then
 %nonassoc Else
 
-%token Div_ Mod ModUnderS Quot Rem QuotUnderS
-
 %token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar
-%token BarBar BarSquare BarBarSquare ColonEq ColonGt ColonSquare
-%token MinusGt LtBar LtColon SquareBar SquareBarBar
+%token MinusGt
 
 /*Terminals with content*/
 
@@ -143,14 +144,16 @@ let rec desugar_rchain chain s e =
 %token <int> Num
 %token <string> String Bin Hex Real
 
-%token <string> Amp At Caret Div Eq Excl Gt Lt Plus Star EqGt Unit
+%token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
 %token <string> Colon ExclEq
-%token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
-%token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar
+%token <string> GtEq
+%token <string> LtEq
 
 %token <string> Op0 Op1 Op2 Op3 Op4 Op5 Op6 Op7 Op8 Op9
 %token <string> Op0l Op1l Op2l Op3l Op4l Op5l Op6l Op7l Op8l Op9l
 %token <string> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
+
+%token <Parse_ast.fixity_token> Fixity
 
 %start file
 %start typschm_eof
@@ -198,6 +201,14 @@ id:
   | Op Plus { mk_id (DeIid "+") $startpos $endpos }
   | Op Minus { mk_id (DeIid "-") $startpos $endpos }
   | Op Star { mk_id (DeIid "*") $startpos $endpos }
+  | Op ExclEq { mk_id (DeIid "!=") $startpos $endpos }
+  | Op Lt { mk_id (DeIid "<") $startpos $endpos }
+  | Op Gt { mk_id (DeIid ">") $startpos $endpos }
+  | Op LtEq { mk_id (DeIid "<=") $startpos $endpos }
+  | Op GtEq { mk_id (DeIid ">=") $startpos $endpos }
+  | Op Amp { mk_id (DeIid "&") $startpos $endpos }
+  | Op Bar { mk_id (DeIid "|") $startpos $endpos }
+  | Op Caret { mk_id (DeIid "^") $startpos $endpos }
 
 op0: Op0 { mk_id (Id $1) $startpos $endpos }
 op1: Op1 { mk_id (Id $1) $startpos $endpos }
@@ -266,7 +277,7 @@ atomic_nc:
   | False
     { mk_nc NC_false $startpos $endpos }
   | typ Eq typ
-    { mk_nc (NC_fixed ($1, $3)) $startpos $endpos }
+    { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
   | typ ExclEq typ
     { mk_nc (NC_not_equal ($1, $3)) $startpos $endpos }
   | nc_lchain
@@ -276,7 +287,7 @@ atomic_nc:
   | Lparen nc Rparen
     { $2 }
   | kid In Lcurly num_list Rcurly
-    { mk_nc (NC_nat_set_bounded ($1, $4)) $startpos $endpos }
+    { mk_nc (NC_set ($1, $4)) $startpos $endpos }
 
 num_list:
   | Num
@@ -434,16 +445,19 @@ typ8:
   | typ8l op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ9 op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 typ8l:
   | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ8l op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 typ8r:
   | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ9 op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 
 typ9:
@@ -481,7 +495,7 @@ atomic_typ:
     { let v = mk_kid "n" $startpos $endpos in
       let atom_id = mk_id (Id "atom") $startpos $endpos in
       let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
-      mk_typ (ATyp_exist ([v], NC_aux (NC_nat_set_bounded (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
+      mk_typ (ATyp_exist ([v], NC_aux (NC_set (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
   | Lcurly kid_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kid_list Comma nc Dot typ Rcurly
@@ -582,13 +596,25 @@ typschm_eof:
   | typschm Eof
     { $1 }
 
-pat:
+pat1:
   | atomic_pat
     { $1 }
-  | atomic_pat As id
+  | atomic_pat At pat_concat
+    { mk_pat (P_vector_concat ($1 :: $3)) $startpos $endpos }
+
+pat_concat:
+  | atomic_pat
+    { [$1] }
+  | atomic_pat At pat_concat
+    { $1 :: $3 }
+
+pat:
+  | pat1
+    { $1 }
+  | pat1 As id
     { mk_pat (P_as ($1, $3)) $startpos $endpos }
-  | Lparen pat Comma pat_list Rparen
-    { mk_pat (P_tup ($2 :: $4)) $startpos $endpos }
+  | pat1 As kid
+    { mk_pat (P_var ($1, $3)) $startpos $endpos }
 
 pat_list:
   | pat
@@ -604,13 +630,17 @@ atomic_pat:
   | id
     { mk_pat (P_id $1) $startpos $endpos }
   | kid
-    { mk_pat (P_var $1) $startpos $endpos }
+    { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos, $1)) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
-  | pat Colon typ
+  | atomic_pat Colon typ
     { mk_pat (P_typ ($3, $1)) $startpos $endpos }
   | Lparen pat Rparen
     { $2 }
+  | Lparen pat Comma pat_list Rparen
+    { mk_pat (P_tup ($2 :: $4)) $startpos $endpos }
+  | Lsquare pat_list Rsquare
+    { mk_pat (P_vector $2) $startpos $endpos }
 
 lit:
   | True
@@ -633,6 +663,8 @@ lit:
     { mk_lit (L_hex $1) $startpos $endpos }
   | String
     { mk_lit (L_string $1) $startpos $endpos }
+  | Real
+    { mk_lit (L_real $1) $startpos $endpos }
 
 exp:
   | exp0
@@ -655,8 +687,39 @@ exp:
     { mk_exp (E_case ($2, $4)) $startpos $endpos }
   | Try exp Catch Lcurly case_list Rcurly
     { mk_exp (E_try ($2, $5)) $startpos $endpos }
-  | Lparen exp0 Comma exp_list Rparen
-    { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp In typ Rparen exp
+    { if $4 <> "from" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"from\" in foreach loop"));
+      if $6 <> "to" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"to\" in foreach loop"));
+      mk_exp (E_for ($3, $5, $7, $9, $11, $13)) $startpos $endpos }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp Rparen exp
+    { if $4 <> "from" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"from\" in foreach loop"));
+      if $6 <> "to" && $6 <> "downto" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"to\" or \"downto\" in foreach loop"));
+      let order =
+        if $6 = "to"
+        then ATyp_aux(ATyp_inc,loc $startpos($6) $endpos($6))
+        else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
+      in
+      mk_exp (E_for ($3, $5, $7, $9, order, $11)) $startpos $endpos }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp Rparen exp
+    { if $4 <> "from" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"from\" in foreach loop"));
+      if $6 <> "to" && $6 <> "downto" then
+       raise (Parse_error_locn (loc $startpos $endpos,"Missing \"to\" or \"downto\" in foreach loop"));
+      let step = mk_lit_exp (L_num 1) $startpos $endpos in
+      let ord =
+        if $6 = "to"
+        then ATyp_aux(ATyp_inc,loc $startpos($6) $endpos($6))
+        else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
+      in
+      mk_exp (E_for ($3, $5, $7, step, ord, $9)) $startpos $endpos }
+  | Repeat exp Until exp
+    { mk_exp (E_loop (Until, $4, $2)) $startpos $endpos }
+  | While exp Do exp
+    { mk_exp (E_loop (While, $2, $4)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */
@@ -693,6 +756,7 @@ exp2:
   | exp3 op2 exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp2l op2l exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp3 op2r exp2r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3 Bar exp2r { mk_exp (E_app_infix ($1, mk_id (Id "|") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp3 { $1 }
 exp2l:
   | exp3 op2 exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
@@ -701,12 +765,14 @@ exp2l:
 exp2r:
   | exp3 op2 exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp3 op2r exp2r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3 Bar exp2r { mk_exp (E_app_infix ($1, mk_id (Id "|") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp3 { $1 }
 
 exp3:
   | exp4 op3 exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp3l op3l exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp4 op3r exp3r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4 Amp exp3r { mk_exp (E_app_infix ($1, mk_id (Id "&") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp4 { $1 }
 exp3l:
   | exp4 op3 exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
@@ -715,10 +781,16 @@ exp3l:
 exp3r:
   | exp4 op3 exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp4 op3r exp3r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4 Amp exp3r { mk_exp (E_app_infix ($1, mk_id (Id "&") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp4 { $1 }
 
 exp4:
   | exp5 op4 exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5 Lt exp5 { mk_exp (E_app_infix ($1, mk_id (Id "<") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 Gt exp5 { mk_exp (E_app_infix ($1, mk_id (Id ">") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 LtEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id "<=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 GtEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id ">=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 ExclEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id "!=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp4l op4l exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp5 op4r exp4r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp5 { $1 }
@@ -785,6 +857,7 @@ exp8:
   | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp8l op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9 Caret exp8r { mk_exp (E_app_infix ($1, mk_id (Id "^") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 exp8l:
@@ -795,6 +868,7 @@ exp8l:
 exp8r:
   | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9 Caret exp8r { mk_exp (E_app_infix ($1, mk_id (Id "^") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 
@@ -836,13 +910,15 @@ block:
 
 %inline letbind:
   | pat Eq exp
-    { LB_aux (LB_val_implicit ($1, $3), loc $startpos $endpos) }
+    { LB_aux (LB_val ($1, $3), loc $startpos $endpos) }
 
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_cast ($3, $1)) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
+  | atomic_exp Dot id
+    { mk_exp (E_field ($1, $3)) $startpos $endpos }
   | id
     { mk_exp (E_id $1) $startpos $endpos }
   | kid
@@ -851,10 +927,14 @@ atomic_exp:
     { mk_exp (E_app ($1, [mk_lit_exp L_unit $startpos($2) $endpos])) $startpos $endpos }
   | id Lparen exp_list Rparen
     { mk_exp (E_app ($1, $3)) $startpos $endpos }
+  | Exit Lparen exp Rparen
+    { mk_exp (E_exit $3) $startpos $endpos }
   | Sizeof Lparen typ Rparen
     { mk_exp (E_sizeof $3) $startpos $endpos }
   | Constraint Lparen nc Rparen
     { mk_exp (E_constraint $3) $startpos $endpos }
+  | Assert Lparen exp Rparen
+    { mk_exp (E_assert ($3, mk_lit_exp (L_string "") $startpos($4) $endpos($4))) $startpos $endpos }
   | Assert Lparen exp Comma exp Rparen
     { mk_exp (E_assert ($3, $5)) $startpos $endpos }
   | atomic_exp Lsquare exp Rsquare
@@ -869,6 +949,8 @@ atomic_exp:
     { mk_exp (E_vector_update_subrange ($2, $4, $6, $8)) $startpos $endpos }
   | Lparen exp Rparen
     { $2 }
+  | Lparen exp Comma exp_list Rparen
+    { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
 
 exp_list:
   | exp
@@ -880,11 +962,19 @@ funcl:
   | id pat Eq exp
     { mk_funcl (FCL_Funcl ($1, $2, $4)) $startpos $endpos }
 
+funcls:
+  | id pat Eq exp
+    { [mk_funcl (FCL_Funcl ($1, $2, $4)) $startpos $endpos] }
+  | id pat Eq exp And funcls
+    { mk_funcl (FCL_Funcl ($1, $2, $4)) $startpos $endpos :: $6 }
+
 type_def:
   | Typedef id typquant Eq typ
     { mk_td (TD_abbrev ($2, mk_namesectn, mk_typschm $3 $5 $startpos($3) $endpos)) $startpos $endpos }
   | Typedef id Eq typ
     { mk_td (TD_abbrev ($2, mk_namesectn, mk_typschm mk_typqn $4 $startpos($4) $endpos)) $startpos $endpos }
+  | Struct id Eq Lcurly struct_fields Rcurly
+    { mk_td (TD_record ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Struct id typquant Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, mk_namesectn, $3, $6, false)) $startpos $endpos }
   | Enum id Eq enum_bar
@@ -933,8 +1023,8 @@ type_unions:
     { $1 :: $3 }
 
 fun_def:
-  | Function_ funcl
-    { mk_fun (FD_function (mk_recn, mk_tannotn, mk_eannotn, [$2])) $startpos $endpos }
+  | Function_ funcls
+    { mk_fun (FD_function (mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
 
 let_def:
   | Let_ letbind
@@ -942,7 +1032,13 @@ let_def:
 
 val_spec_def:
   | Val id Colon typschm
-    { mk_vs (VS_val_spec ($4, $2)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, $2, None, false)) $startpos $endpos }
+  | Val Cast id Colon typschm
+    { mk_vs (VS_val_spec ($5, $3, None, true)) $startpos $endpos }
+  | Val id Eq String Colon typschm
+    { mk_vs (VS_val_spec ($6, $2, Some $4, false)) $startpos $endpos }
+  | Val Cast id Eq String Colon typschm
+    { mk_vs (VS_val_spec ($7, $3, Some $5, true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ
@@ -965,6 +1061,8 @@ scattered_def:
 def:
   | fun_def
     { DEF_fundef $1 }
+  | Fixity
+    { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
     { DEF_spec $1 }
   | type_def

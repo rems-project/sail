@@ -74,6 +74,7 @@ let fix_id remove_tick name = match name with
   | "try"
   | "match"
   | "with"
+  | "check"
   | "field"
   | "LT"
   | "GT"
@@ -289,7 +290,22 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
               (doc_tannot_lem sequential mwords false typ)))
        | _ -> utf8string "(failwith \"undefined value of unsupported type\")")
   | L_string s -> utf8string ("\"" ^ s ^ "\"")
-  | L_real s -> utf8string s (* TODO What's the Lem syntax for reals? *)
+  | L_real s ->
+    (* Lem does not support decimal syntax, so we translate a string
+       of the form "x.y" into the ratio (x * 10^len(y) + y) / 10^len(y).
+       The OCaml library has a conversion function from strings to floats, but
+       not from floats to ratios. ZArith's Q library does have the latter, but
+       using this would require adding a dependency on ZArith to Sail. *)
+    let parts = Util.split_on_char '.' s in
+    let (num, denom) = match parts with
+    | [i] -> (big_int_of_string i, unit_big_int)
+    | [i;f] ->
+      let denom = power_int_positive_int 10 (String.length f) in
+      (add_big_int (mult_big_int (big_int_of_string i) denom) (big_int_of_string f), denom)
+    | _ ->
+      raise (Reporting_basic.Fatal_error
+        (Reporting_basic.Err_syntax_locn (l, "could not parse real literal"))) in
+    separate space (List.map string ["realFromFrac"; string_of_big_int num; string_of_big_int denom])
 
 (* typ_doc is the doc for the type being quantified *)
 let doc_quant_item (QI_aux (qi, _)) = match qi with
@@ -356,7 +372,7 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
      begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
-  | P_var kid -> doc_var_lem kid
+  | P_var(p,kid) -> doc_pat_lem sequential mwords true p
   | P_as(p,id) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_id_lem id])
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem sequential mwords true p in
@@ -376,7 +392,7 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
       | _ -> parens (separate_map comma_sp (doc_pat_lem sequential mwords false) pats))
   | P_list pats -> brackets (separate_map semi (doc_pat_lem sequential mwords false) pats) (*Never seen but easy in lem*)
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem sequential mwords true p) (doc_pat_lem sequential mwords true p')
-  | P_record (_,_) | P_vector_indexed _ -> empty (* TODO *)
+  | P_record (_,_) -> empty (* TODO *)
 
 let rec contains_bitvector_typ (Typ_aux (t,_) as typ) = match t with
   | Typ_tup ts -> List.exists contains_bitvector_typ ts
@@ -533,12 +549,12 @@ let doc_exp_lem, doc_let_lem =
           let [id;indices;body;e5] = args in
           let varspp = match e5 with
             | E_aux (E_tuple vars,_) ->
-               let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
+               let vars = List.map (fun (E_aux (E_id id,_)) -> doc_id_lem id) vars in
                begin match vars with
                | [v] -> v
                | _ -> parens (separate comma vars) end
-            | E_aux (E_id (Id_aux (Id name,_)),_) ->
-               string name
+            | E_aux (E_id id,_) ->
+               doc_id_lem id
             | E_aux (E_lit (L_aux (L_unit,_)),_) ->
                string "_" in
           parens (
@@ -553,12 +569,12 @@ let doc_exp_lem, doc_let_lem =
           let [is_while;cond;body;e5] = args in
           let varspp = match e5 with
             | E_aux (E_tuple vars,_) ->
-               let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
+               let vars = List.map (fun (E_aux (E_id id,_)) -> doc_id_lem id) vars in
                begin match vars with
                | [v] -> v
                | _ -> parens (separate comma vars) end
-            | E_aux (E_id (Id_aux (Id name,_)),_) ->
-               string name
+            | E_aux (E_id id,_) ->
+               doc_id_lem id
             | E_aux (E_lit (L_aux (L_unit,_)),_) ->
                string "_" in
           parens (
@@ -593,7 +609,7 @@ let doc_exp_lem, doc_let_lem =
              currently broken. *)
           let [arg] = args in
           let targ = typ_of arg in
-          let call = if mwords && is_bitvector_typ targ then "bvlength" else "length" in
+          let call = if mwords && is_bitvector_typ targ then "bitvector_length" else "length" in
           let epp = separate space [string call;expY arg] in
           if aexp_needed then parens (align epp) else epp
        (*)| Id_aux (Id "bool_not", _) ->
@@ -632,17 +648,19 @@ let doc_exp_lem, doc_let_lem =
        end
     | E_vector_access (v,e) ->
       let vtyp = Env.base_typ_of (env_of v) (typ_of v) in
-      let (start, _, ord, etyp) = vector_typ_args_of vtyp in
+      let (start, len, ord, etyp) = vector_typ_args_of vtyp in
       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-      let call =
-        if is_bitvector_typ vtyp (*&& mwords*)
-        then "bitvector_access" ^ ord_suffix
-        else "vector_access" ^ ord_suffix in
+      let bit_prefix = if is_bitvector_typ vtyp then "bit" else "" in
+      let call = bit_prefix ^ "vector_access" ^ ord_suffix in
       let start_idx = match simplify_nexp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
-          raise (Reporting_basic.err_unreachable l
-            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+          let nc = nc_eq start (nminus len (nconstant 1)) in
+          if prove (env_of full_exp) nc
+          then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+          else raise (Reporting_basic.err_unreachable l
+            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+            " with non-constant start index")) in
       let epp = string call ^^ space ^^ parens (separate comma_sp [start_idx;expY v;expY e]) in
       if aexp_needed then parens (align epp) else epp
       (* raise (Reporting_basic.err_unreachable l
@@ -658,17 +676,19 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align epp) else epp*)
     | E_vector_subrange (v,e1,e2) ->
       let vtyp = Env.base_typ_of (env_of v) (typ_of v) in
-      let (start, _, ord, etyp) = vector_typ_args_of vtyp in
+      let (start, len, ord, etyp) = vector_typ_args_of vtyp in
       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-      let call =
-        if is_bitvector_typ vtyp (*&& mwords*)
-        then "bitvector_subrange" ^ ord_suffix
-        else "vector_subrange" ^ ord_suffix in
+      let bit_prefix = if is_bitvector_typ vtyp then "bit" else "" in
+      let call = bit_prefix ^ "vector_subrange" ^ ord_suffix in
       let start_idx = match simplify_nexp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
-          raise (Reporting_basic.err_unreachable l
-            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+          let nc = nc_eq start (nminus len (nconstant 1)) in
+          if prove (env_of full_exp) nc
+          then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+          else raise (Reporting_basic.err_unreachable l
+            ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+            " with non-constant start index")) in
       let epp = string call ^^ space ^^ parens (separate comma_sp [start_idx;expY v;expY e1;expY e2]) in
       if aexp_needed then parens (align epp) else epp
       (* raise (Reporting_basic.err_unreachable l
@@ -852,91 +872,38 @@ let doc_exp_lem, doc_let_lem =
                 else (epp,aexp_needed) in
               if aexp_needed then parens (align epp) else epp
        (* *)
-    | E_vector_indexed (iexps, (Def_val_aux (default,(dl,dannot)))) ->
-      let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-      let (start, len, order, etyp) =
-        if is_vector_typ t then vector_typ_args_of t
-        else raise (Reporting_basic.err_unreachable l "E_vector_indexed of non-vector type") in
-       let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-       let start = match simplify_nexp start with
-         | Nexp_aux (Nexp_constant i, _) -> string_of_int i
-         | _ -> if dir then "0" else string_of_int (List.length iexps) in
-       let size = match simplify_nexp len with
-         | Nexp_aux (Nexp_constant i, _)-> string_of_int i
-         | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
-           string_of_int (Util.power 2 i)
-         | _ ->
-           raise (Reporting_basic.err_unreachable l
-             "trying to pretty-print indexed vector without constant size") in
-       let default_string =
-         match default with
-         | Def_val_empty ->
-            if is_bitvector_typ t then string "BU"
-            else failwith "E_vector_indexed of non-bitvector type without default argument"
-         | Def_val_dec e ->
-            (*let (Base ((_,{t = t}),_,_,_,_,_)) = dannot in
-            match t with
-            | Tapp ("register",
-                    [TA_typ ({t = rt})]) ->
-               (* TODO: Does this case still occur with the new type checker? *)
-               let n = match rt with
-                 | Tapp ("vector",TA_nexp {nexp = Nconst i} :: TA_nexp {nexp = Nconst j} ::_) ->
-                    abs_big_int (sub_big_int i j)
-                 | _ ->
-                    raise ((Reporting_basic.err_unreachable dl)
-                             ("not the right type information available to construct "^
-                                "undefined register")) in
-               parens (string ("UndefinedRegister " ^ string_of_big_int n))
-            | _ ->*) expY e in
-       let iexp (i,e) = parens (doc_int i ^^ comma ^^ expN e) in
-       let expspp =
-         match iexps with
-         | [] -> empty
-         | e :: es ->
-            let (expspp,_) =
-              List.fold_left
-                (fun (pp,count) e ->
-                  (pp ^^ semi ^^ (if count = 5 then break 1 else empty) ^^ iexp e),
-                  if count = 5 then 0 else count + 1)
-                (iexp e,0) es in
-            align (expspp) in
-       let call = string "make_indexed_vector" in
-       let epp =
-         align (group (call ^//^ brackets expspp ^/^
-                         separate space [default_string;string start;string size;string dir_out])) in
-       let (bepp, aexp_needed) =
-         if is_bitvector_typ t && mwords
-         then (string "vec_to_bvec" ^^ space ^^ parens (epp) ^^ doc_tannot_lem sequential mwords false t, true)
-         else (epp, aexp_needed) in
-       if aexp_needed then parens (align bepp) else bepp
     | E_vector_update(v,e1,e2) ->
-       let t = typ_of full_exp in
-       let (start, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let t = typ_of v in
+       let (start, len, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
        let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-       let call =
-         if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update_pos" ^ ord_suffix
-         else "vector_update_pos" ^ ord_suffix in
+       let bit_prefix = if is_bitvector_typ t then "bit" else "" in
+       let call = bit_prefix ^ "vector_update_pos" ^ ord_suffix in
        let start_idx = match simplify_nexp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
-           raise (Reporting_basic.err_unreachable l
-             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+           let nc = nc_eq start (nminus len (nconstant 1)) in
+           if prove (env_of full_exp) nc
+           then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+           else raise (Reporting_basic.err_unreachable l
+             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+             " with non-constant start index")) in
        let epp = string call ^^ space ^^ parens (separate comma_sp [start_idx;expY v;expY e1;expY e2]) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update_subrange(v,e1,e2,e3) ->
-       let t = typ_of full_exp in
-       let (start, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let t = typ_of v in
+       let (start, len, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
        let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
-       let call =
-         if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update_subrange" ^ ord_suffix
-         else "vector_update_subrange" ^ ord_suffix in
+       let bit_prefix = if is_bitvector_typ t then "bit" else "" in
+       let call = bit_prefix ^ "vector_update_subrange" ^ ord_suffix in
        let start_idx = match simplify_nexp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
-           raise (Reporting_basic.err_unreachable l
-             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^ " with non-constant start index")) in
+           let nc = nc_eq start (nminus len (nconstant 1)) in
+           if prove (env_of full_exp) nc
+           then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
+           else raise (Reporting_basic.err_unreachable l
+             ("cannot pretty print expression " ^ (string_of_exp full_exp) ^
+             " with non-constant start index")) in
        let epp =
          align (string call ^//^
            parens (separate comma_sp
@@ -1097,8 +1064,7 @@ let doc_exp_lem, doc_let_lem =
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
   and let_exp sequential mwords early_ret (LB_aux(lb,_)) = match lb with
-    | LB_val_explicit(_,pat,e)
-      | LB_val_implicit(pat,e) ->
+    | LB_val(pat,e) ->
        prefix 2 1
               (separate space [string "let"; doc_pat_lem sequential mwords true pat; equals])
               (top_exp sequential mwords early_ret false e)
@@ -1601,13 +1567,13 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
 
 let doc_spec_lem sequential mwords (VS_aux (valspec,annot)) =
   match valspec with
-  | VS_extern_no_rename _
-  | VS_extern_spec _ -> empty (* ignore these at the moment *)
-  | VS_val_spec (typschm,id) | VS_cast_spec (typschm,id) ->
+  | VS_val_spec (typschm,id,None,_) ->
      separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem sequential mwords true typschm] ^/^ hardline 
+  | VS_val_spec (_,_,Some _,_) -> empty
 
-
-let rec doc_def_lem sequential mwords def = match def with
+let rec doc_def_lem sequential mwords def =
+  (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
+  match def with
   | DEF_spec v_spec -> (empty,doc_spec_lem sequential mwords v_spec)
   | DEF_overload _ -> (empty,empty)
   | DEF_type t_def -> (group (doc_typdef_lem sequential mwords t_def) ^/^ hardline,empty)

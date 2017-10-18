@@ -5,7 +5,7 @@ open import Sail_values
 
 (*** Bit vector operations *)
 
-let bvlength bs = integerFromNat (word_length bs)
+let bitvector_length bs = integerFromNat (word_length bs)
 
 (*val set_bitvector_start : forall 'a. (integer * bitvector 'a) -> bitvector 'a
 let set_bitvector_start (new_start, Bitvector bs _ is_inc) =
@@ -240,18 +240,8 @@ let extz_big (start, len, vec) = to_vec_big (unsigned_big vec)
 let extz_bl (start, len, bits) = vec_to_bvec (Vector bits (integerFromNat (List.length bits - 1)) false)
 let exts_bl (start, len, bits) = vec_to_bvec (Vector bits (integerFromNat (List.length bits - 1)) false)
 
-let add (l,r) = integerAdd l r
-let add_signed (l,r) = integerAdd l r
-let sub (l,r) = integerMinus l r
-let mult (l,r) = integerMult l r
-let quotient (l,r) = integerDiv l r
-let modulo (l,r) = hardware_mod l r
 let quot = hardware_quot
-let power (l,r) = integerPow l r
-
-let add_int = add
-let sub_int = sub
-let mult_int = mult
+let modulo (l,r) = hardware_mod l r
 
 (* TODO: this, and the definitions that use it, currently require Size for
    to_vec, which I'd rather avoid in favour of library versions; the

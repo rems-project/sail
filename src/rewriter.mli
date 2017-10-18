@@ -56,8 +56,8 @@ type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
                     
 val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
-val rewrite_defs_ocaml : (tannot defs -> tannot defs) list (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
-val rewrite_defs_lem : (tannot defs -> tannot defs) list (*Perform rewrites to exclude AST nodes not supported for lem out*)
+val rewrite_defs_ocaml : (string * (tannot defs -> tannot defs)) list (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
+val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list (*Perform rewrites to exclude AST nodes not supported for lem out*)
 
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
@@ -66,11 +66,10 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux
-  ; p_var            : kid -> 'pat_aux
+  ; p_var            : 'pat * kid -> 'pat_aux
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
-  ; p_vector_indexed : (int * 'pat) list -> 'pat_aux
   ; p_vector_concat  : 'pat list -> 'pat_aux
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
@@ -99,7 +98,6 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
  ; e_loop                   : loop * 'exp * 'exp -> 'exp_aux
  ; e_vector                 : 'exp list -> 'exp_aux
- ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
  ; e_vector_access          : 'exp * 'exp -> 'exp_aux
  ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
  ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux
@@ -145,8 +143,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
  ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
- ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
- ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux
+ ; lB_val          : 'pat * 'exp -> 'letbind_aux
  ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
  }

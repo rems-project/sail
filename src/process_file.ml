@@ -59,20 +59,25 @@ let get_lexbuf f =
   lexbuf, in_chan
 
 let parse_file (f : string) : Parse_ast.defs =
-  let scanbuf, in_chan = get_lexbuf f in
-  let type_names =
-    try
-      Pre_parser.file Pre_lexer.token scanbuf
-    with
+  if not !opt_new_parser
+  then
+    let scanbuf, in_chan = get_lexbuf f in
+    let type_names =
+      try
+        Pre_parser.file Pre_lexer.token scanbuf
+      with
       | Parsing.Parse_error ->
-          let pos = Lexing.lexeme_start_p scanbuf in
-           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "pre")))
+         let pos = Lexing.lexeme_start_p scanbuf in
+         raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "pre")))
       | Parse_ast.Parse_error_locn(l,m) ->
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
+         raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
       | Lexer.LexError(s,p) ->
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s))) in
-  let () = Lexer.custom_type_names := !Lexer.custom_type_names @ type_names in
-  close_in in_chan;
+         raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
+    in
+    close_in in_chan;
+    Lexer.custom_type_names := !Lexer.custom_type_names @ type_names
+  else ();
+
   let lexbuf, in_chan = get_lexbuf f in
     try
       let ast =
@@ -82,13 +87,16 @@ let parse_file (f : string) : Parse_ast.defs =
       in
       close_in in_chan; ast
     with
-      | Parsing.Parse_error ->
-          let pos = Lexing.lexeme_start_p lexbuf in
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "main")))
-      | Parse_ast.Parse_error_locn(l,m) ->
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
-      | Lexer.LexError(s,p) ->
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
+    | Parser2.Error ->
+       let pos = Lexing.lexeme_start_p lexbuf in
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "no information")))
+    | Parsing.Parse_error ->
+       let pos = Lexing.lexeme_start_p lexbuf in
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "main")))
+    | Parse_ast.Parse_error_locn(l,m) ->
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
+    | Lexer.LexError(s,p) ->
+       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
@@ -229,19 +237,27 @@ let output libpath out_arg files =
        output1 libpath out_arg f defs)
     files
 
-let rewrite_step defs rewriter =
+let rewrite_step defs (name,rewriter) =
   let defs = rewriter defs in
   let _ = match !(opt_ddump_rewrite_ast) with
     | Some (f, i) ->
       begin
-        output "" Lem_ast_out [f ^ "_rewrite_" ^ string_of_int i ^ ".sail",defs];
+        let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
+        output "" Lem_ast_out [filename, defs];
+        let ((ot,_, _) as ext_ot) = open_output_with_check_unformatted filename in
+        Pretty_print_sail.pp_defs ot defs;
+        close_output_with_check ext_ot;
         opt_ddump_rewrite_ast := Some (f, i + 1)
       end
     | _ -> () in
   defs
 
-let rewrite rewriters defs = List.fold_left rewrite_step defs rewriters
+let rewrite rewriters defs =
+  try List.fold_left rewrite_step defs rewriters with
+  | Type_check.Type_error (_, err) ->
+     prerr_endline (Type_check.string_of_type_error err);
+     exit 1
 
-let rewrite_ast = rewrite [Rewriter.rewrite_defs]
+let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_ast_lem = rewrite Rewriter.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewriter.rewrite_defs_ocaml

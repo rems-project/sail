@@ -87,14 +87,6 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
-let format_pos ff p =
-  let open Lexing in
-  begin
-    Format.fprintf ff "file \"%s\", line %d, character %d:\n"
-                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol);
-    Format.pp_print_flush ff ()
-  end
-
 let rec skip_lines in_chan = function
   | n when n <= 0 -> ()
   | n -> input_line in_chan; skip_lines in_chan (n - 1)
@@ -125,6 +117,16 @@ let print_code1 ff fname lnum1 cnum1 cnum2 =
       with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
     end
   with _ -> ()
+
+let format_pos ff p =
+  let open Lexing in
+  begin
+    Format.fprintf ff "file \"%s\", line %d, character %d:\n\n"
+                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol);
+    print_code1 ff p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) (p.pos_cnum - p.pos_bol + 1);
+    Format.fprintf ff "\n\n";
+    Format.pp_print_flush ff ()
+  end
 
 let print_code2 ff fname lnum1 cnum1 lnum2 cnum2 =
   try

@@ -42,14 +42,13 @@
 
 {
 open Parser2
+open Parse_ast
 module M = Map.Make(String)
 exception LexError of string * Lexing.position
 
 let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
 let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
-
-type prec = Infix | InfixL | InfixR
 
 let mk_operator prec n op =
   match prec, n with
@@ -100,17 +99,14 @@ let kw_table =
      ("by",                      (fun _ -> By));
      ("match",			 (fun _ -> Match));
      ("clause",                  (fun _ -> Clause));
-     ("const",			 (fun _ -> Const));
      ("dec",                     (fun _ -> Dec));
-     ("def",                     (fun _ -> Def));
-     ("op",                      (fun _ -> Op));
+     ("operator",                (fun _ -> Op));
      ("default",		 (fun _ -> Default));
      ("effect",                  (fun _ -> Effect));
-     ("Effect",                  (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
      ("enum",		         (fun _ -> Enum));
      ("else",                    (fun _ -> Else));
-     ("extern",                  (fun _ -> Extern));
+     ("exit",                    (fun _ -> Exit));
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
@@ -123,13 +119,10 @@ let kw_table =
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
      ("inc",                     (fun _ -> Inc));
-     ("IN",                      (fun x -> IN));
      ("let",                     (fun x -> Let_));
-     ("member",                  (fun x -> Member));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
      ("pure",                    (fun x -> Pure));
-     ("rec",			 (fun x -> Rec));
      ("register",		 (fun x -> Register));
      ("return",                  (fun x -> Return));
      ("scattered",               (fun x -> Scattered));
@@ -144,13 +137,10 @@ let kw_table =
      ("union",			 (fun x -> Union));
      ("with",                    (fun x -> With));
      ("val",                     (fun x -> Val));
-
-     ("div",			 (fun x -> Div_));
-     ("mod",			 (fun x -> Mod));
-     ("mod_s",                   (fun x -> ModUnderS));
-     ("quot",			 (fun x -> Quot));
-     ("quot_s",                  (fun x -> QuotUnderS));
-     ("rem",			 (fun x -> Rem));
+     ("repeat",                  (fun _ -> Repeat));
+     ("until",                   (fun _ -> Until));
+     ("while",                   (fun _ -> While));
+     ("do",                      (fun _ -> Do));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
@@ -180,8 +170,8 @@ let alphanum = letter|digit
 let startident = letter|'_'
 let ident = alphanum|['_''\'']
 let tyvar_start = '\''
-let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|''~']
-let operator = oper_char+ ('_' ident)?
+let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|']
+let operator = (oper_char+ ('_' ident)?)
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 
 rule token = parse
@@ -198,6 +188,9 @@ rule token = parse
   | ","                                 { Comma }
   | ".."                                { DotDot }
   | "."                                 { Dot }
+  | "==" as op
+    { try M.find op !operators
+      with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
   | "="                                 { (Eq(r"=")) }
   | ">"					{ (Gt(r">")) }
   | "-"					{ Minus }
@@ -223,19 +216,20 @@ rule token = parse
   | "<="				{ (LtEq(r"<=")) }
   | "infix" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
-      token lexbuf }
+      Fixity (Infix, int_of_string (Char.escaped p), op) }
   | "infixl" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator InfixL (int_of_string (Char.escaped p)) op) !operators;
-      token lexbuf }
+      Fixity (InfixL, int_of_string (Char.escaped p), op) }
   | "infixr" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator InfixR (int_of_string (Char.escaped p)) op) !operators;
-      token lexbuf }
+      Fixity (InfixR, int_of_string (Char.escaped p), op) }
   | operator as op
     { try M.find op !operators
-      with Not_found -> raise (LexError ("Operator fixity undeclared", Lexing.lexeme_start_p lexbuf)) }
+      with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
   | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
   | "*)"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
   | tyvar_start startident ident* as i  { TyVar(r i) }
+  | "~"                                 { Id(r"~") }
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) ()
 					  (* else if

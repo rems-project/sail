@@ -50,6 +50,8 @@ let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
+let opt_convert = ref false
+let opt_memo_z3 = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -103,6 +105,12 @@ let options = Arg.align ([
   ( "-just_check",
     Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking");
+  ( "-convert",
+    Arg.Set opt_convert,
+    " Convert sail to new syntax");
+  ( "-memo_z3",
+    Arg.Set opt_memo_z3,
+    " Memoize calls to z3");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
@@ -118,7 +126,7 @@ let options = Arg.align ([
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " turn off effect checking");
-  ( "-undefined-gen",
+  ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
   ( "-v",
@@ -142,12 +150,18 @@ let main() =
   if !(opt_print_version)
   then Printf.printf "Sail private release \n"
   else
+    if !opt_memo_z3 then Constraint.load_digests () else ();
 
     let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
     let ast =
       List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 
                         -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
     let ast = convert_ast Ast_util.inc_ord ast in
+
+    if !opt_convert
+    then (Pretty_print_sail2.pp_defs stdout ast; exit 0)
+    else ();
+
     let (ast, type_envs) = check_ast ast in
 
     let (ast, type_envs) =
@@ -160,6 +174,9 @@ let main() =
     let out_name = match !opt_file_out with
       | None -> fst (List.hd parsed)
       | Some f -> f ^ ".sail" in
+
+    if !opt_memo_z3 then Constraint.save_digests () else ();
+
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
       (if !(opt_print_verbose)

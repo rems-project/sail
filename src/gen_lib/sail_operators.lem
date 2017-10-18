@@ -5,7 +5,7 @@ open import Sail_values
 
 (*** Bit vector operations *)
 
-let bvlength = length
+let bitvector_length = length
 
 let set_bitvector_start = set_vector_start
 let reset_bitvector_start = reset_vector_start
@@ -25,8 +25,10 @@ let vector_subrange_bl_dec = vector_subrange_bl
 
 let bitvector_access_inc = vector_access_inc
 let bitvector_access_dec = vector_access_dec
-let bitvector_update_pos_dec = update_pos
-let bitvector_update_subrange_dec = vector_update_dec
+let bitvector_update_pos_inc = vector_update_pos_inc
+let bitvector_update_pos_dec = vector_update_pos_dec
+let bitvector_update_subrange_inc = vector_update_subrange_inc
+let bitvector_update_subrange_dec = vector_update_subrange_dec
 
 let extract_only_bit = extract_only_element
 
@@ -197,18 +199,8 @@ let extz_bl (start, len, bits) = Vector bits start false
 let exts_bl (start, len, bits) = Vector bits start false
 
 
-let add (l,r) = integerAdd l r
-let add_signed (l,r) = integerAdd l r
-let sub (l,r) = integerMinus l r
-let mult (l,r) = integerMult l r
-let quotient (l,r) = integerDiv l r
-let modulo (l,r) = hardware_mod l r
 let quot = hardware_quot
-let power (l,r) = integerPow l r
-
-let add_int = add
-let sub_int = sub
-let mult_int = mult
+let modulo (l,r) = hardware_mod l r
 
 let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in
