@@ -158,7 +158,7 @@ let footprint = Footprint (Done (),Nothing)
 val foreachM_inc : forall 'vars 'r. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> MR 'vars 'r) -> MR 'vars 'r
 let rec foreachM_inc (i,stop,by) vars body =
-  if i <= stop
+  if (by > 0 && i <= stop) || (by < 0 && stop <= i)
   then
     body i vars >>= fun vars ->
     foreachM_inc (i + by,stop,by) vars body
@@ -167,11 +167,11 @@ let rec foreachM_inc (i,stop,by) vars body =
 
 val foreachM_dec : forall 'vars 'r. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> MR 'vars 'r) -> MR 'vars 'r
-let rec foreachM_dec (i,stop,by) vars body =
-  if i >= stop
+let rec foreachM_dec (stop,i,by) vars body =
+  if (by > 0 && i >= stop) || (by < 0 && stop >= i)
   then
     body i vars >>= fun vars ->
-    foreachM_dec (i - by,stop,by) vars body
+    foreachM_dec (stop,i - by,by) vars body
   else return vars
 
 val while_PP : forall 'vars. bool -> 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
