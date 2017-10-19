@@ -120,6 +120,7 @@ id :: '' ::=
   | bit				 :: M :: bit {{ ichlo (Id "bit") }} 
   | unit			 :: M :: unit {{ ichlo (Id "unit") }}
   | nat				 :: M :: nat  {{ ichlo (Id "nat") }}
+  | int				 :: M :: int  {{ ichlo (Id "int") }}
   | string                       :: M :: string {{ tex \ottkw{string} }} {{ ichlo (Id "string") }}
   | range                        :: M :: range {{ ichlo (Id "range") }}
   | atom			 :: M :: atom {{ ichlo (Id "atom") }}
@@ -135,8 +136,15 @@ id :: '' ::=
 % variable, and field name.  We don't enforce any lexical convention
 % on type variables (or variables of other kinds)
 % We don't enforce a lexical convention on infix operators, as some of the 
-% targets use alphabetical infix operators. 
+% targets use alphabetical infix operators.
 
+% Vector builtins
+  | vector_access          :: M :: vector_access
+  | vector_update          :: M :: vector_update
+  | vector_update_subrange :: M :: vector_update_subrange
+  | vector_subrange        :: M :: vector_subrange
+  | vector_append        :: M :: vector_append
+  
 kid :: '' ::=
   {{ com kinded IDs: $[[Type]]$, $[[Nat]]$, $[[Order]]$, and $[[Effect]]$ variables }}
   {{ aux _ l }}
@@ -243,6 +251,7 @@ typ :: 'Typ_' ::=
 % TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
   | ( typ1 , .... , typn )                          :: :: tup
     {{ com Tuple }}
+  | exist kid1 , .. , kidn , n_constraint . typ :: :: exist
 % TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
   | id < typ_arg1 , .. , typ_argn >                    :: :: app
   {{ com type constructor application }}
@@ -258,11 +267,12 @@ typ :: 'Typ_' ::=
 % probably some sugar for vector types, using [ ] similarly to enums:
 % (but with .. not : in the former, to avoid confusion...)
   | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} 
-{{ com sugar for vector indexed by \texttt{[|} [[nexp]] \texttt{|]} }}
+{{ com sugar for vector indexed by \texttt{[|} $[[nexp]]$ \texttt{|]} }}
   | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} 
-{{ com sugar for vector indexed by \texttt{[|} [[nexp]]..[[nexp']] \texttt{|]} }}
+{{ com sugar for vector indexed by \texttt{[|} $[[nexp]]$..$[[nexp']]$ \texttt{|]} }}
   | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector }}
   | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector }}
+  | register [ id ] :: S :: register
 % ...so bit [ nexp ] etc is just an instance of that
 %  | List < typ > :: :: list {{ com list of [[typ]] }}
 %  | Set < typ >  :: :: set  {{ com finite set of [[typ]] }}
@@ -271,7 +281,7 @@ typ :: 'Typ_' ::=
 % not sure how first-class it should be, though
 % use "reg word32" etc for the types of vanilla registers 
 
-
+ 
 typ_arg :: 'Typ_arg_' ::=
   {{ com type constructor arguments of all kinds }}
   {{ aux _ l }} 
@@ -987,7 +997,8 @@ exp :: 'E_' ::=
     {{ com conditional }}
 
   | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
-
+  | while exp1 do exp2  ::  :: while 
+  | repeat exp1 until exp2  :: :: until
   | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for {{ com loop }}
   | foreach ( id from exp1 to exp2 by exp3 ) exp4           :: S :: forup {{ ichlo [[ foreach id from exp1 to exp2 by exp3 in inc exp4 ]] }}
   | foreach ( id from exp1 to exp2 ) exp3                   :: S :: forupbyone  {{ ichlo [[ foreach id from exp1 to exp2 by 1 in inc exp4 ]] }}
@@ -1069,15 +1080,15 @@ exp :: 'E_' ::=
     {{ com imperative assignment }}
 
   | sizeof nexp                                         :: :: sizeof
-  {{ com the value of [[nexp]] at run time }}
+  {{ com the value of $[[nexp]]$ at run time }}
 
-  | return exp                                       :: :: return {{ com  return [[exp]] from current function }}
+  | return exp                                       :: :: return {{ com  return $[[exp]]$ from current function }}
 % this can be used to break out of for loops
   | exit exp						:: :: exit
     {{ com halt all current execution }}
 %, potentially calling a system, trap, or interrupt handler with exp
   | assert ( exp , exp' )                            :: :: assert
-    {{ com halt with error [[exp']] when not [[exp]] }}
+    {{ com halt with error $[[exp']]$ when not $[[exp]]$ }}
 % exp' is optional?
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
   | ( annot ) exp                                   :: I :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
@@ -1090,7 +1101,7 @@ exp :: 'E_' ::=
   | let pat = exp in exp' :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
   | return_int ( exp )                                          :: I :: internal_return {{ com For internal use to embed into monad definition }}
   | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
-
+  | constraint n_constraint :: :: constraint
 i_direction :: 'I' ::=
   | IInc :: :: Inc
   | IDec :: :: Dec
@@ -1127,7 +1138,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ com identifier }}
     | id ( exp1 , .. , expn )				  :: :: memory {{ com memory or register write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
-{{ com sugared form of above for explicit tuple [[exp]] }}
+{{ com sugared form of above for explicit tuple $[[exp]]$ }}
     | ( typ ) id					  :: :: cast
 {{ com cast }}
     | ( lexp0 , .. , lexpn )                              :: :: tup {{ com multiple (non-memory) assignment }}
@@ -1271,10 +1282,10 @@ letbind :: 'LB_' ::=
   {{ com let binding }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | let typschm pat = exp                                :: :: val_explicit
-    {{ com let, explicit type ([[pat]] must be total)}}
+    {{ com let, explicit type ($[[pat]]$ must be total)}}
 % at the moment, we cannot parse the following, so perhaps we shouldn't keep this form here 
   | let pat = exp                                    :: :: val_implicit
-    {{ com let, implicit type ([[pat]] must be total)}}
+    {{ com let, implicit type ($[[pat]]$ must be total)}}
 
 
 val_spec :: 'VS_' ::=
@@ -1379,16 +1390,16 @@ terminals :: '' ::=
   | **                                  :: :: starstar
     {{ tex \ensuremath{\mathop{\mathord{*}\mathord{*} } } }}
     {{ com \texttt{**} }}
-%   | >=                                  :: :: geq
-% %    {{ tex \ensuremath{\geq} }}
+   | >=                                  :: :: geq
+    {{ tex \ensuremath{\geq} }}
 %     {{ tex \ottsym{\textgreater=} }}
 %     {{ com \texttt{>=} }}
-%   | '<='                                        :: :: leq
-% %    {{ tex \ensuremath{\leq} }}
+   | '<='                                        :: :: leq
+    {{ tex \ensuremath{\leq} }}
 %     {{ tex \ottsym{\textless=} }}
 %     {{ com \texttt{<=} }}
-%   | ->                                  :: :: arrow
-% %    {{ tex \ensuremath{\rightarrow} }}
+   | ->                                  :: :: arrow
+    {{ tex \ensuremath{\rightarrow} }}
 %     {{ tex \ottsym{-\textgreater} }}
 %     {{ com \texttt{->} }}
    | ==>                                 :: :: Longrightarrow
@@ -1415,10 +1426,10 @@ terminals :: '' ::=
   | emptyset                            :: :: emptyset
     {{ tex \ensuremath{\emptyset} }}
 %   | <                                   :: :: lt
-% %    {{ tex \ensuremath{\langle} }}
+    {{ tex \ensuremath{\langle} }}
 %     {{ tex \ottsym{<} }}
 %   | >                                   :: :: gt
-% %    {{ tex \ensuremath{\rangle} }}
+    {{ tex \ensuremath{\rangle} }}
 %    {{ tex \ottsym{>} }}
   | lt                                  :: :: mathlt
     {{ tex < }}
