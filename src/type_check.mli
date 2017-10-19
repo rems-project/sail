@@ -239,6 +239,7 @@ val string_of_uvar : uvar -> string
 val instantiation_of : tannot exp -> uvar KBindings.t
 
 val propagate_exp_effect : tannot exp -> tannot exp
+val propagate_pexp_effect : tannot pexp -> tannot pexp * effect
 
 (* Fully type-check an AST
 

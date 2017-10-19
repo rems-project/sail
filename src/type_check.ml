@@ -2999,6 +2999,21 @@ and propagate_exp_effect_aux = function
   | E_field (exp, id) ->
      let p_exp = propagate_exp_effect exp in
      E_field (p_exp, id), effect_of p_exp
+  | E_internal_let (lexp, exp, body) ->
+     let p_lexp = propagate_lexp_effect lexp in
+     let p_exp = propagate_exp_effect exp in
+     let p_body = propagate_exp_effect body in
+     E_internal_let (p_lexp, p_exp, p_body),
+     union_effects (effect_of_lexp p_lexp) (collect_effects [p_exp; p_body])
+  | E_internal_plet (pat, exp, body) ->
+     let p_pat = propagate_pat_effect pat in
+     let p_exp = propagate_exp_effect exp in
+     let p_body = propagate_exp_effect body in
+     E_internal_plet (p_pat, p_exp, p_body),
+     union_effects (effect_of_pat p_pat) (collect_effects [p_exp; p_body])
+  | E_internal_return exp ->
+     let p_exp = propagate_exp_effect exp in
+     E_internal_return p_exp, effect_of p_exp
   | exp_aux -> typ_error Parse_ast.Unknown ("Unimplemented: Cannot propagate effect in expression "
                                             ^ string_of_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))))
 
