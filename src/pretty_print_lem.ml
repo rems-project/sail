@@ -62,7 +62,7 @@ let is_number_char c =
   c = '0' || c = '1' || c = '2' || c = '3' || c = '4' || c = '5' ||
   c = '6' || c = '7' || c = '8' || c = '9'
 
-let fix_id remove_tick name = match name with
+let rec fix_id remove_tick name = match name with
   | "assert"
   | "lsl"
   | "lsr"
@@ -82,7 +82,9 @@ let fix_id remove_tick name = match name with
   | "integer"
     -> name ^ "'"
   | _ ->
-     if name.[0] = '\'' then
+     if String.contains name '#' then
+       fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
+     else if name.[0] = '\'' then
        let var = String.sub name 1 (String.length name - 1) in
        if remove_tick then var else (var ^ "'")
      else if is_number_char(name.[0]) then
