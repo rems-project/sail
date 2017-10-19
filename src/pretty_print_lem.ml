@@ -285,9 +285,9 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
           | Typ_app (Id_aux (Id "register", _),_) -> utf8string "UndefinedRegister 0"
           | Typ_id (Id_aux (Id "string", _)) -> utf8string "\"\""
           | _ ->
+            let ta = if contains_t_pp_var typ then empty else doc_tannot_lem sequential mwords false typ in
             parens
-              ((utf8string "(failwith \"undefined value of unsupported type\")") ^^
-              (doc_tannot_lem sequential mwords false typ)))
+              ((utf8string "(failwith \"undefined value of unsupported type\")") ^^ ta))
        | _ -> utf8string "(failwith \"undefined value of unsupported type\")")
   | L_string s -> utf8string ("\"" ^ s ^ "\"")
   | L_real s ->
@@ -1031,7 +1031,15 @@ let doc_exp_lem, doc_let_lem =
           raise (Reporting_basic.err_unreachable l
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
-      align (string "early_return" ^//^ expV true r)
+      let ret_monad = if sequential then " : MR regstate" else " : MR" in
+      let ta =
+        if contains_t_pp_var (typ_of full_exp) || contains_t_pp_var (typ_of r)
+        then empty
+        else separate space
+          [string ret_monad;
+          parens (doc_typ_lem sequential mwords (typ_of full_exp));
+          parens (doc_typ_lem sequential mwords (typ_of r))] in
+      align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_exp_user _ ->
       raise (Reporting_basic.err_unreachable l

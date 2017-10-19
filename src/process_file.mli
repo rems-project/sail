@@ -45,6 +45,7 @@ val convert_ast : Ast.order -> Parse_ast.defs -> unit Ast.defs
 val check_ast: unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 val monomorphise_ast : ((string * int) * string) list -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_undefined: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 

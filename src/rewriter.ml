@@ -3516,7 +3516,7 @@ let rewrite_defs_lem = [
 
 let rewrite_defs_ocaml = [
     (* ("top_sort_defs", top_sort_defs); *)
-  ("undefined", rewrite_undefined);
+  (* ("undefined", rewrite_undefined); *)
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
