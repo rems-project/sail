@@ -1093,9 +1093,10 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
 let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
-  | TD_abbrev(id,nm,typschm) ->
-     doc_op equals (concat [string "type"; space; doc_id_lem_type id])
-            (doc_typschm_lem sequential mwords false typschm)
+  | TD_abbrev(id,nm,(TypSchm_aux (TypSchm_ts (typq, _), _) as typschm)) ->
+     doc_op equals
+       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem typq])
+       (doc_typschm_lem sequential mwords false typschm)
   | TD_record(id,nm,typq,fs,_) ->
     let fname fid = if prefix_recordtype
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
