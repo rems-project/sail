@@ -534,6 +534,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
   | DEF_val lebind -> ((fun (b,u,_) -> (b,u)) (fv_of_let consider_var mt mt mt lebind))
   | DEF_spec vspec -> fv_of_vspec consider_var vspec
+  | DEF_fixity _ -> mt,mt
   | DEF_overload (id,ids) -> init_env (string_of_id id), List.fold_left (fun ns id -> Nameset.add (string_of_id id) ns) mt ids
   | DEF_default def -> mt,mt
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef

@@ -1544,6 +1544,7 @@ let rec doc_def_lem sequential mwords def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> (doc_spec_lem mwords v_spec,empty)
+  | DEF_fixity _ -> (empty,empty)
   | DEF_overload _ -> (empty,empty)
   | DEF_type t_def -> (group (doc_typdef_lem sequential mwords t_def) ^/^ hardline,empty)
   | DEF_reg_dec dec -> (group (doc_dec_lem sequential dec),empty)
