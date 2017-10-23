@@ -73,10 +73,10 @@ let (CapStruct) null_cap = {
   permit_execute         = false;
   global                 = false;
   reserved               = 0;
-  E                      = 48; (* encoded as 0 in memory due to xor *)
+  E                      = 48;
   sealed                 = false;
   B                      = 0;
-  T                      = 0;
+  T                      = 0x10000;
   otype                  = 0;
   address                = 0;
 }
@@ -104,7 +104,7 @@ function CapStruct capRegToCapStruct((CapReg) c) =
     permit_execute         = c[114];
     global                 = c[113];
     reserved               = c[112..111];
-    E                      = c[110..105] ^ 0b110000;
+    E                      = c[110..105];
     sealed                 = s;
     B                      = B;
     T                      = T;
@@ -125,13 +125,13 @@ function (bit[11]) getCapHardPerms((CapStruct) cap) =
   : [cap.permit_execute]
   : [cap.global])
 
-function (bit[128]) capStructToMemBits((CapStruct) cap) =
+function (bit[128]) capStructToMemBits128((CapStruct) cap) =
     let (bit[20]) b = if cap.sealed then (cap.B)[19..12] : (cap.otype)[23..12] else cap.B in
     let (bit[20]) t = if cap.sealed then (cap.T)[19..12] : (cap.otype)[11..0]  else cap.T in
     ( cap.uperms
     : getCapHardPerms(cap)
     : cap.reserved
-    : (cap.E ^ 0b110000) (* XXX brackets required otherwise sail interpreter error *)
+    : (cap.E)
     : [cap.sealed]
     : b
     : t
@@ -139,11 +139,23 @@ function (bit[128]) capStructToMemBits((CapStruct) cap) =
     )
 
 function (CapReg) capStructToCapReg((CapStruct) cap) =
-    ([cap.tag] : capStructToMemBits(cap))
+    ([cap.tag] : capStructToMemBits128(cap))
 
 (* Reverse of above used when reading from memory *)
-function (CapReg) memBitsToCapBits((bool) tag, (bit[128]) b) =
+function (CapReg) memBitsToCapBits128((bool) tag, (bit[128]) b) =
   ([tag] : b)
+
+(* When saving/restoring capabilities xor them with bits of null_cap --
+   this ensures that canonical null_cap is always all-zeros in memory
+   even though it may have bits set logically (e.g. length or exponent *)
+
+let (bit[128]) null_cap_bits = capStructToMemBits128(null_cap)
+
+function (bit[128]) capStructToMemBits((CapStruct) cap) =
+  capStructToMemBits128(cap) ^ null_cap_bits
+
+function (bit[129]) memBitsToCapBits((bool) tag, (bit[128]) b) =
+  memBitsToCapBits128(tag, b ^ null_cap_bits)
 
 function (bit[31]) getCapPerms((CapStruct) cap) = 
     let (bit[15]) perms = EXTS(getCapHardPerms(cap)) in (* NB access_system copied into 14-11 *)
