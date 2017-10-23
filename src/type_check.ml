@@ -3232,12 +3232,13 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
    the difference is irrelevant for the typechecker. *)
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ, env) = match vs with
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, None, false) -> (id, quants, typ, env)
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, None, true) -> (id, quants, typ, Env.add_cast id env)
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, Some ext, false) ->
-       let env = Env.add_extern id ext env in
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, ext_opt, is_cast) ->
+       let env = match ext_opt with
+         | None -> env
+         | Some ext -> Env.add_extern id ext env
+       in
+       let env = if is_cast then Env.add_cast id env else env in
        (id, quants, typ, env)
-    | _ -> typ_error l "Invalid valspec"
   in
   [DEF_spec (VS_aux (vs, (l, None)))], Env.add_val_spec id (quants, Env.expand_synonyms env typ) env
 
