@@ -389,8 +389,8 @@ and string_of_typ_aux = function
   | Typ_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_typ_arg args ^ ">"
   | Typ_fn (typ_arg, typ_ret, eff) ->
      string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-  | Typ_exist (kids, nc, typ) -> 
-     "exist " ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ 
+  | Typ_exist (kids, nc, typ) ->
+     "exist " ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ
 and string_of_typ_arg = function
   | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
 and string_of_typ_arg_aux = function

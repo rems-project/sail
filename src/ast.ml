@@ -519,8 +519,7 @@ type
  | DEC_typ_alias of typ * id * 'a alias_spec
 
 
-type
-'a default_spec =
+type default_spec =
    DT_aux of default_spec_aux * l
 
 
@@ -568,7 +567,7 @@ and 'a def =  (* Top-level definition *)
  | DEF_spec of 'a val_spec (* top-level type constraint *)
  | DEF_fixity of prec * int * id (* fixity declaration *)
  | DEF_overload of id * id list (* operator overload specification *)
- | DEF_default of 'a default_spec (* default kind and type assumptions *)
+ | DEF_default of default_spec (* default kind and type assumptions *)
  | DEF_scattered of 'a scattered_def (* scattered function and type definition *)
  | DEF_reg_dec of 'a dec_spec (* register declaration *)
  | DEF_comm of 'a dec_comm (* generated comments *)

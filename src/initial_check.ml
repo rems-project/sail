@@ -563,7 +563,7 @@ and to_ast_record_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp
   | _ ->
     None,Some(l, "Expected a field assignment to be identifier = expression")
 
-let to_ast_default (names, k_env, default_order) (default : Parse_ast.default_typing_spec) : (unit default_spec) envs_out =
+let to_ast_default (names, k_env, default_order) (default : Parse_ast.default_typing_spec) : default_spec envs_out =
   match default with
   | Parse_ast.DT_aux(df,l) ->
     (match df with 
