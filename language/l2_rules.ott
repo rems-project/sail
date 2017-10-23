@@ -206,6 +206,39 @@ G ( typ1 , id ) = typ
 G |-f exp . id => typ
 
 
+defn
+G |- exp1 => n_constraint :: :: infer_flow :: infer_flow_
+by
+
+
+G |- x => atom < nexp1 >
+G |- y => atom < nexp2 >
+---------------------------- :: lteq
+G |- :E_app: lteq_atom_atom ( x , y ) =>  nexp1 <= nexp2
+
+
+G |- x => atom < nexp1 >
+G |- y => atom < nexp2 >
+---------------------------- :: gteq
+G |- :E_app: gteq_atom_atom ( x , y ) =>  nexp1 >= nexp2
+
+G |- x => atom < nexp1 >
+G |- y => atom < nexp2 >
+---------------------------- :: lt
+G |- :E_app: lt_atom_atom ( x , y ) =>  nexp1 + numOne <= nexp2
+
+G |- x => atom < nexp1 >
+G |- y => atom < nexp2 >
+---------------------------- :: gt
+G |- :E_app: lteq_atom_atom ( x , y ) =>  nexp1 >= nexp2 + numOne
+
+
+G |- id => range <nexp1 , nexp2 >
+G |- y => atom < nexp >
+------------------------------------------------------------------------------- :: lt_range_atom
+G |- :E_app: lt_range_atom ( id , y ) => range < nexp1 , min (nexp - 1 , nexp2 ) >
+
+
 
 
 defn
@@ -321,9 +354,9 @@ G |- foreach ( id from exp1 to exp2 by numOne in dec) exp3  => typ
 G |- foreach ( id from exp1 downto exp2 ) exp3  => typ
 
 
-G |- exp1 => (flows,constrs)
-G , flows , constrs |- exp2 => typ
-G , flows , negate constrs |- exp3 <= typ
+G |- exp1 => n_constraint
+%G , flows , constrs |- exp2 => typ
+%G , flows , negate constrs |- exp3 <= typ
 -------------------------------------------- :: if
 G |- if exp1 then exp2 else exp3 => typ
 

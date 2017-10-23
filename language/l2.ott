@@ -1,3 +1,7 @@
+%%
+%% Grammar for user language. Generates ./src/ast.ml
+%%
+
 indexvar n , m , i , j ::=
   {{ phantom }}
   {{ com Index variables for meta-lists }}
@@ -43,10 +47,23 @@ metavar regexp ::=
   {{ hol string }}
   {{ com Regular expresions, as a string literal }}
 
+metavar real ::=
+   {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ com Real number literal }}
+
 embed
 {{ ocaml
 
+type text = string
+
+type l = Parse_ast.l
+
 type 'a annot = l * 'a
+
+type loop = While | Until
 
 }}
 
@@ -75,7 +92,7 @@ val subst : forall 'a. list 'a -> list 'a -> bool
 }}
 
 metavar x , y , z ::=
-  {{ ocaml string }}
+  {{ ocaml text }}
   {{ lem string }}
   {{ hol string }}
   {{ com identifier }}
@@ -84,7 +101,7 @@ metavar x , y , z ::=
 
 metavar ix ::=
   {{ lex alphanum }}
-  {{ ocaml string }}
+  {{ ocaml text }}
   {{ lem string }}
   {{ hol string }}
   {{ com infix identifier }}
@@ -112,7 +129,7 @@ annot :: '' ::=
                                                 {{ hol unit }}
 
 id :: '' ::=
-  {{ com identifier }}
+  {{ com Identifier }}
   {{ aux _ l }}
   | x                           :: :: id
   | ( deinfix x )                       :: D :: deIid {{ com remove infix status }}
@@ -138,12 +155,18 @@ id :: '' ::=
 % We don't enforce a lexical convention on infix operators, as some of the 
 % targets use alphabetical infix operators.
 
-% Vector builtins
-  | vector_access          :: M :: vector_access
-  | vector_update          :: M :: vector_update
-  | vector_update_subrange :: M :: vector_update_subrange
-  | vector_subrange        :: M :: vector_subrange
-  | vector_append        :: M :: vector_append
+% Vector builtins 
+  | vector_access          :: M :: vector_access  {{ ichlo (Id "vector_access") }} 
+  | vector_update          :: M :: vector_update  {{ ichlo (Id "vector_update") }}
+  | vector_update_subrange :: M :: vector_update_subrange {{ ichlo (Id "vector_update_subrange") }}
+  | vector_subrange        :: M :: vector_subrange {{ ichlo (Id "vector_subrange") }}
+  | vector_append        :: M :: vector_append {{ ichlo (Id "vector_append") }}
+
+% Comparison builtins
+  | lteq_atom_atom :: M :: lteq_atom_atom {{ ichlo (Id "lteq_atom_atom") }}
+  | gteq_atom_atom :: M :: gteq_atom_atom {{ ichlo (Id "gteq_atom_atom") }}
+  | lt_atom_atom :: M :: lt_atom_atom {{ ichlo (Id "lt_atom_atom") }}
+  | gt_atom_atom :: M :: gt_atom_atom {{ ichlo (Id "gt_atom_atom") }}
   
 kid :: '' ::=
   {{ com kinded IDs: $[[Type]]$, $[[Nat]]$, $[[Order]]$, and $[[Effect]]$ variables }}
@@ -161,10 +184,10 @@ grammar
 base_kind :: 'BK_' ::=  
   {{ com base kind}}
   {{ aux _ l }}
-  | Type                                       :: :: type    {{ com kind of types  }} 
-  | Nat                                        :: :: nat     {{ com kind of natural number size expressions  }} 
+  | Type                                      :: :: type    {{ com kind of types  }} 
+  | Nat                                       :: :: nat     {{ com kind of natural number size expressions  }} 
   | Order                                     :: :: order  {{ com kind of vector order specifications  }} 
-  | Effect                                    :: :: effect {{ com kind of effect sets  }} 
+
 
 kind :: 'K_' ::=  
   {{ com kinds}}
@@ -272,7 +295,7 @@ typ :: 'Typ_' ::=
 {{ com sugar for vector indexed by \texttt{[|} $[[nexp]]$..$[[nexp']]$ \texttt{|]} }}
   | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector }}
   | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector }}
-  | register [ id ] :: S :: register
+%  | register [ id ] :: S :: register {{ ichlo (Typ_app Id "lteq_atom_atom") }}
 % ...so bit [ nexp ] etc is just an instance of that
 %  | List < typ > :: :: list {{ com list of [[typ]] }}
 %  | Set < typ >  :: :: set  {{ com finite set of [[typ]] }}
@@ -288,7 +311,6 @@ typ_arg :: 'Typ_arg_' ::=
   | nexp       :: :: nexp
   | typ        :: :: typ
   | order     :: :: order
-  | effect    :: :: effect
 
 % plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
 
@@ -317,10 +339,15 @@ grammar
 n_constraint :: 'NC_' ::=
   {{ com constraint over kind $[[Nat]]$ }}
   {{ aux _ l }}
-  | nexp = nexp'                                :: :: fixed
+  | nexp = nexp'                                :: :: equal
   | nexp >= nexp'                               :: :: bounded_ge
   | nexp '<=' nexp'                             :: :: bounded_le
-  | kid 'IN' { num1 , ... , numn }               :: :: nat_set_bounded
+  | nexp != nexp'                               :: :: not_equal
+  | kid 'IN' { num1 , ... , numn }              :: :: set
+  | n_constraint \/ n_constraint'               :: :: or
+  | n_constraint /\ n_constraint'               :: :: and
+  | true                                        :: :: true
+  | false                                       :: :: false
 
 % Note only id on the left and constants on the right in a
 % finite-set-bound, as we don't think we need anything more
@@ -422,17 +449,17 @@ kind_def :: 'KD_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
   | Def kind id name_scm_opt = nexp                                           :: :: nabbrev
     {{ com $[[Nat]]$-expression abbreviation }}
-  | Def kind id name_scm_opt = typschm                                        :: D :: abbrev
-    {{ com type abbreviation }} {{ texlong }}
-  | Def kind id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: D :: record
-    {{ com struct type definition }} {{ texlong }}
-  | Def kind id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: D :: variant
-    {{ com union type definition}} {{ texlong }}
-  | Def kind id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: D :: enum
-    {{ com enumeration type definition}} {{ texlong }}
-
-  | Def kind id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
-:: D :: register {{ com register mutable bitfield type definition }} {{ texlong }}
+%  | Def kind id name_scm_opt = typschm                                        :: D :: abbrev
+%    {{ com type abbreviation }} {{ texlong }}
+%  | Def kind id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: D :: record
+%    {{ com struct type definition }} {{ texlong }}
+%  | Def kind id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: D :: variant
+%    {{ com union type definition}} {{ texlong }}
+%  | Def kind id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: D :: enum
+%    {{ com enumeration type definition}} {{ texlong }}
+%
+%  | Def kind id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
+%:: D :: register {{ com register mutable bitfield type definition }} {{ texlong }}
 
 
 
@@ -477,7 +504,8 @@ lit :: 'L_' ::=
 % Should undefined be of type bit[alpha] or alpha[beta] or just alpha?
   | string                                              :: :: string {{ com string constant }}
   | undefined					:: :: undef {{ com undefined-value constant }}
-
+  | real :: :: real
+  
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
                                                         {{ lem bool }}
@@ -513,11 +541,10 @@ pat :: 'P_' ::=
 % C-style
   | ( typ ) pat                                       :: :: typ
     {{ com typed pattern }}
-
   | id                                      :: :: id
     {{ com identifier  }}
-
-%
+  | pat kid :: :: var
+    {{ com bind pattern to type variable }}
   | id ( pat1 , .. , patn )                                     :: :: app
     {{ com union constructor pattern }}
 
@@ -535,8 +562,8 @@ pat :: 'P_' ::=
   | [ pat1 , .. , patn  ]                     :: :: vector
    {{ com vector pattern }}
 
-  | [ num1 = pat1 , .. , numn = patn ]                     :: :: vector_indexed
-   {{ com vector pattern (with explicit indices) }}
+%  | [ num1 = pat1 , .. , numn = patn ]                     :: :: vector_indexed
+%   {{ com vector pattern (with explicit indices) }}
 
 % cf ntoes for this
   |  pat1 : .... : patn                                   :: :: vector_concat
@@ -547,9 +574,9 @@ pat :: 'P_' ::=
   | [|| pat1 , .. , patn ||]	                        :: :: list
     {{ com list pattern }}
   | ( pat )                                             :: S :: paren
-{{ ichlo [[pat]] }}
-%  | pat1 '::' pat2                                      :: :: cons
-%    {{ com Cons patterns }}
+    {{ ichlo [[pat]] }}
+ | pat1 '::' pat2                                      :: :: cons
+   {{ com Cons patterns }}
 
 % XXX Is this still useful?
 fpat :: 'FP_' ::=
@@ -593,355 +620,6 @@ end
  
 grammar 
 
-k :: 'Ki_' ::=
-{{ com Internal kinds }}
-   | K_Typ                                             :: :: typ
-   | K_Nat                                             :: :: nat
-   | K_Ord                                             :: :: ord
-   | K_Efct                                             :: :: efct
-   | K_Lam ( k0 .. kn -> k' )                  :: :: ctor
-   | K_infer                                           :: :: infer {{ com Representing an unknown kind, inferred by context }}
-
-t , u :: 'T_' ::=                                
-{{ com Internal types }}
-   | x                                            :: :: id
-   | ' x                                          :: :: var
-   | t1 -> t2 effect                        :: :: fn 
-   | ( t1 , .... , tn )                           :: :: tup
-   | x < t_args >                           :: :: app 
-   | t |-> t1                                   :: :: abbrev
-   | register < t_arg >                  :: S :: reg_app {{ ichlo T_app "register" [[t_arg]] }}
-   | range < ne ne' > 			  :: S :: range_app {{ ichlo T_app "range" [[ [ ne ; ne' ] ]] }}
-   | atom < ne >    			  :: S :: atom_app {{ ichlo T_app "atom" [ [[ne]] ] }}
-   | vector < ne ne' order t >           :: S :: vector_app {{ ichlo T_app "vector" [[ [ ne; ne'; ord; t ] ]] }} 
-   | list < t >      	     		 :: S :: list_app {{ ichlo T_app "list" [[t]] }}
-   | reg < t >				 :: S :: box_app {{ ichlo T_app "reg" [[t]] }}
-   | implicit < ne >                      :: S :: implicit_app {{ ichlo T_app "implicit" [[ne]] }}
-   | bit      	     	   	       	          :: S :: bit_typ {{ ichlo T_id "bit" }}
-   | string                                    :: S :: string_typ {{ ichlo T_id "string" }}
-   | unit                                       :: S :: unit_typ {{ ichlo T_id "unit" }} 
-   | t [ t_arg1 / tid1 .. t_argn / tidn ]  :: M :: subst {{ ichlo "todo" }}
-
-optx :: '' ::= {{ phantom }} {{ lem maybe string }} {{ ocaml string option }}
-  | x                                            ::  :: optx_x
-  {{ lem (Just [[x]]) }} {{ ocaml (Some [[x]]) }}
-  |                                              :: :: optx_none
-  {{ lem Nothing }} {{ ocaml None }}
-
-
-tag :: 'Tag_' ::=                                 
-{{ com Data indicating where the identifier arises and thus information necessary in compilation }}
-   | None                                 :: :: empty
-   | Intro                                :: :: intro {{ com Denotes an assignment and lexp that introduces a binding }}
-   | Set                                  :: :: set {{ com Denotes an expression that mutates a local variable }}
-   | Tuple                                :: :: tuple_assign {{ com Denotes an assignment with a tuple lexp }}
-   | Global				  :: :: global {{ com Globally let-bound or enumeration based value/variable }} 
-   | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
-   | Extern optx                          :: :: extern {{ com External function, specied only with a val statement }}
-   | Default                              :: :: default {{ com Type has come from default declaration, identifier may not be bound locally }}
-   | Spec				  :: :: spec
-   | Enum num				  :: :: enum
-   | Alias				  :: :: alias
-   | Unknown_path optx			  :: :: unknown {{ com Tag to distinguish an unknown path from a non-analysis non deterministic path}}
-
-ne :: 'Ne_' ::=
- {{ com internal numeric expressions }}
-   | x                                   :: :: id
-   | ' x                                 :: :: var
-   | num                                 :: :: const
-   | infinity                            :: :: inf
-   | ne1 * ne2                           :: :: mult
-   | ne1 + ... + nen                     :: :: add
-   | ne1 - ne2 	 		       :: :: minus
-   | 2 ** ne				 :: :: exp
-   | ( - ne )                            :: :: unary
-   | zero   				 :: S :: zero
-     {{ ichlo (Ne_const 0) }}
-   | one				 :: S :: one
-     {{ ichlo (Ne_const 1) }}
-   | bitlength ( bin )                   :: M :: cbin
-     {{ ocaml (asssert false) }}
-     {{ hol ARB }}
-     {{ lem (blength [[bin]]) }}
-   | bitlength ( hex )                   :: M :: chex
-     {{ ocaml (assert false) }}
-     {{ hol ARB }}
-     {{ lem (hlength [[hex]]) }}
-   | count ( num0 ... numi )                :: M :: length {{ichlo "todo" }}
-   | length ( pat1 ... patn )            :: M :: cpat
-     {{ ocaml (assert false) }}
-     {{ hol ARB }}
-     {{ lem (Ne_const (List.length [[pat1...patn]])) }}
-   | length ( exp1 ... expn )            :: M :: cexp
-     {{ hol ARB }}
-     {{ ocaml (assert false) }}
-     {{ lem (Ne_const (List.length [[exp1...expn]])) }}
- 
- t_arg :: 't_arg_' ::=  
- {{ com Argument to type constructors }}
- | t :: :: typ
- | ne :: :: nexp
- | effect :: :: effect
- | order :: :: order
- | fresh :: M :: freshvar {{ ichlo T_arg (T_var "fresh") }}
-
- t_args :: '' ::=   {{ lem list t_arg }}
-  {{ com Arguments to type constructors }}
-   | t_arg1 ... t_argn                            :: :: T_args
-
- nec :: 'Nec_' ::=
-   {{ com Numeric expression constraints }}
-   | ne <= ne'            :: :: lteq
-   | ne = ne'            :: :: eq
-   | ne >= ne'           :: :: gteq
-   | ' x 'IN' { num1 , ... , numn } :: :: in
-   | nec0 .. necn -> nec'0 ... nec'm :: :: cond
-   | nec0 ... necn                   :: :: branch
-
-S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
-                                                                    {{ hol nec list }}
-                                                                    {{ lem list nec }}
-    {{ com nexp constraint lists }}
-    | { nec1 , .. ,  necn }                              :: :: Sn_concrete
-      {{ hol [[nec1 .. necn]] }}
-      {{ lem [[nec1 .. necn]] }}
-   | S_N1 u+ .. u+ S_Nn                                                    :: M :: SN_union
-     {{ hol (FOLDR FUNION FEMPTY [[S_N1..S_Nn]]) }}
-     {{ lem (List.foldr (++) [] [[S_N1..S_Nn]]) }}
-     {{ ocaml (assert false) }}
-   | consistent_increase ne1 ne'1 ... nen ne'n                    :: M :: SN_increasing
-     {{ com Generates constraints from  pairs of constraints, where the first of each pair is always larger than the sum of the previous pair }}
-     {{ ocaml (assert false) }}
-     {{ ichl todo }}
-   | consistent_decrease ne1 ne'1 ... nen ne'n                      :: M :: SN_decreasing
-     {{ com Generates constraints from  pairs of constraints, where the first of each pair is always smaller than the difference of the previous pair }}
-     {{ ocaml assert false }}
-     {{ ichl todo }}
-   | resolve ( S_N )                                                :: :: resolution
-     {{ lem [[S_N]] (* Write constraint solver *) }}
- 
-
- E_d {{ tex {\ottnt{E}^{\textsc{d} } } }} :: 'E_d_' ::=  {{ phantom }}
-                                                         {{ lem definition_env }}
- {{ com Environments storing top level information, such as defined abbreviations, records, enumerations, and kinds }}
- | < E_k , E_a , E_r , E_e >	     	       		    	 :: :: base
-   {{ hol arb }}
-   {{ lem (Denv [[E_k]] [[E_r]] [[E_e]]) }}
- | empty       	     					 :: :: empty
-   {{ hol arb }}
-   {{ lem DenvEmp }}
- | E_d u+ E_d'						 :: :: union
-   {{ hol arb }}
-   {{ lem (denv_union [[E_d]] [[E_d']]) }}
- 
- kinf :: 'kinf_' ::=
-   {{ com Whether a kind is default or from a local binding }}
-   | k                                        :: :: k
-   | k default                                :: :: def
-
- tid :: 'tid_' ::=
-   {{ com A type identifier or type variable }}
-   | id                                      :: :: id
-   | kid                                     :: :: var
-
- E_k {{ tex {\ottnt{E}^{\textsc{k} } } }} :: 'E_k_' ::=             {{ phantom }}
-                                                                 {{ hol (tid-> kinf) }}
-                                                                 {{ lem (map tid kinf) }}
-   {{ com Kind environments }}
-   | { tid1 |-> kinf1 , .. , tidn |-> kinfn }    :: :: concrete
-     {{ hol (FOLDR (\(k1,k2) E. E |+ (k1,k2)) FEMPTY [[tid1 kinf1 .. tidn kinfn]]) }}
-     {{ lem (List.foldr (fun (x,v) m -> Map.insert x v m) Map.empty [[tid1 kinf1 .. tidn kinfn]]) }} 
-   | E_k1 u+ .. u+ E_kn                                          :: M :: union
-     {{ com In a unioning kinf, {k default} u {k} results in {k} (i.e. the default is locally forgotten) }} 
-     {{ hol (FOLDR FUNION FEMPTY [[E_k1..E_kn]]) }}
-     {{ lem (List.foldr (union) Map.empty [[E_k1..E_kn]]) }}
-     {{ ocaml (assert false) }}
-   | E_k u- E_k1 .. E_kn                                            :: M :: multi_set_minus
-     {{ hol arb }} 
-     {{ lem (Map.fromList (remove_from (Set_extra.toList (Map.toSet [[E_k]]))
-                                       (Set_extra.toList (Map.toSet (List.foldr (union) Map.empty [[E_k1..E_kn]]))))) }} 
-     {{ ocaml assert false }}
-
- tinf :: 'tinf_' ::=                                                 
-    {{ com Type variables, type, and constraints, bound to an identifier }}
-    | t                                                 :: :: typ
-    | E_k , S_N , tag , t         :: :: quant_typ                                                             
-
-tinflist :: 'tinfs_' ::=
-  {{ com In place so that a list of tinfs can be referred to without the dot form }}
-  | empty :: :: empty
-  | tinf1 ... tinfn  :: :: ls
-
-conformsto :: 'conformsto_' ::=
-  {{ com how much conformance does overloading need }}
- | full :: :: full
- | parm :: :: parm
-
-widenvec :: 'widenvec_' ::=
-  | vectors :: :: widen
-  | none    :: :: dont
-  | _       :: :: dontcare
-
-widennum :: 'widennum_' ::=
-  | nums  :: :: widen
-  | none  :: :: dont
-  | _     :: :: dontcare
-
-widening :: 'widening_' ::=
-  {{ com Should we widen vector start locations, should we widen atoms and ranges }}
-  | ( widennum , widenvec ) :: :: w
-
- E_a {{ tex \ottnt{E}^{\textsc{a} } }} :: 'E_a_' ::=   {{ phantom }}
-                                                                            {{ hol tid |-> tinf}}
-                                                                            {{ lem map tid tinf }} 
-   | { tid1 |-> tinf1 , .. , tidn |-> tinfn } :: :: concrete
-   | E_a1 u+ .. u+ E_an	               :: :: union
-
- field_typs :: 'FT_' ::=     {{ phantom }}
-                             {{ lem list (id * t) }}
- {{ com Record fields }}
- | id1 : t1 , .. , idn : tn :: :: fields
-   {{ lem [[id1 t1..idn tn]] }}
-
- E_r {{ tex \ottnt{E}^{\textsc{r} } }} :: 'E_r_' ::=             {{ phantom }}
-                                                                 {{ hol (id*t) |-> tinf) }}
-                                                                 {{ lem map (list (id*t)) tinf }}
-   {{ com Record environments }}
-   | { { field_typs1 } |-> tinf1 , .. , { field_typsn } |-> tinfn }                    :: :: concrete
-     {{ hol (FOLDR (\x E. E |+ x) FEMPTY) }}
-     {{ lem (List.foldr (fun (x,f) m -> Map.insert x f m) Map.empty [[field_typs1 tinf1..field_typsn tinfn]]) }} 
-   | E_r1 u+ .. u+ E_rn                                          :: M :: union
-     {{ hol (FOLDR FUNION FEMPTY [[E_r1..E_rn]]) }}
-     {{ lem (List.foldr (union) Map.empty [[E_r1..E_rn]]) }}
-     {{ ocaml (assert false) }}
-
-  enumerate_map :: '' ::=                                        {{ phantom }}
-                                                                 {{ lem (list (nat*id)) }}
-   | { num1 |-> id1 ... numn |-> idn }                           :: :: enum_map
-    {{ lem [[num1 id1...numn idn]] }}
-
-  E_e {{ tex \ottnt{E}^{\textsc{e} } }} :: 'E_e_' ::=            {{ phantom }}
-                                                                 {{ lem (map t (list (nat*id))) }}
-   {{ com Enumeration environments }}
-   | { t1 |-> enumerate_map1 , .. , tn |-> enumerate_mapn }     :: :: base
-     {{ lem (List.foldr (fun (x,f) m -> Map.insert x f m) Map.empty [[t1 enumerate_map1..tn enumerate_mapn]]) }} 
-   | E_e1 u+ .. u+ E_en                                         :: :: union
-     {{ lem (List.foldr (union) Map.empty [[E_e1..E_en]]) }}
-
-    
-embed
-{{ lem
- type definition_env =
-   | DenvEmp
-   | Denv of (map tid kinf) * (map (list (id*t)) tinf) * (map t (list (nat*id)))
-
-}}
-
-grammar
-
- E_t {{ tex {\ottnt{E}^{\textsc{t} } } }} :: 'E_t_' ::=          {{ phantom }}
-                                                                 {{ hol (id |-> tinf) }}
-                                                                 {{ lem map id tinf }}
-   {{ com Type environments }}
-   | { id1 |-> tinf1 , .. , idn |-> tinfn }                    :: :: base
-     {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[id1 tinf1 .. idn tinfn]]) }}
-     {{ lem (List.foldr (fun (x,f) m -> Map.insert x f m) Map.empty [[id1 tinf1 .. idn tinfn]]) }} 
-   | { id |-> overload tinf conformsto : tinf1 , ... , tinfn }        :: :: overload
-   | ( E_t1 u+ .... u+ E_tn )                                         :: M :: union
-     {{ hol (FOLDR FUNION FEMPTY [[E_t1....E_tn]]) }}
-     {{ lem (List.foldr (union) Map.empty [[E_t1....E_tn]]) }}
-     {{ ocaml (assert false) }}
-   | u+ E_t1 .. E_tn                                            :: M :: multi_union
-     {{ hol arb }}
-     {{ lem (List.foldr (union) Map.empty [[E_t1..E_tn]]) }}
-     {{ ocaml assert false }}
-   | E_t u- id1 .. idn                                            :: M :: multi_set_minus
-     {{ hol arb }} 
-     {{ lem (Map.fromList (remove_from (Set_extra.toList (Map.toSet [[E_t]]))
-                                       (Set_extra.toList (Map.toSet (List.foldr (union) Map.empty [[id1..idn]]))))) }} 
-     {{ ocaml assert false }}
-   | ( E_t1 inter .... inter E_tn )                                  :: M :: intersect
-     {{ hol arb }}
-     {{ lem (List.foldr (fun a b -> (Map.fromList (Set_extra.toList ((Map.toSet a) inter (Map.toSet b)))))  Map.empty [[E_t1....E_tn]]) }} 
-     {{ ocaml (assert false) }}
-   | inter E_t1 .. E_tn                                            :: M :: multi_inter
-     {{ hol arb }}
-     {{ lem (List.foldr (fun a b -> (Map.fromList (Set_extra.toList ((Map.toSet a) inter (Map.toSet b))))) Map.empty [[E_t1..E_tn]]) }}
-     {{ ocaml assert false }}
-
-
-ts :: ts_ ::=                                     {{ phantom }}
-                                                  {{ lem list t }}
-  | t1 , .. , tn :: :: lst 
-
-embed
-{{ lem
-let blength (bit) = Ne_const 8
-let hlength (bit) = Ne_const 8
-
- type env =
-   | EnvEmp 
-   | Env of (map id tinf) * definition_env
-
- type inf = 
-   | Iemp
-   | Inf of (list nec) * effect
-
- val denv_union : definition_env -> definition_env -> definition_env
- let denv_union de1 de2 = 
-  match (de1,de2) with
-   | (DenvEmp,de2) -> de2
-   | (de1,DenvEmp) -> de1
-   | ((Denv ke1 re1 ee1),(Denv ke2 re2 ee2)) ->
-      Denv (ke1 union ke2) (re1 union re2) (ee1 union ee2)
-   end
-
- val env_union : env -> env -> env
- let env_union e1 e2 =
-   match (e1,e2) with
-    | (EnvEmp,e2) -> e2
-    | (e1,EnvEmp) -> e1
-    | ((Env te1 de1),(Env te2 de2)) ->
-      Env (te1 union te2) (denv_union de1 de2)
- end
-
-let inf_union i1 i2 =
-  match (i1,i2) with 
- | (Iemp,i2) -> i2
- | (i1,Iemp) -> i1
- | (Inf n1 e1,Inf n2 e2) -> (Inf (n1++n2) (effect_union e1 e2))
- end
-
-let fresh_kid denv = Var "x" (*TODO When strings can be manipulated, this should actually build a fresh string*)
-
-}}
-
-grammar
-
- E :: '' ::=                                                     
-                                                                 {{ hol ((string,env_body) fmaptree) }}
-                                                                 {{ lem env }}
- {{ com Definition environment and lexical environment }}
- | < E_t , E_d >                                           :: :: E
-  {{ hol arb }}
-  {{ lem (Env [[E_t]] [[E_d]])  }}
- | empty                                                       :: M :: E_empty
-   {{ hol arb }}
-   {{ lem EnvEmp }}
-   {{ ocaml assert false }}
- | E u+ E'                                                      :: :: E_union
-   {{ lem (env_union [[E]] [[E']]) }}
-
- I :: '' ::=                                                     {{ lem inf }}
-  {{ com Information given by type checking an expression }}
-  | < S_N , effect >                                      :: :: I
-    {{ lem (Inf [[S_N]] [[effect]]) }}
-  | Ie                                                           :: :: Iempty {{ com Empty constraints, effect }} {{ tex {\ottnt{I}_{\epsilon} } }}
-    {{ lem Iemp }}
-  | ( I1 u+ I2 ) :: :: singleunion {{ tex [[I1]] [[u+]] [[I2]] }}
-  | I1 u+ .. u+ In                                               :: :: Iunion {{ com Unions the constraints and effect }}
-    {{ lem (List.foldr inf_union Iemp [[I1..In]]) }}
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Expressions                                                  %
@@ -959,7 +637,9 @@ tannot :: '' ::=
                                                 {{ phantom }}
                                                 {{ ocaml tannot }}
                                                 {{ lem tannot }}
-
+loop :: loop ::= {{ phantom }}
+  | while ::   :: while 
+  | until ::  :: until 
 
 
 exp :: 'E_' ::=
@@ -997,8 +677,9 @@ exp :: 'E_' ::=
     {{ com conditional }}
 
   | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
-  | while exp1 do exp2  ::  :: while 
-  | repeat exp1 until exp2  :: :: until
+  | loop exp1 exp2 :: :: loop
+  | while exp1 do exp2  ::  S :: while        {{ ichlo [[ loop while exp1 exp2 ]] }}
+  | repeat exp1 until exp2  S :: :: until     {{ ichlo [[ loop until exp2 exp1 ]] }}
   | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for {{ com loop }}
   | foreach ( id from exp1 to exp2 by exp3 ) exp4           :: S :: forup {{ ichlo [[ foreach id from exp1 to exp2 by exp3 in inc exp4 ]] }}
   | foreach ( id from exp1 to exp2 ) exp3                   :: S :: forupbyone  {{ ichlo [[ foreach id from exp1 to exp2 by 1 in inc exp4 ]] }}
@@ -1086,6 +767,8 @@ exp :: 'E_' ::=
 % this can be used to break out of for loops
   | exit exp						:: :: exit
     {{ com halt all current execution }}
+  | throw exp                                  :: :: throw
+  | try exp catch pexp1 .. pexpn             :: :: try
 %, potentially calling a system, trap, or interrupt handler with exp
   | assert ( exp , exp' )                            :: :: assert
     {{ com halt with error $[[exp']]$ when not $[[exp]]$ }}
@@ -1099,38 +782,26 @@ exp :: 'E_' ::=
   | comment exp               :: I :: comment_struc {{ com For generated structured comments }}
   | let lexp = exp in exp'    :: I :: internal_let {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
   | let pat = exp in exp' :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
-  | return_int ( exp )                                          :: I :: internal_return {{ com For internal use to embed into monad definition }}
-  | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
+  | return_int ( exp )                                          ::  :: internal_return {{ com For internal use to embed into monad definition }}
+%  | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
   | constraint n_constraint :: :: constraint
-i_direction :: 'I' ::=
-  | IInc :: :: Inc
-  | IDec :: :: Dec
 
-ctor_kind :: 'C_' ::=
-  | C_Enum nat :: :: Enum
-  | C_Union    :: :: Union
+%i_direction :: 'I' ::=
+%  | IInc :: :: Inc
+%  | IDec :: :: Dec
 
-reg_form :: 'Form_' ::=
-  | Reg id tannot i_direction :: :: Reg
-  | SubReg id reg_form index_range :: :: SubReg
+%ctor_kind :: 'C_' ::=
+%  | C_Enum nat :: :: Enum
+%  | C_Union    :: :: Union
 
-reg_form_set :: '' ::= {{ phantom }} {{ lem set reg_form }}
+%reg_form :: 'Form_' ::=
+%  | Reg id tannot i_direction :: :: Reg
+%  | SubReg id reg_form index_range :: :: SubReg
 
-alias_spec_tannot :: '' ::= {{ phantom }} {{ lem alias_spec tannot }} {{ ocaml tannot alias_spec }}
+%reg_form_set :: '' ::= {{ phantom }} {{ lem set reg_form }}
 
-value :: 'V_' ::= {{ com interpreter evaluated value }}
-  | Boxref nat t                                                                    :: :: boxref
-  | Lit lit                                                                         :: :: lit
-  | Tuple ( value1 , ... , valuen )                                                 :: :: tuple
-  | List ( value1 , ... , valuen )                                                  :: :: list
-  | Vector nat i_direction ( value1 , ... , valuen )                                :: :: vector
-  | Vector_sparse nat' nat'' i_direction ( nat1 value1 , ... , natn valuen ) value' :: :: vector_sparse
-  | Record t ( id1 value1 , ... , idn valuen )                                      :: :: record
-  | V_ctor id t ctor_kind value1                                                    :: :: ctor
-  | Unknown                                                                         :: :: unknown
-  | Register reg_form                                                               :: :: register
-  | Register_alias alias_spec_tannot tannot                                         :: :: register_alias
-  | Track value reg_form_set                                                        :: :: track
+%alias_spec_tannot :: '' ::= {{ phantom }} {{ lem alias_spec tannot }} {{ ocaml tannot alias_spec }}
+
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
@@ -1167,7 +838,8 @@ opt_default :: 'Def_val_' ::=
 pexp :: 'Pat_' ::=
   {{ com pattern match }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | pat -> exp                                  :: :: exp
+  | pat -> exp                          :: :: exp
+  | pat when exp1 -> exp                :: :: when
 % apparently could use -> or => for this.
 
 %% % psexp :: 'Pats' ::=
@@ -1244,7 +916,7 @@ grammar
 tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com optional type annotation for functions}}
   {{ aux _ l }} 
-%  |                                             :: :: none
+  |                                             :: :: none
 % Currently not optional; one issue, do the type parameters apply over the argument types, or should this be the type of the function and not just the return
   | typquant typ                                :: :: some 
 
@@ -1281,22 +953,27 @@ fundef :: 'FD_' ::=
 letbind :: 'LB_' ::=
   {{ com let binding }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | let typschm pat = exp                                :: :: val_explicit
-    {{ com let, explicit type ($[[pat]]$ must be total)}}
+%  | let typschm pat = exp                                :: :: val_explicit
+%    {{ com let, explicit type ($[[pat]]$ must be total)}}
 % at the moment, we cannot parse the following, so perhaps we shouldn't keep this form here 
-  | let pat = exp                                    :: :: val_implicit
+  | let pat = exp                                    :: :: val
     {{ com let, implicit type ($[[pat]]$ must be total)}}
-
 
 val_spec :: 'VS_' ::=
   {{ com value type specification }} 
   {{ aux _ annot }} {{ auxparam 'a }}
-  | val typschm id                                  :: :: val_spec
+  {{ ocaml  VS_val_spec of typschm * id * string option * bool }}
+  | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
-  | val extern typschm id                           :: :: extern_no_rename
+    {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }}
+  | val cast typschm id                             :: S :: cast
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }}
+  | val extern typschm id                           :: S :: extern_no_rename
     {{ com specify the type of an external function }}
-  | val extern typschm id = string                  :: :: extern_spec
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[id]]) false) }}
+  | val extern typschm id = string                  :: S :: extern_spec
     {{ com specify the type of a function from Lem }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[string]]) false) }}
 %where the string must provide an explicit path to the required function but will not be checked
 
 default_spec :: 'DT_' ::=
@@ -1357,6 +1034,11 @@ dec_comm :: 'DC_' ::= {{ com top-level generated comments }} {{auxparam 'a}}
 % Top-level definitions                                        %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+prec :: '' ::=
+   | infix :: :: Infix
+   | infixl :: :: InfixL
+   | infixr :: :: InfixR
+
 def :: 'DEF_' ::=
   {{ com top-level definition }}
   {{ auxparam 'a }}
@@ -1370,6 +1052,10 @@ def :: 'DEF_' ::=
     {{ com value definition }}
   | val_spec                                                    :: :: spec
     {{ com top-level type constraint }}
+  | fix prec num id  :: :: fixity
+    {{ com fixity declaration }}
+  |  overload id [ id1 ; ... ; idn ] :: :: overload
+    {{ com operator overload specification }}
   | default_spec                                         :: :: default
     {{ com default kind and type assumptions }}
   | scattered_def                                        :: :: scattered
