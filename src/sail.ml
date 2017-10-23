@@ -170,7 +170,11 @@ let main() =
       | locs -> monomorphise_ast locs ast
     in
 
-    let ast = rewrite_ast ast in
+    let ast =
+      if !Initial_check.opt_undefined_gen then
+        rewrite_undefined (rewrite_ast ast)
+      else rewrite_ast ast in
+
     let out_name = match !opt_file_out with
       | None -> fst (List.hd parsed)
       | Some f -> f ^ ".sail" in

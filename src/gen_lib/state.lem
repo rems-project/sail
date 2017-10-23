@@ -63,8 +63,9 @@ let catch_early_return m s =
     end) (m s)
 
 val range : integer -> integer -> list integer
-let rec range i j = 
-  if i = j then [i]
+let rec range i j =
+  if j < i then []
+  else if i = j then [i]
   else i :: range (i+1) j
 
 val get_reg : forall 'regs 'a. sequential_state 'regs -> register_ref 'regs 'a -> 'a
@@ -218,7 +219,7 @@ let footprint s = return () s
 val foreachM_inc : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
 let rec foreachM_inc (i,stop,by) vars body =
-  if i <= stop
+  if (by > 0 && i <= stop) || (by < 0 && stop <= i)
   then
     body i vars >>= fun vars ->
     foreachM_inc (i + by,stop,by) vars body
@@ -227,11 +228,11 @@ let rec foreachM_inc (i,stop,by) vars body =
 
 val foreachM_dec : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
-let rec foreachM_dec (i,stop,by) vars body =
-  if i >= stop
+let rec foreachM_dec (stop,i,by) vars body =
+  if (by > 0 && i >= stop) || (by < 0 && stop >= i)
   then
     body i vars >>= fun vars ->
-    foreachM_dec (i - by,stop,by) vars body
+    foreachM_dec (stop,i - by,by) vars body
   else return vars
 
 val while_PP : forall 'vars. bool -> 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars

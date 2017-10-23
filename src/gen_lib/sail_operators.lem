@@ -144,7 +144,7 @@ let to_bin n = List.reverse (to_bin_aux n)
 
 val pad_zero : list bitU -> integer -> list bitU
 let rec pad_zero bits n =
-  if n = 0 then bits else pad_zero (B0 :: bits) (n -1)
+  if n <= 0 then bits else pad_zero (B0 :: bits) (n -1)
 
 
 let rec add_one_bit_ignore_overflow_aux bits = match bits with

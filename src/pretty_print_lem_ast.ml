@@ -234,6 +234,17 @@ let pp_lem_nexp ppf n = base ppf (pp_format_nexp_lem n)
 let pp_lem_ord ppf o = base ppf (pp_format_ord_lem o)
 let pp_lem_effects ppf e = base ppf (pp_format_effects_lem e)
 let pp_lem_beffect ppf be = base ppf (pp_format_base_effect_lem be)
+let pp_lem_loop ppf l =
+  let l_str = match l with
+  | While -> "While"
+  | Until -> "Until" in
+  base ppf l_str
+let pp_lem_prec ppf p =
+  let p_str = match p with
+  | Infix -> "Infix"
+  | InfixL -> "InfixL"
+  | InfixR -> "InfixR" in
+  base ppf p_str
 
 let pp_lem_nexp_constraint ppf nc = base ppf (pp_format_nexp_constraint_lem nc)
 
@@ -380,6 +391,9 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (E_for %a %a %a %a %a @ @[<1> %a @]) (%a, %a))@]"
         pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3
         pp_lem_ord order pp_lem_exp exp4 pp_lem_l l pp_annot annot
+    | E_loop(loop,cond,body) ->
+      fprintf ppf "@[<0>(E_aux (E_loop %a %a @ @[<1> %a @]) (%a, %a))@]"
+        pp_lem_loop loop pp_lem_exp cond pp_lem_exp body pp_lem_l l pp_annot annot
     | E_vector(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]"
                           kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
     | E_vector_access(v,e) ->
@@ -634,6 +648,7 @@ let pp_lem_def ppf d =
   | DEF_val(lbind) -> fprintf ppf "(DEF_val %a);@\n" pp_lem_let lbind
   | DEF_reg_dec(dec) -> fprintf ppf "(DEF_reg_dec %a);@\n" pp_lem_dec dec
   | DEF_comm d -> fprintf ppf ""
+  | DEF_fixity (prec, n, id) -> fprintf ppf "(DEF_fixity %a %s %a);@\n" pp_lem_prec prec (lemnum string_of_int n) pp_lem_id id
   | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_lem_defs ppf (Defs(defs)) =

@@ -241,6 +241,7 @@ val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constrai
 val instantiation_of : tannot exp -> uvar KBindings.t
 
 val propagate_exp_effect : tannot exp -> tannot exp
+val propagate_pexp_effect : tannot pexp -> tannot pexp * effect
 
 (* Fully type-check an AST
 

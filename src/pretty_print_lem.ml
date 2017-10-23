@@ -62,7 +62,7 @@ let is_number_char c =
   c = '0' || c = '1' || c = '2' || c = '3' || c = '4' || c = '5' ||
   c = '6' || c = '7' || c = '8' || c = '9'
 
-let fix_id remove_tick name = match name with
+let rec fix_id remove_tick name = match name with
   | "assert"
   | "lsl"
   | "lsr"
@@ -82,7 +82,9 @@ let fix_id remove_tick name = match name with
   | "integer"
     -> name ^ "'"
   | _ ->
-     if name.[0] = '\'' then
+     if String.contains name '#' then
+       fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
+     else if name.[0] = '\'' then
        let var = String.sub name 1 (String.length name - 1) in
        if remove_tick then var else (var ^ "'")
      else if is_number_char(name.[0]) then
@@ -285,9 +287,9 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
           | Typ_app (Id_aux (Id "register", _),_) -> utf8string "UndefinedRegister 0"
           | Typ_id (Id_aux (Id "string", _)) -> utf8string "\"\""
           | _ ->
+            let ta = if contains_t_pp_var typ then empty else doc_tannot_lem sequential mwords false typ in
             parens
-              ((utf8string "(failwith \"undefined value of unsupported type\")") ^^
-              (doc_tannot_lem sequential mwords false typ)))
+              ((utf8string "(failwith \"undefined value of unsupported type\")") ^^ ta))
        | _ -> utf8string "(failwith \"undefined value of unsupported type\")")
   | L_string s -> utf8string ("\"" ^ s ^ "\"")
   | L_real s ->
@@ -1058,7 +1060,15 @@ let doc_exp_lem, doc_let_lem =
           raise (Reporting_basic.err_unreachable l
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
-      align (string "early_return" ^//^ expV true r)
+      let ret_monad = if sequential then " : MR regstate" else " : MR" in
+      let ta =
+        if contains_t_pp_var (typ_of full_exp) || contains_t_pp_var (typ_of r)
+        then empty
+        else separate space
+          [string ret_monad;
+          parens (doc_typ_lem sequential mwords (typ_of full_exp));
+          parens (doc_typ_lem sequential mwords (typ_of r))] in
+      align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_exp_user _ ->
       raise (Reporting_basic.err_unreachable l
@@ -1110,9 +1120,10 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
 let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
-  | TD_abbrev(id,nm,typschm) ->
-     doc_op equals (concat [string "type"; space; doc_id_lem_type id])
-            (doc_typschm_lem sequential mwords false typschm)
+  | TD_abbrev(id,nm,(TypSchm_aux (TypSchm_ts (typq, _), _) as typschm)) ->
+     doc_op equals
+       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem typq])
+       (doc_typschm_lem sequential mwords false typschm)
   | TD_record(id,nm,typq,fs,_) ->
     let fname fid = if prefix_recordtype
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
@@ -1575,6 +1586,7 @@ let rec doc_def_lem sequential mwords def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> (empty,doc_spec_lem sequential mwords v_spec)
+  | DEF_fixity _ -> (empty,empty)
   | DEF_overload _ -> (empty,empty)
   | DEF_type t_def -> (group (doc_typdef_lem sequential mwords t_def) ^/^ hardline,empty)
   | DEF_reg_dec dec -> (group (doc_dec_lem sequential dec),empty)

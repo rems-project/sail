@@ -5,12 +5,14 @@ open Type_check
 
 type ctx =
   { register_inits : tannot exp list;
-    externs : id Bindings.t
+    externs : id Bindings.t;
+    val_specs : typ Bindings.t
   }
 
 let empty_ctx =
   { register_inits = [];
-    externs = Bindings.empty
+    externs = Bindings.empty;
+    val_specs = Bindings.empty
   }
 
 let zchar c =
@@ -47,7 +49,10 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
   | id when Id.compare id (mk_id "bit") = 0 -> string "bit"
   | id when Id.compare id (mk_id "int") = 0 -> string "big_int"
+  | id when Id.compare id (mk_id "nat") = 0 -> string "big_int"
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
+  | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
+  | id when Id.compare id (mk_id "real") = 0 -> string "Num.num"
   | id -> zencode ctx id
 
 let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
@@ -84,6 +89,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_num n -> parens (string "big_int_of_int" ^^ space ^^ string (string_of_int n))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> dquotes (string (String.escaped str))
+  | L_real str -> parens (string "Num.num_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
   | _ -> string "LIT"
 
 let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
@@ -110,10 +116,10 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_app (f, [x]) when Env.is_union_constructor f (env_of exp) -> zencode_upper ctx f ^^ space ^^ ocaml_atomic_exp ctx x
   | E_app (f, [x]) -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
   | E_app (f, xs) when Env.is_union_constructor f (env_of exp) ->
-     zencode_upper ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) xs)
+     zencode_upper ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
   | E_app (f, xs) ->
-     zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) xs)
-  | E_vector_subrange (exp1, exp2, exp3) -> string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) [exp1; exp2; exp3])
+     zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
+  | E_vector_subrange (exp1, exp2, exp3) -> string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
   | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
   | E_cast (_, exp) -> ocaml_exp ctx exp
@@ -140,8 +146,19 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      ^/^ ocaml_exp ctx exp
   | E_internal_let (lexp, exp1, exp2) ->
      separate space [string "let"; ocaml_atomic_lexp ctx lexp;
-                     equals; string "ref"; ocaml_atomic_exp ctx exp1; string "in"]
+                     equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewriter.simple_typ (typ_of exp1))); string "in"]
      ^/^ ocaml_exp ctx exp2
+  | E_loop (Until, cond, body) ->
+     let loop_body =
+       (ocaml_atomic_exp ctx body ^^ semi)
+       ^/^
+       separate space [string "if"; ocaml_atomic_exp ctx cond;
+                       string "then loop ()";
+                       string "else ()"]
+     in
+     (string "let rec loop () =" ^//^ loop_body)
+     ^/^ string "in"
+     ^/^ string "loop ()"
   | E_loop (While, cond, body) ->
      let loop_body =
        separate space [string "if"; ocaml_atomic_exp ctx cond;
@@ -152,11 +169,22 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      ^/^ string "in"
      ^/^ string "loop ()"
   | E_lit _ | E_list _ | E_id _ | E_tuple _ -> ocaml_atomic_exp ctx exp
+  | E_for (id, exp_from, exp_to, exp_step, _, exp_body) ->
+     let loop_var = separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"] in
+     let loop_mod = string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step in
+     let loop_body =
+       separate space [string "if"; zencode ctx id; string "<="; ocaml_atomic_exp ctx exp_to]
+       ^/^ separate space [string "then";
+             parens (ocaml_atomic_exp ctx exp_body ^^ semi ^^ space ^^ string "loop" ^^ space ^^ parens loop_mod)]
+       ^/^ string "else ()"
+     in
+     (string ("let rec loop " ^ zencode_string (string_of_id id) ^ " =") ^//^ loop_body)
+     ^/^ string "in"
+     ^/^ (string "loop" ^^ space ^^ ocaml_atomic_exp ctx exp_from)
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
   match lb_aux with
   | LB_val (pat, exp) -> separate space [ocaml_pat ctx pat; equals; ocaml_atomic_exp ctx exp]
-  | _ -> failwith "Ocaml: Explicit letbind found"
 and ocaml_pexps ctx = function
   | [pexp] -> ocaml_pexp ctx pexp
   | pexp :: pexps -> ocaml_pexp ctx pexp ^/^ ocaml_pexps ctx pexps
@@ -166,7 +194,7 @@ and ocaml_pexp ctx = function
      separate space [bar; ocaml_pat ctx pat; string "->"]
      ^//^ group (ocaml_exp ctx exp)
   | Pat_aux (Pat_when (pat, wh, exp), _) ->
-     separate space [bar; ocaml_pat ctx pat; string "when"; ocaml_atomic_exp ctx exp; string "->"]
+     separate space [bar; ocaml_pat ctx pat; string "when"; ocaml_atomic_exp ctx wh; string "->"]
      ^//^ group (ocaml_exp ctx exp)
 and ocaml_block ctx = function
   | [exp] -> ocaml_exp ctx exp
@@ -182,7 +210,8 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        match Env.lookup_id id (env_of exp) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
        | Enum _ | Union _ -> zencode_upper ctx id
-       | Register _ | Local (Mutable, _) -> bang ^^ zencode ctx id
+       | Register _ -> parens (string ("trace \"REG: " ^ string_of_id id ^ "\";") ^^ space ^^ bang ^^ zencode ctx id)
+       | Local (Mutable, _) -> bang ^^ zencode ctx id
      end
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
@@ -234,15 +263,25 @@ let rec ocaml_funcl_matches ctx = function
   | [clause] -> ocaml_funcl_match ctx clause
   | (clause :: clauses) -> ocaml_funcl_match ctx clause ^/^ ocaml_funcl_matches ctx clauses
 
+let first_function = ref true
+
+let function_header () =
+  if !first_function
+  then (first_function := false; string "let rec")
+  else string "and"
+
 let ocaml_funcls ctx = function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pat, exp),_)] ->
-     separate space [string "let rec"; zencode ctx id; ocaml_pat ctx pat; equals; string "with_return (fun r ->"]
+     let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
+     let annot_pat = parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1) in
+     let dbg = string ("trace_call \"Calling: " ^ string_of_id id ^ "\";") in
+     separate space [function_header (); zencode ctx id; annot_pat; colon; ocaml_typ ctx typ2; equals; dbg; string "with_return (fun r ->"]
      ^//^ ocaml_exp ctx exp
      ^^ rparen
   | funcls ->
      let id = funcls_id funcls in
-     separate space [string "let rec"; zencode ctx id; equals; string "function"]
+     separate space [function_header (); zencode ctx id; equals; string "function"]
      ^//^ ocaml_funcl_matches ctx funcls
 
 let ocaml_fundef ctx (FD_aux (FD_function (_, _, _, funcls), _)) =
@@ -303,15 +342,35 @@ let get_externs (Defs defs) =
 
 let ocaml_def_end = string ";;" ^^ twice hardline
 
+let nf_group doc =
+  first_function := true;
+  group doc
+
 let ocaml_def ctx def = match def with
-  | DEF_reg_dec ds -> group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
-  | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ ocaml_def_end
-  | DEF_type td -> group (ocaml_typedef ctx td) ^^ ocaml_def_end
+  | DEF_reg_dec ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
+  | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
+  | DEF_type td -> nf_group (ocaml_typedef ctx td) ^^ ocaml_def_end
+  | DEF_val lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
   | _ -> empty
+
+let val_spec_typs (Defs defs) =
+  let typs = ref (Bindings.empty) in
+  let val_spec_typ (VS_aux (vs_aux, _)) =
+    match vs_aux with
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _, _) -> typs := Bindings.add id typ !typs
+  in
+  let rec vs_typs = function
+    | DEF_spec vs :: defs -> val_spec_typ vs; vs_typs defs
+    | _ :: defs -> vs_typs defs
+    | [] -> []
+  in
+  vs_typs defs;
+  !typs
 
 let ocaml_defs (Defs defs) =
   let ctx = { register_inits = get_initialize_registers defs;
-              externs = get_externs (Defs defs)
+              externs = get_externs (Defs defs);
+              val_specs = val_spec_typs (Defs defs)
             }
   in
   let empty_reg_init =
@@ -333,6 +392,7 @@ let ocaml_main spec =
           ^//^ (string "Random.self_init ();"
                 ^/^ string "load_elf ();"
                 ^/^ string "initialize_registers ();"
+                ^/^ string "Printexc.record_backtrace true;"
                 ^/^ string "zmain ()")
          ]
 

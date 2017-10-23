@@ -2,12 +2,26 @@ open Big_int
 
 type 'a return = { return : 'b . 'a -> 'b }
 
+let trace_depth = ref 0
+let random = ref false
+
 let with_return (type t) (f : _ -> t) =
   let module M =
     struct exception Return of t end
   in
-  let return = { return = (fun x -> raise (M.Return x)); } in
-  try f return with M.Return x -> x
+  let return = { return = (fun x -> decr trace_depth; raise (M.Return x)); } in
+  try
+    let result = f return in
+    decr trace_depth;
+    result
+  with M.Return x -> x
+
+let trace str =
+  if !trace_depth < 0 then trace_depth := 0 else ();
+  prerr_endline (String.make (!trace_depth * 2) ' ' ^ str)
+
+let trace_call str =
+  trace str; incr trace_depth
 
 type bit = B0 | B1
 
@@ -18,6 +32,11 @@ let and_bit = function
 let or_bit = function
   | B0, B0 -> B0
   | _, _ -> B1
+
+let xor_bit = function
+  | B1, B0 -> B1
+  | B0, B1 -> B1
+  | _, _ -> B0
 
 let and_vec (xs, ys) =
   assert (List.length xs = List.length ys);
@@ -31,10 +50,19 @@ let or_vec (xs, ys) =
 
 let or_bool (b1, b2) = b1 || b2
 
-let undefined_bit () =
-  if Random.bool () then B0 else B1
+let xor_vec (xs, ys) =
+  assert (List.length xs = List.length ys);
+  List.map2 (fun x y -> xor_bit (x, y)) xs ys
 
-let undefined_bool () = Random.bool ()
+let xor_bool (b1, b2) = (b1 || b2) && (b1 != b2)
+
+let undefined_bit () =
+  if !random
+  then (if Random.bool () then B0 else B1)
+  else B0
+
+let undefined_bool () =
+  if !random then Random.bool () else false
 
 let rec undefined_vector (start_index, len, item) =
   if eq_big_int len zero_big_int
@@ -46,10 +74,16 @@ let undefined_string () = ""
 let undefined_unit () = ()
 
 let undefined_int () =
-  big_int_of_int (Random.int 0xFFFF)
+  if !random then big_int_of_int (Random.int 0xFFFF) else zero_big_int
+
+let undefined_nat () = zero_big_int
+
+let undefined_range (lo, hi) = lo
 
 let internal_pick list =
-  List.nth list (Random.int (List.length list))
+  if !random
+  then List.nth list (Random.int (List.length list))
+  else List.nth list 0
 
 let eq_int (n, m) = eq_big_int n m
 
@@ -69,6 +103,11 @@ let subrange (list, n, m) =
   let n = int_of_big_int n in
   let m = int_of_big_int m in
   List.rev (take (n - (m - 1)) (drop m (List.rev list)))
+
+let slice (list, n, m) =
+  let n = int_of_big_int n in
+  let m = int_of_big_int m in
+  List.rev (take m (drop n (List.rev list)))
 
 let eq_list (xs, ys) = List.for_all2 (fun x y -> x == y) xs ys
 
@@ -319,3 +358,40 @@ let debug (str1, n, str2, v) = prerr_endline (str1 ^ string_of_big_int n ^ str2 
 let eq_string (str1, str2) = String.compare str1 str2 == 0
 
 let lt_int (x, y) = lt_big_int x y
+
+let set_slice (out_len, slice_len, out, n, slice) =
+  update_subrange(out, n, sub_big_int n (big_int_of_int (List.length slice - 1)), slice)
+
+let set_slice_int (_, _, _, _) = assert false
+
+let eq_real (x, y) = Num.eq_num x y
+let lt_real (x, y) = Num.lt_num x y
+let gt_real (x, y) = Num.gt_num x y
+let lteq_real (x, y) = Num.le_num x y
+let gteq_real (x, y) = Num.ge_num x y
+
+let round_down x = Num.big_int_of_num (Num.floor_num x)
+let round_up x = Num.big_int_of_num (Num.ceiling_num x)
+let quotient_real (x, y) = Num.div_num x y
+let mult_real (x, y) = Num.mult_num x y
+let real_power (x, y) = Num.power_num x (Num.num_of_big_int y)
+let add_real (x, y) = Num.add_num x y
+let sub_real (x, y) = Num.sub_num x y
+
+let lt (x, y) = lt_big_int x y
+let gt (x, y) = gt_big_int x y
+let lteq (x, y) = le_big_int x y
+let gteq (x, y) = gt_big_int x y
+
+let pow2 x = power_big_int_positive_int x 2
+
+let max_int (x, y) = max_big_int x y
+let min_int (x, y) = min_big_int x y
+
+let undefined_real () = Num.num_of_int 0
+
+(* Not a very good sqrt implementation *)
+let sqrt_real x = Num.num_of_string (string_of_float (sqrt (Num.float_of_num x)))
+
+let print_int (str, x) =
+  prerr_endline (str ^ string_of_big_int x)

@@ -2027,16 +2027,15 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_throw exp, _ ->
      let checked_exp = crule check_exp env exp exc_typ in
      annot_exp_effect (E_throw checked_exp) typ (mk_effect [BE_escape])
+  | E_internal_let (lexp, bind, exp), _ ->
+     let E_aux (E_assign (lexp, bind), _), env = bind_assignment env lexp bind in
+     let checked_exp = crule check_exp env exp typ in
+     annot_exp (E_internal_let (lexp, bind, checked_exp)) typ
   | E_vector vec, _ ->
-     begin
-       let (start, len, ord, vtyp) = destruct_vec_typ l env typ in
-       let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
-       match nexp_simp len with
-       | Nexp_aux (Nexp_constant lenc, _) ->
-          if List.length vec = lenc then annot_exp (E_vector checked_items) typ
-          else typ_error l "List length didn't match" (* FIXME: improve error message *)
-       | _ -> typ_error l "Cannot check list constant against non-constant length vector type"
-     end
+     let (start, len, ord, vtyp) = destruct_vec_typ l env typ in
+     let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
+     if prove env (nc_eq (nconstant (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
+     else typ_error l "List length didn't match" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
      annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
   (* This rule allows registers of type t to be passed by name with type register<t>*)
@@ -2981,6 +2980,11 @@ and propagate_exp_effect_aux = function
      let p_lexp = propagate_lexp_effect lexp in
      let p_exp = propagate_exp_effect exp in
      E_assign (p_lexp, p_exp), union_effects (effect_of p_exp) (effect_of_lexp p_lexp)
+  | E_internal_let (lexp, bind, exp) ->
+     let p_lexp = propagate_lexp_effect lexp in
+     let p_bind = propagate_exp_effect bind in
+     let p_exp = propagate_exp_effect exp in
+     E_internal_let (p_lexp, p_bind, p_exp), union_effects (effect_of_lexp p_lexp) (collect_effects [p_bind; p_exp])
   | E_sizeof nexp -> E_sizeof nexp, no_effect
   | E_constraint nc -> E_constraint nc, no_effect
   | E_exit exp ->
@@ -2999,6 +3003,21 @@ and propagate_exp_effect_aux = function
   | E_field (exp, id) ->
      let p_exp = propagate_exp_effect exp in
      E_field (p_exp, id), effect_of p_exp
+  | E_internal_let (lexp, exp, body) ->
+     let p_lexp = propagate_lexp_effect lexp in
+     let p_exp = propagate_exp_effect exp in
+     let p_body = propagate_exp_effect body in
+     E_internal_let (p_lexp, p_exp, p_body),
+     union_effects (effect_of_lexp p_lexp) (collect_effects [p_exp; p_body])
+  | E_internal_plet (pat, exp, body) ->
+     let p_pat = propagate_pat_effect pat in
+     let p_exp = propagate_exp_effect exp in
+     let p_body = propagate_exp_effect body in
+     E_internal_plet (p_pat, p_exp, p_body),
+     union_effects (effect_of_pat p_pat) (collect_effects [p_exp; p_body])
+  | E_internal_return exp ->
+     let p_exp = propagate_exp_effect exp in
+     E_internal_return p_exp, effect_of p_exp
   | exp_aux -> typ_error Parse_ast.Unknown ("Unimplemented: Cannot propagate effect in expression "
                                             ^ string_of_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))))
 

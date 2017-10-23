@@ -259,5 +259,6 @@ let rewrite rewriters defs =
      exit 1
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
+let rewrite_undefined = rewrite [("undefined", Rewriter.rewrite_undefined)]
 let rewrite_ast_lem = rewrite Rewriter.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewriter.rewrite_defs_ocaml
