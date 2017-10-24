@@ -620,14 +620,20 @@ let rec simplify_nexp (Nexp_aux (nexp, l)) =
   match nexp with
   | Nexp_times (Nexp_aux (Nexp_constant 1,_),n')
   | Nexp_times (n',Nexp_aux (Nexp_constant 1,_))
-    -> n'
+    -> simplify_nexp n'
   | Nexp_times (n1, n2) -> try_binop ( * ) n1 n2 (fun n1 n2 -> Nexp_times (n1, n2))
   | Nexp_sum (n1, n2) -> try_binop ( + ) n1 n2 (fun n1 n2 -> Nexp_sum (n1, n2))
-  | Nexp_minus (n', Nexp_aux (Nexp_constant 0,_)) -> n'
+  | Nexp_minus (n', Nexp_aux (Nexp_constant 0,_)) -> simplify_nexp n'
   (* A vector range x['n-1 .. 0] can result in the size "('n-1) - -1" *)
-  | Nexp_minus (Nexp_aux (Nexp_minus (n', Nexp_aux (Nexp_constant 1,_)),_),
-                Nexp_aux (Nexp_constant (-1),_)) -> n'
-  | Nexp_minus (n1, n2) -> try_binop ( - ) n1 n2 (fun n1 n2 -> Nexp_minus (n1, n2))
+  | Nexp_minus (n1, n2) ->
+     begin
+       match simplify_nexp n1, simplify_nexp n2 with
+       | Nexp_aux (Nexp_minus (n', Nexp_aux (Nexp_constant 1,_)),_),
+         Nexp_aux (Nexp_constant (-1),_) -> simplify_nexp n'
+       | Nexp_aux (Nexp_constant i1,_), Nexp_aux (Nexp_constant i2,_) ->
+          rewrap (Nexp_constant (i1-i2))
+       | n1',n2' -> rewrap (Nexp_minus (n1,n2))
+     end
   (* | Nexp_exp n ->
     (match simplify_nexp n with
       | Nexp_aux (Nexp_constant i, _) ->
