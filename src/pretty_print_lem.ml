@@ -156,6 +156,45 @@ let doc_nexp_lem (Nexp_aux (nexp, l) as full_nexp) = match nexp with
   | _ -> raise (Reporting_basic.err_unreachable l
     ("cannot pretty-print non-atomic nexp \"" ^ string_of_nexp full_nexp ^ "\""))
 
+(* Returns the set of type variables that will appear in the Lem output,
+   which may be smaller than those in the Sail type.  May need to be
+   updated with doc_typ_lem *)
+let rec lem_tyvars_of_typ sequential mwords (Typ_aux (t,_)) =
+  let trec = lem_tyvars_of_typ sequential mwords in
+  match t with
+  | Typ_wild
+  | Typ_id _ -> KidSet.empty
+  | Typ_var kid -> KidSet.singleton kid
+  | Typ_fn (t1,t2,_) -> KidSet.union (trec t1) (trec t2)
+  | Typ_tup ts ->
+     List.fold_left (fun s t -> KidSet.union s (trec t))
+       KidSet.empty ts
+  | Typ_app(Id_aux (Id "vector", _), [
+    Typ_arg_aux (Typ_arg_nexp n, _);
+    Typ_arg_aux (Typ_arg_nexp m, _);
+    Typ_arg_aux (Typ_arg_order ord, _);
+    Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
+     KidSet.union
+       (if mwords then tyvars_of_nexp (simplify_nexp m) else KidSet.empty)
+       (trec elem_typ)
+  | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
+     if sequential then trec etyp else KidSet.empty
+  | Typ_app(Id_aux (Id "range", _),_)
+  | Typ_app(Id_aux (Id "implicit", _),_)
+  | Typ_app(Id_aux (Id "atom", _), _) -> KidSet.empty
+  | Typ_app (_,tas) ->
+     List.fold_left (fun s ta -> KidSet.union s (lem_tyvars_of_typ_arg sequential mwords ta))
+       KidSet.empty tas
+  | Typ_exist (kids,_,t) ->
+     let s = trec t in
+     List.fold_left (fun s k -> KidSet.remove k s) s kids
+and lem_tyvars_of_typ_arg sequential mwords (Typ_arg_aux (ta,_)) =
+  match ta with
+  | Typ_arg_nexp nexp -> tyvars_of_nexp nexp
+  | Typ_arg_typ typ -> lem_tyvars_of_typ sequential mwords typ
+  | Typ_arg_order _ -> KidSet.empty
+
+(* When making changes here, check whether they affect lem_tyvars_of_typ *)
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
   let rec typ sequential mwords ty = fn_typ sequential mwords true ty
@@ -210,7 +249,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
          let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space (doc_typ_arg_lem sequential mwords) args) in
          if atyp_needed then parens tpp else tpp
       | _ -> atomic_typ sequential mwords atyp_needed ty
-    and atomic_typ sequential mwords atyp_needed ((Typ_aux (t, _)) as ty) = match t with
+    and atomic_typ sequential mwords atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_id (Id_aux (Id "bool",_)) -> string "bool"
       | Typ_id (Id_aux (Id "bit",_)) -> string "bitU"
       | Typ_id (id) ->
@@ -224,11 +263,22 @@ let doc_typ_lem, doc_atomic_typ_lem =
           * if we add a new Typ constructor *)
          let tpp = typ sequential mwords ty in
          if atyp_needed then parens tpp else tpp
+      | Typ_exist (kids,_,ty) -> begin
+         let tpp = typ sequential mwords ty in
+         let visible_vars = lem_tyvars_of_typ sequential mwords ty in
+         match List.filter (fun kid -> KidSet.mem kid visible_vars) kids with
+         | [] -> if atyp_needed then parens tpp else tpp
+         | bad -> raise (Reporting_basic.err_general l
+                           ("Existential type variable(s) " ^
+                               String.concat ", " (List.map string_of_kid bad) ^
+                               " escape into Lem"))
+      end
     and doc_typ_arg_lem sequential mwords (Typ_arg_aux(t,_)) = match t with
       | Typ_arg_typ t -> app_typ sequential mwords true t
       | Typ_arg_nexp n -> doc_nexp_lem (simplify_nexp n)
       | Typ_arg_order o -> empty
   in typ', atomic_typ
+
 
 (* Check for variables in types that would be pretty-printed.
    In particular, in case of vector types, only the element type and the

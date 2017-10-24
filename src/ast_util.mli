@@ -225,3 +225,6 @@ val vector_typ_args_of : typ -> nexp * nexp * order * typ
 val is_order_inc : order -> bool
 
 val has_effect : effect -> base_effect_aux -> bool
+
+val tyvars_of_nexp : nexp -> KidSet.t
+val tyvars_of_typ : typ -> KidSet.t

@@ -618,8 +618,15 @@ let rec simplify_nexp (Nexp_aux (nexp, l)) =
       rewrap (Nexp_constant (op i1 i2))
     | n1, n2 -> rewrap (c n1 n2)) in
   match nexp with
+  | Nexp_times (Nexp_aux (Nexp_constant 1,_),n')
+  | Nexp_times (n',Nexp_aux (Nexp_constant 1,_))
+    -> n'
   | Nexp_times (n1, n2) -> try_binop ( * ) n1 n2 (fun n1 n2 -> Nexp_times (n1, n2))
   | Nexp_sum (n1, n2) -> try_binop ( + ) n1 n2 (fun n1 n2 -> Nexp_sum (n1, n2))
+  | Nexp_minus (n', Nexp_aux (Nexp_constant 0,_)) -> n'
+  (* A vector range x['n-1 .. 0] can result in the size "('n-1) - -1" *)
+  | Nexp_minus (Nexp_aux (Nexp_minus (n', Nexp_aux (Nexp_constant 1,_)),_),
+                Nexp_aux (Nexp_constant (-1),_)) -> n'
   | Nexp_minus (n1, n2) -> try_binop ( - ) n1 n2 (fun n1 n2 -> Nexp_minus (n1, n2))
   (* | Nexp_exp n ->
     (match simplify_nexp n with
@@ -709,3 +716,35 @@ let has_effect (Effect_aux (eff,_)) searched_for = match eff with
   | Effect_var _ ->
     raise (Reporting_basic.err_unreachable Parse_ast.Unknown
       "has_effect called on effect variable")
+
+let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
+  match nexp with
+  | Nexp_id _
+  | Nexp_constant _ -> KidSet.empty
+  | Nexp_var kid -> KidSet.singleton kid
+  | Nexp_times (n1,n2)
+  | Nexp_sum (n1,n2)
+  | Nexp_minus (n1,n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | Nexp_exp n
+  | Nexp_neg n -> tyvars_of_nexp n
+
+let rec tyvars_of_typ (Typ_aux (t,_)) =
+  match t with
+  | Typ_wild
+  | Typ_id _ -> KidSet.empty
+  | Typ_var kid -> KidSet.singleton kid
+  | Typ_fn (t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_tup ts ->
+     List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
+       KidSet.empty ts
+  | Typ_app (_,tas) -> 
+     List.fold_left (fun s ta -> KidSet.union s (tyvars_of_typ_arg ta))
+       KidSet.empty tas
+  | Typ_exist (kids,_,t) ->
+     let s = tyvars_of_typ t in
+     List.fold_left (fun s k -> KidSet.remove k s) s kids
+and tyvars_of_typ_arg (Typ_arg_aux (ta,_)) =
+  match ta with
+  | Typ_arg_nexp nexp -> tyvars_of_nexp nexp
+  | Typ_arg_typ typ -> tyvars_of_typ typ
+  | Typ_arg_order _ -> KidSet.empty
