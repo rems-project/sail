@@ -189,7 +189,7 @@ let is_within_machine64 candidate constraints = is_within_range candidate int64_
 let conditional_add typ_or_exp bound used id =
   let known_list =
     if typ_or_exp (*true for typ*)
-    then ["bit";"vector";"unit";"string";"int";"bool";"boolean"]
+    then ["bit";"vector";"unit";"string";"int";"bool"]
     else ["=="; "!="; "|";"~";"&";"add_int"] in
   let i = (string_of_id id) in
   if Nameset.mem i bound || List.mem i known_list

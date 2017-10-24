@@ -212,7 +212,6 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | _ -> atomic_typ sequential mwords atyp_needed ty
     and atomic_typ sequential mwords atyp_needed ((Typ_aux (t, _)) as ty) = match t with
       | Typ_id (Id_aux (Id "bool",_)) -> string "bool"
-      | Typ_id (Id_aux (Id "boolean",_)) -> string "bool"
       | Typ_id (Id_aux (Id "bit",_)) -> string "bitU"
       | Typ_id (id) ->
          (*if List.exists ((=) (string_of_id id)) regtypes
