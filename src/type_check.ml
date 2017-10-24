@@ -1695,7 +1695,11 @@ let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
      nc_eq (assert_nexp env x) (assert_nexp env y)
   | E_app (op, [x; y]) when string_of_id op = "neq_atom" ->
      nc_neq (assert_nexp env x) (assert_nexp env y)
-  | _ -> nc_true
+  | _ ->
+     begin
+       typ_debug ("Unable to construct a constraint for expression " ^ string_of_exp exp);
+       nc_true
+     end
 
 type flow_constraint =
   | Flow_lteq of big_int * nexp
