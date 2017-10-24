@@ -970,6 +970,8 @@ let generate_undefineds vs_ids (Defs defs) =
      gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
      (* FIXME: How to handle inc/dec order correctly? *)
      gen_vs (mk_id "undefined_vector") "forall 'n 'm ('a:Type). (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";
+     (* Only used with lem_mwords *)
+     gen_vs (mk_id "undefined_bitvector") "forall 'n 'm. (atom('n), atom('m)) -> vector('n, 'm, dec,bit) effect {undef}";
      gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
   in
   let undefined_tu = function

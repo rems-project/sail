@@ -2512,11 +2512,13 @@ let rewrite_overload_cast (Defs defs) =
   let defs = List.map simple_def defs in
   Defs (List.filter (fun def -> not (is_overload def)) defs)
 
-let rewrite_undefined =
-  let rec undefined_of_typ (Typ_aux (typ_aux, _)) =
+let rewrite_undefined mwords =
+  let rec undefined_of_typ (Typ_aux (typ_aux, _) as typ) =
     match typ_aux with
     | Typ_id id ->
        mk_exp (E_app (prepend_id "undefined_" id, [mk_lit_exp L_unit]))
+    | Typ_app (_,[start;size;_;_]) when mwords && is_bitvector_typ typ ->
+       mk_exp (E_app (mk_id "undefined_bitvector", undefined_of_typ_args start @ undefined_of_typ_args size))
     | Typ_app (id, args) ->
        mk_exp (E_app (prepend_id "undefined_" id, List.concat (List.map undefined_of_typ_args args)))
     | Typ_var kid ->
