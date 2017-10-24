@@ -665,7 +665,7 @@ let cheri_register_data_all = mips_register_data_all @ [
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_stack_data = [] in 
-  let initial_cap_val_int = Nat_big_num.of_string "0x1fffe0000000800000000000000000000" in (* hex((0x80000 << 64) + (0x7fff << 113) + (1 << 128)) *)
+  let initial_cap_val_int = Nat_big_num.of_string "0x1fffe6000000100000000000000000000" in (* hex((0x10000 << 64) + (48 << 105) + (0x7fff << 113) + (1 << 128)) T=0x10000 E=48 perms=0x7fff tag=1 *)
   let initial_cap_val_reg = Sail_impl_base.register_value_of_integer 129 128 D_decreasing  initial_cap_val_int in
   let initial_register_abi_data : (string * Sail_impl_base.register_value) list = [
     ("CP0Status", Sail_impl_base.register_value_of_integer 32 31 D_decreasing (Nat_big_num.of_string "0x00400000"));

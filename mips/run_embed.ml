@@ -250,7 +250,7 @@ module CHERI128_model : ISA_model = struct
     let start_addr = (to_vec_dec_big (bi64, big_int_of_string "0x9000000040000000")) in
     set_register Cheri128_embed._nextPC start_addr;
     set_register_field_bit Cheri128_embed._CP0Status "BEV" Vone;
-    let initial_cap_val_int = big_int_of_string "0x1fffe0000000800000000000000000000" in (* hex((0x80000 << 64) + (0x7fff << 113) + (1 << 128)) *)
+    let initial_cap_val_int = big_int_of_string "0x1fffe6000000100000000000000000000" in (* hex((0x10000 << 64) + (48 << 105) + (0x7fff << 113) + (1 << 128)) T=0x10000 E=48 perms=0x7fff tag=1 *)
     let initial_cap_vec = to_vec_dec ((bi129), initial_cap_val_int) in 
     set_register Cheri128_embed._PCC initial_cap_vec;
     set_register Cheri128_embed._nextPCC initial_cap_vec;
