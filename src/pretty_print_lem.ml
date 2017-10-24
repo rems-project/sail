@@ -359,18 +359,22 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
     separate space (List.map string ["realFromFrac"; string_of_big_int num; string_of_big_int denom])
 
 (* typ_doc is the doc for the type being quantified *)
-let doc_quant_item (QI_aux (qi, _)) = match qi with
+let doc_quant_item vars_included (QI_aux (qi, _)) = match qi with
 | QI_id (KOpt_aux (KOpt_none kid, _))
-| QI_id (KOpt_aux (KOpt_kind (_, kid), _)) -> doc_var kid
+| QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
+   (match vars_included with
+     None -> doc_var kid
+   | Some set when KidSet.mem kid set -> doc_var kid
+   | _ -> empty)
 | _ -> empty
 
-let doc_typquant_items_lem (TypQ_aux(tq,_)) = match tq with
-| TypQ_tq qs -> separate_map space doc_quant_item qs
+let doc_typquant_items_lem vars_included (TypQ_aux(tq,_)) = match tq with
+| TypQ_tq qs -> separate_map space (doc_quant_item vars_included) qs
 | _ -> empty
 
-let doc_typquant_lem (TypQ_aux(tq,_)) typ = match tq with
+let doc_typquant_lem (TypQ_aux(tq,_)) vars_included typ = match tq with
 | TypQ_tq ((_ :: _) as qs) ->
-  string "forall " ^^ separate_map space doc_quant_item qs ^^ string ". " ^^ typ
+  string "forall " ^^ separate_map space (doc_quant_item vars_included) qs ^^ string ". " ^^ typ
 | _ -> typ
 
 (* Produce Size type constraints for bitvector sizes when using
@@ -396,13 +400,21 @@ let doc_typclasses_lem mwords t =
     let vars = typeclass_vars t in
     let vars = List.sort_uniq Kid.compare vars in
     match vars with
-    | [] -> empty
-    | _ -> separate_map comma_sp (fun var -> string "Size " ^^ doc_var var) vars ^^ string " => "
-  else empty
+    | [] -> (empty, KidSet.empty)
+    | _ -> (separate_map comma_sp (fun var -> string "Size " ^^ doc_var var) vars ^^ string " => ", KidSet.of_list vars)
+  else (empty, KidSet.empty)
 
 let doc_typschm_lem sequential mwords quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
-  if quants then (doc_typquant_lem tq (doc_typclasses_lem mwords t ^^ doc_typ_lem sequential mwords t))
-  else doc_typ_lem sequential mwords t
+  let pt = doc_typ_lem sequential mwords t in
+  if quants
+  then
+    let tyvars_used = lem_tyvars_of_typ sequential mwords t in
+    let ptyc, tyvars_sizes = doc_typclasses_lem mwords t in
+    let tyvars_to_include = KidSet.union tyvars_used tyvars_sizes in
+    if KidSet.is_empty tyvars_to_include
+    then pt
+    else doc_typquant_lem tq (Some tyvars_to_include) (ptyc ^^ pt)
+  else pt
 
 let is_ctor env id = match Env.lookup_id id env with
 | Enum _ | Union _ -> true
@@ -1171,7 +1183,7 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
 let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,nm,(TypSchm_aux (TypSchm_ts (typq, _), _) as typschm)) ->
      doc_op equals
-       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem typq])
+       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
        (doc_typschm_lem sequential mwords false typschm)
   | TD_record(id,nm,typq,fs,_) ->
     let fname fid = if prefix_recordtype
@@ -1222,7 +1234,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
           doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
           doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in
     doc_op equals
-           (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem typq])
+           (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
            ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline ^^
     if sequential && string_of_id id = "regstate" then empty
     else separate_map hardline doc_field fs
@@ -1242,7 +1254,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
          let typ_pp =
 
            (doc_op equals)
-             (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem typq])
+             (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem None typq])
              ((*doc_typquant_lem typq*) ar_doc) in
          let make_id pat id =
            separate space [string "SIA.Id_aux";
