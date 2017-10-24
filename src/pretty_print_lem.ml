@@ -702,8 +702,7 @@ let doc_exp_lem, doc_let_lem =
              let (taepp,aexp_needed) =
                let t = (*Env.base_typ_of (env_of full_exp)*) (typ_of full_exp) in
                let eff = effect_of full_exp in
-               if contains_bitvector_typ (Env.base_typ_of (env_of full_exp) t) &&
-                  not (contains_t_pp_var t)
+               if contains_bitvector_typ (Env.base_typ_of (env_of full_exp) t)
                then (align epp ^^ (doc_tannot_lem sequential mwords (effectful eff) t), true)
                else (epp, aexp_needed) in
              liftR (if aexp_needed then parens (align taepp) else taepp)
@@ -782,7 +781,7 @@ let doc_exp_lem, doc_let_lem =
            let eff = effect_of full_exp in
            let field_f = doc_id_lem tid ^^ underscore ^^ doc_id_lem id ^^ dot ^^ string "get_field" in
            let (ta,aexp_needed) =
-             if contains_bitvector_typ t && not (contains_t_pp_var t)
+             if contains_bitvector_typ t
              then (doc_tannot_lem sequential mwords (effectful eff) t, true)
              else (empty, aexp_needed) in
            let epp = field_f ^^ space ^^ (expY fexp) in
@@ -805,7 +804,7 @@ let doc_exp_lem, doc_let_lem =
        let base_typ = Env.base_typ_of env typ in
        if has_effect eff BE_rreg then
          let epp = separate space [string "read_reg";doc_id_lem id] in
-         if is_bitvector_typ base_typ && not (contains_t_pp_var base_typ)
+         if is_bitvector_typ base_typ
          then liftR (parens (epp ^^ doc_tannot_lem sequential mwords true base_typ))
          else liftR epp
        else if is_ctor env id then doc_id_lem_ctor id
@@ -929,9 +928,7 @@ let doc_exp_lem, doc_let_lem =
               let (epp,aexp_needed) =
                 if is_bit_typ etyp && mwords then
                   let bepp = string "vec_to_bvec" ^^ space ^^ parens (align epp) in
-                  if contains_t_pp_var t
-                  then (bepp, aexp_needed)
-                  else (bepp ^^ doc_tannot_lem sequential mwords false t, true)
+                  (bepp ^^ doc_tannot_lem sequential mwords false t, true)
                 else (epp,aexp_needed) in
               if aexp_needed then parens (align epp) else epp
        (* *)
