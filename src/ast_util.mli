@@ -187,6 +187,11 @@ module Kid : sig
   val compare : kid -> kid -> int
 end
 
+module Nexp : sig
+  type t = nexp
+  val compare : nexp -> nexp -> int
+end
+
 module BE : sig
   type t = base_effect
   val compare : base_effect -> base_effect -> int
@@ -194,6 +199,10 @@ end
 
 module IdSet : sig
   include Set.S with type elt = id
+end
+
+module NexpSet : sig
+  include Set.S with type elt = nexp
 end
 
 module BESet : sig
