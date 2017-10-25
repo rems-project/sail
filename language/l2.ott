@@ -421,9 +421,12 @@ grammar
 
 %%% OR, IN C STYLE
 
-type_def :: 'TD_' ::=
+type_def {{ ocaml 'a type_def }} :: 'TD_' ::=
+  {{ ocaml TD_aux of type_def_aux * 'a annot }}
+  | type_def_aux  :: :: aux
+
+type_def_aux  :: 'TD_' ::=
   {{ com type definition body }}
-  {{ aux _ annot }} {{ auxparam 'a }}
   | typedef id name_scm_opt = typschm                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
   | typedef id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
@@ -959,9 +962,13 @@ letbind :: 'LB_' ::=
   | let pat = exp                                    :: :: val
     {{ com let, implicit type ($[[pat]]$ must be total)}}
 
-val_spec :: 'VS_' ::=
+val_spec {{ ocaml 'a val_spec }} :: 'VS_' ::=
+   {{ ocaml VS_aux of val_spec_aux * 'a annot }}
+  | val_spec_aux ::  :: aux 
+
+
+val_spec_aux :: 'VS_' ::=
   {{ com value type specification }} 
-  {{ aux _ annot }} {{ auxparam 'a }}
   {{ ocaml  VS_val_spec of typschm * id * string option * bool }}
   | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
@@ -978,7 +985,7 @@ val_spec :: 'VS_' ::=
 
 default_spec :: 'DT_' ::=
   {{ com default kinding or typing assumption }}
-  {{ aux _ l }} {{ auxparam 'a }}
+  {{ aux _ l }}
   | default Order order      :: :: order
   | default base_kind kid    :: :: kind
   | default typschm id      :: :: typ
