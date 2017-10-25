@@ -15,6 +15,13 @@ let empty_ctx =
     val_specs = Bindings.empty
   }
 
+let gensym_counter = ref 0
+
+let gensym () =
+  let gs = "gs" ^ string_of_int !gensym_counter in
+  incr gensym_counter;
+  string gs
+
 let zchar c =
   let zc c = "z" ^ String.make 1 c in
   if Char.code c <= 41 then zc (Char.chr (Char.code c + 16))
@@ -44,6 +51,27 @@ let zencode_upper ctx id =
 
 let zencode_kid kid = string ("'" ^ zencode_string (string_of_id (id_of_kid kid)))
 
+let ocaml_string_of id = string ("string_of_" ^ zencode_string (string_of_id id))
+
+let ocaml_string_parens inside = string "\"(\" ^ " ^^ inside ^^ string " ^ \")\""
+
+let ocaml_string_comma = string " ^ \", \" ^ "
+
+let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
+  match typ_aux with
+  | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
+  | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
+  | Typ_app (id, typs) -> string ("\"APP" ^ string_of_id id ^ "\"")
+  | Typ_tup typs ->
+     let args = List.map (fun _ -> gensym ()) typs in
+     let body =
+       ocaml_string_parens (separate_map ocaml_string_comma (fun (typ, arg) -> ocaml_string_typ typ arg) (List.combine typs args))
+     in
+     parens (separate space [string "fun"; parens (separate (comma ^^ space) args); string "->"; body])
+     ^^ space ^^ arg
+  | Typ_fn (typ1, typ2, _) -> string "\"FN\""
+  | Typ_var kid -> string "\"VAR\""
+  | Typ_exist _ | Typ_wild -> assert false
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
@@ -79,6 +107,8 @@ let ocaml_typquant typq =
   | [qi] -> ocaml_qi qi
   | qis -> parens (separate_map (string " * ") ocaml_qi qis)
 
+let string_lit str = dquotes (string (String.escaped str))
+
 let ocaml_lit (L_aux (lit_aux, _)) =
   match lit_aux with
   | L_unit -> string "()"
@@ -88,7 +118,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_false -> string "false"
   | L_num n -> parens (string "big_int_of_int" ^^ space ^^ string (string_of_int n))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
-  | L_string str -> dquotes (string (String.escaped str))
+  | L_string str -> string_lit str
   | L_real str -> parens (string "Num.num_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
   | _ -> string "LIT"
 
@@ -131,7 +161,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_case (exp, pexps) ->
      begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"]
                 ^/^ ocaml_pexps ctx pexps)
-  | E_assign (lexp, exp) -> separate space [ocaml_lexp ctx lexp; string ":="; ocaml_exp ctx exp]
+  | E_assign (lexp, exp) -> ocaml_assignment ctx lexp exp
   | E_if (c, t, e) -> separate space [string "if"; ocaml_atomic_exp ctx c;
                                       string "then"; ocaml_atomic_exp ctx t;
                                       string "else"; ocaml_atomic_exp ctx e]
@@ -210,12 +240,27 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        match Env.lookup_id id (env_of exp) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
        | Enum _ | Union _ -> zencode_upper ctx id
-       | Register _ -> parens (string ("trace \"REG: " ^ string_of_id id ^ "\";") ^^ space ^^ bang ^^ zencode ctx id)
+       | Register _ -> parens (string ("trace \"Read: " ^ string_of_id id ^ "\";") ^^ space ^^ bang ^^ zencode ctx id)
        | Local (Mutable, _) -> bang ^^ zencode ctx id
      end
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
   | _ -> parens (ocaml_exp ctx exp)
+and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
+  match lexp_aux with
+  | LEXP_cast (_, id) | LEXP_id id ->
+     begin
+       match Env.lookup_id id (env_of exp) with
+       | Register typ ->
+          let var = gensym () in
+          let traced_exp =
+            parens (separate space [string "let"; var; equals; ocaml_atomic_exp ctx exp; string "in";
+                                    string "trace_write" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ parens (ocaml_string_typ (Rewriter.simple_typ typ) var) ^^ semi; var])
+          in
+          separate space [zencode ctx id; string ":="; traced_exp]
+       | _ -> separate space [zencode ctx id; string ":="; ocaml_exp ctx exp]
+     end
+  | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
 and ocaml_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
   | LEXP_cast _ | LEXP_id _ -> ocaml_atomic_lexp ctx lexp
@@ -250,19 +295,6 @@ let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
                      string "ref"; parens (ocaml_exp ctx (initial_value_for id ctx.register_inits))]
   | _ -> failwith "Unsupported register declaration"
 
-let funcls_id = function
-  | [] -> failwith "Ocaml: empty function"
-  | FCL_aux (FCL_Funcl (id, pat, exp),_) :: _ -> id
-
-let ocaml_funcl_match ctx (FCL_aux (FCL_Funcl (id, pat, exp), _)) =
-  separate space [bar; ocaml_pat ctx pat; string "->"]
-  ^//^ group (string "with_return (fun r ->" ^//^ ocaml_exp ctx exp ^^ rparen)
-
-let rec ocaml_funcl_matches ctx = function
-  | [] -> failwith "Ocaml: empty function"
-  | [clause] -> ocaml_funcl_match ctx clause
-  | (clause :: clauses) -> ocaml_funcl_match ctx clause ^/^ ocaml_funcl_matches ctx clauses
-
 let first_function = ref true
 
 let function_header () =
@@ -270,19 +302,65 @@ let function_header () =
   then (first_function := false; string "let rec")
   else string "and"
 
-let ocaml_funcls ctx = function
+
+let funcls_id = function
+  | [] -> failwith "Ocaml: empty function"
+  | FCL_aux (FCL_Funcl (id, pat, exp),_) :: _ -> id
+
+let ocaml_funcl_match ctx (FCL_aux (FCL_Funcl (id, pat, exp), _)) =
+  separate space [bar; ocaml_pat ctx pat; string "->"]
+  ^//^ ocaml_exp ctx exp
+
+let rec ocaml_funcl_matches ctx = function
+  | [] -> failwith "Ocaml: empty function"
+  | [clause] -> ocaml_funcl_match ctx clause
+  | (clause :: clauses) -> ocaml_funcl_match ctx clause ^/^ ocaml_funcl_matches ctx clauses
+
+let ocaml_funcls ctx =
+  (* Create functions string_of_arg and string_of_ret that print the argument and return types of the function respectively *)
+  let trace_info typ1 typ2 =
+     let arg_sym = gensym () in
+     let ret_sym = gensym () in
+     let string_of_arg =
+       separate space [function_header (); arg_sym; parens (string "arg" ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1);
+                       colon; string "string"; equals; ocaml_string_typ typ1 (string "arg")]
+     in
+     let string_of_ret =
+       separate space [function_header (); ret_sym; parens (string "arg" ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ2);
+                       colon; string "string"; equals; ocaml_string_typ typ2 (string "arg")]
+     in
+     (arg_sym, string_of_arg, ret_sym, string_of_ret)
+  in
+  function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pat, exp),_)] ->
      let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
-     let annot_pat = parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1) in
-     let dbg = string ("trace_call \"Calling: " ^ string_of_id id ^ "\";") in
-     separate space [function_header (); zencode ctx id; annot_pat; colon; ocaml_typ ctx typ2; equals; dbg; string "with_return (fun r ->"]
-     ^//^ ocaml_exp ctx exp
-     ^^ rparen
+     let pat_sym = gensym () in
+     let annot_pat = parens (separate space [parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1); string "as"; pat_sym]) in
+     let call_header = function_header () in
+     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
+     let call =
+       separate space [call_header; zencode ctx id; annot_pat; colon; ocaml_typ ctx typ2; equals;
+                       string "sail_trace_call"; string_lit (string_of_id id); parens (arg_sym ^^ space ^^ pat_sym); ret_sym;
+                       string "(fun r ->"]
+       ^//^ ocaml_exp ctx exp
+       ^^ rparen
+     in
+     call ^^ twice hardline ^^ string_of_arg ^^ twice hardline ^^ string_of_ret
   | funcls ->
      let id = funcls_id funcls in
-     separate space [function_header (); zencode ctx id; equals; string "function"]
-     ^//^ ocaml_funcl_matches ctx funcls
+     let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
+     let pat_sym = gensym () in
+     let call_header = function_header () in
+     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
+     let call =
+       separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1); equals;
+                       string "sail_trace_call"; string_lit (string_of_id id); parens (arg_sym ^^ space ^^ pat_sym); ret_sym;
+                       string "(fun r ->"]
+       ^//^ (separate space [string "match"; pat_sym; string "with"] ^^ hardline ^^ ocaml_funcl_matches ctx funcls)
+       ^^ rparen
+     in
+     call ^^ twice hardline ^^ string_of_arg ^^ twice hardline ^^ string_of_ret
 
 let ocaml_fundef ctx (FD_aux (FD_function (_, _, _, funcls), _)) =
   ocaml_funcls ctx funcls
@@ -311,18 +389,42 @@ let rec ocaml_enum ctx = function
   | id :: ids -> zencode_upper ctx id ^/^ (bar ^^ space ^^ ocaml_enum ctx ids)
   | [] -> empty
 
+(* We generate a string_of_X ocaml function for each type X, to be used for debugging purposes *)
+
+
+let ocaml_def_end = string ";;" ^^ twice hardline
+
+let ocaml_string_of_enum ctx id ids =
+  let ocaml_case id =
+    separate space [bar; zencode_upper ctx id; string "->"; string ("\"" ^ string_of_id id ^ "\"")]
+  in
+  separate space [string "let"; ocaml_string_of id; equals; string "function"]
+  ^//^ (separate_map hardline ocaml_case ids)
+
+let ocaml_string_of_struct ctx id typq fields =
+  let arg = gensym () in
+  let ocaml_field (typ, id) =
+    separate space [string (string_of_id id ^ " = \""); string "^"; ocaml_string_typ typ arg ^^ string "." ^^ zencode ctx id]
+  in
+  separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
+  ^//^ (string "\"{" ^^ separate_map (hardline ^^ string "^ \", ") ocaml_field fields ^^ string " ^ \"}\"")
+
 let ocaml_typedef ctx (TD_aux (td_aux, _)) =
   match td_aux with
   | TD_record (id, _, typq, fields, _) ->
-     (separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
-      ^//^ ocaml_fields ctx fields)
-     ^/^ rbrace
+     ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
+       ^//^ ocaml_fields ctx fields)
+      ^/^ rbrace)
+     ^^ ocaml_def_end
+     ^^ ocaml_string_of_struct ctx id typq fields
   | TD_variant (id, _, typq, cases, _) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
      ^//^ ocaml_cases ctx cases
   | TD_enum (id, _, ids, _) ->
-     separate space [string "type"; zencode ctx id; equals]
-     ^//^ (bar ^^ space ^^ ocaml_enum ctx ids)
+     (separate space [string "type"; zencode ctx id; equals]
+      ^//^ (bar ^^ space ^^ ocaml_enum ctx ids))
+     ^^ ocaml_def_end
+     ^^ ocaml_string_of_enum ctx id ids
   | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (typq, typ), _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
   | _ -> failwith "Unsupported typedef"
@@ -339,8 +441,6 @@ let get_externs (Defs defs) =
     | [] -> []
   in
   List.fold_left (fun exts (id, name) -> Bindings.add id name exts) Bindings.empty (List.concat (extern_ids defs))
-
-let ocaml_def_end = string ";;" ^^ twice hardline
 
 let nf_group doc =
   first_function := true;

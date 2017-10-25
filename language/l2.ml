@@ -285,7 +285,7 @@ type
 
 
 type 
-'a type_def_aux =  (* type definition body *)
+type_def_aux =  (* type definition body *)
    TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
  | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
  | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* tagged union type definition *)
@@ -298,9 +298,8 @@ type
    KD_aux of 'a kind_def_aux * 'a annot
 
 
-type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+type
+'a type_def = TD_aux of type_def_aux * 'a annot
 
 
 type 
@@ -480,7 +479,7 @@ type
 
 
 type
-'a val_spec_aux = VS_val_spec of typschm * id * string option * bool
+val_spec_aux = VS_val_spec of typschm * id * string option * bool
 
 
 type 
@@ -489,7 +488,7 @@ type
 
 
 type 
-'a default_spec_aux =  (* default kinding or typing assumption *)
+default_spec_aux =  (* default kinding or typing assumption *)
    DT_order of order
  | DT_kind of base_kind * kid
  | DT_typ of typschm * id
@@ -512,9 +511,8 @@ type
    DEC_aux of 'a dec_spec_aux * 'a annot
 
 
-type 
-'a val_spec = 
-   VS_aux of 'a val_spec_aux * 'a annot
+type
+'a val_spec = VS_aux of val_spec_aux * 'a annot
 
 
 type 
@@ -523,8 +521,8 @@ type
 
 
 type 
-'a default_spec = 
-   DT_aux of 'a default_spec_aux * Parse_ast.l
+default_spec = 
+   DT_aux of default_spec_aux * Parse_ast.l
 
 
 type 
@@ -540,7 +538,7 @@ and 'a def =  (* top-level definition *)
  | DEF_spec of 'a val_spec (* top-level type constraint *)
  | DEF_fixity of prec * int * id (* fixity declaration *)
  | DEF_overload of id * (id) list (* operator overload specification *)
- | DEF_default of 'a default_spec (* default kind and type assumptions *)
+ | DEF_default of default_spec (* default kind and type assumptions *)
  | DEF_scattered of 'a scattered_def (* scattered function and type definition *)
  | DEF_reg_dec of 'a dec_spec (* register declaration *)
  | DEF_comm of 'a dec_comm (* generated comments *)

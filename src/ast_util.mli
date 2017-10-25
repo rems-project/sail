@@ -194,6 +194,10 @@ module IdSet : sig
   include Set.S with type elt = id
 end
 
+module BESet : sig
+  include Set.S with type elt = base_effect
+end
+
 module KidSet : sig
   include Set.S with type elt = kid
 end
@@ -225,6 +229,8 @@ val vector_typ_args_of : typ -> nexp * nexp * order * typ
 val is_order_inc : order -> bool
 
 val has_effect : effect -> base_effect_aux -> bool
+
+val effect_set : effect -> BESet.t
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t

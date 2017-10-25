@@ -389,8 +389,8 @@ and string_of_typ_aux = function
   | Typ_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_typ_arg args ^ ">"
   | Typ_fn (typ_arg, typ_ret, eff) ->
      string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-  | Typ_exist (kids, nc, typ) -> 
-     "exist " ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ 
+  | Typ_exist (kids, nc, typ) ->
+     "exist " ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ
 and string_of_typ_arg = function
   | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
 and string_of_typ_arg_aux = function
@@ -576,6 +576,7 @@ module Id = struct
     | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
 end
 
+module BESet = Set.Make(BE)
 module Bindings = Map.Make(Id)
 module IdSet = Set.Make(Id)
 module KBindings = Map.Make(Kid)
@@ -721,7 +722,10 @@ let has_effect (Effect_aux (eff,_)) searched_for = match eff with
     List.exists (fun (BE_aux (be,_)) -> be = searched_for) effs
   | Effect_var _ ->
     raise (Reporting_basic.err_unreachable Parse_ast.Unknown
-      "has_effect called on effect variable")
+             "has_effect called on effect variable")
+
+let effect_set (Effect_aux (eff,_)) = match eff with
+  | Effect_set effs -> BESet.of_list effs
 
 let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with

@@ -5,20 +5,33 @@ type 'a return = { return : 'b . 'a -> 'b }
 let trace_depth = ref 0
 let random = ref false
 
-let with_return (type t) (f : _ -> t) =
+let sail_call (type t) (f : _ -> t) =
   let module M =
     struct exception Return of t end
   in
-  let return = { return = (fun x -> decr trace_depth; raise (M.Return x)); } in
+  let return = { return = (fun x -> raise (M.Return x)) } in
   try
-    let result = f return in
-    decr trace_depth;
-    result
+    f return
   with M.Return x -> x
 
 let trace str =
   if !trace_depth < 0 then trace_depth := 0 else ();
   prerr_endline (String.make (!trace_depth * 2) ' ' ^ str)
+
+let trace_write name str =
+  trace ("Write: " ^ name ^ " " ^ str)
+
+let sail_trace_call (type t) (name : string) (in_string : string) (string_of_out : t -> string) (f : _ -> t) =
+  let module M =
+    struct exception Return of t end
+  in
+  let return = { return = (fun x -> raise (M.Return x)) } in
+  trace ("Call: " ^ name ^ " " ^ in_string);
+  incr trace_depth;
+  let result = try f return with M.Return x -> x in
+  decr trace_depth;
+  trace ("Return: " ^ string_of_out result);
+  result
 
 let trace_call str =
   trace str; incr trace_depth
@@ -321,7 +334,7 @@ let ram : int RAM.t = RAM.create 256
 let write_ram' (addr_size, data_size, hex_ram, addr, data) =
   let data = List.map (fun byte -> int_of_big_int (uint byte)) (break 8 data) in
   let rec write_byte i byte =
-    prerr_endline (Printf.sprintf "W: %s -> 0x%02X" (string_of_big_int (add_big_int addr (big_int_of_int i))) byte);
+    trace (Printf.sprintf "Store: %s 0x%02X" (string_of_big_int (add_big_int addr (big_int_of_int i))) byte);
     RAM.add ram (add_big_int addr (big_int_of_int i)) byte
   in
   List.iteri write_byte (List.rev data)
@@ -341,7 +354,7 @@ let read_ram (addr_size, data_size, hex_ram, addr) =
       begin
         let loc = sub_big_int (add_big_int addr i) unit_big_int in
         let byte = try RAM.find ram loc with Not_found -> 0 in
-        prerr_endline (Printf.sprintf "R: %s <- 0x%02X" (string_of_big_int loc) byte);
+        trace (Printf.sprintf "Load: %s 0x%02X" (string_of_big_int loc) byte);
         byte_of_int byte @ read_byte (sub_big_int i unit_big_int)
       end
   in
@@ -395,3 +408,13 @@ let sqrt_real x = Num.num_of_string (string_of_float (sqrt (Num.float_of_num x))
 
 let print_int (str, x) =
   prerr_endline (str ^ string_of_big_int x)
+
+let string_of_znat n = string_of_big_int n
+let string_of_zint n = string_of_big_int n
+let string_of_zunit () = "()"
+let string_of_zbits xs = string_of_bits xs
+let string_of_zbool = function
+  | true -> "true"
+  | false -> "false"
+let string_of_zreal r = Num.string_of_num r
+let string_of_zstring str = "\"" ^ String.escaped str ^ "\""

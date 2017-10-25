@@ -1039,6 +1039,10 @@ val_spec_def:
     { mk_vs (VS_val_spec ($6, $2, Some $4, false)) $startpos $endpos }
   | Val Cast id Eq String Colon typschm
     { mk_vs (VS_val_spec ($7, $3, Some $5, true)) $startpos $endpos }
+  | Val String Colon typschm
+    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some $2, false)) $startpos $endpos }
+  | Val Cast String Colon typschm
+    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), Some $3, true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

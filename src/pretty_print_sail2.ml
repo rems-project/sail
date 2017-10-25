@@ -90,8 +90,11 @@ let rec doc_typ (Typ_aux (typ_aux, _)) =
      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
   | Typ_exist (kids, nc, typ) ->
      braces (separate_map space doc_kid kids ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
-  | Typ_fn (typ1, typ2, eff) ->
+  | Typ_fn (typ1, typ2, Effect_aux (Effect_set [], _)) ->
      separate space [doc_typ typ1; string "->"; doc_typ typ2]
+  | Typ_fn (typ1, typ2, Effect_aux (Effect_set effs, _)) ->
+     let ocaml_eff = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs)) in
+     separate space [doc_typ typ1; string "->"; doc_typ typ2; string "effect"; ocaml_eff]
 and doc_typ_arg (Typ_arg_aux (ta_aux, _)) =
   match ta_aux with
   | Typ_arg_typ typ -> doc_typ typ
