@@ -49,8 +49,8 @@ all: sail lib doc
 
 full: sail lib power doc test
 
-ast.ml: ast.ott
-	ott -sort false -generate_aux_rules true -o ast.ml -picky_multiple_parses true ast.ott
+ast.ml: ../language/l2.ott
+	ott -sort false -generate_aux_rules true -o ast.ml -picky_multiple_parses true ../language/l2.ott
 
 sail: ast.ml
 	ocamlbuild sail.native
