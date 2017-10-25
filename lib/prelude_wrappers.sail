@@ -78,5 +78,5 @@ function forall Num 'n, Num 'l. (vector<'n,'l,inc,bit>) cast_0_vec_inc i = to_ve
 function forall Num 'n, Num 'l. (vector<'n,'l,inc,bit>) cast_1_vec_inc i = to_vec_inc (sizeof 'n, sizeof 'l, i)
 function forall Num 'n, Num 'l. (vector<'n,'l,inc,bit>) cast_01_vec_inc i = to_vec_inc (sizeof 'n, sizeof 'l, i)
 
-val extern forall Num 'n, Num 'm, 'n >= 'm - 1, 'm >= 1. ([:'n:], [:'m:], bit) -> vector<'n,'m,dec,bit> effect pure cast_bit_vec' = "cast_bit_vec"
+val extern forall Num 'n, Num 'm, 'n >= 'm - 1, 'm >= 1. ([:'n:], [:'m:], bit) -> vector<'n,'m,dec,bit> effect pure cast_bit_vec' = "cast_bit_vec_basic"
 function forall Num 'n, Num 'm, 'n >= 'm - 1, 'm >= 1. (vector<'n,'m,dec,bit>) cast_bit_vec b = cast_bit_vec' (sizeof 'n, sizeof 'm, b)
