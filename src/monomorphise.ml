@@ -163,14 +163,14 @@ let rec cross' = function
   | [] -> [[]]
   | (h::t) ->
      let t' = cross' t in
-     List.concat (List.map (fun x -> List.map (List.cons x) t') h)
+     List.concat (List.map (fun x -> List.map (fun l ->  x::l) t') h)
 
 let rec cross'' = function
   | [] -> [[]]
-  | (k,None)::t -> List.map (List.cons (k,None)) (cross'' t)
+  | (k,None)::t -> List.map (fun l -> (k,None)::l) (cross'' t)
   | (k,Some h)::t ->
      let t' = cross'' t in
-     List.concat (List.map (fun x -> List.map (List.cons (k,Some x)) t') h)
+     List.concat (List.map (fun x -> List.map (fun l -> (k,Some x)::l) t') h)
 
 let kidset_bigunion = function
   | [] -> KidSet.empty
