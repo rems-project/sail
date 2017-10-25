@@ -49,15 +49,18 @@ all: sail lib doc
 
 full: sail lib power doc test
 
-sail:
+ast.ml: ast.ott
+	ott -sort false -generate_aux_rules true -o ast.ml -picky_multiple_parses true ast.ott
+
+sail: ast.ml
 	ocamlbuild sail.native
 
 sail.native: sail
 
-sail.byte: 
+sail.byte:
 	ocamlbuild -cflag -g sail.byte
 
-interpreter: 
+interpreter:
 	ocamlbuild lem_interp/extract.cmxa
 	ocamlbuild lem_interp/extract.cma
 
@@ -238,6 +241,7 @@ clean:
 	-rm -rf tex-doc
 	-rm -rf lem lib
 	-rm -rf sail.docdir
+	-rm -f ast.ml
 
 doc:
 	ocamlbuild sail.docdir/index.html
