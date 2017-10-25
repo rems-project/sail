@@ -1071,6 +1071,8 @@ def :: 'DEF_' ::=
     {{ com register declaration }}
   | dec_comm                                            :: I :: comm
     {{ com generated comments }}
+  | fundef1 .. fundefn                                  :: I :: internal_mutrec
+    {{ com internal representation of mutually recursive functions }}
 
 defs :: '' ::=
   {{ com definition sequence }}
@@ -1176,5 +1178,3 @@ terminals :: '' ::=
 %     {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}       
 %   | ||] :: :: list_end       
 %     {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}       
-
-

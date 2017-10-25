@@ -1523,81 +1523,90 @@ let get_id = function
 
 module StringSet = Set.Make(String)
 
-let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
+let doc_fundef_rhs_lem sequential mwords (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
+  match funcls with
+  | [] -> failwith "FD_function with empty function list"
+  | [FCL_aux(FCL_Funcl(id,pat,exp),_)] ->
+    (prefix 2 1)
+      ((separate space)
+         [doc_id_lem id;
+          (doc_pat_lem sequential mwords true pat);
+          equals])
+      (doc_fun_body_lem sequential mwords exp)
+  | _ ->
+    let clauses =
+      (separate_map (break 1))
+        (fun fcl -> separate space [pipe;doc_funcl_lem sequential mwords fcl]) funcls in
+    (prefix 2 1)
+      ((separate space) [doc_id_lem (id_of_fundef fd);equals;string "function"])
+      (clauses ^/^ string "end")
+
+let doc_mutrec_lem sequential mwords = function
+  | [] -> failwith "DEF_internal_mutrec with empty function list"
+  | fundefs ->
+    string "let rec " ^^
+    separate_map (hardline ^^ string "and ")
+      (doc_fundef_rhs_lem sequential mwords) fundefs
+
+let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | [FCL_aux (FCL_Funcl(id,pat,exp),_)]
-    when not (Env.is_extern id (env_of exp)) ->
-     (prefix 2 1)
-       ((separate space)
-          [(string "let") ^^ (doc_rec_lem r) ^^ (doc_id_lem id);
-           (doc_pat_lem sequential mwords true pat);
-           equals])
-       (doc_fun_body_lem sequential mwords exp)
+  | FCL_aux (FCL_Funcl(id,_,exp),_) :: _
+    when string_of_id id = "execute" || string_of_id id = "initial_analysis" ->
+    let (_,auxiliary_functions,clauses) =
+      List.fold_left
+        (fun (already_used_fnames,auxiliary_functions,clauses) funcl ->
+          match funcl with
+          | FCL_aux (FCL_Funcl (Id_aux (Id _,l),pat,exp),annot) ->
+             let ctor, l, argspat, pannot = (match pat with
+               | P_aux (P_app (Id_aux (Id ctor,l),argspat),pannot) ->
+                 (ctor, l, argspat, pannot)
+               | P_aux (P_id (Id_aux (Id ctor,l)), pannot) ->
+                 (ctor, l, [], pannot)
+               | _ ->
+                 raise (Reporting_basic.err_unreachable l
+                   "unsupported parameter pattern in function clause")) in
+             let rec pick_name_not_clashing_with already_used candidate =
+               if StringSet.mem candidate already_used then
+                 pick_name_not_clashing_with already_used (candidate ^ "'")
+               else candidate in
+             let aux_fname = pick_name_not_clashing_with already_used_fnames (string_of_id id ^ "_" ^ ctor) in
+             let already_used_fnames = StringSet.add aux_fname already_used_fnames in
+             let fcl = FCL_aux (FCL_Funcl (Id_aux (Id aux_fname,l),
+                                           P_aux (P_tup argspat,pannot),exp),annot) in
+             let auxiliary_functions =
+                auxiliary_functions ^^ hardline ^^ hardline ^^
+                  doc_fundef_lem sequential mwords (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
+             (* Bind complex patterns to names so that we can pass them to the
+                auxiliary function *)
+             let name_pat idx (P_aux (p,a)) = match p with
+               | P_as (pat,_) -> P_aux (p,a) (* already named *)
+               | P_lit _ -> P_aux (p,a) (* no need to name a literal *)
+               | P_id _ -> P_aux (p,a) (* no need to name an identifier *)
+               | _ -> P_aux (P_as (P_aux (p,a), Id_aux (Id ("arg" ^ string_of_int idx),l)),a) in
+             let named_argspat = List.mapi name_pat argspat in
+             let named_pat = P_aux (P_app (Id_aux (Id ctor,l),named_argspat),pannot) in
+             let doc_arg idx (P_aux (p,(l,a))) = match p with
+               | P_as (pat,id) -> doc_id_lem id
+               | P_lit lit -> doc_lit_lem sequential mwords false lit a
+               | P_id id -> doc_id_lem id
+               | _ -> string ("arg" ^ string_of_int idx) in
+             let clauses =
+               clauses ^^ (break 1) ^^
+                 (separate space
+                    [pipe;doc_pat_lem sequential mwords false named_pat;arrow;
+                     string aux_fname;
+                     parens (separate comma (List.mapi doc_arg named_argspat))]) in
+             (already_used_fnames,auxiliary_functions,clauses)
+        ) (StringSet.empty,empty,empty) fcls in
+
+    auxiliary_functions ^^ hardline ^^ hardline ^^
+    (prefix 2 1)
+      ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
+      (clauses ^/^ string "end")
   | FCL_aux (FCL_Funcl(id,_,exp),_) :: _
     when not (Env.is_extern id (env_of exp)) ->
-    (*    let sep = hardline ^^ pipe ^^ space in *)
-    (match id with
-    | Id_aux (Id fname,idl)
-      when fname = "execute" || fname = "initial_analysis" ->
-      let (_,auxiliary_functions,clauses) = 
-        List.fold_left 
-          (fun (already_used_fnames,auxiliary_functions,clauses) funcl ->
-            match funcl with
-            | FCL_aux (FCL_Funcl (Id_aux (Id _,l),pat,exp),annot) ->
-               let ctor, l, argspat, pannot = (match pat with
-                 | P_aux (P_app (Id_aux (Id ctor,l),argspat),pannot) ->
-                   (ctor, l, argspat, pannot)
-                 | P_aux (P_id (Id_aux (Id ctor,l)), pannot) ->
-                   (ctor, l, [], pannot)
-                 | _ ->
-                   raise (Reporting_basic.err_unreachable l
-                     "unsupported parameter pattern in function clause")) in
-               let rec pick_name_not_clashing_with already_used candidate =
-                 if StringSet.mem candidate already_used then
-                   pick_name_not_clashing_with already_used (candidate ^ "'")
-                 else candidate in
-               let aux_fname = pick_name_not_clashing_with already_used_fnames (fname ^ "_" ^ ctor) in
-               let already_used_fnames = StringSet.add aux_fname already_used_fnames in
-               let fcl = FCL_aux (FCL_Funcl (Id_aux (Id aux_fname,l),
-                                             P_aux (P_tup argspat,pannot),exp),annot) in
-               let auxiliary_functions = 
-                  auxiliary_functions ^^ hardline ^^ hardline ^^
-                    doc_fundef_lem sequential mwords (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
-               (* Bind complex patterns to names so that we can pass them to the
-                  auxiliary function *)
-               let name_pat idx (P_aux (p,a)) = match p with
-                 | P_as (pat,_) -> P_aux (p,a) (* already named *)
-                 | P_lit _ -> P_aux (p,a) (* no need to name a literal *)
-                 | P_id _ -> P_aux (p,a) (* no need to name an identifier *)
-                 | _ -> P_aux (P_as (P_aux (p,a), Id_aux (Id ("arg" ^ string_of_int idx),l)),a) in
-               let named_argspat = List.mapi name_pat argspat in
-               let named_pat = P_aux (P_app (Id_aux (Id ctor,l),named_argspat),pannot) in
-               let doc_arg idx (P_aux (p,(l,a))) = match p with
-                 | P_as (pat,id) -> doc_id_lem id
-                 | P_lit lit -> doc_lit_lem sequential mwords false lit a
-                 | P_id id -> doc_id_lem id
-                 | _ -> string ("arg" ^ string_of_int idx) in
-               let clauses =
-                 clauses ^^ (break 1) ^^
-                   (separate space
-                      [pipe;doc_pat_lem sequential mwords false named_pat;arrow;
-                       string aux_fname;
-                       parens (separate comma (List.mapi doc_arg named_argspat))]) in
-               (already_used_fnames,auxiliary_functions,clauses)
-          ) (StringSet.empty,empty,empty) fcls in
-
-      auxiliary_functions ^^ hardline ^^ hardline ^^
-      (prefix 2 1)
-        ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
-        (clauses ^/^ string "end")
-    | _ ->
-      let clauses =
-        (separate_map (break 1))
-          (fun fcl -> separate space [pipe;doc_funcl_lem sequential mwords fcl]) fcls in
-      (prefix 2 1)
-        ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
-        (clauses ^/^ string "end"))
+    string "let" ^^ (doc_rec_lem r) ^^ (doc_fundef_rhs_lem sequential mwords fd)
   | _ -> empty
 
 
@@ -1651,6 +1660,8 @@ let rec doc_def_lem sequential mwords def =
 
   | DEF_default df -> (empty,empty)
   | DEF_fundef f_def -> (empty,group (doc_fundef_lem sequential mwords f_def) ^/^ hardline)
+  | DEF_internal_mutrec fundefs ->
+     (empty, doc_mutrec_lem sequential mwords fundefs ^/^ hardline)
   | DEF_val lbind -> (empty,group (doc_let_lem sequential mwords false lbind) ^/^ hardline)
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 

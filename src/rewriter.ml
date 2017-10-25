@@ -579,6 +579,7 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
 let rewrite_def rewriters d = match d with
   | DEF_type _ | DEF_kind _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_comm _ | DEF_overload _ | DEF_fixity _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
+  | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "DEF_scattered survived to rewritter")
 
@@ -2432,20 +2433,51 @@ let rewrite_fix_fun_effs (Defs defs) =
     (Bindings.add id fun_eff fun_effs,
      funcls @ [FCL_aux (FCL_Funcl (id, pat, exp), (l, annot))]) in
 
-  let rewrite_def (fun_effs, defs) = function
-  | DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) ->
+  let rewrite_fundef (fun_effs, FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) =
     let (fun_effs, funcls) = List.fold_left rewrite_funcl (fun_effs, []) funcls in
+    let is_funcl_rec (FCL_aux (FCL_Funcl (id, _, exp), _)) =
+      fst (fold_exp
+        { (compute_exp_alg false (||) ) with
+          e_app = (fun (f, es) ->
+            let (rs, es) = List.split es in
+            (List.fold_left (||) (string_of_id f = string_of_id id) rs,
+             E_app (f, es)));
+          e_app_infix = (fun ((r1,e1), f, (r2,e2)) ->
+            (r1 || r2 || (string_of_id f = string_of_id id),
+             E_app_infix (e1, f, e2))) } exp) in
+    let is_rec = List.exists is_funcl_rec funcls in
     (* Repeat once for recursive functions:
        propagates union of effects to all clauses *)
-    let (fun_effs, funcls) = List.fold_left rewrite_funcl (fun_effs, []) funcls in
-    (fun_effs, defs @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a))])
+    let recopt, (fun_effs, funcls) =
+      if is_rec then
+        Rec_aux (Rec_rec, Parse_ast.Unknown),
+        List.fold_left rewrite_funcl (fun_effs, []) funcls
+      else recopt, (fun_effs, funcls) in
+    (fun_effs, FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) in
+
+  let rec rewrite_fundefs (fun_effs, fundefs) =
+    match fundefs with
+    | fundef :: fundefs ->
+      let (fun_effs, fundef) = rewrite_fundef (fun_effs, fundef) in
+      let (fun_effs, fundefs) = rewrite_fundefs (fun_effs, fundefs) in
+      (fun_effs, fundef :: fundefs)
+    | [] -> (fun_effs, []) in
+
+  let rewrite_def (fun_effs, defs) = function
+  | DEF_fundef fundef ->
+    let (fun_effs, fundef) = rewrite_fundef (fun_effs, fundef) in
+    (fun_effs, defs @ [DEF_fundef fundef])
+  | DEF_internal_mutrec fundefs ->
+    let (fun_effs, fundefs) = rewrite_fundefs (fun_effs, fundefs) in
+    (fun_effs, defs @ [DEF_internal_mutrec fundefs])
   | DEF_val (LB_aux (LB_val (pat, exp), a)) ->
     (fun_effs, defs @ [DEF_val (LB_aux (LB_val (pat, rewrite_exp fun_effs exp), a))])
   | def -> (fun_effs, defs @ [def]) in
 
-  if !Type_check.opt_no_effects
-  then Defs (snd (List.fold_left rewrite_def (Bindings.empty, []) defs))
-  else Defs defs
+  (* if !Type_check.opt_no_effects
+  then *)
+  Defs (snd (List.fold_left rewrite_def (Bindings.empty, []) defs))
+  (* else Defs defs *)
 
 (* Turn constraints into numeric expressions with sizeof *)
 let rewrite_constraint =
@@ -3018,6 +3050,8 @@ let rewrite_defs_letbind_effects  =
           rewrap (LB_val (pat, n_exp_term (effectful exp) exp))
       end
     | DEF_fundef fdef -> DEF_fundef (rewrite_fun rewriters fdef)
+    | DEF_internal_mutrec fdefs ->
+      DEF_internal_mutrec (List.map (rewrite_fun rewriters) fdefs)
     | d -> d in
   rewrite_defs_base
     {rewrite_exp = rewrite_exp

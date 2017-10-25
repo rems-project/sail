@@ -306,6 +306,22 @@ let id_loc = function
 let kid_loc = function
   | Kid_aux (_, l) -> l
 
+let def_loc = function
+  | DEF_kind (KD_aux (_, (l, _)))
+  | DEF_type (TD_aux (_, (l, _)))
+  | DEF_fundef (FD_aux (_, (l, _)))
+  | DEF_val (LB_aux (_, (l, _)))
+  | DEF_spec (VS_aux (_, (l, _)))
+  | DEF_default (DT_aux (_, l))
+  | DEF_scattered (SD_aux (_, (l, _)))
+  | DEF_reg_dec (DEC_aux (_, (l, _))) ->
+    l
+  | DEF_internal_mutrec _
+  | DEF_comm _
+  | DEF_overload _
+  | DEF_fixity _ ->
+    Parse_ast.Unknown
+
 let string_of_id = function
   | Id_aux (Id v, _) -> v
   | Id_aux (DeIid v, _) -> "(deinfix " ^ v ^ ")"

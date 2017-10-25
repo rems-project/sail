@@ -315,6 +315,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_for(id,from,to_,by,_,body) ->
     let _,used,set = list_fv bound used set [from;to_;by] in
     fv_of_exp consider_var (Nameset.add (string_of_id id) bound) used set body
+  | E_loop(_, cond, body) -> list_fv bound used set [cond; body]
   | E_vector_access(v,i) -> list_fv bound used set [v;i]
   | E_vector_subrange(v,i1,i2) -> list_fv bound used set [v;i1;i2]
   | E_vector_update(v,i,e) -> list_fv bound used set [v;i;e]
@@ -457,6 +458,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
       let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
       exp_ns) funcls mt in
+  (* let _ = Printf.eprintf "Function %s uses %s\n" fun_name (set_to_string (Nameset.union ns ns_r)) in *)
   init_env fun_name,Nameset.union ns ns_r
 
 let fv_of_vspec consider_var (VS_aux(vspec,_)) = match vspec with
@@ -575,6 +577,20 @@ let rec print_dependencies orig_queue work_queue names =
            print_dependencies orig_queue orig_queue uses));
     print_dependencies orig_queue wq names
 
+let merge_mutrecs defs =
+  let merge_aux ((binds', uses'), def) ((binds, uses), fundefs) =
+    let fundefs = match def with
+      | DEF_fundef fundef -> fundef :: fundefs
+      | DEF_internal_mutrec fundefs' -> fundefs' @ fundefs
+      | _ ->
+        (* let _ = Pretty_print_sail2.pp_defs stderr (Defs [def]) in *)
+        raise (Reporting_basic.err_unreachable (def_loc def)
+          "Trying to merge non-function definition with mutually recursive functions") in
+    (* let _ = Printf.eprintf " - Merging %s (using %s)\n" (set_to_string binds') (set_to_string uses') in *)
+    ((Nameset.union binds' binds, Nameset.union uses' uses), fundefs) in
+  let ((binds, uses), fundefs) = List.fold_right merge_aux defs ((mt, mt), []) in
+  ((binds, uses), DEF_internal_mutrec fundefs)
+
 let rec topological_sort work_queue defs =
   match work_queue with
   | [] -> List.rev defs
@@ -588,11 +604,15 @@ let rec topological_sort work_queue defs =
     else
       match List.stable_sort compare_dbts work_queue with (*We wait to sort until there are no 0 dependency nodes on top*)
       | [] -> failwith "sort shrunk the list???"
-      | (((n,uses),_)::_) as wq ->
+      | (((n,uses),def)::rest) as wq ->
         if (Nameset.cardinal uses = 0)
         then topological_sort wq defs
-        else let _ = Printf.eprintf "Uses on failure are %s, binds are %s\n" (set_to_string uses) (set_to_string n)
-          in let _ = print_dependencies wq wq uses in failwith "A dependency was unmet"
+        else
+          let _ = Printf.eprintf "Merging (potentially) mutually recursive definitions %s and %s\n" (set_to_string n) (set_to_string uses) in
+          let is_used ((binds', uses'), def') = not(Nameset.is_empty(Nameset.inter binds' uses)) in
+          let (used, rest) = List.partition is_used rest in
+          let wq = merge_mutrecs (((n,uses),def)::used) :: rest in
+          topological_sort wq defs
 
 let rec add_to_partial_order ((binds,uses),def) = function
   | [] ->

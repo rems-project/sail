@@ -140,6 +140,8 @@ val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
 val id_loc : id -> Parse_ast.l
 val kid_loc : kid -> Parse_ast.l
 
+val def_loc : 'a def -> Parse_ast.l
+
 (* For debugging and error messages only: Not guaranteed to produce
    parseable SAIL, or even print all language constructs! *)
 (* TODO: replace with existing pretty-printer *)
