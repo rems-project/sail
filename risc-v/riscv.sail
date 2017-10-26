@@ -365,14 +365,14 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   (bit[64]) addr := rGPR(rs1);
 
   switch (width) {
-    case WORD   -> mem_write_ea(addr, 4, aq, rl, true)
-    case DOUBLE -> mem_write_ea(addr, 8, aq, rl, true)
+    case WORD   -> mem_write_ea(addr, 4, aq & rl, rl, true)
+    case DOUBLE -> mem_write_ea(addr, 8, aq & rl, rl, true)
   };
 
   (bit[64]) loaded :=
     switch (width) {
-      case WORD   -> EXTS(mem_read(addr, 4, aq, rl, true))
-      case DOUBLE -> mem_read(addr, 8, aq, rl, true)
+      case WORD   -> EXTS(mem_read(addr, 4, aq, aq & rl, true))
+      case DOUBLE -> mem_read(addr, 8, aq, aq & rl, true)
     };
   wGPR(rd, loaded);
 
@@ -392,8 +392,8 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
     };
 
   switch (width) {
-    case WORD   -> mem_write_value(addr, 4, result[31..0], aq, rl, true)
-    case DOUBLE -> mem_write_value(addr, 8, result,        aq, rl, true)
+    case WORD   -> mem_write_value(addr, 4, result[31..0], aq & rl, rl, true)
+    case DOUBLE -> mem_write_value(addr, 8, result,        aq & rl, rl, true)
   };
 }
 
