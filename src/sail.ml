@@ -56,39 +56,35 @@ let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_mono_split = ref ([]:((string * int) * string) list)
+
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
+  ( "-ocaml",
+    Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
+    " output an OCaml translated version of the input");
+  ( "-ocaml_trace",
+    Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
+    " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
+  ( "-ocaml_lib",
+    Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
+    "<filename> provide additional library to open in OCaml output");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
     " output a Lem AST representation of the input");
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
-  ( "-ocaml",
-    Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
-    " output an OCaml translated version of the input");
   ( "-lem_lib",
     Arg.String (fun l -> opt_libs_lem := l::!opt_libs_lem),
     "<filename> provide additional library to open in Lem output");
-  ( "-ocaml_lib",
-    Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
-    "<filename> provide additional library to open in OCaml output");
   ( "-lem_sequential",
     Arg.Set Process_file.opt_lem_sequential,
     " use sequential state monad for Lem output");
   ( "-lem_mwords",
     Arg.Set Process_file.opt_lem_mwords,
     " use native machine word library for Lem output");
-(*
-  ( "-i",
-    Arg.String (fun l -> lib := l::!lib),
-    "<library_filename> treat this file as input only and generate no output for it");
-*)
-  ( "-verbose",
-    Arg.Set opt_print_verbose,
-    " (debug) pretty-print the input to standard output");
   ( "-mono-split",
     Arg.String (fun s ->
       let l = Util.split_on_char ':' s in
@@ -96,39 +92,42 @@ let options = Arg.align ([
       | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
       | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
       "<filename>:<line>:<variable> to case split for monomorphisation");
-  ( "-ddump_raw_mono_ast",
-    Arg.Set opt_ddump_raw_mono_ast,
-    " (debug) dump the monomorphised ast before type-checking");
+  ( "-memo_z3",
+    Arg.Set opt_memo_z3,
+    " memoize calls to z3, improving performance when typechecking repeatedly");
+  ( "-undefined_gen",
+    Arg.Set Initial_check.opt_undefined_gen,
+    " generate undefined_type functions for types in the specification");
+  ( "-no_effects",
+    Arg.Set Type_check.opt_no_effects,
+    " (experimental) turn off effect checking");
   ( "-new_parser",
     Arg.Set Process_file.opt_new_parser,
     " (experimental) use new parser");
+  ( "-convert",
+    Arg.Set opt_convert,
+    " (experimental) convert sail to new syntax for use with -new_parser");
   ( "-just_check",
     Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking");
-  ( "-convert",
-    Arg.Set opt_convert,
-    " Convert sail to new syntax");
-  ( "-memo_z3",
-    Arg.Set opt_memo_z3,
-    " Memoize calls to z3");
+  ( "-ddump_raw_mono_ast",
+    Arg.Set opt_ddump_raw_mono_ast,
+    " (debug) dump the monomorphised ast before type-checking");
+  ( "-verbose",
+    Arg.Set opt_print_verbose,
+    " (debug) pretty-print the input to standard output");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
   ( "-ddump_rewrite_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
-    " <prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
+    "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
-    " (debug) verbose typechecker output: 0 is silent");
+    "<verbosity> (debug) verbose typechecker output: 0 is silent");
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");
-  ( "-no_effects",
-    Arg.Set Type_check.opt_no_effects,
-    " turn off effect checking");
-  ( "-undefined_gen",
-    Arg.Set Initial_check.opt_undefined_gen,
-    " generate undefined_type functions for types in the specification");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

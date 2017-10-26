@@ -2,6 +2,8 @@ open Big_int
 
 type 'a return = { return : 'b . 'a -> 'b }
 
+let opt_trace = ref false
+
 let trace_depth = ref 0
 let random = ref false
 
@@ -15,8 +17,13 @@ let sail_call (type t) (f : _ -> t) =
   with M.Return x -> x
 
 let trace str =
-  if !trace_depth < 0 then trace_depth := 0 else ();
-  prerr_endline (String.make (!trace_depth * 2) ' ' ^ str)
+  if !opt_trace
+  then
+    begin
+      if !trace_depth < 0 then trace_depth := 0 else ();
+      prerr_endline (String.make (!trace_depth * 2) ' ' ^ str)
+    end
+  else ()
 
 let trace_write name str =
   trace ("Write: " ^ name ^ " " ^ str)
