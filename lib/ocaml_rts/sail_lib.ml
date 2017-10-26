@@ -380,7 +380,9 @@ let eq_string (str1, str2) = String.compare str1 str2 == 0
 let lt_int (x, y) = lt_big_int x y
 
 let set_slice (out_len, slice_len, out, n, slice) =
-  update_subrange(out, n, sub_big_int n (big_int_of_int (List.length slice - 1)), slice)
+  let out = update_subrange(out, add_big_int n (big_int_of_int (List.length slice - 1)), n, slice) in
+  assert (List.length out = int_of_big_int out_len);
+  out
 
 let set_slice_int (_, _, _, _) = assert false
 
