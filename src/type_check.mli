@@ -217,6 +217,7 @@ val pat_env_of : tannot pat -> Env.t
 
 val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect
+val add_effect_annot : tannot -> effect -> tannot
 
 val destruct_atom_nexp : Env.t -> typ -> nexp option
 

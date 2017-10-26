@@ -152,47 +152,80 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
 
 let doc_nexp_lem (Nexp_aux (nexp, l) as full_nexp) = match nexp with
   | Nexp_constant i -> string ("ty" ^ string_of_int i)
-  | Nexp_var v -> string (string_of_kid v)
-  | _ -> raise (Reporting_basic.err_unreachable l
-    ("cannot pretty-print non-atomic nexp \"" ^ string_of_nexp full_nexp ^ "\""))
+  | Nexp_var v -> string (string_of_kid (orig_kid v))
+  | _ ->
+     let rec mangle_nexp (Nexp_aux (nexp, _)) = begin
+       match nexp with
+       | Nexp_id id -> string_of_id id
+       | Nexp_var kid -> string_of_id (id_of_kid (orig_kid kid))
+       | Nexp_constant i -> Pretty_print_lem_ast.lemnum string_of_int i
+       | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
+       | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
+       | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
+       | Nexp_exp n -> "exp_" ^ mangle_nexp n
+       | Nexp_neg n -> "neg_" ^ mangle_nexp n
+     end in
+     string ("'" ^ mangle_nexp full_nexp)
+     (* raise (Reporting_basic.err_unreachable l
+       ("cannot pretty-print non-atomic nexp \"" ^ string_of_nexp full_nexp ^ "\"")) *)
+
+(* Rewrite mangled names of type variables to the original names *)
+let rec orig_nexp (Nexp_aux (nexp, l)) =
+  let rewrap nexp = Nexp_aux (nexp, l) in
+  match nexp with
+  | Nexp_var kid -> rewrap (Nexp_var (orig_kid kid))
+  | Nexp_times (n1, n2) -> rewrap (Nexp_times (orig_nexp n1, orig_nexp n2))
+  | Nexp_sum (n1, n2) -> rewrap (Nexp_sum (orig_nexp n1, orig_nexp n2))
+  | Nexp_minus (n1, n2) -> rewrap (Nexp_minus (orig_nexp n1, orig_nexp n2))
+  | Nexp_exp n -> rewrap (Nexp_exp (orig_nexp n))
+  | Nexp_neg n -> rewrap (Nexp_neg (orig_nexp n))
+  | _ -> rewrap nexp
 
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
    updated with doc_typ_lem *)
-let rec lem_tyvars_of_typ sequential mwords (Typ_aux (t,_)) =
-  let trec = lem_tyvars_of_typ sequential mwords in
+let rec lem_nexps_of_typ sequential mwords (Typ_aux (t,_)) =
+  let trec = lem_nexps_of_typ sequential mwords in
   match t with
   | Typ_wild
-  | Typ_id _ -> KidSet.empty
-  | Typ_var kid -> KidSet.singleton kid
-  | Typ_fn (t1,t2,_) -> KidSet.union (trec t1) (trec t2)
+  | Typ_id _ -> NexpSet.empty
+  | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
+  | Typ_fn (t1,t2,_) -> NexpSet.union (trec t1) (trec t2)
   | Typ_tup ts ->
-     List.fold_left (fun s t -> KidSet.union s (trec t))
-       KidSet.empty ts
+     List.fold_left (fun s t -> NexpSet.union s (trec t))
+       NexpSet.empty ts
   | Typ_app(Id_aux (Id "vector", _), [
     Typ_arg_aux (Typ_arg_nexp n, _);
     Typ_arg_aux (Typ_arg_nexp m, _);
     Typ_arg_aux (Typ_arg_order ord, _);
     Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
-     KidSet.union
-       (if mwords then tyvars_of_nexp (simplify_nexp m) else KidSet.empty)
-       (trec elem_typ)
+     let m = simplify_nexp m in
+     if mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
+       NexpSet.singleton (orig_nexp m)
+     else trec elem_typ
+     (* NexpSet.union
+       (if mwords then tyvars_of_nexp (simplify_nexp m) else NexpSet.empty)
+       (trec elem_typ) *)
   | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
-     if sequential then trec etyp else KidSet.empty
+     if sequential then trec etyp else NexpSet.empty
   | Typ_app(Id_aux (Id "range", _),_)
   | Typ_app(Id_aux (Id "implicit", _),_)
-  | Typ_app(Id_aux (Id "atom", _), _) -> KidSet.empty
+  | Typ_app(Id_aux (Id "atom", _), _) -> NexpSet.empty
   | Typ_app (_,tas) ->
-     List.fold_left (fun s ta -> KidSet.union s (lem_tyvars_of_typ_arg sequential mwords ta))
-       KidSet.empty tas
+     List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg sequential mwords ta))
+       NexpSet.empty tas
   | Typ_exist (kids,_,t) ->
      let s = trec t in
-     List.fold_left (fun s k -> KidSet.remove k s) s kids
-and lem_tyvars_of_typ_arg sequential mwords (Typ_arg_aux (ta,_)) =
+     List.fold_left (fun s k -> NexpSet.remove k s) s (List.map nvar kids)
+and lem_nexps_of_typ_arg sequential mwords (Typ_arg_aux (ta,_)) =
   match ta with
-  | Typ_arg_nexp nexp -> tyvars_of_nexp nexp
-  | Typ_arg_typ typ -> lem_tyvars_of_typ sequential mwords typ
-  | Typ_arg_order _ -> KidSet.empty
+  | Typ_arg_nexp nexp -> NexpSet.singleton (orig_nexp (simplify_nexp nexp))
+  | Typ_arg_typ typ -> lem_nexps_of_typ sequential mwords typ
+  | Typ_arg_order _ -> NexpSet.empty
+
+let lem_tyvars_of_typ sequential mwords typ =
+  NexpSet.fold (fun nexp ks -> KidSet.union ks (tyvars_of_nexp nexp))
+    (lem_nexps_of_typ sequential mwords typ) KidSet.empty
 
 (* When making changes here, check whether they affect lem_tyvars_of_typ *)
 let doc_typ_lem, doc_atomic_typ_lem =
@@ -364,7 +397,9 @@ let doc_quant_item vars_included (QI_aux (qi, _)) = match qi with
 | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
    (match vars_included with
      None -> doc_var kid
-   | Some set when KidSet.mem kid set -> doc_var kid
+   | Some set -> (*when KidSet.mem kid set -> doc_var kid*)
+      let nexps = NexpSet.filter (fun nexp -> KidSet.mem (orig_kid kid) (nexp_frees nexp)) set in
+      separate_map space doc_nexp_lem (NexpSet.elements nexps)
    | _ -> empty)
 | _ -> empty
 
@@ -381,39 +416,38 @@ let doc_typquant_lem (TypQ_aux(tq,_)) vars_included typ = match tq with
    machine words.  Often these will be unnecessary, but this simple
    approach will do for now. *)
 
-let rec typeclass_vars (Typ_aux(t,_)) = match t with
+let rec typeclass_nexps (Typ_aux(t,_)) = match t with
 | Typ_wild
 | Typ_id _
 | Typ_var _
-  -> []
-| Typ_fn (t1,t2,_) -> typeclass_vars t1 @ typeclass_vars t2
-| Typ_tup ts -> List.concat (List.map typeclass_vars ts)
+  -> NexpSet.empty
+| Typ_fn (t1,t2,_) -> NexpSet.union (typeclass_nexps t1) (typeclass_nexps t2)
+| Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
 | Typ_app (Id_aux (Id "vector",_),
-           [_;Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var v,_)),_);
+           [_;Typ_arg_aux (Typ_arg_nexp size_nexp,_);
             _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
-   [v]
-| Typ_app _ -> []
-| Typ_exist (kids,_,t) -> [] (* todo *)
+   if is_nexp_constant (simplify_nexp size_nexp) then NexpSet.empty else
+   NexpSet.singleton (orig_nexp size_nexp)
+| Typ_app _ -> NexpSet.empty
+| Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
 
 let doc_typclasses_lem mwords t =
   if mwords then
-    let vars = typeclass_vars t in
-    let vars = List.sort_uniq Kid.compare vars in
-    match vars with
-    | [] -> (empty, KidSet.empty)
-    | _ -> (separate_map comma_sp (fun var -> string "Size " ^^ doc_var var) vars ^^ string " => ", KidSet.of_list vars)
-  else (empty, KidSet.empty)
+    let nexps = typeclass_nexps t in
+    if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
+    (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
+  else (empty, NexpSet.empty)
 
 let doc_typschm_lem sequential mwords quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   let pt = doc_typ_lem sequential mwords t in
   if quants
   then
-    let tyvars_used = lem_tyvars_of_typ sequential mwords t in
-    let ptyc, tyvars_sizes = doc_typclasses_lem mwords t in
-    let tyvars_to_include = KidSet.union tyvars_used tyvars_sizes in
-    if KidSet.is_empty tyvars_to_include
+    let nexps_used = lem_nexps_of_typ sequential mwords t in
+    let ptyc, nexps_sizes = doc_typclasses_lem mwords t in
+    let nexps_to_include = NexpSet.union nexps_used nexps_sizes in
+    if NexpSet.is_empty nexps_to_include
     then pt
-    else doc_typquant_lem tq (Some tyvars_to_include) (ptyc ^^ pt)
+    else doc_typquant_lem tq (Some nexps_to_include) (ptyc ^^ pt)
   else pt
 
 let is_ctor env id = match Env.lookup_id id env with

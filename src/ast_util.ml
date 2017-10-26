@@ -592,11 +592,36 @@ module Id = struct
     | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
 end
 
+module Nexp = struct
+  type t = nexp
+  let rec compare (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
+    let lex_ord (c1, c2) = if c1 = 0 then c2 else c1 in
+    match nexp1, nexp2 with
+    | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2
+    | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2
+    | Nexp_constant c1, Nexp_constant c2 -> Pervasives.compare c1 c2
+    | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b)
+    | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b)
+    | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) ->
+      lex_ord (compare n1a n2a, compare n1b n2b)
+    | Nexp_exp n1, Nexp_exp n2 -> compare n1 n2
+    | Nexp_neg n1, Nexp_neg n2 -> compare n1 n2
+    | Nexp_constant _, _ -> -1 | _, Nexp_constant _ -> 1
+    | Nexp_id _, _ -> -1 | _, Nexp_id _ -> 1
+    | Nexp_var _, _ -> -1 | _, Nexp_var _ -> 1
+    | Nexp_neg _, _ -> -1 | _, Nexp_neg _ -> 1
+    | Nexp_exp _, _ -> -1 | _, Nexp_exp _ -> 1
+    | Nexp_minus _, _ -> -1 | _, Nexp_minus _ -> 1
+    | Nexp_sum _, _ -> -1 | _, Nexp_sum _ -> 1
+    | Nexp_times _, _ -> -1 | _, Nexp_times _ -> 1
+end
+
 module BESet = Set.Make(BE)
 module Bindings = Map.Make(Id)
 module IdSet = Set.Make(Id)
 module KBindings = Map.Make(Kid)
 module KidSet = Set.Make(Kid)
+module NexpSet = Set.Make(Nexp)
 
 let rec nexp_frees (Nexp_aux (nexp, l)) =
   match nexp with
@@ -609,17 +634,7 @@ let rec nexp_frees (Nexp_aux (nexp, l)) =
   | Nexp_exp n -> nexp_frees n
   | Nexp_neg n -> nexp_frees n
 
-let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
-  match nexp1, nexp2 with
-  | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2 = 0
-  | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2 = 0
-  | Nexp_constant c1, Nexp_constant c2 -> c1 = c2
-  | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | Nexp_exp n1, Nexp_exp n2 -> nexp_identical n1 n2
-  | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
-  | _, _ -> false
+let rec nexp_identical nexp1 nexp2 = (Nexp.compare nexp1 nexp2 = 0)
 
 let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_id _ | Nexp_var _ -> false

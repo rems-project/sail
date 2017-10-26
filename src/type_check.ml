@@ -2858,24 +2858,22 @@ let effect_of_annot = function
 
 let effect_of (E_aux (exp, (l, annot))) = effect_of_annot annot
 
-let add_effect (E_aux (exp, (l, annot))) eff1 =
-  match annot with
-  | Some (env, typ, eff2) -> E_aux (exp, (l, Some (env, typ, union_effects eff1 eff2)))
-  | None -> assert false
+let add_effect_annot annot eff = match annot with
+  | Some (env, typ, eff') -> Some (env, typ, union_effects eff eff')
+  | None -> None
+
+let add_effect (E_aux (exp, (l, annot))) eff =
+  E_aux (exp, (l, add_effect_annot annot eff))
 
 let effect_of_lexp (LEXP_aux (exp, (l, annot))) = effect_of_annot annot
 
-let add_effect_lexp (LEXP_aux (lexp, (l, annot))) eff1 =
-  match annot with
-  | Some (env, typ, eff2) -> LEXP_aux (lexp, (l, Some (env, typ, union_effects eff1 eff2)))
-  | None -> assert false
+let add_effect_lexp (LEXP_aux (lexp, (l, annot))) eff =
+  LEXP_aux (lexp, (l, add_effect_annot annot eff))
 
 let effect_of_pat (P_aux (exp, (l, annot))) = effect_of_annot annot
 
-let add_effect_pat (P_aux (pat, (l, annot))) eff1 =
-  match annot with
-  | Some (env, typ, eff2) -> P_aux (pat, (l, Some (env, typ, union_effects eff1 eff2)))
-  | None -> assert false
+let add_effect_pat (P_aux (pat, (l, annot))) eff =
+  P_aux (pat, (l, add_effect_annot annot eff))
 
 let collect_effects xs = List.fold_left union_effects no_effect (List.map effect_of xs)
 
