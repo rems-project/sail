@@ -996,6 +996,46 @@ let compute_exp_alg bot join =
   ; pat_alg = compute_pat_alg bot join
   }
 
+let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
+| Nexp_id id -> rewrite_nexp_ids env (Env.get_num_def id env)
+| Nexp_times (nexp1, nexp2) -> Nexp_aux (Nexp_times (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
+| Nexp_sum (nexp1, nexp2) -> Nexp_aux (Nexp_sum (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
+| Nexp_minus (nexp1, nexp2) -> Nexp_aux (Nexp_minus (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
+| Nexp_exp nexp -> Nexp_aux (Nexp_exp (rewrite_nexp_ids env nexp), l)
+| Nexp_neg nexp -> Nexp_aux (Nexp_neg (rewrite_nexp_ids env nexp), l)
+| _ -> nexp_aux
+
+let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
+  let rec rewrite_typ env (Typ_aux (typ, l) as typ_aux) = match typ with
+    | Typ_fn (arg_t, ret_t, eff) ->
+       Typ_aux (Typ_fn (rewrite_typ env arg_t, rewrite_typ env ret_t, eff), l)
+    | Typ_tup ts ->
+       Typ_aux (Typ_tup (List.map (rewrite_typ env) ts), l)
+    | Typ_exist (kids, c, typ) ->
+       Typ_aux (Typ_exist (kids, c, rewrite_typ env typ), l)
+    | Typ_app (id, targs) ->
+       Typ_aux (Typ_app (id, List.map (rewrite_typ_arg env) targs), l)
+    | _ -> typ_aux
+  and rewrite_typ_arg env (Typ_arg_aux (targ, l) as targ_aux) = match targ with
+    | Typ_arg_nexp nexp ->
+       Typ_arg_aux (Typ_arg_nexp (rewrite_nexp_ids env nexp), l)
+    | Typ_arg_typ typ ->
+       Typ_arg_aux (Typ_arg_typ (rewrite_typ env typ), l)
+    | Typ_arg_order ord ->
+       Typ_arg_aux (Typ_arg_order ord, l)
+  in
+
+  let rewrite_annot = function
+    | (l, Some (env, typ, eff)) -> (l, Some (env, rewrite_typ env typ, eff))
+    | (l, None) -> (l, None)
+  in
+
+  rewrite_defs_base {
+    rewriters_base with rewrite_exp = (fun _ -> map_exp_annot rewrite_annot)
+    },
+  rewrite_typ
+
+
 (* Re-write trivial sizeof expressions - trivial meaning that the
    value of the sizeof can be directly inferred from the type
    variables in scope. *)
@@ -1023,14 +1063,6 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
     | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_range", [split_nexp nexp]))
     | _ -> mk_exp (E_sizeof nexp)
   in
-  let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
-    | Nexp_id id -> rewrite_nexp_ids env (Env.get_num_def id env)
-    | Nexp_times (nexp1, nexp2) -> Nexp_aux (Nexp_times (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
-    | Nexp_sum (nexp1, nexp2) -> Nexp_aux (Nexp_sum (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
-    | Nexp_minus (nexp1, nexp2) -> Nexp_aux (Nexp_minus (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
-    | Nexp_exp nexp -> Nexp_aux (Nexp_exp (rewrite_nexp_ids env nexp), l)
-    | Nexp_neg nexp -> Nexp_aux (Nexp_neg (rewrite_nexp_ids env nexp), l)
-    | _ -> nexp_aux in
   let rec rewrite_e_aux split_sizeof (E_aux (e_aux, (l, _)) as orig_exp) =
     let env = env_of orig_exp in
     match e_aux with
@@ -2441,8 +2473,9 @@ let rewrite_fix_val_specs (Defs defs) =
     let vs, eff = match find_vs (env_of_annot (l, annot)) val_specs id with
       | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff), a)) ->
          let eff' = union_effects eff (effect_of exp) in
-         let args_t' = pat_typ_of pat in
-         (tq, Typ_aux (Typ_fn (args_t', ret_t, eff'), a)), eff'
+         let args_t' = rewrite_typ_nexp_ids (env_of exp) (pat_typ_of pat) in
+         let ret_t' = rewrite_typ_nexp_ids (env_of exp) (typ_of exp) in
+         (tq, Typ_aux (Typ_fn (args_t', ret_t', eff'), a)), eff'
     in
     let annot = add_effect_annot annot eff in
     (Bindings.add id vs val_specs,
@@ -2482,13 +2515,24 @@ let rewrite_fix_val_specs (Defs defs) =
 
   let rewrite_def (val_specs, defs) = function
     | DEF_fundef fundef ->
-      let (val_specs, fundef) = rewrite_fundef (val_specs, fundef) in
-      (val_specs, defs @ [DEF_fundef fundef])
+       let (val_specs, fundef) = rewrite_fundef (val_specs, fundef) in
+       (val_specs, defs @ [DEF_fundef fundef])
     | DEF_internal_mutrec fundefs ->
-      let (val_specs, fundefs) = rewrite_fundefs (val_specs, fundefs) in
-      (val_specs, defs @ [DEF_internal_mutrec fundefs])
+       let (val_specs, fundefs) = rewrite_fundefs (val_specs, fundefs) in
+       (val_specs, defs @ [DEF_internal_mutrec fundefs])
     | DEF_val (LB_aux (LB_val (pat, exp), a)) ->
-      (val_specs, defs @ [DEF_val (LB_aux (LB_val (pat, rewrite_exp val_specs exp), a))])
+       (val_specs, defs @ [DEF_val (LB_aux (LB_val (pat, rewrite_exp val_specs exp), a))])
+    | DEF_spec (VS_aux (VS_val_spec (typschm, id, ext_opt, is_cast), a)) ->
+       let typschm, val_specs =
+         if Bindings.mem id val_specs then begin
+           let (tq, typ) = Bindings.find id val_specs in
+           TypSchm_aux (TypSchm_ts (tq, typ), Parse_ast.Unknown), val_specs
+         end else begin
+           let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
+           typschm, Bindings.add id (tq, typ) val_specs
+         end
+       in
+       (val_specs, defs @ [DEF_spec (VS_aux (VS_val_spec (typschm, id, ext_opt, is_cast), a))])
     | def -> (val_specs, defs @ [def])
   in
 
@@ -3573,6 +3617,7 @@ let rewrite_defs_lem = [
   ("guarded_pats", rewrite_defs_guarded_pats);
   (* ("recheck_defs", recheck_defs); *)
   ("early_return", rewrite_defs_early_return);
+  ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("remove_blocks", rewrite_defs_remove_blocks);
