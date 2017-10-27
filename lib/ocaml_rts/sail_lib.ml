@@ -129,7 +129,7 @@ let slice (list, n, m) =
   let m = int_of_big_int m in
   List.rev (take m (drop n (List.rev list)))
 
-let eq_list (xs, ys) = List.for_all2 (fun x y -> x == y) xs ys
+let eq_list (xs, ys) = List.for_all2 (fun x y -> x = y) xs ys
 
 let access (xs, n) = List.nth (List.rev xs) (int_of_big_int n)
 
@@ -240,8 +240,14 @@ let sub_vec_int (v, n) =
   sub_vec(v, n_bits)
 
 let get_slice_int (n, m, o) =
-  let bits = bits_of_big_int (power_int_positive_big_int 2 (add_big_int n o)) m in
+  let bits = bits_of_big_int (power_int_positive_big_int 2 (add_big_int n o)) (abs_big_int m) in
+  let bits =
+    if lt_big_int m zero_big_int
+    then sub_vec (List.map (fun _ -> B0) bits, bits)
+    else bits
+  in
   let slice = List.rev (take (int_of_big_int n) (drop (int_of_big_int o) (List.rev bits))) in
+  assert (eq_big_int (big_int_of_int (List.length slice)) n);
   slice
 
 let hex_char = function
@@ -412,8 +418,18 @@ let min_int (x, y) = min_big_int x y
 
 let undefined_real () = Num.num_of_int 0
 
+let real_of_string str =
+  try
+    let point = String.index str '.' in
+    let whole = Num.num_of_string (String.sub str 0 point) in
+    let frac_str = String.sub str (point + 1) (String.length str - (point + 1)) in
+    let frac = Num.div_num (Num.num_of_string frac_str) (Num.num_of_big_int (power_int_positive_int 10 (String.length frac_str))) in
+    Num.add_num whole frac
+  with
+  | Not_found -> Num.num_of_string str
+
 (* Not a very good sqrt implementation *)
-let sqrt_real x = Num.num_of_string (string_of_float (sqrt (Num.float_of_num x)))
+let sqrt_real x = real_of_string (string_of_float (sqrt (Num.float_of_num x)))
 
 let print_int (str, x) =
   prerr_endline (str ^ string_of_big_int x)
@@ -427,3 +443,4 @@ let string_of_zbool = function
   | false -> "false"
 let string_of_zreal r = Num.string_of_num r
 let string_of_zstring str = "\"" ^ String.escaped str ^ "\""
+

@@ -2644,9 +2644,9 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      annot_exp (E_loop (loop_type, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
-       let f, t = match ord with
-         | Ord_aux (Ord_inc, _) -> f, t
-         | Ord_aux (Ord_dec, _) -> t, f (* reverse direction for downto loop *)
+       let f, t, is_dec = match ord with
+         | Ord_aux (Ord_inc, _) -> f, t, false
+         | Ord_aux (Ord_dec, _) -> t, f, true (* reverse direction to typechecking downto as upto loop *)
        in
        let inferred_f = irule infer_exp env f in
        let inferred_t = irule infer_exp env t in
@@ -2668,7 +2668,9 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
               let env = Env.add_constraint (nc_and (nc_lteq l1 (nvar kid)) (nc_lteq (nvar kid) u2)) env in
               let loop_vtyp = atom_typ (nvar kid) in
               let checked_body = crule check_exp (Env.add_local v (Immutable, loop_vtyp) env) body unit_typ in
-              annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
+              if not is_dec (* undo reverse direction in annoteded ast for downto loop *)
+              then annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
+              else annot_exp (E_for (v, inferred_t, inferred_f, checked_step, ord, checked_body)) unit_typ
             end
        | _, _ -> typ_error l "Ranges in foreach overlap"
      end

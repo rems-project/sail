@@ -122,7 +122,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_num n -> parens (string "big_int_of_int" ^^ space ^^ string (string_of_int n))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
-  | L_real str -> parens (string "Num.num_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
+  | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
   | _ -> string "LIT"
 
 let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
@@ -202,11 +202,20 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      ^/^ string "in"
      ^/^ string "loop ()"
   | E_lit _ | E_list _ | E_id _ | E_tuple _ -> ocaml_atomic_exp ctx exp
-  | E_for (id, exp_from, exp_to, exp_step, _, exp_body) ->
+  | E_for (id, exp_from, exp_to, exp_step, ord, exp_body) ->
      let loop_var = separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"] in
-     let loop_mod = string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step in
+     let loop_mod =
+       match ord with
+       | Ord_aux (Ord_inc, _) -> string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_dec, _) -> string "sub_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+     in
+     let loop_compare =
+       match ord with
+       | Ord_aux (Ord_inc, _) -> string "le_big_int"
+       | Ord_aux (Ord_dec, _) -> string "gt_big_int"
+     in
      let loop_body =
-       separate space [string "if"; zencode ctx id; string "<="; ocaml_atomic_exp ctx exp_to]
+       separate space [string "if"; loop_compare; zencode ctx id; ocaml_atomic_exp ctx exp_to]
        ^/^ separate space [string "then";
              parens (ocaml_atomic_exp ctx exp_body ^^ semi ^^ space ^^ string "loop" ^^ space ^^ parens loop_mod)]
        ^/^ string "else ()"
