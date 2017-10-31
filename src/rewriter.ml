@@ -3339,17 +3339,17 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
         (* let cond = rewrite_var_updates (add_vars false cond vartuple) in *)
         let body = rewrite_var_updates (add_vars overwrite body vartuple) in
         let (E_aux (_,(_,bannot))) = body in
-        let fname = match effectful cond, effectful body with
-          | false, false -> "while_PP"
-          | false, true  -> "while_PM"
-          | true,  false -> "while_MP"
-          | true,  true  -> "while_MM" in
+        let fname = match loop, effectful cond, effectful body with
+          | While, false, false -> "while_PP"
+          | While, false, true  -> "while_PM"
+          | While, true,  false -> "while_MP"
+          | While, true,  true  -> "while_MM"
+          | Until, false, false -> "until_PP"
+          | Until, false, true  -> "until_PM"
+          | Until, true,  false -> "until_MP"
+          | Until, true,  true  -> "until_MM" in
         let funcl = Id_aux (Id fname,gen_loc el) in
-        let is_while =
-          match loop with
-          | While -> annot_exp (E_lit (mk_lit L_true)) (gen_loc el) env bool_typ
-          | Until -> annot_exp (E_lit (mk_lit L_false)) (gen_loc el) env bool_typ in
-        let v = E_aux (E_app (funcl,[is_while;cond;body;vartuple]), (gen_loc el, bannot)) in
+        let v = E_aux (E_app (funcl,[cond;body;vartuple]), (gen_loc el, bannot)) in
         let pat =
           if overwrite then mktup_pat el vars
           else annot_pat (P_tup [pat; mktup_pat pl vars]) pl env (typ_of v) in

@@ -662,8 +662,10 @@ let doc_exp_lem, doc_let_lem =
                 )
             )
        | Id_aux ((Id (("while_PP" | "while_PM" |
-                       "while_MP" | "while_MM" ) as loopf),_)) ->
-          let [is_while;cond;body;e5] = args in
+                       "while_MP" | "while_MM" |
+                       "until_PP" | "until_PM" |
+                       "until_MP" | "until_MM") as loopf),_)) ->
+          let [cond;body;e5] = args in
           let varspp = match e5 with
             | E_aux (E_tuple vars,_) ->
                let vars = List.map (fun (E_aux (E_id id,_)) -> doc_id_lem id) vars in
@@ -676,7 +678,7 @@ let doc_exp_lem, doc_let_lem =
                string "_" in
           parens (
               (prefix 2 1)
-                ((separate space) [string loopf;expY is_while;expY e5])
+                ((separate space) [string loopf; expY e5])
                 ((prefix 0 1)
                   (parens (prefix 1 1 (separate space [string "fun";varspp;arrow]) (expN cond)))
                   (parens (prefix 1 1 (separate space [string "fun";varspp;arrow]) (expN body))))

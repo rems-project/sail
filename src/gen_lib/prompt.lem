@@ -177,34 +177,55 @@ let rec foreachM_dec (stop,i,by) vars body =
     foreachM_dec (stop,i - by,by) vars body
   else return vars
 
-val while_PP : forall 'vars. bool -> 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
-let rec while_PP is_while vars cond body =
-  if (cond vars = is_while)
-  then while_PP is_while (body vars) cond body
-  else vars
+val while_PP : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
+let rec while_PP vars cond body =
+  if cond vars then while_PP (body vars) cond body else vars
 
-val while_PM : forall 'vars 'r. bool -> 'vars -> ('vars -> bool) ->
+val while_PM : forall 'vars 'r. 'vars -> ('vars -> bool) ->
                 ('vars -> MR 'vars 'r) -> MR 'vars 'r
-let rec while_PM is_while vars cond body =
-  if (cond vars = is_while)
-  then body vars >>= fun vars -> while_PM is_while vars cond body
+let rec while_PM vars cond body =
+  if cond vars then
+    body vars >>= fun vars -> while_PM vars cond body
   else return vars
 
-val while_MP : forall 'vars 'r. bool -> 'vars -> ('vars -> MR bool 'r) ->
+val while_MP : forall 'vars 'r. 'vars -> ('vars -> MR bool 'r) ->
                 ('vars -> 'vars) -> MR 'vars 'r
-let rec while_MP is_while vars cond body =
-  cond vars >>= fun continue ->
-  if (continue = is_while)
-  then while_MP is_while (body vars) cond body
+let rec while_MP vars cond body =
+  cond vars >>= fun cond_val ->
+  if cond_val then while_MP (body vars) cond body else return vars
+
+val while_MM : forall 'vars 'r. 'vars -> ('vars -> MR bool 'r) ->
+                ('vars -> MR 'vars 'r) -> MR 'vars 'r
+let rec while_MM vars cond body =
+  cond vars >>= fun cond_val ->
+  if cond_val then
+    body vars >>= fun vars -> while_MM vars cond body
   else return vars
 
-val while_MM : forall 'vars 'r. bool -> 'vars -> ('vars -> MR bool 'r) ->
+val until_PP : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
+let rec until_PP vars cond body =
+  let vars = body vars in
+  if (cond vars) then vars else until_PP (body vars) cond body
+
+val until_PM : forall 'vars 'r. 'vars -> ('vars -> bool) ->
                 ('vars -> MR 'vars 'r) -> MR 'vars 'r
-let rec while_MM is_while vars cond body =
-  cond vars >>= fun continue ->
-  if (continue = is_while)
-  then body vars >>= fun vars -> while_MM is_while vars cond body
-  else return vars
+let rec until_PM vars cond body =
+  body vars >>= fun vars ->
+  if (cond vars) then return vars else until_PM vars cond body
+
+val until_MP : forall 'vars 'r. 'vars -> ('vars -> MR bool 'r) ->
+                ('vars -> 'vars) -> MR 'vars 'r
+let rec until_MP vars cond body =
+  let vars = body vars in
+  cond vars >>= fun cond_val ->
+  if cond_val then return vars else until_MP vars cond body
+
+val until_MM : forall 'vars 'r. 'vars -> ('vars -> MR bool 'r) ->
+                ('vars -> MR 'vars 'r) -> MR 'vars 'r
+let rec until_MM vars cond body =
+  body vars >>= fun vars ->
+  cond vars >>= fun cond_val ->
+  if cond_val then return vars else until_MM vars cond body
 
 (*let write_two_regs r1 r2 vec =
   let is_inc =
