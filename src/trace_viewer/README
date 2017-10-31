@@ -1,0 +1,11 @@
+
+To use, first make sure node.js and npm are installed (e.g. via the
+Ubuntu package manager), then run the following in this directory:
+
+> npm install
+
+> npm run tsc
+
+> ./node_modules/.bin/electron .
+
+and point the file selector at a trace produced by sail -ocaml_trace
