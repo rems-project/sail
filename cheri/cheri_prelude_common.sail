@@ -211,7 +211,7 @@ function bool pcc_access_system_regs () =
       (pcc.access_system_regs)
 
 function bool register_inaccessible((regno) r) =
-  if ((r == 26 (* IDC *)) & inCCallDelay) then true else
+  if ((r == 26 (* IDC *)) & ((bool)inCCallDelay)) then true else (* XXX interpreter crash without cast *)
   let is_sys_reg = switch(r) {
     case 0b11011 -> true
     case 0b11100 -> true
