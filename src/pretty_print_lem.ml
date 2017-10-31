@@ -199,12 +199,12 @@ let rec lem_nexps_of_typ sequential mwords (Typ_aux (t,_)) =
     Typ_arg_aux (Typ_arg_nexp m, _);
     Typ_arg_aux (Typ_arg_order ord, _);
     Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
-     let m = simplify_nexp m in
+     let m = nexp_simp m in
      if mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
        NexpSet.singleton (orig_nexp m)
      else trec elem_typ
      (* NexpSet.union
-       (if mwords then tyvars_of_nexp (simplify_nexp m) else NexpSet.empty)
+       (if mwords then tyvars_of_nexp (nexp_simp m) else NexpSet.empty)
        (trec elem_typ) *)
   | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
      if sequential then trec etyp else NexpSet.empty
@@ -219,7 +219,7 @@ let rec lem_nexps_of_typ sequential mwords (Typ_aux (t,_)) =
      List.fold_left (fun s k -> NexpSet.remove k s) s (List.map nvar kids)
 and lem_nexps_of_typ_arg sequential mwords (Typ_arg_aux (ta,_)) =
   match ta with
-  | Typ_arg_nexp nexp -> NexpSet.singleton (orig_nexp (simplify_nexp nexp))
+  | Typ_arg_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
   | Typ_arg_typ typ -> lem_nexps_of_typ sequential mwords typ
   | Typ_arg_order _ -> NexpSet.empty
 
@@ -256,8 +256,8 @@ let doc_typ_lem, doc_atomic_typ_lem =
           Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when mwords ->
-             string "bitvector " ^^ doc_nexp_lem (simplify_nexp m)
-             (* (match simplify_nexp m with
+             string "bitvector " ^^ doc_nexp_lem (nexp_simp m)
+             (* (match nexp_simp m with
                | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
                | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
                | _ -> raise (Reporting_basic.err_unreachable l
@@ -308,7 +308,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
       end
     and doc_typ_arg_lem sequential mwords (Typ_arg_aux(t,_)) = match t with
       | Typ_arg_typ t -> app_typ sequential mwords true t
-      | Typ_arg_nexp n -> doc_nexp_lem (simplify_nexp n)
+      | Typ_arg_nexp n -> doc_nexp_lem (nexp_simp n)
       | Typ_arg_order o -> empty
   in typ', atomic_typ
 
@@ -329,11 +329,11 @@ let rec contains_t_pp_var (Typ_aux (t,a) as typ) = match t with
       if Ast_util.is_number typ then false
       else if is_bitvector_typ typ then
         let (_,length,_,_) = vector_typ_args_of typ in
-        not (is_nexp_constant (simplify_nexp length))
+        not (is_nexp_constant (nexp_simp length))
       else List.exists contains_t_arg_pp_var targs
 and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
   | Typ_arg_typ t -> contains_t_pp_var t
-  | Typ_arg_nexp nexp -> not (is_nexp_constant (simplify_nexp nexp))
+  | Typ_arg_nexp nexp -> not (is_nexp_constant (nexp_simp nexp))
   | _ -> false
 
 let doc_tannot_lem sequential mwords eff typ =
@@ -426,8 +426,8 @@ let rec typeclass_nexps (Typ_aux(t,_)) = match t with
 | Typ_app (Id_aux (Id "vector",_),
            [_;Typ_arg_aux (Typ_arg_nexp size_nexp,_);
             _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
-   if is_nexp_constant (simplify_nexp size_nexp) then NexpSet.empty else
-   NexpSet.singleton (orig_nexp size_nexp)
+   if is_nexp_constant (nexp_simp size_nexp) then NexpSet.empty else
+   NexpSet.singleton (nexp_simp (orig_nexp size_nexp))
 | Typ_app _ -> NexpSet.empty
 | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
 
@@ -748,7 +748,7 @@ let doc_exp_lem, doc_let_lem =
       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
       let bit_prefix = if is_bitvector_typ vtyp then "bit" else "" in
       let call = bit_prefix ^ "vector_access" ^ ord_suffix in
-      let start_idx = match simplify_nexp (start) with
+      let start_idx = match nexp_simp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
           let nc = nc_eq start (nminus len (nconstant 1)) in
@@ -776,7 +776,7 @@ let doc_exp_lem, doc_let_lem =
       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
       let bit_prefix = if is_bitvector_typ vtyp then "bit" else "" in
       let call = bit_prefix ^ "vector_subrange" ^ ord_suffix in
-      let start_idx = match simplify_nexp (start) with
+      let start_idx = match nexp_simp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
           let nc = nc_eq start (nminus len (nconstant 1)) in
@@ -942,7 +942,7 @@ let doc_exp_lem, doc_let_lem =
            | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; TA_typ etyp])
              | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; TA_typ etyp])}) ->*)
               let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-              let start = match simplify_nexp start with
+              let start = match nexp_simp start with
                 | Nexp_aux (Nexp_constant i, _) -> string_of_int i
                 | _ -> if dir then "0" else string_of_int (List.length exps) in
               let expspp =
@@ -972,7 +972,7 @@ let doc_exp_lem, doc_let_lem =
        let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
        let bit_prefix = if is_bitvector_typ t then "bit" else "" in
        let call = bit_prefix ^ "vector_update_pos" ^ ord_suffix in
-       let start_idx = match simplify_nexp (start) with
+       let start_idx = match nexp_simp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
            let nc = nc_eq start (nminus len (nconstant 1)) in
@@ -989,7 +989,7 @@ let doc_exp_lem, doc_let_lem =
        let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
        let bit_prefix = if is_bitvector_typ t then "bit" else "" in
        let call = bit_prefix ^ "vector_update_subrange" ^ ord_suffix in
-       let start_idx = match simplify_nexp (start) with
+       let start_idx = match nexp_simp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
            let nc = nc_eq start (nminus len (nconstant 1)) in
@@ -1146,7 +1146,7 @@ let doc_exp_lem, doc_let_lem =
     | E_internal_return (e1) ->
        separate space [string "return"; expY e1;]
     | E_sizeof nexp ->
-      (match simplify_nexp nexp with
+      (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem sequential mwords false (L_aux (L_num i, l)) annot
         | _ ->
           raise (Reporting_basic.err_unreachable l
@@ -1249,7 +1249,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
       let (start, is_inc) =
         try
           let (start, _, ord, _) = vector_typ_args_of base_ftyp in
-          match simplify_nexp start with
+          match nexp_simp start with
           | Nexp_aux (Nexp_constant i, _) -> (i, is_order_inc ord)
           | _ ->
             raise (Reporting_basic.err_unreachable Parse_ast.Unknown
@@ -1761,7 +1761,7 @@ let doc_register_refs_lem registers =
     let (start, is_inc) =
       try
         let (start, _, ord, _) = vector_typ_args_of base_typ in
-        match simplify_nexp start with
+        match nexp_simp start with
         | Nexp_aux (Nexp_constant i, _) -> (i, is_order_inc ord)
         | _ ->
           raise (Reporting_basic.err_unreachable Parse_ast.Unknown

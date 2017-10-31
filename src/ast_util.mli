@@ -224,7 +224,6 @@ end
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool
-val simplify_nexp : nexp -> nexp
 
 val lexp_to_exp : 'a lexp -> 'a exp
 

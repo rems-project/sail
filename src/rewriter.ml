@@ -1070,7 +1070,7 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
        E_aux (E_lit (L_aux (L_num c, l)), (l, Some (env, atom_typ nexp, no_effect)))
     | E_sizeof nexp ->
        begin
-         match simplify_nexp (rewrite_nexp_ids (env_of orig_exp) nexp) with
+         match nexp_simp (rewrite_nexp_ids (env_of orig_exp) nexp) with
          | Nexp_aux (Nexp_constant c, _) ->
             E_aux (E_lit (L_aux (L_num c, l)), (l, Some (env, atom_typ nexp, no_effect)))
          | _ ->
@@ -1142,7 +1142,7 @@ let rewrite_sizeof (Defs defs) =
                                       Id_aux (Id op, Parse_ast.Unknown),
                                       E_aux (e_sizeof nmap nexp2, simple_annot l (atom_typ nexp2))
                                     ) in
-       let (Nexp_aux (nexp, l) as nexp_aux) = simplify_nexp nexp_aux in
+       let (Nexp_aux (nexp, l) as nexp_aux) = nexp_simp nexp_aux in
        (match nexp with
         | Nexp_constant i -> E_lit (L_aux (L_num i, l))
         | Nexp_times (nexp1, nexp2) -> binop nexp1 "*" nexp2
@@ -2735,7 +2735,7 @@ let rewrite_tuple_vector_assignments defs =
            let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
            if is_vector_typ ltyp then
              let (_, len, _, _) = vector_typ_args_of ltyp in
-             match simplify_nexp len with
+             match nexp_simp len with
              | Nexp_aux (Nexp_constant len, _) -> len
              | _ -> 1
            else 1 in
@@ -2743,7 +2743,7 @@ let rewrite_tuple_vector_assignments defs =
            if is_order_inc ord
            then (i + step - 1, i + step)
            else (i - step + 1, i - step) in
-         let i = match simplify_nexp start with
+         let i = match nexp_simp start with
          | (Nexp_aux (Nexp_constant i, _)) -> i
          | _ -> if is_order_inc ord then 0 else List.length lexps - 1 in
          let l = gen_loc (fst annot) in
