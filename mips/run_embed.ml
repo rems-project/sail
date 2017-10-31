@@ -219,7 +219,10 @@ module CHERI_model : ISA_model = struct
        let pc_vaddr = unsigned_big(Cheri_embed._PC) in
        let npc_addr = add_int_big_int 4 pc_vaddr in
        let npc_vec = to_vec_dec_big (bi64, npc_addr) in
-       set_register Cheri_embed._nextPC npc_vec
+       begin
+         set_register Cheri_embed._nextPC npc_vec;
+         set_register Cheri_embed._inCCallDelay (to_vec_dec_int (1, 0))
+       end
 
   let get_pc () = unsigned_big (Cheri_embed._PC)
 
@@ -277,7 +280,10 @@ module CHERI128_model : ISA_model = struct
        let pc_vaddr = unsigned_big(Cheri128_embed._PC) in
        let npc_addr = add_int_big_int 4 pc_vaddr in
        let npc_vec = to_vec_dec_big (bi64, npc_addr) in
-       set_register Cheri128_embed._nextPC npc_vec
+       begin
+         set_register Cheri128_embed._nextPC npc_vec;
+         set_register Cheri128_embed._inCCallDelay (to_vec_dec_int (1, 0))
+       end
 
   let get_pc () = unsigned_big (Cheri128_embed._PC)
 

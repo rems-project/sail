@@ -493,6 +493,7 @@ let mips_register_data_all =  [
   ("PC", (D_decreasing, 64, 63));
   ("branchPending", (D_decreasing, 1, 0));
   ("inBranchDelay", (D_decreasing, 1, 0));
+  ("inCCallDelay", (D_decreasing, 1, 0));
   ("delayedPC", (D_decreasing, 64, 63));
   ("nextPC", (D_decreasing, 64, 63));
   (* General purpose registers *)
@@ -1072,6 +1073,7 @@ let set_next_instruction_address model =
        begin
          reg := Reg.add "nextPC" n_pc !reg;
          reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
+         reg := Reg.add "inCCallDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
        end
      | (Some pc_val, Some 1) -> 
        (* delay slot -- branch to delayed PC and clear branchPending *)
