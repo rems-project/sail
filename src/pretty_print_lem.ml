@@ -150,7 +150,9 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | Typ_id(id) when Env.is_regtyp id env -> true
   | _ -> false
 
-let doc_nexp_lem (Nexp_aux (nexp, l) as full_nexp) = match nexp with
+let doc_nexp_lem nexp =
+  let (Nexp_aux (nexp, l) as full_nexp) = simplify_nexp nexp in
+  match nexp with
   | Nexp_constant i -> string ("ty" ^ string_of_int i)
   | Nexp_var v -> string (string_of_kid (orig_kid v))
   | _ ->
@@ -256,7 +258,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
           Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when mwords ->
-             string "bitvector " ^^ doc_nexp_lem (simplify_nexp m)
+             string "bitvector " ^^ doc_nexp_lem m
              (* (match simplify_nexp m with
                | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
                | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
@@ -308,7 +310,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
       end
     and doc_typ_arg_lem sequential mwords (Typ_arg_aux(t,_)) = match t with
       | Typ_arg_typ t -> app_typ sequential mwords true t
-      | Typ_arg_nexp n -> doc_nexp_lem (simplify_nexp n)
+      | Typ_arg_nexp n -> doc_nexp_lem n
       | Typ_arg_order o -> empty
   in typ', atomic_typ
 
@@ -426,7 +428,8 @@ let rec typeclass_nexps (Typ_aux(t,_)) = match t with
 | Typ_app (Id_aux (Id "vector",_),
            [_;Typ_arg_aux (Typ_arg_nexp size_nexp,_);
             _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
-   if is_nexp_constant (simplify_nexp size_nexp) then NexpSet.empty else
+   let size_nexp = simplify_nexp size_nexp in
+   if is_nexp_constant size_nexp then NexpSet.empty else
    NexpSet.singleton (orig_nexp size_nexp)
 | Typ_app _ -> NexpSet.empty
 | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
