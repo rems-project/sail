@@ -1891,7 +1891,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
                 let nc = assert_constraint env constr_exp in
                 let cexp = annot_exp (E_constraint nc) bool_typ in
                 let checked_msg = crule check_exp env assert_msg string_typ in
-                let texp = annot_exp (E_assert (cexp, checked_msg)) unit_typ in
+                let texp = annot_exp_effect (E_assert (cexp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
                 texp :: check_block l (Env.add_constraint nc env) exps typ
               with
               | Not_a_constraint -> check_block l env exps typ
@@ -2705,7 +2705,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_assert (test, msg) ->
      let checked_test = crule check_exp env test bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
-     annot_exp (E_assert (checked_test, checked_msg)) unit_typ
+     annot_exp_effect (E_assert (checked_test, checked_msg)) unit_typ (mk_effect [BE_escape])
   | _ -> typ_error l ("Cannot infer type of: " ^ string_of_exp exp)
 
 and infer_funapp l env f xs ret_ctx_typ = fst (infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ)

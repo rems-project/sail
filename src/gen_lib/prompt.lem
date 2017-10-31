@@ -34,6 +34,9 @@ let inline (>>) m n = m >>= fun _ -> n
 val exit : forall 'a 'b. 'b -> M 'a
 let exit s = Fail Nothing
 
+val assert_exp : bool -> string -> M unit
+let assert_exp exp msg = if exp then Done () else Fail (Just msg)
+
 val early_return : forall 'r. 'r -> MR unit 'r
 let early_return r = Return r
 

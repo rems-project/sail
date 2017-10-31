@@ -1029,10 +1029,8 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align epp) else align epp
     | E_exit e -> liftR (separate space [string "exit"; expY e;])
     | E_assert (e1,e2) ->
-       (* FIXME needs pretty-printing of E_constraint; ignore for now *)
-       string "()"
-       (* let epp = separate space [string "assert'"; expY e1; expY e2] in
-       if aexp_needed then parens (align epp) else align epp *)
+       let epp = liftR (separate space [string "assert_exp"; expY e1; expY e2]) in
+       if aexp_needed then parens (align epp) else align epp
     | E_app_infix (e1,id,e2) ->
        (* TODO: Should have been removed by the new type checker; check with Alasdair *)
        raise (Reporting_basic.err_unreachable l
