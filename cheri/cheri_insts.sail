@@ -1057,9 +1057,9 @@ function clause execute (CCall(cs, cb, 0b00000000001)) = (* selector=1 *)
         sealed=false;
         otype=0;
     }) in {
-      nextPC := (bit[64]) (getCapOffset(cs_val));
-      nextPCC := csUnsealed;
+      delayedPC := (bit[64]) (getCapOffset(cs_val));
       delayedPCC := csUnsealed;
+      branchPending := true;
       C26 := capStructToCapReg({cb_val with
         sealed=false;
         otype=0;
