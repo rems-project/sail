@@ -64,7 +64,10 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
   match typ_aux with
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
-  | Typ_app (id, typs) -> string ("\"APP" ^ string_of_id id ^ "\"")
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) ->
+     let farg = gensym () in
+     separate space [string "string_of_list \", \""; parens (separate space [string "fun"; farg; string "->"; ocaml_string_typ typ farg]); arg]
+  | Typ_app (_, _) -> assert false
   | Typ_tup typs ->
      let args = List.map (fun _ -> gensym ()) typs in
      let body =
@@ -75,6 +78,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
   | Typ_fn (typ1, typ2, _) -> string "\"FN\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ | Typ_wild -> assert false
+
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
@@ -252,9 +256,12 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        match Env.lookup_id id (env_of exp) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
        | Enum _ | Union _ -> zencode_upper ctx id
-       | Register _ ->
-          if !opt_trace_ocaml
-          then parens (string ("trace \"Read: " ^ string_of_id id ^ "\";") ^^ space ^^ bang ^^ zencode ctx id)
+       | Register typ ->
+          if !opt_trace_ocaml then
+            let var = gensym () in
+            let str_typ = parens (ocaml_string_typ (Rewriter.simple_typ typ) var) in
+            parens (separate space [string "let"; var; equals; bang ^^ zencode ctx id; string "in";
+                                    string "trace_read" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ str_typ ^^ semi; var])
           else bang ^^ zencode ctx id
        | Local (Mutable, _) -> bang ^^ zencode ctx id
      end

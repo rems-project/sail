@@ -28,6 +28,9 @@ let trace str =
 let trace_write name str =
   trace ("Write: " ^ name ^ " " ^ str)
 
+let trace_read name str =
+  trace ("Read: " ^ name ^ " " ^ str)
+
 let sail_trace_call (type t) (name : string) (in_string : string) (string_of_out : t -> string) (f : _ -> t) =
   let module M =
     struct exception Return of t end
@@ -444,3 +447,7 @@ let string_of_zbool = function
 let string_of_zreal r = Num.string_of_num r
 let string_of_zstring str = "\"" ^ String.escaped str ^ "\""
 
+let rec string_of_list sep string_of = function
+  | [] -> ""
+  | [x] -> string_of x
+  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
