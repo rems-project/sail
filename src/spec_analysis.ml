@@ -440,7 +440,7 @@ let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pat,exp),l)) =
   let _, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
   (pat_bs,exp_ns,exp_sets)
 
-let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_)) =
+let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) as fd) =
   let fun_name = match funcls with
     | [] -> failwith "fv_of_fun fell off the end looking for the function name"
     | FCL_aux(FCL_Funcl(id,_,_),_)::_ -> string_of_id id in
@@ -458,8 +458,9 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
       let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
       exp_ns) funcls mt in
+  let ns_vs = init_env ("val:" ^ (string_of_id (id_of_fundef fd))) in
   (* let _ = Printf.eprintf "Function %s uses %s\n" fun_name (set_to_string (Nameset.union ns ns_r)) in *)
-  init_env fun_name,Nameset.union ns ns_r
+  init_env fun_name, Nameset.union ns_vs (Nameset.union ns ns_r)
 
 let fv_of_vspec consider_var (VS_aux(vspec,_)) = match vspec with
   | VS_val_spec(ts,id,_,_) ->
