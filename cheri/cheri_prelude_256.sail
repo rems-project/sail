@@ -155,12 +155,12 @@ function (bit[257]) memBitsToCapBits256((bool) tag, (bit[256]) b) =
    this ensures that canonical null_cap is always all-zeros in memory
    even though it may have bits set logically (e.g. length or exponent *)
 
-let (bit[256]) null_cap_bits = capStructToMemBits256(null_cap)
-
 function (bit[256]) capStructToMemBits((CapStruct) cap) =
+  let (bit[256]) null_cap_bits = capStructToMemBits256(null_cap) in
   capStructToMemBits256(cap) ^ null_cap_bits
 
 function (bit[257]) memBitsToCapBits((bool) tag, (bit[256]) b) =
+  let (bit[256]) null_cap_bits = capStructToMemBits256(null_cap) in
   memBitsToCapBits256(tag, b ^ null_cap_bits)
 
 function (CapReg) capStructToCapReg((CapStruct) cap) =
