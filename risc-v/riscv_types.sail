@@ -138,6 +138,7 @@ val extern unit -> bool effect {exmem} speculate_conditional_success
 
 val extern unit -> unit effect { barr } MEM_fence_rw_rw
 val extern unit -> unit effect { barr } MEM_fence_r_rw
+val extern unit -> unit effect { barr } MEM_fence_r_r
 val extern unit -> unit effect { barr } MEM_fence_rw_w
 val extern unit -> unit effect { barr } MEM_fence_w_w
 val extern unit -> unit effect { barr } MEM_fence_i

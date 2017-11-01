@@ -501,6 +501,7 @@ type barrier_kind =
   (* RISC-V barriers *)
   | Barrier_RISCV_rw_rw
   | Barrier_RISCV_r_rw
+  | Barrier_RISCV_r_r
   | Barrier_RISCV_rw_w
   | Barrier_RISCV_w_w
   | Barrier_RISCV_i
@@ -525,6 +526,7 @@ instance (Show barrier_kind)
     | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
     | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
     | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
+    | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
     | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
     | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
     | Barrier_RISCV_i     -> "Barrier_RISCV_i"
@@ -621,10 +623,11 @@ instance (EnumerationType barrier_kind)
     | Barrier_MIPS_SYNC -> 12
     | Barrier_RISCV_rw_rw -> 13
     | Barrier_RISCV_r_rw -> 14
-    | Barrier_RISCV_rw_w -> 15
-    | Barrier_RISCV_w_w -> 16
-    | Barrier_RISCV_i -> 17
-    | Barrier_x86_MFENCE -> 18
+    | Barrier_RISCV_r_r -> 15
+    | Barrier_RISCV_rw_w -> 16
+    | Barrier_RISCV_w_w -> 17
+    | Barrier_RISCV_i -> 18
+    | Barrier_x86_MFENCE -> 19
   end
 end
 
