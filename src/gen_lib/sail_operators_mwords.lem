@@ -3,6 +3,16 @@ open import Machine_word
 open import Sail_impl_base
 open import Sail_values
 
+(* Translating between a type level number (itself 'n) and an integer *)
+
+let size_itself_int x = integerFromNat (size_itself x)
+
+(* NB: the corresponding sail type is forall 'n. atom('n) -> itself('n),
+   the actual integer is ignored. *)
+
+val make_the_value : forall 'n. integer -> itself 'n
+let inline make_the_value x = the_value
+
 (*** Bit vector operations *)
 
 let bitvector_length bs = integerFromNat (word_length bs)

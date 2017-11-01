@@ -507,6 +507,7 @@ end = struct
     || Id.compare id (mk_id "real") = 0
     || Id.compare id (mk_id "list") = 0
     || Id.compare id (mk_id "string") = 0
+    || Id.compare id (mk_id "itself") = 0
 
   (* Check if a type, order, or n-expression is well-formed. Throws a
      type error if the type is badly formed. FIXME: Add arity to type
@@ -921,6 +922,21 @@ let lvector_typ env l typ =
 let initial_env =
   Env.empty
   |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args)))
+
+  (* Internal functions for Monomorphise.AtomToItself *)
+
+  |> Env.add_extern (mk_id "size_itself_int") "size_itself_int"
+  |> Env.add_val_spec (mk_id "size_itself_int")
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+                                  Parse_ast.Unknown)],Parse_ast.Unknown),
+       function_typ (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))])
+         (atom_typ (nvar (mk_kid "n"))) no_effect)
+  |> Env.add_extern (mk_id "make_the_value") "make_the_value"
+  |> Env.add_val_spec (mk_id "make_the_value")
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+                                  Parse_ast.Unknown)],Parse_ast.Unknown),
+       function_typ (atom_typ (nvar (mk_kid "n")))
+         (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))]) no_effect)
 
 let ex_counter = ref 0
 

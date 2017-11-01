@@ -151,12 +151,24 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
  }
 
+(* fold over patterns *)
+val fold_pat : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg -> 'a pat -> 'pat
+
 (* fold over expressions *)
 val fold_exp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a exp -> 'exp
 
 val id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg
+val id_exp_alg :
+  ('a,'a exp,'a exp_aux,'a lexp,'a lexp_aux,'a fexp,
+  'a fexp_aux,'a fexps,'a fexps_aux,
+  'a opt_default_aux,'a opt_default,'a pexp,'a pexp_aux,
+  'a letbind_aux,'a letbind,
+  'a pat,'a pat_aux,'a fpat,'a fpat_aux) exp_alg
+
+val compute_pat_alg : 'b -> ('b -> 'b -> 'b) ->
+  ('a,('b * 'a pat),('b * 'a pat_aux),('b * 'a fpat),('b * 'a fpat_aux)) pat_alg
 
 val compute_exp_alg : 'b -> ('b -> 'b -> 'b) ->
   ('a,('b * 'a exp),('b * 'a exp_aux),('b * 'a lexp),('b * 'a lexp_aux),('b * 'a fexp),

@@ -427,7 +427,9 @@ let rec typeclass_nexps (Typ_aux(t,_)) = match t with
 | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
 | Typ_app (Id_aux (Id "vector",_),
            [_;Typ_arg_aux (Typ_arg_nexp size_nexp,_);
-            _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+            _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
+| Typ_app (Id_aux (Id "itself",_),
+           [Typ_arg_aux (Typ_arg_nexp size_nexp,_)]) ->
    let size_nexp = simplify_nexp size_nexp in
    if is_nexp_constant size_nexp then NexpSet.empty else
    NexpSet.singleton (orig_nexp size_nexp)
@@ -494,13 +496,14 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem sequential mwords true p) (doc_pat_lem sequential mwords true p')
   | P_record (_,_) -> empty (* TODO *)
 
-let rec contains_bitvector_typ (Typ_aux (t,_) as typ) = match t with
-  | Typ_tup ts -> List.exists contains_bitvector_typ ts
-  | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists contains_bitvector_typ_arg targs
-  | Typ_fn (t1,t2,_) -> contains_bitvector_typ t1 || contains_bitvector_typ t2
+let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
+  | Typ_tup ts -> List.exists typ_needs_printed ts
+  | Typ_app (Id_aux (Id "itself",_),_) -> true
+  | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists typ_needs_printed_arg targs
+  | Typ_fn (t1,t2,_) -> typ_needs_printed t1 || typ_needs_printed t2
   | _ -> false
-and contains_bitvector_typ_arg (Typ_arg_aux (targ, _)) = match targ with
-  | Typ_arg_typ t -> contains_bitvector_typ t
+and typ_needs_printed_arg (Typ_arg_aux (targ, _)) = match targ with
+  | Typ_arg_typ t -> typ_needs_printed t
   | _ -> false
 
 let contains_early_return exp =
@@ -697,7 +700,7 @@ let doc_exp_lem, doc_let_lem =
           let (taepp,aexp_needed) =
             let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
             let eff = effect_of full_exp in
-            if contains_bitvector_typ t && not (contains_t_pp_var t)
+            if typ_needs_printed t && not (contains_t_pp_var t)
             then (align epp ^^ (doc_tannot_lem sequential mwords (effectful eff) t), true)
             else (epp, aexp_needed) in
           if aexp_needed then parens (align taepp) else taepp*)
@@ -739,7 +742,7 @@ let doc_exp_lem, doc_let_lem =
              let (taepp,aexp_needed) =
                let t = (*Env.base_typ_of (env_of full_exp)*) (typ_of full_exp) in
                let eff = effect_of full_exp in
-               if contains_bitvector_typ (Env.base_typ_of (env_of full_exp) t)
+               if typ_needs_printed (Env.base_typ_of (env_of full_exp) t)
                then (align epp ^^ (doc_tannot_lem sequential mwords (effectful eff) t), true)
                else (epp, aexp_needed) in
              liftR (if aexp_needed then parens (align taepp) else taepp)
@@ -797,7 +800,7 @@ let doc_exp_lem, doc_let_lem =
        let (epp,aexp_needed) =
          if has_effect eff BE_rreg then
            let epp = align (string "read_reg_range" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2) in
-           if contains_bitvector_typ t && not (contains_t_pp_var t)
+           if typ_needs_printed t && not (contains_t_pp_var t)
            then (epp ^^ doc_tannot_lem sequential mwords true t, true)
            else (epp, aexp_needed)
          else
@@ -818,7 +821,7 @@ let doc_exp_lem, doc_let_lem =
            let eff = effect_of full_exp in
            let field_f = doc_id_lem tid ^^ underscore ^^ doc_id_lem id ^^ dot ^^ string "get_field" in
            let (ta,aexp_needed) =
-             if contains_bitvector_typ t
+             if typ_needs_printed t
              then (doc_tannot_lem sequential mwords (effectful eff) t, true)
              else (empty, aexp_needed) in
            let epp = field_f ^^ space ^^ (expY fexp) in
@@ -853,7 +856,7 @@ let doc_exp_lem, doc_let_lem =
                   | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) -> "read_reg_bitfield"
                   | _ -> "read_reg_field" in
                 let ta =
-                  if contains_bitvector_typ t && not (contains_t_pp_var t)
+                  if typ_needs_printed t && not (contains_t_pp_var t)
                   then doc_tannot_lem sequential mwords true t else empty in
                 let epp = separate space [string call;string reg;string_lit(string field)] ^^ ta in
                 if aexp_needed then parens (align epp) else epp
@@ -861,7 +864,7 @@ let doc_exp_lem, doc_let_lem =
                 let (call,ta) =
                   if has_effect eff BE_rreg then
                     let ta =
-                      if contains_bitvector_typ t && not (contains_t_pp_var t)
+                      if typ_needs_printed t && not (contains_t_pp_var t)
                       then doc_tannot_lem sequential mwords true t else empty in
                     ("read_two_regs", ta)
                   else
@@ -874,7 +877,7 @@ let doc_exp_lem, doc_let_lem =
                     separate space [string "read_reg_bit";string reg;doc_int start]
                   else
                     let ta =
-                      if contains_bitvector_typ t && not (contains_t_pp_var t)
+                      if typ_needs_printed t && not (contains_t_pp_var t)
                       then doc_tannot_lem sequential mwords true t else empty in
                     separate space [string "read_reg_range";string reg;doc_int start;doc_int stop] ^^ ta in
                 if aexp_needed then parens (align epp) else epp
@@ -886,7 +889,7 @@ let doc_exp_lem, doc_let_lem =
         | Base((_,t),External _,_,_,_,_) ->
            (* TODO: Does this case still exist with the new type checker? *)
            let epp = string "read_reg" ^^ space ^^ expY e in
-           if contains_bitvector_typ t && not (contains_t_pp_var t)
+           if typ_needs_printed t && not (contains_t_pp_var t)
            then parens (epp ^^ doc_tannot_lem sequential mwords true t) else epp
         | Base((_,t),_,_,_,_,_) ->
            (match typ with
@@ -1118,7 +1121,7 @@ let doc_exp_lem, doc_let_lem =
                 | _ ->
                    string name ^//^ parens (expN e1 ^^ comma ^/^ expN e2)) in
            let (epp,aexp_needed) =
-             if contains_bitvector_typ t && not (contains_t_pp_var t)
+             if typ_needs_printed t && not (contains_t_pp_var t)
              then (parens epp ^^ doc_tannot_lem sequential mwords false t, true)
              else (epp, aexp_needed) in
            if aexp_needed then parens (align epp) else epp
