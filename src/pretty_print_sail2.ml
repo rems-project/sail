@@ -181,7 +181,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
   | E_if (if_exp, then_exp, else_exp) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
-  | E_list exps -> string "E_list"
+  | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> string "E_cons"
   | E_record fexps -> string "E_record"
   | E_loop (While, cond, exp) ->

@@ -245,7 +245,7 @@ let rewrite_step defs (name,rewriter) =
         let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
         output "" Lem_ast_out [filename, defs];
         let ((ot,_, _) as ext_ot) = open_output_with_check_unformatted filename in
-        Pretty_print_sail.pp_defs ot defs;
+        Pretty_print_sail2.pp_defs ot defs;
         close_output_with_check ext_ot;
         opt_ddump_rewrite_ast := Some (f, i + 1)
       end

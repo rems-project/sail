@@ -769,9 +769,11 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
      wrap (E_app (prepend_id "undefined_" id,
        List.concat (List.map (undefined_of_typ_args mwords l annot) args))) typ
   | Typ_var kid ->
-     (* FIXME: bit of a hack, need to add a restriction to how
-        polymorphic undefined can be in the type checker to
-        guarantee this always works. *)
+     (* Undefined monomorphism restriction in the type checker should
+        guarantee that the typ_(kid) parameter was always one created
+        in an undefined_(type) function created in
+        initial_check.ml. i.e. the rewriter should only encounter this
+        case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
   | Typ_fn _ -> assert false
 and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =

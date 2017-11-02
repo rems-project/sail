@@ -1,7 +1,7 @@
 
 register int z
 
-val unit -> int effect {wreg, rreg} test
+val unit -> int effect {wreg, rreg, escape} test
 
 function int test () = {
   nondet {

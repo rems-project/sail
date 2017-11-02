@@ -968,6 +968,7 @@ let generate_undefineds vs_ids (Defs defs) =
      gen_vs (mk_id "undefined_nat") "unit -> nat effect {undef}";
      gen_vs (mk_id "undefined_real") "unit -> real effect {undef}";
      gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
+     gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
      gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
      (* FIXME: How to handle inc/dec order correctly? *)
      gen_vs (mk_id "undefined_vector") "forall 'n 'm ('a:Type). (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";

@@ -4,6 +4,10 @@ register nat n
 register nat x
 register nat y
 
+val (int, int) -> bool effect pure eq_int
+
+overload (deinfix ==) [eq_int]
+
 typedef wordsize = exist 'n, 'n IN {8,16,32}. [|'n|]
 let (wordsize) word = ([|8|]) 8
 

@@ -387,6 +387,8 @@ module Env : sig
   val no_casts : t -> t
   val enable_casts : t -> t
   val add_cast : id -> t -> t
+  val allow_polymorphic_undefineds : t -> t
+  val polymorphic_undefineds : t -> bool
   val lookup_id : id -> t -> lvar
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
@@ -413,7 +415,8 @@ end = struct
       allow_casts : bool;
       constraints : n_constraint list;
       default_order : order option;
-      ret_typ : typ option
+      ret_typ : typ option;
+      poly_undefineds : bool
     }
 
   let empty =
@@ -437,6 +440,7 @@ end = struct
       constraints = [];
       default_order = None;
       ret_typ = None;
+      poly_undefineds = false;
     }
 
   let counter = ref 0
@@ -892,6 +896,11 @@ end = struct
       | targ -> rewrap targ in
     aux (expand_synonyms env typ)
 
+  let allow_polymorphic_undefineds env =
+    { env with poly_undefineds = true }
+
+  let polymorphic_undefineds env = env.poly_undefineds
+
 end
 
 
@@ -971,6 +980,21 @@ let destruct_vector env typ =
     | typ -> None
   in
   destruct_vector' (Env.expand_synonyms env typ)
+
+let rec is_typ_monomorphic (Typ_aux (typ, _)) =
+  match typ with
+  | Typ_wild -> assert false (* Typ_wild is bad in general *)
+  | Typ_id _ -> true
+  | Typ_tup typs -> List.for_all is_typ_monomorphic typs
+  | Typ_app (id, args) -> List.for_all is_typ_arg_monomorphic args
+  | Typ_fn (typ1, typ2, _) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
+  | Typ_exist _ | Typ_var _ -> false
+and is_typ_arg_monomorphic (Typ_arg_aux (arg, _)) =
+  match arg with
+  | Typ_arg_nexp _ -> true
+  | Typ_arg_typ typ -> is_typ_monomorphic typ
+  | Typ_arg_order (Ord_aux (Ord_dec, _)) | Typ_arg_order (Ord_aux (Ord_inc, _)) -> true
+  | Typ_arg_order (Ord_aux (Ord_var _, _)) -> false
 
 (**************************************************************************)
 (* 3. Subtyping and constraint solving                                    *)
@@ -2057,7 +2081,9 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      if prove env (nc_eq (nconstant (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
      else typ_error l "List length didn't match" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
-     annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
+     if is_typ_monomorphic typ || Env.polymorphic_undefineds env
+     then annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
+     else typ_error l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
   (* This rule allows registers of type t to be passed by name with type register<t>*)
   | E_id reg, Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)])
     when string_of_id id = "register" && Env.is_register reg env ->
@@ -3171,6 +3197,17 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pat, exp), (l, _))) typ =
      begin
        let typed_pat, env = bind_pat env (strip_pat pat) typ_arg in
        let env = Env.add_ret_typ typ_ret env in
+       (* We want to forbid polymorphic undefined values in all cases,
+          except when type checking the specific undefined_(type)
+          functions created by the -undefined_gen functions in
+          initial_check.ml. Only in these functions will the rewriter
+          be able to correctly re-write the polymorphic undefineds
+          (due to the specific form the functions have *)
+       let env =
+         if Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0
+         then Env.allow_polymorphic_undefineds env
+         else env
+       in
        let exp = propagate_exp_effect (crule check_exp env (strip_exp exp) typ_ret) in
        FCL_aux (FCL_Funcl (id, typed_pat, exp), (l, Some (env, typ, effect_of exp)))
      end
