@@ -2621,31 +2621,12 @@ let rewrite_overload_cast (Defs defs) =
   let defs = List.map simple_def defs in
   Defs (List.filter (fun def -> not (is_overload def)) defs)
 
+
 let rewrite_undefined mwords =
-  let rec undefined_of_typ (Typ_aux (typ_aux, _) as typ) =
-    match typ_aux with
-    | Typ_id id ->
-       mk_exp (E_app (prepend_id "undefined_" id, [mk_lit_exp L_unit]))
-    | Typ_app (_,[start;size;_;_]) when mwords && is_bitvector_typ typ ->
-       mk_exp (E_app (mk_id "undefined_bitvector", undefined_of_typ_args start @ undefined_of_typ_args size))
-    | Typ_app (id, args) ->
-       mk_exp (E_app (prepend_id "undefined_" id, List.concat (List.map undefined_of_typ_args args)))
-    | Typ_var kid ->
-       (* FIXME: bit of a hack, need to add a restriction to how
-          polymorphic undefined can be in the type checker to
-          guarantee this always works. *)
-       mk_exp (E_id (prepend_id "typ_" (id_of_kid kid)))
-    | Typ_fn _ -> assert false
-  and undefined_of_typ_args (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
-    match typ_arg_aux with
-    | Typ_arg_nexp n -> [mk_exp (E_sizeof n)]
-    | Typ_arg_typ typ -> [undefined_of_typ typ]
-    | Typ_arg_order _ -> []
-  in
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
     match e_aux with
     | E_lit (L_aux (L_undef, l)) ->
-       check_exp (env_of exp) (undefined_of_typ (Env.expand_synonyms (env_of exp) (typ_of exp))) (typ_of exp)
+       check_exp (env_of exp) (undefined_of_typ mwords l (fun _ -> ()) (Env.expand_synonyms (env_of exp) (typ_of exp))) (typ_of exp)
     | _ -> exp
   in
   let rewrite_exp_undefined = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in

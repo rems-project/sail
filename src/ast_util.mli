@@ -244,3 +244,5 @@ val effect_set : effect -> BESet.t
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
+
+val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp

@@ -84,6 +84,8 @@ let rec fix_id remove_tick name = match name with
   | _ ->
      if String.contains name '#' then
        fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
+     else if String.contains name '?' then
+       fix_id remove_tick (String.concat "_pat_" (Util.split_on_char '?' name))
      else if name.[0] = '\'' then
        let var = String.sub name 1 (String.length name - 1) in
        if remove_tick then var else (var ^ "'")
@@ -337,8 +339,8 @@ and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
   | _ -> false
 
 let doc_tannot_lem sequential mwords eff typ =
-  (* if contains_t_pp_var typ then empty
-  else *)
+  if contains_t_pp_var typ then empty
+  else
     let ta = doc_typ_lem sequential mwords typ in
     if eff then string " : _M " ^^ parens ta
     else string " : " ^^ ta
@@ -708,7 +710,7 @@ let doc_exp_lem, doc_let_lem =
              currently broken. *)
           let [arg] = args in
           let targ = typ_of arg in
-          let call = if mwords && is_bitvector_typ targ then "bitvector_length" else "length" in
+          let call = if (*mwords &&*) is_bitvector_typ targ then "bitvector_length" else "vector_length" in
           let epp = separate space [string call;expY arg] in
           if aexp_needed then parens (align epp) else epp
        (*)| Id_aux (Id "bool_not", _) ->
@@ -915,8 +917,8 @@ let doc_exp_lem, doc_let_lem =
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
        let recordtyp = match annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
-         | Some (env, Typ_aux (Typ_app (tid, _), _), _)
-           when Env.is_record tid env ->
+         | Some (env, Typ_aux (Typ_app (tid, _), _), _) ->
+           (* when Env.is_record tid env -> *)
            tid
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
        let epp = anglebars (space ^^ (align (separate_map
@@ -1586,7 +1588,7 @@ let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls)
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | FCL_aux (FCL_Funcl(id,_,exp),_) :: _
-    when string_of_id id = "execute" || string_of_id id = "initial_analysis" ->
+    when string_of_id id = "execute" (*|| string_of_id id = "initial_analysis"*) ->
     let (_,auxiliary_functions,clauses) =
       List.fold_left
         (fun (already_used_fnames,auxiliary_functions,clauses) funcl ->
@@ -1680,6 +1682,8 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
 let doc_spec_lem sequential mwords (VS_aux (valspec,annot)) =
   match valspec with
   | VS_val_spec (typschm,id,None,_) ->
+     (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
+     if contains_t_pp_var typ then empty else *)
      separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem sequential mwords true typschm] ^/^ hardline 
   | VS_val_spec (_,_,Some _,_) -> empty
 
@@ -1746,12 +1750,30 @@ let doc_regstate_lem mwords registers =
         Name_sect_aux (Name_sect_none, l),
         TypQ_aux (TypQ_tq [], l),
         List.map (fun (typ, id, env) -> (typ, id)) registers,
-        false) in
+        false)
+  in
+  let initregstate =
+    if !Initial_check.opt_undefined_gen then
+      let exp = match registers with
+        | [] -> E_aux (E_lit (mk_lit L_unit), (l, Some (Env.empty, unit_typ, no_effect)))
+        | _ ->
+           let initreg (typ, id, env) =
+             let annot typ = Some (env, typ, no_effect) in
+             let initval = undefined_of_typ mwords l annot typ in
+             FE_aux (FE_Fexp (id, initval), (l, annot typ)) in
+           E_aux (
+             E_record (FES_aux (FES_Fexps (List.map initreg registers, false), annot)),
+             (l, Some (Env.empty, mk_id_typ (mk_id "regstate"), no_effect)))
+      in
+      doc_op equals (string "let initial_regstate") (doc_exp_lem true mwords false false exp)
+    else empty
+  in
   concat [
     doc_typdef_lem true mwords (TD_aux (regstate, annot)); hardline;
     hardline;
     string "type _M 'a = M regstate 'a"
-  ]
+  ],
+  initregstate
 
 let doc_register_refs_lem registers =
   let doc_register_ref (typ, id, env) =
@@ -1779,7 +1801,7 @@ let doc_register_refs_lem registers =
 let pp_defs_lem sequential mwords (types_file,types_modules) (defs_file,defs_modules) d top_line =
   (* let regtypes = find_regtypes d in *)
   let (typdefs,valdefs) = doc_defs_lem sequential mwords d in
-  let regstate_def = doc_regstate_lem mwords (find_registers d) in
+  let regstate_def, initregstate_def = doc_regstate_lem mwords (find_registers d) in
   let register_refs = doc_register_refs_lem (find_registers d) in
   (print types_file)
     (concat
@@ -1835,7 +1857,9 @@ let pp_defs_lem sequential mwords (types_file,types_modules) (defs_file,defs_mod
         (separate_map hardline)
           (fun lib -> separate space [string "open import";string lib]) defs_modules;hardline;
         hardline;
-        valdefs]);
+        valdefs;
+        hardline;
+        initregstate_def]);
   (* (print state_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;

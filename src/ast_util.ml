@@ -755,3 +755,27 @@ and tyvars_of_typ_arg (Typ_arg_aux (ta,_)) =
   | Typ_arg_nexp nexp -> tyvars_of_nexp nexp
   | Typ_arg_typ typ -> tyvars_of_typ typ
   | Typ_arg_order _ -> KidSet.empty
+
+let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
+  let wrap e_aux typ = E_aux (e_aux, (l, annot typ)) in
+  match typ_aux with
+  | Typ_id id ->
+     wrap (E_app (prepend_id "undefined_" id, [wrap (E_lit (mk_lit L_unit)) unit_typ])) typ
+  | Typ_app (_,[start;size;_;_]) when mwords && is_bitvector_typ typ ->
+     wrap (E_app (mk_id "undefined_bitvector",
+       undefined_of_typ_args mwords l annot start @
+       undefined_of_typ_args mwords l annot size)) typ
+  | Typ_app (id, args) ->
+     wrap (E_app (prepend_id "undefined_" id,
+       List.concat (List.map (undefined_of_typ_args mwords l annot) args))) typ
+  | Typ_var kid ->
+     (* FIXME: bit of a hack, need to add a restriction to how
+        polymorphic undefined can be in the type checker to
+        guarantee this always works. *)
+     wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
+  | Typ_fn _ -> assert false
+and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
+  match typ_arg_aux with
+  | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
+  | Typ_arg_typ typ -> [undefined_of_typ mwords l annot typ]
+  | Typ_arg_order _ -> []
