@@ -121,7 +121,7 @@ let check_ast (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.E
 let opt_ddump_raw_mono_ast = ref false
 
 let monomorphise_ast locs ast =
-  let ast = Monomorphise.split_defs locs ast in
+  let ast = Monomorphise.monomorphise (!opt_lem_mwords) locs ast in
   let () = if !opt_ddump_raw_mono_ast then Pretty_print.pp_defs stdout ast else () in
   let ienv = Type_check.Env.no_casts Type_check.initial_env in
   Type_check.check ienv ast

@@ -3,6 +3,9 @@ open Ast_util
 open PPrint
 open Type_check
 
+(* Option to turn tracing features on or off *)
+let opt_trace_ocaml = ref false
+
 type ctx =
   { register_inits : tannot exp list;
     externs : id Bindings.t;
@@ -61,7 +64,10 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
   match typ_aux with
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
-  | Typ_app (id, typs) -> string ("\"APP" ^ string_of_id id ^ "\"")
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) ->
+     let farg = gensym () in
+     separate space [string "string_of_list \", \""; parens (separate space [string "fun"; farg; string "->"; ocaml_string_typ typ farg]); arg]
+  | Typ_app (_, _) -> assert false
   | Typ_tup typs ->
      let args = List.map (fun _ -> gensym ()) typs in
      let body =
@@ -72,6 +78,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
   | Typ_fn (typ1, typ2, _) -> string "\"FN\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ | Typ_wild -> assert false
+
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
@@ -119,7 +126,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_num n -> parens (string "big_int_of_int" ^^ space ^^ string (string_of_int n))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
-  | L_real str -> parens (string "Num.num_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
+  | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
   | _ -> string "LIT"
 
 let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
@@ -199,11 +206,20 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      ^/^ string "in"
      ^/^ string "loop ()"
   | E_lit _ | E_list _ | E_id _ | E_tuple _ -> ocaml_atomic_exp ctx exp
-  | E_for (id, exp_from, exp_to, exp_step, _, exp_body) ->
+  | E_for (id, exp_from, exp_to, exp_step, ord, exp_body) ->
      let loop_var = separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"] in
-     let loop_mod = string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step in
+     let loop_mod =
+       match ord with
+       | Ord_aux (Ord_inc, _) -> string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_dec, _) -> string "sub_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+     in
+     let loop_compare =
+       match ord with
+       | Ord_aux (Ord_inc, _) -> string "le_big_int"
+       | Ord_aux (Ord_dec, _) -> string "gt_big_int"
+     in
      let loop_body =
-       separate space [string "if"; zencode ctx id; string "<="; ocaml_atomic_exp ctx exp_to]
+       separate space [string "if"; loop_compare; zencode ctx id; ocaml_atomic_exp ctx exp_to]
        ^/^ separate space [string "then";
              parens (ocaml_atomic_exp ctx exp_body ^^ semi ^^ space ^^ string "loop" ^^ space ^^ parens loop_mod)]
        ^/^ string "else ()"
@@ -240,7 +256,13 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        match Env.lookup_id id (env_of exp) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
        | Enum _ | Union _ -> zencode_upper ctx id
-       | Register _ -> parens (string ("trace \"Read: " ^ string_of_id id ^ "\";") ^^ space ^^ bang ^^ zencode ctx id)
+       | Register typ ->
+          if !opt_trace_ocaml then
+            let var = gensym () in
+            let str_typ = parens (ocaml_string_typ (Rewriter.simple_typ typ) var) in
+            parens (separate space [string "let"; var; equals; bang ^^ zencode ctx id; string "in";
+                                    string "trace_read" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ str_typ ^^ semi; var])
+          else bang ^^ zencode ctx id
        | Local (Mutable, _) -> bang ^^ zencode ctx id
      end
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
@@ -254,8 +276,12 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
        | Register typ ->
           let var = gensym () in
           let traced_exp =
-            parens (separate space [string "let"; var; equals; ocaml_atomic_exp ctx exp; string "in";
-                                    string "trace_write" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ parens (ocaml_string_typ (Rewriter.simple_typ typ) var) ^^ semi; var])
+            if !opt_trace_ocaml then
+              let var = gensym () in
+              let str_typ = parens (ocaml_string_typ (Rewriter.simple_typ typ) var) in
+              parens (separate space [string "let"; var; equals; ocaml_atomic_exp ctx exp; string "in";
+                                      string "trace_write" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ str_typ ^^ semi; var])
+            else ocaml_atomic_exp ctx exp
           in
           separate space [zencode ctx id; string ":="; traced_exp]
        | _ -> separate space [zencode ctx id; string ":="; ocaml_exp ctx exp]
@@ -331,22 +357,36 @@ let ocaml_funcls ctx =
      in
      (arg_sym, string_of_arg, ret_sym, string_of_ret)
   in
+  let sail_call id arg_sym pat_sym ret_sym =
+    if !opt_trace_ocaml
+    then separate space [string "sail_trace_call"; string_lit (string_of_id id); parens (arg_sym ^^ space ^^ pat_sym); ret_sym]
+    else separate space [string "sail_call"]
+  in
+  let ocaml_funcl call string_of_arg string_of_ret =
+    if !opt_trace_ocaml
+    then (call ^^ twice hardline ^^ string_of_arg ^^ twice hardline ^^ string_of_ret)
+    else call
+  in
   function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pat, exp),_)] ->
      let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
      let pat_sym = gensym () in
-     let annot_pat = parens (separate space [parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1); string "as"; pat_sym]) in
+     let annot_pat =
+       let pat = parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1) in
+       if !opt_trace_ocaml
+       then parens (separate space [pat; string "as"; pat_sym])
+       else pat
+     in
      let call_header = function_header () in
      let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
      let call =
        separate space [call_header; zencode ctx id; annot_pat; colon; ocaml_typ ctx typ2; equals;
-                       string "sail_trace_call"; string_lit (string_of_id id); parens (arg_sym ^^ space ^^ pat_sym); ret_sym;
-                       string "(fun r ->"]
+                       sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
        ^//^ ocaml_exp ctx exp
        ^^ rparen
      in
-     call ^^ twice hardline ^^ string_of_arg ^^ twice hardline ^^ string_of_ret
+     ocaml_funcl call string_of_arg string_of_ret
   | funcls ->
      let id = funcls_id funcls in
      let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
@@ -355,12 +395,11 @@ let ocaml_funcls ctx =
      let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
      let call =
        separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1); equals;
-                       string "sail_trace_call"; string_lit (string_of_id id); parens (arg_sym ^^ space ^^ pat_sym); ret_sym;
-                       string "(fun r ->"]
+                       sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
        ^//^ (separate space [string "match"; pat_sym; string "with"] ^^ hardline ^^ ocaml_funcl_matches ctx funcls)
        ^^ rparen
      in
-     call ^^ twice hardline ^^ string_of_arg ^^ twice hardline ^^ string_of_ret
+     ocaml_funcl call string_of_arg string_of_ret
 
 let ocaml_fundef ctx (FD_aux (FD_function (_, _, _, funcls), _)) =
   ocaml_funcls ctx funcls
@@ -390,7 +429,6 @@ let rec ocaml_enum ctx = function
   | [] -> empty
 
 (* We generate a string_of_X ocaml function for each type X, to be used for debugging purposes *)
-
 
 let ocaml_def_end = string ";;" ^^ twice hardline
 
@@ -491,6 +529,7 @@ let ocaml_main spec =
           separate space [string "let"; string "()"; equals]
           ^//^ (string "Random.self_init ();"
                 ^/^ string "load_elf ();"
+                ^/^ string (if !opt_trace_ocaml then "Sail_lib.opt_trace := true;" else "Sail_lib.opt_trace := false;")
                 ^/^ string "initialize_registers ();"
                 ^/^ string "Printexc.record_backtrace true;"
                 ^/^ string "zmain ()")

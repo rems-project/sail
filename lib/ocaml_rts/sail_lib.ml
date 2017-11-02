@@ -2,6 +2,8 @@ open Big_int
 
 type 'a return = { return : 'b . 'a -> 'b }
 
+let opt_trace = ref false
+
 let trace_depth = ref 0
 let random = ref false
 
@@ -15,11 +17,19 @@ let sail_call (type t) (f : _ -> t) =
   with M.Return x -> x
 
 let trace str =
-  if !trace_depth < 0 then trace_depth := 0 else ();
-  prerr_endline (String.make (!trace_depth * 2) ' ' ^ str)
+  if !opt_trace
+  then
+    begin
+      if !trace_depth < 0 then trace_depth := 0 else ();
+      prerr_endline (String.make (!trace_depth * 2) ' ' ^ str)
+    end
+  else ()
 
 let trace_write name str =
   trace ("Write: " ^ name ^ " " ^ str)
+
+let trace_read name str =
+  trace ("Read: " ^ name ^ " " ^ str)
 
 let sail_trace_call (type t) (name : string) (in_string : string) (string_of_out : t -> string) (f : _ -> t) =
   let module M =
@@ -122,7 +132,7 @@ let slice (list, n, m) =
   let m = int_of_big_int m in
   List.rev (take m (drop n (List.rev list)))
 
-let eq_list (xs, ys) = List.for_all2 (fun x y -> x == y) xs ys
+let eq_list (xs, ys) = List.for_all2 (fun x y -> x = y) xs ys
 
 let access (xs, n) = List.nth (List.rev xs) (int_of_big_int n)
 
@@ -233,8 +243,14 @@ let sub_vec_int (v, n) =
   sub_vec(v, n_bits)
 
 let get_slice_int (n, m, o) =
-  let bits = bits_of_big_int (power_int_positive_big_int 2 (add_big_int n o)) m in
+  let bits = bits_of_big_int (power_int_positive_big_int 2 (add_big_int n o)) (abs_big_int m) in
+  let bits =
+    if lt_big_int m zero_big_int
+    then sub_vec (List.map (fun _ -> B0) bits, bits)
+    else bits
+  in
   let slice = List.rev (take (int_of_big_int n) (drop (int_of_big_int o) (List.rev bits))) in
+  assert (eq_big_int (big_int_of_int (List.length slice)) n);
   slice
 
 let hex_char = function
@@ -373,7 +389,9 @@ let eq_string (str1, str2) = String.compare str1 str2 == 0
 let lt_int (x, y) = lt_big_int x y
 
 let set_slice (out_len, slice_len, out, n, slice) =
-  update_subrange(out, n, sub_big_int n (big_int_of_int (List.length slice - 1)), slice)
+  let out = update_subrange(out, add_big_int n (big_int_of_int (List.length slice - 1)), n, slice) in
+  assert (List.length out = int_of_big_int out_len);
+  out
 
 let set_slice_int (_, _, _, _) = assert false
 
@@ -403,8 +421,18 @@ let min_int (x, y) = min_big_int x y
 
 let undefined_real () = Num.num_of_int 0
 
+let real_of_string str =
+  try
+    let point = String.index str '.' in
+    let whole = Num.num_of_string (String.sub str 0 point) in
+    let frac_str = String.sub str (point + 1) (String.length str - (point + 1)) in
+    let frac = Num.div_num (Num.num_of_string frac_str) (Num.num_of_big_int (power_int_positive_int 10 (String.length frac_str))) in
+    Num.add_num whole frac
+  with
+  | Not_found -> Num.num_of_string str
+
 (* Not a very good sqrt implementation *)
-let sqrt_real x = Num.num_of_string (string_of_float (sqrt (Num.float_of_num x)))
+let sqrt_real x = real_of_string (string_of_float (sqrt (Num.float_of_num x)))
 
 let print_int (str, x) =
   prerr_endline (str ^ string_of_big_int x)
@@ -418,3 +446,8 @@ let string_of_zbool = function
   | false -> "false"
 let string_of_zreal r = Num.string_of_num r
 let string_of_zstring str = "\"" ^ String.escaped str ^ "\""
+
+let rec string_of_list sep string_of = function
+  | [] -> ""
+  | [x] -> string_of x
+  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)

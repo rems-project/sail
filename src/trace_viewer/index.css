@@ -1,0 +1,86 @@
+
+body {
+    background-color: #202020;
+    color: #DCDCCC;
+    font-family: monospace;
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+img {
+    height: 30px;
+}
+
+#control {
+    position: fixed;
+    bottom: 0px;
+    left:10%;
+    right:10%;
+    width:80%;
+}
+
+#command {
+    font-size: 16pt;
+    width: 100%;
+}
+
+.call {
+    background-color: #313131;
+    border: 1px;
+    border-left: 5px;
+    border-color: rgb(118, 173, 160);
+    border-style: solid;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin: 0px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+}
+
+.write {
+    background-color: #313131;
+    border: 1px;
+    border-left: 5px;
+    border-color: rgb(255, 40, 40);
+    border-style: solid;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin: 0px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+}
+
+.load {
+    background-color: #313131;
+    color: white;
+    border: 1px;
+    border-left: 5px;
+    border-color: #ff9100;
+    border-style: solid;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin: 0px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+}
+
+.read {
+    background-color: #313131;
+    border: 1px;
+    border-left: 5px;
+    border-color: rgb(107, 199, 47);
+    border-style: solid;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin: 0px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+}
+
+.tree {
+    padding-left: 20px;
+}

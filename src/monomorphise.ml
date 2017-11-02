@@ -264,24 +264,24 @@ and contains_exist_arg (Typ_arg_aux (arg,_)) =
       -> false
   | Typ_arg_typ typ -> contains_exist typ
 
+let rec size_nvars_nexp (Nexp_aux (ne,_)) =
+  match ne with
+  | Nexp_var v -> [v]
+  | Nexp_id _
+  | Nexp_constant _
+    -> []
+  | Nexp_times (n1,n2)
+  | Nexp_sum (n1,n2)
+  | Nexp_minus (n1,n2)
+    -> size_nvars_nexp n1 @ size_nvars_nexp n2
+  | Nexp_exp n
+  | Nexp_neg n
+    -> size_nvars_nexp n
+
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
 let split_src_type id ty (TypQ_aux (q,ql)) =
   let i = string_of_id id in
-  let rec size_nvars_nexp (Nexp_aux (ne,_)) =
-    match ne with
-    | Nexp_var v -> [v]
-    | Nexp_id _
-    | Nexp_constant _
-      -> []
-    | Nexp_times (n1,n2)
-    | Nexp_sum (n1,n2)
-    | Nexp_minus (n1,n2)
-      -> size_nvars_nexp n1 @ size_nvars_nexp n2
-    | Nexp_exp n
-    | Nexp_neg n
-      -> size_nvars_nexp n
-  in
   (* This was originally written for the general case, but I cut it down to the
      more manageable prenex-form below *)
   let rec size_nvars_ty (Typ_aux (ty,l) as typ) =
@@ -575,6 +575,32 @@ let lit_match = function
   | (L_one  | L_true ), (L_one  | L_true ) -> true
   | l1,l2 -> l1 = l2
 
+(* There's no undefined nexp, so replace undefined sizes with a plausible size.
+   32 is used as a sensible default. *)
+let fabricate_nexp l = function
+  | None -> Nexp_aux (Nexp_constant 32,Unknown)
+  | Some (env,typ,_) ->
+     match Type_check.destruct_exist env typ with
+     | None -> Nexp_aux (Nexp_constant 32,Unknown)
+     | Some (kids,nc,typ') ->
+        match kids,nc,Env.expand_synonyms env typ' with
+        | ([kid],NC_aux (NC_set (kid',i::_),_),
+           Typ_aux (Typ_app (Id_aux (Id "range",_),
+                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+            when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
+              Kid.compare kid kid''' = 0 ->
+           Nexp_aux (Nexp_constant i,Unknown)
+        | ([kid],NC_aux (NC_true,_),
+           Typ_aux (Typ_app (Id_aux (Id "range",_),
+                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+            when Kid.compare kid kid'' = 0 &&
+              Kid.compare kid kid''' = 0 ->
+           Nexp_aux (Nexp_constant 32,Unknown)
+        | _ -> raise (Reporting_basic.err_general l
+                        ("Undefined value at unsupported type " ^ string_of_typ typ))
+
 type 'a matchresult =
   | DoesMatch of 'a
   | DoesNotMatch
@@ -614,12 +640,20 @@ let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
      let checkpat = function
        | P_aux (P_lit (L_aux (lit_p, _)),_) ->
           if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
-       | P_aux (P_var (P_aux (P_id id,_), kid),_) ->
+       | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
           begin
             match lit_e with
             | L_num i ->
                DoesMatch ([id, E_aux (e,(l,annot))],
                           [kid,Nexp_aux (Nexp_constant i,Unknown)])
+            (* For undefined we fix the type-level size (because there's no good
+               way to construct an undefined size), but leave the term as undefined
+               to make the meaning clear. *)
+            | L_undef ->
+               let nexp = fabricate_nexp l annot in
+               let typ = subst_src_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+               DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,None))),(l,None))],
+                          [kid,nexp])
             | _ ->
                (Reporting_basic.print_err false true lit_l "Monomorphisation"
                   "Unexpected kind of literal for var match"; GiveUp)
@@ -692,7 +726,7 @@ let try_app (l,ann) (Id_aux (id,_),args) =
     | _ -> None
   else if id = Id "ex_int" then
     match args with
-    | [E_aux (E_lit (L_aux (L_num _,_)),_) as exp] -> Some exp
+    | [E_aux (E_lit lit,(l,_))] -> Some (E_aux (E_lit lit,(l,ann)))
     | _ -> None
   else if id = Id "vector_access" || id = Id "bitvector_access" then
     match args with
@@ -1444,8 +1478,262 @@ let split_defs splits defs =
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
       | DEF_val lb -> [DEF_val (map_letbind lb)]
       | DEF_scattered sd -> List.map (fun x -> DEF_scattered x) (map_scattered_def sd)
-
     in
     Defs (List.concat (List.map map_def defs))
   in
   map_locs splits defs'
+
+
+
+(* The next section of code turns atom('n) types into itself('n) types, which
+   survive into the Lem output, so can be used to parametrise functions over
+   internal bitvector lengths (such as datasize and regsize in ARM specs *)
+
+module AtomToItself =
+struct
+
+let findi f =
+  let rec aux n = function
+    | [] -> None
+    | h::t -> match f h with Some x -> Some (n,x) | _ -> aux (n+1) t
+  in aux 0
+
+let mapat f is xs =
+  let rec aux n = function
+    | _, [] -> []
+    | (i,_)::is, h::t when i = n ->
+       let h' = f h in
+       let t' = aux (n+1) (is, t) in
+       h'::t'
+    | is, h::t ->
+       let t' = aux (n+1) (is, t) in
+       h::t'
+  in aux 0 (is, xs)
+
+let mapat_extra f is xs =
+  let rec aux n = function
+    | _, [] -> [], []
+    | (i,v)::is, h::t when i = n ->
+       let h',x = f v h in
+       let t',xs = aux (n+1) (is, t) in
+       h'::t',x::xs
+    | is, h::t ->
+       let t',xs = aux (n+1) (is, t) in
+       h::t',xs
+  in aux 0 (is, xs)
+
+let tyvars_bound_in_pat pat =
+  let open Rewriter in
+  fst (fold_pat
+         { (compute_pat_alg KidSet.empty KidSet.union) with
+           p_var = (fun ((s,pat),kid) -> KidSet.add kid s, P_var (pat,kid)) }
+         pat)
+let tyvars_bound_in_lb (LB_aux (LB_val (pat,_),_)) = tyvars_bound_in_pat pat
+
+let rec sizes_of_typ (Typ_aux (t,l)) =
+  match t with
+    Typ_wild
+  | Typ_id _
+  | Typ_var _
+    -> KidSet.empty
+  | Typ_fn _ -> raise (Reporting_basic.err_general l
+                         "Function type on expressinon")
+  | Typ_tup typs -> kidset_bigunion (List.map sizes_of_typ typs)
+  | Typ_exist (kids,_,typ) ->
+     List.fold_left (fun s k -> KidSet.remove k s) (sizes_of_typ typ) kids
+  | Typ_app (Id_aux (Id "vector",_),
+             [_;Typ_arg_aux (Typ_arg_nexp size,_);
+              _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+     KidSet.of_list (size_nvars_nexp size)
+  | Typ_app (_,tas) ->
+     kidset_bigunion (List.map sizes_of_typarg tas)
+and sizes_of_typarg (Typ_arg_aux (ta,_)) =
+  match ta with
+    Typ_arg_nexp _
+  | Typ_arg_order _
+    -> KidSet.empty
+  | Typ_arg_typ typ -> sizes_of_typ typ
+
+let sizes_of_annot = function
+  | _,None -> KidSet.empty
+  | _,Some (_,typ,_) -> sizes_of_typ typ
+
+let change_parameter_pat kid = function
+  | P_aux (P_id var, (l,_))
+  | P_aux (P_typ (_,P_aux (P_id var, (l,_))),_)
+    -> P_aux (P_id var, (l,None)), (var,kid)
+  | P_aux (_,(l,_)) -> raise (Reporting_basic.err_unreachable l
+                                "Expected variable pattern")
+
+(* We add code to change the itself('n) parameter into the corresponding
+   integer. *)
+let add_var_rebind exp (var,kid) =
+  let l = Generated Unknown in
+  let annot = (l,None) in
+  E_aux (E_let (LB_aux (LB_val (P_aux (P_id var,annot),
+                                E_aux (E_app (mk_id "size_itself_int",[E_aux (E_id var,annot)]),annot)),annot),exp),annot)
+
+(* atom('n) arguments to function calls need to be rewritten *)
+let replace_with_the_value (E_aux (_,(l,_)) as exp) =
+  let env = env_of exp in
+  let typ, wrap = match typ_of exp with
+    | Typ_aux (Typ_exist (kids,nc,typ),l) -> typ, fun t -> Typ_aux (Typ_exist (kids,nc,t),l)
+    | typ -> typ, fun x -> x
+  in
+  let typ = Env.expand_synonyms env typ in
+  let mk_exp nexp l l' =
+     E_aux (E_cast (wrap (Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
+                                      [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated Unknown)),
+                    E_aux (E_app (Id_aux (Id "make_the_value",Generated Unknown),[exp]),(Generated l,None))),
+            (Generated l,None))
+  in
+  match typ with
+  | Typ_aux (Typ_app (Id_aux (Id "range",_),
+                      [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp nexp',_)]),_)
+    when nexp = nexp' ->
+     mk_exp nexp l l'
+  | _ -> raise (Reporting_basic.err_unreachable l
+                  "atom stopped being an atom?")
+
+let replace_type env typ =
+  let Typ_aux (t,l) = Env.expand_synonyms env typ in
+  match t with
+  | Typ_app (Id_aux (Id "range",_),
+             [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp _,_)]) ->
+     Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
+                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
+  | _ -> raise (Reporting_basic.err_unreachable l
+                  "atom stopped being an atom?")
+
+
+let rewrite_size_parameters env (Defs defs) =
+  let open Rewriter in
+  let size_vars exp =
+    fst (fold_exp
+           { (compute_exp_alg KidSet.empty KidSet.union) with
+             e_aux = (fun ((s,e),annot) -> KidSet.union s (sizes_of_annot annot), E_aux (e,annot));
+             e_let = (fun ((sl,lb),(s2,e2)) -> KidSet.union sl (KidSet.diff s2 (tyvars_bound_in_lb lb)), E_let (lb,e2));
+             pat_exp = (fun ((sp,pat),(s,e)) -> KidSet.diff s (tyvars_bound_in_pat pat), Pat_exp (pat,e))}
+           exp)
+  in
+  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pat,exp),(l,_))) =
+    let sizes = size_vars exp in
+    (* TODO: what, if anything, should sequential be? *)
+    let visible_tyvars =
+      KidSet.union (Pretty_print_lem.lem_tyvars_of_typ false true (pat_typ_of pat))
+         (Pretty_print_lem.lem_tyvars_of_typ false true (typ_of exp))
+    in
+    let expose_tyvars = KidSet.diff sizes visible_tyvars in
+    let parameters = match pat with
+      | P_aux (P_tup ps,_) -> ps
+      | _ -> [pat]
+    in
+    let to_change = List.map
+      (fun kid ->
+        let check (P_aux (_,(_,Some (env,typ,_)))) =
+          match Env.expand_synonyms env typ with
+            Typ_aux (Typ_app(Id_aux (Id "range",_),
+                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_);
+                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_) ->
+              if Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 then Some kid else None
+          | _ -> None
+        in match findi check parameters with
+        | None -> raise (Reporting_basic.err_general l
+                           ("Unable to find an argument for " ^ string_of_kid kid))
+        | Some i -> i)
+      (KidSet.elements expose_tyvars)
+    in
+    let to_change = List.sort compare to_change in
+    match Bindings.find id fsizes with
+    | old -> if old = to_change then fsizes else
+        raise (Reporting_basic.err_general l
+                 ("Different size type variables in different clauses of " ^ string_of_id id))
+    | exception Not_found -> Bindings.add id to_change fsizes
+  in
+  let sizes_def fsizes = function
+    | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) ->
+       List.fold_left sizes_funcl fsizes funcls
+    | _ -> fsizes
+  in
+  let fn_sizes = List.fold_left sizes_def Bindings.empty defs in
+
+  let rewrite_e_app (id,args) =
+    match Bindings.find id fn_sizes with
+    | [] -> E_app (id,args)
+    | to_change ->
+       let args' = mapat replace_with_the_value to_change args in
+       E_app (id,args')
+    | exception Not_found -> E_app (id,args)
+  in
+  let rewrite_funcl (FCL_aux (FCL_Funcl (id,pat,body),(l,annot))) =
+    let pat,body =
+      (* Update pattern and add itself -> nat wrapper to body *)
+      match Bindings.find id fn_sizes with
+      | [] -> pat,body
+      | to_change ->
+         let pat, vars =
+           match pat with
+             P_aux (P_tup pats,(l,_)) ->
+               let pats, vars = mapat_extra change_parameter_pat to_change pats in
+               P_aux (P_tup pats,(l,None)), vars
+           | P_aux (_,(l,_)) ->
+              begin
+                match to_change with
+                | [0,kid] ->
+                   let pat, var = change_parameter_pat kid pat in
+                   pat, [var]
+                | _ ->
+                   raise (Reporting_basic.err_unreachable l
+                            "Expected multiple parameters at single parameter")
+              end
+         in
+         let body = List.fold_left add_var_rebind body vars in
+         pat,body
+      | exception Not_found -> pat,body
+    in
+    (* Update function applications *)
+    let body = fold_exp { id_exp_alg with e_app = rewrite_e_app } body in
+    FCL_aux (FCL_Funcl (id,pat,body),(l,None))
+  in
+  let rewrite_def = function
+    | DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,funcls),(l,_))) ->
+       (* TODO rewrite tannopt? *)
+       DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,List.map rewrite_funcl funcls),(l,None)))
+    | DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot))) as spec ->
+       begin
+         match Bindings.find id fn_sizes with
+         | [] -> spec
+         | to_change ->
+            let typschm = match typschm with
+              | TypSchm_aux (TypSchm_ts (tq,typ),l) ->
+                 let typ = match typ with
+                   | Typ_aux (Typ_fn (Typ_aux (Typ_tup ts,l),t2,eff),l2) ->
+                      Typ_aux (Typ_fn (Typ_aux (Typ_tup (mapat (replace_type env) to_change ts),l),t2,eff),l2)
+                   | _ -> replace_type env typ
+                 in TypSchm_aux (TypSchm_ts (tq,typ),l)
+            in
+            DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,None)))
+         | exception Not_found -> spec
+       end
+    | def -> def
+  in
+(*
+  Bindings.iter (fun id args ->
+    print_endline (string_of_id id ^ " needs " ^
+                     String.concat ", " (List.map string_of_int args))) fn_sizes
+*)
+  Defs (List.map rewrite_def defs)
+
+end
+
+let monomorphise mwords splits defs =
+  let defs = split_defs splits defs in
+  (* TODO: currently doing this because constant propagation leaves numeric literals as
+     int, try to avoid this later; also use final env for DEF_spec case above, because the
+     type checker doesn't store the env at that point :( *)
+  if mwords then
+    let (defs,env) = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
+    let defs = AtomToItself.rewrite_size_parameters env defs in
+    defs
+  else
+    defs

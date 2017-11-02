@@ -507,6 +507,7 @@ end = struct
     || Id.compare id (mk_id "real") = 0
     || Id.compare id (mk_id "list") = 0
     || Id.compare id (mk_id "string") = 0
+    || Id.compare id (mk_id "itself") = 0
 
   (* Check if a type, order, or n-expression is well-formed. Throws a
      type error if the type is badly formed. FIXME: Add arity to type
@@ -921,6 +922,21 @@ let lvector_typ env l typ =
 let initial_env =
   Env.empty
   |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args)))
+
+  (* Internal functions for Monomorphise.AtomToItself *)
+
+  |> Env.add_extern (mk_id "size_itself_int") "size_itself_int"
+  |> Env.add_val_spec (mk_id "size_itself_int")
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+                                  Parse_ast.Unknown)],Parse_ast.Unknown),
+       function_typ (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))])
+         (atom_typ (nvar (mk_kid "n"))) no_effect)
+  |> Env.add_extern (mk_id "make_the_value") "make_the_value"
+  |> Env.add_val_spec (mk_id "make_the_value")
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+                                  Parse_ast.Unknown)],Parse_ast.Unknown),
+       function_typ (atom_typ (nvar (mk_kid "n")))
+         (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))]) no_effect)
 
 let ex_counter = ref 0
 
@@ -2644,9 +2660,9 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      annot_exp (E_loop (loop_type, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
-       let f, t = match ord with
-         | Ord_aux (Ord_inc, _) -> f, t
-         | Ord_aux (Ord_dec, _) -> t, f (* reverse direction for downto loop *)
+       let f, t, is_dec = match ord with
+         | Ord_aux (Ord_inc, _) -> f, t, false
+         | Ord_aux (Ord_dec, _) -> t, f, true (* reverse direction to typechecking downto as upto loop *)
        in
        let inferred_f = irule infer_exp env f in
        let inferred_t = irule infer_exp env t in
@@ -2668,7 +2684,9 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
               let env = Env.add_constraint (nc_and (nc_lteq l1 (nvar kid)) (nc_lteq (nvar kid) u2)) env in
               let loop_vtyp = atom_typ (nvar kid) in
               let checked_body = crule check_exp (Env.add_local v (Immutable, loop_vtyp) env) body unit_typ in
-              annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
+              if not is_dec (* undo reverse direction in annoteded ast for downto loop *)
+              then annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
+              else annot_exp (E_for (v, inferred_t, inferred_f, checked_step, ord, checked_body)) unit_typ
             end
        | _, _ -> typ_error l "Ranges in foreach overlap"
      end

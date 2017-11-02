@@ -913,6 +913,7 @@ let initial_kind_env =
     ("atom", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});
     ("option", { k = K_Lam( [{k=K_Typ}], {k=K_Typ}) });
     ("implicit", {k = K_Lam( [{k = K_Nat}], {k=K_Typ})} );
+    ("itself", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});
   ]
 
 let typschm_of_string order str =
