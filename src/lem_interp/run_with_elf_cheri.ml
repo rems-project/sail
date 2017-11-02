@@ -1285,6 +1285,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
             let npc_addr = add_address_nat pc_val 4 in
             let npc_reg = register_value_of_address npc_addr Sail_impl_base.D_decreasing in
             reg := Reg.add "nextPC" npc_reg !reg;
+            reg := Reg.add "inCCallDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
           | Some 1 ->
             reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
             reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
