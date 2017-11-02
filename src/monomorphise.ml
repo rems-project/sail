@@ -1438,6 +1438,8 @@ let split_defs splits defs =
       | DEF_reg_dec _
       | DEF_comm _
       | DEF_overload _
+      | DEF_fixity _
+      | DEF_internal_mutrec _
         -> [d]
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
       | DEF_val lb -> [DEF_val (map_letbind lb)]
@@ -1447,4 +1449,3 @@ let split_defs splits defs =
     Defs (List.concat (List.map map_def defs))
   in
   map_locs splits defs'
-

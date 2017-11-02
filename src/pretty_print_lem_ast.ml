@@ -57,8 +57,17 @@ let rec list_pp i_format l_format =
     | [i] -> fprintf ppf "%a" l_format i
     | i::is -> fprintf ppf "%a%a" i_format i (list_pp i_format l_format) is
 
+let pp_option_lem some_format =
+  fun ppf opt ->
+    match opt with
+    | Some a -> fprintf ppf "(Just %a)" some_format a
+    | None -> fprintf ppf "Nothing"
+
+let pp_bool_lem ppf b = fprintf ppf (if b then "true" else "false")
+
 let kwd ppf s = fprintf ppf "%s" s
 let base ppf s = fprintf ppf "%s" s
+let quot_string ppf s = fprintf ppf "\"%s\"" s
 
 let lemnum default n = match n with
   | 0   -> "zero"
@@ -523,12 +532,8 @@ let pp_lem_default ppf (DT_aux(df,l)) =
 let pp_lem_spec ppf (VS_aux(v,(l,annot))) =
   let print_spec ppf v =
     match v with
-    | VS_val_spec(ts,id,None,false) ->
-      fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id
-    | VS_val_spec(ts,id,Some s,false) ->
-      fprintf ppf "@[<0>(%a %a %a \"%s\")@]@\n" kwd "VS_extern_spec" pp_lem_typscm ts pp_lem_id id s
-    | VS_val_spec(ts,id,None,true) ->
-       fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_cast_spec" pp_lem_typscm ts pp_lem_id id
+    | VS_val_spec(ts,id,ext_opt,is_cast) ->
+      fprintf ppf "@[<0>(%a %a %a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id (pp_option_lem quot_string) ext_opt pp_bool_lem is_cast
     | _ -> failwith "Invalid valspec"
   in
   fprintf ppf "@[<0>(VS_aux %a (%a, %a))@]" print_spec v pp_lem_l l pp_annot annot

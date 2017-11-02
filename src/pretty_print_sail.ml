@@ -408,13 +408,13 @@ let doc_default (DT_aux(df,_)) = match df with
   | DT_order(ord) -> separate space [string "default"; string "Order"; doc_ord ord]
 
 let doc_spec (VS_aux(v,_)) = match v with
-  | VS_val_spec(ts,id,None,false) ->
-     separate space [string "val"; doc_typscm ts; doc_id id]
-  | VS_val_spec (ts, id,None,true) ->
-     separate space [string "val"; string "cast"; doc_typscm ts; doc_id id]
-  | VS_val_spec(ts,id,Some ext,false) ->
-     separate space [string "val"; string "extern"; doc_typscm ts;
-                     doc_op equals (doc_id id) (dquotes (string ext))]
+  | VS_val_spec(ts,id,ext_opt,is_cast) ->
+     let cast_pp = if is_cast then [string "cast"] else [] in
+     let extern_kwd_pp, id_pp = match ext_opt with
+       | Some ext -> [string "extern"], doc_op equals (doc_id id) (dquotes (string ext))
+       | None -> [], doc_id id
+     in
+     separate space ([string "val"] @ cast_pp @ extern_kwd_pp @ [doc_typscm ts] @ [id_pp])
   | _ -> failwith "Invalid valspec"
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with

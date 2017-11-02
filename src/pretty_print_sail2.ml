@@ -300,6 +300,10 @@ let doc_dec (DEC_aux (reg,_)) =
 let doc_field (typ, id) =
   separate space [doc_id id; colon; doc_typ typ]
 
+let doc_union (Tu_aux (tu, l)) = match tu with
+  | Tu_id id -> doc_id id
+  | Tu_ty_id (typ, id) -> separate space [doc_id id; colon; doc_typ typ]
+
 let doc_typdef (TD_aux(td,_)) = match td with
   | TD_abbrev (id, _, typschm) ->
      begin
@@ -316,6 +320,11 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | TD_record (id, _, TypQ_aux (TypQ_tq qs, _), fields, _) ->
      separate space [string "struct"; doc_id id; doc_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
+  | TD_variant (id, _, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, _, TypQ_aux (TypQ_tq [], _), unions, _) ->
+     separate space [string "union"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
+  | TD_variant (id, _, TypQ_aux (TypQ_tq qs, _), unions, _) ->
+     separate space [string "union"; doc_id id; doc_quants qs; equals;
+                     surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | _ -> string "TYPEDEF"
 
 let doc_spec (VS_aux(v,_)) =
