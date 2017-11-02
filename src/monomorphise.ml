@@ -575,6 +575,32 @@ let lit_match = function
   | (L_one  | L_true ), (L_one  | L_true ) -> true
   | l1,l2 -> l1 = l2
 
+(* There's no undefined nexp, so replace undefined sizes with a plausible size.
+   32 is used as a sensible default. *)
+let fabricate_nexp l = function
+  | None -> Nexp_aux (Nexp_constant 32,Unknown)
+  | Some (env,typ,_) ->
+     match Type_check.destruct_exist env typ with
+     | None -> Nexp_aux (Nexp_constant 32,Unknown)
+     | Some (kids,nc,typ') ->
+        match kids,nc,Env.expand_synonyms env typ' with
+        | ([kid],NC_aux (NC_set (kid',i::_),_),
+           Typ_aux (Typ_app (Id_aux (Id "range",_),
+                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+            when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
+              Kid.compare kid kid''' = 0 ->
+           Nexp_aux (Nexp_constant i,Unknown)
+        | ([kid],NC_aux (NC_true,_),
+           Typ_aux (Typ_app (Id_aux (Id "range",_),
+                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+            when Kid.compare kid kid'' = 0 &&
+              Kid.compare kid kid''' = 0 ->
+           Nexp_aux (Nexp_constant 32,Unknown)
+        | _ -> raise (Reporting_basic.err_general l
+                        ("Undefined value at unsupported type " ^ string_of_typ typ))
+
 type 'a matchresult =
   | DoesMatch of 'a
   | DoesNotMatch
@@ -614,12 +640,20 @@ let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
      let checkpat = function
        | P_aux (P_lit (L_aux (lit_p, _)),_) ->
           if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
-       | P_aux (P_var (P_aux (P_id id,_), kid),_) ->
+       | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
           begin
             match lit_e with
             | L_num i ->
                DoesMatch ([id, E_aux (e,(l,annot))],
                           [kid,Nexp_aux (Nexp_constant i,Unknown)])
+            (* For undefined we fix the type-level size (because there's no good
+               way to construct an undefined size), but leave the term as undefined
+               to make the meaning clear. *)
+            | L_undef ->
+               let nexp = fabricate_nexp l annot in
+               let typ = subst_src_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+               DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,None))),(l,None))],
+                          [kid,nexp])
             | _ ->
                (Reporting_basic.print_err false true lit_l "Monomorphisation"
                   "Unexpected kind of literal for var match"; GiveUp)
@@ -692,7 +726,7 @@ let try_app (l,ann) (Id_aux (id,_),args) =
     | _ -> None
   else if id = Id "ex_int" then
     match args with
-    | [E_aux (E_lit (L_aux (L_num _,_)),_) as exp] -> Some exp
+    | [E_aux (E_lit lit,(l,_))] -> Some (E_aux (E_lit lit,(l,ann)))
     | _ -> None
   else if id = Id "vector_access" || id = Id "bitvector_access" then
     match args with
@@ -1540,11 +1574,12 @@ let add_var_rebind exp (var,kid) =
 
 (* atom('n) arguments to function calls need to be rewritten *)
 let replace_with_the_value (E_aux (_,(l,_)) as exp) =
-  let typ = Env.expand_synonyms (env_of exp) (typ_of exp) in
-  let typ, wrap = match typ with
+  let env = env_of exp in
+  let typ, wrap = match typ_of exp with
     | Typ_aux (Typ_exist (kids,nc,typ),l) -> typ, fun t -> Typ_aux (Typ_exist (kids,nc,t),l)
-    | _ -> typ, fun x -> x
+    | typ -> typ, fun x -> x
   in
+  let typ = Env.expand_synonyms env typ in
   let mk_exp nexp l l' =
      E_aux (E_cast (wrap (Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
                                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated Unknown)),
