@@ -1,18 +1,19 @@
+val string_of_int = "string_of_big_int" : int -> string
 
-val extern int -> string effect pure string_of_int = "string_of_big_int"
+val add = "add" : (int, int) -> int
 
-val extern (int, int) -> int effect pure add = "add"
-val extern (int, int) -> bool effect pure lt = "lt_int"
+val lt = "lt_int" : (int, int) -> bool
 
-overload (deinfix +) [add]
-overload (deinfix <) [lt]
+overload operator + = {add}
 
-val unit -> unit effect pure main
+overload operator < = {lt}
+
+val main : unit -> unit
 
 function main () = {
-  (int) x := 0;
+  x : int = 0;
   while x < 100 do {
-    x := x + 1;
+    x = x + 1;
     print(string_of_int(x))
   }
 }

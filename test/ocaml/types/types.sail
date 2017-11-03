@@ -1,44 +1,44 @@
+enum signal = {Low, High}
 
-typedef signal = enumerate {Low; High}
+enum enum_single = {SingleConstructor}
 
-typedef enum_single = enumerate {SingleConstructor}
+type byte = bits(8)
 
-typedef byte = bit[8]
-typedef b32 = bit[32]
-typedef b64 = bit[64]
+type b32 = bits(32)
 
-register b64 R64
-register b32 R32
-register byte R8
+type b64 = bits(64)
 
-register signal SIGNALREG
+register R64 : b64
 
-typedef TestStruct = const struct {
-  bit[2] field1;
-  byte field2;
-  bool field3
+register R32 : b32
+
+register R8 : byte
+
+register SIGNALREG : signal
+
+struct TestStruct = {
+  field1 : bits(2),
+  field2 : byte,
+  field3 : bool
 }
 
-register TestStruct SREG
+register SREG : TestStruct
 
-typedef option = const union forall Type 'a. {
-    None;
-    'a Some
-}
+union option ('a : Type) = {None, Some : 'a}
 
-register (option<byte>) OREG
+register OREG : option(byte)
 
-val unit -> unit effect {rreg, wreg} main
+val main : unit -> unit effect {rreg, wreg}
 
 function main () = {
-  R8 := 0xFF;
-  SIGNALREG := Low;
+  R8 = 0xFF;
+  SIGNALREG = Low;
   print(if SIGNALREG == Low then "pass" else "fail");
-  SIGNALREG := High;
+  SIGNALREG = High;
   print(if SIGNALREG == High then "pass" else "fail");
-  SREG.field1 := 0b00;
+  SREG.field1 = 0b00;
   print(if SREG.field1 == 0b00 then "pass" else "faiL");
-  SREG.field1 := 0b11;
+  SREG.field1 = 0b11;
   print(if SREG.field1 == 0b11 then "pass" else "faiL");
   print("pass")
 }

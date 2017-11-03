@@ -1,19 +1,18 @@
-
-val unit -> string effect pure hello_world
+val hello_world : unit -> string
 
 function hello_world () = {
-  return "Hello, World!";
+  return("Hello, World!");
   "Unreachable"
 }
 
-val unit -> unit effect {wreg, rreg} main
+val main : unit -> unit effect {wreg, rreg}
 
-register string REG
+register REG : string
 
 function main () = {
-  REG := "Hello, Sail!";
+  REG = "Hello, Sail!";
   print(REG);
-  REG := hello_world ();
+  REG = hello_world();
   print(REG);
-  return ()
+  return(())
 }

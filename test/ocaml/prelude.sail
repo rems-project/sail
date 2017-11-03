@@ -1,142 +1,286 @@
-
 default Order dec
 
-val extern (int, int) -> bool effect pure eq_int = "eq_int"
-val extern forall 'n. (bit['n], bit['n]) -> bool effect pure eq_vec = "eq_list"
-val extern (string, string) -> bool effect pure eq_string = "eq_string"
-val (real, real) -> bool effect pure eq_real
+type bits ('n : Int) = vector('n - 1, 'n, dec, bit)
 
-val extern forall Type 'a. ('a, 'a) -> bool effect pure eq_anything = "(fun (x, y) -> x == y)"
+infix 4 ==
 
-overload (deinfix ==) [eq_int; eq_vec; eq_string; eq_real; eq_anything]
+val eq_atom = "eq_int" : (atom('n), atom('m)) -> bool
+val lteq_atom = "lteq" : (atom('n), atom('m)) -> bool
+val gteq_atom = "gteq" : (atom('n), atom('m)) -> bool
+val lt_atom = "lt" : (atom('n), atom('m)) -> bool
+val gt_atom = "gt" : (atom('n), atom('m)) -> bool
 
-val extern forall Type 'a, Num 'n. vector<'n - 1, 'n, dec, 'a> -> [:'n:] effect pure length = "length"
+val eq_int = "eq_int" : (int, int) -> bool
 
-val extern forall Num 'n, Num 'm, Num 'o (* , 'm >= 'o, 'o >= 0, 'n >= 'm + 1 *).
-  (bit['n], [:'m:], [:'o:]) -> bit['m - ('o - 1)] effect pure vector_subrange = "subrange"
+val eq_vec = "eq_list" : forall 'n. (bits('n), bits('n)) -> bool
 
-(* FIXME: rewriter shouldn't assume this exists *)
-val extern forall Num 'n, Num 'm, Num 'o (* , 'm >= 'o, 'o >= 0, 'n >= 'm + 1 *).
-  (bit['n], [:'m:], [:'o:]) -> bit['m - ('o - 1)] effect pure bitvector_subrange_dec = "subrange"
+val eq_string = "eq_string" : (string, string) -> bool
 
-val extern forall Num 'n, Type 'a. (vector<'n - 1, 'n, dec, 'a>, int) -> 'a effect pure vector_access = "access"
+val eq_real = "eq_real" : (real, real) -> bool
 
-val extern forall Num 'n, Type 'a. (vector<'n - 1, 'n, dec, 'a>, int, 'a) -> vector<'n - 1, 'n, dec, 'a> effect pure vector_update = "update"
+val eq_anything = "(fun (x, y) -> x = y)" : forall ('a : Type). ('a, 'a) -> bool
 
-val extern forall Num 'n, Num 'm, Num 'o.
-  (bit['n], [:'m:], [:'o:], bit['m - ('o - 1)]) -> bit['n]
-  effect pure vector_update_subrange = "update_subrange"
+val length = "length" : forall 'n ('a : Type). vector('n - 1, 'n, dec, 'a) -> atom('n)
 
-val forall Num 'n, Type 'a. ('a, vector<'n - 1, 'n, dec, 'a>) -> vector<'n, 'n + 1, dec, 'a> effect pure vcons
+overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
 
-val extern forall Num 'n, Num 'm, Type 'a. (vector<'n - 1, 'n, dec, 'a>, vector<'m - 1, 'm, dec, 'a>) -> vector<('n + 'm) - 1, 'n + 'm, dec, 'a> effect pure append = "append"
+val vector_subrange_A = "subrange" : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+  (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
-val extern bool -> bool effect pure not_bool = "not"
-val extern forall 'n. bit['n] -> bit['n] effect pure not_vec = "not_vec"
+val vector_subrange_B = "subrange" : forall ('n : Int) ('m : Int) ('o : Int).
+  (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
-overload ~ [not_bool; not_vec]
+overload vector_subrange = {vector_subrange_A, vector_subrange_B}
 
-val forall Type 'a. ('a, 'a) -> bool effect pure neq_anything
+val vector_access_A = "access" : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
+  (vector('n - 1, 'n, dec, 'a), atom('m)) -> 'a
 
-function neq_anything (x, y) = not_bool (x == y)
+val vector_access_B = "access" : forall ('n : Int) ('a : Type).
+  (vector('n - 1, 'n, dec, 'a), int) -> 'a
 
-overload (deinfix !=) [neq_anything]
+overload vector_access = {vector_access_A, vector_access_B}
 
-val extern (bool, bool) -> bool effect pure and_bool = "and_bool"
-val extern forall 'n. (bit['n], bit['n]) -> bit['n] effect pure and_vec = "and_vec"
+val vector_update = "update" : forall 'n ('a : Type).
+  (vector('n - 1, 'n, dec, 'a), int, 'a) -> vector('n - 1, 'n, dec, 'a)
 
-overload (deinfix &) [and_bool; and_vec]
+val vector_update_subrange = "update_subrange" : forall 'n 'm 'o.
+  (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
-val extern (bool, bool) -> bool effect pure or_bool = "or_bool"
-val extern forall 'n. (bit['n], bit['n]) -> bit['n] effect pure or_vec = "or_vec"
+val vcons : forall ('n : Int) ('a : Type).
+  ('a, vector('n - 1, 'n, dec, 'a)) -> vector('n, 'n + 1, dec, 'a)
 
-overload (deinfix |) [or_bool; or_vec]
+val append = "append" : forall ('n : Int) ('m : Int) ('a : Type).
+  (vector('n - 1, 'n, dec, 'a), vector('m - 1, 'm, dec, 'a)) -> vector('n + 'm - 1, 'n + 'm, dec, 'a)
 
-val extern forall 'n. bit['n] -> [|0:2**'n - 1|] effect pure UInt = "uint"
+val not_bool = "not" : bool -> bool
 
-val extern forall 'n. bit['n] -> [|- 2**('n - 1):2**('n - 1) - 1|] effect pure SInt = "sint"
+val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
-val extern string -> unit effect pure print = "print_endline"
-val extern (string, string) -> string effect pure concat_str = "concat_string"
-val int -> string effect pure DecStr
-val int -> string effect pure HexStr
+overload ~ = {not_bool, not_vec}
 
-val forall 'n. (bit['n], bit['n]) -> bit['n] effect pure xor_vec
-val (int, int) -> int effect pure int_exp
+val neq_atom : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-overload (deinfix ^) [xor_vec; int_exp]
+function neq_atom (x, y) = not_bool(eq_atom(x, y))
 
-val extern forall 'n, 'm, 'o, 'p. ([|'n:'m|], [|'o:'p|]) -> [|'n+'o:'m+'p|] effect pure add_range = "add"
-val extern (int, int) -> int effect pure add_int = "add"
-val extern forall 'n. (bit['n], bit['n]) -> bit['n] effect pure add_vec = "add_vec"
-val forall 'n. (bit['n], int) -> bit['n] effect pure add_vec_int
+val neq_int : (int, int) -> bool
 
-overload (deinfix +) [add_range; add_int; add_vec; add_vec_int]
+function neq_int (x, y) = not_bool(eq_int(x, y))
 
-val extern forall 'n, 'm, 'o, 'p. ([|'n:'m|], [|'o:'p|]) -> [|'n-'p:'m-'o|] effect pure sub_range = "sub"
-val extern (int, int) -> int effect pure sub_int = "sub"
-val forall 'n. (bit['n], bit['n]) -> bit['n] effect pure sub_vec
-val forall 'n. (bit['n], int) -> bit ['n] effect pure sub_vec_int
+val neq_vec : forall 'n. (bits('n), bits('n)) -> bool
 
-val forall 'n. [|'n:'m|] -> [|-'m:-'n|] effect pure negate_range
-val int -> int effect pure negate_int
+function neq_vec (x, y) = not_bool(eq_vec(x, y))
 
-overload (deinfix -) [sub_range; sub_int; sub_vec; sub_vec_int]
-overload negate [negate_range; negate_int]
+val neq_anything : forall ('a : Type). ('a, 'a) -> bool
 
-val extern forall 'n, 'm, 'o, 'p. ([|'n:'m|], [|'o:'p|]) -> [|'n * 'o : 'm * 'p|] effect pure mult_range = "mult"
-val extern (int, int) -> int effect pure mult_int = "mult"
+function neq_anything (x, y) = not_bool(x == y)
 
-overload (deinfix * ) [mult_range; mult_int]
+overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
-val (int, int) -> bool effect pure gteq_int
-val (real, real) -> bool effect pure gteq_real
+val and_bool = "and_bool" : (bool, bool) -> bool
 
-overload (deinfix >=) [gteq_int; gteq_real]
+val builtin_and_vec = "and_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val (int, int) -> bool effect pure lteq_int
-val (real, real) -> bool effect pure lteq_real
+val and_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-overload (deinfix <=) [lteq_int; lteq_real]
+function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
-val (int, int) -> bool effect pure gt_int
-val (real, real) -> bool effect pure gt_real
+overload operator & = {and_bool, and_vec}
 
-overload (deinfix >) [gt_int; gt_real]
+val or_bool = "or_bool" : (bool, bool) -> bool
 
-val (int, int) -> bool effect pure lt_int
-val (real, real) -> bool effect pure lt_real
+val builtin_or_vec = "or_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-overload (deinfix <) [lt_int; lt_real]
+val or_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val real -> int effect pure RoundDown
-val real -> int effect pure RoundUp
+function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
-val extern (int, int) -> int effect pure quotient = "quotient"
+overload operator | = {or_bool, or_vec}
 
-overload (deinfix quot) [quotient]
+val UInt = "uint" : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
-val extern (int, int) -> int effect pure modulus = "modulus"
+val SInt = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
-overload (deinfix mod) [modulus]
+val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm)
 
-val extern (int, int) -> int effect pure shl_int
-val extern (int, int) -> int effect pure shr_int
+val __SetSlice_bits = "set_slice" : forall 'n 'm.
+  (atom('n), atom('m), bits('n), int, bits('m)) -> bits('n)
 
-val (nat, nat) -> nat effect pure min_nat
-val (int, int) -> int effect pure min_int
-val (nat, nat) -> nat effect pure max_nat
-val (int, int) -> int effect pure max_int
+val __SetSlice_int = "set_slice_int" : forall 'w. (atom('w), int, int, bits('w)) -> int
 
-overload min [min_nat; min_int]
-overload max [max_nat; max_int]
+val __raw_SetSlice_int : forall 'w. (atom('w), int, int, bits('w)) -> int
 
-val extern forall 'n, 'm. ([:'m:], [:'n:], bit['m], bit['m], bit[8 * 'n]) -> unit effect {wmem} __WriteRAM = "write_ram"
-val extern forall 'n, 'm. ([:'m:], [:'n:], bit['m], bit['m]) -> bit[8 * 'n] effect {rmem} __ReadRAM = "read_ram"
+val __raw_GetSlice_int = "get_slice_int" : forall 'w. (atom('w), int, int) -> bits('w)
 
-val extern forall 'n, 'm. (bit['n], [:'m:]) -> bit['n * 'm] effect pure replicate_bits
+val __GetSlice_int : forall 'n. (atom('n), int, int) -> bits('n)
 
-val extern nat -> exist 'n, 'n >= 0. [:'n:] effect pure ex_nat = "identity"
-val extern int -> exist 'n. [:'n:] effect pure ex_int = "identity"
-val extern forall 'n, 'm. [|'n:'m|] -> exist 'o, 'n <= 'o & 'o <= 'm. [:'o:] effect pure ex_range = "identity"
+function __GetSlice_int (n, m, o) = __raw_GetSlice_int(n, m, o)
 
+val __raw_SetSlice_bits : forall 'n 'w.
+  (atom('n), atom('w), bits('n), int, bits('w)) -> bits('n)
+
+val __raw_GetSlice_bits : forall 'n 'w.
+  (atom('n), atom('w), bits('n), int) -> bits('w)
+
+val __ShiftLeft : forall 'm. (bits('m), int) -> bits('m)
+
+val __SignExtendSlice : forall 'm. (bits('m), int, int) -> bits('m)
+
+val __ZeroExtendSlice : forall 'm. (bits('m), int, int) -> bits('m)
+
+val cast cast_unit_vec : bit -> bits(1)
+
+val print = "print_endline" : string -> unit
+
+val putchar = "putchar" : forall ('a : Type). 'a -> unit
+
+val concat_str = "concat_str" : (string, string) -> string
+
+val DecStr : int -> string
+
+val HexStr : int -> string
+
+val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
+
+val xor_vec = "xor_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
+
+val int_power : (int, int) -> int
+
+val real_power = "real_power" : (real, int) -> real
+
+overload operator ^ = {xor_vec, int_power, real_power}
+
+val add_range = "add" : forall 'n 'm 'o 'p.
+  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
+
+val add_int = "add" : (int, int) -> int
+
+val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
+
+val add_vec_int = "add_vec_int" : forall 'n. (bits('n), int) -> bits('n)
+
+val add_real = "add_real" : (real, real) -> real
+
+overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
+
+val sub_range = "sub" : forall 'n 'm 'o 'p.
+  (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
+
+val sub_int = "sub" : (int, int) -> int
+
+val sub_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
+
+val sub_vec_int = "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
+
+val sub_real = "sub_real" : (real, real) -> real
+
+val negate_range = "minus_big_int" : forall 'n. range('n, 'm) -> range(- 'm, - 'n)
+
+val negate_int = "minus_big_int" : int -> int
+
+val negate_real = "Num.minus_num" : real -> real
+
+overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
+
+overload negate = {negate_range, negate_int, negate_real}
+
+val mult_range = "mult" : forall 'n 'm 'o 'p.
+  (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
+
+val mult_int = "mult" : (int, int) -> int
+
+val mult_real = "mult_real" : (real, real) -> real
+
+overload operator * = {mult_range, mult_int, mult_real}
+
+val Sqrt = "sqrt_real" : real -> real
+
+val gteq_int = "gteq" : (int, int) -> bool
+
+val gteq_real = "gteq_real" : (real, real) -> bool
+
+overload operator >= = {gteq_atom, gteq_int, gteq_real}
+
+val lteq_int = "lteq" : (int, int) -> bool
+
+val lteq_real = "lteq_real" : (real, real) -> bool
+
+overload operator <= = {lteq_atom, lteq_int, lteq_real}
+
+val gt_int = "gt" : (int, int) -> bool
+
+val gt_real = "gt_real" : (real, real) -> bool
+
+overload operator > = {gt_atom, gt_int, gt_real}
+
+val lt_int = "lt" : (int, int) -> bool
+
+val lt_real = "lt_real" : (real, real) -> bool
+
+overload operator < = {lt_atom, lt_int, lt_real}
+
+val RoundDown = "round_down" : real -> int
+
+val RoundUp = "round_up" : real -> int
+
+val abs = "abs_num" : real -> real
+
+val quotient_nat = "quotient" : (nat, nat) -> nat
+
+val quotient_real = "quotient_real" : (real, real) -> real
+
+val quotient = "quotient" : (int, int) -> int
+
+infixl 7 /
+
+overload operator / = {quotient_nat, quotient, quotient_real}
+
+val modulus = "modulus" : (int, int) -> int
+
+infixl 7 %
+
+overload operator % = {modulus}
+
+val Real = "Num.num_of_big_int" : int -> real
+
+val shl_int = "shl_int" : (int, int) -> int
+
+val shr_int = "shr_int" : (int, int) -> int
+
+val min_nat = "min_int" : (nat, nat) -> nat
+
+val min_int = "min_int" : (int, int) -> int
+
+val max_nat = "max_int" : (nat, nat) -> nat
+
+val max_int = "max_int" : (int, int) -> int
+
+overload min = {min_nat, min_int}
+
+overload max = {max_nat, max_int}
+
+val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
+
+val cast ex_nat : nat -> {'n, 'n >= 0. atom('n)}
+
+function ex_nat 'n = n
+
+val cast ex_int : int -> {'n, true. atom('n)}
+
+function ex_int 'n = n
+
+val ex_range : forall 'n 'm.
+  range('n, 'm) -> {'o, 'n <= 'o & 'o <= 'm. atom('o)}
+
+val coerce_int_nat : int -> nat effect {escape}
+
+function coerce_int_nat 'x = {
+  assert(constraint('x >= 0));
+  x
+}
+
+val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
+  (bits('m), int, atom('n)) -> bits('n)
+
+val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
+
+val print_int = "print_int" : (string, int) -> unit

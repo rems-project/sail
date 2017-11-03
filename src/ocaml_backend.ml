@@ -64,10 +64,13 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
   match typ_aux with
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) ->
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id eid, _)), _)])
+       when string_of_id id = "list" && string_of_id eid = "bit" ->
+     string "string_of_bits" ^^ space ^^ arg
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "list" ->
      let farg = gensym () in
      separate space [string "string_of_list \", \""; parens (separate space [string "fun"; farg; string "->"; ocaml_string_typ typ farg]); arg]
-  | Typ_app (_, _) -> assert false
+  | Typ_app (_, _) -> string "\"APP\""
   | Typ_tup typs ->
      let args = List.map (fun _ -> gensym ()) typs in
      let body =
@@ -447,6 +450,13 @@ let ocaml_string_of_struct ctx id typq fields =
   separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
   ^//^ (string "\"{" ^^ separate_map (hardline ^^ string "^ \", ") ocaml_field fields ^^ string " ^ \"}\"")
 
+let ocaml_string_of_abbrev ctx id typq typ =
+  let arg = gensym () in
+  separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
+  ^//^ ocaml_string_typ typ arg
+
+
+
 let ocaml_typedef ctx (TD_aux (td_aux, _)) =
   match td_aux with
   | TD_record (id, _, typq, fields, _) ->
@@ -465,7 +475,9 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
      ^^ ocaml_string_of_enum ctx id ids
   | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (typq, typ), _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
-  | _ -> failwith "Unsupported typedef"
+     ^^ ocaml_def_end
+     ^^ ocaml_string_of_abbrev ctx id typq typ
+ | _ -> failwith "Unsupported typedef"
 
 let get_externs (Defs defs) =
   let extern_id (VS_aux (vs_aux, _)) =
