@@ -198,6 +198,9 @@ and nexp_simp_aux = function
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
        | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 - c2)
+       (* A vector range x['n-1 .. 0] can result in the size "('n-1) - -1" *)
+       | Nexp_minus (Nexp_aux (n,_), Nexp_aux (Nexp_constant c1,_)), Nexp_constant c2
+         when c1 = -c2 -> n
        | _, _ -> Nexp_minus (n1, n2)
      end
   | nexp -> nexp

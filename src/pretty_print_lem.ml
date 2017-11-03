@@ -316,32 +316,33 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_arg_order o -> empty
   in typ', atomic_typ
 
-
 (* Check for variables in types that would be pretty-printed.
    In particular, in case of vector types, only the element type and the
    length argument are checked for variables, and the latter only if it is
    a bitvector; for other types of vectors, the length is not pretty-printed
    in the type, and the start index is never pretty-printed in vector types. *)
-let rec contains_t_pp_var (Typ_aux (t,a) as typ) = match t with
+let rec contains_t_pp_var mwords (Typ_aux (t,a) as typ) = match t with
   | Typ_wild -> true
   | Typ_id _ -> false
   | Typ_var _ -> true
   | Typ_exist _ -> true
-  | Typ_fn (t1,t2,_) -> contains_t_pp_var t1 || contains_t_pp_var t2
-  | Typ_tup ts -> List.exists contains_t_pp_var ts
+  | Typ_fn (t1,t2,_) -> contains_t_pp_var mwords t1 || contains_t_pp_var mwords t2
+  | Typ_tup ts -> List.exists (contains_t_pp_var mwords) ts
   | Typ_app (c,targs) ->
       if Ast_util.is_number typ then false
       else if is_bitvector_typ typ then
         let (_,length,_,_) = vector_typ_args_of typ in
-        not (is_nexp_constant (nexp_simp length))
-      else List.exists contains_t_arg_pp_var targs
-and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
-  | Typ_arg_typ t -> contains_t_pp_var t
+        let length = nexp_simp length in
+        not (is_nexp_constant length ||
+               (mwords && match length with Nexp_aux (Nexp_var _,_) -> true | _ -> false))
+      else List.exists (contains_t_arg_pp_var mwords) targs
+and contains_t_arg_pp_var mwords (Typ_arg_aux (targ, _)) = match targ with
+  | Typ_arg_typ t -> contains_t_pp_var mwords t
   | Typ_arg_nexp nexp -> not (is_nexp_constant (nexp_simp nexp))
   | _ -> false
 
 let doc_tannot_lem sequential mwords eff typ =
-  if contains_t_pp_var typ then empty
+  if contains_t_pp_var mwords typ then empty
   else
     let ta = doc_typ_lem sequential mwords typ in
     if eff then string " : _M " ^^ parens ta
@@ -373,7 +374,8 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
           | Typ_app (Id_aux (Id "register", _),_) -> utf8string "UndefinedRegister 0"
           | Typ_id (Id_aux (Id "string", _)) -> utf8string "\"\""
           | _ ->
-            let ta = if contains_t_pp_var typ then empty else doc_tannot_lem sequential mwords false typ in
+            let ta = if contains_t_pp_var mwords typ then empty
+              else doc_tannot_lem sequential mwords false typ in
             parens
               ((utf8string "(failwith \"undefined value of unsupported type\")") ^^ ta))
        | _ -> utf8string "(failwith \"undefined value of unsupported type\")")
@@ -480,7 +482,7 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
   | P_as(p,id) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_id_lem id])
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem sequential mwords true p in
-    if contains_t_pp_var typ then doc_p
+    if contains_t_pp_var mwords typ then doc_p
     else parens (doc_op colon doc_p (doc_typ_lem sequential mwords typ))
   | P_vector pats ->
      let ppp =
@@ -625,7 +627,7 @@ let doc_exp_lem, doc_let_lem =
        (* let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let (call,ta,aexp_needed) =
          if is_bitvector_typ t then
-           if not (contains_t_pp_var t)
+           if not (contains_t_pp_var mwords t)
            then ("bitvector_concat", doc_tannot_lem sequential mwords false t, true)
            else ("bitvector_concat", empty, aexp_needed)
          else ("vector_concat",empty,aexp_needed) in
@@ -704,7 +706,7 @@ let doc_exp_lem, doc_let_lem =
           let (taepp,aexp_needed) =
             let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
             let eff = effect_of full_exp in
-            if typ_needs_printed t && not (contains_t_pp_var t)
+            if typ_needs_printed t && not (contains_t_pp_var mwords t)
             then (align epp ^^ (doc_tannot_lem sequential mwords (effectful eff) t), true)
             else (epp, aexp_needed) in
           if aexp_needed then parens (align taepp) else taepp*)
@@ -804,13 +806,13 @@ let doc_exp_lem, doc_let_lem =
        let (epp,aexp_needed) =
          if has_effect eff BE_rreg then
            let epp = align (string "read_reg_range" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2) in
-           if typ_needs_printed t && not (contains_t_pp_var t)
+           if typ_needs_printed t && not (contains_t_pp_var mwords t)
            then (epp ^^ doc_tannot_lem sequential mwords true t, true)
            else (epp, aexp_needed)
          else
            if is_bitvector_typ t then
              let bepp = string "bvslice" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2 in
-             if not (contains_t_pp_var t)
+             if not (contains_t_pp_var mwords t)
              then (bepp ^^ doc_tannot_lem sequential mwords false t, true)
              else (bepp, aexp_needed)
            else (string "slice" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2, aexp_needed) in
@@ -860,7 +862,7 @@ let doc_exp_lem, doc_let_lem =
                   | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) -> "read_reg_bitfield"
                   | _ -> "read_reg_field" in
                 let ta =
-                  if typ_needs_printed t && not (contains_t_pp_var t)
+                  if typ_needs_printed t && not (contains_t_pp_var mwords t)
                   then doc_tannot_lem sequential mwords true t else empty in
                 let epp = separate space [string call;string reg;string_lit(string field)] ^^ ta in
                 if aexp_needed then parens (align epp) else epp
@@ -868,7 +870,7 @@ let doc_exp_lem, doc_let_lem =
                 let (call,ta) =
                   if has_effect eff BE_rreg then
                     let ta =
-                      if typ_needs_printed t && not (contains_t_pp_var t)
+                      if typ_needs_printed t && not (contains_t_pp_var mwords t)
                       then doc_tannot_lem sequential mwords true t else empty in
                     ("read_two_regs", ta)
                   else
@@ -881,7 +883,7 @@ let doc_exp_lem, doc_let_lem =
                     separate space [string "read_reg_bit";string reg;doc_int start]
                   else
                     let ta =
-                      if typ_needs_printed t && not (contains_t_pp_var t)
+                      if typ_needs_printed t && not (contains_t_pp_var mwords t)
                       then doc_tannot_lem sequential mwords true t else empty in
                     separate space [string "read_reg_range";string reg;doc_int start;doc_int stop] ^^ ta in
                 if aexp_needed then parens (align epp) else epp
@@ -893,7 +895,7 @@ let doc_exp_lem, doc_let_lem =
         | Base((_,t),External _,_,_,_,_) ->
            (* TODO: Does this case still exist with the new type checker? *)
            let epp = string "read_reg" ^^ space ^^ expY e in
-           if typ_needs_printed t && not (contains_t_pp_var t)
+           if typ_needs_printed t && not (contains_t_pp_var mwords t)
            then parens (epp ^^ doc_tannot_lem sequential mwords true t) else epp
         | Base((_,t),_,_,_,_,_) ->
            (match typ with
@@ -1123,7 +1125,7 @@ let doc_exp_lem, doc_let_lem =
                 | _ ->
                    string name ^//^ parens (expN e1 ^^ comma ^/^ expN e2)) in
            let (epp,aexp_needed) =
-             if typ_needs_printed t && not (contains_t_pp_var t)
+             if typ_needs_printed t && not (contains_t_pp_var mwords t)
              then (parens epp ^^ doc_tannot_lem sequential mwords false t, true)
              else (epp, aexp_needed) in
            if aexp_needed then parens (align epp) else epp
@@ -1162,7 +1164,7 @@ let doc_exp_lem, doc_let_lem =
     | E_return r ->
       let ret_monad = if sequential then " : MR regstate" else " : MR" in
       let ta =
-        if contains_t_pp_var (typ_of full_exp) || contains_t_pp_var (typ_of r)
+        if contains_t_pp_var mwords (typ_of full_exp) || contains_t_pp_var mwords (typ_of r)
         then empty
         else separate space
           [string ret_monad;
@@ -1549,7 +1551,7 @@ let doc_tannot_opt_lem sequential mwords (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem sequential mwords typ)
 
 let doc_fun_body_lem sequential mwords exp =
-  let early_ret = contains_early_return exp in
+  let early_ret =contains_early_return exp in
   let doc_exp = doc_exp_lem sequential mwords early_ret false exp in
   if early_ret
   then align (string "catch_early_return" ^//^ parens (doc_exp))
@@ -1689,7 +1691,7 @@ let doc_spec_lem sequential mwords (VS_aux (valspec,annot)) =
   match valspec with
   | VS_val_spec (typschm,id,None,_) ->
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
-     if contains_t_pp_var typ then empty else *)
+     if contains_t_pp_var mwords typ then empty else *)
      separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem sequential mwords true typschm] ^/^ hardline 
   | VS_val_spec (_,_,Some _,_) -> empty
 
