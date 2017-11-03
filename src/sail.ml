@@ -146,7 +146,7 @@ let _ =
 
 
 let main() =
-  if !(opt_print_version)
+  if !opt_print_version
   then Printf.printf "Sail private release \n"
   else
     if !opt_memo_z3 then Constraint.load_digests () else ();
@@ -175,6 +175,7 @@ let main() =
       else rewrite_ast ast in
 
     let out_name = match !opt_file_out with
+      | None when parsed = [] -> "out.sail"
       | None -> fst (List.hd parsed)
       | Some f -> f ^ ".sail" in
 
