@@ -184,3 +184,7 @@
 "amomin.d.aq.rl",   AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOMIN};
 "amomaxu.d.aq.rl",  AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOMAXU};
 "amominu.d.aq.rl",  AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOMINU};
+
+(** pseudo instructions *********************************************)
+
+"li", LI ()
