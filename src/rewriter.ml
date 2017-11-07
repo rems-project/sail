@@ -1859,7 +1859,7 @@ let rewrite_guarded_clauses l cs =
 
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_,(l,_))) = exp1 in
-  let andid = Id_aux (Id "bool_and", gen_loc l) in
+  let andid = Id_aux (Id "and_bool", gen_loc l) in
   annot_exp (E_app(andid,[exp1;exp2])) l (env_of exp1) bool_typ
 
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with

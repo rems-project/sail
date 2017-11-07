@@ -33,11 +33,14 @@ let negate_real r = realNegate r
 let abs_real r = realAbs r
 let power_real (b, e) = realPowInteger b e
 
-let bool_or (l, r) = (l || r)
-let bool_and (l, r) = (l && r)
-let bool_xor (l, r) = xor l r
+let or_bool (l, r) = (l || r)
+let and_bool (l, r) = (l && r)
+let xor_bool (l, r) = xor l r
 
 let list_append (l, r) = l ++ r
+let list_length xs = integerFromNat (List.length xs)
+let list_take (n, xs) = List.take (natFromInteger n) xs
+let list_drop (n, xs) = List.drop (natFromInteger n) xs
 
 val repeat : forall 'a. list 'a -> integer -> list 'a
 let rec repeat xs n =
@@ -70,12 +73,12 @@ end
 
 class (BitU 'a)
   val to_bitU : 'a -> bitU
-  val from_bitU : bitU -> 'a
+  val of_bitU : bitU -> 'a
 end
 
 instance (BitU bitU)
   let to_bitU b = b
-  let from_bitU b = b
+  let of_bitU b = b
 end
 
 let bitU_to_bool = function
@@ -88,7 +91,7 @@ let bool_to_bitU b = if b then B1 else B0
 
 instance (BitU bool)
   let to_bitU = bool_to_bitU
-  let from_bitU = bitU_to_bool
+  let of_bitU = bitU_to_bool
 end
 
 let cast_bit_bool = bitU_to_bool
@@ -153,6 +156,56 @@ let inline (|.) x y = bitwise_or_bit (x,y)
 val (+.) : bitU -> bitU -> bitU
 let inline (+.) x y = bitwise_xor_bit (x,y)
 
+val to_bin_aux : natural -> list bitU
+let rec to_bin_aux x =
+  if x = 0 then []
+  else (if x mod 2 = 1 then B1 else B0) :: to_bin_aux (x / 2)
+let to_bin n = List.reverse (to_bin_aux n)
+
+val of_bin : list bitU -> natural
+let of_bin bits =
+  let (sum,_) =
+    List.foldr
+      (fun b (acc,exp) ->
+        match b with
+        | B1 -> (acc + naturalPow 2 exp, exp + 1)
+        | B0 -> (acc, exp + 1)
+        | BU -> failwith "of_bin: bitvector has undefined bits"
+        end)
+      (0,0) bits in
+  sum
+
+val bitlist_to_integer : list bitU -> integer
+let bitlist_to_integer bs = integerFromNatural (of_bin bs)
+
+val pad_zero : list bitU -> integer -> list bitU
+let rec pad_zero bits n =
+  if n <= 0 then bits else pad_zero (B0 :: bits) (n -1)
+
+let bitwise_not_bitlist = List.map bitwise_not_bit
+
+let rec add_one_bit_ignore_overflow_aux bits = match bits with
+  | [] -> []
+  | B0 :: bits -> B1 :: bits
+  | B1 :: bits -> B0 :: add_one_bit_ignore_overflow_aux bits
+  | BU :: _ -> failwith "add_one_bit_ignore_overflow: undefined bit"
+end
+
+let add_one_bit_ignore_overflow bits =
+  List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
+
+let bits_of_nat ((len : integer),(n : natural)) =
+  let bits = to_bin n in
+  let len_bits = integerFromNat (List.length bits) in
+  let longer = len - len_bits in
+  if longer < 0 then drop (natFromInteger (abs (longer))) bits
+  else pad_zero bits longer
+
+let bits_of_int ((len : integer),(n : integer)) =
+  let bits = bits_of_nat (len, naturalFromInteger (abs n)) in
+  if n > (0 : integer)
+  then bits
+  else (add_one_bit_ignore_overflow (bitwise_not_bitlist bits))
 
 
 (*** Vectors *)
@@ -292,47 +345,34 @@ class (Bitvector 'a)
   val set_bits : bool -> integer -> 'a -> integer -> integer -> list bitU -> 'a
 end
 
-val bitlist_to_integer : list bitU -> integer
-let bitlist_to_integer bs =
-  let (sum,_) =
-    List.foldr
-      (fun b (acc,exp) ->
-        match b with
-        | B1 -> (acc + integerPow 2 exp,exp + 1)
-        | B0 -> (acc, exp + 1)
-        | BU -> failwith "unsigned: vector has undefined bits"
-        end)
-      (0,0) bs in
-  sum
-
 instance forall 'a. BitU 'a => (Bitvector (list 'a))
   let bits_of v = List.map to_bitU v
-  let of_bits v = List.map from_bitU v
+  let of_bits v = List.map of_bitU v
   let unsigned v = bitlist_to_integer (List.map to_bitU v)
   let get_bit is_inc start v n = to_bitU (access_aux is_inc start v n)
-  let set_bit is_inc start v n b = update_aux is_inc start v n n [from_bitU b]
+  let set_bit is_inc start v n b = update_aux is_inc start v n n [of_bitU b]
   let get_bits is_inc start v i j = List.map to_bitU (slice_aux is_inc start v i j)
-  let set_bits is_inc start v i j v' = update_aux is_inc start v i j (List.map from_bitU v')
+  let set_bits is_inc start v i j v' = update_aux is_inc start v i j (List.map of_bitU v')
 end
 
 instance forall 'a. BitU 'a => (Bitvector (vector 'a))
   let bits_of v = List.map to_bitU (get_elems v)
-  let of_bits v = Vector (List.map from_bitU v) (integerFromNat (List.length v) - 1) false
+  let of_bits v = Vector (List.map of_bitU v) (integerFromNat (List.length v) - 1) false
   let unsigned v = unsigned (get_elems v)
   let get_bit is_inc start v n = to_bitU (access v n)
-  let set_bit is_inc start v n b = update_pos v n (from_bitU b)
+  let set_bit is_inc start v n b = update_pos v n (of_bitU b)
   let get_bits is_inc start v i j = List.map to_bitU (get_elems (slice v i j))
-  let set_bits is_inc start v i j v' = update v i j (Vector (List.map from_bitU v') (integerFromNat (List.length v') - 1) false)
+  let set_bits is_inc start v i j v' = update v i j (Vector (List.map of_bitU v') (integerFromNat (List.length v') - 1) false)
 end
 
 instance forall 'a. Size 'a => (Bitvector (mword 'a))
   let bits_of v = List.map to_bitU (bitlistFromWord v)
-  let of_bits v = wordFromBitlist (List.map from_bitU v)
+  let of_bits v = wordFromBitlist (List.map of_bitU v)
   let unsigned v = unsignedIntegerFromWord v
   let get_bit is_inc start v n = to_bitU (access_aux is_inc start (bitlistFromWord v) n)
-  let set_bit is_inc start v n b = wordFromBitlist (update_aux is_inc start (bitlistFromWord v) n n [from_bitU b])
+  let set_bit is_inc start v n b = wordFromBitlist (update_aux is_inc start (bitlistFromWord v) n n [of_bitU b])
   let get_bits is_inc start v i j = slice_aux is_inc start (List.map to_bitU (bitlistFromWord v)) i j
-  let set_bits is_inc start v i j v' = wordFromBitlist (update_aux is_inc start (bitlistFromWord v) i j (List.map from_bitU v'))
+  let set_bits is_inc start v i j v' = wordFromBitlist (update_aux is_inc start (bitlistFromWord v) i j (List.map of_bitU v'))
 end
 
 (*let showBitvector (Bitvector elems start inc) =
