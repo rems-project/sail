@@ -126,6 +126,9 @@ val extern forall Num 'n, Num 'l, Order 'ord. vector<'n,'l,'ord,bit> -> list<bit
 (* MSB *)
 val forall Num 'n, Num 'm, Order 'ord. vector<'n, 'm, 'ord, bit> -> bit effect pure most_significant
 
+(* Endianness *)
+val extern forall Num 'n, Num 'm, Order 'ord. vector<'n, 8 * 'm, 'ord, bit> -> vector<'n, 8 * 'm, 'ord, bit> effect pure reverse_endianness
+
 (* List functions *)
 
 val extern forall Type 'a. (int, list<'a>) -> list<'a> effect pure list_take

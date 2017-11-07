@@ -450,6 +450,12 @@ let address_of_bitv v =
   let bytes = bytes_of_bitv v in
   address_of_byte_list bytes
 
+let rec reverse_endianness_bl bits =
+  if List.length bits <= 8 then bits else
+    list_append(reverse_endianness_bl(list_drop(8, bits)), list_take(8, bits))
+
+val reverse_endianness : forall 'a. Bitvector 'a => 'a -> 'a
+let reverse_endianness v = of_bits (reverse_endianness_bl (bits_of v))
 
 
 (*** Registers *)

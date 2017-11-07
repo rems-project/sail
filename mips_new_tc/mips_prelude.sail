@@ -577,7 +577,7 @@ function (bool) isAddressAligned ((bit[64]) addr, (WordType) wordType) =
   let a = unsigned(addr) in
   ((a quot alignment_width) == (a + wordWidthBytes(wordType) - 1) quot alignment_width)
 
-val forall Nat 'W, 'W >= 1. ([:'W:], bit[8 * 'W]) -> bit[8 * 'W] effect pure reverse_endianness'
+(*val forall Nat 'W, 'W >= 1. ([:'W:], bit[8 * 'W]) -> bit[8 * 'W] effect pure reverse_endianness'
 
 function rec forall Nat 'W, 'W >= 1. bit[8 * 'W] reverse_endianness' (w, value) =
 {
@@ -592,7 +592,7 @@ val forall Nat 'W, 'W >= 1. bit[8 * 'W] -> bit[8 * 'W] effect pure reverse_endia
 function rec forall Nat 'W, 'W >= 1. bit[8 * 'W] reverse_endianness ((bit[8 * 'W]) value) =
 {
     reverse_endianness'(sizeof 'W, value)
-}
+}*)
 
 function forall Nat 'n, 1 <= 'n, 'n <= 8. (bit[8 * 'n]) effect { rmem } MEMr_wrapper ((bit[64]) addr, ([:'n:]) size) =
     if (addr == 0x000000007f000000) then

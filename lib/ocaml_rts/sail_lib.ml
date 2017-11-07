@@ -376,6 +376,10 @@ let read_ram (addr_size, data_size, hex_ram, addr) =
   in
   read_byte data_size
 
+let rec reverse_endianness bits =
+  if List.length bits <= 8 then bits else
+  reverse_endianness (drop 8 bits) @ (take 8 bits)
+
 (* FIXME: Casts can't be externed *)
 let zcast_unit_vec x = [x]
 
