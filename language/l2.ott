@@ -962,7 +962,7 @@ val_spec {{ ocaml 'a val_spec }} :: 'VS_' ::=
 
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
-  {{ ocaml  VS_val_spec of typschm * id * (string -> string) option * bool }}
+  {{ ocaml  VS_val_spec of typschm * id * (string -> string option) * bool }}
   | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
     {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }}
@@ -970,10 +970,10 @@ val_spec_aux :: 'VS_' ::=
     {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }}
   | val extern typschm id                           :: S :: extern_no_rename
     {{ com specify the type of an external function }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[id]]) false) }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some id]]) false) }}
   | val extern typschm id = string                  :: S :: extern_spec
     {{ com specify the type of a function from Lem }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[string]]) false) }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some string]]) false) }}
 %where the string must provide an explicit path to the required function but will not be checked
 
 default_spec :: 'DT_' ::=

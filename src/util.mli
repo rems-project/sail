@@ -90,6 +90,10 @@ val option_binop : ('a -> 'a -> 'a) -> 'a option -> 'a option -> 'a option
     whereas [option_get_exn exn (Some x)] returns [x]. *)
 val option_get_exn : exn -> 'a option -> 'a
 
+(** [option_these xs] extracts the elements of the list [xs]
+    wrapped in [Some]. *)
+val option_these : 'a option list -> 'a list
+
 (** [changed2 f g x h y] applies [g] to [x] and [h] to [y].
     If both function applications return [None], then [None] is
     returned. Otherwise [f] is applied to the results. For this

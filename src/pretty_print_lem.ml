@@ -738,7 +738,7 @@ let doc_exp_lem, doc_let_lem =
              if aexp_needed then parens (align epp) else epp
           | _ ->
              let call = match annot with
-               | Some (env, _, _) when Env.is_extern f env ->
+               | Some (env, _, _) when Env.is_extern f env "lem" ->
                  string (Env.get_extern f env "lem")
                | _ -> doc_id_lem f in
              let argspp = match args with
@@ -1649,7 +1649,7 @@ let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls)
       ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
       (clauses ^/^ string "end")
   | FCL_aux (FCL_Funcl(id,_,exp),_) :: _
-    when not (Env.is_extern id (env_of exp)) ->
+    when not (Env.is_extern id (env_of exp) "lem") ->
     string "let" ^^ (doc_rec_lem r) ^^ (doc_fundef_rhs_lem sequential mwords fd)
   | _ -> empty
 
@@ -1689,11 +1689,12 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
 
 let doc_spec_lem sequential mwords (VS_aux (valspec,annot)) =
   match valspec with
-  | VS_val_spec (typschm,id,None,_) ->
+  | VS_val_spec (typschm,id,ext,_) when ext "lem" = None ->
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var mwords typ then empty else *)
      separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem sequential mwords true typschm] ^/^ hardline 
-  | VS_val_spec (_,_,Some _,_) -> empty
+  (* | VS_val_spec (_,_,Some _,_) -> empty *)
+  | _ -> empty
 
 let rec doc_def_lem sequential mwords def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)

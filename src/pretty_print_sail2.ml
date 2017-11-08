@@ -328,7 +328,12 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | _ -> string "TYPEDEF"
 
 let doc_spec (VS_aux(v,_)) =
-  let doc_extern = function
+  let doc_extern ext =
+    let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
+      utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
+    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"]) in
+    if docs = [] then empty else braces (separate (comma ^^ space) docs)
+    (* function
     | Some s ->
        let ext_for backend = utf8string ("\"" ^ String.escaped (s backend) ^  "\"") in
        let extern =
@@ -337,7 +342,7 @@ let doc_spec (VS_aux(v,_)) =
          else separate space [lbrace; string "ocaml:"; ext_for "ocaml"; string "lem:"; ext_for "lem"; rbrace]
        in
        equals ^^ space ^^ extern ^^ space
-    | None -> empty
+    | None -> empty *)
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->

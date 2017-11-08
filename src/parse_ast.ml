@@ -423,7 +423,7 @@ type_def_aux =  (* Type definition body *)
 
 type 
 val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id * (string -> string) option * bool
+   VS_val_spec of typschm * id * (string -> string option) * bool
 
 
 type 
@@ -514,6 +514,3 @@ and lexp =
 type 
 defs =  (* Definition sequence *)
    Defs of (def) list
-
-
-

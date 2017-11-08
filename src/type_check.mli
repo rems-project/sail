@@ -117,7 +117,7 @@ module Env : sig
 
   val get_num_def : id -> t -> nexp
 
-  val is_extern : id -> t -> bool
+  val is_extern : id -> t -> string -> bool
 
   val get_extern : id -> t -> string -> string
 

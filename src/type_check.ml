@@ -374,8 +374,8 @@ module Env : sig
   val get_num_def : id -> t -> nexp
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
-  val is_extern : id -> t -> bool
-  val add_extern : id -> (string -> string) -> t -> t
+  val is_extern : id -> t -> string -> bool
+  val add_extern : id -> (string -> string option) -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
   val set_default_order_inc : t -> t
@@ -410,7 +410,7 @@ end = struct
       enums : IdSet.t Bindings.t;
       records : (typquant * (typ * id) list) Bindings.t;
       accessors : (typquant * typ) Bindings.t;
-      externs : (string -> string) Bindings.t;
+      externs : (string -> string option) Bindings.t;
       casts : id list;
       allow_casts : bool;
       constraints : n_constraint list;
@@ -674,14 +674,20 @@ end = struct
     typ_print ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]");
     { env with overloads = Bindings.add id ids env.overloads }
 
-  let is_extern id env =
-    Bindings.mem id env.externs
+  let is_extern id env backend =
+    try not (Bindings.find id env.externs backend = None) with
+    | Not_found -> false
+    (* Bindings.mem id env.externs *)
 
   let add_extern id ext env =
     { env with externs = Bindings.add id ext env.externs }
 
-  let get_extern id env =
-    try Bindings.find id env.externs with
+  let get_extern id env backend =
+    try
+      match Bindings.find id env.externs backend with
+      | Some ext -> ext
+      | None -> typ_error (id_loc id) ("No extern binding found for " ^ string_of_id id)
+    with
     | Not_found -> typ_error (id_loc id) ("No extern binding found for " ^ string_of_id id)
 
   let get_casts env = env.casts
@@ -934,13 +940,13 @@ let initial_env =
 
   (* Internal functions for Monomorphise.AtomToItself *)
 
-  |> Env.add_extern (mk_id "size_itself_int") (fun _ -> "size_itself_int")
+  |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
   |> Env.add_val_spec (mk_id "size_itself_int")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
        function_typ (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))])
          (atom_typ (nvar (mk_kid "n"))) no_effect)
-  |> Env.add_extern (mk_id "make_the_value") (fun _ -> "make_the_value")
+  |> Env.add_extern (mk_id "make_the_value") (fun _ -> Some "make_the_value")
   |> Env.add_val_spec (mk_id "make_the_value")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
@@ -3238,7 +3244,7 @@ let infer_funtyp l env tannotopt funcls =
      end
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error l "Cannot infer function type for unannotated function"
 
-let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None, false), (Parse_ast.Unknown, None)))
+let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, (fun _ -> None), false), (Parse_ast.Unknown, None)))
 
 let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
@@ -3290,9 +3296,11 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ, env) = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, ext_opt, is_cast) ->
-       let env = match ext_opt with
+       let env =
+       (* match ext_opt with
          | None -> env
-         | Some ext -> Env.add_extern id ext env
+         | Some ext -> *)
+         Env.add_extern id ext_opt env
        in
        let env = if is_cast then Env.add_cast id env else env in
        (id, quants, typ, env)

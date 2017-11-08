@@ -1053,21 +1053,21 @@ externs:
 
 val_spec_def:
   | Val id Colon typschm
-    { mk_vs (VS_val_spec ($4, $2, None, false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, $2, (fun _ -> None), false)) $startpos $endpos }
   | Val Cast id Colon typschm
-    { mk_vs (VS_val_spec ($5, $3, None, true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($5, $3, (fun _ -> None), true)) $startpos $endpos }
   | Val id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($6, $2, Some (fun _ -> $4), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($6, $2, (fun _ -> Some $4), false)) $startpos $endpos }
   | Val Cast id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($7, $3, Some (fun _ -> $5), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($7, $3, (fun _ -> Some $5), true)) $startpos $endpos }
   | Val String Colon typschm
-    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some (fun _ -> $2), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), (fun _ -> Some $2), false)) $startpos $endpos }
   | Val Cast String Colon typschm
-    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), Some (fun _ -> $3), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), (fun _ -> Some $3), true)) $startpos $endpos }
   | Val id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($8, $2, Some (fun backend -> default_opt (string_of_id $2) (assoc_opt backend $5)), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($8, $2, (fun backend -> (assoc_opt backend $5)), false)) $startpos $endpos }
   | Val Cast id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($9, $3, Some (fun backend -> default_opt (string_of_id $3) (assoc_opt backend $6)), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($9, $3, (fun backend -> (assoc_opt backend $6)), true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

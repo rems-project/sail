@@ -1049,29 +1049,29 @@ fun_def:
 
 val_spec:
   | Val typquant typ id
-    { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4, None, false)) }
+    { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4, (fun _ -> None), false)) }
   | Val typ id
-    { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3, None, false)) }
+    { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3, (fun _ -> None), false)) }
   | Val Cast typquant typ id
-    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, None, true)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, (fun _ -> None), true)) }
   | Val Cast typ id
-    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, None, true)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, (fun _ -> None), true)) }
   | Val Extern typquant typ id
-    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, Some (fun _ -> string_of_id $5), false)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, (fun _ -> Some (string_of_id $5)), false)) }
   | Val Extern typ id
-    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, Some (fun _ -> string_of_id $4), false)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, (fun _ -> Some (string_of_id $4)), false)) }
   | Val Extern typquant typ id Eq String
-    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, Some (fun _ -> $7), false)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, (fun _ -> Some $7), false)) }
   | Val Extern typ id Eq String
-    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, Some (fun _ -> $6), false)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, (fun _ -> Some $6), false)) }
   | Val Cast Extern typquant typ id
-    { vloc (VS_val_spec (mk_typschm $4 $5 4 5,$6, Some (fun _ -> string_of_id $6), true)) }
+    { vloc (VS_val_spec (mk_typschm $4 $5 4 5,$6, (fun _ -> Some (string_of_id $6)), true)) }
   | Val Cast Extern typ id
-    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $4 4 4, $5, Some (fun _ -> string_of_id $5), true)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $4 4 4, $5, (fun _ -> Some (string_of_id $5)), true)) }
   | Val Cast Extern typquant typ id Eq String
-    { vloc (VS_val_spec (mk_typschm $4 $5 4 5,$6, Some (fun _ -> $8), true)) }
+    { vloc (VS_val_spec (mk_typschm $4 $5 4 5,$6, (fun _ -> Some $8), true)) }
   | Val Cast Extern typ id Eq String
-    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $4 4 4,$5, Some (fun _ -> $7), true)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $4 4 4,$5, (fun _ -> Some $7), true)) }
 
 kinded_id:
   | tyvar

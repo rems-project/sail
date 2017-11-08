@@ -216,6 +216,11 @@ let rec option_binop f x y = match x, y with
   | Some x, Some y -> Some (f x y)
   | _ -> None
 
+let rec option_these = function
+  | Some x :: xs -> x :: option_these xs
+  | None :: xs -> option_these xs
+  | [] -> []
+
 let changed2 f g x h y =
   match (g x, h y) with
     | (None,None) -> None

@@ -477,10 +477,10 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
  | _ -> failwith "Unsupported typedef"
 
 let get_externs (Defs defs) =
-  let extern_id (VS_aux (vs_aux, _)) =
-    match vs_aux with
-    | VS_val_spec (typschm, id, None, _) -> []
-    | VS_val_spec (typschm, id, Some ext, _) -> [(id, mk_id (ext "ocaml"))]
+  let extern_id (VS_aux (VS_val_spec (typschm, id, ext, _), _)) =
+    match ext "ocaml" with
+    | None -> []
+    | Some ext -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
     | DEF_spec vs :: defs -> extern_id vs :: extern_ids defs
@@ -574,4 +574,3 @@ let ocaml_compile spec defs =
     let _ = Unix.system ("ocamlbuild -pkg zarith -pkg uint " ^ spec ^ ".cmo") in
     ();
   Unix.chdir cwd
-
