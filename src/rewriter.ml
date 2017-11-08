@@ -1859,7 +1859,7 @@ let rewrite_guarded_clauses l cs =
 
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_,(l,_))) = exp1 in
-  let andid = Id_aux (Id "bool_and", gen_loc l) in
+  let andid = Id_aux (Id "and_bool", gen_loc l) in
   annot_exp (E_app(andid,[exp1;exp2])) l (env_of exp1) bool_typ
 
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
@@ -2561,7 +2561,7 @@ let rewrite_constraint =
   let rec rewrite_nc (NC_aux (nc_aux, l)) = mk_exp (rewrite_nc_aux nc_aux)
   and rewrite_nc_aux = function
     | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
-    | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
+    | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<=", mk_exp (E_sizeof n2))
     | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
     | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
     | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc nc1, mk_id "&", rewrite_nc nc2)

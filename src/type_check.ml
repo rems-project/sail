@@ -2955,7 +2955,7 @@ and propagate_exp_effect_aux = function
   | E_vector_subrange (v, i, j) ->
      let p_v = propagate_exp_effect v in
      let p_i = propagate_exp_effect i in
-     let p_j = propagate_exp_effect i in
+     let p_j = propagate_exp_effect j in
      E_vector_subrange (p_v, p_i, p_j), collect_effects [p_v; p_i; p_j]
   | E_vector_update (v, i, x) ->
      let p_v = propagate_exp_effect v in

@@ -38,7 +38,7 @@
 val forall Nat 'n, 'n >= 1, 'n <= 8. (bit[64], [:'n:], bit[8 * 'n]) -> unit effect {eamem, wmv, wreg} MEMw_wrapper
 
 function unit MEMw_wrapper((bit[64]) addr, ([:'n:]) size, (bit[8 * 'n]) data) =
-    let ledata = reverse_endianness'(sizeof 'n, data) in
+    let ledata = reverse_endianness(data) in
     if (addr == 0x000000007f000000) then
       {
         UART_WDATA   := ledata[7..0];
@@ -53,7 +53,7 @@ val forall Nat 'n, 'n >= 1, 'n <= 8. (bit[64], [:'n:], bit[8 * 'n]) -> bool effe
 function bool MEMw_conditional_wrapper(addr, size, data) =
     {
       MEMea_conditional(addr, size);
-      MEMval_conditional(addr, size, reverse_endianness'(sizeof 'n, data))
+      MEMval_conditional(addr, size, reverse_endianness(data))
     }
 
 function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordType) width) =

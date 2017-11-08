@@ -39,6 +39,7 @@ let cast_vec_bool v = bitU_to_bool (extract_only_element v)
 let cast_bit_vec_basic (start, len, b) = Vector (repeat [b] len) start false
 let cast_boolvec_bitvec (Vector bs start inc) =
   Vector (List.map bool_to_bitU bs) start inc
+let cast_vec_bl (Vector bs start inc) = bs
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
@@ -50,8 +51,6 @@ let most_significant = function
   | _ -> failwith "most_significant applied to empty vector"
   end
 
-let bitwise_not_bitlist = List.map bitwise_not_bit
-
 let bitwise_not (Vector bs start is_inc) =
   Vector (bitwise_not_bitlist bs) start is_inc
 
@@ -62,18 +61,6 @@ let bitwise_binop op (Vector bsl start is_inc, Vector bsr _ _) =
 let bitwise_and = bitwise_binop (&&)
 let bitwise_or = bitwise_binop (||)
 let bitwise_xor = bitwise_binop xor
-
-(*let unsigned (Vector bs _ _) : integer =
-  let (sum,_) =
-    List.foldr
-      (fun b (acc,exp) ->
-        match b with
-        | B1 -> (acc + integerPow 2 exp,exp + 1)
-        | B0 -> (acc, exp + 1)
-        | BU -> failwith "unsigned: vector has undefined bits"
-        end)
-      (0,0) bs in
-  sum*)
 
 let unsigned_big = unsigned
 
@@ -136,40 +123,9 @@ let get_min_representable_in _ (n : integer) : integer =
   else if n = 5 then min_5
   else 0 - (integerPow 2 (natFromInteger n))
 
-val to_bin_aux : natural -> list bitU
-let rec to_bin_aux x =
-  if x = 0 then []
-  else (if x mod 2 = 1 then B1 else B0) :: to_bin_aux (x / 2)
-let to_bin n = List.reverse (to_bin_aux n)
-
-val pad_zero : list bitU -> integer -> list bitU
-let rec pad_zero bits n =
-  if n <= 0 then bits else pad_zero (B0 :: bits) (n -1)
-
-
-let rec add_one_bit_ignore_overflow_aux bits = match bits with
-  | [] -> []
-  | B0 :: bits -> B1 :: bits
-  | B1 :: bits -> B0 :: add_one_bit_ignore_overflow_aux bits
-  | BU :: _ -> failwith "add_one_bit_ignore_overflow: undefined bit"
-end
-
-let add_one_bit_ignore_overflow bits =
-  List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
-  
-
 let to_norm_vec is_inc ((len : integer),(n : integer)) =
   let start = if is_inc then 0 else len - 1 in
-  let bits = to_bin (naturalFromInteger (abs n)) in
-  let len_bits = integerFromNat (List.length bits) in
-  let longer = len - len_bits in
-  let bits' =
-    if longer < 0 then drop (natFromInteger (abs (longer))) bits
-    else pad_zero bits longer in
-  if n > (0 : integer)
-  then Vector bits' start is_inc
-  else Vector (add_one_bit_ignore_overflow (bitwise_not_bitlist bits'))
-              start is_inc
+  Vector (bits_of_int (len, n)) start is_inc
 
 let to_vec_big = to_norm_vec
 
@@ -450,7 +406,6 @@ let lt = compare_op (<)
 let gt = compare_op (>)
 let lteq = compare_op (<=)
 let gteq = compare_op (>=)
-
 
 let compare_op_vec op sign (l,r) =
   let (l',r') = (to_num sign l, to_num sign r) in

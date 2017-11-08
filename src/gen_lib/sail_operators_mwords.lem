@@ -65,7 +65,7 @@ let bvslice_raw bs i j =
 val bvupdate_aux : forall 'a 'b. Size 'a => bool -> integer -> bitvector 'a -> integer -> integer -> list bitU -> bitvector 'a
 let bvupdate_aux is_inc start bs i j bs' =
   let bits = update_aux is_inc start (List.map to_bitU (bitlistFromWord bs)) i j bs' in
-  wordFromBitlist (List.map from_bitU bits)
+  wordFromBitlist (List.map of_bitU bits)
   (*let iN = natFromInteger i in
   let jN = natFromInteger j in
   let startN = natFromInteger start in
@@ -110,6 +110,7 @@ let cast_vec_bool v = bitU_to_bool (extract_only_bit v)
 let cast_bit_vec_basic (start, len, b) = vec_to_bvec (Vector [b] start false)
 let cast_boolvec_bitvec (Vector bs start inc) =
   vec_to_bvec (Vector (List.map bool_to_bitU bs) start inc)
+let cast_vec_bl v = List.map bool_to_bitU (bitlistFromWord v)
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in

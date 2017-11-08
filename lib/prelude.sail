@@ -1,7 +1,7 @@
 
-val cast forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m - 1|] effect pure unsigned
+val cast extern forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m - 1|] effect pure unsigned
 
-val forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0 - (2**('m - 1)):2**('m - 1) - 1|] effect pure signed
+val extern forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0 - (2**('m - 1)):2**('m - 1) - 1|] effect pure signed
 
 val forall Num 'n, Num 'm. [|0:'n|] -> vector<'m - 1,'m,dec,bit> effect pure to_vec
 
@@ -44,7 +44,7 @@ val extern forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, Type 'a, 'l1 >= 
 val extern forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, 'l1 >= 0, 'l2 >= 0.
   (vector<'n1,'l1,'o,bit>, vector<'n2,'l2,'o,bit>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,bit> effect pure bitvector_append = "bitvector_concat"
 
-val (list<bit>, list<bit>) -> list<bit> effect pure list_append
+val extern (list<bit>, list<bit>) -> list<bit> effect pure list_append
 
 overload append [bitvector_append; vector_append; list_append]
 
@@ -58,17 +58,17 @@ val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l 
 overload vector_update [bitvector_update_dec; bitvector_update_inc; vector_update_dec; vector_update_inc]
 
 (* Implicit register dereferencing *)
-val cast forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
+val cast extern forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
 
 (* Bitvector duplication *)
-val forall Num 'n. (bit, [:'n:]) -> vector<'n - 1,'n,dec,bit> effect pure duplicate
+val extern forall Num 'n. (bit, [:'n:]) -> vector<'n - 1,'n,dec,bit> effect pure duplicate
 
-val (bit, int) -> list<bit> effect pure duplicate_to_list
+val extern (bit, int) -> list<bit> effect pure duplicate_to_list
 
 val extern forall Num 'n, Num 'm, Num 'o, Order 'ord.
   (vector<'o,'n,'ord,bit>, [:'m:]) -> vector<'o,'m*'n,'ord,bit> effect pure duplicate_bits
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
   (vector<'o,'n,'ord,bit>, int) -> list<bit> effect pure duplicate_bits_to_list
 
 overload (deinfix ^^) [duplicate; duplicate_bits; duplicate_to_list; duplicate_bits_to_list]
@@ -98,7 +98,7 @@ val extern forall Type 'a, Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord, 'm >= 'o.
     vector<'n, 'm, 'ord, 'a> -> vector<'p, 'o, 'ord, 'a> effect pure mask
 
 (* Adjust the start index of a decreasing bitvector *)
-val cast forall Num 'n, Num 'm, 'n >= 'm - 1.
+val cast extern forall Num 'n, Num 'm, 'n >= 'm - 1.
   vector<'n,'m,dec,bit> -> vector<'m - 1,'m,dec,bit>
   effect pure norm_dec
 
@@ -114,13 +114,25 @@ val cast forall Num 'n, Num 'l. [:0:] -> vector<'n,'l,inc,bit> effect pure cast_
 val cast forall Num 'n, Num 'l. [:1:] -> vector<'n,'l,inc,bit> effect pure cast_1_vec_inc
 val cast forall Num 'n, Num 'l. [|0:1|] -> vector<'n,'l,inc,bit> effect pure cast_01_vec_inc
 
-val cast forall Num 'n, Order 'ord. vector<'n,1,'ord,bit> -> bool effect pure cast_vec_bool
-val cast bit -> bool effect pure cast_bit_bool
+val cast extern forall Num 'n, Order 'ord. vector<'n,1,'ord,bit> -> bool effect pure cast_vec_bool
+val cast extern bit -> bool effect pure cast_bit_bool
 
 val cast forall Num 'n, Num 'm, 'n >= 'm - 1, 'm >= 1. bit -> vector<'n,'m,dec,bit> effect pure cast_bit_vec
 
+(* Cast from bitvectors to bit lists *)
+
+val extern forall Num 'n, Num 'l, Order 'ord. vector<'n,'l,'ord,bit> -> list<bit> effect pure cast_vec_bl
+
 (* MSB *)
 val forall Num 'n, Num 'm, Order 'ord. vector<'n, 'm, 'ord, bit> -> bit effect pure most_significant
+
+(* Endianness *)
+val extern forall Num 'n, Num 'm, Order 'ord. vector<'n, 8 * 'm, 'ord, bit> -> vector<'n, 8 * 'm, 'ord, bit> effect pure reverse_endianness
+
+(* List functions *)
+
+val extern forall Type 'a. (int, list<'a>) -> list<'a> effect pure list_take
+val extern forall Type 'a. (int, list<'a>) -> list<'a> effect pure list_drop
 
 (* Arithmetic *)
 
@@ -131,16 +143,16 @@ val extern (nat, nat) -> nat effect pure add_nat = "add_int"
 
 val extern (int, int) -> int effect pure add_int
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure add_vec_int
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (int, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_int_vec
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure add_overflow_vec
 
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
@@ -148,13 +160,13 @@ val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
 
 val extern (int, int) -> int effect pure sub_int = "sub_int"
 
-val forall Num 'n, Num 'm, Order 'ord.
+val extern forall Num 'n, Num 'm, Order 'ord.
     (vector<'n,'m,'ord,bit>, int) -> vector<'n,'m,'ord,bit> effect pure sub_vec_int
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure sub_vec
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure sub_underflow_vec
 
 overload (deinfix +) [
@@ -195,24 +207,24 @@ overload (deinfix *_s) [
   mult_svec
 ]
 
-val extern (bool, bool) -> bool effect pure bool_xor
+val extern (bool, bool) -> bool effect pure xor_bool
 
 val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure xor_vec = "bitwise_xor"
 
 overload (deinfix ^) [
-  bool_xor;
+  xor_bool;
   xor_vec
 ]
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure shiftl
 
 overload (deinfix <<) [
   shiftl
 ]
 
-val forall Num 'n, Num 'o, Order 'ord.
+val extern forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure shiftr
 
 overload (deinfix >>) [
@@ -220,9 +232,9 @@ overload (deinfix >>) [
 ]
 
 (* Boolean operators *)
-val extern bool -> bool effect pure bool_not = "not"
-val extern (bool, bool) -> bool effect pure bool_or
-val extern (bool, bool) -> bool effect pure bool_and
+val extern bool -> bool effect pure not_bool = "not"
+val extern (bool, bool) -> bool effect pure or_bool
+val extern (bool, bool) -> bool effect pure and_bool
 
 val extern forall Num 'n, Num 'm, Order 'ord.
     vector<'n,'m,'ord,bit> -> vector<'n,'m,'ord,bit> effect pure bitwise_not
@@ -233,9 +245,9 @@ val extern forall Num 'n, Num 'm, Order 'ord.
 val extern forall Num 'n, Num 'm, Order 'ord.
     (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> vector<'n,'m,'ord,bit> effect pure bitwise_or
 
-overload ~ [bool_not; bitwise_not]
-overload (deinfix &) [bool_and; bitwise_and]
-overload (deinfix |) [bool_or; bitwise_or]
+overload ~ [not_bool; bitwise_not]
+overload (deinfix &) [and_bool; bitwise_and]
+overload (deinfix |) [or_bool; bitwise_or]
 
 (* Equality *)
 
@@ -314,7 +326,7 @@ val extern forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [:'m:] e
 
 overload length [bitvector_length; vector_length; list_length]
 
-val cast forall Num 'n. [:'n:] -> [|'n|] effect pure upper
+val cast extern forall Num 'n. [:'n:] -> [|'n|] effect pure upper
 
 typedef option = const union forall Type 'a. {
     None;

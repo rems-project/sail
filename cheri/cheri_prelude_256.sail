@@ -35,8 +35,8 @@
 (* 256 bit cap + tag *)
 typedef CapReg = bit[257]
 
-val cast bool -> bit effect pure cast_bool_bit
-val cast forall 'n, 'm. vector<'n,'m,dec,bool> -> vector<'n,'m,dec,bit> effect pure cast_boolvec_bitvec
+val cast extern bool -> bit effect pure cast_bool_bit
+val cast extern forall 'n, 'm. vector<'n,'m,dec,bool> -> vector<'n,'m,dec,bit> effect pure cast_boolvec_bitvec
 val cast forall 'm. [|0:2**'m - 1|] -> vector<'m - 1,'m,dec,bit> effect pure cast_range_bitvec
 function vector<'m - 1,'m,dec,bit> cast_range_bitvec (v) = to_vec (v)
 val extern bool -> bool effect pure not
