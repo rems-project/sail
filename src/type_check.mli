@@ -119,7 +119,7 @@ module Env : sig
 
   val is_extern : id -> t -> bool
 
-  val get_extern : id -> t -> string
+  val get_extern : id -> t -> string -> string
 
   (* Lookup id searchs for a specified id in the environment, and
      returns it's type and what kind of identifier it is, using the

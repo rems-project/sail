@@ -329,7 +329,14 @@ let doc_typdef (TD_aux(td,_)) = match td with
 
 let doc_spec (VS_aux(v,_)) =
   let doc_extern = function
-    | Some s -> equals ^^ space ^^ utf8string ("\"" ^ String.escaped s ^ "\"") ^^ space
+    | Some s ->
+       let ext_for backend = utf8string ("\"" ^ String.escaped (s backend) ^  "\"") in
+       let extern =
+         if s "ocaml" = s "lem"
+         then ext_for "ocaml"
+         else separate space [lbrace; string "ocaml:"; ext_for "ocaml"; string "lem:"; ext_for "lem"; rbrace]
+       in
+       equals ^^ space ^^ extern ^^ space
     | None -> empty
   in
   match v with

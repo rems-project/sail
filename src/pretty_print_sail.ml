@@ -411,7 +411,8 @@ let doc_spec (VS_aux(v,_)) = match v with
   | VS_val_spec(ts,id,ext_opt,is_cast) ->
      let cast_pp = if is_cast then [string "cast"] else [] in
      let extern_kwd_pp, id_pp = match ext_opt with
-       | Some ext -> [string "extern"], doc_op equals (doc_id id) (dquotes (string ext))
+       (* This sail syntax only supports a single extern name, so just use the ocaml version *)
+       | Some ext -> [string "extern"], doc_op equals (doc_id id) (dquotes (string (ext "ocaml")))
        | None -> [], doc_id id
      in
      separate space ([string "val"] @ cast_pp @ extern_kwd_pp @ [doc_typscm ts] @ [id_pp])

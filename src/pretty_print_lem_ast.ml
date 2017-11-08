@@ -533,7 +533,8 @@ let pp_lem_spec ppf (VS_aux(v,(l,annot))) =
   let print_spec ppf v =
     match v with
     | VS_val_spec(ts,id,ext_opt,is_cast) ->
-      fprintf ppf "@[<0>(%a %a %a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id (pp_option_lem quot_string) ext_opt pp_bool_lem is_cast
+       (* FIXME: None *)
+      fprintf ppf "@[<0>(%a %a %a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id (pp_option_lem quot_string) None pp_bool_lem is_cast
     | _ -> failwith "Invalid valspec"
   in
   fprintf ppf "@[<0>(VS_aux %a (%a, %a))@]" print_spec v pp_lem_l l pp_annot annot

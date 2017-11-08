@@ -375,8 +375,8 @@ module Env : sig
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> bool
-  val add_extern : id -> string -> t -> t
-  val get_extern : id -> t -> string
+  val add_extern : id -> (string -> string) -> t -> t
+  val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
   val set_default_order_inc : t -> t
   val set_default_order_dec : t -> t
@@ -410,7 +410,7 @@ end = struct
       enums : IdSet.t Bindings.t;
       records : (typquant * (typ * id) list) Bindings.t;
       accessors : (typquant * typ) Bindings.t;
-      externs : string Bindings.t;
+      externs : (string -> string) Bindings.t;
       casts : id list;
       allow_casts : bool;
       constraints : n_constraint list;
@@ -934,13 +934,13 @@ let initial_env =
 
   (* Internal functions for Monomorphise.AtomToItself *)
 
-  |> Env.add_extern (mk_id "size_itself_int") "size_itself_int"
+  |> Env.add_extern (mk_id "size_itself_int") (fun _ -> "size_itself_int")
   |> Env.add_val_spec (mk_id "size_itself_int")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
        function_typ (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))])
          (atom_typ (nvar (mk_kid "n"))) no_effect)
-  |> Env.add_extern (mk_id "make_the_value") "make_the_value"
+  |> Env.add_extern (mk_id "make_the_value") (fun _ -> "make_the_value")
   |> Env.add_val_spec (mk_id "make_the_value")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),

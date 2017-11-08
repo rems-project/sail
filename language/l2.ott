@@ -695,9 +695,6 @@ exp :: 'E_' ::=
 % here the expi are of type 'a and the result is a vector of 'a, whereas in exp1 : ... : expn 
 % the expi and the result are both of type vector of 'a 
 
-  | [ num1 = exp1 , ... , numn = expn opt_default ]               :: :: vector_indexed {{ com vector (indexed consecutively) }}
-% num1 .. numn must be a consecutive list of naturals
-
 % we pick [ ] not { } for vector literals for consistency with their
 % array-like access syntax, in contrast to the C which has funny
 % syntax for array literals.  We don't have to preserve [ ] for lists
@@ -956,20 +953,16 @@ fundef :: 'FD_' ::=
 letbind :: 'LB_' ::=
   {{ com let binding }}
   {{ aux _ annot }} {{ auxparam 'a }}
-%  | let typschm pat = exp                                :: :: val_explicit
-%    {{ com let, explicit type ($[[pat]]$ must be total)}}
-% at the moment, we cannot parse the following, so perhaps we shouldn't keep this form here 
   | let pat = exp                                    :: :: val
     {{ com let, implicit type ($[[pat]]$ must be total)}}
 
 val_spec {{ ocaml 'a val_spec }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
-  | val_spec_aux ::  :: aux 
-
+  | val_spec_aux ::  :: aux
 
 val_spec_aux :: 'VS_' ::=
-  {{ com value type specification }} 
-  {{ ocaml  VS_val_spec of typschm * id * string option * bool }}
+  {{ com value type specification }}
+  {{ ocaml  VS_val_spec of typschm * id * (string -> string) option * bool }}
   | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
     {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }}

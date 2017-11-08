@@ -48,6 +48,18 @@ open Parse_ast
 
 let loc n m = Range (n, m)
 
+let default_opt x = function
+  | None -> x
+  | Some y -> y
+
+let assoc_opt key assocs =
+  try Some (List.assoc key assocs) with
+  | Not_found -> None
+
+let string_of_id = function
+  | Id_aux (Id str, _) -> str
+  | Id_aux (DeIid str, _) -> str
+
 let mk_id i n m = Id_aux (i, loc n m)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
@@ -1033,19 +1045,29 @@ let_def:
   | Let_ letbind
     { $2 }
 
+externs:
+  | id Colon String
+    { [(string_of_id $1, $3)] }
+  | id Colon String Comma externs
+    { (string_of_id $1, $3) :: $5 }
+
 val_spec_def:
   | Val id Colon typschm
     { mk_vs (VS_val_spec ($4, $2, None, false)) $startpos $endpos }
   | Val Cast id Colon typschm
     { mk_vs (VS_val_spec ($5, $3, None, true)) $startpos $endpos }
   | Val id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($6, $2, Some $4, false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($6, $2, Some (fun _ -> $4), false)) $startpos $endpos }
   | Val Cast id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($7, $3, Some $5, true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($7, $3, Some (fun _ -> $5), true)) $startpos $endpos }
   | Val String Colon typschm
-    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some $2, false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some (fun _ -> $2), false)) $startpos $endpos }
   | Val Cast String Colon typschm
-    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), Some $3, true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), Some (fun _ -> $3), true)) $startpos $endpos }
+  | Val id Eq Lcurly externs Rcurly Colon typschm
+    { mk_vs (VS_val_spec ($8, $2, Some (fun backend -> default_opt (string_of_id $2) (assoc_opt backend $5)), false)) $startpos $endpos }
+  | Val Cast id Eq Lcurly externs Rcurly Colon typschm
+    { mk_vs (VS_val_spec ($9, $3, Some (fun backend -> default_opt (string_of_id $3) (assoc_opt backend $6)), true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

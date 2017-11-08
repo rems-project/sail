@@ -921,7 +921,7 @@ let typschm_of_string order str =
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
-let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, Some (string_of_id id), false))
+let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, Some (fun _ -> string_of_id id), false))
 
 let val_spec_ids (Defs defs) =
   let val_spec_id (VS_aux (vs_aux, _)) =

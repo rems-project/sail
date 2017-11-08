@@ -739,7 +739,7 @@ let doc_exp_lem, doc_let_lem =
           | _ ->
              let call = match annot with
                | Some (env, _, _) when Env.is_extern f env ->
-                 string (Env.get_extern f env)
+                 string (Env.get_extern f env "lem")
                | _ -> doc_id_lem f in
              let argspp = match args with
                | [arg] -> expV true arg

@@ -331,7 +331,6 @@ let function_header () =
   then (first_function := false; string "let rec")
   else string "and"
 
-
 let funcls_id = function
   | [] -> failwith "Ocaml: empty function"
   | FCL_aux (FCL_Funcl (id, pat, exp),_) :: _ -> id
@@ -455,8 +454,6 @@ let ocaml_string_of_abbrev ctx id typq typ =
   separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
   ^//^ ocaml_string_typ typ arg
 
-
-
 let ocaml_typedef ctx (TD_aux (td_aux, _)) =
   match td_aux with
   | TD_record (id, _, typq, fields, _) ->
@@ -483,7 +480,7 @@ let get_externs (Defs defs) =
   let extern_id (VS_aux (vs_aux, _)) =
     match vs_aux with
     | VS_val_spec (typschm, id, None, _) -> []
-    | VS_val_spec (typschm, id, Some ext, _) -> [(id, mk_id ext)]
+    | VS_val_spec (typschm, id, Some ext, _) -> [(id, mk_id (ext "ocaml"))]
   in
   let rec extern_ids = function
     | DEF_spec vs :: defs -> extern_id vs :: extern_ids defs
