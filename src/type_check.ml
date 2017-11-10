@@ -2170,10 +2170,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      then annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
      else typ_error l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
   (* This rule allows registers of type t to be passed by name with type register<t>*)
-  | E_id reg, Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)])
+  | E_id reg, Typ_app (id, [Typ_arg_aux (Typ_arg_typ arg_typ, _)])
     when string_of_id id = "register" && Env.is_register reg env ->
      let rtyp = Env.get_register reg env in
-     subtyp l env rtyp typ; annot_exp (E_id reg) typ (* CHECK: is this subtyp the correct way around? *)
+     subtyp l env rtyp arg_typ; annot_exp (E_id reg) typ (* CHECK: is this subtyp the correct way around? *)
   | E_id id, _ when is_union_id id env ->
      begin
        match Env.lookup_id id env with

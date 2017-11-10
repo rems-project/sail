@@ -91,6 +91,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
   | id when Id.compare id (mk_id "real") = 0 -> string "Num.num"
+  | id when Id.compare id (mk_id "register") = 0 -> string "ref"
   | id -> zencode ctx id
 
 let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
@@ -150,6 +151,11 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   | _ -> string ("PAT<" ^ string_of_pat pat ^ ">")
 
 let begin_end doc = group (string "begin" ^^ nest 2 (break 1 ^^ doc) ^/^ string "end")
+
+(* Returns true if a type is a register being passed by name *)
+let is_passed_by_name = function
+  | (Typ_aux (Typ_app (tid, _), _)) -> string_of_id tid = "register"
+  | _ -> false
 
 let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   match exp_aux with
@@ -259,6 +265,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        match Env.lookup_id id (env_of exp) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
        | Enum _ | Union _ -> zencode_upper ctx id
+       | Register _ when is_passed_by_name (typ_of exp) -> zencode ctx id
        | Register typ ->
           if !opt_trace_ocaml then
             let var = gensym () in
