@@ -1139,8 +1139,7 @@ let rec nc_constraints env var_of ncs =
   | (nc :: ncs) ->
      Constraint.conj (nc_constraint env var_of nc) (nc_constraints env var_of ncs)
 
-let prove_z3 env nc =
-  typ_print ("Prove " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc);
+let prove_z3' env constr =
   let module Bindings = Map.Make(Kid) in
   let bindings = ref Bindings.empty  in
   let fresh_var kid =
@@ -1152,11 +1151,15 @@ let prove_z3 env nc =
     try Bindings.find kid !bindings with
     | Not_found -> fresh_var kid
   in
-  let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.negate (nc_constraint env var_of nc)) in
+  let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (constr var_of) in
   match Constraint.call_z3 constr with
   | Constraint.Unsat -> typ_debug "unsat"; true
   | Constraint.Sat -> typ_debug "sat"; false
   | Constraint.Unknown -> typ_debug "unknown"; false
+
+let prove_z3 env nc =
+  typ_print ("Prove " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc);
+  prove_z3' env (fun var_of -> Constraint.negate (nc_constraint env var_of nc))
 
 let prove env (NC_aux (nc_aux, _) as nc) =
   let compare_const f (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
@@ -1287,6 +1290,20 @@ let ord_identical (Ord_aux (ord1, _)) (Ord_aux (ord2, _)) =
   | Ord_dec, Ord_dec -> true
   | _, _ -> false
 
+let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
+  match nc1, nc2 with
+  | NC_equal (n1a, n1b), NC_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_not_equal (n1a, n1b), NC_not_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_bounded_ge (n1a, n1b), NC_bounded_ge (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_bounded_le (n1a, n1b), NC_bounded_le (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_or (nc1a, nc1b), NC_or (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
+  | NC_and (nc1a, nc1b), NC_and (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
+  | NC_true, NC_true -> true
+  | NC_false, NC_false -> true
+  | NC_set (kid1, ints1), NC_set (kid2, ints2) when List.length ints1 = List.length ints2 ->
+     Kid.compare kid1 kid2 = 0 && List.for_all2 (fun i1 i2 -> i1 = i2) ints1 ints2
+  | _, _ -> false
+
 let typ_identical env typ1 typ2 =
   let rec typ_identical' (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
     match typ1, typ2 with
@@ -1303,6 +1320,8 @@ let typ_identical env typ1 typ2 =
          try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
          | Invalid_argument _ -> false
        end
+    | Typ_exist (kids1, nc1, typ1), Typ_exist (kids2, nc2, typ2) when List.length kids1 = List.length kids2 ->
+       List.for_all2 (fun k1 k2 -> Kid.compare k1 k2 = 0) kids1 kids2 && nc_identical nc1 nc2 && typ_identical' typ1 typ2
     | _, _ -> false
   and typ_arg_identical (Typ_arg_aux (arg1, _)) (Typ_arg_aux (arg2, _)) =
     match arg1, arg2 with
@@ -1506,6 +1525,23 @@ let merge_uvars l unifiers1 unifiers2 =
 (* 4.5. Subtyping with existentials                                       *)
 (**************************************************************************)
 
+let destruct_atom_nexp env typ =
+  match Env.expand_synonyms env typ with
+  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
+       when string_of_id f = "atom" -> Some n
+  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp m, _)]), _)
+       when string_of_id f = "range" && nexp_identical n m -> Some n
+  | _ -> None
+
+let destruct_atom_kid env typ =
+  match Env.expand_synonyms env typ with
+  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid, _)), _)]), _)
+       when string_of_id f = "atom" -> Some kid
+  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid1, _)), _);
+                          Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid2, _)), _)]), _)
+       when string_of_id f = "range" && Kid.compare kid1 kid2 = 0 -> Some kid1
+  | _ -> None
+
 let nc_subst_uvar kid uvar nc =
   match uvar with
   | U_nexp nexp -> nc_subst_nexp kid (unaux_nexp nexp) nc
@@ -1516,9 +1552,60 @@ let uv_nexp_constraint env (kid, uvar) =
   | U_nexp nexp -> Env.add_constraint (nc_eq (nvar kid) nexp) env
   | _ -> env
 
+let rec alpha_equivalent env typ1 typ2 =
+  let counter = ref 0 in
+  let new_kid () = let kid = mk_kid ("alpha#" ^ string_of_int !counter) in (incr counter; kid) in
+
+  let rec relabel (Typ_aux (aux, l) as typ) =
+    let relabelled_aux =
+      match aux with
+      | Typ_wild | Typ_id _ | Typ_var _ -> aux
+      | Typ_fn (typ1, typ2, eff) -> Typ_fn (relabel typ1, relabel typ2, eff)
+      | Typ_tup typs -> Typ_tup (List.map relabel typs)
+      | Typ_exist (kids, nc, typ) ->
+         let kids = List.map (fun kid -> (kid, new_kid ())) kids in
+         let nc = List.fold_left (fun nc (kid, nk) -> nc_subst_nexp kid (Nexp_var nk) nc) nc kids in
+         let typ = List.fold_left (fun nc (kid, nk) -> typ_subst_nexp kid (Nexp_var nk) nc) typ kids in
+         Typ_exist (List.map snd kids, nc, typ)
+      | Typ_app (id, args) ->
+         Typ_app (id, List.map relabel_arg args)
+    in
+    Typ_aux (relabelled_aux, l)
+  and relabel_arg (Typ_arg_aux (aux, l) as arg) =
+    match aux with
+    | Typ_arg_nexp _ | Typ_arg_order _ -> arg
+    | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (relabel typ), l)
+  in
+
+  let typ1 = relabel (Env.expand_synonyms env typ1) in
+  counter := 0;
+  let typ2 = relabel (Env.expand_synonyms env typ2) in
+  typ_debug ("Alpha equivalence for " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
+  if typ_identical env typ1 typ2
+  then (typ_debug "alpha-equivalent"; true)
+  else (typ_debug "Not alpha-equivalent"; false)
+
 let rec subtyp l env typ1 typ2 =
   typ_print ("Subtype " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
   match destruct_exist env typ1, destruct_exist env typ2 with
+  (* Ensure alpha equivalent types are always subtypes of one another
+     - this ensures that we can always re-check inferred types. *)
+  | _, _ when alpha_equivalent env typ1 typ2 -> ()
+  (* Special case for two existentially quantified numeric (atom) types *)
+  | Some (kids1, nc1, typ1), Some (_ :: _ :: _ as kids2, nc2, typ2)
+       when is_some (destruct_atom_kid env typ1) && is_some (destruct_atom_kid env typ2) ->
+     let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids1 in
+     let env = Env.add_constraint nc1 env in
+     let Some atom_kid1 = destruct_atom_kid env typ1 in
+     let Some atom_kid2 = destruct_atom_kid env typ2 in
+     let kids2 = List.filter (fun kid -> Kid.compare atom_kid2 kid <> 0) kids2 in
+     let env = Env.add_typ_var atom_kid2 BK_nat env in
+     let env = Env.add_constraint (nc_eq (nvar atom_kid1) (nvar atom_kid2)) env in
+     let constr var_of =
+       Constraint.forall (List.map var_of kids2) (Constraint.negate (nc_constraint env var_of nc2))
+     in
+     if prove_z3' env constr then ()
+     else typ_error l ("Existential atom subtyping failed")
   | Some (kids, nc, typ1), _ ->
      let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
      let env = Env.add_constraint nc env in
@@ -1694,14 +1781,6 @@ let destruct_atom (Typ_aux (typ_aux, _)) =
        | Some c1, Some c2 -> if eq_big_int c1 c2 then Some (c1, nexp1) else None
        | _ -> None
      end
-  | _ -> None
-
-let destruct_atom_nexp env typ =
-  match Env.expand_synonyms env typ with
-  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
-       when string_of_id f = "atom" -> Some n
-  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp m, _)]), _)
-       when string_of_id f = "range" && nexp_identical n m -> Some n
   | _ -> None
 
 exception Not_a_constraint;;
@@ -2116,6 +2195,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
 and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
+  let switch_typ (E_aux (exp, (l, Some (env, _, eff)))) typ = E_aux (exp, (l, Some (env, typ, eff))) in
   let rec try_casts trigger errs = function
     | [] -> typ_raise l (Err_no_casts (trigger, errs))
     | (cast :: casts) -> begin
@@ -2130,7 +2210,7 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   begin
     try
       typ_debug ("PERFORMING TYPE COERCION: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ);
-      subtyp l env (typ_of annotated_exp) typ; annotated_exp
+      subtyp l env (typ_of annotated_exp) typ; switch_typ annotated_exp typ
     with
     | Type_error (_, trigger) when Env.allow_casts env ->
        let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
@@ -2146,6 +2226,7 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
 and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
+  let switch_typ (E_aux (exp, (l, Some (env, _, eff)))) typ = E_aux (exp, (l, Some (env, typ, eff))) in
   let rec try_casts = function
     | [] -> unify_error l "No valid casts resulted in unification"
     | (cast :: casts) -> begin
@@ -2768,6 +2849,7 @@ and instantiation_of (E_aux (exp_aux, (l, _)) as exp) =
 
 and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let annot_exp exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
+  let switch_annot env typ (E_aux (exp, (l, Some (_, _, eff)))) = E_aux (exp, (l, Some (env, typ, eff))) in
   let all_unifiers = ref KBindings.empty in
   let ex_goal = ref None in
   let prove_goal env = match !ex_goal with

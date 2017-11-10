@@ -48,6 +48,7 @@ val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_undefined: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 
 val load_file_no_check : Ast.order -> string -> unit Ast.defs
 val load_file : Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t

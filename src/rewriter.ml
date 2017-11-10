@@ -3624,3 +3624,19 @@ let rewrite_defs_ocaml = [
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
   ]
+
+let rewrite_check_annot =
+  let check_annot exp =
+    try
+      prerr_endline ("CHECKING: " ^ string_of_exp exp ^ " : " ^ string_of_typ (typ_of exp));
+      let _ = check_exp (env_of exp) (strip_exp exp) (typ_of exp) in
+      exp
+    with
+      Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))
+  in
+  let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> check_annot (E_aux (exp, annot))) } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) }
+
+let rewrite_defs_check = [
+  ("check_annotations", rewrite_check_annot);
+  ]

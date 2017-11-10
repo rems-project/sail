@@ -215,3 +215,6 @@ val string_of_list : string -> ('a -> string) -> 'a list -> string
 val string_of_option : ('a -> string) -> 'a option -> string
 
 val split_on_char : char -> string -> string list
+
+val is_some : 'a option -> bool
+val is_none : 'a option -> bool

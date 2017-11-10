@@ -60,9 +60,9 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 
 for i in `ls $DIR/pass/`;
 do
-    if $SAILDIR/sail -ddump_tc_ast -just_check $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
+    if $SAILDIR/sail -ddump_tc_ast -dsanity $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
     then
-	if $SAILDIR/sail -dno_cast -ddump_tc_ast -just_check $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
+	if $SAILDIR/sail -ddump_tc_ast -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
 	then
 	    if diff $DIR/rtpass/$i $DIR/rtpass2/$i;
 	    then

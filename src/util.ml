@@ -359,3 +359,9 @@ let rec string_of_list sep string_of = function
 let string_of_option string_of = function
   | None -> ""
   | Some x -> string_of x
+
+let is_some = function
+  | Some _ -> true
+  | None -> false
+
+let is_none opt = not (is_some opt)

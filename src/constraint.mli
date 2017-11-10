@@ -14,8 +14,8 @@ val implies : t -> t -> t
 val conj : t -> t -> t
 val disj : t -> t -> t
 val negate : t -> t
-val branch : t list -> t
 val literal : bool -> t
+val forall : int list -> t -> t
 
 val lt : nexp -> nexp -> t
 val lteq : nexp -> nexp -> t

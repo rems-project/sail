@@ -45,84 +45,13 @@ type 'a constraint_bool =
   | BFun of (constraint_bool_op * 'a constraint_bool * 'a constraint_bool)
   | Not of 'a constraint_bool
   | CFun of (constraint_compare_op * 'a * 'a)
-  | Branch of ('a constraint_bool list)
+  | Forall of (int list * 'a constraint_bool)
   | Boolean of bool
 
 let rec pairs (xs : 'a list) (ys : 'a list) : ('a * 'b) list =
   match xs with
   | [] -> []
   | (x :: xs) -> List.map (fun y -> (x, y)) ys @ pairs xs ys
-
-let rec unbranch : 'a constraint_bool -> 'a constraint_bool list = function
-  | Branch xs -> List.map unbranch xs |> List.concat
-  | Not x -> unbranch x |> List.map (fun y -> Not y)
-  | BFun (op, x, y) ->
-     let xs, ys = unbranch x, unbranch y in
-     List.map (fun (z, w) -> BFun (op, z, w)) (pairs xs ys)
-  | c -> [c]
-
-(* Apply De Morgan's laws to push all negations to just before integer
-   constraints *)
-let rec de_morgan : 'a constraint_bool -> 'a constraint_bool = function
-  | Not (Not x) -> de_morgan x
-  | Not (BFun (And, x, y)) -> BFun (Or, de_morgan (Not x), de_morgan (Not y))
-  | Not (BFun (Or, x, y)) -> BFun (And, de_morgan (Not x), de_morgan (Not y))
-  | Not (Boolean b) -> Boolean (not b)
-  | BFun (op, x, y) -> BFun (op, de_morgan x, de_morgan y)
-  | c -> c
-
-(* Once De Morgan's laws are applied we can push all the Nots into
-   comparison constraints *)
-let rec remove_nots : 'a constraint_bool -> 'a constraint_bool = function
-  | BFun (op, x, y) -> BFun (op, remove_nots x, remove_nots y)
-  | Not (CFun (c, x, y)) -> CFun (negate_comparison c, x, y)
-  | c -> c
-
-(* Apply distributivity so all Or clauses are within And clauses *)
-let rec distrib_step : 'a constraint_bool -> ('a constraint_bool * int) = function
-  | BFun (Or, x, BFun (And, y, z)) ->
-     let (xy, n) = distrib_step (BFun (Or, x, y)) in
-     let (xz, m) = distrib_step (BFun (Or, x, z)) in
-     BFun (And, xy, xz), n + m + 1
-  | BFun (Or, BFun (And, x, y), z) ->
-     let (xz, n) = distrib_step (BFun (Or, x, z)) in
-     let (yz, m) = distrib_step (BFun (Or, y, z)) in
-     BFun (And, xz, yz), n + m + 1
-  | BFun (op, x, y) ->
-     let (x', n) = distrib_step x in
-     let (y', m) = distrib_step y in
-     BFun (op, x', y'), n + m
-  | c -> (c, 0)
-
-let rec distrib (c : 'a constraint_bool) : 'a constraint_bool =
-  let (c', n) = distrib_step c in
-  if n = 0 then c else distrib c'
-
-(* Once these steps have been applied, the constraint language is a
-   list of And clauses, each a list of Or clauses, with either
-   explicit booleans (LBool) or integer comparisons LFun. The flatten
-   function coverts from a constraint_bool to this representation. *)
-type 'a constraint_leaf =
-  | LFun of (constraint_compare_op * 'a * 'a)
-  | LBoolean of bool
-
-let rec flatten_or : 'a constraint_bool -> 'a constraint_leaf list = function
-  | BFun (Or, x, y) -> flatten_or x @ flatten_or y
-  | CFun comparison -> [LFun comparison]
-  | Boolean b -> [LBoolean b]
-  | _ -> assert false
-
-let rec flatten : 'a constraint_bool -> 'a constraint_leaf list list = function
-  | BFun (And, x, y) -> flatten x @ flatten y
-  | Boolean b -> [[LBoolean b]]
-  | c -> [flatten_or c]
-
-let normalize (constr : 'a constraint_bool) : 'a constraint_leaf list list =
-  constr
-  |> de_morgan
-  |> remove_nots
-  |> distrib
-  |> flatten
 
 (* Get a set of variables from a constraint *)
 module IntSet = Set.Make(
@@ -131,21 +60,18 @@ module IntSet = Set.Make(
     type t = int
   end)
 
-let rec int_expr_vars : nexp -> IntSet.t = function
+let rec nexp_vars : nexp -> IntSet.t = function
   | NConstant _ -> IntSet.empty
   | NVar v -> IntSet.singleton v
-  | NFun (_, x, y) -> IntSet.union (int_expr_vars x) (int_expr_vars y)
-  | N2n x -> int_expr_vars x
+  | NFun (_, x, y) -> IntSet.union (nexp_vars x) (nexp_vars y)
+  | N2n x -> nexp_vars x
 
-let leaf_expr_vars : nexp constraint_leaf -> IntSet .t = function
-  | LBoolean _ -> IntSet.empty
-  | LFun (_, x, y) -> IntSet.union (int_expr_vars x) (int_expr_vars y)
-
-let constraint_vars constr : IntSet.t =
-  constr
-  |> List.map (List.map leaf_expr_vars)
-  |> List.map (List.fold_left IntSet.union IntSet.empty)
-  |> List.fold_left IntSet.union IntSet.empty
+let rec constraint_vars : nexp constraint_bool -> IntSet.t = function
+  | BFun (_, x, y) -> IntSet.union (constraint_vars x) (constraint_vars y)
+  | Not x -> constraint_vars x
+  | CFun (_, x, y) -> IntSet.union (nexp_vars x) (nexp_vars y)
+  | Forall (vars, x) -> IntSet.diff (constraint_vars x) (IntSet.of_list vars)
+  | Boolean _ -> IntSet.empty
 
 (* SMTLIB v2.0 format is based on S-expressions so we have a
    lightweight representation of those here. *)
@@ -184,27 +110,17 @@ let rec sexpr_of_nexp = function
   | NConstant c -> Atom (string_of_big_int c) (* CHECK: do we do negative constants right? *)
   | NVar var -> Atom ("v" ^ string_of_int var)
 
-let rec sexpr_of_cbool = function
-  | BFun (And, x, y) -> sfun "and" [sexpr_of_cbool x; sexpr_of_cbool y]
-  | BFun (Or, x, y) -> sfun "or" [sexpr_of_cbool x; sexpr_of_cbool y]
-  | Not x -> sfun "not" [sexpr_of_cbool x]
+let rec sexpr_of_constraint = function
+  | BFun (And, x, y) -> sfun "and" [sexpr_of_constraint x; sexpr_of_constraint y]
+  | BFun (Or, x, y) -> sfun "or" [sexpr_of_constraint x; sexpr_of_constraint y]
+  | Not x -> sfun "not" [sexpr_of_constraint x]
   | CFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp (arith x)) (sexpr_of_nexp (arith y))
-  | Branch xs -> sfun "BRANCH" (List.map sexpr_of_cbool xs)
+  | Forall (vars, x) ->
+     sfun "forall" [List (List.map (fun v -> List [Atom ("v" ^ string_of_int v); Atom "Int"]) vars); sexpr_of_constraint x]
   | Boolean true -> Atom "true"
   | Boolean false -> Atom "false"
 
-let sexpr_of_constraint_leaf = function
-  | LFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp (arith x)) (sexpr_of_nexp (arith y))
-  | LBoolean true -> Atom "true"
-  | LBoolean false -> Atom "false"
-
-let sexpr_of_constraint constr : sexpr =
-  constr
-  |> List.map (List.map sexpr_of_constraint_leaf)
-  |> List.map (fun xs -> match xs with [x] -> x | _ -> (sfun "or" xs))
-  |> sfun "and"
-
-let smtlib_of_constraint constr : string =
+let smtlib_of_constraints constr : string =
   "(push)\n"
   ^ var_decs constr ^ "\n"
   ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; sexpr_of_constraint constr])
@@ -252,13 +168,8 @@ let save_digests () =
   close_out out_chan
 
 let rec call_z3 constraints : smt_result =
-  let problems = unbranch constraints in
-  let z3_file =
-    problems
-    |> List.map normalize
-    |> List.map smtlib_of_constraint
-    |> string_of_list "\n" (fun x -> x)
-  in
+  let problems = [constraints] in
+  let z3_file = smtlib_of_constraints constraints in
 
   (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
 
@@ -298,12 +209,7 @@ let rec call_z3 constraints : smt_result =
          else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
     end
 
-let string_of constr =
-  constr
-  |> unbranch
-  |> List.map normalize
-  |> List.map (fun c -> smtlib_of_constraint c)
-  |> string_of_list "\n" (fun x -> x)
+let string_of = smtlib_of_constraints
 
 (* ===== Abstract API for building constraints ===== *)
 
@@ -319,9 +225,9 @@ let conj (x : t) (y : t) : t =
 let disj (x : t) (y : t) : t =
   BFun (Or, x, y)
 
-let negate (x : t) : t = Not x
+let forall (vars : int list) (x : t) : t = Forall (vars, x)
 
-let branch (xs : t list) : t = Branch xs
+let negate (x : t) : t = Not x
 
 let literal (b : bool) : t = Boolean b
 

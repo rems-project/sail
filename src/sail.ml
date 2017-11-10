@@ -52,6 +52,7 @@ let opt_print_lem = ref false
 let opt_print_ocaml = ref false
 let opt_convert = ref false
 let opt_memo_z3 = ref false
+let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -128,6 +129,9 @@ let options = Arg.align ([
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");
+  ( "-dsanity",
+    Arg.Set opt_sanity,
+    " (debug) sanity check the AST (slow)");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -183,6 +187,11 @@ let main() =
 
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
+      (if !(opt_sanity)
+       then
+         let _ = rewrite_ast_check ast in
+         ()
+       else ());
       (if !(opt_print_verbose)
        then ((Pretty_print.pp_defs stdout) ast)
        else ());
