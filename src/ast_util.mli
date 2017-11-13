@@ -60,6 +60,7 @@ val mk_funcl : id -> unit pat -> unit exp -> unit funcl
 val mk_fundef : (unit funcl) list -> unit def
 val mk_val_spec : val_spec_aux -> unit def
 val mk_typschm : typquant -> typ -> typschm
+val mk_typquant : quant_item list -> typquant
 val mk_qi_id : base_kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
@@ -176,6 +177,7 @@ val id_of_kid : kid -> id
 val kid_of_id : id -> kid
 
 val prepend_id : string -> id -> id
+val prepend_kid : string -> kid -> kid
 
 module Id : sig
   type t = id

@@ -262,6 +262,8 @@ let nc_false = mk_nc NC_false
 
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
 
+let mk_typquant qis = TypQ_aux (TypQ_tq qis, Parse_ast.Unknown)
+
 let mk_fexp id exp = FE_aux (FE_Fexp (id, exp), no_annot)
 let mk_fexps fexps = FES_aux (FES_Fexps (fexps, false), no_annot)
 
@@ -400,6 +402,9 @@ let kid_of_id = function
 let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid (str ^ v), l)
+
+let prepend_kid str = function
+  | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
 
 let string_of_base_effect_aux = function
   | BE_rreg -> "rreg"

@@ -1337,6 +1337,12 @@ type uvar =
   | U_effect of effect
   | U_typ of typ
 
+let uvar_subst_nexp sv subst = function
+  | U_nexp nexp -> U_nexp (nexp_subst sv subst nexp)
+  | U_typ typ -> U_typ (typ_subst_nexp sv subst typ)
+  | U_effect eff -> U_effect eff
+  | U_order ord -> U_order ord
+
 exception Unification_error of l * string;;
 
 let unify_error l str = raise (Unification_error (l, str))
@@ -2893,15 +2899,23 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          let iarg = irule infer_exp env arg in
          typ_debug ("INFER: " ^ string_of_exp arg ^ " type " ^ string_of_typ (typ_of iarg));
          try
-           let iarg, (unifiers, ex_kids, ex_nc) (* FIXME *) = type_coercion_unify env iarg typ in
+           (* If we get an existential when instantiating, we prepend
+              the identifier of the exisitential with the tag argN# to
+              denote that it was bound by the Nth argument to the
+              function. *)
+           let ex_tag = "arg" ^ string_of_int n ^ "#" in
+           let iarg, (unifiers, ex_kids, ex_nc) = type_coercion_unify env iarg typ in
            typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
            typ_debug ("EX KIDS: " ^ string_of_list ", " string_of_kid ex_kids);
            let env = match ex_kids, ex_nc with
              | [], None -> env
              | _, Some enc ->
-                let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env ex_kids in
+                let enc = List.fold_left (fun nc kid -> nc_subst_nexp kid (Nexp_var (prepend_kid ex_tag kid)) nc) enc ex_kids in
+                let env = List.fold_left (fun env kid -> Env.add_typ_var (prepend_kid ex_tag kid) BK_nat env) env ex_kids in
                 Env.add_constraint enc env
            in
+           let tag_unifier uvar = List.fold_left (fun uvar kid -> uvar_subst_nexp kid (Nexp_var (prepend_kid ex_tag kid)) uvar) uvar ex_kids in
+           let unifiers = KBindings.map tag_unifier unifiers in
            all_unifiers := merge_uvars l !all_unifiers unifiers;
            let utyps' = List.map (subst_unifiers unifiers) utyps in
            let typs' = List.map (subst_unifiers unifiers) typs in
