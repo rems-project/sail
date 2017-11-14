@@ -1923,48 +1923,6 @@ let deps_of_uvar kid_deps arg_deps = function
   | U_effect _ -> dempty
   | U_typ typ -> deps_of_typ kid_deps arg_deps typ
 
-(* Alternative to decoding existential names to find corresponding function arguments;
-   also see case for E_app
-let existential_in_uvar kid_deps =
-  let check kids = KidSet.exists (fun kid -> not (KBindings.mem kid kid_deps)) kids in
-  function
-  | U_typ typ -> check (tyvars_of_typ typ)
-  | U_nexp nexp -> check (nexp_frees nexp)
-  | _ -> false
-
-let findi p =
-  let rec aux n = function
-    | [] -> None
-    | h::t -> if p h then Some n else aux (n+1) t
-  in aux 0
-
-let rec filtermap f = function
-  | [] -> []
-  | h::t -> match f h with
-    | None -> filtermap f t
-    | Some x -> x::(filtermap f t)
-
-let find_existential_args kid_inst kid_deps deps typs tq =
-  let typ_vars = List.map tyvars_of_typ typs in
-  match tq with
-  | TypQ_aux (TypQ_no_forall, _) -> KBindings.empty
-  | TypQ_aux (TypQ_tq tqs, _) ->
-     let aux = function
-       | QI_aux (QI_const _,_) -> None
-       | QI_aux (QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_,kid)),_)),_) ->
-          match KBindings.find kid kid_inst with
-          | uvar ->
-             if existential_in_uvar kid_deps uvar then
-               match findi (KidSet.mem kid) typ_vars with
-               | Some i -> Some (kid, List.nth deps i)
-               | None -> Some (kid, Unknown ("No instantiating argument found for " ^ string_of_kid kid))
-             else None
-          | exception Not_found -> None
-     in
-     let kdeps = filtermap aux tqs in
-     List.fold_left (fun b (kid,deps) -> KBindings.add kid deps b) KBindings.empty kdeps
-*)
-
 (* Takes an environment of dependencies on vars, type vars, and flow control,
    and dependencies on mutable variables.  The latter are quite conservative,
    we currently drop variables assigned inside loops, for example. *)
@@ -2017,12 +1975,6 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        let deps, assigns, r = non_det args in
        let kid_inst = instantiation_of exp in
        let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
-(*
-       let (tq,typ) = Env.get_val_spec id (env_of_annot (l,annot)) in
-       let typ = match typ with Typ_aux (Typ_fn (t,_,_),_) -> t | _ -> typ in
-       let typs = match typ with Typ_aux (Typ_tup ts,_) -> ts | _ -> [typ] in
-       let ex_kid_deps = find_existential_args kid_inst env.kid_deps deps typs tq in
-       let kid_deps = dep_kbindings_merge kid_deps ex_kid_deps in*)
        let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
      (merge_deps deps, assigns, merge r r')
     | E_app_infix (e1,id,e2) ->
