@@ -392,6 +392,9 @@ let reduce_nexp subst ne =
 
 let typ_of_args args =
   match args with
+  | [E_aux (E_tuple args,(_,Some (_,Typ_aux (Typ_exist _,_),_)))] ->
+     let tys = List.map (fun (E_aux (_,(l,annot))) -> snd (env_typ_expected l annot)) args in
+     Typ_aux (Typ_tup tys,Unknown)
   | [E_aux (_,(l,annot))] ->
      snd (env_typ_expected l annot)
   | _ ->
