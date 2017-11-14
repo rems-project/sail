@@ -1726,8 +1726,626 @@ let rewrite_size_parameters env (Defs defs) =
 
 end
 
-let monomorphise mwords splits defs =
-  let defs = split_defs splits defs in
+
+module Analysis =
+struct
+
+type loc = string * int (* filename, line *)
+
+let string_of_loc (s,l) = s ^ "." ^ string_of_int l
+
+let id_pair_compare (id,l) (id',l') =
+    match Id.compare id id' with
+    | 0 -> compare l l'
+    | x -> x
+
+(* Arguments that we might split on *)
+module ArgSet = Set.Make (struct
+  type t = id * loc
+  let compare = id_pair_compare
+end)
+
+(* Arguments that we should look at in callers *)
+module CallerArgSet = Set.Make (struct
+  type t = id * int
+  let compare = id_pair_compare
+end)
+
+(* Type variables that we should look at in callers *)
+module CallerKidSet = Set.Make (struct
+  type t = id * kid
+  let compare (id,kid) (id',kid') =
+    match Id.compare id id' with
+    | 0 -> Kid.compare kid kid'
+    | x -> x
+end)
+
+type dependencies =
+  | Have of ArgSet.t * CallerArgSet.t * CallerKidSet.t
+  (* args to split inside fn * caller args to split * caller kids that are bitvector parameters *)
+  | Unknown of string
+
+let string_of_argset s =
+  String.concat ", " (List.map (fun (id,l) -> string_of_id id ^ "." ^ string_of_loc l)
+                        (ArgSet.elements s))
+
+let string_of_callerset s =
+  String.concat ", " (List.map (fun (id,arg) -> string_of_id id ^ "." ^ string_of_int arg)
+                        (CallerArgSet.elements s))
+
+let string_of_callerkidset s =
+  String.concat ", " (List.map (fun (id,kid) -> string_of_id id ^ "." ^ string_of_kid kid)
+                        (CallerKidSet.elements s))
+
+let string_of_dep = function
+  | Have (argset,callset,kidset) ->
+     "Have (" ^ string_of_argset argset ^ "; " ^ string_of_callerset callset ^ "; " ^
+       string_of_callerkidset kidset ^ ")"
+  | Unknown msg -> "Unknown " ^ msg
+
+(* Result of analysing the body of a function.  The split field gives the
+   arguments to split based on the body alone.  The other fields are used at
+   the end for the interprocedural phase. *)
+
+type result = {
+  split : ArgSet.t;
+  (* Dependencies for arguments and type variables of each fn called, so that
+     if the fn uses one for a bitvector size we can track it back *)
+  split_on_call : (dependencies list * dependencies KBindings.t) Bindings.t; (* (arguments, kids) per fn *)
+  split_in_caller : CallerArgSet.t;
+  kid_in_caller : CallerKidSet.t
+}
+
+let empty = {
+  split = ArgSet.empty;
+  split_on_call = Bindings.empty;
+  split_in_caller = CallerArgSet.empty;
+  kid_in_caller = CallerKidSet.empty
+}
+
+let dmerge x y =
+  match x,y with
+  | Unknown s, _ -> Unknown s
+  | _, Unknown s -> Unknown s
+  | Have (a,c,k), Have (a',c',k') ->
+     Have (ArgSet.union a a', CallerArgSet.union c c', CallerKidSet.union k k')
+
+let dempty = Have (ArgSet.empty, CallerArgSet.empty, CallerKidSet.empty)
+
+let dopt_merge k x y =
+  match x, y with
+  | None, _ -> y
+  | _, None -> x
+  | Some x, Some y -> Some (dmerge x y)
+
+let dep_bindings_merge a1 a2 =
+  Bindings.merge dopt_merge a1 a2
+
+let dep_kbindings_merge a1 a2 =
+  KBindings.merge dopt_merge a1 a2
+
+let call_kid_merge k x y =
+  match x, y with
+  | None, x -> x
+  | x, None -> x
+  | Some d, Some d' -> Some (dmerge d d')
+
+let call_arg_merge k args args' =
+  match args, args' with
+  | None, x -> x
+  | x, None -> x
+  | Some (args,kdep), Some (args',kdep')
+    -> Some (List.map2 dmerge args args', KBindings.merge call_kid_merge kdep kdep')
+
+let merge rs rs' = {
+  split = ArgSet.union rs.split rs'.split;
+  split_on_call = Bindings.merge call_arg_merge rs.split_on_call rs'.split_on_call;
+  split_in_caller = CallerArgSet.union rs.split_in_caller rs'.split_in_caller;
+  kid_in_caller = CallerKidSet.union rs.kid_in_caller rs'.kid_in_caller
+}
+
+type env = {
+  var_deps : dependencies Bindings.t;
+  kid_deps : dependencies KBindings.t;
+  control_deps : dependencies
+}
+
+let rec split3 = function
+  | [] -> [],[],[]
+  | ((h1,h2,h3)::t) ->
+     let t1,t2,t3 = split3 t in
+     (h1::t1,h2::t2,h3::t3)
+
+let kids_bound_by_pat pat =
+  let open Rewriter in
+  fst (fold_pat ({ (compute_pat_alg KidSet.empty KidSet.union)
+                   with p_var = (fun ((s,p),kid) -> (KidSet.add kid s, P_var (p,kid))) }) pat)
+
+let update_env env deps pat =
+  let bound = bindings_from_pat pat in
+  let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
+  let kbound = kids_bound_by_pat pat in
+  let kid_deps = KidSet.fold (fun v ds -> KBindings.add v deps ds) kbound env.kid_deps in
+  { env with var_deps = var_deps; kid_deps = kid_deps }
+
+(* Functions to give dependencies for type variables in nexps, constraints, types and
+   unification variables.  For function calls we also supply a list of dependencies for
+   arguments so that we can find dependencies for existentially bound sizes. *)
+
+let deps_of_tyvars kid_deps arg_deps kids =
+  let check kid deps =
+    match KBindings.find kid kid_deps with
+    | deps' -> dmerge deps deps'
+    | exception Not_found ->
+       match kid with
+       | Kid_aux (Var kidstr,_) ->
+          let unknown = Unknown ("Unknown type variable " ^ string_of_kid kid) in
+          (* Tyvars from existentials in arguments have a special format *)
+          if String.length kidstr > 5 && String.sub kidstr 0 4 = "'arg" then
+            try
+              let i = String.index kidstr '#' in
+              let n = String.sub kidstr 4 (i-4) in
+              let arg = int_of_string n in
+              List.nth arg_deps arg
+            with Not_found | Failure _ -> unknown
+          else unknown
+  in
+  KidSet.fold check kids dempty
+
+let deps_of_nexp kid_deps arg_deps nexp =
+  let kids = nexp_frees nexp in
+  deps_of_tyvars kid_deps arg_deps kids
+
+let rec deps_of_nc kid_deps (NC_aux (nc,_)) =
+  match nc with
+  | NC_equal (nexp1,nexp2)
+  | NC_bounded_ge (nexp1,nexp2)
+  | NC_bounded_le (nexp1,nexp2)
+  | NC_not_equal (nexp1,nexp2)
+    -> dmerge (deps_of_nexp kid_deps [] nexp1) (deps_of_nexp kid_deps [] nexp2)
+  | NC_set (kid,_) ->
+     (match KBindings.find kid kid_deps with
+     | deps -> deps
+     | exception Not_found -> Unknown ("Unknown type variable " ^ string_of_kid kid))
+  | NC_or (nc1,nc2)
+  | NC_and (nc1,nc2)
+    -> dmerge (deps_of_nc kid_deps nc1) (deps_of_nc kid_deps nc2)
+  | NC_true
+  | NC_false
+    -> dempty
+
+let deps_of_typ kid_deps arg_deps typ =
+  deps_of_tyvars kid_deps arg_deps (tyvars_of_typ typ)
+
+let deps_of_uvar kid_deps arg_deps = function
+  | U_nexp nexp -> deps_of_nexp kid_deps arg_deps nexp
+  | U_order _
+  | U_effect _ -> dempty
+  | U_typ typ -> deps_of_typ kid_deps arg_deps typ
+
+(* Alternative to decoding existential names to find corresponding function arguments;
+   also see case for E_app
+let existential_in_uvar kid_deps =
+  let check kids = KidSet.exists (fun kid -> not (KBindings.mem kid kid_deps)) kids in
+  function
+  | U_typ typ -> check (tyvars_of_typ typ)
+  | U_nexp nexp -> check (nexp_frees nexp)
+  | _ -> false
+
+let findi p =
+  let rec aux n = function
+    | [] -> None
+    | h::t -> if p h then Some n else aux (n+1) t
+  in aux 0
+
+let rec filtermap f = function
+  | [] -> []
+  | h::t -> match f h with
+    | None -> filtermap f t
+    | Some x -> x::(filtermap f t)
+
+let find_existential_args kid_inst kid_deps deps typs tq =
+  let typ_vars = List.map tyvars_of_typ typs in
+  match tq with
+  | TypQ_aux (TypQ_no_forall, _) -> KBindings.empty
+  | TypQ_aux (TypQ_tq tqs, _) ->
+     let aux = function
+       | QI_aux (QI_const _,_) -> None
+       | QI_aux (QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_,kid)),_)),_) ->
+          match KBindings.find kid kid_inst with
+          | uvar ->
+             if existential_in_uvar kid_deps uvar then
+               match findi (KidSet.mem kid) typ_vars with
+               | Some i -> Some (kid, List.nth deps i)
+               | None -> Some (kid, Unknown ("No instantiating argument found for " ^ string_of_kid kid))
+             else None
+          | exception Not_found -> None
+     in
+     let kdeps = filtermap aux tqs in
+     List.fold_left (fun b (kid,deps) -> KBindings.add kid deps b) KBindings.empty kdeps
+*)
+
+(* Takes an environment of dependencies on vars, type vars, and flow control,
+   and dependencies on mutable variables.  The latter are quite conservative,
+   we currently drop variables assigned inside loops, for example. *)
+
+let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
+  let remove_assigns es message =
+    let assigned =
+        List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
+          IdSet.empty es in
+    IdSet.fold
+      (fun id asn ->
+        Bindings.add id (Unknown (string_of_id id ^ message)) asn)
+      assigned assigns
+  in
+  let non_det es =
+    let assigns = remove_assigns es " assigned in non-deterministic expressions" in
+    let deps, _, rs = split3 (List.map (analyse_exp env assigns) es) in
+    (deps, assigns, List.fold_left merge empty rs)
+  in
+  let merge_deps deps =
+    List.fold_left dmerge env.control_deps deps in
+  let deps, assigns, r =
+    match e with
+    | E_block es ->
+       let rec aux assigns = function
+         | [] -> (dempty, assigns, empty)
+         | [e] -> analyse_exp env assigns e
+         | e::es ->
+            let _, assigns, r' = analyse_exp env assigns e in
+            let d, assigns, r = aux assigns es in
+            d, assigns, merge r r'
+       in
+       aux assigns es
+    | E_nondet es ->
+       let _, assigns, r = non_det es in
+       (dempty, assigns, r)
+    | E_id id ->
+       begin 
+         match Bindings.find id env.var_deps with
+         | args -> (dmerge env.control_deps args,assigns,empty)
+         | exception Not_found ->
+            match Bindings.find id assigns with
+            | args -> (dmerge env.control_deps args,assigns,empty)
+            | exception Not_found ->
+               (Unknown (string_of_id id ^ " not in environment"),assigns,empty)
+       end
+    | E_lit _ -> (env.control_deps,assigns,empty)
+    | E_cast (_,e) -> analyse_exp env assigns e
+    | E_app (id,args) ->
+       let deps, assigns, r = non_det args in
+       let kid_inst = instantiation_of exp in
+       let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
+(*
+       let (tq,typ) = Env.get_val_spec id (env_of_annot (l,annot)) in
+       let typ = match typ with Typ_aux (Typ_fn (t,_,_),_) -> t | _ -> typ in
+       let typs = match typ with Typ_aux (Typ_tup ts,_) -> ts | _ -> [typ] in
+       let ex_kid_deps = find_existential_args kid_inst env.kid_deps deps typs tq in
+       let kid_deps = dep_kbindings_merge kid_deps ex_kid_deps in*)
+       let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
+     (merge_deps deps, assigns, merge r r')
+    | E_app_infix (e1,id,e2) ->
+       let deps, assigns, r = non_det [e1;e2] in
+       (* TODO: kids once I fix instantiation_of *)
+       let kid_deps = KBindings.empty in
+       let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
+       (merge_deps deps, assigns, merge r r')
+    | E_tuple es
+    | E_list es ->
+       let deps, assigns, r = non_det es in
+       (merge_deps deps, assigns, r)
+    | E_if (e1,e2,e3) ->
+       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let env' = { env with control_deps = dmerge env.control_deps d1 } in
+       let d2,a2,r2 = analyse_exp env' assigns e2 in
+       let d3,a3,r3 = analyse_exp env' assigns e3 in
+       (dmerge d2 d3, dep_bindings_merge a2 a3, merge r1 (merge r2 r3))
+    | E_loop (_,e1,e2) ->
+       let assigns = remove_assigns [e1;e2] " assigned in a loop" in
+       let d1,a1,r1 = analyse_exp env assigns e1 in
+       let env' = { env with control_deps = dmerge env.control_deps d1 } in
+       let d2,a2,r2 = analyse_exp env' assigns e2 in
+     (dempty, assigns, merge r1 r2)
+    | E_for (var,efrom,eto,eby,ord,body) ->
+       let d1,assigns,r1 = non_det [efrom;eto;eby] in
+       let assigns = remove_assigns [body] " assigned in a loop" in
+       let env' = { env with control_deps = dmerge env.control_deps (merge_deps d1) } in
+       let d2,a2,r2 = analyse_exp env' assigns body in
+       (dempty, assigns, merge r1 r2)
+    | E_vector es ->
+       let ds, assigns, r = non_det es in
+       (merge_deps ds, assigns, r)
+    | E_vector_access (e1,e2)
+    | E_vector_append (e1,e2)
+    | E_cons (e1,e2) ->
+       let ds, assigns, r = non_det [e1;e2] in
+       (merge_deps ds, assigns, r)
+    | E_vector_subrange (e1,e2,e3)
+    | E_vector_update (e1,e2,e3) ->
+       let ds, assigns, r = non_det [e1;e2;e3] in
+       (merge_deps ds, assigns, r)
+    | E_vector_update_subrange (e1,e2,e3,e4) ->
+       let ds, assigns, r = non_det [e1;e2;e3;e4] in
+       (merge_deps ds, assigns, r)
+    | E_record (FES_aux (FES_Fexps (fexps,_),_)) ->
+       let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
+       let ds, assigns, r = non_det es in
+       (merge_deps ds, assigns, r)
+    | E_record_update (e,FES_aux (FES_Fexps (fexps,_),_)) ->
+       let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
+       let ds, assigns, r = non_det (e::es) in
+       (merge_deps ds, assigns, r)
+    | E_field (e,_) -> analyse_exp env assigns e
+    | E_case (e,cases) ->
+       let deps,assigns,r = analyse_exp env assigns e in
+       let analyse_case (Pat_aux (pexp,_)) =
+         match pexp with
+         | Pat_exp (pat,e1) ->
+            let env = update_env env deps pat in
+            analyse_exp env assigns e1
+         | Pat_when (pat,e1,e2) ->
+            let env = update_env env deps pat in
+            let d1,assigns,r1 = analyse_exp env assigns e1 in
+            let d2,assigns,r2 = analyse_exp env assigns e2 in
+            (dmerge d1 d2, assigns, merge r1 r2)
+       in
+       let ds,assigns,rs = split3 (List.map analyse_case cases) in
+       (merge_deps (deps::ds),
+        List.fold_left dep_bindings_merge Bindings.empty assigns,
+        List.fold_left merge r rs)
+    | E_let (LB_aux (LB_val (pat,e1),_),e2) ->
+       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let env = update_env env d1 pat in
+       let d2,assigns,r2 = analyse_exp env assigns e2 in
+       (d2,assigns,merge r1 r2)
+    | E_assign (lexp,e1) ->
+       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let assigns,r2 = analyse_lexp env assigns d1 lexp in
+       (dempty, assigns, merge r1 r2)
+    | E_sizeof nexp ->
+       (deps_of_nexp env.kid_deps [] nexp, assigns, empty)
+    | E_return e
+    | E_exit e
+    | E_throw e ->
+       let _, _, r = analyse_exp env assigns e in
+       (Unknown "non-local flow", Bindings.empty, r)
+    | E_try (e,cases) ->
+       let deps,_,r = analyse_exp env assigns e in
+       let assigns = remove_assigns [e] " assigned in try expression" in
+       let analyse_handler (Pat_aux (pexp,_)) =
+         match pexp with
+         | Pat_exp (pat,e1) ->
+            let env = update_env env (Unknown "Exception") pat in
+            analyse_exp env assigns e1
+         | Pat_when (pat,e1,e2) ->
+            let env = update_env env (Unknown "Exception") pat in
+            let d1,assigns,r1 = analyse_exp env assigns e1 in
+            let d2,assigns,r2 = analyse_exp env assigns e2 in
+            (dmerge d1 d2, assigns, merge r1 r2)
+       in
+       let ds,assigns,rs = split3 (List.map analyse_handler cases) in
+       (merge_deps (deps::ds),
+        List.fold_left dep_bindings_merge Bindings.empty assigns,
+        List.fold_left merge r rs)
+    | E_assert (e1,_) -> analyse_exp env assigns e1
+
+    | E_internal_cast _
+    | E_internal_exp _
+    | E_sizeof_internal _
+    | E_internal_exp_user _
+    | E_comment _
+    | E_comment_struc _
+    | E_internal_plet _
+    | E_internal_return _
+      -> raise (Reporting_basic.err_unreachable l
+                  "Unexpected internal expression encountered in monomorphisation")
+       
+    | E_internal_let (lexp,e1,e2) ->
+       (* Really we ought to remove the assignment after e2 *)
+       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let assigns,r' = analyse_lexp env assigns d1 lexp in
+       let d2,assigns,r2 = analyse_exp env assigns e2 in
+       (dempty, assigns, merge r1 (merge r' r2))
+    | E_constraint nc ->
+       (deps_of_nc env.kid_deps nc, assigns, empty)
+  in
+  let r =
+    (* Check for bitvector types with parametrised sizes *)
+    match annot with
+    | None -> r
+    | Some (tenv,typ,_) ->
+       (* TODO: existential wrappers *)
+       let typ = Env.expand_synonyms tenv typ in
+       if is_bitvector_typ typ then
+         let _,size,_,_ = vector_typ_args_of typ in
+         match deps_of_nexp env.kid_deps [] size with
+         | Have (args,caller,caller_kids) ->
+            { r with
+              split = ArgSet.union r.split args;
+              split_in_caller = CallerArgSet.union r.split_in_caller caller;
+              kid_in_caller = CallerKidSet.union r.kid_in_caller caller_kids
+            }
+         | Unknown msg ->
+            raise (Reporting_basic.err_general l msg)
+       else
+         r
+  in (deps, assigns, r)
+
+
+and analyse_lexp env assigns deps (LEXP_aux (lexp,_)) =
+ (* TODO: maybe subexps and sublexps should be non-det (and in const_prop_lexp, too?) *)
+ match lexp with
+  | LEXP_id id
+  | LEXP_cast (_,id) ->
+     Bindings.add id deps assigns, empty
+  | LEXP_memory (id,es) ->
+     let _, assigns, r = analyse_exp env assigns (E_aux (E_tuple es,(Unknown,None))) in
+     assigns, r
+  | LEXP_tup lexps ->
+      List.fold_left (fun (assigns,r) lexp ->
+       let assigns,r' = analyse_lexp env assigns deps lexp
+       in assigns,merge r r') (assigns,empty) lexps
+  | LEXP_vector (lexp,e) ->
+     let _, assigns, r1 = analyse_exp env assigns e in
+     let assigns, r2 = analyse_lexp env assigns deps lexp in
+     assigns, merge r1 r2
+  | LEXP_vector_range (lexp,e1,e2) ->
+     let _, assigns, r1 = analyse_exp env assigns e1 in
+     let _, assigns, r2 = analyse_exp env assigns e2 in
+     let assigns, r3 = analyse_lexp env assigns deps lexp in
+     assigns, merge r3 (merge r1 r2)
+  | LEXP_field (lexp,_) -> analyse_lexp env assigns deps lexp
+
+
+let translate_id (Id_aux (_,l) as id) =
+  let rec aux l =
+    match l with
+    | Range (pos,_) -> id,(pos.pos_fname,pos.pos_lnum)
+    | Generated l -> aux l
+    | _ ->
+       raise (Reporting_basic.err_general l ("Unable to give location for " ^ string_of_id id))
+  in aux l
+
+let initial_env fn_id (TypQ_aux (tq,_)) pat =
+  let pats = 
+    match pat with
+    | P_aux (P_tup pats,_) -> pats
+    | _ -> [pat]
+  in
+  let arg i pat =
+    let rec aux (P_aux (p,(l,_))) =
+      let of_list pats =
+        let ss,vs,ks = split3 (List.map aux pats) in
+        let s = List.fold_left ArgSet.union ArgSet.empty ss in
+        let v = List.fold_left dep_bindings_merge Bindings.empty vs in
+        let k = List.fold_left dep_kbindings_merge KBindings.empty ks in
+        s,v,k
+      in
+      match p with
+      | P_lit _
+      | P_wild
+        -> ArgSet.empty,Bindings.empty,KBindings.empty
+      | P_as (pat,id) ->
+         let s,v,k = aux pat in
+         let id' = translate_id id in
+         ArgSet.add id' s, Bindings.add id (Have (ArgSet.singleton id',CallerArgSet.empty,CallerKidSet.empty)) v,k
+      | P_typ (_,pat) -> aux pat
+      | P_id id ->
+         let id' = translate_id id in
+         let s = ArgSet.singleton id' in
+         s, Bindings.singleton id (Have (s,CallerArgSet.empty,CallerKidSet.empty)), KBindings.empty
+      | P_var (pat,kid) ->
+         let s,v,k = aux pat in
+         s,v,KBindings.add kid (Have (ArgSet.empty,CallerArgSet.singleton (fn_id,i),CallerKidSet.empty)) k
+      | P_app (_,pats) -> of_list pats
+      | P_record (fpats,_) -> of_list (List.map (fun (FP_aux (FP_Fpat (_,p),_)) -> p) fpats)
+      | P_vector pats
+      | P_vector_concat pats
+      | P_tup pats
+      | P_list pats
+        -> of_list pats
+      | P_cons (p1,p2) -> of_list [p1;p2]
+    in aux pat
+  in
+  let quant k = function
+    | QI_aux (QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_,kid)),_)),_) ->
+       KBindings.add kid (Have (ArgSet.empty,CallerArgSet.empty,CallerKidSet.singleton (fn_id,kid))) k
+    | QI_aux (QI_const _,_) -> k
+  in
+  let kid_quant_deps =
+    match tq with
+    | TypQ_no_forall -> KBindings.empty
+    | TypQ_tq qs -> List.fold_left quant KBindings.empty qs
+  in
+  let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
+  let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
+  let kid_deps = List.fold_left dep_kbindings_merge kid_quant_deps kid_deps in
+  { var_deps = var_deps; kid_deps = kid_deps; control_deps = dempty }
+
+let print_result r =
+  let _ = print_endline ("  splits: " ^ string_of_argset r.split) in
+  let print_kbinding kid dep =
+    let _ = print_endline ("      " ^ string_of_kid kid ^ ": " ^ string_of_dep dep) in
+    ()
+  in
+  let print_binding id (deps,kdep) =
+    let _ = print_endline ("    " ^ string_of_id id ^ ":") in
+    let _ = List.iter (fun dep -> print_endline ("      " ^ string_of_dep dep)) deps in
+    let _ = KBindings.iter print_kbinding kdep in
+    ()
+  in
+  let _ = print_endline "  split_on_call: " in
+  let _ = Bindings.iter print_binding r.split_on_call in
+  let _ = print_endline ("  split_in_caller: " ^ string_of_callerset r.split_in_caller) in
+  let _ = print_endline ("  kid_in_caller: " ^ string_of_callerkidset r.kid_in_caller) in
+  ()
+
+let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pat,body),_)) =
+  let (tq,_) = Env.get_val_spec id tenv in
+  let aenv = initial_env id tq pat in
+  let _,_,r = analyse_exp aenv Bindings.empty body in
+  let _ =
+    if debug > 2 then
+      (print_endline (string_of_id id);
+       print_result r)
+    else ()
+  in r
+
+let analyse_def debug env = function
+  | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) ->
+     List.fold_left (fun r f -> merge r (analyse_funcl debug env f)) empty funcls
+
+  | _ -> empty
+
+let analyse_defs debug env (Defs defs) =
+  let r = List.fold_left (fun r d -> merge r (analyse_def debug env d)) empty defs in
+
+  (* Resolve the interprocedural dependencies *)
+
+  let rec chase_deps = function
+    | Have (splits, caller_args, caller_kids) ->
+       let splits = CallerArgSet.fold (fun x -> ArgSet.union (chase_arg_caller x)) caller_args splits in
+       let splits = CallerKidSet.fold (fun x -> ArgSet.union (chase_kid_caller x)) caller_kids splits in
+       splits
+    | Unknown msg ->
+            raise (Reporting_basic.err_general Unknown msg)
+  and chase_kid_caller (id,kid) =
+    match Bindings.find id r.split_on_call with
+    | (_,kid_deps) -> begin
+      match KBindings.find kid kid_deps with
+      | deps -> chase_deps deps
+      | exception Not_found -> ArgSet.empty
+    end
+    | exception Not_found -> ArgSet.empty
+  and chase_arg_caller (id,i) =
+    match Bindings.find id r.split_on_call with
+    | (arg_deps,_) -> chase_deps (List.nth arg_deps i)
+    | exception Not_found -> ArgSet.empty
+  in
+  let _ = if debug > 1 then print_result r else () in
+  let splits = CallerArgSet.fold (fun x -> ArgSet.union (chase_arg_caller x)) r.split_in_caller r.split in
+  let splits = CallerKidSet.fold (fun x -> ArgSet.union (chase_kid_caller x)) r.kid_in_caller splits in
+  let _ =
+    if debug > 0 then
+      (print_endline "Final splits:";
+       print_endline (string_of_argset splits))
+    else ()
+  in splits
+
+let argset_to_list splits =
+  let l = ArgSet.elements splits in
+  let argelt (id,(file,loc)) = ((file,loc),string_of_id id) in
+  List.map argelt l
+end
+
+
+let monomorphise mwords auto debug_analysis splits env defs =
+  let new_splits =
+    if auto
+    then Analysis.argset_to_list (Analysis.analyse_defs debug_analysis env defs)
+    else [] in
+  let defs = split_defs (new_splits@splits) defs in
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
      type checker doesn't store the env at that point :( *)

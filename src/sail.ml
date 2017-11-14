@@ -114,6 +114,12 @@ let options = Arg.align ([
   ( "-ddump_raw_mono_ast",
     Arg.Set opt_ddump_raw_mono_ast,
     " (debug) dump the monomorphised ast before type-checking");
+  ( "-dmono_analysis",
+    Arg.Set_int opt_dmono_analysis,
+    " (debug) dump information about monomorphisation analysis: 0 silent, 3 max");
+  ( "-auto_mono",
+    Arg.Set opt_auto_mono,
+    " automatically infer how to monomorphise code");
   ( "-verbose",
     Arg.Set opt_print_verbose,
     " (debug) pretty-print the input to standard output");
@@ -168,9 +174,9 @@ let main() =
     let (ast, type_envs) = check_ast ast in
 
     let (ast, type_envs) =
-      match !opt_mono_split with
-      | [] -> ast, type_envs
-      | locs -> monomorphise_ast locs ast
+      match !opt_mono_split, !opt_auto_mono with
+      | [], false -> ast, type_envs
+      | locs, _ -> monomorphise_ast locs type_envs ast
     in
 
     let ast =
