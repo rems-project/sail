@@ -921,11 +921,7 @@ let split_defs splits defs =
        (match try_app (l,annot) (id,es') with
        | None ->
           (match const_prop_try_fn l env (id,es') with
-          | None ->
-             (let env,_ = env_typ_expected l annot in
-              match Env.is_union_constructor id env, refine_constructor refinements l env id es' with
-             | true, Some exp -> re exp assigns
-             | _,_ -> re (E_app (id,es')) assigns)
+          | None -> re (E_app (id,es')) assigns
           | Some r -> r,assigns)
        | Some r -> r,assigns)
     | E_app_infix (e1,id,e2) ->
@@ -1356,7 +1352,14 @@ let split_defs splits defs =
       | E_constraint _
         -> ea
       | E_cast (t,e') -> re (E_cast (t, map_exp e'))
-      | E_app (id,es) -> re (E_app (id,List.map map_exp es))
+      | E_app (id,es) ->
+         let es' = List.map map_exp es in
+         let env = env_of_annot annot in
+         begin
+           match Env.is_union_constructor id env, refine_constructor refinements (fst annot) env id es' with
+           | true, Some exp -> re exp
+           | _,_ -> re (E_app (id,es'))
+         end
       | E_app_infix (e1,id,e2) -> re (E_app_infix (map_exp e1,id,map_exp e2))
       | E_tuple es -> re (E_tuple (List.map map_exp es))
       | E_if (e1,e2,e3) -> re (E_if (map_exp e1, map_exp e2, map_exp e3))
