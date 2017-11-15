@@ -1496,6 +1496,11 @@ let rec unify l env typ1 typ2 =
          | Invalid_argument _ -> unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2
                                               ^ " tuple type is of different length")
        end
+    | Typ_app (f1, [arg1]), Typ_app (f2, [Typ_arg_aux (Typ_arg_nexp n1, _) as arg2a; Typ_arg_aux (Typ_arg_nexp n2, _)])
+         when Id.compare (mk_id "atom") f1 = 0 && Id.compare (mk_id "range") f2 = 0 ->
+       if prove env (nc_eq n1 n2)
+       then unify_typ_arg_list 0 KBindings.empty [] [] [arg1] [arg2a]
+       else typ_error l ("Cannot unify atom with range when range indices " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2 ^ " are not equal")
     | Typ_app (f1, [arg1a; arg1b]), Typ_app (f2, [arg2])
          when Id.compare (mk_id "range") f1 = 0 && Id.compare (mk_id "atom") f2 = 0 ->
        unify_typ_arg_list 0 KBindings.empty [] [] [arg1a; arg1b] [arg2; arg2]
