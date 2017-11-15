@@ -1982,7 +1982,11 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
     | E_for (var,efrom,eto,eby,ord,body) ->
        let d1,assigns,r1 = non_det [efrom;eto;eby] in
        let assigns = remove_assigns [body] " assigned in a loop" in
-       let env' = { env with control_deps = dmerge env.control_deps (merge_deps d1) } in
+       let d = dmerge env.control_deps (merge_deps d1) in
+       let loop_kid = mk_kid ("loop_" ^ string_of_id var) in
+       let env' = { env with
+         control_deps = d;
+         kid_deps = KBindings.add loop_kid d env.kid_deps} in
        let d2,a2,r2 = analyse_exp env' assigns body in
        (dempty, assigns, merge r1 r2)
     | E_vector es ->
