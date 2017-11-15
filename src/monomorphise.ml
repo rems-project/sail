@@ -739,18 +739,6 @@ let try_app (l,ann) (Id_aux (id,_),args) =
   else None
 
 
-let try_app_infix (l,ann) (E_aux (e1,ann1)) (Id_aux (id,_)) (E_aux (e2,ann2)) =
-  let i = match id with Id x -> x | DeIid x -> x in
-  let new_l = Generated l in
-  match e1, i, e2 with
-  | E_lit l1, ("=="|"!="), E_lit l2 ->
-     let lit b = if b then L_true else L_false in
-     let lit b = lit (if i = "==" then b else not b) in
-     (match lit_eq l1 l2 with
-     | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)), (l,ann)))
-     | None -> None)
-  | _ -> None
-
 let construct_lit_vector args =
   let rec aux l = function
     | [] -> Some (L_aux (L_bin (String.concat "" (List.rev l)),Unknown))
@@ -920,11 +908,6 @@ let split_defs splits defs =
           | None -> re (E_app (id,es')) assigns
           | Some r -> r,assigns)
        | Some r -> r,assigns)
-    | E_app_infix (e1,id,e2) ->
-       let e1',e2',assigns = non_det_exp_2 e1 e2 in
-       (match try_app_infix (l,annot) e1' id e2' with
-       | Some exp -> exp,assigns
-       | None -> re (E_app_infix (e1',id,e2')) assigns)
     | E_tuple es ->
        let es',assigns = non_det_exp_list es in
        re (E_tuple es') assigns
@@ -1067,11 +1050,13 @@ let split_defs splits defs =
        re (E_internal_cast (ann,e')) assigns
     (* TODO: should I substitute or anything here?  Is it even used? *)
     | E_comment_struc e -> re (E_comment_struc e) assigns
+
+    | E_app_infix _
     | E_internal_let _
     | E_internal_plet _
     | E_internal_return _
       -> raise (Reporting_basic.err_unreachable l
-                  "Unexpected internal expression encountered in monomorphisation")
+                  ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
   and const_prop_fexps substs assigns (FES_aux (FES_Fexps (fes,flag), annot)) =
     FES_aux (FES_Fexps (List.map (const_prop_fexp substs assigns) fes, flag), annot)
   and const_prop_fexp substs assigns (FE_aux (FE_Fexp (id,e), annot)) =
@@ -1978,12 +1963,6 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
        let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
      (merge_deps deps, assigns, merge r r')
-    | E_app_infix (e1,id,e2) ->
-       let deps, assigns, r = non_det [e1;e2] in
-       (* TODO: kids once I fix instantiation_of *)
-       let kid_deps = KBindings.empty in
-       let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
-       (merge_deps deps, assigns, merge r r')
     | E_tuple es
     | E_list es ->
        let deps, assigns, r = non_det es in
@@ -2083,6 +2062,7 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
         List.fold_left merge r rs)
     | E_assert (e1,_) -> analyse_exp env assigns e1
 
+    | E_app_infix _
     | E_internal_cast _
     | E_internal_exp _
     | E_sizeof_internal _
@@ -2092,7 +2072,7 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
     | E_internal_plet _
     | E_internal_return _
       -> raise (Reporting_basic.err_unreachable l
-                  "Unexpected internal expression encountered in monomorphisation")
+                  ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
        
     | E_internal_let (lexp,e1,e2) ->
        (* Really we ought to remove the assignment after e2 *)
