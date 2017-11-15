@@ -1,9 +1,9 @@
 
 typedef Int = exist 'n. [:'n:]
 
-val ([:'n:], [:'m:]) -> exist 'o, 'o = 'n + 'm. [:'o:] effect pure add
+val forall 'n, 'm. ([:'n:], [:'m:]) -> exist 'o, 'o = 'n + 'm. [:'o:] effect pure add
 
-val ([:'n:], [:'m:]) -> exist 'o, 'o = 'n * 'm. [:'o:] effect pure mult
+val forall 'n, 'm. ([:'n:], [:'m:]) -> exist 'o, 'o = 'n * 'm. [:'o:] effect pure mult
 
 overload (deinfix +) [add]
 

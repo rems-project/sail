@@ -28,6 +28,7 @@ val pow2 : nexp -> nexp
 val add : nexp -> nexp -> nexp
 val sub : nexp -> nexp -> nexp
 val mult : nexp -> nexp -> nexp
+val app : string -> nexp list -> nexp
 
 val constant : Big_int.big_int -> nexp
 val variable : int -> nexp
