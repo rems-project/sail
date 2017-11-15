@@ -1746,10 +1746,15 @@ module CallerKidSet = Set.Make (struct
     | x -> x
 end)
 
+module FailureSet = Set.Make (struct
+  type t = Parse_ast.l * string
+  let compare = compare
+end)
+
 type dependencies =
   | Have of ArgSet.t * CallerArgSet.t * CallerKidSet.t
   (* args to split inside fn * caller args to split * caller kids that are bitvector parameters *)
-  | Unknown of string
+  | Unknown of Parse_ast.l * string
 
 let string_of_argset s =
   String.concat ", " (List.map (fun (id,l) -> string_of_id id ^ "." ^ string_of_loc l)
@@ -1767,14 +1772,16 @@ let string_of_dep = function
   | Have (argset,callset,kidset) ->
      "Have (" ^ string_of_argset argset ^ "; " ^ string_of_callerset callset ^ "; " ^
        string_of_callerkidset kidset ^ ")"
-  | Unknown msg -> "Unknown " ^ msg
+  | Unknown (l,msg) -> "Unknown " ^ msg ^ " at " ^ Reporting_basic.loc_to_string l
 
-(* Result of analysing the body of a function.  The split field gives the
-   arguments to split based on the body alone.  The other fields are used at
+(* Result of analysing the body of a function.  The split field gives
+   the arguments to split based on the body alone, and the failures
+   field where we couldn't do anything.  The other fields are used at
    the end for the interprocedural phase. *)
 
 type result = {
   split : ArgSet.t;
+  failures : FailureSet.t;
   (* Dependencies for arguments and type variables of each fn called, so that
      if the fn uses one for a bitvector size we can track it back *)
   split_on_call : (dependencies list * dependencies KBindings.t) Bindings.t; (* (arguments, kids) per fn *)
@@ -1784,6 +1791,7 @@ type result = {
 
 let empty = {
   split = ArgSet.empty;
+  failures = FailureSet.empty;
   split_on_call = Bindings.empty;
   split_in_caller = CallerArgSet.empty;
   kid_in_caller = CallerKidSet.empty
@@ -1791,8 +1799,8 @@ let empty = {
 
 let dmerge x y =
   match x,y with
-  | Unknown s, _ -> Unknown s
-  | _, Unknown s -> Unknown s
+  | Unknown (l,s), _ -> Unknown (l,s)
+  | _, Unknown (l,s) -> Unknown (l,s)
   | Have (a,c,k), Have (a',c',k') ->
      Have (ArgSet.union a a', CallerArgSet.union c c', CallerKidSet.union k k')
 
@@ -1825,6 +1833,7 @@ let call_arg_merge k args args' =
 
 let merge rs rs' = {
   split = ArgSet.union rs.split rs'.split;
+  failures = FailureSet.union rs.failures rs'.failures;
   split_on_call = Bindings.merge call_arg_merge rs.split_on_call rs'.split_on_call;
   split_in_caller = CallerArgSet.union rs.split_in_caller rs'.split_in_caller;
   kid_in_caller = CallerKidSet.union rs.kid_in_caller rs'.kid_in_caller
@@ -1864,8 +1873,8 @@ let deps_of_tyvars kid_deps arg_deps kids =
     | deps' -> dmerge deps deps'
     | exception Not_found ->
        match kid with
-       | Kid_aux (Var kidstr,_) ->
-          let unknown = Unknown ("Unknown type variable " ^ string_of_kid kid) in
+       | Kid_aux (Var kidstr, l) ->
+          let unknown = Unknown (l, "Unknown type variable " ^ string_of_kid kid) in
           (* Tyvars from existentials in arguments have a special format *)
           if String.length kidstr > 5 && String.sub kidstr 0 4 = "'arg" then
             try
@@ -1882,7 +1891,7 @@ let deps_of_nexp kid_deps arg_deps nexp =
   let kids = nexp_frees nexp in
   deps_of_tyvars kid_deps arg_deps kids
 
-let rec deps_of_nc kid_deps (NC_aux (nc,_)) =
+let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
   match nc with
   | NC_equal (nexp1,nexp2)
   | NC_bounded_ge (nexp1,nexp2)
@@ -1892,7 +1901,7 @@ let rec deps_of_nc kid_deps (NC_aux (nc,_)) =
   | NC_set (kid,_) ->
      (match KBindings.find kid kid_deps with
      | deps -> deps
-     | exception Not_found -> Unknown ("Unknown type variable " ^ string_of_kid kid))
+     | exception Not_found -> Unknown (l, "Unknown type variable " ^ string_of_kid kid))
   | NC_or (nc1,nc2)
   | NC_and (nc1,nc2)
     -> dmerge (deps_of_nc kid_deps nc1) (deps_of_nc kid_deps nc2)
@@ -1920,7 +1929,7 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
           IdSet.empty es in
     IdSet.fold
       (fun id asn ->
-        Bindings.add id (Unknown (string_of_id id ^ message)) asn)
+        Bindings.add id (Unknown (l, string_of_id id ^ message)) asn)
       assigned assigns
   in
   let non_det es =
@@ -1953,7 +1962,11 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
             match Bindings.find id assigns with
             | args -> (dmerge env.control_deps args,assigns,empty)
             | exception Not_found ->
-               (Unknown (string_of_id id ^ " not in environment"),assigns,empty)
+               match Env.lookup_id id (Type_check.env_of_annot (l,annot)) with
+               | Enum _ | Union _ -> env.control_deps,assigns,empty
+               | Register _ -> Unknown (l, string_of_id id ^ " is a register"),assigns,empty
+               | _ ->
+                  Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
        end
     | E_lit _ -> (env.control_deps,assigns,empty)
     | E_cast (_,e) -> analyse_exp env assigns e
@@ -2045,17 +2058,17 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
     | E_exit e
     | E_throw e ->
        let _, _, r = analyse_exp env assigns e in
-       (Unknown "non-local flow", Bindings.empty, r)
+       (Unknown (l,"non-local flow"), Bindings.empty, r)
     | E_try (e,cases) ->
        let deps,_,r = analyse_exp env assigns e in
        let assigns = remove_assigns [e] " assigned in try expression" in
        let analyse_handler (Pat_aux (pexp,_)) =
          match pexp with
          | Pat_exp (pat,e1) ->
-            let env = update_env env (Unknown "Exception") pat in
+            let env = update_env env (Unknown (l,"Exception")) pat in
             analyse_exp env assigns e1
          | Pat_when (pat,e1,e2) ->
-            let env = update_env env (Unknown "Exception") pat in
+            let env = update_env env (Unknown (l,"Exception")) pat in
             let d1,assigns,r1 = analyse_exp env assigns e1 in
             let d2,assigns,r2 = analyse_exp env assigns e2 in
             (dmerge d1 d2, assigns, merge r1 r2)
@@ -2103,8 +2116,11 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
               split_in_caller = CallerArgSet.union r.split_in_caller caller;
               kid_in_caller = CallerKidSet.union r.kid_in_caller caller_kids
             }
-         | Unknown msg ->
-            raise (Reporting_basic.err_general l msg)
+         | Unknown (l,msg) ->
+            { r with
+              failures =
+                FailureSet.add (l,"Unable to monomorphise " ^ string_of_nexp size ^ ": " ^ msg)
+                  r.failures }
        else
          r
   in (deps, assigns, r)
@@ -2242,32 +2258,46 @@ let analyse_defs debug env (Defs defs) =
 
   let rec chase_deps = function
     | Have (splits, caller_args, caller_kids) ->
-       let splits = CallerArgSet.fold (fun x -> ArgSet.union (chase_arg_caller x)) caller_args splits in
-       let splits = CallerKidSet.fold (fun x -> ArgSet.union (chase_kid_caller x)) caller_kids splits in
-       splits
-    | Unknown msg ->
-            raise (Reporting_basic.err_general Unknown msg)
+       let splits,fails = CallerArgSet.fold add_arg caller_args (splits,FailureSet.empty) in
+       let splits,fails = CallerKidSet.fold add_kid caller_kids (splits,fails) in
+       splits, fails
+    | Unknown (l,msg) ->
+       ArgSet.empty , FailureSet.singleton (l,("Unable to monomorphise dependency: " ^ msg))
   and chase_kid_caller (id,kid) =
     match Bindings.find id r.split_on_call with
     | (_,kid_deps) -> begin
       match KBindings.find kid kid_deps with
       | deps -> chase_deps deps
-      | exception Not_found -> ArgSet.empty
+      | exception Not_found -> ArgSet.empty,FailureSet.empty
     end
-    | exception Not_found -> ArgSet.empty
+    | exception Not_found -> ArgSet.empty,FailureSet.empty
   and chase_arg_caller (id,i) =
     match Bindings.find id r.split_on_call with
     | (arg_deps,_) -> chase_deps (List.nth arg_deps i)
-    | exception Not_found -> ArgSet.empty
+    | exception Not_found -> ArgSet.empty,FailureSet.empty
+  and add_arg arg (splits,fails) =
+    let splits',fails' = chase_arg_caller arg in
+    ArgSet.union splits splits', FailureSet.union fails fails'
+  and add_kid k (splits,fails) =
+    let splits',fails' = chase_kid_caller k in
+    ArgSet.union splits splits', FailureSet.union fails fails'
   in
   let _ = if debug > 1 then print_result r else () in
-  let splits = CallerArgSet.fold (fun x -> ArgSet.union (chase_arg_caller x)) r.split_in_caller r.split in
-  let splits = CallerKidSet.fold (fun x -> ArgSet.union (chase_kid_caller x)) r.kid_in_caller splits in
+  let splits,fails = CallerArgSet.fold add_arg r.split_in_caller (r.split,r.failures) in
+  let splits,fails = CallerKidSet.fold add_kid r.kid_in_caller (splits,fails) in
   let _ =
     if debug > 0 then
       (print_endline "Final splits:";
        print_endline (string_of_argset splits))
     else ()
+  in
+  let _ =
+    if FailureSet.is_empty fails then () else
+      begin
+        FailureSet.iter (fun (l,msg) -> Reporting_basic.print_err false false l "Monomorphisation" msg)
+          fails;
+        raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+      end
   in splits
 
 let argset_to_list splits =
