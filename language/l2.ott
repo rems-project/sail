@@ -198,14 +198,15 @@ kind :: 'K_' ::=
 nexp :: 'Nexp_' ::=  
   {{ com numeric expression, of kind $[[Nat]]$ }}
   {{ aux _ l }}
-  | id                                  :: :: id          {{ com abbreviation identifier }}
-  | kid                                 :: :: var         {{ com variable }}
-  | num                                 :: :: constant     {{ com constant }}
-  | nexp1 * nexp2                       :: :: times        {{ com product }}
-  | nexp1 + nexp2                       :: :: sum          {{ com sum }}
-  | nexp1 - nexp2			:: :: minus	   {{ com subtraction }} 
-  | 2** nexp                            :: :: exp         {{ com exponential }}
-  | neg nexp				:: I :: neg	  {{ com for internal use only}}
+  | id                                  :: :: id       {{ com abbreviation identifier }}
+  | kid                                 :: :: var      {{ com variable }}
+  | num                                 :: :: constant {{ com constant }}
+  | id ( nexp1 , ... , nexpn )          :: :: app      {{ com app }}
+  | nexp1 * nexp2                       :: :: times    {{ com product }}
+  | nexp1 + nexp2                       :: :: sum      {{ com sum }}
+  | nexp1 - nexp2			:: :: minus    {{ com subtraction }}
+  | 2** nexp                            :: :: exp      {{ com exponential }}
+  | neg nexp				:: I :: neg    {{ com for internal use only}}
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  

@@ -238,6 +238,9 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
         let n1 = to_ast_nexp k_env t1 in
         let n2 = to_ast_nexp k_env t2 in
         Nexp_aux (Nexp_minus (n1, n2), l)
+     | Parse_ast.ATyp_app (id, ts) ->
+        let nexps = List.map (to_ast_nexp k_env) ts in
+        Nexp_aux (Nexp_app (to_ast_id id, nexps), l)
      | _ -> typ_error l "Required an item of kind Nat, encountered an illegal form for this kind" None None None)
 
 and to_ast_order (k_env : kind Envmap.t) (def_ord : order) (o: Parse_ast.atyp) : Ast.order =

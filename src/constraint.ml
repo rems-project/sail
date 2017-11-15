@@ -3,27 +3,33 @@ open Util
 
 (* ===== Integer Constraints ===== *)
 
-type nexp_op = Plus | Minus | Mult
+type nexp_op = string
 
 type nexp =
-  | NFun of (nexp_op * nexp * nexp)
+  | NFun of (nexp_op * nexp list)
   | N2n of nexp
   | NConstant of big_int
   | NVar of int
 
-let big_int_op : nexp_op -> big_int -> big_int -> big_int = function
-  | Plus -> add_big_int
-  | Minus -> sub_big_int
-  | Mult -> mult_big_int
+let big_int_op : nexp_op -> (big_int -> big_int -> big_int) option = function
+  | "+" -> Some add_big_int
+  | "-" -> Some sub_big_int
+  | "*" -> Some mult_big_int
+  | _ -> None
 
 let rec arith constr =
   let constr' = match constr with
-    | NFun (op, x, y) -> NFun (op, arith x, arith y)
+    | NFun (op, [x; y]) -> NFun (op, [arith x; arith y])
     | N2n c -> N2n (arith c)
     | c -> c
   in
   match constr' with
-  | NFun (op, NConstant x, NConstant y) -> NConstant (big_int_op op x y)
+  | NFun (op, [NConstant x; NConstant y]) as c ->
+     begin
+       match big_int_op op with
+       | Some op -> NConstant (op x y)
+       | None -> c
+     end
   | N2n (NConstant x) -> NConstant (power_int_positive_big_int 2 x)
   | c -> c
 
@@ -63,7 +69,7 @@ module IntSet = Set.Make(
 let rec nexp_vars : nexp -> IntSet.t = function
   | NConstant _ -> IntSet.empty
   | NVar v -> IntSet.singleton v
-  | NFun (_, x, y) -> IntSet.union (nexp_vars x) (nexp_vars y)
+  | NFun (_, xs) -> List.fold_left IntSet.union IntSet.empty (List.map nexp_vars xs)
   | N2n x -> nexp_vars x
 
 let rec constraint_vars : nexp constraint_bool -> IntSet.t = function
@@ -98,14 +104,8 @@ let cop_sexpr op x y =
   | Eq -> sfun "=" [x; y]
   | NEq -> sfun "not" [sfun "=" [x; y]]
 
-let iop_sexpr op x y =
-  match op with
-  | Plus -> sfun "+" [x; y]
-  | Minus -> sfun "-" [x; y]
-  | Mult -> sfun "*" [x; y]
-
 let rec sexpr_of_nexp = function
-  | NFun (op, x, y) -> iop_sexpr op (sexpr_of_nexp x) (sexpr_of_nexp y)
+  | NFun (op, xs) -> sfun op (List.map sexpr_of_nexp xs)
   | N2n x -> sfun "^" [Atom "2"; sexpr_of_nexp x]
   | NConstant c -> Atom (string_of_big_int c) (* CHECK: do we do negative constants right? *)
   | NVar var -> Atom ("v" ^ string_of_int var)
@@ -245,11 +245,13 @@ let neq x y : t = CFun (NEq, x, y)
 
 let pow2 x : nexp = N2n x
 
-let add x y : nexp = NFun (Plus, x, y)
+let add x y : nexp = NFun ("+", [x; y])
 
-let sub x y : nexp = NFun (Minus, x, y)
+let sub x y : nexp = NFun ("-", [x; y])
 
-let mult x y : nexp = NFun (Mult, x, y)
+let mult x y : nexp = NFun ("*", [x; y])
+
+let app f xs : nexp = NFun (f, xs)
 
 let constant (x : big_int) : nexp = NConstant x
 

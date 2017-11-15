@@ -48,7 +48,7 @@ val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'or
 
 overload (deinfix ==) [eq_vec]
 
-val extern forall Num 'm. ([:'l:], [:'m:], int) -> vector<'l,'m,dec,bit> effect pure to_vec_dec
+val extern forall Num 'l, Num 'm. ([:'l:], [:'m:], int) -> vector<'l,'m,dec,bit> effect pure to_vec_dec
 
 val cast forall Nat 'n, Nat 'l. [|0:1|] -> vector<'n,'l,dec,bit> effect pure cast_01_vec
 function forall Num 'n, Num 'l. (vector<'n,'l,dec,bit>) cast_01_vec i = to_vec_dec (sizeof 'n, sizeof 'l, i)

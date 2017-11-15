@@ -225,6 +225,7 @@ and nexp_subst_aux sv subst = function
   | Nexp_times (nexp1, nexp2) -> Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
   | Nexp_sum (nexp1, nexp2) -> Nexp_sum (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
   | Nexp_minus (nexp1, nexp2) -> Nexp_minus (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
+  | Nexp_app (id, nexps) -> Nexp_app (id, List.map (nexp_subst sv subst) nexps)
   | Nexp_exp nexp -> Nexp_exp (nexp_subst sv subst nexp)
   | Nexp_neg nexp -> Nexp_neg (nexp_subst sv subst nexp)
 
@@ -238,6 +239,7 @@ and nc_subst_nexp_aux l sv subst = function
   | NC_equal (n1, n2) -> NC_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
+  | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_set (kid, ints) as set_nc ->
      if Kid.compare kid sv = 0
      then nexp_set_to_or l (mk_nexp subst) ints
@@ -393,6 +395,11 @@ module Env : sig
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
   val base_typ_of : t -> typ -> typ
+  val add_smt_op : id -> string -> t -> t
+  val get_smt_op : id -> t -> string
+  (* Well formedness-checks *)
+  val wf_typ : ?exs:KidSet.t -> t -> typ -> unit
+  val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
   val empty : t
 end = struct
   type t =
@@ -411,6 +418,7 @@ end = struct
       records : (typquant * (typ * id) list) Bindings.t;
       accessors : (typquant * typ) Bindings.t;
       externs : (string -> string option) Bindings.t;
+      smt_ops : string Bindings.t;
       casts : id list;
       allow_casts : bool;
       constraints : n_constraint list;
@@ -435,6 +443,7 @@ end = struct
       records = Bindings.empty;
       accessors = Bindings.empty;
       externs = Bindings.empty;
+      smt_ops = Bindings.empty;
       casts = [];
       allow_casts = true;
       constraints = [];
@@ -442,6 +451,112 @@ end = struct
       ret_typ = None;
       poly_undefineds = false;
     }
+
+  let get_typ_var kid env =
+    try KBindings.find kid env.typ_vars with
+    | Not_found -> typ_error (kid_loc kid) ("No kind identifier " ^ string_of_kid kid)
+
+  let get_typ_vars env = env.typ_vars
+
+  let builtin_typs =
+    IdSet.of_list (List.map mk_id
+      [ "range"; "atom"; "vector"; "register"; "bit"; "unit"; "int"; "nat"; "bool"; "real"; "list"; "string"; "itself"])
+
+  (* FIXME: Add an IdSet for builtin types *)
+  let bound_typ_id env id =
+    Bindings.mem id env.typ_synonyms
+    || Bindings.mem id env.variants
+    || Bindings.mem id env.records
+    || Bindings.mem id env.regtyps
+    || Bindings.mem id env.enums
+    || IdSet.mem id builtin_typs
+
+  let get_overloads id env =
+    try Bindings.find id env.overloads with
+    | Not_found -> []
+
+  let add_overloads id ids env =
+    typ_print ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]");
+    { env with overloads = Bindings.add id ids env.overloads }
+
+  let add_smt_op id str env =
+    typ_print ("Adding smt binding " ^ string_of_id id ^ " to " ^ str);
+    { env with smt_ops = Bindings.add id str env.smt_ops }
+
+  let get_smt_op (Id_aux (_, l) as id) env =
+    let rec first_smt_op = function
+      | id :: ids -> (try Bindings.find id env.smt_ops with Not_found -> first_smt_op ids)
+      | [] -> typ_error l ("No SMT op for " ^ string_of_id id)
+    in
+    try Bindings.find id env.smt_ops with
+    | Not_found -> first_smt_op (get_overloads id env)
+
+  (* Check if a type, order, or n-expression is well-formed. Throws a
+     type error if the type is badly formed. FIXME: Add arity to type
+     constructors, although arity checking for the builtin types does
+     seem to be done by the initial ast check. *)
+  let rec wf_typ ?exs:(exs=KidSet.empty) env (Typ_aux (typ_aux, l)) =
+    match typ_aux with
+    | Typ_wild -> ()
+    | Typ_id id when bound_typ_id env id -> ()
+    | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
+    | Typ_var kid when KBindings.mem kid env.typ_vars -> ()
+    | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid)
+    | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
+    | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
+    | Typ_app (id, args) when bound_typ_id env id -> List.iter (wf_typ_arg ~exs:exs env) args
+    | Typ_app (id, _) -> typ_error l ("Undefined type " ^ string_of_id id)
+    | Typ_exist ([], _, _) -> typ_error l ("Existential must have some type variables")
+    | Typ_exist (kids, nc, typ) when KidSet.is_empty exs ->
+       wf_constraint ~exs:(KidSet.of_list kids) env nc; wf_typ ~exs:(KidSet.of_list kids) env typ
+    | Typ_exist (_, _, _) -> typ_error l ("Nested existentials are not allowed")
+  and wf_typ_arg ?exs:(exs=KidSet.empty) env (Typ_arg_aux (typ_arg_aux, _)) =
+    match typ_arg_aux with
+    | Typ_arg_nexp nexp -> wf_nexp ~exs:exs env nexp
+    | Typ_arg_typ typ -> wf_typ ~exs:exs env typ
+    | Typ_arg_order ord -> wf_order env ord
+  and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l)) =
+    match nexp_aux with
+    | Nexp_id _ -> ()
+    | Nexp_var kid when KidSet.mem kid exs -> ()
+    | Nexp_var kid ->
+       begin
+         match get_typ_var kid env with
+         | BK_nat -> ()
+         | kind -> typ_error l ("Constraint is badly formed, "
+                                ^ string_of_kid kid ^ " has kind "
+                                ^ string_of_base_kind_aux kind ^ " but should have kind Nat")
+       end
+    | Nexp_constant _ -> ()
+    | Nexp_app (id, nexps) ->
+       let _ = get_smt_op id env in
+       List.iter (fun n -> wf_nexp ~exs:exs env n) nexps
+    | Nexp_times (nexp1, nexp2) -> wf_nexp ~exs:exs env nexp1; wf_nexp ~exs:exs env nexp2
+    | Nexp_sum (nexp1, nexp2) -> wf_nexp ~exs:exs env nexp1; wf_nexp ~exs:exs env nexp2
+    | Nexp_minus (nexp1, nexp2) -> wf_nexp ~exs:exs env nexp1; wf_nexp ~exs:exs env nexp2
+    | Nexp_exp nexp -> wf_nexp ~exs:exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
+    | Nexp_neg nexp -> wf_nexp ~exs:exs env nexp
+  and wf_order env (Ord_aux (ord_aux, l)) =
+    match ord_aux with
+    | Ord_var kid ->
+       begin
+         match get_typ_var kid env with
+         | BK_order -> ()
+         | kind -> typ_error l ("Order is badly formed, "
+                                ^ string_of_kid kid ^ " has kind "
+                                ^ string_of_base_kind_aux kind ^ " but should have kind Order")
+       end
+    | Ord_inc | Ord_dec -> ()
+  and wf_constraint ?exs:(exs=KidSet.empty) env (NC_aux (nc, _)) =
+    match nc with
+    | NC_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_not_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_bounded_ge (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_bounded_le (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_set (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
+    | NC_or (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
+    | NC_and (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
+    | NC_true | NC_false -> ()
 
   let counter = ref 0
 
@@ -486,85 +601,6 @@ end = struct
     in
     let type_unions = List.concat (List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants)) in
     List.exists (is_ctor id) type_unions
-
-  let get_typ_var kid env =
-    try KBindings.find kid env.typ_vars with
-    | Not_found -> typ_error (kid_loc kid) ("No kind identifier " ^ string_of_kid kid)
-
-  let get_typ_vars env = env.typ_vars
-
-  (* FIXME: Add an IdSet for builtin types *)
-  let bound_typ_id env id =
-    Bindings.mem id env.typ_synonyms
-    || Bindings.mem id env.variants
-    || Bindings.mem id env.records
-    || Bindings.mem id env.regtyps
-    || Bindings.mem id env.enums
-    || Id.compare id (mk_id "range") = 0
-    || Id.compare id (mk_id "vector") = 0
-    || Id.compare id (mk_id "register") = 0
-    || Id.compare id (mk_id "bit") = 0
-    || Id.compare id (mk_id "unit") = 0
-    || Id.compare id (mk_id "int") = 0
-    || Id.compare id (mk_id "nat") = 0
-    || Id.compare id (mk_id "bool") = 0
-    || Id.compare id (mk_id "real") = 0
-    || Id.compare id (mk_id "list") = 0
-    || Id.compare id (mk_id "string") = 0
-    || Id.compare id (mk_id "itself") = 0
-
-  (* Check if a type, order, or n-expression is well-formed. Throws a
-     type error if the type is badly formed. FIXME: Add arity to type
-     constructors, although arity checking for the builtin types does
-     seem to be done by the initial ast check. *)
-  let rec wf_typ ?exs:(exs=KidSet.empty) env (Typ_aux (typ_aux, l)) =
-    match typ_aux with
-    | Typ_wild -> ()
-    | Typ_id id when bound_typ_id env id -> ()
-    | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
-    | Typ_var kid when KBindings.mem kid env.typ_vars -> ()
-    | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid)
-    | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
-    | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
-    | Typ_app (id, args) when bound_typ_id env id -> List.iter (wf_typ_arg ~exs:exs env) args
-    | Typ_app (id, _) -> typ_error l ("Undefined type " ^ string_of_id id)
-    | Typ_exist ([], _, _) -> typ_error l ("Existential must have some type variables")
-    | Typ_exist (kids, nc, typ) when KidSet.is_empty exs -> wf_typ ~exs:(KidSet.of_list kids) env typ
-    | Typ_exist (_, _, _) -> typ_error l ("Nested existentials are not allowed")
-  and wf_typ_arg ?exs:(exs=KidSet.empty) env (Typ_arg_aux (typ_arg_aux, _)) =
-    match typ_arg_aux with
-    | Typ_arg_nexp nexp -> wf_nexp ~exs:exs env nexp
-    | Typ_arg_typ typ -> wf_typ ~exs:exs env typ
-    | Typ_arg_order ord -> wf_order env ord
-  and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l)) =
-    match nexp_aux with
-    | Nexp_id _ -> ()
-    | Nexp_var kid when KidSet.mem kid exs -> ()
-    | Nexp_var kid ->
-       begin
-         match get_typ_var kid env with
-         | BK_nat -> ()
-         | kind -> typ_error l ("Constraint is badly formed, "
-                                ^ string_of_kid kid ^ " has kind "
-                                ^ string_of_base_kind_aux kind ^ " but should have kind Nat")
-       end
-    | Nexp_constant _ -> ()
-    | Nexp_times (nexp1, nexp2) -> wf_nexp ~exs:exs env nexp1; wf_nexp ~exs:exs env nexp2
-    | Nexp_sum (nexp1, nexp2) -> wf_nexp ~exs:exs env nexp1; wf_nexp ~exs:exs env nexp2
-    | Nexp_minus (nexp1, nexp2) -> wf_nexp ~exs:exs env nexp1; wf_nexp ~exs:exs env nexp2
-    | Nexp_exp nexp -> wf_nexp ~exs:exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
-    | Nexp_neg nexp -> wf_nexp ~exs:exs env nexp
-  and wf_order env (Ord_aux (ord_aux, l)) =
-    match ord_aux with
-    | Ord_var kid ->
-       begin
-         match get_typ_var kid env with
-         | BK_order -> ()
-         | kind -> typ_error l ("Order is badly formed, "
-                                ^ string_of_kid kid ^ " has kind "
-                                ^ string_of_base_kind_aux kind ^ " but should have kind Order")
-       end
-    | Ord_inc | Ord_dec -> ()
 
   let add_enum id ids env =
     if bound_typ_id env id
@@ -665,14 +701,6 @@ end = struct
   let get_register id env =
     try Bindings.find id env.registers with
     | Not_found -> typ_error (id_loc id) ("No register binding found for " ^ string_of_id id)
-
-  let get_overloads id env =
-    try Bindings.find id env.overloads with
-    | Not_found -> []
-
-  let add_overloads id ids env =
-    typ_print ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]");
-    { env with overloads = Bindings.add id ids env.overloads }
 
   let is_extern id env backend =
     try not (Bindings.find id env.externs backend = None) with
@@ -792,17 +820,6 @@ end = struct
   let get_num_def id env =
     try Bindings.find id env.num_defs with
     | Not_found -> typ_raise (id_loc id) (Err_no_num_ident id)
-
-  let rec wf_constraint env (NC_aux (nc, _)) =
-    match nc with
-    | NC_equal (n1, n2) -> wf_nexp env n1; wf_nexp env n2
-    | NC_not_equal (n1, n2) -> wf_nexp env n1; wf_nexp env n2
-    | NC_bounded_ge (n1, n2) -> wf_nexp env n1; wf_nexp env n2
-    | NC_bounded_le (n1, n2) -> wf_nexp env n1; wf_nexp env n2
-    | NC_set (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
-    | NC_or (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
-    | NC_and (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
-    | NC_true | NC_false -> ()
 
   let get_constraints env = env.constraints
 
@@ -936,7 +953,7 @@ let lvector_typ env l typ =
 
 let initial_env =
   Env.empty
-  |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args)))
+  (* |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args))) *)
 
   (* Internal functions for Monomorphise.AtomToItself *)
 
@@ -1066,6 +1083,9 @@ let rec normalize_typ env (Typ_aux (typ, l)) =
   | Typ_var kid -> Tnf_var kid
   | Typ_tup typs -> Tnf_tup (List.map (normalize_typ env) typs)
   | Typ_app (f, []) -> normalize_typ env (Typ_aux (Typ_id f, l))
+  | Typ_app (Id_aux (Id "atom", _), [Typ_arg_aux (Typ_arg_nexp n, _)]) ->
+     let kid = Env.fresh_kid env in
+     Tnf_index_sort (IS_prop (kid, [(n, nvar kid); (nvar kid, n)]))
   | Typ_app (Id_aux (Id "range", _), [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)]) ->
      let kid = Env.fresh_kid env in
      Tnf_index_sort (IS_prop (kid, [(n1, nvar kid); (nvar kid, n2)]))
@@ -1115,6 +1135,7 @@ let rec nexp_constraint env var_of (Nexp_aux (nexp, l)) =
   | Nexp_minus (nexp1, nexp2) -> Constraint.sub (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | Nexp_exp nexp -> Constraint.pow2 (nexp_constraint env var_of nexp)
   | Nexp_neg nexp -> Constraint.sub (Constraint.constant (big_int_of_int 0)) (nexp_constraint env var_of nexp)
+  | Nexp_app (id, nexps) -> Constraint.app (Env.get_smt_op id env) (List.map (nexp_constraint env var_of) nexps)
 
 let rec nc_constraint env var_of (NC_aux (nc, l)) =
   match nc with
@@ -1248,6 +1269,7 @@ let rec nexp_frees ?exs:(exs=KidSet.empty) (Nexp_aux (nexp, l)) =
   | Nexp_times (n1, n2) -> KidSet.union (nexp_frees ~exs:exs n1) (nexp_frees ~exs:exs n2)
   | Nexp_sum (n1, n2) -> KidSet.union (nexp_frees ~exs:exs n1) (nexp_frees ~exs:exs n2)
   | Nexp_minus (n1, n2) -> KidSet.union (nexp_frees ~exs:exs n1) (nexp_frees ~exs:exs n2)
+  | Nexp_app (id, ns) -> List.fold_left KidSet.union KidSet.empty (List.map (fun n -> nexp_frees ~exs:exs n) ns)
   | Nexp_exp n -> nexp_frees ~exs:exs n
   | Nexp_neg n -> nexp_frees ~exs:exs n
 
@@ -1474,6 +1496,9 @@ let rec unify l env typ1 typ2 =
          | Invalid_argument _ -> unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2
                                               ^ " tuple type is of different length")
        end
+    | Typ_app (f1, [arg1a; arg1b]), Typ_app (f2, [arg2])
+         when Id.compare (mk_id "range") f1 = 0 && Id.compare (mk_id "atom") f2 = 0 ->
+       unify_typ_arg_list 0 KBindings.empty [] [] [arg1a; arg1b] [arg2; arg2]
     | Typ_app (f1, args1), Typ_app (f2, args2) when Id.compare f1 f2 = 0 ->
        unify_typ_arg_list 0 KBindings.empty [] [] args1 args2
     | _, _ -> unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
@@ -2115,6 +2140,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      begin
        match letbind with
        | LB_val (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
+          Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
           let tpat, env = bind_pat env pat ptyp in
           annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp env exp typ)) typ
@@ -2126,6 +2152,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_app_infix (x, op, y), _ ->
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "_prove") = 0 ->
+     Env.wf_constraint env nc;
      if prove env nc
      then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      else typ_error l ("Cannot prove " ^ string_of_n_constraint nc)
@@ -2405,6 +2432,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
        | Enum enum -> annot_pat (P_id v) enum, env
      end
   | P_typ (typ_annot, pat) ->
+     Env.wf_typ env typ_annot;
      let (typed_pat, env) = bind_pat env pat typ_annot in
      annot_pat (P_typ (typ_annot, typed_pat)) typ_annot, env
   | P_lit lit ->
@@ -2695,6 +2723,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)])))
   | E_constraint nc ->
+     Env.wf_constraint env nc;
      annot_exp (E_constraint nc) bool_typ
   | E_field (exp, field) ->
      begin
@@ -3392,6 +3421,8 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ, env) = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, ext_opt, is_cast) ->
+       let env = match ext_opt "smt" with Some op -> Env.add_smt_op id op env | None -> env in
+       Env.wf_typ (add_typquant quants env) typ;
        let env =
        (* match ext_opt with
          | None -> env
