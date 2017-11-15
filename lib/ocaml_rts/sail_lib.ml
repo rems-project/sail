@@ -439,10 +439,10 @@ let real_of_string str =
 let sqrt_real x = real_of_string (string_of_float (sqrt (Num.float_of_num x)))
 
 let print_int (str, x) =
-  prerr_endline (str ^ string_of_big_int x)
+  print_endline (str ^ string_of_big_int x)
 
 let print_bits (str, xs) =
-  prerr_endline (str ^ string_of_bits xs)
+  print_endline (str ^ string_of_bits xs)
 
 let reg_deref r = !r
 
