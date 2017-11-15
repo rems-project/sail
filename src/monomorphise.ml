@@ -11,10 +11,6 @@ let optmap v f =
   | None -> None
   | Some v -> Some (f v)
 
-let env_typ_expected l : tannot -> Env.t * typ = function
-  | None -> raise (Reporting_basic.err_unreachable l "Missing type environment")
-  | Some (env,ty,_) -> env,ty
-
 let kbindings_from_list = List.fold_left (fun s (v,i) -> KBindings.add v i s) KBindings.empty
 let bindings_from_list = List.fold_left (fun s (v,i) -> Bindings.add v i s) Bindings.empty
 (* union was introduced in 4.03.0, a bit too recently *)
@@ -393,12 +389,12 @@ let reduce_nexp subst ne =
 let typ_of_args args =
   match args with
   | [E_aux (E_tuple args,(_,Some (_,Typ_aux (Typ_exist _,_),_)))] ->
-     let tys = List.map (fun (E_aux (_,(l,annot))) -> snd (env_typ_expected l annot)) args in
+     let tys = List.map Type_check.typ_of args in
      Typ_aux (Typ_tup tys,Unknown)
-  | [E_aux (_,(l,annot))] ->
-     snd (env_typ_expected l annot)
+  | [exp] ->
+     Type_check.typ_of exp
   | _ ->
-     let tys = List.map (fun (E_aux (_,(l,annot))) -> snd (env_typ_expected l annot)) args in
+     let tys = List.map Type_check.typ_of args in
      Typ_aux (Typ_tup tys,Unknown)
 
 (* Check to see if we need to monomorphise a use of a constructor.  Currently
@@ -547,7 +543,7 @@ let nexp_subst_exp substs = snd (nexp_subst_fns substs)
 
 let bindings_from_pat p =
   let rec aux_pat (P_aux (p,(l,annot))) =
-    let env,_ = env_typ_expected l annot in
+    let env = Type_check.env_of_annot (l, annot) in
     match p with
     | P_lit _
     | P_wild
@@ -667,9 +663,9 @@ let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
      in findpat_generic checkpat "literal" cases
   | _ -> None
 
-let can_match (E_aux (_,(l,annot)) as exp0) cases =
-  let (env,_) = env_typ_expected l annot in
-  can_match_with_env env exp0 cases
+let can_match exp cases =
+  let env = Type_check.env_of exp in
+  can_match_with_env env exp cases
 
 (* Remove top-level casts from an expression.  Useful when we need to look at
    subexpressions to reduce something, but could break type-checking if we used
@@ -897,7 +893,7 @@ let split_defs splits defs =
        let es',assigns = non_det_exp_list es in
        re (E_nondet es') assigns
     | E_id id ->
-       let env,_ = env_typ_expected l annot in
+       let env = Type_check.env_of_annot (l, annot) in
        (try
          match Env.lookup_id id env with
          | Local (Immutable,_) -> Bindings.find id substs
@@ -917,7 +913,7 @@ let split_defs splits defs =
        re (E_cast (t, e'')) assigns
     | E_app (id,es) ->
        let es',assigns = non_det_exp_list es in
-       let env,_ = env_typ_expected l annot in
+       let env = Type_check.env_of_annot (l, annot) in
        (match try_app (l,annot) (id,es') with
        | None ->
           (match const_prop_try_fn l env (id,es') with
@@ -1031,7 +1027,7 @@ let split_defs splits defs =
        end
     (* TODO maybe - tuple assignments *)
     | E_assign (le,e) ->
-       let env,_ = env_typ_expected l annot in
+       let env = Type_check.env_of_annot (l, annot) in
        let assigned_in = IdSet.union (assigned_vars_in_lexp le) (assigned_vars e) in
        let assigns = isubst_minus_set assigns assigned_in in
        let le',idopt = const_prop_lexp substs assigns le in
@@ -1145,7 +1141,8 @@ let split_defs splits defs =
 
   let split var l annot =
     let v = string_of_id var in
-    let env, typ = env_typ_expected l annot in
+    let env = Type_check.env_of_annot (l, annot) in
+    let typ = Type_check.typ_of_annot (l, annot) in
     let typ = Env.expand_synonyms env typ in
     let Typ_aux (ty,l) = typ in
     let new_l = Generated l in
@@ -1239,8 +1236,6 @@ let split_defs splits defs =
         let fpat (FP_aux ((FP_Fpat (id,p),annot))) =
           optmap (spl p)
             (fun ps -> List.map (fun (p,sub) -> FP_aux (FP_Fpat (id,p), annot), sub) ps)
-        in
-        let ipat (i,p) = optmap (spl p) (List.map (fun (p,sub) -> (i,p),sub))
         in
         match p with
         | P_lit _
@@ -2159,7 +2154,7 @@ and analyse_lexp env assigns deps (LEXP_aux (lexp,_)) =
 let translate_id (Id_aux (_,l) as id) =
   let rec aux l =
     match l with
-    | Range (pos,_) -> id,(pos.pos_fname,pos.pos_lnum)
+    | Range (pos,_) -> id,(pos.Lexing.pos_fname,pos.Lexing.pos_lnum)
     | Generated l -> aux l
     | _ ->
        raise (Reporting_basic.err_general l ("Unable to give location for " ^ string_of_id id))
