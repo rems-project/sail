@@ -4,11 +4,11 @@ type bits ('n : Int) = vector('n - 1, 'n, dec, bit)
 
 infix 4 ==
 
-val eq_atom = "eq_int" : (atom('n), atom('m)) -> bool
-val lteq_atom = "lteq" : (atom('n), atom('m)) -> bool
-val gteq_atom = "gteq" : (atom('n), atom('m)) -> bool
-val lt_atom = "lt" : (atom('n), atom('m)) -> bool
-val gt_atom = "gt" : (atom('n), atom('m)) -> bool
+val eq_atom = "eq_int" : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = "eq_int" : (int, int) -> bool
 
@@ -173,7 +173,7 @@ val sub_vec_int = "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 val sub_real = "sub_real" : (real, real) -> real
 
-val negate_range = "minus_big_int" : forall 'n. range('n, 'm) -> range(- 'm, - 'n)
+val negate_range = "minus_big_int" : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
 
 val negate_int = "minus_big_int" : int -> int
 
@@ -283,4 +283,6 @@ val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
 
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
-val print_int = "print_int" : (string, int) -> unit
+val "print_int" : (string, int) -> unit
+
+val "print_bits" : forall 'n. (string, bits('n)) -> unit

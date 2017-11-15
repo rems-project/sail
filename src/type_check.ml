@@ -1819,22 +1819,10 @@ let destruct_atom (Typ_aux (typ_aux, _)) =
 
 exception Not_a_constraint;;
 
-let rec assert_nexp env (E_aux (exp_aux, _)) =
-  match exp_aux with
-  | E_sizeof nexp -> nexp
-  | E_id id ->
-     begin
-       match Env.lookup_id id env with
-       | Local (Immutable, typ) ->
-          begin
-            match destruct_atom_nexp env typ with
-            | Some nexp -> nexp
-            | None -> raise Not_a_constraint
-          end
-       | _ -> raise Not_a_constraint
-     end
-  | E_lit (L_aux (L_num n, _)) -> nconstant n
-  | _ -> raise Not_a_constraint
+let rec assert_nexp env exp =
+  match destruct_atom_nexp env (typ_of exp) with
+  | Some nexp -> nexp
+  | None -> raise Not_a_constraint
 
 let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
   match exp_aux with
@@ -1898,24 +1886,8 @@ let apply_flow_constraint = function
      (restrict_range_lower c nexp,
       restrict_range_upper (pred_big_int c) (nexp_simp (nminus nexp (nconstant 1))))
 
-let rec infer_flow env (E_aux (exp_aux, (l, _))) =
+let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
-  | E_app (f, [x; y]) when string_of_id f = "lteq_atom_atom" ->
-     let Some n1 = destruct_atom_nexp env (typ_of x) in
-     let Some n2 = destruct_atom_nexp env (typ_of y) in
-     [], [nc_lteq n1 n2]
-  | E_app (f, [x; y]) when string_of_id f = "gteq_atom_atom" ->
-     let Some n1 = destruct_atom_nexp env (typ_of x) in
-     let Some n2 = destruct_atom_nexp env (typ_of y) in
-     [], [nc_gteq n1 n2]
-  | E_app (f, [x; y]) when string_of_id f = "lt_atom_atom" ->
-     let Some n1 = destruct_atom_nexp env (typ_of x) in
-     let Some n2 = destruct_atom_nexp env (typ_of y) in
-     [], [nc_lt n1 n2]
-  | E_app (f, [x; y]) when string_of_id f = "gt_atom_atom" ->
-     let Some n1 = destruct_atom_nexp env (typ_of x) in
-     let Some n2 = destruct_atom_nexp env (typ_of y) in
-     [], [nc_gt n1 n2]
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
      let kid = Env.fresh_kid env in
      begin
@@ -1946,7 +1918,7 @@ let rec infer_flow env (E_aux (exp_aux, (l, _))) =
        | Some (c, nexp) -> [(v, Flow_gteq (c, nexp))], []
        | _ -> [], []
      end
-  | _ -> [], []
+  | _ -> try [], [assert_constraint env exp] with Not_a_constraint -> [], []
 
 let rec add_flows b flows env =
   match flows with
