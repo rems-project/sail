@@ -35,6 +35,7 @@ let subst_nexp substs nexp =
     | Nexp_minus (n1,n2) -> re (Nexp_minus (s_snexp n1, s_snexp n2))
     | Nexp_exp ne -> re (Nexp_exp (s_snexp ne))
     | Nexp_neg ne -> re (Nexp_neg (s_snexp ne))
+    | Nexp_app (id,args) -> re (Nexp_app (id,List.map s_snexp args))
   in s_snexp substs nexp
 
 let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
@@ -270,6 +271,7 @@ let rec size_nvars_nexp (Nexp_aux (ne,_)) =
   | Nexp_exp n
   | Nexp_neg n
     -> size_nvars_nexp n
+  | Nexp_app (_,args) -> List.concat (List.map size_nvars_nexp args)
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
