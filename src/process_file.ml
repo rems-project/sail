@@ -175,6 +175,10 @@ let output_lem filename libs defs =
   close_output_with_check ext_ot;
   close_output_with_check ext_o
 
+let rec iterate (f : int -> unit) (n : int) : unit =
+  if n = 0 then ()
+  else (f n; iterate f (n - 1))
+
 let output1 libpath out_arg filename defs  =
   let f' = Filename.basename (Filename.chop_extension filename) in
     match out_arg with
@@ -185,37 +189,7 @@ let output1 libpath out_arg filename defs  =
           Format.fprintf o "open import Interp_ast@\n";
 	  Format.fprintf o "open import Pervasives@\n";
           Format.fprintf o "(*Supply common numeric constants at the right type to alleviate repeated calls to typeclass macro*)\n";
-          Format.fprintf o "let zero  : integer = integerFromNat 0\n";
-          Format.fprintf o "let one   : integer = integerFromNat 1\n";
-          Format.fprintf o "let two   : integer = integerFromNat 2\n";
-          Format.fprintf o "let three : integer = integerFromNat 3\n";
-          Format.fprintf o "let four  : integer = integerFromNat 4\n";
-          Format.fprintf o "let five  : integer = integerFromNat 5\n";
-          Format.fprintf o "let six   : integer = integerFromNat 6\n";
-          Format.fprintf o "let seven : integer = integerFromNat 7\n";
-          Format.fprintf o "let eight : integer = integerFromNat 8\n";
-          Format.fprintf o "let fifteen : integer = integerFromNat 15\n";
-          Format.fprintf o "let sixteen : integer = integerFromNat 16\n";
-          Format.fprintf o "let twenty  : integer = integerFromNat 20\n";
-          Format.fprintf o "let twentythree : integer = integerFromNat 23\n";
-          Format.fprintf o "let twentyfour  : integer = integerFromNat 24\n";
-          Format.fprintf o "let thirty : integer = integerFromNat 30\n";
-          Format.fprintf o "let thirtyone  : integer = integerFromNat 31\n";
-          Format.fprintf o "let thirtytwo  : integer = integerFromNat 32\n";
-          Format.fprintf o "let thirtyfive : integer = integerFromNat 35\n";
-          Format.fprintf o "let thirtynine : integer = integerFromNat 39\n";
-          Format.fprintf o "let forty : integer = integerFromNat 40\n";
-          Format.fprintf o "let fortyseven : integer = integerFromNat 47\n";
-          Format.fprintf o "let fortyeight : integer = integerFromNat 48\n";
-          Format.fprintf o "let fiftyfive  : integer = integerFromNat 55\n";
-          Format.fprintf o "let fiftysix   : integer = integerFromNat 56\n";
-          Format.fprintf o "let fiftyseven : integer = integerFromNat 57\n";
-          Format.fprintf o "let sixtyone   : integer = integerFromNat 61\n";
-          Format.fprintf o "let sixtythree : integer = integerFromNat 63\n";
-          Format.fprintf o "let sixtyfour  : integer = integerFromNat 64\n";
-          Format.fprintf o "let onetwentyseven : integer = integerFromNat 127\n";
-          Format.fprintf o "let onetwentyeight : integer = integerFromNat 128\n";
-                    
+          iterate (fun n -> Format.fprintf o "let int%i : integer = integerFromNat %i\n" (n - 1) (n - 1)) 129;
           Format.fprintf o "let defs = ";
 	  Pretty_print.pp_lem_defs o defs;
 	  close_output_with_check ext_o

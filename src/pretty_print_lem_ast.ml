@@ -69,38 +69,12 @@ let kwd ppf s = fprintf ppf "%s" s
 let base ppf s = fprintf ppf "%s" s
 let quot_string ppf s = fprintf ppf "\"%s\"" s
 
-let lemnum default n = match n with
-  | 0   -> "zero"
-  | 1   -> "one"
-  | 2   -> "two"
-  | 3   -> "three"
-  | 4   -> "four"
-  | 5   -> "five"
-  | 6   -> "six"
-  | 7   -> "seven"
-  | 8   -> "eight"
-  | 15  -> "fifteen"
-  | 16  -> "sixteen"
-  | 20  -> "twenty"
-  | 23  -> "twentythree"
-  | 24  -> "twentyfour"
-  | 30  -> "thirty"
-  | 31  -> "thirtyone"
-  | 32  -> "thirtytwo"
-  | 35  -> "thirtyfive"
-  | 39  -> "thirtynine"
-  | 40  -> "forty"
-  | 47  -> "fortyseven"
-  | 48  -> "fortyeight"
-  | 55  -> "fiftyfive"
-  | 56  -> "fiftysix"
-  | 57  -> "fiftyseven"
-  | 61  -> "sixtyone"
-  | 63  -> "sixtythree"
-  | 64  -> "sixtyfour"
-  | 127 -> "onetwentyseven"
-  | 128 -> "onetwentyeight"
-  | _   -> if n >= 0 then default n else ("(zero - " ^ (default (abs n)) ^ ")")
+let lemnum default n =
+  if 0 <= n && n <= 128 then
+    "int" ^ string_of_int n
+  else if n >= 0 then
+    default n
+  else ("(zero - " ^ (default (abs n)) ^ ")")
 
 let pp_format_id (Id_aux(i,_)) =
   match i with
