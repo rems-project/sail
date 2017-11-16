@@ -89,6 +89,8 @@ val set_from_list : forall 'a. list 'a -> set 'a
 
 val subst : forall 'a. list 'a -> list 'a -> bool
 
+type loop = While | Until
+
 }}
 
 metavar x , y , z ::=
@@ -420,8 +422,9 @@ grammar
 
 %%% OR, IN C STYLE
 
-type_def {{ ocaml 'a type_def }} :: 'TD_' ::=
+type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
   {{ ocaml TD_aux of type_def_aux * 'a annot }}
+  {{ lem TD_aux of type_def_aux * annot 'a }}
   | type_def_aux  :: :: aux
 
 type_def_aux  :: 'TD_' ::=
@@ -627,22 +630,9 @@ grammar
 % Expressions                                                  %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-embed
-{{ lem
-
-type tannot = maybe (t * tag * list nec * effect * effect)
-
-}}
-
-grammar
-tannot :: '' ::=
-                                                {{ phantom }}
-                                                {{ ocaml tannot }}
-                                                {{ lem tannot }}
 loop :: loop ::= {{ phantom }}
   | while ::   :: while 
   | until ::  :: until 
-
 
 exp :: 'E_' ::=
   {{ com expression }}
@@ -955,24 +945,26 @@ letbind :: 'LB_' ::=
   | let pat = exp                                    :: :: val
     {{ com let, implicit type ($[[pat]]$ must be total)}}
 
-val_spec {{ ocaml 'a val_spec }} :: 'VS_' ::=
+val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
+   {{ lem VS_aux of val_spec_aux * annot 'a }}
   | val_spec_aux ::  :: aux
 
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string -> string option) * bool }}
+  {{ lem VS_val_spec of typschm * id * maybe string * bool }}
   | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
-    {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }}
+    {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }} {{ lem }}
   | val cast typschm id                             :: S :: cast
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }} {{ lem }}
   | val extern typschm id                           :: S :: extern_no_rename
     {{ com specify the type of an external function }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some id]]) false) }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some id]]) false) }} {{ lem }}
   | val extern typschm id = string                  :: S :: extern_spec
     {{ com specify the type of a function from Lem }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some string]]) false) }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some string]]) false) }} {{ lem }}
 %where the string must provide an explicit path to the required function but will not be checked
 
 default_spec :: 'DT_' ::=
