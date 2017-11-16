@@ -260,6 +260,21 @@ let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
 let nc_true = mk_nc NC_true
 let nc_false = mk_nc NC_false
 
+let rec nc_negate (NC_aux (nc, _)) =
+  match nc with
+  | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
+  | NC_bounded_le (n1, n2) -> nc_gt n1 n2
+  | NC_equal (n1, n2) -> nc_neq n1 n2
+  | NC_not_equal (n1, n2) -> nc_eq n1 n2
+  | NC_and (n1, n2) -> mk_nc (NC_or (nc_negate n1, nc_negate n2))
+  | NC_or (n1, n2) -> mk_nc (NC_and (nc_negate n1, nc_negate n2))
+  | NC_false -> mk_nc NC_true
+  | NC_true -> mk_nc NC_false
+  | NC_set (kid, []) -> nc_false
+  | NC_set (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
+  | NC_set (kid, int :: ints) ->
+     mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
+
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
 
 let mk_typquant qis = TypQ_aux (TypQ_tq qis, Parse_ast.Unknown)
@@ -282,6 +297,18 @@ let quant_kopts typq =
     | QI_aux _ -> []
   in
   quant_items typq |> List.map qi_kopt |> List.concat
+
+let quant_split typq =
+  let qi_kopt = function
+    | QI_aux (QI_id kopt, _) -> [kopt]
+    | _ -> []
+  in
+  let qi_nc = function
+    | QI_aux (QI_const nc, _) -> [nc]
+    | _ -> []
+  in
+  let qis = quant_items typq in
+  List.concat (List.map qi_kopt qis), List.concat (List.map qi_nc qis)
 
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
@@ -469,7 +496,6 @@ and string_of_nexp_aux = function
 let rec string_of_typ = function
   | Typ_aux (typ, l) -> string_of_typ_aux typ
 and string_of_typ_aux = function
-  | Typ_wild -> "_"
   | Typ_id id -> string_of_id id
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
@@ -737,6 +763,21 @@ let has_effect (Effect_aux (eff,_)) searched_for = match eff with
 let effect_set (Effect_aux (eff,_)) = match eff with
   | Effect_set effs -> BESet.of_list effs
 
+(* Utilities for constructing effect sets *)
+
+let union_effects e1 e2 =
+  match e1, e2 with
+  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
+     let base_effs3 = BESet.elements (BESet.of_list (base_effs1 @ base_effs2)) in
+     Effect_aux (Effect_set base_effs3, Parse_ast.Unknown)
+  | _, _ -> assert false (* We don't do Effect variables *)
+
+let equal_effects e1 e2 =
+  match e1, e2 with
+  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
+     BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
+  | _, _ -> assert false (* We don't do Effect variables *)
+
 let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
   | Nexp_id _
@@ -750,7 +791,6 @@ let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
 
 let rec tyvars_of_typ (Typ_aux (t,_)) =
   match t with
-  | Typ_wild
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)

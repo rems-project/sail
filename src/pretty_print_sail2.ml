@@ -83,7 +83,6 @@ let rec doc_typ (Typ_aux (typ_aux, _)) =
   | Typ_app (id, typs) -> doc_id id ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_tup typs -> parens (separate_map (string ", ") doc_typ typs)
   | Typ_var kid -> doc_kid kid
-  | Typ_wild -> assert false
   (* Resugar set types like {|1, 2, 3|} *)
   | Typ_exist ([kid1], NC_aux (NC_set (kid2, ints), _), Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid3, _)), _)]), _))
          when Kid.compare kid1 kid2 == 0 && Kid.compare kid2 kid3 == 0 && Id.compare (mk_id "atom") id == 0 ->

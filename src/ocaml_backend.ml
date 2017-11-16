@@ -80,7 +80,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
      ^^ space ^^ arg
   | Typ_fn (typ1, typ2, _) -> string "\"FN\""
   | Typ_var kid -> string "\"VAR\""
-  | Typ_exist _ | Typ_wild -> assert false
+  | Typ_exist _ -> assert false
 
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
@@ -102,7 +102,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
   | Typ_var kid -> zencode_kid kid
-  | Typ_exist _ | Typ_wild -> assert false
+  | Typ_exist _ -> assert false
 and ocaml_typ_arg ctx (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_typ typ -> ocaml_typ ctx typ

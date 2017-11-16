@@ -69,7 +69,6 @@ let subst_src_typ substs t =
   let rec s_styp substs ((Typ_aux (t,l)) as ty) =
     let re t = Typ_aux (t,l) in
     match t with
-    | Typ_wild
     | Typ_id _
     | Typ_var _
       -> ty
@@ -209,7 +208,6 @@ let apply_kid_insts kid_insts t =
 
 let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
   match ty with
-  | Typ_wild
   | Typ_id _
   | Typ_var _
     -> insts,typ
@@ -245,7 +243,6 @@ and inst_src_typ_arg insts (Typ_arg_aux (ta,l) as tyarg) =
 
 let rec contains_exist (Typ_aux (ty,_)) =
   match ty with
-  | Typ_wild
   | Typ_id _
   | Typ_var _
     -> false
@@ -282,7 +279,6 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
      more manageable prenex-form below *)
   let rec size_nvars_ty (Typ_aux (ty,l) as typ) =
     match ty with
-    | Typ_wild
     | Typ_id _
     | Typ_var _
       -> (KidSet.empty,[[],typ])
@@ -1518,7 +1514,6 @@ let tyvars_bound_in_lb (LB_aux (LB_val (pat,_),_)) = tyvars_bound_in_pat pat
 
 let rec sizes_of_typ (Typ_aux (t,l)) =
   match t with
-    Typ_wild
   | Typ_id _
   | Typ_var _
     -> KidSet.empty

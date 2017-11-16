@@ -165,14 +165,6 @@ val add_typquant : typquant -> Env.t -> Env.t
    not of this form. *)
 val orig_kid : kid -> kid
 
-val union_effects : effect -> effect -> effect
-val equal_effects : effect -> effect -> bool
-
-(* Negate a n_constraint. Note that there's no NC_not constructor, so
-   this flips all the inequalites a the n_constraint leaves and uses
-   de-morgans to switch and to or and vice versa. *)
-val nc_negate : n_constraint -> n_constraint
-
 (* Vector with default order. *)
 val dvector_typ : Env.t -> nexp -> nexp -> typ -> typ
 

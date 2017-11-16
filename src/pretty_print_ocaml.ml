@@ -112,7 +112,6 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id_ocaml_type id
   | Typ_var v  -> doc_var v
-  | Typ_wild -> underscore
   | Typ_app _ | Typ_tup _ | Typ_fn _ ->
       (* exhaustiveness matters here to avoid infinite loops
        * if we add a new Typ constructor *)

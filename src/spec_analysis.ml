@@ -210,7 +210,6 @@ let rec free_type_names_t consider_var (Typ_aux (t, _)) = match t with
                                      (free_type_names_t consider_var t2)
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
-  | Typ_wild -> mt
   | Typ_exist (kids,_,t') -> List.fold_left (fun s kid -> Nameset.remove (string_of_kid kid) s) (free_type_names_t consider_var t') kids
 and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
 and free_type_names_maybe_t consider_var = function
@@ -230,7 +229,6 @@ let rec free_type_names_tannot consider_var = function
 
 let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
   match t with
-  | Typ_wild -> used
   | Typ_var (Kid_aux (Var v,l)) ->
     if consider_var
     then conditional_add_typ bound used (Ast.Id_aux (Ast.Id v,l))

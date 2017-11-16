@@ -2634,7 +2634,6 @@ let rewrite_undefined mwords =
 
 let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
 and simple_typ_aux = function
-  | Typ_wild -> Typ_wild
   | Typ_id id -> Typ_id id
   | Typ_app (id, [_; _; _; Typ_arg_aux (Typ_arg_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
      Typ_app (mk_id "list", [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)])

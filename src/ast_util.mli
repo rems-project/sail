@@ -131,8 +131,14 @@ val nc_true : n_constraint
 val nc_false : n_constraint
 val nc_set : kid -> int list -> n_constraint
 
+(* Negate a n_constraint. Note that there's no NC_not constructor, so
+   this flips all the inequalites a the n_constraint leaves and uses
+   de-morgans to switch and to or and vice versa. *)
+val nc_negate : n_constraint -> n_constraint
+
 val quant_items : typquant -> quant_item list
 val quant_kopts : typquant -> kinded_id list
+val quant_split : typquant -> kinded_id list * n_constraint list
 
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
@@ -246,6 +252,9 @@ val is_order_inc : order -> bool
 val has_effect : effect -> base_effect_aux -> bool
 
 val effect_set : effect -> BESet.t
+
+val equal_effects : effect -> effect -> bool
+val union_effects : effect -> effect -> effect
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t

@@ -147,38 +147,6 @@ let is_list (Typ_aux (typ_aux, _)) =
        when string_of_id f = "list" -> Some typ
   | _ -> None
 
-let rec nc_negate (NC_aux (nc, _)) =
-  match nc with
-  | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
-  | NC_bounded_le (n1, n2) -> nc_gt n1 n2
-  | NC_equal (n1, n2) -> nc_neq n1 n2
-  | NC_not_equal (n1, n2) -> nc_eq n1 n2
-  | NC_and (n1, n2) -> mk_nc (NC_or (nc_negate n1, nc_negate n2))
-  | NC_or (n1, n2) -> mk_nc (NC_and (nc_negate n1, nc_negate n2))
-  | NC_false -> mk_nc NC_true
-  | NC_true -> mk_nc NC_false
-  | NC_set (kid, []) -> nc_false
-  | NC_set (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
-  | NC_set (kid, int :: ints) ->
-     mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
-
-(* Utilities for constructing effect sets *)
-
-module BESet = Set.Make(BE)
-
-let union_effects e1 e2 =
-  match e1, e2 with
-  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
-     let base_effs3 = BESet.elements (BESet.of_list (base_effs1 @ base_effs2)) in
-     Effect_aux (Effect_set base_effs3, Parse_ast.Unknown)
-  | _, _ -> assert false (* We don't do Effect variables *)
-
-let equal_effects e1 e2 =
-  match e1, e2 with
-  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
-     BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
-  | _, _ -> assert false (* We don't do Effect variables *)
-
 (* An index_sort is a more general form of range type: it can either
    be IS_int, which represents every natural number, or some set of
    natural numbers given by an IS_prop expression of the form
@@ -193,18 +161,6 @@ let string_of_index_sort = function
      "{" ^ string_of_kid kid ^ " | "
      ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
      ^ "}"
-
-let quant_split typq =
-  let qi_kopt = function
-    | QI_aux (QI_id kopt, _) -> [kopt]
-    | _ -> []
-  in
-  let qi_nc = function
-    | QI_aux (QI_const nc, _) -> [nc]
-    | _ -> []
-  in
-  let qis = quant_items typq in
-  List.concat (List.map qi_kopt qis), List.concat (List.map qi_nc qis)
 
 (**************************************************************************)
 (* 1. Substitutions                                                       *)
@@ -244,7 +200,6 @@ and nc_subst_nexp_aux l sv subst = function
 
 let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
 and typ_subst_nexp_aux sv subst = function
-  | Typ_wild -> Typ_wild
   | Typ_id v -> Typ_id v
   | Typ_var kid -> Typ_var kid
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2, effs)
@@ -260,7 +215,6 @@ and typ_subst_arg_nexp_aux sv subst = function
 
 let rec typ_subst_typ sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_typ_aux sv subst typ, l)
 and typ_subst_typ_aux sv subst = function
-  | Typ_wild -> Typ_wild
   | Typ_id v -> Typ_id v
   | Typ_var kid -> if Kid.compare kid sv = 0 then subst else Typ_var kid
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2, effs)
@@ -282,7 +236,6 @@ let order_subst sv subst (Ord_aux (ord, l)) = Ord_aux (order_subst_aux sv subst 
 
 let rec typ_subst_order sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_order_aux sv subst typ, l)
 and typ_subst_order_aux sv subst = function
-  | Typ_wild -> Typ_wild
   | Typ_id v -> Typ_id v
   | Typ_var kid -> Typ_var kid
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_order sv subst typ1, typ_subst_order sv subst typ2, effs)
@@ -297,7 +250,6 @@ and typ_subst_arg_order_aux sv subst = function
 
 let rec typ_subst_kid sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_kid_aux sv subst typ, l)
 and typ_subst_kid_aux sv subst = function
-  | Typ_wild -> Typ_wild
   | Typ_id v -> Typ_id v
   | Typ_var kid -> if Kid.compare kid sv = 0 then Typ_var subst else Typ_var kid
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2, effs)
@@ -393,7 +345,15 @@ module Env : sig
   (* Well formedness-checks *)
   val wf_typ : ?exs:KidSet.t -> t -> typ -> unit
   val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
+
+  (* Some of the code in the environment needs to use the Z3 prover,
+     which is defined below. To break the circularity this would cause
+     (as the prove code depends on the environment), we add a
+     reference to the prover to the initial environment. *)
   val add_prover : (t -> n_constraint -> bool) -> t -> t
+
+  (* This must not be exported, initial_env sets up a correct initial
+     environment. *)
   val empty : t
 end = struct
   type t =
@@ -571,7 +531,6 @@ end = struct
     typ_debug ("Well-formed " ^ string_of_typ typ);
     let (Typ_aux (typ_aux, l)) = expand_synonyms env typ in
     match typ_aux with
-    | Typ_wild -> ()
     | Typ_id id when bound_typ_id env id ->
        let typq = infer_kind env id in
        if quant_kopts typq != []
@@ -1041,7 +1000,6 @@ let destruct_vector env typ =
 
 let rec is_typ_monomorphic (Typ_aux (typ, _)) =
   match typ with
-  | Typ_wild -> assert false (* Typ_wild is bad in general *)
   | Typ_id _ -> true
   | Typ_tup typs -> List.for_all is_typ_monomorphic typs
   | Typ_app (id, args) -> List.for_all is_typ_arg_monomorphic args
@@ -1106,7 +1064,6 @@ and string_of_tnf_arg = function
 
 let rec normalize_typ env (Typ_aux (typ, l)) =
   match typ with
-  | Typ_wild -> Tnf_wild
   | Typ_id (Id_aux (Id "int", _)) -> Tnf_index_sort IS_int
   | Typ_id (Id_aux (Id "nat", _)) ->
      let kid = Env.fresh_kid env in Tnf_index_sort (IS_prop (kid, [(nconstant 0, nvar kid)]))
@@ -1315,7 +1272,6 @@ let order_frees (Ord_aux (ord_aux, l)) =
 
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
-  | Typ_wild -> KidSet.empty
   | Typ_id v -> KidSet.empty
   | Typ_var kid when KidSet.mem kid exs -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
@@ -1364,7 +1320,6 @@ let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
 let typ_identical env typ1 typ2 =
   let rec typ_identical' (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
     match typ1, typ2 with
-    | Typ_wild, Typ_wild -> true
     | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
     | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
     | Typ_tup typs1, Typ_tup typs2 ->
@@ -1513,7 +1468,6 @@ let rec unify l env typ1 typ2 =
   let rec unify_typ l (Typ_aux (typ1_aux, _) as typ1) (Typ_aux (typ2_aux, _) as typ2) =
     typ_debug ("UNIFYING TYPES " ^ string_of_typ typ1 ^ " AND " ^ string_of_typ typ2);
     match typ1_aux, typ2_aux with
-    | Typ_wild, Typ_wild -> KBindings.empty
     | Typ_id v1, Typ_id v2 ->
        if Id.compare v1 v2 = 0 then KBindings.empty
        else unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
@@ -1628,7 +1582,7 @@ let rec alpha_equivalent env typ1 typ2 =
   let rec relabel (Typ_aux (aux, l) as typ) =
     let relabelled_aux =
       match aux with
-      | Typ_wild | Typ_id _ | Typ_var _ -> aux
+      | Typ_id _ | Typ_var _ -> aux
       | Typ_fn (typ1, typ2, eff) -> Typ_fn (relabel typ1, relabel typ2, eff)
       | Typ_tup typs -> Typ_tup (List.map relabel typs)
       | Typ_exist (kids, nc, typ) ->
@@ -1976,7 +1930,6 @@ let rec match_typ env typ1 typ2 =
   match typ1_aux, typ2_aux with
   | Typ_exist (_, _, typ1), _ -> match_typ env typ1 typ2
   | _, Typ_exist (_, _, typ2) -> match_typ env typ1 typ2
-  | Typ_wild, Typ_wild -> true
   | _, Typ_var kid2 -> true
   | Typ_id v1, Typ_id v2 when Id.compare v1 v2 = 0 -> true
   | Typ_id v1, Typ_id v2 when string_of_id v1 = "int" && string_of_id v2 = "nat" -> true

@@ -162,8 +162,7 @@ let rec pp_format_typ_lem (Typ_aux(t,l)) =
                               (pp_format_effects_lem efct) ^ ")"
     | Typ_tup(typs) -> "(Typ_tup [" ^ (list_format "; " pp_format_typ_lem typs) ^ "])"
     | Typ_app(id,args) -> "(Typ_app " ^ (pp_format_id_lem id) ^ " [" ^ (list_format "; " pp_format_typ_arg_lem args) ^ "])"
-    | Typ_exist(kids,nc,typ) -> "(Typ_exist ([" ^ list_format ";" pp_format_var_lem kids ^ "], " ^ pp_format_nexp_constraint_lem nc ^ ", " ^ pp_format_typ_lem typ ^ "))"
-    | Typ_wild -> "Typ_wild") ^ " " ^
+    | Typ_exist(kids,nc,typ) -> "(Typ_exist ([" ^ list_format ";" pp_format_var_lem kids ^ "], " ^ pp_format_nexp_constraint_lem nc ^ ", " ^ pp_format_typ_lem typ ^ "))") ^ " " ^
     (pp_format_l_lem l) ^ ")"
 and pp_format_nexp_lem (Nexp_aux(n,l)) =
   "(Nexp_aux " ^

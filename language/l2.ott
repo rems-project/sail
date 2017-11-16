@@ -263,8 +263,6 @@ grammar
 typ :: 'Typ_' ::=
   {{ com type expressions, of kind $[[Type]]$ }}
   {{ aux _ l }}
-  | _                                           :: :: wild
-    {{ com unspecified type }}
   | id                                         :: :: id
     {{ com defined type }}
   | kid                                         :: :: var

@@ -191,7 +191,6 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
 let rec lem_nexps_of_typ sequential mwords (Typ_aux (t,_)) =
   let trec = lem_nexps_of_typ sequential mwords in
   match t with
-  | Typ_wild
   | Typ_id _ -> NexpSet.empty
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
   | Typ_fn (t1,t2,_) -> NexpSet.union (trec t1) (trec t2)
@@ -294,7 +293,6 @@ let doc_typ_lem, doc_atomic_typ_lem =
          then string "register"
          else*) doc_id_lem_type id
       | Typ_var v -> doc_var v
-      | Typ_wild -> underscore
       | Typ_app _ | Typ_tup _ | Typ_fn _ ->
          (* exhaustiveness matters here to avoid infinite loops
           * if we add a new Typ constructor *)
@@ -322,7 +320,6 @@ let doc_typ_lem, doc_atomic_typ_lem =
    a bitvector; for other types of vectors, the length is not pretty-printed
    in the type, and the start index is never pretty-printed in vector types. *)
 let rec contains_t_pp_var mwords (Typ_aux (t,a) as typ) = match t with
-  | Typ_wild -> true
   | Typ_id _ -> false
   | Typ_var _ -> true
   | Typ_exist _ -> true
@@ -423,7 +420,6 @@ let doc_typquant_lem (TypQ_aux(tq,_)) vars_included typ = match tq with
    approach will do for now. *)
 
 let rec typeclass_nexps (Typ_aux(t,_)) = match t with
-| Typ_wild
 | Typ_id _
 | Typ_var _
   -> NexpSet.empty
