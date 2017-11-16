@@ -365,3 +365,8 @@ let is_some = function
   | None -> false
 
 let is_none opt = not (is_some opt)
+
+let rec take n xs = match n, xs with
+  | 0, _ -> []
+  | n, [] -> []
+  | n, (x :: xs) -> x :: take (n - 1) xs 

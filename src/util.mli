@@ -218,3 +218,5 @@ val split_on_char : char -> string -> string list
 
 val is_some : 'a option -> bool
 val is_none : 'a option -> bool
+
+val take : int -> 'a list -> 'a list

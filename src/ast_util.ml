@@ -283,6 +283,10 @@ let quant_kopts typq =
   in
   quant_items typq |> List.map qi_kopt |> List.concat
 
+let unaux_nexp (Nexp_aux (nexp, _)) = nexp
+let unaux_order (Ord_aux (ord, _)) = ord
+let unaux_typ (Typ_aux (typ, _)) = typ
+
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)

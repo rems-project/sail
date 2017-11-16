@@ -46,14 +46,16 @@ open Util
 open Ast_util
 open Big_int
 
+(* opt_tc_debug controls the verbosity of the type checker. 0 is
+   silent, 1 prints a tree of the type derivation and 2 is like 1 but
+   with much more debug information. *)
 let opt_tc_debug = ref 0
-let opt_no_effects = ref false
-let depth = ref 0
 
-let rec take n xs = match n, xs with
-  | 0, _ -> []
-  | n, [] -> []
-  | n, (x :: xs) -> x :: take (n - 1) xs 
+(* opt_no_effects turns of the effect checking. This can break
+   re-writer passes, so it should only be used for debugging. *)
+let opt_no_effects = ref false
+
+let depth = ref 0
 
 let rec indent n = match n with
   | 0 -> ""
@@ -62,8 +64,6 @@ let rec indent n = match n with
 let typ_debug m = if !opt_tc_debug > 1 then prerr_endline (indent !depth ^ m) else ()
 
 let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ m) else ()
-
-let typ_warning m = prerr_endline ("Warning: " ^ m)
 
 type type_error =
   (* First parameter is the error that caused us to start doing type
@@ -126,10 +126,6 @@ let field_name rec_id id =
 
 let string_of_bind (typquant, typ) = string_of_typquant typquant ^ ". " ^ string_of_typ typ
 
-let unaux_nexp (Nexp_aux (nexp, _)) = nexp
-let unaux_order (Ord_aux (ord, _)) = ord
-let unaux_typ (Typ_aux (typ, _)) = typ
-
 let orig_kid (Kid_aux (Var v, l) as kid) =
   try
     let i = String.rindex v '#' in
@@ -151,8 +147,6 @@ let is_list (Typ_aux (typ_aux, _)) =
        when string_of_id f = "list" -> Some typ
   | _ -> None
 
-let mk_lit l = E_aux (E_lit (L_aux (l, Parse_ast.Unknown)), (Parse_ast.Unknown, ()))
-
 let rec nc_negate (NC_aux (nc, _)) =
   match nc with
   | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
@@ -169,7 +163,6 @@ let rec nc_negate (NC_aux (nc, _)) =
      mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
 
 (* Utilities for constructing effect sets *)
-
 
 module BESet = Set.Make(BE)
 
@@ -400,6 +393,7 @@ module Env : sig
   (* Well formedness-checks *)
   val wf_typ : ?exs:KidSet.t -> t -> typ -> unit
   val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
+  val add_prover : (t -> n_constraint -> bool) -> t -> t
   val empty : t
 end = struct
   type t =
@@ -424,7 +418,8 @@ end = struct
       constraints : n_constraint list;
       default_order : order option;
       ret_typ : typ option;
-      poly_undefineds : bool
+      poly_undefineds : bool;
+      prove : t -> n_constraint -> bool
     }
 
   let empty =
@@ -450,7 +445,10 @@ end = struct
       default_order = None;
       ret_typ = None;
       poly_undefineds = false;
+      prove = (fun _ _ -> false)
     }
+
+  let add_prover f env = { env with prove = f }
 
   let get_typ_var kid env =
     try KBindings.find kid env.typ_vars with
@@ -458,18 +456,35 @@ end = struct
 
   let get_typ_vars env = env.typ_vars
 
-  let builtin_typs =
-    IdSet.of_list (List.map mk_id
-      [ "range"; "atom"; "vector"; "register"; "bit"; "unit"; "int"; "nat"; "bool"; "real"; "list"; "string"; "itself"])
+  let bk_counter = ref 0
+  let bk_name () = let kid = mk_kid ("bk#" ^ string_of_int !bk_counter) in incr bk_counter; kid
 
-  (* FIXME: Add an IdSet for builtin types *)
+  let kinds_typq kinds = mk_typquant (List.map (fun k -> mk_qi_id k (bk_name ())) kinds)
+
+  let builtin_typs =
+    List.fold_left (fun m (name, kinds) -> Bindings.add (mk_id name) (kinds_typq kinds) m) Bindings.empty
+      [ ("range", [BK_nat; BK_nat]);
+        ("atom", [BK_nat]);
+        ("vector", [BK_nat; BK_nat; BK_order; BK_type]);
+        ("register", [BK_type]);
+        ("bit", []);
+        ("unit", []);
+        ("int", []);
+        ("nat", []);
+        ("bool", []);
+        ("real", []);
+        ("list", [BK_type]);
+        ("string", []);
+        ("itself", [BK_type])
+      ]
+
   let bound_typ_id env id =
     Bindings.mem id env.typ_synonyms
     || Bindings.mem id env.variants
     || Bindings.mem id env.records
     || Bindings.mem id env.regtyps
     || Bindings.mem id env.enums
-    || IdSet.mem id builtin_typs
+    || Bindings.mem id builtin_typs
 
   let get_overloads id env =
     try Bindings.find id env.overloads with
@@ -491,20 +506,85 @@ end = struct
     try Bindings.find id env.smt_ops with
     | Not_found -> first_smt_op (get_overloads id env)
 
-  (* Check if a type, order, or n-expression is well-formed. Throws a
-     type error if the type is badly formed. FIXME: Add arity to type
-     constructors, although arity checking for the builtin types does
-     seem to be done by the initial ast check. *)
-  let rec wf_typ ?exs:(exs=KidSet.empty) env (Typ_aux (typ_aux, l)) =
+  let rec infer_kind env id =
+    if Bindings.mem id builtin_typs then
+      Bindings.find id builtin_typs
+    else if Bindings.mem id env.variants then
+      fst (Bindings.find id env.variants)
+    else if Bindings.mem id env.records then
+      fst (Bindings.find id env.records)
+    else if Bindings.mem id env.enums || Bindings.mem id env.regtyps then
+      mk_typquant []
+    else if Bindings.mem id env.typ_synonyms then
+      typ_error (id_loc id) ("Cannot infer kind of type synonym " ^ string_of_id id)
+    else
+      typ_error (id_loc id) ("Cannot infer kind of " ^  string_of_id id)
+
+  let check_args_typquant id env args typq =
+    let kopts, ncs = quant_split typq in
+    let rec subst_args kopts args =
+      match kopts, args with
+      | kopt :: kopts, Typ_arg_aux (Typ_arg_nexp arg, _) :: args when is_nat_kopt kopt ->
+         List.map (nc_subst_nexp (kopt_kid kopt) (unaux_nexp arg)) (subst_args kopts args)
+      | kopt :: kopts, Typ_arg_aux (Typ_arg_typ arg, _) :: args when is_typ_kopt kopt ->
+         subst_args kopts args
+      | kopt :: kopts, Typ_arg_aux (Typ_arg_order arg, _) :: args when is_order_kopt kopt ->
+         subst_args kopts args
+      | [], [] -> ncs
+      | _, Typ_arg_aux (_, l) :: _ -> typ_error l "ERROR 1"
+      | _, _ -> typ_error Parse_ast.Unknown "ERROR 2"
+    in
+    let ncs = subst_args kopts args in
+    if List.for_all (env.prove env) ncs
+    then ()
+    else typ_error (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
+
+  let rec expand_synonyms env (Typ_aux (typ, l) as t) =
+    match typ with
+    | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
+    | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
+    | Typ_app (id, args) ->
+       begin
+         try
+           let synonym = Bindings.find id env.typ_synonyms in
+           expand_synonyms env (synonym env args)
+         with
+       | Not_found -> Typ_aux (Typ_app (id, List.map (expand_synonyms_arg env) args), l)
+       end
+    | Typ_id id ->
+       begin
+         try
+           let synonym = Bindings.find id env.typ_synonyms in
+           expand_synonyms env (synonym env [])
+         with
+         | Not_found -> Typ_aux (Typ_id id, l)
+       end
+    | typ -> Typ_aux (typ, l)
+  and expand_synonyms_arg env (Typ_arg_aux (typ_arg, l)) =
+    match typ_arg with
+    | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (expand_synonyms env typ), l)
+    | arg -> Typ_arg_aux (arg, l)
+
+  (* Check if a type, order, n-expression or constraint is
+     well-formed. Throws a type error if the type is badly formed. *)
+  let rec wf_typ ?exs:(exs=KidSet.empty) env typ =
+    typ_debug ("Well-formed " ^ string_of_typ typ);
+    let (Typ_aux (typ_aux, l)) = expand_synonyms env typ in
     match typ_aux with
     | Typ_wild -> ()
-    | Typ_id id when bound_typ_id env id -> ()
+    | Typ_id id when bound_typ_id env id ->
+       let typq = infer_kind env id in
+       if quant_kopts typq != []
+       then typ_error l ("Type constructor " ^ string_of_id id ^ " expected " ^ string_of_typquant typq)
+       else ()
     | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_var kid when KBindings.mem kid env.typ_vars -> ()
     | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid)
     | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
     | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
-    | Typ_app (id, args) when bound_typ_id env id -> List.iter (wf_typ_arg ~exs:exs env) args
+    | Typ_app (id, args) when bound_typ_id env id ->
+       List.iter (wf_typ_arg ~exs:exs env) args;
+       check_args_typquant id env args (infer_kind env id)
     | Typ_app (id, _) -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_exist ([], _, _) -> typ_error l ("Existential must have some type variables")
     | Typ_exist (kids, nc, typ) when KidSet.is_empty exs ->
@@ -854,32 +934,6 @@ end = struct
 
   let get_typ_synonym id env = Bindings.find id env.typ_synonyms
 
-  let rec expand_synonyms env (Typ_aux (typ, l) as t) =
-    match typ with
-    | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
-    | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
-    | Typ_app (id, args) ->
-       begin
-         try
-           let synonym = Bindings.find id env.typ_synonyms in
-           expand_synonyms env (synonym env args)
-         with
-       | Not_found -> Typ_aux (Typ_app (id, List.map (expand_synonyms_arg env) args), l)
-       end
-    | Typ_id id ->
-       begin
-         try
-           let synonym = Bindings.find id env.typ_synonyms in
-           expand_synonyms env (synonym env [])
-         with
-         | Not_found -> Typ_aux (Typ_id id, l)
-       end
-    | typ -> Typ_aux (typ, l)
-  and expand_synonyms_arg env (Typ_arg_aux (typ_arg, l)) =
-    match typ_arg with
-    | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (expand_synonyms env typ), l)
-    | arg -> Typ_arg_aux (arg, l)
-
   let get_default_order env =
     match env.default_order with
     | None -> typ_error Parse_ast.Unknown ("No default order has been set")
@@ -950,25 +1004,6 @@ let lvector_typ env l typ =
      vector_typ (nconstant 0) l ord typ
   | Ord_aux (Ord_dec, _) as ord ->
      vector_typ (nminus l (nconstant 1)) l ord typ
-
-let initial_env =
-  Env.empty
-  (* |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args))) *)
-
-  (* Internal functions for Monomorphise.AtomToItself *)
-
-  |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
-  |> Env.add_val_spec (mk_id "size_itself_int")
-      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
-                                  Parse_ast.Unknown)],Parse_ast.Unknown),
-       function_typ (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))])
-         (atom_typ (nvar (mk_kid "n"))) no_effect)
-  |> Env.add_extern (mk_id "make_the_value") (fun _ -> Some "make_the_value")
-  |> Env.add_val_spec (mk_id "make_the_value")
-      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
-                                  Parse_ast.Unknown)],Parse_ast.Unknown),
-       function_typ (atom_typ (nvar (mk_kid "n")))
-         (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))]) no_effect)
 
 let ex_counter = ref 0
 
@@ -2186,7 +2221,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      begin
        match Env.lookup_id id env with
        | Union (typq, ctor_typ) ->
-          let inferred_exp = fst (infer_funapp' l env id (typq, mk_typ (Typ_fn (unit_typ, ctor_typ, no_effect))) [mk_lit L_unit] (Some typ)) in
+          let inferred_exp = fst (infer_funapp' l env id (typq, mk_typ (Typ_fn (unit_typ, ctor_typ, no_effect))) [mk_lit_exp L_unit] (Some typ)) in
           annot_exp (E_id id) (typ_of inferred_exp)
        | _ -> assert false (* Unreachble due to guard *)
      end
@@ -3460,6 +3495,7 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
      |> Env.add_union_id v (typq, typ')
      |> Env.add_val_spec v (typq, typ')
 
+(* FIXME: This code is duplicated with general kind-checking code in environment, can they be merged? *)
 let mk_synonym typq typ =
   let kopts, ncs = quant_split typq in
   let rec subst_args kopts args =
@@ -3543,3 +3579,23 @@ let rec check' env (Defs defs) =
 let check env defs =
   try check' env defs with
   | Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))
+
+let initial_env =
+  Env.empty
+  |> Env.add_prover prove
+  (* |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args))) *)
+
+  (* Internal functions for Monomorphise.AtomToItself *)
+
+  |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
+  |> Env.add_val_spec (mk_id "size_itself_int")
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+                                  Parse_ast.Unknown)],Parse_ast.Unknown),
+       function_typ (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))])
+         (atom_typ (nvar (mk_kid "n"))) no_effect)
+  |> Env.add_extern (mk_id "make_the_value") (fun _ -> Some "make_the_value")
+  |> Env.add_val_spec (mk_id "make_the_value")
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+                                  Parse_ast.Unknown)],Parse_ast.Unknown),
+       function_typ (atom_typ (nvar (mk_kid "n")))
+         (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))]) no_effect)
