@@ -52,8 +52,8 @@ full: sail lib power doc test
 ast.ml: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o ast.ml -picky_multiple_parses true ../language/l2.ott
 
-lem_interp2/interp_ast.lem: ../language/l2.ott
-	ott -sort false -generate_aux_rules true -o lem_interp2/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
+lem_interp/interp_ast.lem: ../language/l2.ott
+	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
 
 sail: ast.ml
 	ocamlbuild sail.native
@@ -63,7 +63,7 @@ sail.native: sail
 sail.byte:
 	ocamlbuild -cflag -g sail.byte
 
-interpreter:
+interpreter: lem_interp/interp_ast.lem
 	ocamlbuild lem_interp/extract.cmxa
 	ocamlbuild lem_interp/extract.cma
 
