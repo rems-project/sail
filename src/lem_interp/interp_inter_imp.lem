@@ -48,6 +48,7 @@ import Set_extra
 open import Pervasives
 open import Assert_extra
 open import Interp_ast
+open import Interp_utilities
 open import Sail_impl_base
 open import Interp_interface
 
@@ -501,7 +502,7 @@ let value_of_instruction_param direction (name,typ,v) =
   end in v
 
 let intern_instruction direction (name,parms) =
-  Interp_ast.V_ctor (Interp.id_of_string name) (T_id "ast") Interp_ast.C_Union
+  Interp_ast.V_ctor (Interp.id_of_string name) (mk_typ_id "ast") Interp_ast.C_Union
     (Interp_ast.V_tuple (List.map (value_of_instruction_param direction) parms))
 
 let instruction_analysis top_level end_flag thunk_name regn_to_reg_details registers instruction =
@@ -747,7 +748,7 @@ let instr_external_to_interp_value top_level instr =
     end in
   (*This type shouldn't be hard-coded*)
   Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id name) Interp_ast.Unknown) 
-                (T_id "ast") Interp_ast.C_Union parmsV
+                (mk_typ_id "ast") Interp_ast.C_Union parmsV
 
 val instruction_to_istate : context -> instruction -> instruction_state 
 let instruction_to_istate (top_level:context) (((name, parms) as instr):instruction) : instruction_state  = 

@@ -52,14 +52,19 @@ let rec power (a: integer) (b: integer) : integer =
 let foldr2 f x l l' = List.foldr (Tuple.uncurry f) x (List.zip l l')
 let map2 f l l' = List.map (Tuple.uncurry f) (List.zip l l')
 
-(*As in the type system, the first effect is local to the expression and the second is cummulative*)
-type tannot = maybe (t * tag * list nec * effect * effect)
-
 let get_exp_l (E_aux e (l,annot)) = l
 
 val pure : effect
 let pure = Effect_aux(Effect_set []) Unknown
 let unit_t = Typ_aux(Typ_app (Id_aux (Id "unit") Unknown) []) Unknown
+
+let mk_typ_app str args = Typ_aux (Typ_app (Id_aux (Id str) Unknown) (List.map (fun aux -> Typ_arg_aux aux Unknown) args)) Unknown
+let mk_typ_id str = Typ_aux (Typ_id (Id_aux (Id str) Unknown)) Unknown
+
+let mk_typ_var str = Typ_aux (Typ_var (Kid_aux (Var ("'" ^ str)) Unknown)) Unknown
+let mk_typ_tup typs = Typ_aux (Typ_tup typs) Unknown
+
+let nconstant n = Nexp_aux (Nexp_constant n) Unknown
 
 (* Workaround Lem's inability to scrap my (type classes) boilerplate.
  * Implementing only Eq, and only for literals - hopefully this will

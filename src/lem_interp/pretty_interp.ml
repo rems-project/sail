@@ -150,8 +150,7 @@ let doc_bkind (BK_aux(k,_)) =
   string (match k with
   | BK_type -> "Type"
   | BK_nat -> "Nat"
-  | BK_order -> "Order"
-  | BK_effect -> "Effect")
+  | BK_order -> "Order")
 
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
@@ -233,7 +232,6 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
   | Typ_var v  -> doc_var v
-  | Typ_wild -> underscore
   | Typ_app _ | Typ_tup _ | Typ_fn _ ->
       (* exhaustiveness matters here to avoid infinite loops
        * if we add a new Typ constructor *)
@@ -245,7 +243,6 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   | Typ_arg_typ t -> app_typ t
   | Typ_arg_nexp n -> nexp n
   | Typ_arg_order o -> doc_ord o
-  | Typ_arg_effect e -> doc_effects e
 
   (* same trick to handle precedence of nexp *)
   and nexp ne = sum_typ ne
@@ -277,10 +274,10 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   in typ, atomic_typ, nexp
 
 let doc_nexp_constraint (NC_aux(nc,_)) = match nc with
-  | NC_fixed(n1,n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
+  | NC_equal(n1,n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
   | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
   | NC_bounded_le(n1,n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
-  | NC_nat_set_bounded(v,bounds) ->
+  | NC_set(v,bounds) ->
       doc_op (string "IN") (doc_var v)
         (braces (separate_map comma_sp doc_int bounds))
 
@@ -337,7 +334,6 @@ let doc_pat, doc_atomic_pat =
   | P_app(id,[]) -> doc_id id
   | P_record(fpats,_) -> braces (separate_map semi_sp fpat fpats)
   | P_vector pats  -> brackets (separate_map comma_sp atomic_pat pats)
-  | P_vector_indexed ipats  -> brackets (separate_map comma_sp npat ipats)
   | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats  -> squarebarbars (separate_map semi_sp atomic_pat pats)
   | P_app(_, _ :: _) | P_vector_concat _ ->
@@ -493,13 +489,6 @@ let doc_exp, doc_let =
                                                       | _ -> failwith "bit vector not just bit values")
                  | _ -> failwith "bit vector not all lits") exps "")) 
        else default_print ())
-  | E_vector_indexed (iexps, (Def_val_aux(default,_))) ->
-    let default_string = 
-      (match default with
-        | Def_val_empty -> string "" 
-        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp env mem add_red show_hole_contents e)]) in 
-      let iexp (i,e) = doc_op equals (doc_int i) (exp env mem add_red show_hole_contents e) in
-      brackets (concat [(separate_map comma iexp iexps);default_string])
   | E_vector_update(v,e1,e2) ->
     brackets (doc_op (string "with")
                 (exp env mem add_red show_hole_contents v)
@@ -556,11 +545,7 @@ let doc_exp, doc_let =
   | _-> failwith "internal expression escaped"
 
   and let_exp env mem add_red show_hole_contents (LB_aux(lb,_)) = match lb with
-  | LB_val_explicit(ts,pat,e) ->
-      prefix 2 1
-        (separate space [string "let"; doc_typscm_atomic ts; doc_atomic_pat pat; equals])
-        (exp env mem add_red show_hole_contents e)
-  | LB_val_implicit(pat,e) ->
+  | LB_val(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_atomic_pat pat; equals])
         (exp env mem add_red show_hole_contents e)
@@ -603,13 +588,8 @@ let doc_default (DT_aux(df,_)) = match df with
   | DT_order o -> separate space [string "default"; string "Order"; doc_ord o]
 
 let doc_spec (VS_aux(v,_)) = match v with
-  | VS_val_spec(ts,id) ->
+  | VS_val_spec(ts,id, _, _) ->
       separate space [string "val"; doc_typscm ts; doc_id id]
-  | VS_extern_no_rename(ts,id) ->
-      separate space [string "val"; string "extern"; doc_typscm ts; doc_id id]
-  | VS_extern_spec(ts,id,s) ->
-      separate space [string "val"; string "extern"; doc_typscm ts;
-      doc_op equals (doc_id id) (dquotes (string s))]
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with
   | Name_sect_none -> empty
