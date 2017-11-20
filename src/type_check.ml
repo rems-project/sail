@@ -1834,7 +1834,7 @@ let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
   | _ ->
      begin
        typ_debug ("Unable to construct a constraint for expression " ^ string_of_exp exp);
-       nc_true
+       raise Not_a_constraint
      end
 
 type flow_constraint =
