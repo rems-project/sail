@@ -603,20 +603,42 @@ type 'a matchresult =
   | DoesNotMatch
   | GiveUp
 
-let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
-  let rec findpat_generic check_pat description = function
+let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases (const_prop,substs,assigns) =
+  let rec findpat_generic check_pat description assigns = function
     | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                ("Failed to find a case for " ^ description); None)
     | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
     | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
-       findpat_generic check_pat description ((Pat_aux (Pat_exp (p,exp),ann))::tl)
+       findpat_generic check_pat description assigns ((Pat_aux (Pat_exp (p,exp),ann))::tl)
     | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
         when pat_id_is_variable env id' ->
        Some (exp, [(id', exp0)], [])
-    | (Pat_aux (Pat_when _,_))::_ -> None
+    | (Pat_aux (Pat_when (P_aux (P_id id',_),guard,exp),_))::tl
+        when pat_id_is_variable env id' -> begin
+          let substs = Bindings.add id' exp0 substs in
+          let (E_aux (guard,_)),assigns = const_prop substs assigns guard in
+          match guard with
+          | E_lit (L_aux (L_true,_)) -> Some (exp,[(id',exp0)],[])
+          | E_lit (L_aux (L_false,_)) -> findpat_generic check_pat description assigns tl
+          | _ -> None
+       end
+    | (Pat_aux (Pat_when (p,guard,exp),_))::tl -> begin
+       match check_pat p with
+       | DoesNotMatch -> findpat_generic check_pat description assigns tl
+       | DoesMatch (vsubst,ksubst) -> begin
+          let guard = nexp_subst_exp (kbindings_from_list ksubst) guard in
+          let substs = bindings_union substs (bindings_from_list vsubst) in
+          let (E_aux (guard,_)),assigns = const_prop substs assigns guard in
+          match guard with
+          | E_lit (L_aux (L_true,_)) -> Some (exp,vsubst,ksubst)
+          | E_lit (L_aux (L_false,_)) -> findpat_generic check_pat description assigns tl
+          | _ -> None
+       end
+       | GiveUp -> None
+    end
     | (Pat_aux (Pat_exp (p,exp),_))::tl ->
        match check_pat p with
-       | DoesNotMatch -> findpat_generic check_pat description tl
+       | DoesNotMatch -> findpat_generic check_pat description assigns tl
        | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
        | GiveUp -> None
   in
@@ -631,7 +653,7 @@ let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
           | P_aux (_,(l',_)) ->
              (Reporting_basic.print_err false true l' "Monomorphisation"
                 "Unexpected kind of pattern for enumeration"; GiveUp)
-        in findpat_generic checkpat (string_of_id id) cases
+        in findpat_generic checkpat (string_of_id id) assigns cases
      | _ -> None)
   | E_lit (L_aux (lit_e, lit_l)) ->
      let checkpat = function
@@ -658,12 +680,12 @@ let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
        | P_aux (_,(l',_)) ->
           (Reporting_basic.print_err false true l' "Monomorphisation"
              "Unexpected kind of pattern for literal"; GiveUp)
-     in findpat_generic checkpat "literal" cases
+     in findpat_generic checkpat "literal" assigns cases
   | _ -> None
 
-let can_match exp cases =
+let can_match exp cases const_prop =
   let env = Type_check.env_of exp in
-  can_match_with_env env exp cases
+  can_match_with_env env exp cases const_prop
 
 (* Remove top-level casts from an expression.  Useful when we need to look at
    subexpressions to reduce something, but could break type-checking if we used
@@ -973,7 +995,7 @@ let split_defs splits defs =
        re (E_field (e',id)) assigns
     | E_case (e,cases) ->
        let e',assigns = const_prop_exp substs assigns e in
-       (match can_match e' cases with
+       (match can_match e' cases (const_prop_exp,substs,assigns) with
        | None ->
           let assigned_in =
             List.fold_left (fun vs pe -> IdSet.union vs (assigned_vars_in_pexp pe))
@@ -997,7 +1019,7 @@ let split_defs splits defs =
               re (E_let (LB_aux (LB_val (p,e'), annot),
                          e2')) assigns in
             if is_value e' && not (is_value e) then
-              match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] with
+              match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] ((fun _ -> assert false),substs,assigns) with
               | None -> plain ()
               | Some (e'',bindings,kbindings) ->
                  let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
@@ -1107,7 +1129,7 @@ let split_defs splits defs =
          let cases = List.map (function
            | FCL_aux (FCL_Funcl (_,pat,exp), ann) -> Pat_aux (Pat_exp (pat,exp),ann))
            fcls in
-         match can_match_with_env env arg cases with
+         match can_match_with_env env arg cases (const_prop_exp,Bindings.empty,Bindings.empty) with
          | Some (exp,bindings,kbindings) ->
             let substs = bindings_from_list bindings in
             let result,_ = const_prop_exp substs Bindings.empty exp in
