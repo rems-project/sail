@@ -1970,6 +1970,8 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
        let kid_inst = instantiation_of exp in
+       (* Change kids in instantiation to the canonical ones from the type signature *)
+       let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
        let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
        let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
      (merge_deps deps, assigns, merge r r')
