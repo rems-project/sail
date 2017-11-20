@@ -1919,7 +1919,7 @@ let deps_of_uvar kid_deps arg_deps = function
    and dependencies on mutable variables.  The latter are quite conservative,
    we currently drop variables assigned inside loops, for example. *)
 
-let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
+let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
   let remove_assigns es message =
     let assigned =
         List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
@@ -1931,7 +1931,7 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
   in
   let non_det es =
     let assigns = remove_assigns es " assigned in non-deterministic expressions" in
-    let deps, _, rs = split3 (List.map (analyse_exp env assigns) es) in
+    let deps, _, rs = split3 (List.map (analyse_exp fn_id env assigns) es) in
     (deps, assigns, List.fold_left merge empty rs)
   in
   let merge_deps deps =
@@ -1941,9 +1941,9 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
     | E_block es ->
        let rec aux assigns = function
          | [] -> (dempty, assigns, empty)
-         | [e] -> analyse_exp env assigns e
+         | [e] -> analyse_exp fn_id env assigns e
          | e::es ->
-            let _, assigns, r' = analyse_exp env assigns e in
+            let _, assigns, r' = analyse_exp fn_id env assigns e in
             let d, assigns, r = aux assigns es in
             d, assigns, merge r r'
        in
@@ -1966,30 +1966,37 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
                   Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
        end
     | E_lit _ -> (env.control_deps,assigns,empty)
-    | E_cast (_,e) -> analyse_exp env assigns e
+    | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
        let kid_inst = instantiation_of exp in
        (* Change kids in instantiation to the canonical ones from the type signature *)
        let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
        let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
-       let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
+       let r' =
+       if Id.compare fn_id id == 0 then
+         let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
+         let deps = List.map (fun _ -> bad) deps in
+         let kid_deps = KBindings.map (fun _ -> bad) kid_deps in
+         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) }
+       else
+         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
      (merge_deps deps, assigns, merge r r')
     | E_tuple es
     | E_list es ->
        let deps, assigns, r = non_det es in
        (merge_deps deps, assigns, r)
     | E_if (e1,e2,e3) ->
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
        let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp env' assigns e2 in
-       let d3,a3,r3 = analyse_exp env' assigns e3 in
+       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
+       let d3,a3,r3 = analyse_exp fn_id env' assigns e3 in
        (dmerge d2 d3, dep_bindings_merge a2 a3, merge r1 (merge r2 r3))
     | E_loop (_,e1,e2) ->
        let assigns = remove_assigns [e1;e2] " assigned in a loop" in
-       let d1,a1,r1 = analyse_exp env assigns e1 in
+       let d1,a1,r1 = analyse_exp fn_id env assigns e1 in
        let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp env' assigns e2 in
+       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
      (dempty, assigns, merge r1 r2)
     | E_for (var,efrom,eto,eby,ord,body) ->
        let d1,assigns,r1 = non_det [efrom;eto;eby] in
@@ -1999,7 +2006,7 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        let env' = { env with
          control_deps = d;
          kid_deps = KBindings.add loop_kid d env.kid_deps} in
-       let d2,a2,r2 = analyse_exp env' assigns body in
+       let d2,a2,r2 = analyse_exp fn_id env' assigns body in
        (dempty, assigns, merge r1 r2)
     | E_vector es ->
        let ds, assigns, r = non_det es in
@@ -2024,18 +2031,18 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det (e::es) in
        (merge_deps ds, assigns, r)
-    | E_field (e,_) -> analyse_exp env assigns e
+    | E_field (e,_) -> analyse_exp fn_id env assigns e
     | E_case (e,cases) ->
-       let deps,assigns,r = analyse_exp env assigns e in
+       let deps,assigns,r = analyse_exp fn_id env assigns e in
        let analyse_case (Pat_aux (pexp,_)) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env deps pat in
-            analyse_exp env assigns e1
+            analyse_exp fn_id env assigns e1
          | Pat_when (pat,e1,e2) ->
             let env = update_env env deps pat in
-            let d1,assigns,r1 = analyse_exp env assigns e1 in
-            let d2,assigns,r2 = analyse_exp env assigns e2 in
+            let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+            let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_case cases) in
@@ -2043,40 +2050,40 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
         List.fold_left dep_bindings_merge Bindings.empty assigns,
         List.fold_left merge r rs)
     | E_let (LB_aux (LB_val (pat,e1),_),e2) ->
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
        let env = update_env env d1 pat in
-       let d2,assigns,r2 = analyse_exp env assigns e2 in
+       let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
        (d2,assigns,merge r1 r2)
     | E_assign (lexp,e1) ->
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
-       let assigns,r2 = analyse_lexp env assigns d1 lexp in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+       let assigns,r2 = analyse_lexp fn_id env assigns d1 lexp in
        (dempty, assigns, merge r1 r2)
     | E_sizeof nexp ->
        (deps_of_nexp env.kid_deps [] nexp, assigns, empty)
     | E_return e
     | E_exit e
     | E_throw e ->
-       let _, _, r = analyse_exp env assigns e in
+       let _, _, r = analyse_exp fn_id env assigns e in
        (Unknown (l,"non-local flow"), Bindings.empty, r)
     | E_try (e,cases) ->
-       let deps,_,r = analyse_exp env assigns e in
+       let deps,_,r = analyse_exp fn_id env assigns e in
        let assigns = remove_assigns [e] " assigned in try expression" in
        let analyse_handler (Pat_aux (pexp,_)) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
-            analyse_exp env assigns e1
+            analyse_exp fn_id env assigns e1
          | Pat_when (pat,e1,e2) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
-            let d1,assigns,r1 = analyse_exp env assigns e1 in
-            let d2,assigns,r2 = analyse_exp env assigns e2 in
+            let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+            let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_handler cases) in
        (merge_deps (deps::ds),
         List.fold_left dep_bindings_merge Bindings.empty assigns,
         List.fold_left merge r rs)
-    | E_assert (e1,_) -> analyse_exp env assigns e1
+    | E_assert (e1,_) -> analyse_exp fn_id env assigns e1
 
     | E_app_infix _
     | E_internal_cast _
@@ -2092,9 +2099,9 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        
     | E_internal_let (lexp,e1,e2) ->
        (* Really we ought to remove the assignment after e2 *)
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
-       let assigns,r' = analyse_lexp env assigns d1 lexp in
-       let d2,assigns,r2 = analyse_exp env assigns e2 in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+       let assigns,r' = analyse_lexp fn_id env assigns d1 lexp in
+       let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
        (dempty, assigns, merge r1 (merge r' r2))
     | E_constraint nc ->
        (deps_of_nc env.kid_deps nc, assigns, empty)
@@ -2125,29 +2132,29 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
   in (deps, assigns, r)
 
 
-and analyse_lexp env assigns deps (LEXP_aux (lexp,_)) =
+and analyse_lexp fn_id env assigns deps (LEXP_aux (lexp,_)) =
  (* TODO: maybe subexps and sublexps should be non-det (and in const_prop_lexp, too?) *)
  match lexp with
   | LEXP_id id
   | LEXP_cast (_,id) ->
      Bindings.add id deps assigns, empty
   | LEXP_memory (id,es) ->
-     let _, assigns, r = analyse_exp env assigns (E_aux (E_tuple es,(Unknown,None))) in
+     let _, assigns, r = analyse_exp fn_id env assigns (E_aux (E_tuple es,(Unknown,None))) in
      assigns, r
   | LEXP_tup lexps ->
       List.fold_left (fun (assigns,r) lexp ->
-       let assigns,r' = analyse_lexp env assigns deps lexp
+       let assigns,r' = analyse_lexp fn_id env assigns deps lexp
        in assigns,merge r r') (assigns,empty) lexps
   | LEXP_vector (lexp,e) ->
-     let _, assigns, r1 = analyse_exp env assigns e in
-     let assigns, r2 = analyse_lexp env assigns deps lexp in
+     let _, assigns, r1 = analyse_exp fn_id env assigns e in
+     let assigns, r2 = analyse_lexp fn_id env assigns deps lexp in
      assigns, merge r1 r2
   | LEXP_vector_range (lexp,e1,e2) ->
-     let _, assigns, r1 = analyse_exp env assigns e1 in
-     let _, assigns, r2 = analyse_exp env assigns e2 in
-     let assigns, r3 = analyse_lexp env assigns deps lexp in
+     let _, assigns, r1 = analyse_exp fn_id env assigns e1 in
+     let _, assigns, r2 = analyse_exp fn_id env assigns e2 in
+     let assigns, r3 = analyse_lexp fn_id env assigns deps lexp in
      assigns, merge r3 (merge r1 r2)
-  | LEXP_field (lexp,_) -> analyse_lexp env assigns deps lexp
+  | LEXP_field (lexp,_) -> analyse_lexp fn_id env assigns deps lexp
 
 
 let translate_id (Id_aux (_,l) as id) =
@@ -2236,7 +2243,7 @@ let print_result r =
 let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pat,body),_)) =
   let (tq,_) = Env.get_val_spec id tenv in
   let aenv = initial_env id tq pat in
-  let _,_,r = analyse_exp aenv Bindings.empty body in
+  let _,_,r = analyse_exp id aenv Bindings.empty body in
   let _ =
     if debug > 2 then
       (print_endline (string_of_id id);
