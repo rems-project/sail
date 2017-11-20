@@ -35,6 +35,7 @@ let subst_nexp substs nexp =
     | Nexp_minus (n1,n2) -> re (Nexp_minus (s_snexp n1, s_snexp n2))
     | Nexp_exp ne -> re (Nexp_exp (s_snexp ne))
     | Nexp_neg ne -> re (Nexp_neg (s_snexp ne))
+    | Nexp_app (id,args) -> re (Nexp_app (id,List.map s_snexp args))
   in s_snexp substs nexp
 
 let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
@@ -270,6 +271,7 @@ let rec size_nvars_nexp (Nexp_aux (ne,_)) =
   | Nexp_exp n
   | Nexp_neg n
     -> size_nvars_nexp n
+  | Nexp_app (_,args) -> List.concat (List.map size_nvars_nexp args)
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
@@ -596,72 +598,11 @@ let fabricate_nexp l = function
         | _ -> raise (Reporting_basic.err_general l
                         ("Undefined value at unsupported type " ^ string_of_typ typ))
 
+(* Used for constant propagation in pattern matches *)
 type 'a matchresult =
   | DoesMatch of 'a
   | DoesNotMatch
   | GiveUp
-
-let can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases =
-  let rec findpat_generic check_pat description = function
-    | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
-               ("Failed to find a case for " ^ description); None)
-    | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
-    | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
-       findpat_generic check_pat description ((Pat_aux (Pat_exp (p,exp),ann))::tl)
-    | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
-        when pat_id_is_variable env id' ->
-       Some (exp, [(id', exp0)], [])
-    | (Pat_aux (Pat_when _,_))::_ -> None
-    | (Pat_aux (Pat_exp (p,exp),_))::tl ->
-       match check_pat p with
-       | DoesNotMatch -> findpat_generic check_pat description tl
-       | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
-       | GiveUp -> None
-  in
-  match e with
-  | E_id id ->
-     (match Env.lookup_id id env with
-     | Enum _ ->
-        let checkpat = function
-          | P_aux (P_id id',_)
-          | P_aux (P_app (id',[]),_) ->
-             if Id.compare id id' = 0 then DoesMatch ([],[]) else DoesNotMatch
-          | P_aux (_,(l',_)) ->
-             (Reporting_basic.print_err false true l' "Monomorphisation"
-                "Unexpected kind of pattern for enumeration"; GiveUp)
-        in findpat_generic checkpat (string_of_id id) cases
-     | _ -> None)
-  | E_lit (L_aux (lit_e, lit_l)) ->
-     let checkpat = function
-       | P_aux (P_lit (L_aux (lit_p, _)),_) ->
-          if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
-       | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
-          begin
-            match lit_e with
-            | L_num i ->
-               DoesMatch ([id, E_aux (e,(l,annot))],
-                          [kid,Nexp_aux (Nexp_constant i,Unknown)])
-            (* For undefined we fix the type-level size (because there's no good
-               way to construct an undefined size), but leave the term as undefined
-               to make the meaning clear. *)
-            | L_undef ->
-               let nexp = fabricate_nexp l annot in
-               let typ = subst_src_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
-               DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,None))),(l,None))],
-                          [kid,nexp])
-            | _ ->
-               (Reporting_basic.print_err false true lit_l "Monomorphisation"
-                  "Unexpected kind of literal for var match"; GiveUp)
-          end
-       | P_aux (_,(l',_)) ->
-          (Reporting_basic.print_err false true l' "Monomorphisation"
-             "Unexpected kind of pattern for literal"; GiveUp)
-     in findpat_generic checkpat "literal" cases
-  | _ -> None
-
-let can_match exp cases =
-  let env = Type_check.env_of exp in
-  can_match_with_env env exp cases
 
 (* Remove top-level casts from an expression.  Useful when we need to look at
    subexpressions to reduce something, but could break type-checking if we used
@@ -971,7 +912,7 @@ let split_defs splits defs =
        re (E_field (e',id)) assigns
     | E_case (e,cases) ->
        let e',assigns = const_prop_exp substs assigns e in
-       (match can_match e' cases with
+       (match can_match e' cases substs assigns with
        | None ->
           let assigned_in =
             List.fold_left (fun vs pe -> IdSet.union vs (assigned_vars_in_pexp pe))
@@ -995,7 +936,7 @@ let split_defs splits defs =
               re (E_let (LB_aux (LB_val (p,e'), annot),
                          e2')) assigns in
             if is_value e' && not (is_value e) then
-              match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] with
+              match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] substs assigns with
               | None -> plain ()
               | Some (e'',bindings,kbindings) ->
                  let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
@@ -1105,12 +1046,96 @@ let split_defs splits defs =
          let cases = List.map (function
            | FCL_aux (FCL_Funcl (_,pat,exp), ann) -> Pat_aux (Pat_exp (pat,exp),ann))
            fcls in
-         match can_match_with_env env arg cases with
+         match can_match_with_env env arg cases Bindings.empty Bindings.empty with
          | Some (exp,bindings,kbindings) ->
             let substs = bindings_from_list bindings in
             let result,_ = const_prop_exp substs Bindings.empty exp in
             if is_value result then Some result else None
          | None -> None
+
+  and can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases substs assigns =
+    let rec findpat_generic check_pat description assigns = function
+      | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
+                 ("Failed to find a case for " ^ description); None)
+      | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
+      | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
+         findpat_generic check_pat description assigns ((Pat_aux (Pat_exp (p,exp),ann))::tl)
+      | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tlx
+          when pat_id_is_variable env id' ->
+         Some (exp, [(id', exp0)], [])
+      | (Pat_aux (Pat_when (P_aux (P_id id',_),guard,exp),_))::tl
+          when pat_id_is_variable env id' -> begin
+            let substs = Bindings.add id' exp0 substs in
+            let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
+            match guard with
+            | E_lit (L_aux (L_true,_)) -> Some (exp,[(id',exp0)],[])
+            | E_lit (L_aux (L_false,_)) -> findpat_generic check_pat description assigns tl
+            | _ -> None
+          end
+      | (Pat_aux (Pat_when (p,guard,exp),_))::tl -> begin
+        match check_pat p with
+        | DoesNotMatch -> findpat_generic check_pat description assigns tl
+        | DoesMatch (vsubst,ksubst) -> begin
+          let guard = nexp_subst_exp (kbindings_from_list ksubst) guard in
+          let substs = bindings_union substs (bindings_from_list vsubst) in
+          let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
+          match guard with
+          | E_lit (L_aux (L_true,_)) -> Some (exp,vsubst,ksubst)
+          | E_lit (L_aux (L_false,_)) -> findpat_generic check_pat description assigns tl
+          | _ -> None
+        end
+        | GiveUp -> None
+      end
+      | (Pat_aux (Pat_exp (p,exp),_))::tl ->
+         match check_pat p with
+         | DoesNotMatch -> findpat_generic check_pat description assigns tl
+         | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
+         | GiveUp -> None
+    in
+    match e with
+    | E_id id ->
+       (match Env.lookup_id id env with
+       | Enum _ ->
+          let checkpat = function
+            | P_aux (P_id id',_)
+            | P_aux (P_app (id',[]),_) ->
+               if Id.compare id id' = 0 then DoesMatch ([],[]) else DoesNotMatch
+            | P_aux (_,(l',_)) ->
+               (Reporting_basic.print_err false true l' "Monomorphisation"
+                  "Unexpected kind of pattern for enumeration"; GiveUp)
+          in findpat_generic checkpat (string_of_id id) assigns cases
+       | _ -> None)
+    | E_lit (L_aux (lit_e, lit_l)) ->
+       let checkpat = function
+         | P_aux (P_lit (L_aux (lit_p, _)),_) ->
+            if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
+         | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
+            begin
+              match lit_e with
+              | L_num i ->
+                 DoesMatch ([id, E_aux (e,(l,annot))],
+                            [kid,Nexp_aux (Nexp_constant i,Unknown)])
+              (* For undefined we fix the type-level size (because there's no good
+                 way to construct an undefined size), but leave the term as undefined
+                 to make the meaning clear. *)
+              | L_undef ->
+                 let nexp = fabricate_nexp l annot in
+                 let typ = subst_src_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+                 DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,None))),(l,None))],
+                            [kid,nexp])
+              | _ ->
+                 (Reporting_basic.print_err false true lit_l "Monomorphisation"
+                    "Unexpected kind of literal for var match"; GiveUp)
+            end
+         | P_aux (_,(l',_)) ->
+            (Reporting_basic.print_err false true l' "Monomorphisation"
+               "Unexpected kind of pattern for literal"; GiveUp)
+       in findpat_generic checkpat "literal" assigns cases
+    | _ -> None
+
+  and can_match exp =
+    let env = Type_check.env_of exp in
+    can_match_with_env env exp
   in
 
   let subst_exp substs exp =
@@ -1917,7 +1942,7 @@ let deps_of_uvar kid_deps arg_deps = function
    and dependencies on mutable variables.  The latter are quite conservative,
    we currently drop variables assigned inside loops, for example. *)
 
-let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
+let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
   let remove_assigns es message =
     let assigned =
         List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
@@ -1929,7 +1954,7 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
   in
   let non_det es =
     let assigns = remove_assigns es " assigned in non-deterministic expressions" in
-    let deps, _, rs = split3 (List.map (analyse_exp env assigns) es) in
+    let deps, _, rs = split3 (List.map (analyse_exp fn_id env assigns) es) in
     (deps, assigns, List.fold_left merge empty rs)
   in
   let merge_deps deps =
@@ -1939,9 +1964,9 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
     | E_block es ->
        let rec aux assigns = function
          | [] -> (dempty, assigns, empty)
-         | [e] -> analyse_exp env assigns e
+         | [e] -> analyse_exp fn_id env assigns e
          | e::es ->
-            let _, assigns, r' = analyse_exp env assigns e in
+            let _, assigns, r' = analyse_exp fn_id env assigns e in
             let d, assigns, r = aux assigns es in
             d, assigns, merge r r'
        in
@@ -1964,28 +1989,37 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
                   Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
        end
     | E_lit _ -> (env.control_deps,assigns,empty)
-    | E_cast (_,e) -> analyse_exp env assigns e
+    | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
        let kid_inst = instantiation_of exp in
+       (* Change kids in instantiation to the canonical ones from the type signature *)
+       let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
        let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
-       let r' = { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
+       let r' =
+       if Id.compare fn_id id == 0 then
+         let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
+         let deps = List.map (fun _ -> bad) deps in
+         let kid_deps = KBindings.map (fun _ -> bad) kid_deps in
+         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) }
+       else
+         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
      (merge_deps deps, assigns, merge r r')
     | E_tuple es
     | E_list es ->
        let deps, assigns, r = non_det es in
        (merge_deps deps, assigns, r)
     | E_if (e1,e2,e3) ->
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
        let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp env' assigns e2 in
-       let d3,a3,r3 = analyse_exp env' assigns e3 in
+       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
+       let d3,a3,r3 = analyse_exp fn_id env' assigns e3 in
        (dmerge d2 d3, dep_bindings_merge a2 a3, merge r1 (merge r2 r3))
     | E_loop (_,e1,e2) ->
        let assigns = remove_assigns [e1;e2] " assigned in a loop" in
-       let d1,a1,r1 = analyse_exp env assigns e1 in
+       let d1,a1,r1 = analyse_exp fn_id env assigns e1 in
        let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp env' assigns e2 in
+       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
      (dempty, assigns, merge r1 r2)
     | E_for (var,efrom,eto,eby,ord,body) ->
        let d1,assigns,r1 = non_det [efrom;eto;eby] in
@@ -1995,7 +2029,7 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        let env' = { env with
          control_deps = d;
          kid_deps = KBindings.add loop_kid d env.kid_deps} in
-       let d2,a2,r2 = analyse_exp env' assigns body in
+       let d2,a2,r2 = analyse_exp fn_id env' assigns body in
        (dempty, assigns, merge r1 r2)
     | E_vector es ->
        let ds, assigns, r = non_det es in
@@ -2020,18 +2054,18 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det (e::es) in
        (merge_deps ds, assigns, r)
-    | E_field (e,_) -> analyse_exp env assigns e
+    | E_field (e,_) -> analyse_exp fn_id env assigns e
     | E_case (e,cases) ->
-       let deps,assigns,r = analyse_exp env assigns e in
+       let deps,assigns,r = analyse_exp fn_id env assigns e in
        let analyse_case (Pat_aux (pexp,_)) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env deps pat in
-            analyse_exp env assigns e1
+            analyse_exp fn_id env assigns e1
          | Pat_when (pat,e1,e2) ->
             let env = update_env env deps pat in
-            let d1,assigns,r1 = analyse_exp env assigns e1 in
-            let d2,assigns,r2 = analyse_exp env assigns e2 in
+            let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+            let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_case cases) in
@@ -2039,40 +2073,40 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
         List.fold_left dep_bindings_merge Bindings.empty assigns,
         List.fold_left merge r rs)
     | E_let (LB_aux (LB_val (pat,e1),_),e2) ->
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
        let env = update_env env d1 pat in
-       let d2,assigns,r2 = analyse_exp env assigns e2 in
+       let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
        (d2,assigns,merge r1 r2)
     | E_assign (lexp,e1) ->
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
-       let assigns,r2 = analyse_lexp env assigns d1 lexp in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+       let assigns,r2 = analyse_lexp fn_id env assigns d1 lexp in
        (dempty, assigns, merge r1 r2)
     | E_sizeof nexp ->
        (deps_of_nexp env.kid_deps [] nexp, assigns, empty)
     | E_return e
     | E_exit e
     | E_throw e ->
-       let _, _, r = analyse_exp env assigns e in
+       let _, _, r = analyse_exp fn_id env assigns e in
        (Unknown (l,"non-local flow"), Bindings.empty, r)
     | E_try (e,cases) ->
-       let deps,_,r = analyse_exp env assigns e in
+       let deps,_,r = analyse_exp fn_id env assigns e in
        let assigns = remove_assigns [e] " assigned in try expression" in
        let analyse_handler (Pat_aux (pexp,_)) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
-            analyse_exp env assigns e1
+            analyse_exp fn_id env assigns e1
          | Pat_when (pat,e1,e2) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
-            let d1,assigns,r1 = analyse_exp env assigns e1 in
-            let d2,assigns,r2 = analyse_exp env assigns e2 in
+            let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+            let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_handler cases) in
        (merge_deps (deps::ds),
         List.fold_left dep_bindings_merge Bindings.empty assigns,
         List.fold_left merge r rs)
-    | E_assert (e1,_) -> analyse_exp env assigns e1
+    | E_assert (e1,_) -> analyse_exp fn_id env assigns e1
 
     | E_app_infix _
     | E_internal_cast _
@@ -2088,9 +2122,9 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
        
     | E_internal_let (lexp,e1,e2) ->
        (* Really we ought to remove the assignment after e2 *)
-       let d1,assigns,r1 = analyse_exp env assigns e1 in
-       let assigns,r' = analyse_lexp env assigns d1 lexp in
-       let d2,assigns,r2 = analyse_exp env assigns e2 in
+       let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+       let assigns,r' = analyse_lexp fn_id env assigns d1 lexp in
+       let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
        (dempty, assigns, merge r1 (merge r' r2))
     | E_constraint nc ->
        (deps_of_nc env.kid_deps nc, assigns, empty)
@@ -2121,29 +2155,29 @@ let rec analyse_exp env assigns (E_aux (e,(l,annot)) as exp) =
   in (deps, assigns, r)
 
 
-and analyse_lexp env assigns deps (LEXP_aux (lexp,_)) =
+and analyse_lexp fn_id env assigns deps (LEXP_aux (lexp,_)) =
  (* TODO: maybe subexps and sublexps should be non-det (and in const_prop_lexp, too?) *)
  match lexp with
   | LEXP_id id
   | LEXP_cast (_,id) ->
      Bindings.add id deps assigns, empty
   | LEXP_memory (id,es) ->
-     let _, assigns, r = analyse_exp env assigns (E_aux (E_tuple es,(Unknown,None))) in
+     let _, assigns, r = analyse_exp fn_id env assigns (E_aux (E_tuple es,(Unknown,None))) in
      assigns, r
   | LEXP_tup lexps ->
       List.fold_left (fun (assigns,r) lexp ->
-       let assigns,r' = analyse_lexp env assigns deps lexp
+       let assigns,r' = analyse_lexp fn_id env assigns deps lexp
        in assigns,merge r r') (assigns,empty) lexps
   | LEXP_vector (lexp,e) ->
-     let _, assigns, r1 = analyse_exp env assigns e in
-     let assigns, r2 = analyse_lexp env assigns deps lexp in
+     let _, assigns, r1 = analyse_exp fn_id env assigns e in
+     let assigns, r2 = analyse_lexp fn_id env assigns deps lexp in
      assigns, merge r1 r2
   | LEXP_vector_range (lexp,e1,e2) ->
-     let _, assigns, r1 = analyse_exp env assigns e1 in
-     let _, assigns, r2 = analyse_exp env assigns e2 in
-     let assigns, r3 = analyse_lexp env assigns deps lexp in
+     let _, assigns, r1 = analyse_exp fn_id env assigns e1 in
+     let _, assigns, r2 = analyse_exp fn_id env assigns e2 in
+     let assigns, r3 = analyse_lexp fn_id env assigns deps lexp in
      assigns, merge r3 (merge r1 r2)
-  | LEXP_field (lexp,_) -> analyse_lexp env assigns deps lexp
+  | LEXP_field (lexp,_) -> analyse_lexp fn_id env assigns deps lexp
 
 
 let translate_id (Id_aux (_,l) as id) =
@@ -2232,7 +2266,7 @@ let print_result r =
 let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pat,body),_)) =
   let (tq,_) = Env.get_val_spec id tenv in
   let aenv = initial_env id tq pat in
-  let _,_,r = analyse_exp aenv Bindings.empty body in
+  let _,_,r = analyse_exp id aenv Bindings.empty body in
   let _ =
     if debug > 2 then
       (print_endline (string_of_id id);
