@@ -45,6 +45,7 @@ open Big_int
 
 let opt_file_arguments = ref ([] : string list)
 let opt_elf_threads = ref 1
+let opt_elf_entry = ref zero_big_int
 
 let options = Arg.align []
 
@@ -125,5 +126,10 @@ let load_elf () =
   match !opt_file_arguments with
   | (name :: _) ->
      let segments, e_entry = read name in
+     opt_elf_entry := e_entry;
      List.iter load_segment segments
   | [] -> ()
+
+(* The sail model can access this by externing a unit -> int function
+   as Elf_loader.elf_entry. *)
+let elf_entry () = !opt_elf_entry

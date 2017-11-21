@@ -12,7 +12,7 @@
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "inc" "dec"
-    "barr" "depend" "rreg" "wreg" "rmem" "rmemt" "wmv" "wmvt" "eamem"
+    "barr" "depend" "rreg" "wreg" "rmem" "rmemt" "wmv" "wmvt" "eamem" "wmem"
     "exmem" "undef" "unspec" "nondet" "escape"))
 
 (defconst sail2-types
