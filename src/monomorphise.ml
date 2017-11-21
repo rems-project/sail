@@ -627,44 +627,42 @@ let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   | L_undef, _ | _, L_undef -> None
   | _ -> Some (l1 = l2)
 
-(* TODO: we should really specify which functions are equality in the prelude,
-   rather than fixing them here. *)
-let eq_fns = [Id "eq_int"; Id "eq_vec"; Id "eq_string"; Id "eq_real"]
-let neq_fns = [Id "neq_anything"]
-
-let try_app (l,ann) (Id_aux (id,_),args) =
-  let is_eq = List.mem id eq_fns in
-  let is_neq = (not is_eq) && List.mem id neq_fns in
+let try_app (l,ann) (id,args) =
   let new_l = Generated l in
-  if is_eq || is_neq then
+  let env = env_of_annot (l,ann) in
+  let get_overloads f = List.map string_of_id
+    (Env.get_overloads (Id_aux (Id f, Parse_ast.Unknown)) env @
+    Env.get_overloads (Id_aux (DeIid f, Parse_ast.Unknown)) env) in
+  let is_id f = List.mem (string_of_id id) (f :: get_overloads f) in
+  if is_id "==" || is_id "!=" then
     match args with
     | [E_aux (E_lit l1,_); E_aux (E_lit l2,_)] ->
        let lit b = if b then L_true else L_false in
-       let lit b = lit (if is_eq then b else not b) in
+       let lit b = lit (if is_id "==" then b else not b) in
        (match lit_eq l1 l2 with
        | None -> None
        | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)),(l,ann))))
     | _ -> None
-  else if id = Id "cast_bit_bool" then
+  else if is_id "cast_bit_bool" then
     match args with
     | [E_aux (E_lit L_aux (L_zero,_),_)] -> Some (E_aux (E_lit (L_aux (L_false,new_l)),(l,ann)))
     | [E_aux (E_lit L_aux (L_one ,_),_)] -> Some (E_aux (E_lit (L_aux (L_true ,new_l)),(l,ann)))
     | _ -> None
-  else if id = Id "UInt" then
+  else if is_id "UInt" then
     match args with
     | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit,_), _)] ->
        Some (E_aux (E_lit (L_aux (L_num (int_of_lit lit),new_l)),(l,ann)))
     | _ -> None
-  else if id = Id "shl_int" then
+  else if is_id "shl_int" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (i lsl j),new_l)),(l,ann)))
     | _ -> None
-  else if id = Id "ex_int" then
+  else if is_id "ex_int" then
     match args with
     | [E_aux (E_lit lit,(l,_))] -> Some (E_aux (E_lit lit,(l,ann)))
     | _ -> None
-  else if id = Id "vector_access" || id = Id "bitvector_access" then
+  else if is_id "vector_access" || is_id "bitvector_access" then
     match args with
     | [E_aux (E_lit L_aux ((L_hex _ | L_bin _) as lit,_),_);
        E_aux (E_lit L_aux (L_num i,_),_)] ->
@@ -1562,7 +1560,7 @@ and sizes_of_typarg (Typ_arg_aux (ta,_)) =
 
 let sizes_of_annot = function
   | _,None -> KidSet.empty
-  | _,Some (_,typ,_) -> sizes_of_typ typ
+  | _,Some (env,typ,_) -> sizes_of_typ (Env.base_typ_of env typ)
 
 let change_parameter_pat kid = function
   | P_aux (P_id var, (l,_))
@@ -1598,6 +1596,9 @@ let replace_with_the_value (E_aux (_,(l,_)) as exp) =
                       [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp nexp',_)]),_)
     when nexp = nexp' ->
      mk_exp nexp l l'
+  | Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                      [Typ_arg_aux (Typ_arg_nexp nexp,l')]),_) ->
+     mk_exp nexp l l'
   | _ -> raise (Reporting_basic.err_unreachable l
                   "atom stopped being an atom?")
 
@@ -1606,6 +1607,10 @@ let replace_type env typ =
   match t with
   | Typ_app (Id_aux (Id "range",_),
              [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp _,_)]) ->
+     Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
+                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
+  | Typ_app (Id_aux (Id "atom",_),
+                      [Typ_arg_aux (Typ_arg_nexp nexp,l')]) ->
      Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
                        [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
   | _ -> raise (Reporting_basic.err_unreachable l
@@ -1642,6 +1647,9 @@ let rewrite_size_parameters env (Defs defs) =
                              [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_);
                               Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_) ->
               if Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 then Some kid else None
+          | Typ_aux (Typ_app(Id_aux (Id "atom", _),
+                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]), _) ->
+              if Kid.compare kid kid' = 0 then Some kid else None
           | _ -> None
         in match findi check parameters with
         | None -> raise (Reporting_basic.err_general l
