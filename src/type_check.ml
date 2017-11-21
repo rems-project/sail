@@ -1989,6 +1989,7 @@ let strip_lexp : 'a lexp -> unit lexp = function lexp -> map_lexp_annot (fun (l,
 
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
+  let add_effect (E_aux (exp, (l, Some (env, typ, _)))) eff = E_aux (exp, (l, Some (env, typ, eff))) in
   let annot_exp exp typ = annot_exp_effect exp typ no_effect in
   match (exp_aux, typ_aux) with
   | E_block exps, _ ->
@@ -2002,7 +2003,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          | ((E_aux (E_assert (E_aux (E_constraint nc, _), assert_msg), _) as exp) :: exps) ->
             typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
             let inferred_exp = irule infer_exp env exp in
-            inferred_exp :: check_block l (Env.add_constraint nc env) exps typ
+            add_effect inferred_exp (mk_effect [BE_escape]) :: check_block l (Env.add_constraint nc env) exps typ
          | ((E_aux (E_assert (constr_exp, assert_msg), _) as exp) :: exps) ->
             begin
               try
@@ -2013,7 +2014,11 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
                 let texp = annot_exp_effect (E_assert (cexp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
                 texp :: check_block l (Env.add_constraint nc env) exps typ
               with
-              | Not_a_constraint -> check_block l env exps typ
+              | Not_a_constraint ->
+                 let constr_exp = crule check_exp env constr_exp bool_typ in
+                 let checked_msg = crule check_exp env assert_msg string_typ in
+                 let texp = annot_exp_effect (E_assert (constr_exp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
+                 texp :: check_block l env exps typ
             end
          | (exp :: exps) ->
             let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
