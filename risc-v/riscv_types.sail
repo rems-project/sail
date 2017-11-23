@@ -143,12 +143,12 @@ val extern unit -> unit effect { barr } MEM_fence_rw_w
 val extern unit -> unit effect { barr } MEM_fence_w_w
 val extern unit -> unit effect { barr } MEM_fence_i
 
-typedef uop = enumerate {LUI; AUIPC} (* upper immediate ops *)
-typedef bop = enumerate {BEQ; BNE; BLT; BGE; BLTU; BGEU} (* branch ops *)
-typedef iop = enumerate {ADDI; SLTI; SLTIU; XORI; ORI; ANDI} (* immediate ops *)
-typedef sop = enumerate {SLLI; SRLI; SRAI} (* shift ops *)
-typedef rop = enumerate {ADD; SUB; SLL; SLT; SLTU; XOR; SRL; SRA; OR; AND} (* reg-reg ops *)
-typedef ropw = enumerate {ADDW; SUBW; SLLW; SRLW; SRAW} (* reg-reg 32-bit ops *)
+typedef uop = enumerate {RISCV_LUI; RISCV_AUIPC} (* upper immediate ops *)
+typedef bop = enumerate {RISCV_BEQ; RISCV_BNE; RISCV_BLT; RISCV_BGE; RISCV_BLTU; RISCV_BGEU} (* branch ops *)
+typedef iop = enumerate {RISCV_ADDI; RISCV_SLTI; RISCV_SLTIU; RISCV_XORI; RISCV_ORI; RISCV_ANDI} (* immediate ops *)
+typedef sop = enumerate {RISCV_SLLI; RISCV_SRLI; RISCV_SRAI} (* shift ops *)
+typedef rop = enumerate {RISCV_ADD; RISCV_SUB; RISCV_SLL; RISCV_SLT; RISCV_SLTU; RISCV_XOR; RISCV_SRL; RISCV_SRA; RISCV_OR; RISCV_AND} (* reg-reg ops *)
+typedef ropw = enumerate {RISCV_ADDW; RISCV_SUBW; RISCV_SLLW; RISCV_SRLW; RISCV_SRAW} (* reg-reg 32-bit ops *)
 typedef amoop = enumerate {AMOSWAP; AMOADD; AMOXOR; AMOAND; AMOOR;
     AMOMIN; AMOMAX; AMOMINU; AMOMAXU} (* AMO ops *)
 
