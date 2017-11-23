@@ -1154,6 +1154,10 @@ let split_defs splits defs =
                ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v))
     in
     match ty with
+    | Typ_id (Id_aux (Id "bool",_)) ->
+       [P_aux (P_lit (L_aux (L_true,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_true,new_l)),(new_l,annot))];
+        P_aux (P_lit (L_aux (L_false,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_false,new_l)),(new_l,annot))]]
+
     | Typ_id id ->
        (try
          (* enumerations *)
@@ -1168,6 +1172,7 @@ let split_defs splits defs =
               [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))])
               [L_zero; L_one]
          | _ -> cannot ())
+
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
