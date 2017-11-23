@@ -20,11 +20,11 @@ function clause execute (UTYPE(imm, rd, op)) =
     wGPR(rd, ret)
 
 (********************************************************************)
-union ast member ((bit[21]), regno) JAL
+union ast member ((bit[21]), regno) RISCV_JAL
 
-function clause decode ((bit[20]) imm : (regno) rd : 0b1101111) = Some (JAL(imm[19] : imm[7..0] : imm[8] : imm[18..13] : imm[12..9] : 0b0, rd))
+function clause decode ((bit[20]) imm : (regno) rd : 0b1101111) = Some (RISCV_JAL(imm[19] : imm[7..0] : imm[8] : imm[18..13] : imm[12..9] : 0b0, rd))
 
-function clause execute (JAL(imm, rd)) = {
+function clause execute (RISCV_JAL(imm, rd)) = {
     (bit[64]) pc := PC;
     wGPR(rd, pc + 4);
     (bit[64]) offset := EXTS(imm);
@@ -32,12 +32,12 @@ function clause execute (JAL(imm, rd)) = {
 }
 
 (********************************************************************)
-union ast member((bit[12]), regno, regno) JALR
+union ast member((bit[12]), regno, regno) RISCV_JALR
 
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b1100111) =
-    Some(JALR(imm, rs1, rd))
+    Some(RISCV_JALR(imm, rs1, rd))
 
-function clause execute (JALR(imm, rs1, rd)) = {
+function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     (* write rd before anything else to prevent unintended strength *)
     wGPR(rd, PC + 4);
     (bit[64]) newPC := rGPR(rs1) + EXTS(imm);

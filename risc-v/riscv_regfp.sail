@@ -20,12 +20,12 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
      case (UTYPE ( imm, rd, op)) -> {
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
      }
-     case (JAL ( imm, rd)) -> {
+     case (RISCV_JAL ( imm, rd)) -> {
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
             let (bit[64]) offset = EXTS(imm) in
             Nias := [|| NIAFP_concrete_address (PC + offset) ||]
      }
-     case (JALR ( imm, rs, rd)) -> {
+     case (RISCV_JALR ( imm, rs, rd)) -> {
             if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
             let (bit[64]) offset = EXTS(imm) in

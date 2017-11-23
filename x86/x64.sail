@@ -147,7 +147,7 @@ typedef base = const union {
 typedef scale_index = (bit[2],regn)
 
 typedef rm = const union {
-  regn                             Reg;
+  regn                             X86_Reg;
   (option<scale_index>,base,qword) Mem;
 }
 
@@ -167,10 +167,11 @@ typedef bit_offset = const union {
   (rm, regn)  Bit_rm_r;
 }
 
-typedef monop_name = enumerate { Dec; Inc; Not; Neg }
+typedef monop_name = enumerate { X86_Dec; X86_Inc; X86_Not; X86_Neg }
 
 typedef binop_name = enumerate {
-  Add; Or; Adc; Sbb; And; Sub; Xor; Cmp; Rol; Ror; Rcl; Rcr; Shl; Shr; Test; Sar
+  X86_Add; X86_Or; X86_Adc; X86_Sbb; X86_And; X86_Sub; X86_Xor; X86_Cmp;
+  X86_Rol; X86_Ror; X86_Rcl; X86_Rcr; X86_Shl; X86_Shr; X86_Test; X86_Sar;
 }
 
 typedef bitop_name = enumerate { Bts; Btc; Btr }
@@ -178,47 +179,48 @@ typedef bitop_name = enumerate { Bts; Btc; Btr }
 function binop_name opc_to_binop_name ((bit[4]) opc) =
   switch opc
   {
-    case 0x0 -> Add
-    case 0x1 -> Or
-    case 0x2 -> Adc
-    case 0x3 -> Sbb
-    case 0x4 -> And
-    case 0x5 -> Sub
-    case 0x6 -> Xor
-    case 0x7 -> Cmp
-    case 0x8 -> Rol
-    case 0x9 -> Ror
-    case 0xa -> Rcl
-    case 0xb -> Rcr
-    case 0xc -> Shl
-    case 0xd -> Shr
-    case 0xe -> Test
-    case 0xf -> Sar
+    case 0x0 -> X86_Add
+    case 0x1 -> X86_Or
+    case 0x2 -> X86_Adc
+    case 0x3 -> X86_Sbb
+    case 0x4 -> X86_And
+    case 0x5 -> X86_Sub
+    case 0x6 -> X86_Xor
+    case 0x7 -> X86_Cmp
+    case 0x8 -> X86_Rol
+    case 0x9 -> X86_Ror
+    case 0xa -> X86_Rcl
+    case 0xb -> X86_Rcr
+    case 0xc -> X86_Shl
+    case 0xd -> X86_Shr
+    case 0xe -> X86_Test
+    case 0xf -> X86_Sar
   }
 
 typedef cond = enumerate {
-  O; NO; B; NB; E; NE; NA; A; S; NS; P; NP; L; NL; NG; G; ALWAYS
+  X86_O; X86_NO; X86_B; X86_NB; X86_E; X86_NE; X86_NA; X86_A; X86_S;
+  X86_NS; X86_P; X86_NP; X86_L; X86_NL; X86_NG; X86_G; X86_ALWAYS;
 }
 
 function cond bv_to_cond ((bit[4]) v) =
   switch v
   {
-    case 0x0 -> O
-    case 0x1 -> NO
-    case 0x2 -> B
-    case 0x3 -> NB
-    case 0x4 -> E
-    case 0x5 -> NE
-    case 0x6 -> NA
-    case 0x7 -> A
-    case 0x8 -> S
-    case 0x9 -> NS
-    case 0xa -> P
-    case 0xb -> NP
-    case 0xc -> L
-    case 0xd -> NL
-    case 0xe -> NG
-    case 0xf -> G
+    case 0x0 -> X86_O
+    case 0x1 -> X86_NO
+    case 0x2 -> X86_B
+    case 0x3 -> X86_NB
+    case 0x4 -> X86_E
+    case 0x5 -> X86_NE
+    case 0x6 -> X86_NA
+    case 0x7 -> X86_A
+    case 0x8 -> X86_S
+    case 0x9 -> X86_NS
+    case 0xa -> X86_P
+    case 0xb -> X86_NP
+    case 0xc -> X86_L
+    case 0xd -> X86_NL
+    case 0xe -> X86_NG
+    case 0xf -> X86_G
   }
 
 (* Effective addresses *)
@@ -248,7 +250,7 @@ function qword ea_base ((base) b) =
 
 function ea ea_rm ((wsize) sz, (rm) r) =
   switch r {
-    case (Reg(n)) -> Ea_r (sz, n)
+    case (X86_Reg(n))     -> Ea_r (sz, n)
     case (Mem(idx, b, d)) -> Ea_m (sz, ea_index(idx) + (qword) (ea_base(b) + d))
   }
 
@@ -509,22 +511,22 @@ function qword sar ((wsize) sz, (qword) a, (qword) b) =
 
 function unit write_binop ((bool) locked, (wsize) sz, (binop_name) bop, (qword) a, (qword) b, (ea) e) =
   switch bop {
-    case Add -> let (w,c,x) = add_with_carry_out (sz, a, b) in
+    case X86_Add -> let (w,c,x) = add_with_carry_out (sz, a, b) in
                 write_arith_result (locked, sz, w, c, x, e)
-    case Sub -> let (w,c,x) = sub_with_borrow (sz, a, b) in
+    case X86_Sub -> let (w,c,x) = sub_with_borrow (sz, a, b) in
                 write_arith_result (locked, sz, w, c, x, e)
-    case Cmp -> let (w,c,x) = sub_with_borrow (sz, a, b) in
+    case X86_Cmp -> let (w,c,x) = sub_with_borrow (sz, a, b) in
                 write_arith_eflags (sz, w, c, x)
-    case Test -> write_logical_eflags (sz, a & b)
-    case And -> write_logical_result (locked, sz, a & b, e) (* XXX rmn30 wrong flags? *)
-    case Xor -> write_logical_result (locked, sz, a ^ b, e)
-    case Or  -> write_logical_result (locked, sz, a | b, e)
-    case Rol -> write_result_erase_eflags (locked, rol (sz, a, b), e)
-    case Ror -> write_result_erase_eflags (locked, ror (sz, a, b), e)
-    case Sar -> write_result_erase_eflags (locked, sar (sz, a, b), e)
-    case Shl -> write_result_erase_eflags (locked, a << mask_shift (sz, b), e)
-    case Shr -> write_result_erase_eflags (locked, a >> mask_shift (sz, b), e)
-    case Adc ->
+    case X86_Test -> write_logical_eflags (sz, a & b)
+    case X86_And -> write_logical_result (locked, sz, a & b, e) (* XXX rmn30 wrong flags? *)
+    case X86_Xor -> write_logical_result (locked, sz, a ^ b, e)
+    case X86_Or  -> write_logical_result (locked, sz, a | b, e)
+    case X86_Rol -> write_result_erase_eflags (locked, rol (sz, a, b), e)
+    case X86_Ror -> write_result_erase_eflags (locked, ror (sz, a, b), e)
+    case X86_Sar -> write_result_erase_eflags (locked, sar (sz, a, b), e)
+    case X86_Shl -> write_result_erase_eflags (locked, a << mask_shift (sz, b), e)
+    case X86_Shr -> write_result_erase_eflags (locked, a >> mask_shift (sz, b), e)
+    case X86_Adc ->
       {
         let carry = (bit) CF in
         let (qword) result = a + (qword) (b + carry) in
@@ -534,7 +536,7 @@ function unit write_binop ((bool) locked, (wsize) sz, (binop_name) bop, (qword) 
           write_arith_result_no_CF_OF (locked, sz, result, e);
         }
       }
-    case Sbb ->
+    case X86_Sbb ->
       {
         let carry = (bit) CF in
         let (qword) result = a - (qword) (b + carry) in
@@ -549,33 +551,33 @@ function unit write_binop ((bool) locked, (wsize) sz, (binop_name) bop, (qword) 
 
 function unit write_monop ((bool) locked, (wsize) sz, (monop_name) mop, (qword) a, (ea) e) =
   switch mop {
-    case Not -> wEA(locked, e) := ~(a)
-    case Dec -> write_arith_result_no_CF_OF (locked, sz, a - 1, e) 
-    case Inc -> write_arith_result_no_CF_OF (locked, sz, a + 1, e)(* XXX rmn30 should set OF *)
-    case Neg -> { write_arith_result_no_CF_OF (locked, sz, 0 - a, e);
-                  CF := undefined;
-                }
+    case X86_Not -> wEA(locked, e) := ~(a)
+    case X86_Dec -> write_arith_result_no_CF_OF (locked, sz, a - 1, e)
+    case X86_Inc -> write_arith_result_no_CF_OF (locked, sz, a + 1, e)(* XXX rmn30 should set OF *)
+    case X86_Neg -> { write_arith_result_no_CF_OF (locked, sz, 0 - a, e);
+                      CF := undefined;
+                    }
   }
 
 function bool read_cond ((cond) c) =
   switch c {
-    case A  -> ~(CF) & ~(ZF)
-    case NB -> ~(CF)
-    case B  -> CF
-    case NA -> CF | (bit) ZF
-    case E  -> ZF
-    case G  -> ~(ZF) & (SF == OF)
-    case NL -> SF == OF
-    case L  -> SF != OF
-    case NG -> ZF | SF != OF
-    case NE -> ~(ZF)
-    case NO -> ~(OF)
-    case NP -> ~(PF)
-    case NS -> ~(SF)
-    case O  -> OF
-    case P  -> PF
-    case S  -> SF
-    case ALWAYS -> true
+    case X86_A  -> ~(CF) & ~(ZF)
+    case X86_NB -> ~(CF)
+    case X86_B  -> CF
+    case X86_NA -> CF | (bit) ZF
+    case X86_E  -> ZF
+    case X86_G  -> ~(ZF) & (SF == OF)
+    case X86_NL -> SF == OF
+    case X86_L  -> SF != OF
+    case X86_NG -> ZF | SF != OF
+    case X86_NE -> ~(ZF)
+    case X86_NO -> ~(OF)
+    case X86_NP -> ~(PF)
+    case X86_NS -> ~(SF)
+    case X86_O  -> OF
+    case X86_P  -> PF
+    case X86_S  -> SF
+    case X86_ALWAYS -> true
   }
 
 function qword pop_aux () =
@@ -677,7 +679,7 @@ function clause execute (CMPXCHG (locked, sz,r,n)) =
   let val_dst = EA(locked, dst) in
   let val_acc = EA(false, acc) in
   {
-    write_binop (locked, sz, Cmp, val_acc, val_dst, src); 
+    write_binop (locked, sz, X86_Cmp, val_acc, val_dst, src);
     if val_acc == val_dst then
       wEA(locked, dst) := EA (false, src)
     else {
@@ -692,9 +694,9 @@ function clause execute (CMPXCHG (locked, sz,r,n)) =
       DIV
    ========================================================================== *)
 
-union ast member (wsize,rm) DIV
+union ast member (wsize,rm) X86_DIV
 
-function clause execute (DIV (sz,r)) =
+function clause execute (X86_DIV (sz,r)) =
   let w = (int) (value_width(sz)) in
   let eax = Ea_r(sz, 0) in (* RAX *)
   let edx = Ea_r(sz, 2) in (* RDX *)
@@ -756,7 +758,7 @@ union ast member unit LEAVE
 function clause execute LEAVE =
 {
   RSP := RBP;
-  pop (Reg (5)); (* RBP *)
+  pop (X86_Reg (5)); (* RBP *)
 }
 
 (* ==========================================================================
@@ -828,9 +830,9 @@ function clause execute (MOVZX (sz1,ds,sz2)) =
       MUL
    ========================================================================== *)
 
-union ast member (wsize,rm) MUL
+union ast member (wsize,rm) X86_MUL
 
-function clause execute (MUL (sz,r)) =
+function clause execute (X86_MUL (sz,r)) =
   let eax = Ea_r (sz, 0) in (* RAX *)
   let val_eax = EA(false, eax) in
   let val_src = EA(false, ea_rm (sz, r)) in
@@ -911,7 +913,7 @@ function clause execute (XADD (locked,sz,r,n)) =
   let val_dst = EA(locked, dst) in
   {
     wEA(false, src) := val_dst;
-    write_binop (locked, sz, Add, val_src, val_dst, dst);
+    write_binop (locked, sz, X86_Add, val_src, val_dst, dst);
   }
 
 (* ==========================================================================
@@ -1326,7 +1328,7 @@ function (regfps) regfp_idx ((option<scale_index>) idx) =
 
 function (bool, regfps, regfps) regfp_rm ((rm) r) =
   switch r {
-    case (Reg(n)) -> 
+    case (X86_Reg(n)) ->
        (false, [|| RFull(GPRstr[n]) ||], [|| ||])
     case (Mem(idx, b, d)) -> {
        (true, [|| ||], append(regfp_idx(idx), regfp_base(b)))
@@ -1374,40 +1376,40 @@ let all_flags = append([|| RFull("CF"), RFull("OF") ||], all_flags_but_cf_of)
 
 function (regfps) regfp_binop_flags ((binop_name) op) = 
   switch (op) {
-    case Add -> all_flags
-    case Sub -> all_flags
-    case Cmp -> all_flags
-    case Test -> all_flags_but_cf_of
-    case And -> all_flags_but_cf_of
-    case Xor -> all_flags_but_cf_of
-    case Or  -> all_flags_but_cf_of
-    case Rol -> all_flags
-    case Ror -> all_flags
-    case Sar -> all_flags
-    case Shl -> all_flags
-    case Shr -> all_flags
-    case Adc -> all_flags
-    case Sbb -> all_flags
+    case X86_Add -> all_flags
+    case X86_Sub -> all_flags
+    case X86_Cmp -> all_flags
+    case X86_Test -> all_flags_but_cf_of
+    case X86_And -> all_flags_but_cf_of
+    case X86_Xor -> all_flags_but_cf_of
+    case X86_Or  -> all_flags_but_cf_of
+    case X86_Rol -> all_flags
+    case X86_Ror -> all_flags
+    case X86_Sar -> all_flags
+    case X86_Shl -> all_flags
+    case X86_Shr -> all_flags
+    case X86_Adc -> all_flags
+    case X86_Sbb -> all_flags
   }
 function (regfps) regfp_cond ((cond) c) =
   switch c {
-    case A  -> [|| RFull("CF"), RFull("ZF") ||]
-    case NB -> [|| RFull("CF") ||]
-    case B  -> [|| RFull("CF") ||]
-    case NA -> [|| RFull("CF"), RFull("ZF") ||]
-    case E  -> [|| RFull("ZF") ||]
-    case G  -> [|| RFull("ZF"), RFull("SF"), RFull("OF") ||]
-    case NL -> [|| RFull("SF"), RFull("OF") ||]
-    case L  -> [|| RFull("SF"), RFull("OF") ||]
-    case NG -> [|| RFull("ZF"), RFull("SF"), RFull("OF") ||]
-    case NE -> [|| RFull("ZF") ||]
-    case NO -> [|| RFull("OF") ||]
-    case NP -> [|| RFull("PF") ||]
-    case NS -> [|| RFull("SF") ||]
-    case O  -> [|| RFull("OF") ||]
-    case P  -> [|| RFull("PF") ||]
-    case S  -> [|| RFull("SF") ||]
-    case ALWAYS -> [|| ||]
+    case X86_A  -> [|| RFull("CF"), RFull("ZF") ||]
+    case X86_NB -> [|| RFull("CF") ||]
+    case X86_B  -> [|| RFull("CF") ||]
+    case X86_NA -> [|| RFull("CF"), RFull("ZF") ||]
+    case X86_E  -> [|| RFull("ZF") ||]
+    case X86_G  -> [|| RFull("ZF"), RFull("SF"), RFull("OF") ||]
+    case X86_NL -> [|| RFull("SF"), RFull("OF") ||]
+    case X86_L  -> [|| RFull("SF"), RFull("OF") ||]
+    case X86_NG -> [|| RFull("ZF"), RFull("SF"), RFull("OF") ||]
+    case X86_NE -> [|| RFull("ZF") ||]
+    case X86_NO -> [|| RFull("OF") ||]
+    case X86_NP -> [|| RFull("PF") ||]
+    case X86_NS -> [|| RFull("SF") ||]
+    case X86_O  -> [|| RFull("OF") ||]
+    case X86_P  -> [|| RFull("PF") ||]
+    case X86_S  -> [|| RFull("SF") ||]
+    case X86_ALWAYS -> [|| ||]
   }
 
 function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (instr) = {
@@ -1471,10 +1473,10 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       let (m, rs, aRs) = regfp_rm (r_m) in {
         ik := if m then IK_mem_rmw (rk, wk) else IK_simple;
         iR := RFull("RAX") :: RFull(GPRstr[reg]) :: append(rs, aRs);
-        oR := RFull("RAX") :: append(regfp_binop_flags(Cmp),  rs);
+        oR := RFull("RAX") :: append(regfp_binop_flags(X86_Cmp),  rs);
         aR := aRs;
       }
-    case(DIV    (sz, r_m)             ) ->
+    case(X86_DIV    (sz, r_m)             ) ->
       let (m, rs, ars) = regfp_rm (r_m) in {
         ik := if m then IK_mem_read (Read_plain) else IK_simple;
         iR := RFull("RAX") :: RFull("RDX") :: append(rs, ars);
@@ -1549,7 +1551,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
           oR := ors;
           aR := ars;
       }
-    case(MUL    (sz, r_m)              ) ->
+    case(X86_MUL    (sz, r_m)              ) ->
       let (m, rs, ars) = regfp_rm (r_m) in {
         ik := if m then IK_mem_read (Read_plain) else IK_simple;
         iR := RFull("RAX") :: append(rs, ars);
