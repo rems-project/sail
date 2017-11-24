@@ -539,21 +539,13 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
   | E_internal_return _ -> raise (Reporting_basic.err_unreachable l "Internal return found before it should have been introduced")
   | E_internal_plet _ -> raise (Reporting_basic.err_unreachable l " Internal plet found before it should have been introduced")
   | _ -> rewrap exp
-                           
+
 let rewrite_let rewriters (LB_aux(letbind,(l,annot))) =
-  (*let local_map = get_map_tannot annot in
-  let map =
-    match map,local_map with
-    | None,None -> None
-    | None,Some m -> Some(m, Envmap.empty)
-    | Some(m,s), None -> Some(m,s)
-    | Some(m,s), Some m' -> match merge_option_maps (Some m) local_map with
-      | None -> Some(m,s) (*Shouldn't happen*)
-      | Some new_m -> Some(new_m,s) in*)
   match letbind with
   | LB_val ( pat, exp) ->
     LB_aux(LB_val (rewriters.rewrite_pat rewriters pat,
-                            rewriters.rewrite_exp rewriters exp),(l,annot))
+                   rewriters.rewrite_exp rewriters exp),
+           (l, annot))
 
 let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   let rewrap le = LEXP_aux(le,(l,annot)) in
@@ -658,7 +650,6 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
 
-
 and fold_pat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat -> 'pat =
   function
   | P_aux (pat,annot)   -> alg.p_aux (fold_pat_aux alg pat,annot)
@@ -670,7 +661,7 @@ and fold_fpat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat -> 'f
   | FP_aux (fpat,annot) -> alg.fP_aux (fold_fpat_aux alg fpat,annot)
 
 (* identity fold from term alg to term alg *)
-let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg = 
+let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   { p_lit            = (fun lit -> P_lit lit)
   ; p_wild           = P_wild
   ; p_as             = (fun (pat,id) -> P_as (pat,id))
@@ -688,7 +679,7 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; fP_aux           = (fun (fpat,annot) -> FP_aux (fpat,annot))
   ; fP_Fpat          = (fun (id,pat) -> FP_Fpat (id,pat))
   }
-  
+
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux,'fpat,'fpat_aux) exp_alg = 
@@ -749,11 +740,11 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
   ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
   ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
-  ; lB_val          : 'pat * 'exp -> 'letbind_aux
+  ; lB_val                   : 'pat * 'exp -> 'letbind_aux
   ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
   ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
   }
-    
+
 let rec fold_exp_aux alg = function
   | E_block es -> alg.e_block (List.map (fold_exp alg) es)
   | E_nondet es -> alg.e_nondet (List.map (fold_exp alg) es)
@@ -1484,7 +1475,9 @@ let remove_vector_concat_pat pat =
          let rtyp = Env.base_typ_of (env_of_annot rannot') (typ_of_annot rannot') in
          let (start,last_idx) = (match vector_typ_args_of rtyp with
           | (Nexp_aux (Nexp_constant start,_), Nexp_aux (Nexp_constant length,_), ord, _) ->
-            (start, if is_order_inc ord then start + length - 1 else start - length + 1)
+             (start, if is_order_inc ord
+                     then sub_big_int (add_big_int start length) unit_big_int
+                     else add_big_int (sub_big_int start length) unit_big_int)
           | _ ->
             raise (Reporting_basic.err_unreachable (fst rannot')
               ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern"))) in
@@ -1493,14 +1486,15 @@ let remove_vector_concat_pat pat =
            let (_,length,ord,_) = vector_typ_args_of ctyp in
            let (pos',index_j) = match length with
              | Nexp_aux (Nexp_constant i,_) ->
-               if is_order_inc ord then (pos+i, pos+i-1)
-               else (pos-i, pos-i+1)
+                if is_order_inc ord
+                then (add_big_int pos i, sub_big_int (add_big_int pos i) unit_big_int)
+                else (sub_big_int pos i, add_big_int (sub_big_int pos i) unit_big_int)
              | Nexp_aux (_,l) ->
-                 if is_last then (pos,last_idx)
-                 else
-                 raise
-                   (Reporting_basic.err_unreachable
-                      l ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern")) in
+                if is_last then (pos,last_idx)
+                else
+                  raise
+                    (Reporting_basic.err_unreachable
+                       l ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern")) in
            (match p with
             (* if we see a named vector pattern, remove the name and remember to
               declare it later *)
@@ -1594,8 +1588,8 @@ let remove_vector_concat_pat pat =
      with vector_concats patterns as direct child-nodes anymore *)
 
   let range a b =
-    let rec aux a b = if a > b then [] else a :: aux (a+1) b in
-    if a > b then List.rev (aux b a) else aux a b in
+    let rec aux a b = if gt_big_int a b then [] else a :: aux (add_big_int a unit_big_int) b in
+    if gt_big_int a b then List.rev (aux b a) else aux a b in
 
   let remove_vector_concats =
     let p_vector_concat ps =
@@ -1609,9 +1603,9 @@ let remove_vector_concat_pat pat =
           match p, vector_typ_args_of typ with
           | P_vector ps,_ -> acc @ ps
           | _, (_,Nexp_aux (Nexp_constant length,_),_,_) ->
-             acc @ (List.map wild (range 0 (length - 1)))
+             acc @ (List.map wild (range zero_big_int (sub_big_int length unit_big_int)))
           | _, _ ->
-            (*if is_last then*) acc @ [wild 0]
+            (*if is_last then*) acc @ [wild zero_big_int]
         else raise
           (Reporting_basic.err_unreachable l
             ("remove_vector_concats: Non-vector in vector-concat pattern " ^
@@ -1936,15 +1930,15 @@ let remove_bitvector_pat pat =
 
   let test_subvec_exp rootid l typ i j lits =
     let (start, length, ord, _) = vector_typ_args_of typ in
-    let length' = nconstant (List.length lits) in
+    let length' = nint (List.length lits) in
     let start' =
-      if is_order_inc ord then nconstant 0
-      else nminus length' (nconstant 1) in
+      if is_order_inc ord then nint 0
+      else nminus length' (nint 1) in
     let typ' = vector_typ start' length' ord bit_typ in
     let subvec_exp =
       match start, length with
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
-        when s = i && l = List.length lits ->
+        when eq_big_int s i && eq_big_int l (big_int_of_int (List.length lits)) ->
         E_id rootid
       | _ ->
       (*if vec_start t = i && vec_length t = List.length lits
@@ -1988,7 +1982,7 @@ let remove_bitvector_pat pat =
     let collect_guards_decls ps rootid t =
       let (start,_,ord,_) = vector_typ_args_of t in
       let rec collect current (guards,dls) idx ps =
-        let idx' = if is_order_inc ord then idx + 1 else idx - 1 in
+        let idx' = if is_order_inc ord then add_big_int idx unit_big_int else add_big_int idx unit_big_int in
         (match ps with
           | pat :: ps' ->
             (match pat with
@@ -2717,15 +2711,15 @@ let rewrite_tuple_vector_assignments defs =
              let (_, len, _, _) = vector_typ_args_of ltyp in
              match nexp_simp len with
              | Nexp_aux (Nexp_constant len, _) -> len
-             | _ -> 1
-           else 1 in
+             | _ -> unit_big_int
+           else unit_big_int in
          let next i step =
            if is_order_inc ord
-           then (i + step - 1, i + step)
-           else (i - step + 1, i - step) in
+           then (sub_big_int (add_big_int i step) unit_big_int, add_big_int i step)
+           else (add_big_int (sub_big_int i step) unit_big_int, sub_big_int i step) in
          let i = match nexp_simp start with
          | (Nexp_aux (Nexp_constant i, _)) -> i
-         | _ -> if is_order_inc ord then 0 else List.length lexps - 1 in
+         | _ -> if is_order_inc ord then zero_big_int else big_int_of_int (List.length lexps - 1) in
          let l = gen_loc (fst annot) in
          let exp' =
            if small exp then strip_exp exp

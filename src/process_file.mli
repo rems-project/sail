@@ -67,7 +67,6 @@ val opt_auto_mono : bool ref
 type out_type =
   | Lem_ast_out
   | Lem_out of string option (* If present, the string is a file to open in the lem backend*)
-  | Ocaml_out of string option (* If present, the string is a file to open in the ocaml backend*)
 
 val output :
   string ->                           (* The path to the library *)

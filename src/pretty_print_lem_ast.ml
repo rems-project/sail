@@ -70,11 +70,11 @@ let base ppf s = fprintf ppf "%s" s
 let quot_string ppf s = fprintf ppf "\"%s\"" s
 
 let lemnum default n =
-  if 0 <= n && n <= 128 then
-    "int" ^ string_of_int n
-  else if n >= 0 then
+  if le_big_int zero_big_int n && le_big_int n (big_int_of_int 128) then
+    "int" ^ string_of_big_int n
+  else if ge_big_int n zero_big_int then
     default n
-  else ("(zero - " ^ (default (abs n)) ^ ")")
+  else ("(zero - " ^ (default (abs_big_int n)) ^ ")")
 
 let pp_format_id (Id_aux(i,_)) =
   match i with
@@ -143,7 +143,7 @@ and pp_format_nexp_lem (Nexp_aux(n,l)) =
   (match n with
    | Nexp_id(i) -> "(Nexp_id " ^ pp_format_id_lem i ^ ")"
    | Nexp_var(v) -> "(Nexp_var " ^ pp_format_var_lem v ^ ")"
-   | Nexp_constant(i) -> "(Nexp_constant " ^ (lemnum string_of_int i) ^ ")"
+   | Nexp_constant(i) -> "(Nexp_constant " ^ (lemnum string_of_big_int i) ^ ")"
    | Nexp_sum(n1,n2) -> "(Nexp_sum " ^ (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
    | Nexp_minus(n1,n2) -> "(Nexp_minus " ^ (pp_format_nexp_lem n1)^ " " ^ (pp_format_nexp_lem n2) ^ ")"
    | Nexp_times(n1,n2) -> "(Nexp_times " ^  (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
@@ -207,7 +207,7 @@ and pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
   | NC_set(id,bounds) -> "(NC_set " ^
     pp_format_var_lem id ^
       " [" ^
-      list_format "; " string_of_int bounds ^
+      list_format "; " string_of_big_int bounds ^
       "])") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 
@@ -270,7 +270,7 @@ let pp_format_lit_lem (L_aux(lit,l)) =
   | L_one -> "L_one"
   | L_true -> "L_true"
   | L_false -> "L_false"
-  | L_num(i) -> "(L_num " ^ (lemnum string_of_int i) ^ ")"
+  | L_num(i) -> "(L_num " ^ (lemnum string_of_big_int i) ^ ")"
   | L_hex(n) -> "(L_hex \"" ^ n ^ "\")"
   | L_bin(n) -> "(L_bin \"" ^ n ^ "\")"
   | L_undef -> "L_undef"
@@ -519,8 +519,8 @@ let pp_lem_namescm ppf (Name_sect_aux(ns,l)) =
 
 let rec pp_lem_range ppf (BF_aux(r,l)) =
   match r with
-  | BF_single(i) -> fprintf ppf "(BF_aux (BF_single %i) %a)" i pp_lem_l l
-  | BF_range(i1,i2) -> fprintf ppf "(BF_aux (BF_range %i %i) %a)" i1 i2 pp_lem_l l
+  | BF_single(i) -> fprintf ppf "(BF_aux (BF_single %i) %a)" (int_of_big_int i) pp_lem_l l
+  | BF_range(i1,i2) -> fprintf ppf "(BF_aux (BF_range %i %i) %a)" (int_of_big_int i1) (int_of_big_int i2) pp_lem_l l
   | BF_concat(ir1,ir2) -> fprintf ppf "(BF_aux (BF_concat %a %a) %a)" pp_lem_range ir1 pp_lem_range ir2 pp_lem_l l
 
 let pp_lem_typdef ppf (TD_aux(td,(l,annot))) =
@@ -627,7 +627,7 @@ let pp_lem_def ppf d =
   | DEF_val(lbind) -> fprintf ppf "(DEF_val %a);@\n" pp_lem_let lbind
   | DEF_reg_dec(dec) -> fprintf ppf "(DEF_reg_dec %a);@\n" pp_lem_dec dec
   | DEF_comm d -> fprintf ppf ""
-  | DEF_fixity (prec, n, id) -> fprintf ppf "(DEF_fixity %a %s %a);@\n" pp_lem_prec prec (lemnum string_of_int n) pp_lem_id id
+  | DEF_fixity (prec, n, id) -> fprintf ppf "(DEF_fixity %a %s %a);@\n" pp_lem_prec prec (lemnum string_of_big_int n) pp_lem_id id
   | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_lem_defs ppf (Defs(defs)) =

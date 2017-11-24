@@ -42,6 +42,7 @@
 
 open Ast
 open Ast_util
+open Big_int
 open PPrint
 open Pretty_print_common
 
@@ -88,7 +89,7 @@ let doc_lit (L_aux(l,_)) =
   | L_one   -> "bitone"
   | L_true  -> "true"
   | L_false -> "false"
-  | L_num i -> string_of_int i
+  | L_num i -> string_of_big_int i
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_real r -> r

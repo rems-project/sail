@@ -53,7 +53,7 @@ type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
                       rewrite_def  : 'a rewriters -> 'a def -> 'a def;
                       rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
                     }
-                    
+
 val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
 val rewrite_undefined : bool -> tannot defs -> tannot defs

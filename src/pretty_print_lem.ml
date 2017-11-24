@@ -155,14 +155,14 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
 let doc_nexp_lem nexp =
   let (Nexp_aux (nexp, l) as full_nexp) = nexp_simp nexp in
   match nexp with
-  | Nexp_constant i -> string ("ty" ^ string_of_int i)
+  | Nexp_constant i -> string ("ty" ^ string_of_big_int i)
   | Nexp_var v -> string (string_of_kid (orig_kid v))
   | _ ->
      let rec mangle_nexp (Nexp_aux (nexp, _)) = begin
        match nexp with
        | Nexp_id id -> string_of_id id
        | Nexp_var kid -> string_of_id (id_of_kid (orig_kid kid))
-       | Nexp_constant i -> Pretty_print_lem_ast.lemnum string_of_int i
+       | Nexp_constant i -> Pretty_print_lem_ast.lemnum string_of_big_int i
        | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
        | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
        | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
@@ -356,10 +356,10 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
   | L_false -> utf8string "false"
   | L_true  -> utf8string "true"
   | L_num i ->
-     let ipp = string_of_int i in
+     let ipp = string_of_big_int i in
      utf8string (
        if in_pat then "("^ipp^":nn)"
-       else if i < 0 then "((0"^ipp^"):ii)"
+       else if lt_big_int i zero_big_int then "((0"^ipp^"):ii)"
        else "("^ipp^":ii)")
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
@@ -759,7 +759,7 @@ let doc_exp_lem, doc_let_lem =
       let start_idx = match nexp_simp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
-          let nc = nc_eq start (nminus len (nconstant 1)) in
+          let nc = nc_eq start (nminus len (nint 1)) in
           if prove (env_of full_exp) nc
           then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
           else raise (Reporting_basic.err_unreachable l
@@ -787,7 +787,7 @@ let doc_exp_lem, doc_let_lem =
       let start_idx = match nexp_simp (start) with
         | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
         | _ ->
-          let nc = nc_eq start (nminus len (nconstant 1)) in
+          let nc = nc_eq start (nminus len (nint 1)) in
           if prove (env_of full_exp) nc
           then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
           else raise (Reporting_basic.err_unreachable l
@@ -951,7 +951,7 @@ let doc_exp_lem, doc_let_lem =
              | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; TA_typ etyp])}) ->*)
               let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
               let start = match nexp_simp start with
-                | Nexp_aux (Nexp_constant i, _) -> string_of_int i
+                | Nexp_aux (Nexp_constant i, _) -> string_of_big_int i
                 | _ -> if dir then "0" else string_of_int (List.length exps) in
               let expspp =
                 match exps with
@@ -983,7 +983,7 @@ let doc_exp_lem, doc_let_lem =
        let start_idx = match nexp_simp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
-           let nc = nc_eq start (nminus len (nconstant 1)) in
+           let nc = nc_eq start (nminus len (nint 1)) in
            if prove (env_of full_exp) nc
            then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
            else raise (Reporting_basic.err_unreachable l
@@ -1000,7 +1000,7 @@ let doc_exp_lem, doc_let_lem =
        let start_idx = match nexp_simp (start) with
          | Nexp_aux (Nexp_constant i, _) -> expN (simple_num l i)
          | _ ->
-           let nc = nc_eq start (nminus len (nconstant 1)) in
+           let nc = nc_eq start (nminus len (nint 1)) in
            if prove (env_of full_exp) nc
            then string (bit_prefix ^ "vector_length") ^^ space ^^ expY v
            else raise (Reporting_basic.err_unreachable l
@@ -1261,12 +1261,12 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
             raise (Reporting_basic.err_unreachable Parse_ast.Unknown
               ("register " ^ string_of_id id ^ " has non-constant start index " ^ string_of_nexp start))
         with
-        | _ -> (0, true) in
+        | _ -> (zero_big_int, true) in
       doc_op equals
         (concat [string "let "; parens (concat [doc_id_lem id; underscore; doc_id_lem fid; rfannot])])
         (anglebars (concat [space;
           doc_op equals (string "field_name") (string_lit (doc_id_lem fid)); semi_sp;
-          doc_op equals (string "field_start") (string (string_of_int start)); semi_sp;
+          doc_op equals (string "field_start") (string (string_of_big_int start)); semi_sp;
           doc_op equals (string "field_is_inc") (string (if is_inc then "true" else "false")); semi_sp;
           doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
           doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in
@@ -1463,7 +1463,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
        let dir = (if dir_b then "true" else "false") in
        let dir_suffix = (if dir_b then "_inc" else "_dec") in
        let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
-       let size = if dir_b then i2-i1 +1 else i1-i2 + 1 in
+       let size = if dir_b then add_big_int (sub_big_int i2 i1) unit_big_int else add_big_int (sub_big_int i1 i2) unit_big_int in
        let vtyp = vector_typ (nconstant i1) (nconstant size) ord bit_typ in
        let tannot = doc_tannot_lem sequential mwords false vtyp in
        let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id_lem id);
@@ -1474,7 +1474,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
          | BF_aux (BF_single i, _) -> (i, i)
          | BF_aux (BF_range (i, j), _) -> (i, j)
          | _ -> raise (Reporting_basic.err_unreachable l "unsupported field type") in
-         let fsize = if dir_b then j-i+1 else i-j+1 in
+         let fsize = if dir_b then add_big_int (sub_big_int j i) unit_big_int else add_big_int (sub_big_int i j) unit_big_int in
          let ftyp = vector_typ (nconstant i) (nconstant fsize) ord bit_typ in
          let reftyp =
            mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
@@ -1491,7 +1491,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
            (concat [string "let "; parens (concat [doc_id_lem id; underscore; doc_id_lem fid; rfannot])])
            (concat [
              space; langlebar; string " field_name = \"" ^^ doc_id_lem fid ^^ string "\";"; hardline;
-             space; space; space; string (" field_start = " ^ string_of_int i ^ ";"); hardline;
+             space; space; space; string (" field_start = " ^ string_of_big_int i ^ ";"); hardline;
              space; space; space; string (" field_is_inc = " ^ dir ^ ";"); hardline;
              space; space; space; string " get_field = (fun reg -> " ^^ doc_exp_lem sequential mwords false false get ^^ string ");"; hardline;
              space; space; space; string " set_field = (fun reg v -> " ^^ doc_exp_lem sequential mwords false false set ^^ string ") "; ranglebar])
@@ -1794,10 +1794,10 @@ let doc_register_refs_lem registers =
           raise (Reporting_basic.err_unreachable Parse_ast.Unknown
             ("register " ^ string_of_id id ^ " has non-constant start index " ^ string_of_nexp start))
       with
-      | _ -> (0, true) in
+      | _ -> (zero_big_int, true) in
     concat [string "let "; idd; string " = <|"; hardline;
       string "  reg_name = \""; idd; string "\";"; hardline;
-      string "  reg_start = "; string (string_of_int start); string ";"; hardline;
+      string "  reg_start = "; string (string_of_big_int start); string ";"; hardline;
       string "  reg_is_inc = "; string (if is_inc then "true" else "false"); string ";"; hardline;
       string "  read_from = (fun s -> s."; field; string ");"; hardline;
       string "  write_to = (fun s v -> (<| s with "; field; string " = v |>)) |>"] in

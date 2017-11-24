@@ -1,6 +1,7 @@
 
 open Ast
 open Ast_util
+open Big_int
 open PPrint
 
 let doc_op symb a b = infix 2 1 symb a b
@@ -12,7 +13,7 @@ let doc_id (Id_aux (id_aux, _)) =
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
-let doc_int n = string (string_of_int n)
+let doc_int n = string (string_of_big_int n)
 
 let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_var v -> doc_kid v
@@ -22,7 +23,7 @@ let doc_ord (Ord_aux(o,_)) = match o with
 let rec doc_nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
-    | Nexp_constant c -> string (string_of_int c)
+    | Nexp_constant c -> string (string_of_big_int c)
     | Nexp_id id -> doc_id id
     | Nexp_var kid -> doc_kid kid
     | _ -> parens (nexp0 nexp)
@@ -30,8 +31,8 @@ let rec doc_nexp =
     match n_aux with
     | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) ->
        separate space [nexp0 n1; string "-"; nexp1 n2]
-    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when c < 0 ->
-       separate space [nexp0 n1; string "-"; doc_int (abs c)]
+    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when lt_big_int c zero_big_int ->
+       separate space [nexp0 n1; string "-"; doc_int (abs_big_int c)]
     | Nexp_sum (n1, n2) -> separate space [nexp0 n1; string "+"; nexp1 n2]
     | _ -> nexp1 nexp
   and nexp1 (Nexp_aux (n_aux, _) as nexp) =
@@ -143,7 +144,7 @@ let doc_lit (L_aux(l,_)) =
   | L_one   -> "bitone"
   | L_true  -> "true"
   | L_false -> "false"
-  | L_num i -> string_of_int i
+  | L_num i -> string_of_big_int i
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_real r -> r
@@ -216,7 +217,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_try (exp, pexps) -> assert false
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
-     separate space [doc_int 2; string "^"; doc_atomic_exp exp]
+     separate space [string "2"; string "^"; doc_atomic_exp exp]
   | _ -> doc_atomic_exp exp
 and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   match e_aux with

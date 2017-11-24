@@ -42,6 +42,7 @@
 
 {
 open Parser2
+open Big_int
 open Parse_ast
 module M = Map.Make(String)
 exception LexError of string * Lexing.position
@@ -216,13 +217,13 @@ rule token = parse
   | "<="				{ (LtEq(r"<=")) }
   | "infix" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
-      Fixity (Infix, int_of_string (Char.escaped p), op) }
+      Fixity (Infix, big_int_of_string (Char.escaped p), op) }
   | "infixl" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator InfixL (int_of_string (Char.escaped p)) op) !operators;
-      Fixity (InfixL, int_of_string (Char.escaped p), op) }
+      Fixity (InfixL, big_int_of_string (Char.escaped p), op) }
   | "infixr" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator InfixR (int_of_string (Char.escaped p)) op) !operators;
-      Fixity (InfixR, int_of_string (Char.escaped p), op) }
+      Fixity (InfixR, big_int_of_string (Char.escaped p), op) }
   | operator as op
     { try M.find op !operators
       with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
@@ -239,8 +240,8 @@ rule token = parse
 					  else Id(r i) }
   | (digit+ as i1) "." (digit+ as i2)     { (Real (i1 ^ "." ^ i2)) }
   | "-" (digit* as i1) "." (digit+ as i2) { (Real ("-" ^ i1 ^ "." ^ i2)) }
-  | digit+ as i                           { (Num(int_of_string i)) }
-  | "-" digit+ as i                       { (Num(int_of_string i)) }
+  | digit+ as i                           { (Num(big_int_of_string i)) }
+  | "-" digit+ as i                       { (Num(big_int_of_string i)) }
   | "0b" (binarydigit+ as i)              { (Bin(i)) }
   | "0x" (hexdigit+ as i)                 { (Hex(i)) }
   | '"'                                   { (String(

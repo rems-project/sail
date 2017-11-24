@@ -133,7 +133,7 @@ module Nexp = struct
     match nexp1, nexp2 with
     | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2
     | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2
-    | Nexp_constant c1, Nexp_constant c2 -> Pervasives.compare c1 c2
+    | Nexp_constant c1, Nexp_constant c2 -> compare_big_int c1 c2
     | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b)
     | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b)
     | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) ->
@@ -178,7 +178,7 @@ and nexp_simp_aux = function
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 + c2)
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (add_big_int c1 c2)
        | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
        | _, _ -> Nexp_sum (n1, n2)
      end
@@ -187,9 +187,9 @@ and nexp_simp_aux = function
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
-       | Nexp_constant 1, _ -> n2_simp
-       | _, Nexp_constant 1 -> n1_simp
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 * c2)
+       | Nexp_constant c, _ when eq_big_int c unit_big_int -> n2_simp
+       | _, Nexp_constant c when eq_big_int c unit_big_int -> n1_simp
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (mult_big_int c1 c2)
        | _, _ -> Nexp_times (n1, n2)
      end
   | Nexp_minus (n1, n2) ->
@@ -197,10 +197,10 @@ and nexp_simp_aux = function
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 - c2)
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (sub_big_int c1 c2)
        (* A vector range x['n-1 .. 0] can result in the size "('n-1) - -1" *)
        | Nexp_minus (Nexp_aux (n,_), Nexp_aux (Nexp_constant c1,_)), Nexp_constant c2
-         when c1 = -c2 -> n
+         when eq_big_int c1 (minus_big_int c2) -> n
        | _, _ -> Nexp_minus (n1, n2)
      end
   | nexp -> nexp
@@ -241,6 +241,7 @@ let vector_typ n m ord typ =
 let exc_typ = mk_id_typ (mk_id "exception")
 
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
+let nint i = nconstant (big_int_of_int i)
 let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
 let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
 let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
@@ -253,8 +254,8 @@ let nc_eq n1 n2 = mk_nc (NC_equal (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
-let nc_lt n1 n2 = nc_lteq n1 (nsum n2 (nconstant 1))
-let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nconstant 1))
+let nc_lt n1 n2 = nc_lteq n1 (nsum n2 (nint 1))
+let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nint 1))
 let nc_and nc1 nc2 = mk_nc (NC_and (nc1, nc2))
 let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
 let nc_true = mk_nc NC_true
@@ -485,7 +486,7 @@ let rec string_of_nexp = function
 and string_of_nexp_aux = function
   | Nexp_id id -> string_of_id id
   | Nexp_var kid -> string_of_kid kid
-  | Nexp_constant c -> string_of_int c
+  | Nexp_constant c -> string_of_big_int c
   | Nexp_times (n1, n2) -> "(" ^ string_of_nexp n1 ^ " * " ^ string_of_nexp n2 ^ ")"
   | Nexp_sum (n1, n2) -> "(" ^ string_of_nexp n1 ^ " + " ^ string_of_nexp n2 ^ ")"
   | Nexp_minus (n1, n2) -> "(" ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2 ^ ")"
@@ -520,7 +521,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_and (nc1, nc2), _) ->
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
-     string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
+     string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_big_int ns ^ "}"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
@@ -553,7 +554,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_one -> "bitone"
   | L_true -> "true"
   | L_false -> "false"
-  | L_num n -> string_of_int n
+  | L_num n -> string_of_big_int n
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_undef -> "undefined"
@@ -652,8 +653,8 @@ and string_of_letbind (LB_aux (lb, l)) =
 
 let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with
-  | BF_single n -> string_of_int n
-  | BF_range (n, m) -> string_of_int n ^ " .. " ^ string_of_int m
+  | BF_single n -> string_of_big_int n
+  | BF_range (n, m) -> string_of_big_int n ^ " .. " ^ string_of_big_int m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
 
 let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =

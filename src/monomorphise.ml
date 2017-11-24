@@ -1,6 +1,7 @@
 open Parse_ast
 open Ast
 open Ast_util
+open Big_int
 open Type_check
 
 let size_set_limit = 8
@@ -87,21 +88,18 @@ let subst_src_typ substs t =
   in s_styp substs t
 
 let make_vector_lit sz i =
-  let f j = if (i lsr (sz-j-1)) mod 2 = 0 then '0' else '1' in
+  let f j = if eq_big_int (mod_big_int (shift_right_big_int i (sz-j-1)) (big_int_of_int 2)) zero_big_int then '0' else '1' in
   let s = String.init sz f in
   L_aux (L_bin s,Generated Unknown)
 
 let tabulate f n =
   let rec aux acc n =
     let acc' = f n::acc in
-    if n = 0 then acc' else aux acc' (n-1)
-  in if n = 0 then [] else aux [] (n-1)
+    if eq_big_int n zero_big_int then acc' else aux acc' (sub_big_int n unit_big_int)
+  in if eq_big_int n zero_big_int then [] else aux [] (sub_big_int n unit_big_int)
 
 let make_vectors sz =
-  tabulate (make_vector_lit sz) (1 lsl sz)
-  
-  
-
+  tabulate (make_vector_lit sz) (shift_left_big_int unit_big_int sz)
 
 let pat_id_is_variable env id =
   match Env.lookup_id id env with
@@ -364,7 +362,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
      in
      let name_seg = function
        | (_,None) -> ""
-       | (k,Some i) -> string_of_kid k ^ string_of_int i
+       | (k,Some i) -> string_of_kid k ^ string_of_big_int i
      in
      let name l i = String.concat "_" (i::(List.map name_seg l)) in
      Some (List.map (fun (l,ty) -> (l, wrap (name l),ty)) variants)
@@ -373,11 +371,11 @@ let reduce_nexp subst ne =
   let rec eval (Nexp_aux (ne,_) as nexp) =
     match ne with
     | Nexp_constant i -> i
-    | Nexp_sum (n1,n2) -> (eval n1) + (eval n2)
-    | Nexp_minus (n1,n2) -> (eval n1) - (eval n2)
-    | Nexp_times (n1,n2) -> (eval n1) * (eval n2)
-    | Nexp_exp n -> 1 lsl (eval n)
-    | Nexp_neg n -> - (eval n)
+    | Nexp_sum (n1,n2) -> add_big_int (eval n1) (eval n2)
+    | Nexp_minus (n1,n2) -> sub_big_int (eval n1) (eval n2)
+    | Nexp_times (n1,n2) -> mult_big_int (eval n1) (eval n2)
+    | Nexp_exp n -> shift_left_big_int (eval n) 1
+    | Nexp_neg n -> minus_big_int (eval n)
     | _ ->
        raise (Reporting_basic.err_general Unknown ("Couldn't turn nexp " ^
                                                       string_of_nexp nexp ^ " into concrete value"))
@@ -575,10 +573,10 @@ let lit_match = function
 (* There's no undefined nexp, so replace undefined sizes with a plausible size.
    32 is used as a sensible default. *)
 let fabricate_nexp l = function
-  | None -> Nexp_aux (Nexp_constant 32,Unknown)
+  | None -> nint 32
   | Some (env,typ,_) ->
      match Type_check.destruct_exist env typ with
-     | None -> Nexp_aux (Nexp_constant 32,Unknown)
+     | None -> nint 32
      | Some (kids,nc,typ') ->
         match kids,nc,Env.expand_synonyms env typ' with
         | ([kid],NC_aux (NC_set (kid',i::_),_),
@@ -594,7 +592,7 @@ let fabricate_nexp l = function
                               Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
             when Kid.compare kid kid'' = 0 &&
               Kid.compare kid kid''' = 0 ->
-           Nexp_aux (Nexp_constant 32,Unknown)
+           nint 32
         | _ -> raise (Reporting_basic.err_general l
                         ("Undefined value at unsupported type " ^ string_of_typ typ))
 
@@ -613,8 +611,8 @@ let rec drop_casts = function
 
 (* TODO: ought to be a big int of some form, but would need L_num to be one *)
 let int_of_lit = function
-  | L_hex hex -> int_of_string ("0x" ^ hex)
-  | L_bin bin -> int_of_string ("0b" ^ bin)
+  | L_hex hex -> big_int_of_string ("0x" ^ hex)
+  | L_bin bin -> big_int_of_string ("0b" ^ bin)
   | _ -> assert false
 
 let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
@@ -656,7 +654,7 @@ let try_app (l,ann) (id,args) =
   else if is_id "shl_int" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
-       Some (E_aux (E_lit (L_aux (L_num (i lsl j),new_l)),(l,ann)))
+       Some (E_aux (E_lit (L_aux (L_num (shift_left_big_int i (int_of_big_int j)),new_l)),(l,ann)))
     | _ -> None
   else if is_id "ex_int" then
     match args with
@@ -667,8 +665,8 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux ((L_hex _ | L_bin _) as lit,_),_);
        E_aux (E_lit L_aux (L_num i,_),_)] ->
        let v = int_of_lit lit in
-       let b = (v lsr i) land 1 in
-       let lit' = if b = 1 then L_one else L_zero in
+       let b = and_big_int (shift_right_big_int v (int_of_big_int i)) unit_big_int in
+       let lit' = if eq_big_int b unit_big_int then L_one else L_zero in
        Some (E_aux (E_lit (L_aux (lit',new_l)),(l,ann)))
     | _ -> None
   else None
@@ -1173,14 +1171,14 @@ let split_defs splits defs =
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
-          if sz <= vector_split_limit then
-            let lits = make_vectors sz in
+          if int_of_big_int sz <= vector_split_limit then
+            let lits = make_vectors (int_of_big_int sz) in
             List.map (fun lit ->
               P_aux (P_lit lit,(l,annot)),
               [var,E_aux (E_lit lit,(new_l,annot))]) lits
           else
             raise (Reporting_basic.err_general l
-                     ("Refusing to split vector type of length " ^ string_of_int sz ^
+                     ("Refusing to split vector type of length " ^ string_of_big_int sz ^
                          " above limit " ^ string_of_int vector_split_limit ^ 
                          " for variable " ^ v))
        | _ ->

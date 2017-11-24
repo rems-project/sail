@@ -44,6 +44,7 @@
 
 let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
+open Big_int
 open Parse_ast
 
 let loc n m = Range (n, m)
@@ -104,12 +105,12 @@ let rec desugar_lchain chain s e =
   | [LC_nexp n1; LC_lteq; LC_nexp n2] ->
     mk_nc (NC_bounded_le (n1, n2)) s e
   | [LC_nexp n1; LC_lt; LC_nexp n2] ->
-    mk_nc (NC_bounded_le (mk_typ (ATyp_sum (n1, mk_typ (ATyp_constant 1) s e)) s e, n2)) s e
+    mk_nc (NC_bounded_le (mk_typ (ATyp_sum (n1, mk_typ (ATyp_constant unit_big_int) s e)) s e, n2)) s e
   | (LC_nexp n1 :: LC_lteq :: LC_nexp n2 :: chain) ->
     let nc1 = mk_nc (NC_bounded_le (n1, n2)) s e in
     mk_nc (NC_and (nc1, desugar_lchain (LC_nexp n2 :: chain) s e)) s e
   | (LC_nexp n1 :: LC_lt :: LC_nexp n2 :: chain) ->
-    let nc1 = mk_nc (NC_bounded_le (mk_typ (ATyp_sum (n1, mk_typ (ATyp_constant 1) s e)) s e, n2)) s e in
+    let nc1 = mk_nc (NC_bounded_le (mk_typ (ATyp_sum (n1, mk_typ (ATyp_constant unit_big_int) s e)) s e, n2)) s e in
     mk_nc (NC_and (nc1, desugar_lchain (LC_nexp n2 :: chain) s e)) s e
   | _ -> assert false
 
@@ -123,12 +124,12 @@ let rec desugar_rchain chain s e =
   | [RC_nexp n1; RC_gteq; RC_nexp n2] ->
     mk_nc (NC_bounded_ge (n1, n2)) s e
   | [RC_nexp n1; RC_gt; RC_nexp n2] ->
-    mk_nc (NC_bounded_ge (n1, mk_typ (ATyp_sum (n2, mk_typ (ATyp_constant 1) s e)) s e)) s e
+    mk_nc (NC_bounded_ge (n1, mk_typ (ATyp_sum (n2, mk_typ (ATyp_constant unit_big_int) s e)) s e)) s e
   | (RC_nexp n1 :: RC_gteq :: RC_nexp n2 :: chain) ->
     let nc1 = mk_nc (NC_bounded_ge (n1, n2)) s e in
     mk_nc (NC_and (nc1, desugar_rchain (RC_nexp n2 :: chain) s e)) s e
   | (RC_nexp n1 :: RC_gt :: RC_nexp n2 :: chain) ->
-    let nc1 = mk_nc (NC_bounded_ge (n1, mk_typ (ATyp_sum (n2, mk_typ (ATyp_constant 1) s e)) s e)) s e in
+    let nc1 = mk_nc (NC_bounded_ge (n1, mk_typ (ATyp_sum (n2, mk_typ (ATyp_constant unit_big_int) s e)) s e)) s e in
     mk_nc (NC_and (nc1, desugar_rchain (RC_nexp n2 :: chain) s e)) s e
   | _ -> assert false
 
@@ -153,7 +154,7 @@ let rec desugar_rchain chain s e =
 /*Terminals with content*/
 
 %token <string> Id TyVar
-%token <int> Num
+%token <Big_int.big_int> Num
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
@@ -724,7 +725,7 @@ exp:
        raise (Parse_error_locn (loc $startpos $endpos,"Missing \"from\" in foreach loop"));
       if $6 <> "to" && $6 <> "downto" then
        raise (Parse_error_locn (loc $startpos $endpos,"Missing \"to\" or \"downto\" in foreach loop"));
-      let step = mk_lit_exp (L_num 1) $startpos $endpos in
+      let step = mk_lit_exp (L_num unit_big_int) $startpos $endpos in
       let ord =
         if $6 = "to"
         then ATyp_aux(ATyp_inc,loc $startpos($6) $endpos($6))

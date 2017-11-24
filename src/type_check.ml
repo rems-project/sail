@@ -304,9 +304,9 @@ module Env : sig
   val is_register : id -> t -> bool
   val get_register : id -> t -> typ
   val add_register : id -> typ -> t -> t
-  val add_regtyp : id -> int -> int -> (index_range * id) list -> t -> t
+  val add_regtyp : id -> big_int -> big_int -> (index_range * id) list -> t -> t
   val is_regtyp : id -> t -> bool
-  val get_regtyp : id -> t -> int * int * (index_range * id) list
+  val get_regtyp : id -> t -> big_int * big_int * (index_range * id) list
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
@@ -361,7 +361,7 @@ end = struct
       locals : (mut * typ) Bindings.t;
       union_ids : (typquant * typ) Bindings.t;
       registers : typ Bindings.t;
-      regtyps : (int * int * (index_range * id) list) Bindings.t;
+      regtyps : (big_int * big_int * (index_range * id) list) Bindings.t;
       variants : (typquant * type_union list) Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
@@ -764,11 +764,11 @@ end = struct
     | BF_single n ->
        if cmp f n && cmp n t
        then n
-       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " string_of_int [f; n; t])
+       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " string_of_big_int [f; n; t])
     | BF_range (n1, n2) ->
        if cmp f n1 && cmp n1 n2 && cmp n2 t
        then n2
-       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " string_of_int [f; n1; n2; t])
+       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " string_of_big_int [f; n1; n2; t])
     | BF_concat _ -> typ_error l "Index range concatenation currently unsupported"
 
   let rec check_index_ranges ids cmp base top = function
@@ -798,9 +798,9 @@ end = struct
     else
       begin
         typ_print ("Adding register type " ^ string_of_id id);
-        if base > top
-        then check_index_ranges IdSet.empty (fun x y -> x > y) (base + 1) (top - 1) ranges
-        else check_index_ranges IdSet.empty (fun x y -> x < y) (base - 1) (top + 1) ranges;
+        if gt_big_int base top
+        then check_index_ranges IdSet.empty gt_big_int (add_big_int base unit_big_int) (sub_big_int top unit_big_int) ranges
+        else check_index_ranges IdSet.empty lt_big_int (sub_big_int base unit_big_int) (add_big_int top unit_big_int) ranges;
         { env with regtyps = Bindings.add id (base, top, ranges) env.regtyps }
       end
 
@@ -921,7 +921,7 @@ end = struct
         rewrap (Typ_app (id, List.map aux_arg targs))
       | Typ_id id when is_regtyp id env ->
         let base, top, ranges = get_regtyp id env in
-        let len = abs(top - base) + 1 in
+        let len = sub_big_int (abs_big_int (sub_big_int top base)) unit_big_int in
         vector_typ (nconstant base) (nconstant len) (get_default_order env) bit_typ
         (* TODO registers with non-default order? non-bitvector registers? *)
       | t -> rewrap t
@@ -960,9 +960,9 @@ let dvector_typ env n m typ = vector_typ n m (Env.get_default_order env) typ
 let lvector_typ env l typ =
   match Env.get_default_order env with
   | Ord_aux (Ord_inc, _) as ord ->
-     vector_typ (nconstant 0) l ord typ
+     vector_typ (nint 0) l ord typ
   | Ord_aux (Ord_dec, _) as ord ->
-     vector_typ (nminus l (nconstant 1)) l ord typ
+     vector_typ (nminus l (nint 1)) l ord typ
 
 let ex_counter = ref 0
 
@@ -1066,7 +1066,7 @@ let rec normalize_typ env (Typ_aux (typ, l)) =
   match typ with
   | Typ_id (Id_aux (Id "int", _)) -> Tnf_index_sort IS_int
   | Typ_id (Id_aux (Id "nat", _)) ->
-     let kid = Env.fresh_kid env in Tnf_index_sort (IS_prop (kid, [(nconstant 0, nvar kid)]))
+     let kid = Env.fresh_kid env in Tnf_index_sort (IS_prop (kid, [(nint 0, nvar kid)]))
   | Typ_id v ->
      begin
        try normalize_typ env (Env.get_typ_synonym v env env []) with
@@ -1121,7 +1121,7 @@ let rec nexp_constraint env var_of (Nexp_aux (nexp, l)) =
   match nexp with
   | Nexp_id v -> nexp_constraint env var_of (Env.get_num_def v env)
   | Nexp_var kid -> Constraint.variable (var_of kid)
-  | Nexp_constant c -> Constraint.constant (big_int_of_int c)
+  | Nexp_constant c -> Constraint.constant c
   | Nexp_times (nexp1, nexp2) -> Constraint.mult (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | Nexp_sum (nexp1, nexp2) -> Constraint.add (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | Nexp_minus (nexp1, nexp2) -> Constraint.sub (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
@@ -1138,8 +1138,8 @@ let rec nc_constraint env var_of (NC_aux (nc, l)) =
   | NC_set (_, []) -> Constraint.literal false
   | NC_set (kid, (int :: ints)) ->
      List.fold_left Constraint.disj
-                    (Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int int)))
-                    (List.map (fun i -> Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
+                    (Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant int))
+                    (List.map (fun i -> Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant i)) ints)
   | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
   | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
   | NC_false -> Constraint.literal false
@@ -1181,12 +1181,12 @@ let prove env (NC_aux (nc_aux, _) as nc) =
     | _, _ -> false
   in
   match nc_aux with
-  | NC_equal (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 = c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_bounded_le (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <= c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_bounded_ge (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 >= c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_equal (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <> c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
-  | NC_bounded_le (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 > c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
-  | NC_bounded_ge (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 < c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | NC_equal (nexp1, nexp2) when compare_const eq_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_bounded_le (nexp1, nexp2) when compare_const le_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_bounded_ge (nexp1, nexp2) when compare_const ge_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_equal (nexp1, nexp2) when compare_const (fun c1 c2 -> not (eq_big_int c1 c2)) (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | NC_bounded_le (nexp1, nexp2) when compare_const gt_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | NC_bounded_ge (nexp1, nexp2) when compare_const lt_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> false
   | NC_true -> true
   | NC_false -> false
   | _ -> prove_z3 env nc
@@ -1288,7 +1288,7 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with
   | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2 = 0
   | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2 = 0
-  | Nexp_constant c1, Nexp_constant c2 -> c1 = c2
+  | Nexp_constant c1, Nexp_constant c2 -> eq_big_int c1 c2
   | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
@@ -1400,8 +1400,8 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
            | Nexp_constant c2 ->
               begin
                 match n1a with
-                | Nexp_aux (Nexp_constant c1,_) when c2 mod c1 = 0 ->
-                   unify_nexps l env goals n1b (mk_nexp (Nexp_constant (c2 / c1)))
+                | Nexp_aux (Nexp_constant c1,_) when eq_big_int (mod_big_int c2 c1) zero_big_int ->
+                   unify_nexps l env goals n1b (mk_nexp (Nexp_constant (div_big_int c2 c1)))
                 | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
               end
            | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
@@ -1683,22 +1683,22 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
      begin
        match Env.get_default_order env with
        | Ord_aux (Ord_inc, _) ->
-          dvector_typ env (nconstant 0) (nconstant (String.length str)) (mk_typ (Typ_id (mk_id "bit")))
+          dvector_typ env (nint 0) (nint (String.length str)) (mk_typ (Typ_id (mk_id "bit")))
        | Ord_aux (Ord_dec, _) ->
           dvector_typ env
-                     (nconstant (String.length str - 1))
-                     (nconstant (String.length str))
+                     (nint (String.length str - 1))
+                     (nint (String.length str))
                      (mk_typ (Typ_id (mk_id "bit")))
      end
   | L_hex str ->
      begin
        match Env.get_default_order env with
        | Ord_aux (Ord_inc, _) ->
-          dvector_typ env (nconstant 0) (nconstant (String.length str * 4)) (mk_typ (Typ_id (mk_id "bit")))
+          dvector_typ env (nint 0) (nint (String.length str * 4)) (mk_typ (Typ_id (mk_id "bit")))
        | Ord_aux (Ord_dec, _) ->
           dvector_typ env
-                     (nconstant (String.length str * 4 - 1))
-                     (nconstant (String.length str * 4))
+                     (nint (String.length str * 4 - 1))
+                     (nint (String.length str * 4))
                      (mk_typ (Typ_id (mk_id "bit")))
      end
   | L_undef -> typ_error l "Cannot infer the type of undefined"
@@ -1781,7 +1781,7 @@ let pat_env_of (P_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 (* Flow typing *)
 
 let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
-  | Nexp_constant c -> Some (big_int_of_int c)
+  | Nexp_constant c -> Some c
   | Nexp_times (n1, n2) ->
      Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
   | Nexp_sum (n1, n2) ->
@@ -1870,10 +1870,10 @@ let restrict_range_lower c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
 let apply_flow_constraint = function
   | Flow_lteq (c, nexp) ->
      (restrict_range_upper c nexp,
-      restrict_range_lower (succ_big_int c) (nexp_simp (nsum nexp (nconstant 1))))
+      restrict_range_lower (succ_big_int c) (nexp_simp (nsum nexp (nint 1))))
   | Flow_gteq (c, nexp) ->
      (restrict_range_lower c nexp,
-      restrict_range_upper (pred_big_int c) (nexp_simp (nminus nexp (nconstant 1))))
+      restrict_range_upper (pred_big_int c) (nexp_simp (nminus nexp (nint 1))))
 
 let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
@@ -1882,7 +1882,7 @@ let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
      begin
        match destruct_atom (typ_of y) with
        | Some (c, nexp) ->
-          [(v, Flow_lteq (pred_big_int c, nexp_simp (nminus nexp (nconstant 1))))], []
+          [(v, Flow_lteq (pred_big_int c, nexp_simp (nminus nexp (nint 1))))], []
        | _ -> [], []
      end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
@@ -1897,7 +1897,7 @@ let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
      begin
        match destruct_atom (typ_of y) with
        | Some (c, nexp) ->
-          [(v, Flow_gteq (succ_big_int c, nexp_simp (nsum nexp (nconstant 1))))], []
+          [(v, Flow_gteq (succ_big_int c, nexp_simp (nsum nexp (nint 1))))], []
        | _ -> [], []
      end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
@@ -2164,7 +2164,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_vector vec, _ ->
      let (start, len, ord, vtyp) = destruct_vec_typ l env typ in
      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
-     if prove env (nc_eq (nconstant (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
+     if prove env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
      else typ_error l "List length didn't match" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
      if is_typ_monomorphic typ || Env.polymorphic_undefineds env
@@ -2292,7 +2292,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           annot_pat (P_var (typed_pat, kid)) typ, env
        | None, Typ_aux (Typ_id id, _) when Id.compare id (mk_id "nat") == 0 ->
           let env = Env.add_typ_var kid BK_nat env in
-          let env = Env.add_constraint (nc_gt (nvar kid) (nconstant 0)) env in
+          let env = Env.add_constraint (nc_gt (nvar kid) (nint 0)) env in
           let typed_pat, env = bind_pat env pat (atom_typ (nvar kid)) in
           annot_pat (P_var (typed_pat, kid)) typ, env
        | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp lo, _); Typ_arg_aux (Typ_arg_nexp hi, _)]), _)
@@ -2412,7 +2412,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      in
      let ((typed_pat :: typed_pats) as pats), env =
        List.fold_left fold_pats ([], env) (pat :: pats) in
-     let len = nexp_simp (nconstant (List.length pats)) in
+     let len = nexp_simp (nint (List.length pats)) in
      let etyp = pat_typ_of typed_pat in
      List.map (fun pat -> typ_equality l env etyp (pat_typ_of pat)) pats;
      annot_pat (P_vector pats) (lvector_typ env len etyp), env
@@ -2482,9 +2482,9 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           in
           let vec_typ = match range, Env.get_default_order env with
             | BF_aux (BF_single n, _), Ord_aux (Ord_dec, _) ->
-               dvector_typ env (nconstant n) (nconstant 1) (mk_typ (Typ_id (mk_id "bit")))
+               dvector_typ env (nconstant n) (nint 1) (mk_typ (Typ_id (mk_id "bit")))
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
-               dvector_typ env (nconstant n) (nconstant (n - m + 1)) (mk_typ (Typ_id (mk_id "bit")))
+               dvector_typ env (nconstant n) (nconstant (add_big_int (sub_big_int n m) unit_big_int)) (mk_typ (Typ_id (mk_id "bit")))
             | _, _ -> typ_error l "Not implemented this register field type yet..."
           in
           let checked_exp = crule check_exp env exp vec_typ in
@@ -2605,7 +2605,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
                    tlexp :: tlexps, env, nsum llen llen'
                  | _ -> typ_error l "bit vector assignment must only contain identifiers"
                in
-               let tlexps, env, lexp_len = List.fold_right bind_bits_tuple lexps ([], env, nconstant 0) in
+               let tlexps, env, lexp_len = List.fold_right bind_bits_tuple lexps ([], env, nint 0) in
                if prove env (nc_eq vec_len lexp_len)
                then annot_lexp (LEXP_tup tlexps) typ, env
                else typ_error l "Vector and tuple length must be the same in assignment"
@@ -2709,16 +2709,16 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
           begin
             match range, Env.get_default_order env with
             | BF_aux (BF_single n, _), Ord_aux (Ord_dec, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant 1) bit_typ in
+               let vec_typ = dvector_typ env (nconstant n) (nint 1) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant (n - m + 1)) bit_typ in
+               let vec_typ = dvector_typ env (nconstant n) (nconstant (add_big_int (sub_big_int n m) unit_big_int)) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_single n, _), Ord_aux (Ord_inc, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant 1) bit_typ in
+               let vec_typ = dvector_typ env (nconstant n) (nint 1) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_inc, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant (m - n + 1)) bit_typ in
+               let vec_typ = dvector_typ env (nconstant n) (nconstant (add_big_int (sub_big_int m n) unit_big_int)) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | _, _ -> typ_error l "Invalid register field type"
           end
@@ -2824,14 +2824,14 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let vec_typ = match Env.get_default_order env with
        | Ord_aux (Ord_inc, _) ->
           mk_typ (Typ_app (mk_id "vector",
-                           [mk_typ_arg (Typ_arg_nexp (nconstant 0));
-                            mk_typ_arg (Typ_arg_nexp (nconstant (List.length vec)));
+                           [mk_typ_arg (Typ_arg_nexp (nint 0));
+                            mk_typ_arg (Typ_arg_nexp (nint (List.length vec)));
                             mk_typ_arg (Typ_arg_order (Env.get_default_order env));
                             mk_typ_arg (Typ_arg_typ (typ_of inferred_item))]))
        | Ord_aux (Ord_dec, _) ->
           mk_typ (Typ_app (mk_id "vector",
-                           [mk_typ_arg (Typ_arg_nexp (nconstant (List.length vec - 1)));
-                            mk_typ_arg (Typ_arg_nexp (nconstant (List.length vec)));
+                           [mk_typ_arg (Typ_arg_nexp (nint (List.length vec - 1)));
+                            mk_typ_arg (Typ_arg_nexp (nint (List.length vec)));
                             mk_typ_arg (Typ_arg_order (Env.get_default_order env));
                             mk_typ_arg (Typ_arg_typ (typ_of inferred_item))]))
      in
@@ -3416,7 +3416,7 @@ let check_register env id base top ranges =
   | Nexp_aux (Nexp_constant basec, _), Nexp_aux (Nexp_constant topc, _) ->
      let no_typq = TypQ_aux (TypQ_tq [], Parse_ast.Unknown) (* Maybe could be TypQ_no_forall? *) in
      (* FIXME: wrong for default Order inc? *)
-     let vec_typ = dvector_typ env base (nconstant ((basec - topc) + 1)) bit_typ in
+     let vec_typ = dvector_typ env base (nconstant (add_big_int (sub_big_int basec topc) unit_big_int)) bit_typ in
      let cast_typ = mk_typ (Typ_fn (mk_id_typ id, vec_typ, no_effect)) in
      let cast_to_typ = mk_typ (Typ_fn (vec_typ, mk_id_typ id, no_effect)) in
      env

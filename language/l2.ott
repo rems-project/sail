@@ -9,7 +9,7 @@ indexvar n , m , i , j ::=
 metavar num,numZero,numOne ::=
   {{ phantom }}
   {{ lex numeric }}
-  {{ ocaml int }}
+  {{ ocaml big_int }}
   {{ hol num }}
   {{ lem integer }}
   {{ com Numeric literals }}
@@ -57,6 +57,8 @@ metavar real ::=
 
 embed
 {{ ocaml
+
+open Big_int
 
 type text = string
 
