@@ -415,7 +415,7 @@ let refine_constructor refinements l env id args =
               (fun v (_,w) ->
                 match v,w with
                 | _,None -> true
-                | Some (U_nexp (Nexp_aux (Nexp_constant n, _))),Some m -> n = m
+                | Some (U_nexp (Nexp_aux (Nexp_constant n, _))),Some m -> eq_big_int n m
                 | _,_ -> false) bindings mapping
           in
           match List.find matches_refinement irefinements with
@@ -568,6 +568,7 @@ let remove_bound env pat =
 let lit_match = function
   | (L_zero | L_false), (L_zero | L_false) -> true
   | (L_one  | L_true ), (L_one  | L_true ) -> true
+  | L_num i1, L_num i2 -> eq_big_int i1 i2
   | l1,l2 -> l1 = l2
 
 (* There's no undefined nexp, so replace undefined sizes with a plausible size.
@@ -609,8 +610,7 @@ let rec drop_casts = function
   | E_aux (E_cast (_,e),_) -> drop_casts e
   | exp -> exp
 
-(* TODO: ought to be a big int of some form, but would need L_num to be one *)
-let int_of_lit = function
+let int_of_str_lit = function
   | L_hex hex -> big_int_of_string ("0x" ^ hex)
   | L_bin bin -> big_int_of_string ("0b" ^ bin)
   | _ -> assert false
@@ -621,8 +621,9 @@ let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   | (L_one |L_true ), (L_one |L_true)
     -> Some true
   | (L_hex _| L_bin _), (L_hex _|L_bin _)
-    -> Some (int_of_lit l1 = int_of_lit l2)
+    -> Some (eq_big_int (int_of_str_lit l1) (int_of_str_lit l2))
   | L_undef, _ | _, L_undef -> None
+  | L_num i1, L_num i2 -> Some (eq_big_int i1 i2)
   | _ -> Some (l1 = l2)
 
 let try_app (l,ann) (id,args) =
@@ -649,7 +650,7 @@ let try_app (l,ann) (id,args) =
   else if is_id "UInt" then
     match args with
     | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit,_), _)] ->
-       Some (E_aux (E_lit (L_aux (L_num (int_of_lit lit),new_l)),(l,ann)))
+       Some (E_aux (E_lit (L_aux (L_num (int_of_str_lit lit),new_l)),(l,ann)))
     | _ -> None
   else if is_id "shl_int" then
     match args with
@@ -664,7 +665,7 @@ let try_app (l,ann) (id,args) =
     match args with
     | [E_aux (E_lit L_aux ((L_hex _ | L_bin _) as lit,_),_);
        E_aux (E_lit L_aux (L_num i,_),_)] ->
-       let v = int_of_lit lit in
+       let v = int_of_str_lit lit in
        let b = and_big_int (shift_right_big_int v (int_of_big_int i)) unit_big_int in
        let lit' = if eq_big_int b unit_big_int then L_one else L_zero in
        Some (E_aux (E_lit (L_aux (lit',new_l)),(l,ann)))
@@ -1154,6 +1155,10 @@ let split_defs splits defs =
                ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v))
     in
     match ty with
+    | Typ_id (Id_aux (Id "bool",_)) ->
+       [P_aux (P_lit (L_aux (L_true,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_true,new_l)),(new_l,annot))];
+        P_aux (P_lit (L_aux (L_false,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_false,new_l)),(new_l,annot))]]
+
     | Typ_id id ->
        (try
          (* enumerations *)
@@ -1168,6 +1173,7 @@ let split_defs splits defs =
               [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))])
               [L_zero; L_one]
          | _ -> cannot ())
+
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
@@ -1592,7 +1598,7 @@ let replace_with_the_value (E_aux (_,(l,_)) as exp) =
   match typ with
   | Typ_aux (Typ_app (Id_aux (Id "range",_),
                       [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp nexp',_)]),_)
-    when nexp = nexp' ->
+    when nexp_identical nexp nexp' ->
      mk_exp nexp l l'
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),_) ->
@@ -1655,9 +1661,14 @@ let rewrite_size_parameters env (Defs defs) =
         | Some i -> i)
       (KidSet.elements expose_tyvars)
     in
-    let to_change = List.sort compare to_change in
+    let ik_compare (i,k) (i',k') =
+      match compare (i : int) i' with
+      | 0 -> Kid.compare k k'
+      | x -> x
+    in
+    let to_change = List.sort ik_compare to_change in
     match Bindings.find id fsizes with
-    | old -> if old = to_change then fsizes else
+    | old -> if List.for_all2 (fun x y -> ik_compare x y = 0) old to_change then fsizes else
         raise (Reporting_basic.err_general l
                  ("Different size type variables in different clauses of " ^ string_of_id id))
     | exception Not_found -> Bindings.add id to_change fsizes
