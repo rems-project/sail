@@ -2041,7 +2041,9 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | Pat_aux (Pat_when (pat, guard, case), (l, _)) ->
           let tpat, env = bind_pat env pat (typ_of inferred_exp) in
           let checked_guard = check_exp env guard bool_typ in
-          Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env case typ), (l, None))
+          let flows, constrs = infer_flow env checked_guard in
+          let env' = add_constraints constrs (add_flows true flows env) in
+          Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env' case typ), (l, None))
      in
      annot_exp (E_case (inferred_exp, List.map (fun case -> check_case case typ) cases)) typ
   | E_try (exp, cases), _ ->
