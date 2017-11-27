@@ -1982,7 +1982,7 @@ let remove_bitvector_pat pat =
     let collect_guards_decls ps rootid t =
       let (start,_,ord,_) = vector_typ_args_of t in
       let rec collect current (guards,dls) idx ps =
-        let idx' = if is_order_inc ord then add_big_int idx unit_big_int else add_big_int idx unit_big_int in
+        let idx' = if is_order_inc ord then add_big_int idx unit_big_int else sub_big_int idx unit_big_int in
         (match ps with
           | pat :: ps' ->
             (match pat with
