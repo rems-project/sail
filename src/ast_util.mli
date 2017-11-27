@@ -46,6 +46,7 @@ open Ast
 open Big_int
 
 val no_annot : unit annot
+val gen_loc : Parse_ast.l -> Parse_ast.l
 
 val mk_id : string -> id
 val mk_kid : string -> kid

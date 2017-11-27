@@ -55,13 +55,23 @@ type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
                     }
 
 val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
-val rewrite_defs : tannot defs -> tannot defs
-val rewrite_undefined : bool -> tannot defs -> tannot defs
-val rewrite_defs_ocaml : (string * (tannot defs -> tannot defs)) list (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
-val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list (*Perform rewrites to exclude AST nodes not supported for lem out*)
-val rewrite_defs_check : (string * (tannot defs -> tannot defs)) list
 
-val simple_typ : typ -> typ
+val rewriters_base : tannot rewriters
+
+(* The identity re-writer *)
+val rewrite_defs : tannot defs -> tannot defs
+
+val rewrite_defs_base : tannot rewriters -> tannot defs -> tannot defs
+
+val rewrite_lexp : tannot rewriters -> tannot lexp -> tannot lexp
+
+val rewrite_pat : tannot rewriters -> tannot pat -> tannot pat
+
+val rewrite_let : tannot rewriters -> tannot letbind -> tannot letbind
+
+val rewrite_def : tannot rewriters -> tannot def -> tannot def
+
+val rewrite_fun : tannot rewriters -> tannot fundef -> tannot fundef
 
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
@@ -82,9 +92,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
   ; fP_Fpat          : id * 'pat -> 'fpat_aux
   }
-
 (* fold over pat_aux expressions *)
-
 
 (* the type of interpretations of expressions *)
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
@@ -177,3 +185,24 @@ val compute_exp_alg : 'b -> ('b -> 'b -> 'b) ->
   ('b * 'a opt_default_aux),('b * 'a opt_default),('b * 'a pexp),('b * 'a pexp_aux),
   ('b * 'a letbind_aux),('b * 'a letbind),
   ('b * 'a pat),('b * 'a pat_aux),('b * 'a fpat),('b * 'a fpat_aux)) exp_alg
+
+val simple_annot : Parse_ast.l -> typ -> Parse_ast.l * tannot
+
+val union_eff_exps : (tannot exp) list -> effect
+
+val fix_eff_exp : tannot exp -> tannot exp
+
+val fix_eff_lexp : tannot lexp -> tannot lexp
+
+val fix_eff_lb : tannot letbind -> tannot letbind
+
+val fix_eff_pexp : tannot pexp -> tannot pexp
+
+val fix_eff_fexp : tannot fexp -> tannot fexp
+
+val fix_eff_fexps : tannot fexps -> tannot fexps
+
+val fix_eff_opt_default : tannot opt_default -> tannot opt_default
+
+(* AA: How this is used in rewrite_pat seems suspect to me *)
+val vector_string_to_bit_list : Parse_ast.l -> lit_aux -> lit list

@@ -197,7 +197,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      ^/^ ocaml_exp ctx exp
   | E_internal_let (lexp, exp1, exp2) ->
      separate space [string "let"; ocaml_atomic_lexp ctx lexp;
-                     equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewriter.simple_typ (typ_of exp1))); string "in"]
+                     equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewrites.simple_typ (typ_of exp1))); string "in"]
      ^/^ ocaml_exp ctx exp2
   | E_loop (Until, cond, body) ->
      let loop_body =
@@ -274,7 +274,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        | Register typ ->
           if !opt_trace_ocaml then
             let var = gensym () in
-            let str_typ = parens (ocaml_string_typ (Rewriter.simple_typ typ) var) in
+            let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
             parens (separate space [string "let"; var; equals; bang ^^ zencode ctx id; string "in";
                                     string "trace_read" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ str_typ ^^ semi; var])
           else bang ^^ zencode ctx id
@@ -293,7 +293,7 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
           let traced_exp =
             if !opt_trace_ocaml then
               let var = gensym () in
-              let str_typ = parens (ocaml_string_typ (Rewriter.simple_typ typ) var) in
+              let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
               parens (separate space [string "let"; var; equals; ocaml_atomic_exp ctx exp; string "in";
                                       string "trace_write" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ str_typ ^^ semi; var])
             else ocaml_atomic_exp ctx exp

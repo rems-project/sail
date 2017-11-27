@@ -48,6 +48,8 @@ open Big_int
 
 let no_annot = (Parse_ast.Unknown, ())
 
+let gen_loc l = Parse_ast.Generated l
+
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
 
