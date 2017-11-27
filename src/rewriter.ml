@@ -2686,7 +2686,7 @@ let rewrite_simple_types (Defs defs) =
       e_lit = simple_lit;
       e_vector = (fun exps -> E_list exps);
       e_cast = (fun (typ, exp) -> E_cast (simple_typ typ, exp));
-      e_assert = (fun (E_aux (_, annot), str) -> E_assert (E_aux (E_lit (mk_lit L_true), annot), str));
+      (* e_assert = (fun (E_aux (_, annot), str) -> E_assert (E_aux (E_lit (mk_lit L_true), annot), str)); *)
       lEXP_cast = (fun (typ, lexp) -> LEXP_cast (simple_typ typ, lexp));
       pat_alg = simple_pat
     } in

@@ -416,7 +416,7 @@ let sub_real (x, y) = Num.sub_num x y
 let lt (x, y) = lt_big_int x y
 let gt (x, y) = gt_big_int x y
 let lteq (x, y) = le_big_int x y
-let gteq (x, y) = gt_big_int x y
+let gteq (x, y) = ge_big_int x y
 
 let pow2 x = power_big_int_positive_int x 2
 
@@ -462,3 +462,9 @@ let rec string_of_list sep string_of = function
   | [] -> ""
   | [x] -> string_of x
   | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
+
+let zero_extend (vec, n) =
+  let m = int_of_big_int n in
+  if m <= List.length vec
+  then take m vec
+  else replicate_bits ([B0], big_int_of_int (m - List.length vec)) @ vec

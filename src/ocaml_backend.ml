@@ -163,6 +163,11 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_app (f, [x]) -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
   | E_app (f, xs) when Env.is_union_constructor f (env_of exp) ->
      zencode_upper ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
+  (* Make sure we get the correct short circuiting semantics for and and or *)
+  | E_app (f, [x; y]) when string_of_id f = "and_bool" ->
+     separate space [ocaml_atomic_exp ctx x; string "&&"; ocaml_atomic_exp ctx y]
+  | E_app (f, [x; y]) when string_of_id f = "or_bool" ->
+     separate space [ocaml_atomic_exp ctx x; string "||"; ocaml_atomic_exp ctx y]
   | E_app (f, xs) ->
      zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
   | E_vector_subrange (exp1, exp2, exp3) -> string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
