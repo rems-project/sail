@@ -194,6 +194,8 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
+  | E_internal_let (lexp, binding, exp) ->
+     separate space [string "var"; doc_lexp lexp; equals; doc_exp binding; string "in"; doc_exp exp]
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
   | E_for (id, exp1, exp2, exp3, order, exp4) ->
@@ -247,6 +249,8 @@ and doc_block = function
   | [] -> string "()"
   | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
+  | [E_aux (E_internal_let (lexp, binding, E_aux (E_block exps, _)), _)] ->
+     separate space [string "var"; doc_lexp lexp; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
   | [exp] -> doc_exp exp
   | exp :: exps -> doc_exp exp ^^ semi ^^ hardline ^^ doc_block exps
 and doc_lexp (LEXP_aux (l_aux, _) as lexp) =
