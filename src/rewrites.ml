@@ -2755,6 +2755,9 @@ let rewrite_check_annot =
     try
       prerr_endline ("CHECKING: " ^ string_of_exp exp ^ " : " ^ string_of_typ (typ_of exp));
       let _ = check_exp (env_of exp) (strip_exp exp) (typ_of exp) in
+      (if not (alpha_equivalent (env_of exp) (typ_of exp) (Env.expand_synonyms (env_of exp) (typ_of exp)))
+       then raise (Reporting_basic.err_typ Parse_ast.Unknown "Found synonym in annotation")
+       else ());
       exp
     with
       Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))

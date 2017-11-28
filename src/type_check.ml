@@ -1994,7 +1994,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   match (exp_aux, typ_aux) with
   | E_block exps, _ ->
      begin
-       let rec check_block l env exps typ = match exps with
+       let rec check_block l env exps typ =
+         let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
+         let annot_exp exp typ = annot_exp_effect exp typ no_effect in
+         match exps with
          | [] -> typ_equality l env typ unit_typ; []
          | [exp] -> [crule check_exp env exp typ]
          | (E_aux (E_assign (lexp, bind), _) :: exps) ->
