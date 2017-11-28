@@ -8,7 +8,7 @@
     "else" "match" "in" "return" "register" "forall" "operator" "effect"
     "overload" "cast" "sizeof" "constraint" "default" "assert"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and"
-    "throw" "clause" "as" "repeat" "until" "while" "do"))
+    "throw" "clause" "as" "repeat" "until" "while" "do" "foreach"))
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "inc" "dec"

@@ -167,6 +167,13 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
     let var = E_aux (E_id id, (l, Some (env, typ, no_effect))) in
     match destruct_atom_nexp env typ with
     | Some size when prove env (nc_eq size nexp) -> Some var
+    (* AA: This next case is a bit of a hack... is there a more
+       general way to deal with trivial nexps that are offset by
+       constants? This will resolve a 'n - 1 sizeof when 'n is in
+       scope. *)
+    | Some size when prove env (nc_eq (nsum size (nint 1)) nexp) ->
+       let one_exp = infer_exp env (mk_lit_exp (L_num unit_big_int)) in
+       Some (E_aux (E_app (mk_id "add_range", [var; one_exp]), (gen_loc l, Some (env, atom_typ (nsum size (nint 1)), no_effect))))
     | _ ->
        begin
          match destruct_vector env typ with

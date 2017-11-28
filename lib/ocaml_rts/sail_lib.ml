@@ -413,6 +413,8 @@ let real_power (x, y) = Num.power_num x (Num.num_of_big_int y)
 let add_real (x, y) = Num.add_num x y
 let sub_real (x, y) = Num.sub_num x y
 
+let abs_real x = Num.abs_num x
+
 let lt (x, y) = lt_big_int x y
 let gt (x, y) = gt_big_int x y
 let lteq (x, y) = le_big_int x y
@@ -422,6 +424,7 @@ let pow2 x = power_big_int_positive_int x 2
 
 let max_int (x, y) = max_big_int x y
 let min_int (x, y) = min_big_int x y
+let abs_int x = abs_big_int x
 
 let undefined_real () = Num.num_of_int 0
 
