@@ -127,7 +127,10 @@ let rec extract_patt_parm (P_aux p (_,tannot)) =
 let rec extract_from_execute fcls = match fcls with
   | [] -> []
   | FCL_aux (FCL_Funcl _ (P_aux (P_app (Id_aux (Id i) _) parms) _) _) (_,Just(_,_,_,Effect_aux(Effect_set efs) _,_))::fcls ->
-    (Instr_form i (List.map extract_patt_parm parms) efs)::extract_from_execute fcls
+     (Instr_form i (List.map extract_patt_parm parms) efs)::extract_from_execute fcls
+  | _ :: fcls ->
+     (* AA: Find out what breaks this *)
+     extract_from_execute fcls
 end
 
 let rec extract_effects instrs execute = 

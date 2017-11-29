@@ -300,13 +300,15 @@ let rec pp_format_nes nes =
      nes) ^*) "]"
 
 let pp_format_annot = function
-  | _ -> "Nothing"
-
-    (*
   | None -> "Nothing"
   | Some (_, typ, eff) ->
-    "(Just (" ^ pp_format_typ_lem typ ^ ", " ^ pp_format_effects_lem eff ^ "))"
-     *)
+     "(Just ("
+     ^ pp_format_typ_lem typ ^ ", "
+     ^ "Tag_empty" ^ ", "
+     ^ "[], "
+     ^ pp_format_effects_lem eff ^ ", "
+     ^ pp_format_effects_lem eff
+     ^ "))"
 
 (*
   | NoTyp -> "Nothing"
