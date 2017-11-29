@@ -415,12 +415,12 @@ let def_loc = function
   | DEF_spec (VS_aux (_, (l, _)))
   | DEF_default (DT_aux (_, l))
   | DEF_scattered (SD_aux (_, (l, _)))
-  | DEF_reg_dec (DEC_aux (_, (l, _))) ->
+  | DEF_reg_dec (DEC_aux (_, (l, _)))
+  | DEF_fixity (_, _, Id_aux (_, l))
+  | DEF_overload (Id_aux (_, l), _) ->
     l
   | DEF_internal_mutrec _
-  | DEF_comm _
-  | DEF_overload _
-  | DEF_fixity _ ->
+  | DEF_comm _ ->
     Parse_ast.Unknown
 
 let string_of_id = function
