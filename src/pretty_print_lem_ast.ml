@@ -74,7 +74,7 @@ let lemnum default n =
     "int" ^ string_of_big_int n
   else if ge_big_int n zero_big_int then
     default n
-  else ("(zero - " ^ (default (abs_big_int n)) ^ ")")
+  else ("(int0 - " ^ (default (abs_big_int n)) ^ ")")
 
 let pp_format_id (Id_aux(i,_)) =
   match i with
@@ -300,9 +300,14 @@ let rec pp_format_nes nes =
      nes) ^*) "]"
 
 let pp_format_annot = function
+  | _ -> "Nothing"
+
+    (*
   | None -> "Nothing"
   | Some (_, typ, eff) ->
     "(Just (" ^ pp_format_typ_lem typ ^ ", " ^ pp_format_effects_lem eff ^ "))"
+     *)
+
 (*
   | NoTyp -> "Nothing"
   | Base((_,t),tag,nes,efct,efctsum,_) ->
@@ -471,7 +476,7 @@ and pp_lem_case ppf = function
 | Pat_aux(Pat_exp(pat,exp),(l,annot)) ->
   fprintf ppf "@[<1>(Pat_aux (Pat_exp %a@ %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp exp pp_lem_l l pp_annot annot
 | Pat_aux(Pat_when(pat,guard,exp),(l,annot)) ->
-  fprintf ppf "@[<1>(Pat_aux (Pat_exp %a@ %a %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp guard pp_lem_exp exp pp_lem_l l pp_annot annot
+  fprintf ppf "@[<1>(Pat_aux (Pat_when %a@ %a %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp guard pp_lem_exp exp pp_lem_l l pp_annot annot
 and pp_semi_lem_case ppf case = fprintf ppf "@[<1>%a %a@]" pp_lem_case case kwd ";"
 
 and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
