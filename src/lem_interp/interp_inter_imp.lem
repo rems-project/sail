@@ -440,7 +440,8 @@ let rec interp_to_value_helper debug arg ivh_mode err_str instr direction regist
       (Ivh_error (Interp_interface.Internal_error ("Write memory value request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_memv_tagged _ _ _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Write memory value tagged request in a " ^ errk_str)), events_out)
-    | _ -> (Ivh_error (Interp_interface.Internal_error ("Non expected action in a " ^ errk_str)), events_out)
+    | (outcome, _, _) ->
+       (Ivh_error (Interp_interface.Internal_error ("Non expected action in a " ^ errk_str ^ " " ^ Interp.string_of_outcome outcome)), events_out)
 end
 
 let call_external_functions direction outcome = 
