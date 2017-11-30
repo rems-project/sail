@@ -1419,8 +1419,8 @@ let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
    | V_ctor (Id_aux cid _) t ckind v ->
      if id = cid
      then (match (pats,detaint v) with
-     | ([],(V_lit (L_aux L_unit _))) -> (true,true,eenv)
-     | ([P_aux (P_lit (L_aux L_unit _)) _],(V_lit (L_aux L_unit _))) -> (true,true,eenv)
+     | ([],(V_lit (L_aux L_unit _))) -> (true,false,eenv)
+     | ([P_aux (P_lit (L_aux L_unit _)) _],(V_lit (L_aux L_unit _))) -> (true,false,eenv)
      | ([p],_) -> match_pattern t_level p v
      | _ -> (false,false,eenv) end)
      else (false,false,eenv)

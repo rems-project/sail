@@ -84,3 +84,15 @@ let translate_out_ropw op = match translate_out_enum op with
 | 3 -> RISCVSRLW
 | 4 -> RISCVSRAW
 | _ -> failwith "Unknown ropw in sail translate out"
+
+let translate_out_amoop op = match translate_out_enum op with
+| 0 -> RISCVAMOSWAP
+| 1 -> RISCVAMOADD
+| 2 -> RISCVAMOXOR
+| 3 -> RISCVAMOAND
+| 4 -> RISCVAMOOR
+| 5 -> RISCVAMOMIN
+| 6 -> RISCVAMOMAX
+| 7 -> RISCVAMOMINU
+| 8 -> RISCVAMOMAXU
+| _ -> failwith "Unknown amoop in sail translate out"

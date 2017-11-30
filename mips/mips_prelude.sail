@@ -472,6 +472,13 @@ function AccessLevel getAccessLevel() =
       case _    -> User (* behaviour undefined, assume user *)
     }
 
+function ([|2|]) int_of_accessLevel((AccessLevel)x) = 
+       switch (x) {
+         case User -> 0
+         case Supervisor -> 1
+         case Kernel -> 2
+       }
+
 function unit checkCP0Access () =
   {
     let accessLevel = getAccessLevel() in

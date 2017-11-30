@@ -32,21 +32,31 @@ typedef diafp = const union {
 
 typedef read_kind = enumerate {
   Read_plain;
-  Read_tag;
   Read_reserve;
   Read_acquire;
   Read_exclusive;
   Read_exclusive_acquire;
-  Read_stream
+  Read_stream;
+  Read_RISCV_acquire;
+  Read_RISCV_strong_acquire;
+  Read_RISCV_reserved;
+  Read_RISCV_reserved_acquire;
+  Read_RISCV_reserved_strong_acquire;
+  Read_X86_locked;
 }
 
 typedef write_kind = enumerate {
   Write_plain;
-  Write_tag;
   Write_conditional;
   Write_release;
   Write_exclusive;
   Write_exclusive_release;
+  Write_RISCV_release;
+  Write_RISCV_strong_release;
+  Write_RISCV_conditional;
+  Write_RISCV_conditional_release;
+  Write_RISCV_conditional_strong_release;
+  Write_X86_locked;
 }
 
 typedef barrier_kind = enumerate {
@@ -62,6 +72,13 @@ typedef barrier_kind = enumerate {
   Barrier_DSB_LD;
   Barrier_ISB;
   Barrier_MIPS_SYNC;
+  Barrier_RISCV_rw_rw;
+  Barrier_RISCV_r_rw;
+  Barrier_RISCV_r_r;
+  Barrier_RISCV_rw_w;
+  Barrier_RISCV_w_w;
+  Barrier_RISCV_i;
+  Barrier_x86_MFENCE;
 }
 
 typedef trans_kind = enumerate {
@@ -72,6 +89,7 @@ typedef instruction_kind = const union {
   (barrier_kind) IK_barrier;
   (read_kind) IK_mem_read;
   (write_kind) IK_mem_write;
+  (read_kind, write_kind) IK_mem_rmw;
   IK_cond_branch;
   (trans_kind) IK_trans;
   IK_simple

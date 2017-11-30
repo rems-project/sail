@@ -108,7 +108,7 @@ function (bit[64], bool) TLBTranslateC ((bit[64]) vAddr, (MemAccessType) accessT
       case 0b01 -> (Supervisor, None)                       (* xsseg - supervisor mapped *)
       case 0b00 -> (User, None) (* xuseg - user mapped *)
     } in
-    if (((nat)currentAccessLevel) < ((nat)requiredLevel)) then
+    if ((int_of_accessLevel(currentAccessLevel)) < (int_of_accessLevel(requiredLevel))) then
       (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
     else 
       let (pa, c) = switch(addr) {

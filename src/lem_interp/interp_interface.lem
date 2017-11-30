@@ -104,6 +104,10 @@ end
   and the potential static effects from the funcl clause for this instruction 
   Follows the form of the instruction in instruction_extractor, but populates the parameters with actual values
 *)
+
+
+type instruction_field_value = list bit
+
 type instruction = (string * list (string * instr_parm_typ * instruction_field_value))
 
 let {coq} instructionEqual i1 i2 = match (i1,i2) with
@@ -117,7 +121,7 @@ let inline ~{coq} instructionInequal = unsafe_structural_inequality
 type v_kind = Bitv | Bytev
 
 type decode_error = 
-  | Unsupported_instruction_error of instruction
+  | Unsupported_instruction_error of Interp_ast.value
   | Not_an_instruction_error of opcode
   | Internal_error of string
 
@@ -264,12 +268,12 @@ val initial_instruction_state : context -> string -> list register_value -> inst
   (* string is a function name, list of value are the parameters to that function *)
 
 type instruction_or_decode_error =
-  | IDE_instr of instruction * Interp_ast.value
+  | IDE_instr of Interp_ast.value
   | IDE_decode_error of decode_error
 
 (** propose to remove the following type and use the above instead *)
 type i_state_or_error =
-  | Instr of instruction * instruction_state
+  | Instr of Interp_ast.value * instruction_state
   | Decode_error of decode_error
 
 

@@ -99,22 +99,71 @@ type wordWidth =
   | RISCVWORD
   | RISCVDOUBLE
 
-let pp_riscv_load_op (unsigned, width) = match (unsigned, width) with
-  | (false, RISCVBYTE)    -> "lb"
-  | (true,  RISCVBYTE)    -> "lbu"
-  | (false, RISCVHALF)    -> "lh"
-  | (true,  RISCVHALF)    -> "lhu"
-  | (false, RISCVWORD)    -> "lw"
-  | (true,  RISCVWORD)    -> "lwu"
-  | (_, RISCVDOUBLE)      -> "ld"
-  | _                          -> failwith "unexpected load op"
+let pp_word_width width : string =
+  begin match width with
+  | RISCVBYTE   -> "b"
+  | RISCVHALF   -> "h"
+  | RISCVWORD   -> "w"
+  | RISCVDOUBLE -> "d"
+  end
 
-let pp_riscv_store_op width = match width with
-| RISCVBYTE -> "sb"
-| RISCVHALF -> "sh"
-| RISCVWORD -> "sw"
-| RISCVDOUBLE -> "sd"
-| _ -> failwith "unexpected store op"
+let pp_riscv_load_op (unsigned, width, aq, rl) =
+  "l" ^
+  (pp_word_width width) ^
+  (if unsigned then "u" else "") ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
+
+let pp_riscv_store_op (width, aq, rl) =
+  "s" ^
+  (pp_word_width width) ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
+
+let pp_riscv_load_reserved_op (aq, rl, width) =
+  "lr." ^
+  (pp_word_width width) ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
+
+let pp_riscv_store_conditional_op (aq, rl, width) =
+  "sc." ^
+  (pp_word_width width) ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
+
+type riscvAmoop =
+  | RISCVAMOSWAP
+  | RISCVAMOADD
+  | RISCVAMOXOR
+  | RISCVAMOAND
+  | RISCVAMOOR
+  | RISCVAMOMIN
+  | RISCVAMOMAX
+  | RISCVAMOMINU
+  | RISCVAMOMAXU
+
+let pp_riscv_amo_op_part = function
+  | RISCVAMOSWAP -> "swap"
+  | RISCVAMOADD  -> "add"
+  | RISCVAMOXOR  -> "xor"
+  | RISCVAMOAND  -> "and"
+  | RISCVAMOOR   -> "or"
+  | RISCVAMOMIN  -> "min"
+  | RISCVAMOMAX  -> "max"
+  | RISCVAMOMINU -> "minu"
+  | RISCVAMOMAXU -> "maxu"
+
+let pp_riscv_amo_op (op, aq, rl, width) =
+  "amo" ^
+  pp_riscv_amo_op_part op ^
+  begin match width with
+  | RISCVWORD   -> ".w"
+  | RISCVDOUBLE -> ".d"
+  | _ -> assert false
+  end ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
 
 let pp_riscv_fence_option = function
   | 0b0011 -> "rw"

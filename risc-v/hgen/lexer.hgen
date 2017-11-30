@@ -33,18 +33,44 @@
 "or",   RTYPE{op=RISCVOR};
 "and",  RTYPE{op=RISCVAND};
 
-"lb",  LOAD{unsigned=false; width=RISCVBYTE};
-"lbu", LOAD{unsigned=true;  width=RISCVBYTE};
-"lh",  LOAD{unsigned=false; width=RISCVHALF};
-"lhu", LOAD{unsigned=true;  width=RISCVHALF};
-"lw",  LOAD{unsigned=false; width=RISCVWORD};
-"lwu", LOAD{unsigned=true;  width=RISCVWORD};
-"ld",  LOAD{unsigned=false; width=RISCVDOUBLE};
+"lb",  LOAD{unsigned=false; width=RISCVBYTE;   aq=false; rl=false};
+"lbu", LOAD{unsigned=true;  width=RISCVBYTE;   aq=false; rl=false};
+"lh",  LOAD{unsigned=false; width=RISCVHALF;   aq=false; rl=false};
+"lhu", LOAD{unsigned=true;  width=RISCVHALF;   aq=false; rl=false};
+"lw",  LOAD{unsigned=false; width=RISCVWORD;   aq=false; rl=false};
+"lwu", LOAD{unsigned=true;  width=RISCVWORD;   aq=false; rl=false};
+"ld",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=false; rl=false};
 
-"sb", STORE{width=RISCVBYTE};
-"sh", STORE{width=RISCVHALF};
-"sw", STORE{width=RISCVWORD};
-"sd", STORE{width=RISCVDOUBLE};
+"lb.aq",  LOAD{unsigned=false; width=RISCVBYTE;   aq=true; rl=false};
+"lbu.aq", LOAD{unsigned=true;  width=RISCVBYTE;   aq=true; rl=false};
+"lh.aq",  LOAD{unsigned=false; width=RISCVHALF;   aq=true; rl=false};
+"lhu.aq", LOAD{unsigned=true;  width=RISCVHALF;   aq=true; rl=false};
+"lw.aq",  LOAD{unsigned=false; width=RISCVWORD;   aq=true; rl=false};
+"lwu.aq", LOAD{unsigned=true;  width=RISCVWORD;   aq=true; rl=false};
+"ld.aq",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=true; rl=false};
+
+"lb.aq.rl",  LOAD{unsigned=false; width=RISCVBYTE;   aq=true; rl=true};
+"lbu.aq.rl", LOAD{unsigned=true;  width=RISCVBYTE;   aq=true; rl=true};
+"lh.aq.rl",  LOAD{unsigned=false; width=RISCVHALF;   aq=true; rl=true};
+"lhu.aq.rl", LOAD{unsigned=true;  width=RISCVHALF;   aq=true; rl=true};
+"lw.aq.rl",  LOAD{unsigned=false; width=RISCVWORD;   aq=true; rl=true};
+"lwu.aq.rl", LOAD{unsigned=true;  width=RISCVWORD;   aq=true; rl=true};
+"ld.aq.rl",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=true; rl=true};
+
+"sb", STORE{width=RISCVBYTE;   aq=false; rl=false};
+"sh", STORE{width=RISCVHALF;   aq=false; rl=false};
+"sw", STORE{width=RISCVWORD;   aq=false; rl=false};
+"sd", STORE{width=RISCVDOUBLE; aq=false; rl=false};
+
+"sb.rl", STORE{width=RISCVBYTE;   aq=false; rl=true};
+"sh.rl", STORE{width=RISCVHALF;   aq=false; rl=true};
+"sw.rl", STORE{width=RISCVWORD;   aq=false; rl=true};
+"sd.rl", STORE{width=RISCVDOUBLE; aq=false; rl=true};
+
+"sb.aq.rl", STORE{width=RISCVBYTE;   aq=true; rl=true};
+"sh.aq.rl", STORE{width=RISCVHALF;   aq=true; rl=true};
+"sw.aq.rl", STORE{width=RISCVWORD;   aq=true; rl=true};
+"sd.aq.rl", STORE{width=RISCVDOUBLE; aq=true; rl=true};
 
 "addiw", ADDIW ();
 
@@ -62,3 +88,103 @@
 "r",  FENCEOPTION Fence_R;
 "w",  FENCEOPTION Fence_W;
 "rw", FENCEOPTION Fence_RW;
+
+"fence.i", FENCEI ();
+
+"lr.w",       LOADRES {width=RISCVWORD;   aq=false; rl=false};
+"lr.w.aq",    LOADRES {width=RISCVWORD;   aq=true;  rl=false};
+"lr.w.aq.rl", LOADRES {width=RISCVWORD;   aq=true;  rl=true};
+"lr.d",       LOADRES {width=RISCVDOUBLE; aq=false; rl=false};
+"lr.d.aq",    LOADRES {width=RISCVDOUBLE; aq=true;  rl=false};
+"lr.d.aq.rl", LOADRES {width=RISCVDOUBLE; aq=true;  rl=true};
+
+"sc.w",       STORECON {width=RISCVWORD;   aq=false; rl=false};
+"sc.w.rl",    STORECON {width=RISCVWORD;   aq=false; rl=true};
+"sc.w.aq.rl", STORECON {width=RISCVWORD;   aq=true;  rl=true};
+"sc.d",       STORECON {width=RISCVDOUBLE; aq=false; rl=false};
+"sc.d.rl",    STORECON {width=RISCVDOUBLE; aq=false; rl=true};
+"sc.d.aq.rl", STORECON {width=RISCVDOUBLE; aq=true;  rl=true};
+
+"amoswap.w",  AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOSWAP};
+"amoadd.w",   AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOADD};
+"amoand.w",   AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOAND};
+"amoor.w",    AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOOR};
+"amoxor.w",   AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOXOR};
+"amomax.w",   AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOMAX};
+"amomin.w",   AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOMIN};
+"amomaxu.w",  AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOMAXU};
+"amominu.w",  AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOMINU};
+
+"amoswap.d",  AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOSWAP};
+"amoadd.d",   AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOADD};
+"amoand.d",   AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOAND};
+"amoor.d",    AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOOR};
+"amoxor.d",   AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOXOR};
+"amomax.d",   AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOMAX};
+"amomin.d",   AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOMIN};
+"amomaxu.d",  AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOMAXU};
+"amominu.d",  AMO {width=RISCVDOUBLE; aq=false; rl=false; op=RISCVAMOMINU};
+
+"amoswap.w.aq",  AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOSWAP};
+"amoadd.w.aq",   AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOADD};
+"amoand.w.aq",   AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOAND};
+"amoor.w.aq",    AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOOR};
+"amoxor.w.aq",   AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOXOR};
+"amomax.w.aq",   AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOMAX};
+"amomin.w.aq",   AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOMIN};
+"amomaxu.w.aq",  AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOMAXU};
+"amominu.w.aq",  AMO {width=RISCVWORD; aq=true; rl=false; op=RISCVAMOMINU};
+
+"amoswap.d.aq",  AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOSWAP};
+"amoadd.d.aq",   AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOADD};
+"amoand.d.aq",   AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOAND};
+"amoor.d.aq",    AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOOR};
+"amoxor.d.aq",   AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOXOR};
+"amomax.d.aq",   AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOMAX};
+"amomin.d.aq",   AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOMIN};
+"amomaxu.d.aq",  AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOMAXU};
+"amominu.d.aq",  AMO {width=RISCVDOUBLE; aq=true; rl=false; op=RISCVAMOMINU};
+
+"amoswap.w.rl",  AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOSWAP};
+"amoadd.w.rl",   AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOADD};
+"amoand.w.rl",   AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOAND};
+"amoor.w.rl",    AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOOR};
+"amoxor.w.rl",   AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOXOR};
+"amomax.w.rl",   AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOMAX};
+"amomin.w.rl",   AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOMIN};
+"amomaxu.w.rl",  AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOMAXU};
+"amominu.w.rl",  AMO {width=RISCVWORD; aq=false; rl=true; op=RISCVAMOMINU};
+
+"amoswap.d.rl",  AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOSWAP};
+"amoadd.d.rl",   AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOADD};
+"amoand.d.rl",   AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOAND};
+"amoor.d.rl",    AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOOR};
+"amoxor.d.rl",   AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOXOR};
+"amomax.d.rl",   AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOMAX};
+"amomin.d.rl",   AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOMIN};
+"amomaxu.d.rl",  AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOMAXU};
+"amominu.d.rl",  AMO {width=RISCVDOUBLE; aq=false; rl=true; op=RISCVAMOMINU};
+
+"amoswap.w.aq.rl",  AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOSWAP};
+"amoadd.w.aq.rl",   AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOADD};
+"amoand.w.aq.rl",   AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOAND};
+"amoor.w.aq.rl",    AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOOR};
+"amoxor.w.aq.rl",   AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOXOR};
+"amomax.w.aq.rl",   AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOMAX};
+"amomin.w.aq.rl",   AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOMIN};
+"amomaxu.w.aq.rl",  AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOMAXU};
+"amominu.w.aq.rl",  AMO {width=RISCVWORD; aq=true; rl=true; op=RISCVAMOMINU};
+
+"amoswap.d.aq.rl",  AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOSWAP};
+"amoadd.d.aq.rl",   AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOADD};
+"amoand.d.aq.rl",   AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOAND};
+"amoor.d.aq.rl",    AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOOR};
+"amoxor.d.aq.rl",   AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOXOR};
+"amomax.d.aq.rl",   AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOMAX};
+"amomin.d.aq.rl",   AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOMIN};
+"amomaxu.d.aq.rl",  AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOMAXU};
+"amominu.d.aq.rl",  AMO {width=RISCVDOUBLE; aq=true; rl=true; op=RISCVAMOMINU};
+
+(** pseudo instructions *********************************************)
+
+"li", LI ()

@@ -10,48 +10,59 @@ let translate_out_signed_int inst bits =
 let translate_out_ireg ireg = IReg (int_to_ireg (translate_out_int ireg))
 
 let translate_out_uop op = match op with
-  | LUI0  -> RISCVLUI  
-  | AUIPC -> RISCVAUIPC
+  | RISCV_LUI   -> RISCVLUI
+  | RISCV_AUIPC -> RISCVAUIPC
 
 let translate_out_bop op = match op with
-  | BEQ0 -> RISCVBEQ 
-  | BNE  -> RISCVBNE 
-  | BLT  -> RISCVBLT 
-  | BGE  -> RISCVBGE 
-  | BLTU -> RISCVBLTU
-  | BGEU -> RISCVBGEU
+  | RISCV_BEQ  -> RISCVBEQ
+  | RISCV_BNE  -> RISCVBNE
+  | RISCV_BLT  -> RISCVBLT
+  | RISCV_BGE  -> RISCVBGE
+  | RISCV_BLTU -> RISCVBLTU
+  | RISCV_BGEU -> RISCVBGEU
 
 let translate_out_iop op = match op with
-  | ADDI0  -> RISCVADDI 
-  | SLTI0  -> RISCVSLTI 
-  | SLTIU0 -> RISCVSLTIU
-  | XORI0  -> RISCVXORI 
-  | ORI0   -> RISCVORI  
-  | ANDI0  -> RISCVANDI 
+  | RISCV_ADDI   -> RISCVADDI
+  | RISCV_SLTI   -> RISCVSLTI
+  | RISCV_SLTIU  -> RISCVSLTIU
+  | RISCV_XORI   -> RISCVXORI
+  | RISCV_ORI    -> RISCVORI
+  | RISCV_ANDI   -> RISCVANDI
 
 let translate_out_sop op = match op with
-  | SLLI -> RISCVSLLI
-  | SRLI -> RISCVSRLI
-  | SRAI -> RISCVSRAI
+  | RISCV_SLLI -> RISCVSLLI
+  | RISCV_SRLI -> RISCVSRLI
+  | RISCV_SRAI -> RISCVSRAI
 
 let translate_out_rop op = match op with
-  | ADD0  -> RISCVADD 
-  | SUB0  -> RISCVSUB 
-  | SLL0  -> RISCVSLL 
-  | SLT0  -> RISCVSLT 
-  | SLTU0 -> RISCVSLTU
-  | XOR0  -> RISCVXOR 
-  | SRL0  -> RISCVSRL 
-  | SRA0  -> RISCVSRA 
-  | OR0   -> RISCVOR  
-  | AND0  -> RISCVAND 
+  | RISCV_ADD   -> RISCVADD
+  | RISCV_SUB   -> RISCVSUB
+  | RISCV_SLL   -> RISCVSLL
+  | RISCV_SLT   -> RISCVSLT
+  | RISCV_SLTU  -> RISCVSLTU
+  | RISCV_XOR   -> RISCVXOR
+  | RISCV_SRL   -> RISCVSRL
+  | RISCV_SRA   -> RISCVSRA
+  | RISCV_OR    -> RISCVOR
+  | RISCV_AND   -> RISCVAND
 
 let translate_out_ropw op = match op with
-  | ADDW  -> RISCVADDW
-  | SUBW  -> RISCVSUBW
-  | SLLW  -> RISCVSLLW
-  | SRLW  -> RISCVSRLW
-  | SRAW  -> RISCVSRAW
+  | RISCV_ADDW  -> RISCVADDW
+  | RISCV_SUBW  -> RISCVSUBW
+  | RISCV_SLLW  -> RISCVSLLW
+  | RISCV_SRLW  -> RISCVSRLW
+  | RISCV_SRAW  -> RISCVSRAW
+
+let translate_out_amoop op = match op with
+  | AMOSWAP -> RISCVAMOSWAP
+  | AMOADD  -> RISCVAMOADD
+  | AMOXOR  -> RISCVAMOXOR
+  | AMOAND  -> RISCVAMOAND
+  | AMOOR   -> RISCVAMOOR
+  | AMOMIN  -> RISCVAMOMIN
+  | AMOMAX  -> RISCVAMOMAX
+  | AMOMINU -> RISCVAMOMINU
+  | AMOMAXU -> RISCVAMOMAXU
 
 let translate_out_wordWidth op = match op with
   | BYTE   -> RISCVBYTE  

@@ -86,7 +86,7 @@ let (CapStruct) null_cap = {
   sealed = false;
   offset = 0;
   base = 0;
-  length = 0;
+  length = 0xffffffffffffffff;
 }
 
 def Nat cap_size_t  = 32 (* cap size in bytes *)
@@ -138,7 +138,7 @@ function (bit[31]) getCapPerms((CapStruct) cap) =
    - this is the same as register format except for the offset,
      field which is stored as an absolute cursor on CHERI
      due to uarch optimisation *)
-function (bit[256]) capStructToMemBits((CapStruct) cap) =
+function (bit[256]) capStructToMemBits256((CapStruct) cap) =
   (
         cap.padding
       : cap.otype
@@ -152,12 +152,24 @@ function (bit[256]) capStructToMemBits((CapStruct) cap) =
 
 
 (* Reverse of above used when reading from memory *)
-function (bit[257]) memBitsToCapBits((bool) tag, (bit[256]) b) =
+function (bit[257]) memBitsToCapBits256((bool) tag, (bit[256]) b) =
   ([tag]
    : b[255..192]
    : ((bit[64])(b[191..128] - b[127..64]))
    : b[127..0]
   )
+
+(* When saving/restoring capabilities xor them with bits of null_cap --
+   this ensures that canonical null_cap is always all-zeros in memory
+   even though it may have bits set logically (e.g. length or exponent *)
+
+function (bit[256]) capStructToMemBits((CapStruct) cap) =
+  let (bit[256]) null_cap_bits = capStructToMemBits256(null_cap) in
+  capStructToMemBits256(cap) ^ null_cap_bits
+
+function (bit[257]) memBitsToCapBits((bool) tag, (bit[256]) b) =
+  let (bit[256]) null_cap_bits = capStructToMemBits256(null_cap) in
+  memBitsToCapBits256(tag, b ^ null_cap_bits)
 
 function (CapReg) capStructToCapReg((CapStruct) cap) =
     (

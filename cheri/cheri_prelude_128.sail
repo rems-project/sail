@@ -84,7 +84,7 @@ let (CapStruct) null_cap = {
   E                      = 48; (* encoded as 0 in memory due to xor *)
   sealed                 = false;
   B                      = 0;
-  T                      = 0;
+  T                      = 0x10000;
   otype                  = 0;
   address                = 0;
 }
@@ -133,7 +133,7 @@ function (bit[11]) getCapHardPerms((CapStruct) cap) =
   : [cap.permit_execute]
   : [cap.global])
 
-function (bit[128]) capStructToMemBits((CapStruct) cap) =
+function (bit[128]) capStructToMemBits128((CapStruct) cap) =
     let (bit[20]) b = if cap.sealed then (cap.B)[19..12] : (cap.otype)[23..12] else cap.B in
     let (bit[20]) t = if cap.sealed then (cap.T)[19..12] : (cap.otype)[11..0]  else cap.T in
     ( cap.uperms
@@ -147,11 +147,23 @@ function (bit[128]) capStructToMemBits((CapStruct) cap) =
     )
 
 function (CapReg) capStructToCapReg((CapStruct) cap) =
-    ([cap.tag] : capStructToMemBits(cap))
+    ([cap.tag] : capStructToMemBits128(cap))
 
 (* Reverse of above used when reading from memory *)
-function (CapReg) memBitsToCapBits((bool) tag, (bit[128]) b) =
+function (CapReg) memBitsToCapBits128((bool) tag, (bit[128]) b) =
   ([tag] : b)
+
+(* When saving/restoring capabilities xor them with bits of null_cap --
+   this ensures that canonical null_cap is always all-zeros in memory
+   even though it may have bits set logically (e.g. length or exponent *)
+
+let (bit[128]) null_cap_bits = capStructToMemBits128(null_cap)
+
+function (bit[128]) capStructToMemBits((CapStruct) cap) =
+  capStructToMemBits128(cap) ^ null_cap_bits
+
+function (bit[129]) memBitsToCapBits((bool) tag, (bit[128]) b) =
+  memBitsToCapBits128(tag, b ^ null_cap_bits)
 
 function (bit[31]) getCapPerms((CapStruct) cap) = 
     let (bit[15]) perms = EXTS(getCapHardPerms(cap)) in (* NB access_system copied into 14-11 *)
@@ -191,23 +203,23 @@ function [|-1:1|] a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound
     }
 
 function uint64 getCapBase((CapStruct) c)  = 
-    let ([|45|])  E = min(unsigned(c.E), 45) in
+    let ([|48|])  E = min(unsigned(c.E), 48) in
     let (bit[20]) Bc = c.B in
     let (bit[65]) a = EXTZ(c.address) in
     let (bit[20]) R = Bc - 0x01000 in (* wraps *)
-    let (bit[20]) a_mid = a[(E + 19)..E] in
+    let (bit[20]) a_mid = mask(a >> E) in
     let correction = a_top_correction(a_mid, R, Bc) in
     let a_top = a >> (E+20) in
     let (bit[64]) base = EXTZ((a_top + correction) : Bc) << E in
     unsigned(base)
 
 function CapLen getCapTop ((CapStruct) c)  = 
-    let ([|45|])  E = min(unsigned(c.E), 45) in
+    let ([|45|])  E = min(unsigned(c.E), 48) in
     let (bit[20]) Bc = c.B in
     let (bit[20]) T = c.T in
     let (bit[65]) a = EXTZ(c.address)  in
     let (bit[20]) R = Bc - 0x01000 in (* wraps *)
-    let (bit[20]) a_mid = a[(E + 19)..E] in
+    let (bit[20]) a_mid = mask(a >> E) in
     let correction = a_top_correction(a_mid, R, T) in
     let a_top = a >> (E+20) in
     let (bit[65]) top1 = EXTZ((a_top + correction) : T) in

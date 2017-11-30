@@ -45,6 +45,7 @@ scattered function option<ast> decode
 register CapReg PCC
 register CapReg nextPCC
 register CapReg delayedPCC
+register (bit[1]) inCCallDelay
 register CapReg C00 (* aka default data capability, DDC *)
 register CapReg C01
 register CapReg C02
@@ -115,6 +116,7 @@ typedef CapEx = enumerate {
   CapEx_PermitSealViolation;
   CapEx_AccessSystemRegsViolation;
   CapEx_PermitCCallViolation;
+  CapEx_AccessCCallIDCViolation;
 }
 
 typedef CPtrCmpOp = enumerate {
@@ -158,6 +160,7 @@ function (bit[8]) CapExCode((CapEx) ex) =
     case CapEx_PermitSealViolation          -> 0x17
     case CapEx_AccessSystemRegsViolation    -> 0x18
     case CapEx_PermitCCallViolation         -> 0x19
+    case CapEx_AccessCCallIDCViolation      -> 0x1a
   }
 
 typedef CapCauseReg = register bits [15:0] {
@@ -204,7 +207,11 @@ function forall Type 'o . 'o raise_c2_exception8((CapEx) capEx, (bit[8]) regnum)
   }
 
 function forall Type 'o . 'o raise_c2_exception((CapEx) capEx, (regno) regnum) =
-  raise_c2_exception8(capEx, 0b000 : regnum)
+  let reg8 = 0b000 : regnum in
+  if ((capEx == CapEx_AccessSystemRegsViolation) & (regnum == 26 (* IDC *))) then
+     raise_c2_exception8(CapEx_AccessCCallIDCViolation, reg8)
+  else
+     raise_c2_exception8(capEx, reg8)
 
 function forall Type 'o . 'o raise_c2_exception_noreg((CapEx) capEx) =
   raise_c2_exception8(capEx, 0xff)
@@ -213,7 +220,8 @@ function bool pcc_access_system_regs () =
       let pcc = capRegToCapStruct(PCC) in
       (pcc.access_system_regs)
 
-function bool register_inaccessible((regno) r) = 
+function bool register_inaccessible((regno) r) =
+  if ((r == 26 (* IDC *)) & ((bool)inCCallDelay)) then true else (* XXX interpreter crash without cast *)
   let (bool) is_sys_reg = switch(r) {
     case 0b11011 -> true
     case 0b11100 -> true

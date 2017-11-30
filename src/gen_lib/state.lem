@@ -79,7 +79,23 @@ let set_reg state reg v =
   <| state with regstate = reg.write_to state.regstate v |>
 
 
-val read_mem : forall 'regs 'a 'b. Bitvector 'a, Bitvector 'b => bool -> read_kind -> 'a -> integer -> M 'regs 'b
+let is_exclusive = function 
+  | Sail_impl_base.Read_plain -> false
+  | Sail_impl_base.Read_reserve -> true
+  | Sail_impl_base.Read_acquire -> false
+  | Sail_impl_base.Read_exclusive -> true
+  | Sail_impl_base.Read_exclusive_acquire -> true
+  | Sail_impl_base.Read_stream -> false
+  | Sail_impl_base.Read_RISCV_acquire -> false
+  | Sail_impl_base.Read_RISCV_strong_acquire -> false
+  | Sail_impl_base.Read_RISCV_reserved -> true
+  | Sail_impl_base.Read_RISCV_reserved_acquire -> true
+  | Sail_impl_base.Read_RISCV_reserved_strong_acquire -> true
+  | Sail_impl_base.Read_X86_locked -> true
+end
+
+
+val read_mem : bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
 let read_mem dir read_kind addr sz state =
   let addr = unsigned addr in
   let addrs = range addr (addr+sz-1) in
@@ -94,7 +110,7 @@ let read_mem dir read_kind addr sz state =
     | Sail_impl_base.Read_stream -> false
   end in
 
-  if is_exclusive 
+  if is_exclusive read_kind
   then [(Left value, <| state with last_exclusive_operation_was_load = true |>)]
   else [(Left value, state)]
 
@@ -118,7 +134,7 @@ let read_tag dir read_kind addr state =
   end in
 
   (* TODO Should reading a tag set the exclusive flag? *)
-  if is_exclusive
+  if is_exclusive read_kind
   then [(Left tag, <| state with last_exclusive_operation_was_load = true |>)]
   else [(Left tag, state)]
 
@@ -174,7 +190,23 @@ let reg_deref = read_reg
 
 val write_reg : forall 'regs 'a. register_ref 'regs 'a -> 'a -> M 'regs unit
 let write_reg reg v state =
-  [(Left (), <| state with regstate = reg.write_to state.regstate v |>)]
+  [(Left (),<| state with regstate = Map.insert (name_of_reg reg) v state.regstate |>)]
+let write_reg_range reg i j v =
+  read_reg reg >>= fun current_value ->
+  let new_value = update current_value i j v in
+  write_reg reg new_value
+let write_reg_bit reg i bit =
+  write_reg_range reg i i (Vector [bit] i (is_inc_of_reg reg))
+let write_reg_field reg regfield =
+  let (i,j) = register_field_indices reg regfield in  
+  write_reg_range reg i j
+let write_reg_bitfield reg regfield =
+  let (i,_) = register_field_indices reg regfield in  
+  write_reg_bit reg i
+let write_reg_field_range reg regfield i j v =
+  read_reg_field reg regfield >>= fun current_field_value ->
+  let new_field_value = update current_field_value i j v in
+  write_reg_field reg regfield new_field_value
 
 val update_reg : forall 'regs 'a 'b. register_ref 'regs 'a -> ('a -> 'b -> 'a) -> 'b -> M 'regs unit
 let update_reg reg f v state =

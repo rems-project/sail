@@ -3,10 +3,10 @@
       translate_imm20 "imm" imm,
       translate_reg "rd" rd,
       translate_uop op)
-| `RISCVJAL(imm, rd) -> JAL0(
+| `RISCVJAL(imm, rd) -> RISCV_JAL(
       translate_imm21 "imm" imm,
       translate_reg "rd" rd)
-| `RISCVJALR(imm, rs, rd) -> JALR0(
+| `RISCVJALR(imm, rs, rd) -> RISCV_JALR(
       translate_imm12 "imm" imm,
       translate_reg "rs" rd,
       translate_reg "rd" rd)
@@ -30,17 +30,21 @@
       translate_reg "rs1" rs1,
       translate_reg "rd" rd,
       translate_rop op)
-| `RISCVLoad(imm, rs, rd, unsigned, width) -> LOAD(
+| `RISCVLoad(imm, rs, rd, unsigned, width, aq, rl) -> LOAD(
       translate_imm12 "imm" imm,
       translate_reg "rs" rs,
       translate_reg "rd" rd,
       translate_bool "unsigned" unsigned,
-      translate_wordWidth width)
-| `RISCVStore(imm, rs, rd, width) -> STORE (
+      translate_wordWidth width,
+      translate_bool "aq" aq,
+      translate_bool "rl" rl)
+| `RISCVStore(imm, rs, rd, width, aq, rl) -> STORE (
       translate_imm12 "imm" imm,
       translate_reg "rs" rs,
       translate_reg "rd" rd,
-      translate_wordWidth width)
+      translate_wordWidth width,
+      translate_bool "aq" aq,
+      translate_bool "rl" rl)
 | `RISCVADDIW(imm, rs, rd) -> ADDIW(
       translate_imm12 "imm" imm,
       translate_reg "rs" rs,
@@ -56,5 +60,27 @@
       translate_reg "rd" rd,
       translate_ropw op)
 | `RISCVFENCE(pred, succ) -> FENCE(
-  translate_imm4 "pred" pred,
-  translate_imm4 "succ" succ)
+      translate_imm4 "pred" pred,
+      translate_imm4 "succ" succ)
+| `RISCVFENCEI -> FENCEI
+| `RISCVLoadRes(aq, rl, rs1, width, rd) -> LOADRES(
+      translate_bool "aq" aq,
+      translate_bool "rl" rl,
+      translate_reg "rs1" rs1,
+      translate_wordWidth width,
+      translate_reg "rd" rd)
+| `RISCVStoreCon(aq, rl, rs2, rs1, width, rd) -> STORECON(
+      translate_bool "aq" aq,
+      translate_bool "rl" rl,
+      translate_reg "rs2" rs2,
+      translate_reg "rs1" rs1,
+      translate_wordWidth width,
+      translate_reg "rd" rd)
+| `RISCVAMO (op, aq, rl, rs2, rs1, width, rd) -> AMO(
+      translate_amoop op,
+      translate_bool "aq" aq,
+      translate_bool "rl" rl,
+      translate_reg "rs2" rs2,
+      translate_reg "rs1" rs1,
+      translate_wordWidth width,
+      translate_reg "rd" rd)
