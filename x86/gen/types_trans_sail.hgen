@@ -1,0 +1,61 @@
+(*let translate_enum enum_values name value =
+  let rec bit_count n =
+    if n = 0 then 0
+    else 1 + (bit_count (n lsr 1)) in
+  let rec find_index element = function
+    | h::tail -> if h = element then 0 else 1 + (find_index element tail)
+    | _ -> failwith "translate_enum could not find value"
+    in
+  let size = bit_count (List.length enum_values) in
+  let index = find_index value enum_values in
+  (name, Range0 (Some size),  IInt.bit_list_of_integer size (Nat_big_num.of_int index))
+
+let translate_binop = translate_enum [X86ADD ; X86OR ; X86ADC ; X86SBB ; X86AND ; X86SUB ; X86XOR ; X86CMP ; X86ROL ; X86ROR ; X86RCL ; X86RCR ; X86SHL ; X86SHR ; X86TEST; X86SAR]
+
+let translate_cond = translate_enum [X86O ; X86NO ; X86B ; X86NB ; X86E ; X86NE ; X86NA ; X86A ; X86S ; X86NS  ; X86P ; X86NP ; X86L ; X86NL ; X86NG ; X86G ; X86ALWAYS ]
+
+let translate_monop = translate_enum [X86DEC; X86INC; X86NOT; X86NEG]
+
+let translate_bool value =
+  ("bool", Bit, [if value then Bitc_one else Bitc_zero])
+
+let translate_size = function
+  | X86S8(high) -> ("Sz8", [translate_bool high], [])
+  | X86S16      -> ("Sz16", [], [])
+  | X86S32      -> ("Sz32", [], [])
+  | X86S64      -> ("Sz64", [], [])
+
+let translate_bits bits value =
+  ("bits", Bvector (Some bits), IInt.bit_list_of_integer bits (Nat_big_num.of_int value))
+
+let translate_bits_big bits value =
+  ("bits", Bvector (Some bits), IInt.bit_list_of_integer bits value)
+
+let translate_reg r = translate_bits 4 (reg_to_int r)
+
+let translate_scale s = translate_bits 2 s
+
+let translate_imm64 i = translate_bits_big 64 i
+
+let translate_msi = function
+  | Some (scale, reg) -> ("Some", [translate_scale scale; translate_reg reg], [])
+  | None -> ("None", [], [])
+
+let translate_base = function
+  | X86HGenBase.NoBase  -> ("NoBase", [], [])
+  | X86HGenBase.RegBase(r) -> ("RegBase", [translate_reg r], [])
+  | X86HGenBase.RipBase -> ("RipBase", [], [])
+
+let translate_rm = function
+  | X86HGenBase.Reg (r)               -> ("Reg", [translate_reg r], [])
+  | X86HGenBase.Mem (m_si, base, imm) -> ("Mem", [translate_msi m_si; translate_base base; translate_imm64 imm], [])
+
+let translate_dest_src = function
+  | X86HGenBase.R_rm (reg, rm)   -> ("R_rm", [translate_reg reg; translate_rm rm], [])
+  | X86HGenBase.Rm_i (rm, imm64) -> ("Rm_i", [translate_rm rm; translate_imm64 imm64], [])
+  | X86HGenBase.Rm_r (rm, reg)   -> ("Rm_r", [translate_rm rm; translate_reg reg], [])
+
+let translate_imm_rm = function
+  | X86HGenBase.Imm (imm)        -> ("Imm", [translate_imm64 imm], [])
+  | X86HGenBase.Rm (rm)          -> ("Rm",  [translate_rm rm], [])
+ *)

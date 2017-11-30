@@ -1,0 +1,50 @@
+| `X86BINOP (locked, bop, sz, dst_src) ->
+    pp_locked locked ^ pp_x86Binop bop ^ pp_x86Size sz ^ " " ^ pp_x86Dest_src (sz, dst_src)
+| `X86BITOP (locked, bop, sz, bo) ->
+    pp_locked locked ^ pp_x86Bitop bop ^ pp_x86Size sz ^ " " ^ pp_x86Bit_offset (sz, bo)
+| `X86CALL (Imm i) -> "call " ^ " $" ^ bit64_to_string i
+| `X86CALL (Rm rm) -> "call " ^ pp_x86Rm (X86S64, rm)
+| `X86CLC -> "clc"
+| `X86CMC -> "cmc"
+| `X86CMPXCHG (locked, sz, rm, r) ->
+    sprintf "%scmpxchg%s %s, %s"
+      (pp_locked locked) (pp_x86Size sz) (pp_size_reg sz r) (pp_x86Rm (sz, rm))
+| `X86DIV (sz, rm) -> "div" ^ pp_x86Size sz ^ " " ^ pp_x86Rm (sz, rm)
+| `X86JCC (X86ALWAYS, i) -> "jmp " ^ bit64_to_string i
+| `X86JCC (cnd, i) -> "j" ^ pp_x86Cond cnd ^ " " ^ bit64_to_string i
+| `X86JMP (rm) -> "jmp " ^ pp_x86Rm(X86S64, rm)
+| `X86LEA (sz, dst_src) ->
+    "lea" ^ (pp_x86Size sz) ^ " " ^ pp_x86Dest_src (sz, dst_src)
+| `X86LEAVE -> "leave"
+| `X86LOOP (cnd, i) -> "loop" ^ pp_x86Cond cnd ^ " " ^ bit64_to_string i
+| `X86MFENCE -> "mfence"
+| `X86MONOP (locked, mop, sz, rm) ->
+    pp_x86Monop mop ^ pp_x86Size sz ^ " " ^ pp_x86Rm (sz, rm)
+| `X86MOV (X86ALWAYS, sz, dst_src) ->
+    "mov" ^ pp_x86Size sz ^ " " ^ pp_x86Dest_src (sz, dst_src)
+| `X86MOV (cnd, sz, dst_src) ->
+    "cmov" ^ pp_x86Cond cnd ^ pp_x86Size sz ^ " " ^ pp_x86Dest_src (sz, dst_src)
+| `X86MOVSX (sz1, R_rm (r, rm), sz2) ->
+    "movs" ^ pp_x86Size sz1 ^ pp_x86Size sz2 ^ " " ^ pp_x86Rm (sz1, rm) ^
+    ", " ^ pp_size_reg sz2 r
+| `X86MOVSX (sz1, _, sz2) -> failwith "bad movsx instruction"
+| `X86MOVZX (sz1, R_rm (r, rm), sz2) ->
+    "movz" ^ pp_x86Size sz1 ^ pp_x86Size sz2 ^ " " ^ pp_x86Rm (sz1, rm) ^
+    ", " ^ pp_size_reg sz2 r
+| `X86MOVZX (sz1, _, sz2) -> failwith "bad movzx instruction"
+| `X86MUL (sz, rm) -> "mul" ^ pp_x86Size sz ^ " " ^ pp_x86Rm (sz, rm)
+| `X86NOP -> "nop"
+| `X86POP rm -> "pop " ^ (pp_x86Rm (X86S64, rm))
+| `X86PUSH (Imm i) -> "push $" ^ bit64_to_string i
+| `X86PUSH (Rm rm) -> "push " ^ pp_x86Rm (X86S64, rm)
+| `X86RET i -> "ret " ^ bit64_to_string i
+| `X86SET (cnd, b, rm) -> "set" ^ pp_x86Cond cnd ^ " " ^ pp_x86Rm (X86S8 b, rm)
+| `X86STC -> "stc"
+| `X86XADD (locked, sz, rm, r) ->
+    sprintf "%s xadd%s %s, %s"
+      (pp_locked locked) (pp_x86Size sz) (pp_size_reg sz r) (pp_x86Rm (sz, rm))
+| `X86XCHG (locked, sz, rm, r) ->
+    sprintf "%sxchg%s %s, %s"
+      (pp_locked locked) (pp_x86Size sz) (pp_size_reg sz r) (pp_x86Rm (sz, rm))
+| `X86ThreadStart               -> "start"
+| `X86StopFetching              -> "hlt"

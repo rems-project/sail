@@ -1,0 +1,26 @@
+| `X86BINOP (_, _, _, ds) -> fold_dest_src ds c
+| `X86BITOP (_, _, _, bo) -> fold_bit_offset bo c
+| `X86CALL irm -> fold_imm_rm irm c
+| `X86CLC -> c
+| `X86CMC -> c
+| `X86CMPXCHG (_, _, rm, r) -> fold_rm rm (fold_reg r c)
+| `X86DIV (_, rm) -> fold_rm rm c
+| `X86JCC _ -> c
+| `X86JMP rm -> fold_rm rm c
+| `X86LEA (_, ds) -> fold_dest_src ds c
+| `X86LEAVE -> c
+| `X86LOOP _ -> c
+| `X86MFENCE -> c
+| `X86MONOP (_, _, _, rm) -> fold_rm rm c
+| `X86MOV (_, _, ds) -> fold_dest_src ds c
+| `X86MOVSX (_, ds, _) -> fold_dest_src ds c
+| `X86MOVZX (_, ds, _) -> fold_dest_src ds c
+| `X86MUL (_, rm) -> fold_rm rm c
+| `X86NOP -> c
+| `X86POP rm -> fold_rm rm c
+| `X86PUSH irm -> fold_imm_rm irm c
+| `X86RET _ -> c
+| `X86SET (_, _, rm) -> fold_rm rm c
+| `X86STC -> c
+| `X86XADD (_, _, rm, r) -> fold_rm rm (fold_reg r c)
+| `X86XCHG (_, _, rm, r) -> fold_rm rm (fold_reg r c)

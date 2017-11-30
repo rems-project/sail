@@ -1,0 +1,26 @@
+| `X86BINOP of bool * x86Binop * x86Size * x86Dest_src
+| `X86BITOP of bool * x86Bitop * x86Size * x86Bit_offset
+| `X86CALL of x86Imm_rm
+| `X86CLC
+| `X86CMC
+| `X86CMPXCHG of bool * x86Size * x86Rm * reg
+| `X86DIV of x86Size * x86Rm
+| `X86JCC of x86Cond * bit64
+| `X86JMP of x86Rm
+| `X86LEA of x86Size * x86Dest_src
+| `X86LEAVE
+| `X86LOOP of x86Cond * bit64
+| `X86MFENCE
+| `X86MONOP of bool * x86Monop * x86Size * x86Rm
+| `X86MOV of x86Cond * x86Size * x86Dest_src
+| `X86MOVSX of x86Size * x86Dest_src * x86Size
+| `X86MOVZX of x86Size * x86Dest_src * x86Size
+| `X86MUL of x86Size * x86Rm
+| `X86NOP
+| `X86POP of x86Rm
+| `X86PUSH of x86Imm_rm
+| `X86RET of bit64
+| `X86SET of x86Cond * bool * x86Rm
+| `X86STC
+| `X86XADD of bool * x86Size * x86Rm * reg
+| `X86XCHG of bool * x86Size * x86Rm * reg

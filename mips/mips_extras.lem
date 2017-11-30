@@ -31,25 +31,25 @@ let memory_parameter_transformer_option_address _mode v =
   end
 
 
-let read_memory_functions : memory_reads =
+let mips_read_memory_functions : memory_reads =
   [ ("MEMr",             (MR Read_plain              memory_parameter_transformer));
     ("MEMr_reserve",     (MR Read_reserve            memory_parameter_transformer));
   ]
 
-let read_memory_tagged_functions : memory_read_taggeds =
+let mips_read_memory_tagged_functions : memory_read_taggeds =
   [ ("MEMr_tag",         (MRT Read_plain             memory_parameter_transformer));
     ("MEMr_tag_reserve", (MRT Read_reserve           memory_parameter_transformer));
   ]
 
-let memory_writes : memory_writes =
+let mips_memory_writes : memory_writes =
   []
 
-let memory_eas : memory_write_eas =
+let mips_memory_eas : memory_write_eas =
   [ ("MEMea",                 (MEA Write_plain           memory_parameter_transformer));
     ("MEMea_conditional",     (MEA Write_conditional     memory_parameter_transformer));
   ]
 
-let memory_vals : memory_write_vals =
+let mips_memory_vals : memory_write_vals =
   [ ("MEMval",      (MV memory_parameter_transformer_option_address Nothing));
     ("MEMval_conditional", (MV memory_parameter_transformer_option_address
                            (Just 
@@ -58,7 +58,7 @@ let memory_vals : memory_write_vals =
                              (IState (Interp.add_answer_to_stack interp bit) context)))));
   ]
 
-let memory_vals_tagged : memory_write_vals_tagged =
+let mips_memory_vals_tagged : memory_write_vals_tagged =
   [
     ("MEMval_tag",      (MVT memory_parameter_transformer_option_address Nothing));
     ("MEMval_tag_conditional", (MVT memory_parameter_transformer_option_address
@@ -68,6 +68,6 @@ let memory_vals_tagged : memory_write_vals_tagged =
                              (IState (Interp.add_answer_to_stack interp bit) context)))));
   ]
 
-let barrier_functions = [
+let mips_barrier_functions = [
   ("MEM_sync", Barrier_MIPS_SYNC);
   ]
