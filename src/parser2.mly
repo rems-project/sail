@@ -142,13 +142,13 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union With Val Constraint Throw Try Catch Exit
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do
+%token Repeat Until While Do Record Mutual
 
 %nonassoc Then
 %nonassoc Else
 
 %token Bar Comma Dot Eof Minus Semi Under DotDot
-%token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar
+%token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
 %token MinusGt
 
 /*Terminals with content*/
@@ -957,16 +957,32 @@ atomic_exp:
     { mk_exp (E_vector_access ($1, $3)) $startpos $endpos }
   | atomic_exp Lsquare exp DotDot exp Rsquare
     { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
+  | Record Lcurly fexp_exp_list Rcurly
+    { mk_exp (E_record $3) $startpos $endpos }
+  | Lcurly exp With fexp_exp_list Rcurly
+    { mk_exp (E_record_update ($2, $4)) $startpos $endpos }
   | Lsquare exp_list Rsquare
     { mk_exp (E_vector $2) $startpos $endpos }
   | Lsquare exp With atomic_exp Eq exp Rsquare
     { mk_exp (E_vector_update ($2, $4, $6)) $startpos $endpos }
   | Lsquare exp With atomic_exp DotDot atomic_exp Eq exp Rsquare
     { mk_exp (E_vector_update_subrange ($2, $4, $6, $8)) $startpos $endpos }
+  | LsquareBar exp_list RsquareBar
+    { mk_exp (E_list $2) $startpos $endpos }
   | Lparen exp Rparen
     { $2 }
   | Lparen exp Comma exp_list Rparen
     { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
+
+fexp_exp:
+  | atomic_exp Eq exp
+    { mk_exp (E_app_infix ($1, mk_id (Id "=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+
+fexp_exp_list:
+  | fexp_exp
+    { [$1] }
+  | fexp_exp Comma fexp_exp_list
+    { $1 :: $3 }
 
 exp_list:
   | exp
@@ -1042,6 +1058,12 @@ fun_def:
   | Function_ funcls
     { mk_fun (FD_function (mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
 
+fun_def_list:
+  | fun_def
+    { [$1] }
+  | fun_def fun_def_list
+    { $1 :: $2 }
+
 let_def:
   | Let_ letbind
     { $2 }
@@ -1115,6 +1137,8 @@ def:
     { DEF_scattered (mk_sd (SD_scattered_end $2) $startpos $endpos) }
   | default_def
     { DEF_default $1 }
+  | Mutual Lcurly fun_def_list Rcurly
+    { DEF_internal_mutrec $3 }
 
 defs_list:
   | def

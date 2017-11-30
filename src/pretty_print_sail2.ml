@@ -183,12 +183,13 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> string "E_cons"
-  | E_record fexps -> string "E_record"
+  | E_record fexps -> separate space [string "record"; string "{"; doc_fexps fexps; string "}"]
   | E_loop (While, cond, exp) ->
      separate space [string "while"; doc_exp cond; string "do"; doc_exp exp]
   | E_loop (Until, cond, exp) ->
      separate space [string "repeat"; doc_exp exp; string "until"; doc_exp cond]
-  | E_record_update (exp, fexps) -> string "E_record_update"
+  | E_record_update (exp, fexps) ->
+     separate space [string "{"; doc_exp exp; string "with"; doc_fexps fexps; string "}"]
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
@@ -245,6 +246,10 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
   | _ -> parens (doc_exp exp)
+and doc_fexps (FES_aux (FES_Fexps (fexps, _), _)) =
+  separate_map (comma ^^ space) doc_fexp fexps
+and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+  separate space [doc_id id; equals; doc_exp exp]
 and doc_block = function
   | [] -> string "()"
   | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
@@ -336,17 +341,7 @@ let doc_spec (VS_aux(v,_)) =
     let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
       utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
     let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"]) in
-    if docs = [] then empty else braces (separate (comma ^^ space) docs)
-    (* function
-    | Some s ->
-       let ext_for backend = utf8string ("\"" ^ String.escaped (s backend) ^  "\"") in
-       let extern =
-         if s "ocaml" = s "lem"
-         then ext_for "ocaml"
-         else separate space [lbrace; string "ocaml:"; ext_for "ocaml"; string "lem:"; ext_for "lem"; rbrace]
-       in
-       equals ^^ space ^^ extern ^^ space
-    | None -> empty *)
+    if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->
@@ -382,6 +377,9 @@ let rec doc_def def = group (match def with
   | DEF_kind k_def -> doc_kind_def k_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
+  | DEF_internal_mutrec fundefs ->
+     (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs)
+     ^^ hardline ^^ string "}"
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
   | DEF_fixity (prec, n, id) ->

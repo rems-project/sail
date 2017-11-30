@@ -46,6 +46,7 @@ open Ast_util
 open Big_int
 
 let opt_undefined_gen = ref false
+let opt_magic_hash = ref false
 
 module Envmap = Finite_map.Fmap_map(String)
 module Nameset' = Set.Make(String)
@@ -117,10 +118,21 @@ let typ_error l msg opt_id opt_var opt_kind =
               | None,None,Some(kind) -> " " ^ (kind_to_string kind)
               | _ -> "")))
 
-let to_ast_id (Parse_ast.Id_aux(id,l)) =
-    Id_aux( (match id with
-             | Parse_ast.Id(x) -> Id(x)
-             | Parse_ast.DeIid(x) -> DeIid(x)) , l)
+let string_of_parse_id_aux = function
+  | Parse_ast.Id v -> v
+  | Parse_ast.DeIid v -> v
+
+let string_contains str char =
+  try (String.index str char; true) with
+  | Not_found -> false
+
+let to_ast_id (Parse_ast.Id_aux(id, l)) =
+  if string_contains (string_of_parse_id_aux id) '#' && not (!opt_magic_hash)
+  then typ_error l "Identifier contains hash character" None None None
+  else Id_aux ((match id with
+                | Parse_ast.Id(x) -> Id(x)
+                | Parse_ast.DeIid(x) -> DeIid(x)),
+               l)
 
 let to_ast_var (Parse_ast.Kid_aux(Parse_ast.Var v,l)) = Kid_aux(Var v,l)
 
@@ -483,7 +495,10 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_vector_append(e1,e2) -> E_vector_append(to_ast_exp k_env def_ord e1,to_ast_exp k_env def_ord e2)
     | Parse_ast.E_list(exps) -> E_list(List.map (to_ast_exp k_env def_ord) exps)
     | Parse_ast.E_cons(e1,e2) -> E_cons(to_ast_exp k_env def_ord e1, to_ast_exp k_env def_ord e2)
-    | Parse_ast.E_record _ -> raise (Reporting_basic.err_unreachable l "parser generated an E_record")
+    | Parse_ast.E_record fexps ->
+       (match to_ast_fexps true k_env def_ord fexps with
+        | Some fexps -> E_record fexps
+        | None -> raise (Reporting_basic.err_unreachable l "to_ast_fexps with true returned none"))
     | Parse_ast.E_record_update(exp,fexps) -> 
       (match to_ast_fexps true k_env def_ord fexps with
       | Some(fexps) -> E_record_update(to_ast_exp k_env def_ord exp, fexps)
@@ -886,7 +901,15 @@ let rec to_ast_defs_helper envs partial_defs = function
                    then (fst !d) :: defs, envs, partial_defs
                    else typ_error l "Scattered type definition never ended" (Some id) None None))                
 
+let rec remove_mutrec = function
+  | [] -> []
+  | Parse_ast.DEF_internal_mutrec fundefs :: defs ->
+     List.map (fun fdef -> Parse_ast.DEF_fundef fdef) fundefs @ remove_mutrec defs
+  | def :: defs ->
+     def :: remove_mutrec defs
+
 let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (def_ord : order) (Parse_ast.Defs(defs)) =
+  let defs = remove_mutrec defs in
   let defs,(_,k_env,def_ord),partial_defs = to_ast_defs_helper (default_names,kind_env,def_ord) [] defs in
   List.iter 
     (fun (id,(d,k)) -> 

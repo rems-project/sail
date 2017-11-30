@@ -2757,6 +2757,18 @@ let rewrite_defs_ocaml = [
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
   ]
 
+let rewrite_defs_sil = [
+    ("top_sort_defs", top_sort_defs);
+    ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
+    ("tuple_assignments", rewrite_tuple_assignments);
+    ("simple_assignments", rewrite_simple_assignments);
+    ("constraint", rewrite_constraint);
+    ("trivial_sizeof", rewrite_trivial_sizeof);
+    ("sizeof", rewrite_sizeof);
+    ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+    ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  ]
+
 let rewrite_check_annot =
   let check_annot exp =
     try

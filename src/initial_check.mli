@@ -44,6 +44,7 @@ open Ast
 open Ast_util
 
 val opt_undefined_gen : bool ref
+val opt_magic_hash : bool ref
 
 val process_ast : order -> Parse_ast.defs -> unit defs
 

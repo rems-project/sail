@@ -275,7 +275,7 @@ exp_aux =  (* Expression *)
  | E_vector_append of exp * exp (* vector concatenation *)
  | E_list of (exp) list (* list *)
  | E_cons of exp * exp (* cons *)
- | E_record of fexps (* struct *)
+ | E_record of exp list (* struct *)
  | E_record_update of exp * (exp) list (* functional update of struct *)
  | E_field of exp * id (* field projection from struct *)
  | E_case of exp * (pexp) list (* pattern matching *)
@@ -498,6 +498,7 @@ def =  (* Top-level definition *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
  | DEF_reg_dec of dec_spec (* register declaration *)
+ | DEF_internal_mutrec of fundef list
 
 
 type 
