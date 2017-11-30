@@ -1294,9 +1294,9 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
              (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem None typq])
              ((*doc_typquant_lem typq*) ar_doc) in
          let make_id pat id =
-           separate space [string "Interp_ast.Id_aux";
-                           parens (string "Interp_ast.Id " ^^ string_lit (doc_id id));
-                           if pat then underscore else string "Interp_ast.Unknown"] in
+           separate space [string "SIA.Id_aux";
+                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                           if pat then underscore else string "SIA.Unknown"] in
          let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
          let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
          let fromInterpValuePP =
@@ -1308,18 +1308,18 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
                     match tu with
                     | Tu_ty_id (ty,cid) ->
                        (separate space)
-                         [pipe;string "Interp_ast.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
                           arrow;
                           doc_id_lem_ctor cid;
                           parens (string "fromInterpValue v")]
                     | Tu_id cid ->
                        (separate space)
-                         [pipe;string "Interp_ast.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
                           arrow;
                           doc_id_lem_ctor cid])
                   ar) ^/^
 
-                  ((separate space) [pipe;string "Interp_ast.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
+                  ((separate space) [pipe;string "SI.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
 
                  let failmessage =
                     (string_lit
@@ -1338,40 +1338,43 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
                     | Tu_ty_id (ty,cid) ->
                        (separate space)
                          [pipe;doc_id_lem_ctor cid;string "v";arrow;
-                          string "Interp_ast.V_ctor";
+                          string "SI.V_ctor";
                           parens (make_id false cid);
-                          parens (string "Interp_ast.T_id " ^^ string_lit (doc_id id));
-                          string "Interp_ast.C_Union";
+                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                          string "SI.C_Union";
                           parens (string "toInterpValue v")]
                     | Tu_id cid ->
                        (separate space)
                          [pipe;doc_id_lem_ctor cid;arrow;
-                          string "Interp_ast.V_ctor";
+                          string "SI.V_ctor";
                           parens (make_id false cid);
-                          parens (string "Interp_ast.T_id " ^^ string_lit (doc_id id));
-                          string "Interp_ast.C_Union";
+                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                          string "SI.C_Union";
                           parens (string "toInterpValue ()")])
                   ar) ^/^
                  string "end") in
          let fromToInterpValuePP =
-          toInterpValuePP ^^ hardline ^^ hardline ^^
-          fromInterpValuePP ^^ hardline ^^ hardline ^^           
            ((prefix 2 1)
               (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
               (concat [string "let toInterpValue = ";toInterpValueF;hardline;
                        string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
-         (typ_pp ^^ hardline,fromToInterpValuePP ^^ hardline))
+         typ_pp ^^ hardline ^^ hardline ^^
+           if !print_to_from_interp_value then
+           toInterpValuePP ^^ hardline ^^ hardline ^^
+             fromInterpValuePP ^^ hardline ^^ hardline ^^
+               fromToInterpValuePP ^^ hardline
+           else empty)
   | TD_enum(id,nm,enums,_) ->
      (match id with
-      | Id_aux ((Id "read_kind"),_) -> (empty,empty)
-      | Id_aux ((Id "write_kind"),_) -> (empty,empty)
-      | Id_aux ((Id "barrier_kind"),_) -> (empty,empty)
-      | Id_aux ((Id "trans_kind"),_) -> (empty,empty)
-      | Id_aux ((Id "instruction_kind"),_) -> (empty,empty)
-      | Id_aux ((Id "regfp"),_) -> (empty,empty)
-      | Id_aux ((Id "niafp"),_) -> (empty,empty)
-      | Id_aux ((Id "diafp"),_) -> (empty,empty)
+      | Id_aux ((Id "read_kind"),_) -> empty
+      | Id_aux ((Id "write_kind"),_) -> empty
+      | Id_aux ((Id "barrier_kind"),_) -> empty
+      | Id_aux ((Id "trans_kind"),_) -> empty
+      | Id_aux ((Id "instruction_kind"),_) -> empty
+      | Id_aux ((Id "regfp"),_) -> empty
+      | Id_aux ((Id "niafp"),_) -> empty
+      | Id_aux ((Id "diafp"),_) -> empty
       | _ ->
          let rec range i j = if i > j then [] else i :: (range (i+1) j) in
          let nats = range 0 in
@@ -1382,9 +1385,9 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
          let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
          let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
          let make_id pat id =
-           separate space [string "Interp_ast.Id_aux";
-                           parens (string "Interp_ast.Id " ^^ string_lit (doc_id id));
-                           if pat then underscore else string "Interp_ast.Unknown"] in
+           separate space [string "SIA.Id_aux";
+                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                           if pat then underscore else string "SIA.Unknown"] in
          let fromInterpValuePP =
            (prefix 2 1)
              (separate space [string "let rec";fromInterpValueF;string "v";equals;string "match v with"])
@@ -1392,7 +1395,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
                ((separate_map (break 1))
                   (fun (cid) ->
                     (separate space)
-                      [pipe;string "Interp_ast.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                      [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
                        arrow;doc_id_lem_ctor cid]
                   )
                   enums
@@ -1400,7 +1403,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
                  (
                    (align
                       ((prefix 3 1)
-                         (separate space [pipe;string ("Interp_ast.V_lit (Interp_ast.L_aux (Interp_ast.L_num n) _)");arrow])
+                         (separate space [pipe;string ("SI.V_lit (SIA.L_aux (SIA.L_num n) _)");arrow])
                          (separate space [string "match";parens(string "natFromInteger n");string "with"] ^/^
                             (
                               ((separate_map (break 1))
@@ -1416,7 +1419,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
                    )
                  ) ^/^
 
-                  ((separate space) [pipe;string "Interp_ast.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
+                  ((separate space) [pipe;string "SI.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
 
                    let failmessage =
                      (string_lit
@@ -1434,25 +1437,27 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
                   (fun (cid,number) ->
                     (separate space)
                       [pipe;doc_id_lem_ctor cid;arrow;
-                       string "Interp_ast.V_ctor";
+                       string "SI.V_ctor";
                        parens (make_id false cid);
-                       parens (string "Interp_ast.T_id " ^^ string_lit (doc_id id));
-                       parens (string ("Interp_ast.C_Enum " ^ string_of_int number));
+                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                       parens (string ("SI.C_Enum " ^ string_of_int number));
                        parens (string "toInterpValue ()")])
                   (List.combine enums (nats ((List.length enums) - 1)))) ^/^
                  string "end") in
          let fromToInterpValuePP =
-           toInterpValuePP ^^ hardline ^^ hardline ^^
-           fromInterpValuePP ^^ hardline ^^ hardline ^^
            ((prefix 2 1)
              (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
              (concat [string "let toInterpValue = ";toInterpValueF;hardline;
                       string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
-         (typ_pp ^^ hardline,
-          fromToInterpValuePP ^^ hardline))
+          typ_pp ^^ hardline ^^ hardline ^^
+            if !print_to_from_interp_value 
+            then toInterpValuePP ^^ hardline ^^ hardline ^^
+              fromInterpValuePP ^^ hardline ^^ hardline ^^
+                fromToInterpValuePP ^^ hardline
+            else empty)
   | TD_register(id,n1,n2,rs) ->
-    match n1,n2 with
+    match n1, n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
        let dir_b = i1 < i2 in
        let dir = (if dir_b then "true" else "false") in
@@ -1532,7 +1537,6 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
          (*^^ hardline ^^
            separate_map hardline doc_field rs*)
     | _ -> raise (Reporting_basic.err_unreachable l "register with non-constant indices")
-
 
 let doc_rec_lem (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> space
