@@ -1,0 +1,85 @@
+(*** instructions ***)
+
+type token_TSTART  = {txt : string}
+type token_TCOMMIT = {txt : string}
+type token_TABORT  = {txt : string}
+type token_TTEST   = {txt : string}
+
+type token_ADCSBC = {txt : string; sub_op : boolean; setflags : boolean}
+type token_ADDSUB = {txt : string; sub_op : boolean; setflags : boolean}
+type token_ADR = {txt : string; page : boolean}
+type token_LOGOP = {txt : string; op : logicalOp; setflags : boolean; invert : boolean}
+type token_SHIFTOP = {txt : string; shift_type : shiftType}
+type token_BCOND = {txt : string; condition : int}
+type token_B = {txt : string; branch_type : branchType}
+type token_BR = {txt : string; branch_type : branchType}
+type token_CBZ = {txt : string; iszero : boolean}
+type token_BFM = {txt : string; inzero : boolean; extend : boolean}
+type token_CCM = {txt : string; sub_op : boolean}
+type token_CM = {txt : string; sub_op : boolean}
+type token_CL = {txt : string; opcode : countOp}
+type token_CRC = {txt : string; size : data_size; crc32c : boolean}
+type token_CRC32X = {txt : string; crc32c : boolean}
+type token_CSEL = {txt : string; else_inv : boolean; else_inc : boolean}
+type token_CSET = {txt : string; else_inv : boolean; else_inc : boolean}
+type token_CSETM = {txt : string; else_inv : boolean; else_inc : boolean}
+type token_CON = {txt : string; else_inv : boolean; else_inc : boolean}
+type token_MEMBARR = {txt : string; op : memBarrierOp}
+type token_LDAXR_var32 = {elsize : int; datasize : data_size}
+type token_LDAXR = {txt : string; acctype : accType; excl : boolean; memop : memOp; var32 : token_LDAXR_var32; var64 : boolean}
+type token_STLXR_var32 = {elsize : int; datasize : data_size}
+type token_STLXR = {txt : string; acctype : accType; var32 : token_STLXR_var32; var64 : boolean}
+type token_LDXP = {txt : string; acctype : accType}
+type token_STXP = {txt : string; acctype : accType}
+type token_LDSTR_var32 = {datasize : data_size}
+type token_LDSTR_var64 = {datasize : data_size}
+type token_LDSTR_lit64 = {datasize : data_size; size : int}
+type token_LDSTR = {txt : string; memop : memOp; signed : boolean; lit32 : boolean; var32 : token_LDSTR_var32 option; var64 : token_LDSTR_var64 option; lit64 : token_LDSTR_lit64 option}
+type token_LDSTTUR_off32 = {datasize : data_size}
+type token_LDSTTUR_off64 = {datasize : data_size}
+type token_LDSTTUR = {txt : string; memop : memOp; acctype : accType; signed : boolean; off32 : token_LDSTTUR_off32 option; off64 : token_LDSTTUR_off64 option}
+type token_MADDSUB = {txt : string; sub_op : boolean}
+type token_MUL = {txt : string; sub_op : boolean}
+type token_MOVWIDE = {txt : string; opcode : moveWideOp}
+type token_NEG = {txt : string; setflags : boolean}
+type token_NGC = {txt : string; setflags : boolean}
+type token_REV = {txt : string; op32 : revOp option; op64 : revOp}
+type token_DIV = {txt : string; unsigned : boolean}
+type token_MADDSUBL = {txt : string; sub_op : boolean; unsigned : boolean}
+type token_MULH = {txt : string; unsigned : boolean}
+type token_MULL = {txt : string; unsigned : boolean}
+type token_LDSTP = {txt : string; memop : memOp}
+type token_TBZ = {txt : string; bit_val : bit}
+type token_BFIZ = {txt : string; extend : boolean}
+type token_BFX = {txt : string; extend : boolean}
+type token_MNEGL = {txt : string; unsigned : boolean}
+type token_BFI = {txt : string}
+type token_BFXIL = {txt : string}
+type token_CLREX = {txt : string}
+type token_EXTR = {txt : string}
+type token_HINT = {txt : string}
+type token_ISB = {txt : string}
+type token_LDPSW = {txt : string}
+type token_MOV = {txt : string}
+type token_MVN = {txt : string}
+type token_NOP = {txt : string}
+type token_PRFM = {txt : string}
+type token_PRFUM = {txt : string}
+type token_RET = {txt : string}
+type token_TST = {txt : string}
+type token_MRS = {txt : string}
+type token_MSR = {txt : string}
+
+(*** instructions/operands ***)
+
+type token_SHIFT = {txt : string; shift_type : shiftType}
+type token_EXTEND_inst = {extend : boolean; imms : int}
+type token_EXTEND = {txt : string; _type : extendType; inst : token_EXTEND_inst option}
+
+(*** operands: ***)
+
+type token_COND = int
+type token_BARROP = {domain : mBReqDomain; types : mBReqTypes}
+type token_PRFOP = inst_reg (* this is an int that is encoded in a reg field *)
+type token_SYSREG = {sys_op0 : uinteger; sys_op1 : uinteger; sys_op2 : uinteger; sys_crn : uinteger; sys_crm : uinteger}
+type token_PSTATEFIELD = pSTATEField

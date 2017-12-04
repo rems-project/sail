@@ -1,0 +1,119 @@
+let translate_big_int bits (name : string) value =
+  (name, Range0 (Some bits), IInt.bit_list_of_integer bits value)
+
+let translate_big_bit bits (name:string) value =
+    (name, Bvector (Some bits), IInt.bit_list_of_integer bits value)
+
+let translate_int bits name value =
+  translate_big_int bits name (Nat_big_num.of_int value)
+
+let translate_bits bits (name:string) value =
+  (name, Bvector (Some bits),  IInt.bit_list_of_integer bits (Nat_big_num.of_int value))
+
+let translate_bool name value =
+  (name, Bit, [if value then Bitc_one else Bitc_zero])
+
+let translate_enum enum_values (name: string) value =
+  let rec bit_count n =
+    if n = 0 then 0
+    else 1 + (bit_count (n lsr 1)) in
+  let rec find_index element = function
+    | h::tail -> if h = element then 0 else 1 + (find_index element tail)
+    | _ -> failwith "translate_enum could not find value"
+    in
+  let size = bit_count (List.length enum_values) in
+  let index = find_index value enum_values in
+  (name, Range0 (Some size),  IInt.bit_list_of_integer size (Nat_big_num.of_int index))
+
+(* the following are tightly coupled with types.hgen. As it is not relevant
+   to herdtools I put it here and not in types.hgen *)
+
+let translate_reg_size name value =
+  match value with
+  | Set32 -> (name, Range0 (Some 7), IInt.bit_list_of_integer 7 (Nat_big_num.of_int 32))
+  | Set64 -> (name, Range0 (Some 7), IInt.bit_list_of_integer 7 (Nat_big_num.of_int 64))
+
+let translate_reg name value =
+  (name, Range0 (Some 5), bit_list_of_integer 5 (Nat_big_num.of_int (inst_reg_to_int value)))
+
+let translate_reg_size_bits name value =
+  match value with
+  | R32Bits value -> translate_bits 32 name value
+  | R64Bits value -> translate_big_bit 64 name value
+
+let translate_data_size name value =
+  match value with
+  | DataSize8  -> (name, Range0 (Some 7), IInt.bit_list_of_integer 7 (Nat_big_num.of_int 8))
+  | DataSize16 -> (name, Range0 (Some 7), IInt.bit_list_of_integer 7 (Nat_big_num.of_int 16))
+  | DataSize32 -> (name, Range0 (Some 7), IInt.bit_list_of_integer 7 (Nat_big_num.of_int 32))
+  | DataSize64 -> (name, Range0 (Some 7), IInt.bit_list_of_integer 7 (Nat_big_num.of_int 64))
+
+let translate_reg_index = translate_int 5
+
+let translate_boolean = translate_bool
+
+let translate_range0_7 = translate_int 3
+
+let translate_range0_63 = translate_int 6
+
+let translate_bit64 = translate_big_bit 64
+
+let translate_bit4 = translate_bits 4
+let translate_bit5 = translate_bits 5
+let translate_bit16 = translate_bits 16
+
+let translate_bit = translate_bool
+
+let translate_range8_64 = translate_int 7
+
+let translate_uinteger = translate_int 63
+
+let translate_extendType =
+  translate_enum [ExtendType_SXTB; ExtendType_SXTH; ExtendType_SXTW; ExtendType_SXTX;
+                  ExtendType_UXTB; ExtendType_UXTH; ExtendType_UXTW; ExtendType_UXTX]
+
+let translate_shiftType =
+  translate_enum [ShiftType_LSL; ShiftType_LSR; ShiftType_ASR; ShiftType_ROR]
+
+let translate_logicalOp =
+  translate_enum [LogicalOp_AND; LogicalOp_EOR; LogicalOp_ORR]
+
+let translate_branchType =
+  translate_enum [BranchType_CALL; BranchType_ERET; BranchType_DBGEXIT;
+                  BranchType_RET; BranchType_JMP; BranchType_EXCEPTION;
+                  BranchType_UNKNOWN]
+
+let translate_countOp =
+  translate_enum [CountOp_CLZ;CountOp_CLS;CountOp_CNT]
+
+let translate_memBarrierOp=
+  translate_enum [MemBarrierOp_DSB; MemBarrierOp_DMB; MemBarrierOp_ISB]
+
+let translate_mBReqDomain =
+  translate_enum [MBReqDomain_Nonshareable; MBReqDomain_InnerShareable;
+                  MBReqDomain_OuterShareable; MBReqDomain_FullSystem]
+
+let translate_mBReqTypes =
+  translate_enum [MBReqTypes_Reads; MBReqTypes_Writes; MBReqTypes_All]
+
+let translate_systemHintOp =
+  translate_enum [SystemHintOp_NOP; SystemHintOp_YIELD; SystemHintOp_WFE;
+                  SystemHintOp_WFI; SystemHintOp_SEV; SystemHintOp_SEVL]
+
+let translate_accType =
+  translate_enum [AccType_NORMAL; AccType_VEC; AccType_STREAM;
+                  AccType_VECSTREAM; AccType_ATOMIC; AccType_ORDERED;
+                  AccType_UNPRIV; AccType_IFETCH; AccType_PTW;
+                  AccType_DC; AccType_IC; AccType_AT]
+
+let translate_memOp =
+  translate_enum [MemOp_LOAD; MemOp_STORE; MemOp_PREFETCH]
+
+let translate_moveWideOp =
+  translate_enum [MoveWideOp_N; MoveWideOp_Z; MoveWideOp_K]
+
+let translate_revOp =
+  translate_enum [RevOp_RBIT; RevOp_REV16; RevOp_REV32; RevOp_REV64]
+
+let translate_pSTATEField =
+  translate_enum [PSTATEField_DAIFSet; PSTATEField_DAIFClr; PSTATEField_SP]

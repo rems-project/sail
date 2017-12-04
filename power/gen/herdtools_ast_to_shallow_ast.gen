@@ -1,0 +1,1312 @@
+  | `Pb(setaa0, setlk1, k2) -> 
+      B
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 24,Nat_big_num.of_int (trans_li_setaa_setlk_k setaa0 setlk1 k2)),
+        int_to_bit (trans_aa setaa0),
+        int_to_bit (trans_lk setlk1))
+
+  | `Pbc(setaa0, setlk1, k2, k3, k4) -> 
+      Bc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k3),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 14,Nat_big_num.of_int (trans_bd_setaa_setlk_k_k_k setaa0 setlk1 k2 k3 k4)),
+        int_to_bit (trans_aa setaa0),
+        int_to_bit (trans_lk setlk1))
+
+  | `Pbclr(setlk0, k1, k2, k3) -> 
+      Bclr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 2,Nat_big_num.of_int k3),
+        int_to_bit (trans_lk setlk0))
+
+  | `Pbcctr(setlk0, k1, k2, k3) -> 
+      Bcctr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 2,Nat_big_num.of_int k3),
+        int_to_bit (trans_lk setlk0))
+
+  | `Pcrand(k0, k1, k2) -> 
+      Crand
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pcrnand(k0, k1, k2) -> 
+      Crnand
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pcror(k0, k1, k2) -> 
+      Cror
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pcrxor(k0, k1, k2) -> 
+      Crxor
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pcrnor(k0, k1, k2) -> 
+      Crnor
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pcreqv(k0, k1, k2) -> 
+      Creqv
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pcrandc(k0, k1, k2) -> 
+      Crandc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pcrorc(k0, k1, k2) -> 
+      Crorc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pmcrf(crindex0, k1) -> 
+      Mcrf
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 3,Nat_big_num.of_int crindex0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 3,Nat_big_num.of_int k1))
+
+  | `Psc(k0) -> 
+      Sc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 7,Nat_big_num.of_int k0))
+
+  | `Pscv(k0) -> 
+      Scv
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 7,Nat_big_num.of_int k0))
+
+  | `Plbz(reg0, k1, reg2) -> 
+      Lbz
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plbzx(reg0, reg1, reg2) -> 
+      Lbzx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plbzu(reg0, k1, reg2) -> 
+      Lbzu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plbzux(reg0, reg1, reg2) -> 
+      Lbzux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plhz(reg0, k1, reg2) -> 
+      Lhz
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plhzx(reg0, reg1, reg2) -> 
+      Lhzx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plhzu(reg0, k1, reg2) -> 
+      Lhzu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plhzux(reg0, reg1, reg2) -> 
+      Lhzux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plha(reg0, k1, reg2) -> 
+      Lha
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plhax(reg0, reg1, reg2) -> 
+      Lhax
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plhau(reg0, k1, reg2) -> 
+      Lhau
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plhaux(reg0, reg1, reg2) -> 
+      Lhaux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plwz(reg0, k1, reg2) -> 
+      Lwz
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plwzx(reg0, reg1, reg2) -> 
+      Lwzx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plwzu(reg0, k1, reg2) -> 
+      Lwzu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plwzux(reg0, reg1, reg2) -> 
+      Lwzux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plwa(reg0, ds1, reg2) -> 
+      Lwa
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 14,Nat_big_num.of_int ds1))
+
+  | `Plwax(reg0, reg1, reg2) -> 
+      Lwax
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plwaux(reg0, reg1, reg2) -> 
+      Lwaux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pld(reg0, ds1, reg2) -> 
+      Ld
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 14,Nat_big_num.of_int ds1))
+
+  | `Pldx(reg0, reg1, reg2) -> 
+      Ldx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pldu(reg0, ds1, reg2) -> 
+      Ldu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 14,Nat_big_num.of_int ds1))
+
+  | `Pldux(reg0, reg1, reg2) -> 
+      Ldux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstb(reg0, k1, reg2) -> 
+      Stb
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Pstbx(reg0, reg1, reg2) -> 
+      Stbx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstbu(reg0, k1, reg2) -> 
+      Stbu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Pstbux(reg0, reg1, reg2) -> 
+      Stbux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Psth(reg0, k1, reg2) -> 
+      Sth
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Psthx(reg0, reg1, reg2) -> 
+      Sthx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Psthu(reg0, k1, reg2) -> 
+      Sthu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Psthux(reg0, reg1, reg2) -> 
+      Sthux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstw(reg0, k1, reg2) -> 
+      Stw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Pstwx(reg0, reg1, reg2) -> 
+      Stwx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstwu(reg0, k1, reg2) -> 
+      Stwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Pstwux(reg0, reg1, reg2) -> 
+      Stwux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstd(reg0, ds1, reg2) -> 
+      Std
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 14,Nat_big_num.of_int ds1))
+
+  | `Pstdx(reg0, reg1, reg2) -> 
+      Stdx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstdu(reg0, ds1, reg2) -> 
+      Stdu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 14,Nat_big_num.of_int ds1))
+
+  | `Pstdux(reg0, reg1, reg2) -> 
+      Stdux
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plq(k0, k1, reg2, k3) -> 
+      Lq
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 12,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 4,Nat_big_num.of_int k3))
+
+  | `Pstq(k0, ds1, reg2) -> 
+      Stq
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 14,Nat_big_num.of_int ds1))
+
+  | `Plhbrx(reg0, reg1, reg2) -> 
+      Lhbrx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Psthbrx(reg0, reg1, reg2) -> 
+      Sthbrx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plwbrx(reg0, reg1, reg2) -> 
+      Lwbrx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstwbrx(reg0, reg1, reg2) -> 
+      Stwbrx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pldbrx(reg0, reg1, reg2) -> 
+      Ldbrx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstdbrx(reg0, reg1, reg2) -> 
+      Stdbrx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Plmw(reg0, k1, reg2) -> 
+      Lmw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Pstmw(reg0, k1, reg2) -> 
+      Stmw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k1))
+
+  | `Plswi(k0, reg1, k2) -> 
+      Lswi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Plswx(reg0, reg1, reg2) -> 
+      Lswx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstswi(k0, reg1, k2) -> 
+      Stswi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2))
+
+  | `Pstswx(k0, reg1, reg2) -> 
+      Stswx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Paddi(reg0, reg1, k2) -> 
+      Addi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Paddis(reg0, reg1, k2) -> 
+      Addis
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Padd(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Add
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Psubf(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Subf
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Paddic(reg0, reg1, k2) -> 
+      Addic
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Paddicdot(reg0, reg1, k2) -> 
+      AddicDot
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Psubfic(reg0, reg1, k2) -> 
+      Subfic
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Paddc(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Addc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Psubfc(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Subfc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Padde(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Adde
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Psubfe(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Subfe
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Paddme(setsoov0, setcr01, reg2, reg3) -> 
+      Addme
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Psubfme(setsoov0, setcr01, reg2, reg3) -> 
+      Subfme
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Paddze(setsoov0, setcr01, reg2, reg3) -> 
+      Addze
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Psubfze(setsoov0, setcr01, reg2, reg3) -> 
+      Subfze
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pneg(setsoov0, setcr01, reg2, reg3) -> 
+      Neg
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmulli(reg0, reg1, k2) -> 
+      Mulli
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Pmullw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Mullw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmulhw(setcr00, reg1, reg2, reg3) -> 
+      Mulhw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmulhwu(setcr00, reg1, reg2, reg3) -> 
+      Mulhwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pdivw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pdivwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pdivwe(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divwe
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pdivweu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divweu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmulld(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Mulld
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmulhd(setcr00, reg1, reg2, reg3) -> 
+      Mulhd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmulhdu(setcr00, reg1, reg2, reg3) -> 
+      Mulhdu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pdivd(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pdivdu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divdu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pdivde(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divde
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pdivdeu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Divdeu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pcmpi(crindex0, k1, reg2, k3) -> 
+      Cmpi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 3,Nat_big_num.of_int crindex0),
+        int_to_bit k1,
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k3))
+
+  | `Pcmp(crindex0, k1, reg2, reg3) -> 
+      Cmp
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 3,Nat_big_num.of_int crindex0),
+        int_to_bit k1,
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)))
+
+  | `Pcmpli(crindex0, k1, reg2, k3) -> 
+      Cmpli
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 3,Nat_big_num.of_int crindex0),
+        int_to_bit k1,
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k3))
+
+  | `Pcmpl(crindex0, k1, reg2, reg3) -> 
+      Cmpl
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 3,Nat_big_num.of_int crindex0),
+        int_to_bit k1,
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)))
+
+  | `Pisel(reg0, reg1, reg2, k3) -> 
+      Isel
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k3))
+
+  | `Pandi(reg0, reg1, k2) -> 
+      Andi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Pandis(reg0, reg1, k2) -> 
+      Andis
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Pori(reg0, reg1, k2) -> 
+      Ori
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Poris(reg0, reg1, k2) -> 
+      Oris
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Pxori(reg0, reg1, k2) -> 
+      Xori
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Pxoris(reg0, reg1, k2) -> 
+      Xoris
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 16,Nat_big_num.of_int k2))
+
+  | `Pand(setcr00, reg1, reg2, reg3) -> 
+      And
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pxor(setcr00, reg1, reg2, reg3) -> 
+      Xor
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pnand(setcr00, reg1, reg2, reg3) -> 
+      Nand
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Por(setcr00, reg1, reg2, reg3) -> 
+      Or
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pnor(setcr00, reg1, reg2, reg3) -> 
+      Nor
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Peqv(setcr00, reg1, reg2, reg3) -> 
+      Eqv
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pandc(setcr00, reg1, reg2, reg3) -> 
+      Andc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Porc(setcr00, reg1, reg2, reg3) -> 
+      Orc
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pextsb(setcr00, reg1, reg2) -> 
+      Extsb
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pextsh(setcr00, reg1, reg2) -> 
+      Extsh
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pcntlzw(setcr00, reg1, reg2) -> 
+      Cntlzw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pcmpb(reg0, k1, reg2) -> 
+      Cmpb
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k1),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Ppopcntb(reg0, reg1) -> 
+      Popcntb
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Ppopcntw(reg0, reg1) -> 
+      Popcntw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Pprtyd(reg0, reg1) -> 
+      Prtyd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Pprtyw(reg0, reg1) -> 
+      Prtyw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Pextsw(setcr00, reg1, reg2) -> 
+      Extsw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pcntlzd(setcr00, reg1, reg2) -> 
+      Cntlzd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Ppopcntd(reg0, reg1) -> 
+      Popcntd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Pbpermd(reg0, reg1, reg2) -> 
+      Bpermd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Prlwinm(setcr00, reg1, reg2, k3, k4, k5) -> 
+      Rlwinm
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k3),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k4),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k5),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prlwnm(setcr00, reg1, reg2, reg3, k4, k5) -> 
+      Rlwnm
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k4),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k5),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prlwimi(setcr00, reg1, reg2, k3, k4, k5) -> 
+      Rlwimi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k3),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k4),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k5),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prldicl(setcr00, reg1, reg2, k3, k4) -> 
+      Rldicl
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k3),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k4),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prldicr(setcr00, reg1, reg2, k3, k4) -> 
+      Rldicr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k3),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k4),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prldic(setcr00, reg1, reg2, k3, k4) -> 
+      Rldic
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k3),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k4),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prldcl(setcr00, reg1, reg2, reg3, k4) -> 
+      Rldcl
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k4),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prldcr(setcr00, reg1, reg2, reg3, k4) -> 
+      Rldcr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k4),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Prldimi(setcr00, reg1, reg2, k3, k4) -> 
+      Rldimi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k3),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k4),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pslw(setcr00, reg1, reg2, reg3) -> 
+      Slw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Psrw(setcr00, reg1, reg2, reg3) -> 
+      Srw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Psrawi(setcr00, reg1, reg2, k3) -> 
+      Srawi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k3),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Psraw(setcr00, reg1, reg2, reg3) -> 
+      Sraw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Psld(setcr00, reg1, reg2, reg3) -> 
+      Sld
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Psrd(setcr00, reg1, reg2, reg3) -> 
+      Srd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Psradi(setcr00, reg1, reg2, k3) -> 
+      Sradi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 6,Nat_big_num.of_int k3),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Psrad(setcr00, reg1, reg2, reg3) -> 
+      Srad
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pcdtbcd(reg0, reg1) -> 
+      Cdtbcd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Pcbcdtd(reg0, reg1) -> 
+      Cbcdtd
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Paddg6s(reg0, reg1, reg2) -> 
+      Addg6s
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pmtspr(k0, reg1) -> 
+      Mtspr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 10,Nat_big_num.of_int k0))
+
+  | `Pmfspr(reg0, k1) -> 
+      Mfspr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 10,Nat_big_num.of_int k1))
+
+  | `Pmtcrf(crmask0, reg1) -> 
+      Mtcrf
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 8,Nat_big_num.of_int crmask0))
+
+  | `Pmfcr(reg0) -> 
+      Mfcr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)))
+
+  | `Pmtocrf(crmask0, reg1) -> 
+      Mtocrf
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 8,Nat_big_num.of_int crmask0))
+
+  | `Pmfocrf(reg0, crmask1) -> 
+      Mfocrf
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 8,Nat_big_num.of_int crmask1))
+
+  | `Pmcrxr(crindex0) -> 
+      Mcrxr
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 3,Nat_big_num.of_int crindex0))
+
+  | `Pdlmzb(setcr00, reg1, reg2, reg3) -> 
+      Dlmzb
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmacchw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Macchw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmacchws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Macchws
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmacchwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Macchwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmacchwsu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Macchwsu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmachhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Machhw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmachhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Machhws
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmachhwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Machhwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmachhwsu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Machhwsu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmaclhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Maclhw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmaclhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Maclhws
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmaclhwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Maclhwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmaclhwsu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Maclhwsu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pmulchw(setcr00, reg1, reg2, reg3) -> 
+      Mulchw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmulchwu(setcr00, reg1, reg2, reg3) -> 
+      Mulchwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmulhhw(setcr00, reg1, reg2, reg3) -> 
+      Mulhhw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmulhhwu(setcr00, reg1, reg2, reg3) -> 
+      Mulhhwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmullhw(setcr00, reg1, reg2, reg3) -> 
+      Mullhw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pmullhwu(setcr00, reg1, reg2, reg3) -> 
+      Mullhwu
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        int_to_bit (trans_cr0 setcr00))
+
+  | `Pnmacchw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Nmacchw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pnmacchws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Nmacchws
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pnmachhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Nmachhw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pnmachhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Nmachhws
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pnmaclhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Nmaclhw
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Pnmaclhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      Nmaclhws
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg3)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg4)),
+        int_to_bit (trans_soov setsoov0),
+        int_to_bit (trans_cr0 setcr01))
+
+  | `Picbi(reg0, reg1) -> 
+      Icbi
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)))
+
+  | `Picbt(k0, reg1, reg2) -> 
+      Icbt
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 4,Nat_big_num.of_int k0),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pdcba(reg0, reg1) -> 
+      Dcba
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)))
+
+  | `Pdcbt(reg0, reg1, k2) -> 
+      Dcbt
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)))
+
+  | `Pdcbtst(reg0, reg1, k2) -> 
+      Dcbtst
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int k2),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)))
+
+  | `Pdcbz(reg0, reg1) -> 
+      Dcbz
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)))
+
+  | `Pdcbst(reg0, reg1) -> 
+      Dcbst
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)))
+
+  | `Pdcbf(reg0, reg1, k2) -> 
+      Dcbf
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 2,Nat_big_num.of_int k2),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)))
+
+  | `Pisync -> 
+      Isync
+
+  | `Plbarx(reg0, reg1, reg2, k3) -> 
+      Lbarx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        int_to_bit k3)
+
+  | `Plharx(reg0, reg1, reg2, k3) -> 
+      Lharx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        int_to_bit k3)
+
+  | `Plwarx(reg0, reg1, reg2, k3) -> 
+      Lwarx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        int_to_bit k3)
+
+  | `Pstbcx(reg0, reg1, reg2) -> 
+      Stbcx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Psthcx(reg0, reg1, reg2) -> 
+      Sthcx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pstwcx(reg0, reg1, reg2) -> 
+      Stwcx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Pldarx(reg0, reg1, reg2, k3) -> 
+      Ldarx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)),
+        int_to_bit k3)
+
+  | `Pstdcx(reg0, reg1, reg2) -> 
+      Stdcx
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg0)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg1)),
+        Sail_values.to_vec0 true (Nat_big_num.of_int 5,Nat_big_num.of_int (int_of_reg reg2)))
+
+  | `Psync(k0) -> 
+      Sync
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 2,Nat_big_num.of_int k0))
+
+  | `Peieio -> 
+      Eieio
+
+  | `Pwait(k0) -> 
+      Wait
+       (Sail_values.to_vec0 true (Nat_big_num.of_int 2,Nat_big_num.of_int k0))
+

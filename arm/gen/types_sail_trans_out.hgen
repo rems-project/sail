@@ -1,0 +1,189 @@
+let translate_out_big_int_bits = function
+  | (name, Range0 _, bits) -> IInt.integer_of_bit_list bits
+  | _ -> assert false
+
+let translate_out_big_bit = function
+  | (name, Bvector _, bits) -> IInt.integer_of_bit_list bits
+  | _ -> assert false
+
+let translate_out_signed_big_bit = function
+  | (name, Bvector _, bits) -> IInt.signed_integer_of_bit_list bits
+  | _ -> assert false
+
+let translate_out_int inst = (Nat_big_num.to_int (translate_out_big_int_bits inst))
+
+let translate_out_bits = function
+  | (name, Bvector _, bits) -> Nat_big_num.to_int (IInt.integer_of_bit_list bits)
+  | _ -> assert false
+
+let translate_out_bool = function
+  | (name, Bit, [Bitc_one])  -> true
+  | (name, Bit, [Bitc_zero]) -> false
+  | _ -> assert false
+
+let translate_out_enum (name,_,bits) =
+    Nat_big_num.to_int (IInt.integer_of_bit_list bits)
+
+let translate_out_reg_size inst =
+  match translate_out_int inst with
+    | 32 -> Set32
+    | 64 -> Set64
+    | _ -> assert false
+
+let translate_out_regzr regsize reg =
+  begin match (regsize, translate_out_int reg) with
+  | (Set32, 31)  -> W ZR
+  | (Set32, reg) -> W (Ireg (ireg_of_int reg))
+  | (Set64, 31)  -> X ZR
+  | (Set64, reg) -> X (Ireg (ireg_of_int reg))
+  end
+
+let translate_out_regsp regsize reg =
+  begin match (regsize, translate_out_int reg) with
+  | (Set32, 31)  -> W SP
+  | (Set32, reg) -> W (Ireg (ireg_of_int reg))
+  | (Set64, 31)  -> X SP
+  | (Set64, reg) -> X (Ireg (ireg_of_int reg))
+  end
+
+let translate_out_regzrbyext regsize extend_type reg =
+  begin match extend_type with
+  | ExtendType_UXTX | ExtendType_SXTX -> translate_out_regzr regsize reg
+  | _ -> translate_out_regzr Set32 reg
+  end
+
+let translate_out_reg_size_bits ((name,_,bits) as inst) =
+  match List.length bits with
+    | 32 -> R32Bits (translate_out_bits inst)
+    | 64 -> R64Bits (translate_out_big_bit inst)
+    | _ -> assert false
+
+let translate_out_data_size inst =
+  match (translate_out_int inst) with
+    | 8 -> DataSize8
+    | 16 -> DataSize16
+    | 32 -> DataSize32
+    | 64 -> DataSize64
+    | _ -> assert false
+
+let translate_out_extendType inst =
+  match translate_out_enum inst with
+    | 0 -> ExtendType_SXTB
+    | 1 -> ExtendType_SXTH
+    | 2 -> ExtendType_SXTW
+    | 3 -> ExtendType_SXTX
+    | 4 -> ExtendType_UXTB
+    | 5 -> ExtendType_UXTH
+    | 6 -> ExtendType_UXTW
+    | 7 -> ExtendType_UXTX
+    | _ -> assert false
+
+let translate_out_shiftType inst =
+  match translate_out_enum inst with
+    | 0 -> ShiftType_LSL
+    | 1 -> ShiftType_LSR
+    | 2 -> ShiftType_ASR
+    | 3 -> ShiftType_ROR
+    | _ -> assert false
+
+let translate_out_logicalOp inst =
+  match translate_out_enum inst with
+    | 0 -> LogicalOp_AND
+    | 1 -> LogicalOp_EOR
+    | 2 -> LogicalOp_ORR
+    | _ -> assert false
+
+let translate_out_branchType inst =
+    match translate_out_enum inst with
+      | 0 -> BranchType_CALL
+      | 1 -> BranchType_ERET
+      | 2 -> BranchType_DBGEXIT
+      | 3 -> BranchType_RET
+      | 4 -> BranchType_JMP
+      | 5 -> BranchType_EXCEPTION
+      | 6 -> BranchType_UNKNOWN
+      | _ -> assert false
+
+let translate_out_countOp inst =
+  match translate_out_enum inst with
+    | 0 -> CountOp_CLZ
+    | 1 -> CountOp_CLS
+    | 2 -> CountOp_CNT
+    | _ -> assert false
+
+let translate_out_memBarrierOp inst =
+  match translate_out_enum inst with
+    | 0 -> MemBarrierOp_DSB
+    | 1 -> MemBarrierOp_DMB
+    | 2 -> MemBarrierOp_ISB
+    | _ -> assert false
+
+let translate_out_mBReqDomain inst =
+    match translate_out_enum inst with
+    | 0 -> MBReqDomain_Nonshareable
+    | 1 -> MBReqDomain_InnerShareable
+    | 2 -> MBReqDomain_OuterShareable
+    | 3 -> MBReqDomain_FullSystem
+    | _ -> assert false
+
+let translate_out_mBReqTypes inst =
+    match translate_out_enum inst with
+    | 0 -> MBReqTypes_Reads
+    | 1 -> MBReqTypes_Writes
+    | 2 -> MBReqTypes_All
+    | _ -> assert false
+
+let translate_out_systemHintOp inst =
+    match translate_out_enum inst with
+      | 0 -> SystemHintOp_NOP
+      | 1 -> SystemHintOp_YIELD
+      | 2 -> SystemHintOp_WFE
+      | 3 -> SystemHintOp_WFI
+      | 4 -> SystemHintOp_SEV
+      | 5 -> SystemHintOp_SEVL
+      | _ -> assert false
+
+let translate_out_accType inst =
+  match translate_out_enum inst with
+    | 0  -> AccType_NORMAL
+    | 1  -> AccType_VEC
+    | 2  -> AccType_STREAM
+    | 3  -> AccType_VECSTREAM
+    | 4  -> AccType_ATOMIC
+    | 5  -> AccType_ORDERED
+    | 6  -> AccType_UNPRIV
+    | 7  -> AccType_IFETCH
+    | 8  -> AccType_PTW
+    | 9  -> AccType_DC
+    | 10 -> AccType_IC
+    | 11 -> AccType_AT
+    | _ -> assert false
+
+let translate_out_memOp inst =
+  match translate_out_enum inst with
+    | 0 -> MemOp_LOAD
+    | 1 -> MemOp_STORE
+    | 2 -> MemOp_PREFETCH
+    | _ -> assert false
+
+let translate_out_moveWideOp inst =
+  match translate_out_enum inst with
+    | 0 -> MoveWideOp_N
+    | 1 -> MoveWideOp_Z
+    | 2 -> MoveWideOp_K
+    | _ -> assert false
+
+let translate_out_revOp inst =
+  match translate_out_enum inst with
+    | 0 -> RevOp_RBIT
+    | 1 -> RevOp_REV16
+    | 2 -> RevOp_REV32
+    | 3 -> RevOp_REV64
+    | _ -> assert false
+
+let translate_out_pSTATEField inst =
+  match translate_out_enum inst with
+    | 0 -> PSTATEField_DAIFSet
+    | 1 -> PSTATEField_DAIFClr
+    | 2 -> PSTATEField_SP
+    | _ -> assert false

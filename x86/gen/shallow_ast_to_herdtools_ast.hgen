@@ -1,0 +1,27 @@
+| Binop   (locked, binop, sz, dest_src) -> `X86BINOP   (translate_out_bool locked, translate_out_binop binop, translate_out_size sz, translate_out_dest_src dest_src)
+| Bitop   (locked, bitop, sz, bo) -> `X86BITOP   (translate_out_bool locked, translate_out_bitop bitop, translate_out_size sz, translate_out_bitoffset bo)
+| CALL    (imm_rm)              -> `X86CALL    (translate_out_imm_rm imm_rm)
+| CLC                           -> `X86CLC
+| CMC                           -> `X86CMC
+| CMPXCHG (locked, sz, rm , reg)        -> `X86CMPXCHG (translate_out_bool locked, translate_out_size sz, translate_out_rm rm, translate_out_reg reg)
+| X86_DIV (sz, rm)              -> `X86DIV     (translate_out_size sz, translate_out_rm rm)
+| HLT                           -> `X86StopFetching
+| Jcc     (cond, imm64)         -> `X86JCC     (translate_out_cond cond, translate_out_imm64 imm64)
+| JMP     (rm)                  -> `X86JMP     (translate_out_rm rm)
+| LEA     (sz, dest_src)        -> `X86LEA     (translate_out_size sz, translate_out_dest_src dest_src)
+| LEAVE                         -> `X86LEAVE
+| LOOP    (cond, imm64)         -> `X86LOOP    (translate_out_cond cond, translate_out_imm64 imm64)
+| MFENCE                        -> `X86MFENCE
+| Monop   (locked, monop, sz, rm)       -> `X86MONOP   (translate_out_bool locked, translate_out_monop monop, translate_out_size sz, translate_out_rm rm)
+| MOV     (cond, sz, dest_src)  -> `X86MOV     (translate_out_cond cond, translate_out_size sz, translate_out_dest_src dest_src)
+| MOVSX   (sz1, dest_src, sz2)  -> `X86MOVSX   (translate_out_size sz1, translate_out_dest_src dest_src, translate_out_size sz2)
+| MOVZX   (sz1, dest_src, sz2)  -> `X86MOVZX   (translate_out_size sz1, translate_out_dest_src dest_src, translate_out_size sz2)
+| X86_MUL (sz, rm)              -> `X86MUL     (translate_out_size sz, translate_out_rm rm)
+| NOP     (_)                   -> `X86NOP
+| POP     (rm)                  -> `X86POP     (translate_out_rm rm)
+| PUSH    (imm_rm)              -> `X86PUSH    (translate_out_imm_rm imm_rm)
+| RET     (imm64)               -> `X86RET     (translate_out_imm64 imm64)
+| SET     (cond, b, rm)         -> `X86SET     (translate_out_cond cond, translate_out_bool b, translate_out_rm rm)
+| STC                           -> `X86STC
+| XADD    (locked, sz, rm, reg)         -> `X86XADD    (translate_out_bool locked, translate_out_size sz, translate_out_rm rm, translate_out_reg reg)
+| XCHG    (locked, sz, rm, reg)         -> `X86XCHG    (translate_out_bool locked, translate_out_size sz, translate_out_rm rm, translate_out_reg reg)

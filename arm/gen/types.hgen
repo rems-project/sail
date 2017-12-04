@@ -1,0 +1,90 @@
+type reg_size = Set64 | Set32
+
+type reg_size_bits = R32Bits of int | R64Bits of Nat_big_num.num
+let reg_size_bits_R32_of_int value = R32Bits value
+let reg_size_bits_R64_of_int value = R64Bits (Nat_big_num.of_int value)
+let reg_size_bits_R32_of_big_int value = R32Bits (Nat_big_num.to_int value)
+let reg_size_bits_R64_of_big_int value = R64Bits value
+let eq_reg_size_bits = function
+  | (R32Bits lhs, R32Bits rhs) -> lhs = rhs
+  | (R64Bits lhs, R64Bits rhs) -> Nat_big_num.equal lhs rhs
+  | (R32Bits _, R64Bits _)     -> false
+  | (R64Bits _, R32Bits _)     -> false
+let reg_size_bits_iskbituimm k value =
+  match value with
+  | R32Bits value -> iskbituimm k value
+  | R64Bits value -> big_iskbituimm k value
+let reg_size_bits_shift_right value n =
+  match value with
+  | R32Bits value -> R32Bits (value lsr n)
+  | R64Bits value -> R64Bits (Nat_big_num.shift_right value n)
+let reg_size_bits_to_int value =
+  match value with
+  | R32Bits value -> value
+  | R64Bits value -> Nat_big_num.to_int value
+
+type data_size = DataSize64 | DataSize32 | DataSize16 | DataSize8
+
+type reg_index = int
+
+type boolean = bool
+
+type range0_7 = int
+
+type range0_63 = int
+
+type bit64 = Nat_big_num.num
+let bit64_of_int = Nat_big_num.of_int
+let bit64_to_int = Nat_big_num.to_int
+let eq_bit64 = Nat_big_num.equal
+
+type bit4 = int
+
+type bit5 = int
+
+type bit16 = int
+
+type bit = bool
+
+type range8_64 = int
+
+type uinteger = int
+
+type extendType = ExtendType_SXTB | ExtendType_SXTH | ExtendType_SXTW | ExtendType_SXTX |
+                  ExtendType_UXTB | ExtendType_UXTH | ExtendType_UXTW | ExtendType_UXTX
+
+
+type shiftType = ShiftType_LSL | ShiftType_LSR | ShiftType_ASR | ShiftType_ROR
+
+type logicalOp = LogicalOp_AND | LogicalOp_EOR | LogicalOp_ORR
+
+type branchType = BranchType_CALL | BranchType_ERET | BranchType_DBGEXIT |
+                  BranchType_RET | BranchType_JMP | BranchType_EXCEPTION |
+                  BranchType_UNKNOWN
+
+type countOp = CountOp_CLZ | CountOp_CLS | CountOp_CNT
+
+type memBarrierOp = MemBarrierOp_DSB | MemBarrierOp_DMB | MemBarrierOp_ISB
+
+type mBReqDomain = MBReqDomain_Nonshareable | MBReqDomain_InnerShareable |
+                   MBReqDomain_OuterShareable | MBReqDomain_FullSystem
+
+type mBReqTypes = MBReqTypes_Reads | MBReqTypes_Writes | MBReqTypes_All
+
+type systemHintOp = SystemHintOp_NOP | SystemHintOp_YIELD |
+                    SystemHintOp_WFE | SystemHintOp_WFI   |
+                    SystemHintOp_SEV | SystemHintOp_SEVL
+
+type accType = AccType_NORMAL    | AccType_VEC    | AccType_STREAM |
+               AccType_VECSTREAM | AccType_ATOMIC | AccType_ORDERED |
+               AccType_UNPRIV    | AccType_IFETCH | AccType_PTW |
+               AccType_DC        | AccType_IC     | AccType_AT
+
+type memOp = MemOp_LOAD | MemOp_STORE | MemOp_PREFETCH
+
+type moveWideOp = MoveWideOp_N | MoveWideOp_Z | MoveWideOp_K
+
+type revOp = RevOp_RBIT | RevOp_REV16 | RevOp_REV32 | RevOp_REV64
+
+type pSTATEField = PSTATEField_DAIFSet | PSTATEField_DAIFClr |
+                   PSTATEField_SP

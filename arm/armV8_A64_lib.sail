@@ -730,6 +730,8 @@ function bit[64] System_Get((uinteger) op0, (uinteger) op1, (uinteger) crn, (uin
   switch (op0,op1,crn,crm,op2) {
     case (3,3,4,2,0) -> ZeroExtend(NZCV)
     case (3,3,4,2,1) -> ZeroExtend(DAIF)
+    case (3, 3, 13, 0, 2) -> TPIDR_EL0
+  (* TODO FIXME: higher EL TPIDRs *)
 
 (*     case (3,0,1,0,1) -> ZeroExtend(ACTLR_EL1) *)
   }
@@ -741,6 +743,8 @@ function unit effect {wreg} System_Put((uinteger) op0, (uinteger) op1, (uinteger
   switch (op0,op1,crn,crm,op2) {
     case (3,3,4,2,0) -> NZCV := _val[31..0]
     case (3,3,4,2,1) -> DAIF := _val[31..0]
+    case (3, 3, 13, 0, 2) -> TPIDR_EL0 := _val[63..0]
+  (* TODO FIXME: higher EL TPIDRs *)
 
 (*     case (3,0,1,0,1) -> ACTLR_EL1 := _val[31..0] *)
   }
@@ -756,7 +760,19 @@ function unit AArch64_ExceptionReturn((bit[64]) new_pc, (bit[32]) spsr) =
 (** ENUMERATE:aarch64/instrs/countop/CountOp *)
 (** FUNCTION:ExtendType DecodeRegExtend(bits(3) op) *)
 
-function ExtendType DecodeRegExtend ((bit[3]) op) = ([|8|]) op
+function ExtendType DecodeRegExtend ((bit[3]) op) =
+{
+  switch op {
+    case 0b000 -> ExtendType_UXTB
+    case 0b001 -> ExtendType_UXTH
+    case 0b010 -> ExtendType_UXTW
+    case 0b011 -> ExtendType_UXTX
+    case 0b100 -> ExtendType_SXTB
+    case 0b101 -> ExtendType_SXTH
+    case 0b110 -> ExtendType_SXTW
+    case 0b111 -> ExtendType_SXTX
+  }
+}
 
 (** FUNCTION:aarch64/instrs/extendreg/ExtendReg *)
 
