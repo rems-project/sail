@@ -1,0 +1,1112 @@
+  | ("B", [li; aa; lk], _) -> 
+      `Pb(
+       (trans_out_aa aa),
+        (trans_out_lk lk),
+        (trans_out_int (trans_out_li_setaa_setlk_k3 li aa lk)))
+  | ("Bc", [bo; bi; bd; aa; lk], _) -> 
+      `Pbc(
+       (trans_out_aa aa),
+        (trans_out_lk lk),
+        (trans_out_int bo),
+        (trans_out_int bi),
+        (trans_out_int (trans_out_bd_setaa_setlk_k_k_k5 bo bi bd aa lk)))
+  | ("Bclr", [bo; bi; bh; lk], _) -> 
+      `Pbclr(
+       (trans_out_lk lk),
+        (trans_out_int bo),
+        (trans_out_int bi),
+        (trans_out_int bh))
+  | ("Bcctr", [bo; bi; bh; lk], _) -> 
+      `Pbcctr(
+       (trans_out_lk lk),
+        (trans_out_int bo),
+        (trans_out_int bi),
+        (trans_out_int bh))
+  | ("Crand", [bt; ba; bb], _) -> 
+      `Pcrand(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Crnand", [bt; ba; bb], _) -> 
+      `Pcrnand(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Cror", [bt; ba; bb], _) -> 
+      `Pcror(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Crxor", [bt; ba; bb], _) -> 
+      `Pcrxor(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Crnor", [bt; ba; bb], _) -> 
+      `Pcrnor(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Creqv", [bt; ba; bb], _) -> 
+      `Pcreqv(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Crandc", [bt; ba; bb], _) -> 
+      `Pcrandc(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Crorc", [bt; ba; bb], _) -> 
+      `Pcrorc(
+       (trans_out_int bt),
+        (trans_out_int ba),
+        (trans_out_int bb))
+  | ("Mcrf", [bf; bfa], _) -> 
+      `Pmcrf(
+       (trans_out_int bf),
+        (trans_out_int bfa))
+  | ("Sc", [lev], _) -> 
+      `Psc(
+       (trans_out_int lev))
+  | ("Scv", [lev], _) -> 
+      `Pscv(
+       (trans_out_int lev))
+  | ("Lbz", [rt; ra; d], _) -> 
+      `Plbz(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lbzx", [rt; ra; rb], _) -> 
+      `Plbzx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lbzu", [rt; ra; d], _) -> 
+      `Plbzu(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lbzux", [rt; ra; rb], _) -> 
+      `Plbzux(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lhz", [rt; ra; d], _) -> 
+      `Plhz(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lhzx", [rt; ra; rb], _) -> 
+      `Plhzx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lhzu", [rt; ra; d], _) -> 
+      `Plhzu(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lhzux", [rt; ra; rb], _) -> 
+      `Plhzux(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lha", [rt; ra; d], _) -> 
+      `Plha(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lhax", [rt; ra; rb], _) -> 
+      `Plhax(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lhau", [rt; ra; d], _) -> 
+      `Plhau(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lhaux", [rt; ra; rb], _) -> 
+      `Plhaux(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lwz", [rt; ra; d], _) -> 
+      `Plwz(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lwzx", [rt; ra; rb], _) -> 
+      `Plwzx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lwzu", [rt; ra; d], _) -> 
+      `Plwzu(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lwzux", [rt; ra; rb], _) -> 
+      `Plwzux(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lwa", [rt; ra; ds], _) -> 
+      `Plwa(
+       (trans_out_reg rt),
+        (trans_out_int ds),
+        (trans_out_reg ra))
+  | ("Lwax", [rt; ra; rb], _) -> 
+      `Plwax(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lwaux", [rt; ra; rb], _) -> 
+      `Plwaux(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Ld", [rt; ra; ds], _) -> 
+      `Pld(
+       (trans_out_reg rt),
+        (trans_out_int ds),
+        (trans_out_reg ra))
+  | ("Ldx", [rt; ra; rb], _) -> 
+      `Pldx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Ldu", [rt; ra; ds], _) -> 
+      `Pldu(
+       (trans_out_reg rt),
+        (trans_out_int ds),
+        (trans_out_reg ra))
+  | ("Ldux", [rt; ra; rb], _) -> 
+      `Pldux(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stb", [rs; ra; d], _) -> 
+      `Pstb(
+       (trans_out_reg rs),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Stbx", [rs; ra; rb], _) -> 
+      `Pstbx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stbu", [rs; ra; d], _) -> 
+      `Pstbu(
+       (trans_out_reg rs),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Stbux", [rs; ra; rb], _) -> 
+      `Pstbux(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Sth", [rs; ra; d], _) -> 
+      `Psth(
+       (trans_out_reg rs),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Sthx", [rs; ra; rb], _) -> 
+      `Psthx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Sthu", [rs; ra; d], _) -> 
+      `Psthu(
+       (trans_out_reg rs),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Sthux", [rs; ra; rb], _) -> 
+      `Psthux(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stw", [rs; ra; d], _) -> 
+      `Pstw(
+       (trans_out_reg rs),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Stwx", [rs; ra; rb], _) -> 
+      `Pstwx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stwu", [rs; ra; d], _) -> 
+      `Pstwu(
+       (trans_out_reg rs),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Stwux", [rs; ra; rb], _) -> 
+      `Pstwux(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Std", [rs; ra; ds], _) -> 
+      `Pstd(
+       (trans_out_reg rs),
+        (trans_out_int ds),
+        (trans_out_reg ra))
+  | ("Stdx", [rs; ra; rb], _) -> 
+      `Pstdx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stdu", [rs; ra; ds], _) -> 
+      `Pstdu(
+       (trans_out_reg rs),
+        (trans_out_int ds),
+        (trans_out_reg ra))
+  | ("Stdux", [rs; ra; rb], _) -> 
+      `Pstdux(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lq", [rtp; ra; dq; pt], _) -> 
+      `Plq(
+       (trans_out_int rtp),
+        (trans_out_int dq),
+        (trans_out_reg ra),
+        (trans_out_int pt))
+  | ("Stq", [rsp; ra; ds], _) -> 
+      `Pstq(
+       (trans_out_int rsp),
+        (trans_out_int ds),
+        (trans_out_reg ra))
+  | ("Lhbrx", [rt; ra; rb], _) -> 
+      `Plhbrx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Sthbrx", [rs; ra; rb], _) -> 
+      `Psthbrx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lwbrx", [rt; ra; rb], _) -> 
+      `Plwbrx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stwbrx", [rs; ra; rb], _) -> 
+      `Pstwbrx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Ldbrx", [rt; ra; rb], _) -> 
+      `Pldbrx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stdbrx", [rs; ra; rb], _) -> 
+      `Pstdbrx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Lmw", [rt; ra; d], _) -> 
+      `Plmw(
+       (trans_out_reg rt),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Stmw", [rs; ra; d], _) -> 
+      `Pstmw(
+       (trans_out_reg rs),
+        (trans_out_int d),
+        (trans_out_reg ra))
+  | ("Lswi", [rt; ra; nb], _) -> 
+      `Plswi(
+       (trans_out_int rt),
+        (trans_out_reg ra),
+        (trans_out_int nb))
+  | ("Lswx", [rt; ra; rb], _) -> 
+      `Plswx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stswi", [rs; ra; nb], _) -> 
+      `Pstswi(
+       (trans_out_int rs),
+        (trans_out_reg ra),
+        (trans_out_int nb))
+  | ("Stswx", [rs; ra; rb], _) -> 
+      `Pstswx(
+       (trans_out_int rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Addi", [rt; ra; si], _) -> 
+      `Paddi(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_int si))
+  | ("Addis", [rt; ra; si], _) -> 
+      `Paddis(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_int si))
+  | ("Add", [rt; ra; rb; oe; rc], _) -> 
+      `Padd(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Subf", [rt; ra; rb; oe; rc], _) -> 
+      `Psubf(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Addic", [rt; ra; si], _) -> 
+      `Paddic(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_int si))
+  | ("AddicDot", [rt; ra; si], _) -> 
+      `Paddicdot(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_int si))
+  | ("Subfic", [rt; ra; si], _) -> 
+      `Psubfic(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_int si))
+  | ("Addc", [rt; ra; rb; oe; rc], _) -> 
+      `Paddc(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Subfc", [rt; ra; rb; oe; rc], _) -> 
+      `Psubfc(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Adde", [rt; ra; rb; oe; rc], _) -> 
+      `Padde(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Subfe", [rt; ra; rb; oe; rc], _) -> 
+      `Psubfe(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Addme", [rt; ra; oe; rc], _) -> 
+      `Paddme(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra))
+  | ("Subfme", [rt; ra; oe; rc], _) -> 
+      `Psubfme(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra))
+  | ("Addze", [rt; ra; oe; rc], _) -> 
+      `Paddze(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra))
+  | ("Subfze", [rt; ra; oe; rc], _) -> 
+      `Psubfze(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra))
+  | ("Neg", [rt; ra; oe; rc], _) -> 
+      `Pneg(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra))
+  | ("Mulli", [rt; ra; si], _) -> 
+      `Pmulli(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_int si))
+  | ("Mullw", [rt; ra; rb; oe; rc], _) -> 
+      `Pmullw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulhw", [rt; ra; rb; rc], _) -> 
+      `Pmulhw(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulhwu", [rt; ra; rb; rc], _) -> 
+      `Pmulhwu(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divw", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divwu", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivwu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divwe", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivwe(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divweu", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivweu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulld", [rt; ra; rb; oe; rc], _) -> 
+      `Pmulld(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulhd", [rt; ra; rb; rc], _) -> 
+      `Pmulhd(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulhdu", [rt; ra; rb; rc], _) -> 
+      `Pmulhdu(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divd", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivd(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divdu", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivdu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divde", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivde(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Divdeu", [rt; ra; rb; oe; rc], _) -> 
+      `Pdivdeu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Cmpi", [bf; l; ra; si], _) -> 
+      `Pcmpi(
+       (trans_out_int bf),
+        (trans_out_int l),
+        (trans_out_reg ra),
+        (trans_out_int si))
+  | ("Cmp", [bf; l; ra; rb], _) -> 
+      `Pcmp(
+       (trans_out_int bf),
+        (trans_out_int l),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Cmpli", [bf; l; ra; ui], _) -> 
+      `Pcmpli(
+       (trans_out_int bf),
+        (trans_out_int l),
+        (trans_out_reg ra),
+        (trans_out_int ui))
+  | ("Cmpl", [bf; l; ra; rb], _) -> 
+      `Pcmpl(
+       (trans_out_int bf),
+        (trans_out_int l),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Isel", [rt; ra; rb; bc], _) -> 
+      `Pisel(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int bc))
+  | ("Andi", [rs; ra; ui], _) -> 
+      `Pandi(
+       (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int ui))
+  | ("Andis", [rs; ra; ui], _) -> 
+      `Pandis(
+       (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int ui))
+  | ("Ori", [rs; ra; ui], _) -> 
+      `Pori(
+       (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int ui))
+  | ("Oris", [rs; ra; ui], _) -> 
+      `Poris(
+       (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int ui))
+  | ("Xori", [rs; ra; ui], _) -> 
+      `Pxori(
+       (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int ui))
+  | ("Xoris", [rs; ra; ui], _) -> 
+      `Pxoris(
+       (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int ui))
+  | ("And", [rs; ra; rb; rc], _) -> 
+      `Pand(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Xor", [rs; ra; rb; rc], _) -> 
+      `Pxor(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Nand", [rs; ra; rb; rc], _) -> 
+      `Pnand(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Or", [rs; ra; rb; rc], _) -> 
+      `Por(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Nor", [rs; ra; rb; rc], _) -> 
+      `Pnor(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Eqv", [rs; ra; rb; rc], _) -> 
+      `Peqv(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Andc", [rs; ra; rb; rc], _) -> 
+      `Pandc(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Orc", [rs; ra; rb; rc], _) -> 
+      `Porc(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Extsb", [rs; ra; rc], _) -> 
+      `Pextsb(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Extsh", [rs; ra; rc], _) -> 
+      `Pextsh(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Cntlzw", [rs; ra; rc], _) -> 
+      `Pcntlzw(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Cmpb", [rs; ra; rb], _) -> 
+      `Pcmpb(
+       (trans_out_reg ra),
+        (trans_out_int rs),
+        (trans_out_reg rb))
+  | ("Popcntb", [rs; ra], _) -> 
+      `Ppopcntb(
+       (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Popcntw", [rs; ra], _) -> 
+      `Ppopcntw(
+       (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Prtyd", [rs; ra], _) -> 
+      `Pprtyd(
+       (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Prtyw", [rs; ra], _) -> 
+      `Pprtyw(
+       (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Extsw", [rs; ra; rc], _) -> 
+      `Pextsw(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Cntlzd", [rs; ra; rc], _) -> 
+      `Pcntlzd(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Popcntd", [rs; ra], _) -> 
+      `Ppopcntd(
+       (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Bpermd", [rs; ra; rb], _) -> 
+      `Pbpermd(
+       (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Rlwinm", [rs; ra; sh; mb; me; rc], _) -> 
+      `Prlwinm(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh),
+        (trans_out_int mb),
+        (trans_out_int me))
+  | ("Rlwnm", [rs; ra; rb; mb; me; rc], _) -> 
+      `Prlwnm(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb),
+        (trans_out_int mb),
+        (trans_out_int me))
+  | ("Rlwimi", [rs; ra; sh; mb; me; rc], _) -> 
+      `Prlwimi(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh),
+        (trans_out_int mb),
+        (trans_out_int me))
+  | ("Rldicl", [rs; ra; sh; mb; rc], _) -> 
+      `Prldicl(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh),
+        (trans_out_int mb))
+  | ("Rldicr", [rs; ra; sh; me; rc], _) -> 
+      `Prldicr(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh),
+        (trans_out_int me))
+  | ("Rldic", [rs; ra; sh; mb; rc], _) -> 
+      `Prldic(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh),
+        (trans_out_int mb))
+  | ("Rldcl", [rs; ra; rb; mb; rc], _) -> 
+      `Prldcl(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb),
+        (trans_out_int mb))
+  | ("Rldcr", [rs; ra; rb; me; rc], _) -> 
+      `Prldcr(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb),
+        (trans_out_int me))
+  | ("Rldimi", [rs; ra; sh; mb; rc], _) -> 
+      `Prldimi(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh),
+        (trans_out_int mb))
+  | ("Slw", [rs; ra; rb; rc], _) -> 
+      `Pslw(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Srw", [rs; ra; rb; rc], _) -> 
+      `Psrw(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Srawi", [rs; ra; sh; rc], _) -> 
+      `Psrawi(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh))
+  | ("Sraw", [rs; ra; rb; rc], _) -> 
+      `Psraw(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Sld", [rs; ra; rb; rc], _) -> 
+      `Psld(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Srd", [rs; ra; rb; rc], _) -> 
+      `Psrd(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Sradi", [rs; ra; sh; rc], _) -> 
+      `Psradi(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_int sh))
+  | ("Srad", [rs; ra; rb; rc], _) -> 
+      `Psrad(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Cdtbcd", [rs; ra], _) -> 
+      `Pcdtbcd(
+       (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Cbcdtd", [rs; ra], _) -> 
+      `Pcbcdtd(
+       (trans_out_reg ra),
+        (trans_out_reg rs))
+  | ("Addg6s", [rt; ra; rb], _) -> 
+      `Paddg6s(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mtspr", [rs; spr], _) -> 
+      `Pmtspr(
+       (trans_out_int spr),
+        (trans_out_reg rs))
+  | ("Mfspr", [rt; spr], _) -> 
+      `Pmfspr(
+       (trans_out_reg rt),
+        (trans_out_int spr))
+  | ("Mtcrf", [rs; fxm], _) -> 
+      `Pmtcrf(
+       (trans_out_int fxm),
+        (trans_out_reg rs))
+  | ("Mfcr", [rt], _) -> 
+      `Pmfcr(
+       (trans_out_reg rt))
+  | ("Mtocrf", [rs; fxm], _) -> 
+      `Pmtocrf(
+       (trans_out_int fxm),
+        (trans_out_reg rs))
+  | ("Mfocrf", [rt; fxm], _) -> 
+      `Pmfocrf(
+       (trans_out_reg rt),
+        (trans_out_int fxm))
+  | ("Mcrxr", [bf], _) -> 
+      `Pmcrxr(
+       (trans_out_int bf))
+  | ("Dlmzb", [rs; ra; rb; rc], _) -> 
+      `Pdlmzb(
+       (trans_out_cr0 rc),
+        (trans_out_reg ra),
+        (trans_out_reg rs),
+        (trans_out_reg rb))
+  | ("Macchw", [rt; ra; rb; oe; rc], _) -> 
+      `Pmacchw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Macchws", [rt; ra; rb; oe; rc], _) -> 
+      `Pmacchws(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Macchwu", [rt; ra; rb; oe; rc], _) -> 
+      `Pmacchwu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Macchwsu", [rt; ra; rb; oe; rc], _) -> 
+      `Pmacchwsu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Machhw", [rt; ra; rb; oe; rc], _) -> 
+      `Pmachhw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Machhws", [rt; ra; rb; oe; rc], _) -> 
+      `Pmachhws(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Machhwu", [rt; ra; rb; oe; rc], _) -> 
+      `Pmachhwu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Machhwsu", [rt; ra; rb; oe; rc], _) -> 
+      `Pmachhwsu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Maclhw", [rt; ra; rb; oe; rc], _) -> 
+      `Pmaclhw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Maclhws", [rt; ra; rb; oe; rc], _) -> 
+      `Pmaclhws(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Maclhwu", [rt; ra; rb; oe; rc], _) -> 
+      `Pmaclhwu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Maclhwsu", [rt; ra; rb; oe; rc], _) -> 
+      `Pmaclhwsu(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulchw", [rt; ra; rb; rc], _) -> 
+      `Pmulchw(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulchwu", [rt; ra; rb; rc], _) -> 
+      `Pmulchwu(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulhhw", [rt; ra; rb; rc], _) -> 
+      `Pmulhhw(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mulhhwu", [rt; ra; rb; rc], _) -> 
+      `Pmulhhwu(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mullhw", [rt; ra; rb; rc], _) -> 
+      `Pmullhw(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Mullhwu", [rt; ra; rb; rc], _) -> 
+      `Pmullhwu(
+       (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Nmacchw", [rt; ra; rb; oe; rc], _) -> 
+      `Pnmacchw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Nmacchws", [rt; ra; rb; oe; rc], _) -> 
+      `Pnmacchws(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Nmachhw", [rt; ra; rb; oe; rc], _) -> 
+      `Pnmachhw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Nmachhws", [rt; ra; rb; oe; rc], _) -> 
+      `Pnmachhws(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Nmaclhw", [rt; ra; rb; oe; rc], _) -> 
+      `Pnmaclhw(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Nmaclhws", [rt; ra; rb; oe; rc], _) -> 
+      `Pnmaclhws(
+       (trans_out_soov oe),
+        (trans_out_cr0 rc),
+        (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Icbi", [ra; rb], _) -> 
+      `Picbi(
+       (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Icbt", [ct; ra; rb], _) -> 
+      `Picbt(
+       (trans_out_int ct),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Dcba", [ra; rb], _) -> 
+      `Pdcba(
+       (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Dcbt", [th; ra; rb], _) -> 
+      `Pdcbt(
+       (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int th))
+  | ("Dcbtst", [th; ra; rb], _) -> 
+      `Pdcbtst(
+       (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int th))
+  | ("Dcbz", [ra; rb], _) -> 
+      `Pdcbz(
+       (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Dcbst", [ra; rb], _) -> 
+      `Pdcbst(
+       (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Dcbf", [l; ra; rb], _) -> 
+      `Pdcbf(
+       (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int l))
+  | ("Isync", [], _) -> 
+      `Pisync
+
+  | ("Lbarx", [rt; ra; rb; eh], _) -> 
+      `Plbarx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int eh))
+  | ("Lharx", [rt; ra; rb; eh], _) -> 
+      `Plharx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int eh))
+  | ("Lwarx", [rt; ra; rb; eh], _) -> 
+      `Plwarx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int eh))
+  | ("Stbcx", [rs; ra; rb], _) -> 
+      `Pstbcx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Sthcx", [rs; ra; rb], _) -> 
+      `Psthcx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Stwcx", [rs; ra; rb], _) -> 
+      `Pstwcx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Ldarx", [rt; ra; rb; eh], _) -> 
+      `Pldarx(
+       (trans_out_reg rt),
+        (trans_out_reg ra),
+        (trans_out_reg rb),
+        (trans_out_int eh))
+  | ("Stdcx", [rs; ra; rb], _) -> 
+      `Pstdcx(
+       (trans_out_reg rs),
+        (trans_out_reg ra),
+        (trans_out_reg rb))
+  | ("Sync", [l], _) -> 
+      `Psync(
+       (trans_out_int l))
+  | ("Eieio", [], _) -> 
+      `Peieio
+
+  | ("Wait", [wc], _) -> 
+      `Pwait(
+       (trans_out_int wc))

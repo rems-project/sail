@@ -1,0 +1,736 @@
+  | B k
+    { `Pb (DontSetAA,DontSetLK,$2) }
+  | BA k
+    { `Pb (SetAA,DontSetLK,$2) }
+  | BL k
+    { `Pb (DontSetAA,SetLK,$2) }
+  | BLA k
+    { `Pb (SetAA,SetLK,$2) }
+  | BC k COMMA k COMMA k
+    { `Pbc (DontSetAA,DontSetLK,$2,$4,$6) }
+  | BCA k COMMA k COMMA k
+    { `Pbc (SetAA,DontSetLK,$2,$4,$6) }
+  | BCL k COMMA k COMMA k
+    { `Pbc (DontSetAA,SetLK,$2,$4,$6) }
+  | BCLA k COMMA k COMMA k
+    { `Pbc (SetAA,SetLK,$2,$4,$6) }
+  | BCLR k COMMA k COMMA k
+    { `Pbclr (DontSetLK,$2,$4,$6) }
+  | BCLRL k COMMA k COMMA k
+    { `Pbclr (SetLK,$2,$4,$6) }
+  | BCCTR k COMMA k COMMA k
+    { `Pbcctr (DontSetLK,$2,$4,$6) }
+  | BCCTRL k COMMA k COMMA k
+    { `Pbcctr (SetLK,$2,$4,$6) }
+  | CRAND k COMMA k COMMA k
+    { `Pcrand ($2,$4,$6) }
+  | CRNAND k COMMA k COMMA k
+    { `Pcrnand ($2,$4,$6) }
+  | CROR k COMMA k COMMA k
+    { `Pcror ($2,$4,$6) }
+  | CRXOR k COMMA k COMMA k
+    { `Pcrxor ($2,$4,$6) }
+  | CRNOR k COMMA k COMMA k
+    { `Pcrnor ($2,$4,$6) }
+  | CREQV k COMMA k COMMA k
+    { `Pcreqv ($2,$4,$6) }
+  | CRANDC k COMMA k COMMA k
+    { `Pcrandc ($2,$4,$6) }
+  | CRORC k COMMA k COMMA k
+    { `Pcrorc ($2,$4,$6) }
+  | MCRF crindex COMMA k
+    { `Pmcrf ($2,$4) }
+  | SC k
+    { `Psc ($2) }
+  | SCV k
+    { `Pscv ($2) }
+  | LBZ reg COMMA k LPAR reg RPAR
+    { `Plbz ($2,$4,$6) }
+  | LBZX reg COMMA reg COMMA reg
+    { `Plbzx ($2,$4,$6) }
+  | LBZU reg COMMA k LPAR reg RPAR
+    { `Plbzu ($2,$4,$6) }
+  | LBZUX reg COMMA reg COMMA reg
+    { `Plbzux ($2,$4,$6) }
+  | LHZ reg COMMA k LPAR reg RPAR
+    { `Plhz ($2,$4,$6) }
+  | LHZX reg COMMA reg COMMA reg
+    { `Plhzx ($2,$4,$6) }
+  | LHZU reg COMMA k LPAR reg RPAR
+    { `Plhzu ($2,$4,$6) }
+  | LHZUX reg COMMA reg COMMA reg
+    { `Plhzux ($2,$4,$6) }
+  | LHA reg COMMA k LPAR reg RPAR
+    { `Plha ($2,$4,$6) }
+  | LHAX reg COMMA reg COMMA reg
+    { `Plhax ($2,$4,$6) }
+  | LHAU reg COMMA k LPAR reg RPAR
+    { `Plhau ($2,$4,$6) }
+  | LHAUX reg COMMA reg COMMA reg
+    { `Plhaux ($2,$4,$6) }
+  | LWZ reg COMMA k LPAR reg RPAR
+    { `Plwz ($2,$4,$6) }
+  | LWZX reg COMMA reg COMMA reg
+    { `Plwzx ($2,$4,$6) }
+  | LWZU reg COMMA k LPAR reg RPAR
+    { `Plwzu ($2,$4,$6) }
+  | LWZUX reg COMMA reg COMMA reg
+    { `Plwzux ($2,$4,$6) }
+  | LWA reg COMMA ds LPAR reg RPAR
+    { `Plwa ($2,$4,$6) }
+  | LWAX reg COMMA reg COMMA reg
+    { `Plwax ($2,$4,$6) }
+  | LWAUX reg COMMA reg COMMA reg
+    { `Plwaux ($2,$4,$6) }
+  | LD reg COMMA ds LPAR reg RPAR
+    { `Pld ($2,$4,$6) }
+  | LDX reg COMMA reg COMMA reg
+    { `Pldx ($2,$4,$6) }
+  | LDU reg COMMA ds LPAR reg RPAR
+    { `Pldu ($2,$4,$6) }
+  | LDUX reg COMMA reg COMMA reg
+    { `Pldux ($2,$4,$6) }
+  | STB reg COMMA k LPAR reg RPAR
+    { `Pstb ($2,$4,$6) }
+  | STBX reg COMMA reg COMMA reg
+    { `Pstbx ($2,$4,$6) }
+  | STBU reg COMMA k LPAR reg RPAR
+    { `Pstbu ($2,$4,$6) }
+  | STBUX reg COMMA reg COMMA reg
+    { `Pstbux ($2,$4,$6) }
+  | STH reg COMMA k LPAR reg RPAR
+    { `Psth ($2,$4,$6) }
+  | STHX reg COMMA reg COMMA reg
+    { `Psthx ($2,$4,$6) }
+  | STHU reg COMMA k LPAR reg RPAR
+    { `Psthu ($2,$4,$6) }
+  | STHUX reg COMMA reg COMMA reg
+    { `Psthux ($2,$4,$6) }
+  | STW reg COMMA k LPAR reg RPAR
+    { `Pstw ($2,$4,$6) }
+  | STWX reg COMMA reg COMMA reg
+    { `Pstwx ($2,$4,$6) }
+  | STWU reg COMMA k LPAR reg RPAR
+    { `Pstwu ($2,$4,$6) }
+  | STWUX reg COMMA reg COMMA reg
+    { `Pstwux ($2,$4,$6) }
+  | STD reg COMMA ds LPAR reg RPAR
+    { `Pstd ($2,$4,$6) }
+  | STDX reg COMMA reg COMMA reg
+    { `Pstdx ($2,$4,$6) }
+  | STDU reg COMMA ds LPAR reg RPAR
+    { `Pstdu ($2,$4,$6) }
+  | STDUX reg COMMA reg COMMA reg
+    { `Pstdux ($2,$4,$6) }
+  | LQ k COMMA k LPAR reg RPAR COMMA k
+    { `Plq ($2,$4,$6,$9) }
+  | STQ k COMMA ds LPAR reg RPAR
+    { `Pstq ($2,$4,$6) }
+  | LHBRX reg COMMA reg COMMA reg
+    { `Plhbrx ($2,$4,$6) }
+  | STHBRX reg COMMA reg COMMA reg
+    { `Psthbrx ($2,$4,$6) }
+  | LWBRX reg COMMA reg COMMA reg
+    { `Plwbrx ($2,$4,$6) }
+  | STWBRX reg COMMA reg COMMA reg
+    { `Pstwbrx ($2,$4,$6) }
+  | LDBRX reg COMMA reg COMMA reg
+    { `Pldbrx ($2,$4,$6) }
+  | STDBRX reg COMMA reg COMMA reg
+    { `Pstdbrx ($2,$4,$6) }
+  | LMW reg COMMA k LPAR reg RPAR
+    { `Plmw ($2,$4,$6) }
+  | STMW reg COMMA k LPAR reg RPAR
+    { `Pstmw ($2,$4,$6) }
+  | LSWI k COMMA reg COMMA k
+    { `Plswi ($2,$4,$6) }
+  | LSWX reg COMMA reg COMMA reg
+    { `Plswx ($2,$4,$6) }
+  | STSWI k COMMA reg COMMA k
+    { `Pstswi ($2,$4,$6) }
+  | STSWX k COMMA reg COMMA reg
+    { `Pstswx ($2,$4,$6) }
+  | ADDI reg COMMA reg COMMA k
+    { `Paddi ($2,$4,$6) }
+  | ADDIS reg COMMA reg COMMA k
+    { `Paddis ($2,$4,$6) }
+  | ADD reg COMMA reg COMMA reg
+    { `Padd (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | ADDDOT reg COMMA reg COMMA reg
+    { `Padd (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | ADDO reg COMMA reg COMMA reg
+    { `Padd (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | ADDODOT reg COMMA reg COMMA reg
+    { `Padd (SetSOOV,SetCR0,$2,$4,$6) }
+  | SUBF reg COMMA reg COMMA reg
+    { `Psubf (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | SUBFDOT reg COMMA reg COMMA reg
+    { `Psubf (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | SUBFO reg COMMA reg COMMA reg
+    { `Psubf (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | SUBFODOT reg COMMA reg COMMA reg
+    { `Psubf (SetSOOV,SetCR0,$2,$4,$6) }
+  | ADDIC reg COMMA reg COMMA k
+    { `Paddic ($2,$4,$6) }
+  | ADDICDOT reg COMMA reg COMMA k
+    { `Paddicdot ($2,$4,$6) }
+  | SUBFIC reg COMMA reg COMMA k
+    { `Psubfic ($2,$4,$6) }
+  | ADDC reg COMMA reg COMMA reg
+    { `Paddc (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | ADDCDOT reg COMMA reg COMMA reg
+    { `Paddc (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | ADDCO reg COMMA reg COMMA reg
+    { `Paddc (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | ADDCODOT reg COMMA reg COMMA reg
+    { `Paddc (SetSOOV,SetCR0,$2,$4,$6) }
+  | SUBFC reg COMMA reg COMMA reg
+    { `Psubfc (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | SUBFCDOT reg COMMA reg COMMA reg
+    { `Psubfc (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | SUBFCO reg COMMA reg COMMA reg
+    { `Psubfc (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | SUBFCODOT reg COMMA reg COMMA reg
+    { `Psubfc (SetSOOV,SetCR0,$2,$4,$6) }
+  | ADDE reg COMMA reg COMMA reg
+    { `Padde (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | ADDEDOT reg COMMA reg COMMA reg
+    { `Padde (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | ADDEO reg COMMA reg COMMA reg
+    { `Padde (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | ADDEODOT reg COMMA reg COMMA reg
+    { `Padde (SetSOOV,SetCR0,$2,$4,$6) }
+  | SUBFE reg COMMA reg COMMA reg
+    { `Psubfe (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | SUBFEDOT reg COMMA reg COMMA reg
+    { `Psubfe (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | SUBFEO reg COMMA reg COMMA reg
+    { `Psubfe (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | SUBFEODOT reg COMMA reg COMMA reg
+    { `Psubfe (SetSOOV,SetCR0,$2,$4,$6) }
+  | ADDME reg COMMA reg
+    { `Paddme (DontSetSOOV,DontSetCR0,$2,$4) }
+  | ADDMEDOT reg COMMA reg
+    { `Paddme (DontSetSOOV,SetCR0,$2,$4) }
+  | ADDMEO reg COMMA reg
+    { `Paddme (SetSOOV,DontSetCR0,$2,$4) }
+  | ADDMEODOT reg COMMA reg
+    { `Paddme (SetSOOV,SetCR0,$2,$4) }
+  | SUBFME reg COMMA reg
+    { `Psubfme (DontSetSOOV,DontSetCR0,$2,$4) }
+  | SUBFMEDOT reg COMMA reg
+    { `Psubfme (DontSetSOOV,SetCR0,$2,$4) }
+  | SUBFMEO reg COMMA reg
+    { `Psubfme (SetSOOV,DontSetCR0,$2,$4) }
+  | SUBFMEODOT reg COMMA reg
+    { `Psubfme (SetSOOV,SetCR0,$2,$4) }
+  | ADDZE reg COMMA reg
+    { `Paddze (DontSetSOOV,DontSetCR0,$2,$4) }
+  | ADDZEDOT reg COMMA reg
+    { `Paddze (DontSetSOOV,SetCR0,$2,$4) }
+  | ADDZEO reg COMMA reg
+    { `Paddze (SetSOOV,DontSetCR0,$2,$4) }
+  | ADDZEODOT reg COMMA reg
+    { `Paddze (SetSOOV,SetCR0,$2,$4) }
+  | SUBFZE reg COMMA reg
+    { `Psubfze (DontSetSOOV,DontSetCR0,$2,$4) }
+  | SUBFZEDOT reg COMMA reg
+    { `Psubfze (DontSetSOOV,SetCR0,$2,$4) }
+  | SUBFZEO reg COMMA reg
+    { `Psubfze (SetSOOV,DontSetCR0,$2,$4) }
+  | SUBFZEODOT reg COMMA reg
+    { `Psubfze (SetSOOV,SetCR0,$2,$4) }
+  | NEG reg COMMA reg
+    { `Pneg (DontSetSOOV,DontSetCR0,$2,$4) }
+  | NEGDOT reg COMMA reg
+    { `Pneg (DontSetSOOV,SetCR0,$2,$4) }
+  | NEGO reg COMMA reg
+    { `Pneg (SetSOOV,DontSetCR0,$2,$4) }
+  | NEGODOT reg COMMA reg
+    { `Pneg (SetSOOV,SetCR0,$2,$4) }
+  | MULLI reg COMMA reg COMMA k
+    { `Pmulli ($2,$4,$6) }
+  | MULLW reg COMMA reg COMMA reg
+    { `Pmullw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MULLWDOT reg COMMA reg COMMA reg
+    { `Pmullw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MULLWO reg COMMA reg COMMA reg
+    { `Pmullw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MULLWODOT reg COMMA reg COMMA reg
+    { `Pmullw (SetSOOV,SetCR0,$2,$4,$6) }
+  | MULHW reg COMMA reg COMMA reg
+    { `Pmulhw (DontSetCR0,$2,$4,$6) }
+  | MULHWDOT reg COMMA reg COMMA reg
+    { `Pmulhw (SetCR0,$2,$4,$6) }
+  | MULHWU reg COMMA reg COMMA reg
+    { `Pmulhwu (DontSetCR0,$2,$4,$6) }
+  | MULHWUDOT reg COMMA reg COMMA reg
+    { `Pmulhwu (SetCR0,$2,$4,$6) }
+  | DIVW reg COMMA reg COMMA reg
+    { `Pdivw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWDOT reg COMMA reg COMMA reg
+    { `Pdivw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVWO reg COMMA reg COMMA reg
+    { `Pdivw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWODOT reg COMMA reg COMMA reg
+    { `Pdivw (SetSOOV,SetCR0,$2,$4,$6) }
+  | DIVWU reg COMMA reg COMMA reg
+    { `Pdivwu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWUDOT reg COMMA reg COMMA reg
+    { `Pdivwu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVWUO reg COMMA reg COMMA reg
+    { `Pdivwu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWUODOT reg COMMA reg COMMA reg
+    { `Pdivwu (SetSOOV,SetCR0,$2,$4,$6) }
+  | DIVWE reg COMMA reg COMMA reg
+    { `Pdivwe (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWEDOT reg COMMA reg COMMA reg
+    { `Pdivwe (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVWEO reg COMMA reg COMMA reg
+    { `Pdivwe (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWEODOT reg COMMA reg COMMA reg
+    { `Pdivwe (SetSOOV,SetCR0,$2,$4,$6) }
+  | DIVWEU reg COMMA reg COMMA reg
+    { `Pdivweu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWEUDOT reg COMMA reg COMMA reg
+    { `Pdivweu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVWEUO reg COMMA reg COMMA reg
+    { `Pdivweu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVWEUODOT reg COMMA reg COMMA reg
+    { `Pdivweu (SetSOOV,SetCR0,$2,$4,$6) }
+  | MULLD reg COMMA reg COMMA reg
+    { `Pmulld (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MULLDDOT reg COMMA reg COMMA reg
+    { `Pmulld (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MULLDO reg COMMA reg COMMA reg
+    { `Pmulld (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MULLDODOT reg COMMA reg COMMA reg
+    { `Pmulld (SetSOOV,SetCR0,$2,$4,$6) }
+  | MULHD reg COMMA reg COMMA reg
+    { `Pmulhd (DontSetCR0,$2,$4,$6) }
+  | MULHDDOT reg COMMA reg COMMA reg
+    { `Pmulhd (SetCR0,$2,$4,$6) }
+  | MULHDU reg COMMA reg COMMA reg
+    { `Pmulhdu (DontSetCR0,$2,$4,$6) }
+  | MULHDUDOT reg COMMA reg COMMA reg
+    { `Pmulhdu (SetCR0,$2,$4,$6) }
+  | DIVD reg COMMA reg COMMA reg
+    { `Pdivd (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDDOT reg COMMA reg COMMA reg
+    { `Pdivd (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVDO reg COMMA reg COMMA reg
+    { `Pdivd (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDODOT reg COMMA reg COMMA reg
+    { `Pdivd (SetSOOV,SetCR0,$2,$4,$6) }
+  | DIVDU reg COMMA reg COMMA reg
+    { `Pdivdu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDUDOT reg COMMA reg COMMA reg
+    { `Pdivdu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVDUO reg COMMA reg COMMA reg
+    { `Pdivdu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDUODOT reg COMMA reg COMMA reg
+    { `Pdivdu (SetSOOV,SetCR0,$2,$4,$6) }
+  | DIVDE reg COMMA reg COMMA reg
+    { `Pdivde (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDEDOT reg COMMA reg COMMA reg
+    { `Pdivde (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVDEO reg COMMA reg COMMA reg
+    { `Pdivde (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDEODOT reg COMMA reg COMMA reg
+    { `Pdivde (SetSOOV,SetCR0,$2,$4,$6) }
+  | DIVDEU reg COMMA reg COMMA reg
+    { `Pdivdeu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDEUDOT reg COMMA reg COMMA reg
+    { `Pdivdeu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | DIVDEUO reg COMMA reg COMMA reg
+    { `Pdivdeu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | DIVDEUODOT reg COMMA reg COMMA reg
+    { `Pdivdeu (SetSOOV,SetCR0,$2,$4,$6) }
+  | CMPI crindex COMMA k COMMA reg COMMA k
+    { `Pcmpi ($2,$4,$6,$8) }
+  | CMP crindex COMMA k COMMA reg COMMA reg
+    { `Pcmp ($2,$4,$6,$8) }
+  | CMPLI crindex COMMA k COMMA reg COMMA k
+    { `Pcmpli ($2,$4,$6,$8) }
+  | CMPL crindex COMMA k COMMA reg COMMA reg
+    { `Pcmpl ($2,$4,$6,$8) }
+  | ISEL reg COMMA reg COMMA reg COMMA k
+    { `Pisel ($2,$4,$6,$8) }
+  | ANDIDOT reg COMMA reg COMMA k
+    { `Pandi ($2,$4,$6) }
+  | ANDISDOT reg COMMA reg COMMA k
+    { `Pandis ($2,$4,$6) }
+  | ORI reg COMMA reg COMMA k
+    { `Pori ($2,$4,$6) }
+  | ORIS reg COMMA reg COMMA k
+    { `Poris ($2,$4,$6) }
+  | XORI reg COMMA reg COMMA k
+    { `Pxori ($2,$4,$6) }
+  | XORIS reg COMMA reg COMMA k
+    { `Pxoris ($2,$4,$6) }
+  | AND reg COMMA reg COMMA reg
+    { `Pand (DontSetCR0,$2,$4,$6) }
+  | ANDDOT reg COMMA reg COMMA reg
+    { `Pand (SetCR0,$2,$4,$6) }
+  | XOR reg COMMA reg COMMA reg
+    { `Pxor (DontSetCR0,$2,$4,$6) }
+  | XORDOT reg COMMA reg COMMA reg
+    { `Pxor (SetCR0,$2,$4,$6) }
+  | NAND reg COMMA reg COMMA reg
+    { `Pnand (DontSetCR0,$2,$4,$6) }
+  | NANDDOT reg COMMA reg COMMA reg
+    { `Pnand (SetCR0,$2,$4,$6) }
+  | OR reg COMMA reg COMMA reg
+    { `Por (DontSetCR0,$2,$4,$6) }
+  | ORDOT reg COMMA reg COMMA reg
+    { `Por (SetCR0,$2,$4,$6) }
+  | NOR reg COMMA reg COMMA reg
+    { `Pnor (DontSetCR0,$2,$4,$6) }
+  | NORDOT reg COMMA reg COMMA reg
+    { `Pnor (SetCR0,$2,$4,$6) }
+  | EQV reg COMMA reg COMMA reg
+    { `Peqv (DontSetCR0,$2,$4,$6) }
+  | EQVDOT reg COMMA reg COMMA reg
+    { `Peqv (SetCR0,$2,$4,$6) }
+  | ANDC reg COMMA reg COMMA reg
+    { `Pandc (DontSetCR0,$2,$4,$6) }
+  | ANDCDOT reg COMMA reg COMMA reg
+    { `Pandc (SetCR0,$2,$4,$6) }
+  | ORC reg COMMA reg COMMA reg
+    { `Porc (DontSetCR0,$2,$4,$6) }
+  | ORCDOT reg COMMA reg COMMA reg
+    { `Porc (SetCR0,$2,$4,$6) }
+  | EXTSB reg COMMA reg
+    { `Pextsb (DontSetCR0,$2,$4) }
+  | EXTSBDOT reg COMMA reg
+    { `Pextsb (SetCR0,$2,$4) }
+  | EXTSH reg COMMA reg
+    { `Pextsh (DontSetCR0,$2,$4) }
+  | EXTSHDOT reg COMMA reg
+    { `Pextsh (SetCR0,$2,$4) }
+  | CNTLZW reg COMMA reg
+    { `Pcntlzw (DontSetCR0,$2,$4) }
+  | CNTLZWDOT reg COMMA reg
+    { `Pcntlzw (SetCR0,$2,$4) }
+  | CMPB reg COMMA k COMMA reg
+    { `Pcmpb ($2,$4,$6) }
+  | POPCNTB reg COMMA reg
+    { `Ppopcntb ($2,$4) }
+  | POPCNTW reg COMMA reg
+    { `Ppopcntw ($2,$4) }
+  | PRTYD reg COMMA reg
+    { `Pprtyd ($2,$4) }
+  | PRTYW reg COMMA reg
+    { `Pprtyw ($2,$4) }
+  | EXTSW reg COMMA reg
+    { `Pextsw (DontSetCR0,$2,$4) }
+  | EXTSWDOT reg COMMA reg
+    { `Pextsw (SetCR0,$2,$4) }
+  | CNTLZD reg COMMA reg
+    { `Pcntlzd (DontSetCR0,$2,$4) }
+  | CNTLZDDOT reg COMMA reg
+    { `Pcntlzd (SetCR0,$2,$4) }
+  | POPCNTD reg COMMA reg
+    { `Ppopcntd ($2,$4) }
+  | BPERMD reg COMMA reg COMMA reg
+    { `Pbpermd ($2,$4,$6) }
+  | RLWINM reg COMMA reg COMMA k COMMA k COMMA k
+    { `Prlwinm (DontSetCR0,$2,$4,$6,$8,$10) }
+  | RLWINMDOT reg COMMA reg COMMA k COMMA k COMMA k
+    { `Prlwinm (SetCR0,$2,$4,$6,$8,$10) }
+  | RLWNM reg COMMA reg COMMA reg COMMA k COMMA k
+    { `Prlwnm (DontSetCR0,$2,$4,$6,$8,$10) }
+  | RLWNMDOT reg COMMA reg COMMA reg COMMA k COMMA k
+    { `Prlwnm (SetCR0,$2,$4,$6,$8,$10) }
+  | RLWIMI reg COMMA reg COMMA k COMMA k COMMA k
+    { `Prlwimi (DontSetCR0,$2,$4,$6,$8,$10) }
+  | RLWIMIDOT reg COMMA reg COMMA k COMMA k COMMA k
+    { `Prlwimi (SetCR0,$2,$4,$6,$8,$10) }
+  | RLDICL reg COMMA reg COMMA k COMMA k
+    { `Prldicl (DontSetCR0,$2,$4,$6,$8) }
+  | RLDICLDOT reg COMMA reg COMMA k COMMA k
+    { `Prldicl (SetCR0,$2,$4,$6,$8) }
+  | RLDICR reg COMMA reg COMMA k COMMA k
+    { `Prldicr (DontSetCR0,$2,$4,$6,$8) }
+  | RLDICRDOT reg COMMA reg COMMA k COMMA k
+    { `Prldicr (SetCR0,$2,$4,$6,$8) }
+  | RLDIC reg COMMA reg COMMA k COMMA k
+    { `Prldic (DontSetCR0,$2,$4,$6,$8) }
+  | RLDICDOT reg COMMA reg COMMA k COMMA k
+    { `Prldic (SetCR0,$2,$4,$6,$8) }
+  | RLDCL reg COMMA reg COMMA reg COMMA k
+    { `Prldcl (DontSetCR0,$2,$4,$6,$8) }
+  | RLDCLDOT reg COMMA reg COMMA reg COMMA k
+    { `Prldcl (SetCR0,$2,$4,$6,$8) }
+  | RLDCR reg COMMA reg COMMA reg COMMA k
+    { `Prldcr (DontSetCR0,$2,$4,$6,$8) }
+  | RLDCRDOT reg COMMA reg COMMA reg COMMA k
+    { `Prldcr (SetCR0,$2,$4,$6,$8) }
+  | RLDIMI reg COMMA reg COMMA k COMMA k
+    { `Prldimi (DontSetCR0,$2,$4,$6,$8) }
+  | RLDIMIDOT reg COMMA reg COMMA k COMMA k
+    { `Prldimi (SetCR0,$2,$4,$6,$8) }
+  | SLW reg COMMA reg COMMA reg
+    { `Pslw (DontSetCR0,$2,$4,$6) }
+  | SLWDOT reg COMMA reg COMMA reg
+    { `Pslw (SetCR0,$2,$4,$6) }
+  | SRW reg COMMA reg COMMA reg
+    { `Psrw (DontSetCR0,$2,$4,$6) }
+  | SRWDOT reg COMMA reg COMMA reg
+    { `Psrw (SetCR0,$2,$4,$6) }
+  | SRAWI reg COMMA reg COMMA k
+    { `Psrawi (DontSetCR0,$2,$4,$6) }
+  | SRAWIDOT reg COMMA reg COMMA k
+    { `Psrawi (SetCR0,$2,$4,$6) }
+  | SRAW reg COMMA reg COMMA reg
+    { `Psraw (DontSetCR0,$2,$4,$6) }
+  | SRAWDOT reg COMMA reg COMMA reg
+    { `Psraw (SetCR0,$2,$4,$6) }
+  | SLD reg COMMA reg COMMA reg
+    { `Psld (DontSetCR0,$2,$4,$6) }
+  | SLDDOT reg COMMA reg COMMA reg
+    { `Psld (SetCR0,$2,$4,$6) }
+  | SRD reg COMMA reg COMMA reg
+    { `Psrd (DontSetCR0,$2,$4,$6) }
+  | SRDDOT reg COMMA reg COMMA reg
+    { `Psrd (SetCR0,$2,$4,$6) }
+  | SRADI reg COMMA reg COMMA k
+    { `Psradi (DontSetCR0,$2,$4,$6) }
+  | SRADIDOT reg COMMA reg COMMA k
+    { `Psradi (SetCR0,$2,$4,$6) }
+  | SRAD reg COMMA reg COMMA reg
+    { `Psrad (DontSetCR0,$2,$4,$6) }
+  | SRADDOT reg COMMA reg COMMA reg
+    { `Psrad (SetCR0,$2,$4,$6) }
+  | CDTBCD reg COMMA reg
+    { `Pcdtbcd ($2,$4) }
+  | CBCDTD reg COMMA reg
+    { `Pcbcdtd ($2,$4) }
+  | ADDG6S reg COMMA reg COMMA reg
+    { `Paddg6s ($2,$4,$6) }
+  | MTSPR k COMMA reg
+    { `Pmtspr ($2,$4) }
+  | MFSPR reg COMMA k
+    { `Pmfspr ($2,$4) }
+  | MTCRF crmask COMMA reg
+    { `Pmtcrf ($2,$4) }
+  | MFCR reg
+    { `Pmfcr ($2) }
+  | MTOCRF crmask COMMA reg
+    { `Pmtocrf ($2,$4) }
+  | MFOCRF reg COMMA crmask
+    { `Pmfocrf ($2,$4) }
+  | MCRXR crindex
+    { `Pmcrxr ($2) }
+  | DLMZB reg COMMA reg COMMA reg
+    { `Pdlmzb (DontSetCR0,$2,$4,$6) }
+  | DLMZBDOT reg COMMA reg COMMA reg
+    { `Pdlmzb (SetCR0,$2,$4,$6) }
+  | MACCHW reg COMMA reg COMMA reg
+    { `Pmacchw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWDOT reg COMMA reg COMMA reg
+    { `Pmacchw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACCHWO reg COMMA reg COMMA reg
+    { `Pmacchw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWODOT reg COMMA reg COMMA reg
+    { `Pmacchw (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACCHWS reg COMMA reg COMMA reg
+    { `Pmacchws (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWSDOT reg COMMA reg COMMA reg
+    { `Pmacchws (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACCHWSO reg COMMA reg COMMA reg
+    { `Pmacchws (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWSODOT reg COMMA reg COMMA reg
+    { `Pmacchws (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACCHWU reg COMMA reg COMMA reg
+    { `Pmacchwu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWUDOT reg COMMA reg COMMA reg
+    { `Pmacchwu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACCHWUO reg COMMA reg COMMA reg
+    { `Pmacchwu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWUODOT reg COMMA reg COMMA reg
+    { `Pmacchwu (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACCHWSU reg COMMA reg COMMA reg
+    { `Pmacchwsu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWSUDOT reg COMMA reg COMMA reg
+    { `Pmacchwsu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACCHWSUO reg COMMA reg COMMA reg
+    { `Pmacchwsu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACCHWSUODOT reg COMMA reg COMMA reg
+    { `Pmacchwsu (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHW reg COMMA reg COMMA reg
+    { `Pmachhw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWDOT reg COMMA reg COMMA reg
+    { `Pmachhw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHWO reg COMMA reg COMMA reg
+    { `Pmachhw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWODOT reg COMMA reg COMMA reg
+    { `Pmachhw (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHWS reg COMMA reg COMMA reg
+    { `Pmachhws (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWSDOT reg COMMA reg COMMA reg
+    { `Pmachhws (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHWSO reg COMMA reg COMMA reg
+    { `Pmachhws (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWSODOT reg COMMA reg COMMA reg
+    { `Pmachhws (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHWU reg COMMA reg COMMA reg
+    { `Pmachhwu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWUDOT reg COMMA reg COMMA reg
+    { `Pmachhwu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHWUO reg COMMA reg COMMA reg
+    { `Pmachhwu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWUODOT reg COMMA reg COMMA reg
+    { `Pmachhwu (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHWSU reg COMMA reg COMMA reg
+    { `Pmachhwsu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWSUDOT reg COMMA reg COMMA reg
+    { `Pmachhwsu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACHHWSUO reg COMMA reg COMMA reg
+    { `Pmachhwsu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACHHWSUODOT reg COMMA reg COMMA reg
+    { `Pmachhwsu (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHW reg COMMA reg COMMA reg
+    { `Pmaclhw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWDOT reg COMMA reg COMMA reg
+    { `Pmaclhw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHWO reg COMMA reg COMMA reg
+    { `Pmaclhw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWODOT reg COMMA reg COMMA reg
+    { `Pmaclhw (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHWS reg COMMA reg COMMA reg
+    { `Pmaclhws (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWSDOT reg COMMA reg COMMA reg
+    { `Pmaclhws (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHWSO reg COMMA reg COMMA reg
+    { `Pmaclhws (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWSODOT reg COMMA reg COMMA reg
+    { `Pmaclhws (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHWU reg COMMA reg COMMA reg
+    { `Pmaclhwu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWUDOT reg COMMA reg COMMA reg
+    { `Pmaclhwu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHWUO reg COMMA reg COMMA reg
+    { `Pmaclhwu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWUODOT reg COMMA reg COMMA reg
+    { `Pmaclhwu (SetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHWSU reg COMMA reg COMMA reg
+    { `Pmaclhwsu (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWSUDOT reg COMMA reg COMMA reg
+    { `Pmaclhwsu (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | MACLHWSUO reg COMMA reg COMMA reg
+    { `Pmaclhwsu (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | MACLHWSUODOT reg COMMA reg COMMA reg
+    { `Pmaclhwsu (SetSOOV,SetCR0,$2,$4,$6) }
+  | MULCHW reg COMMA reg COMMA reg
+    { `Pmulchw (DontSetCR0,$2,$4,$6) }
+  | MULCHWDOT reg COMMA reg COMMA reg
+    { `Pmulchw (SetCR0,$2,$4,$6) }
+  | MULCHWU reg COMMA reg COMMA reg
+    { `Pmulchwu (DontSetCR0,$2,$4,$6) }
+  | MULCHWUDOT reg COMMA reg COMMA reg
+    { `Pmulchwu (SetCR0,$2,$4,$6) }
+  | MULHHW reg COMMA reg COMMA reg
+    { `Pmulhhw (DontSetCR0,$2,$4,$6) }
+  | MULHHWDOT reg COMMA reg COMMA reg
+    { `Pmulhhw (SetCR0,$2,$4,$6) }
+  | MULHHWU reg COMMA reg COMMA reg
+    { `Pmulhhwu (DontSetCR0,$2,$4,$6) }
+  | MULHHWUDOT reg COMMA reg COMMA reg
+    { `Pmulhhwu (SetCR0,$2,$4,$6) }
+  | MULLHW reg COMMA reg COMMA reg
+    { `Pmullhw (DontSetCR0,$2,$4,$6) }
+  | MULLHWDOT reg COMMA reg COMMA reg
+    { `Pmullhw (SetCR0,$2,$4,$6) }
+  | MULLHWU reg COMMA reg COMMA reg
+    { `Pmullhwu (DontSetCR0,$2,$4,$6) }
+  | MULLHWUDOT reg COMMA reg COMMA reg
+    { `Pmullhwu (SetCR0,$2,$4,$6) }
+  | NMACCHW reg COMMA reg COMMA reg
+    { `Pnmacchw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACCHWDOT reg COMMA reg COMMA reg
+    { `Pnmacchw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | NMACCHWO reg COMMA reg COMMA reg
+    { `Pnmacchw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACCHWODOT reg COMMA reg COMMA reg
+    { `Pnmacchw (SetSOOV,SetCR0,$2,$4,$6) }
+  | NMACCHWS reg COMMA reg COMMA reg
+    { `Pnmacchws (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACCHWSDOT reg COMMA reg COMMA reg
+    { `Pnmacchws (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | NMACCHWSO reg COMMA reg COMMA reg
+    { `Pnmacchws (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACCHWSODOT reg COMMA reg COMMA reg
+    { `Pnmacchws (SetSOOV,SetCR0,$2,$4,$6) }
+  | NMACHHW reg COMMA reg COMMA reg
+    { `Pnmachhw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACHHWDOT reg COMMA reg COMMA reg
+    { `Pnmachhw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | NMACHHWO reg COMMA reg COMMA reg
+    { `Pnmachhw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACHHWODOT reg COMMA reg COMMA reg
+    { `Pnmachhw (SetSOOV,SetCR0,$2,$4,$6) }
+  | NMACHHWS reg COMMA reg COMMA reg
+    { `Pnmachhws (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACHHWSDOT reg COMMA reg COMMA reg
+    { `Pnmachhws (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | NMACHHWSO reg COMMA reg COMMA reg
+    { `Pnmachhws (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACHHWSODOT reg COMMA reg COMMA reg
+    { `Pnmachhws (SetSOOV,SetCR0,$2,$4,$6) }
+  | NMACLHW reg COMMA reg COMMA reg
+    { `Pnmaclhw (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACLHWDOT reg COMMA reg COMMA reg
+    { `Pnmaclhw (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | NMACLHWO reg COMMA reg COMMA reg
+    { `Pnmaclhw (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACLHWODOT reg COMMA reg COMMA reg
+    { `Pnmaclhw (SetSOOV,SetCR0,$2,$4,$6) }
+  | NMACLHWS reg COMMA reg COMMA reg
+    { `Pnmaclhws (DontSetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACLHWSDOT reg COMMA reg COMMA reg
+    { `Pnmaclhws (DontSetSOOV,SetCR0,$2,$4,$6) }
+  | NMACLHWSO reg COMMA reg COMMA reg
+    { `Pnmaclhws (SetSOOV,DontSetCR0,$2,$4,$6) }
+  | NMACLHWSODOT reg COMMA reg COMMA reg
+    { `Pnmaclhws (SetSOOV,SetCR0,$2,$4,$6) }
+  | ICBI reg COMMA reg
+    { `Picbi ($2,$4) }
+  | ICBT k COMMA reg COMMA reg
+    { `Picbt ($2,$4,$6) }
+  | DCBA reg COMMA reg
+    { `Pdcba ($2,$4) }
+  | DCBT reg COMMA reg COMMA k
+    { `Pdcbt ($2,$4,$6) }
+  | DCBTST reg COMMA reg COMMA k
+    { `Pdcbtst ($2,$4,$6) }
+  | DCBZ reg COMMA reg
+    { `Pdcbz ($2,$4) }
+  | DCBST reg COMMA reg
+    { `Pdcbst ($2,$4) }
+  | DCBF reg COMMA reg COMMA k
+    { `Pdcbf ($2,$4,$6) }
+  | ISYNC
+    { `Pisync }
+  | LBARX reg COMMA reg COMMA reg COMMA k
+    { `Plbarx ($2,$4,$6,$8) }
+  | LHARX reg COMMA reg COMMA reg COMMA k
+    { `Plharx ($2,$4,$6,$8) }
+  | LWARX reg COMMA reg COMMA reg COMMA k
+    { `Plwarx ($2,$4,$6,$8) }
+  | STBCXDOT reg COMMA reg COMMA reg
+    { `Pstbcx ($2,$4,$6) }
+  | STHCXDOT reg COMMA reg COMMA reg
+    { `Psthcx ($2,$4,$6) }
+  | STWCXDOT reg COMMA reg COMMA reg
+    { `Pstwcx ($2,$4,$6) }
+  | LDARX reg COMMA reg COMMA reg COMMA k
+    { `Pldarx ($2,$4,$6,$8) }
+  | STDCXDOT reg COMMA reg COMMA reg
+    { `Pstdcx ($2,$4,$6) }
+  | SYNC k
+    { `Psync ($2) }
+  | EIEIO
+    { `Peieio }
+  | WAIT k
+    { `Pwait ($2) }

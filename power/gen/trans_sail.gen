@@ -1,0 +1,1516 @@
+  | `Pb(setaa0, setlk1, k2) -> 
+      ("B",
+       [("LI", IInt.Bvector (Some 24), SB.bit_list_of_integer 24 (Nat_big_num.of_int (trans_li_setaa_setlk_k setaa0 setlk1 k2)));
+        ("AA", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_aa setaa0)));
+        ("LK", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_lk setlk1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pbc(setaa0, setlk1, k2, k3, k4) -> 
+      ("Bc",
+       [("BO", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2));
+        ("BI", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k3));
+        ("BD", IInt.Bvector (Some 14), SB.bit_list_of_integer 14 (Nat_big_num.of_int (trans_bd_setaa_setlk_k_k_k setaa0 setlk1 k2 k3 k4)));
+        ("AA", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_aa setaa0)));
+        ("LK", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_lk setlk1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pbclr(setlk0, k1, k2, k3) -> 
+      ("Bclr",
+       [("BO", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BI", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2));
+        ("BH", IInt.Bvector (Some 2), SB.bit_list_of_integer 2 (Nat_big_num.of_int k3));
+        ("LK", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_lk setlk0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pbcctr(setlk0, k1, k2, k3) -> 
+      ("Bcctr",
+       [("BO", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BI", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2));
+        ("BH", IInt.Bvector (Some 2), SB.bit_list_of_integer 2 (Nat_big_num.of_int k3));
+        ("LK", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_lk setlk0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcrand(k0, k1, k2) -> 
+      ("Crand",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pcrnand(k0, k1, k2) -> 
+      ("Crnand",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pcror(k0, k1, k2) -> 
+      ("Cror",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pcrxor(k0, k1, k2) -> 
+      ("Crxor",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pcrnor(k0, k1, k2) -> 
+      ("Crnor",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pcreqv(k0, k1, k2) -> 
+      ("Creqv",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pcrandc(k0, k1, k2) -> 
+      ("Crandc",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pcrorc(k0, k1, k2) -> 
+      ("Crorc",
+       [("BT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("BA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("BB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pmcrf(crindex0, k1) -> 
+      ("Mcrf",
+       [("BF", IInt.Bvector (Some 3), SB.bit_list_of_integer 3 (Nat_big_num.of_int crindex0));
+        ("BFA", IInt.Bvector (Some 3), SB.bit_list_of_integer 3 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Psc(k0) -> 
+      ("Sc",
+       [("LEV", IInt.Bvector (Some 7), SB.bit_list_of_integer 7 (Nat_big_num.of_int k0))],
+       [(* always empty base effects*)]
+      )
+  | `Pscv(k0) -> 
+      ("Scv",
+       [("LEV", IInt.Bvector (Some 7), SB.bit_list_of_integer 7 (Nat_big_num.of_int k0))],
+       [(* always empty base effects*)]
+      )
+  | `Plbz(reg0, k1, reg2) -> 
+      ("Lbz",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plbzx(reg0, reg1, reg2) -> 
+      ("Lbzx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plbzu(reg0, k1, reg2) -> 
+      ("Lbzu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plbzux(reg0, reg1, reg2) -> 
+      ("Lbzux",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plhz(reg0, k1, reg2) -> 
+      ("Lhz",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plhzx(reg0, reg1, reg2) -> 
+      ("Lhzx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plhzu(reg0, k1, reg2) -> 
+      ("Lhzu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plhzux(reg0, reg1, reg2) -> 
+      ("Lhzux",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plha(reg0, k1, reg2) -> 
+      ("Lha",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plhax(reg0, reg1, reg2) -> 
+      ("Lhax",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plhau(reg0, k1, reg2) -> 
+      ("Lhau",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plhaux(reg0, reg1, reg2) -> 
+      ("Lhaux",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plwz(reg0, k1, reg2) -> 
+      ("Lwz",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plwzx(reg0, reg1, reg2) -> 
+      ("Lwzx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plwzu(reg0, k1, reg2) -> 
+      ("Lwzu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plwzux(reg0, reg1, reg2) -> 
+      ("Lwzux",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plwa(reg0, ds1, reg2) -> 
+      ("Lwa",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("DS", IInt.Bvector (Some 14), SB.bit_list_of_integer 14 (Nat_big_num.of_int ds1))],
+       [(* always empty base effects*)]
+      )
+  | `Plwax(reg0, reg1, reg2) -> 
+      ("Lwax",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plwaux(reg0, reg1, reg2) -> 
+      ("Lwaux",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pld(reg0, ds1, reg2) -> 
+      ("Ld",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("DS", IInt.Bvector (Some 14), SB.bit_list_of_integer 14 (Nat_big_num.of_int ds1))],
+       [(* always empty base effects*)]
+      )
+  | `Pldx(reg0, reg1, reg2) -> 
+      ("Ldx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pldu(reg0, ds1, reg2) -> 
+      ("Ldu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("DS", IInt.Bvector (Some 14), SB.bit_list_of_integer 14 (Nat_big_num.of_int ds1))],
+       [(* always empty base effects*)]
+      )
+  | `Pldux(reg0, reg1, reg2) -> 
+      ("Ldux",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstb(reg0, k1, reg2) -> 
+      ("Stb",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Pstbx(reg0, reg1, reg2) -> 
+      ("Stbx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstbu(reg0, k1, reg2) -> 
+      ("Stbu",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Pstbux(reg0, reg1, reg2) -> 
+      ("Stbux",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Psth(reg0, k1, reg2) -> 
+      ("Sth",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Psthx(reg0, reg1, reg2) -> 
+      ("Sthx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Psthu(reg0, k1, reg2) -> 
+      ("Sthu",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Psthux(reg0, reg1, reg2) -> 
+      ("Sthux",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstw(reg0, k1, reg2) -> 
+      ("Stw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Pstwx(reg0, reg1, reg2) -> 
+      ("Stwx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstwu(reg0, k1, reg2) -> 
+      ("Stwu",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Pstwux(reg0, reg1, reg2) -> 
+      ("Stwux",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstd(reg0, ds1, reg2) -> 
+      ("Std",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("DS", IInt.Bvector (Some 14), SB.bit_list_of_integer 14 (Nat_big_num.of_int ds1))],
+       [(* always empty base effects*)]
+      )
+  | `Pstdx(reg0, reg1, reg2) -> 
+      ("Stdx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstdu(reg0, ds1, reg2) -> 
+      ("Stdu",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("DS", IInt.Bvector (Some 14), SB.bit_list_of_integer 14 (Nat_big_num.of_int ds1))],
+       [(* always empty base effects*)]
+      )
+  | `Pstdux(reg0, reg1, reg2) -> 
+      ("Stdux",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plq(k0, k1, reg2, k3) -> 
+      ("Lq",
+       [("RTp", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("DQ", IInt.Bvector (Some 12), SB.bit_list_of_integer 12 (Nat_big_num.of_int k1));
+        ("PT", IInt.Bvector (Some 4), SB.bit_list_of_integer 4 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Pstq(k0, ds1, reg2) -> 
+      ("Stq",
+       [("RSp", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("DS", IInt.Bvector (Some 14), SB.bit_list_of_integer 14 (Nat_big_num.of_int ds1))],
+       [(* always empty base effects*)]
+      )
+  | `Plhbrx(reg0, reg1, reg2) -> 
+      ("Lhbrx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Psthbrx(reg0, reg1, reg2) -> 
+      ("Sthbrx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plwbrx(reg0, reg1, reg2) -> 
+      ("Lwbrx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstwbrx(reg0, reg1, reg2) -> 
+      ("Stwbrx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pldbrx(reg0, reg1, reg2) -> 
+      ("Ldbrx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstdbrx(reg0, reg1, reg2) -> 
+      ("Stdbrx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Plmw(reg0, k1, reg2) -> 
+      ("Lmw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Pstmw(reg0, k1, reg2) -> 
+      ("Stmw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("D", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Plswi(k0, reg1, k2) -> 
+      ("Lswi",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("NB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Plswx(reg0, reg1, reg2) -> 
+      ("Lswx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstswi(k0, reg1, k2) -> 
+      ("Stswi",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("NB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pstswx(k0, reg1, reg2) -> 
+      ("Stswx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k0));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Paddi(reg0, reg1, k2) -> 
+      ("Addi",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Paddis(reg0, reg1, k2) -> 
+      ("Addis",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Padd(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Add",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Psubf(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Subf",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Paddic(reg0, reg1, k2) -> 
+      ("Addic",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Paddicdot(reg0, reg1, k2) -> 
+      ("AddicDot",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Psubfic(reg0, reg1, k2) -> 
+      ("Subfic",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Paddc(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Addc",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Psubfc(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Subfc",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Padde(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Adde",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Psubfe(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Subfe",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Paddme(setsoov0, setcr01, reg2, reg3) -> 
+      ("Addme",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Psubfme(setsoov0, setcr01, reg2, reg3) -> 
+      ("Subfme",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Paddze(setsoov0, setcr01, reg2, reg3) -> 
+      ("Addze",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Psubfze(setsoov0, setcr01, reg2, reg3) -> 
+      ("Subfze",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pneg(setsoov0, setcr01, reg2, reg3) -> 
+      ("Neg",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulli(reg0, reg1, k2) -> 
+      ("Mulli",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pmullw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Mullw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulhw(setcr00, reg1, reg2, reg3) -> 
+      ("Mulhw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulhwu(setcr00, reg1, reg2, reg3) -> 
+      ("Mulhwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivwe(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divwe",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivweu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divweu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulld(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Mulld",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulhd(setcr00, reg1, reg2, reg3) -> 
+      ("Mulhd",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulhdu(setcr00, reg1, reg2, reg3) -> 
+      ("Mulhdu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivd(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divd",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivdu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divdu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivde(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divde",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdivdeu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Divdeu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcmpi(crindex0, k1, reg2, k3) -> 
+      ("Cmpi",
+       [("BF", IInt.Bvector (Some 3), SB.bit_list_of_integer 3 (Nat_big_num.of_int crindex0));
+        ("L", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k1));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("SI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Pcmp(crindex0, k1, reg2, reg3) -> 
+      ("Cmp",
+       [("BF", IInt.Bvector (Some 3), SB.bit_list_of_integer 3 (Nat_big_num.of_int crindex0));
+        ("L", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k1));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcmpli(crindex0, k1, reg2, k3) -> 
+      ("Cmpli",
+       [("BF", IInt.Bvector (Some 3), SB.bit_list_of_integer 3 (Nat_big_num.of_int crindex0));
+        ("L", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k1));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("UI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Pcmpl(crindex0, k1, reg2, reg3) -> 
+      ("Cmpl",
+       [("BF", IInt.Bvector (Some 3), SB.bit_list_of_integer 3 (Nat_big_num.of_int crindex0));
+        ("L", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k1));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)))],
+       [(* always empty base effects*)]
+      )
+  | `Pisel(reg0, reg1, reg2, k3) -> 
+      ("Isel",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("BC", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Pandi(reg0, reg1, k2) -> 
+      ("Andi",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("UI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pandis(reg0, reg1, k2) -> 
+      ("Andis",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("UI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pori(reg0, reg1, k2) -> 
+      ("Ori",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("UI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Poris(reg0, reg1, k2) -> 
+      ("Oris",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("UI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pxori(reg0, reg1, k2) -> 
+      ("Xori",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("UI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pxoris(reg0, reg1, k2) -> 
+      ("Xoris",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("UI", IInt.Bvector (Some 16), SB.bit_list_of_integer 16 (Nat_big_num.of_int k2))],
+       [(* always empty base effects*)]
+      )
+  | `Pand(setcr00, reg1, reg2, reg3) -> 
+      ("And",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pxor(setcr00, reg1, reg2, reg3) -> 
+      ("Xor",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnand(setcr00, reg1, reg2, reg3) -> 
+      ("Nand",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Por(setcr00, reg1, reg2, reg3) -> 
+      ("Or",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnor(setcr00, reg1, reg2, reg3) -> 
+      ("Nor",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Peqv(setcr00, reg1, reg2, reg3) -> 
+      ("Eqv",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pandc(setcr00, reg1, reg2, reg3) -> 
+      ("Andc",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Porc(setcr00, reg1, reg2, reg3) -> 
+      ("Orc",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pextsb(setcr00, reg1, reg2) -> 
+      ("Extsb",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pextsh(setcr00, reg1, reg2) -> 
+      ("Extsh",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcntlzw(setcr00, reg1, reg2) -> 
+      ("Cntlzw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcmpb(reg0, k1, reg2) -> 
+      ("Cmpb",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k1));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Ppopcntb(reg0, reg1) -> 
+      ("Popcntb",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Ppopcntw(reg0, reg1) -> 
+      ("Popcntw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pprtyd(reg0, reg1) -> 
+      ("Prtyd",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pprtyw(reg0, reg1) -> 
+      ("Prtyw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pextsw(setcr00, reg1, reg2) -> 
+      ("Extsw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcntlzd(setcr00, reg1, reg2) -> 
+      ("Cntlzd",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Ppopcntd(reg0, reg1) -> 
+      ("Popcntd",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pbpermd(reg0, reg1, reg2) -> 
+      ("Bpermd",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Prlwinm(setcr00, reg1, reg2, k3, k4, k5) -> 
+      ("Rlwinm",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SH", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k3));
+        ("MB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k4));
+        ("ME", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k5));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prlwnm(setcr00, reg1, reg2, reg3, k4, k5) -> 
+      ("Rlwnm",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("MB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k4));
+        ("ME", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k5));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prlwimi(setcr00, reg1, reg2, k3, k4, k5) -> 
+      ("Rlwimi",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SH", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k3));
+        ("MB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k4));
+        ("ME", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k5));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prldicl(setcr00, reg1, reg2, k3, k4) -> 
+      ("Rldicl",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("sh", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k3));
+        ("mb", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k4));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prldicr(setcr00, reg1, reg2, k3, k4) -> 
+      ("Rldicr",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("sh", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k3));
+        ("me", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k4));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prldic(setcr00, reg1, reg2, k3, k4) -> 
+      ("Rldic",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("sh", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k3));
+        ("mb", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k4));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prldcl(setcr00, reg1, reg2, reg3, k4) -> 
+      ("Rldcl",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("mb", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k4));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prldcr(setcr00, reg1, reg2, reg3, k4) -> 
+      ("Rldcr",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("me", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k4));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Prldimi(setcr00, reg1, reg2, k3, k4) -> 
+      ("Rldimi",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("sh", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k3));
+        ("mb", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k4));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pslw(setcr00, reg1, reg2, reg3) -> 
+      ("Slw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Psrw(setcr00, reg1, reg2, reg3) -> 
+      ("Srw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Psrawi(setcr00, reg1, reg2, k3) -> 
+      ("Srawi",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("SH", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k3));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Psraw(setcr00, reg1, reg2, reg3) -> 
+      ("Sraw",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Psld(setcr00, reg1, reg2, reg3) -> 
+      ("Sld",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Psrd(setcr00, reg1, reg2, reg3) -> 
+      ("Srd",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Psradi(setcr00, reg1, reg2, k3) -> 
+      ("Sradi",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("sh", IInt.Bvector (Some 6), SB.bit_list_of_integer 6 (Nat_big_num.of_int k3));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Psrad(setcr00, reg1, reg2, reg3) -> 
+      ("Srad",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcdtbcd(reg0, reg1) -> 
+      ("Cdtbcd",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pcbcdtd(reg0, reg1) -> 
+      ("Cbcdtd",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Paddg6s(reg0, reg1, reg2) -> 
+      ("Addg6s",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmtspr(k0, reg1) -> 
+      ("Mtspr",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("spr", IInt.Bvector (Some 10), SB.bit_list_of_integer 10 (Nat_big_num.of_int k0))],
+       [(* always empty base effects*)]
+      )
+  | `Pmfspr(reg0, k1) -> 
+      ("Mfspr",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("spr", IInt.Bvector (Some 10), SB.bit_list_of_integer 10 (Nat_big_num.of_int k1))],
+       [(* always empty base effects*)]
+      )
+  | `Pmtcrf(crmask0, reg1) -> 
+      ("Mtcrf",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("FXM", IInt.Bvector (Some 8), SB.bit_list_of_integer 8 (Nat_big_num.of_int crmask0))],
+       [(* always empty base effects*)]
+      )
+  | `Pmfcr(reg0) -> 
+      ("Mfcr",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmtocrf(crmask0, reg1) -> 
+      ("Mtocrf",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("FXM", IInt.Bvector (Some 8), SB.bit_list_of_integer 8 (Nat_big_num.of_int crmask0))],
+       [(* always empty base effects*)]
+      )
+  | `Pmfocrf(reg0, crmask1) -> 
+      ("Mfocrf",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("FXM", IInt.Bvector (Some 8), SB.bit_list_of_integer 8 (Nat_big_num.of_int crmask1))],
+       [(* always empty base effects*)]
+      )
+  | `Pmcrxr(crindex0) -> 
+      ("Mcrxr",
+       [("BF", IInt.Bvector (Some 3), SB.bit_list_of_integer 3 (Nat_big_num.of_int crindex0))],
+       [(* always empty base effects*)]
+      )
+  | `Pdlmzb(setcr00, reg1, reg2, reg3) -> 
+      ("Dlmzb",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmacchw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Macchw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmacchws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Macchws",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmacchwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Macchwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmacchwsu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Macchwsu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmachhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Machhw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmachhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Machhws",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmachhwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Machhwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmachhwsu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Machhwsu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmaclhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Maclhw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmaclhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Maclhws",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmaclhwu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Maclhwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmaclhwsu(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Maclhwsu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulchw(setcr00, reg1, reg2, reg3) -> 
+      ("Mulchw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulchwu(setcr00, reg1, reg2, reg3) -> 
+      ("Mulchwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulhhw(setcr00, reg1, reg2, reg3) -> 
+      ("Mulhhw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmulhhwu(setcr00, reg1, reg2, reg3) -> 
+      ("Mulhhwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmullhw(setcr00, reg1, reg2, reg3) -> 
+      ("Mullhw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pmullhwu(setcr00, reg1, reg2, reg3) -> 
+      ("Mullhwu",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr00)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnmacchw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Nmacchw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnmacchws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Nmacchws",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnmachhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Nmachhw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnmachhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Nmachhws",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnmaclhw(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Nmaclhw",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Pnmaclhws(setsoov0, setcr01, reg2, reg3, reg4) -> 
+      ("Nmaclhws",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg3)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg4)));
+        ("OE", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_soov setsoov0)));
+        ("Rc", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int (trans_cr0 setcr01)))],
+       [(* always empty base effects*)]
+      )
+  | `Picbi(reg0, reg1) -> 
+      ("Icbi",
+       [("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)))],
+       [(* always empty base effects*)]
+      )
+  | `Picbt(k0, reg1, reg2) -> 
+      ("Icbt",
+       [("CT", IInt.Bvector (Some 4), SB.bit_list_of_integer 4 (Nat_big_num.of_int k0));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdcba(reg0, reg1) -> 
+      ("Dcba",
+       [("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdcbt(reg0, reg1, k2) -> 
+      ("Dcbt",
+       [("TH", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdcbtst(reg0, reg1, k2) -> 
+      ("Dcbtst",
+       [("TH", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int k2));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdcbz(reg0, reg1) -> 
+      ("Dcbz",
+       [("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdcbst(reg0, reg1) -> 
+      ("Dcbst",
+       [("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pdcbf(reg0, reg1, k2) -> 
+      ("Dcbf",
+       [("L", IInt.Bvector (Some 2), SB.bit_list_of_integer 2 (Nat_big_num.of_int k2));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)))],
+       [(* always empty base effects*)]
+      )
+  | `Pisync -> 
+      ("Isync",
+       [],
+       [(* always empty base effects*)]
+      )
+  | `Plbarx(reg0, reg1, reg2, k3) -> 
+      ("Lbarx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("EH", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Plharx(reg0, reg1, reg2, k3) -> 
+      ("Lharx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("EH", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Plwarx(reg0, reg1, reg2, k3) -> 
+      ("Lwarx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("EH", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Pstbcx(reg0, reg1, reg2) -> 
+      ("Stbcx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Psthcx(reg0, reg1, reg2) -> 
+      ("Sthcx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pstwcx(reg0, reg1, reg2) -> 
+      ("Stwcx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Pldarx(reg0, reg1, reg2, k3) -> 
+      ("Ldarx",
+       [("RT", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)));
+        ("EH", IInt.Bit, SB.bit_list_of_integer 1 (Nat_big_num.of_int k3))],
+       [(* always empty base effects*)]
+      )
+  | `Pstdcx(reg0, reg1, reg2) -> 
+      ("Stdcx",
+       [("RS", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg0)));
+        ("RA", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg1)));
+        ("RB", IInt.Bvector (Some 5), SB.bit_list_of_integer 5 (Nat_big_num.of_int (int_of_reg reg2)))],
+       [(* always empty base effects*)]
+      )
+  | `Psync(k0) -> 
+      ("Sync",
+       [("L", IInt.Bvector (Some 2), SB.bit_list_of_integer 2 (Nat_big_num.of_int k0))],
+       [(* always empty base effects*)]
+      )
+  | `Peieio -> 
+      ("Eieio",
+       [],
+       [(* always empty base effects*)]
+      )
+  | `Pwait(k0) -> 
+      ("Wait",
+       [("WC", IInt.Bvector (Some 2), SB.bit_list_of_integer 2 (Nat_big_num.of_int k0))],
+       [(* always empty base effects*)]
+      )

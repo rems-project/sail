@@ -1,0 +1,2257 @@
+| `Pb (DontSetAA,DontSetLK,target_addr) ->
+    { empty_ins with
+    memo=sprintf "b %i" target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pb (SetAA,DontSetLK,target_addr) ->
+    { empty_ins with
+    memo=sprintf "ba %i" target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pb (DontSetAA,SetLK,target_addr) ->
+    { empty_ins with
+    memo=sprintf "bl %i" target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pb (SetAA,SetLK,target_addr) ->
+    { empty_ins with
+    memo=sprintf "bla %i" target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbc (DontSetAA,DontSetLK,bO,bI,target_addr) ->
+    { empty_ins with
+    memo=sprintf "bc %i,%i,%i" bO bI target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbc (SetAA,DontSetLK,bO,bI,target_addr) ->
+    { empty_ins with
+    memo=sprintf "bca %i,%i,%i" bO bI target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbc (DontSetAA,SetLK,bO,bI,target_addr) ->
+    { empty_ins with
+    memo=sprintf "bcl %i,%i,%i" bO bI target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbc (SetAA,SetLK,bO,bI,target_addr) ->
+    { empty_ins with
+    memo=sprintf "bcla %i,%i,%i" bO bI target_addr;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbclr (DontSetLK,bO,bI,bH) ->
+    { empty_ins with
+    memo=sprintf "bclr %i,%i,%i" bO bI bH;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbclr (SetLK,bO,bI,bH) ->
+    { empty_ins with
+    memo=sprintf "bclrl %i,%i,%i" bO bI bH;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbcctr (DontSetLK,bO,bI,bH) ->
+    { empty_ins with
+    memo=sprintf "bcctr %i,%i,%i" bO bI bH;
+    inputs=[];
+    outputs=[]; }::k
+| `Pbcctr (SetLK,bO,bI,bH) ->
+    { empty_ins with
+    memo=sprintf "bcctrl %i,%i,%i" bO bI bH;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcrand (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "crand %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcrnand (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "crnand %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcror (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "cror %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcrxor (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "crxor %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcrnor (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "crnor %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcreqv (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "creqv %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcrandc (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "crandc %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pcrorc (bT,bA,bB) ->
+    { empty_ins with
+    memo=sprintf "crorc %i,%i,%i" bT bA bB;
+    inputs=[];
+    outputs=[]; }::k
+| `Pmcrf (bF,bFA) ->
+    { empty_ins with
+    memo=sprintf "mcrf %i,%i" bF bFA;
+    inputs=[];
+    outputs=[]; }::k
+| `Psc (lEV) ->
+    { empty_ins with
+    memo=sprintf "sc %i" lEV;
+    inputs=[];
+    outputs=[]; }::k
+| `Pscv (lEV) ->
+    { empty_ins with
+    memo=sprintf "scv %i" lEV;
+    inputs=[];
+    outputs=[]; }::k
+| `Plbz (rT,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lbz ^o0,%i(0)" d
+      else sprintf "lbz ^o0,%i(^i0)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Plbzx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lbzx ^o0,0,^i0" 
+      else sprintf "lbzx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Plbzu (rT,d,rA) ->
+    { empty_ins with
+    memo=sprintf "lbzu ^o0,%i(^i0)" d;
+    inputs=[rA];
+    outputs=[rT; rA]; }::k
+| `Plbzux (rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "lbzux ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT; rA]; }::k
+| `Plhz (rT,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lhz ^o0,%i(0)" d
+      else sprintf "lhz ^o0,%i(^i0)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Plhzx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lhzx ^o0,0,^i0" 
+      else sprintf "lhzx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Plhzu (rT,d,rA) ->
+    { empty_ins with
+    memo=sprintf "lhzu ^o0,%i(^i0)" d;
+    inputs=[rA];
+    outputs=[rT; rA]; }::k
+| `Plhzux (rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "lhzux ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT; rA]; }::k
+| `Plha (rT,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lha ^o0,%i(0)" d
+      else sprintf "lha ^o0,%i(^i0)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Plhax (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lhax ^o0,0,^i0" 
+      else sprintf "lhax ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Plhau (rT,d,rA) ->
+    { empty_ins with
+    memo=sprintf "lhau ^o0,%i(^i0)" d;
+    inputs=[rA];
+    outputs=[rT; rA]; }::k
+| `Plhaux (rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "lhaux ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT; rA]; }::k
+| `Plwz (rT,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lwz ^o0,%i(0)" d
+      else sprintf "lwz ^o0,%i(^i0)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Plwzx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lwzx ^o0,0,^i0" 
+      else sprintf "lwzx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Plwzu (rT,d,rA) ->
+    { empty_ins with
+    memo=sprintf "lwzu ^o0,%i(^i0)" d;
+    inputs=[rA];
+    outputs=[rT; rA]; }::k
+| `Plwzux (rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "lwzux ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT; rA]; }::k
+| `Plwa (rT,dS,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lwa ^o0,%i(0)" (dS lsr 2)
+      else sprintf "lwa ^o0,%i(^i0)" (dS lsr 2);
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Plwax (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lwax ^o0,0,^i0" 
+      else sprintf "lwax ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Plwaux (rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "lwaux ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT; rA]; }::k
+| `Pld (rT,dS,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "ld ^o0,%i(0)" (dS lsr 2)
+      else sprintf "ld ^o0,%i(^i0)" (dS lsr 2);
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Pldx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "ldx ^o0,0,^i0" 
+      else sprintf "ldx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Pldu (rT,dS,rA) ->
+    { empty_ins with
+    memo=sprintf "ldu ^o0,%i(^i0)" (dS lsr 2);
+    inputs=[rA];
+    outputs=[rT; rA]; }::k
+| `Pldux (rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "ldux ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT; rA]; }::k
+| `Pstb (rS,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stb ^i0,%i(0)" d
+      else sprintf "stb ^i0,%i(^i1)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS] else [rS; rA]);
+    outputs=[]; }::k
+| `Pstbx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stbx ^i0,0,^i1" 
+      else sprintf "stbx ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS; rB] else [rS; rA; rB]);
+    outputs=[]; }::k
+| `Pstbu (rS,d,rA) ->
+    { empty_ins with
+    memo=sprintf "stbu ^i0,%i(^i1)" d;
+    inputs=[rS; rA];
+    outputs=[rA]; }::k
+| `Pstbux (rS,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "stbux ^i0,^i1,^i2" ;
+    inputs=[rS; rA; rB];
+    outputs=[rA]; }::k
+| `Psth (rS,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "sth ^i0,%i(0)" d
+      else sprintf "sth ^i0,%i(^i1)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS] else [rS; rA]);
+    outputs=[]; }::k
+| `Psthx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "sthx ^i0,0,^i1" 
+      else sprintf "sthx ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS; rB] else [rS; rA; rB]);
+    outputs=[]; }::k
+| `Psthu (rS,d,rA) ->
+    { empty_ins with
+    memo=sprintf "sthu ^i0,%i(^i1)" d;
+    inputs=[rS; rA];
+    outputs=[rA]; }::k
+| `Psthux (rS,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "sthux ^i0,^i1,^i2" ;
+    inputs=[rS; rA; rB];
+    outputs=[rA]; }::k
+| `Pstw (rS,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stw ^i0,%i(0)" d
+      else sprintf "stw ^i0,%i(^i1)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS] else [rS; rA]);
+    outputs=[]; }::k
+| `Pstwx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stwx ^i0,0,^i1" 
+      else sprintf "stwx ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS; rB] else [rS; rA; rB]);
+    outputs=[]; }::k
+| `Pstwu (rS,d,rA) ->
+    { empty_ins with
+    memo=sprintf "stwu ^i0,%i(^i1)" d;
+    inputs=[rS; rA];
+    outputs=[rA]; }::k
+| `Pstwux (rS,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "stwux ^i0,^i1,^i2" ;
+    inputs=[rS; rA; rB];
+    outputs=[rA]; }::k
+| `Pstd (rS,dS,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "std ^i0,%i(0)" (dS lsr 2)
+      else sprintf "std ^i0,%i(^i1)" (dS lsr 2);
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS] else [rS; rA]);
+    outputs=[]; }::k
+| `Pstdx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stdx ^i0,0,^i1" 
+      else sprintf "stdx ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS; rB] else [rS; rA; rB]);
+    outputs=[]; }::k
+| `Pstdu (rS,dS,rA) ->
+    { empty_ins with
+    memo=sprintf "stdu ^i0,%i(^i1)" (dS lsr 2);
+    inputs=[rS; rA];
+    outputs=[rA]; }::k
+| `Pstdux (rS,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "stdux ^i0,^i1,^i2" ;
+    inputs=[rS; rA; rB];
+    outputs=[rA]; }::k
+| `Plq (rTp,dQ,rA,pT) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lq %i,%i(0),%i" rTp dQ pT
+      else sprintf "lq %i,%i(^i0),%i" rTp dQ pT;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rA]; }::k
+| `Pstq (rSp,dS,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stq %i,%i(0)" rSp (dS lsr 2)
+      else sprintf "stq %i,%i(^i0)" rSp (dS lsr 2);
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[]; }::k
+| `Plhbrx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lhbrx ^o0,0,^i0" 
+      else sprintf "lhbrx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Psthbrx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "sthbrx ^i0,0,^i1" 
+      else sprintf "sthbrx ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS; rB] else [rS; rA; rB]);
+    outputs=[]; }::k
+| `Plwbrx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lwbrx ^o0,0,^i0" 
+      else sprintf "lwbrx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Pstwbrx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stwbrx ^i0,0,^i1" 
+      else sprintf "stwbrx ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS; rB] else [rS; rA; rB]);
+    outputs=[]; }::k
+| `Pldbrx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "ldbrx ^o0,0,^i0" 
+      else sprintf "ldbrx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Pstdbrx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stdbrx ^i0,0,^i1" 
+      else sprintf "stdbrx ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rS; rB] else [rS; rA; rB]);
+    outputs=[]; }::k
+| `Plmw (rT,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lmw ^o0,%i(0)" d
+      else sprintf "lmw ^o0,%i(^i0)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[] @ (A.regs_interval rT); }::k
+| `Pstmw (rS,d,rA) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stmw ^i0,%i(0)" d
+      else sprintf "stmw ^i1,%i(^i0)" d;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]) @ (A.regs_interval rS);
+    outputs=[]; }::k
+| `Plswi (rT,rA,nB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lswi %i,0,%i" rT nB
+      else sprintf "lswi %i,^i0,%i" rT nB;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[]; }::k
+| `Plswx (rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lswx ^o0,0,^i0" 
+      else sprintf "lswx ^o0,^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Pstswi (rS,rA,nB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stswi %i,0,%i" rS nB
+      else sprintf "stswi %i,^i0,%i" rS nB;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[]; }::k
+| `Pstswx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stswx %i,0,^i0" rS
+      else sprintf "stswx %i,^i0,^i1" rS;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[]; }::k
+| `Paddi (rT,rA,sI) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "addi ^o0,0,%i" sI
+      else sprintf "addi ^o0,^i0,%i" sI;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Paddis (rT,rA,sI) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "addis ^o0,0,%i" sI
+      else sprintf "addis ^o0,^i0,%i" sI;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA]);
+    outputs=[rT]; }::k
+| `Padd (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "add ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Padd (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "add. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Padd (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Padd (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubf (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subf ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubf (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subf. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubf (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubf (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Paddic (rT,rA,sI) ->
+    { empty_ins with
+    memo=sprintf "addic ^o0,^i0,%i" sI;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddicdot (rT,rA,sI) ->
+    { empty_ins with
+    memo=sprintf "addic. ^o0,^i0,%i" sI;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfic (rT,rA,sI) ->
+    { empty_ins with
+    memo=sprintf "subfic ^o0,^i0,%i" sI;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddc (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addc ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Paddc (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addc. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Paddc (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addco ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Paddc (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addco. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfc (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfc ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfc (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfc. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfc (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfco ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfc (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfco. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Padde (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "adde ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Padde (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "adde. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Padde (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addeo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Padde (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addeo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfe (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfe ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfe (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfe. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfe (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfeo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Psubfe (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "subfeo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Paddme (DontSetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addme ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddme (DontSetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addme. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddme (SetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addmeo ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddme (SetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addmeo. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfme (DontSetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfme ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfme (DontSetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfme. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfme (SetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfmeo ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfme (SetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfmeo. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddze (DontSetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addze ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddze (DontSetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addze. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddze (SetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addzeo ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Paddze (SetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "addzeo. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfze (DontSetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfze ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfze (DontSetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfze. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfze (SetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfzeo ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Psubfze (SetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "subfzeo. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Pneg (DontSetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "neg ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Pneg (DontSetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "neg. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Pneg (SetSOOV,DontSetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "nego ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Pneg (SetSOOV,SetCR0,rT,rA) ->
+    { empty_ins with
+    memo=sprintf "nego. ^o0,^i0" ;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Pmulli (rT,rA,sI) ->
+    { empty_ins with
+    memo=sprintf "mulli ^o0,^i0,%i" sI;
+    inputs=[rA];
+    outputs=[rT]; }::k
+| `Pmullw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mullw ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmullw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mullw. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmullw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mullwo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmullw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mullwo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhw (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhw ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhw (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhw. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhwu (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhwu ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhwu (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhwu. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divw ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divw. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwu ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwu. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwuo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwuo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwe (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwe ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwe (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divwe. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwe (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divweo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivwe (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divweo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivweu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divweu ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivweu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divweu. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivweu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divweuo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivweu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divweuo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulld (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulld ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulld (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulld. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulld (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulldo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulld (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulldo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhd (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhd ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhd (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhd. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhdu (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhdu ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmulhdu (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "mulhdu. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivd (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divd ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivd (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divd. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivd (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivd (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdu ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdu. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divduo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divduo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivde (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divde ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivde (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divde. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivde (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdeo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivde (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdeo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdeu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdeu ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdeu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdeu. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdeu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdeuo ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pdivdeu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "divdeuo. ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pcmpi (bF,l,rA,sI) ->
+    { empty_ins with
+    memo=sprintf "cmpi %i,%i,^i0,%i" bF l sI;
+    inputs=[rA];
+    outputs=[]; }::k
+| `Pcmp (bF,l,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "cmp %i,%i,^i0,^i1" bF l;
+    inputs=[rA; rB];
+    outputs=[]; }::k
+| `Pcmpli (bF,l,rA,uI) ->
+    { empty_ins with
+    memo=sprintf "cmpli %i,%i,^i0,%i" bF l uI;
+    inputs=[rA];
+    outputs=[]; }::k
+| `Pcmpl (bF,l,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "cmpl %i,%i,^i0,^i1" bF l;
+    inputs=[rA; rB];
+    outputs=[]; }::k
+| `Pisel (rT,rA,rB,bC) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "isel ^o0,0,^i0,%i" bC
+      else sprintf "isel ^o0,^i0,^i1,%i" bC;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Pandi (rA,rS,uI) ->
+    { empty_ins with
+    memo=sprintf "andi. ^o0,^i0,%i" uI;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pandis (rA,rS,uI) ->
+    { empty_ins with
+    memo=sprintf "andis. ^o0,^i0,%i" uI;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pori (rA,rS,uI) ->
+    { empty_ins with
+    memo=sprintf "ori ^o0,^i0,%i" uI;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Poris (rA,rS,uI) ->
+    { empty_ins with
+    memo=sprintf "oris ^o0,^i0,%i" uI;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pxori (rA,rS,uI) ->
+    { empty_ins with
+    memo=sprintf "xori ^o0,^i0,%i" uI;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pxoris (rA,rS,uI) ->
+    { empty_ins with
+    memo=sprintf "xoris ^o0,^i0,%i" uI;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pand (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "and ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pand (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "and. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pxor (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "xor ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pxor (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "xor. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pnand (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "nand ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pnand (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "nand. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Por (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "or ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Por (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "or. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pnor (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "nor ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pnor (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "nor. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Peqv (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "eqv ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Peqv (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "eqv. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pandc (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "andc ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pandc (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "andc. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Porc (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "orc ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Porc (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "orc. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pextsb (DontSetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "extsb ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pextsb (SetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "extsb. ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pextsh (DontSetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "extsh ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pextsh (SetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "extsh. ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pcntlzw (DontSetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "cntlzw ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pcntlzw (SetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "cntlzw. ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pcmpb (rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "cmpb ^o0,%i,^i0" rS;
+    inputs=[rB];
+    outputs=[rA]; }::k
+| `Ppopcntb (rA,rS) ->
+    { empty_ins with
+    memo=sprintf "popcntb ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Ppopcntw (rA,rS) ->
+    { empty_ins with
+    memo=sprintf "popcntw ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pprtyd (rA,rS) ->
+    { empty_ins with
+    memo=sprintf "prtyd ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pprtyw (rA,rS) ->
+    { empty_ins with
+    memo=sprintf "prtyw ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pextsw (DontSetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "extsw ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pextsw (SetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "extsw. ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pcntlzd (DontSetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "cntlzd ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pcntlzd (SetCR0,rA,rS) ->
+    { empty_ins with
+    memo=sprintf "cntlzd. ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Ppopcntd (rA,rS) ->
+    { empty_ins with
+    memo=sprintf "popcntd ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pbpermd (rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "bpermd ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Prlwinm (DontSetCR0,rA,rS,sH,mB,mE) ->
+    { empty_ins with
+    memo=sprintf "rlwinm ^o0,^i0,%i,%i,%i" sH mB mE;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prlwinm (SetCR0,rA,rS,sH,mB,mE) ->
+    { empty_ins with
+    memo=sprintf "rlwinm. ^o0,^i0,%i,%i,%i" sH mB mE;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prlwnm (DontSetCR0,rA,rS,rB,mB,mE) ->
+    { empty_ins with
+    memo=sprintf "rlwnm ^o0,^i0,^i1,%i,%i" mB mE;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Prlwnm (SetCR0,rA,rS,rB,mB,mE) ->
+    { empty_ins with
+    memo=sprintf "rlwnm. ^o0,^i0,^i1,%i,%i" mB mE;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Prlwimi (DontSetCR0,rA,rS,sH,mB,mE) ->
+    { empty_ins with
+    memo=sprintf "rlwimi ^i0,^i1,%i,%i,%i" sH mB mE;
+    inputs=[rA; rS];
+    outputs=[rA]; }::k
+| `Prlwimi (SetCR0,rA,rS,sH,mB,mE) ->
+    { empty_ins with
+    memo=sprintf "rlwimi. ^i0,^i1,%i,%i,%i" sH mB mE;
+    inputs=[rA; rS];
+    outputs=[rA]; }::k
+| `Prldicl (DontSetCR0,rA,rS,sH,mB) ->
+    { empty_ins with
+    memo=sprintf "rldicl ^o0,^i0,%i,%i" sH mB;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prldicl (SetCR0,rA,rS,sH,mB) ->
+    { empty_ins with
+    memo=sprintf "rldicl. ^o0,^i0,%i,%i" sH mB;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prldicr (DontSetCR0,rA,rS,sH,mE) ->
+    { empty_ins with
+    memo=sprintf "rldicr ^o0,^i0,%i,%i" sH mE;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prldicr (SetCR0,rA,rS,sH,mE) ->
+    { empty_ins with
+    memo=sprintf "rldicr. ^o0,^i0,%i,%i" sH mE;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prldic (DontSetCR0,rA,rS,sH,mB) ->
+    { empty_ins with
+    memo=sprintf "rldic ^o0,^i0,%i,%i" sH mB;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prldic (SetCR0,rA,rS,sH,mB) ->
+    { empty_ins with
+    memo=sprintf "rldic. ^o0,^i0,%i,%i" sH mB;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Prldcl (DontSetCR0,rA,rS,rB,mB) ->
+    { empty_ins with
+    memo=sprintf "rldcl ^o0,^i0,^i1,%i" mB;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Prldcl (SetCR0,rA,rS,rB,mB) ->
+    { empty_ins with
+    memo=sprintf "rldcl. ^o0,^i0,^i1,%i" mB;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Prldcr (DontSetCR0,rA,rS,rB,mE) ->
+    { empty_ins with
+    memo=sprintf "rldcr ^o0,^i0,^i1,%i" mE;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Prldcr (SetCR0,rA,rS,rB,mE) ->
+    { empty_ins with
+    memo=sprintf "rldcr. ^o0,^i0,^i1,%i" mE;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Prldimi (DontSetCR0,rA,rS,sH,mB) ->
+    { empty_ins with
+    memo=sprintf "rldimi ^i0,^i1,%i,%i" sH mB;
+    inputs=[rA; rS];
+    outputs=[rA]; }::k
+| `Prldimi (SetCR0,rA,rS,sH,mB) ->
+    { empty_ins with
+    memo=sprintf "rldimi. ^i0,^i1,%i,%i" sH mB;
+    inputs=[rA; rS];
+    outputs=[rA]; }::k
+| `Pslw (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "slw ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pslw (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "slw. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psrw (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "srw ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psrw (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "srw. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psrawi (DontSetCR0,rA,rS,sH) ->
+    { empty_ins with
+    memo=sprintf "srawi ^o0,^i0,%i" sH;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Psrawi (SetCR0,rA,rS,sH) ->
+    { empty_ins with
+    memo=sprintf "srawi. ^o0,^i0,%i" sH;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Psraw (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "sraw ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psraw (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "sraw. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psld (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "sld ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psld (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "sld. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psrd (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "srd ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psrd (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "srd. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psradi (DontSetCR0,rA,rS,sH) ->
+    { empty_ins with
+    memo=sprintf "sradi ^o0,^i0,%i" sH;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Psradi (SetCR0,rA,rS,sH) ->
+    { empty_ins with
+    memo=sprintf "sradi. ^o0,^i0,%i" sH;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Psrad (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "srad ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Psrad (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo=sprintf "srad. ^o0,^i0,^i1" ;
+    inputs=[rS; rB];
+    outputs=[rA]; }::k
+| `Pcdtbcd (rA,rS) ->
+    { empty_ins with
+    memo=sprintf "cdtbcd ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Pcbcdtd (rA,rS) ->
+    { empty_ins with
+    memo=sprintf "cbcdtd ^o0,^i0" ;
+    inputs=[rS];
+    outputs=[rA]; }::k
+| `Paddg6s (rT,rA,rB) ->
+    { empty_ins with
+    memo=sprintf "addg6s ^o0,^i0,^i1" ;
+    inputs=[rA; rB];
+    outputs=[rT]; }::k
+| `Pmtspr (sPR,rS) ->
+    { empty_ins with
+    memo=sprintf "mtspr %i,^i0" sPR;
+    inputs=[rS];
+    outputs=[]; }::k
+| `Pmfspr (rT,sPR) ->
+    { empty_ins with
+    memo=sprintf "mfspr ^o0,%i" sPR;
+    inputs=[];
+    outputs=[rT]; }::k
+| `Pmtcrf (fXM,rS) ->
+    { empty_ins with
+    memo=sprintf "mtcrf %i,^i0" fXM;
+    inputs=[rS];
+    outputs=[]; }::k
+| `Pmfcr (rT) ->
+    { empty_ins with
+    memo=sprintf "mfcr ^o0" ;
+    inputs=[];
+    outputs=[rT]; }::k
+| `Pmtocrf (fXM,rS) ->
+    { empty_ins with
+    memo=sprintf "mtocrf %i,^i0" fXM;
+    inputs=[rS];
+    outputs=[]; }::k
+| `Pmfocrf (rT,fXM) ->
+    { empty_ins with
+    memo=sprintf "mfocrf ^o0,%i" fXM;
+    inputs=[];
+    outputs=[rT]; }::k
+| `Pmcrxr (bF) ->
+    { empty_ins with
+    memo=sprintf "mcrxr %i" bF;
+    inputs=[];
+    outputs=[]; }::k
+| `Pdlmzb (DontSetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dlmzb 0,^o1,^o2" 
+      else sprintf "dlmzb ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rS; rB]);
+    outputs=[rA; rS; rB]; }::k
+| `Pdlmzb (SetCR0,rA,rS,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dlmzb. 0,^o1,^o2" 
+      else sprintf "dlmzb. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rS; rB]);
+    outputs=[rA; rS; rB]; }::k
+| `Pmacchw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchw ^o0,0,^o2" 
+      else sprintf "macchw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchw. ^o0,0,^o2" 
+      else sprintf "macchw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwo ^o0,0,^o2" 
+      else sprintf "macchwo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwo. ^o0,0,^o2" 
+      else sprintf "macchwo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchws (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchws ^o0,0,^o2" 
+      else sprintf "macchws ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchws (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchws. ^o0,0,^o2" 
+      else sprintf "macchws. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchws (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwso ^o0,0,^o2" 
+      else sprintf "macchwso ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchws (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwso. ^o0,0,^o2" 
+      else sprintf "macchwso. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwu ^o0,0,^o2" 
+      else sprintf "macchwu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwu. ^o0,0,^o2" 
+      else sprintf "macchwu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwuo ^o0,0,^o2" 
+      else sprintf "macchwuo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwuo. ^o0,0,^o2" 
+      else sprintf "macchwuo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwsu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwsu ^o0,0,^o2" 
+      else sprintf "macchwsu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwsu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwsu. ^o0,0,^o2" 
+      else sprintf "macchwsu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwsu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwsuo ^o0,0,^o2" 
+      else sprintf "macchwsuo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmacchwsu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "macchwsuo. ^o0,0,^o2" 
+      else sprintf "macchwsuo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhw ^o0,0,^o2" 
+      else sprintf "machhw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhw. ^o0,0,^o2" 
+      else sprintf "machhw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwo ^o0,0,^o2" 
+      else sprintf "machhwo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwo. ^o0,0,^o2" 
+      else sprintf "machhwo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhws (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhws ^o0,0,^o2" 
+      else sprintf "machhws ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhws (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhws. ^o0,0,^o2" 
+      else sprintf "machhws. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhws (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwso ^o0,0,^o2" 
+      else sprintf "machhwso ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhws (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwso. ^o0,0,^o2" 
+      else sprintf "machhwso. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwu ^o0,0,^o2" 
+      else sprintf "machhwu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwu. ^o0,0,^o2" 
+      else sprintf "machhwu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwuo ^o0,0,^o2" 
+      else sprintf "machhwuo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwuo. ^o0,0,^o2" 
+      else sprintf "machhwuo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwsu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwsu ^o0,0,^o2" 
+      else sprintf "machhwsu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwsu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwsu. ^o0,0,^o2" 
+      else sprintf "machhwsu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwsu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwsuo ^o0,0,^o2" 
+      else sprintf "machhwsuo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmachhwsu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "machhwsuo. ^o0,0,^o2" 
+      else sprintf "machhwsuo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhw ^o0,0,^o2" 
+      else sprintf "maclhw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhw. ^o0,0,^o2" 
+      else sprintf "maclhw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwo ^o0,0,^o2" 
+      else sprintf "maclhwo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwo. ^o0,0,^o2" 
+      else sprintf "maclhwo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhws (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhws ^o0,0,^o2" 
+      else sprintf "maclhws ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhws (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhws. ^o0,0,^o2" 
+      else sprintf "maclhws. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhws (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwso ^o0,0,^o2" 
+      else sprintf "maclhwso ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhws (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwso. ^o0,0,^o2" 
+      else sprintf "maclhwso. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwu ^o0,0,^o2" 
+      else sprintf "maclhwu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwu. ^o0,0,^o2" 
+      else sprintf "maclhwu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwuo ^o0,0,^o2" 
+      else sprintf "maclhwuo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwuo. ^o0,0,^o2" 
+      else sprintf "maclhwuo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwsu (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwsu ^o0,0,^o2" 
+      else sprintf "maclhwsu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwsu (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwsu. ^o0,0,^o2" 
+      else sprintf "maclhwsu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwsu (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwsuo ^o0,0,^o2" 
+      else sprintf "maclhwsuo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmaclhwsu (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "maclhwsuo. ^o0,0,^o2" 
+      else sprintf "maclhwsuo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulchw (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulchw ^o0,0,^o2" 
+      else sprintf "mulchw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulchw (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulchw. ^o0,0,^o2" 
+      else sprintf "mulchw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulchwu (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulchwu ^o0,0,^o2" 
+      else sprintf "mulchwu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulchwu (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulchwu. ^o0,0,^o2" 
+      else sprintf "mulchwu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulhhw (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulhhw ^o0,0,^o2" 
+      else sprintf "mulhhw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulhhw (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulhhw. ^o0,0,^o2" 
+      else sprintf "mulhhw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulhhwu (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulhhwu ^o0,0,^o2" 
+      else sprintf "mulhhwu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmulhhwu (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mulhhwu. ^o0,0,^o2" 
+      else sprintf "mulhhwu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmullhw (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mullhw ^o0,0,^o2" 
+      else sprintf "mullhw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmullhw (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mullhw. ^o0,0,^o2" 
+      else sprintf "mullhw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmullhwu (DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mullhwu ^o0,0,^o2" 
+      else sprintf "mullhwu ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pmullhwu (SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "mullhwu. ^o0,0,^o2" 
+      else sprintf "mullhwu. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchw ^o0,0,^o2" 
+      else sprintf "nmacchw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchw. ^o0,0,^o2" 
+      else sprintf "nmacchw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchwo ^o0,0,^o2" 
+      else sprintf "nmacchwo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchwo. ^o0,0,^o2" 
+      else sprintf "nmacchwo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchws (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchws ^o0,0,^o2" 
+      else sprintf "nmacchws ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchws (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchws. ^o0,0,^o2" 
+      else sprintf "nmacchws. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchws (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchwso ^o0,0,^o2" 
+      else sprintf "nmacchwso ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmacchws (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmacchwso. ^o0,0,^o2" 
+      else sprintf "nmacchwso. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhw ^o0,0,^o2" 
+      else sprintf "nmachhw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhw. ^o0,0,^o2" 
+      else sprintf "nmachhw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhwo ^o0,0,^o2" 
+      else sprintf "nmachhwo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhwo. ^o0,0,^o2" 
+      else sprintf "nmachhwo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhws (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhws ^o0,0,^o2" 
+      else sprintf "nmachhws ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhws (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhws. ^o0,0,^o2" 
+      else sprintf "nmachhws. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhws (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhwso ^o0,0,^o2" 
+      else sprintf "nmachhwso ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmachhws (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmachhwso. ^o0,0,^o2" 
+      else sprintf "nmachhwso. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhw (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhw ^o0,0,^o2" 
+      else sprintf "nmaclhw ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhw (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhw. ^o0,0,^o2" 
+      else sprintf "nmaclhw. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhw (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhwo ^o0,0,^o2" 
+      else sprintf "nmaclhwo ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhw (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhwo. ^o0,0,^o2" 
+      else sprintf "nmaclhwo. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhws (DontSetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhws ^o0,0,^o2" 
+      else sprintf "nmaclhws ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhws (DontSetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhws. ^o0,0,^o2" 
+      else sprintf "nmaclhws. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhws (SetSOOV,DontSetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhwso ^o0,0,^o2" 
+      else sprintf "nmaclhwso ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Pnmaclhws (SetSOOV,SetCR0,rT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "nmaclhwso. ^o0,0,^o2" 
+      else sprintf "nmaclhwso. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rT; rA; rB]);
+    outputs=[rT; rA; rB]; }::k
+| `Picbi (rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "icbi 0,^o1" 
+      else sprintf "icbi ^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Picbt (cT,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "icbt %i,0,^o1" cT
+      else sprintf "icbt %i,^i0,^i1" cT;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Pdcba (rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dcba 0,^o1" 
+      else sprintf "dcba ^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Pdcbt (rA,rB,tH) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dcbt 0,^o1,%i" tH
+      else sprintf "dcbt ^i0,^i1,%i" tH;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Pdcbtst (rA,rB,tH) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dcbtst 0,^o1,%i" tH
+      else sprintf "dcbtst ^i0,^i1,%i" tH;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Pdcbz (rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dcbz 0,^o1" 
+      else sprintf "dcbz ^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Pdcbst (rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dcbst 0,^o1" 
+      else sprintf "dcbst ^i0,^i1" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Pdcbf (rA,rB,l) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "dcbf 0,^o1,%i" l
+      else sprintf "dcbf ^i0,^i1,%i" l;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rA; rB]);
+    outputs=[rA; rB]; }::k
+| `Pisync ->
+    { empty_ins with
+    memo=sprintf "isync " ;
+    inputs=[];
+    outputs=[]; }::k
+| `Plbarx (rT,rA,rB,eH) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lbarx ^o0,0,^i0,%i" eH
+      else sprintf "lbarx ^o0,^i0,^i1,%i" eH;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Plharx (rT,rA,rB,eH) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lharx ^o0,0,^i0,%i" eH
+      else sprintf "lharx ^o0,^i0,^i1,%i" eH;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Plwarx (rT,rA,rB,eH) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "lwarx ^o0,0,^i0,%i" eH
+      else sprintf "lwarx ^o0,^i0,^i1,%i" eH;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Pstbcx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stbcx. ^o0,0,^o2" 
+      else sprintf "stbcx. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rS; rA; rB]);
+    outputs=[rS; rA; rB]; }::k
+| `Psthcx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "sthcx. ^o0,0,^o2" 
+      else sprintf "sthcx. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rS; rA; rB]);
+    outputs=[rS; rA; rB]; }::k
+| `Pstwcx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stwcx. ^o0,0,^o2" 
+      else sprintf "stwcx. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rS; rA; rB]);
+    outputs=[rS; rA; rB]; }::k
+| `Pldarx (rT,rA,rB,eH) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "ldarx ^o0,0,^i0,%i" eH
+      else sprintf "ldarx ^o0,^i0,^i1,%i" eH;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [rB] else [rA; rB]);
+    outputs=[rT]; }::k
+| `Pstdcx (rS,rA,rB) ->
+    { empty_ins with
+    memo= if rA = A.Ireg A.GPR0
+      then sprintf "stdcx. ^o0,0,^o2" 
+      else sprintf "stdcx. ^i0,^i1,^i2" ;
+    inputs=
+      (if rA = A.Ireg A.GPR0 then [] else [rS; rA; rB]);
+    outputs=[rS; rA; rB]; }::k
+| `Psync (l) ->
+    { empty_ins with
+    memo=sprintf "sync %i" l;
+    inputs=[];
+    outputs=[]; }::k
+| `Peieio ->
+    { empty_ins with
+    memo=sprintf "eieio " ;
+    inputs=[];
+    outputs=[]; }::k
+| `Pwait (wC) ->
+    { empty_ins with
+    memo=sprintf "wait %i" wC;
+    inputs=[];
+    outputs=[]; }::k
