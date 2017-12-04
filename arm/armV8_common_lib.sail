@@ -513,8 +513,8 @@ val extern unit -> unit effect {barr} DataMemoryBarrier_All
 
 function unit effect {barr} DataMemoryBarrier((MBReqDomain) domain, (MBReqTypes) types) =
 {
-  if domain != MBReqDomain_FullSystem then
-    not_implemented("DataMemoryBarrier: not MBReqDomain_FullSystem");
+  if domain != MBReqDomain_FullSystem & domain != MBReqDomain_InnerShareable then
+    not_implemented("DataMemoryBarrier: not MBReqDomain_FullSystem or _InnerShareable");
 
   switch types {
     case MBReqTypes_Reads  -> DataMemoryBarrier_Reads()
@@ -725,10 +725,10 @@ function bool effect {wmv} flush_write_buffer_exclusive((write_buffer_type) writ
 
 (** FUNCTION:BranchTo(bits(N) target, BranchType branch_type) *)
 
-function forall Nat 'N, 'N IN {32,64}. unit effect {rreg,wreg} BranchTo((bit['N]) target, (BranchType) _branch_type) = {
+function forall Nat 'N, 'N IN {32,64}. unit effect {rreg,wreg} BranchTo((bit['N]) target, (BranchType) branch_type) = {
   (bit['N]) target' := target; (* Sail does not let you change parameter vector *)
 
-  Hint_Branch(_branch_type);
+  Hint_Branch(branch_type);
   if length(target) == 32 then {
     assert( UsingAArch32(), None );
     _PC := ZeroExtend(target);
@@ -831,7 +831,7 @@ function boolean effect {rreg} ConditionHolds((bit[4]) _cond) =
     case 0b111 -> result := true                                   (* AL *)
   };
 
-  (* Condition flag valuesin the set '111x' indicate always true *)
+  (* Condition flag values in the set '111x' indicate always true *)
   (* Otherwise, invert condition if necessary. *)
   if _cond[0] == 1 & _cond != 0b1111 then
     result := ~(result);

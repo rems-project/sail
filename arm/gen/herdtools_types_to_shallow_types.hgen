@@ -1,0 +1,153 @@
+open Sail_values
+
+let is_inc = false
+
+let translate_big_int bits (name : string) value =
+  (name, Range0 (Some bits), IInt.bit_list_of_integer bits value)
+
+let translate_big_bit bits (name:string) value =
+  Sail_values.to_vec0 is_inc (Nat_big_num.of_int bits,value)
+
+let translate_int (size : int) (name:string) value = (Nat_big_num.of_int value)
+
+let translate_bits bits (name:string) value =
+  Sail_values.to_vec0 is_inc (Nat_big_num.of_int bits,Nat_big_num.of_int value)
+
+let translate_bool _ = function
+  | true -> B1
+  | false -> B0
+
+let translate_reg_size name value =
+  match value with
+  | Set32 -> (Nat_big_num.of_int 32)
+  | Set64 -> (Nat_big_num.of_int 64)
+
+let translate_reg name value =
+  (Nat_big_num.of_int (inst_reg_to_int value))
+
+
+let translate_reg_size_bits name value =
+  match value with
+  | R32Bits value -> translate_bits 32 name value
+  | R64Bits value -> translate_big_bit 64 name value
+
+let translate_data_size name value =
+  match value with
+  | DataSize8  -> (Nat_big_num.of_int 8)
+  | DataSize16 -> (Nat_big_num.of_int 16)
+  | DataSize32 -> (Nat_big_num.of_int 32)
+  | DataSize64 -> (Nat_big_num.of_int 64)
+
+let translate_reg_index = translate_int 5
+
+let translate_boolean = translate_bool
+
+let translate_range0_7 = translate_int 3
+
+let translate_range0_63 = translate_int 6
+
+let translate_bit64 = translate_big_bit 64
+
+let translate_bit4 = translate_bits 4
+let translate_bit5 = translate_bits 5
+let translate_bit16 = translate_bits 16
+
+let translate_bit = translate_bool
+
+let translate_range8_64 = translate_int 7
+
+let translate_uinteger = translate_int 63
+
+let translate_extendType _ = function
+  | ExtendType_UXTB -> ArmV8_embed_types.ExtendType_UXTB
+  | ExtendType_UXTH -> ArmV8_embed_types.ExtendType_UXTH
+  | ExtendType_UXTW -> ArmV8_embed_types.ExtendType_UXTW
+  | ExtendType_UXTX -> ArmV8_embed_types.ExtendType_UXTX
+  | ExtendType_SXTB -> ArmV8_embed_types.ExtendType_SXTB
+  | ExtendType_SXTH -> ArmV8_embed_types.ExtendType_SXTH
+  | ExtendType_SXTW -> ArmV8_embed_types.ExtendType_SXTW
+  | ExtendType_SXTX -> ArmV8_embed_types.ExtendType_SXTX
+
+let translate_shiftType _ = function
+  | ShiftType_LSL -> ArmV8_embed_types.ShiftType_LSL
+  | ShiftType_LSR -> ArmV8_embed_types.ShiftType_LSR
+  | ShiftType_ASR -> ArmV8_embed_types.ShiftType_ASR
+  | ShiftType_ROR -> ArmV8_embed_types.ShiftType_ROR
+
+let translate_logicalOp _ = function
+  | LogicalOp_AND -> ArmV8_embed_types.LogicalOp_AND
+  | LogicalOp_EOR -> ArmV8_embed_types.LogicalOp_EOR
+  | LogicalOp_ORR -> ArmV8_embed_types.LogicalOp_ORR
+
+let translate_branchType _ = function
+  | BranchType_CALL -> ArmV8_embed_types.BranchType_CALL
+  | BranchType_ERET -> ArmV8_embed_types.BranchType_ERET
+  | BranchType_DBGEXIT -> ArmV8_embed_types.BranchType_DBGEXIT
+  | BranchType_RET -> ArmV8_embed_types.BranchType_RET
+  | BranchType_JMP -> ArmV8_embed_types.BranchType_JMP
+  | BranchType_EXCEPTION -> ArmV8_embed_types.BranchType_EXCEPTION
+  | BranchType_UNKNOWN -> ArmV8_embed_types.BranchType_UNKNOWN
+
+let translate_countOp _ = function
+  | CountOp_CLZ -> ArmV8_embed_types.CountOp_CLZ
+  | CountOp_CLS -> ArmV8_embed_types.CountOp_CLS
+  | CountOp_CNT -> ArmV8_embed_types.CountOp_CNT
+
+let translate_memBarrierOp _ = function
+  | MemBarrierOp_DSB -> ArmV8_embed_types.MemBarrierOp_DSB
+  | MemBarrierOp_DMB -> ArmV8_embed_types.MemBarrierOp_DMB
+  | MemBarrierOp_ISB -> ArmV8_embed_types.MemBarrierOp_ISB
+
+let translate_mBReqDomain _ = function
+  | MBReqDomain_Nonshareable -> ArmV8_embed_types.MBReqDomain_Nonshareable
+  | MBReqDomain_InnerShareable -> ArmV8_embed_types.MBReqDomain_InnerShareable
+  | MBReqDomain_OuterShareable -> ArmV8_embed_types.MBReqDomain_OuterShareable
+  | MBReqDomain_FullSystem -> ArmV8_embed_types.MBReqDomain_FullSystem
+
+let translate_mBReqTypes _ = function
+  | MBReqTypes_Reads -> ArmV8_embed_types.MBReqTypes_Reads
+  | MBReqTypes_Writes -> ArmV8_embed_types.MBReqTypes_Writes
+  | MBReqTypes_All -> ArmV8_embed_types.MBReqTypes_All
+
+let translate_systemHintOp _ = function
+  | SystemHintOp_NOP -> ArmV8_embed_types.SystemHintOp_NOP
+  | SystemHintOp_YIELD -> ArmV8_embed_types.SystemHintOp_YIELD
+  | SystemHintOp_WFE -> ArmV8_embed_types.SystemHintOp_WFE
+  | SystemHintOp_WFI -> ArmV8_embed_types.SystemHintOp_WFI
+  | SystemHintOp_SEV -> ArmV8_embed_types.SystemHintOp_SEV
+  | SystemHintOp_SEVL -> ArmV8_embed_types.SystemHintOp_SEVL
+
+let translate_accType _ = function
+  | AccType_NORMAL -> ArmV8_embed_types.AccType_NORMAL
+  | AccType_VEC -> ArmV8_embed_types.AccType_VEC
+  | AccType_STREAM -> ArmV8_embed_types.AccType_STREAM
+  | AccType_VECSTREAM -> ArmV8_embed_types.AccType_VECSTREAM
+  | AccType_ATOMIC -> ArmV8_embed_types.AccType_ATOMIC
+  | AccType_ORDERED -> ArmV8_embed_types.AccType_ORDERED
+  | AccType_UNPRIV -> ArmV8_embed_types.AccType_UNPRIV
+  | AccType_IFETCH -> ArmV8_embed_types.AccType_IFETCH
+  | AccType_PTW -> ArmV8_embed_types.AccType_PTW
+  | AccType_DC -> ArmV8_embed_types.AccType_DC
+  | AccType_IC -> ArmV8_embed_types.AccType_IC
+  | AccType_AT -> ArmV8_embed_types.AccType_AT
+
+let translate_memOp _ = function
+  | MemOp_LOAD -> ArmV8_embed_types.MemOp_LOAD
+  | MemOp_STORE -> ArmV8_embed_types.MemOp_STORE
+  | MemOp_PREFETCH -> ArmV8_embed_types.MemOp_PREFETCH
+
+let translate_moveWideOp _ = function
+  | MoveWideOp_N -> ArmV8_embed_types.MoveWideOp_N
+  | MoveWideOp_Z -> ArmV8_embed_types.MoveWideOp_Z
+  | MoveWideOp_K -> ArmV8_embed_types.MoveWideOp_K
+
+let translate_revOp _ = function
+  | RevOp_RBIT -> ArmV8_embed_types.RevOp_RBIT
+  | RevOp_REV16 -> ArmV8_embed_types.RevOp_REV16
+  | RevOp_REV32 -> ArmV8_embed_types.RevOp_REV32
+  | RevOp_REV64 -> ArmV8_embed_types.RevOp_REV64
+
+let translate_pSTATEField _ = function
+  | PSTATEField_DAIFSet -> ArmV8_embed_types.PSTATEField_DAIFSet
+  | PSTATEField_DAIFClr -> ArmV8_embed_types.PSTATEField_DAIFClr
+  | PSTATEField_SP -> ArmV8_embed_types.PSTATEField_SP

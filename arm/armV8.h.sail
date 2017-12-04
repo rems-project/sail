@@ -43,6 +43,27 @@ typedef SIMD_index = [|32|]
 
 register (bit[64])  _PC
 
+(* transactional memory registers *)
+register (bit[8]) TxNestingLevel (* same size as TXIDR_EL0.DEPTH *)
+
+typedef TMSTATUS_type = register bits [63:0]
+{
+  (*63..17 : RES0;*)
+  16 : IMP;
+  15 : DBG;
+  14 : MEM;
+  13 : ERR;
+  12 : INV;
+  11 : SIZE;
+  10 : NEST;
+   9 : ABRT;
+   8 : RTRY;
+  (*7..5 : RES0*)
+  4..0 : REASON;
+}
+register (TMSTATUS_type) TMAbortEffect (* we abuse the register write to pass out the status value *)
+register (TMSTATUS_type) TMStartEffect (* we abuse the register read to pass in the status value *)
+
 (* General purpose registers *)
 
 register (bit[64]) R30
@@ -170,3 +191,6 @@ let IMPLEMENTATION_DEFINED =
 
 (* FIXME: ask Kathy what should we do with this *)
 let UNKNOWN = 0
+
+
+val extern unit -> bool effect {exmem} speculate_exclusive_success

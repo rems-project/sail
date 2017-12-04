@@ -1,0 +1,154 @@
+let translate_out_big_int_bits x = Sail_values.unsigned x
+
+let translate_out_big_bit = Sail_values.unsigned
+
+let translate_out_signed_big_bit = Sail_values.signed
+
+let translate_out_int inst = (Nat_big_num.to_int inst)
+
+let translate_out_bits bits = Nat_big_num.to_int (Sail_values.unsigned bits)
+
+let translate_out_bool = function
+  | Sail_values.B1 -> true
+  | Sail_values.B0 -> false
+  | Sail_values.BU -> failwith "translate_out_bool Undef"
+
+let translate_out_enum (name,_,bits) =
+    Nat_big_num.to_int (IInt.integer_of_bit_list bits)
+
+let translate_out_reg_size inst =
+  match translate_out_int inst with
+    | 32 -> Set32
+    | 64 -> Set64
+    | _ -> assert false
+
+let translate_out_regzr regsize reg =
+  begin match (regsize, translate_out_int reg) with
+  | (Set32, 31)  -> W ZR
+  | (Set32, reg) -> W (Ireg (ireg_of_int reg))
+  | (Set64, 31)  -> X ZR
+  | (Set64, reg) -> X (Ireg (ireg_of_int reg))
+  end
+
+let translate_out_regsp regsize reg =
+  begin match (regsize, translate_out_int reg) with
+  | (Set32, 31)  -> W SP
+  | (Set32, reg) -> W (Ireg (ireg_of_int reg))
+  | (Set64, 31)  -> X SP
+  | (Set64, reg) -> X (Ireg (ireg_of_int reg))
+  end
+
+let translate_out_regzrbyext regsize extend_type reg =  begin match extend_type with
+  | ExtendType_UXTX | ExtendType_SXTX -> translate_out_regzr regsize reg
+  | _ -> translate_out_regzr Set32 reg
+  end
+
+let translate_out_reg_size_bits bits =
+  match Nat_big_num.to_int (Sail_values.length bits) with
+    | 32 -> R32Bits (translate_out_bits bits)
+    | 64 -> R64Bits (translate_out_big_bit bits)
+    | _ -> assert false
+
+let translate_out_data_size inst =
+  match (translate_out_int inst) with
+    | 8 -> DataSize8
+    | 16 -> DataSize16
+    | 32 -> DataSize32
+    | 64 -> DataSize64
+    | _ -> assert false
+
+let translate_out_extendType = function
+    | ArmV8_embed_types.ExtendType_UXTB -> ExtendType_UXTB
+    | ArmV8_embed_types.ExtendType_UXTH -> ExtendType_UXTH
+    | ArmV8_embed_types.ExtendType_UXTW -> ExtendType_UXTW
+    | ArmV8_embed_types.ExtendType_UXTX -> ExtendType_UXTX
+    | ArmV8_embed_types.ExtendType_SXTB -> ExtendType_SXTB
+    | ArmV8_embed_types.ExtendType_SXTH -> ExtendType_SXTH
+    | ArmV8_embed_types.ExtendType_SXTW -> ExtendType_SXTW
+    | ArmV8_embed_types.ExtendType_SXTX -> ExtendType_SXTX
+
+let translate_out_shiftType = function
+    | ArmV8_embed_types.ShiftType_LSL -> ShiftType_LSL
+    | ArmV8_embed_types.ShiftType_LSR -> ShiftType_LSR
+    | ArmV8_embed_types.ShiftType_ASR -> ShiftType_ASR
+    | ArmV8_embed_types.ShiftType_ROR -> ShiftType_ROR
+
+let translate_out_logicalOp = function
+    | ArmV8_embed_types.LogicalOp_AND -> LogicalOp_AND
+    | ArmV8_embed_types.LogicalOp_EOR -> LogicalOp_EOR
+    | ArmV8_embed_types.LogicalOp_ORR -> LogicalOp_ORR
+
+let translate_out_branchType = function
+      | ArmV8_embed_types.BranchType_CALL -> BranchType_CALL
+      | ArmV8_embed_types.BranchType_ERET -> BranchType_ERET
+      | ArmV8_embed_types.BranchType_DBGEXIT -> BranchType_DBGEXIT
+      | ArmV8_embed_types.BranchType_RET -> BranchType_RET
+      | ArmV8_embed_types.BranchType_JMP -> BranchType_JMP
+      | ArmV8_embed_types.BranchType_EXCEPTION -> BranchType_EXCEPTION
+      | ArmV8_embed_types.BranchType_UNKNOWN -> BranchType_UNKNOWN
+
+let translate_out_countOp = function
+    | ArmV8_embed_types.CountOp_CLZ -> CountOp_CLZ
+    | ArmV8_embed_types.CountOp_CLS -> CountOp_CLS
+    | ArmV8_embed_types.CountOp_CNT -> CountOp_CNT
+
+let translate_out_memBarrierOp = function
+    | ArmV8_embed_types.MemBarrierOp_DSB -> MemBarrierOp_DSB
+    | ArmV8_embed_types.MemBarrierOp_DMB -> MemBarrierOp_DMB
+    | ArmV8_embed_types.MemBarrierOp_ISB -> MemBarrierOp_ISB
+
+let translate_out_mBReqDomain = function
+    | ArmV8_embed_types.MBReqDomain_Nonshareable -> MBReqDomain_Nonshareable
+    | ArmV8_embed_types.MBReqDomain_InnerShareable -> MBReqDomain_InnerShareable
+    | ArmV8_embed_types.MBReqDomain_OuterShareable -> MBReqDomain_OuterShareable
+    | ArmV8_embed_types.MBReqDomain_FullSystem -> MBReqDomain_FullSystem
+
+let translate_out_mBReqTypes = function
+    | ArmV8_embed_types.MBReqTypes_Reads -> MBReqTypes_Reads
+    | ArmV8_embed_types.MBReqTypes_Writes -> MBReqTypes_Writes
+    | ArmV8_embed_types.MBReqTypes_All -> MBReqTypes_All
+
+let translate_out_systemHintOp = function
+    | ArmV8_embed_types.SystemHintOp_NOP -> SystemHintOp_NOP
+    | ArmV8_embed_types.SystemHintOp_YIELD -> SystemHintOp_YIELD
+    | ArmV8_embed_types.SystemHintOp_WFE -> SystemHintOp_WFE
+    | ArmV8_embed_types.SystemHintOp_WFI -> SystemHintOp_WFI
+    | ArmV8_embed_types.SystemHintOp_SEV -> SystemHintOp_SEV
+    | ArmV8_embed_types.SystemHintOp_SEVL -> SystemHintOp_SEVL
+
+let translate_out_accType = function
+    | ArmV8_embed_types.AccType_NORMAL  -> AccType_NORMAL
+    | ArmV8_embed_types.AccType_VEC  -> AccType_VEC
+    | ArmV8_embed_types.AccType_STREAM  -> AccType_STREAM
+    | ArmV8_embed_types.AccType_VECSTREAM  -> AccType_VECSTREAM
+    | ArmV8_embed_types.AccType_ATOMIC  -> AccType_ATOMIC
+    | ArmV8_embed_types.AccType_ORDERED  -> AccType_ORDERED
+    | ArmV8_embed_types.AccType_UNPRIV  -> AccType_UNPRIV
+    | ArmV8_embed_types.AccType_IFETCH  -> AccType_IFETCH
+    | ArmV8_embed_types.AccType_PTW  -> AccType_PTW
+    | ArmV8_embed_types.AccType_DC  -> AccType_DC
+    | ArmV8_embed_types.AccType_IC -> AccType_IC
+    | ArmV8_embed_types.AccType_AT -> AccType_AT
+
+let translate_out_memOp = function
+    | ArmV8_embed_types.MemOp_LOAD -> MemOp_LOAD
+    | ArmV8_embed_types.MemOp_STORE -> MemOp_STORE
+    | ArmV8_embed_types.MemOp_PREFETCH -> MemOp_PREFETCH
+
+
+let translate_out_moveWideOp = function
+    | ArmV8_embed_types.MoveWideOp_N -> MoveWideOp_N
+    | ArmV8_embed_types.MoveWideOp_Z -> MoveWideOp_Z
+    | ArmV8_embed_types.MoveWideOp_K -> MoveWideOp_K
+
+let translate_out_revOp = function
+    | ArmV8_embed_types.RevOp_RBIT -> RevOp_RBIT
+    | ArmV8_embed_types.RevOp_REV16 -> RevOp_REV16
+    | ArmV8_embed_types.RevOp_REV32 -> RevOp_REV32
+    | ArmV8_embed_types.RevOp_REV64 -> RevOp_REV64
+
+let translate_out_pSTATEField = function
+    | ArmV8_embed_types.PSTATEField_DAIFSet -> PSTATEField_DAIFSet
+    | ArmV8_embed_types.PSTATEField_DAIFClr -> PSTATEField_DAIFClr
+    | ArmV8_embed_types.PSTATEField_SP -> PSTATEField_SP
+
