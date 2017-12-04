@@ -118,7 +118,7 @@ let binarydigit = ['0'-'1']
 let hexdigit = ['0'-'9''A'-'F''a'-'f']
 let alphanum = letter|digit
 let startident = letter|'_'
-let ident = alphanum|['_''\'']
+let ident = alphanum|['_''\'''#']
 let tyvar_start = '\''
 let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|''~']
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
