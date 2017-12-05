@@ -2183,22 +2183,29 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let inferred_exp = irule infer_exp env exp in
      type_coercion env inferred_exp typ
 
-and check_case env pat_typ pat typ = match pat with
-  | Pat_aux (Pat_exp (P_aux (P_lit lit, _) as pat, case), annot) ->
-     let guard = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
-     check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
-  | Pat_aux (Pat_when (P_aux (P_lit lit, _) as pat, guard, case), annot) ->
-     let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
-     check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), mk_exp (E_app_infix (guard, mk_id "&", guard')), case), annot)) typ
-  | Pat_aux (Pat_exp (pat, case), (l, _)) ->
-     let tpat, env = bind_pat env pat pat_typ in
-     Pat_aux (Pat_exp (tpat, crule check_exp env case typ), (l, None))
-  | Pat_aux (Pat_when (pat, guard, case), (l, _)) ->
-     let tpat, env = bind_pat env pat pat_typ in
-     let checked_guard = check_exp env guard bool_typ in
-     let flows, constrs = infer_flow env checked_guard in
-     let env' = add_constraints constrs (add_flows true flows env) in
-     Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env' case typ), (l, None))
+and check_case env pat_typ pexp typ =
+  let pat,guard,case,((l,_) as annot) = destruct_pexp pexp in
+  match bind_pat env pat pat_typ with
+  | tpat, env ->
+     let checked_guard, env' = match guard with
+       | None -> None, env
+       | Some guard ->
+          let checked_guard = check_exp env guard bool_typ in
+          let flows, constrs = infer_flow env checked_guard in
+          Some checked_guard, add_constraints constrs (add_flows true flows env)
+     in
+     let checked_case = crule check_exp env' case typ in
+     construct_pexp (tpat, checked_guard, checked_case, (l, None))
+  | exception (Type_error _ as typ_exn) ->
+     match pat with
+     | P_aux (P_lit lit, _) ->
+        let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
+        let guard = match guard with
+          | None -> guard'
+          | Some guard -> mk_exp (E_app_infix (guard, mk_id "&", guard'))
+        in
+        check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
+     | _ -> raise typ_exn
 
 (* type_coercion env exp typ takes a fully annoted (i.e. already type
    checked) expression exp, and attempts to cast (coerce) it to the
