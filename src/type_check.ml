@@ -379,7 +379,7 @@ end = struct
       default_order : order option;
       ret_typ : typ option;
       poly_undefineds : bool;
-      prove : t -> n_constraint -> bool
+      prove : t -> n_constraint -> bool;
     }
 
   let empty =
@@ -405,7 +405,7 @@ end = struct
       default_order = None;
       ret_typ = None;
       poly_undefineds = false;
-      prove = (fun _ _ -> false)
+      prove = (fun _ _ -> false);
     }
 
   let add_prover f env = { env with prove = f }
@@ -936,7 +936,6 @@ end = struct
     { env with poly_undefineds = true }
 
   let polymorphic_undefineds env = env.poly_undefineds
-
 end
 
 

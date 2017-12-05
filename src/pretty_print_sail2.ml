@@ -169,18 +169,68 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
   | _ -> string (string_of_pat pat)
 
+(* if_block_x is true if x should be printed like a block, i.e. with
+   newlines. Blocks are automatically printed as blocks, so this
+   returns false for them. *)
+let if_block_then (E_aux (e_aux, _)) =
+  match e_aux with
+  | E_assign _ | E_if _ -> true
+  | _ -> false
+
+let if_block_else (E_aux (e_aux, _)) =
+  match e_aux with
+  | E_assign _ -> true
+  | _ -> false
+
+let fixities =
+  let fixities' =
+    List.fold_left
+      (fun r (x, y) -> Bindings.add x y r)
+      Bindings.empty
+      [
+        (mk_id "^", (InfixR, 8));
+        (mk_id "*", (InfixL, 7));
+        (mk_id "+", (InfixL, 6));
+        (mk_id "-", (InfixL, 6));
+        (mk_id "!=", (Infix, 4));
+        (mk_id ">", (Infix, 4));
+        (mk_id "<", (Infix, 4));
+        (mk_id ">=", (Infix, 4));
+        (mk_id "<=", (Infix, 4));
+        (mk_id "&", (InfixR, 3));
+        (mk_id "|", (InfixR, 2));
+      ]
+  in
+  ref (fixities' : (prec * int) Bindings.t)
+
 let rec doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
+  | E_block [] -> string "()"
   | E_block [exp] -> doc_exp exp
   | E_block exps -> surround 2 0 lbrace (doc_block exps) rbrace
   | E_nondet exps -> assert false
   (* This is mostly for the -convert option *)
   | E_app_infix (x, id, y) when Id.compare (mk_id "quot") id == 0 ->
      separate space [doc_atomic_exp x; string "/"; doc_atomic_exp y]
-  | E_app_infix (x, id, y) -> separate space [doc_atomic_exp x; doc_id id; doc_atomic_exp y]
+  | E_app_infix _ -> doc_infix 0 exp
   | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
+
+  (* Various rules to try to format if blocks nicely based on content *)
+  | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp && if_block_else else_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
+     ^/^ (string "else" ^//^ doc_exp else_exp)
+  | E_if (if_exp, then_exp, (E_aux (E_if _, _) as else_exp)) when if_block_then then_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
+     ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
+  | E_if (if_exp, then_exp, else_exp) when if_block_else else_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp])
+     ^^ space ^^ (string "else" ^//^ doc_exp else_exp)
+  | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
+     ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
   | E_if (if_exp, then_exp, else_exp) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
+
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> string "E_cons"
   | E_record fexps -> separate space [string "record"; string "{"; doc_fexps fexps; string "}"]
@@ -221,6 +271,24 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
      separate space [string "2"; string "^"; doc_atomic_exp exp]
+  | _ -> doc_atomic_exp exp
+and doc_infix n (E_aux (e_aux, _) as exp) =
+  match e_aux with
+  | E_app_infix (l, op, r) when n < 10 ->
+     let module M = Map.Make(String)  in
+     begin
+       try
+         match Bindings.find op !fixities with
+         | (Infix, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r]
+         | (Infix, m) when m < n -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
+         | (InfixL, m) when m >= n -> separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r]
+         | (InfixL, m) when m < n -> parens (separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r])
+         | (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r]
+         | (InfixR, m) when m < n -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r])
+       with
+       | Not_found ->
+          separate space [doc_atomic_exp l; doc_id op; doc_atomic_exp r]
+     end
   | _ -> doc_atomic_exp exp
 and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
@@ -383,6 +451,8 @@ let rec doc_def def = group (match def with
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
   | DEF_fixity (prec, n, id) ->
+     print_endline ("YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY " ^ string_of_id id);
+     fixities := Bindings.add id (prec, int_of_big_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
