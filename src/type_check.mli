@@ -195,6 +195,8 @@ val prove : Env.t -> n_constraint -> bool
 
 val subtype_check : Env.t -> typ -> typ -> bool
 
+val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t
+
 (* Partial functions: The expressions and patterns passed to these
    functions must be guaranteed to have tannots of the form Some (env,
    typ) for these to work. *)

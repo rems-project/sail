@@ -612,8 +612,8 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_comment _ -> "INTERNAL COMMENT"
   | E_comment_struc _ -> "INTERNAL COMMENT STRUC"
   | E_internal_let _ -> "INTERNAL LET"
-  | E_internal_return _ -> "INTERNAL RETURN"
-  | E_internal_plet _ -> "INTERNAL PLET"
+  | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
+  | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
   | _ -> "INTERNAL"
 and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp
@@ -703,6 +703,14 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   | LEXP_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
   | LEXP_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
   | LEXP_memory (id, exps) -> rewrap (E_app (id, exps))
+
+let destruct_range (Typ_aux (typ_aux, _)) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
+       when string_of_id f = "atom" -> Some (n, n)
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)])
+       when string_of_id f = "range" -> Some (n1, n2)
+  | _ -> None
 
 let rec is_number (Typ_aux (t,_)) =
   match t with
@@ -819,6 +827,8 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
      wrap (E_app (mk_id "undefined_bitvector",
        undefined_of_typ_args mwords l annot start @
        undefined_of_typ_args mwords l annot size)) typ
+  | Typ_app (atom, [Typ_arg_aux (Typ_arg_nexp i, _)]) when string_of_id atom = "atom" ->
+     wrap (E_sizeof i) typ
   | Typ_app (id, args) ->
      wrap (E_app (prepend_id "undefined_" id,
        List.concat (List.map (undefined_of_typ_args mwords l annot) args))) typ

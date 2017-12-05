@@ -10,12 +10,16 @@ val forall Num 'm. int -> vector<'m - 1,'m,dec,bit> effect pure to_svec
 (* Vector access can't actually be properly polymorphic on vector
    direction because of the ranges being different for each type, so
    we overload it instead *)
+val forall Num 'n, 'n >= 0. (vector<'n - 1,'n,dec,bit>, [|0:'n - 1|]) -> bit effect pure bitvector_access_dec_norm
+val forall Num 'n, 'n >= 0. (vector<0,'n,inc,bit>, [|0:'n - 1|]) -> bit effect pure bitvector_access_inc_norm
+val forall Num 'n, Type 'a, 'n >= 0. (vector<'n - 1,'n,dec,'a>, [|0:'n - 1|]) -> 'a effect pure vector_access_dec_norm
+val forall Num 'n, Type 'a, 'n >= 0. (vector<0,'n,inc,'a>, [|0:'n - 1|]) -> 'a effect pure vector_access_inc_norm
 val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
 val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
 val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,dec,bit>, [|'n - 'l + 1:'n|]) -> bit effect pure bitvector_access_dec
 val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|]) -> bit effect pure bitvector_access_inc
 
-overload vector_access [bitvector_access_inc; bitvector_access_dec; vector_access_inc; vector_access_dec]
+overload vector_access [bitvector_access_dec_norm; bitvector_access_dec; bitvector_access_inc_norm; bitvector_access_inc; vector_access_inc_norm; vector_access_inc; vector_access_dec_norm; vector_access_dec]
 
 (* Type safe vector subrange *)
 (* vector_subrange(v, m, o) returns the subvector of v with elements with
@@ -56,6 +60,15 @@ val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,dec,bit>, [|'n - 'l + 1
 val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|], bit) -> vector<'n,'l,dec,bit> effect pure bitvector_update_inc
 
 overload vector_update [bitvector_update_dec; bitvector_update_inc; vector_update_dec; vector_update_inc]
+
+(* Vector subrange update *)
+
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [:'i:], [:'j:], vector<'o,'i - 'j + 1,dec,'a>) -> vector<'n,'l,dec,'a> effect pure vector_update_subrange_dec
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [:'i:], [:'j:], vector<'o,'j - 'i + 1,inc,'a>) -> vector<'n,'l,inc,'a> effect pure vector_update_subrange_inc
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, 'l >= 0. (vector<'n,'l,dec,bit>, [:'i:], [:'j:], vector<'o,'i - 'j + 1,dec,bit>) -> vector<'n,'l,dec,bit> effect pure bitvector_update_subrange_dec
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, 'l >= 0. (vector<'n,'l,inc,bit>, [:'i:], [:'j:], vector<'o,'j - 'i + 1,inc,bit>) -> vector<'n,'l,dec,bit> effect pure bitvector_update_subrange_inc
+
+overload vector_update_subrange [bitvector_update_subrange_dec; bitvector_update_subrange_inc; vector_update_subrange_dec; vector_update_subrange_inc]
 
 (* Implicit register dereferencing *)
 val cast extern forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref

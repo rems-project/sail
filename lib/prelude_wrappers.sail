@@ -14,6 +14,10 @@ val extern forall Num 'n, Num 'l, 'l >= 0. ([:'n:], vector<'n,'l,dec,bit>, [|'n 
 function forall Num 'n, Num 'l, 'l >= 0. bit bitvector_access_dec ((vector<'n,'l,dec,bit>) v, i) = bitvector_access_dec' (sizeof 'n, v, i)
 val extern forall Num 'n, Num 'l, 'l >= 0. ([:'n:], vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|]) -> bit effect pure bitvector_access_inc' = "bitvector_access_inc"
 function forall Num 'n, Num 'l, 'l >= 0. bit bitvector_access_inc ((vector<'n,'l,inc,bit>) v, i) = bitvector_access_inc' (sizeof 'n, v, i)
+function forall Num 'n, 'n >= 0. bit bitvector_access_dec_norm ((vector<'n - 1,'n,dec,bit>) v, i) = bitvector_access_dec' (sizeof 'n - 1, v, i)
+function forall Num 'n, 'n >= 0. bit bitvector_access_inc_norm ((vector<0,'n,inc,bit>) v, i) = bitvector_access_inc' (0, v, i)
+function forall Num 'n, Type 'a, 'n >= 0. 'a vector_access_dec_norm ((vector<'n - 1,'n,dec,'a>) v, i) = vector_access_dec' (sizeof 'n - 1, v, i)
+function forall Num 'n, Type 'a, 'n >= 0. 'a vector_access_inc_norm ((vector<0,'n,inc,'a>) v, i) = vector_access_inc' (0, v, i)
 
 (* Vector subrange *)
 
@@ -36,6 +40,18 @@ function bitvector_subrange_inc (v, i, j) = bitvector_subrange_inc' (sizeof 'n, 
 val extern forall Num 'n, Num 'l, Num 'm, Num 'o, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
   ([:'n:], vector<'n,'l,dec,bit>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,bit> effect pure bitvector_subrange_dec' = "bitvector_subrange_dec"
 function bitvector_subrange_dec (v, i, j) = bitvector_subrange_dec' (sizeof 'n, v, i, j)
+
+(* Vector subrange update *)
+
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, Type 'a, 'l >= 0. ([:'n:], vector<'n,'l,dec,'a>, [:'i:], [:'j:], vector<'o,'i - 'j + 1,dec,'a>) -> vector<'n,'l,dec,'a> effect pure vector_update_subrange_dec' = "vector_update_subrange_dec"
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, Type 'a, 'l >= 0. ([:'n:], vector<'n,'l,inc,'a>, [:'i:], [:'j:], vector<'o,'j - 'i + 1,inc,'a>) -> vector<'n,'l,inc,'a> effect pure vector_update_subrange_inc' = "vector_update_subrange_inc"
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, 'l >= 0. ([:'n:], vector<'n,'l,dec,bit>, [:'i:], [:'j:], vector<'o,'i - 'j + 1,dec,bit>) -> vector<'n,'l,dec,bit> effect pure bitvector_update_subrange_dec' = "bitvector_update_subrange_dec"
+val extern forall Num 'n, Num 'l, Num 'i, Num 'j, Num 'o, 'l >= 0. ([:'n:], vector<'n,'l,inc,bit>, [:'i:], [:'j:], vector<'o,'j - 'i + 1,inc,bit>) -> vector<'n,'l,dec,bit> effect pure bitvector_update_subrange_inc' = "bitvector_update_subrange_inc"
+
+function vector_update_subrange_dec (v, i, j, v') = vector_update_subrange_dec' (sizeof 'n, v, i, j, v')
+function vector_update_subrange_inc (v, i, j, v') = vector_update_subrange_inc' (sizeof 'n, v, i, j, v')
+function bitvector_update_subrange_dec (v, i, j, v') = bitvector_update_subrange_dec' (sizeof 'n, v, i, j, v')
+function bitvector_update_subrange_inc (v, i, j, v') = bitvector_update_subrange_inc' (sizeof 'n, v, i, j, v')
 
 (* Bitvector extension *)
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.

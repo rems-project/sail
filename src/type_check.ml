@@ -133,14 +133,6 @@ let orig_kid (Kid_aux (Var v, l) as kid) =
   with
   | Not_found -> kid
 
-let is_range (Typ_aux (typ_aux, _)) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
-       when string_of_id f = "atom" -> Some (n, n)
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)])
-       when string_of_id f = "range" -> Some (n1, n2)
-  | _ -> None
-
 let is_list (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [Typ_arg_aux (Typ_arg_typ typ, _)])
@@ -921,7 +913,7 @@ end = struct
         rewrap (Typ_app (id, List.map aux_arg targs))
       | Typ_id id when is_regtyp id env ->
         let base, top, ranges = get_regtyp id env in
-        let len = sub_big_int (abs_big_int (sub_big_int top base)) unit_big_int in
+        let len = succ_big_int (abs_big_int (sub_big_int top base)) in
         vector_typ (nconstant base) (nconstant len) (get_default_order env) bit_typ
         (* TODO registers with non-default order? non-bitvector registers? *)
       | t -> rewrap t
@@ -1808,34 +1800,30 @@ let destruct_atom (Typ_aux (typ_aux, _)) =
 
 exception Not_a_constraint;;
 
-let rec assert_nexp env exp =
-  match destruct_atom_nexp env (typ_of exp) with
-  | Some nexp -> nexp
-  | None -> raise Not_a_constraint
+let rec assert_nexp env exp = destruct_atom_nexp env (typ_of exp)
 
 let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
   match exp_aux with
+  | E_constraint nc ->
+     Some nc
   | E_app (op, [x; y]) when string_of_id op = "or_bool" ->
-     nc_or (assert_constraint env x) (assert_constraint env y)
+     option_binop nc_or (assert_constraint env x) (assert_constraint env y)
   | E_app (op, [x; y]) when string_of_id op = "and_bool" ->
-     nc_and (assert_constraint env x) (assert_constraint env y)
+     option_binop nc_and (assert_constraint env x) (assert_constraint env y)
   | E_app (op, [x; y]) when string_of_id op = "gteq_atom" ->
-     nc_gteq (assert_nexp env x) (assert_nexp env y)
+     option_binop nc_gteq (assert_nexp env x) (assert_nexp env y)
   | E_app (op, [x; y]) when string_of_id op = "lteq_atom" ->
-     nc_lteq (assert_nexp env x) (assert_nexp env y)
+     option_binop nc_lteq (assert_nexp env x) (assert_nexp env y)
   | E_app (op, [x; y]) when string_of_id op = "gt_atom" ->
-     nc_gt (assert_nexp env x) (assert_nexp env y)
+     option_binop nc_gt (assert_nexp env x) (assert_nexp env y)
   | E_app (op, [x; y]) when string_of_id op = "lt_atom" ->
-     nc_lt (assert_nexp env x) (assert_nexp env y)
+     option_binop nc_lt (assert_nexp env x) (assert_nexp env y)
   | E_app (op, [x; y]) when string_of_id op = "eq_atom" ->
-     nc_eq (assert_nexp env x) (assert_nexp env y)
+     option_binop nc_eq (assert_nexp env x) (assert_nexp env y)
   | E_app (op, [x; y]) when string_of_id op = "neq_atom" ->
-     nc_neq (assert_nexp env x) (assert_nexp env y)
+     option_binop nc_neq (assert_nexp env x) (assert_nexp env y)
   | _ ->
-     begin
-       typ_debug ("Unable to construct a constraint for expression " ^ string_of_exp exp);
-       raise Not_a_constraint
-     end
+     None
 
 type flow_constraint =
   | Flow_lteq of big_int * nexp
@@ -1907,7 +1895,7 @@ let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
        | Some (c, nexp) -> [(v, Flow_gteq (c, nexp))], []
        | _ -> [], []
      end
-  | _ -> try [], [assert_constraint env exp] with Not_a_constraint -> [], []
+  | _ -> [], option_these [assert_constraint env exp]
 
 let rec add_flows b flows env =
   match flows with
@@ -2000,26 +1988,17 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          | (E_aux (E_assign (lexp, bind), _) :: exps) ->
             let texp, env = bind_assignment env lexp bind in
             texp :: check_block l env exps typ
-         | ((E_aux (E_assert (E_aux (E_constraint nc, _), assert_msg), _) as exp) :: exps) ->
-            typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
-            let inferred_exp = irule infer_exp env exp in
-            add_effect inferred_exp (mk_effect [BE_escape]) :: check_block l (Env.add_constraint nc env) exps typ
          | ((E_aux (E_assert (constr_exp, assert_msg), _) as exp) :: exps) ->
-            begin
-              try
-                let constr_exp = crule check_exp env constr_exp bool_typ in
-                let nc = assert_constraint env constr_exp in
-                let cexp = annot_exp (E_constraint nc) bool_typ in
-                let checked_msg = crule check_exp env assert_msg string_typ in
-                let texp = annot_exp_effect (E_assert (cexp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
-                texp :: check_block l (Env.add_constraint nc env) exps typ
-              with
-              | Not_a_constraint ->
-                 let constr_exp = crule check_exp env constr_exp bool_typ in
-                 let checked_msg = crule check_exp env assert_msg string_typ in
-                 let texp = annot_exp_effect (E_assert (constr_exp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
-                 texp :: check_block l env exps typ
-            end
+            let constr_exp = crule check_exp env constr_exp bool_typ in
+            let checked_msg = crule check_exp env assert_msg string_typ in
+            let cexp, env = match assert_constraint env constr_exp with
+              | Some nc ->
+                 typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
+                 annot_exp (E_constraint nc) bool_typ, Env.add_constraint nc env
+              | None ->
+                 constr_exp, env in
+            let texp = annot_exp_effect (E_assert (cexp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
+            texp :: check_block l env exps typ
          | (exp :: exps) ->
             let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
             texp :: check_block l env exps typ
@@ -2163,6 +2142,27 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let E_aux (E_assign (lexp, bind), _), env = bind_assignment env lexp bind in
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_internal_let (lexp, bind, checked_exp)) typ
+  | E_internal_return exp, _ ->
+     let checked_exp = crule check_exp env exp typ in
+     annot_exp (E_internal_return checked_exp) typ
+  | E_internal_plet (pat, bind, body), _ ->
+     let bind_exp, ptyp = match pat with
+       | P_aux (P_typ (ptyp, _), _) ->
+          Env.wf_typ env ptyp;
+          let checked_bind = crule check_exp env bind ptyp in
+          checked_bind, ptyp
+       | _ ->
+          let inferred_bind = irule infer_exp env bind in
+          inferred_bind, typ_of inferred_bind in
+     let tpat, env = bind_pat env pat ptyp in
+     (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
+     let env = match bind_exp with
+       | E_aux (E_assert (E_aux (E_constraint nc, _), _), _) ->
+          typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
+          Env.add_constraint nc env
+       | _ -> env in
+     let checked_body = crule check_exp env body typ in
+     annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
   | E_vector vec, _ ->
      let (start, len, ord, vtyp) = destruct_vec_typ l env typ in
      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
@@ -2785,7 +2785,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        let inferred_f = irule infer_exp env f in
        let inferred_t = irule infer_exp env t in
        let checked_step = crule check_exp env step int_typ in
-       match is_range (typ_of inferred_f), is_range (typ_of inferred_t) with
+       match destruct_range (typ_of inferred_f), destruct_range (typ_of inferred_t) with
        | None, _ -> typ_error l ("Type of " ^ string_of_exp f ^ " in foreach must be a range")
        | _, None -> typ_error l ("Type of " ^ string_of_exp t ^ " in foreach must be a range")
        (* | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
@@ -2842,6 +2842,39 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let checked_test = crule check_exp env test bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
      annot_exp_effect (E_assert (checked_test, checked_msg)) unit_typ (mk_effect [BE_escape])
+  | E_internal_return exp ->
+     let inferred_exp = irule infer_exp env exp in
+     annot_exp (E_internal_return inferred_exp) (typ_of inferred_exp)
+  | E_internal_plet (pat, bind, body) ->
+     let bind_exp, ptyp = match pat with
+       | P_aux (P_typ (ptyp, _), _) ->
+          Env.wf_typ env ptyp;
+          let checked_bind = crule check_exp env bind ptyp in
+          checked_bind, ptyp
+       | _ ->
+          let inferred_bind = irule infer_exp env bind in
+          inferred_bind, typ_of inferred_bind in
+     let tpat, env = bind_pat env pat ptyp in
+     (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
+     let env = match bind_exp with
+       | E_aux (E_assert (E_aux (E_constraint nc, _), _), _) ->
+          typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
+          Env.add_constraint nc env
+       | _ -> env in
+     let inferred_body = irule infer_exp env body in
+     annot_exp (E_internal_plet (tpat, bind_exp, inferred_body)) (typ_of inferred_body)
+  | E_let (LB_aux (letbind, (let_loc, _)), exp) ->
+     let bind_exp, pat, ptyp = match letbind with
+       | LB_val (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
+          Env.wf_typ env ptyp;
+          let checked_bind = crule check_exp env bind ptyp in
+          checked_bind, pat, ptyp
+       | LB_val (pat, bind) ->
+          let inferred_bind = irule infer_exp env bind in
+          inferred_bind, pat, typ_of inferred_bind in
+     let tpat, env = bind_pat env pat ptyp in
+     let inferred_exp = irule infer_exp env exp in
+     annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp)) (typ_of inferred_exp)
   | _ -> typ_error l ("Cannot infer type of: " ^ string_of_exp exp)
 
 and infer_funapp l env f xs ret_ctx_typ = fst (infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ)
@@ -3496,7 +3529,7 @@ let check_typedef env (TD_aux (tdef, (l, _))) =
      [DEF_type (TD_aux (tdef, (l, None)))], env
   | TD_enum(id, nmscm, ids, _) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
-  | TD_register(id, base, top, ranges) -> [DEF_type (TD_aux (tdef, (l, None)))], check_register env id base top ranges
+  | TD_register(id, base, top, ranges) -> [DEF_type (TD_aux (tdef, (l, Some (env, unit_typ, no_effect))))], check_register env id base top ranges
 
 let check_kinddef env (KD_aux (kdef, (l, _))) =
   let kd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented kind def") in
@@ -3513,6 +3546,13 @@ let rec check_def env def =
   | DEF_type tdef -> check_typedef env tdef
   | DEF_fixity (prec, n, op) -> [DEF_fixity (prec, n, op)], env
   | DEF_fundef fdef -> check_fundef env fdef
+  | DEF_internal_mutrec fdefs ->
+     let defs = List.concat (List.map (fun fdef -> fst (check_fundef env fdef)) fdefs) in
+     let split_fundef (defs, fdefs) def = match def with
+       | DEF_fundef fdef -> (defs, fdefs @ [fdef])
+       | _ -> (defs @ [def], fdefs) in
+     let (defs, fdefs) = List.fold_left split_fundef ([], []) defs in
+     (defs @ [DEF_internal_mutrec fdefs]), env
   | DEF_val letdef -> check_letdef env letdef
   | DEF_spec vs -> check_val_spec env vs
   | DEF_default default -> check_default env default

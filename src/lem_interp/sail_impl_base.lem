@@ -643,7 +643,7 @@ instance (Ord write_kind)
   let (>=) = write_kindGreaterEq
 end
 
-(* Barrier comparison that uses less memory in Isabelle/HOL
+(* Barrier comparison that uses less memory in Isabelle/HOL *)
 let ~{ocaml} barrier_number = function
     | Barrier_Sync -> (0 : natural)
     | Barrier_LwSync -> 1
@@ -660,15 +660,15 @@ let ~{ocaml} barrier_number = function
     | Barrier_MIPS_SYNC -> 12
   end
 
- let ~{ocaml} barrier_kindCompare bk1 bk2 =
+let ~{ocaml} barrier_kindCompare bk1 bk2 =
   let n1 = barrier_number bk1 in
   let n2 = barrier_number bk2 in
   if n1 < n2 then LT
   else if n1 = n2 then EQ
   else GT
-*)
+let inline {ocaml} barrier_kindCompare = defaultCompare
 
-let ~{ocaml} barrier_kindCompare bk1 bk2 =
+(*let ~{ocaml} barrier_kindCompare bk1 bk2 =
   match (bk1, bk2) with
   | (Barrier_Sync, Barrier_Sync) -> EQ
   | (Barrier_Sync, _) -> LT
@@ -722,8 +722,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   (* | (Barrier_MIPS_SYNC, _) -> LT
   | (_, Barrier_MIPS_SYNC) -> GT *)
 
-  end
-let inline {ocaml} barrier_kindCompare = defaultCompare
+  end*)
 
 let ~{ocaml} barrier_kindLess b1 b2      = barrier_kindCompare b1 b2 =  LT
 let ~{ocaml} barrier_kindLessEq b1 b2    = barrier_kindCompare b1 b2 <> GT

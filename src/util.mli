@@ -84,7 +84,7 @@ val option_default : 'a -> 'a option -> 'a
 
 (** [option_binop f (Some x) (Some y)] returns [Some (f x y)],
     and in all other cases, [option_binop] returns [None]. *)
-val option_binop : ('a -> 'a -> 'a) -> 'a option -> 'a option -> 'a option
+val option_binop : ('a -> 'a -> 'b) -> 'a option -> 'a option -> 'b option
 
 (** [option_get_exn exn None] throws the exception [exn],
     whereas [option_get_exn exn (Some x)] returns [x]. *)

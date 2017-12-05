@@ -616,7 +616,7 @@ let pp_lem_dec ppf (DEC_aux(reg,(l,annot))) =
     fprintf ppf "@[<0>(DEC_aux (DEC_typ_alias %a %a %a) (%a, %a))@]"
       pp_lem_typ typ pp_lem_id id pp_lem_aspec alias_spec pp_lem_l l pp_annot annot
 
-let pp_lem_def ppf d =
+let rec pp_lem_def ppf d =
   match d with
   | DEF_default(df) -> fprintf ppf "(DEF_default %a);@\n" pp_lem_default df
   | DEF_spec(v_spec) -> fprintf ppf "(DEF_spec %a);@\n" pp_lem_spec v_spec
@@ -628,6 +628,7 @@ let pp_lem_def ppf d =
   | DEF_reg_dec(dec) -> fprintf ppf "(DEF_reg_dec %a);@\n" pp_lem_dec dec
   | DEF_comm d -> fprintf ppf ""
   | DEF_fixity (prec, n, id) -> fprintf ppf "(DEF_fixity %a %s %a);@\n" pp_lem_prec prec (lemnum string_of_big_int n) pp_lem_id id
+  | DEF_internal_mutrec f_defs -> List.iter (fun f_def -> pp_lem_def ppf (DEF_fundef f_def)) f_defs
   | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_lem_defs ppf (Defs(defs)) =

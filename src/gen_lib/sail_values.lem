@@ -619,10 +619,10 @@ let rec foreach_inc (i,stop,by) vars body =
 
 val foreach_dec : forall 'vars. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> 'vars) -> 'vars
-let rec foreach_dec (stop,i,by) vars body =
+let rec foreach_dec (i,stop,by) vars body =
   if (by > 0 && i >= stop) || (by < 0 && stop >= i)
   then let vars = body i vars in
-       foreach_dec (stop,i - by,by) vars body
+       foreach_dec (i - by,stop,by) vars body
   else vars
 
 let assert' b msg_opt =

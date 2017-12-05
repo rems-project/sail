@@ -334,6 +334,10 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_let(lebind,e) ->
     let b,u,s = fv_of_let consider_var bound used set lebind in
     fv_of_exp consider_var b u s e
+  | E_internal_let (lexp, exp1, exp2) ->
+    let b,u,s = fv_of_lexp consider_var bound used set lexp in
+    let _,used,set = fv_of_exp consider_var bound used set exp1 in
+    fv_of_exp consider_var b used set exp2
   | E_assign(lexp,e) ->
     let b,u,s = fv_of_lexp consider_var bound used set lexp in
     let _,used,set = fv_of_exp consider_var bound u s e in

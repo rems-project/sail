@@ -15,6 +15,14 @@ type sequential_state 'regs =
      write_ea : maybe (write_kind * integer * integer);
      last_exclusive_operation_was_load : bool|>
 
+val init_state : forall 'regs. 'regs -> sequential_state 'regs
+let init_state regs =
+  <| regstate = regs;
+     memstate = Map.empty;
+     tagstate = Map.empty;
+     write_ea = Nothing;
+     last_exclusive_operation_was_load = false |>
+
 (* State, nondeterminism and exception monad with result type 'a
    and exception type 'e. *)
 type ME 'regs 'a 'e = sequential_state 'regs -> list ((either 'a 'e) * sequential_state 'regs)
@@ -176,6 +184,8 @@ val write_reg : forall 'regs 'a. register_ref 'regs 'a -> 'a -> M 'regs unit
 let write_reg reg v state =
   [(Left (), <| state with regstate = reg.write_to state.regstate v |>)]
 
+let write_reg_ref (reg, v) = write_reg reg v
+
 val update_reg : forall 'regs 'a 'b. register_ref 'regs 'a -> ('a -> 'b -> 'a) -> 'b -> M 'regs unit
 let update_reg reg f v state =
   let current_value = get_reg state reg in
@@ -218,6 +228,17 @@ let barrier _ = return ()
 val footprint : forall 'regs. M 'regs unit
 let footprint s = return () s
 
+val iter_aux : forall 'regs 'e 'a. integer -> (integer -> 'a -> ME 'regs unit 'e) -> list 'a -> ME 'regs unit 'e
+let rec iter_aux i f xs = match xs with
+  | x :: xs -> f i x >> iter_aux (i + 1) f xs
+  | [] -> return ()
+  end
+
+val iteri : forall 'regs 'e 'a. (integer -> 'a -> ME 'regs unit 'e) -> list 'a -> ME 'regs unit 'e
+let iteri f xs = iter_aux 0 f xs
+
+val iter : forall 'regs 'e 'a. ('a -> ME 'regs unit 'e) -> list 'a -> ME 'regs unit 'e
+let iter f xs = iteri (fun _ x -> f x) xs
 
 val foreachM_inc : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
@@ -231,11 +252,11 @@ let rec foreachM_inc (i,stop,by) vars body =
 
 val foreachM_dec : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
-let rec foreachM_dec (stop,i,by) vars body =
+let rec foreachM_dec (i,stop,by) vars body =
   if (by > 0 && i >= stop) || (by < 0 && stop >= i)
   then
     body i vars >>= fun vars ->
-    foreachM_dec (stop,i - by,by) vars body
+    foreachM_dec (i - by,stop,by) vars body
   else return vars
 
 val while_PP : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars

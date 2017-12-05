@@ -148,7 +148,7 @@ let write_reg_field_pos reg regfield i v =
   write_reg_field_range reg regfield i i [v]
 let write_reg_field_bit = write_reg_field_pos
 
-
+let write_reg_ref (reg, v) = write_reg reg v
 
 val barrier : barrier_kind -> M unit
 let barrier bk = Barrier bk (Done (), Nothing)
@@ -156,6 +156,19 @@ let barrier bk = Barrier bk (Done (), Nothing)
 
 val footprint : M unit
 let footprint = Footprint (Done (),Nothing)
+
+
+val iter_aux : forall 'regs 'e 'a. integer -> (integer -> 'a -> MR unit 'e) -> list 'a -> MR unit 'e
+let rec iter_aux i f xs = match xs with
+  | x :: xs -> f i x >> iter_aux (i + 1) f xs
+  | [] -> return ()
+  end
+
+val iteri : forall 'regs 'e 'a. (integer -> 'a -> MR unit 'e) -> list 'a -> MR unit 'e
+let iteri f xs = iter_aux 0 f xs
+
+val iter : forall 'regs 'e 'a. ('a -> MR unit 'e) -> list 'a -> MR unit 'e
+let iter f xs = iteri (fun _ x -> f x) xs
 
 
 val foreachM_inc : forall 'vars 'r. (integer * integer * integer) -> 'vars ->
@@ -170,11 +183,11 @@ let rec foreachM_inc (i,stop,by) vars body =
 
 val foreachM_dec : forall 'vars 'r. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> MR 'vars 'r) -> MR 'vars 'r
-let rec foreachM_dec (stop,i,by) vars body =
+let rec foreachM_dec (i,stop,by) vars body =
   if (by > 0 && i >= stop) || (by < 0 && stop >= i)
   then
     body i vars >>= fun vars ->
-    foreachM_dec (stop,i - by,by) vars body
+    foreachM_dec (i - by,stop,by) vars body
   else return vars
 
 val while_PP : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars

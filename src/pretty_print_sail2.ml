@@ -183,17 +183,29 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> string "E_cons"
-  | E_record fexps -> string "E_record"
+  | E_record fexps -> string "<|" ^^ doc_fexps fexps ^^ string "|>"
   | E_loop (While, cond, exp) ->
      separate space [string "while"; doc_exp cond; string "do"; doc_exp exp]
   | E_loop (Until, cond, exp) ->
      separate space [string "repeat"; doc_exp exp; string "until"; doc_exp cond]
-  | E_record_update (exp, fexps) -> string "E_record_update"
+  | E_record_update (exp, fexps) -> separate space [string "<|"; doc_exp exp; string "with"; doc_fexps fexps; string "|>"]
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
+  | E_internal_let (lexp, exp1, exp2) ->
+     let le =
+       prefix 2 1
+         (separate space [string "internal_let"; doc_lexp lexp; equals])
+         (doc_exp exp1) in
+     doc_op (string "in") le (doc_exp exp2)
+  | E_internal_plet (pat, exp1, exp2) ->
+     let le =
+       prefix 2 1
+         (separate space [string "internal_plet"; doc_pat pat; equals])
+         (doc_exp exp1) in
+     doc_op (string "in") le (doc_exp exp2)
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
   | E_for (id, exp1, exp2, exp3, order, exp4) ->
@@ -216,6 +228,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_throw exp -> assert false
   | E_try (exp, pexps) -> assert false
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
+  | E_internal_return exp -> string "internal_return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
      separate space [string "2"; string "^"; doc_atomic_exp exp]
   | _ -> doc_atomic_exp exp
@@ -268,6 +281,9 @@ and doc_pexp (Pat_aux (pat_aux, _)) =
   | Pat_exp (pat, exp) -> separate space [doc_pat pat; string "=>"; doc_exp exp]
   | Pat_when (pat, wh, exp) ->
      separate space [doc_pat pat; string "if"; doc_exp wh; string "=>"; doc_exp exp]
+and doc_fexps (FES_aux (FES_Fexps (fexps, _), _)) = separate_map (semi ^^ space) doc_fexp fexps
+and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+  doc_op (string "=") (doc_id id) (doc_exp exp)
 and doc_letbind (LB_aux (lb_aux, _)) =
   match lb_aux with
   | LB_val (pat, exp) ->
@@ -377,6 +393,7 @@ let rec doc_def def = group (match def with
   | DEF_type t_def -> doc_typdef t_def
   | DEF_kind k_def -> doc_kind_def k_def
   | DEF_fundef f_def -> doc_fundef f_def
+  | DEF_internal_mutrec f_defs -> separate_map hardline doc_fundef f_defs
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef

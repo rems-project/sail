@@ -248,6 +248,7 @@ val is_bitvector_typ : typ -> bool
 
 val typ_app_args_of : typ -> string * typ_arg_aux list * Ast.l
 val vector_typ_args_of : typ -> nexp * nexp * order * typ
+val destruct_range : typ -> (nexp * nexp) option
 
 val is_order_inc : order -> bool
 
