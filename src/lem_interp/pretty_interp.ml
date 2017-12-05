@@ -657,7 +657,7 @@ let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
   | Effect_opt_pure -> string "pure"
   | Effect_opt_effect e -> doc_effects e
 
-let doc_funcl env mem add_red (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
+let doc_funcl env mem add_red (FCL_aux(FCL_Funcl(id,Pat_aux (Pat_exp (pat, exp), _)),_)) =
   group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp env mem add_red false exp))
 
 let doc_fundef env mem add_red (FD_aux(FD_function(r, typa, efa, fcls),_)) =

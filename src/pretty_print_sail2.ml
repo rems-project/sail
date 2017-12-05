@@ -394,12 +394,12 @@ and doc_atomic_lexp (LEXP_aux (l_aux, _) as lexp) =
   | LEXP_vector_range (lexp, exp1, exp2) -> doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string ".."; doc_exp exp2])
   | LEXP_memory (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
   | _ -> parens (doc_lexp lexp)
-and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_pexp pexps) rbrace
-and doc_pexp (Pat_aux (pat_aux, _)) =
+and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) (doc_pexp "=>") pexps) rbrace
+and doc_pexp sym (Pat_aux (pat_aux, _)) =
   match pat_aux with
-  | Pat_exp (pat, exp) -> separate space [doc_pat pat; string "=>"; doc_exp exp]
+  | Pat_exp (pat, exp) -> separate space [doc_pat pat; string sym; doc_exp exp]
   | Pat_when (pat, wh, exp) ->
-     separate space [doc_pat pat; string "if"; doc_exp wh; string "=>"; doc_exp exp]
+     separate space [doc_pat pat; string "if"; doc_exp wh; string sym; doc_exp exp]
 and doc_letbind (LB_aux (lb_aux, _)) =
   match lb_aux with
   | LB_val (pat, exp) ->
@@ -407,8 +407,8 @@ and doc_letbind (LB_aux (lb_aux, _)) =
 
 let doc_funcl funcl = string "FUNCL"
 
-let doc_funcl (FCL_aux  (FCL_Funcl (id, pat, exp), _)) =
-  group (separate space [doc_id id; doc_pat pat; equals; doc_exp exp])
+let doc_funcl (FCL_aux  (FCL_Funcl (id, pexp), _)) =
+  group (separate space [doc_id id; doc_pexp "=" pexp])
 
 let doc_default (DT_aux(df,_)) = match df with
   | DT_kind(bk,v) -> string "DT_kind" (* separate space [string "default"; doc_bkind bk; doc_var v] *)

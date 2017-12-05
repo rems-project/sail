@@ -257,6 +257,14 @@ let vector_string_to_bit_list l lit =
                    | '1' -> L_aux (L_one, gen_loc l)
                    | _ -> raise (Reporting_basic.err_unreachable (gen_loc l) "binary had non-zero or one")) s_bin
 
+let rewrite_pexp rewriters =
+  let rewrite = rewriters.rewrite_exp rewriters in
+  function
+  | (Pat_aux (Pat_exp(p, e), pannot)) ->
+     Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters p, rewrite e), pannot)
+  | (Pat_aux (Pat_when(p, e, e'), pannot)) ->
+     Pat_aux (Pat_when(rewriters.rewrite_pat rewriters p, rewrite e, rewrite e'), pannot)
+
 let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
   let rewrap p = P_aux (p,(l,annot)) in
   let rewrite = rewriters.rewrite_pat rewriters in
@@ -322,12 +330,7 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
                                               FE_aux(FE_Fexp(id,rewrite e),fannot)) fexps, bool), fannot))))
   | E_field(exp,id) -> rewrap (E_field(rewrite exp,id))
   | E_case (exp,pexps) ->
-    let rewrite_pexp = function
-    | (Pat_aux (Pat_exp(p, e), pannot)) ->
-      Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters p, rewrite e), pannot)
-    | (Pat_aux (Pat_when(p, e, e'), pannot)) ->
-      Pat_aux (Pat_when(rewriters.rewrite_pat rewriters p, rewrite e, rewrite e'), pannot) in
-    rewrap (E_case (rewrite exp, List.map rewrite_pexp pexps))
+    rewrap (E_case (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
   | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters letbind,rewrite body))
   | E_assign (lexp,exp) -> rewrap (E_assign(rewriters.rewrite_lexp rewriters lexp,rewrite exp))
   | E_sizeof n -> rewrap (E_sizeof n)
@@ -364,9 +367,8 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   | LEXP_field (lexp,id) -> rewrap (LEXP_field (rewriters.rewrite_lexp rewriters lexp,id))
 
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
-  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) =
-    (FCL_aux (FCL_Funcl (id,rewriters.rewrite_pat rewriters pat,
-                         rewriters.rewrite_exp rewriters exp),(l,annot))) 
+  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
+    (FCL_aux (FCL_Funcl (id,rewrite_pexp rewriters pexp),(l,annot)))
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_def rewriters d = match d with

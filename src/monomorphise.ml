@@ -1080,7 +1080,7 @@ let split_defs splits defs =
     else
       let Defs ds = defs in
       match list_extract (function
-      | (DEF_fundef (FD_aux (FD_function (_,_,eff,((FCL_aux (FCL_Funcl (id',_,_),_))::_ as fcls)),_)))
+      | (DEF_fundef (FD_aux (FD_function (_,_,eff,((FCL_aux (FCL_Funcl (id',_),_))::_ as fcls)),_)))
         -> if Id.compare id id' = 0 then Some (eff,fcls) else None
       | _ -> None) ds with
       | None -> None
@@ -1091,7 +1091,7 @@ let split_defs splits defs =
            | [e] -> e
            | _ -> E_aux (E_tuple args,(Generated l,None)) in
          let cases = List.map (function
-           | FCL_aux (FCL_Funcl (_,pat,exp), ann) -> Pat_aux (Pat_exp (pat,exp),ann))
+           | FCL_aux (FCL_Funcl (_,pexp), ann) -> pexp)
            fcls in
          match can_match_with_env env arg cases Bindings.empty Bindings.empty with
          | Some (exp,bindings,kbindings) ->
@@ -1497,20 +1497,8 @@ let split_defs splits defs =
       | LEXP_field (le,id) -> re (LEXP_field (map_lexp le, id))
     in
 
-    let map_funcl (FCL_aux (FCL_Funcl (id,pat,exp),annot)) =
-      match map_pat pat with
-      | NoSplit -> [FCL_aux (FCL_Funcl (id, pat, map_exp exp), annot)]
-      | VarSplit patsubsts ->
-         List.map (fun (pat',substs) ->
-           let exp' = subst_exp substs exp in
-           FCL_aux (FCL_Funcl (id, pat', map_exp exp'), annot))
-           patsubsts
-      | ConstrSplit patnsubsts ->
-         List.map (fun (pat',nsubst) ->
-           let pat' = nexp_subst_pat nsubst pat' in
-           let exp' = nexp_subst_exp nsubst exp in
-           FCL_aux (FCL_Funcl (id, pat', map_exp exp'), annot)
-         ) patnsubsts
+    let map_funcl (FCL_aux (FCL_Funcl (id,pexp),annot)) =
+      List.map (fun pexp -> FCL_aux (FCL_Funcl (id,pexp),annot)) (map_pexp pexp)
     in
 
     let map_fundef (FD_aux (FD_function (r,t,e,fcls),annot)) =
@@ -1673,19 +1661,21 @@ let replace_type env typ =
 
 let rewrite_size_parameters env (Defs defs) =
   let open Rewriter in
-  let size_vars exp =
-    fst (fold_exp
+  let size_vars pexp =
+    fst (fold_pexp
            { (compute_exp_alg KidSet.empty KidSet.union) with
              e_aux = (fun ((s,e),annot) -> KidSet.union s (sizes_of_annot annot), E_aux (e,annot));
              e_let = (fun ((sl,lb),(s2,e2)) -> KidSet.union sl (KidSet.diff s2 (tyvars_bound_in_lb lb)), E_let (lb,e2));
              pat_exp = (fun ((sp,pat),(s,e)) -> KidSet.diff s (tyvars_bound_in_pat pat), Pat_exp (pat,e))}
-           exp)
+           pexp)
   in
-  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pat,exp),(l,_))) =
-    let sizes = size_vars exp in
+  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
+    let sizes = size_vars pexp in
+    let pat,guard,exp,pannot = destruct_pexp pexp in
     (* TODO: what, if anything, should sequential be? *)
     let visible_tyvars =
-      KidSet.union (Pretty_print_lem.lem_tyvars_of_typ false true (pat_typ_of pat))
+      KidSet.union
+        (Pretty_print_lem.lem_tyvars_of_typ false true (pat_typ_of pat))
          (Pretty_print_lem.lem_tyvars_of_typ false true (typ_of exp))
     in
     let expose_tyvars = KidSet.diff sizes visible_tyvars in
@@ -1738,11 +1728,12 @@ let rewrite_size_parameters env (Defs defs) =
        E_app (id,args')
     | exception Not_found -> E_app (id,args)
   in
-  let rewrite_funcl (FCL_aux (FCL_Funcl (id,pat,body),(l,annot))) =
-    let pat,body =
+  let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),(l,annot))) =
+    let pat,guard,body,(pl,_) = destruct_pexp pexp in
+    let pat,guard,body =
       (* Update pattern and add itself -> nat wrapper to body *)
       match Bindings.find id fn_sizes with
-      | [] -> pat,body
+      | [] -> pat,guard,body
       | to_change ->
          let pat, vars =
            match pat with
@@ -1760,13 +1751,21 @@ let rewrite_size_parameters env (Defs defs) =
                             "Expected multiple parameters at single parameter")
               end
          in
+         (* TODO: only add bindings that are necessary (esp for guards) *)
          let body = List.fold_left add_var_rebind body vars in
-         pat,body
-      | exception Not_found -> pat,body
+         let guard = match guard with
+           | None -> None
+           | Some exp -> Some (List.fold_left add_var_rebind body vars)
+         in
+         pat,guard,body
+      | exception Not_found -> pat,guard,body
     in
     (* Update function applications *)
     let body = fold_exp { id_exp_alg with e_app = rewrite_e_app } body in
-    FCL_aux (FCL_Funcl (id,pat,body),(l,None))
+    let guard = match guard with
+      | None -> None
+      | Some exp -> Some (fold_exp { id_exp_alg with e_app = rewrite_e_app } exp) in
+    FCL_aux (FCL_Funcl (id,construct_pexp (pat,guard,body,(pl,None))),(l,None))
   in
   let rewrite_def = function
     | DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,funcls),(l,_))) ->
@@ -2250,10 +2249,9 @@ and analyse_lexp fn_id env assigns deps (LEXP_aux (lexp,_)) =
 let translate_id (Id_aux (_,l) as id) =
   let rec aux l =
     match l with
-    | Range (pos,_) -> id,(pos.Lexing.pos_fname,pos.Lexing.pos_lnum)
+    | Range (pos,_) -> Some (id,(pos.Lexing.pos_fname,pos.Lexing.pos_lnum))
     | Generated l -> aux l
-    | _ ->
-       raise (Reporting_basic.err_general l ("Unable to give location for " ^ string_of_id id))
+    | _ -> None
   in aux l
 
 let initial_env fn_id (TypQ_aux (tq,_)) pat =
@@ -2276,14 +2274,22 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat =
       | P_wild
         -> ArgSet.empty,Bindings.empty,KBindings.empty
       | P_as (pat,id) ->
-         let s,v,k = aux pat in
-         let id' = translate_id id in
-         ArgSet.add id' s, Bindings.add id (Have (ArgSet.singleton id',CallerArgSet.empty,CallerKidSet.empty)) v,k
+         begin
+           let s,v,k = aux pat in
+           match translate_id id with
+           | Some id' -> ArgSet.add id' s, Bindings.add id (Have (ArgSet.singleton id',CallerArgSet.empty,CallerKidSet.empty)) v,k
+           | None -> s, Bindings.add id (Unknown (l, ("Unable to give location for " ^ string_of_id id))) v, k
+         end
       | P_typ (_,pat) -> aux pat
       | P_id id ->
-         let id' = translate_id id in
-         let s = ArgSet.singleton id' in
-         s, Bindings.singleton id (Have (s,CallerArgSet.empty,CallerKidSet.empty)), KBindings.empty
+         begin
+         match translate_id id with
+         | Some id' ->
+            let s = ArgSet.singleton id' in
+            s, Bindings.singleton id (Have (s,CallerArgSet.empty,CallerKidSet.empty)), KBindings.empty
+         | None ->
+            ArgSet.empty, Bindings.singleton id (Unknown (l, ("Unable to give location for " ^ string_of_id id))), KBindings.empty
+         end
       | P_var (pat,kid) ->
          let s,v,k = aux pat in
          s,v,KBindings.add kid (Have (ArgSet.empty,CallerArgSet.singleton (fn_id,i),CallerKidSet.empty)) k
@@ -2330,10 +2336,16 @@ let print_result r =
   let _ = print_endline ("  kid_in_caller: " ^ string_of_callerkidset r.kid_in_caller) in
   ()
 
-let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pat,body),_)) =
+let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pexp),_)) =
+  let pat,guard,body,_ = destruct_pexp pexp in
   let (tq,_) = Env.get_val_spec id tenv in
   let aenv = initial_env id tq pat in
   let _,_,r = analyse_exp id aenv Bindings.empty body in
+  let r = match guard with
+    | None -> r
+    | Some exp -> let _,_,r' = analyse_exp id aenv Bindings.empty exp in
+                  merge r r'
+  in
   let _ =
     if debug > 2 then
       (print_endline (string_of_id id);

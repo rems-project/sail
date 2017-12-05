@@ -742,7 +742,7 @@ let to_ast_funcl (names,k_env,def_ord) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.fun
   (*let _ = Printf.eprintf "to_ast_funcl\n" in*)
   match fcl with
   | Parse_ast.FCL_Funcl(id,pat,exp) -> 
-    FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,()))
+    FCL_aux(FCL_Funcl(to_ast_id id, Pat_aux (Pat_exp (to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,()))),(l,()))
 
 let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef) : (unit fundef) envs_out = 
   match fd with

@@ -579,9 +579,9 @@ let pp_lem_effects_opt ppf (Effect_opt_aux(e,l)) =
   | Effect_opt_pure -> fprintf ppf "(Effect_opt_aux Effect_opt_pure %a)" pp_lem_l l
   | Effect_opt_effect e -> fprintf ppf "(Effect_opt_aux (Effect_opt_effect %a) %a)" pp_lem_effects e pp_lem_l l
 
-let pp_lem_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),(l,annot))) =
-  fprintf ppf "@[<0>(FCL_aux (%a %a %a %a) (%a,%a))@]@\n"
-    kwd "FCL_Funcl" pp_lem_id id pp_lem_pat pat pp_lem_exp exp pp_lem_l l pp_annot annot
+let pp_lem_funcl ppf (FCL_aux(FCL_Funcl(id,pexp),(l,annot))) =
+  fprintf ppf "@[<0>(FCL_aux (%a %a %a) (%a,%a))@]@\n"
+    kwd "FCL_Funcl" pp_lem_id id pp_lem_case pexp pp_lem_l l pp_annot annot
 
 let pp_lem_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),(l,annot))) =
   let pp_funcls ppf funcl = fprintf ppf "%a %a" pp_lem_funcl funcl kwd ";" in

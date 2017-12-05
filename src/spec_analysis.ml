@@ -445,15 +445,22 @@ let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
     (mt, mt)
 
 (*Unlike the other fv, the bound returns are the names bound by the pattern for use in the exp*)
-let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pat,exp),l)) =
-  let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
-  let _, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
-  (pat_bs,exp_ns,exp_sets)
+let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) =
+  match pexp with
+  | Pat_aux(Pat_exp (pat,exp),_) ->
+     let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
+     let _, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
+     (pat_bs,exp_ns,exp_sets)
+  | Pat_aux(Pat_when (pat,guard,exp),_) ->
+     let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
+     let bound_g, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
+     let _, exp_ns, exp_sets = fv_of_exp consider_var bound_g exp_ns exp_sets exp in
+     (pat_bs,exp_ns,exp_sets)
 
 let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) as fd) =
   let fun_name = match funcls with
     | [] -> failwith "fv_of_fun fell off the end looking for the function name"
-    | FCL_aux(FCL_Funcl(id,_,_),_)::_ -> string_of_id id in
+    | FCL_aux(FCL_Funcl(id,_),_)::_ -> string_of_id id in
   let base_bounds = match rec_opt with
     | Rec_aux(Ast.Rec_rec,_) -> init_env fun_name
     | _ -> mt in
@@ -464,10 +471,18 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
       bound, fv_of_typ consider_var bound mt typ
     | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
       base_bounds, mt in
-  let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pat,exp),_)) ns ->
-      let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
-      let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
-      exp_ns) funcls mt in
+  let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pexp),_)) ns ->
+    match pexp with
+    | Pat_aux(Pat_exp (pat,exp),_) ->
+       let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
+       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
+       exp_ns
+    | Pat_aux(Pat_when (pat,guard,exp),_) ->
+       let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
+       let guard_bs, guard_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty guard in
+       let _, exp_ns,_ = fv_of_exp consider_var guard_bs guard_ns Nameset.empty exp in
+       exp_ns
+  ) funcls mt in
   let ns_vs = init_env ("val:" ^ (string_of_id (id_of_fundef fd))) in
   (* let _ = Printf.eprintf "Function %s uses %s\n" fun_name (set_to_string (Nameset.union ns ns_r)) in *)
   init_env fun_name, Nameset.union ns_vs (Nameset.union ns ns_r)
@@ -481,7 +496,7 @@ let rec find_scattered_of name = function
   | DEF_scattered (SD_aux(sda,_) as sd):: defs ->
     (match sda with
      | SD_scattered_function(_,_,_,id)
-     | SD_scattered_funcl(FCL_aux(FCL_Funcl(id,_,_),_))
+     | SD_scattered_funcl(FCL_aux(FCL_Funcl(id,_),_))
      | SD_scattered_unioncl(id,_) ->
        if name = string_of_id id
        then [sd] else []
@@ -498,13 +513,25 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
         | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
           mt, mt) in
     init_env (string_of_id id),ns
-  | SD_scattered_funcl (FCL_aux(FCL_Funcl(id,pat,exp),_)) ->
-    let pat_bs,pat_ns = pat_bindings consider_var mt mt pat in
-    let _,exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
-    let scattered_binds = match pat with
-      | P_aux(P_app(pid,_),_) -> init_env ((string_of_id id) ^ "/" ^ (string_of_id pid))
-      | _ -> mt in
-    scattered_binds, exp_ns
+  | SD_scattered_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) ->
+     begin
+       match pexp with
+       | Pat_aux(Pat_exp (pat,exp),_) ->
+          let pat_bs,pat_ns = pat_bindings consider_var mt mt pat in
+          let _,exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
+          let scattered_binds = match pat with
+            | P_aux(P_app(pid,_),_) -> init_env ((string_of_id id) ^ "/" ^ (string_of_id pid))
+            | _ -> mt in
+          scattered_binds, exp_ns
+       | Pat_aux(Pat_when (pat,guard,exp),_) ->
+          let pat_bs,pat_ns = pat_bindings consider_var mt mt pat in
+          let guard_bs, guard_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty guard in
+          let _, exp_ns,_ = fv_of_exp consider_var guard_bs guard_ns Nameset.empty exp in
+          let scattered_binds = match pat with
+            | P_aux(P_app(pid,_),_) -> init_env ((string_of_id id) ^ "/" ^ (string_of_id pid))
+            | _ -> mt in
+          scattered_binds, exp_ns
+     end
   | SD_scattered_variant (id,_,_) ->
     let name = string_of_id id in
     let uses =

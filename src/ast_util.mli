@@ -153,6 +153,7 @@ val quant_split : typquant -> kinded_id list * n_constraint list
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
+val map_pexp_annot : ('a annot -> 'b annot) -> 'a pexp -> 'b pexp
 val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
 val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
 
@@ -271,3 +272,6 @@ val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
 
 val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
+
+val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
+val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp

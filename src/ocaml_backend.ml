@@ -365,7 +365,7 @@ and ocaml_atomic_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _, E_aux (E_block inits, _)), _)]), _)) :: defs
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)) :: defs
        when Id.compare id (mk_id "initialize_registers") = 0 ->
      inits
   | _ :: defs -> get_initialize_registers defs
@@ -397,11 +397,10 @@ let function_header () =
 
 let funcls_id = function
   | [] -> failwith "Ocaml: empty function"
-  | FCL_aux (FCL_Funcl (id, pat, exp),_) :: _ -> id
+  | FCL_aux (FCL_Funcl (id, _),_) :: _ -> id
 
-let ocaml_funcl_match ctx (FCL_aux (FCL_Funcl (id, pat, exp), _)) =
-  separate space [bar; ocaml_pat ctx pat; string "->"]
-  ^//^ ocaml_exp ctx exp
+let ocaml_funcl_match ctx (FCL_aux (FCL_Funcl (id, pexp), _)) =
+  ocaml_pexp ctx pexp
 
 let rec ocaml_funcl_matches ctx = function
   | [] -> failwith "Ocaml: empty function"
@@ -435,9 +434,14 @@ let ocaml_funcls ctx =
   in
   function
   | [] -> failwith "Ocaml: empty function"
-  | [FCL_aux (FCL_Funcl (id, pat, exp),_)] ->
+  | [FCL_aux (FCL_Funcl (id, pexp),_)] ->
      let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
      let pat_sym = gensym () in
+     let pat, exp =
+       match pexp with
+       | Pat_aux (Pat_exp (pat,exp),_) -> pat,exp
+       | Pat_aux (Pat_when (pat,wh,exp),_) -> failwith "OCaml: top-level pattern guards not supported"
+     in
      let annot_pat =
        let pat = parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1) in
        if !opt_trace_ocaml

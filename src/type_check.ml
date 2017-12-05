@@ -1979,6 +1979,7 @@ let irule r env exp =
 
 let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -> (l, ())) exp
 let strip_pat : 'a pat -> unit pat = function pat -> map_pat_annot (fun (l, _) -> (l, ())) pat
+let strip_pexp : 'a pexp -> unit pexp = function pexp -> map_pexp_annot (fun (l, _) -> (l, ())) pexp
 let strip_lexp : 'a lexp -> unit lexp = function lexp -> map_lexp_annot (fun (l, _) -> (l, ())) lexp
 
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
@@ -2016,24 +2017,8 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      end
   | E_case (exp, cases), _ ->
      let inferred_exp = irule infer_exp env exp in
-     let rec check_case pat typ = match pat with
-       | Pat_aux (Pat_exp (P_aux (P_lit lit, _) as pat, case), annot) ->
-          let guard = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
-          check_case (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
-       | Pat_aux (Pat_when (P_aux (P_lit lit, _) as pat, guard, case), annot) ->
-          let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
-          check_case (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), mk_exp (E_app_infix (guard, mk_id "&", guard')), case), annot)) typ
-       | Pat_aux (Pat_exp (pat, case), (l, _)) ->
-          let tpat, env = bind_pat env pat (typ_of inferred_exp) in
-          Pat_aux (Pat_exp (tpat, crule check_exp env case typ), (l, None))
-       | Pat_aux (Pat_when (pat, guard, case), (l, _)) ->
-          let tpat, env = bind_pat env pat (typ_of inferred_exp) in
-          let checked_guard = check_exp env guard bool_typ in
-          let flows, constrs = infer_flow env checked_guard in
-          let env' = add_constraints constrs (add_flows true flows env) in
-          Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env' case typ), (l, None))
-     in
-     annot_exp (E_case (inferred_exp, List.map (fun case -> check_case case typ) cases)) typ
+     let inferred_typ = typ_of inferred_exp in
+     annot_exp (E_case (inferred_exp, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
      let check_case pat typ = match pat with
@@ -2197,6 +2182,23 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | _, _ ->
      let inferred_exp = irule infer_exp env exp in
      type_coercion env inferred_exp typ
+
+and check_case env pat_typ pat typ = match pat with
+  | Pat_aux (Pat_exp (P_aux (P_lit lit, _) as pat, case), annot) ->
+     let guard = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
+     check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
+  | Pat_aux (Pat_when (P_aux (P_lit lit, _) as pat, guard, case), annot) ->
+     let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
+     check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), mk_exp (E_app_infix (guard, mk_id "&", guard')), case), annot)) typ
+  | Pat_aux (Pat_exp (pat, case), (l, _)) ->
+     let tpat, env = bind_pat env pat pat_typ in
+     Pat_aux (Pat_exp (tpat, crule check_exp env case typ), (l, None))
+  | Pat_aux (Pat_when (pat, guard, case), (l, _)) ->
+     let tpat, env = bind_pat env pat pat_typ in
+     let checked_guard = check_exp env guard bool_typ in
+     let flows, constrs = infer_flow env checked_guard in
+     let env' = add_constraints constrs (add_flows true flows env) in
+     Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env' case typ), (l, None))
 
 (* type_coercion env exp typ takes a fully annoted (i.e. already type
    checked) expression exp, and attempts to cast (coerce) it to the
@@ -3334,11 +3336,10 @@ let check_letdef env (LB_aux (letbind, (l, _))) =
        [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], env
   end
 
-let check_funcl env (FCL_aux (FCL_Funcl (id, pat, exp), (l, _))) typ =
+let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
   match typ with
   | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
      begin
-       let typed_pat, env = bind_pat env (strip_pat pat) typ_arg in
        let env = Env.add_ret_typ typ_ret env in
        (* We want to forbid polymorphic undefined values in all cases,
           except when type checking the specific undefined_(type)
@@ -3351,12 +3352,12 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pat, exp), (l, _))) typ =
          then Env.allow_polymorphic_undefineds env
          else env
        in
-       let exp = propagate_exp_effect (crule check_exp env (strip_exp exp) typ_ret) in
-       FCL_aux (FCL_Funcl (id, typed_pat, exp), (l, Some (env, typ, effect_of exp)))
+       let typed_pexp, prop_eff = propagate_pexp_effect (check_case env typ_arg (strip_pexp pexp) typ_ret) in
+       FCL_aux (FCL_Funcl (id, typed_pexp), (l, Some (env, typ, prop_eff)))
      end
   | _ -> typ_error l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
-let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pat, exp), (l, annot))) =
+let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   match annot with
   | Some (_, _, eff) -> eff
   | None -> no_effect (* Maybe could be assert false. This should never happen *)
@@ -3373,7 +3374,8 @@ let infer_funtyp l env tannotopt funcls =
          | _ -> typ_error l ("Cannot infer type from pattern " ^ string_of_pat pat)
        in
        match funcls with
-       | [FCL_aux (FCL_Funcl (_, pat, _), _)] ->
+       | [FCL_aux (FCL_Funcl (_, Pat_aux (pexp,_)), _)] ->
+          let pat = match pexp with Pat_exp (pat,_) | Pat_when (pat,_,_) -> pat in
           let arg_typ = typ_from_pat pat in
           let fn_typ = mk_typ (Typ_fn (arg_typ, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
           (quant, fn_typ)
@@ -3393,7 +3395,7 @@ let check_tannotopt env typq ret_typ = function
 let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, _)) as fd_aux) =
   let id =
     match (List.fold_right
-             (fun (FCL_aux (FCL_Funcl (id, _, _), _)) id' ->
+             (fun (FCL_aux (FCL_Funcl (id, _), _)) id' ->
                match id' with
                | Some id' -> if string_of_id id' = string_of_id id then Some id'
                              else typ_error l ("Function declaration expects all definitions to have the same name, "

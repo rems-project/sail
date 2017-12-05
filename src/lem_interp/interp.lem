@@ -639,7 +639,7 @@ let rec to_fdefs (Defs defs) =
             | FD_aux (FD_function _ _ _ fcls) _ ->
               match fcls with
                 | [] -> to_fdefs (Defs defs)
-                | (FCL_aux (FCL_Funcl name _ _) _)::_  ->
+                | (FCL_aux (FCL_Funcl name _) _)::_  ->
                   Map.insert (get_id name) fcls (to_fdefs (Defs defs)) end end)
         | _ -> to_fdefs (Defs defs) end end
 
@@ -1625,7 +1625,7 @@ val find_funcl : top_level -> list (funcl tannot) -> value -> list (lenv * bool 
 let rec find_funcl t_level funcls value =
   match funcls with
   | [] -> []
-  | (FCL_aux (FCL_Funcl id pat exp) _)::funcls ->
+  | (FCL_aux (FCL_Funcl id (Pat_aux (Pat_exp pat exp) _)) _)::funcls ->
     let (is_matching,used_unknown,env) = match_pattern t_level pat value in
     if (is_matching && used_unknown)
     then (env,used_unknown,exp)::(find_funcl t_level funcls value)

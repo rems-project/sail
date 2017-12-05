@@ -1213,20 +1213,34 @@ let doc_fun_body_lem sequential mwords exp =
   then align (string "catch_early_return" ^//^ parens (doc_exp))
   else doc_exp
 
-let doc_funcl_lem sequential mwords (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
+let doc_funcl_lem sequential mwords (FCL_aux(FCL_Funcl(id,pexp),_)) =
+  let pat,guard,exp,(l,_) = destruct_pexp pexp in
+  let _ = match guard with
+    | None -> ()
+    | _ ->
+       raise (Reporting_basic.err_unreachable l
+                "guarded pattern expression should have been rewritten before pretty-printing")
+  in
   group (prefix 3 1 ((doc_pat_lem sequential mwords false pat) ^^ space ^^ arrow)
     (doc_fun_body_lem sequential mwords exp))
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
-  | (FCL_aux (FCL_Funcl (id,_,_),_))::_ -> id
+  | (FCL_aux (FCL_Funcl (id,_),_))::_ -> id
 
 module StringSet = Set.Make(String)
 
 let doc_fundef_rhs_lem sequential mwords (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
   match funcls with
   | [] -> failwith "FD_function with empty function list"
-  | [FCL_aux(FCL_Funcl(id,pat,exp),_)] ->
+  | [FCL_aux(FCL_Funcl(id,pexp),_)] ->
+     let pat,guard,exp,(l,_) = destruct_pexp pexp in
+     let _ = match guard with
+       | None -> ()
+       | _ ->
+          raise (Reporting_basic.err_unreachable l
+                   "guarded pattern expression should have been rewritten before pretty-printing")
+     in
     (prefix 2 1)
       ((separate space)
          [doc_id_lem id;
@@ -1251,13 +1265,20 @@ let doc_mutrec_lem sequential mwords = function
 let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | FCL_aux (FCL_Funcl(id,_,exp),_) :: _
+  | FCL_aux (FCL_Funcl(id,_),_) :: _
     when string_of_id id = "execute" (*|| string_of_id id = "initial_analysis"*) ->
     let (_,auxiliary_functions,clauses) =
       List.fold_left
         (fun (already_used_fnames,auxiliary_functions,clauses) funcl ->
           match funcl with
-          | FCL_aux (FCL_Funcl (Id_aux (Id _,l),pat,exp),annot) ->
+          | FCL_aux (FCL_Funcl (Id_aux (Id _,l),pexp),annot) ->
+             let pat,guard,exp,(pexp_l,_) = destruct_pexp pexp in
+             let _ = match guard with
+               | None -> ()
+               | _ ->
+                  raise (Reporting_basic.err_unreachable pexp_l
+                           "guarded pattern expression should have been rewritten before pretty-printing")
+             in
              let ctor, l, argspat, pannot = (match pat with
                | P_aux (P_app (Id_aux (Id ctor,l),argspat),pannot) ->
                  (ctor, l, argspat, pannot)
@@ -1273,7 +1294,8 @@ let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls)
              let aux_fname = pick_name_not_clashing_with already_used_fnames (string_of_id id ^ "_" ^ ctor) in
              let already_used_fnames = StringSet.add aux_fname already_used_fnames in
              let fcl = FCL_aux (FCL_Funcl (Id_aux (Id aux_fname,l),
-                                           P_aux (P_tup argspat,pannot),exp),annot) in
+                                           Pat_aux (Pat_exp (P_aux (P_tup argspat,pannot),exp),(pexp_l,None)))
+                                  ,annot) in
              let auxiliary_functions =
                 auxiliary_functions ^^ hardline ^^ hardline ^^
                   doc_fundef_lem sequential mwords (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
@@ -1304,8 +1326,8 @@ let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls)
     (prefix 2 1)
       ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
       (clauses ^/^ string "end")
-  | FCL_aux (FCL_Funcl(id,_,exp),_) :: _
-    when not (Env.is_extern id (env_of exp) "lem") ->
+  | FCL_aux (FCL_Funcl(id,_),annot) :: _
+    when not (Env.is_extern id (env_of_annot annot) "lem") ->
     string "let" ^^ (doc_rec_lem r) ^^ (doc_fundef_rhs_lem sequential mwords fd)
   | _ -> empty
 

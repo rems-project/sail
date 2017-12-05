@@ -485,8 +485,13 @@ let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
   | Effect_opt_pure -> string "pure"
   | Effect_opt_effect e -> doc_effects e
 
-let doc_funcl (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
-  group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp exp))
+let doc_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) =
+  match pexp with
+  | Pat_aux (Pat_exp (pat,exp),_) ->
+     group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp exp))
+  | Pat_aux (Pat_when (pat,wh,exp),_) ->
+     group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat; string "if"; doc_exp wh])
+              (doc_exp exp))
 
 let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   match fcls with

@@ -77,7 +77,7 @@ let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
 let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
 
-let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, pat, body), no_annot)
+let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, body),no_annot)), no_annot)
 
 let mk_qi_nc nc = QI_aux (QI_const nc, Parse_ast.Unknown)
 
@@ -668,7 +668,7 @@ let rec string_of_index_range (BF_aux (ir, _)) =
 
 let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
   match (List.fold_right
-           (fun (FCL_aux (FCL_Funcl (id, _, _), _)) id' ->
+           (fun (FCL_aux (FCL_Funcl (id, _), _)) id' ->
              match id' with
              | Some id' -> if string_of_id id' = string_of_id id then Some id'
                            else raise (Reporting_basic.err_typ l
@@ -854,3 +854,13 @@ and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_ar
   | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
   | Typ_arg_typ typ -> [undefined_of_typ mwords l annot typ]
   | Typ_arg_order _ -> []
+
+let destruct_pexp (Pat_aux (pexp,ann)) =
+  match pexp with
+  | Pat_exp (pat,exp) -> pat,None,exp,ann
+  | Pat_when (pat,guard,exp) -> pat,Some guard,exp,ann
+
+let construct_pexp (pat,guard,exp,ann) =
+  match guard with
+  | None -> Pat_aux (Pat_exp (pat,exp),ann)
+  | Some guard -> Pat_aux (Pat_when (pat,guard,exp),ann)

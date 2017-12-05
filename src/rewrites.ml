@@ -391,15 +391,21 @@ let rewrite_sizeof (Defs defs) =
 
   let rewrite_sizeof_fun params_map
                          (FD_aux (FD_function (rec_opt,tannot,eff,funcls),((l,_) as annot))) =
-    let rewrite_funcl_body (FCL_aux (FCL_Funcl (id,pat,exp), annot)) (funcls,nvars) =
-      let body_env = env_of exp in
-      let body_typ = typ_of exp in
+    let rewrite_funcl_body (FCL_aux (FCL_Funcl (id,pexp), annot)) (funcls,nvars) =
+      let pat,guard,exp,pannot = destruct_pexp pexp in
       let nmap = nexps_from_params pat in
       (* first rewrite calls to other functions... *)
       let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
       (* ... then rewrite sizeof expressions in current function body *)
       let exp'' = fold_exp { id_exp_alg with e_sizeof = e_sizeof nmap } exp' in
-      (FCL_aux (FCL_Funcl (id,pat,exp''), annot) :: funcls,
+      let guard' = match guard with
+        | Some guard ->
+           (* As above *)
+           let guard' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } guard) in
+           Some (fold_exp { id_exp_alg with e_sizeof = e_sizeof nmap } guard')
+        | None -> None in
+      let pexp' = construct_pexp (pat,guard',exp'',pannot) in
+      (FCL_aux (FCL_Funcl (id,pexp'), annot) :: funcls,
        KidSet.union nvars (sizeof_frees exp'')) in
     let (funcls, nvars) = List.fold_right rewrite_funcl_body funcls ([], KidSet.empty) in
     (* Add a parameter for each remaining free type-level variable in a
@@ -414,7 +420,7 @@ let rewrite_sizeof (Defs defs) =
     let kid_typs = List.map kid_typ (KidSet.elements nvars) in
     let kid_pats = List.map kid_pat (KidSet.elements nvars) in
     let kid_nmap = List.map (fun kid -> (nvar kid, kid_eaux kid)) (KidSet.elements nvars) in
-    let rewrite_funcl_params (FCL_aux (FCL_Funcl (id, pat, exp), annot) as funcl) =
+    let rewrite_funcl_params (FCL_aux (FCL_Funcl (id, pexp), annot) as funcl) =
       let rec rewrite_pat (P_aux (pat, ((l, _) as pannot)) as paux) =
         let penv = env_of_annot pannot in
         let peff = effect_of_annot (snd pannot) in
@@ -440,8 +446,14 @@ let rewrite_sizeof (Defs defs) =
           | ptyp ->
              let ptyp' = Typ_aux (Typ_tup (kid_typs @ [ptyp]), l) in
              P_aux (P_tup (kid_pats @ [paux]), (l, Some (penv, ptyp', peff))) in
+      let pat,guard,exp,pannot = destruct_pexp pexp in
+      let pat' = rewrite_pat pat in
+      let guard' = match guard with
+        | Some guard -> Some (fold_exp { id_exp_alg with e_sizeof = e_sizeof kid_nmap } guard)
+        | None -> None in
       let exp' = fold_exp { id_exp_alg with e_sizeof = e_sizeof kid_nmap } exp in
-      FCL_aux (FCL_Funcl (id, rewrite_pat pat, exp'), annot) in
+      let pexp' = construct_pexp (pat',guard',exp',pannot) in
+      FCL_aux (FCL_Funcl (id, pexp'), annot) in
     let funcls = List.map rewrite_funcl_params funcls in
     let fd = FD_aux (FD_function (rec_opt,tannot,eff,funcls),annot) in
     let params_map =
@@ -812,10 +824,15 @@ let rewrite_exp_remove_vector_concat_pat rewriters (E_aux (exp,(l,annot)) as ful
 
 let rewrite_fun_remove_vector_concat_pat
       rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
-  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) =
+  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
+    let pat,guard,exp,pannot = destruct_pexp pexp in
     let (pat',_,decls) = remove_vector_concat_pat pat in
+    let guard' = match guard with
+      | Some exp -> Some (decls (rewriters.rewrite_exp rewriters exp))
+      | None -> None in
     let exp' = decls (rewriters.rewrite_exp rewriters exp) in
-    (FCL_aux (FCL_Funcl (id,pat',exp'),(l,annot))) 
+    let pexp' = construct_pexp (pat',guard',exp',pannot) in
+    (FCL_aux (FCL_Funcl (id,pexp'),(l,annot)))
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_defs_remove_vector_concat (Defs defs) =
@@ -1238,13 +1255,18 @@ let rewrite_fun_remove_bitvector_pat
       rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) =
   let _ = reset_fresh_name_counter () in
   let funcls = match funcls with
-    | (FCL_aux (FCL_Funcl(id,_,_),_) :: _) ->
-        let clause (FCL_aux (FCL_Funcl(_,pat,exp),annot)) =
+    | (FCL_aux (FCL_Funcl(id,_),_) :: _) ->
+        let clause (FCL_aux (FCL_Funcl(_,pexp),annot)) =
+          let pat,fguard,exp,pannot = destruct_pexp pexp in
           let (pat,(guard,decls,_)) = remove_bitvector_pat pat in
+          let guard = match guard,fguard with
+            | None,e | e,None -> e
+            | Some g, Some wh ->
+               Some (bitwise_and_exp g (decls (rewriters.rewrite_exp rewriters wh)))
+          in
           let exp = decls (rewriters.rewrite_exp rewriters exp) in
-          (pat,guard,exp,annot) in
-        let cs = rewrite_guarded_clauses l (List.map clause funcls) in
-        List.map (fun (pat,exp,annot) -> FCL_aux (FCL_Funcl(id,pat,exp),annot)) cs
+          FCL_aux (FCL_Funcl (id,construct_pexp (pat,guard,exp,annot)),annot) in
+        List.map clause funcls
     | _ -> funcls in
   FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))
 
@@ -1272,7 +1294,7 @@ let rewrite_defs_remove_bitvector_pats (Defs defs) =
 
 
 (* Remove pattern guards by rewriting them to if-expressions within the
-   pattern expression. Shares code with the rewriting of bitvector patterns. *)
+   pattern expression. *)
 let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
   let rewrap e = E_aux (e,(l,annot)) in
   let rewrite_rec = rewriters.rewrite_exp rewriters in
@@ -1300,8 +1322,22 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
     else case_exp e (typ_of full_exp) clauses
   | _ -> rewrite_base full_exp
 
+let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r,t,e,funcls),(l,fdannot))) =
+   let funcls = match funcls with
+    | (FCL_aux (FCL_Funcl(id,_),_) :: _) ->
+       let clause (FCL_aux (FCL_Funcl(_,pexp),annot)) =
+         let pat,guard,exp,_ = destruct_pexp pexp in
+         let exp = rewriters.rewrite_exp rewriters exp in
+         (pat,guard,exp,annot) in
+       let cs = rewrite_guarded_clauses l (List.map clause funcls) in
+       List.map (fun (pat,exp,annot) ->
+         FCL_aux (FCL_Funcl(id,construct_pexp (pat,None,exp,(Unknown,None))),annot)) cs
+     | _ -> funcls (* TODO is the empty list possible here? *) in
+   FD_aux (FD_function(r,t,e,funcls),(l,fdannot))
+
 let rewrite_defs_guarded_pats =
-  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp_guarded_pats }
+  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp_guarded_pats;
+                    rewrite_fun = rewrite_fun_guarded_pats }
 
 
 let id_is_local_var id env = match Env.lookup_id id env with
@@ -1652,7 +1688,8 @@ let rewrite_defs_early_return (Defs defs) =
       E_aux (E_app (mk_id "early_return", [exp']), (l, annot'))
     | _ -> full_exp in
 
-  let rewrite_funcl_early_return _ (FCL_aux (FCL_Funcl (id, pat, exp), a)) =
+  let rewrite_funcl_early_return _ (FCL_aux (FCL_Funcl (id, pexp), a)) =
+    let pat,guard,exp,pannot = destruct_pexp pexp in
     let exp =
       exp
       (* Pull early returns out as far as possible *)
@@ -1665,7 +1702,7 @@ let rewrite_defs_early_return (Defs defs) =
     | (l, Some (env, typ, eff)) ->
       (l, Some (env, typ, union_effects eff (effect_of exp)))
     | _ -> a in
-    FCL_aux (FCL_Funcl (id, pat, exp), a) in
+    FCL_aux (FCL_Funcl (id, construct_pexp (pat, guard, exp, pannot)), a) in
 
   let rewrite_fun_early_return rewriters
     (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), a)) =
@@ -1716,7 +1753,9 @@ let rewrite_fix_val_specs (Defs defs) =
 
   let rewrite_exp val_specs = fold_exp { id_exp_alg with e_aux = e_aux val_specs } in
 
-  let rewrite_funcl (val_specs, funcls) (FCL_aux (FCL_Funcl (id, pat, exp), (l, annot))) =
+  let rewrite_funcl (val_specs, funcls) (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
+    let pat,guard,exp,pannot = destruct_pexp pexp in
+    (* Assumes there are no effects in guards *)
     let exp = propagate_exp_effect (rewrite_exp val_specs exp) in
     let vs, eff = match find_vs (env_of_annot (l, annot)) val_specs id with
       | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff), a)) ->
@@ -1727,14 +1766,17 @@ let rewrite_fix_val_specs (Defs defs) =
     in
     let annot = add_effect_annot annot eff in
     (Bindings.add id vs val_specs,
-     funcls @ [FCL_aux (FCL_Funcl (id, pat, exp), (l, annot))])
+     funcls @ [FCL_aux (FCL_Funcl (id, construct_pexp (pat, guard, exp, pannot)), (l, annot))])
   in
 
   let rewrite_fundef (val_specs, FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) =
     let (val_specs, funcls) = List.fold_left rewrite_funcl (val_specs, []) funcls in
     (* Repeat once to cross-propagate effects between clauses *)
     let (val_specs, funcls) = List.fold_left rewrite_funcl (val_specs, []) funcls in
-    let is_funcl_rec (FCL_aux (FCL_Funcl (id, _, exp), _)) =
+    let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
+      let pat,guard,exp,pannot = destruct_pexp pexp in
+      let exp = match guard with None -> exp
+        | Some exp' -> E_aux (E_block [exp';exp],(Parse_ast.Unknown,None)) in
       fst (fold_exp
         { (compute_exp_alg false (||) ) with
           e_app = (fun (f, es) ->
@@ -2140,7 +2182,7 @@ let rewrite_defs_letbind_effects  =
   and n_fexpL (fexps : 'a fexp list) (k : 'a fexp list -> 'a exp) : 'a exp =
     mapCont n_fexp fexps k
 
-  and n_pexp (newreturn : bool) (pexp : 'a pexp) (k : 'a pexp -> 'a exp) : 'a exp =
+  and n_pexp : 'b. bool -> 'a pexp -> ('a pexp -> 'b) -> 'b = fun newreturn pexp k ->
     match pexp with
     | Pat_aux (Pat_exp (pat,exp),annot) ->
       k (fix_eff_pexp (Pat_aux (Pat_exp (pat,n_exp_term newreturn exp), annot)))
@@ -2341,11 +2383,11 @@ let rewrite_defs_letbind_effects  =
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot)) = 
-    let effectful_funcl (FCL_aux (FCL_Funcl(_, _, exp), _)) = effectful exp in
+    let effectful_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = effectful_pexp pexp in
     let newreturn = List.exists effectful_funcl funcls in
-    let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),annot)) =
+    let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),annot)) =
       let _ = reset_fresh_name_counter () in
-      FCL_aux (FCL_Funcl (id,pat,n_exp_term newreturn exp),annot)
+      FCL_aux (FCL_Funcl (id,n_pexp newreturn pexp (fun x -> x)),annot)
     in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),fdannot) in
   let rewrite_def rewriters def =
     (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
