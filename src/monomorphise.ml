@@ -1255,7 +1255,7 @@ let split_defs splits defs =
       | Range (p,q) ->
          let matches =
            List.filter (fun ((filename,line),_) ->
-             Filename.basename p.Lexing.pos_fname = filename &&
+             p.Lexing.pos_fname = filename &&
                p.Lexing.pos_lnum <= line && line <= q.Lexing.pos_lnum) ls
          in List.map snd matches
     in 
