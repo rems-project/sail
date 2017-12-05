@@ -315,7 +315,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
        | _ -> header ^//^ doc_exp exp4
      end
   (* Resugar an assert with an empty message *)
-  | E_throw exp -> assert false
+  | E_throw exp -> string "throw" ^^ parens (doc_exp exp)
   | E_try (exp, pexps) -> assert false
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
@@ -324,7 +324,6 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
 and doc_infix n (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_app_infix (l, op, r) when n < 10 ->
-     let module M = Map.Make(String)  in
      begin
        try
          match Bindings.find op !fixities with
@@ -500,7 +499,6 @@ let rec doc_def def = group (match def with
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
   | DEF_fixity (prec, n, id) ->
-     print_endline ("YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY " ^ string_of_id id);
      fixities := Bindings.add id (prec, int_of_big_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->

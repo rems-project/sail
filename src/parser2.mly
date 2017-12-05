@@ -1021,6 +1021,8 @@ type_def:
     { mk_td (TD_enum ($2, mk_namesectn, $4, false)) $startpos $endpos }
   | Enum id Eq Lcurly enum Rcurly
     { mk_td (TD_enum ($2, mk_namesectn, $5, false)) $startpos $endpos }
+  | Union id Eq Lcurly type_unions Rcurly
+    { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Union id typquant Eq Lcurly type_unions Rcurly
     { mk_td (TD_variant ($2, mk_namesectn, $3, $6, false)) $startpos $endpos }
 

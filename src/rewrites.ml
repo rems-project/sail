@@ -364,6 +364,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_sizeof = (fun nexp -> (E_sizeof nexp, E_sizeof nexp))
     ; e_constraint = (fun nc -> (E_constraint nc, E_constraint nc))
     ; e_exit = (fun (e1,e1') -> (E_exit (e1), E_exit (e1')))
+    ; e_throw = (fun (e1,e1') -> (E_throw (e1), E_throw (e1')))
     ; e_return = (fun (e1,e1') -> (E_return e1, E_return e1'))
     ; e_assert = (fun ((e1,e1'),(e2,e2')) -> (E_assert(e1,e2), E_assert(e1',e2')) )
     ; e_internal_cast = (fun (a,(e1,e1')) -> (E_internal_cast (a,e1), E_internal_cast (a,e1')))

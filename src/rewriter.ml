@@ -518,6 +518,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_sizeof                 : nexp -> 'exp_aux
   ; e_constraint             : n_constraint -> 'exp_aux
   ; e_exit                   : 'exp -> 'exp_aux
+  ; e_throw                  : 'exp -> 'exp_aux
   ; e_return                 : 'exp -> 'exp_aux
   ; e_assert                 : 'exp * 'exp -> 'exp_aux
   ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
@@ -586,6 +587,7 @@ let rec fold_exp_aux alg = function
   | E_sizeof nexp -> alg.e_sizeof nexp
   | E_constraint nc -> alg.e_constraint nc
   | E_exit e -> alg.e_exit (fold_exp alg e)
+  | E_throw e -> alg.e_throw (fold_exp alg e)
   | E_return e -> alg.e_return (fold_exp alg e)
   | E_assert(e1,e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
   | E_internal_cast (annot,e) -> alg.e_internal_cast (annot, fold_exp alg e)
@@ -658,6 +660,7 @@ let id_exp_alg =
   ; e_sizeof = (fun nexp -> E_sizeof nexp)
   ; e_constraint = (fun nc -> E_constraint nc)
   ; e_exit = (fun e1 -> E_exit (e1))
+  ; e_throw = (fun e1 -> E_throw (e1))
   ; e_return = (fun e1 -> E_return e1)
   ; e_assert = (fun (e1,e2) -> E_assert(e1,e2)) 
   ; e_internal_cast = (fun (a,e1) -> E_internal_cast (a,e1))
@@ -753,6 +756,7 @@ let compute_exp_alg bot join =
   ; e_sizeof = (fun nexp -> (bot, E_sizeof nexp))
   ; e_constraint = (fun nc -> (bot, E_constraint nc))
   ; e_exit = (fun (v1,e1) -> (v1, E_exit (e1)))
+  ; e_throw = (fun (v1,e1) -> (v1, E_throw (e1)))
   ; e_return = (fun (v1,e1) -> (v1, E_return e1))
   ; e_assert = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_assert(e1,e2)) )
   ; e_internal_cast = (fun (a,(v1,e1)) -> (v1, E_internal_cast (a,e1)))

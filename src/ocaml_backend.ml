@@ -141,6 +141,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
   | id when Id.compare id (mk_id "real") = 0 -> string "Num.num"
+  | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
   | id -> zencode ctx id
 
@@ -229,6 +230,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_block exps -> begin_end (ocaml_block ctx exps)
   | E_field (exp, id) -> ocaml_atomic_exp ctx exp ^^ dot ^^ zencode ctx id
   | E_exit exp -> string "exit 0"
+  | E_throw exp -> string "raise" ^^ space ^^ ocaml_atomic_exp ctx exp
   | E_case (exp, pexps) ->
      begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"]
                 ^/^ ocaml_pexps ctx pexps)
@@ -487,6 +489,17 @@ let rec ocaml_cases ctx =
   | tu :: tus -> ocaml_case tu ^/^ ocaml_cases ctx tus
   | [] -> empty
 
+let rec ocaml_exceptions ctx =
+  let ocaml_exception = function
+    | Tu_aux (Tu_id id, _) -> separate space [string "exception"; zencode_upper ctx id]
+    | Tu_aux (Tu_ty_id (typ, id), _) ->
+       separate space [string "exception"; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
+  in
+  function
+  | [tu] -> ocaml_exception tu
+  | tu :: tus -> ocaml_exception tu ^^ string ";;" ^^ hardline ^^ ocaml_exceptions ctx tus
+  | [] -> empty
+
 let rec ocaml_enum ctx = function
   | [id] -> zencode_upper ctx id
   | id :: ids -> zencode_upper ctx id ^/^ (bar ^^ space ^^ ocaml_enum ctx ids)
@@ -524,6 +537,8 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
       ^/^ rbrace)
      ^^ ocaml_def_end
      ^^ ocaml_string_of_struct ctx id typq fields
+  | TD_variant (id, _, _, cases, _) when string_of_id id = "exception" ->
+     ocaml_exceptions ctx cases
   | TD_variant (id, _, typq, cases, _) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
      ^//^ ocaml_cases ctx cases
