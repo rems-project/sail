@@ -741,8 +741,8 @@ let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) :
 let to_ast_funcl (names,k_env,def_ord) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (unit funcl) =
   (*let _ = Printf.eprintf "to_ast_funcl\n" in*)
   match fcl with
-  | Parse_ast.FCL_Funcl(id,pat,exp) -> 
-    FCL_aux(FCL_Funcl(to_ast_id id, Pat_aux (Pat_exp (to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,()))),(l,()))
+  | Parse_ast.FCL_Funcl(id,pexp) ->
+    FCL_aux(FCL_Funcl(to_ast_id id, to_ast_case k_env def_ord pexp),(l,()))
 
 let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef) : (unit fundef) envs_out = 
   match fd with
@@ -839,7 +839,7 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
       | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.SD_scattered_funcl(funcl) -> 
       (match funcl with
-      | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_,_),_) -> 
+      | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_),_) ->
         let id = to_ast_id id in
         (match (def_in_progress id partial_defs) with
 	| None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None

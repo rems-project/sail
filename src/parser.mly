@@ -869,8 +869,6 @@ eq_exp:
   | at_exp
     { $1 }
   /* XXX check for consistency */
-  | eq_exp Eq at_exp
-    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp EqEq at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp ExclEq at_exp
@@ -907,8 +905,6 @@ eq_exp:
 eq_right_atomic_exp:
   | at_right_atomic_exp
     { $1 }
-  | eq_exp Eq at_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp EqEq at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp ExclEq at_right_atomic_exp
@@ -1018,9 +1014,15 @@ letbind:
   | Let_ atomic_pat Eq exp
     { lbloc (LB_val($2,$4)) }
 
+patsexp_funcl:
+  | atomic_pat Eq exp
+    { peloc (Pat_exp($1,$3)) }
+  | atomic_pat When exp Eq exp
+    { peloc (Pat_when ($1, $3, $5)) }
+
 funcl:
-  | id atomic_pat Eq exp
-    { funclloc (FCL_Funcl($1,$2,$4)) }
+  | id patsexp_funcl
+    { funclloc (FCL_Funcl($1,$2)) }
 
 funcl_ands:
   | funcl

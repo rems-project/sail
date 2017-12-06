@@ -998,15 +998,21 @@ exp_list:
   | exp Comma exp_list
     { $1 :: $3 }
 
+funcl_patexp:
+  | pat Eq exp
+    { mk_pexp (Pat_exp ($1, $3)) $startpos $endpos }
+  | pat If_ exp0 Eq exp
+    { mk_pexp (Pat_when ($1, $3, $5)) $startpos $endpos }
+
 funcl:
-  | id pat Eq exp
-    { mk_funcl (FCL_Funcl ($1, $2, $4)) $startpos $endpos }
+  | id funcl_patexp
+    { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos }
 
 funcls:
-  | id pat Eq exp
-    { [mk_funcl (FCL_Funcl ($1, $2, $4)) $startpos $endpos] }
-  | id pat Eq exp And funcls
-    { mk_funcl (FCL_Funcl ($1, $2, $4)) $startpos $endpos :: $6 }
+  | id funcl_patexp
+    { [mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos] }
+  | id funcl_patexp And funcls
+    { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos :: $4 }
 
 type_def:
   | Typedef id typquant Eq typ

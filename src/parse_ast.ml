@@ -354,7 +354,7 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 
 type 
 funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * pat * exp
+   FCL_Funcl of id * pexp
 
 
 type 
