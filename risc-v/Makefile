@@ -1,13 +1,22 @@
-
 SAIL:=../src/sail.native
-SOURCES:=riscv.sail ../etc/regfp.sail riscv_regfp.sail
-all: lem_ast shallow
+LEM:=../../lem/lem
 
-lem_ast: $(SOURCES) $(SAIL)
-	$(SAIL) -lem_ast $(SOURCES)
+SOURCES:=riscv_types.sail riscv.sail ../etc/regfp.sail riscv_regfp.sail
 
-shallow: $(SOURCES) $(SAIL)
-	$(SAIL) -lem_lib Riscv_extras_embed -lem $(SOURCES)
+
+all: riscv.lem riscv.ml riscv_embed.lem
+
+riscv.lem: $(SOURCES)
+	$(SAIL) -lem_ast -o riscv $(SOURCES)
+
+riscv.ml: riscv.lem ../src/lem_interp/interp_ast.lem
+	$(LEM) -ocaml -lib ../src/lem_interp/ $<
+
+
+riscv_embed.lem: $(SOURCES)
+# also generates riscv_embed_sequential.lem, riscv_embed_types.lem, riscv_toFromInterp.lem
+	$(SAIL) -lem -lem_lib Riscv_extras_embed -o riscv $(SOURCES)
 
 clean:
-	rm -f riscv.lem riscv_embed*.lem
+	rm -f riscv.lem riscv.ml
+	rm -f riscv_embed*.lem riscv_toFromInterp.lem

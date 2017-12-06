@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -41,6 +49,29 @@
 (*========================================================================*)
 
 open import Pervasives_extra
+
+
+
+class ( EnumerationType 'a ) 
+  val toNat : 'a -> nat
+end
+
+
+val enumeration_typeCompare : forall 'a. EnumerationType 'a => 'a -> 'a -> ordering
+let ~{ocaml} enumeration_typeCompare e1 e2 =
+  compare (toNat e1) (toNat e2)
+let inline {ocaml} enumeration_typeCompare = defaultCompare
+
+ 
+default_instance forall 'a. EnumerationType 'a => (Ord 'a)
+  let compare = enumeration_typeCompare
+  let (<)  r1 r2 = (enumeration_typeCompare r1 r2) = LT
+  let (<=) r1 r2 = (enumeration_typeCompare r1 r2) <> GT
+  let (>)  r1 r2 = (enumeration_typeCompare r1 r2) = GT
+  let (>=) r1 r2 = (enumeration_typeCompare r1 r2) <> LT
+end
+
+
 
 (* maybe isn't a member of type Ord - this should be in the Lem standard library*)
 instance forall 'a. Ord 'a => (Ord (maybe 'a))
@@ -212,6 +243,28 @@ instance (Ord byte)
   let (<=) = byteLessEq
   let (>)  = byteGreater
   let (>=) = byteGreaterEq
+end
+
+let ~{ocaml} opcodeCompare (Opcode o1) (Opcode o2) =
+  compare o1 o2
+let {ocaml} opcodeCompare = defaultCompare
+
+let ~{ocaml} opcodeLess b1 b2      = opcodeCompare b1 b2 =  LT
+let ~{ocaml} opcodeLessEq b1 b2    = opcodeCompare b1 b2 <> GT
+let ~{ocaml} opcodeGreater b1 b2   = opcodeCompare b1 b2 =  GT
+let ~{ocaml} opcodeGreaterEq b1 b2 = opcodeCompare b1 b2 <> LT
+
+let inline {ocaml} opcodeLess      = defaultLess
+let inline {ocaml} opcodeLessEq    = defaultLessEq
+let inline {ocaml} opcodeGreater   = defaultGreater
+let inline {ocaml} opcodeGreaterEq = defaultGreaterEq
+
+instance (Ord opcode)
+  let compare = opcodeCompare
+  let (<)  = opcodeLess
+  let (<=) = opcodeLessEq
+  let (>)  = opcodeGreater
+  let (>=) = opcodeGreaterEq
 end
 
 let addressCompare (Address b1 i1) (Address b2 i2) = compare i1 i2
@@ -419,6 +472,8 @@ end
 
 (* Data structures for building up instructions *)
 
+(* careful: changes in the read/write/barrier kinds have to be
+   reflected in deep_shallow_convert *)
 type read_kind =
   (* common reads *)
   | Read_plain
@@ -426,6 +481,12 @@ type read_kind =
   | Read_reserve
   (* AArch64 reads *)
   | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
+  (* RISC-V reads *)
+  | Read_RISCV_acquire  | Read_RISCV_strong_acquire
+  | Read_RISCV_reserved | Read_RISCV_reserved_acquire
+  | Read_RISCV_reserved_strong_acquire
+  (* x86 reads *)
+  | Read_X86_locked (* the read part of a lock'd instruction (rmw) *)
 
 instance (Show read_kind)
   let show = function
@@ -435,6 +496,12 @@ instance (Show read_kind)
     | Read_exclusive -> "Read_exclusive"
     | Read_exclusive_acquire -> "Read_exclusive_acquire"
     | Read_stream -> "Read_stream"
+    | Read_RISCV_acquire -> "Read_RISCV_acquire"
+    | Read_RISCV_strong_acquire -> "Read_RISCV_strong_acquire"
+    | Read_RISCV_reserved -> "Read_RISCV_reserved"
+    | Read_RISCV_reserved_acquire -> "Read_RISCV_reserved_acquire"
+    | Read_RISCV_reserved_strong_acquire -> "Read_RISCV_reserved_strong_acquire"
+    | Read_X86_locked -> "Read_X86_locked"
   end
 end
 
@@ -445,6 +512,12 @@ type write_kind =
   | Write_conditional
   (* AArch64 writes *)
   | Write_release | Write_exclusive | Write_exclusive_release
+  (* RISC-V *)
+  | Write_RISCV_release     | Write_RISCV_strong_release
+  | Write_RISCV_conditional | Write_RISCV_conditional_release
+  | Write_RISCV_conditional_strong_release
+  (* x86 writes *)
+  | Write_X86_locked (* the write part of a lock'd instruction (rmw) *)
 
 instance (Show write_kind)
   let show = function
@@ -453,6 +526,12 @@ instance (Show write_kind)
     | Write_release -> "Write_release"
     | Write_exclusive -> "Write_exclusive"
     | Write_exclusive_release -> "Write_exclusive_release"
+    | Write_RISCV_release -> "Write_RISCV_release"
+    | Write_RISCV_strong_release -> "Write_RISCV_strong_release"
+    | Write_RISCV_conditional -> "Write_RISCV_conditional"
+    | Write_RISCV_conditional_release -> "Write_RISCV_conditional_release"
+    | Write_RISCV_conditional_strong_release -> "Write_RISCV_conditional_strong_release"
+    | Write_X86_locked -> "Write_X86_locked"
   end
 end
 
@@ -468,7 +547,12 @@ type barrier_kind =
   (* RISC-V barriers *)
   | Barrier_RISCV_rw_rw
   | Barrier_RISCV_r_rw
+  | Barrier_RISCV_r_r
   | Barrier_RISCV_rw_w
+  | Barrier_RISCV_w_w
+  | Barrier_RISCV_i
+  (* X86 *)
+  | Barrier_x86_MFENCE
 
 
 instance (Show barrier_kind)
@@ -486,6 +570,13 @@ instance (Show barrier_kind)
     | Barrier_ISB -> "Barrier_ISB"
     | Barrier_TM_COMMIT -> "Barrier_TM_COMMIT"
     | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
+    | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
+    | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
+    | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
+    | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
+    | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
+    | Barrier_RISCV_i     -> "Barrier_RISCV_i"
+    | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
   end
 end
 
@@ -502,15 +593,15 @@ instance (Show trans_kind)
 end
 
 type instruction_kind = 
-  | IK_barrier of barrier_kind 
-  | IK_mem_read of read_kind 
+  | IK_barrier   of barrier_kind
+  | IK_mem_read  of read_kind
   | IK_mem_write of write_kind
-(* SS reinstating cond_branches
-at present branches are not distinguished in the instruction_kind;
-they just have particular nias (and will be IK_simple *)
-  | IK_cond_branch 
-(*  | IK_uncond_branch *)
-  | IK_trans of trans_kind
+  | IK_mem_rmw   of (read_kind * write_kind)
+  | IK_cond_branch
+  (* unconditional branches are not distinguished in the instruction_kind;
+  they just have particular nias (and will be IK_simple *)
+  (* | IK_uncond_branch *)
+  | IK_trans     of trans_kind
   | IK_simple
 
 
@@ -658,6 +749,13 @@ let ~{ocaml} barrier_number = function
     | Barrier_ISB -> 10
     | Barrier_TM_COMMIT -> 11
     | Barrier_MIPS_SYNC -> 12
+    | Barrier_RISCV_rw_rw -> 13
+    | Barrier_RISCV_r_rw -> 14
+    | Barrier_RISCV_r_r -> 15
+    | Barrier_RISCV_rw_w -> 16
+    | Barrier_RISCV_w_w -> 17
+    | Barrier_RISCV_i -> 18
+    | Barrier_x86_MFENCE -> 19
   end
 
 let ~{ocaml} barrier_kindCompare bk1 bk2 =
@@ -742,21 +840,20 @@ instance (Ord barrier_kind)
   let (>=) = barrier_kindGreaterEq
 end
 
-
 type event = 
-| E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
-| E_read_memt of read_kind * address_lifted * nat * maybe (list reg_name)
-| E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
-| E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
-| E_excl_res
-| E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
-| E_write_memvt of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name)
-| E_barrier of barrier_kind
-| E_footprint 
-| E_read_reg of reg_name
-| E_write_reg of reg_name * register_value
-| E_escape
-| E_error of string 
+  | E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
+  | E_read_memt of read_kind * address_lifted * nat * maybe (list reg_name)
+  | E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
+  | E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
+  | E_excl_res
+  | E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
+  | E_write_memvt of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name)
+  | E_barrier of barrier_kind
+  | E_footprint 
+  | E_read_reg of reg_name
+  | E_write_reg of reg_name * register_value
+  | E_escape
+  | E_error of string 
 
 
 let eventCompare e1 e2 = 

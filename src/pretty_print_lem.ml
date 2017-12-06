@@ -9,7 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
 (*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -1191,7 +1198,6 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
               align (separate space [string "regname"; doc_int size; doc_int i1; string dir;
                                      break 0 ^^ brackets (align doc_rids)]))
     | _ -> raise (Reporting_basic.err_unreachable l "register with non-constant indices")
-
 
 let doc_rec_lem (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> space

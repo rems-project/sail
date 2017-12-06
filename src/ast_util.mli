@@ -10,7 +10,13 @@
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
 (*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
 (*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -46,6 +52,7 @@ open Ast
 open Big_int
 
 val no_annot : unit annot
+val gen_loc : Parse_ast.l -> Parse_ast.l
 
 val mk_id : string -> id
 val mk_kid : string -> kid
@@ -132,6 +139,7 @@ val nc_or : n_constraint -> n_constraint -> n_constraint
 val nc_true : n_constraint
 val nc_false : n_constraint
 val nc_set : kid -> big_int list -> n_constraint
+val nc_int_set : kid -> int list -> n_constraint
 
 (* Negate a n_constraint. Note that there's no NC_not constructor, so
    this flips all the inequalites a the n_constraint leaves and uses

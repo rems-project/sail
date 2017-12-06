@@ -1,3 +1,52 @@
+(**************************************************************************)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(**************************************************************************)
 
 open Ast
 open Ast_util
@@ -169,43 +218,90 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
   | _ -> string (string_of_pat pat)
 
+(* if_block_x is true if x should be printed like a block, i.e. with
+   newlines. Blocks are automatically printed as blocks, so this
+   returns false for them. *)
+let if_block_then (E_aux (e_aux, _)) =
+  match e_aux with
+  | E_assign _ | E_if _ -> true
+  | _ -> false
+
+let if_block_else (E_aux (e_aux, _)) =
+  match e_aux with
+  | E_assign _ -> true
+  | _ -> false
+
+let fixities =
+  let fixities' =
+    List.fold_left
+      (fun r (x, y) -> Bindings.add x y r)
+      Bindings.empty
+      [
+        (mk_id "^", (InfixR, 8));
+        (mk_id "*", (InfixL, 7));
+        (mk_id "+", (InfixL, 6));
+        (mk_id "-", (InfixL, 6));
+        (mk_id "!=", (Infix, 4));
+        (mk_id ">", (Infix, 4));
+        (mk_id "<", (Infix, 4));
+        (mk_id ">=", (Infix, 4));
+        (mk_id "<=", (Infix, 4));
+        (mk_id "&", (InfixR, 3));
+        (mk_id "|", (InfixR, 2));
+      ]
+  in
+  ref (fixities' : (prec * int) Bindings.t)
+
 let rec doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
+  | E_block [] -> string "()"
   | E_block [exp] -> doc_exp exp
   | E_block exps -> surround 2 0 lbrace (doc_block exps) rbrace
   | E_nondet exps -> assert false
   (* This is mostly for the -convert option *)
   | E_app_infix (x, id, y) when Id.compare (mk_id "quot") id == 0 ->
      separate space [doc_atomic_exp x; string "/"; doc_atomic_exp y]
-  | E_app_infix (x, id, y) -> separate space [doc_atomic_exp x; doc_id id; doc_atomic_exp y]
+  | E_app_infix _ -> doc_infix 0 exp
   | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
+
+  (* Various rules to try to format if blocks nicely based on content *)
+  | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp && if_block_else else_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
+     ^/^ (string "else" ^//^ doc_exp else_exp)
+  | E_if (if_exp, then_exp, (E_aux (E_if _, _) as else_exp)) when if_block_then then_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
+     ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
+  | E_if (if_exp, then_exp, else_exp) when if_block_else else_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp])
+     ^^ space ^^ (string "else" ^//^ doc_exp else_exp)
+  | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp ->
+     (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
+     ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
   | E_if (if_exp, then_exp, else_exp) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
+
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> string "E_cons"
-  | E_record fexps -> string "<|" ^^ doc_fexps fexps ^^ string "|>"
+  | E_record fexps -> separate space [string "record"; string "{"; doc_fexps fexps; string "}"]
   | E_loop (While, cond, exp) ->
      separate space [string "while"; doc_exp cond; string "do"; doc_exp exp]
   | E_loop (Until, cond, exp) ->
      separate space [string "repeat"; doc_exp exp; string "until"; doc_exp cond]
-  | E_record_update (exp, fexps) -> separate space [string "<|"; doc_exp exp; string "with"; doc_fexps fexps; string "|>"]
+  | E_record_update (exp, fexps) ->
+     separate space [string "{"; doc_exp exp; string "with"; doc_fexps fexps; string "}"]
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
-  | E_internal_let (lexp, exp1, exp2) ->
-     let le =
-       prefix 2 1
-         (separate space [string "internal_let"; doc_lexp lexp; equals])
-         (doc_exp exp1) in
-     doc_op (string "in") le (doc_exp exp2)
   | E_internal_plet (pat, exp1, exp2) ->
      let le =
        prefix 2 1
          (separate space [string "internal_plet"; doc_pat pat; equals])
          (doc_exp exp1) in
      doc_op (string "in") le (doc_exp exp2)
+  | E_internal_let (lexp, binding, exp) ->
+     separate space [string "var"; doc_lexp lexp; equals; doc_exp binding; string "in"; doc_exp exp]
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
   | E_for (id, exp1, exp2, exp3, order, exp4) ->
@@ -225,12 +321,29 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
        | _ -> header ^//^ doc_exp exp4
      end
   (* Resugar an assert with an empty message *)
-  | E_throw exp -> assert false
+  | E_throw exp -> string "throw" ^^ parens (doc_exp exp)
   | E_try (exp, pexps) -> assert false
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
   | E_internal_return exp -> string "internal_return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
      separate space [string "2"; string "^"; doc_atomic_exp exp]
+  | _ -> doc_atomic_exp exp
+and doc_infix n (E_aux (e_aux, _) as exp) =
+  match e_aux with
+  | E_app_infix (l, op, r) when n < 10 ->
+     begin
+       try
+         match Bindings.find op !fixities with
+         | (Infix, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r]
+         | (Infix, m) when m < n -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
+         | (InfixL, m) when m >= n -> separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r]
+         | (InfixL, m) when m < n -> parens (separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r])
+         | (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r]
+         | (InfixR, m) when m < n -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r])
+       with
+       | Not_found ->
+          separate space [doc_atomic_exp l; doc_id op; doc_atomic_exp r]
+     end
   | _ -> doc_atomic_exp exp
 and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
@@ -256,10 +369,16 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
   | _ -> parens (doc_exp exp)
+and doc_fexps (FES_aux (FES_Fexps (fexps, _), _)) =
+  separate_map (comma ^^ space) doc_fexp fexps
+and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+  separate space [doc_id id; equals; doc_exp exp]
 and doc_block = function
   | [] -> string "()"
   | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
+  | [E_aux (E_internal_let (lexp, binding, E_aux (E_block exps, _)), _)] ->
+     separate space [string "var"; doc_lexp lexp; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
   | [exp] -> doc_exp exp
   | exp :: exps -> doc_exp exp ^^ semi ^^ hardline ^^ doc_block exps
 and doc_lexp (LEXP_aux (l_aux, _) as lexp) =
@@ -281,9 +400,6 @@ and doc_pexp (Pat_aux (pat_aux, _)) =
   | Pat_exp (pat, exp) -> separate space [doc_pat pat; string "=>"; doc_exp exp]
   | Pat_when (pat, wh, exp) ->
      separate space [doc_pat pat; string "if"; doc_exp wh; string "=>"; doc_exp exp]
-and doc_fexps (FES_aux (FES_Fexps (fexps, _), _)) = separate_map (semi ^^ space) doc_fexp fexps
-and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
-  doc_op (string "=") (doc_id id) (doc_exp exp)
 and doc_letbind (LB_aux (lb_aux, _)) =
   match lb_aux with
   | LB_val (pat, exp) ->
@@ -348,17 +464,7 @@ let doc_spec (VS_aux(v,_)) =
     let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
       utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
     let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"]) in
-    if docs = [] then empty else braces (separate (comma ^^ space) docs)
-    (* function
-    | Some s ->
-       let ext_for backend = utf8string ("\"" ^ String.escaped (s backend) ^  "\"") in
-       let extern =
-         if s "ocaml" = s "lem"
-         then ext_for "ocaml"
-         else separate space [lbrace; string "ocaml:"; ext_for "ocaml"; string "lem:"; ext_for "lem"; rbrace]
-       in
-       equals ^^ space ^^ extern ^^ space
-    | None -> empty *)
+    if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->
@@ -395,9 +501,13 @@ let rec doc_def def = group (match def with
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_internal_mutrec f_defs -> separate_map hardline doc_fundef f_defs
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
+  | DEF_internal_mutrec fundefs ->
+     (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs)
+     ^^ hardline ^^ string "}"
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
   | DEF_fixity (prec, n, id) ->
+     fixities := Bindings.add id (prec, int_of_big_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]

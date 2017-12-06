@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -44,6 +52,7 @@ open Ast
 open Ast_util
 
 val opt_undefined_gen : bool ref
+val opt_magic_hash : bool ref
 
 val process_ast : order -> Parse_ast.defs -> unit defs
 

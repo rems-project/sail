@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -121,6 +129,7 @@ let kw_table =
      ("in",			 (fun x -> In));
      ("inc",                     (fun _ -> Inc));
      ("let",                     (fun x -> Let_));
+     ("record",                  (fun _ -> Record));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
      ("pure",                    (fun x -> Pure));
@@ -142,6 +151,7 @@ let kw_table =
      ("until",                   (fun _ -> Until));
      ("while",                   (fun _ -> While));
      ("do",                      (fun _ -> Do));
+     ("mutual",                  (fun _ -> Mutual));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
@@ -169,7 +179,7 @@ let binarydigit = ['0'-'1']
 let hexdigit = ['0'-'9''A'-'F''a'-'f']
 let alphanum = letter|digit
 let startident = letter|'_'
-let ident = alphanum|['_''\'']
+let ident = alphanum|['_''\'''#']
 let tyvar_start = '\''
 let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''@''^''|']
 let operator = (oper_char+ ('_' ident)?)
@@ -200,6 +210,8 @@ rule token = parse
   | ";"                                 { Semi }
   | "*"                                 { (Star(r"*")) }
   | "_"                                 { Under }
+  | "[|"                                { LsquareBar }
+  | "|]"                                { RsquareBar }
   | "{|"                                { LcurlyBar }
   | "|}"                                { RcurlyBar }
   | "|"                                 { Bar }

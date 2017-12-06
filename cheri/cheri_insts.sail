@@ -32,6 +32,159 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
+(* Old encodings *)
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b000) = Some(CGetPerm(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b001) = Some(CGetType(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b010) = Some(CGetBase(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b011) = Some(CGetLen(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b101) = Some(CGetTag(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b110) = Some(CGetSealed(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd :    0b00000 : 0b00000000 : 0b100) = Some(CGetCause(rd))
+
+function clause decode (0b010010 : 0b00110 : 0b000000000000000000000) = Some(CReturn)
+
+function clause decode (0b010010 : 0b01101 : (regno) rd : (regno) cb : 0b00000000 : 0b010) = Some(CGetOffset(rd, cb)) (* NB encoding does not follow pattern *)
+function clause decode (0b010010 : 0b00100 : 0b00000 : 0b00000 : (regno) rt : 0b000 : 0b100) = Some(CSetCause(rt))
+function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b000) = Some(CAndPerm(cd, cb, rt))
+function clause decode (0b010010 : 0b01100 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b000) = Some(CToPtr(rd, cb, ct))
+
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b000) = Some(CPtrCmp(rd, cb, ct, CEQ))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b001) = Some(CPtrCmp(rd, cb, ct, CNE))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b010) = Some(CPtrCmp(rd, cb, ct, CLT))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b011) = Some(CPtrCmp(rd, cb, ct, CLE))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b100) = Some(CPtrCmp(rd, cb, ct, CLTU))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b101) = Some(CPtrCmp(rd, cb, ct, CLEU))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b110) = Some(CPtrCmp(rd, cb, ct, CEXEQ))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b111) = Some(CPtrCmp(rd, cb, ct, CNEXEQ))
+function clause decode (0b010010 : 0b01101 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b000) = Some(CIncOffset(cd, cb, rt))
+function clause decode (0b010010 : 0b01101 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b001) = Some(CSetOffset(cd, cb, rt))
+function clause decode (0b010010 : 0b00001 : (regno) cd : (regno) cb : (regno) rt : 0b000000)      = Some(CSetBounds(cd, cb, rt))
+
+function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : 0b00000 : 0b000: 0b101)    = Some(CClearTag(cd, cb))
+function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : (regno) rt : 0b000: 0b111) = Some(CFromPtr(cd, cb, rt))
+function clause decode (0b010010 : 0b01011 : (regno) cs : 0b00000 : (regno) rt : 0b000: 0b000) = Some(CCheckPerm(cs, rt))
+function clause decode (0b010010 : 0b01011 : (regno) cs : (regno) cb : 0b00000 : 0b000: 0b001) = Some(CCheckType(cs, cb))
+function clause decode (0b010010 : 0b00010 : (regno) cd : (regno) cs : (regno) ct : 0b000: 0b000) = Some(CSeal(cd, cs, ct))
+function clause decode (0b010010 : 0b00011 : (regno) cd : (regno) cs : (regno) ct : 0b000: 0b000) = Some(CUnseal(cd, cs, ct))
+function clause decode (0b010010 : 0b00111 : (regno) cd : (regno) cb : 0b00000 : 0b000000) = Some(CJALR(cd, cb, true)) (* CJALR *)
+function clause decode (0b010010 : 0b01000 : 0b00000    : (regno) cb : 0b00000 : 0b000000) = Some(CJALR(0b00000, cb, false)) (* CJR *)
+
+
+(* 
+New encodings as per CHERI ISA Appendix B.2.  
+
+NB: Must be careful about order of matching because unused register
+fields are re-used as additional function codes.
+*)
+
+(* One arg *)
+function clause decode (0b010010 : 0b00000 : (regno) rd :    0b00001 :    0b11111 : 0b111111) = Some(CGetCause(rd))
+function clause decode (0b010010 : 0b00000 : (regno) rs :    0b00010 :    0b11111 : 0b111111) = Some(CSetCause(rs))
+function clause decode (0b010010 : 0b00000 : (regno) cd :    0b00000 :    0b11111 : 0b111111) = Some(CGetPCC(cd))
+function clause decode (0b010010 : 0b00000 : (regno) cb :    0b00011 :    0b11111 : 0b111111) = Some(CJALR(0b00000, cb, false)) (* CJR *)
+
+(* Two arg *)
+function clause decode (0b010010 : 0b00000 : (regno) cs : (regno) rt :    0b01000 : 0b111111) = Some(CCheckPerm(cs, rt))
+function clause decode (0b010010 : 0b00000 : (regno) cs : (regno) cb :    0b01001 : 0b111111) = Some(CCheckType(cs, cb))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb :    0b01011 : 0b111111) = Some(CClearTag(cd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs :    0b01010 : 0b111111) = Some(CMOVX(cd, cs, 0b00000, false)) (* CMOVE *)
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb :    0b01100 : 0b111111) = Some(CJALR(cd, cb, true)) (* CJALR *)
+
+(* Capability Inspection *)
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00000 : 0b111111) = Some(CGetPerm(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00001 : 0b111111) = Some(CGetType(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00010 : 0b111111) = Some(CGetBase(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00011 : 0b111111) = Some(CGetLen(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00100 : 0b111111) = Some(CGetTag(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00101 : 0b111111) = Some(CGetSealed(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb :    0b00110 : 0b111111) = Some(CGetOffset(rd, cb))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) rs :    0b00111 : 0b111111) = Some(CGetPCCSetOffset(cd, rs))
+
+(* Three operand *)
+
+(* Capability Modification *)
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) ct : 0b001011) = Some(CSeal(cd, cs, ct))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) ct : 0b001100) = Some(CUnseal(cd, cs, ct))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rt : 0b001101) = Some(CAndPerm(cd, cs, rt))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rt : 0b001111) = Some(CSetOffset(cd, cs, rt))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rt : 0b001000) = Some(CSetBounds(cd, cs, rt))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rt : 0b001001) = Some(CSetBoundsExact(cd, cs, rt))
+
+
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b010001) = Some(CIncOffset(cd, cb, rt))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011101) = Some(CBuildCap(cd, cb, ct))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011110) = Some(CCopyType(cd, cb, ct))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) ct : 0b011111) = Some(CCSeal(cd, cs, ct))
+
+(* Pointer Arithmetic *)
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b010010) = Some(CToPtr(rd, cb, ct))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rs : 0b010011) = Some(CFromPtr(cd, cb, rs))
+function clause decode (0b010010 : 0b00000 : (regno) rt : (regno) cb : (regno) cs : 0b001010) = Some(CSub(rt, cb, cs))
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rs : 0b011011) = Some(CMOVX(cd, cs, rs, false)) (* CMOVZ *)
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) rs : 0b011100) = Some(CMOVX(cd, cs, rs, true))  (* CMOVN *)
+
+(* Pointer Comparison *)
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b010100) = Some(CPtrCmp(rd, cb, cs, CEQ))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b010101) = Some(CPtrCmp(rd, cb, cs, CNE))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b010110) = Some(CPtrCmp(rd, cb, cs, CLT))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b010111) = Some(CPtrCmp(rd, cb, cs, CLE))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b011000) = Some(CPtrCmp(rd, cb, cs, CLTU))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b011001) = Some(CPtrCmp(rd, cb, cs, CLEU))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b011010) = Some(CPtrCmp(rd, cb, cs, CEXEQ))
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) cs : 0b100001) = Some(CPtrCmp(rd, cb, cs, CNEXEQ))
+
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b100000) = Some(CTestSubset(rd, cb, ct))
+
+function clause decode (0b010010 : 0b01001 : (regno) cd : (bit[16]) imm) = Some(CBX(cd, imm, true))  (* CBTU *)
+function clause decode (0b010010 : 0b01010 : (regno) cd : (bit[16]) imm) = Some(CBX(cd, imm, false)) (* CBTS *)
+function clause decode (0b010010 : 0b10001 : (regno) cd : (bit[16]) imm) = Some(CBZ(cd, imm, false)) (* CBEZ *)
+function clause decode (0b010010 : 0b10010 : (regno) cd : (bit[16]) imm) = Some(CBZ(cd, imm, true))  (* CBNZ *)
+
+function clause decode (0b010010 : 0b00101 :    0b00000 :    0b00000 : 0b11111111111) = Some(CReturn)
+function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb, selector))
+
+function clause decode (0b010010 : 0b01111 : 0b00000 : (bit[16]) imm) = Some(ClearRegs(GPLo, imm))
+function clause decode (0b010010 : 0b01111 : 0b00001 : (bit[16]) imm) = Some(ClearRegs(GPHi, imm))
+function clause decode (0b010010 : 0b01111 : 0b00010 : (bit[16]) imm) = Some(ClearRegs(CLo,  imm))
+function clause decode (0b010010 : 0b01111 : 0b00011 : (bit[16]) imm) = Some(ClearRegs(CHi,  imm))
+
+function clause decode (0b010010 : 0b10011 : (regno) cd : (regno) cb : (bit[11]) imm) = Some(CIncOffsetImmediate(cd, cb, imm))
+function clause decode (0b010010 : 0b10100 : (regno) cd : (regno) cb : (bit[11]) imm) = Some(CSetBoundsImmediate(cd, cb, imm))
+
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CLoad(rd, cb, rt, offset, false, B, false)) (* CLBU *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b00) = Some(CLoad(rd, cb, rt, offset, true,  B, false)) (* CLB *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CLoad(rd, cb, rt, offset, false, H, false)) (* CLHU *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b01) = Some(CLoad(rd, cb, rt, offset, true,  H, false)) (* CLH *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CLoad(rd, cb, rt, offset, false, W, false)) (* CLWU *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b10) = Some(CLoad(rd, cb, rt, offset, true,  W, false)) (* CLW *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CLoad(rd, cb, rt, offset, false, D, false)) (* CLD *)
+
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b00) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, B, true)) (* CLLBU *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b00) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  B, true)) (* CLLB  *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b01) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, H, true)) (* CLLHU *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b01) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  H, true)) (* CLLH  *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b10) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, W, true)) (* CLLWU *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b10) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  W, true)) (* CLLW  *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b11) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, D, true)) (* CLLD  *)
+
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CStore(rs, cb, rt, 0b00000, offset, B, false)) (* CSB *)
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CStore(rs, cb, rt, 0b00000, offset, H, false)) (* CSH *)
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CStore(rs, cb, rt, 0b00000, offset, W, false)) (* CSW *)
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CStore(rs, cb, rt, 0b00000, offset, D, false)) (* CSD *)
+
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b00) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, B, true)) (* CSCB *)
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b01) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, H, true)) (* CSCH *)
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b10) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, W, true)) (* CSCW *)
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b11) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, D, true)) (* CSCD *)
+
+function clause decode (0b111110 : (regno) cs : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CSC(cs, cb, rt, 0b00000, offset, false))
+function clause decode (0b010010 : 0b10000 : (regno) cs : (regno) cb: (regno) rd : 0b00 : 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))
+
+function clause decode (0b110110 : (regno) cd : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CLC(cd, cb, rt, offset, false))
+function clause decode (0b010010 : 0b10000 : (regno) cd : (regno) cb: 0b0000000 : 0b1111) = Some(CLC(cd, cb, 0b00000, 0b00000000000, true))
+
+function clause decode (0b010010 : 0b00100 : (regno) rt : 0x0006) = Some(C2Dump(rt))
+
 (* Operations that extract parts of a capability into GPR *)
 
 union ast member (regno, regno) CGetPerm
@@ -41,15 +194,6 @@ union ast member (regno, regno) CGetLen
 union ast member (regno, regno) CGetTag
 union ast member (regno, regno) CGetSealed
 union ast member (regno, regno) CGetOffset
-
-function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b000) = Some(CGetPerm(rd, cb))
-function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b001) = Some(CGetType(rd, cb))
-function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b010) = Some(CGetBase(rd, cb))
-function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b011) = Some(CGetLen(rd, cb))
-(* NB CGetCause Handled separately *)
-function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b101) = Some(CGetTag(rd, cb))
-function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : 0b00000000 : 0b110) = Some(CGetSealed(rd, cb))
-function clause decode (0b010010 : 0b01101 : (regno) rd : (regno) cb : 0b00000000 : 0b010) = Some(CGetOffset(rd, cb)) (* NB encoding does not follow pattern *)
 
 function clause execute (CGetPerm(rd, cb)) =
 {
@@ -141,7 +285,6 @@ function clause execute (CGetSealed(rd, cb)) =
 }
 
 union ast member regno CGetPCC
-function clause decode (0b010010 : 0b00000 : (regno) cd : 0b00000 : 0b11111 : 0b111111) = Some(CGetPCC(cd))
 function clause execute (CGetPCC(cd)) =
 {
   (* START_CGetPCC *)
@@ -158,7 +301,6 @@ function clause execute (CGetPCC(cd)) =
 
 
 union ast member (regno, regno) CGetPCCSetOffset
-function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) rs : 0b00111 : 0b111111) = Some(CGetPCCSetOffset(cd, rs))
 function clause execute (CGetPCCSetOffset(cd, rs)) =
 {
   (* START_CGetPCCSetOffset *)
@@ -178,7 +320,6 @@ function clause execute (CGetPCCSetOffset(cd, rs)) =
 (* Get and Set CP2 cause register *)
 
 union ast member regno CGetCause
-function clause decode (0b010010 : 0b00000 : (regno) rd : 0b00000 : 0b00000000 : 0b100) = Some(CGetCause(rd))
 function clause execute (CGetCause(rd)) = 
 {
   (* START_CGetCause *)
@@ -191,7 +332,6 @@ function clause execute (CGetCause(rd)) =
 }
 
 union ast member (regno) CSetCause
-function clause decode (0b010010 : 0b00100 : 0b00000 : 0b00000 : (regno) rt : 0b000 : 0b100) = Some(CSetCause(rt))
 function clause execute (CSetCause((regno) rt)) = 
 {
   (* START_CSetCause *)
@@ -208,7 +348,6 @@ function clause execute (CSetCause((regno) rt)) =
 }
 
 union ast member regregreg CAndPerm
-function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b000) = Some(CAndPerm(cd, cb, rt))
 function clause execute(CAndPerm(cd, cb, rt)) = 
 {
   (* START_CAndPerm *)
@@ -233,7 +372,6 @@ function clause execute(CAndPerm(cd, cb, rt)) =
 
 
 union ast member regregreg CToPtr
-function clause decode (0b010010 : 0b01100 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b000) = Some(CToPtr(rd, cb, ct))
 function clause execute(CToPtr(rd, cb, ct)) = 
 {
   (* START_CToPtr *)
@@ -267,7 +405,6 @@ function clause execute(CToPtr(rd, cb, ct)) =
 
 
 union ast member regregreg CSub
-function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b001010) = Some(CSub(rd, cb, ct))
 function clause execute(CSub(rd, cb, ct)) = 
 {
   (* START_CSub *)
@@ -286,15 +423,6 @@ function clause execute(CSub(rd, cb, ct)) =
 }
 
 union ast member (regno, regno, regno, CPtrCmpOp) CPtrCmp
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b000) = Some(CPtrCmp(rd, cb, ct, CEQ))
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b001) = Some(CPtrCmp(rd, cb, ct, CNE))
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b010) = Some(CPtrCmp(rd, cb, ct, CLT))
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b011) = Some(CPtrCmp(rd, cb, ct, CLE))
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b100) = Some(CPtrCmp(rd, cb, ct, CLTU))
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b101) = Some(CPtrCmp(rd, cb, ct, CLEU))
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b110) = Some(CPtrCmp(rd, cb, ct, CEXEQ))
-function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b111) = Some(CPtrCmp(rd, cb, ct, CNEXEQ))
-
 function clause execute(CPtrCmp(rd, cb, ct, op)) = 
 {
   (* START_CPtrCmp *)
@@ -341,7 +469,6 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
 }
 
 union ast member regregreg CIncOffset
-function clause decode (0b010010 : 0b01101 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b000) = Some(CIncOffset(cd, cb, rt))
 function clause execute (CIncOffset(cd, cb, rt)) =
 {
   (* START_CIncOffset *)
@@ -363,8 +490,29 @@ function clause execute (CIncOffset(cd, cb, rt)) =
   (* END_CIncOffset *)
 }
 
+union ast member (regno, regno, bit[11]) CIncOffsetImmediate
+function clause execute (CIncOffsetImmediate(cd, cb, imm)) =
+{
+  (* START_CIncOffsetImmediate *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  let (bit[64]) imm64 = EXTZ(imm) in
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if ((cb_val.tag) & (cb_val.sealed)) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else
+    let (success, newCap) = incCapOffset(cb_val, imm64) in
+    if (success) then
+        writeCapReg(cd, newCap)
+    else
+        writeCapReg(cd, int_to_cap(getCapBase(cb_val) + imm64))
+  (* END_CIncOffsetImmediate *)
+}
+
 union ast member regregreg CSetOffset
-function clause decode (0b010010 : 0b01101 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b001) = Some(CSetOffset(cd, cb, rt))
 function clause execute (CSetOffset(cd, cb, rt)) =
 {
   (* START_CSetOffset *)
@@ -387,7 +535,6 @@ function clause execute (CSetOffset(cd, cb, rt)) =
 }
 
 union ast member regregreg CSetBounds
-function clause decode (0b010010 : 0b00001 : (regno) cd : (regno) cb : (regno) rt : 0b000000) = Some(CSetBounds(cd, cb, rt))
 function clause execute (CSetBounds(cd, cb, rt)) =
 {
   (* START_CSetBounds *)
@@ -416,9 +563,36 @@ function clause execute (CSetBounds(cd, cb, rt)) =
   (* END_CSetBounds *)
 }
 
+union ast member (regno, regno, bit[11]) CSetBoundsImmediate
+function clause execute (CSetBoundsImmediate(cd, cb, imm)) =
+{
+  (* START_CSetBoundsImmedate *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  immU   := unsigned(imm);
+  cursor := getCapCursor(cb_val);
+  base   := getCapBase(cb_val);
+  top    := getCapTop(cb_val);
+  newTop := cursor + immU;
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else if (cursor < base) then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else if (newTop > top) then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else
+    let (_, newCap) = setCapBounds(cb_val, (bit[64]) cursor, (bit[65]) newTop) in
+    writeCapReg(cd, newCap) (* ignore exact *)
+  (* END_CSetBoundsImmediate *)
+}
 
 union ast member regregreg CSetBoundsExact
-function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b001001) = Some(CSetBoundsExact(cd, cb, rt))
 function clause execute (CSetBoundsExact(cd, cb, rt)) =
 {
   (* START_CSetBoundsExact *)
@@ -451,7 +625,6 @@ function clause execute (CSetBoundsExact(cd, cb, rt)) =
 }
 
 union ast member (regno, regno) CClearTag
-function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : 0b00000 : 0b000: 0b101) = Some(CClearTag(cd, cb))
 function clause execute (CClearTag(cd, cb)) =
 {
   (* START_CClearTag *)
@@ -469,9 +642,7 @@ function clause execute (CClearTag(cd, cb)) =
 }
 
 union ast member (regno,regno,regno,bool) CMOVX
-function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b011100) = Some(CMOVX(cd, cb, rt, false)) (* CMOVN *)
-function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b011011) = Some(CMOVX(cd, cb, rt, true)) (* CMOVZ *)
-function clause execute (CMOVX(cd, cb, rt, ismovz)) =
+function clause execute (CMOVX(cd, cb, rt, ismovn)) =
 {
   (* START_CMOVX *)
   checkCP2usable();
@@ -479,16 +650,12 @@ function clause execute (CMOVX(cd, cb, rt, ismovz)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
-  else if ((rGPR(rt) == 0) ^ ismovz) then
+  else if ((rGPR(rt) == 0) ^ ismovn) then
     writeCapReg(cd) := readCapReg(cb);
   (* END_CMOVX *)
 }
 
 union ast member (ClearRegSet, bit[16]) ClearRegs
-function clause decode (0b010010 : 0b01111 : 0b00000 : (bit[16]) imm) = Some(ClearRegs(GPLo, imm)) (* ClearLo *)
-function clause decode (0b010010 : 0b01111 : 0b00001 : (bit[16]) imm) = Some(ClearRegs(GPHi, imm)) (* ClearHi *)
-function clause decode (0b010010 : 0b01111 : 0b00010 : (bit[16]) imm) = Some(ClearRegs(CLo, imm))  (* CClearLo *)
-function clause decode (0b010010 : 0b01111 : 0b00011 : (bit[16]) imm) = Some(ClearRegs(CHi, imm))  (* CClearHi *)
 function clause execute (ClearRegs(regset, mask)) =
 {
   (* START_ClearRegs *)
@@ -511,7 +678,6 @@ function clause execute (ClearRegs(regset, mask)) =
 }
 
 union ast member regregreg CFromPtr
-function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : (regno) rt : 0b000: 0b111) = Some(CFromPtr(cd, cb, rt))
 function clause execute (CFromPtr(cd, cb, rt)) =
 {
   (* START_CFromPtr *)
@@ -538,7 +704,6 @@ function clause execute (CFromPtr(cd, cb, rt)) =
 }
 
 union ast member regregreg CBuildCap
-function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011101) = Some(CBuildCap(cd, cb, ct))
 function clause execute (CBuildCap(cd, cb, ct)) =
 {
   (* START_CBuildCap *)
@@ -583,7 +748,6 @@ function clause execute (CBuildCap(cd, cb, ct)) =
 }
 
 union ast member regregreg CCopyType
-function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011110) = Some(CCopyType(cd, cb, ct))
 function clause execute (CCopyType(cd, cb, ct)) =
 {
   (* START_CCopyType *)
@@ -619,7 +783,6 @@ function clause execute (CCopyType(cd, cb, ct)) =
 }
 
 union ast member (regno, regno) CCheckPerm
-function clause decode (0b010010 : 0b01011 : (regno) cs : 0b00000 : (regno) rt : 0b000: 0b000) = Some(CCheckPerm(cs, rt))
 function clause execute (CCheckPerm(cs, rt)) =
 {
   (* START_CCheckPerm *)
@@ -639,7 +802,6 @@ function clause execute (CCheckPerm(cs, rt)) =
 }
 
 union ast member (regno, regno) CCheckType
-function clause decode (0b010010 : 0b01011 : (regno) cs : (regno) cb : 0b00000 : 0b000: 0b001) = Some(CCheckType(cs, cb))
 function clause execute (CCheckType(cs, cb)) =
 {
   (* START_CCheckType *)
@@ -665,8 +827,42 @@ function clause execute (CCheckType(cs, cb)) =
   (* END_CCheckType *)
 }
 
+union ast member regregreg CTestSubset
+function clause execute (CTestSubset(rd, cb, ct)) =
+{
+  (* START_CTestSubset *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  ct_val := readCapReg(ct);
+  ct_top    := getCapTop(ct_val);
+  ct_base   := getCapBase(ct_val);
+  ct_perms  := getCapPerms(ct_val);
+  cb_top    := getCapTop(cb_val);
+  cb_base   := getCapBase(cb_val);
+  cb_perms  := getCapPerms(cb_val);
+  if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if (register_inaccessible(ct)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
+  else {
+     (bit[64]) result := EXTZ(if (cb_val.tag != ct_val.tag) then
+             0x0
+        else if (cb_val.sealed != ct_val.sealed) then
+             0x0
+        else if (ct_base < cb_base) then
+             0x0
+        else if (ct_top > cb_top) then
+             0x0
+        else if ((ct_perms & cb_perms) != cb_perms) then
+             0x0
+        else
+             0x1);
+     wGPR(rd) := result;
+  }
+  (* END_CTestSubset *)
+}
+
 union ast member regregreg CSeal
-function clause decode (0b010010 : 0b00010 : (regno) cd : (regno) cs : (regno) ct : 0b000: 0b000) = Some(CSeal(cd, cs, ct))
 function clause execute (CSeal(cd, cs, ct)) =
 {
   (* START_CSeal *)
@@ -708,7 +904,6 @@ function clause execute (CSeal(cd, cs, ct)) =
 }
 
 union ast member regregreg CCSeal
-function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) ct : 0b011111) = Some(CCSeal(cd, cs, ct))
 function clause execute (CCSeal(cd, cs, ct)) =
 {
   (* START_CCSeal *)
@@ -750,7 +945,6 @@ function clause execute (CCSeal(cd, cs, ct)) =
 }
 
 union ast member regregreg CUnseal
-function clause decode (0b010010 : 0b00011 : (regno) cd : (regno) cs : (regno) ct : 0b000: 0b000) = Some(CUnseal(cd, cs, ct))
 function clause execute (CUnseal(cd, cs, ct)) =
 {
   (* START_CUnseal *)
@@ -790,7 +984,6 @@ function clause execute (CUnseal(cd, cs, ct)) =
 }
 
 union ast member (regno, regno, bit[11]) CCall
-function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb, selector))
 function clause execute (CCall(cs, cb, 0b00000000000)) = (* selector=0 *)
 {
   (* Partial implementation of CCall with checks in hardware, but raising a trap to perform trusted stack manipulation *)
@@ -865,9 +1058,10 @@ function clause execute (CCall(cs, cb, 0b00000000001)) = (* selector=1 *)
         sealed=false;
         otype=0;
     }) in {
-      nextPC := (bit[64]) (getCapOffset(cs_val));
-      nextPCC := csUnsealed;
+      delayedPC := (bit[64]) (getCapOffset(cs_val));
       delayedPCC := csUnsealed;
+      branchPending := true;
+      inCCallDelay  := true;
       C26 := capStructToCapReg({cb_val with
         sealed=false;
         otype=0;
@@ -877,7 +1071,6 @@ function clause execute (CCall(cs, cb, 0b00000000001)) = (* selector=1 *)
 }
 
 union ast member unit CReturn
-function clause decode (0b010010 : 0b00110 : 0b000000000000000000000) = Some(CReturn)
 function clause execute (CReturn) =
 {
   (* START_CReturn *)
@@ -887,9 +1080,6 @@ function clause execute (CReturn) =
 }
 
 union ast member (regno, bit[16], bool) CBX
-function clause decode (0b010010 : 0b01001 : (regno) cb : (bit[16]) imm) = Some(CBX(cb, imm, true)) (* CBTU *)
-function clause decode (0b010010 : 0b01010 : (regno) cb : (bit[16]) imm) = Some(CBX(cb, imm, false)) (* CBTS *)
-
 function clause execute (CBX(cb, imm, invert)) =
 {
   (* START_CBx *)
@@ -905,9 +1095,23 @@ function clause execute (CBX(cb, imm, invert)) =
   (* END_CBx *)
 }
 
+union ast member (regno, bit[16], bool) CBZ
+function clause execute (CBZ(cb, imm, invert)) =
+{
+  (* START_CBz *)
+  checkCP2usable();
+  if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if (((readCapReg(cb)) == null_cap) ^ invert) then
+    {
+      let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
+      delayedPC     := PC + offset;
+      branchPending := 1;
+    }
+  (* END_CBz *)
+}
+
 union ast member (regno, regno, bool) CJALR
-function clause decode (0b010010 : 0b00111 : (regno) cd : (regno) cb : 0b00000 : 0b000000) = Some(CJALR(cd, cb, true)) (* CJALR *)
-function clause decode (0b010010 : 0b01000 : 0b00000    : (regno) cb : 0b00000 : 0b000000) = Some(CJALR(0b00000, cb, false)) (* CJR *)
 function clause execute(CJALR(cd, cb, link)) = 
 {
   (* START_CJALR *)
@@ -949,22 +1153,6 @@ function clause execute(CJALR(cd, cb, link)) =
 }
 
 union ast member (regno, regno, regno, bit[8], bool, WordType, bool) CLoad
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CLoad(rd, cb, rt, offset, false, B, false)) (* CLBU *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b00) = Some(CLoad(rd, cb, rt, offset, true,  B, false)) (* CLB *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CLoad(rd, cb, rt, offset, false, H, false)) (* CLHU *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b01) = Some(CLoad(rd, cb, rt, offset, true,  H, false)) (* CLH *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CLoad(rd, cb, rt, offset, false, W, false)) (* CLWU *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b10) = Some(CLoad(rd, cb, rt, offset, true,  W, false)) (* CLW *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CLoad(rd, cb, rt, offset, false, D, false)) (* CLD *)
-
-function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b00) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, B, true)) (* CLLBU *)
-function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b00) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  B, true)) (* CLLB  *)
-function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b01) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, H, true)) (* CLLHU *)
-function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b01) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  H, true)) (* CLLH  *)
-function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b10) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, W, true)) (* CLLWU *)
-function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b10) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  W, true)) (* CLLW  *)
-function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b11) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, D, true)) (* CLLD  *)
-
 function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
 {
   (* START_CLoad *)
@@ -1017,15 +1205,6 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
 }
 
 union ast member (regno, regno, regno, regno, bit[8], WordType, bool) CStore
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CStore(rs, cb, rt, 0b00000, offset, B, false)) (* CSB *)
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CStore(rs, cb, rt, 0b00000, offset, H, false)) (* CSH *)
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CStore(rs, cb, rt, 0b00000, offset, W, false)) (* CSW *)
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CStore(rs, cb, rt, 0b00000, offset, D, false)) (* CSD *)
-
-function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b00) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, B, true)) (* CSCB *)
-function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b01) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, H, true)) (* CSCH *)
-function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b10) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, W, true)) (* CSCW *)
-function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b11) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, D, true)) (* CSCD *)
 
 function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
 {
@@ -1084,8 +1263,6 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
 }
 
 union ast member (regno, regno, regno, regno, bit[11], bool) CSC
-function clause decode (0b111110 : (regno) cs : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CSC(cs, cb, rt, 0b00000, offset, false))
-function clause decode (0b010010 : 0b10000 : (regno) cs : (regno) cb: (regno) rd : 0b00 : 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))
 function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
 {
   (* START_CSC *)
@@ -1136,8 +1313,6 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
 }
 
 union ast member (regno, regno, regno, bit[11], bool) CLC
-function clause decode (0b110110 : (regno) cd : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CLC(cd, cb, rt, offset, false))
-function clause decode (0b010010 : 0b10000 : (regno) cd : (regno) cb: 0b0000000 : 0b1111) = Some(CLC(cd, cb, 0b00000, 0b00000000000, true))
 function clause execute (CLC(cd, cb, rt, offset, linked)) =  
 {
   (* START_CLC *)
@@ -1183,6 +1358,5 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
 }
 
 union ast member (regno) C2Dump
-function clause decode (0b010010 : 0b00100 : (regno) rt : 0x0006) = Some(C2Dump(rt))
 function clause execute (C2Dump (rt)) =
     () (* Currently a NOP *)

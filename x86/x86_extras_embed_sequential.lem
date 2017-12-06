@@ -1,0 +1,24 @@
+open import Pervasives
+open import Pervasives_extra
+open import Sail_impl_base
+open import Sail_values
+open import State
+
+val rMEM             : (vector bitU * integer) -> M (vector bitU)
+val rMEM_locked      : (vector bitU * integer) -> M (vector bitU)
+
+let rMEM (addr,size)             = read_mem false Read_plain addr size
+let rMEM_locked  (addr,size)     = read_mem false Read_X86_locked addr size
+
+val MEMea                 : (vector bitU * integer) -> M unit
+val MEMea_locked          : (vector bitU * integer) -> M unit
+
+let MEMea (addr,size)                 = write_mem_ea Write_plain addr size
+let MEMea_locked      (addr,size)     = write_mem_ea Write_X86_locked addr size
+
+val MEMval                 : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_conditional     : (vector bitU * integer * vector bitU) -> M bitU
+
+let MEMval (_,_,v)                 = write_mem_val v >>= fun _ -> return ()
+
+let X86_MFENCE () = barrier Barrier_x86_MFENCE

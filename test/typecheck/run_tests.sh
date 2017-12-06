@@ -62,7 +62,7 @@ for i in `ls $DIR/pass/`;
 do
     if $SAILDIR/sail -ddump_tc_ast -dsanity $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
     then
-	if $SAILDIR/sail -ddump_tc_ast -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
+	if $SAILDIR/sail -ddump_tc_ast -dmagic_hash -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
 	then
 	    if diff $DIR/rtpass/$i $DIR/rtpass2/$i;
 	    then
@@ -86,7 +86,7 @@ do
     then
 	red "tested $i expecting fail" "pass"
     else
-	if $SAILDIR/sail -dno_cast -just_check $DIR/rtfail/$i 2> /dev/null;
+	if $SAILDIR/sail -dno_cast -dmagic_hash -just_check $DIR/rtfail/$i 2> /dev/null;
 	then
 	    yellow "tested $i expecting fail" "passed re-check"
 	else

@@ -9,6 +9,14 @@
 #    Robert Norton-Wright                                                #
 #    Christopher Pulte                                                   #
 #    Peter Sewell                                                        #
+#    Alasdair Armstrong                                                  #
+#    Brian Campbell                                                      #
+#    Thomas Bauereiss                                                    #
+#    Anthony Fox                                                         #
+#    Jon French                                                          #
+#    Dominic Mulligan                                                    #
+#    Stephen Kell                                                        #
+#    Mark Wassell                                                        #
 #                                                                        #
 #  All rights reserved.                                                  #
 #                                                                        #
@@ -79,7 +87,8 @@ LEM = $(BITBUCKET_ROOT)/lem/lem
 LEMLIBOCAML = $(BITBUCKET_ROOT)/lem/ocaml-lib
 ELFDIR= $(BITBUCKET_ROOT)/linksem
 ZARITH_DIR=$(LEMLIBOCAML)/dependencies/zarith
-ZARITH_LIB=$(ZARITH_DIR)/zarith.cmxa
+ZARITH_LIB=$(ZARITH_DIR)/zarith.cma
+# ZARITH_LIB=$(ZARITH_DIR)/zarith.cmxa
 
 SAIL_LIB_DIR:=$(SAIL_DIR)/lib
 MIPS_SAIL_DIR:=$(SAIL_DIR)/mips_new_tc
@@ -204,8 +213,11 @@ count: _build/cheri_trimmed.sail _build/mips_trimmed.sail
 %.ml: %.lem
 	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
 
+#run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml interpreter
+#	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(ZARITH_DIR) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ZARITH_LIB) $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
+
 run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml interpreter
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(ZARITH_DIR) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ZARITH_LIB) $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlc $(OCAML_OPTS) -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(ZARITH_DIR) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ZARITH_LIB) $(LEMLIBOCAML)/extract.cma $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cma $(ELFDIR)/src/linksem.cma  _build/pprint/src/PPrintLib.cma _build/lem_interp/extract.cma _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
 
 run_cheri.native:  _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml interpreter
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(ZARITH_DIR) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ZARITH_LIB) $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml  -o run_cheri.native

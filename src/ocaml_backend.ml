@@ -1,3 +1,53 @@
+(**************************************************************************)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(**************************************************************************)
+
 open Ast
 open Ast_util
 open PPrint
@@ -91,6 +141,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
   | id when Id.compare id (mk_id "real") = 0 -> string "Num.num"
+  | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
   | id -> zencode ctx id
 
@@ -179,6 +230,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_block exps -> begin_end (ocaml_block ctx exps)
   | E_field (exp, id) -> ocaml_atomic_exp ctx exp ^^ dot ^^ zencode ctx id
   | E_exit exp -> string "exit 0"
+  | E_throw exp -> string "raise" ^^ space ^^ ocaml_atomic_exp ctx exp
   | E_case (exp, pexps) ->
      begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"]
                 ^/^ ocaml_pexps ctx pexps)
@@ -197,7 +249,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      ^/^ ocaml_exp ctx exp
   | E_internal_let (lexp, exp1, exp2) ->
      separate space [string "let"; ocaml_atomic_lexp ctx lexp;
-                     equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewriter.simple_typ (typ_of exp1))); string "in"]
+                     equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewrites.simple_typ (typ_of exp1))); string "in"]
      ^/^ ocaml_exp ctx exp2
   | E_loop (Until, cond, body) ->
      let loop_body =
@@ -274,7 +326,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        | Register typ ->
           if !opt_trace_ocaml then
             let var = gensym () in
-            let str_typ = parens (ocaml_string_typ (Rewriter.simple_typ typ) var) in
+            let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
             parens (separate space [string "let"; var; equals; bang ^^ zencode ctx id; string "in";
                                     string "trace_read" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ str_typ ^^ semi; var])
           else bang ^^ zencode ctx id
@@ -293,7 +345,7 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
           let traced_exp =
             if !opt_trace_ocaml then
               let var = gensym () in
-              let str_typ = parens (ocaml_string_typ (Rewriter.simple_typ typ) var) in
+              let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
               parens (separate space [string "let"; var; equals; ocaml_atomic_exp ctx exp; string "in";
                                       string "trace_write" ^^ space ^^ string_lit (string_of_id id) ^^ space ^^ str_typ ^^ semi; var])
             else ocaml_atomic_exp ctx exp
@@ -437,6 +489,17 @@ let rec ocaml_cases ctx =
   | tu :: tus -> ocaml_case tu ^/^ ocaml_cases ctx tus
   | [] -> empty
 
+let rec ocaml_exceptions ctx =
+  let ocaml_exception = function
+    | Tu_aux (Tu_id id, _) -> separate space [string "exception"; zencode_upper ctx id]
+    | Tu_aux (Tu_ty_id (typ, id), _) ->
+       separate space [string "exception"; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
+  in
+  function
+  | [tu] -> ocaml_exception tu
+  | tu :: tus -> ocaml_exception tu ^^ string ";;" ^^ hardline ^^ ocaml_exceptions ctx tus
+  | [] -> empty
+
 let rec ocaml_enum ctx = function
   | [id] -> zencode_upper ctx id
   | id :: ids -> zencode_upper ctx id ^/^ (bar ^^ space ^^ ocaml_enum ctx ids)
@@ -474,6 +537,8 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
       ^/^ rbrace)
      ^^ ocaml_def_end
      ^^ ocaml_string_of_struct ctx id typq fields
+  | TD_variant (id, _, _, cases, _) when string_of_id id = "exception" ->
+     ocaml_exceptions ctx cases
   | TD_variant (id, _, typq, cases, _) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
      ^//^ ocaml_cases ctx cases

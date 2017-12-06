@@ -1,0 +1,97 @@
+let is_inc = false
+
+let translate_out_bool = function
+  | Sail_values.B1 -> true 
+  | Sail_values.B0 -> false
+  | _ -> failwith "translate_out_bool Undef"
+
+let translate_out_binop = function
+  | X86_Add  -> X86ADD
+  | X86_Or   -> X86OR
+  | X86_Adc  -> X86ADC
+  | X86_Sbb  -> X86SBB
+  | X86_And  -> X86AND
+  | X86_Sub  -> X86SUB
+  | X86_Xor  -> X86XOR
+  | X86_Cmp  -> X86CMP
+  | X86_Rol  -> X86ROL
+  | X86_Ror  -> X86ROR
+  | X86_Rcl  -> X86RCL
+  | X86_Rcr  -> X86RCR
+  | X86_Shl  -> X86SHL
+  | X86_Shr  -> X86SHR
+  | X86_Test -> X86TEST
+  | X86_Sar  -> X86SAR
+
+let translate_out_bitop = function
+  | Btc -> X86Btc
+  | Bts -> X86Bts
+  | Btr -> X86Btr
+
+let translate_out_size = function
+  | Sz8 (high) -> X86S8 (translate_out_bool high)
+  | Sz16       -> X86S16
+  | Sz32       -> X86S32
+  | Sz64       -> X86S64
+
+let translate_out_big_bit = Sail_values.unsigned
+
+let translate_out_int inst = (Nat_big_num.to_int (translate_out_big_bit inst))
+
+let translate_out_reg r = IReg (int_to_ireg (Nat_big_num.to_int r))
+
+let translate_out_scale = translate_out_int
+
+let translate_out_imm64 i = translate_out_big_bit i
+
+let translate_out_msi = function
+  | Some (scale, reg) -> Some (translate_out_scale scale, translate_out_reg reg)
+  | None -> None
+
+let translate_out_base = function
+  | X86_embed_types.NoBase     -> X86HGenBase.NoBase
+  | X86_embed_types.RegBase(r) -> X86HGenBase.RegBase (translate_out_reg r)
+  | X86_embed_types.RipBase    -> X86HGenBase.RipBase
+
+let translate_out_rm = function
+  | X86_embed_types.X86_Reg (r)           -> X86HGenBase.Reg (translate_out_reg r)
+  | X86_embed_types.Mem (m_si, base, imm) -> X86HGenBase.Mem (translate_out_msi m_si, translate_out_base base, translate_out_imm64 imm)
+
+let translate_out_dest_src = function
+  | X86_embed_types.R_rm (reg, rm)   -> X86HGenBase.R_rm (translate_out_reg reg, translate_out_rm rm)
+  | X86_embed_types.Rm_i (rm, imm64) -> X86HGenBase.Rm_i (translate_out_rm rm, translate_out_imm64 imm64)
+  | X86_embed_types.Rm_r (rm, reg)   -> X86HGenBase.Rm_r (translate_out_rm rm, translate_out_reg reg)
+
+let translate_out_imm_rm = function
+  | X86_embed_types.Imm (imm)        -> X86HGenBase.Imm (translate_out_imm64 imm)
+  | X86_embed_types.Rm (rm)          -> X86HGenBase.Rm  (translate_out_rm rm)
+
+let translate_out_bitoffset = function
+  | Bit_rm_imm (rm, imm) -> X86HGenBase.Bit_rm_imm (translate_out_rm rm, Nat_big_num.to_int (translate_out_imm64 imm))
+  | Bit_rm_r (rm, r)     -> X86HGenBase.Bit_rm_r (translate_out_rm rm, translate_out_reg r)
+
+let translate_out_cond = function
+  | X86_O      -> X86O
+  | X86_NO     -> X86NO
+  | X86_B      -> X86B
+  | X86_NB     -> X86NB
+  | X86_E      -> X86E
+  | X86_NE     -> X86NE
+  | X86_NA     -> X86NA
+  | X86_A      -> X86A
+  | X86_S      -> X86S
+  | X86_NS     -> X86NS
+  | X86_P      -> X86P
+  | X86_NP     -> X86NP
+  | X86_L      -> X86L
+  | X86_NL     -> X86NL
+  | X86_NG     -> X86NG
+  | X86_G      -> X86G
+  | X86_ALWAYS -> X86ALWAYS
+
+let translate_out_monop = function
+  | X86_Dec  -> X86DEC
+  | X86_Inc  -> X86INC
+  | X86_Not  -> X86NOT
+  | X86_Neg  -> X86NEG
+

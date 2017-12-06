@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -124,375 +132,13 @@ let register_state_zero register_data rbn : register_value =
   in register_value_zeros dir width start_index
 
 type model = PPC | AArch64 | MIPS
-(*
-let ppc_register_data_all =  [
-  (*Pseudo registers*)
-  ("CIA",   (D_increasing, 64, 0));
-  ("NIA",   (D_increasing, 64, 0));
-  ("mode64bit", (D_increasing, 1, 0));
-  ("bigendianmode", (D_increasing, 1, 0));
-  (* special registers *)
-  ("CR",    (D_increasing, 32, 32));
-  ("CTR",   (D_increasing, 64, 0 ));
-  ("LR",    (D_increasing, 64, 0 ));
-  ("XER",   (D_increasing, 64, 0 ));
-  ("VRSAVE",(D_increasing, 32, 32));
-  ("FPSCR", (D_increasing, 64, 0 ));
-  ("VSCR",  (D_increasing, 32, 96));
-
-  (* general purpose registers *)
-  ("GPR0",  (D_increasing, 64, 0 ));
-  ("GPR1",  (D_increasing, 64, 0 ));
-  ("GPR2",  (D_increasing, 64, 0 ));
-  ("GPR3",  (D_increasing, 64, 0 ));
-  ("GPR4",  (D_increasing, 64, 0 ));
-  ("GPR5",  (D_increasing, 64, 0 ));
-  ("GPR6",  (D_increasing, 64, 0 ));
-  ("GPR7",  (D_increasing, 64, 0 ));
-  ("GPR8",  (D_increasing, 64, 0 ));
-  ("GPR9",  (D_increasing, 64, 0 ));
-  ("GPR10", (D_increasing, 64, 0 ));
-  ("GPR11", (D_increasing, 64, 0 ));
-  ("GPR12", (D_increasing, 64, 0 ));
-  ("GPR13", (D_increasing, 64, 0 ));
-  ("GPR14", (D_increasing, 64, 0 ));
-  ("GPR15", (D_increasing, 64, 0 ));
-  ("GPR16", (D_increasing, 64, 0 ));
-  ("GPR17", (D_increasing, 64, 0 ));
-  ("GPR18", (D_increasing, 64, 0 ));
-  ("GPR19", (D_increasing, 64, 0 ));
-  ("GPR20", (D_increasing, 64, 0 ));
-  ("GPR21", (D_increasing, 64, 0 ));
-  ("GPR22", (D_increasing, 64, 0 ));
-  ("GPR23", (D_increasing, 64, 0 ));
-  ("GPR24", (D_increasing, 64, 0 ));
-  ("GPR25", (D_increasing, 64, 0 ));
-  ("GPR26", (D_increasing, 64, 0 ));
-  ("GPR27", (D_increasing, 64, 0 ));
-  ("GPR28", (D_increasing, 64, 0 ));
-  ("GPR29", (D_increasing, 64, 0 ));
-  ("GPR30", (D_increasing, 64, 0 ));
-  ("GPR31", (D_increasing, 64, 0 ));
-  (* vector registers *)
-  ("VR0",  (D_increasing, 128, 0 ));
-  ("VR1",  (D_increasing, 128, 0 ));
-  ("VR2",  (D_increasing, 128, 0 ));
-  ("VR3",  (D_increasing, 128, 0 ));
-  ("VR4",  (D_increasing, 128, 0 ));
-  ("VR5",  (D_increasing, 128, 0 ));
-  ("VR6",  (D_increasing, 128, 0 ));
-  ("VR7",  (D_increasing, 128, 0 ));
-  ("VR8",  (D_increasing, 128, 0 ));
-  ("VR9",  (D_increasing, 128, 0 ));
-  ("VR10", (D_increasing, 128, 0 ));
-  ("VR11", (D_increasing, 128, 0 ));
-  ("VR12", (D_increasing, 128, 0 ));
-  ("VR13", (D_increasing, 128, 0 ));
-  ("VR14", (D_increasing, 128, 0 ));
-  ("VR15", (D_increasing, 128, 0 ));
-  ("VR16", (D_increasing, 128, 0 ));
-  ("VR17", (D_increasing, 128, 0 ));
-  ("VR18", (D_increasing, 128, 0 ));
-  ("VR19", (D_increasing, 128, 0 ));
-  ("VR20", (D_increasing, 128, 0 ));
-  ("VR21", (D_increasing, 128, 0 ));
-  ("VR22", (D_increasing, 128, 0 ));
-  ("VR23", (D_increasing, 128, 0 ));
-  ("VR24", (D_increasing, 128, 0 ));
-  ("VR25", (D_increasing, 128, 0 ));
-  ("VR26", (D_increasing, 128, 0 ));
-  ("VR27", (D_increasing, 128, 0 ));
-  ("VR28", (D_increasing, 128, 0 ));
-  ("VR29", (D_increasing, 128, 0 ));
-  ("VR30", (D_increasing, 128, 0 ));
-  ("VR31", (D_increasing, 128, 0 ));
-  (* floating-point registers *)
-  ("FPR0",  (D_increasing, 64, 0 ));
-  ("FPR1",  (D_increasing, 64, 0 ));
-  ("FPR2",  (D_increasing, 64, 0 ));
-  ("FPR3",  (D_increasing, 64, 0 ));
-  ("FPR4",  (D_increasing, 64, 0 ));
-  ("FPR5",  (D_increasing, 64, 0 ));
-  ("FPR6",  (D_increasing, 64, 0 ));
-  ("FPR7",  (D_increasing, 64, 0 ));
-  ("FPR8",  (D_increasing, 64, 0 ));
-  ("FPR9",  (D_increasing, 64, 0 ));
-  ("FPR10", (D_increasing, 64, 0 ));
-  ("FPR11", (D_increasing, 64, 0 ));
-  ("FPR12", (D_increasing, 64, 0 ));
-  ("FPR13", (D_increasing, 64, 0 ));
-  ("FPR14", (D_increasing, 64, 0 ));
-  ("FPR15", (D_increasing, 64, 0 ));
-  ("FPR16", (D_increasing, 64, 0 ));
-  ("FPR17", (D_increasing, 64, 0 ));
-  ("FPR18", (D_increasing, 64, 0 ));
-  ("FPR19", (D_increasing, 64, 0 ));
-  ("FPR20", (D_increasing, 64, 0 ));
-  ("FPR21", (D_increasing, 64, 0 ));
-  ("FPR22", (D_increasing, 64, 0 ));
-  ("FPR23", (D_increasing, 64, 0 ));
-  ("FPR24", (D_increasing, 64, 0 ));
-  ("FPR25", (D_increasing, 64, 0 ));
-  ("FPR26", (D_increasing, 64, 0 ));
-  ("FPR27", (D_increasing, 64, 0 ));
-  ("FPR28", (D_increasing, 64, 0 ));
-  ("FPR29", (D_increasing, 64, 0 ));
-  ("FPR30", (D_increasing, 64, 0 ));
-  ("FPR31", (D_increasing, 64, 0 ));
-]
-
-let initial_stack_and_reg_data_of_PPC_elf_file e_entry all_data_memory =
-  (* set up initial registers, per 3.4.1 of 64-bit PowerPC ELF Application Binary Interface Supplement 1.9 *)
-
-  let auxiliary_vector_space = Nat_big_num.of_string "17592186042368" (*"0xffffffff800"*) in
-  (* notionally there should be at least an AT_NULL auxiliary vector entry there, but our examples will never read it *)
-
-  (* take start of stack roughly where running gdb on hello5 on bim says it is*)
-  let initial_GPR1_stack_pointer = Nat_big_num.of_string "17592186040320" (*"0xffffffff000"*) in
-  let initial_GPR1_stack_pointer_value =
-    Sail_impl_base.register_value_of_integer 64 0 Sail_impl_base.D_increasing initial_GPR1_stack_pointer in
-  (* ELF says we need an initial zero doubleword there *)
-  let initial_stack_data =
-    (* the code actually uses the stack, both above and below, so we map a bit more memory*)
-    (* this is a fairly big but arbitrary chunk *)
-    (* let initial_stack_data_address = Nat_big_num.sub initial_GPR1_stack_pointer (Nat_big_num.of_int 128) in
-        [("initial_stack_data", initial_stack_data_address, Lem_list.replicate (128+32) 0 ))] in *)
-    (* this is the stack memory that test 1938 actually uses *)
-    [ ("initial_stack_data1", Nat_big_num.sub initial_GPR1_stack_pointer (Nat_big_num.of_int 128),
-       Lem_list.replicate 8 0 );
-      ("initial_stack_data2", Nat_big_num.sub initial_GPR1_stack_pointer (Nat_big_num.of_int 8),
-       Lem_list.replicate 8  0 );
-      ("initial_stack_data3", Nat_big_num.add initial_GPR1_stack_pointer (Nat_big_num.of_int 16),
-       Lem_list.replicate 8  0 )] in
-  
-  (* read TOC from the second field of the function descriptor pointed to by e_entry*)
-  let initial_GPR2_TOC =
-    Sail_impl_base.register_value_of_address
-      (Sail_impl_base.address_of_byte_list
-         (List.map (fun b -> match b with Some b -> b | None -> failwith "Address had undefined")
-             (List.map byte_of_byte_lifted
-                (read_mem all_data_memory
-                   (Nat_big_num.add (Nat_big_num.of_int 8) e_entry) 8))))
-      Sail_impl_base.D_increasing in
-  (* these initial register values are all mandated to be zero, but that's handled by the generic zeroing below
-      let initial_GPR3_argc = (Nat_big_num.of_int 0) in
-      let initial_GPR4_argv = (Nat_big_num.of_int 0) in
-      let initial_GPR5_envp = (Nat_big_num.of_int 0) in
-      let initial_FPSCR = (Nat_big_num.of_int 0) in
-  *)
-  let initial_register_abi_data : (string * Sail_impl_base.register_value) list =
-    [ ("GPR1", initial_GPR1_stack_pointer_value);
-      ("GPR2", initial_GPR2_TOC);
-  (*
-    ("GPR3", initial_GPR3_argc);
-    ("GPR4", initial_GPR4_argv);
-    ("GPR5", initial_GPR5_envp);
-    ("FPSCR", initial_FPSCR);
-    *)
-    ] in
-
-  (initial_stack_data, initial_register_abi_data)
-
-
-let aarch64_reg bit_count name = (name, (D_decreasing, bit_count, bit_count - 1))
-
-let aarch64_PC_data = [aarch64_reg 64 "_PC"]
-
-(* most of the PSTATE fields are aliases to other registers so they
-   don't appear here *)
-let aarch64_PSTATE_data  = [
-  aarch64_reg 1 "PSTATE_nRW";
-  aarch64_reg 1 "PSTATE_E";
-  aarch64_reg 5 "PSTATE_M";
-]
-
-let aarch64_general_purpose_registers_data = [
-  aarch64_reg 64 "R0";
-  aarch64_reg 64 "R1";
-  aarch64_reg 64 "R2";
-  aarch64_reg 64 "R3";
-  aarch64_reg 64 "R4";
-  aarch64_reg 64 "R5";
-  aarch64_reg 64 "R6";
-  aarch64_reg 64 "R7";
-  aarch64_reg 64 "R8";
-  aarch64_reg 64 "R9";
-  aarch64_reg 64 "R10";
-  aarch64_reg 64 "R11";
-  aarch64_reg 64 "R12";
-  aarch64_reg 64 "R13";
-  aarch64_reg 64 "R14";
-  aarch64_reg 64 "R15";
-  aarch64_reg 64 "R16";
-  aarch64_reg 64 "R17";
-  aarch64_reg 64 "R18";
-  aarch64_reg 64 "R19";
-  aarch64_reg 64 "R20";
-  aarch64_reg 64 "R21";
-  aarch64_reg 64 "R22";
-  aarch64_reg 64 "R23";
-  aarch64_reg 64 "R24";
-  aarch64_reg 64 "R25";
-  aarch64_reg 64 "R26";
-  aarch64_reg 64 "R27";
-  aarch64_reg 64 "R28";
-  aarch64_reg 64 "R29";
-  aarch64_reg 64 "R30";
-]
-
-let aarch64_SIMD_registers_data = [
-  aarch64_reg 128 "V0";
-  aarch64_reg 128 "V1";
-  aarch64_reg 128 "V2";
-  aarch64_reg 128 "V3";
-  aarch64_reg 128 "V4";
-  aarch64_reg 128 "V5";
-  aarch64_reg 128 "V6";
-  aarch64_reg 128 "V7";
-  aarch64_reg 128 "V8";
-  aarch64_reg 128 "V9";
-  aarch64_reg 128 "V10";
-  aarch64_reg 128 "V11";
-  aarch64_reg 128 "V12";
-  aarch64_reg 128 "V13";
-  aarch64_reg 128 "V14";
-  aarch64_reg 128 "V15";
-  aarch64_reg 128 "V16";
-  aarch64_reg 128 "V17";
-  aarch64_reg 128 "V18";
-  aarch64_reg 128 "V19";
-  aarch64_reg 128 "V20";
-  aarch64_reg 128 "V21";
-  aarch64_reg 128 "V22";
-  aarch64_reg 128 "V23";
-  aarch64_reg 128 "V24";
-  aarch64_reg 128 "V25";
-  aarch64_reg 128 "V26";
-  aarch64_reg 128 "V27";
-  aarch64_reg 128 "V28";
-  aarch64_reg 128 "V29";
-  aarch64_reg 128 "V30";
-  aarch64_reg 128 "V31";
-]
-
-let aarch64_special_purpose_registers_data = [
-  aarch64_reg 32 "CurrentEL";
-  aarch64_reg 32 "DAIF";
-  aarch64_reg 32 "NZCV";
-  aarch64_reg 64 "SP_EL0";
-  aarch64_reg 64 "SP_EL1";
-  aarch64_reg 64 "SP_EL2";
-  aarch64_reg 64 "SP_EL3";
-  aarch64_reg 32 "SPSel";
-  aarch64_reg 32 "SPSR_EL1";
-  aarch64_reg 32 "SPSR_EL2";
-  aarch64_reg 32 "SPSR_EL3";
-  aarch64_reg 64 "ELR_EL1";
-  aarch64_reg 64 "ELR_EL2";
-  aarch64_reg 64 "ELR_EL3";
-]
-
-let aarch64_general_system_control_registers_data = [
-  aarch64_reg 64 "HCR_EL2";
-  aarch64_reg 64 "ID_AA64MMFR0_EL1";
-  aarch64_reg 64 "RVBAR_EL1";
-  aarch64_reg 64 "RVBAR_EL2";
-  aarch64_reg 64 "RVBAR_EL3";
-  aarch64_reg 32 "SCR_EL3";
-  aarch64_reg 32 "SCTLR_EL1";
-  aarch64_reg 32 "SCTLR_EL2";
-  aarch64_reg 32 "SCTLR_EL3";
-  aarch64_reg 64 "TCR_EL1";
-  aarch64_reg 32 "TCR_EL2";
-  aarch64_reg 32 "TCR_EL3";
-]
-
-let aarch64_debug_registers_data = [
-  aarch64_reg 32 "DBGPRCR_EL1";
-  aarch64_reg 32 "OSDLR_EL1";
-]
-
-let aarch64_performance_monitors_registers_data = []
-let aarch64_generic_timer_registers_data = []
-let aarch64_generic_interrupt_controller_CPU_interface_registers_data = []
-
-let aarch64_external_debug_registers_data = [
-  aarch64_reg 32 "EDSCR";
-]
-
-let aarch32_general_system_control_registers_data = [
-  aarch64_reg 32 "SCR";
-]
-
-let aarch32_debug_registers_data = [
-  aarch64_reg 32 "DBGOSDLR";
-  aarch64_reg 32 "DBGPRCR";
-]
-
-let aarch64_register_data_all =
-  aarch64_PC_data @
-  aarch64_PSTATE_data @
-  aarch64_general_purpose_registers_data @
-  aarch64_SIMD_registers_data @
-  aarch64_special_purpose_registers_data @
-  aarch64_general_system_control_registers_data @
-  aarch64_debug_registers_data @
-  aarch64_performance_monitors_registers_data @
-  aarch64_generic_timer_registers_data @
-  aarch64_generic_interrupt_controller_CPU_interface_registers_data @
-  aarch64_external_debug_registers_data @
-  aarch32_general_system_control_registers_data @
-  aarch32_debug_registers_data
-
-let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
-  let (reg_SP_EL0_direction, reg_SP_EL0_width, reg_SP_EL0_initial_index) =
-    List.assoc "SP_EL0" aarch64_register_data_all in
-  
-  (* we compiled a small program that prints out SP and run it a few
-      times on the Nexus9, these are the results:
-      0x0000007fe7f903e0
-      0x0000007fdcdbf3f0
-      0x0000007fcbe1ba90
-      0x0000007fcf378280
-      0x0000007fdd54b8d0
-      0x0000007fd961bc10
-      0x0000007ff3be6350
-      0x0000007fd6bf6ef0
-      0x0000007fff7676f0
-      0x0000007ff2c34560 *)
-  let initial_SP_EL0 = Nat_big_num.of_string "549739036672" (*"0x0000007fff000000"*) in
-  let initial_SP_EL0_value =
-    Sail_impl_base.register_value_of_integer
-      reg_SP_EL0_width
-      reg_SP_EL0_initial_index
-      reg_SP_EL0_direction
-      initial_SP_EL0
-  in
-
-  (* ELF says we need an initial zero doubleword there *)
-  (* the code actually uses the stack, both above and below, so we map a bit more memory*)
-  let initial_stack_data =
-    (* this is a fairly big but arbitrary chunk: *)
-    (* let initial_stack_data_address = Nat_big_num.sub initial_GPR1_stack_pointer (Nat_big_num.of_int 128) in
-        [("initial_stack_data", initial_stack_data_address, Lem_list.replicate (128+32) 0 ))] in *)
-    
-    [ ("initial_stack_data1", Nat_big_num.sub initial_SP_EL0 (Nat_big_num.of_int 16),  Lem_list.replicate 8 0);
-      ("initial_stack_data2", Nat_big_num.sub initial_SP_EL0 (Nat_big_num.of_int 8),   Lem_list.replicate 8 0)
-    ]
-  in
-
-  let initial_register_abi_data : (string * Sail_impl_base.register_value) list =
-    [("SP_EL0", initial_SP_EL0_value)]
-  in
-
-  (initial_stack_data, initial_register_abi_data)
-*)
 
 let mips_register_data_all =  [
   (*Pseudo registers*)
   ("PC", (D_decreasing, 64, 63));
   ("branchPending", (D_decreasing, 1, 0));
   ("inBranchDelay", (D_decreasing, 1, 0));
+  ("inCCallDelay", (D_decreasing, 1, 0));
   ("delayedPC", (D_decreasing, 64, 63));
   ("nextPC", (D_decreasing, 64, 63));
   (* General purpose registers *)
@@ -748,50 +394,6 @@ let initial_system_state_of_elf_file name =
       let (isa_defs, isa_memory_access, isa_externs, isa_model, model_reg_d, startaddr,
            initial_stack_data, initial_register_abi_data, register_data_all) =
         match Nat_big_num.to_int e_machine with
-(*        | 21  (* EM_PPC64 *) ->
-          let startaddr =
-            let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
-            match Abi_power64.abi_power64_compute_program_entry_point segments e_entry with
-            | Error.Fail s -> failwith "Failed computing entry point"
-            | Error.Success s -> Nat_big_num.of_int64 (Uint64.to_int64 s)
-          in
-          let (initial_stack_data, initial_register_abi_data) =
-            initial_stack_and_reg_data_of_PPC_elf_file e_entry !data_mem in
-
-            (Power.defs,
-             (Power_extras.read_memory_functions,Power_extras.memory_writes,[],[],Power_extras.barrier_functions),
-             Power_extras.power_externs,
-             PPC,
-             D_increasing,
-             startaddr,
-             initial_stack_data,
-             initial_register_abi_data,
-             ppc_register_data_all)
-
-        | 183 (* EM_AARCH64 *) ->
-          let startaddr =
-            let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
-            match Abi_aarch64_le.abi_aarch64_le_compute_program_entry_point segments e_entry with
-            | Error.Fail s -> failwith "Failed computing entry point"
-            | Error.Success s -> Nat_big_num.of_int64 (Uint64.to_int64 s)
-          in
-          
-          let (initial_stack_data, initial_register_abi_data) =
-            initial_stack_and_reg_data_of_AAarch64_elf_file e_entry !data_mem in
-          
-          (ArmV8.defs,
-           (ArmV8_extras.aArch64_read_memory_functions,
-            ArmV8_extras.aArch64_memory_writes,
-	    ArmV8_extras.aArch64_memory_eas,
-	    ArmV8_extras.aArch64_memory_vals,
-            ArmV8_extras.aArch64_barrier_functions),
-           [],
-           AArch64,
-           D_decreasing,
-           startaddr,
-           initial_stack_data,
-           initial_register_abi_data,
-           aarch64_register_data_all) *)
         | 8 (* EM_MIPS *) ->
           let startaddr =
             let e_entry = Uint64.of_string (Nat_big_num.to_string e_entry) in
@@ -888,50 +490,6 @@ let initial_system_state_of_elf_file name =
       in
 
 
-      (* Now we examine the rest of the data memory,
-         removing the footprint of the symbols and chunking it into aligned chunks *)
-      
-      let rec remove_symbols_from_data_memory data_mem symbols =
-        match symbols with
-        | [] -> data_mem
-        | (name,address,size,bs)::symbols' ->
-          let data_mem' =
-            Mem.filter
-              (fun a v ->
-                 not (Nat_big_num.greater_equal a address &&
-                      Nat_big_num.less a (Nat_big_num.add (Nat_big_num.of_int (List.length bs)) address)))
-              data_mem in
-          remove_symbols_from_data_memory data_mem' symbols' in
-
-      let trimmed_data_memory : (Nat_big_num.num * memory_byte) list =
-        Mem.bindings (remove_symbols_from_data_memory !data_mem symbol_table) in
-
-      (* make sure that's ordered increasingly.... *)
-      let trimmed_data_memory =
-        List.sort (fun (a,b) (a',b') -> Nat_big_num.compare a a') trimmed_data_memory in
-
-      let aligned a n =  (* a mod n = 0 *)
-        let n_big = Nat_big_num.of_int n in
-        Nat_big_num.equal (Nat_big_num.modulus a n_big) ((Nat_big_num.of_int 0)) in
-
-      let isplus a' a n =   (* a' = a+n *)
-        Nat_big_num.equal a' (Nat_big_num.add (Nat_big_num.of_int n) a) in
-
-      let rec chunk_data_memory dm =
-        match dm with
-        | (a0,b0)::(a1,b1)::(a2,b2)::(a3,b3)::(a4,b4)::(a5,b5)::(a6,b6)::(a7,b7)::dm'  when
-            (aligned a0 8 && isplus a1 a0 1 && isplus a2 a0 2 && isplus a3 a0 3 &&
-             isplus a4 a0 4 && isplus a5 a0 5 && isplus a6 a0 6 && isplus a7 a0 7) ->
-          (a0,8,[b0;b1;b2;b3;b4;b5;b6;b7]) :: chunk_data_memory dm'
-        | (a0,b0)::(a1,b1)::(a2,b2)::(a3,b3)::dm' when
-            (aligned a0 4 && isplus a1 a0 1 && isplus a2 a0 2 && isplus a3 a0 3) ->
-              (a0,4,[b0;b1;b2;b3]) :: chunk_data_memory dm'
-        | (a0,b0)::(a1,b1)::dm' when
-            (aligned a0 2 && isplus a1 a0 1) ->
-              (a0,2,[b0;b1]) :: chunk_data_memory dm'
-        | (a0,b0)::dm' ->
-            (a0,1,[b0]):: chunk_data_memory dm'
-        | [] -> [] in
 
       let initial_register_state =
         fun rbn ->
@@ -1021,67 +579,9 @@ let stop_condition_met model instr =
       true
     | _ -> false)
 
-let is_branch model instruction =
-  let (name,_,_) = instruction in
-  match (model , name) with
-  | (PPC, "B") -> true
-  | (PPC, "Bc") -> true
-  | (PPC, "Bclr") -> true
-  | (PPC, "Bcctr") -> true
-  | (PPC, _) -> false
-  | (AArch64, "BranchImmediate") -> true
-  | (AArch64, "BranchConditional") -> true
-  | (AArch64, "CompareAndBranch") -> true
-  | (AArch64, "TestBitAndBranch") -> true
-  | (AArch64, "BranchRegister") -> true
-  | (AArch64, _) -> false
-  | (MIPS, _) -> false (*todo,fill this in*)
-
 let option_int_of_option_integer i = match i with
   | Some i -> Some (Nat_big_num.to_int i)
   | None -> None
-
-let set_next_instruction_address model =
-  match model with
-  | PPC ->
-    let cia = Reg.find "CIA" !reg in
-    let cia_addr = address_of_register_value cia in
-    (match cia_addr with
-    | Some cia_addr ->
-      let nia_addr = add_address_nat cia_addr 4 in 
-      let nia = register_value_of_address nia_addr Sail_impl_base.D_increasing in
-      reg := Reg.add "NIA" nia !reg
-    | _ -> failwith "CIA address contains unknown or undefined")
-  | AArch64 ->
-    let pc = Reg.find "_PC" !reg in
-    let pc_addr = address_of_register_value pc in
-    (match pc_addr with
-     | Some pc_addr ->
-       let n_addr = add_address_nat pc_addr 4 in
-       let n_pc = register_value_of_address n_addr D_decreasing in
-       reg := Reg.add "_PC" n_pc !reg
-     | _ -> failwith "_PC address contains unknown or undefined")
-  | MIPS -> 
-    let pc_addr       = address_of_register_value (Reg.find "PC" !reg) in
-    let branchPending = integer_of_register_value (Reg.find "branchPending" !reg) in
-    (match (pc_addr, option_int_of_option_integer branchPending) with
-     | (Some pc_val, Some 0) -> 
-       (* normal -- increment PC *)
-       let n_addr = add_address_nat pc_val 4 in
-       let n_pc = register_value_of_address n_addr D_decreasing in
-       begin
-         reg := Reg.add "nextPC" n_pc !reg;
-         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
-       end
-     | (Some pc_val, Some 1) -> 
-       (* delay slot -- branch to delayed PC and clear branchPending *)
-       begin 
-         reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
-         reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
-         reg := Reg.add "branchPending" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
-         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1)) !reg;
-       end
-     | (_, _) -> errorf "PC address contains unknown or undefined"; exit 1)
 
 let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 
@@ -1192,68 +692,10 @@ let rec write_events = function
      | _ -> failwith "Only register write events expected");
     write_events events
 
-let fetch_instruction_opcode_and_update_ia model addr_trans =
-  match model with
-  | PPC ->
-    let cia = Reg.find "CIA" !reg in
-    let cia_addr = address_of_register_value cia in
-    (match cia_addr with
-     | Some cia_addr ->
-       let cia_a = integer_of_address cia_addr in
-       let opcode = (get_opcode cia_a) in
-       begin
-         reg := Reg.add "CIA" (Reg.find "NIA" !reg) !reg;
-         Opcode opcode
-       end
-     | None -> failwith "CIA address contains unknown or undefined")
-  | AArch64 ->
-    let pc = Reg.find "_PC" !reg in
-    let pc_addr = address_of_register_value pc in
-    (match pc_addr with
-     | Some pc_addr ->
-       let pc_a = integer_of_address pc_addr in
-       let opcode = (get_opcode pc_a) in
-       Opcode opcode
-     | None -> failwith "_PC address contains unknown or undefined")
-  | MIPS -> 
-    begin
-    reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
-    let nextPC  = Reg.find "nextPC" !reg in
-    let pc_addr = address_of_register_value nextPC in
-    (*let unused = interactf "PC: %s\n" (Printing_functions.register_value_to_string nextPC) in*)
-    (match pc_addr with
-    | Some pc_addr ->
-      let pc_a = match addr_trans (get_addr_trans_regs ()) pc_addr with
-        | Some a, Some events -> write_events (List.rev events); integer_of_address a
-        | Some a, None -> integer_of_address a
-        | None, Some events ->
-          write_events (List.rev events);
-          let nextPC  = Reg.find "nextPC" !reg in
-          reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
-          let pc_addr = address_of_register_value nextPC in
-          (match pc_addr with
-           | Some pc_addr ->
-             (match addr_trans (get_addr_trans_regs ()) pc_addr with
-              | Some a, Some events -> write_events (List.rev events); integer_of_address a
-              | Some a, None -> integer_of_address a
-              | None, _ -> failwith "Address translation failed twice")
-           | None -> failwith "no nextPc address")
-        | _ -> failwith "No address and no events from translate address"
-      in
-      let opcode = (get_opcode pc_a) in
-      begin
-        reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
-        Opcode opcode
-      end
-     | None -> errorf "nextPC contains unknown or undefined"; exit 1)
-    end
-  |  _ -> assert false
-
 let get_pc_address = function
   | MIPS -> Reg.find "PC" !reg
   | PPC  -> Reg.find "CIA" !reg
   | AArch64 -> Reg.find "_PC" !reg
-        
 
 let option_int_of_reg str =
   option_int_of_option_integer (integer_of_register_value (Reg.find str !reg))
@@ -1283,6 +725,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
             let npc_addr = add_address_nat pc_val 4 in
             let npc_reg = register_value_of_address npc_addr Sail_impl_base.D_decreasing in
             reg := Reg.add "nextPC" npc_reg !reg;
+            reg := Reg.add "inCCallDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
           | Some 1 ->
             reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
             reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
@@ -1290,12 +733,14 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
           let opcode = Opcode (get_opcode pc) in
           let (instruction,istate) = match Interp_inter_imp.decode_to_istate context None opcode with
             | Instr(instruction,istate) ->
+               let instruction = interp_value_to_instr_external context instruction in
               interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
               (instruction,istate)
             | Decode_error d ->
               (match d with
-              | Interp_interface.Unsupported_instruction_error instr ->
-                errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
+              | Interp_interface.Unsupported_instruction_error instruction ->
+               let instruction = interp_value_to_instr_external context instruction in
+                errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instruction)
               | Interp_interface.Not_an_instruction_error op ->
                 (match op with
                 | Opcode bytes ->

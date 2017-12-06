@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -210,7 +218,7 @@ let rewrite_step defs (name,rewriter) =
     | Some (f, i) ->
       begin
         let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
-        output "" Lem_ast_out [filename, defs];
+        (* output "" Lem_ast_out [filename, defs]; *)
         let ((ot,_, _) as ext_ot) = open_output_with_check_unformatted filename in
         Pretty_print_sail2.pp_defs ot defs;
         close_output_with_check ext_ot;
@@ -226,7 +234,8 @@ let rewrite rewriters defs =
      exit 1
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
-let rewrite_undefined = rewrite [("undefined", fun x -> Rewriter.rewrite_undefined !opt_lem_mwords x)]
-let rewrite_ast_lem = rewrite Rewriter.rewrite_defs_lem
-let rewrite_ast_ocaml = rewrite Rewriter.rewrite_defs_ocaml
-let rewrite_ast_check = rewrite Rewriter.rewrite_defs_check
+let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !opt_lem_mwords x)]
+let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
+let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
+let rewrite_ast_sil = rewrite Rewrites.rewrite_defs_sil
+let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check

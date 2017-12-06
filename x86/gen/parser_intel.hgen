@@ -1,0 +1,601 @@
+| BINOP addr COMMA imm
+    { `X86BINOP (false, $1.op, suffix_size $1.sz, Rm_i ($2, bit64_of_int $4))  
+      (* XXX size is ambigious -- should require anotation *) }
+| LOCK BINOP addr COMMA imm
+    { check_binop_lockable $2.op
+    ; `X86BINOP (true, $2.op, suffix_size $2.sz, Rm_i ($3, bit64_of_int $5)) }
+| BINOP breg COMMA imm
+    { check_size ($1.sz, X86BYTE)
+    ; `X86BINOP (false, $1.op, X86S8 ($2.high), Rm_i (Reg (IReg ($2.reg)), bit64_of_int $4))
+    }
+| BINOP breg COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; check_byte_regs ($2, $4)
+    ; `X86BINOP (false, $1.op, X86S8 ($2.high), Rm_r (Reg (IReg ($2.reg)), IReg ($4.reg)))
+    }
+| BINOP addr COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86BINOP (false, $1.op, X86S8 ($4.high), Rm_r ($2, IReg ($4.reg)))
+    }
+| LOCK BINOP addr COMMA breg
+    { check_binop_lockable $2.op;
+      check_size ($2.sz, X86BYTE)
+    ; `X86BINOP (true, $2.op, X86S8 ($5.high), Rm_r ($3, IReg ($5.reg)))
+    }
+| BINOP breg COMMA addr
+    { check_size ($1.sz, X86BYTE)
+    ; `X86BINOP (false, $1.op, X86S8 ($2.high), R_rm (IReg ($2.reg), $4))
+    }
+| BINOP wreg COMMA imm
+    { check_size ($1.sz, X86WORD)
+    ; `X86BINOP (false, $1.op, X86S16, Rm_i (Reg $2, bit64_of_int $4))
+    }
+| BINOP wreg COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86BINOP (false, $1.op, X86S16, Rm_r (Reg $2, $4))
+    }
+| BINOP addr COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86BINOP (false, $1.op, X86S16, Rm_r ($2, $4))
+    }
+| LOCK BINOP addr COMMA wreg
+    { check_binop_lockable $2.op;
+      check_size ($2.sz, X86WORD)
+    ; `X86BINOP (true, $2.op, X86S16, Rm_r ($3, $5))
+    }
+| BINOP wreg COMMA addr
+    { check_size ($1.sz, X86WORD)
+    ; `X86BINOP (false, $1.op, X86S16, R_rm ($2, $4))
+    }
+| BINOP lreg COMMA imm
+    { check_size ($1.sz, X86LONG)
+    ; `X86BINOP (false, $1.op, X86S32, Rm_i (Reg $2, bit64_of_int $4))
+    }
+| BINOP lreg COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86BINOP (false, $1.op, X86S32, Rm_r (Reg $2, $4))
+    }
+| BINOP addr COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86BINOP (false, $1.op, X86S32, Rm_r ($2, $4))
+    }
+| LOCK BINOP addr COMMA lreg
+    { check_binop_lockable $2.op;
+      check_size ($2.sz, X86LONG)
+    ; `X86BINOP (true, $2.op, X86S32, Rm_r ($3, $5))
+    }
+| BINOP lreg COMMA addr
+    { check_size ($1.sz, X86LONG)
+    ; `X86BINOP (false, $1.op, X86S32, R_rm ($2, $4))
+    }
+| BINOP qreg COMMA imm
+    { check_size ($1.sz, X86QUAD)
+    ; `X86BINOP (false, $1.op, X86S64, Rm_i (Reg $2, bit64_of_int $4))
+    }
+| BINOP qreg COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86BINOP (false, $1.op, X86S64, Rm_r (Reg $2, $4))
+    }
+| BINOP addr COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86BINOP (false, $1.op, X86S64, Rm_r ($2, $4))
+    }
+| LOCK BINOP addr COMMA qreg
+    { check_binop_lockable $2.op;
+      check_size ($2.sz, X86QUAD)
+    ; `X86BINOP (true, $2.op, X86S64, Rm_r ($3, $5))
+    }
+| BINOP qreg COMMA addr
+    { check_size ($1.sz, X86QUAD)
+    ; `X86BINOP (false, $1.op, X86S64, R_rm ($2, $4))
+    }
+| BITOP addr COMMA imm
+    { `X86BITOP (false, $1.op, suffix_size $1.sz, Bit_rm_imm ($2, $4))
+    }
+| LOCK BITOP addr COMMA imm
+    { `X86BITOP (true, $2.op, suffix_size $2.sz, Bit_rm_imm ($3, $5))
+    }
+| BITOP wreg COMMA imm
+    { check_size ($1.sz, X86WORD) 
+    ; `X86BITOP (false, $1.op, X86S16, Bit_rm_imm (Reg $2, $4))
+    }
+| LOCK BITOP wreg COMMA imm
+    { check_size ($2.sz, X86WORD) 
+    ; `X86BITOP (true, $2.op, X86S16, Bit_rm_imm (Reg $3, $5))
+    }
+| BITOP wreg COMMA wreg
+    { check_size ($1.sz, X86WORD) 
+    ; `X86BITOP (true, $1.op, X86S16, Bit_rm_r (Reg $2, $4))
+    }
+| LOCK BITOP wreg COMMA wreg
+    { check_size ($2.sz, X86WORD) 
+    ; `X86BITOP (false, $2.op, X86S16, Bit_rm_r (Reg $3, $5))
+    }
+| BITOP addr COMMA wreg
+    { check_size ($1.sz, X86WORD) 
+    ; `X86BITOP (false, $1.op, X86S16, Bit_rm_r ($2, $4))
+    }
+| LOCK BITOP addr COMMA wreg
+    { check_size ($2.sz, X86WORD)
+    ; `X86BITOP (true, $2.op, X86S16, Bit_rm_r ($3, $5))
+    }
+| BITOP lreg COMMA imm
+    { check_size ($1.sz, X86LONG) 
+    ; `X86BITOP (false, $1.op, X86S32, Bit_rm_imm (Reg $2, $4))
+    }
+| LOCK BITOP lreg COMMA imm
+    { check_size ($2.sz, X86LONG) 
+    ; `X86BITOP (true, $2.op, X86S32, Bit_rm_imm (Reg $3, $5))
+    }
+| BITOP lreg COMMA lreg
+    { check_size ($1.sz, X86LONG) 
+    ; `X86BITOP (false, $1.op, X86S32, Bit_rm_r (Reg $2, $4))
+    }
+| LOCK BITOP lreg COMMA lreg
+    { check_size ($2.sz, X86LONG) 
+    ; `X86BITOP (true, $2.op, X86S32, Bit_rm_r (Reg $3, $5))
+    }
+| BITOP addr COMMA lreg
+    { check_size ($1.sz, X86LONG) 
+    ; `X86BITOP (false, $1.op, X86S32, Bit_rm_r ($2, $4))
+    }
+| LOCK BITOP addr COMMA lreg
+    { check_size ($2.sz, X86LONG) 
+    ; `X86BITOP (true, $2.op, X86S32, Bit_rm_r ($3, $5))
+    }
+| BITOP qreg COMMA imm
+    { check_size ($1.sz, X86QUAD) 
+    ; `X86BITOP (false, $1.op, X86S64, Bit_rm_imm (Reg $2, $4))
+    }
+| LOCK BITOP qreg COMMA imm
+    { check_size ($2.sz, X86QUAD) 
+    ; `X86BITOP (true, $2.op, X86S64, Bit_rm_imm (Reg $3, $5))
+    }
+| BITOP qreg COMMA qreg
+    { check_size ($1.sz, X86QUAD) 
+    ; `X86BITOP (false, $1.op, X86S64, Bit_rm_r (Reg $2, $4))
+    }
+| LOCK BITOP qreg COMMA qreg
+    { check_size ($2.sz, X86QUAD) 
+    ; `X86BITOP (true, $2.op, X86S64, Bit_rm_r (Reg $3, $5))
+    }
+| BITOP addr COMMA qreg
+    { check_size ($1.sz, X86QUAD) 
+    ; `X86BITOP (false, $1.op, X86S64, Bit_rm_r ($2, $4))
+    }
+| LOCK BITOP addr COMMA qreg
+    { check_size ($2.sz, X86QUAD) 
+    ; `X86BITOP (true, $2.op, X86S64, Bit_rm_r ($3, $5))
+    }
+| CALL big_imm
+    { `X86CALL (Imm $2) }
+| CALL addr
+    { `X86CALL (Rm $2) }
+| CALL qreg
+    { `X86CALL (Rm (Reg $2)) }
+| CLC
+    { `X86CLC }
+| CMC
+    { `X86CMC }
+| CMOV wreg COMMA addr
+    { check_size ($1.sz, X86WORD)
+    ; `X86MOV ($1.cond, X86S16, R_rm ($2, $4))
+    }
+| CMOV lreg COMMA addr
+    { check_size ($1.sz, X86LONG)
+    ; `X86MOV ($1.cond, X86S32, R_rm ($2, $4))
+    }
+| CMOV qreg COMMA addr
+    { check_size ($1.sz, X86QUAD)
+    ; `X86MOV ($1.cond, X86S64, R_rm ($2, $4))
+    }
+| CMOV wreg COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86MOV ($1.cond, X86S16, R_rm ($2, Reg $4))
+    }
+| CMOV lreg COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86MOV ($1.cond, X86S32, R_rm ($2, Reg $4))
+    }
+| CMOV qreg COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86MOV ($1.cond, X86S64, R_rm ($2, Reg $4))
+    }
+| CMPXCHG breg COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; check_byte_regs ($2, $4)
+    ; `X86CMPXCHG (false, X86S8 ($2.high), Reg (IReg ($2.reg)), IReg ($4.reg))
+    }
+| CMPXCHG addr COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86CMPXCHG (false, X86S8 ($4.high), $2, IReg ($4.reg))
+    }
+| LOCK CMPXCHG addr COMMA breg
+    { check_size ($2.sz, X86BYTE)
+    ; `X86CMPXCHG (true, X86S8 ($5.high), $3, IReg ($5.reg))
+    }
+| CMPXCHG wreg COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86CMPXCHG (false, X86S16, Reg $2, $4)
+    }
+| CMPXCHG addr COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86CMPXCHG (false, X86S16, $2, $4)
+    }
+| LOCK CMPXCHG addr COMMA wreg
+    { check_size ($2.sz, X86WORD)
+    ; `X86CMPXCHG (true, X86S16, $3, $5)
+    }
+| CMPXCHG lreg COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86CMPXCHG (false, X86S32, Reg $2, $4)
+    }
+| CMPXCHG addr COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86CMPXCHG (false, X86S32, $2, $4)
+    }
+| LOCK CMPXCHG addr COMMA lreg
+    { check_size ($2.sz, X86LONG)
+    ; `X86CMPXCHG (true, X86S32, $3, $5)
+    }
+| CMPXCHG qreg COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86CMPXCHG (false, X86S64, Reg $2, $4)
+    }
+| CMPXCHG addr COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86CMPXCHG (false, X86S64, $2, $4)
+    }
+| LOCK CMPXCHG addr COMMA qreg
+    { check_size ($2.sz, X86QUAD)
+    ; `X86CMPXCHG (true, X86S64, $3, $5)
+    }
+| DIV addr
+    { `X86DIV (suffix_size $1.sz, $2) }
+| DIV breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86DIV (X86S8 ($2.high), Reg (IReg ($2.reg)))
+    }
+| DIV wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86DIV (X86S16, Reg $2)
+    }
+| DIV lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86DIV (X86S32, Reg $2)
+    }
+| DIV qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86DIV (X86S64, Reg $2)
+    }
+| JCC big_num
+    { `X86JCC ($1.cond, $2) }
+| JMP big_num
+    { `X86JCC (X86ALWAYS, $2) }
+| JMP addr
+    { `X86JMP $2 }
+| JMP qreg
+    { `X86JMP (Reg $2) }
+| LEA wreg COMMA addr
+    { check_size ($1.sz, X86WORD)
+    ; `X86LEA (X86S16, R_rm ($2, $4))
+    }
+| LEA lreg COMMA addr
+    { check_size ($1.sz, X86LONG)
+    ; `X86LEA (X86S32, R_rm ($2, $4))
+    }
+| LEA qreg COMMA addr
+    { check_size ($1.sz, X86QUAD)
+    ; `X86LEA (X86S64, R_rm ($2, $4))
+    }
+| LEAVE
+    { `X86LEAVE }
+| LOOP big_num
+    { `X86LOOP ($1.cond, $2) }
+| MFENCE
+    { `X86MFENCE }
+| MONOP addr
+    { `X86MONOP (false, $1.op, suffix_size $1.sz, $2) }
+| LOCK MONOP addr
+    { `X86MONOP (true, $2.op, suffix_size $2.sz, $3) }
+| MONOP breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86MONOP (false, $1.op, X86S8 ($2.high), Reg (IReg $2.reg))
+    }
+| MONOP wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86MONOP (false, $1.op, X86S16, Reg $2)
+    }
+| MONOP lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86MONOP (false, $1.op, X86S32, Reg $2)
+    }
+| MONOP qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86MONOP (false, $1.op, X86S64, Reg $2)
+    }
+| MOV addr COMMA big_imm
+    { `X86MOV (X86ALWAYS, suffix_size $1.sz, Rm_i ($2, $4)) }
+| MOV breg COMMA imm
+    { check_size ($1.sz, X86BYTE)
+    ; `X86MOV (X86ALWAYS, X86S8 ($2.high), Rm_i (Reg (IReg $2.reg), bit64_of_int $4))
+    }
+| MOV breg COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; check_byte_regs ($2, $4)
+    ; `X86MOV (X86ALWAYS, X86S8 ($2.high), Rm_r (Reg (IReg $2.reg), (IReg $4.reg)))
+    }
+| MOV addr COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86MOV (X86ALWAYS, X86S8 ($4.high), Rm_r ($2, IReg $4.reg))
+    }
+| MOV breg COMMA addr
+    { check_size ($1.sz, X86BYTE)
+    ; `X86MOV (X86ALWAYS, X86S8 ($2.high), R_rm (IReg $2.reg, $4))
+    }
+| MOV wreg COMMA imm
+    { check_size ($1.sz, X86WORD)
+    ; `X86MOV (X86ALWAYS, X86S16, Rm_i (Reg $2, bit64_of_int $4))
+    }
+| MOV wreg COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86MOV (X86ALWAYS, X86S16, Rm_r (Reg $2, $4))
+    }
+| MOV addr COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86MOV (X86ALWAYS, X86S16, Rm_r ($2, $4))
+    }
+| MOV wreg COMMA addr
+    { check_size ($1.sz, X86WORD)
+    ; `X86MOV (X86ALWAYS, X86S16, R_rm ($2, $4))
+    }
+| MOV lreg COMMA imm
+    { check_size ($1.sz, X86LONG)
+    ; `X86MOV (X86ALWAYS, X86S32, Rm_i (Reg $2, bit64_of_int $4))
+    }
+| MOV lreg COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86MOV (X86ALWAYS, X86S32, Rm_r (Reg $2, $4))
+    }
+| MOV addr COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86MOV (X86ALWAYS, X86S32, Rm_r ($2, $4))
+    }
+| MOV lreg COMMA addr
+    { check_size ($1.sz, X86LONG)
+    ; `X86MOV (X86ALWAYS, X86S32, R_rm ($2, $4))
+    }
+| MOV qreg COMMA big_imm
+    { check_size ($1.sz, X86QUAD)
+    ; `X86MOV (X86ALWAYS, X86S64, Rm_i (Reg $2, $4))
+    }
+| MOV qreg COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; if $1.txt = "MOVABS" then failwith "movabs expects an immediate" else ()
+    ; `X86MOV (X86ALWAYS, X86S64, Rm_r (Reg $2, $4))
+    }
+| MOV addr COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; if $1.txt = "MOVABS" then failwith "movabs expects an immediate" else ()
+    ; `X86MOV (X86ALWAYS, X86S64, Rm_r ($2, $4))
+    }
+| MOV qreg COMMA addr
+    { check_size ($1.sz, X86QUAD)
+    ; if $1.txt = "MOVABS" then failwith "movabs expects an immediate" else ()
+    ; `X86MOV (X86ALWAYS, X86S64, R_rm ($2, $4))
+    }
+| MOVSX wreg COMMA breg
+    { check_size ($1.sz1, X86BYTE)
+    ; check_size ($1.sz2, X86WORD)
+    ; `X86MOVSX (X86S16, R_rm ($2, Reg (IReg $4.reg)), X86S8 $4.high)
+    }
+| MOVSX lreg COMMA breg
+    { check_size ($1.sz1, X86BYTE)
+    ; check_size ($1.sz2, X86LONG)
+    ; `X86MOVSX (X86S32, R_rm ($2, Reg (IReg $4.reg)), X86S8 $4.high)
+    }
+| MOVSX qreg COMMA breg
+    { check_size ($1.sz1, X86BYTE)
+    ; check_size ($1.sz2, X86QUAD)
+    ; `X86MOVSX (X86S64, R_rm ($2, Reg (IReg $4.reg)), X86S8 $4.high)
+    }
+| MOVSX lreg COMMA wreg
+    { check_size ($1.sz1, X86WORD)
+    ; check_size ($1.sz2, X86LONG)
+    ; `X86MOVSX (X86S32, R_rm ($2, Reg $4), X86S16)
+    }
+| MOVSX qreg COMMA wreg
+    { check_size ($1.sz1, X86WORD)
+    ; check_size ($1.sz2, X86QUAD)
+    ; `X86MOVSX (X86S64, R_rm ($2, Reg $4), X86S16)
+    }
+| MOVSX qreg COMMA lreg
+    { check_size ($1.sz1, X86LONG)
+    ; check_size ($1.sz2, X86QUAD)
+    ; `X86MOVSX (X86S64, R_rm ($2, Reg $4), X86S32)
+    }
+| MOVSX wreg COMMA addr
+    { check_size ($1.sz2, X86WORD)
+    ; `X86MOVSX (X86S16, R_rm ($2, $4), suffix_size $1.sz1) (* XXX size *)
+    }
+| MOVSX lreg COMMA addr
+    { check_size ($1.sz2, X86LONG)
+    ; `X86MOVSX (X86S32, R_rm ($2, $4), suffix_size $1.sz1)
+    }
+| MOVSX qreg COMMA addr
+    { check_size ($1.sz2, X86QUAD)
+    ; `X86MOVSX (X86S64, R_rm ($2, $4), suffix_size $1.sz1)
+    }
+| MOVZX wreg COMMA breg
+    { check_size ($1.sz1, X86BYTE)
+    ; check_size ($1.sz2, X86WORD)
+    ; `X86MOVZX (X86S16, R_rm ($2, Reg (IReg $4.reg)), X86S8 $4.high)
+    }
+| MOVZX lreg COMMA breg
+    { check_size ($1.sz1, X86BYTE)
+    ; check_size ($1.sz2, X86LONG)
+    ; `X86MOVZX (X86S32, R_rm ($2, Reg (IReg $4.reg)), X86S8 $4.high)
+    }
+| MOVZX qreg COMMA breg
+    { check_size ($1.sz1, X86BYTE)
+    ; check_size ($1.sz2, X86QUAD)
+    ; `X86MOVZX (X86S64, R_rm ($2, Reg (IReg $4.reg)), X86S8 $4.high)
+    }
+| MOVZX lreg COMMA wreg
+    { check_size ($1.sz1, X86WORD)
+    ; check_size ($1.sz2, X86LONG)
+    ; `X86MOVZX (X86S32, R_rm ($2, Reg $4), X86S16)
+    }
+| MOVZX qreg COMMA wreg
+    { check_size ($1.sz1, X86WORD)
+    ; check_size ($1.sz2, X86QUAD)
+    ; `X86MOVZX (X86S64, R_rm ($2, Reg $4), X86S16)
+    }
+| MOVZX wreg COMMA addr
+    { check_size ($1.sz2, X86WORD)
+    ; `X86MOVZX (X86S16, R_rm ($2, $4), suffix_size $1.sz1) (* XXX size *)
+    }
+| MOVZX lreg COMMA addr
+    { check_size ($1.sz2, X86LONG)
+    ; `X86MOVZX (X86S32, R_rm ($2, $4), suffix_size $1.sz1)
+    }
+| MOVZX qreg COMMA addr
+    { check_size ($1.sz2, X86QUAD)
+    ; `X86MOVZX (X86S64, R_rm ($2, $4), suffix_size $1.sz1)
+    }
+| MUL addr
+    { `X86MUL (suffix_size $1.sz, $2) }
+| MUL breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86MUL (X86S8 ($2.high), Reg (IReg $2.reg))
+    }
+| MUL wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86MUL (X86S16, Reg $2)
+    }
+| MUL lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86MUL (X86S32, Reg $2)
+    }
+| MUL qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86MUL (X86S64, Reg $2)
+    }
+| NOP
+    { `X86NOP }
+| POP qreg
+    { `X86POP (Reg $2) }
+| POP addr
+    { `X86POP $2 }
+| PUSH big_imm
+    { `X86PUSH (Imm $2) }
+| PUSH addr
+    { `X86PUSH (Rm $2) }
+| PUSH qreg
+    { `X86PUSH (Rm (Reg $2)) }
+| RET big_imm
+    { `X86RET $2 }
+| SET breg
+    { `X86SET ($1.cond, $2.high, Reg (IReg $2.reg)) }
+| SET addr
+    { `X86SET ($1.cond, false, $2) }
+| STC
+    { `X86STC }
+| XADD breg COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; check_byte_regs ($2, $4)
+    ; `X86XADD (false, X86S8 ($2.high), Reg (IReg $2.reg), (IReg $4.reg))
+    }
+| XADD addr COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86XADD (false, X86S8 ($4.high), $2, (IReg $4.reg))
+    }
+| LOCK XADD addr COMMA breg
+    { check_size ($2.sz, X86BYTE)
+    ; `X86XADD (true, X86S8 ($5.high), $3, (IReg $5.reg))
+    }
+| XADD wreg COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86XADD (false, X86S16, Reg $2, $4)
+    }
+| XADD addr COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86XADD (false, X86S16, $2, $4)
+    }
+| LOCK XADD addr COMMA wreg
+    { check_size ($2.sz, X86WORD)
+    ; `X86XADD (true, X86S16, $3, $5)
+    }
+| XADD lreg COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86XADD (false, X86S32, Reg $2, $4)
+    }
+| XADD addr COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86XADD (false, X86S32, $2, $4)
+    }
+| LOCK XADD addr COMMA lreg
+    { check_size ($2.sz, X86LONG)
+    ; `X86XADD (true, X86S32, $3, $5)
+    }
+| XADD qreg COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86XADD (false, X86S64, Reg $2, $4)
+    }
+| XADD addr COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86XADD (false, X86S64, $2, $4)
+    }
+| LOCK XADD addr COMMA qreg
+    { check_size ($2.sz, X86QUAD)
+    ; `X86XADD (true, X86S64, $3, $5)
+    }
+| XCHG breg COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; check_byte_regs ($2, $4)
+    ; `X86XCHG (false, X86S8 ($2.high), Reg (IReg $2.reg), IReg $4.reg)
+    }
+| XCHG addr COMMA breg
+    { check_size ($1.sz, X86BYTE)
+    ; `X86XCHG (false, X86S8 ($4.high), $2, (IReg $4.reg))
+    }
+| LOCK XCHG addr COMMA breg
+    { check_size ($2.sz, X86BYTE)
+    ; `X86XCHG (true, X86S8 ($5.high), $3, (IReg $5.reg))
+    }
+| XCHG wreg COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86XCHG (false, X86S16, Reg $2, $4)
+    }
+| XCHG addr COMMA wreg
+    { check_size ($1.sz, X86WORD)
+    ; `X86XCHG (false, X86S16, $2, $4)
+    }
+| LOCK XCHG addr COMMA wreg
+    { check_size ($2.sz, X86WORD)
+    ; `X86XCHG (true, X86S16, $3, $5)
+    }
+| XCHG lreg COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86XCHG (false, X86S32, Reg $2, $4)
+    }
+| XCHG addr COMMA lreg
+    { check_size ($1.sz, X86LONG)
+    ; `X86XCHG (false, X86S32, $2, $4)
+    }
+| LOCK XCHG addr COMMA lreg
+    { check_size ($2.sz, X86LONG)
+    ; `X86XCHG (true, X86S32, $3, $5)
+    }
+| XCHG qreg COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86XCHG (false, X86S64, Reg $2, $4)
+    }
+| XCHG addr COMMA qreg
+    { check_size ($1.sz, X86QUAD)
+    ; `X86XCHG (false, X86S64, $2, $4)
+    }
+| LOCK XCHG addr COMMA qreg
+    { check_size ($2.sz, X86QUAD)
+    ; `X86XCHG (true, X86S64, $3, $5)
+    }

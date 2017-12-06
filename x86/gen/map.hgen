@@ -1,0 +1,26 @@
+| `X86BINOP (locked, bop, sz, ds) -> `X86BINOP (locked, bop, sz, map_dest_src ds)
+| `X86BITOP (locked, bop, sz, bo) -> `X86BITOP (locked, bop, sz, map_bit_offset bo)
+| `X86CALL irm -> `X86CALL (map_imm_rm irm)
+| `X86CLC -> `X86CLC
+| `X86CMC -> `X86CMC
+| `X86CMPXCHG (locked, sz, rm, r) -> `X86CMPXCHG (locked, sz, map_rm rm, map_reg r)
+| `X86DIV (sz, rm) -> `X86DIV (sz, map_rm rm)
+| `X86JCC x -> `X86JCC x
+| `X86JMP rm -> `X86JMP (map_rm rm)
+| `X86LEA (sz, ds) -> `X86LEA (sz, map_dest_src ds)
+| `X86LEAVE -> `X86LEAVE
+| `X86LOOP x -> `X86LOOP x
+| `X86MFENCE -> `X86MFENCE
+| `X86MONOP (locked, mop, sz, rm) -> `X86MONOP (locked, mop, sz, map_rm rm)
+| `X86MOV (cnd, sz, ds) -> `X86MOV (cnd, sz, map_dest_src ds)
+| `X86MOVSX (sz1, ds, sz2) -> `X86MOVSX (sz1, map_dest_src ds, sz2)
+| `X86MOVZX (sz1, ds, sz2) -> `X86MOVZX (sz1, map_dest_src ds, sz2)
+| `X86MUL (sz, rm) -> `X86MUL (sz, map_rm rm)
+| `X86NOP -> `X86NOP
+| `X86POP rm -> `X86POP (map_rm rm)
+| `X86PUSH irm -> `X86PUSH (map_imm_rm irm)
+| `X86RET i -> `X86RET i
+| `X86SET (cnd, b, rm) -> `X86SET (cnd, b, map_rm rm)
+| `X86STC -> `X86STC
+| `X86XADD (locked, sz, rm, r) -> `X86XADD (locked, sz, map_rm rm, map_reg r)
+| `X86XCHG (locked, sz, rm, r) -> `X86XCHG (locked, sz, map_rm rm, map_reg r)

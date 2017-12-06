@@ -889,18 +889,25 @@ let shift_op_vec_int op (l,r) =
     let len = Array.length array in
     (match op with
      | "<<" ->
-       let left = Array.sub array r (len - r) in
-       let right = Array.make r Vzero in
-       let result = Array.append left right in
-       Vvector(result, start, ord)
+       if (r <= len) then
+         let left = Array.sub array r (len - r) in
+         let right = Array.make r Vzero in
+         let result = Array.append left right in
+         Vvector(result, start, ord)
+       else
+         Vvector(Array.make len Vzero, start, ord)
      | ">>" ->
-       let left = Array.make r Vzero in
-       let right = Array.sub array 0 (len - r) in
-       let result = Array.append left right in
-       Vvector(result, start, ord)
+       if (r <= len) then
+         let left = Array.make r Vzero in
+         let right = Array.sub array 0 (len - r) in
+         let result = Array.append left right in
+         Vvector(result, start, ord)
+       else
+         Vvector(Array.make len Vzero, start, ord)
      | "<<<" ->
-       let left = Array.sub array r (len - r) in
-       let right = Array.sub array 0 r in
+       let rmod = r mod len in
+       let left = Array.sub array rmod (len - rmod) in
+       let right = Array.sub array 0 rmod in
        let result = Array.append left right in
        Vvector(result, start, ord)
      | _ -> assert false)

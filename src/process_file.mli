@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -48,6 +56,7 @@ val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_undefined: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_sil : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 
 val load_file_no_check : Ast.order -> string -> unit Ast.defs

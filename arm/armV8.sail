@@ -40,6 +40,12 @@ typedef ast = const union forall Nat 'R, 'R IN {32, 64},     (* register size *)
   ImplementationDefinedStopFetching;
   ImplementationDefinedThreadStart;
 
+  (* transactional memory, from the pre-alpha document *)
+  (reg_index) TMStart;
+  TMCommit;
+  (boolean,bit[5]) TMAbort;
+  TMTest;
+
   (reg_index,[:'R:],boolean,bit[64]) CompareAndBranch;
   (bit[64],bit[4]) BranchConditional;
   (bit[16]) GenerateExceptionEL1; (* TODO: add to .hgen *)
@@ -64,7 +70,7 @@ typedef ast = const union forall Nat 'R, 'R IN {32, 64},     (* register size *)
   (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,uinteger,[:'D:],bit[64]) LoadStorePairNonTemp;
   (reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,bit[64],[:'R:],[:'D:]) LoadImmediate;
   (reg_index,reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,ExtendType,uinteger,[:'R:],[:'D:]) LoadRegister;
-  (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,boolean,uinteger,[:'D:],bit[64]) LoadStorePair;
+  (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,boolean,[:'D:],bit[64]) LoadStorePair;
   (reg_index,reg_index,[:'R:],boolean,boolean,bit['R]) AddSubImmediate;
   (reg_index,reg_index,[:'R:],boolean,boolean,uinteger,uinteger,bit['R],bit['R]) BitfieldMove;
   (reg_index,reg_index,reg_index,[:'R:],uinteger) ExtractRegister;
@@ -86,11 +92,90 @@ typedef ast = const union forall Nat 'R, 'R IN {32, 64},     (* register size *)
   (reg_index,reg_index,reg_index,reg_index,[:'R:],[:'D:],boolean,boolean) MultiplyAddSubLong;
   (reg_index,reg_index,reg_index,reg_index,[:'R:],[:'D:],boolean) MultiplyHigh;
   (reg_index,reg_index,reg_index,[:'R:],boolean,LogicalOp,ShiftType,[|63|],boolean) LogicalShiftedRegister;
-
 }
 
-val forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}. ast<'R,'D> -> unit effect {rreg,wreg,rmem,barr,eamem,wmv,escape} execute
+val forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}. ast<'R,'D> -> unit effect {rreg,wreg,rmem,barr,eamem,wmv,exmem,escape} execute
 scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}. unit execute
+
+(* TSTART - dummy decoding *)
+function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
+        option<(ast<'R,'D>)> effect pure decodeTMStart ((bit[5]) Rt) =
+{
+  (reg_index) t := UInt_reg(Rt);
+
+  Some(TMStart(t));
+}
+
+(* transactional memory, from the pre-alpha document *)
+function clause execute (TMStart(t)) = {
+  (bit[8]) nesting := TxNestingLevel;
+
+  if nesting <_u TXIDR_EL0.DEPTH then {
+    TxNestingLevel := nesting + 1;
+    (bit[64]) status := 0;
+    if nesting == 0 then
+      status := TMStartEffect; (* fake effect *)
+    wX(t) := status;
+  } else {
+    (bit[64]) status := 0;
+    status[10] := 1; (* set the NEST bit *)
+    TMAbortEffect := status; (* fake effect *)
+  }
+}
+
+val extern unit -> unit effect {barr} TMCommitEffect
+
+(* TCOMMIT - dummy decoding *)
+function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
+        option<(ast<'R,'D>)> effect pure decodeTMCommit () =
+{
+  Some(TMCommit);
+}
+
+(* transactional memory, from the pre-alpha document *)
+function clause execute (TMCommit) = {
+  (bit[8]) nesting := TxNestingLevel;
+
+  if nesting == 1 then
+    TMCommitEffect() (* fake effect *)
+  else if nesting == 0 then
+    AArch64_UndefinedFault();
+
+  TxNestingLevel := nesting - 1;
+}
+
+(* TTEST - dummy decoding *)
+function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
+        option<(ast<'R,'D>)> effect pure decodeTMTest () =
+{
+  Some(TMTest);
+}
+
+(* transactional memory, from the pre-alpha document *)
+function clause execute (TMTest) = {
+  if TxNestingLevel > 0 then
+    wPSTATE_NZCV() := 0b0000
+  else
+    wPSTATE_NZCV() := 0b0100
+}
+
+(* TABORT - dummy decoding *)
+function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
+        option<(ast<'R,'D>)> effect pure decodeTMAbort ([R]:(bit[5]) imm5) =
+{
+  Some(TMAbort(R,imm5));
+}
+
+(* transactional memory, from the pre-alpha document *)
+function clause execute (TMAbort(retry,reason)) = {
+  if TxNestingLevel > 0 then {
+    (bit[64]) status := 0;
+    status[4..0] := reason; (* REASON *)
+    status[8] := retry; (* RTRY *)
+    status[9] := 1; (* ABRT *)
+    TMAbortEffect := status; (* fake effect *)
+  };
+}
 
 (* CBNZ *)
 (* CBZ *)
@@ -517,16 +602,16 @@ function clause execute ( TestBitAndBranch(t,datasize,bit_pos,bit_val,offset) ) 
 (* BL *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
         option<(ast<'R,'D>)> effect {escape} decodeUnconditionalBranchImmediate ([op]:0b00101:(bit[26]) imm26) = {
-  (BranchType) _branch_type := if op == 1 then BranchType_CALL else BranchType_JMP;
+  (BranchType) branch_type := if op == 1 then BranchType_CALL else BranchType_JMP;
   (bit[64]) offset := SignExtend(imm26:0b00);
 
-  Some(BranchImmediate(_branch_type,offset));
+  Some(BranchImmediate(branch_type,offset));
 }
 
-function clause execute (BranchImmediate(_branch_type,offset)) = {
-  if _branch_type == BranchType_CALL then wX(30) := rPC() + 4;
+function clause execute (BranchImmediate(branch_type,offset)) = {
+  if branch_type == BranchType_CALL then wX(30) := rPC() + 4;
 
-  BranchTo(rPC() + offset, _branch_type);
+  BranchTo(rPC() + offset, branch_type);
 }
 
 
@@ -540,24 +625,24 @@ scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* RET *)
 function clause decodeUnconditionalBranchRegister (0b1101011:0b00:op:0b11111:0b000000:Rn:0b00000) = {
   (reg_index) n := UInt_reg(Rn);
-  (BranchType) _branch_type := 0; (* ARM: uninitialized *)
+  (BranchType) branch_type := 0; (* ARM: uninitialized *)
 
   switch op {
-    case 0b00 -> _branch_type := BranchType_JMP
-    case 0b01 -> _branch_type := BranchType_CALL
-    case 0b10 -> _branch_type := BranchType_RET
+    case 0b00 -> branch_type := BranchType_JMP
+    case 0b01 -> branch_type := BranchType_CALL
+    case 0b10 -> branch_type := BranchType_RET
     case _ -> UnallocatedEncoding()
   };
 
-  Some(BranchRegister(n,_branch_type));
+  Some(BranchRegister(n,branch_type));
 }
 
-function clause execute (BranchRegister(n,_branch_type)) =
+function clause execute (BranchRegister(n,branch_type)) =
 {
   (bit[64]) target := rX(n);
 
-  if _branch_type == BranchType_CALL then wX(30) := rPC() + 4;
-    BranchTo(target, _branch_type);
+  if branch_type == BranchType_CALL then wX(30) := rPC() + 4;
+    BranchTo(target, branch_type);
 }
 
 (* ERET *)
@@ -717,7 +802,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsize,regsize,datasize));
 }
 
-function clause execute ( LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsize,regsize,datasize) ) = {
+function clause execute ( LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsize,regsize,([:'D:]) datasize) ) = {
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data := 0; (* ARM: uninitialized *)
   (*constant*) (uinteger) dbytes := datasize quot 8;
@@ -760,6 +845,19 @@ function clause execute ( LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsiz
     };
   };
 
+  (* this is a hack to allow the result of store-exclusive to be observed
+  before anything else *)
+  (bit) status := 0;
+  if memop == MemOp_STORE & excl then {
+    (*(bit)*) status := if speculate_exclusive_success() then 0 else 1;
+    wX(s) := (bit[32]) (ZeroExtend([status]));
+
+    (* should be:
+    if status == 1 then return ();
+    *)
+  };
+  if status == 1 then () else {
+
   if n == 31 then {
     CheckSPAlignment();
     address := rSP();
@@ -781,7 +879,7 @@ function clause execute ( LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsiz
         (bit['R]) el2 := rX(t2); (* ARM: bit[datasize / 2] see lemma in the decoding *)
         data := if BigEndian() then el1:el2 else el2:el1;
       } else
-        data := rX(t);
+        (bit['D]) data := rX(t);
 
       if excl then {
         (* store {release} exclusive register|pair (atomic) *)
@@ -798,7 +896,9 @@ function clause execute ( LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsiz
             wMem_exclusive(empty_write_buffer, address, dbytes, acctype, data)
           );
         };
+        (* ARM: the following code was moved up, see note there
         wX(s) := (bit[32]) (ZeroExtend([status]));
+        *)
       } else {
         (* store release register (atomic) *)
         flush_write_buffer(
@@ -860,6 +960,7 @@ function clause execute ( LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsiz
       };
     }
   };
+  };
 }
 
 (* LDNP *)
@@ -885,7 +986,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,memop,scale,datasize,offset));
 }
 
-function clause execute ( LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,memop,scale,datasize,offset) ) = {
+function clause execute ( LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,memop,scale,([:'D:]) datasize,offset) ) = {
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data1 := 0; (* ARM: uninitialized *)
   (bit['D]) data2 := 0; (* ARM: uninitialized *)
@@ -930,11 +1031,11 @@ function clause execute ( LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,me
   switch memop {
     case MemOp_STORE -> {
       if rt_unknown & t == n then
-        date1 := (bit['D]) UNKNOWN
+        data1 := (bit['D]) UNKNOWN
       else
         data1 := rX(t);
       if rt_unknown & t2 == n then
-        date2 := (bit['D]) UNKNOWN
+        data2 := (bit['D]) UNKNOWN
       else
         data2 := rX(t2);
 
@@ -951,7 +1052,7 @@ function clause execute ( LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,me
       data2 := read_data[((datasize * 2) - 1)..datasize];
 
       if rt_unknown then {
-        date1 := (bit['D]) UNKNOWN;
+        data1 := (bit['D]) UNKNOWN;
         data2 := (bit['D]) UNKNOWN;
       };
       wX(t) := data1;
@@ -1028,7 +1129,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   sharedDecodeLoadImmediate(opc,size,Rn,Rt,wback,postindex,scale,offset,AccType_NORMAL,false);
 }
 
-function clause execute ( LoadImmediate(n,t,acctype,memop,_signed,wback,postindex,offset,regsize,datasize) ) = {
+function clause execute ( LoadImmediate(n,t,acctype,memop,_signed,wback,postindex,offset,regsize,([:'D:]) datasize) ) = {
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data := 0; (* ARM: uninitialized *)
   (boolean) wb_unknown := false;
@@ -1191,7 +1292,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   sharedDecodeLoadRegister(Rn,Rt,Rm,opc,size,wback,postindex,scale,extend_type,shift);
 }
 
-function clause execute ( LoadRegister(n,t,m,acctype,memop,_signed,wback,postindex,extend_type,shift,regsize,datasize) ) = {
+function clause execute ( LoadRegister(n,t,m,acctype,memop,_signed,wback,postindex,extend_type,shift,regsize,([:'D:]) datasize) ) = {
   (bit[64]) offset := ExtendReg(m, extend_type, shift);
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data := 0; (* ARM: uninitialized *)
@@ -1352,7 +1453,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   ([:'D:]) datasize := lsl(8, scale);
   (bit[64]) offset := LSL(SignExtend(imm7), scale);
 
-  Some(LoadStorePair(wback,postindex,n,t,t2,acctype,memop,_signed,scale,datasize,offset));
+  Some(LoadStorePair(wback,postindex,n,t,t2,acctype,memop,_signed,datasize,offset));
 }
 
 (* LDP signed offset *)
@@ -1367,7 +1468,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   sharedDecodeLoadStorePair(L,opc,imm7,Rn,Rt,Rt2,wback,postindex);
 }
 
-function clause execute ( LoadStorePair(wback,postindex,n,t,t2,acctype,memop,_signed,scale,datasize,offset) ) = {
+function clause execute ( LoadStorePair(wback,postindex,n,t,t2,acctype,memop,_signed,([:'D:])datasize,offset) ) = {
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data1 := 0; (* ARM: uninitialized *)
   (bit['D]) data2 := 0; (* ARM: uninitialized *)
@@ -1616,7 +1717,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(ExtractRegister(d,n,m,datasize,lsb));
 }
 
-function clause execute ( ExtractRegister(d,n,m,datasize,lsb) ) = {
+function clause execute ( ExtractRegister(d,n,m,([:'R:]) datasize,lsb) ) = {
   (bit['R]) result := 0; (* ARM: uninitialized *)
   (bit['R]) operand1 := rX(n);
   (bit['R]) operand2 := rX(m);
@@ -1650,7 +1751,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(LogicalImmediate(d,n,datasize,setflags,op,imm));
 }}
 
-function clause execute (LogicalImmediate(d,n,datasize,setflags,op,imm)) = {
+function clause execute (LogicalImmediate(d,n,([:'R:]) datasize,setflags,op,imm)) = {
   (bit['R]) result := 0; (* ARM: uninitialized *)
   (bit['R]) operand1 := rX(n);
   (bit['R]) operand2 := imm;

@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -1198,12 +1206,16 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
           let opcode = Opcode (get_opcode pc) in
           let (instruction,istate) = match Interp_inter_imp.decode_to_istate context None opcode with
             | Instr(instruction,istate) ->
-              interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
+               let instruction = interp_value_to_instr_external context instruction in
+               interactf "\n**** Running: %s ****\n"
+                         (Printing_functions.instruction_to_string instruction);
               (instruction,istate)
             | Decode_error d ->
               (match d with
-              | Interp_interface.Unsupported_instruction_error instr ->
-                errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
+              | Interp_interface.Unsupported_instruction_error instruction ->
+                 let instruction = interp_value_to_instr_external context instruction in
+                 errorf "\n**** Encountered unsupported instruction %s ****\n"
+                        (Printing_functions.instruction_to_string instruction)
               | Interp_interface.Not_an_instruction_error op ->
                 (match op with
                 | Opcode bytes ->

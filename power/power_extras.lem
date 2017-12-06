@@ -1,0 +1,96 @@
+open import Pervasives_extra
+open import Interp_ast
+open import Interp_interface
+open import Sail_impl_base
+open import Interp_inter_imp 
+import Set_extra
+
+let rec countLeadingZeros_helper bits =
+  match bits with
+    | (Interp_ast.V_lit (L_aux L_zero _))::bits -> 
+       let (n,loc) = match countLeadingZeros_helper bits with
+         | (Interp_ast.V_lit (L_aux (L_num n) loc)) -> (n,loc)
+         | _ -> failwith "countLeadingZeros_helper: unexpected value" end in
+      Interp_ast.V_lit (L_aux (L_num (n+1)) loc)
+    | _ -> Interp_ast.V_lit (L_aux (L_num 0) Interp_ast.Unknown)
+end
+let rec countLeadingZeros e =
+  match e with
+  | Interp_ast.V_tuple v ->
+     match v with
+     | [Interp_ast.V_track v r;Interp_ast.V_track v2 r2] -> 
+        Interp.taint (countLeadingZeros (Interp_ast.V_tuple [v;v2])) (r union r2)
+     | [Interp_ast.V_track v r;v2] -> Interp.taint (countLeadingZeros (Interp_ast.V_tuple [v;v2])) r
+     | [v;Interp_ast.V_track v2 r2] -> Interp.taint (countLeadingZeros (Interp_ast.V_tuple [v;v2])) r2
+     | [Interp_ast.V_unknown;_] -> Interp_ast.V_unknown
+     | [_;Interp_ast.V_unknown] -> Interp_ast.V_unknown
+     | [Interp_ast.V_vector _ _ bits;Interp_ast.V_lit (L_aux (L_num n) _)] -> 
+        countLeadingZeros_helper (snd (List.splitAt (natFromInteger n) bits))
+     | _ -> failwith "countLeadingZeros: unexpected value"
+     end
+  | _ -> failwith "countLeadingZeros: unexpected value"
+end
+
+(*Power specific external functions*)
+let power_externs = [
+  ("countLeadingZeroes", countLeadingZeros);
+]
+
+(*All external functions*)
+(*let external_functions = Interp_lib.function_map ++ power_externs*)
+
+(*List of memory functions; needs to be expanded with all of the memory functions needed for PPCMem.
+  Should probably be expanded into a parameter to mode as with above
+ *)
+
+let memory_parameter_transformer mode v =
+  match v with
+  | Interp_ast.V_tuple [location;length] ->
+     let (v,loc_regs) = extern_with_track mode extern_vector_value location in
+
+     match length with
+     | Interp_ast.V_lit (L_aux (L_num len) _) ->
+	(v,(natFromInteger len),loc_regs)
+     | Interp_ast.V_track (Interp_ast.V_lit (L_aux (L_num len) _)) size_regs ->
+	match loc_regs with
+	| Nothing -> (v,(natFromInteger len),Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
+	| Just loc_regs -> 
+	   (v,(natFromInteger len),Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
+        end 
+     | _ -> failwith "memory_parameter_transformer: unexpected value"
+    end 
+  | _ -> failwith "memory_parameter_transformer: unexpected value"
+  end
+                      
+let power_read_memory_functions : memory_reads =
+  [ ("MEMr'",         (MR Read_plain   memory_parameter_transformer));
+    ("MEMr_reserve'", (MR Read_reserve memory_parameter_transformer));
+  ]
+let power_memory_writes : memory_writes = []
+  (* [ ("MEMw",             (MW Write_plain       memory_parameter_transformer Nothing));
+    ("MEMw_conditional", (MW Write_conditional memory_parameter_transformer
+			     (Just (fun (IState interp_state c) success ->
+			          let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
+			          IState (Interp.add_answer_to_stack interp_state v) c))
+     ));
+  ] *)
+
+let power_memory_eas : memory_write_eas =
+  [ ("MEMw_EA",         (MEA Write_plain             memory_parameter_transformer));
+    ("MEMw_EA_cond",     (MEA Write_conditional      memory_parameter_transformer))
+  ]
+
+let power_memory_vals : memory_write_vals =
+  [ ("MEMw'",      (MV (fun mode v -> Nothing) Nothing));
+    ("MEMw_conditional'", (MV (fun mode v -> Nothing)
+                            (Just (fun (IState interp_state c) success ->
+			         let v = Interp_ast.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
+	                         IState (Interp.add_answer_to_stack interp_state v) c))));
+  ]
+
+let power_barrier_functions = [
+  ("I_Sync", Barrier_Isync);
+  ("H_Sync", Barrier_Sync);
+  ("LW_Sync", Barrier_LwSync);
+  ("EIEIO_Sync", Barrier_Eieio);
+]

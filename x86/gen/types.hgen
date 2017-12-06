@@ -1,0 +1,134 @@
+type bit2  = int
+type bit64 = Nat_big_num.num
+let bit64_of_int = Nat_big_num.of_int
+let bit64_to_int = Nat_big_num.to_int
+let bit64_to_string = Nat_big_num.to_string
+let eq_bit64 = Nat_big_num.equal
+
+type x86Binop =
+| X86ADD
+| X86OR
+| X86ADC
+| X86SBB
+| X86AND
+| X86SUB
+| X86XOR
+| X86CMP
+| X86ROL
+| X86ROR
+| X86RCL
+| X86RCR
+| X86SHL
+| X86SHR
+| X86TEST
+| X86SAR
+
+let pp_x86Binop = function
+| X86ADD  -> "add"
+| X86OR   -> "or"
+| X86ADC  -> "adc"
+| X86SBB  -> "sbb"
+| X86AND  -> "and"
+| X86SUB  -> "sub"
+| X86XOR  -> "xor"
+| X86CMP  -> "cmp"
+| X86ROL  -> "rol"
+| X86ROR  -> "ror"
+| X86RCL  -> "rcl"
+| X86RCR  -> "rcr"
+| X86SHL  -> "shl"
+| X86SHR  -> "shr"
+| X86TEST -> "test"
+| X86SAR  -> "sar"
+
+type x86Bitop = X86Bts | X86Btc | X86Btr
+
+let pp_x86Bitop = function
+| X86Bts -> "bts"
+| X86Btc -> "btc"
+| X86Btr -> "btr"
+
+type x86Monop =
+| X86DEC
+| X86INC
+| X86NOT
+| X86NEG
+
+let pp_x86Monop = function
+| X86DEC -> "dec"
+| X86INC -> "inc"
+| X86NOT -> "not"
+| X86NEG -> "neg"
+
+type x86Cond =
+| X86O
+| X86NO
+| X86B
+| X86NB
+| X86E
+| X86NE
+| X86NA
+| X86A
+| X86S
+| X86NS
+| X86P
+| X86NP
+| X86L
+| X86NL
+| X86NG
+| X86G
+| X86ALWAYS
+
+let pp_x86Cond = function
+| X86O -> "o"
+| X86NO -> "no"
+| X86B -> "b"
+| X86NB -> "nb"
+| X86E -> "e"
+| X86NE -> "ne"
+| X86NA -> "na"
+| X86A -> "a"
+| X86S -> "s"
+| X86NS -> "ns"
+| X86P -> "p"
+| X86NP -> "np"
+| X86L -> "l"
+| X86NL -> "nl"
+| X86NG -> "ng"
+| X86G -> "g"
+| X86ALWAYS -> ""
+
+type x86Suffix =
+| X86BYTE
+| X86WORD
+| X86LONG
+| X86QUAD
+| X86NONE
+
+let pp_x86Suffix = function
+| X86BYTE -> "byte"
+| X86WORD -> "word"
+| X86LONG -> "long"
+| X86QUAD -> "quad"
+| X86NONE -> ""
+
+type x86Size =
+| X86S8 of bool
+| X86S16
+| X86S32
+| X86S64
+
+let pp_x86Size = function
+| X86S8(_) -> "b"
+| X86S16 -> "w"
+| X86S32 -> "l"
+| X86S64 -> "q"
+
+let pp_locked l = if l then "lock " else ""
+
+let suffix_size = function
+| X86BYTE -> X86S8 false
+| X86WORD -> X86S16
+| X86LONG -> X86S32
+| X86QUAD -> X86S64
+| X86NONE -> X86S64

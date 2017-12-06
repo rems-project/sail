@@ -187,9 +187,8 @@ typedef CountOp =
   enumerate {CountOp_CLZ; CountOp_CLS; CountOp_CNT}
 
 typedef ExtendType =
-  (* the oreder is important for decoding *)
-  enumerate { ExtendType_UXTB; ExtendType_UXTH; ExtendType_UXTW; ExtendType_UXTX;
-              ExtendType_SXTB; ExtendType_SXTH; ExtendType_SXTW; ExtendType_SXTX }
+  enumerate { ExtendType_SXTB; ExtendType_SXTH; ExtendType_SXTW; ExtendType_SXTX;
+              ExtendType_UXTB; ExtendType_UXTH; ExtendType_UXTW; ExtendType_UXTX }
 
 typedef RevOp =
   enumerate {RevOp_RBIT; RevOp_REV16; RevOp_REV32; RevOp_REV64}

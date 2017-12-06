@@ -1,0 +1,61 @@
+(* SS: should re-check interpretation of 1 and 0 *)
+let trans_soov = function 
+  | SetSOOV -> 1
+  | DontSetSOOV -> 0
+
+let trans_cr0 = function 
+  | SetCR0 -> 1
+  | DontSetCR0 -> 0
+
+let trans_aa = function 
+  | SetAA -> 1
+  | DontSetAA -> 0
+
+let trans_lk = function 
+  | SetLK -> 1
+  | DontSetLK -> 0
+
+
+(* translating branch target addresses *)
+let trans_li_setaa_setlk_k setaa setlk li = li asr 2
+let trans_bd_setaa_setlk_k_k_k setaa setlk bo bi bd = bd asr 2
+
+(* translating vector-scalar floating-point ops *)
+(* all of these translate a 6-bit value into a 5:1 bit pair, but differ
+   in number and type of arguments *)
+let trans_k xt = xt land 0x1F
+let trans_xk xt = xt land 0x20
+let trans_t_k_k xt _ = trans_k xt
+let trans_tx_k_k xt _ = trans_xk xt
+let trans_t_k_reg_reg xt xa _ = trans_k xt
+let trans_tx_k_reg_reg xt xa _ = trans_xk xt
+let trans_s_k_reg_reg = trans_t_k_reg_reg
+let trans_sx_k_reg_reg = trans_tx_k_reg_reg
+let trans_t_k_k_k = trans_t_k_reg_reg
+let trans_tx_k_k_k = trans_tx_k_reg_reg
+let trans_b_k_k = trans_t_k_k
+let trans_bx_k_k = trans_tx_k_k
+let trans_a_k_k_k xt xa xb = trans_k xa
+let trans_ax_k_k_k xt xa xb = trans_xk xa
+let trans_b_k_k_k xt xa xb = trans_k xb
+let trans_bx_k_k_k xt xa xb = trans_xk xb 
+let trans_a_crindex_k_k bf xa xb = trans_k xa
+let trans_ax_crindex_k_k bf xa xb = trans_xk xa
+let trans_b_crindex_k_k bf xa xb = trans_k xb
+let trans_bx_crindex_k_k bf xa xb = trans_xk xb
+let trans_b_crindex_k bf xb = trans_k xb
+let trans_bx_crindex_k bf xb = trans_xk xb
+let trans_t_setcr0_k_k_k setcr0 xt xa xb = trans_k xt
+let trans_tx_setcr0_k_k_k setcr0 xt xa xb = trans_xk xt
+let trans_a_setcr0_k_k_k setcr0 xt xa xb = trans_k xa
+let trans_ax_setcr0_k_k_k setcr0 xt xa xb = trans_xk xa
+let trans_b_setcr0_k_k_k setcr0 xt xa xb = trans_k xb
+let trans_bx_setcr0_k_k_k setcr0 xt xa xb = trans_xk xb
+let trans_t_k_k_k_k xt xa xb dm = trans_k xt
+let trans_tx_k_k_k_k xt xa xb dm = trans_xk xt
+let trans_a_k_k_k_k xt xa xb dm = trans_k xa
+let trans_ax_k_k_k_k xt xa xb dm = trans_xk xa
+let trans_b_k_k_k_k xt xa xb dm = trans_k xb
+let trans_bx_k_k_k_k xt xa xb dm = trans_xk xb
+let trans_c_k_k_k_k xt xa xb xc = trans_k xc
+let trans_cx_k_k_k_k xt xa xb xc = trans_xk xc

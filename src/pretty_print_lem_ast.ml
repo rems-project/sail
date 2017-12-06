@@ -9,6 +9,14 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -74,7 +82,7 @@ let lemnum default n =
     "int" ^ string_of_big_int n
   else if ge_big_int n zero_big_int then
     default n
-  else ("(zero - " ^ (default (abs_big_int n)) ^ ")")
+  else ("(int0 - " ^ (default (abs_big_int n)) ^ ")")
 
 let pp_format_id (Id_aux(i,_)) =
   match i with
@@ -281,38 +289,28 @@ let pp_format_lit_lem (L_aux(lit,l)) =
 let pp_lem_lit ppf l = base ppf (pp_format_lit_lem l)
 
 
-let rec pp_format_nes nes =
-  "[" ^ (*
-  (list_format "; "
-     (fun ne -> match ne with
-       | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n_lem n1 ^ " " ^ pp_format_n_lem n2 ^ ")"
-       | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n_lem n1 ^ " " ^ pp_format_n_lem n2 ^ ")"
-       | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n_lem n1 ^ " " ^ pp_format_n_lem n2 ^ ")"
-       | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) ->
-         "(Nec_in \"" ^ i ^ "\" [" ^ (list_format "; " string_of_int ns)^ "])"
-       | InS(_,_,ns)  ->
-         "(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"
-       | CondCons(_,nes_c,nes_t) ->
-         "(Nec_cond " ^ (pp_format_nes nes_c) ^ " " ^ (pp_format_nes nes_t) ^ ")"
-       | BranchCons(_,nes_b) ->
-         "(Nec_branch " ^ (pp_format_nes nes_b) ^ ")"
-     )
-     nes) ^*) "]"
+let tag_id id env =
+  if Env.is_extern id env "lem_ast" then
+    "Tag_extern (Just \"" ^ Ast_util.string_of_id id ^ "\")"
+  else if Env.is_union_constructor id env then
+    "Tag_ctor"
+  else
+    "Tag_empty"
 
-let pp_format_annot = function
+let pp_format_annot ?tag:(t="Tag_empty") = function
   | None -> "Nothing"
   | Some (_, typ, eff) ->
-    "(Just (" ^ pp_format_typ_lem typ ^ ", " ^ pp_format_effects_lem eff ^ "))"
-(*
-  | NoTyp -> "Nothing"
-  | Base((_,t),tag,nes,efct,efctsum,_) ->
-    (*TODO print out bindings for use in pattern match in interpreter*)
-     "(Just (" ^ pp_format_t_lem t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
-       pp_format_e_lem efct ^ ", " ^ pp_format_e_lem efctsum ^ "))"
-  | Overload _ -> "Nothing" *)
+     "(Just ("
+     ^ pp_format_typ_lem typ ^ ", "
+     ^ t ^ ", "
+     ^ "[], "
+     ^ pp_format_effects_lem eff ^ ", "
+     ^ pp_format_effects_lem eff
+     ^ "))"
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
 
+let pp_annot_tag tag ppf ant = base ppf (pp_format_annot ~tag:tag ant)
 
 let rec pp_format_pat_lem (P_aux(p,(l,annot))) =
   "(P_aux " ^
@@ -345,7 +343,8 @@ let rec pp_lem_let ppf (LB_aux(lb,(l,annot))) =
         fprintf ppf "@[<0>(%a %a %a)@]" kwd "LB_val" pp_lem_pat pat  pp_lem_exp exp in
   fprintf ppf "@[<0>(LB_aux %a (%a, %a))@]" print_lb lb pp_lem_l l pp_annot annot
 
-and pp_lem_exp ppf (E_aux(e,(l,annot))) =
+and pp_lem_exp ppf (E_aux(e,(l,annot)) as exp) =
+  let env = env_of exp in
   let print_e ppf e =
     match e with
     | E_block(exps) -> fprintf ppf "@[<0>(E_aux %a [%a] %a (%a, %a))@]"
@@ -356,13 +355,13 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       kwd "(E_nondet"
       (list_pp pp_semi_lem_exp pp_lem_exp) exps
       kwd ")" pp_lem_l l pp_annot annot
-    | E_id(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_id" pp_lem_id id pp_lem_l l pp_annot annot
+    | E_id(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_id" pp_lem_id id pp_lem_l l (pp_annot_tag (tag_id id env)) annot
     | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
     | E_cast(typ,exp) ->
       fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_internal_cast((_,None),e) -> pp_lem_exp ppf e
     | E_app(f,args) -> fprintf ppf "@[<0>(E_aux (E_app %a [%a]) (%a, %a))@]"
-                         pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args pp_lem_l l pp_annot annot
+                         pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args pp_lem_l l (pp_annot_tag (tag_id f env)) annot
     | E_app_infix(l',op,r) -> fprintf ppf "@[<0>(E_aux (E_app_infix %a %a %a) (%a, %a))@]"
                                 pp_lem_exp l' pp_lem_id op pp_lem_exp r pp_lem_l l pp_annot annot
     | E_tuple(exps) -> fprintf ppf "@[<0>(E_aux (E_tuple [%a]) (%a, %a))@]"
@@ -471,7 +470,7 @@ and pp_lem_case ppf = function
 | Pat_aux(Pat_exp(pat,exp),(l,annot)) ->
   fprintf ppf "@[<1>(Pat_aux (Pat_exp %a@ %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp exp pp_lem_l l pp_annot annot
 | Pat_aux(Pat_when(pat,guard,exp),(l,annot)) ->
-  fprintf ppf "@[<1>(Pat_aux (Pat_exp %a@ %a %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp guard pp_lem_exp exp pp_lem_l l pp_annot annot
+  fprintf ppf "@[<1>(Pat_aux (Pat_when %a@ %a %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp guard pp_lem_exp exp pp_lem_l l pp_annot annot
 and pp_semi_lem_case ppf case = fprintf ppf "@[<1>%a %a@]" pp_lem_case case kwd ";"
 
 and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =

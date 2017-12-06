@@ -1,0 +1,50 @@
+open import Pervasives
+open import Sail_impl_base
+open import Sail_values
+open import Prompt
+
+val MEMr'         : (vector bitU * integer) -> M (vector bitU)
+val MEMr_reserve' : (vector bitU * integer) -> M (vector bitU)
+
+let MEMr' (addr,size) = read_mem true Read_plain addr size
+let MEMr_reserve' (addr,size) = read_mem true Read_reserve addr size
+
+
+val MEMw_EA      : (vector bitU * integer) -> M unit
+val MEMr_EA_cond : (vector bitU * integer) -> M unit
+                                                           
+let MEMw_EA (addr,size) = write_mem_ea Write_plain addr size
+let MEMw_EA_cond (addr,size) = write_mem_ea Write_conditional addr size
+
+
+val MEMw'             : (vector bitU * integer * vector bitU) -> M unit
+val MEMw_conditional' : (vector bitU * integer * vector bitU) -> M bitU
+
+let MEMw' (_,_,value) = write_mem_val value >>= fun _ -> return ()
+let MEMw_conditional' (_,_,value) = write_mem_val value >>= fun b -> return (bool_to_bitU b)
+
+
+val I_Sync     : unit -> M unit
+val H_Sync     : unit -> M unit
+val LW_Sync    : unit -> M unit
+val EIEIO_Sync : unit -> M unit
+
+let I_Sync ()     = barrier Barrier_Isync
+let H_Sync ()     = barrier Barrier_Sync
+let LW_Sync ()    = barrier Barrier_LwSync
+let EIEIO_Sync () = barrier Barrier_Eieio
+
+let recalculate_dependency () = footprint
+
+let trap () = exit "error"
+(* this needs to change, but for that we'd have to make the type checker know about trap 
+ * as an effect *)
+
+val countLeadingZeroes : vector bitU * integer -> integer
+let countLeadingZeroes (Vector bits _ _ ,n)  = 
+  let (_,bits) = List.splitAt (natFromInteger n) bits in
+  integerFromNat (List.length (takeWhile ((=) B0) bits))
+
+
+let duplicate (bit,length) =
+  Vector (List.replicate (natFromInteger length) bit) 0 true

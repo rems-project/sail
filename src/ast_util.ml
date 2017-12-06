@@ -10,7 +10,13 @@
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
 (*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
 (*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -47,6 +53,8 @@ open Util
 open Big_int
 
 let no_annot = (Parse_ast.Unknown, ())
+
+let gen_loc l = Parse_ast.Generated l
 
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
@@ -249,7 +257,8 @@ let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
 
-let nc_set kid ints = mk_nc (NC_set (kid, ints))
+let nc_set kid nums = mk_nc (NC_set (kid, nums))
+let nc_int_set kid ints = mk_nc (NC_set (kid, List.map big_int_of_int ints))
 let nc_eq n1 n2 = mk_nc (NC_equal (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
@@ -412,12 +421,12 @@ let def_loc = function
   | DEF_spec (VS_aux (_, (l, _)))
   | DEF_default (DT_aux (_, l))
   | DEF_scattered (SD_aux (_, (l, _)))
-  | DEF_reg_dec (DEC_aux (_, (l, _))) ->
+  | DEF_reg_dec (DEC_aux (_, (l, _)))
+  | DEF_fixity (_, _, Id_aux (_, l))
+  | DEF_overload (Id_aux (_, l), _) ->
     l
   | DEF_internal_mutrec _
-  | DEF_comm _
-  | DEF_overload _
-  | DEF_fixity _ ->
+  | DEF_comm _ ->
     Parse_ast.Unknown
 
 let string_of_id = function

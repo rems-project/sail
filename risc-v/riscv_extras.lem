@@ -31,30 +31,53 @@ let memory_parameter_transformer_option_address _mode v =
   end
 
 
-let read_memory_functions : memory_reads =
-  [ ("MEMr",             (MR Read_plain              memory_parameter_transformer));
-    ("MEMr_reserve",     (MR Read_reserve            memory_parameter_transformer));
+let riscv_read_memory_functions : memory_reads =
+  [ ("MEMr",                  (MR Read_plain                  memory_parameter_transformer));
+    ("MEMr_acquire",          (MR Read_RISCV_acquire          memory_parameter_transformer));
+    ("MEMr_strong_acquire",   (MR Read_RISCV_strong_acquire   memory_parameter_transformer));
+    ("MEMr_reserved",         (MR Read_RISCV_reserved         memory_parameter_transformer));
+    ("MEMr_reserved_acquire", (MR Read_RISCV_reserved_acquire memory_parameter_transformer));
+    ("MEMr_reserved_strong_acquire",
+                              (MR Read_RISCV_reserved_acquire memory_parameter_transformer));
   ]
 
-let memory_writes : memory_writes =
+let riscv_memory_writes : memory_writes =
   []
 
-let memory_eas : memory_write_eas =
-  [ ("MEMea",                 (MEA Write_plain           memory_parameter_transformer));
-    ("MEMea_conditional",     (MEA Write_conditional     memory_parameter_transformer));
+let riscv_memory_eas : memory_write_eas =
+  [ ("MEMea",                     (MEA Write_plain                     memory_parameter_transformer));
+    ("MEMea_release",             (MEA Write_RISCV_release             memory_parameter_transformer));
+    ("MEMea_strong_release",      (MEA Write_RISCV_strong_release      memory_parameter_transformer));
+    ("MEMea_conditional",         (MEA Write_RISCV_conditional         memory_parameter_transformer));
+    ("MEMea_conditional_release", (MEA Write_RISCV_conditional_release memory_parameter_transformer));
+    ("MEMea_conditional_strong_release",
+                                  (MEA Write_RISCV_conditional_strong_release
+                                                                       memory_parameter_transformer));
   ]
 
-let memory_vals : memory_write_vals =
-  [ ("MEMval",      (MV memory_parameter_transformer_option_address Nothing));
-    ("MEMval_conditional", (MV memory_parameter_transformer_option_address
-                           (Just 
-                           (fun (IState interp context) b -> 
-                             let bit = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
-                             (IState (Interp.add_answer_to_stack interp bit) context)))));
+let riscv_memory_vals : memory_write_vals =
+  [ ("MEMval",                    (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_release",            (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_strong_release",     (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_conditional",        (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_conditional_release",(MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_conditional_strong_release",
+                                  (MV memory_parameter_transformer_option_address Nothing));
+
   ]
 
-let barrier_functions =
+let riscv_speculate_conditional_success : excl_res =
+  let f = fun (IState interp context) b ->
+    let bool_res = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
+    IState (Interp.add_answer_to_stack interp bool_res) context
+  in
+  Just ("speculate_conditional_success", (ER (Just f)))
+
+let riscv_barrier_functions =
   [ ("MEM_fence_rw_rw", Barrier_RISCV_rw_rw);
     ("MEM_fence_r_rw",  Barrier_RISCV_r_rw);
+    ("MEM_fence_r_r",   Barrier_RISCV_r_r);
     ("MEM_fence_rw_w",  Barrier_RISCV_rw_w);
+    ("MEM_fence_w_w",   Barrier_RISCV_w_w);
+    ("MEM_fence_i",     Barrier_RISCV_i);
   ]

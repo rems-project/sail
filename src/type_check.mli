@@ -10,6 +10,13 @@
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
 (*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -232,6 +239,8 @@ type uvar =
 val string_of_uvar : uvar -> string
 
 val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option
+
+val alpha_equivalent : Env.t -> typ -> typ -> bool
 
 (* Throws Invalid_argument if the argument is not a E_app expression *)
 val instantiation_of : tannot exp -> uvar KBindings.t

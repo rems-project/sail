@@ -1,0 +1,146 @@
+let trans_out_int ( _fname, _fsize, fbits ) =
+  Nat_big_num.to_int (SB.integer_of_bit_list fbits)
+
+let trans_out_reg flv =
+  let n = trans_out_int flv in
+  Ireg (match n with
+  | 0 -> GPR0
+  | 1 -> GPR1
+  | 2 -> GPR2
+  | 3 -> GPR3
+  | 4 -> GPR4
+  | 5 -> GPR5
+  | 6 -> GPR6
+  | 7 -> GPR7
+  | 8 -> GPR8
+  | 9 -> GPR9
+  | 10 -> GPR10
+  | 11 -> GPR11
+  | 12 -> GPR12
+  | 13 -> GPR13
+  | 14 -> GPR14
+  | 15 -> GPR15
+  | 16 -> GPR16
+  | 17 -> GPR17
+  | 18 -> GPR18
+  | 19 -> GPR19
+  | 20 -> GPR20
+  | 21 -> GPR21
+  | 22 -> GPR22
+  | 23 -> GPR23
+  | 24 -> GPR24
+  | 25 -> GPR25
+  | 26 -> GPR26
+  | 27 -> GPR27
+  | 28 -> GPR28
+  | 29 -> GPR29
+  | 30 -> GPR30
+  | 31 -> GPR31
+  | _ -> failwith "trans_out_reg given number not 0 to 31")
+
+let trans_out_soov ifv =
+  match trans_out_int ifv with
+  | 1 -> SetSOOV
+  | 0 -> DontSetSOOV
+  | _ -> failwith "trans_out_soov given number other than 0 and 1"
+
+let trans_out_cr0 ifv =
+  match trans_out_int ifv with
+  | 1 -> SetCR0
+  | 0 -> DontSetCR0
+  | _ -> failwith "trans_out_cr0 given number other than 0 and 1"
+
+let trans_out_aa ifv =
+  match trans_out_int ifv with
+  | 1 -> SetAA
+  | 0 -> DontSetAA
+  | _ -> failwith "trans_out_aa given number other than 0 and 1"
+
+let trans_out_lk ifv =
+  match trans_out_int ifv with
+  | 1 -> SetLK
+  | 0 -> DontSetLK
+  | _ -> failwith "trans_out_lk given number other than 0 and 1"
+
+(*These probably need to be checked that the shift is the correct thing to do*)
+(* translating branch target addresses *)
+(* CP: this does not seem to match with how the function is used, trying to fix
+   this now. *)
+(* let trans_out_li_setaa_setlk_k3 setaa setlk li =
+  match li with
+  | (n,m,bits) ->
+    match bits with
+    | [] | [_] | [_;_] -> (n,m,bits)
+    | _ ->
+      (n,m, (let front,rest = List.hd bits, List.tl bits in
+             let second,rest = List.hd rest, List.tl rest in
+             rest @ [front;second])) *)
+let trans_out_li_setaa_setlk_k3 li setaa setlk =
+  match li with
+  | (n,m,bits) -> (n,m, bits @ [Bitc_zero;Bitc_zero])
+
+(* CP: this does not seem to match with how the function is used, trying to fix
+   this now. *)
+(* let trans_out_bd_setaa_setlk_k_k_k5 setaa setlk bo bi bd = 
+  match bd with
+  | (n,m,bits) ->
+    match bits with
+    | [] | [_] | [_;_] -> (n,m,bits)
+    | _ ->
+      (n,m, (let front,rest = List.hd bits, List.tl bits in
+             let second,rest = List.hd rest, List.tl rest in
+             rest @ [front;second])) *)
+let trans_out_bd_setaa_setlk_k_k_k5 bo bi bd setaa setlk = 
+  match bd with
+  | (n,m,bits) -> (n,m, bits @ [Bitc_zero;Bitc_zero])
+      
+(* translating vector-scalar floating-point ops *)
+(* all of these translate a 6-bit value into a 5:1 bit pair, but differ
+   in number and type of arguments *)
+(*this is probably wrong, probably I want to do a transformation on the bits then return, but unclear what translation*)
+let trans_out_k xt = xt
+let trans_out_xk xt = xt
+let trans_out_t_k_k4 xt _ _ _ = trans_out_k xt
+let trans_out_tx_k_k4 xt _ _ _ = trans_out_xk xt
+let trans_out_t_k_reg_reg4 xt xa _ _ = trans_out_k xt
+let trans_out_tx_k_reg_reg4 xt xa _ _ = trans_out_xk xt
+let trans_out_s_k_reg_reg4 = trans_out_t_k_reg_reg4
+let trans_out_sx_k_reg_reg4 = trans_out_tx_k_reg_reg4
+let trans_out_t_k_k_k6 x _ _ _ _ _ = trans_out_k x
+let trans_out_t_k_k_k5 x _ _ _ _ = trans_out_k x
+let trans_out_tx_k_k_k6 x _ _ _ _ _= trans_out_k x
+let trans_out_tx_k_k_k5 x _ _ _ _ = trans_out_k x
+let trans_out_b_k_k4 = trans_out_t_k_k4
+let trans_out_bx_k_k4 = trans_out_tx_k_k4
+let trans_out_a_k_k_k6 xt xa xb _ _ _ = trans_out_k xa
+let trans_out_ax_k_k_k6 xt xa xb _ _ _ = trans_out_xk xa
+let trans_out_b_k_k_k6 xt xa xb _ _ _ = trans_out_k xb
+let trans_out_b_k_k_k5 xt xa xb _ _ = trans_out_k xb
+let trans_out_bx_k_k_k6 xt xa xb _ _ _ = trans_out_xk xb 
+let trans_out_bx_k_k_k5 xt xa xb _ _ = trans_out_xk xb
+let trans_out_a_crindex_k_k5 bf xa xb _ _ = trans_out_k xa
+let trans_out_ax_crindex_k_k5 bf xa xb _ _ = trans_out_xk xa
+let trans_out_b_crindex_k_k5 bf xa xb _ _ = trans_out_k xb
+let trans_out_bx_crindex_k_k5 bf xa xb _ _ = trans_out_xk xb
+let trans_out_b_crindex_k3 bf xb _ = trans_out_k xb
+let trans_out_bx_crindex_k3 bf xb _ = trans_out_xk xb
+let trans_out_t_setcr0_k_k_k7 setcr0 xt xa xb _ _ _ = trans_out_k xt
+let trans_out_tx_setcr0_k_k_k7 setcr0 xt xa xb _ _ _ = trans_out_xk xt
+let trans_out_a_setcr0_k_k_k7 setcr0 xt xa xb _ _ _ = trans_out_k xa
+let trans_out_ax_setcr0_k_k_k7 setcr0 xt xa xb _ _ _= trans_out_xk xa
+let trans_out_b_setcr0_k_k_k7 setcr0 xt xa xb _ _ _ = trans_out_k xb
+let trans_out_bx_setcr0_k_k_k7 setcr0 xt xa xb _ _ _ = trans_out_xk xb
+let trans_out_t_k_k_k_k7 xt xa xb dm _ _ _ = trans_out_k xt
+let trans_out_tx_k_k_k_k7 xt xa xb dm _ _ _ = trans_out_xk xt
+let trans_out_t_k_k_k_k8 xt xa xb dm _ _ _ _ = trans_out_k xt
+let trans_out_tx_k_k_k_k8 xt xa xb dm _ _ _ _ = trans_out_xk xt
+let trans_out_a_k_k_k_k7 xt xa xb dm _ _ _ = trans_out_k xa
+let trans_out_ax_k_k_k_k7 xt xa xb dm _ _ _ = trans_out_xk xa
+let trans_out_a_k_k_k_k8 xt xa xb dm _ _ _ _ = trans_out_k xa
+let trans_out_ax_k_k_k_k8 xt xa xb dm _ _ _ _ = trans_out_xk xa
+let trans_out_b_k_k_k_k7 xt xa xb dm _ _ _ = trans_out_k xb
+let trans_out_bx_k_k_k_k7 xt xa xb dm _ _ _ = trans_out_xk xb
+let trans_out_b_k_k_k_k8 xt xa xb dm _ _ _ _ = trans_out_k xb
+let trans_out_bx_k_k_k_k8 xt xa xb dm _ _ _ _ = trans_out_xk xb
+let trans_out_c_k_k_k_k8 xt xa xb xc _ _ _ _ = trans_out_k xc
+let trans_out_cx_k_k_k_k8 xt xa xb xc _ _ _ _ = trans_out_xk xc
