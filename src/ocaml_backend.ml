@@ -112,6 +112,7 @@ let ocaml_string_comma = string " ^ \", \" ^ "
 
 let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
   match typ_aux with
+  | Typ_id id when string_of_id id = "exception" -> string "Printexc.to_string" ^^ space ^^ arg
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id eid, _)), _)])
@@ -199,6 +200,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   | P_list pats -> brackets (separate_map (semi ^^ space) (ocaml_pat ctx) pats)
   | P_wild -> string "_"
   | P_as (pat, id) -> separate space [ocaml_pat ctx pat; string "as"; zencode ctx id]
+  | P_app (id, pats) -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
   | _ -> string ("PAT<" ^ string_of_pat pat ^ ">")
 
 let begin_end doc = group (string "begin" ^^ nest 2 (break 1 ^^ doc) ^/^ string "end")
@@ -233,6 +235,9 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_throw exp -> string "raise" ^^ space ^^ ocaml_atomic_exp ctx exp
   | E_case (exp, pexps) ->
      begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"]
+                ^/^ ocaml_pexps ctx pexps)
+  | E_try (exp, pexps) ->
+     begin_end (separate space [string "try"; ocaml_atomic_exp ctx exp; string "with"]
                 ^/^ ocaml_pexps ctx pexps)
   | E_assign (lexp, exp) -> ocaml_assignment ctx lexp exp
   | E_if (c, t, e) -> separate space [string "if"; ocaml_atomic_exp ctx c;

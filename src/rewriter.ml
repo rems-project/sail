@@ -509,6 +509,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_record_update          : 'exp * 'fexps -> 'exp_aux
   ; e_field                  : 'exp * id -> 'exp_aux
   ; e_case                   : 'exp * 'pexp list -> 'exp_aux
+  ; e_try                    : 'exp * 'pexp list -> 'exp_aux
   ; e_let                    : 'letbind * 'exp -> 'exp_aux
   ; e_assign                 : 'lexp * 'exp -> 'exp_aux
   ; e_sizeof                 : nexp -> 'exp_aux
@@ -578,6 +579,7 @@ let rec fold_exp_aux alg = function
   | E_record_update (e,fexps) -> alg.e_record_update (fold_exp alg e, fold_fexps alg fexps)
   | E_field (e,id) -> alg.e_field (fold_exp alg e, id)
   | E_case (e,pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
+  | E_try (e,pexps) -> alg.e_try (fold_exp alg e, List.map (fold_pexp alg) pexps)
   | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
   | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
   | E_sizeof nexp -> alg.e_sizeof nexp
@@ -651,6 +653,7 @@ let id_exp_alg =
   ; e_record_update = (fun (e1,fexp) -> E_record_update (e1,fexp))
   ; e_field = (fun (e1,id) -> (E_field (e1,id)))
   ; e_case = (fun (e1,pexps) -> E_case (e1,pexps))
+  ; e_try = (fun (e1,pexps) -> E_try (e1,pexps))
   ; e_let = (fun (lb,e2) -> E_let (lb,e2))
   ; e_assign = (fun (lexp,e2) -> E_assign (lexp,e2))
   ; e_sizeof = (fun nexp -> E_sizeof nexp)
@@ -747,6 +750,9 @@ let compute_exp_alg bot join =
   ; e_case = (fun ((v1,e1),pexps) ->
     let (vps,pexps) = List.split pexps in
     (join_list (v1::vps), E_case (e1,pexps)))
+  ; e_try = (fun ((v1,e1),pexps) ->
+    let (vps,pexps) = List.split pexps in
+    (join_list (v1::vps), E_try (e1,pexps)))
   ; e_let = (fun ((vl,lb),(v2,e2)) -> (join vl v2, E_let (lb,e2)))
   ; e_assign = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, E_assign (lexp,e2)))
   ; e_sizeof = (fun nexp -> (bot, E_sizeof nexp))

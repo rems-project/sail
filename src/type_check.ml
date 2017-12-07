@@ -1182,11 +1182,7 @@ let prove env (NC_aux (nc_aux, _) as nc) =
   | NC_equal (nexp1, nexp2) when compare_const eq_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
   | NC_bounded_le (nexp1, nexp2) when compare_const le_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
   | NC_bounded_ge (nexp1, nexp2) when compare_const ge_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_equal (nexp1, nexp2) when compare_const (fun c1 c2 -> not (eq_big_int c1 c2)) (nexp_simp nexp1) (nexp_simp nexp2) -> false
-  | NC_bounded_le (nexp1, nexp2) when compare_const gt_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> false
-  | NC_bounded_ge (nexp1, nexp2) when compare_const lt_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> false
   | NC_true -> true
-  | NC_false -> false
   | _ -> prove_z3 env nc
 
 let rec subtyp_tnf env tnf1 tnf2 =
