@@ -1812,6 +1812,8 @@ let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
   match exp_aux with
   | E_constraint nc ->
      Some nc
+  | E_lit (L_aux (L_true, _)) -> Some nc_true
+  | E_lit (L_aux (L_false, _)) -> Some nc_true
   | E_app (op, [x; y]) when string_of_id op = "or_bool" ->
      option_binop nc_or (assert_constraint env x) (assert_constraint env y)
   | E_app (op, [x; y]) when string_of_id op = "and_bool" ->

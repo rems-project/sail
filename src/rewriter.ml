@@ -80,7 +80,7 @@ let effect_of_pexp (Pat_aux (pexp,(_,a))) = match a with
     | Pat_when (_, g, e) -> union_effects (effect_of g) (effect_of e))
 let effect_of_lb (LB_aux (_,(_,a))) = effect_of_annot a
 
-let simple_annot l typ = (gen_loc l, Some (Env.empty, typ, no_effect))
+let simple_annot l typ = (gen_loc l, Some (initial_env, typ, no_effect))
 
 let rec small (E_aux (exp,_)) = match exp with
   | E_id _
@@ -265,12 +265,12 @@ let rewrite_pexp rewriters =
   | (Pat_aux (Pat_when(p, e, e'), pannot)) ->
      Pat_aux (Pat_when(rewriters.rewrite_pat rewriters p, rewrite e, rewrite e'), pannot)
 
-let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
+let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
   let rewrap p = P_aux (p,(l,annot)) in
   let rewrite = rewriters.rewrite_pat rewriters in
   match pat with
   | P_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-    let ps =  List.map (fun p -> P_aux (P_lit p, simple_annot l bit_typ))
+    let ps =  List.map (fun p -> P_aux (P_lit p, (l, Some (pat_env_of orig_pat, bit_typ, no_effect))))
         (vector_string_to_bit_list l lit) in
     rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
@@ -286,7 +286,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
   | P_cons (pat1, pat2) -> rewrap (P_cons (rewrite pat1, rewrite pat2))
 
-let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
+let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   let rewrap e = E_aux (e,(l,annot)) in
   let rewrite = rewriters.rewrite_exp rewriters in
   match exp with
@@ -294,7 +294,7 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
   | E_nondet exps -> rewrap (E_nondet (List.map rewrite exps))
   | E_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-    let es = List.map (fun p -> E_aux (E_lit p, simple_annot l bit_typ))
+    let es = List.map (fun p -> E_aux (E_lit p, (l, Some (env_of orig_exp, bit_typ, no_effect))))
         (vector_string_to_bit_list l lit) in
     rewrap (E_vector es)
   | E_id _ | E_lit _  -> rewrap exp

@@ -229,9 +229,8 @@ let rewrite_step defs (name,rewriter) =
 
 let rewrite rewriters defs =
   try List.fold_left rewrite_step defs rewriters with
-  | Type_check.Type_error (_, err) ->
-     prerr_endline (Type_check.string_of_type_error err);
-     exit 1
+  | Type_check.Type_error (l, err) ->
+     raise (Reporting_basic.err_typ l (Type_check.string_of_type_error err))
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !opt_lem_mwords x)]
