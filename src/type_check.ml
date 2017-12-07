@@ -434,7 +434,7 @@ end = struct
         ("real", []);
         ("list", [BK_type]);
         ("string", []);
-        ("itself", [BK_type])
+        ("itself", [BK_nat])
       ]
 
   let bound_typ_id env id =

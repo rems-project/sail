@@ -6,3 +6,4 @@ fnreduce -auto_mono
 varmatch -auto_mono
 vector -auto_mono
 union-exist -auto_mono
+set -auto_mono

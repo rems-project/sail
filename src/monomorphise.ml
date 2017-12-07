@@ -494,24 +494,23 @@ let nexp_subst_fns substs =
     | None -> None
     | Some (env,t,eff) -> Some (env,s_t t,eff) (* TODO: what about env? *)
   in
-(*  let rec s_pat (P_aux (p,(l,annot))) =
-    let re p = P_aux (p,(l,(*s_tannot*) annot)) in
+  let rec s_pat (P_aux (p,(l,annot))) =
+    let re p = P_aux (p,(l,s_tannot annot)) in
     match p with
     | P_lit _ | P_wild | P_id _ -> re p
-    | P_var kid -> re p
+    | P_var (p',kid) -> re (P_var (s_pat p',kid))
     | P_as (p',id) -> re (P_as (s_pat p', id))
-    | P_typ (ty,p') -> re (P_typ (ty,s_pat p'))
+    | P_typ (ty,p') -> re (P_typ (s_t ty,s_pat p'))
     | P_app (id,ps) -> re (P_app (id, List.map s_pat ps))
     | P_record (fps,flag) -> re (P_record (List.map s_fpat fps, flag))
     | P_vector ps -> re (P_vector (List.map s_pat ps))
-    | P_vector_indexed ips -> re (P_vector_indexed (List.map (fun (i,p) -> (i,s_pat p)) ips))
     | P_vector_concat ps -> re (P_vector_concat (List.map s_pat ps))
     | P_tup ps -> re (P_tup (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
     | P_cons (p1,p2) -> re (P_cons (s_pat p1, s_pat p2))
   and s_fpat (FP_aux (FP_Fpat (id, p), (l,annot))) =
     FP_aux (FP_Fpat (id, s_pat p), (l,s_tannot annot))
-  in*)
+  in
   let rec s_exp (E_aux (e,(l,annot))) =
     let re e = E_aux (e,(l,s_tannot annot)) in
       match e with
@@ -526,7 +525,7 @@ let nexp_subst_fns substs =
       | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, s_tannot annot))
       | E_internal_exp_user ((l1,annot1),(l2,annot2)) ->
          re (E_internal_exp_user ((l1, s_tannot annot1),(l2, s_tannot annot2)))
-      | E_cast (t,e') -> re (E_cast (t, s_exp e'))
+      | E_cast (t,e') -> re (E_cast (s_t t, s_exp e'))
       | E_app (id,es) -> re (E_app (id, List.map s_exp es))
       | E_app_infix (e1,id,e2) -> re (E_app_infix (s_exp e1,id,s_exp e2))
       | E_tuple es -> re (E_tuple (List.map s_exp es))
@@ -553,7 +552,7 @@ let nexp_subst_fns substs =
       | E_internal_cast ((l,ann),e) -> re (E_internal_cast ((l,s_tannot ann),s_exp e))
       | E_comment_struc e -> re (E_comment_struc e)
       | E_internal_let (le,e1,e2) -> re (E_internal_let (s_lexp le, s_exp e1, s_exp e2))
-      | E_internal_plet (p,e1,e2) -> re (E_internal_plet ((*s_pat*) p, s_exp e1, s_exp e2))
+      | E_internal_plet (p,e1,e2) -> re (E_internal_plet (s_pat p, s_exp e1, s_exp e2))
       | E_internal_return e -> re (E_internal_return (s_exp e))
       | E_throw e -> re (E_throw (s_exp e))
       | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
@@ -567,12 +566,12 @@ let nexp_subst_fns substs =
       FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
     and s_pexp = function
       | (Pat_aux (Pat_exp (p,e),(l,annot))) ->
-         Pat_aux (Pat_exp ((*s_pat*) p, s_exp e),(l,s_tannot annot))
+         Pat_aux (Pat_exp (s_pat p, s_exp e),(l,s_tannot annot))
       | (Pat_aux (Pat_when (p,e1,e2),(l,annot))) ->
-         Pat_aux (Pat_when ((*s_pat*) p, s_exp e1, s_exp e2),(l,s_tannot annot))
+         Pat_aux (Pat_when (s_pat p, s_exp e1, s_exp e2),(l,s_tannot annot))
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
-      | LB_val (p,e) -> LB_aux (LB_val ((*s_pat*) p,s_exp e), (l,s_tannot annot))
+      | LB_val (p,e) -> LB_aux (LB_val (s_pat p,s_exp e), (l,s_tannot annot))
     and s_lexp (LEXP_aux (e,(l,annot))) =
       let re e = LEXP_aux (e,(l,s_tannot annot)) in
       match e with
@@ -583,7 +582,7 @@ let nexp_subst_fns substs =
       | LEXP_vector (le,e) -> re (LEXP_vector (s_lexp le, s_exp e))
       | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (s_lexp le, s_exp e1, s_exp e2))
       | LEXP_field (le,id) -> re (LEXP_field (s_lexp le, id))
-  in ((fun x -> x (*s_pat*)),s_exp)
+  in (s_pat,s_exp)
 let nexp_subst_pat substs = fst (nexp_subst_fns substs)
 let nexp_subst_exp substs = snd (nexp_subst_fns substs)
 
@@ -706,6 +705,11 @@ let try_app (l,ann) (id,args) =
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (shift_left_big_int i (int_of_big_int j)),new_l)),(l,ann)))
+    | _ -> None
+  else if is_id "mult_int" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (mult_big_int i j),new_l)),(l,ann)))
     | _ -> None
   else if is_id "ex_int" then
     match args with
@@ -1240,7 +1244,22 @@ let split_defs splits defs =
        | _ ->
           cannot ()
        )
-    (*|  set constrained numbers TODO *)
+    (* set constrained numbers *)
+    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp Nexp_aux (value,_),_)]) ->
+       begin
+         let mk_lit i =
+            let lit = L_aux (L_num i,new_l) in
+            P_aux (P_lit lit,(l,annot)),
+            [var,E_aux (E_lit lit,(new_l,annot))]
+         in
+         match value with
+         | Nexp_constant i -> [mk_lit i]
+         | Nexp_var kvar ->
+           let ncs = Env.get_constraints env in
+           let nc = List.fold_left nc_and nc_true ncs in
+           List.map mk_lit (fst (extract_set_nc kvar nc))
+         | _ -> cannot ()
+       end
     | _ -> cannot ()
   in
   
@@ -1781,6 +1800,8 @@ let rewrite_size_parameters env (Defs defs) =
                  let typ = match typ with
                    | Typ_aux (Typ_fn (Typ_aux (Typ_tup ts,l),t2,eff),l2) ->
                       Typ_aux (Typ_fn (Typ_aux (Typ_tup (mapat (replace_type env) to_change ts),l),t2,eff),l2)
+                   | Typ_aux (Typ_fn (typ,t2,eff),l2) ->
+                      Typ_aux (Typ_fn (replace_type env typ,t2,eff),l2)
                    | _ -> replace_type env typ
                  in TypSchm_aux (TypSchm_ts (tq,typ),l)
             in

@@ -266,6 +266,8 @@ overload (deinfix |) [or_bool; bitwise_or]
 
 val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure eq_vec
 
+val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure eq_atom = "eq"
+
 val extern forall Type 'a. ('a, 'a) -> bool effect pure eq
 
 val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure neq_vec
@@ -274,7 +276,7 @@ val extern forall Type 'a. ('a, 'a) -> bool effect pure neq
 
 (*function forall Num 'n, Num 'm, Order 'ord. bool neq_vec (v1, v2) = bool_not(eq_vec(v1, v2))*)
 
-overload (deinfix ==) [eq_vec; eq]
+overload (deinfix ==) [eq_vec; eq_atom; eq]
 overload (deinfix !=) [neq_vec; neq]
 
 val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gteq_vec
