@@ -490,7 +490,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) =
   | Pat_aux (Pat_exp (pat,exp),_) ->
      group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp exp))
   | Pat_aux (Pat_when (pat,wh,exp),_) ->
-     group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat; string "when"; doc_exp wh])
+     group (doc_op equals (doc_id id ^^ space ^^ parens (separate space [doc_atomic_pat pat; string "when"; doc_exp wh]))
               (doc_exp exp))
 
 let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =

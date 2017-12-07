@@ -1006,7 +1006,7 @@ pexp_funcl :: 'Pat_funcl_' ::=
   {{ icho ('a pexp) }}
   {{ lem (pexp 'a) }}
   | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
-  | pat when exp1 = exp             :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
+  | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
 
 funcl :: 'FCL_' ::=
   {{ com function clause }}

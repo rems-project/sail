@@ -1001,8 +1001,8 @@ exp_list:
 funcl_patexp:
   | pat Eq exp
     { mk_pexp (Pat_exp ($1, $3)) $startpos $endpos }
-  | pat If_ exp0 Eq exp
-    { mk_pexp (Pat_when ($1, $3, $5)) $startpos $endpos }
+  | Lparen pat If_ exp Rparen Eq exp
+    { mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos }
 
 funcl:
   | id funcl_patexp
