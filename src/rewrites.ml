@@ -1566,7 +1566,7 @@ let rewrite_register_ref_writes (Defs defs) =
       let rec_opt = Rec_aux (Rec_nonrec, l) in
       let tannot ret_typ = Typ_annot_opt_aux (Typ_annot_opt_some (TypQ_aux (TypQ_tq [], l), ret_typ), l) in
       let eff_opt = Effect_opt_aux (Effect_opt_pure, l) in
-      let mk_funcl id pat exp = FCL_aux (FCL_Funcl (mk_id id, pat, exp), (l, None)) in
+      let mk_funcl id pat exp = FCL_aux (FCL_Funcl (mk_id id, Pat_aux (Pat_exp (pat, exp),(l,None))), (l, None)) in
       let mk_fundef id pat exp ret_typ = DEF_fundef (FD_aux (FD_function (rec_opt, tannot ret_typ, eff_opt, [mk_funcl id pat exp]), (l, None))) in
       [mk_fundef ("get" ^ fsuffix) reg_pat inferred_get ftyp;
       mk_fundef ("set" ^ fsuffix) set_args inferred_set (typ_of inferred_set)] in
@@ -1795,7 +1795,7 @@ let rewrite_fix_val_specs (Defs defs) =
     in
     let tannotopt = match tannotopt, funcls with
     | Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), l),
-      FCL_aux (FCL_Funcl (_, _, exp), _) :: _ ->
+      FCL_aux (FCL_Funcl (_, Pat_aux ((Pat_exp (_, exp) | Pat_when (_, _, exp)), _)), _) :: _ ->
        Typ_annot_opt_aux (Typ_annot_opt_some (typq, rewrite_typ_nexp_ids (env_of exp) typ), l)
     | _ -> tannotopt in
     (val_specs, FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) in
