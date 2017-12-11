@@ -59,3 +59,5 @@ val process_ast : order -> Parse_ast.defs -> unit defs
 val val_spec_ids : 'a defs -> IdSet.t
 
 val val_spec_of_string : order -> id -> string -> unit def
+
+val exp_of_string : order -> string -> unit exp

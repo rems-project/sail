@@ -178,7 +178,9 @@ let rec desugar_rchain chain s e =
 
 %start file
 %start typschm_eof
+%start exp_eof
 %type <Parse_ast.typschm> typschm_eof
+%type <Parse_ast.exp> exp_eof
 %type <Parse_ast.defs> file
 
 %%
@@ -689,6 +691,10 @@ lit:
     { mk_lit (L_string $1) $startpos $endpos }
   | Real
     { mk_lit (L_real $1) $startpos $endpos }
+
+exp_eof:
+  | exp Eof
+    { $1 }
 
 exp:
   | exp0

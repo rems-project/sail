@@ -171,12 +171,16 @@ let doc_quants quants =
   | [nc] -> kdoc ^^ comma ^^ space ^^ doc_nc nc
   | nc :: ncs -> kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
-let doc_typschm (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) =
+
+
+let doc_binding (TypQ_aux (tq_aux, _), typ) =
   match tq_aux with
   | TypQ_no_forall -> doc_typ typ
   | TypQ_tq [] -> doc_typ typ
   | TypQ_tq qs ->
      string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ typ
+
+let doc_typschm (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding (typq, typ)
 
 let doc_typschm_typ (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) = doc_typ typ
 
@@ -322,7 +326,8 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      end
   (* Resugar an assert with an empty message *)
   | E_throw exp -> string "throw" ^^ parens (doc_exp exp)
-  | E_try (exp, pexps) -> assert false
+  | E_try (exp, pexps) ->
+     separate space [string "try"; doc_exp exp; string "catch"; doc_pexps pexps]
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
   | E_internal_return exp -> string "internal_return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
@@ -368,6 +373,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; equals; doc_exp exp3])
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
+  | E_internal_value v -> string (Value.string_of_value v |> Util.green |> Util.clear)
   | _ -> parens (doc_exp exp)
 and doc_fexps (FES_aux (FES_Fexps (fexps, _), _)) =
   separate_map (comma ^^ space) doc_fexp fexps
@@ -523,3 +529,5 @@ let doc_defs (Defs(defs)) =
   separate_map hardline doc_def defs
 
 let pp_defs f d = ToChannel.pretty 1. 80 f (doc_defs d)
+
+let pretty_sail f doc = ToChannel.pretty 1. 120 f doc

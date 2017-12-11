@@ -48,72 +48,76 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Ocamlbuild_plugin ;;
-open Command ;;
-open Pathname ;;
-open Outcome ;;
+open Big_int
 
-let split ch s =
-  let x = ref [] in
-  let rec go s =
-    if not (String.contains s ch) then List.rev (s :: !x)
-    else begin
-      let pos = String.index s ch in
-      x := (String.before s pos)::!x;
-      go (String.after s (pos + 1))
-    end
-  in
-  go s
+type bit = B0 | B1
 
-(* paths relative to _build *)
-let lem_dir =
-  try Sys.getenv "LEM_DIR" (* LEM_DIR must contain an absolute path *)
-  with Not_found -> "../../../lem" ;;
-let lem_libdir = lem_dir / "ocaml-lib" ;;
-let lem_lib = lem_libdir / "extract" ;;
-let lem = lem_dir / "lem" ;;
+type value =
+  | V_vector of value list
+  | V_list of value list
+  | V_int of big_int
+  | V_bool of bool
+  | V_bit of bit
+  | V_tuple of value list
+  | V_unit
+  | V_string of string
+  | V_ctor of string * value list
 
-(* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
-let lem_opts = [A "-lib"; P "../lem_interp";
-                A "-wl_pat_comp"; P "ign"; 
-                A "-wl_pat_exh";  P "ign"; 
-                A "-wl_pat_fail"; P "ign";
-                A "-wl_unused_vars";   P "ign";
-(*                A "-suppress_renaming";*)
-               ] ;;
+let rec string_of_value = function
+  | V_vector _ -> "VEC"
+  | V_bool true -> "true"
+  | V_bool false -> "false"
+  | V_bit B0 -> "bitzero"
+  | V_bit B1 -> "bitone"
+  | V_tuple vals -> "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
+  | V_list vals -> "[" ^ Util.string_of_list ", " string_of_value vals ^ "]"
+  | V_unit -> "()"
+  | V_string str -> "\"" ^ str ^ "\""
+  | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
 
-dispatch begin function
-| After_rules ->
-    (* ocaml_lib "lem_interp/interp"; *)
-    ocaml_lib ~extern:true ~dir:lem_libdir  ~tag_name:"use_lem" lem_lib;
-    ocaml_lib ~extern:false ~dir:"pprint/src" ~tag_name:"use_pprint" "pprint/src/PPrintLib";
-    
-    rule "lem -> ml"
-    ~prod: "%.ml"
-    ~dep: "%.lem"
-    (fun env builder -> Seq [
-      Cmd (S ([ P lem] @ lem_opts @ [ A "-ocaml"; P (env "%.lem") ]));
-      ]);
+let eq_value v1 v2 = string_of_value v1 = string_of_value v2
 
-    rule "sail -> lem"
-    ~prod: "%.lem"
-    ~deps: ["%.sail"; "sail.native"]
-    (fun env builder ->
-      let sail_opts = List.map (fun s -> A s) (
-        "-lem_ast" ::
-        try
-          split ',' (Sys.getenv "SAIL_OPTS")
-        with Not_found -> []) in
-      Seq [
-        Cmd (S ([ P "./sail.native"] @ sail_opts @ [P (env "%.sail")]));
-        mv (basename (env "%.lem")) (dirname (env "%.lem"))
-      ]);
+let coerce_bit = function
+  | V_bit b -> b
+  | _ -> assert false
 
-    rule "old parser"
-    ~insert:(`top)
-    ~prods: ["parser.ml"; "parser.mli"]
-    ~dep: "parser.mly"
-    (fun env builder -> Cmd(S[V"OCAMLYACC"; T(tags_of_pathname "parser.mly"++"ocaml"++"parser"++"ocamlyacc"); Px "parser.mly"]));
+let coerce_ctor = function
+  | V_ctor (str, vals) -> (str, vals)
+  | _ -> assert false
 
-| _ -> ()
-end ;;
+let coerce_bool = function
+  | V_bool b -> b
+  | _ -> assert false
+
+let and_bool [v1; v2] = V_bool (coerce_bool v1 && coerce_bool v2)
+let or_bool [v1; v2] = V_bool (coerce_bool v1 || coerce_bool v2)
+let print [v] = print_endline (string_of_value v |> Util.red |> Util.clear); V_unit
+
+let tuple_value (vs : value list) : value = V_tuple vs
+
+let coerce_tuple = function
+  | V_tuple vs -> vs
+  | _ -> assert false
+
+let coerce_listlike = function
+  | V_tuple vs -> vs
+  | V_list vs -> vs
+  | _ -> assert false
+
+let coerce_cons = function
+  | V_list (v :: vs) -> Some (v, vs)
+  | V_list [] -> None
+  | _ -> assert false
+
+let unit_value = V_unit
+
+module StringMap = Map.Make(String)
+
+let primops =
+  List.fold_left
+    (fun r (x, y) -> StringMap.add x y r)
+    StringMap.empty
+    [ ("and_bool", and_bool);
+      ("or_bool", or_bool);
+      ("print_endline", print);
+    ]

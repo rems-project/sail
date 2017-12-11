@@ -951,6 +951,10 @@ let initial_kind_env =
     ("itself", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});
   ]
 
+let exp_of_string order str =
+  let exp = Parser2.exp_eof Lexer2.token (Lexing.from_string str) in
+  to_ast_exp initial_kind_env order exp
+
 let typschm_of_string order str =
   let typschm = Parser2.typschm_eof Lexer2.token (Lexing.from_string str) in
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in

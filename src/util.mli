@@ -228,3 +228,14 @@ val is_some : 'a option -> bool
 val is_none : 'a option -> bool
 
 val take : int -> 'a list -> 'a list
+
+val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
+
+(* Terminal color codes *)
+val termcode : int -> string
+val bold : string -> string
+val green : string -> string
+val red : string -> string
+val yellow : string -> string
+val cyan : string -> string
+val clear : string -> string

@@ -64,7 +64,10 @@ lem_interp/interp_ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
 
 sail: ast.ml
-	ocamlbuild sail.native
+	ocamlbuild -use-ocamlfind sail.native
+
+isail: ast.ml
+	ocamlbuild -use-ocamlfind isail.native
 
 sail.native: sail
 

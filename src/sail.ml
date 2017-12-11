@@ -52,6 +52,7 @@ open Process_file
 
 let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
+let opt_interactive = ref false
 let opt_print_version = ref false
 let opt_print_initial_env = ref false
 let opt_print_verbose = ref false
@@ -71,6 +72,9 @@ let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
+  ( "-i",
+    Arg.Set opt_interactive,
+    " start interactive interpreter");
   ( "-ocaml",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
@@ -169,6 +173,8 @@ let _ =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
+let interactive_ast = ref (Ast.Defs [])
+let interactive_env = ref Type_check.initial_env
 
 let main() =
   if !opt_print_version
@@ -208,6 +214,10 @@ let main() =
 
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
+      (if !(opt_interactive)
+       then
+         (interactive_ast := ast; interactive_env := type_envs)
+       else ());
       (if !(opt_sanity)
        then
          let _ = rewrite_ast_check ast in

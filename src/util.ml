@@ -372,9 +372,24 @@ let is_some = function
   | Some _ -> true
   | None -> false
 
+let rec take_drop f = function
+  | [] -> ([], [])
+  | (x :: xs) when not (f x) -> ([], x :: xs)
+  | (x :: xs) ->
+     let (ys, zs) = take_drop f xs in
+     (x :: ys, zs)
+
 let is_none opt = not (is_some opt)
 
 let rec take n xs = match n, xs with
   | 0, _ -> []
   | n, [] -> []
   | n, (x :: xs) -> x :: take (n - 1) xs 
+
+let termcode n = "\x1B[" ^ string_of_int n ^ "m"
+let bold str = termcode 1 ^ str
+let green str = termcode 92 ^ str
+let yellow str = termcode 93 ^ str
+let red str = termcode 91 ^ str
+let cyan str = termcode 96 ^ str
+let clear str = str ^ termcode 0

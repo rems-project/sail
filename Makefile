@@ -6,6 +6,10 @@ sail:
 	$(MAKE) -C src
 	ln -f -s src/sail.native sail
 
+isail:
+	$(MAKE) -C src isail
+	ln -f -s src/isail.native sail
+
 language:
 	$(MAKE) -C language
 
