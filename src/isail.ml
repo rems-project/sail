@@ -1,15 +1,83 @@
+(**************************************************************************)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(**************************************************************************)
+
 open Sail
 
 open Ast
 open Ast_util
+open Interpreter
 open Pretty_print_sail2
 
-let rec user_input prompt callback =
-  match LNoise.linenoise prompt with
+type mode =
+  | Evaluation of trace
+  | Normal
+
+let current_mode = ref Normal
+
+let prompt () =
+  match !current_mode with
+  | Normal -> "sail> "
+  | Evaluation _ -> "eval> "
+
+let mode_clear () =
+  match !current_mode with
+  | Normal -> ()
+  | Evaluation _ -> LNoise.clear_screen ()
+
+let rec user_input callback =
+  match LNoise.linenoise (prompt ()) with
   | None -> ()
-  | Some v -> 
+  | Some v ->
+     mode_clear ();
      callback v;
-     user_input prompt callback
+     user_input callback
 
 let termcode n = "\x1B[" ^ string_of_int n ^ "m"
 let bold str = termcode 1 ^ str
@@ -32,32 +100,55 @@ let sail_logo =
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
 let handle_input input =
-  LNoise.history_add input |> ignore;
+  match !current_mode with
+  | Normal ->
+     begin
+       LNoise.history_add input |> ignore;
 
-  if input <> "" && input.[0] = ':' then
-    let n = try String.index input ' ' with Not_found -> String.length input in
-    let cmd = Str.string_before input n in
-    let arg = String.trim (Str.string_after input n) in
-    match cmd with
-    | ":t" | ":type" ->
-       let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !interactive_env in
-       pretty_sail stdout (doc_binding (typq, typ));
-       print_newline ();
-    | ":q" | ":quit" ->
-       exit 0
-    | ":i" | ":infer" ->
-       let exp = Initial_check.exp_of_string dec_ord arg in
-       let exp = Type_check.infer_exp !interactive_env exp in
-       pretty_sail stdout (doc_typ (Type_check.typ_of exp));
-       print_newline ()
-    | ":v" | ":verbose" ->
-       Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 2
+       if input <> "" && input.[0] = ':' then
+         let n = try String.index input ' ' with Not_found -> String.length input in
+         let cmd = Str.string_before input n in
+         let arg = String.trim (Str.string_after input n) in
+         match cmd with
+         | ":t" | ":type" ->
+            let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !interactive_env in
+            pretty_sail stdout (doc_binding (typq, typ));
+            print_newline ();
+         | ":q" | ":quit" ->
+            exit 0
+         | ":i" | ":infer" ->
+            let exp = Initial_check.exp_of_string dec_ord arg in
+            let exp = Type_check.infer_exp !interactive_env exp in
+            pretty_sail stdout (doc_typ (Type_check.typ_of exp));
+            print_newline ()
+         | ":v" | ":verbose" ->
+            Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 2
 
-    | _ -> print_endline ("Unrecognised command " ^ input)
-  else
-    let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord input) in
-    let v = Interpreter.eval_exp !interactive_ast (Interpreter.step exp) in
-    print_endline ("Result = " ^ Value.string_of_value v)
+         | _ -> print_endline ("Unrecognised command " ^ input)
+       else if input <> "" then
+         let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord input) in
+         current_mode := Evaluation (eval_exp !interactive_ast (return exp))
+       else ()
+     end
+  | Evaluation trace ->
+     begin
+       match trace with
+       | Done v ->
+          print_endline ("Result = " ^ Value.string_of_value v);
+          current_mode := Normal
+       | Step (exp, stack) ->
+          let next = match eval_exp !interactive_ast exp with
+            | Step (exp', stack') -> Evaluation (Step (exp', stack' @ stack))
+            | Done v when stack = [] ->
+               print_endline ("Result = " ^ Value.string_of_value v);
+               Normal
+            | Done v ->
+               print_endline ("Returning: " ^ Value.string_of_value v |> Util.cyan |> Util.clear);
+               Evaluation (Step (List.hd stack v, List.tl stack))
+          in
+          current_mode := next
+     end
+
 
 
 let () =
@@ -88,5 +179,5 @@ let () =
   LNoise.history_set ~max_length:100 |> ignore;
 
   if !opt_interactive then
-    user_input "sail> " handle_input
+    user_input handle_input
   else ()

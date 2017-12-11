@@ -1,6 +1,6 @@
 .PHONY: all sail language clean archs isabelle-lib apply_header
 
-all: sail interpreter
+all: sail
 
 sail:
 	$(MAKE) -C src

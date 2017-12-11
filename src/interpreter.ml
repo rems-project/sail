@@ -287,24 +287,27 @@ let rec get_fundef id (Defs defs) =
   | (DEF_fundef fdef) :: _ when Id.compare id (id_of_fundef fdef) = 0 -> fdef
   | _ :: defs -> get_fundef id (Defs defs)
 
+let rec untilM p f x =
+  if p x then
+    return x
+  else
+    f (return x) >>= fun x' -> untilM p f x'
+
+type trace =
+  | Done of value
+  | Step of (Type_check.tannot exp) monad * (value -> (Type_check.tannot exp) monad) list
+
 let rec eval_exp ast m =
   match m with
-  | Pure v when is_value v -> value_of_exp v
+  | Pure v when is_value v -> Done (value_of_exp v)
   | Pure exp' ->
      Pretty_print_sail2.pretty_sail stdout (Pretty_print_sail2.doc_exp exp');
      print_newline ();
-     eval_exp ast (step exp')
+     Step (step exp', [])
   | Yield (Call (id, vals, cont)) ->
      print_endline ("Calling " ^ string_of_id id |> Util.cyan |> Util.clear);
      let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
      let body = exp_of_fundef (get_fundef id ast) arg in
-     let v = eval_exp ast (return body) in
-     eval_exp ast (cont v)
+     Step (return body, [cont])
   | _ -> assert false
 
-let rec run_interpreter ast env =
-  let str = read_line () in
-  let exp = Type_check.infer_exp env (Initial_check.exp_of_string Ast_util.dec_ord str) in
-  let v = eval_exp ast (step exp) in
-  print_endline ("Result = " ^ string_of_value v);
-  run_interpreter ast env;
