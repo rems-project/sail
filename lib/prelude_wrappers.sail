@@ -60,9 +60,9 @@ function forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     (vector<'p, 'm, 'ord, bit>) extz (v) = extz' (sizeof 'p, sizeof 'm, v)
 
 val extern forall Num 'm, Num 'p, Order 'ord.
-    ([:'p:], [:'m:], list<bit>) -> vector<'p, 'm, 'ord, bit> effect pure extz_bl' = "extz_bl"
+    ([:'p:], [:'m:], list<bit>) -> vector<'p, 'm, 'ord, bit> effect pure cast_bl_vec = "cast_bl_vec"
 function forall Num 'm, Num 'p, Order 'ord.
-    (vector<'p, 'm, 'ord, bit>) extz_bl (v) = extz_bl' (sizeof 'p, sizeof 'm, v)
+    (vector<'p, 'm, 'ord, bit>) extz_bl (v) = cast_bl_vec (sizeof 'p, sizeof 'm, v)
 
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     ([:'p:], [:'m:], vector<'o, 'n, 'ord, bit>) -> vector<'p, 'm, 'ord, bit> effect pure exts' = "exts"
@@ -70,9 +70,9 @@ function forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     (vector<'p, 'm, 'ord, bit>) exts (v) = exts' (sizeof 'p, sizeof 'm, v)
 
 val extern forall Num 'm, Num 'p, Order 'ord.
-    ([:'p:], [:'m:], list<bit>) -> vector<'p, 'm, 'ord, bit> effect pure exts_bl' = "exts_bl"
+    ([:'p:], [:'m:], list<bit>) -> vector<'p, 'm, 'ord, bit> effect pure cast_bl_svec = "cast_bl_svec"
 function forall Num 'm, Num 'p, Order 'ord.
-    vector<'p, 'm, 'ord, bit> exts_bl (v) = exts_bl' (sizeof 'p, sizeof 'm, v)
+    vector<'p, 'm, 'ord, bit> exts_bl (v) = cast_bl_svec (sizeof 'p, sizeof 'm, v)
 
 val extern forall Type 'a, Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord, 'm >= 'o.
     ([:'p:], [:'o:], vector<'n, 'm, 'ord, 'a>) -> vector<'p, 'o, 'ord, 'a> effect pure mask' = "extz"
