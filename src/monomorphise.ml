@@ -2090,19 +2090,28 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
+       let (_,fn_typ) = Env.get_val_spec id (env_of_annot (l,annot)) in
+       let fn_effect = match fn_typ with
+         | Typ_aux (Typ_fn (_,_,eff),_) -> eff
+         | _ -> Effect_aux (Effect_set [],Unknown)
+       in
+       let eff_dep = match fn_effect with
+         | Effect_aux (Effect_set ([] | [BE_aux (BE_undef,_)]),_) -> dempty
+         | _ -> Unknown (l, "Effects from function application")
+       in
        let kid_inst = instantiation_of exp in
        (* Change kids in instantiation to the canonical ones from the type signature *)
        let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
        let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
-       let r' =
-       if Id.compare fn_id id == 0 then
-         let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
-         let deps = List.map (fun _ -> bad) deps in
-         let kid_deps = KBindings.map (fun _ -> bad) kid_deps in
-         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) }
-       else
-         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
-     (merge_deps deps, assigns, merge r r')
+       let rdep,r' =
+         if Id.compare fn_id id == 0 then
+           let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
+           let deps = List.map (fun _ -> bad) deps in
+           let kid_deps = KBindings.map (fun _ -> bad) kid_deps in
+           bad, { empty with split_on_call = Bindings.singleton id (deps, kid_deps) }
+         else
+           dempty, { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
+       (merge_deps (rdep::eff_dep::deps), assigns, merge r r')
     | E_tuple es
     | E_list es ->
        let deps, assigns, r = non_det es in
@@ -2366,6 +2375,11 @@ let print_result r =
   let _ = Bindings.iter print_binding r.split_on_call in
   let _ = print_endline ("  split_in_caller: " ^ string_of_callerset r.split_in_caller) in
   let _ = print_endline ("  kid_in_caller: " ^ string_of_callerkidset r.kid_in_caller) in
+  let _ = print_endline ("  failures: \n    " ^
+                            (String.concat "\n    "
+                               (List.map (fun (l,s) -> Reporting_basic.loc_to_string l ^ ":\n     " ^
+                                 String.concat "\n      " (StringSet.elements s))
+                                  (Failures.bindings r.failures)))) in
   ()
 
 let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pexp),_)) =
