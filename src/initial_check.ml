@@ -131,7 +131,7 @@ let string_of_parse_id_aux = function
   | Parse_ast.DeIid v -> v
 
 let string_contains str char =
-  try (String.index str char; true) with
+  try (ignore (String.index str char); true) with
   | Not_found -> false
 
 let to_ast_id (Parse_ast.Id_aux(id, l)) =
@@ -519,6 +519,7 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_throw exp -> E_throw (to_ast_exp k_env def_ord exp)
     | Parse_ast.E_return exp -> E_return(to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assert(cond,msg) -> E_assert(to_ast_exp k_env def_ord cond, to_ast_exp k_env def_ord msg)
+    | _ -> raise (Reporting_basic.err_unreachable l "Unparsable construct in to_ast_exp")
     ), (l,()))
 
 and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : unit lexp = 
@@ -747,7 +748,7 @@ let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.funde
     (*let _ = Printf.eprintf "to_ast_fundef\n" in*)
     let tannot_opt, k_env,_ = to_ast_tannot_opt k_env def_ord tannot_opt in
     FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, def_ord)) funcls), (l,())), (names,k_env,def_ord)
-    
+
 type def_progress =
     No_def
   | Def_place_holder of id * Parse_ast.l
@@ -823,6 +824,9 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
   | Parse_ast.DEF_reg_dec(dec) ->
     let d = to_ast_dec envs dec in
     ((Finished(DEF_reg_dec(d))),envs),partial_defs
+  | Parse_ast.DEF_internal_mutrec _ ->
+     (* Should never occur because of remove_mutrec *)
+    typ_error Parse_ast.Unknown "Internal mutual block found when processing scattered defs" None None None
   | Parse_ast.DEF_scattered(Parse_ast.SD_aux(sd,l)) ->
     (match sd with
     | Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
@@ -887,8 +891,8 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
 	  ((Finished def), envs),partial_defs
 	| _, true -> 
 	  typ_error l "Scattered definition ended multiple times" (Some id) None None
-	| _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type"))))
-    
+        | _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type"))))
+
 let rec to_ast_defs_helper envs partial_defs = function
   | [] -> ([],envs,partial_defs)
   | d::ds  -> let ((d', envs), partial_defs) = to_ast_def envs partial_defs d in

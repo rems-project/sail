@@ -69,6 +69,7 @@ let rec string_of_value = function
   | V_bool false -> "false"
   | V_bit B0 -> "bitzero"
   | V_bit B1 -> "bitone"
+  | V_int n -> Big_int.to_string n
   | V_tuple vals -> "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_list vals -> "[" ^ Util.string_of_list ", " string_of_value vals ^ "]"
   | V_unit -> "()"
@@ -89,9 +90,17 @@ let coerce_bool = function
   | V_bool b -> b
   | _ -> assert false
 
-let and_bool [v1; v2] = V_bool (coerce_bool v1 && coerce_bool v2)
-let or_bool [v1; v2] = V_bool (coerce_bool v1 || coerce_bool v2)
-let print [v] = print_endline (string_of_value v |> Util.red |> Util.clear); V_unit
+let and_bool = function
+  | [v1; v2] -> V_bool (coerce_bool v1 && coerce_bool v2)
+  | _ -> assert false
+
+let or_bool = function
+  | [v1; v2] -> V_bool (coerce_bool v1 || coerce_bool v2)
+  | _ -> assert false
+
+let print = function
+  | [v] -> print_endline (string_of_value v |> Util.red |> Util.clear); V_unit
+  | _ -> assert false
 
 let tuple_value (vs : value list) : value = V_tuple vs
 

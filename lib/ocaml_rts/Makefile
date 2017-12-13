@@ -50,7 +50,6 @@ all: main
 
 import:
 	rsync -rv --include "*/" --include="*.ml" --include="*.mli" --exclude="*" $(BITBUCKET_ROOT)/linksem/src/ linksem
-	rsync -rv --include "*/" --include="*.ml" --include="*.mli" --exclude="*" $(BITBUCKET_ROOT)/lem/ocaml-lib/ lem
 
 main: import
 	ocamlbuild -pkg uint -pkg zarith main.native -use-ocamlfind

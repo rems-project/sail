@@ -113,7 +113,8 @@ module Env : sig
 
   val is_record : id -> t -> bool
 
-  val get_accessor : id -> id -> t -> typquant * typ
+  (* Return type is: quantifier, argument type, return type, effect *)
+  val get_accessor : id -> id -> t -> typquant * typ * typ * effect
 
   (* If the environment is checking a function, then this will get the
      expected return type of the function. It's useful for checking or

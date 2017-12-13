@@ -142,6 +142,15 @@ module Nexp = struct
     | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2
     | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2
     | Nexp_constant c1, Nexp_constant c2 -> Big_int.compare c1 c2
+    | Nexp_app (op1, args1), Nexp_app (op2, args2) ->
+       let lex1 = Id.compare op1 op2 in
+       let lex2 = List.length args1 - List.length args2 in
+       let lex3 =
+         if lex2 = 0 then
+           List.fold_left2 (fun l n1 n2 -> if compare n1 n2 = 0 then 0 else compare n1 n2) 0 args1 args2
+         else 0
+       in
+       lex_ord (lex1, lex_ord (lex2, lex3))
     | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b)
     | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b)
     | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) ->
@@ -172,6 +181,7 @@ let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
     is_nexp_constant n1 && is_nexp_constant n2
   | Nexp_exp n | Nexp_neg n -> is_nexp_constant n
+  | Nexp_app (_, nexps) -> List.for_all is_nexp_constant nexps
 
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
 and nexp_simp_aux = function
@@ -365,6 +375,7 @@ and map_exp_annot_aux f = function
   | E_internal_exp_user (annot1, annot2) -> E_internal_exp_user (f annot1, f annot2)
   | E_comment str -> E_comment str
   | E_comment_struc exp -> E_comment_struc (map_exp_annot f exp)
+  | E_internal_value v -> E_internal_value v
   | E_internal_let (lexp, exp1, exp2) -> E_internal_let (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (map_pat_annot f pat, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_return exp -> E_internal_return (map_exp_annot f exp)
@@ -653,7 +664,6 @@ and string_of_lexp (LEXP_aux (lexp, _)) =
      string_of_lexp lexp ^ "[" ^ string_of_exp exp1 ^ ".." ^ string_of_exp exp2 ^ "]"
   | LEXP_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
   | LEXP_memory (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
-  | _ -> "LEXP"
 and string_of_letbind (LB_aux (lb, l)) =
   match lb with
   | LB_val (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
@@ -694,6 +704,7 @@ let rec nexp_frees (Nexp_aux (nexp, l)) =
   | Nexp_minus (n1, n2) -> KidSet.union (nexp_frees n1) (nexp_frees n2)
   | Nexp_exp n -> nexp_frees n
   | Nexp_neg n -> nexp_frees n
+  | Nexp_app (_, nexps) -> List.fold_left KidSet.union KidSet.empty (List.map nexp_frees nexps)
 
 let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   let rewrap e_aux = E_aux (e_aux, annot) in
@@ -783,13 +794,11 @@ let union_effects e1 e2 =
   | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
      let base_effs3 = BESet.elements (BESet.of_list (base_effs1 @ base_effs2)) in
      Effect_aux (Effect_set base_effs3, Parse_ast.Unknown)
-  | _, _ -> assert false (* We don't do Effect variables *)
 
 let equal_effects e1 e2 =
   match e1, e2 with
   | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
      BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
-  | _, _ -> assert false (* We don't do Effect variables *)
 
 let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
@@ -801,6 +810,7 @@ let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   | Nexp_minus (n1,n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
   | Nexp_exp n
   | Nexp_neg n -> tyvars_of_nexp n
+  | Nexp_app (_, nexps) -> List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_nexp nexps)
 
 let rec tyvars_of_typ (Typ_aux (t,_)) =
   match t with
@@ -835,7 +845,9 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
      wrap (E_sizeof i) typ
   | Typ_app (id, args) ->
      wrap (E_app (prepend_id "undefined_" id,
-       List.concat (List.map (undefined_of_typ_args mwords l annot) args))) typ
+                  List.concat (List.map (undefined_of_typ_args mwords l annot) args))) typ
+  | Typ_tup typs ->
+     wrap (E_tuple (List.map (undefined_of_typ mwords l annot) typs)) typ
   | Typ_var kid ->
      (* Undefined monomorphism restriction in the type checker should
         guarantee that the typ_(kid) parameter was always one created
@@ -843,7 +855,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         initial_check.ml. i.e. the rewriter should only encounter this
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
-  | Typ_fn _ -> assert false
+  | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
 and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]

@@ -106,6 +106,9 @@ let pp_type_error err =
        ^//^ string (string_of_list ", " string_of_n_constraint constrs)
     | Err_no_num_ident id ->
        string "No num identifier" ^^ space ^^ string (string_of_id id)
+    | Err_unresolved_quants (id, quants) ->
+       string "Could not resolve quantifiers for" ^^ space ^^ string (string_of_id id)
+       ^//^ group (separate_map hardline (fun quant -> string (string_of_quant_item quant)) quants)
     | Err_other str -> string str
   in
   pp_err err
@@ -293,7 +296,8 @@ module Env : sig
   val is_union_constructor : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
-  val get_accessor : id -> id -> t -> typquant * typ
+  val get_accessor_fn : id -> id -> t -> typquant * typ
+  val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
   val get_locals : t -> (mut * typ) Bindings.t
   val add_variant : id -> typquant * type_union list -> t -> t
@@ -685,11 +689,17 @@ end = struct
                    accessors = List.fold_left fold_accessors env.accessors fields }
       end
 
-  let get_accessor rec_id id env =
+  let get_accessor_fn rec_id id env =
     let freshen_bind bind = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
     try freshen_bind (Bindings.find (field_name rec_id id) env.accessors)
     with
     | Not_found -> typ_error (id_loc id) ("No accessor found for " ^ string_of_id (field_name rec_id id))
+
+  let get_accessor rec_id id env =
+    match get_accessor_fn rec_id id env with
+    | (typq, Typ_aux (Typ_fn (rec_typ, field_typ, effect), _)) ->
+       (typq, rec_typ, field_typ, effect)
+    | _ -> typ_error (id_loc id) ("Accessor with non-function type found for " ^ string_of_id (field_name rec_id id))
 
   let is_mutable id env =
     try
@@ -953,6 +963,9 @@ let add_typquant (quant : typquant) (env : Env.t) : Env.t =
 
 (* Create vectors with the default order from the environment *)
 
+let default_order_error_string =
+  "No default Order (if you have set a default Order, move it earlier in the specification)"
+
 let dvector_typ env n m typ = vector_typ n m (Env.get_default_order env) typ
 
 let lvector_typ env l typ =
@@ -961,6 +974,8 @@ let lvector_typ env l typ =
      vector_typ (nint 0) l ord typ
   | Ord_aux (Ord_dec, _) as ord ->
      vector_typ (nminus l (nint 1)) l ord typ
+  | Ord_aux (Ord_var _, _) as ord ->
+     typ_error Parse_ast.Unknown default_order_error_string
 
 let ex_counter = ref 0
 
@@ -1272,6 +1287,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
   | Typ_exist (kids, nc, typ) -> typ_frees ~exs:(KidSet.of_list kids) typ
+  | Typ_fn (typ1, typ2, _) -> KidSet.union (typ_frees ~exs:exs typ1) (typ_frees ~exs:exs typ2)
 and typ_arg_frees ?exs:(exs=KidSet.empty) (Typ_arg_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | Typ_arg_nexp n -> nexp_frees ~exs:exs n
@@ -1334,6 +1350,7 @@ let typ_identical env typ1 typ2 =
     | Typ_arg_nexp n1, Typ_arg_nexp n2 -> nexp_identical n1 n2
     | Typ_arg_typ typ1, Typ_arg_typ typ2 -> typ_identical' typ1 typ2
     | Typ_arg_order ord1, Typ_arg_order ord2 -> ord_identical ord1 ord2
+    | _, _ -> false
   in
   typ_identical' (Env.expand_synonyms env typ1) (Env.expand_synonyms env typ2)
 
@@ -1613,8 +1630,12 @@ let rec subtyp l env typ1 typ2 =
        when is_some (destruct_atom_kid env typ1) && is_some (destruct_atom_kid env typ2) ->
      let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids1 in
      let env = Env.add_constraint nc1 env in
-     let Some atom_kid1 = destruct_atom_kid env typ1 in
-     let Some atom_kid2 = destruct_atom_kid env typ2 in
+
+     (* Guaranteed to succeed because of the guard *)
+     let destruct_some x = match x with Some y -> y | _ -> assert false in
+     let atom_kid1 = destruct_some (destruct_atom_kid env typ1) in
+     let atom_kid2 = destruct_some (destruct_atom_kid env typ2) in
+
      let kids2 = List.filter (fun kid -> Kid.compare atom_kid2 kid <> 0) kids2 in
      let env = Env.add_typ_var atom_kid2 BK_nat env in
      let env = Env.add_constraint (nc_eq (nvar atom_kid1) (nvar atom_kid2)) env in
@@ -1640,6 +1661,7 @@ let rec subtyp l env typ1 typ2 =
           let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env existential_kids in
           let env = List.fold_left uv_nexp_constraint env (KBindings.bindings unifiers) in
           Env.add_constraint enc env
+       | _, None -> assert false (* Cannot have existential_kids without existential_nc *)
      in
      if prove env nc then ()
      else typ_error l ("Could not show " ^ string_of_typ typ1 ^ " is a subset of existential " ^ string_of_typ typ2)
@@ -1683,6 +1705,8 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
                      (nint (String.length str - 1))
                      (nint (String.length str))
                      (mk_typ (Typ_id (mk_id "bit")))
+       | Ord_aux (Ord_var _, _) -> typ_error l default_order_error_string
+
      end
   | L_hex str ->
      begin
@@ -1694,6 +1718,8 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
                      (nint (String.length str * 4 - 1))
                      (nint (String.length str * 4))
                      (mk_typ (Typ_id (mk_id "bit")))
+
+       | Ord_aux (Ord_var _, _) -> typ_error l default_order_error_string
      end
   | L_undef -> typ_error l "Cannot infer the type of undefined"
 
@@ -1982,7 +2008,10 @@ let strip_lexp : 'a lexp -> unit lexp = function lexp -> map_lexp_annot (fun (l,
 
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
-  let add_effect (E_aux (exp, (l, Some (env, typ, _)))) eff = E_aux (exp, (l, Some (env, typ, eff))) in
+  let add_effect exp eff = match exp with
+    | (E_aux (exp, (l, Some (env, typ, _)))) -> E_aux (exp, (l, Some (env, typ, eff)))
+    | _ -> failwith "Tried to add effect to unannoted expression"
+  in
   let annot_exp exp typ = annot_exp_effect exp typ no_effect in
   match (exp_aux, typ_aux) with
   | E_block exps, _ ->
@@ -2055,7 +2084,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
      let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
-       let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+       let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field env in
        let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q typ with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let checked_exp = crule check_exp env exp field_typ' in
@@ -2070,7 +2099,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
      let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
-       let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+       let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field env in
        let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q typ with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let checked_exp = crule check_exp env exp field_typ' in
@@ -2131,7 +2160,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let checked_exp = crule check_exp env exp exc_typ in
      annot_exp_effect (E_throw checked_exp) typ (mk_effect [BE_escape])
   | E_internal_let (lexp, bind, exp), _ ->
-     let E_aux (E_assign (lexp, bind), _), env = bind_assignment env lexp bind in
+     let lexp, bind, env = match bind_assignment env lexp bind with
+       | E_aux (E_assign (lexp, bind), _), env -> lexp, bind, env
+       | _, _ -> assert false
+     in
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_internal_let (lexp, bind, checked_exp)) typ
   | E_internal_return exp, _ ->
@@ -2214,7 +2246,10 @@ and check_case env pat_typ pexp typ =
 and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
-  let switch_typ (E_aux (exp, (l, Some (env, _, eff)))) typ = E_aux (exp, (l, Some (env, typ, eff))) in
+  let switch_typ exp typ = match exp with
+    | (E_aux (exp, (l, Some (env, _, eff)))) -> E_aux (exp, (l, Some (env, typ, eff)))
+    | _ -> failwith "Cannot switch type for unannotated function"
+  in
   let rec try_casts trigger errs = function
     | [] -> typ_raise l (Err_no_casts (trigger, errs))
     | (cast :: casts) -> begin
@@ -2245,7 +2280,10 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
 and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
-  let switch_typ (E_aux (exp, (l, Some (env, _, eff)))) typ = E_aux (exp, (l, Some (env, typ, eff))) in
+  let switch_typ exp typ = match exp with
+    | (E_aux (exp, (l, Some (env, _, eff)))) -> E_aux (exp, (l, Some (env, typ, eff)))
+    | _ -> failwith "Cannot switch type for unannotated expression"
+  in
   let rec try_casts = function
     | [] -> unify_error l "No valid casts resulted in unification"
     | (cast :: casts) -> begin
@@ -2272,7 +2310,10 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
   typ_print ("Binding " ^ string_of_pat pat ^  " to " ^ string_of_typ typ);
   let annot_pat pat typ = P_aux (pat, (l, Some (env, typ, no_effect))) in
-  let switch_typ (P_aux (pat_aux, (l, Some (env, _, eff)))) typ = P_aux (pat_aux, (l, Some (env, typ, eff))) in
+  let switch_typ pat typ = match pat with
+    | (P_aux (pat_aux, (l, Some (env, _, eff)))) -> P_aux (pat_aux, (l, Some (env, typ, eff)))
+    | _ -> failwith "Cannot switch type of unannotated pattern"
+  in
   let bind_tuple_pat (tpats, env) pat typ =
     let tpat, env = bind_pat env pat typ in tpat :: tpats, env
   in
@@ -2411,7 +2452,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
   | P_id v ->
      begin
        match Env.lookup_id v env with
-       | Local (Immutable, _) | Unbound ->
+       | Local (Immutable, _) | Unbound | Union _ ->
           typ_error l ("Cannot infer identifier in pattern " ^ string_of_pat pat ^ " - try adding a type annotation")
        | Local (Mutable, _) | Register _ ->
           typ_error l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
@@ -2428,26 +2469,26 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
        let typed_pat, env = bind_pat env pat bit_typ in
        pats @ [typed_pat], env
      in
-     let ((typed_pat :: typed_pats) as pats), env =
+     let pats, env =
        List.fold_left fold_pats ([], env) (pat :: pats) in
      let len = nexp_simp (nint (List.length pats)) in
-     let etyp = pat_typ_of typed_pat in
-     List.map (fun pat -> typ_equality l env etyp (pat_typ_of pat)) pats;
+     let etyp = pat_typ_of (List.hd pats) in
+     List.iter (fun pat -> typ_equality l env etyp (pat_typ_of pat)) pats;
      annot_pat (P_vector pats) (lvector_typ env len etyp), env
   | P_vector_concat (pat :: pats) ->
      let fold_pats (pats, env) pat =
        let inferred_pat, env = infer_pat env pat in
        pats @ [inferred_pat], env
      in
-     let (inferred_pat :: inferred_pats), env = List.fold_left fold_pats ([], env) (pat :: pats) in
-     let (_, len, _, vtyp) = destruct_vec_typ l env (pat_typ_of inferred_pat) in
+     let inferred_pats, env = List.fold_left fold_pats ([], env) (pat :: pats) in
+     let (_, len, _, vtyp) = destruct_vec_typ l env (pat_typ_of (List.hd inferred_pats)) in
      let fold_len len pat =
        let (_, len', _, vtyp') = destruct_vec_typ l env (pat_typ_of pat) in
        typ_equality l env vtyp vtyp';
        nsum len len'
      in
-     let len = nexp_simp (List.fold_left fold_len len inferred_pats) in
-     annot_pat (P_vector_concat (inferred_pat :: inferred_pats)) (lvector_typ env len vtyp), env
+     let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
+     annot_pat (P_vector_concat inferred_pats) (lvector_typ env len vtyp), env
   | P_as (pat, id) ->
      let (typed_pat, env) = infer_pat env pat in
      annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), Env.add_local id (Immutable, pat_typ_of typed_pat) env
@@ -2478,14 +2519,19 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
               let is_immutable, vtyp, is_register = match Env.lookup_id v env with
                 | Unbound -> typ_error l "Cannot assign to element of unbound vector"
                 | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
+                | Union _ -> typ_error l "Cannot vector assign to union element"
                 | Local (Immutable, vtyp) -> true, vtyp, false
                 | Local (Mutable, vtyp) -> false, vtyp, false
                 | Register vtyp -> false, vtyp, true
               in
               let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
-              let E_aux (E_app (_, [_; inferred_exp]), _) = access in
+              let inferred_exp = match access with
+                | E_aux (E_app (_, [_; inferred_exp]), _) -> inferred_exp
+                | _ -> assert false
+              in
               typ_of access, LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp), is_register
             end
+         | _ -> typ_error l "Field l-expression must be either a vector or an identifier"
        in
        let regtyp, inferred_flexp, is_register = infer_flexp flexp in
        typ_debug ("REGTYP: " ^ string_of_typ regtyp ^ " / " ^ string_of_typ (Env.expand_synonyms env regtyp));
@@ -2509,7 +2555,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp eff, field)) vec_typ) checked_exp, env
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
           let eff = if is_register then mk_effect [BE_wreg] else no_effect in
-          let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+          let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field env in
           let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q regtyp with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
           let field_typ' = subst_unifiers unifiers field_typ in
           let checked_exp = crule check_exp env exp field_typ' in
@@ -2541,8 +2587,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   match lexp_aux with
   | LEXP_id v ->
      begin match Env.lookup_id v env with
-     | Local (Immutable, _) | Enum _ ->
-        typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
+     | Local (Immutable, _) | Enum _ | Union _ ->
+        typ_error l ("Cannot modify let-bound constant, union or enumeration constructor " ^ string_of_id v)
      | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
      | Register vtyp -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ (mk_effect [BE_wreg]), env
      | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
@@ -2550,8 +2596,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   | LEXP_cast (typ_annot, v) ->
      begin
        match Env.lookup_id v env with
-       | Local (Immutable, _) | Enum _ ->
-          typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
+       | Local (Immutable, _) | Enum _ | Union _ ->
+          typ_error l ("Cannot modify let-bound constant, union or enumeration constructor " ^ string_of_id v)
        | Local (Mutable, vtyp) ->
           begin
             subtyp l env typ typ_annot;
@@ -2595,8 +2641,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
                  | LEXP_aux (LEXP_id v, _) ->
                     begin
                       match Env.lookup_id v env with
-                      | Local (Immutable, _) | Enum _ ->
-                         typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
+                      | Local (Immutable, _) | Enum _ | Union _ ->
+                         typ_error l ("Cannot modify let-bound constant, union or enumeration constructor " ^ string_of_id v)
                       | Unbound ->
                          typ_error l "Unbound variable in vector tuple assignment"
                       | Local (Mutable, vtyp) | Register vtyp ->
@@ -2614,7 +2660,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
                      | Register (Typ_aux (Typ_id rec_id, _)) -> rec_id
                      | _ -> typ_error l (string_of_lexp lexp ^ " must be a record register here")
                    in
-                   let typq, (Typ_aux (Typ_fn (_, vtyp, _), _)) = Env.get_accessor rec_id fid env in
+                   let typq, _, vtyp, _ = Env.get_accessor rec_id fid env in
                    let llen' = match destruct_vector env vtyp with
                      | Some (_, llen', _, _) -> llen'
                      | None -> typ_error l "Variables in vector tuple assignment must be vectors"
@@ -2636,12 +2682,16 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        let is_immutable, is_register, vtyp = match Env.lookup_id v env with
          | Unbound -> typ_error l "Cannot assign to element of unbound vector"
          | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
+         | Union _ -> typ_error l "Cannot vector assign to union element"
          | Local (Immutable, vtyp) -> true, false, vtyp
          | Local (Mutable, vtyp) -> false, false, vtyp
          | Register vtyp -> false, true, vtyp
        in
        let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_subrange", [E_aux (E_id v, (l, ())); exp1; exp2]), (l, ()))) in
-       let E_aux (E_app (_, [_; inferred_exp1; inferred_exp2]), _) = access in
+       let inferred_exp1, inferred_exp2 = match access with
+         | E_aux (E_app (_, [_; inferred_exp1; inferred_exp2]), _) -> inferred_exp1, inferred_exp2
+         | _ -> assert false
+       in
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
           subtyp l env typ deref_typ;
@@ -2660,12 +2710,16 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        let is_immutable, is_register, vtyp = match Env.lookup_id v env with
          | Unbound -> typ_error l "Cannot assign to element of unbound vector"
          | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
+         | Union _ -> typ_error l "Cannot vector assign to union element"
          | Local (Immutable, vtyp) -> true, false, vtyp
          | Local (Mutable, vtyp) -> false, false, vtyp
          | Register vtyp -> false, true, vtyp
        in
        let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
-       let E_aux (E_app (_, [_; inferred_exp]), _) = access in
+       let inferred_exp = match access with
+         | E_aux (E_app (_, [_; inferred_exp]), _) -> inferred_exp
+         | _ -> assert false
+       in
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
           subtyp l env typ deref_typ;
@@ -2685,7 +2739,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        | Register (Typ_aux (Typ_id rec_id, _)) -> rec_id
        | _ -> typ_error l (string_of_lexp lexp ^ " must be a record register here")
      in
-     let typq, (Typ_aux (Typ_fn (_, ret_typ, _), _)) = Env.get_accessor rec_id fid env in
+     let typq, _, ret_typ, _ = Env.get_accessor rec_id fid env in
      annot_lexp_effect (LEXP_field (annot_lexp (LEXP_id v) (mk_id_typ rec_id), fid)) ret_typ (mk_effect [BE_wreg]), env
   | _ -> typ_error l ("Unhandled l-expression " ^ string_of_lexp lexp)
 
@@ -2743,7 +2797,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        (* Accessing a field of a record *)
        | Typ_aux (Typ_id rectyp, _) as typ when Env.is_record rectyp env ->
           begin
-            let inferred_acc, _ = infer_funapp' l (Env.no_casts env) field (Env.get_accessor rectyp field env) [strip_exp inferred_exp] None in
+            let inferred_acc, _ = infer_funapp' l (Env.no_casts env) field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] None in
             match inferred_acc with
             | E_aux (E_app (field, [inferred_exp]) ,_) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
             | _ -> assert false (* Unreachable *)
@@ -2764,7 +2818,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
      let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
-       let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+       let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field env in
        let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q typ with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let inferred_exp = crule check_exp env exp field_typ' in
@@ -2797,6 +2851,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        let f, t, is_dec = match ord with
          | Ord_aux (Ord_inc, _) -> f, t, false
          | Ord_aux (Ord_dec, _) -> t, f, true (* reverse direction to typechecking downto as upto loop *)
+         | Ord_aux (Ord_var _, _) -> typ_error l "Cannot check a loop with variable direction!" (* This should never happen *)
        in
        let inferred_f = irule infer_exp env f in
        let inferred_t = irule infer_exp env t in
@@ -2852,6 +2907,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
                             mk_typ_arg (Typ_arg_nexp (nint (List.length vec)));
                             mk_typ_arg (Typ_arg_order (Env.get_default_order env));
                             mk_typ_arg (Typ_arg_typ (typ_of inferred_item))]))
+       | Ord_aux (Ord_var _, _) -> typ_error l default_order_error_string
      in
      annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
   | E_assert (test, msg) ->
@@ -2903,7 +2959,10 @@ and instantiation_of (E_aux (exp_aux, (l, _)) as exp) =
 
 and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let annot_exp exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
-  let switch_annot env typ (E_aux (exp, (l, Some (_, _, eff)))) = E_aux (exp, (l, Some (env, typ, eff))) in
+  let switch_annot env typ = function
+    | (E_aux (exp, (l, Some (_, _, eff)))) -> E_aux (exp, (l, Some (env, typ, eff)))
+    | _ -> failwith "Cannot switch annot for unannotated function"
+  in
   let all_unifiers = ref KBindings.empty in
   let ex_goal = ref None in
   let prove_goal env = match !ex_goal with
@@ -2961,6 +3020,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
                 let enc = List.fold_left (fun nc kid -> nc_subst_nexp kid (Nexp_var (prepend_kid ex_tag kid)) nc) enc ex_kids in
                 let env = List.fold_left (fun env kid -> Env.add_typ_var (prepend_kid ex_tag kid) BK_nat env) env ex_kids in
                 Env.add_constraint enc env
+             | _, None -> assert false (* Cannot have ex_kids without ex_nc *)
            in
            let tag_unifier uvar = List.fold_left (fun uvar kid -> uvar_subst_nexp kid (Nexp_var (prepend_kid ex_tag kid)) uvar) uvar ex_kids in
            let unifiers = KBindings.map tag_unifier unifiers in
@@ -3199,12 +3259,6 @@ and propagate_exp_effect_aux = function
   | E_field (exp, id) ->
      let p_exp = propagate_exp_effect exp in
      E_field (p_exp, id), effect_of p_exp
-  | E_internal_let (lexp, exp, body) ->
-     let p_lexp = propagate_lexp_effect lexp in
-     let p_exp = propagate_exp_effect exp in
-     let p_body = propagate_exp_effect body in
-     E_internal_let (p_lexp, p_exp, p_body),
-     union_effects (effect_of_lexp p_lexp) (collect_effects [p_exp; p_body])
   | E_internal_plet (pat, exp, body) ->
      let p_pat = propagate_pat_effect pat in
      let p_exp = propagate_exp_effect exp in
@@ -3322,7 +3376,6 @@ and propagate_lexp_effect_aux = function
   | LEXP_field (lexp, id) ->
      let p_lexp = propagate_lexp_effect lexp in
      LEXP_field (p_lexp, id),effect_of_lexp p_lexp
-  | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in lexp"
 
 (**************************************************************************)
 (* 6. Checking toplevel definitions                                       *)
@@ -3411,11 +3464,15 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     | None -> typ_error l "funcl list is empty"
   in
   typ_print ("\nChecking function " ^ string_of_id id);
-  let have_val_spec, (quant, (Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) as typ)), env =
+  let have_val_spec, (quant, typ), env =
     try true, Env.get_val_spec id env, env with
     | Type_error (l, _) ->
        let (quant, typ) = infer_funtyp l env tannotopt funcls in
        false, (quant, typ), env
+  in
+  let vtyp_arg, vtyp_ret, declared_eff, vl = match typ with
+    | Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) -> vtyp_arg, vtyp_ret, declared_eff, vl
+    | _ -> typ_error l "Function val spec was not a function type"
   in
   check_tannotopt env quant vtyp_ret tannotopt;
   typ_debug ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ));
@@ -3488,6 +3545,7 @@ let kinded_id_arg kind_id =
      typ_arg (Typ_arg_order (Ord_aux (Ord_var kid, Parse_ast.Unknown)))
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), kid), _) ->
      typ_arg (Typ_arg_typ (mk_typ (Typ_var kid)))
+  | KOpt_aux (KOpt_kind (K_aux (K_kind kinds, _), kid), l) -> typ_error l "Badly formed kind"
 
 let fold_union_quant quants (QI_aux (qi, l)) =
   match qi with

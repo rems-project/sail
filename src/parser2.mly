@@ -75,7 +75,9 @@ let mk_kid str n m = Kid_aux (Var str, loc n m)
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
-let deinfix (Id_aux (Id v, l)) = Id_aux (DeIid v, l)
+let deinfix = function
+  | (Id_aux (Id v, l)) -> Id_aux (DeIid v, l)
+  | (Id_aux (DeIid v, l)) -> Id_aux (Id v, l)
 
 let mk_effect e n m = BE_aux (e, loc n m)
 let mk_typ t n m = ATyp_aux (t, loc n m)

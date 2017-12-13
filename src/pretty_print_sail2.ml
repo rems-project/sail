@@ -157,7 +157,7 @@ let doc_quants quants =
     | QI_id (KOpt_aux (KOpt_none kid, _)) -> [doc_kid kid]
     | QI_id kopt when is_nat_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
     | QI_id kopt when is_typ_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])]
-    | QI_id kopt when is_order_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
+    | QI_id kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
     | QI_const nc -> []
   in
   let qi_nc (QI_aux (qi_aux, _)) =
@@ -209,7 +209,6 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   match p_aux with
   | P_id id -> doc_id id
   | P_tup pats -> lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
-  | P_app (id, pats) -> doc_id id ^^ lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
   | P_typ (typ, pat) -> separate space [doc_pat pat; colon; doc_typ typ]
   | P_lit lit -> doc_lit lit
   (* P_var short form sugar *)
@@ -346,6 +345,7 @@ and doc_infix n (E_aux (e_aux, _) as exp) =
          | (InfixL, m) when m < n -> parens (separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r])
          | (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r]
          | (InfixR, m) when m < n -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r])
+         | _ -> assert false
        with
        | Not_found ->
           separate space [doc_atomic_exp l; doc_id op; doc_atomic_exp r]
@@ -510,7 +510,6 @@ let rec doc_def def = group (match def with
   | DEF_type t_def -> doc_typdef t_def
   | DEF_kind k_def -> doc_kind_def k_def
   | DEF_fundef f_def -> doc_fundef f_def
-  | DEF_internal_mutrec f_defs -> separate_map hardline doc_fundef f_defs
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
   | DEF_internal_mutrec fundefs ->
      (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs)

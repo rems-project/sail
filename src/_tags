@@ -2,7 +2,7 @@ true: -traverse, debug, use_menhir
 <**/*.ml>: bin_annot, annot
 # <lem_interp> or <test>: include
 <sail.{byte,native}>: package(zarith), use_pprint, use_nums, use_unix, use_str, use_lem
-<isail.{byte,native}>: package(linenoise), use_pprint, use_nums, use_unix, use_str, use_lem
+<isail.{byte,native}>: package(zarith), package(linenoise), use_pprint, use_nums, use_unix, use_str, use_lem
 <isail.ml>: package(linenoise)
 <pprint> or <pprint/src>: include
 <*.m{l,li}>: use_lem

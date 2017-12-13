@@ -181,7 +181,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
-  | L_num n -> parens (string "Big_int.of_string" ^^ space ^^ string ("\"" ^ Big_int.to_string n ^ "\""))
+  | L_num n -> parens (string "big_int_of_string" ^^ space ^^ string ("\"" ^ Big_int.to_string n ^ "\""))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
   | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
@@ -285,11 +285,13 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
        match ord with
        | Ord_aux (Ord_inc, _) -> string "Big_int.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
        | Ord_aux (Ord_dec, _) -> string "Big_int.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_var _, _) -> failwith "Cannot have variable loop order!"
      in
      let loop_compare =
        match ord with
        | Ord_aux (Ord_inc, _) -> string "Big_int.less_equal"
        | Ord_aux (Ord_dec, _) -> string "Big_int.greater"
+       | Ord_aux (Ord_var _, _) -> failwith "Cannot have variable loop order!"
      in
      let loop_body =
        separate space [string "if"; loop_compare; zencode ctx id; ocaml_atomic_exp ctx exp_to]
@@ -442,7 +444,11 @@ let ocaml_funcls ctx =
   function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pexp),_)] ->
-     let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
+     let typ1, typ2 =
+       match Bindings.find id ctx.val_specs with
+       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | _ -> failwith "Found val spec which was not a function!"
+     in
      let pat_sym = gensym () in
      let pat, exp =
        match pexp with
@@ -466,7 +472,11 @@ let ocaml_funcls ctx =
      ocaml_funcl call string_of_arg string_of_ret
   | funcls ->
      let id = funcls_id funcls in
-     let Typ_aux (Typ_fn (typ1, typ2, _), _) = Bindings.find id ctx.val_specs in
+     let typ1, typ2 =
+       match Bindings.find id ctx.val_specs with
+       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | _ -> failwith "Found val spec which was not a function!"
+     in
      let pat_sym = gensym () in
      let call_header = function_header () in
      let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
@@ -599,7 +609,7 @@ let val_spec_typs (Defs defs) =
     | _ :: defs -> vs_typs defs
     | [] -> []
   in
-  vs_typs defs;
+  ignore (vs_typs defs);
   !typs
 
 let ocaml_defs (Defs defs) =
@@ -616,7 +626,7 @@ let ocaml_defs (Defs defs) =
     else empty
   in
   (string "open Sail_lib;;" ^^ hardline)
-  ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
+  ^^ (string "open Big_int" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) defs)
   ^^ empty_reg_init
 

@@ -63,6 +63,7 @@ let value_of_lit (L_aux (l_aux, _)) =
   | L_true -> V_bool true
   | L_false -> V_bool false
   | L_string str -> V_string str
+  | _ -> failwith "Unimplemented value_of_lit" (* TODO *)
 
 let is_value = function
   | (E_aux (E_internal_value _, _)) -> true
@@ -77,7 +78,9 @@ let is_false = function
   | _ -> false
 
 let exp_of_value v = (E_aux (E_internal_value v, (Parse_ast.Unknown, None)))
-let value_of_exp (E_aux (E_internal_value v, _)) = v
+let value_of_exp = function
+  | (E_aux (E_internal_value v, _)) -> v
+  | _ -> failwith "value_of_exp coerction failed"
 
 (**************************************************************************)
 (* 1. Interpreter Monad                                                   *)
@@ -155,6 +158,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_id id' -> if Id.compare id id' = 0 then unaux_exp (exp_of_value value) else E_id id'
     | E_cast (typ, exp) -> E_cast (typ, subst id value exp)
     | E_app (fn, exps) -> E_app (fn, List.map (subst id value) exps)
+    | _ -> assert false (* TODO *)
   in
   wrap e_aux
 
@@ -245,6 +249,8 @@ let rec step (E_aux (e_aux, annot)) =
 
   | E_sizeof _ | E_constraint _ -> assert false (* Must be re-written before interpreting *)
 
+  | _ -> assert false (* TODO *)
+
 and combine _ v1 v2 =
   match (v1, v2) with
   | None, None -> None
@@ -262,6 +268,7 @@ and pattern_match (P_aux (p_aux, _) as pat) value =
      matched, Bindings.add id value bindings
   | P_typ (_, pat) -> pattern_match pat value
   | P_id id -> true, Bindings.singleton id value
+  | P_var (pat, _) -> pattern_match pat value
   | P_app (id, pats) ->
      let (ctor, vals) = coerce_ctor value in
      if Id.compare id (mk_id ctor) = 0 then

@@ -264,6 +264,7 @@ clean:
 	-rm -rf lem lib
 	-rm -rf sail.docdir
 	-rm -f ast.ml
+	-rm -f ast.lem
 
 doc:
 	ocamlbuild sail.docdir/index.html
