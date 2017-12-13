@@ -26,7 +26,6 @@ let rec bind m f = match m with
   | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (bind o f ,opt))
 end
 
-
 let inline (>>=) = bind
 val (>>) : forall 'b 'r. MR unit 'r -> MR 'b 'r -> MR 'b 'r
 let inline (>>) m n = m >>= fun _ -> n

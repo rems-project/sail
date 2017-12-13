@@ -49,7 +49,7 @@
 (**************************************************************************)
 
 open Ast
-open Big_int
+module Big_int = Nat_big_num
 
 val no_annot : unit annot
 val gen_loc : Parse_ast.l -> Parse_ast.l
@@ -118,7 +118,7 @@ val mk_effect : base_effect_aux list -> effect
 val nexp_simp : nexp -> nexp
 
 (* Utilities for building n-expressions *)
-val nconstant : big_int -> nexp
+val nconstant : Big_int.num -> nexp
 val nint : int -> nexp
 val nminus : nexp -> nexp -> nexp
 val nsum : nexp -> nexp -> nexp
@@ -138,7 +138,7 @@ val nc_and : n_constraint -> n_constraint -> n_constraint
 val nc_or : n_constraint -> n_constraint -> n_constraint
 val nc_true : n_constraint
 val nc_false : n_constraint
-val nc_set : kid -> big_int list -> n_constraint
+val nc_set : kid -> Big_int.num list -> n_constraint
 val nc_int_set : kid -> int list -> n_constraint
 
 (* Negate a n_constraint. Note that there's no NC_not constructor, so

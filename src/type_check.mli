@@ -50,7 +50,7 @@
 
 open Ast
 open Ast_util
-open Big_int
+module Big_int = Nat_big_num
 
 val opt_tc_debug : int ref
 val opt_no_effects : bool ref
@@ -84,7 +84,7 @@ module Env : sig
 
   val get_register : id -> t -> typ
 
-  val get_regtyp : id -> t -> big_int * big_int * (index_range * id) list
+  val get_regtyp : id -> t -> Big_int.num * Big_int.num * (index_range * id) list
 
   (* Return all the identifiers in an enumeration. Throws a type error
      if the enumeration doesn't exist. *)

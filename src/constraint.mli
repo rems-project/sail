@@ -48,6 +48,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+module Big_int = Nat_big_num
+
 type nexp
 type t
 
@@ -80,5 +82,5 @@ val sub : nexp -> nexp -> nexp
 val mult : nexp -> nexp -> nexp
 val app : string -> nexp list -> nexp
 
-val constant : Big_int.big_int -> nexp
+val constant : Big_int.num -> nexp
 val variable : int -> nexp

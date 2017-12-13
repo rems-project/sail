@@ -48,7 +48,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Big_int
+module Big_int = Nat_big_num
 open Util
 
 (* ===== Integer Constraints ===== *)
@@ -58,13 +58,13 @@ type nexp_op = string
 type nexp =
   | NFun of (nexp_op * nexp list)
   | N2n of nexp
-  | NConstant of big_int
+  | NConstant of Big_int.num
   | NVar of int
 
-let big_int_op : nexp_op -> (big_int -> big_int -> big_int) option = function
-  | "+" -> Some add_big_int
-  | "-" -> Some sub_big_int
-  | "*" -> Some mult_big_int
+let big_int_op : nexp_op -> (Big_int.num -> Big_int.num -> Big_int.num) option = function
+  | "+" -> Some Big_int.add
+  | "-" -> Some Big_int.sub
+  | "*" -> Some Big_int.mul
   | _ -> None
 
 let rec arith constr =
@@ -80,7 +80,7 @@ let rec arith constr =
        | Some op -> NConstant (op x y)
        | None -> c
      end
-  | N2n (NConstant x) -> NConstant (power_int_positive_big_int 2 x)
+  | N2n (NConstant x) -> NConstant (Big_int.pow_int_positive 2 (Big_int.to_int x))
   | c -> c
 
 (* ===== Boolean Constraints ===== *)
@@ -157,7 +157,7 @@ let cop_sexpr op x y =
 let rec sexpr_of_nexp = function
   | NFun (op, xs) -> sfun op (List.map sexpr_of_nexp xs)
   | N2n x -> sfun "^" [Atom "2"; sexpr_of_nexp x]
-  | NConstant c -> Atom (string_of_big_int c) (* CHECK: do we do negative constants right? *)
+  | NConstant c -> Atom (Big_int.to_string c) (* CHECK: do we do negative constants right? *)
   | NVar var -> Atom ("v" ^ string_of_int var)
 
 let rec sexpr_of_constraint = function
@@ -303,6 +303,6 @@ let mult x y : nexp = NFun ("*", [x; y])
 
 let app f xs : nexp = NFun (f, xs)
 
-let constant (x : big_int) : nexp = NConstant x
+let constant (x : Big_int.num) : nexp = NConstant x
 
 let variable (v : int) : nexp = NVar v

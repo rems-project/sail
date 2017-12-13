@@ -50,8 +50,9 @@
 
 open Ast
 open Ast_util
-open Big_int
 open PPrint
+
+module Big_int = Nat_big_num
 
 let doc_op symb a b = infix 2 1 symb a b
 
@@ -62,7 +63,7 @@ let doc_id (Id_aux (id_aux, _)) =
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
-let doc_int n = string (string_of_big_int n)
+let doc_int n = string (Big_int.to_string n)
 
 let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_var v -> doc_kid v
@@ -72,7 +73,7 @@ let doc_ord (Ord_aux(o,_)) = match o with
 let rec doc_nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
-    | Nexp_constant c -> string (string_of_big_int c)
+    | Nexp_constant c -> string (Big_int.to_string c)
     | Nexp_id id -> doc_id id
     | Nexp_var kid -> doc_kid kid
     | _ -> parens (nexp0 nexp)
@@ -80,8 +81,8 @@ let rec doc_nexp =
     match n_aux with
     | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) ->
        separate space [nexp0 n1; string "-"; nexp1 n2]
-    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when lt_big_int c zero_big_int ->
-       separate space [nexp0 n1; string "-"; doc_int (abs_big_int c)]
+    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
+       separate space [nexp0 n1; string "-"; doc_int (Big_int.abs c)]
     | Nexp_sum (n1, n2) -> separate space [nexp0 n1; string "+"; nexp1 n2]
     | _ -> nexp1 nexp
   and nexp1 (Nexp_aux (n_aux, _) as nexp) =
@@ -197,7 +198,7 @@ let doc_lit (L_aux(l,_)) =
   | L_one   -> "bitone"
   | L_true  -> "true"
   | L_false -> "false"
-  | L_num i -> string_of_big_int i
+  | L_num i -> Big_int.to_string i
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_real r -> r
@@ -517,7 +518,7 @@ let rec doc_def def = group (match def with
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
   | DEF_fixity (prec, n, id) ->
-     fixities := Bindings.add id (prec, int_of_big_int n) !fixities;
+     fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]

@@ -50,7 +50,7 @@
 
 {
 open Parser
-open Big_int
+module Big_int = Nat_big_num
 module M = Map.Make(String)
 exception LexError of string * Lexing.position
 
@@ -330,8 +330,8 @@ rule token = parse
 
   | (digit+ as i1) "." (digit+ as i2)     { (Real (i1 ^ "." ^ i2)) }
   | "-" (digit* as i1) "." (digit+ as i2) { (Real ("-" ^ i1 ^ "." ^ i2)) }
-  | digit+ as i                           { (Num(big_int_of_string i)) }
-  | "-" digit+ as i                       { (Num(big_int_of_string i)) }
+  | digit+ as i                           { (Num(Big_int.of_string i)) }
+  | "-" digit+ as i                       { (Num(Big_int.of_string i)) }
   | "0b" (binarydigit+ as i)              { (Bin(i)) }
   | "0x" (hexdigit+ as i)                 { (Hex(i)) }
   | '"'                                   { (String(

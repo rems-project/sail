@@ -52,7 +52,7 @@
 
 let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
-open Big_int
+module Big_int = Nat_big_num
 open Parse_ast
 
 let loc () = Range(Parsing.symbol_start_pos(),Parsing.symbol_end_pos())
@@ -108,16 +108,16 @@ let mk_namesectn _ = Name_sect_aux(Name_sect_none,Unknown)
 let make_range_sugar_bounded typ1 typ2 =
   ATyp_app(Id_aux(Id("range"),Unknown),[typ1; typ2;])
 let make_range_sugar typ1 =
-  make_range_sugar_bounded (ATyp_aux(ATyp_constant(zero_big_int), Unknown)) typ1
+  make_range_sugar_bounded (ATyp_aux(ATyp_constant(Big_int.zero), Unknown)) typ1
 let make_atom_sugar typ1 =
   ATyp_app(Id_aux(Id("atom"),Unknown),[typ1])
 
 let make_r bot top =
   match bot,top with
     | ATyp_aux(ATyp_constant b,_),ATyp_aux(ATyp_constant t,l) ->
-      ATyp_aux(ATyp_constant (add_big_int (sub_big_int t b) unit_big_int),l)
+      ATyp_aux(ATyp_constant (Big_int.add (Big_int.sub t b) (Big_int.of_int 1)),l)
     | bot,(ATyp_aux(_,l) as top) ->
-      ATyp_aux((ATyp_sum ((ATyp_aux (ATyp_sum (top, ATyp_aux(ATyp_constant unit_big_int,Unknown)), Unknown)),
+      ATyp_aux((ATyp_sum ((ATyp_aux (ATyp_sum (top, ATyp_aux(ATyp_constant (Big_int.of_int 1),Unknown)), Unknown)),
 			  (ATyp_aux ((ATyp_neg bot),Unknown)))), l)				   
 
 let make_vector_sugar_bounded order_set is_inc name typ typ1 typ2 = 
@@ -131,11 +131,11 @@ let make_vector_sugar_bounded order_set is_inc name typ typ1 typ2 =
     else (typ2, ATyp_default_ord,"vector_sugar_r") (* rise and base not calculated, rise only from specification *) in
   ATyp_app(Id_aux(Id(name),Unknown),[typ1;rise;ATyp_aux(ord,Unknown);typ])
 let make_vector_sugar order_set is_inc typ typ1 =
-  let zero = (ATyp_aux(ATyp_constant zero_big_int,Unknown)) in
+  let zero = (ATyp_aux(ATyp_constant Big_int.zero,Unknown)) in
   let (typ1,typ2) = match (order_set,is_inc,typ1) with
-    | (true,true,ATyp_aux(ATyp_constant t,l)) -> zero,ATyp_aux(ATyp_constant (sub_big_int t unit_big_int),l)
+    | (true,true,ATyp_aux(ATyp_constant t,l)) -> zero,ATyp_aux(ATyp_constant (Big_int.sub t (Big_int.of_int 1)),l)
     | (true,true,ATyp_aux(_, l)) -> zero,ATyp_aux (ATyp_sum (typ1,
-    ATyp_aux(ATyp_neg(ATyp_aux(ATyp_constant unit_big_int,Unknown)), Unknown)), l)
+    ATyp_aux(ATyp_neg(ATyp_aux(ATyp_constant (Big_int.of_int 1),Unknown)), Unknown)), l)
     | (true,false,_) -> typ1,zero 
     | (false,_,_) -> zero,typ1 in
   make_vector_sugar_bounded order_set is_inc "vector_sugar_r" typ typ1 typ2
@@ -166,7 +166,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 /*Terminals with content*/
 
 %token <string> Id TyVar TyId
-%token <Big_int.big_int> Num
+%token <Nat_big_num.num> Num
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
@@ -694,7 +694,7 @@ right_atomic_exp:
        raise (Parse_error_locn ((loc ()),"Missing \"from\" in foreach loop"));
       if $6 <> "to" && $6 <> "downto" then
        raise (Parse_error_locn ((loc ()),"Missing \"to\" or \"downto\" in foreach loop"));
-      let step = eloc (E_lit(lloc (L_num unit_big_int))) in
+      let step = eloc (E_lit(lloc (L_num (Big_int.of_int 1)))) in
       let ord =
         if $6 = "to"
         then ATyp_aux(ATyp_inc,(locn 6 6))

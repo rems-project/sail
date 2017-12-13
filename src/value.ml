@@ -48,14 +48,14 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Big_int
+module Big_int = Nat_big_num
 
 type bit = B0 | B1
 
 type value =
   | V_vector of value list
   | V_list of value list
-  | V_int of big_int
+  | V_int of Big_int.num
   | V_bool of bool
   | V_bit of bit
   | V_tuple of value list

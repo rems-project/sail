@@ -48,7 +48,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Big_int
+module Big_int = Nat_big_num
 open Ast
 open Type_check
 

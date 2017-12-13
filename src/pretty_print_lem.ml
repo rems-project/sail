@@ -52,7 +52,6 @@ open Type_check
 open Ast
 open Ast_util
 open Rewriter
-open Big_int
 open PPrint
 open Pretty_print_common
 
@@ -149,10 +148,7 @@ let effectful_set =
       | BE_escape -> true
       | _ -> false)
 
-let effectful (Effect_aux (eff,_)) =
-  match eff with
-  | Effect_var _ -> failwith "effectful: Effect_var not supported"
-  | Effect_set effs -> effectful_set effs
+let effectful (Effect_aux (Effect_set effs, _)) = effectful_set effs
 
 let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | Typ_app(id, _) when string_of_id id = "register" -> true
@@ -162,14 +158,14 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
 let doc_nexp_lem nexp =
   let (Nexp_aux (nexp, l) as full_nexp) = nexp_simp nexp in
   match nexp with
-  | Nexp_constant i -> string ("ty" ^ string_of_big_int i)
+  | Nexp_constant i -> string ("ty" ^ Big_int.to_string i)
   | Nexp_var v -> string (string_of_kid (orig_kid v))
   | _ ->
      let rec mangle_nexp (Nexp_aux (nexp, _)) = begin
        match nexp with
        | Nexp_id id -> string_of_id id
        | Nexp_var kid -> string_of_id (id_of_kid (orig_kid kid))
-       | Nexp_constant i -> Pretty_print_lem_ast.lemnum string_of_big_int i
+       | Nexp_constant i -> Pretty_print_lem_ast.lemnum Big_int.to_string i
        | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
        | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
        | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
@@ -362,10 +358,10 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
   | L_false -> utf8string "false"
   | L_true  -> utf8string "true"
   | L_num i ->
-     let ipp = string_of_big_int i in
+     let ipp = Big_int.to_string i in
      utf8string (
        if in_pat then "("^ipp^":nn)"
-       else if lt_big_int i zero_big_int then "((0"^ipp^"):ii)"
+       else if Big_int.less i Big_int.zero then "((0"^ipp^"):ii)"
        else "("^ipp^":ii)")
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
@@ -391,14 +387,14 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
        using this would require adding a dependency on ZArith to Sail. *)
     let parts = Util.split_on_char '.' s in
     let (num, denom) = match parts with
-    | [i] -> (big_int_of_string i, unit_big_int)
+    | [i] -> (Big_int.of_string i, (Big_int.of_int 1))
     | [i;f] ->
-      let denom = power_int_positive_int 10 (String.length f) in
-      (add_big_int (mult_big_int (big_int_of_string i) denom) (big_int_of_string f), denom)
+      let denom = Big_int.pow_int_positive 10 (String.length f) in
+      (Big_int.add (Big_int.mul (Big_int.of_string i) denom) (Big_int.of_string f), denom)
     | _ ->
       raise (Reporting_basic.Fatal_error
         (Reporting_basic.Err_syntax_locn (l, "could not parse real literal"))) in
-    separate space (List.map string ["realFromFrac"; string_of_big_int num; string_of_big_int denom])
+    separate space (List.map string ["realFromFrac"; Big_int.to_string num; Big_int.to_string denom])
 
 (* typ_doc is the doc for the type being quantified *)
 let doc_quant_item vars_included (QI_aux (qi, _)) = match qi with
@@ -791,7 +787,7 @@ let doc_exp_lem, doc_let_lem =
            "E_vector of non-vector type") in
        let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
        let start = match nexp_simp start with
-         | Nexp_aux (Nexp_constant i, _) -> string_of_big_int i
+         | Nexp_aux (Nexp_constant i, _) -> Big_int.to_string i
          | _ -> if dir then "0" else string_of_int (List.length exps) in
        let expspp =
          match exps with
@@ -973,12 +969,12 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
             raise (Reporting_basic.err_unreachable Parse_ast.Unknown
               ("register " ^ string_of_id id ^ " has non-constant start index " ^ string_of_nexp start))
         with
-        | _ -> (zero_big_int, true) in
+        | _ -> (Big_int.zero, true) in
       doc_op equals
         (concat [string "let "; parens (concat [doc_id_lem id; underscore; doc_id_lem fid; rfannot])])
         (anglebars (concat [space;
           doc_op equals (string "field_name") (string_lit (doc_id_lem fid)); semi_sp;
-          doc_op equals (string "field_start") (string (string_of_big_int start)); semi_sp;
+          doc_op equals (string "field_start") (string (Big_int.to_string start)); semi_sp;
           doc_op equals (string "field_is_inc") (string (if is_inc then "true" else "false")); semi_sp;
           doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
           doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in
@@ -1174,7 +1170,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
        let dir = (if dir_b then "true" else "false") in
        let dir_suffix = (if dir_b then "_inc" else "_dec") in
        let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
-       let size = if dir_b then add_big_int (sub_big_int i2 i1) unit_big_int else add_big_int (sub_big_int i1 i2) unit_big_int in
+       let size = if dir_b then Big_int.add (Big_int.sub i2 i1) (Big_int.of_int 1) else Big_int.add (Big_int.sub i1 i2) (Big_int.of_int 1) in
        let vtyp = vector_typ (nconstant i1) (nconstant size) ord bit_typ in
        let tannot = doc_tannot_lem sequential mwords false vtyp in
        let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id_lem id);
@@ -1405,11 +1401,11 @@ let doc_regtype_fields sequential mwords (tname, (n1, n2, fields)) =
     | BF_aux (BF_range (i, j), _) -> (i, j)
     | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown
         ("Unsupported type in field " ^ string_of_id fid ^ " of " ^ tname)) in
-    let fsize = succ_big_int (abs_big_int (sub_big_int i j)) in
+    let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
     (* TODO Assumes normalised, decreasing bitvector slices; however, since
        start indices or indexing order do not appear in Lem type annotations,
        this does not matter. *)
-    let ftyp = vector_typ (nconstant (pred_big_int fsize)) (nconstant fsize) dec_ord bit_typ in
+    let ftyp = vector_typ (nconstant (Big_int.pred fsize)) (nconstant fsize) dec_ord bit_typ in
     let reftyp =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
         [mk_typ_arg (Typ_arg_typ (mk_id_typ (mk_id tname)));
@@ -1419,7 +1415,7 @@ let doc_regtype_fields sequential mwords (tname, (n1, n2, fields)) =
      (concat [string "let "; parens (concat [string tname; underscore; doc_id_lem fid; rfannot])])
      (concat [
        space; langlebar; string " field_name = \"" ^^ doc_id_lem fid ^^ string "\";"; hardline;
-       space; space; space; string (" field_start = " ^ string_of_big_int i ^ ";"); hardline;
+       space; space; space; string (" field_start = " ^ Big_int.to_string i ^ ";"); hardline;
        space; space; space; string (" field_is_inc = " ^ dir ^ ";"); hardline;
        space; space; space; string (" get_field = (fun reg -> get_" ^ tname ^ "_" ^ string_of_id fid ^ "(reg));"); hardline;
        space; space; space; string (" set_field = (fun reg v -> set_" ^ tname ^ "_" ^ string_of_id fid ^ "(reg, v)) "); ranglebar])
@@ -1525,10 +1521,10 @@ let doc_register_refs_lem registers =
           raise (Reporting_basic.err_unreachable Parse_ast.Unknown
             ("register " ^ string_of_id id ^ " has non-constant start index " ^ string_of_nexp start))
       with
-      | _ -> (zero_big_int, true) in
+      | _ -> (Big_int.zero, true) in
     concat [string "let "; idd; string " = <|"; hardline;
       string "  reg_name = \""; idd; string "\";"; hardline;
-      string "  reg_start = "; string (string_of_big_int start); string ";"; hardline;
+      string "  reg_start = "; string (Big_int.to_string start); string ";"; hardline;
       string "  reg_is_inc = "; string (if is_inc then "true" else "false"); string ";"; hardline;
       string "  read_from = (fun s -> s."; field; string ");"; hardline;
       string "  write_to = (fun s v -> (<| s with "; field; string " = v |>)) |>"] in

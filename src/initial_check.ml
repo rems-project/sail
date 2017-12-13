@@ -51,7 +51,7 @@
 open Ast
 open Util
 open Ast_util
-open Big_int
+module Big_int = Nat_big_num
 
 let opt_undefined_gen = ref false
 let opt_magic_hash = ref false
@@ -185,12 +185,12 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
 		let make_r bot top =
 		  match bot,top with
 		    | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant b,_),Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,l) ->
-                      Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (add_big_int (sub_big_int t b) unit_big_int),l)
+                      Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.add (Big_int.sub t b) (Big_int.of_int 1)),l)
 		    | bot,(Parse_ast.ATyp_aux(_,l) as top) ->
 		      Parse_ast.ATyp_aux((Parse_ast.ATyp_sum 
 					    ((Parse_ast.ATyp_aux 
 						(Parse_ast.ATyp_sum (top, 
-                                                                     Parse_ast.ATyp_aux(Parse_ast.ATyp_constant unit_big_int,Parse_ast.Unknown)),
+                                                                     Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.of_int 1),Parse_ast.Unknown)),
 						 Parse_ast.Unknown)),
 					  (Parse_ast.ATyp_aux ((Parse_ast.ATyp_neg bot),Parse_ast.Unknown)))), l) in
 		let base = to_ast_nexp k_env b in
@@ -206,9 +206,9 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
 	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_r",il), [b;r;ord;ti]) ->
 		let make_sub_one t =
 		  match t with
-                    | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,_) -> Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (sub_big_int t unit_big_int),l)
+                    | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,_) -> Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.sub t (Big_int.of_int 1)),l)
 		    | t -> (Parse_ast.ATyp_aux 
-                              (Parse_ast.ATyp_sum (t, Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (minus_big_int unit_big_int),Parse_ast.Unknown)),
+                              (Parse_ast.ATyp_sum (t, Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.negate (Big_int.of_int 1)),Parse_ast.Unknown)),
 			       Parse_ast.Unknown)) in
 		let (base,rise) = match def_ord with
 		  | Ord_aux(Ord_inc,dl) -> (to_ast_nexp k_env b), (to_ast_nexp k_env r)
@@ -291,10 +291,7 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
                 (match mk with
-                | Some(k) -> (match k.k with
-                              | K_Efct -> Effect_var v
-                              | K_infer -> k.k <- K_Efct; Effect_var v
-                              | _ -> typ_error l "Required a variable with kind Effect, encountered " None (Some v) (Some k))
+                | Some k -> typ_error l "Required a variable with kind Effect, encountered " None (Some v) (Some k)
                 | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
                | Parse_ast.ATyp_set(effects) ->
                  Effect_set( List.map 

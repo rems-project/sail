@@ -50,7 +50,7 @@
 
 open Ast
 open Util
-open Big_int
+module Big_int = Nat_big_num
 
 let no_annot = (Parse_ast.Unknown, ())
 
@@ -141,7 +141,7 @@ module Nexp = struct
     match nexp1, nexp2 with
     | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2
     | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2
-    | Nexp_constant c1, Nexp_constant c2 -> compare_big_int c1 c2
+    | Nexp_constant c1, Nexp_constant c2 -> Big_int.compare c1 c2
     | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b)
     | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b)
     | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) ->
@@ -186,7 +186,7 @@ and nexp_simp_aux = function
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (add_big_int c1 c2)
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.add c1 c2)
        | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
        | _, _ -> Nexp_sum (n1, n2)
      end
@@ -195,9 +195,9 @@ and nexp_simp_aux = function
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
-       | Nexp_constant c, _ when eq_big_int c unit_big_int -> n2_simp
-       | _, Nexp_constant c when eq_big_int c unit_big_int -> n1_simp
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (mult_big_int c1 c2)
+       | Nexp_constant c, _ when Big_int.equal c (Big_int.of_int 1) -> n2_simp
+       | _, Nexp_constant c when Big_int.equal c (Big_int.of_int 1) -> n1_simp
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.mul c1 c2)
        | _, _ -> Nexp_times (n1, n2)
      end
   | Nexp_minus (n1, n2) ->
@@ -205,10 +205,10 @@ and nexp_simp_aux = function
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (sub_big_int c1 c2)
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.sub c1 c2)
        (* A vector range x['n-1 .. 0] can result in the size "('n-1) - -1" *)
        | Nexp_minus (Nexp_aux (n,_), Nexp_aux (Nexp_constant c1,_)), Nexp_constant c2
-         when eq_big_int c1 (minus_big_int c2) -> n
+         when Big_int.equal c1 (Big_int.negate c2) -> n
        | _, _ -> Nexp_minus (n1, n2)
      end
   | nexp -> nexp
@@ -249,7 +249,7 @@ let vector_typ n m ord typ =
 let exc_typ = mk_id_typ (mk_id "exception")
 
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
-let nint i = nconstant (big_int_of_int i)
+let nint i = nconstant (Big_int.of_int i)
 let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
 let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
 let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
@@ -258,7 +258,7 @@ let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
 
 let nc_set kid nums = mk_nc (NC_set (kid, nums))
-let nc_int_set kid ints = mk_nc (NC_set (kid, List.map big_int_of_int ints))
+let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Big_int.of_int ints))
 let nc_eq n1 n2 = mk_nc (NC_equal (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
@@ -479,8 +479,6 @@ let string_of_base_effect = function
   | BE_aux (beff, _) -> string_of_base_effect_aux beff
 
 let string_of_effect = function
-  | Effect_aux (Effect_var kid, _) ->
-     string_of_kid kid
   | Effect_aux (Effect_set [], _) -> "pure"
   | Effect_aux (Effect_set beffs, _) ->
      "{" ^ string_of_list ", " string_of_base_effect beffs ^ "}"
@@ -495,7 +493,7 @@ let rec string_of_nexp = function
 and string_of_nexp_aux = function
   | Nexp_id id -> string_of_id id
   | Nexp_var kid -> string_of_kid kid
-  | Nexp_constant c -> string_of_big_int c
+  | Nexp_constant c -> Big_int.to_string c
   | Nexp_times (n1, n2) -> "(" ^ string_of_nexp n1 ^ " * " ^ string_of_nexp n2 ^ ")"
   | Nexp_sum (n1, n2) -> "(" ^ string_of_nexp n1 ^ " + " ^ string_of_nexp n2 ^ ")"
   | Nexp_minus (n1, n2) -> "(" ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2 ^ ")"
@@ -530,7 +528,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_and (nc1, nc2), _) ->
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
-     string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_big_int ns ^ "}"
+     string_of_kid kid ^ " IN {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
@@ -563,7 +561,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_one -> "bitone"
   | L_true -> "true"
   | L_false -> "false"
-  | L_num n -> string_of_big_int n
+  | L_num n -> Big_int.to_string n
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_undef -> "undefined"
@@ -662,8 +660,8 @@ and string_of_letbind (LB_aux (lb, l)) =
 
 let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with
-  | BF_single n -> string_of_big_int n
-  | BF_range (n, m) -> string_of_big_int n ^ " .. " ^ string_of_big_int m
+  | BF_single n -> Big_int.to_string n
+  | BF_range (n, m) -> Big_int.to_string n ^ " .. " ^ Big_int.to_string m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
 
 let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
@@ -774,9 +772,6 @@ let is_bitvector_typ typ =
 let has_effect (Effect_aux (eff,_)) searched_for = match eff with
   | Effect_set effs ->
     List.exists (fun (BE_aux (be,_)) -> be = searched_for) effs
-  | Effect_var _ ->
-    raise (Reporting_basic.err_unreachable Parse_ast.Unknown
-             "has_effect called on effect variable")
 
 let effect_set (Effect_aux (eff,_)) = match eff with
   | Effect_set effs -> BESet.of_list effs

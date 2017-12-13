@@ -50,7 +50,6 @@
 
 open Ast
 open Ast_util
-open Big_int
 open PPrint
 open Pretty_print_common
 
@@ -97,7 +96,7 @@ let doc_lit (L_aux(l,_)) =
   | L_one   -> "bitone"
   | L_true  -> "true"
   | L_false -> "false"
-  | L_num i -> string_of_big_int i
+  | L_num i -> Big_int.to_string i
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_real r -> r
@@ -357,12 +356,12 @@ let doc_exp, doc_let =
       | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
         (match r.nexp with
           | Nvar v -> utf8string v
-          | Nconst bi -> utf8string (Big_int.string_of_big_int bi)
+          | Nconst bi -> utf8string (Big_int.Big_int.to_string bi)
           | _ ->  raise (Reporting_basic.err_unreachable l
                            ("Internal exp given vector without known length, instead given " ^ n_to_string r)))
       | Tapp("implicit",[TA_nexp r]) ->
         (match r.nexp with
-          | Nconst bi -> utf8string (Big_int.string_of_big_int bi)
+          | Nconst bi -> utf8string (Big_int.Big_int.to_string bi)
           | Nvar v -> utf8string v
           | _ -> raise (Reporting_basic.err_unreachable l "Internal exp given implicit without var or const"))
       | _ ->  raise (Reporting_basic.err_unreachable l ("Internal exp given non-vector, non-implicit " ^ t_to_string t)))

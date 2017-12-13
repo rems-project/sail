@@ -57,8 +57,12 @@ all: sail lib doc
 
 full: sail lib power doc test
 
-ast.ml: ../language/l2.ott
-	ott -sort false -generate_aux_rules true -o ast.ml -picky_multiple_parses true ../language/l2.ott
+ast.lem: ../language/l2.ott
+	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/l2.ott
+
+ast.ml: ast.lem
+	lem -ocaml ast.lem
+	sed -i -f ast.sed ast.ml
 
 lem_interp/interp_ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott

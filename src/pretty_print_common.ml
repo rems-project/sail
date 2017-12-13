@@ -49,7 +49,7 @@
 (**************************************************************************)
 
 open Ast
-open Big_int
+module Big_int = Nat_big_num
 open PPrint
 
 let pipe = string "|"
@@ -76,7 +76,7 @@ let comma_sp = comma ^^ space
 let colon_sp = spaces colon
 
 let doc_var (Kid_aux(Var v,_)) = string v
-let doc_int i = string (string_of_big_int i)
+let doc_int i = string (Big_int.to_string i)
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
 
@@ -112,7 +112,6 @@ let doc_effect (BE_aux (e,_)) =
   | BE_nondet -> "nondet")
 
 let doc_effects (Effect_aux(e,_)) = match e with
-  | Effect_var v -> doc_var v
   | Effect_set [] -> string "pure"
   | Effect_set s -> braces (separate_map comma_sp doc_effect s)
 
@@ -176,7 +175,7 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
-    (squarebars (if eq_big_int n zero_big_int then nexp m else doc_op colon (doc_int n) (nexp m)))
+    (squarebars (if Big_int.equal n Big_int.zero then nexp m else doc_op colon (doc_int n) (nexp m)))
   | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
     (squarecolons (nexp n))
   | Typ_app(id,args) ->
@@ -220,7 +219,7 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   and atomic_nexp_typ ((Nexp_aux(n,_)) as ne) = match n with
     | Nexp_var v -> doc_var v
     | Nexp_id i  -> braces (doc_id i)
-    | Nexp_constant i -> if lt_big_int i zero_big_int then parens(doc_int i) else doc_int i
+    | Nexp_constant i -> if Big_int.less i Big_int.zero then parens(doc_int i) else doc_int i
     | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _->
       group (parens (nexp ne))
 

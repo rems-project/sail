@@ -51,7 +51,7 @@
 open Ast
 open Util
 open Ast_util
-open Big_int
+module Big_int = Nat_big_num
 
 (* opt_tc_debug controls the verbosity of the type checker. 0 is
    silent, 1 prints a tree of the type derivation and 2 is like 1 but
@@ -303,9 +303,9 @@ module Env : sig
   val is_register : id -> t -> bool
   val get_register : id -> t -> typ
   val add_register : id -> typ -> t -> t
-  val add_regtyp : id -> big_int -> big_int -> (index_range * id) list -> t -> t
+  val add_regtyp : id -> Big_int.num -> Big_int.num -> (index_range * id) list -> t -> t
   val is_regtyp : id -> t -> bool
-  val get_regtyp : id -> t -> big_int * big_int * (index_range * id) list
+  val get_regtyp : id -> t -> Big_int.num * Big_int.num * (index_range * id) list
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
@@ -360,7 +360,7 @@ end = struct
       locals : (mut * typ) Bindings.t;
       union_ids : (typquant * typ) Bindings.t;
       registers : typ Bindings.t;
-      regtyps : (big_int * big_int * (index_range * id) list) Bindings.t;
+      regtyps : (Big_int.num * Big_int.num * (index_range * id) list) Bindings.t;
       variants : (typquant * type_union list) Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
@@ -763,11 +763,11 @@ end = struct
     | BF_single n ->
        if cmp f n && cmp n t
        then n
-       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " string_of_big_int [f; n; t])
+       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " Big_int.to_string [f; n; t])
     | BF_range (n1, n2) ->
        if cmp f n1 && cmp n1 n2 && cmp n2 t
        then n2
-       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " string_of_big_int [f; n1; n2; t])
+       else typ_error l ("Badly ordered index range: " ^ string_of_list ", " Big_int.to_string [f; n1; n2; t])
     | BF_concat _ -> typ_error l "Index range concatenation currently unsupported"
 
   let rec check_index_ranges ids cmp base top = function
@@ -797,9 +797,9 @@ end = struct
     else
       begin
         typ_print ("Adding register type " ^ string_of_id id);
-        if gt_big_int base top
-        then check_index_ranges IdSet.empty gt_big_int (add_big_int base unit_big_int) (sub_big_int top unit_big_int) ranges
-        else check_index_ranges IdSet.empty lt_big_int (sub_big_int base unit_big_int) (add_big_int top unit_big_int) ranges;
+        if Big_int.greater base top
+        then check_index_ranges IdSet.empty Big_int.greater (Big_int.add base (Big_int.of_int 1)) (Big_int.sub top (Big_int.of_int 1)) ranges
+        else check_index_ranges IdSet.empty Big_int.less (Big_int.sub base (Big_int.of_int 1)) (Big_int.add top (Big_int.of_int 1)) ranges;
         { env with regtyps = Bindings.add id (base, top, ranges) env.regtyps }
       end
 
@@ -920,7 +920,7 @@ end = struct
         rewrap (Typ_app (id, List.map aux_arg targs))
       | Typ_id id when is_regtyp id env ->
         let base, top, ranges = get_regtyp id env in
-        let len = succ_big_int (abs_big_int (sub_big_int top base)) in
+        let len = Big_int.succ (Big_int.abs (Big_int.sub top base)) in
         vector_typ (nconstant base) (nconstant len) (get_default_order env) bit_typ
         (* TODO registers with non-default order? non-bitvector registers? *)
       | t -> rewrap t
@@ -1124,7 +1124,7 @@ let rec nexp_constraint env var_of (Nexp_aux (nexp, l)) =
   | Nexp_sum (nexp1, nexp2) -> Constraint.add (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | Nexp_minus (nexp1, nexp2) -> Constraint.sub (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | Nexp_exp nexp -> Constraint.pow2 (nexp_constraint env var_of nexp)
-  | Nexp_neg nexp -> Constraint.sub (Constraint.constant (big_int_of_int 0)) (nexp_constraint env var_of nexp)
+  | Nexp_neg nexp -> Constraint.sub (Constraint.constant (Big_int.of_int 0)) (nexp_constraint env var_of nexp)
   | Nexp_app (id, nexps) -> Constraint.app (Env.get_smt_op id env) (List.map (nexp_constraint env var_of) nexps)
 
 let rec nc_constraint env var_of (NC_aux (nc, l)) =
@@ -1179,9 +1179,9 @@ let prove env (NC_aux (nc_aux, _) as nc) =
     | _, _ -> false
   in
   match nc_aux with
-  | NC_equal (nexp1, nexp2) when compare_const eq_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_bounded_le (nexp1, nexp2) when compare_const le_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_bounded_ge (nexp1, nexp2) when compare_const ge_big_int (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_equal (nexp1, nexp2) when compare_const Big_int.equal (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_bounded_le (nexp1, nexp2) when compare_const Big_int.less_equal (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_bounded_ge (nexp1, nexp2) when compare_const Big_int.greater_equal (nexp_simp nexp1) (nexp_simp nexp2) -> true
   | NC_true -> true
   | _ -> prove_z3 env nc
 
@@ -1282,7 +1282,7 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with
   | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2 = 0
   | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2 = 0
-  | Nexp_constant c1, Nexp_constant c2 -> eq_big_int c1 c2
+  | Nexp_constant c1, Nexp_constant c2 -> Big_int.equal c1 c2
   | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
@@ -1394,8 +1394,8 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
            | Nexp_constant c2 ->
               begin
                 match n1a with
-                | Nexp_aux (Nexp_constant c1,_) when eq_big_int (mod_big_int c2 c1) zero_big_int ->
-                   unify_nexps l env goals n1b (mk_nexp (Nexp_constant (div_big_int c2 c1)))
+                | Nexp_aux (Nexp_constant c1,_) when Big_int.equal (Big_int.modulus c2 c1) Big_int.zero ->
+                   unify_nexps l env goals n1b (mk_nexp (Nexp_constant (Big_int.div c2 c1)))
                 | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
               end
            | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
@@ -1777,13 +1777,13 @@ let pat_env_of (P_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_constant c -> Some c
   | Nexp_times (n1, n2) ->
-     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+     Util.option_binop Big_int.add (big_int_of_nexp n1) (big_int_of_nexp n2)
   | Nexp_sum (n1, n2) ->
-     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+     Util.option_binop Big_int.add (big_int_of_nexp n1) (big_int_of_nexp n2)
   | Nexp_minus (n1, n2) ->
-     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+     Util.option_binop Big_int.add (big_int_of_nexp n1) (big_int_of_nexp n2)
   | Nexp_exp n ->
-     Util.option_map (power_int_positive_big_int 2) (big_int_of_nexp n)
+     Util.option_map (fun n -> Big_int.pow_int_positive 2 (Big_int.to_int n)) (big_int_of_nexp n)
   | _ -> None
 
 let destruct_atom (Typ_aux (typ_aux, _)) =
@@ -1795,7 +1795,7 @@ let destruct_atom (Typ_aux (typ_aux, _)) =
        when string_of_id f = "range" ->
      begin
        match big_int_of_nexp nexp1, big_int_of_nexp nexp2 with
-       | Some c1, Some c2 -> if eq_big_int c1 c2 then Some (c1, nexp1) else None
+       | Some c1, Some c2 -> if Big_int.equal c1 c2 then Some (c1, nexp1) else None
        | _ -> None
      end
   | _ -> None
@@ -1830,8 +1830,8 @@ let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
      None
 
 type flow_constraint =
-  | Flow_lteq of big_int * nexp
-  | Flow_gteq of big_int * nexp
+  | Flow_lteq of Big_int.num * nexp
+  | Flow_gteq of Big_int.num * nexp
 
 let restrict_range_upper c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
   match typ_aux with
@@ -1840,7 +1840,7 @@ let restrict_range_upper c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
      begin
        match big_int_of_nexp nexp2 with
        | Some c2 ->
-          let upper = if (lt_big_int c1 c2) then nexp1 else nexp2 in
+          let upper = if (Big_int.less c1 c2) then nexp1 else nexp2 in
           range_typ nexp upper
        | _ -> typ
      end
@@ -1853,7 +1853,7 @@ let restrict_range_lower c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
      begin
        match big_int_of_nexp nexp2 with
        | Some c2 ->
-          let lower = if (gt_big_int c1 c2) then nexp1 else nexp2 in
+          let lower = if (Big_int.greater c1 c2) then nexp1 else nexp2 in
           range_typ lower nexp
        | _ -> typ
      end
@@ -1862,10 +1862,10 @@ let restrict_range_lower c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
 let apply_flow_constraint = function
   | Flow_lteq (c, nexp) ->
      (restrict_range_upper c nexp,
-      restrict_range_lower (succ_big_int c) (nexp_simp (nsum nexp (nint 1))))
+      restrict_range_lower (Big_int.succ c) (nexp_simp (nsum nexp (nint 1))))
   | Flow_gteq (c, nexp) ->
      (restrict_range_lower c nexp,
-      restrict_range_upper (pred_big_int c) (nexp_simp (nminus nexp (nint 1))))
+      restrict_range_upper (Big_int.pred c) (nexp_simp (nminus nexp (nint 1))))
 
 let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
@@ -1874,7 +1874,7 @@ let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
      begin
        match destruct_atom (typ_of y) with
        | Some (c, nexp) ->
-          [(v, Flow_lteq (pred_big_int c, nexp_simp (nminus nexp (nint 1))))], []
+          [(v, Flow_lteq (Big_int.pred c, nexp_simp (nminus nexp (nint 1))))], []
        | _ -> [], []
      end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
@@ -1889,7 +1889,7 @@ let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
      begin
        match destruct_atom (typ_of y) with
        | Some (c, nexp) ->
-          [(v, Flow_gteq (succ_big_int c, nexp_simp (nsum nexp (nint 1))))], []
+          [(v, Flow_gteq (Big_int.succ c, nexp_simp (nsum nexp (nint 1))))], []
        | _ -> [], []
      end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
@@ -2502,7 +2502,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             | BF_aux (BF_single n, _), Ord_aux (Ord_dec, _) ->
                dvector_typ env (nconstant n) (nint 1) (mk_typ (Typ_id (mk_id "bit")))
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
-               dvector_typ env (nconstant n) (nconstant (add_big_int (sub_big_int n m) unit_big_int)) (mk_typ (Typ_id (mk_id "bit")))
+               dvector_typ env (nconstant n) (nconstant (Big_int.add (Big_int.sub n m) (Big_int.of_int 1))) (mk_typ (Typ_id (mk_id "bit")))
             | _, _ -> typ_error l "Not implemented this register field type yet..."
           in
           let checked_exp = crule check_exp env exp vec_typ in
@@ -2730,13 +2730,13 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
                let vec_typ = dvector_typ env (nconstant n) (nint 1) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant (add_big_int (sub_big_int n m) unit_big_int)) bit_typ in
+               let vec_typ = dvector_typ env (nconstant n) (nconstant (Big_int.add (Big_int.sub n m) (Big_int.of_int 1))) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_single n, _), Ord_aux (Ord_inc, _) ->
                let vec_typ = dvector_typ env (nconstant n) (nint 1) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_inc, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant (add_big_int (sub_big_int m n) unit_big_int)) bit_typ in
+               let vec_typ = dvector_typ env (nconstant n) (nconstant (Big_int.add (Big_int.sub m n) (Big_int.of_int 1))) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | _, _ -> typ_error l "Invalid register field type"
           end
@@ -3467,7 +3467,7 @@ let check_register env id base top ranges =
   | Nexp_aux (Nexp_constant basec, _), Nexp_aux (Nexp_constant topc, _) ->
      let no_typq = TypQ_aux (TypQ_tq [], Parse_ast.Unknown) (* Maybe could be TypQ_no_forall? *) in
      (* FIXME: wrong for default Order inc? *)
-     let vec_typ = dvector_typ env base (nconstant (add_big_int (sub_big_int basec topc) unit_big_int)) bit_typ in
+     let vec_typ = dvector_typ env base (nconstant (Big_int.add (Big_int.sub basec topc) (Big_int.of_int 1))) bit_typ in
      let cast_typ = mk_typ (Typ_fn (mk_id_typ id, vec_typ, no_effect)) in
      let cast_to_typ = mk_typ (Typ_fn (vec_typ, mk_id_typ id, no_effect)) in
      env

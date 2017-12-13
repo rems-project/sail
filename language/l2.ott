@@ -26,7 +26,7 @@ metavar hex ::=
   {{ ocaml string }}
   {{ lem string }}
   {{ com Bit vector literal, specified by C-style hex number }}
-  
+
 metavar bin ::=
   {{ phantom }}
   {{ lex numeric }}
@@ -78,27 +78,14 @@ type loop = While | Until
 
 embed
 {{ lem
-open import Pervasives
-open import Pervasives_extra
-open import Map
-open import Maybe
-open import Set_extra
 
-type l =
-  | Unknown
-  | Int of string * maybe l (*internal types, functions*)
-  | Range of string * nat * nat * nat * nat
-  | Generated of l (*location for a generated node, where l is the location of the closest original source*)
+type l = | Unknown
 
-type annot 'a = l * 'a
-
-val duplicates : forall 'a. list 'a -> list 'a
-
-val set_from_list : forall 'a. list 'a -> set 'a
-
-val subst : forall 'a. list 'a -> list 'a -> bool
+type value = | Val
 
 type loop = While | Until
+
+type annot 'a = l * 'a
 
 }}
 
@@ -118,8 +105,6 @@ metavar ix ::=
   {{ com infix identifier }}
   {{ ocamlvar "[[ix]]" }}
   {{ lemvar "[[ix]]" }}
-
-
 
 grammar
 
@@ -145,7 +130,7 @@ id :: '' ::=
   | x                           :: :: id
   | ( deinfix x )                       :: D :: deIid {{ com remove infix status }}
   | bool      		   	 :: M :: bool {{ com built in type identifiers }} {{ ichlo (Id "bool") }}
-  | bit				 :: M :: bit {{ ichlo (Id "bit") }} 
+  | bit				 :: M :: bit {{ ichlo (Id "bit") }}
   | unit			 :: M :: unit {{ ichlo (Id "unit") }}
   | nat				 :: M :: nat  {{ ichlo (Id "nat") }}
   | int				 :: M :: int  {{ ichlo (Id "int") }}
@@ -252,22 +237,11 @@ base_effect :: 'BE_' ::=
 effect :: 'Effect_' ::=
   {{ com effect set, of kind $[[Effect]]$ }}
   {{ aux _ l }}
- | kid                                 :: :: var
  | { base_effect1 , .. , base_effectn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} 
    {{ lem (Effect_set [])  }} {{icho [[{}]] }}
  | effect1 u+ .. u+ effectn                   :: M :: union {{ com union of sets of effects }} {{ icho [] }}
    {{ lem (List.foldr effect_union (Effect_aux (Effect_set []) Unknown) [[effect1..effectn]]) }}
-
-embed
-{{ lem
-let effect_union e1 e2 = 
-  match (e1,e2) with
-  | ((Effect_aux (Effect_set els) _),(Effect_aux (Effect_set els2) l)) -> Effect_aux (Effect_set (els++els2)) l
-  end
-}}
-
-grammar
 
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 
@@ -581,7 +555,7 @@ pat :: 'P_' ::=
 
 % cf ntoes for this
   |  pat1 : .... : patn                                   :: :: vector_concat
-  {{ com concatenated vector pattern }} 
+  {{ com concatenated vector pattern }}
 
   | ( pat1 , .... , patn )                              :: :: tup
     {{ com tuple pattern }}
@@ -601,35 +575,6 @@ fpat :: 'FP_' ::=
 parsing
 P_app <= P_app
 P_app <= P_as
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Machinery for typing rules                                   %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-embed
-{{ lem
-
-let rec remove_one i l =
-  match l with
-  | [] -> []
-  | i2::l2 -> if i2 = i then l2 else i2::(remove_one i l2)
-end
-
-let rec remove_from l l2 =
-  match l2 with 
-  | [] -> l
-  | i::l2' -> remove_from (remove_one i l) l2'
-end
-
-let disjoint s1 s2 = Set.null (s1 inter s2)
-
-let rec disjoint_all sets =
-  match sets with
-  | [] -> true
-  | s1::[] -> true
-  | s1::s2::sets -> (disjoint s1 s2) && (disjoint_all (s2::sets))
-end
-}}
 
 grammar
 
@@ -1046,7 +991,7 @@ val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string -> string option) * bool }}
-  {{ lem VS_val_spec of typschm * id * maybe string * bool }}
+  {{ lem VS_val_spec of typschm * id * (string -> maybe string) * bool }}
   | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
     {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }} {{ lem }}

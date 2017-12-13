@@ -53,6 +53,8 @@ open Ast_util
 open PPrint
 open Type_check
 
+module Big_int = Nat_big_num
+
 (* Option to turn tracing features on or off *)
 let opt_trace_ocaml = ref false
 
@@ -179,7 +181,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
-  | L_num n -> parens (string "big_int_of_string" ^^ space ^^ string ("\"" ^ Big_int.string_of_big_int n ^ "\""))
+  | L_num n -> parens (string "Big_int.of_string" ^^ space ^^ string ("\"" ^ Big_int.to_string n ^ "\""))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
   | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
@@ -281,13 +283,13 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      let loop_var = separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"] in
      let loop_mod =
        match ord with
-       | Ord_aux (Ord_inc, _) -> string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
-       | Ord_aux (Ord_dec, _) -> string "sub_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_inc, _) -> string "Big_int.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_dec, _) -> string "Big_int.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
      in
      let loop_compare =
        match ord with
-       | Ord_aux (Ord_inc, _) -> string "le_big_int"
-       | Ord_aux (Ord_dec, _) -> string "gt_big_int"
+       | Ord_aux (Ord_inc, _) -> string "Big_int.less_equal"
+       | Ord_aux (Ord_dec, _) -> string "Big_int.greater"
      in
      let loop_body =
        separate space [string "if"; loop_compare; zencode ctx id; ocaml_atomic_exp ctx exp_to]
@@ -614,7 +616,7 @@ let ocaml_defs (Defs defs) =
     else empty
   in
   (string "open Sail_lib;;" ^^ hardline)
-  ^^ (string "open Big_int" ^^ ocaml_def_end)
+  ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) defs)
   ^^ empty_reg_init
 
