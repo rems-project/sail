@@ -16,10 +16,6 @@ power.ml: power.lem ../src/lem_interp/interp_ast.lem
 power_embed.lem: $(SOURCES)
 # also generates power_embed_sequential.lem, power_embed_types.lem, power_toFromInterp.lem
 	$(SAIL) -lem -lem_lib Power_extras_embed -o power $(SOURCES)
-	# patch:
-	rm -f power_embed.lem power_embed_sequential.lem
-	cp power_embed.lem.fixed power_embed.lem
-	cp power_embed_sequential.lem.fixed power_embed_sequential.lem
 
 clean:
 	rm -f power.lem power.ml

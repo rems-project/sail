@@ -91,7 +91,7 @@ SAIL_DIR:=$(realpath $(dir $(THIS_MAKEFILE))..)
 BITBUCKET_ROOT=$(realpath $(dir $(THIS_MAKEFILE))../..)
 
 LEM = $(BITBUCKET_ROOT)/lem/lem
-LEMLIBOCAML = $(BITBUCKET_ROOT)/lem/ocaml-lib
+LEMLIBOCAML = $(BITBUCKET_ROOT)/lem/ocaml-lib/_build_zarith
 ELFDIR= $(BITBUCKET_ROOT)/linksem
 ZARITH_DIR=$(LEMLIBOCAML)/dependencies/zarith
 ZARITH_LIB=$(ZARITH_DIR)/zarith.cma
