@@ -49,8 +49,6 @@
 (**************************************************************************)
 
 let opt_new_parser = ref false
-let opt_lem_sequential = ref false
-let opt_lem_mwords = ref false
 
 type out_type =
   | Lem_ast_out
@@ -130,7 +128,7 @@ let opt_dmono_analysis = ref 0
 let opt_auto_mono = ref false
 
 let monomorphise_ast locs type_env ast =
-  let ast = Monomorphise.monomorphise (!opt_lem_mwords) (!opt_auto_mono) (!opt_dmono_analysis)
+  let ast = Monomorphise.monomorphise (!Pretty_print_lem.opt_mwords) (!opt_auto_mono) (!opt_dmono_analysis)
     locs type_env ast in
   let () = if !opt_ddump_raw_mono_ast then Pretty_print.pp_defs stdout ast else () in
   let ienv = Type_check.Env.no_casts Type_check.initial_env in
@@ -159,10 +157,10 @@ let generated_line f =
 
 let output_lem filename libs defs =
   let generated_line = generated_line filename in
-  let seq_suffix = if !opt_lem_sequential then "_sequential" else "" in
+  let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in
   let types_module = (filename ^ "_embed_types" ^ seq_suffix) in
-  let monad_module = if !opt_lem_sequential then "State" else "Prompt" in
-  let operators_module = if !opt_lem_mwords then "Sail_operators_mwords" else "Sail_operators" in
+  let monad_module = if !Pretty_print_lem.opt_sequential then "State" else "Prompt" in
+  let operators_module = if !Pretty_print_lem.opt_mwords then "Sail_operators_mwords" else "Sail_operators" in
   let libs = List.map (fun lib -> lib ^ seq_suffix) libs in
   let base_imports = [
       "Pervasives_extra";
@@ -175,7 +173,7 @@ let output_lem filename libs defs =
     open_output_with_check_unformatted (filename ^ "_embed_types" ^ seq_suffix ^ ".lem") in
   let ((o,_, _) as ext_o) =
     open_output_with_check_unformatted (filename ^ "_embed" ^ seq_suffix ^ ".lem") in
-  (Pretty_print.pp_defs_lem !opt_lem_sequential !opt_lem_mwords
+  (Pretty_print.pp_defs_lem
      (ot, base_imports)
      (o, base_imports @ (String.capitalize types_module :: libs))
      defs generated_line);
@@ -233,7 +231,7 @@ let rewrite rewriters defs =
      raise (Reporting_basic.err_typ l (Type_check.string_of_type_error err))
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
-let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !opt_lem_mwords x)]
+let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !Pretty_print_lem.opt_mwords x)]
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
 let rewrite_ast_sil = rewrite Rewrites.rewrite_defs_sil

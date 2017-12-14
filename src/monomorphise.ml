@@ -1691,11 +1691,10 @@ let rewrite_size_parameters env (Defs defs) =
   let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
     let sizes = size_vars pexp in
     let pat,guard,exp,pannot = destruct_pexp pexp in
-    (* TODO: what, if anything, should sequential be? *)
     let visible_tyvars =
       KidSet.union
-        (Pretty_print_lem.lem_tyvars_of_typ false true (pat_typ_of pat))
-         (Pretty_print_lem.lem_tyvars_of_typ false true (typ_of exp))
+        (Pretty_print_lem.lem_tyvars_of_typ (pat_typ_of pat))
+         (Pretty_print_lem.lem_tyvars_of_typ (typ_of exp))
     in
     let expose_tyvars = KidSet.diff sizes visible_tyvars in
     let parameters = match pat with

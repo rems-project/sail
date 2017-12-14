@@ -93,10 +93,10 @@ let options = Arg.align ([
     Arg.String (fun l -> opt_libs_lem := l::!opt_libs_lem),
     "<filename> provide additional library to open in Lem output");
   ( "-lem_sequential",
-    Arg.Set Process_file.opt_lem_sequential,
+    Arg.Set Pretty_print_lem.opt_sequential,
     " use sequential state monad for Lem output");
   ( "-lem_mwords",
-    Arg.Set Process_file.opt_lem_mwords,
+    Arg.Set Pretty_print_lem.opt_mwords,
     " use native machine word library for Lem output");
   ( "-mono-split",
     Arg.String (fun s ->
