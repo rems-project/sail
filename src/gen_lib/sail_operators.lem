@@ -40,6 +40,9 @@ let cast_bit_vec_basic (start, len, b) = Vector (repeat [b] len) start false
 let cast_boolvec_bitvec (Vector bs start inc) =
   Vector (List.map bool_to_bitU bs) start inc
 let cast_vec_bl (Vector bs start inc) = bs
+let cast_bl_vec (start, len, bs) = Vector (extz_bl (len, bs)) start false
+let cast_bl_svec (start, len, bs) = Vector (bits_of_int (len, bitlist_to_signed bs)) start false
+let cast_int_vec n = of_bits (int_to_bin n)
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
@@ -149,10 +152,6 @@ let extz (start, len, vec) = set_vector_start (start, to_norm_vec (get_dir vec) 
 
 let exts_big (start, len, vec) = set_vector_start (start, to_vec_big (get_dir vec) (len, signed_big vec))
 let extz_big (start, len, vec) = set_vector_start (start, to_vec_big (get_dir vec) (len, unsigned_big vec))
-
-(* TODO *)
-let extz_bl (start, len, bits) = Vector bits start false
-let exts_bl (start, len, bits) = Vector bits start false
 
 
 let quot = hardware_quot

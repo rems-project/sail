@@ -111,6 +111,9 @@ let cast_bit_vec_basic (start, len, b) = vec_to_bvec (Vector [b] start false)
 let cast_boolvec_bitvec (Vector bs start inc) =
   vec_to_bvec (Vector (List.map bool_to_bitU bs) start inc)
 let cast_vec_bl v = List.map bool_to_bitU (bitlistFromWord v)
+let cast_int_vec n = wordFromInteger n
+let cast_bl_vec (start, len, bs) = wordFromBitlist (List.map bitU_to_bool bs)
+let cast_bl_svec (start, len, bs) = cast_int_vec (bitlist_to_signed bs)
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
@@ -210,7 +213,7 @@ end
 
 let add_one_bit_ignore_overflow bits =
   List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
-  
+
 val to_norm_vec : forall 'a. Size 'a => integer -> bitvector 'a
 let to_norm_vec (n : integer) = wordFromInteger n
 (*
@@ -246,10 +249,6 @@ let extz (start, len, vec) = to_norm_vec (unsigned vec)
 
 let exts_big (start, len, vec) = to_vec_big (signed_big vec)
 let extz_big (start, len, vec) = to_vec_big (unsigned_big vec)
-
-(* TODO *)
-let extz_bl (start, len, bits) = vec_to_bvec (Vector bits (integerFromNat (List.length bits - 1)) false)
-let exts_bl (start, len, bits) = vec_to_bvec (Vector bits (integerFromNat (List.length bits - 1)) false)
 
 let quot = hardware_quot
 let modulo (l,r) = hardware_mod l r
@@ -442,6 +441,7 @@ let bitwise_rightshift x = shift_op_vec RR_shift x (*">>"*)
 let bitwise_rotate x = shift_op_vec LLL_shift x (*"<<<"*)
 
 let shiftl = bitwise_leftshift
+let shiftr = bitwise_rightshift
 
 let rec arith_op_no0 (op : integer -> integer -> integer) l r =
   if r = 0

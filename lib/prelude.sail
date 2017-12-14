@@ -90,13 +90,13 @@ overload (deinfix ^^) [duplicate; duplicate_bits; duplicate_to_list; duplicate_b
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extz
 
-val extern forall Num 'm, Num 'p, Order 'ord.
+val forall Num 'm, Num 'p, Order 'ord.
     list<bit> -> vector<'p, 'm, 'ord, bit> effect pure extz_bl
 
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure exts
 
-val extern forall Num 'm, Num 'p, Order 'ord.
+val forall Num 'm, Num 'p, Order 'ord.
     list<bit> -> vector<'p, 'm, 'ord, bit> effect pure exts_bl
 
 (* If we want an automatic bitvector extension, then this is the function to

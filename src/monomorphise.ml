@@ -1853,8 +1853,13 @@ module CallerKidSet = Set.Make (struct
     | x -> x
 end)
 
-module FailureSet = Set.Make (struct
-  type t = Parse_ast.l * string
+(* Map from locations to string sets *)
+module Failures = Map.Make (struct
+  type t = Parse_ast.l
+  let compare = compare
+end)
+module StringSet = Set.Make (struct
+  type t = string
   let compare = compare
 end)
 
@@ -1888,7 +1893,7 @@ let string_of_dep = function
 
 type result = {
   split : ArgSet.t;
-  failures : FailureSet.t;
+  failures : StringSet.t Failures.t;
   (* Dependencies for arguments and type variables of each fn called, so that
      if the fn uses one for a bitvector size we can track it back *)
   split_on_call : (dependencies list * dependencies KBindings.t) Bindings.t; (* (arguments, kids) per fn *)
@@ -1898,7 +1903,7 @@ type result = {
 
 let empty = {
   split = ArgSet.empty;
-  failures = FailureSet.empty;
+  failures = Failures.empty;
   split_on_call = Bindings.empty;
   split_in_caller = CallerArgSet.empty;
   kid_in_caller = CallerKidSet.empty
@@ -1938,9 +1943,15 @@ let call_arg_merge k args args' =
   | Some (args,kdep), Some (args',kdep')
     -> Some (List.map2 dmerge args args', KBindings.merge call_kid_merge kdep kdep')
 
+let failure_merge _ x y =
+  match x, y with
+  | None, x -> x
+  | x, None -> x
+  | Some x, Some y -> Some (StringSet.union x y)
+
 let merge rs rs' = {
   split = ArgSet.union rs.split rs'.split;
-  failures = FailureSet.union rs.failures rs'.failures;
+  failures = Failures.merge failure_merge rs.failures rs'.failures;
   split_on_call = Bindings.merge call_arg_merge rs.split_on_call rs'.split_on_call;
   split_in_caller = CallerArgSet.union rs.split_in_caller rs'.split_in_caller;
   kid_in_caller = CallerKidSet.union rs.kid_in_caller rs'.kid_in_caller
@@ -2079,19 +2090,28 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
+       let (_,fn_typ) = Env.get_val_spec id (env_of_annot (l,annot)) in
+       let fn_effect = match fn_typ with
+         | Typ_aux (Typ_fn (_,_,eff),_) -> eff
+         | _ -> Effect_aux (Effect_set [],Unknown)
+       in
+       let eff_dep = match fn_effect with
+         | Effect_aux (Effect_set ([] | [BE_aux (BE_undef,_)]),_) -> dempty
+         | _ -> Unknown (l, "Effects from function application")
+       in
        let kid_inst = instantiation_of exp in
        (* Change kids in instantiation to the canonical ones from the type signature *)
        let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
        let kid_deps = KBindings.map (deps_of_uvar env.kid_deps deps) kid_inst in
-       let r' =
-       if Id.compare fn_id id == 0 then
-         let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
-         let deps = List.map (fun _ -> bad) deps in
-         let kid_deps = KBindings.map (fun _ -> bad) kid_deps in
-         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) }
-       else
-         { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
-     (merge_deps deps, assigns, merge r r')
+       let rdep,r' =
+         if Id.compare fn_id id == 0 then
+           let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
+           let deps = List.map (fun _ -> bad) deps in
+           let kid_deps = KBindings.map (fun _ -> bad) kid_deps in
+           bad, { empty with split_on_call = Bindings.singleton id (deps, kid_deps) }
+         else
+           dempty, { empty with split_on_call = Bindings.singleton id (deps, kid_deps) } in
+       (merge_deps (rdep::eff_dep::deps), assigns, merge r r')
     | E_tuple es
     | E_list es ->
        let deps, assigns, r = non_det es in
@@ -2235,7 +2255,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          | Unknown (l,msg) ->
             { r with
               failures =
-                FailureSet.add (l,"Unable to monomorphise " ^ string_of_nexp size ^ ": " ^ msg)
+                Failures.add l (StringSet.singleton ("Unable to monomorphise " ^ string_of_nexp size ^ ": " ^ msg))
                   r.failures }
        else
          r
@@ -2355,6 +2375,11 @@ let print_result r =
   let _ = Bindings.iter print_binding r.split_on_call in
   let _ = print_endline ("  split_in_caller: " ^ string_of_callerset r.split_in_caller) in
   let _ = print_endline ("  kid_in_caller: " ^ string_of_callerkidset r.kid_in_caller) in
+  let _ = print_endline ("  failures: \n    " ^
+                            (String.concat "\n    "
+                               (List.map (fun (l,s) -> Reporting_basic.loc_to_string l ^ ":\n     " ^
+                                 String.concat "\n      " (StringSet.elements s))
+                                  (Failures.bindings r.failures)))) in
   ()
 
 let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pexp),_)) =
@@ -2387,29 +2412,29 @@ let analyse_defs debug env (Defs defs) =
 
   let rec chase_deps = function
     | Have (splits, caller_args, caller_kids) ->
-       let splits,fails = CallerArgSet.fold add_arg caller_args (splits,FailureSet.empty) in
+       let splits,fails = CallerArgSet.fold add_arg caller_args (splits,Failures.empty) in
        let splits,fails = CallerKidSet.fold add_kid caller_kids (splits,fails) in
        splits, fails
     | Unknown (l,msg) ->
-       ArgSet.empty , FailureSet.singleton (l,("Unable to monomorphise dependency: " ^ msg))
+       ArgSet.empty , Failures.singleton l (StringSet.singleton ("Unable to monomorphise dependency: " ^ msg))
   and chase_kid_caller (id,kid) =
     match Bindings.find id r.split_on_call with
     | (_,kid_deps) -> begin
       match KBindings.find kid kid_deps with
       | deps -> chase_deps deps
-      | exception Not_found -> ArgSet.empty,FailureSet.empty
+      | exception Not_found -> ArgSet.empty,Failures.empty
     end
-    | exception Not_found -> ArgSet.empty,FailureSet.empty
+    | exception Not_found -> ArgSet.empty,Failures.empty
   and chase_arg_caller (id,i) =
     match Bindings.find id r.split_on_call with
     | (arg_deps,_) -> chase_deps (List.nth arg_deps i)
-    | exception Not_found -> ArgSet.empty,FailureSet.empty
+    | exception Not_found -> ArgSet.empty,Failures.empty
   and add_arg arg (splits,fails) =
     let splits',fails' = chase_arg_caller arg in
-    ArgSet.union splits splits', FailureSet.union fails fails'
+    ArgSet.union splits splits', Failures.merge failure_merge fails fails'
   and add_kid k (splits,fails) =
     let splits',fails' = chase_kid_caller k in
-    ArgSet.union splits splits', FailureSet.union fails fails'
+    ArgSet.union splits splits', Failures.merge failure_merge fails fails'
   in
   let _ = if debug > 1 then print_result r else () in
   let splits,fails = CallerArgSet.fold add_arg r.split_in_caller (r.split,r.failures) in
@@ -2421,9 +2446,10 @@ let analyse_defs debug env (Defs defs) =
     else ()
   in
   let _ =
-    if FailureSet.is_empty fails then () else
+    if Failures.is_empty fails then () else
       begin
-        FailureSet.iter (fun (l,msg) -> Reporting_basic.print_err false false l "Monomorphisation" msg)
+        Failures.iter (fun l msgs ->
+          Reporting_basic.print_err false false l "Monomorphisation" (String.concat "\n" (StringSet.elements msgs)))
           fails;
         raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
       end
