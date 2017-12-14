@@ -1171,7 +1171,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
        let dir_suffix = (if dir_b then "_inc" else "_dec") in
        let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
        let size = if dir_b then Big_int.add (Big_int.sub i2 i1) (Big_int.of_int 1) else Big_int.add (Big_int.sub i1 i2) (Big_int.of_int 1) in
-       let vtyp = vector_typ (nconstant i1) (nconstant size) ord bit_typ in
+       let vtyp = vector_typ (nconstant size) ord bit_typ in
        let tannot = doc_tannot_lem sequential mwords false vtyp in
        let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id_lem id);
                                                        doc_range_lem r;]) in
@@ -1405,7 +1405,7 @@ let doc_regtype_fields sequential mwords (tname, (n1, n2, fields)) =
     (* TODO Assumes normalised, decreasing bitvector slices; however, since
        start indices or indexing order do not appear in Lem type annotations,
        this does not matter. *)
-    let ftyp = vector_typ (nconstant (Big_int.pred fsize)) (nconstant fsize) dec_ord bit_typ in
+    let ftyp = vector_typ (nconstant fsize) dec_ord bit_typ in
     let reftyp =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
         [mk_typ_arg (Typ_arg_typ (mk_id_typ (mk_id tname)));

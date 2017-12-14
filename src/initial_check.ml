@@ -945,7 +945,7 @@ let initial_kind_env =
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
-    ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
+    ("vector", {k = K_Lam( [{k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
     ("atom", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});
     ("option", { k = K_Lam( [{k=K_Typ}], {k=K_Typ}) });
     ("implicit", {k = K_Lam( [{k = K_Nat}], {k=K_Typ})} );
@@ -1011,9 +1011,9 @@ let generate_undefineds vs_ids (Defs defs) =
      gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
      gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
      (* FIXME: How to handle inc/dec order correctly? *)
-     gen_vs (mk_id "undefined_vector") "forall 'n 'm ('a:Type). (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";
+     gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type). (atom('n), 'a) -> vector('n, dec,'a) effect {undef}";
      (* Only used with lem_mwords *)
-     gen_vs (mk_id "undefined_bitvector") "forall 'n 'm. (atom('n), atom('m)) -> vector('n, 'm, dec,bit) effect {undef}";
+     gen_vs (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
      gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
   in
   let undefined_tu = function

@@ -428,7 +428,7 @@ end = struct
     List.fold_left (fun m (name, kinds) -> Bindings.add (mk_id name) (kinds_typq kinds) m) Bindings.empty
       [ ("range", [BK_nat; BK_nat]);
         ("atom", [BK_nat]);
-        ("vector", [BK_nat; BK_nat; BK_order; BK_type]);
+        ("vector", [BK_nat; BK_order; BK_type]);
         ("register", [BK_type]);
         ("bit", []);
         ("unit", []);
@@ -494,8 +494,8 @@ end = struct
       | kopt :: kopts, Typ_arg_aux (Typ_arg_order arg, _) :: args when is_order_kopt kopt ->
          subst_args kopts args
       | [], [] -> ncs
-      | _, Typ_arg_aux (_, l) :: _ -> typ_error l "ERROR 1"
-      | _, _ -> typ_error Parse_ast.Unknown "ERROR 2"
+      | _, Typ_arg_aux (_, l) :: _ -> typ_error l ("Error when processing type quantifer arguments " ^ string_of_typquant typq)
+      | _, _ -> typ_error Parse_ast.Unknown ("Error when processing type quantifer arguments " ^ string_of_typquant typq)
     in
     let ncs = subst_args kopts args in
     if List.for_all (env.prove env) ncs
@@ -931,7 +931,7 @@ end = struct
       | Typ_id id when is_regtyp id env ->
         let base, top, ranges = get_regtyp id env in
         let len = Big_int.succ (Big_int.abs (Big_int.sub top base)) in
-        vector_typ (nconstant base) (nconstant len) (get_default_order env) bit_typ
+        vector_typ (nconstant len) (get_default_order env) bit_typ
         (* TODO registers with non-default order? non-bitvector registers? *)
       | t -> rewrap t
     and aux_arg (Typ_arg_aux (targ,a)) =
@@ -966,16 +966,7 @@ let add_typquant (quant : typquant) (env : Env.t) : Env.t =
 let default_order_error_string =
   "No default Order (if you have set a default Order, move it earlier in the specification)"
 
-let dvector_typ env n m typ = vector_typ n m (Env.get_default_order env) typ
-
-let lvector_typ env l typ =
-  match Env.get_default_order env with
-  | Ord_aux (Ord_inc, _) as ord ->
-     vector_typ (nint 0) l ord typ
-  | Ord_aux (Ord_dec, _) as ord ->
-     vector_typ (nminus l (nint 1)) l ord typ
-  | Ord_aux (Ord_var _, _) as ord ->
-     typ_error Parse_ast.Unknown default_order_error_string
+let dvector_typ env n typ = vector_typ n (Env.get_default_order env) typ
 
 let ex_counter = ref 0
 
@@ -1003,10 +994,9 @@ let exist_typ constr typ =
 let destruct_vector env typ =
   let destruct_vector' = function
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
-                             Typ_arg_aux (Typ_arg_nexp n2, _);
                              Typ_arg_aux (Typ_arg_order o, _);
                              Typ_arg_aux (Typ_arg_typ vtyp, _)]
-                       ), _) when string_of_id id = "vector" -> Some (n1, n2, o, vtyp)
+                       ), _) when string_of_id id = "vector" -> Some (n1, o, vtyp)
     | typ -> None
   in
   destruct_vector' (Env.expand_synonyms env typ)
@@ -1698,27 +1688,15 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
   | L_bin str ->
      begin
        match Env.get_default_order env with
-       | Ord_aux (Ord_inc, _) ->
-          dvector_typ env (nint 0) (nint (String.length str)) (mk_typ (Typ_id (mk_id "bit")))
-       | Ord_aux (Ord_dec, _) ->
-          dvector_typ env
-                     (nint (String.length str - 1))
-                     (nint (String.length str))
-                     (mk_typ (Typ_id (mk_id "bit")))
+       | Ord_aux (Ord_inc, _) | Ord_aux (Ord_dec, _) ->
+          dvector_typ env (nint (String.length str)) (mk_typ (Typ_id (mk_id "bit")))
        | Ord_aux (Ord_var _, _) -> typ_error l default_order_error_string
-
      end
   | L_hex str ->
      begin
        match Env.get_default_order env with
-       | Ord_aux (Ord_inc, _) ->
-          dvector_typ env (nint 0) (nint (String.length str * 4)) (mk_typ (Typ_id (mk_id "bit")))
-       | Ord_aux (Ord_dec, _) ->
-          dvector_typ env
-                     (nint (String.length str * 4 - 1))
-                     (nint (String.length str * 4))
-                     (mk_typ (Typ_id (mk_id "bit")))
-
+       | Ord_aux (Ord_inc, _) | Ord_aux (Ord_dec, _) ->
+          dvector_typ env (nint (String.length str * 4)) (mk_typ (Typ_id (mk_id "bit")))
        | Ord_aux (Ord_var _, _) -> typ_error l default_order_error_string
      end
   | L_undef -> typ_error l "Cannot infer the type of undefined"
@@ -1767,10 +1745,9 @@ let rec instantiate_quants quants kid uvar = match quants with
 let destruct_vec_typ l env typ =
   let destruct_vec_typ' l = function
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
-                             Typ_arg_aux (Typ_arg_nexp n2, _);
                              Typ_arg_aux (Typ_arg_order o, _);
                              Typ_arg_aux (Typ_arg_typ vtyp, _)]
-                       ), _) when string_of_id id = "vector" -> (n1, n2, o, vtyp)
+                       ), _) when string_of_id id = "vector" -> (n1, o, vtyp)
     | typ -> typ_error l ("Expected vector type, got " ^ string_of_typ typ)
   in
   destruct_vec_typ' l (Env.expand_synonyms env typ)
@@ -2188,7 +2165,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let checked_body = crule check_exp env body typ in
      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
   | E_vector vec, _ ->
-     let (start, len, ord, vtyp) = destruct_vec_typ l env typ in
+     let (len, ord, vtyp) = destruct_vec_typ l env typ in
      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
      if prove env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
      else typ_error l "List length didn't match" (* FIXME: improve error message *)
@@ -2474,21 +2451,21 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      let len = nexp_simp (nint (List.length pats)) in
      let etyp = pat_typ_of (List.hd pats) in
      List.iter (fun pat -> typ_equality l env etyp (pat_typ_of pat)) pats;
-     annot_pat (P_vector pats) (lvector_typ env len etyp), env
+     annot_pat (P_vector pats) (dvector_typ env len etyp), env
   | P_vector_concat (pat :: pats) ->
      let fold_pats (pats, env) pat =
        let inferred_pat, env = infer_pat env pat in
        pats @ [inferred_pat], env
      in
      let inferred_pats, env = List.fold_left fold_pats ([], env) (pat :: pats) in
-     let (_, len, _, vtyp) = destruct_vec_typ l env (pat_typ_of (List.hd inferred_pats)) in
+     let (len, _, vtyp) = destruct_vec_typ l env (pat_typ_of (List.hd inferred_pats)) in
      let fold_len len pat =
-       let (_, len', _, vtyp') = destruct_vec_typ l env (pat_typ_of pat) in
+       let (len', _, vtyp') = destruct_vec_typ l env (pat_typ_of pat) in
        typ_equality l env vtyp vtyp';
        nsum len len'
      in
      let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
-     annot_pat (P_vector_concat inferred_pats) (lvector_typ env len vtyp), env
+     annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env
   | P_as (pat, id) ->
      let (typed_pat, env) = infer_pat env pat in
      annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), Env.add_local id (Immutable, pat_typ_of typed_pat) env
@@ -2537,6 +2514,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
        typ_debug ("REGTYP: " ^ string_of_typ regtyp ^ " / " ^ string_of_typ (Env.expand_synonyms env regtyp));
        match Env.expand_synonyms env regtyp with
        | Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id regtyp_id, _)), _)]), _)
+         (* FIXME: Almost certainly broken *)
        | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
           let eff = mk_effect [BE_wreg] in
           let base, top, ranges = Env.get_regtyp regtyp_id env in
@@ -2546,9 +2524,9 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           in
           let vec_typ = match range, Env.get_default_order env with
             | BF_aux (BF_single n, _), Ord_aux (Ord_dec, _) ->
-               dvector_typ env (nconstant n) (nint 1) (mk_typ (Typ_id (mk_id "bit")))
+               dvector_typ env (nint 1) (mk_typ (Typ_id (mk_id "bit")))
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
-               dvector_typ env (nconstant n) (nconstant (Big_int.add (Big_int.sub n m) (Big_int.of_int 1))) (mk_typ (Typ_id (mk_id "bit")))
+               dvector_typ env (nconstant (Big_int.add (Big_int.sub n m) (Big_int.of_int 1))) (mk_typ (Typ_id (mk_id "bit")))
             | _, _ -> typ_error l "Not implemented this register field type yet..."
           in
           let checked_exp = crule check_exp env exp vec_typ in
@@ -2635,7 +2613,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        | Typ_app (id, _) when Id.compare id (mk_id "vector") == 0 ->
           begin
             match destruct_vector env typ with
-            | Some (_, vec_len, _, _) ->
+            | Some (vec_len, _, _) ->
                let bind_bits_tuple lexp (tlexps, env, llen) =
                  match lexp with
                  | LEXP_aux (LEXP_id v, _) ->
@@ -2647,7 +2625,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
                          typ_error l "Unbound variable in vector tuple assignment"
                       | Local (Mutable, vtyp) | Register vtyp ->
                          let llen' = match destruct_vector env vtyp with
-                           | Some (_, llen', _, _) -> llen'
+                           | Some (llen', _, _) -> llen'
                            | None -> typ_error l "Variables in vector tuple assignment must be vectors"
                          in
                          let tlexp, env = bind_lexp env lexp vtyp in
@@ -2662,7 +2640,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
                    in
                    let typq, _, vtyp, _ = Env.get_accessor rec_id fid env in
                    let llen' = match destruct_vector env vtyp with
-                     | Some (_, llen', _, _) -> llen'
+                     | Some (llen', _, _) -> llen'
                      | None -> typ_error l "Variables in vector tuple assignment must be vectors"
                    in
                    let tlexp, env = bind_lexp env lexp vtyp in
@@ -2781,16 +2759,16 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
           begin
             match range, Env.get_default_order env with
             | BF_aux (BF_single n, _), Ord_aux (Ord_dec, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nint 1) bit_typ in
+               let vec_typ = dvector_typ env (nint 1) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant (Big_int.add (Big_int.sub n m) (Big_int.of_int 1))) bit_typ in
+               let vec_typ = dvector_typ env (nconstant (Big_int.add (Big_int.sub n m) (Big_int.of_int 1))) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_single n, _), Ord_aux (Ord_inc, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nint 1) bit_typ in
+               let vec_typ = dvector_typ env (nint 1) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_inc, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant (Big_int.add (Big_int.sub m n) (Big_int.of_int 1))) bit_typ in
+               let vec_typ = dvector_typ env (nconstant (Big_int.add (Big_int.sub m n) (Big_int.of_int 1))) bit_typ in
                annot_exp (E_field (checked_exp, field)) vec_typ
             | _, _ -> typ_error l "Invalid register field type"
           end
@@ -2894,21 +2872,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_vector ((item :: items) as vec) ->
      let inferred_item = irule infer_exp env item in
      let checked_items = List.map (fun i -> crule check_exp env i (typ_of inferred_item)) items in
-     let vec_typ = match Env.get_default_order env with
-       | Ord_aux (Ord_inc, _) ->
-          mk_typ (Typ_app (mk_id "vector",
-                           [mk_typ_arg (Typ_arg_nexp (nint 0));
-                            mk_typ_arg (Typ_arg_nexp (nint (List.length vec)));
-                            mk_typ_arg (Typ_arg_order (Env.get_default_order env));
-                            mk_typ_arg (Typ_arg_typ (typ_of inferred_item))]))
-       | Ord_aux (Ord_dec, _) ->
-          mk_typ (Typ_app (mk_id "vector",
-                           [mk_typ_arg (Typ_arg_nexp (nint (List.length vec - 1)));
-                            mk_typ_arg (Typ_arg_nexp (nint (List.length vec)));
-                            mk_typ_arg (Typ_arg_order (Env.get_default_order env));
-                            mk_typ_arg (Typ_arg_typ (typ_of inferred_item))]))
-       | Ord_aux (Ord_var _, _) -> typ_error l default_order_error_string
-     in
+     let vec_typ = dvector_typ env (nint (List.length vec)) (typ_of inferred_item) in
      annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
   | E_assert (test, msg) ->
      let checked_test = crule check_exp env test bool_typ in
@@ -3524,7 +3488,7 @@ let check_register env id base top ranges =
   | Nexp_aux (Nexp_constant basec, _), Nexp_aux (Nexp_constant topc, _) ->
      let no_typq = TypQ_aux (TypQ_tq [], Parse_ast.Unknown) (* Maybe could be TypQ_no_forall? *) in
      (* FIXME: wrong for default Order inc? *)
-     let vec_typ = dvector_typ env base (nconstant (Big_int.add (Big_int.sub basec topc) (Big_int.of_int 1))) bit_typ in
+     let vec_typ = dvector_typ env (nconstant (Big_int.add (Big_int.sub basec topc) (Big_int.of_int 1))) bit_typ in
      let cast_typ = mk_typ (Typ_fn (mk_id_typ id, vec_typ, no_effect)) in
      let cast_to_typ = mk_typ (Typ_fn (vec_typ, mk_id_typ id, no_effect)) in
      env

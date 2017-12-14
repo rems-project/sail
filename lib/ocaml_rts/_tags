@@ -1,4 +1,4 @@
-true: use_lem
+true: use_lem, debug
 <main.{byte,native}>: use_nums, use_str, use_unix, debug
 <linksem>: include
 <linksem/adaptors>: include

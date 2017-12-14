@@ -249,10 +249,9 @@ let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]
 let tuple_typ typs = mk_typ (Typ_tup typs)
 let function_typ typ1 typ2 eff = mk_typ (Typ_fn (typ1, typ2, eff))
 
-let vector_typ n m ord typ =
+let vector_typ n ord typ =
   mk_typ (Typ_app (mk_id "vector",
                    [mk_typ_arg (Typ_arg_nexp (nexp_simp n));
-                    mk_typ_arg (Typ_arg_nexp (nexp_simp m));
                     mk_typ_arg (Typ_arg_order ord);
                     mk_typ_arg (Typ_arg_typ typ)]))
 
@@ -744,7 +743,7 @@ let is_reftyp (Typ_aux (typ_aux, _)) = match typ_aux with
   | _ -> false
 
 let rec is_vector_typ = function
-  | Typ_aux (Typ_app (Id_aux (Id "vector",_), [_;_;_;_]), _) -> true
+  | Typ_aux (Typ_app (Id_aux (Id "vector",_), [_;_;_]), _) -> true
   | Typ_aux (Typ_app (Id_aux (Id "register",_), [Typ_arg_aux (Typ_arg_typ rtyp,_)]), _) ->
     is_vector_typ rtyp
   | _ -> false
@@ -757,8 +756,13 @@ let typ_app_args_of = function
        ("typ_app_args_of called on non-app type " ^ string_of_typ typ))
 
 let rec vector_typ_args_of typ = match typ_app_args_of typ with
-  | ("vector", [Typ_arg_nexp start; Typ_arg_nexp len; Typ_arg_order ord; Typ_arg_typ etyp], _) ->
-    (nexp_simp start, nexp_simp len, ord, etyp)
+  | ("vector", [Typ_arg_nexp len; Typ_arg_order ord; Typ_arg_typ etyp], l) ->
+     begin
+       match ord with
+       | Ord_aux (Ord_inc, _) -> (nint 0, nexp_simp len, ord, etyp)
+       | Ord_aux (Ord_dec, _) -> (nexp_simp (nminus len (nint 1)), nexp_simp len, ord, etyp) (* FIXME to return 3 arguments *)
+       | _ -> raise (Reporting_basic.err_typ l "Can't calculate start index without order")
+     end
   | ("register", [Typ_arg_typ rtyp], _) -> vector_typ_args_of rtyp
   | (_, _, l) ->
      raise (Reporting_basic.err_typ l

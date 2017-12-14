@@ -283,14 +283,14 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      let loop_var = separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"] in
      let loop_mod =
        match ord with
-       | Ord_aux (Ord_inc, _) -> string "Big_int.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
-       | Ord_aux (Ord_dec, _) -> string "Big_int.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_inc, _) -> string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_dec, _) -> string "sub_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
        | Ord_aux (Ord_var _, _) -> failwith "Cannot have variable loop order!"
      in
      let loop_compare =
        match ord with
-       | Ord_aux (Ord_inc, _) -> string "Big_int.less_equal"
-       | Ord_aux (Ord_dec, _) -> string "Big_int.greater"
+       | Ord_aux (Ord_inc, _) -> string "le_big_int"
+       | Ord_aux (Ord_dec, _) -> string "gt_big_int"
        | Ord_aux (Ord_var _, _) -> failwith "Cannot have variable loop order!"
      in
      let loop_body =

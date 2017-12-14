@@ -177,10 +177,7 @@ val add_typquant : typquant -> Env.t -> Env.t
 val orig_kid : kid -> kid
 
 (* Vector with default order. *)
-val dvector_typ : Env.t -> nexp -> nexp -> typ -> typ
-
-(* Vector of specific length with default order, i.e. lvector_typ env n bit_typ = bit[n]. *)
-val lvector_typ : Env.t -> nexp -> typ -> typ
+val dvector_typ : Env.t -> nexp -> typ -> typ
 
 val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
 
@@ -231,7 +228,7 @@ val destruct_atom_nexp : Env.t -> typ -> nexp option
    existential to ensure that no name-clashes occur. *)
 val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
 
-val destruct_vector : Env.t -> typ -> (nexp * nexp * order * typ) option
+val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
 type uvar =
   | U_nexp of nexp

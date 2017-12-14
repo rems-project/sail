@@ -87,10 +87,10 @@ let undefined_bit () =
 let undefined_bool () =
   if !random then Random.bool () else false
 
-let rec undefined_vector (start_index, len, item) =
+let rec undefined_vector (len, item) =
   if eq_big_int len zero_big_int
   then []
-  else item :: undefined_vector (start_index, sub_big_int len unit_big_int, item)
+  else item :: undefined_vector (sub_big_int len unit_big_int, item)
 
 let undefined_string () = ""
 

@@ -173,7 +173,7 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
     | _ ->
        begin
          match destruct_vector env typ with
-         | Some (_, len, _, _) when prove env (nc_eq len nexp) ->
+         | Some (len, _, _) when prove env (nc_eq len nexp) ->
             Some (E_aux (E_app (mk_id "length", [var]), (l, Some (env, atom_typ len, no_effect))))
          | _ -> None
        end
@@ -1550,7 +1550,7 @@ let rewrite_register_ref_writes (Defs defs) =
     let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
     let size = if dir_b then Big_int.succ (Big_int.sub i2 i1) else Big_int.succ (Big_int.sub i1 i2) in
     let rtyp = mk_id_typ id in
-    let vtyp = vector_typ (nconstant i1) (nconstant size) ord bit_typ in
+    let vtyp = vector_typ (nconstant size) ord bit_typ in
     let accessors (fr, fid) =
       let i, j = match fr with
         | BF_aux (BF_single i, _) -> (i, i)
@@ -1936,7 +1936,7 @@ let rewrite_undefined mwords =
 let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
 and simple_typ_aux = function
   | Typ_id id -> Typ_id id
-  | Typ_app (id, [_; _; _; Typ_arg_aux (Typ_arg_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
+  | Typ_app (id, [_; _; Typ_arg_aux (Typ_arg_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
      Typ_app (mk_id "list", [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)])
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 ->
      Typ_id (mk_id "int")
