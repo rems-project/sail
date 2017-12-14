@@ -247,12 +247,15 @@ let doc_typ_lem, doc_atomic_typ_lem =
     and typ' ty = fn_typ false ty
     and fn_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
       | Typ_fn(arg,ret,efct) ->
-         (*let exc_typ = string "string" in*)
          let ret_typ =
            if effectful efct
-           then separate space [string "_M";(*parens exc_typ;*) fn_typ true ret]
+           then separate space [string "_M"; fn_typ true ret]
            else separate space [fn_typ false ret] in
-         let tpp = separate space [tup_typ true arg; arrow;ret_typ] in
+         let arg_typs = match arg with
+           | Typ_aux (Typ_tup typs, _) ->
+              List.map (app_typ true) typs
+           | _ -> [tup_typ true arg] in
+         let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
       | _ -> tup_typ atyp_needed ty
@@ -702,13 +705,17 @@ let doc_exp_lem, doc_let_lem =
                     parens (separate_map comma (expV false) args) in
              if aexp_needed then parens (align epp) else epp
           | _ ->
-             let call = match annot with
+             let call, is_extern = match annot with
                | Some (env, _, _) when Env.is_extern f env "lem" ->
-                 string (Env.get_extern f env "lem")
-               | _ -> doc_id_lem f in
-             let argspp = match args with
-               | [arg] -> expV true arg
-               | args -> parens (align (separate_map (comma ^^ break 0) (expV false) args)) in
+                 string (Env.get_extern f env "lem"), true
+               | _ -> doc_id_lem f, false in
+             let argspp =
+               (* TODO Update Sail library functions to not use tupled arguments,
+                  then remove the special case here *)
+               if is_extern then
+                 parens (align (separate_map (comma ^^ break 0) (expV true) args))
+               else
+                 align (separate_map (break 1) (expV true) args) in
              let epp = align (call ^//^ argspp) in
              let (taepp,aexp_needed) =
                let t = (*Env.base_typ_of (env_of full_exp)*) (typ_of full_exp) in
@@ -1203,6 +1210,43 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
                                      break 0 ^^ brackets (align doc_rids)]))
     | _ -> raise (Reporting_basic.err_unreachable l "register with non-constant indices")
 
+let args_of_typ l env typ =
+  let typs = match typ with
+    | Typ_aux (Typ_tup typs, _) -> typs
+    | typ -> [typ] in
+  let arg i typ =
+    let id = mk_id ("arg" ^ string_of_int i) in
+    P_aux (P_id id, (l, Some (env, typ, no_effect))),
+    E_aux (E_id id, (l, Some (env, typ, no_effect))) in
+  List.split (List.mapi arg typs)
+
+let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
+  let env = env_of_annot annot in
+  let id = (fun body -> body) in
+  match paux with
+  | P_tup [] ->
+     let annot = (l, Some (Env.empty, unit_typ, no_effect)) in
+     [P_aux (P_lit (mk_lit L_unit), annot)], id
+  | P_tup pats -> pats, id
+  | P_wild ->
+     begin
+       match pat_typ_of pat with
+       | Typ_aux (Typ_tup typs, _) ->
+          let wild typ = P_aux (P_wild, (l, Some (env, typ, no_effect))) in
+          List.map wild typs, id
+       | _ -> [pat], id
+     end
+  | P_lit _ | P_id _ | P_var _ | P_app _ | P_record _
+  | P_vector _ | P_vector_concat _ | P_list _ | P_cons _ ->
+     [pat], id
+  | P_typ (_, pat) -> untuple_args_pat pat
+  | P_as _ ->
+     let argpats, argexps = args_of_typ l env (pat_typ_of pat) in
+     let argexp = E_aux (E_tuple argexps, annot) in
+     let bindargs (E_aux (_, bannot) as body) =
+       E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
+     argpats, bindargs
+
 let doc_rec_lem (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> space
   | Rec_rec -> space ^^ string "rec" ^^ space
@@ -1219,14 +1263,16 @@ let doc_fun_body_lem exp =
 
 let doc_funcl_lem (FCL_aux(FCL_Funcl(id,pexp),_)) =
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
+  let pats, bind = untuple_args_pat pat in
+  let patspp = separate_map space (doc_pat_lem true) pats in
   let _ = match guard with
     | None -> ()
     | _ ->
        raise (Reporting_basic.err_unreachable l
-                "guarded pattern expression should have been rewritten before pretty-printing")
-  in
-  group (prefix 3 1 ((doc_pat_lem false pat) ^^ space ^^ arrow)
-    (doc_fun_body_lem exp))
+                "guarded pattern expression should have been rewritten before pretty-printing") in
+  group (prefix 3 1
+    (separate space [doc_id_lem id; patspp; equals])
+    (doc_fun_body_lem (bind exp)))
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -1235,29 +1281,7 @@ let get_id = function
 module StringSet = Set.Make(String)
 
 let doc_fundef_rhs_lem (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
-  match funcls with
-  | [] -> failwith "FD_function with empty function list"
-  | [FCL_aux(FCL_Funcl(id,pexp),_)] ->
-     let pat,guard,exp,(l,_) = destruct_pexp pexp in
-     let _ = match guard with
-       | None -> ()
-       | _ ->
-          raise (Reporting_basic.err_unreachable l
-                   "guarded pattern expression should have been rewritten before pretty-printing")
-     in
-    (prefix 2 1)
-      ((separate space)
-         [doc_id_lem id;
-          (doc_pat_lem true pat);
-          equals])
-      (doc_fun_body_lem exp)
-  | _ ->
-    let clauses =
-      (separate_map (break 1))
-        (fun fcl -> separate space [pipe;doc_funcl_lem fcl]) funcls in
-    (prefix 2 1)
-      ((separate space) [doc_id_lem (id_of_fundef fd);equals;string "function"])
-      (clauses ^/^ string "end")
+  separate_map (hardline ^^ string "and ") doc_funcl_lem funcls
 
 let doc_mutrec_lem = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
@@ -1294,10 +1318,12 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
                if StringSet.mem candidate already_used then
                  pick_name_not_clashing_with already_used (candidate ^ "'")
                else candidate in
+             let unit_pat = P_aux (P_lit (mk_lit L_unit), (l, Some (Env.empty, unit_typ, no_effect))) in
              let aux_fname = pick_name_not_clashing_with already_used_fnames (string_of_id id ^ "_" ^ ctor) in
+             let aux_args = if argspat = [] then unit_pat else P_aux (P_tup argspat,pannot) in
              let already_used_fnames = StringSet.add aux_fname already_used_fnames in
              let fcl = FCL_aux (FCL_Funcl (Id_aux (Id aux_fname,l),
-                                           Pat_aux (Pat_exp (P_aux (P_tup argspat,pannot),exp),(pexp_l,None)))
+                                           Pat_aux (Pat_exp (aux_args,exp),(pexp_l,None)))
                                   ,annot) in
              let auxiliary_functions =
                 auxiliary_functions ^^ hardline ^^ hardline ^^
@@ -1311,6 +1337,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
                | _ -> P_aux (P_as (P_aux (p,a), Id_aux (Id ("arg" ^ string_of_int idx),l)),a) in
              let named_argspat = List.mapi name_pat argspat in
              let named_pat = P_aux (P_app (Id_aux (Id ctor,l),named_argspat),pannot) in
+             let named_args = if argspat = [] then [unit_pat] else named_argspat in
              let doc_arg idx (P_aux (p,(l,a))) = match p with
                | P_as (pat,id) -> doc_id_lem id
                | P_lit lit -> doc_lit_lem false lit a
@@ -1321,7 +1348,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
                  (separate space
                     [pipe;doc_pat_lem false named_pat;arrow;
                      string aux_fname;
-                     parens (separate comma (List.mapi doc_arg named_argspat))]) in
+                     separate space (List.mapi doc_arg named_args)]) in
              (already_used_fnames,auxiliary_functions,clauses)
         ) (StringSet.empty,empty,empty) fcls in
 
@@ -1424,8 +1451,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
        space; langlebar; string " field_name = \"" ^^ doc_id_lem fid ^^ string "\";"; hardline;
        space; space; space; string (" field_start = " ^ string_of_big_int i ^ ";"); hardline;
        space; space; space; string (" field_is_inc = " ^ dir ^ ";"); hardline;
-       space; space; space; string (" get_field = (fun reg -> get_" ^ tname ^ "_" ^ string_of_id fid ^ "(reg));"); hardline;
-       space; space; space; string (" set_field = (fun reg v -> set_" ^ tname ^ "_" ^ string_of_id fid ^ "(reg, v)) "); ranglebar])
+       space; space; space; string (" get_field = get_" ^ tname ^ "_" ^ string_of_id fid ^ ";"); hardline;
+       space; space; space; string (" set_field = set_" ^ tname ^ "_" ^ string_of_id fid ^ " "); ranglebar])
   in
   separate_map hardline doc_field fields
 
