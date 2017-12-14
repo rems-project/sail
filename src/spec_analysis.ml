@@ -577,6 +577,10 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_fixity _ -> mt,mt
   | DEF_overload (id,ids) -> init_env (string_of_id id), List.fold_left (fun ns id -> Nameset.add (string_of_id id) ns) mt ids
   | DEF_default def -> mt,mt
+  | DEF_internal_mutrec fdefs ->
+     let fvs = List.map (fv_of_fun consider_var) fdefs in
+     List.fold_left Nameset.union Nameset.empty (List.map fst fvs),
+     List.fold_left Nameset.union Nameset.empty (List.map snd fvs)
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
   | DEF_comm _ -> mt,mt

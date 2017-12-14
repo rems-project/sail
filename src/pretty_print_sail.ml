@@ -347,27 +347,6 @@ let doc_exp, doc_let =
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
   (* doc_op (doc_id op) (exp l) (exp r) *)
-  | E_comment s -> comment (string s)
-  | E_comment_struc e -> comment (exp e)
-                                 (*
-  | E_internal_exp((l, Base((_,t),_,_,_,_,bindings))) -> (*TODO use bindings, and other params*)
-    (match t.t with
-      | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
-      | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
-        (match r.nexp with
-          | Nvar v -> utf8string v
-          | Nconst bi -> utf8string (Big_int.Big_int.to_string bi)
-          | _ ->  raise (Reporting_basic.err_unreachable l
-                           ("Internal exp given vector without known length, instead given " ^ n_to_string r)))
-      | Tapp("implicit",[TA_nexp r]) ->
-        (match r.nexp with
-          | Nconst bi -> utf8string (Big_int.Big_int.to_string bi)
-          | Nvar v -> utf8string v
-          | _ -> raise (Reporting_basic.err_unreachable l "Internal exp given implicit without var or const"))
-      | _ ->  raise (Reporting_basic.err_unreachable l ("Internal exp given non-vector, non-implicit " ^ t_to_string t)))
-  | E_internal_exp_user _ -> raise (Reporting_basic.err_unreachable Unknown ("internal_exp_user not rewritten away"))
-  | E_internal_cast ((_, Overload (_, _,_ )), _) | E_internal_exp _ -> assert false
-                                  *)
   | E_internal_return exp1 ->
       separate space [string "internal_return"; exp exp1]
   | _ -> failwith ("Cannot print: " ^ Ast_util.string_of_exp expr)
@@ -415,16 +394,14 @@ let doc_default (DT_aux(df,_)) = match df with
   | DT_typ(ts,id) -> separate space [string "default"; doc_typscm ts; doc_id id]
   | DT_order(ord) -> separate space [string "default"; string "Order"; doc_ord ord]
 
-let doc_spec (VS_aux(v,_)) = match v with
-  | VS_val_spec(ts,id,ext_opt,is_cast) ->
-     let cast_pp = if is_cast then [string "cast"] else [] in
-     (* This sail syntax only supports a single extern name, so just use the ocaml version *)
-     let extern_kwd_pp, id_pp = match ext_opt "ocaml" with
-       | Some ext -> [string "extern"], doc_op equals (doc_id id) (dquotes (string (ext)))
-       | None -> [], doc_id id
-     in
-     separate space ([string "val"] @ cast_pp @ extern_kwd_pp @ [doc_typscm ts] @ [id_pp])
-  | _ -> failwith "Invalid valspec"
+let doc_spec (VS_aux (VS_val_spec (ts, id, ext_opt, is_cast), _)) =
+  let cast_pp = if is_cast then [string "cast"] else [] in
+  (* This sail syntax only supports a single extern name, so just use the ocaml version *)
+  let extern_kwd_pp, id_pp = match ext_opt "ocaml" with
+    | Some ext -> [string "extern"], doc_op equals (doc_id id) (dquotes (string (ext)))
+    | None -> [], doc_id id
+  in
+  separate space ([string "val"] @ cast_pp @ extern_kwd_pp @ [doc_typscm ts] @ [id_pp])
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with
   | Name_sect_none -> empty
@@ -555,6 +532,7 @@ let rec doc_def def = group (match def with
   | DEF_comm (DC_comm s) -> comment (string s)
   | DEF_comm (DC_comm_struct d) -> comment (doc_def d)
   | DEF_fixity _ -> empty
+  | DEF_internal_mutrec _ -> failwith "Cannot print internal mutrec"
   ) ^^ hardline
 
 let doc_defs (Defs(defs)) =

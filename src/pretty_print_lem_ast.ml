@@ -150,6 +150,7 @@ and pp_format_nexp_lem (Nexp_aux(n,l)) =
   (match n with
    | Nexp_id(i) -> "(Nexp_id " ^ pp_format_id_lem i ^ ")"
    | Nexp_var(v) -> "(Nexp_var " ^ pp_format_var_lem v ^ ")"
+   | Nexp_app(op,args) -> "(Nexp_app [" ^ Util.string_of_list ", " pp_format_nexp_lem args ^ "])"
    | Nexp_constant(i) -> "(Nexp_constant " ^ (lemnum Big_int.to_string i) ^ ")"
    | Nexp_sum(n1,n2) -> "(Nexp_sum " ^ (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
    | Nexp_minus(n1,n2) -> "(Nexp_minus " ^ (pp_format_nexp_lem n1)^ " " ^ (pp_format_nexp_lem n2) ^ ")"
@@ -406,6 +407,9 @@ and pp_lem_exp ppf (E_aux(e,(l,annot)) as exp) =
     | E_case(exp,pexps) ->
       fprintf ppf "@[<0>(E_aux (E_case %a [%a]) (%a, %a))@]"
         pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
+    | E_try(exp,pexps) ->
+      fprintf ppf "@[<0>(E_aux (E_try %a [%a]) (%a, %a))@]"
+        pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (E_let %a %a) (%a, %a))@]"
                           pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (E_assign %a %a) (%a, %a))@]"
@@ -416,30 +420,12 @@ and pp_lem_exp ppf (E_aux(e,(l,annot)) as exp) =
       fprintf ppf "@[<0>(E_aux (E_constraint %a) (%a, %a))@]" pp_lem_nexp_constraint nc pp_lem_l l pp_annot annot
     | E_exit exp ->
       fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
+    | E_throw exp ->
+      fprintf ppf "@[<0>(E_aux (E_throw %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_return exp ->
       fprintf ppf "@[<0>(E_aux (E_return %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assert(c,msg) ->
       fprintf ppf "@[<0>(E_aux (E_assert %a %a) (%a, %a))@]" pp_lem_exp c pp_lem_exp msg pp_lem_l l pp_annot annot
-      (*
-    | E_internal_exp ((l, Base((_,t),_,_,_,_,bindings))) ->
-      (*TODO use bindings where appropriate*)
-      (match t.t with
-        | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
-        | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
-          (match r.nexp with
-          | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]"
-                                       kwd (lemnum string_of_int (Big_int.to_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
-          | Nvar v -> fprintf ppf  "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
-          | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
-        | Tapp("implicit",[TA_nexp r]) ->
-          (match r.nexp with
-            | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]"
-                                       kwd (lemnum string_of_int (Big_int.to_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
-            | Nvar v -> fprintf ppf "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
-            | _ -> raise (Reporting_basic.err_unreachable l "Internal_exp given implicit without variable or const"))
-        | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit")*)
     | E_comment _ | E_comment_struc _ ->
       fprintf ppf "@[(E_aux (E_lit (L_aux L_unit %a)) (%a,%a))@]" pp_lem_l l pp_lem_l l pp_annot annot
     | E_internal_cast _ | E_internal_exp _ ->
@@ -455,6 +441,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot)) as exp) =
     | E_internal_plet (pat,exp1,exp2) ->
       fprintf ppf "@[<0>(E_aux (E_internal_plet %a %a %a) (%a, %a))@]"
         pp_lem_pat pat pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_l l pp_annot annot
+    | E_internal_value _ -> raise (Reporting_basic.err_unreachable l "Found internal_value")
   in
   print_e ppf e
 
@@ -500,12 +487,8 @@ let pp_lem_default ppf (DT_aux(df,l)) =
 
 (* FIXME *)
 let pp_lem_spec ppf (VS_aux(v,(l,annot))) =
-  let print_spec ppf v =
-    match v with
-    | VS_val_spec(ts,id,ext_opt,is_cast) ->
-       (* FIXME: None *)
-      fprintf ppf "@[<0>(%a %a %a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id (pp_option_lem quot_string) None pp_bool_lem is_cast
-    | _ -> failwith "Invalid valspec"
+  let print_spec ppf (VS_val_spec(ts, id, ext_opt, is_cast)) =
+    fprintf ppf "@[<0>(%a %a %a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id (pp_option_lem quot_string) None pp_bool_lem is_cast
   in
   fprintf ppf "@[<0>(VS_aux %a (%a, %a))@]" print_spec v pp_lem_l l pp_annot annot
 

@@ -130,11 +130,11 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_record_update(e,fexps) ->
       union_effects (effect_of e) (effect_of_fexps fexps)
     | E_field (e,_) -> effect_of e
-    | E_case (e,pexps) ->
+    | E_case (e,pexps) | E_try (e,pexps) ->
       List.fold_left union_effects (effect_of e) (List.map effect_of_pexp pexps)
     | E_let (lb,e) -> union_effects (effect_of_lb lb) (effect_of e)
     | E_assign (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
-    | E_exit e -> union_effects eff (effect_of e)
+    | E_exit e | E_throw e -> union_effects eff (effect_of e)
     | E_return e -> union_effects eff (effect_of e)
     | E_sizeof _ | E_sizeof_internal _ | E_constraint _ -> no_effect
     | E_assert (c,m) -> union_effects eff (union_eff_exps [c; m])
@@ -147,6 +147,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
         (union_effects (effect_of e1) (effect_of e2))
     | E_internal_plet (_,e1,e2) -> union_effects (effect_of e1) (effect_of e2)
     | E_internal_return e1 -> effect_of e1
+    | E_internal_value v -> no_effect
   in
   E_aux (e, (l, Some (env, typ, effsum)))
 | None ->
@@ -204,24 +205,6 @@ let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match snd annot with
   LB_aux (lb, (l, Some (env, typ, effsum)))
 | None ->
   LB_aux (lb, (l, None))
-
-let effectful_effs = function
-  | Effect_aux (Effect_set effs, _) ->
-    List.exists
-      (fun (BE_aux (be,_)) ->
-       match be with
-       | BE_nondet | BE_unspec | BE_undef | BE_lset -> false
-       | _ -> true
-      ) effs
-  | _ -> true
-
-let effectful eaux = effectful_effs (effect_of (propagate_exp_effect eaux))
-let effectful_pexp pexp = effectful_effs (snd (propagate_pexp_effect pexp))
-
-(* let id_to_string (Id_aux(id,l)) =
-  match id with
-    | Id(s) -> s
-    | DeIid(s) -> s *)
 
 let explode s =
   let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
@@ -526,6 +509,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
   ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
   ; e_internal_return        : 'exp -> 'exp_aux
+  ; e_internal_value         : Value.value -> 'exp_aux
   ; e_aux                    : 'exp_aux * 'a annot -> 'exp
   ; lEXP_id                  : id -> 'lexp_aux
   ; lEXP_memory              : id * 'exp list -> 'lexp_aux
@@ -600,6 +584,7 @@ let rec fold_exp_aux alg = function
   | E_internal_plet (pat,e1,e2) ->
      alg.e_internal_plet (fold_pat alg.pat_alg pat, fold_exp alg e1, fold_exp alg e2)
   | E_internal_return e -> alg.e_internal_return (fold_exp alg e)
+  | E_internal_value v -> alg.e_internal_value v
 and fold_exp alg (E_aux (exp_aux,annot)) = alg.e_aux (fold_exp_aux alg exp_aux, annot)
 and fold_lexp_aux alg = function
   | LEXP_id id -> alg.lEXP_id id
@@ -670,6 +655,7 @@ let id_exp_alg =
   ; e_internal_let = (fun (lexp, e2, e3) -> E_internal_let (lexp,e2,e3))
   ; e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat,e1,e2))
   ; e_internal_return = (fun e -> E_internal_return e)
+  ; e_internal_value = (fun v -> E_internal_value v)
   ; e_aux = (fun (e,annot) -> E_aux (e,annot))
   ; lEXP_id = (fun id -> LEXP_id id)
   ; lEXP_memory = (fun (id,es) -> LEXP_memory (id,es))
@@ -771,6 +757,7 @@ let compute_exp_alg bot join =
   ; e_internal_plet = (fun ((vp,pat), (v1,e1), (v2,e2)) ->
     (join_list [vp;v1;v2], E_internal_plet (pat,e1,e2)))
   ; e_internal_return = (fun (v,e) -> (v, E_internal_return e))
+  ; e_internal_value = (fun v -> (bot, E_internal_value v))
   ; e_aux = (fun ((v,e),annot) -> (v, E_aux (e,annot)))
   ; lEXP_id = (fun id -> (bot, LEXP_id id))
   ; lEXP_memory = (fun (id,es) -> split_join (fun es -> LEXP_memory (id,es)) es)

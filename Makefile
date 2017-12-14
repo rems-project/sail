@@ -3,7 +3,7 @@
 all: sail
 
 sail:
-	$(MAKE) -C src
+	$(MAKE) -C src sail
 	ln -f -s src/sail.native sail
 
 isail:

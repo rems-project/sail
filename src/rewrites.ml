@@ -102,7 +102,6 @@ let effectful_effs = function
        | BE_nondet | BE_unspec | BE_undef | BE_lset -> false
        | _ -> true
       ) effs
-  | _ -> true
 
 let effectful eaux = effectful_effs (effect_of (propagate_exp_effect eaux))
 let effectful_pexp pexp = effectful_effs (snd (propagate_pexp_effect pexp))
@@ -366,6 +365,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_internal_let = (fun ((lexp,lexp'), (e2,e2'), (e3,e3')) -> (E_internal_let (lexp,e2,e3), E_internal_let (lexp',e2',e3')))
     ; e_internal_plet = (fun (pat, (e1,e1'), (e2,e2')) -> (E_internal_plet (pat,e1,e2), E_internal_plet (pat,e1',e2')))
     ; e_internal_return = (fun (e,e') -> (E_internal_return e, E_internal_return e'))
+    ; e_internal_value = (fun v -> (E_internal_value v, E_internal_value v))
     ; e_aux = (fun ((e,e'),annot) -> (E_aux (e,annot), E_aux (e',annot)))
     ; lEXP_id = (fun id -> (LEXP_id id, LEXP_id id))
     ; lEXP_memory = (fun (id,es) -> let (es, es') = List.split es in (LEXP_memory (id,es), LEXP_memory (id,es')))
@@ -942,6 +942,7 @@ let rec pat_to_exp (P_aux (pat,(l,annot))) =
   | P_wild -> raise (Reporting_basic.err_unreachable l
       "pat_to_exp given wildcard pattern")
   | P_as (pat,id) -> rewrap (E_id id)
+  | P_var (pat, _) -> pat_to_exp pat
   | P_typ (_,pat) -> pat_to_exp pat
   | P_id id -> rewrap (E_id id)
   | P_app (id,pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
@@ -1030,7 +1031,7 @@ let bitwise_and_exp exp1 exp2 =
 
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_lit _ | P_wild | P_id _ -> false
-| P_as (pat,_) | P_typ (_,pat) -> contains_bitvector_pat pat
+| P_as (pat,_) | P_typ (_,pat) | P_var (pat,_) -> contains_bitvector_pat pat
 | P_vector _ | P_vector_concat _ ->
     let typ = Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) in
     is_bitvector_typ typ
@@ -1333,7 +1334,7 @@ let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r,t,e,funcls),(l,fd
          (pat,guard,exp,annot) in
        let cs = rewrite_guarded_clauses l (List.map clause funcls) in
        List.map (fun (pat,exp,annot) ->
-         FCL_aux (FCL_Funcl(id,construct_pexp (pat,None,exp,(Unknown,None))),annot)) cs
+         FCL_aux (FCL_Funcl(id,construct_pexp (pat,None,exp,(Parse_ast.Unknown,None))),annot)) cs
      | _ -> funcls (* TODO is the empty list possible here? *) in
    FD_aux (FD_function(r,t,e,funcls),(l,fdannot))
 
@@ -1765,6 +1766,7 @@ let rewrite_fix_val_specs (Defs defs) =
          let args_t' = rewrite_typ_nexp_ids (env_of exp) (pat_typ_of pat) in
          let ret_t' = rewrite_typ_nexp_ids (env_of exp) (typ_of exp) in
          (tq, Typ_aux (Typ_fn (args_t', ret_t', eff'), a)), eff'
+      | _ -> assert false (* find_vs must return a function type *)
     in
     let annot = add_effect_annot annot eff in
     (Bindings.add id vs val_specs,
@@ -2288,7 +2290,7 @@ let rewrite_defs_letbind_effects  =
        let exp3 = n_exp_term newreturn exp3 in
        k (rewrap (E_if (exp1,exp2,exp3))))
     | E_for (id,start,stop,by,dir,body) ->
-       n_exp_name start (fun start -> 
+       n_exp_name start (fun start ->
        n_exp_name stop (fun stop ->
        n_exp_name by (fun by ->
        let body = n_exp_term (effectful body) body in
@@ -2305,19 +2307,19 @@ let rewrite_defs_letbind_effects  =
        n_exp_name exp2 (fun exp2 ->
        k (rewrap (E_vector_access (exp1,exp2)))))
     | E_vector_subrange (exp1,exp2,exp3) ->
-       n_exp_name exp1 (fun exp1 -> 
-       n_exp_name exp2 (fun exp2 -> 
+       n_exp_name exp1 (fun exp1 ->
+       n_exp_name exp2 (fun exp2 ->
        n_exp_name exp3 (fun exp3 ->
        k (rewrap (E_vector_subrange (exp1,exp2,exp3))))))
     | E_vector_update (exp1,exp2,exp3) ->
-       n_exp_name exp1 (fun exp1 -> 
-       n_exp_name exp2 (fun exp2 -> 
+       n_exp_name exp1 (fun exp1 ->
+       n_exp_name exp2 (fun exp2 ->
        n_exp_name exp3 (fun exp3 ->
        k (rewrap (E_vector_update (exp1,exp2,exp3))))))
     | E_vector_update_subrange (exp1,exp2,exp3,exp4) ->
-       n_exp_name exp1 (fun exp1 -> 
-       n_exp_name exp2 (fun exp2 -> 
-       n_exp_name exp3 (fun exp3 -> 
+       n_exp_name exp1 (fun exp1 ->
+       n_exp_name exp2 (fun exp2 ->
+       n_exp_name exp3 (fun exp3 ->
        n_exp_name exp4 (fun exp4 ->
        k (rewrap (E_vector_update_subrange (exp1,exp2,exp3,exp4)))))))
     | E_vector_append (exp1,exp2) ->
@@ -2327,14 +2329,14 @@ let rewrite_defs_letbind_effects  =
     | E_list exps ->
        n_exp_nameL exps (fun exps ->
        k (rewrap (E_list exps)))
-    | E_cons (exp1,exp2) -> 
+    | E_cons (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
        k (rewrap (E_cons (exp1,exp2)))))
     | E_record fexps ->
        n_fexps fexps (fun fexps ->
        k (rewrap (E_record fexps)))
-    | E_record_update (exp1,fexps) -> 
+    | E_record_update (exp1,fexps) ->
        n_exp_name exp1 (fun exp1 ->
        n_fexps fexps (fun fexps ->
        k (rewrap (E_record_update (exp1,fexps)))))
@@ -2343,11 +2345,16 @@ let rewrite_defs_letbind_effects  =
        k (rewrap (E_field (exp1,id))))
     | E_case (exp1,pexps) ->
        let newreturn = List.exists effectful_pexp pexps in
-       n_exp_name exp1 (fun exp1 -> 
+       n_exp_name exp1 (fun exp1 ->
        n_pexpL newreturn pexps (fun pexps ->
        k (rewrap (E_case (exp1,pexps)))))
+    | E_try (exp1,pexps) ->
+       let newreturn = List.exists effectful_pexp pexps in
+       n_exp_name exp1 (fun exp1 ->
+       n_pexpL newreturn pexps (fun pexps ->
+       k (rewrap (E_try (exp1,pexps)))))
     | E_let (lb,body) ->
-       n_lb lb (fun lb -> 
+       n_lb lb (fun lb ->
        rewrap (E_let (lb,n_exp body k)))
     | E_sizeof nexp ->
        k (rewrap (E_sizeof nexp))
@@ -2360,6 +2367,7 @@ let rewrite_defs_letbind_effects  =
        n_exp_name exp1 (fun exp1 ->
        k (rewrap (E_assign (lexp,exp1)))))
     | E_exit exp' -> k (E_aux (E_exit (n_exp_term (effectful exp') exp'),annot))
+    | E_throw exp' -> k (E_aux (E_throw (n_exp_term (effectful exp') exp'),annot))
     | E_assert (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
@@ -2376,11 +2384,13 @@ let rewrite_defs_letbind_effects  =
     | E_internal_return exp1 ->
        n_exp_name exp1 (fun exp1 ->
        k (rewrap (E_internal_return exp1)))
+    | E_internal_value v ->
+       k (rewrap (E_internal_value v))
     | E_comment str ->
-      k (rewrap (E_comment str))
+       k (rewrap (E_comment str))
     | E_comment_struc exp' ->
        n_exp exp' (fun exp' ->
-               k (rewrap (E_comment_struc exp')))
+       k (rewrap (E_comment_struc exp')))
     | E_return exp' ->
        n_exp_name exp' (fun exp' ->
        k (rewrap (E_return exp')))

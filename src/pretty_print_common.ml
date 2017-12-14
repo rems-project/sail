@@ -102,6 +102,8 @@ let doc_effect (BE_aux (e,_)) =
   | BE_wmem -> "wmem"
   | BE_wmv  -> "wmv"
   | BE_wmvt  -> "wmvt"
+  | BE_lset -> "lset"
+  | BE_lret -> "lret"
   | BE_eamem -> "eamem"
   | BE_exmem -> "exmem"
   | BE_barr -> "barr"
@@ -133,51 +135,12 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
-  (*TODO Need to un bid-endian-ify this here, since both can transform to the shorthand, especially with <: and :> *)
-  (* Special case simple vectors to improve legibility
-   * XXX we assume big-endian here, as usual *)
-(*
-  | Typ_app(Id_aux (Id "vector", _), [
-      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
-      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
-      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_inc, _)), _);
-      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-    (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
-  | Typ_app(Id_aux (Id "vector", _), [
-      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
-      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
-      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
-      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-    (doc_id id) ^^ (brackets (if n = m-1 then doc_int m else doc_op colon (doc_int n) (doc_int (m+1 -n))))
-  | Typ_app(Id_aux (Id "vector", _), [
-      Typ_arg_aux(Typ_arg_nexp
-                    (Nexp_aux(Nexp_minus (Nexp_aux(Nexp_constant n, _),
-                                          Nexp_aux(Nexp_constant 1, _)),_)),_);
-      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
-      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
-      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-    (doc_id id) ^^ (brackets (if n = m then doc_int m else doc_op colon (doc_int m) (doc_int (n-1))))
-  | Typ_app(Id_aux (Id "vector", _), [
-      Typ_arg_aux(Typ_arg_nexp
-                    (Nexp_aux(Nexp_minus (n', Nexp_aux((Nexp_constant 1), _)),_) as n_n),_);
-      Typ_arg_aux(Typ_arg_nexp m_nexp, _);
-      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
-      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-    (doc_id id) ^^ (brackets (if n' = m_nexp then nexp m_nexp else doc_op colon (nexp m_nexp) (nexp n_n)))
-  | Typ_app(Id_aux (Id "vector", _), [
-      Typ_arg_aux(Typ_arg_nexp
-                  (Nexp_aux(Nexp_sum (n', Nexp_aux((Nexp_constant -1), _)),_) as n_n),_);
-      Typ_arg_aux(Typ_arg_nexp m_nexp, _);
-      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
-      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-    (doc_id id) ^^ (brackets (if n' = m_nexp then nexp m_nexp else doc_op colon (nexp m_nexp) (nexp n_n)))
- *)
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
     (squarebars (if Big_int.equal n Big_int.zero then nexp m else doc_op colon (doc_int n) (nexp m)))
   | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
-    (squarecolons (nexp n))
+     (squarecolons (nexp n))
   | Typ_app(id,args) ->
       (* trailing space to avoid >> token in case of nested app types *)
       (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
@@ -185,7 +148,7 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
   | Typ_var v  -> doc_var v
-  | Typ_app _ | Typ_tup _ | Typ_fn _ ->
+  | Typ_app _ | Typ_tup _ | Typ_fn _ | Typ_exist _ ->
       (* exhaustiveness matters here to avoid infinite loops
        * if we add a new Typ constructor *)
       group (parens (typ ty))
@@ -219,6 +182,7 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   and atomic_nexp_typ ((Nexp_aux(n,_)) as ne) = match n with
     | Nexp_var v -> doc_var v
     | Nexp_id i  -> braces (doc_id i)
+    | Nexp_app (op, args) -> doc_id op ^^ parens (separate_map (comma ^^ space) nexp args)
     | Nexp_constant i -> if Big_int.less i Big_int.zero then parens(doc_int i) else doc_int i
     | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _->
       group (parens (nexp ne))
