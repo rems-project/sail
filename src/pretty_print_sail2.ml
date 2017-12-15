@@ -531,3 +531,8 @@ let doc_defs (Defs(defs)) =
 let pp_defs f d = ToChannel.pretty 1. 80 f (doc_defs d)
 
 let pretty_sail f doc = ToChannel.pretty 1. 120 f doc
+
+let to_string doc =
+  let b = Buffer.create 120 in
+  ToBuffer.pretty 1. 120 b doc;
+  Buffer.contents b

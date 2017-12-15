@@ -216,7 +216,7 @@ let main() =
     begin
       (if !(opt_interactive)
        then
-         (interactive_ast := ast; interactive_env := type_envs)
+         (interactive_ast := Process_file.rewrite_ast_interpreter ast; interactive_env := type_envs)
        else ());
       (if !(opt_sanity)
        then

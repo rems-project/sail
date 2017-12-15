@@ -2970,6 +2970,12 @@ let rewrite_defs_ocaml = [
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
   ]
 
+let rewrite_defs_interpreter = [
+    ("constraint", rewrite_constraint);
+    ("trivial_sizeof", rewrite_trivial_sizeof);
+    ("sizeof", rewrite_sizeof);
+  ]
+
 let rewrite_defs_sil = [
     ("top_sort_defs", top_sort_defs);
     ("tuple_vector_assignments", rewrite_tuple_vector_assignments);

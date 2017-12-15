@@ -61,6 +61,9 @@ val rewrite_defs_ocaml : (string * (tannot defs -> tannot defs)) list
 val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list
 
 (* Perform rewrites to sail intermediate language *)
+val rewrite_defs_interpreter : (string * (tannot defs -> tannot defs)) list
+
+(* Perform rewrites to sail intermediate language *)
 val rewrite_defs_sil : (string * (tannot defs -> tannot defs)) list
 
 (* This is a special rewriter pass that checks AST invariants without

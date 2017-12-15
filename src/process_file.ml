@@ -237,4 +237,5 @@ let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefin
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
 let rewrite_ast_sil = rewrite Rewrites.rewrite_defs_sil
+let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
 let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check
