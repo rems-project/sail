@@ -52,7 +52,7 @@ let opt_new_parser = ref false
 
 type out_type =
   | Lem_ast_out
-  | Lem_out of string list option
+  | Lem_out of string list
 
 let get_lexbuf f =
   let in_chan = open_in f in
@@ -199,9 +199,7 @@ let output1 libpath out_arg filename defs  =
 	  Pretty_print.pp_lem_defs o defs;
 	  close_output_with_check ext_o
 	end
-      | Lem_out None ->
-        output_lem f' [] defs
-      | Lem_out (Some libs) ->
+      | Lem_out libs ->
         output_lem f' libs defs
 
 let output libpath out_arg files =
