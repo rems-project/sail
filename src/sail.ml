@@ -234,7 +234,7 @@ let main() =
        then let ast_lem = rewrite_ast_lem ast in
          if !(opt_libs_lem) = []
          then output "" (Lem_out None) [out_name,ast_lem]
-         else output "" (Lem_out (Some (List.hd !opt_libs_lem))) [out_name,ast_lem]
+         else output "" (Lem_out (Some (!opt_libs_lem))) [out_name,ast_lem]
        else ());
     end
 

@@ -52,7 +52,7 @@ let opt_new_parser = ref false
 
 type out_type =
   | Lem_ast_out
-  | Lem_out of string option
+  | Lem_out of string list option
 
 let get_lexbuf f =
   let in_chan = open_in f in
@@ -201,8 +201,8 @@ let output1 libpath out_arg filename defs  =
 	end
       | Lem_out None ->
         output_lem f' [] defs
-      | Lem_out (Some lib) ->
-        output_lem f' [lib] defs
+      | Lem_out (Some libs) ->
+        output_lem f' libs defs
 
 let output libpath out_arg files =
   List.iter
