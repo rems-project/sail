@@ -2378,6 +2378,11 @@ let rewrite_defs_letbind_effects  =
        n_exp_name exp1 (fun exp1 -> 
        n_pexpL newreturn pexps (fun pexps ->
        k (rewrap (E_case (exp1,pexps)))))
+    | E_try (exp1,pexps) ->
+       let newreturn = effectful exp1 || List.exists effectful_pexp pexps in
+       n_exp_name exp1 (fun exp1 ->
+       n_pexpL newreturn pexps (fun pexps ->
+       k (rewrap (E_try (exp1,pexps)))))
     | E_let (lb,body) ->
        n_lb lb (fun lb -> 
        rewrap (E_let (lb,n_exp body k)))
@@ -2416,6 +2421,9 @@ let rewrite_defs_letbind_effects  =
     | E_return exp' ->
        n_exp_name exp' (fun exp' ->
        k (rewrap (E_return exp')))
+    | E_throw exp' ->
+       n_exp_name exp' (fun exp' ->
+       k (rewrap (E_throw exp')))
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot)) = 

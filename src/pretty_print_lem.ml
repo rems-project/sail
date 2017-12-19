@@ -249,12 +249,12 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_fn(arg,ret,efct) ->
          let ret_typ =
            if effectful efct
-           then separate space [string "_M"; fn_typ true ret]
+           then separate space [string "M"; fn_typ true ret]
            else separate space [fn_typ false ret] in
          let arg_typs = match arg with
            | Typ_aux (Typ_tup typs, _) ->
-              List.map (app_typ true) typs
-           | _ -> [tup_typ true arg] in
+              List.map (app_typ false) typs
+           | _ -> [tup_typ false arg] in
          let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
@@ -355,7 +355,7 @@ let doc_tannot_lem eff typ =
   if contains_t_pp_var typ then empty
   else
     let ta = doc_typ_lem typ in
-    if eff then string " : _M " ^^ parens ta
+    if eff then string " : M " ^^ parens ta
     else string " : " ^^ ta
 
 (* doc_lit_lem gets as an additional parameter the type information from the
@@ -685,7 +685,7 @@ let doc_exp_lem, doc_let_lem =
                     contains_t_pp_var (typ_of full_exp) then
                    aexp_needed, epp
                  else
-                   let tannot = separate space [string "_MR";
+                   let tannot = separate space [string "MR";
                      doc_atomic_typ_lem false (typ_of full_exp);
                      doc_atomic_typ_lem false (typ_of exp)] in
                    true, doc_op colon epp tannot in
@@ -855,7 +855,20 @@ let doc_exp_lem, doc_let_lem =
                   (separate_map (break 1) (doc_case early_ret) pexps) ^/^
                     (string "end")) in
        if aexp_needed then parens (align epp) else align epp
-    | E_exit e -> liftR (separate space [string "exit"; expY e;])
+    | E_try (e, pexps) ->
+       if effectful (effect_of e) then
+         let try_catch = if early_ret then "try_catchR" else "try_catch" in
+         let epp =
+           group ((separate space [string try_catch; expY e; string "(function "]) ^/^
+                    (separate_map (break 1) (doc_case early_ret) pexps) ^/^
+                      (string "end)")) in
+         if aexp_needed then parens (align epp) else align epp
+       else
+         raise (Reporting_basic.err_todo l "Warning: try-block around pure expression")
+    | E_throw e ->
+       let epp = liftR (separate space [string "throw"; expY e]) in
+       if aexp_needed then parens (align epp) else align epp
+    | E_exit e -> liftR (separate space [string "exit"; expY e])
     | E_assert (e1,e2) ->
        let epp = liftR (separate space [string "assert_exp"; expY e1; expY e2]) in
        if aexp_needed then parens (align epp) else align epp
@@ -1495,6 +1508,12 @@ let find_registers (Defs defs) =
       | _ -> acc
     ) [] defs
 
+let find_exc_typ (Defs defs) =
+  let is_exc_typ_def = function
+    | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
+    | _ -> false in
+  if List.exists is_exc_typ_def defs then "exception" else "unit"
+
 let doc_regstate_lem registers =
   let l = Parse_ast.Unknown in
   let annot = (l, None) in
@@ -1528,12 +1547,7 @@ let doc_regstate_lem registers =
       doc_op equals (string "let initial_regstate") (doc_exp_lem false false exp)
     else empty
   in
-  concat [
-    doc_typdef_lem (TD_aux (regstate, annot)); hardline;
-    hardline;
-    string "type _MR 'a 'r = MR regstate 'a 'r"; hardline;
-    string "type _M 'a = M regstate 'a"
-  ],
+  doc_typdef_lem (TD_aux (regstate, annot)),
   initregstate
 
 let doc_register_refs_lem registers =
@@ -1564,6 +1578,7 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
   let (typdefs,valdefs) = doc_defs_lem d in
   let regstate_def, initregstate_def = doc_regstate_lem (find_registers d) in
   let register_refs = doc_register_refs_lem (find_registers d) in
+  let exc_typ = find_exc_typ d in
   (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
@@ -1585,10 +1600,17 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
         hardline;
         if !opt_sequential then
           concat [regstate_def; hardline;
-          hardline;
-          register_refs]
+            hardline;
+            string ("type MR 'a 'r = State.MR regstate 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = State.M regstate 'a " ^ exc_typ); hardline;
+            hardline;
+            register_refs
+          ]
         else
-          concat [string "type _MR 'a 'r = MR 'a 'r"; hardline; string "type _M 'a = M 'a"; hardline]
+          concat [
+            string ("type MR 'a 'r = Prompt.MR 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = Prompt.M 'a " ^ exc_typ); hardline
+          ]
         ]);
   (print defs_file)
     (concat

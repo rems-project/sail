@@ -102,7 +102,7 @@ let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
      begin
        match KBindings.find kid substs with
        | Nexp_aux (Nexp_constant i,_) ->
-          if List.mem i is then re NC_true else re NC_false
+          if List.exists (fun j -> Big_int.eq_big_int i j) is then re NC_true else re NC_false
        | nexp -> 
           raise (Reporting_basic.err_general l
                    ("Unable to substitute " ^ string_of_nexp nexp ^
