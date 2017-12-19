@@ -1222,30 +1222,25 @@ let args_of_typ l env typ =
 
 let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
   let env = env_of_annot annot in
-  let id = (fun body -> body) in
-  match paux with
-  | P_tup [] ->
+  let (Typ_aux (taux, _)) = typ_of_annot annot in
+  let identity = (fun body -> body) in
+  match paux, taux with
+  | P_tup [], _ ->
      let annot = (l, Some (Env.empty, unit_typ, no_effect)) in
-     [P_aux (P_lit (mk_lit L_unit), annot)], id
-  | P_tup pats -> pats, id
-  | P_wild ->
-     begin
-       match pat_typ_of pat with
-       | Typ_aux (Typ_tup typs, _) ->
-          let wild typ = P_aux (P_wild, (l, Some (env, typ, no_effect))) in
-          List.map wild typs, id
-       | _ -> [pat], id
-     end
-  | P_lit _ | P_id _ | P_var _ | P_app _ | P_record _
-  | P_vector _ | P_vector_concat _ | P_list _ | P_cons _ ->
-     [pat], id
-  | P_typ (_, pat) -> untuple_args_pat pat
-  | P_as _ ->
+     [P_aux (P_lit (mk_lit L_unit), annot)], identity
+  | P_tup pats, _ -> pats, identity
+  | P_wild, Typ_tup typs ->
+     let wild typ = P_aux (P_wild, (l, Some (env, typ, no_effect))) in
+     List.map wild typs, identity
+  | P_typ (_, pat), _ -> untuple_args_pat pat
+  | P_as _, Typ_tup _ | P_id _, Typ_tup _ ->
      let argpats, argexps = args_of_typ l env (pat_typ_of pat) in
      let argexp = E_aux (E_tuple argexps, annot) in
      let bindargs (E_aux (_, bannot) as body) =
        E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
      argpats, bindargs
+  | _, _ ->
+     [pat], identity
 
 let doc_rec_lem (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> space
