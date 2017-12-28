@@ -48,6 +48,20 @@
 #  SUCH DAMAGE.                                                          #
 ##########################################################################
 
+$(warning MAKECMDGOALS is $(MAKECMDGOALS))
+ifneq ($(MAKECMDGOALS),clean)
+# Lem optionally vendors the zarith dependency, but currently
+# we don't use that -- just assume the host system has zarith.
+ifeq ($(shell ocamlfind query zarith),)
+$(error No zarith installed [anywhere ocamlfind can find it]; install it (opam install zarith || apt-get install libzarith-ocaml{,-dev} || yum install ocaml-zarith), or use make install_dependencies in lem/ocaml-lib.)
+endif
+# assume the host system has lem
+ifeq ($(shell ocamlfind query lem),)
+$(error No lem installed [anywhere ocamlfind can find it]; please install it ('make install' from lem/ocaml-lib || 'make local-install' from lem/ocaml-lib and add lem/ocaml-lib/local to OCAMLPATH))
+endif
+endif
+
+
 .PHONY: all sail test clean doc lib power test_power test_idempotence
 
 # set to -p on command line to enable gprof profiling
@@ -58,26 +72,25 @@ all: sail lib doc
 full: sail lib power doc test
 
 sail:
-	ocamlbuild sail.native sail_lib.cma sail_lib.cmxa
+	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
 sail.native: sail
 
 sail.byte: 
-	ocamlbuild -cflag -g sail.byte
+	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
 interpreter: 
-	ocamlbuild lem_interp/extract.cmxa
-	ocamlbuild lem_interp/extract.cma
+	ocamlbuild -use-ocamlfind lem_interp/extract.cmxa
+	ocamlbuild -use-ocamlfind lem_interp/extract.cma
 
 test: sail interpreter
-	ocamlbuild test/run_tests.native
+	ocamlbuild -use-ocamlfind test/run_tests.native
 	./run_tests.native
 
 THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
 BITBUCKET_ROOT=$(realpath $(dir $(THIS_MAKEFILE))../..)
 
 LEM = $(BITBUCKET_ROOT)/lem/lem
-LEMLIBOCAML = $(BITBUCKET_ROOT)/lem/ocaml-lib/_build_zarith
 ELFDIR= $(BITBUCKET_ROOT)/linksem
 
 SAIL_DIR:=$(BITBUCKET_ROOT)/sail
@@ -200,13 +213,13 @@ count: _build/cheri_trimmed.sail _build/mips_trimmed.sail
 	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
 
 run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml interpreter
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package zarith -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package lem -package zarith -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
 
 run_cheri.native:  _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml interpreter
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package zarith -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml  -o run_cheri.native
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package lem -package zarith -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml  -o run_cheri.native
 
 run_cheri128.native:  _build/cheri128.ml _build/mips_extras.ml _build/run_with_elf_cheri128.ml interpreter
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package zarith -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri128.ml _build/mips_extras.ml _build/run_with_elf_cheri128.ml  -o run_cheri128.native
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package lem -package zarith -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri128.ml _build/mips_extras.ml _build/run_with_elf_cheri128.ml  -o run_cheri128.native
 
 run_embed.native: _build/sail_values.ml _build/mips_extras_ml.ml _build/mips_embed.ml _build/cheri_embed.ml _build/cheri128_embed.ml _build/run_embed.ml
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package zarith -package unix -I _build -linkpkg $^ -o $@
@@ -241,7 +254,7 @@ clean:
 	-rm -rf sail.docdir
 
 doc:
-	ocamlbuild sail.docdir/index.html
+	ocamlbuild -use-ocamlfind sail.docdir/index.html
 
 lib:
-	ocamlbuild pretty_print.cmxa pretty_print.cma
+	ocamlbuild -use-ocamlfind pretty_print.cmxa pretty_print.cma

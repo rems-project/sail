@@ -1,12 +1,12 @@
 true: -traverse, debug
 <**/*.ml>: bin_annot, annot
 <lem_interp> or <test>:  include
-<sail.{byte,native}>: use_pprint, use_nums
+<sail.{byte,native}>: use_pprint, package(num)
 <pprint> or <pprint/src>: include
 
 # see http://caml.inria.fr/mantis/view.php?id=4943
-<lem_interp/*> and not <lem_interp/*.cmxa>: use_nums, use_lem
-<test/*> and not <test/*.cmxa>: use_nums, use_lem, use_str
+<lem_interp/*> and not <lem_interp/*.cmxa>: package(num), package(lem)
+<test/*> and not <test/*.cmxa>: package(num), package(lem), package(str)
 
 # disable partial match and unused variable warnings
 <**/*.ml>: warn_y
