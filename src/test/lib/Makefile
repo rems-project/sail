@@ -8,11 +8,8 @@ TESTS=div.sail
 BITBUCKET_DIR:=$(realpath ../../../../)
 LEM_DIR:=$(BITBUCKET_DIR)/lem
 LEM:=$(LEM_DIR)/lem
-LEMLIB = $(LEM_DIR)/ocaml-lib
 SAIL_DIR:=$(BITBUCKET_DIR)/sail/src
 SAIL:=$(SAIL_DIR)/sail.native
-ZARITH_DIR:=$(LEM_DIR)/ocaml-lib/dependencies/zarith
-ZARITH_LIB:=$(ZARITH_DIR)/zarith.cmxa
 SAIL_VALUES:=$(SAIL_DIR)/gen_lib/sail_values.ml
 
 BUILD_DIR:=_build
@@ -41,14 +38,14 @@ $(BUILD_DIR)/sail_values.ml: | $(BUILD_DIR)
 $(BUILD_DIR)/%_embed.out : tests/%.sail $(BUILD_DIR)/run_test_embed.ml $(BUILD_DIR)/sail_values.ml
 	cd $(BUILD_DIR) && \
 	$(SAIL) -ocaml ../test_prelude.sail ../$< ../test_epilogue.sail -o test && \
-	ocamlopt -I $(ZARITH_DIR) $(ZARITH_LIB) sail_values.ml test.ml run_test_embed.ml -o test_embed.native && \
+	ocamlfind ocamlopt -package zarith -linkpkg sail_values.ml test.ml run_test_embed.ml -o test_embed.native && \
 	./test_embed.native > $(notdir $@)
 
 $(BUILD_DIR)/%_interp.out : tests/%.sail $(BUILD_DIR)/run_test_interp.ml
 	cd $(BUILD_DIR) && \
 	$(SAIL) -lem_ast ../test_prelude.sail ../$< ../test_epilogue.sail -o test_lem_ast && \
 	$(LEM) -ocaml test_lem_ast.lem -lib $(SAIL_DIR)/lem_interp && \
-	ocamlfind ocamlopt -g -package num -I $(ZARITH_DIR)  -I $(SAIL_DIR)/_build/lem_interp -I $(LEMLIB) -linkpkg $(ZARITH_LIB) $(LEMLIB)/extract.cmxa  $(SAIL_DIR)/_build/lem_interp/extract.cmxa test_lem_ast.ml run_test_interp.ml -o test_interp.native && \
+	ocamlfind ocamlopt -g -package num -package zarith -package lem -linkpkg -I $(SAIL_DIR)/_build/lem_interp $(SAIL_DIR)/_build/lem_interp/extract.cmxa test_lem_ast.ml run_test_interp.ml -o test_interp.native && \
 	./test_interp.native >$(notdir $@) 2>&1
 
 tests.xml: $(OCAML_RESULTS) $(INTERP_RESULTS)
