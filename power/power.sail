@@ -109,7 +109,7 @@ val forall Nat 'n, Nat 'm, 0 <= 'n, 'n <= 'm, 'm <= 63 .
 function (bit[64]) MASK(start, stop) = {
   (bit[64]) mask_temp := 0;
   if(start > stop) then {
-    mask_temp[start .. 63] := bitone ^^ (64 - start);
+    mask_temp[start .. 63] := bitone ^^ sub(64, start);
     mask_temp[0 .. stop] := bitone ^^ (stop + 1);
   } else {
     mask_temp[start .. stop ] := bitone ^^ (stop - start + 1);
@@ -213,8 +213,12 @@ let (vector <0, 1024, inc, (register<(bit[64])>) >) SPR =
  vector definition. *)
 register (vector <0, 64, inc, bit>) DCR0
 register (vector <0, 64, inc, bit>) DCR1
-let (vector <0, 1024, inc, (register<(vector<0, 64, inc, bit>)>) >) DCR =
-  [ 0=DCR0, 1=DCR1 ; default=undefined]
+let (vector <0, 1024, inc, (register<(vector<0, 64, inc, bit>)>) >) DCR = {
+  v = undefined;
+  v[0] = DCR0;
+  v[1] = DCR1;
+  v
+}
 
 (* Floating-point registers *)
 
@@ -362,7 +366,7 @@ function bit[32] SINGLE ((bit[64]) frs) = {
    (bit[11]) exp := frs[1..11] - 1023;
    (bit[53]) frac := 0b1 : frs[12..63];
    foreach (i from 0 to 53) {
-     if exp < (0 - 126) 
+     if exp < sub(0, 126)
      then { frac[0..52] := 0b0 : frac[0..51];
             exp := exp + 1; }
      else ()};
@@ -1701,7 +1705,7 @@ function clause execute (Lmw (RT, RA, D)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(D);
-    size := ([|32|]) (32 - RT) * 4;
+    size := ([|32|])(sub(32, RT)) * 4;
     buffer := MEMr(EA,size);
     i := 0;
     foreach (r from RT to 31 by 1 in inc)
@@ -1725,9 +1729,9 @@ function clause execute (Stmw (RS, RA, D)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(D);
-    size := ([|32|]) (32 - RS) * 4;
+    size := ([|32|]) (sub(32, RS)) * 4;
     MEMw_EA(EA,size);
-    (bit[994]) buffer := [0 = 0,993 = 0; default=0];
+    (bit[994]) buffer := zeros(994);
     i := 0;
     foreach (r from RS to 31 by 1 in inc)
     {
@@ -1838,7 +1842,7 @@ function clause execute (Stswi (RS, RA, NB)) =
     r := RS - 1;
     ([|32|]) size := if NB == 0 then 32 else NB;
     MEMw_EA(EA,size);
-    (bit[256]) membuffer := [0 = 0,255 = 0; default=0];
+    (bit[256]) membuffer := zeros(255);
     j := 0;
     i := 32;
     foreach (n from (if NB == 0 then 32 else NB) to 1 by 1 in dec)
@@ -1874,7 +1878,7 @@ function clause execute (Stswx (RS, RA, RB)) =
     ([|128|]) n_top := XER[57 .. 63];
     recalculate_dependency(());
     MEMw_EA(EA,n_top);
-    (bit[512]) membuffer := [0 = 0,511 = 0; default=0];
+    (bit[512]) membuffer := zeros(512);
     j := 0;
     foreach (n from n_top to 1 by 1 in dec)
     {

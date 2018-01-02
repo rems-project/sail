@@ -304,7 +304,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
          (separate space [string "internal_plet"; doc_pat pat; equals])
          (doc_exp exp1) in
      doc_op (string "in") le (doc_exp exp2)
-  | E_internal_let (lexp, binding, exp) ->
+  | E_var (lexp, binding, exp) ->
      separate space [string "var"; doc_lexp lexp; equals; doc_exp binding; string "in"; doc_exp exp]
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
@@ -384,7 +384,7 @@ and doc_block = function
   | [] -> string "()"
   | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
-  | [E_aux (E_internal_let (lexp, binding, E_aux (E_block exps, _)), _)] ->
+  | [E_aux (E_var (lexp, binding, E_aux (E_block exps, _)), _)] ->
      separate space [string "var"; doc_lexp lexp; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
   | [exp] -> doc_exp exp
   | exp :: exps -> doc_exp exp ^^ semi ^^ hardline ^^ doc_block exps

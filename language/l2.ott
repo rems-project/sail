@@ -799,7 +799,7 @@ exp :: 'E_' ::=
   | annot , annot'           :: I :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }}
   | comment string            :: I :: comment {{ com For generated unstructured comments }}
   | comment exp               :: I :: comment_struc {{ com For generated structured comments }}
-  | let lexp = exp in exp'    :: I :: internal_let {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
+  | var lexp = exp in exp'    :: I :: var {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
   | let pat = exp in exp' :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
   | return_int ( exp )                                          ::  :: internal_return {{ com For internal use to embed into monad definition }}
   | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}

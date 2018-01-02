@@ -551,7 +551,7 @@ let nexp_subst_fns substs =
       | E_assert (e1,e2) -> re (E_assert (s_exp e1,s_exp e2))
       | E_internal_cast ((l,ann),e) -> re (E_internal_cast ((l,s_tannot ann),s_exp e))
       | E_comment_struc e -> re (E_comment_struc e)
-      | E_internal_let (le,e1,e2) -> re (E_internal_let (s_lexp le, s_exp e1, s_exp e2))
+      | E_var (le,e1,e2) -> re (E_var (s_lexp le, s_exp e1, s_exp e2))
       | E_internal_plet (p,e1,e2) -> re (E_internal_plet (s_pat p, s_exp e1, s_exp e2))
       | E_internal_return e -> re (E_internal_return (s_exp e))
       | E_throw e -> re (E_throw (s_exp e))
@@ -1040,7 +1040,7 @@ let split_defs splits defs =
     | E_comment_struc e -> re (E_comment_struc e) assigns
 
     | E_app_infix _
-    | E_internal_let _
+    | E_var _
     | E_internal_plet _
     | E_internal_return _
       -> raise (Reporting_basic.err_unreachable l
@@ -1458,7 +1458,7 @@ let split_defs splits defs =
       | E_assert (e1,e2) -> re (E_assert (map_exp e1,map_exp e2))
       | E_internal_cast (ann,e) -> re (E_internal_cast (ann,map_exp e))
       | E_comment_struc e -> re (E_comment_struc e)
-      | E_internal_let (le,e1,e2) -> re (E_internal_let (map_lexp le, map_exp e1, map_exp e2))
+      | E_var (le,e1,e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
       | E_internal_plet (p,e1,e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
       | E_internal_return e -> re (E_internal_return (map_exp e))
     and map_opt_default ((Def_val_aux (ed,annot)) as eda) =
@@ -2227,7 +2227,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
       -> raise (Reporting_basic.err_unreachable l
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
        
-    | E_internal_let (lexp,e1,e2) ->
+    | E_var (lexp,e1,e2) ->
        (* Really we ought to remove the assignment after e2 *)
        let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
        let assigns,r' = analyse_lexp fn_id env assigns d1 lexp in

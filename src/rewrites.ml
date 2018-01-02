@@ -362,7 +362,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_internal_exp_user = (fun (a1,a2) -> (E_internal_exp_user (a1,a2), E_internal_exp_user (a1,a2)))
     ; e_comment = (fun c -> (E_comment c, E_comment c))
     ; e_comment_struc = (fun (e,e') -> (E_comment_struc e, E_comment_struc e'))
-    ; e_internal_let = (fun ((lexp,lexp'), (e2,e2'), (e3,e3')) -> (E_internal_let (lexp,e2,e3), E_internal_let (lexp',e2',e3')))
+    ; e_internal_let = (fun ((lexp,lexp'), (e2,e2'), (e3,e3')) -> (E_var (lexp,e2,e3), E_var (lexp',e2',e3')))
     ; e_internal_plet = (fun (pat, (e1,e1'), (e2,e2')) -> (E_internal_plet (pat,e1,e2), E_internal_plet (pat,e1',e2')))
     ; e_internal_return = (fun (e,e') -> (E_internal_return e, E_internal_return e'))
     ; e_internal_value = (fun v -> (E_internal_value v, E_internal_value v))
@@ -1438,7 +1438,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
         let exps' = walker exps in
         let effects = union_eff_exps exps' in
         let block = E_aux (E_block exps', (l, Some (env, unit_typ, effects))) in
-        [fix_eff_exp (E_aux (E_internal_let(le', e', block), annot))]
+        [fix_eff_exp (E_aux (E_var(le', e', block), annot))]
       (*| ((E_aux(E_if(c,t,e),(l,annot))) as exp)::exps ->
         let vars_t = introduced_variables t in
         let vars_e = introduced_variables e in
@@ -1475,7 +1475,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
                            (Parse_ast.Generated l, simple_annot t))
                   | _ -> e in
                 let unioneffs = union_effects effects (get_effsum_exp set_exp) in
-                ([E_aux (E_internal_let (LEXP_aux (LEXP_id (Id_aux (Id i, Parse_ast.Generated l)),
+                ([E_aux (E_var (LEXP_aux (LEXP_id (Id_aux (Id i, Parse_ast.Generated l)),
                                                   (Parse_ast.Generated l, (tag_annot t Emp_intro))),
                                         set_exp,
                                         E_aux (E_block res, (Parse_ast.Generated l, (simple_annot_efr unit_t effects)))),
@@ -1491,7 +1491,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
     let e' = re' (rewrite_base e) in
     let block = annot_exp (E_block []) l (env_of full_exp) unit_typ in
     check_exp (env_of full_exp)
-      (strip_exp (E_aux (E_internal_let(le', e', block), annot))) (typ_of full_exp)
+      (strip_exp (E_aux (E_var(le', e', block), annot))) (typ_of full_exp)
   | _ -> rewrite_base full_exp
 
 let rewrite_lexp_lift_assign_intro rewriters ((LEXP_aux(lexp,annot)) as le) =
@@ -1622,8 +1622,8 @@ let rewrite_register_ref_writes (Defs defs) =
                        (fun (Pat_aux (Pat_exp(p,e),pannot)) -> 
                           Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters nmap p,rewrite_rec e),pannot)) pexps)))
   | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite_rec body))
-  | E_internal_let (lexp,exp,body) ->
-    rewrap (E_internal_let (rewriters.rewrite_lexp rewriters nmap lexp, rewrite_rec exp, rewrite_rec body))
+  | E_var (lexp,exp,body) ->
+    rewrap (E_var (rewriters.rewrite_lexp rewriters nmap lexp, rewrite_rec exp, rewrite_rec body))
   | _ -> rewrite_base full_exp
 
 let rewrite_defs_separate_numbs defs = rewrite_defs_base
@@ -2377,10 +2377,10 @@ let rewrite_defs_letbind_effects  =
        k (rewrap (E_internal_cast (annot',exp'))))
     | E_internal_exp _ -> k exp
     | E_internal_exp_user _ -> k exp
-    | E_internal_let (lexp,exp1,exp2) ->
+    | E_var (lexp,exp1,exp2) ->
        n_lexp lexp (fun lexp ->
        n_exp exp1 (fun exp1 ->
-       rewrap (E_internal_let (lexp,exp1,n_exp exp2 k))))
+       rewrap (E_var (lexp,exp1,n_exp exp2 k))))
     | E_internal_return exp1 ->
        n_exp_name exp1 (fun exp1 ->
        k (rewrap (E_internal_return exp1)))
@@ -2457,7 +2457,7 @@ let rewrite_defs_internal_lets =
        (P_id id, annot)
     | LEXP_aux (LEXP_cast (typ, id), annot) ->
        (P_typ (typ, P_aux (P_id id, annot)), annot)
-    | _ -> failwith "E_internal_let with unexpected lexp" in
+    | _ -> failwith "E_var with unexpected lexp" in
     if effectful exp1 then
       E_internal_plet (P_aux (paux, annot), exp1, exp2)
     else
@@ -2565,9 +2565,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
     | E_let (lb,exp) ->
        let exp = add_vars overwrite exp vars in
        E_aux (E_let (lb,exp),swaptyp (typ_of exp) annot)
-    | E_internal_let (lexp,exp1,exp2) ->
+    | E_var (lexp,exp1,exp2) ->
        let exp2 = add_vars overwrite exp2 vars in
-       E_aux (E_internal_let (lexp,exp1,exp2), swaptyp (typ_of exp2) annot)
+       E_aux (E_var (lexp,exp1,exp2), swaptyp (typ_of exp2) annot)
     | E_internal_plet (pat,exp1,exp2) ->
        let exp2 = add_vars overwrite exp2 vars in
        E_aux (E_internal_plet (pat,exp1,exp2), swaptyp (typ_of exp2) annot)
@@ -2761,8 +2761,8 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           annot_letbind (pat, v) (get_loc_exp v) env (typ_of v)
        | Same_vars v -> LB_aux (LB_val (pat, v),lbannot) in
      propagate_exp_effect (annot_exp (E_let (lb, body)) l env (typ_of body))
-  | E_internal_let (lexp,v,body) ->
-     (* Rewrite E_internal_let into E_let and call recursively *)
+  | E_var (lexp,v,body) ->
+     (* Rewrite E_var into E_let and call recursively *)
      let paux, typ = match lexp with
        | LEXP_aux (LEXP_id id, _) ->
           P_id id, typ_of v
@@ -2770,7 +2770,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           P_typ (typ, annot_pat (P_id id) l env (typ_of v)), typ
        | _ ->
          raise (Reporting_basic.err_unreachable l
-           "E_internal_let with a lexp that is not a variable") in
+           "E_var with a lexp that is not a variable") in
      let lb = annot_letbind (paux, v) l env typ in
      let exp = propagate_exp_effect (annot_exp (E_let (lb, body)) l env (typ_of body)) in
      rewrite_var_updates exp

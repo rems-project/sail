@@ -152,7 +152,7 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union With Val Constraint Throw Try Catch Exit
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Record Mutual
+%token Repeat Until While Do Record Mutual Var
 
 %nonassoc Then
 %nonassoc Else
@@ -705,6 +705,8 @@ exp:
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
   | Let_ letbind In exp
     { mk_exp (E_let ($2, $4)) $startpos $endpos }
+  | Var atomic_exp Eq exp In exp
+    { mk_exp (E_var ($2, $4, $6)) $startpos $endpos }
   | Lcurly block Rcurly
     { mk_exp (E_block $2) $startpos $endpos }
   | Return exp
@@ -935,6 +937,8 @@ block:
     { [$1] }
   | Let_ letbind Semi block
     { [mk_exp (E_let ($2, mk_exp (E_block $4) $startpos($4) $endpos)) $startpos $endpos] }
+  | Var atomic_exp Eq exp Semi block
+    { [mk_exp (E_var ($2, $4, mk_exp (E_block $6) $startpos($6) $endpos)) $startpos $endpos] }
   | exp Semi /* Allow trailing semicolon in block */
     { [$1] }
   | exp Semi block

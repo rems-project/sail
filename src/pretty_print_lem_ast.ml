@@ -432,8 +432,8 @@ and pp_lem_exp ppf (E_aux(e,(l,annot)) as exp) =
       raise (Reporting_basic.err_unreachable l "Found internal cast or exp")
     | E_internal_exp_user _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_exp_user"))
     | E_sizeof_internal _ -> (raise (Reporting_basic.err_unreachable l "Internal sizeof not removed"))
-    | E_internal_let (lexp,exp1,exp2) ->
-      fprintf ppf "@[<0>(E_aux (E_internal_let %a %a %a) (%a, %a))@]"
+    | E_var (lexp,exp1,exp2) ->
+      fprintf ppf "@[<0>(E_aux (E_var %a %a %a) (%a, %a))@]"
         pp_lem_lexp lexp pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_l l pp_annot annot
     | E_internal_return exp ->
       fprintf ppf "@[<0>(E_aux (E_internal_return %a) (%a, %a))@]"

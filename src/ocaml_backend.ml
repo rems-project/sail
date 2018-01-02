@@ -254,7 +254,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_let (lb, exp) ->
      separate space [string "let"; ocaml_letbind ctx lb; string "in"]
      ^/^ ocaml_exp ctx exp
-  | E_internal_let (lexp, exp1, exp2) ->
+  | E_var (lexp, exp1, exp2) ->
      separate space [string "let"; ocaml_atomic_lexp ctx lexp;
                      equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewrites.simple_typ (typ_of exp1))); string "in"]
      ^/^ ocaml_exp ctx exp2

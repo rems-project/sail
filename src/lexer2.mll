@@ -129,6 +129,7 @@ let kw_table =
      ("in",			 (fun x -> In));
      ("inc",                     (fun _ -> Inc));
      ("let",                     (fun x -> Let_));
+     ("var",                     (fun _ -> Var));
      ("record",                  (fun _ -> Record));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));

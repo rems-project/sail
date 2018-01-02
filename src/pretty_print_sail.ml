@@ -186,7 +186,7 @@ let doc_exp, doc_let =
   | E_app_infix(l,(Id_aux(Id "**",_) as op),r) ->
       doc_op (doc_id op) (starstar_exp l) (app_exp r)
   | E_if _ | E_for _ | E_loop _ | E_let _
-  | E_internal_let _ | E_internal_plet _ -> right_atomic_exp expr
+  | E_var _ | E_internal_plet _ -> right_atomic_exp expr
   | _ -> app_exp expr
   and right_atomic_exp ((E_aux(e,_)) as expr) = match e with
   (* Special case: omit "else ()" when the else branch is empty. *)
@@ -217,7 +217,7 @@ let doc_exp, doc_let =
       )) ^/^
       exp exp4
   | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
-  | E_internal_let (lexp, exp1, exp2) ->
+  | E_var (lexp, exp1, exp2) ->
      let le =
        prefix 2 1
          (separate space [string "internal_let"; doc_lexp lexp; equals])
@@ -324,7 +324,7 @@ let doc_exp, doc_let =
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
   | E_if _ | E_for _ | E_loop _ | E_let _
-  | E_internal_let _ | E_internal_plet _
+  | E_var _ | E_internal_plet _
   | E_vector_append _
   | E_app_infix (_,
     (* for every app_infix operator caught at a higher precedence,

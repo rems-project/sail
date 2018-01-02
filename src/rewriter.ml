@@ -142,7 +142,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_internal_cast (_,e) -> effect_of e
     | E_internal_exp _ -> no_effect
     | E_internal_exp_user _ -> no_effect
-    | E_internal_let (lexp,e1,e2) ->
+    | E_var (lexp,e1,e2) ->
       union_effects (effect_of_lexp lexp)
         (union_effects (effect_of e1) (effect_of e2))
     | E_internal_plet (_,e1,e2) -> union_effects (effect_of e1) (effect_of e2)
@@ -322,8 +322,8 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_assert(e1,e2) -> rewrap (E_assert(rewrite e1,rewrite e2))
   | E_internal_cast (casted_annot,exp) ->
     rewrap (E_internal_cast (casted_annot, rewrite exp))
-  | E_internal_let (lexp, e1, e2) ->
-     rewrap (E_internal_let (rewriters.rewrite_lexp rewriters lexp, rewriters.rewrite_exp rewriters e1, rewriters.rewrite_exp rewriters e2))
+  | E_var (lexp, e1, e2) ->
+     rewrap (E_var (rewriters.rewrite_lexp rewriters lexp, rewriters.rewrite_exp rewriters e1, rewriters.rewrite_exp rewriters e2))
   | E_internal_return _ -> raise (Reporting_basic.err_unreachable l "Internal return found before it should have been introduced")
   | E_internal_plet _ -> raise (Reporting_basic.err_unreachable l " Internal plet found before it should have been introduced")
   | _ -> rewrap exp
@@ -579,7 +579,7 @@ let rec fold_exp_aux alg = function
   | E_internal_exp_user (annot1,annot2) -> alg.e_internal_exp_user (annot1,annot2)
   | E_comment c -> alg.e_comment c
   | E_comment_struc e -> alg.e_comment_struc (fold_exp alg e)
-  | E_internal_let (lexp,e1,e2) ->
+  | E_var (lexp,e1,e2) ->
      alg.e_internal_let (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
   | E_internal_plet (pat,e1,e2) ->
      alg.e_internal_plet (fold_pat alg.pat_alg pat, fold_exp alg e1, fold_exp alg e2)
@@ -652,7 +652,7 @@ let id_exp_alg =
   ; e_internal_exp_user = (fun (a1,a2) -> E_internal_exp_user (a1,a2))
   ; e_comment = (fun c -> E_comment c)
   ; e_comment_struc = (fun e -> E_comment_struc e)
-  ; e_internal_let = (fun (lexp, e2, e3) -> E_internal_let (lexp,e2,e3))
+  ; e_internal_let = (fun (lexp, e2, e3) -> E_var (lexp,e2,e3))
   ; e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat,e1,e2))
   ; e_internal_return = (fun e -> E_internal_return e)
   ; e_internal_value = (fun v -> E_internal_value v)
@@ -753,7 +753,7 @@ let compute_exp_alg bot join =
   ; e_comment = (fun c -> (bot, E_comment c))
   ; e_comment_struc = (fun (v,e) -> (bot, E_comment_struc e)) (* ignore value by default, since it is comes from a comment *)
   ; e_internal_let = (fun ((vl, lexp), (v2,e2), (v3,e3)) ->
-    (join_list [vl;v2;v3], E_internal_let (lexp,e2,e3)))
+    (join_list [vl;v2;v3], E_var (lexp,e2,e3)))
   ; e_internal_plet = (fun ((vp,pat), (v1,e1), (v2,e2)) ->
     (join_list [vp;v1;v2], E_internal_plet (pat,e1,e2)))
   ; e_internal_return = (fun (v,e) -> (v, E_internal_return e))

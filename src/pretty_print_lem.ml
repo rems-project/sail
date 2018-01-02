@@ -847,8 +847,8 @@ let doc_exp_lem, doc_let_lem =
     | E_app_infix (e1,id,e2) ->
        raise (Reporting_basic.err_unreachable l
          "E_app_infix should have been rewritten before pretty-printing")
-    | E_internal_let(lexp, eq_exp, in_exp) ->
-       raise (report l "E_internal_lets should have been removed before pretty-printing")
+    | E_var(lexp, eq_exp, in_exp) ->
+       raise (report l "E_vars should have been removed before pretty-printing")
     | E_internal_plet (pat,e1,e2) ->
        let epp =
          let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
