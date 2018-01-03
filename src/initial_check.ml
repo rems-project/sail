@@ -472,6 +472,7 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
       | None -> E_block(List.map (to_ast_exp k_env def_ord) exps))
     | Parse_ast.E_nondet(exps) -> E_nondet(List.map (to_ast_exp k_env def_ord) exps)
     | Parse_ast.E_id(id) -> E_id(to_ast_id id)
+    | Parse_ast.E_ref(id) -> E_ref(to_ast_id id)
     | Parse_ast.E_lit(lit) -> E_lit(to_ast_lit lit)
     | Parse_ast.E_cast(typ,exp) -> E_cast(to_ast_typ k_env def_ord typ, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_app(f,args) -> 
@@ -945,6 +946,7 @@ let initial_kind_env =
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
+    ("ref", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
     ("vector", {k = K_Lam( [{k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
     ("atom", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});

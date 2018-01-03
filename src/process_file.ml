@@ -121,7 +121,7 @@ let opt_dno_cast = ref false
 let check_ast (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
   let ienv = if !opt_dno_cast then Type_check.Env.no_casts Type_check.initial_env else Type_check.initial_env in
   let ast, env = Type_check.check ienv defs in
-  let () = if !opt_ddump_tc_ast then Pretty_print.pp_defs stdout ast else () in
+  let () = if !opt_ddump_tc_ast then Pretty_print_sail2.pp_defs stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 

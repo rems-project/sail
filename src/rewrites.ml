@@ -1389,21 +1389,6 @@ let rec rewrite_lexp_to_rhs (do_rewrite : tannot lexp -> bool) ((LEXP_aux(lexp,(
          let (LEXP_aux (_, lannot)) = lexp in
          let env = env_of_annot lannot in
          match Env.expand_synonyms env (typ_of_annot lannot) with
-         | Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id regtyp_id, _)), _)]), _)
-         | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
-            let base, top, ranges = Env.get_regtyp regtyp_id env in
-            let range, _ =
-              try List.find (fun (_, fid) -> Id.compare fid id = 0) ranges with
-              | Not_found ->
-                 raise (Reporting_basic.err_typ l ("Field " ^ string_of_id id ^ " doesn't exist for register type " ^ string_of_id regtyp_id))
-            in
-            let lexp_exp = E_aux (E_app (mk_id ("cast_" ^ string_of_id regtyp_id), [lexp_to_exp lexp]), (l, None)) in
-            let n, m = match range with
-            | BF_aux (BF_single n, _) -> n, n
-            | BF_aux (BF_range (n, m), _) -> n, m
-            | _ -> raise (Reporting_basic.err_unreachable l ("Unsupported lexp: " ^ string_of_lexp le)) in
-            let rhs' exp = rhs (E_aux (E_vector_update_subrange (lexp_exp, simple_num l n, simple_num l m, exp), lannot)) in
-            (lhs, rhs')
          | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
             let field_update exp = FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), annot)], false), annot) in
             (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, field_update exp), lannot))))

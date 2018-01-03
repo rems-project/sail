@@ -392,4 +392,5 @@ let green str = termcode 92 ^ str
 let yellow str = termcode 93 ^ str
 let red str = termcode 91 ^ str
 let cyan str = termcode 96 ^ str
+let blue str = termcode 94 ^ str
 let clear str = str ^ termcode 0

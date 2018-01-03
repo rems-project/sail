@@ -56,7 +56,7 @@ open Interpreter
 open Pretty_print_sail2
 
 type mode =
-  | Evaluation of trace
+  | Evaluation of frame
   | Normal
 
 let current_mode = ref Normal
@@ -86,14 +86,14 @@ let clear str = str ^ termcode 0
 
 let sail_logo =
   let banner str = str |> bold |> red |> clear in
-  [ {|    ___       ___       ___       ___  |};
-    {|   /\  \     /\  \     /\  \     /\__\ |};
-    {|  /::\  \   /::\  \   _\:\  \   /:/  / |};
-    {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/  |};
-    {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \  |};
-    {|  \::/  /    /:/  /   \:\__\    \:\__\ |};
-    {|   \/__/     \/__/     \/__/     \/__/ |};
-    {|                                       |}
+  [ "    ___       ___       ___       ___ ";
+    "   /\\  \\     /\\  \\     /\\  \\     /\\__\\";
+    "  /::\\  \\   /::\\  \\   _\\:\\  \\   /:/  /";
+    " /\\:\\:\\__\\ /::\\:\\__\\ /\\/::\\__\\ /:/__/ ";
+    " \\:\\:\\/__/ \\/\\::/  / \\::/\\/__/ \\:\\  \\ ";
+    "  \\::/  /    /:/  /   \\:\\__\\    \\:\\__\\";
+    "   \\/__/     \\/__/     \\/__/     \\/__/";
+    ""
   ]
   |> List.map banner
 
@@ -127,31 +127,27 @@ let handle_input input =
          | _ -> print_endline ("Unrecognised command " ^ input)
        else if input <> "" then
          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord input) in
-         current_mode := Evaluation (eval_exp !interactive_ast (return exp))
+         current_mode := Evaluation (eval_frame !interactive_ast (Step ("", initial_state, return exp, [])))
        else ()
      end
-  | Evaluation trace ->
+  | Evaluation frame ->
      begin
-       match trace with
-       | Done v ->
+       match frame with
+       | Done (_, v) ->
           print_endline ("Result = " ^ Value.string_of_value v);
           current_mode := Normal
-       | Step (exp, stack) ->
-          let next = match eval_exp !interactive_ast exp with
-            | Step (exp', stack') -> Evaluation (Step (exp', stack' @ stack))
-            | Done v when stack = [] ->
-               print_endline ("Result = " ^ Value.string_of_value v);
-               Normal
-            | Done v ->
-               print_endline ("Returning: " ^ Value.string_of_value v |> Util.cyan |> Util.clear);
-               Evaluation (Step (List.hd stack v, List.tl stack))
-          in
-          current_mode := next
+       | Step (out, _, _, stack) ->
+          let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
+          List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
+          print_endline out;
+          current_mode := Evaluation (eval_frame !interactive_ast frame)
      end
 
 
 
 let () =
+  List.iter print_endline sail_logo;
+
   (* Auto complete function names based on val specs *)
   LNoise.set_completion_callback
     begin
@@ -177,5 +173,5 @@ let () =
   LNoise.history_set ~max_length:100 |> ignore;
 
   if !opt_interactive then
-    (List.iter print_endline sail_logo; user_input handle_input)
+    user_input handle_input
   else ()

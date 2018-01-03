@@ -130,6 +130,7 @@ let kw_table =
      ("inc",                     (fun _ -> Inc));
      ("let",                     (fun x -> Let_));
      ("var",                     (fun _ -> Var));
+     ("ref",                     (fun _ -> Ref));
      ("record",                  (fun _ -> Record));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
@@ -170,6 +171,8 @@ let kw_table =
      ("nondet",                  (fun x -> Nondet));
      ("escape",                  (fun x -> Escape));
    ]
+
+
 
 }
 

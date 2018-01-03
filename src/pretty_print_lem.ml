@@ -152,7 +152,6 @@ let effectful (Effect_aux (Effect_set effs, _)) = effectful_set effs
 
 let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | Typ_app(id, _) when string_of_id id = "register" -> true
-  | Typ_id(id) when Env.is_regtyp id env -> true
   | _ -> false
 
 let doc_nexp_lem nexp =
@@ -720,18 +719,6 @@ let doc_exp_lem, doc_let_lem =
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
        let ft = typ_of_annot (l,fannot) in
        (match fannot with
-        | Some(env, (Typ_aux (Typ_id tid, _)), _)
-        | Some(env, (Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id tid, _)), _)]), _)), _)
-          when Env.is_regtyp tid env ->
-           let t = (* Env.base_typ_of (env_of full_exp) *) (typ_of full_exp) in
-           let eff = effect_of full_exp in
-           let field_f = doc_id_lem tid ^^ underscore ^^ doc_id_lem id ^^ dot ^^ string "get_field" in
-           let (ta,aexp_needed) =
-             if typ_needs_printed t
-             then (doc_tannot_lem sequential mwords (effectful eff) t, true)
-             else (empty, aexp_needed) in
-           let epp = field_f ^^ space ^^ (expY fexp) in
-           if aexp_needed then parens (align epp ^^ ta) else (epp ^^ ta)
         | Some(env, (Typ_aux (Typ_id tid, _)), _) when Env.is_record tid env ->
            let fname =
              if prefix_recordtype
@@ -1336,9 +1323,6 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
      else
        let env = env_of_annot annot in
        (match typ with
-        | Typ_aux (Typ_id idt, _) when Env.is_regtyp idt env ->
-          separate space [string "let";doc_id_lem id;equals;
-                          string "build_" ^^ string (string_of_id idt);string_lit (doc_id_lem id)] ^/^ hardline
         | _ ->
           let rt = Env.base_typ_of env typ in
           if is_vector_typ rt then

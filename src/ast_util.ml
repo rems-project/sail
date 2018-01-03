@@ -238,6 +238,8 @@ let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
 let real_typ = mk_id_typ (mk_id "real")
 let app_typ id args = mk_typ (Typ_app (id, args))
+let ref_typ typ = mk_typ (Typ_app (mk_id "ref", [mk_typ_arg (Typ_arg_typ typ)]))
+let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (Typ_arg_typ typ)]))
 let atom_typ nexp =
   mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))
 let range_typ nexp1 nexp2 =
@@ -338,6 +340,7 @@ and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)
   | E_nondet xs -> E_nondet (List.map (map_exp_annot f) xs)
   | E_id id -> E_id id
+  | E_ref id -> E_ref id
   | E_lit lit -> E_lit lit
   | E_cast (typ, exp) -> E_cast (typ, map_exp_annot f exp)
   | E_app (id, xs) -> E_app (id, List.map (map_exp_annot f) xs)
@@ -582,6 +585,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   match exp with
   | E_block exps -> "{ " ^ string_of_list "; " string_of_exp exps ^ " }"
   | E_id v -> string_of_id v
+  | E_ref id -> "ref " ^ string_of_id id
   | E_sizeof nexp -> "sizeof " ^ string_of_nexp nexp
   | E_constraint nc -> "constraint(" ^ string_of_n_constraint nc ^ ")"
   | E_lit lit -> string_of_lit lit

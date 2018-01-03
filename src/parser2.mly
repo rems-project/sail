@@ -69,6 +69,10 @@ let string_of_id = function
   | Id_aux (Id str, _) -> str
   | Id_aux (DeIid str, _) -> str
 
+let prepend_id str1 = function
+  | Id_aux (Id str2, loc) -> Id_aux (Id (str1 ^ str2), loc)
+  | _ -> assert false
+
 let mk_id i n m = Id_aux (i, loc n m)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
@@ -152,7 +156,7 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union With Val Constraint Throw Try Catch Exit
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Record Mutual Var
+%token Repeat Until While Do Record Mutual Var Ref
 
 %nonassoc Then
 %nonassoc Else
@@ -513,8 +517,11 @@ atomic_typ:
   | id Lparen typ_list Rparen
     { mk_typ (ATyp_app ($1, $3)) $startpos $endpos }
   | Register Lparen typ Rparen
-    { let register_id = mk_id (Id "register") $startpos $endpos in
+    { let register_id = mk_id (Id "register") $startpos($1) $endpos($1) in
       mk_typ (ATyp_app (register_id, [$3])) $startpos $endpos }
+  | Ref Lparen typ Rparen
+    { let ref_id = mk_id (Id "ref") $startpos($1) $endpos($1) in
+      mk_typ (ATyp_app (ref_id, [$3])) $startpos $endpos }
   | Lparen typ Rparen
     { $2 }
   | Lparen typ Comma typ_list Rparen
@@ -953,12 +960,18 @@ atomic_exp:
     { mk_exp (E_cast ($3, $1)) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
+  | id MinusGt id Lparen exp_list Rparen
+    { mk_exp (E_app (prepend_id "_mod_" $3, mk_exp (E_ref $1) $startpos($1) $endpos($1) :: $5)) $startpos $endpos }
+  | atomic_exp Dot id Lparen exp_list Rparen
+    { mk_exp (E_app (prepend_id "_mod_" $3, $1 :: $5)) $startpos $endpos }
   | atomic_exp Dot id
     { mk_exp (E_field ($1, $3)) $startpos $endpos }
   | id
     { mk_exp (E_id $1) $startpos $endpos }
   | kid
     { mk_exp (E_sizeof (mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }
+  | Ref id
+    { mk_exp (E_ref $2) $startpos $endpos }
   | id Unit
     { mk_exp (E_app ($1, [mk_lit_exp L_unit $startpos($2) $endpos])) $startpos $endpos }
   | id Lparen exp_list Rparen

@@ -786,6 +786,7 @@ exp :: 'E_' ::=
 % this can be used to break out of for loops
   | exit exp						:: :: exit
     {{ com halt all current execution }}
+  | ref id                                     :: :: ref
   | throw exp                                  :: :: throw
   | try exp catch pexp1 .. pexpn             :: :: try
 %, potentially calling a system, trap, or interrupt handler with exp
