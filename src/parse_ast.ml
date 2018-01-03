@@ -268,6 +268,7 @@ exp_aux =  (* Expression *)
  | E_nondet of (exp) list (* block that can evaluate the contained expressions in any ordering *)
  | E_id of id (* identifier *)
  | E_ref of id
+ | E_deref of exp
  | E_lit of lit (* literal constant *)
  | E_cast of atyp * exp (* cast *)
  | E_app of id * (exp) list (* function application *)

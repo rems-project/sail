@@ -528,6 +528,7 @@ and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l
   LEXP_aux(
     (match exp with
      | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
+     | Parse_ast.E_deref(exp) -> LEXP_deref(to_ast_exp k_env def_ord exp)
      | Parse_ast.E_cast(typ,Parse_ast.E_aux(Parse_ast.E_id(id),l')) ->
        LEXP_cast(to_ast_typ k_env def_ord typ, to_ast_id id)
      | Parse_ast.E_tuple(tups) ->

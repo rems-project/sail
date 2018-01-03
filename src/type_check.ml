@@ -2489,10 +2489,16 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, Some (env, typ, eff))) in
   let annot_lexp lexp typ = annot_lexp_effect lexp typ no_effect in
   match lexp_aux with
+  | LEXP_deref exp ->
+     let inferred_exp = infer_exp env exp in
+     begin match typ_of inferred_exp with
+     | Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ vtyp, _)]), _) when string_of_id r = "ref" ->
+        subtyp l env typ vtyp; annot_lexp (LEXP_deref inferred_exp) typ, env
+     | Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ vtyp, _)]), _) when string_of_id r = "register" ->
+        subtyp l env typ vtyp; annot_lexp_effect (LEXP_deref inferred_exp) typ (mk_effect [BE_wreg]), env
+     end
   | LEXP_id v ->
      begin match Env.lookup_id v env with
-     | Local (Immutable, Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ vtyp, _)]), _)) when string_of_id r = "ref" ->
-        subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
      | Local (Immutable, _) | Enum _ | Union _ ->
         typ_error l ("Cannot modify let-bound constant, union or enumeration constructor " ^ string_of_id v)
      | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
@@ -2599,9 +2605,6 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
          | _ -> assert false
        in
        match typ_of access with
-       | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
-          subtyp l env typ deref_typ;
-          annot_lexp (LEXP_vector_range (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp1, inferred_exp2)) typ, env
        | _ when not is_immutable && is_register ->
           subtyp l env typ (typ_of access);
           annot_lexp (LEXP_vector_range (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp1, inferred_exp2)) typ, env
@@ -2627,9 +2630,6 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
          | _ -> assert false
        in
        match typ_of access with
-       | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
-          subtyp l env typ deref_typ;
-          annot_lexp (LEXP_vector (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp)) typ, env
        | _ when not is_immutable && is_register ->
           subtyp l env typ (typ_of access);
           annot_lexp (LEXP_vector (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp)) typ, env
@@ -3230,6 +3230,9 @@ and propagate_lexp_effect (LEXP_aux (lexp, annot)) =
   add_effect_lexp (LEXP_aux (p_lexp, annot)) eff
 and propagate_lexp_effect_aux = function
   | LEXP_id id -> LEXP_id id, no_effect
+  | LEXP_deref exp ->
+     let p_exp = propagate_exp_effect exp in
+     LEXP_deref p_exp, effect_of p_exp
   | LEXP_memory (id, exps) ->
      let p_exps = List.map propagate_exp_effect exps in
      LEXP_memory (id, p_exps), collect_effects p_exps

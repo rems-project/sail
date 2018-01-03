@@ -231,6 +231,8 @@ rule token = parse
   | "->"                                { MinusGt }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
+  | "/*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
+  | "*/"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
   | "infix" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
       Fixity (Infix, Big_int.of_string (Char.escaped p), op) }
@@ -243,8 +245,6 @@ rule token = parse
   | operator as op
     { try M.find op !operators
       with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
-  | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
-  | "*)"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
   | tyvar_start startident ident* as i  { TyVar(r i) }
   | "~"                                 { Id(r"~") }
   | startident ident* as i              { if M.mem i kw_table then
@@ -269,8 +269,8 @@ rule token = parse
 
 
 and comment pos depth = parse
-  | "(*"                                { comment pos (depth+1) lexbuf }
-  | "*)"                                { if depth = 0 then ()
+  | "/*"                                { comment pos (depth+1) lexbuf }
+  | "*/"                                { if depth = 0 then ()
                                           else if depth > 0 then comment pos (depth-1) lexbuf
                                           else assert false }
   | "\n"                                { Lexing.new_line lexbuf;

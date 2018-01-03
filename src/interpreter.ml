@@ -53,20 +53,30 @@ open Ast_util
 open Value
 
 type gstate =
-  { registers : value Bindings.t }
+  { registers : value Bindings.t;
+    letbinds : (Type_check.tannot letbind) list
+  }
 
 type lstate =
   { locals : value Bindings.t }
 
 type state = lstate * gstate
 
-let initial_gstate =
-  { registers = Bindings.empty }
+let rec ast_letbinds (Defs defs) =
+  match defs with
+  | [] -> []
+  | DEF_val lb :: defs -> lb :: ast_letbinds (Defs defs)
+  | _ :: defs -> ast_letbinds (Defs defs)
+
+let initial_gstate ast =
+  { registers = Bindings.empty;
+    letbinds = ast_letbinds ast
+  }
 
 let initial_lstate =
   { locals = Bindings.empty }
 
-let initial_state = initial_lstate, initial_gstate
+let initial_state ast = initial_lstate, initial_gstate ast
 
 let value_of_lit (L_aux (l_aux, _)) =
   match l_aux with
@@ -77,6 +87,11 @@ let value_of_lit (L_aux (l_aux, _)) =
   | L_false -> V_bool false
   | L_string str -> V_string str
   | L_num n -> V_int n
+  | L_hex str ->
+     Util.string_to_list str
+     |> List.map (fun c -> List.map (fun b -> V_bit b) (Sail_lib.hex_char c))
+     |> List.concat
+     |> (fun v -> V_vector v)
   | _ -> failwith "Unimplemented value_of_lit" (* TODO *)
 
 let is_value = function
@@ -175,7 +190,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_app (fn, exps) -> E_app (fn, List.map (subst id value) exps)
     | E_app_infix (exp1, op, exp2) -> E_app_infix (subst id value exp1, op, subst id value exp2)
     | E_tuple exps -> E_tuple (List.map (subst id value) exps)
-    | E_assign (lexp, exp) -> E_assign (lexp, subst id value exp) (* Shadowing... *)
+    | E_assign (lexp, exp) -> E_assign (subst_lexp id value lexp, subst id value exp) (* Shadowing... *)
     | E_let (LB_aux (LB_val (pat, bind), lb_annot), body) ->
        (* TODO: Fix shadowing *)
        E_let (LB_aux (LB_val (pat, subst id value bind), lb_annot), subst id value body)
@@ -189,6 +204,16 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
   in
   wrap e_aux
 
+and subst_lexp id value (LEXP_aux (lexp_aux, annot) as lexp) =
+  let wrap lexp_aux = LEXP_aux (lexp_aux, annot) in
+  let lexp_aux = match lexp_aux with
+    | LEXP_deref exp -> LEXP_deref (subst id value exp)
+    | LEXP_id id' -> LEXP_id id'
+    | LEXP_memory (f, exps) -> LEXP_memory (f, List.map (subst id value) exps)
+    | _ -> failwith ("subst lexp")
+  in
+  wrap lexp_aux
+
 
 (**************************************************************************)
 (* 2. Expression Evaluation                                               *)
@@ -198,6 +223,14 @@ let unit_exp = E_lit (L_aux (L_unit, Parse_ast.Unknown))
 
 let is_value_fexp (FE_aux (FE_Fexp (id, exp), _)) = is_value exp
 let value_of_fexp (FE_aux (FE_Fexp (id, exp), _)) = (string_of_id id, value_of_exp exp)
+
+let rec build_letchain lbs (E_aux (_, annot) as exp) =
+  print_endline ("LETCHAIN " ^ string_of_exp exp);
+  match lbs with
+  | [] -> exp
+  | lb :: lbs ->
+     let exp = E_aux (E_let (lb, exp), annot) in
+     build_letchain lbs exp
 
 let rec step (E_aux (e_aux, annot) as orig_exp) =
   let wrap e_aux' = return (E_aux (e_aux', annot)) in
@@ -245,6 +278,9 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
      else
        failwith "Match failure"
+
+  | E_vector_update (vec, n, x) ->
+     wrap (E_app (mk_id "vector_update", [vec; n; x]))
 
   (* otherwise left-to-right evaluation order for function applications *)
   | E_app (id, exps) ->
@@ -298,6 +334,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_throw exp when is_value exp -> throw (value_of_exp exp)
   | E_throw exp -> step exp >>= fun exp' -> wrap (E_throw exp')
 
+  | E_ref id -> return (exp_of_value (V_ref (string_of_id id)))
   | E_id id ->
      begin
        let open Type_check in
@@ -312,6 +349,10 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           in
           return exp
        | Local (Mutable, _) -> return (exp_of_value (Bindings.find id lstate.locals))
+       | Local (Immutable, _) ->
+          let chain = build_letchain gstate.letbinds orig_exp in
+          print_endline "CHAINED";
+          return chain
        | _ -> failwith "id"
      end
 
@@ -355,6 +396,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      let ul = (Parse_ast.Unknown, None) in
      let exp' = E_aux (E_record_update (lexp_exp, FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), ul)], false), ul)), ul) in
      wrap (E_assign (lexp, exp'))
+  | E_assign (LEXP_aux (LEXP_vector (vec, n), _), exp) ->
+     let open Type_check in
+     let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
+     let ul = (Parse_ast.Unknown, None) in
+     let exp' = E_aux (E_vector_update (vec_exp, n, exp), ul) in
+     wrap (E_assign (vec, exp'))
   | E_assign (LEXP_aux (LEXP_id id, _), exp) | E_assign (LEXP_aux (LEXP_cast (_, id), _), exp) ->
      begin
        let open Type_check in
@@ -366,6 +413,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           puts ({ lstate with locals = Bindings.add id (value_of_exp exp) lstate.locals }, gstate) >> wrap unit_exp
        | _ -> failwith "Assign"
      end
+  | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) when not (is_value reference) ->
+     step reference >>= fun reference' -> wrap (E_assign (LEXP_aux (LEXP_deref reference', annot), exp))
+  | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) ->
+     let id = Id_aux (Id (coerce_ref (value_of_exp reference)), Parse_ast.Unknown) in
+     gets >>= fun (lstate, gstate) ->
+     puts (lstate, { gstate with registers = Bindings.add id (value_of_exp exp) gstate.registers }) >> wrap unit_exp
   | E_assign _ -> assert false
 
   | E_try (exp, pexps) when is_value exp -> return exp
@@ -443,7 +496,7 @@ let rec get_fundef id (Defs defs) =
 let stack_cont (_, _, cont) = cont
 let stack_string (str, _, _) = str
 let stack_state (_, lstate, _) = lstate
-                            
+
 type frame =
   | Done of state * value
   | Step of string * state * (Type_check.tannot exp) monad * (string * lstate * (value -> (Type_check.tannot exp) monad)) list
@@ -473,5 +526,5 @@ let rec eval_frame ast = function
         print_endline ("Returning value: " ^ string_of_value v |> Util.cyan |> Util.clear);
         Step (stack_string head, (stack_state head, snd state), stack_cont head v, stack')
      | Yield (Assertion_failed msg), _ ->
-        failwith msg 
+        failwith msg
      | _ -> assert false

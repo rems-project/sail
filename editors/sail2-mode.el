@@ -34,13 +34,8 @@
     (modify-syntax-entry ?_ "w" st)
     (modify-syntax-entry ?' "w" st)
     (modify-syntax-entry ?*  ". 23" st)
-    (condition-case nil
-        (progn
-          (modify-syntax-entry ?\( "()1n" st)
-          (modify-syntax-entry ?\) ")(4n" st))
-      (error ; XEmacs signals an error instead of ignoring `n'.
-       (modify-syntax-entry ?\( "()1" st)
-       (modify-syntax-entry ?\) ")(4" st)))
+    (modify-syntax-entry ?/ ". 124b" st)
+    (modify-syntax-entry ?\n "> b" st)
     st)
   "Syntax table for Sail2 mode")
 

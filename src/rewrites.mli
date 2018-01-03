@@ -57,6 +57,9 @@ val rewrite_undefined : bool -> tannot defs -> tannot defs
 (* Perform rewrites to exclude AST nodes not supported for ocaml out*)
 val rewrite_defs_ocaml : (string * (tannot defs -> tannot defs)) list
 
+(* Perform rewrites to exclude AST nodes not supported for interpreter *)
+val rewrite_defs_interpreter : (string * (tannot defs -> tannot defs)) list
+
 (* Perform rewrites to exclude AST nodes not supported for lem out*)
 val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list
 

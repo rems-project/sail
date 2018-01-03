@@ -357,6 +357,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      separate space [doc_atomic_exp exp; colon; doc_typ typ]
   | E_lit lit -> doc_lit lit
   | E_id id -> doc_id id
+  | E_ref id -> string "ref" ^^ space ^^ doc_id id
   | E_field (exp, id) -> doc_atomic_exp exp ^^ dot ^^ doc_id id
   | E_sizeof (Nexp_aux (Nexp_var kid, _)) -> doc_kid kid
   | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
@@ -395,6 +396,7 @@ and doc_lexp (LEXP_aux (l_aux, _) as lexp) =
 and doc_atomic_lexp (LEXP_aux (l_aux, _) as lexp) =
   match l_aux with
   | LEXP_id id -> doc_id id
+  | LEXP_deref exp -> lparen ^^ string "*" ^^ doc_atomic_exp exp ^^ rparen
   | LEXP_tup lexps -> lparen ^^ separate_map (comma ^^ space) doc_lexp lexps ^^ rparen
   | LEXP_field (lexp, id) -> doc_atomic_lexp lexp ^^ dot ^^ doc_id id
   | LEXP_vector (lexp, exp) -> doc_atomic_lexp lexp ^^ brackets (doc_exp exp)

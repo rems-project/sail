@@ -413,6 +413,7 @@ and map_letbind_annot_aux f = function
 and map_lexp_annot f (LEXP_aux (lexp, annot)) = LEXP_aux (map_lexp_annot_aux f lexp, f annot)
 and map_lexp_annot_aux f = function
   | LEXP_id id -> LEXP_id id
+  | LEXP_deref exp -> LEXP_deref (map_exp_annot f exp)
   | LEXP_memory (id, exps) -> LEXP_memory (id, List.map (map_exp_annot f) exps)
   | LEXP_cast (typ, id) -> LEXP_cast (typ, id)
   | LEXP_tup lexps -> LEXP_tup (List.map (map_lexp_annot f) lexps)
@@ -660,6 +661,7 @@ and string_of_pat (P_aux (pat, l)) =
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
   | LEXP_id v -> string_of_id v
+  | LEXP_deref exp -> "*(" ^ string_of_exp exp ^ ")"
   | LEXP_cast (typ, v) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_id v
   | LEXP_tup lexps -> "(" ^ string_of_list ", " string_of_lexp lexps ^ ")"
   | LEXP_vector (lexp, exp) -> string_of_lexp lexp ^ "[" ^ string_of_exp exp ^ "]"

@@ -328,6 +328,7 @@ let rewrite_sizeof (Defs defs) =
     { e_block = (fun es -> let (es, es') = List.split es in (E_block es, E_block es'))
     ; e_nondet = (fun es -> let (es, es') = List.split es in (E_nondet es, E_nondet es'))
     ; e_id = (fun id -> (E_id id, E_id id))
+    ; e_ref = (fun id -> (E_ref id, E_ref id))
     ; e_lit = (fun lit -> (E_lit lit, E_lit lit))
     ; e_cast = (fun (typ,(e,e')) -> (E_cast (typ,e), E_cast (typ,e')))
     ; e_app = (fun (id,es) -> let (es, es') = List.split es in (E_app (id,es), E_app (id,es')))
@@ -368,6 +369,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_internal_value = (fun v -> (E_internal_value v, E_internal_value v))
     ; e_aux = (fun ((e,e'),annot) -> (E_aux (e,annot), E_aux (e',annot)))
     ; lEXP_id = (fun id -> (LEXP_id id, LEXP_id id))
+    ; lEXP_deref = (fun (e, e') -> (LEXP_deref e, LEXP_deref e'))
     ; lEXP_memory = (fun (id,es) -> let (es, es') = List.split es in (LEXP_memory (id,es), LEXP_memory (id,es')))
     ; lEXP_cast = (fun (typ,id) -> (LEXP_cast (typ,id), LEXP_cast (typ,id)))
     ; lEXP_tup = (fun tups -> let (tups,tups') = List.split tups in (LEXP_tup tups, LEXP_tup tups'))
@@ -2953,6 +2955,12 @@ let rewrite_defs_ocaml = [
   ("simple_types", rewrite_simple_types);
   ("overload_cast", rewrite_overload_cast);
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
+  ]
+
+let rewrite_defs_interpreter = [
+    ("constraint", rewrite_constraint);
+    ("trivial_sizeof", rewrite_trivial_sizeof);
+    ("sizeof", rewrite_sizeof);
   ]
 
 let rewrite_defs_sil = [

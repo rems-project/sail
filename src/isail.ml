@@ -127,7 +127,7 @@ let handle_input input =
          | _ -> print_endline ("Unrecognised command " ^ input)
        else if input <> "" then
          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord input) in
-         current_mode := Evaluation (eval_frame !interactive_ast (Step ("", initial_state, return exp, [])))
+         current_mode := Evaluation (eval_frame !interactive_ast (Step ("", initial_state !interactive_ast, return exp, [])))
        else ()
      end
   | Evaluation frame ->

@@ -107,7 +107,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
   let effsum = match e with
     | E_block es -> union_eff_exps es
     | E_nondet es -> union_eff_exps es
-    | E_id _
+    | E_id _ | E_ref _
     | E_lit _ -> eff
     | E_cast (_,e) -> effect_of e
     | E_app (f,es) ->
@@ -339,6 +339,7 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   let rewrap le = LEXP_aux(le,(l,annot)) in
   match lexp with
   | LEXP_id _ | LEXP_cast _ -> rewrap lexp
+  | LEXP_deref exp -> rewrap (LEXP_deref (rewriters.rewrite_exp rewriters exp))
   | LEXP_tup tupls -> rewrap (LEXP_tup (List.map (rewriters.rewrite_lexp rewriters) tupls))
   | LEXP_memory (id,exps) -> rewrap (LEXP_memory(id,List.map (rewriters.rewrite_exp rewriters) exps))
   | LEXP_vector (lexp,exp) ->
@@ -472,6 +473,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   { e_block                  : 'exp list -> 'exp_aux
   ; e_nondet                 : 'exp list -> 'exp_aux
   ; e_id                     : id -> 'exp_aux
+  ; e_ref                    : id -> 'exp_aux
   ; e_lit                    : lit -> 'exp_aux
   ; e_cast                   : Ast.typ * 'exp -> 'exp_aux
   ; e_app                    : id * 'exp list -> 'exp_aux
@@ -512,6 +514,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_internal_value         : Value.value -> 'exp_aux
   ; e_aux                    : 'exp_aux * 'a annot -> 'exp
   ; lEXP_id                  : id -> 'lexp_aux
+  ; lEXP_deref               : 'exp -> 'lexp_aux
   ; lEXP_memory              : id * 'exp list -> 'lexp_aux
   ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
   ; lEXP_tup                 : 'lexp list -> 'lexp_aux
@@ -538,6 +541,7 @@ let rec fold_exp_aux alg = function
   | E_block es -> alg.e_block (List.map (fold_exp alg) es)
   | E_nondet es -> alg.e_nondet (List.map (fold_exp alg) es)
   | E_id id -> alg.e_id id
+  | E_ref id -> alg.e_ref id
   | E_lit lit -> alg.e_lit lit
   | E_cast (typ,e) -> alg.e_cast (typ, fold_exp alg e)
   | E_app (id,es) -> alg.e_app (id, List.map (fold_exp alg) es)
@@ -588,6 +592,7 @@ let rec fold_exp_aux alg = function
 and fold_exp alg (E_aux (exp_aux,annot)) = alg.e_aux (fold_exp_aux alg exp_aux, annot)
 and fold_lexp_aux alg = function
   | LEXP_id id -> alg.lEXP_id id
+  | LEXP_deref exp -> alg.lEXP_deref (fold_exp alg exp)
   | LEXP_memory (id,es) -> alg.lEXP_memory (id, List.map (fold_exp alg) es)
   | LEXP_tup les -> alg.lEXP_tup (List.map (fold_lexp alg) les)
   | LEXP_cast (typ,id) -> alg.lEXP_cast (typ,id)
@@ -618,6 +623,7 @@ let id_exp_alg =
   { e_block = (fun es -> E_block es)
   ; e_nondet = (fun es -> E_nondet es)
   ; e_id = (fun id -> E_id id)
+  ; e_ref = (fun id -> E_ref id)
   ; e_lit = (fun lit -> (E_lit lit))
   ; e_cast = (fun (typ,e) -> E_cast (typ,e))
   ; e_app = (fun (id,es) -> E_app (id,es))
@@ -658,6 +664,7 @@ let id_exp_alg =
   ; e_internal_value = (fun v -> E_internal_value v)
   ; e_aux = (fun (e,annot) -> E_aux (e,annot))
   ; lEXP_id = (fun id -> LEXP_id id)
+  ; lEXP_deref = (fun e -> LEXP_deref e)
   ; lEXP_memory = (fun (id,es) -> LEXP_memory (id,es))
   ; lEXP_cast = (fun (typ,id) -> LEXP_cast (typ,id))
   ; lEXP_tup = (fun tups -> LEXP_tup tups)
@@ -712,6 +719,7 @@ let compute_exp_alg bot join =
   { e_block = split_join (fun es -> E_block es)
   ; e_nondet = split_join (fun es -> E_nondet es)
   ; e_id = (fun id -> (bot, E_id id))
+  ; e_ref = (fun id -> (bot, E_ref id))
   ; e_lit = (fun lit -> (bot, E_lit lit))
   ; e_cast = (fun (typ,(v,e)) -> (v, E_cast (typ,e)))
   ; e_app = (fun (id,es) -> split_join (fun es -> E_app (id,es)) es)
@@ -760,6 +768,7 @@ let compute_exp_alg bot join =
   ; e_internal_value = (fun v -> (bot, E_internal_value v))
   ; e_aux = (fun ((v,e),annot) -> (v, E_aux (e,annot)))
   ; lEXP_id = (fun id -> (bot, LEXP_id id))
+  ; lEXP_deref = (fun (v, e) -> (v, LEXP_deref e))
   ; lEXP_memory = (fun (id,es) -> split_join (fun es -> LEXP_memory (id,es)) es)
   ; lEXP_cast = (fun (typ,id) -> (bot, LEXP_cast (typ,id)))
   ; lEXP_tup = (fun ls ->

@@ -714,6 +714,8 @@ exp:
     { mk_exp (E_let ($2, $4)) $startpos $endpos }
   | Var atomic_exp Eq exp In exp
     { mk_exp (E_var ($2, $4, $6)) $startpos $endpos }
+  | Star atomic_exp
+    { mk_exp (E_deref $2) $startpos $endpos }
   | Lcurly block Rcurly
     { mk_exp (E_block $2) $startpos $endpos }
   | Return exp

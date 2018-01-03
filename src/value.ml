@@ -61,6 +61,7 @@ type value =
   | V_tuple of value list
   | V_unit
   | V_string of string
+  | V_ref of string
   | V_ctor of string * value list
   | V_record of value StringMap.t
 
@@ -125,6 +126,10 @@ let coerce_bv = function
 
 let coerce_string = function
   | V_string str -> str
+  | _ -> assert false
+
+let coerce_ref = function
+  | V_ref str -> str
   | _ -> assert false
 
 let unit_value = V_unit
@@ -221,17 +226,23 @@ let value_replicate_bits = function
   | [v1; v2] -> mk_vector (Sail_lib.replicate_bits (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value replicate_bits"
 
+let is_bit = function
+  | V_bit _ -> true
+  | _ -> false
+
 let rec string_of_value = function
-  | V_vector vs -> Sail_lib.string_of_bits (List.map coerce_bit vs)
+  | V_vector vs when List.for_all is_bit vs -> Sail_lib.string_of_bits (List.map coerce_bit vs)
+  | V_vector vs -> "[" ^ Util.string_of_list ", " string_of_value vs ^ "]"
   | V_bool true -> "true"
   | V_bool false -> "false"
   | V_bit B0 -> "bitzero"
   | V_bit B1 -> "bitone"
   | V_int n -> Big_int.to_string n
   | V_tuple vals -> "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
-  | V_list vals -> "[" ^ Util.string_of_list ", " string_of_value vals ^ "]"
+  | V_list vals -> "[|" ^ Util.string_of_list ", " string_of_value vals ^ "|]"
   | V_unit -> "()"
   | V_string str -> "\"" ^ str ^ "\""
+  | V_ref str -> "ref " ^ str
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
      "{" ^ Util.string_of_list ", " (fun (field, v) -> field ^ "=" ^ string_of_value v) (StringMap.bindings record) ^ "}"

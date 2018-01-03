@@ -826,6 +826,8 @@ exp :: 'E_' ::=
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
     | id                                                  :: :: id
+%    | ref id                                              :: :: ref
+    | deref exp                                           :: :: deref
     {{ com identifier }}
     | id ( exp1 , .. , expn )				  :: :: memory {{ com memory or register write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
