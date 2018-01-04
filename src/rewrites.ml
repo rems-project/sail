@@ -1354,7 +1354,7 @@ let id_is_unbound id env = match Env.lookup_id id env with
   | _ -> false
 
 let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
-  | LEXP_memory _ -> false
+  | LEXP_memory _ | LEXP_deref _ -> false
   | LEXP_id id
   | LEXP_cast (_, id) -> id_is_local_var id env
   | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
@@ -1363,7 +1363,7 @@ let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
   | LEXP_field (lexp,_) -> lexp_is_local lexp env
 
 let rec lexp_is_local_intro (LEXP_aux (lexp, _)) env = match lexp with
-  | LEXP_memory _ -> false
+  | LEXP_memory _ | LEXP_deref _ -> false
   | LEXP_id id
   | LEXP_cast (_, id) -> id_is_unbound id env
   | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
@@ -1378,7 +1378,7 @@ let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match annot with
 let rec rewrite_lexp_to_rhs (do_rewrite : tannot lexp -> bool) ((LEXP_aux(lexp,((l,_) as annot))) as le) =
   if do_rewrite le then
     match lexp with
-    | LEXP_id _ | LEXP_cast (_, _) | LEXP_tup _ -> (le, (fun exp -> exp))
+    | LEXP_id _ | LEXP_cast (_, _) | LEXP_tup _ | LEXP_deref _ -> (le, (fun exp -> exp))
     | LEXP_vector (lexp, e) ->
        let (lhs, rhs) = rewrite_lexp_to_rhs do_rewrite lexp in
        (lhs, (fun exp -> rhs (E_aux (E_vector_update (lexp_to_exp lexp, e, exp), annot))))

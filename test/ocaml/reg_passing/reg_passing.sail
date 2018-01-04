@@ -17,8 +17,8 @@ function f R = {
 val g : unit -> unit effect {rreg, wreg}
 
 function g () = {
-  f(R1);
-  f(R2);
+  f(ref R1);
+  f(ref R2);
 }
 
 val main : unit -> unit effect {rreg, wreg}
@@ -28,7 +28,7 @@ function main () = {
   R2 = 5;
   g ();
   R3 = 10;
-  f(R3);
+  f(ref R3);
   R2 = 20;
   output("R1 = ", R1);
   output("R2 = ", R2);

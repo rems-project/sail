@@ -1,0 +1,51 @@
+Testing register references
+Register 1
+Assigning 0x00000000
+Register 2
+Assigning 0x00000000
+Register 3
+Assigning 0x00000000
+1 = 0x00000000
+2 = 0x00000000
+3 = 0x00000000
+Register 1
+Assigning 0xCAFEBEEF
+1 = 0xCAFEBEEF
+2 = 0x00000000
+3 = 0x00000000
+Reading 1 to variable
+v = 0xCAFEBEEF
+Register 3
+Assigning 0x00BEEF00
+1 = 0xCAFEBEEF
+2 = 0x00000000
+3 = 0x00BEEF00
+Reading zero register
+0 = 0x00000000
+Register 2
+Assigning 0xDEADCAFE
+2 = 0xDEADCAFE
+Assigning register 2 to register 1
+Register 2
+Assigning 0xCAFEBEEF
+1 = 0xCAFEBEEF
+2 = 0xCAFEBEEF
+3 = 0x00BEEF00
+
+Testing slicing
+s = 0b111
+s = 0b01110
+s = 0xE
+b = 0b01110
+b = 0b01010
+b = 0b01111
+
+Testing bit aliasing
+CR0 = 0x0
+LT = 0b0
+Setting LT to bitone
+CR0 = 0x8
+LT = 0b1
+Setting CR0 to 0b0111
+CR0 = 0x7
+LT = 0b0

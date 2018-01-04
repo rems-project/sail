@@ -147,6 +147,7 @@ let kw_table =
      ("type",		         (fun x -> Typedef));
      ("undefined",               (fun x -> Undefined));
      ("union",			 (fun x -> Union));
+     ("newtype",                 (fun x -> Newtype));
      ("with",                    (fun x -> With));
      ("val",                     (fun x -> Val));
      ("repeat",                  (fun _ -> Repeat));

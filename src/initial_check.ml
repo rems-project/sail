@@ -1022,6 +1022,8 @@ let generate_undefineds vs_ids (Defs defs) =
   in
   let undefined_tu = function
     | Tu_aux (Tu_id id, _) -> mk_exp (E_id id)
+    | Tu_aux (Tu_ty_id (Typ_aux (Typ_tup typs, _), id), _) ->
+       mk_exp (E_app (id, List.map (fun _ -> mk_lit_exp L_undef) typs))
     | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_lit_exp L_undef]))
   in
   let undefined_td = function

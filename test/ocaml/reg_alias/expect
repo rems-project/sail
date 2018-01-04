@@ -1,0 +1,7 @@
+CR = 0x00
+CR = 0xCA
+CR.CR0 = 0xC
+CR.CR1 = 0b10
+CR.CR2 = 0b10
+CR = 0xFA
+CR = 0xF8

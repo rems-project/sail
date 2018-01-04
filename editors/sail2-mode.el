@@ -6,7 +6,7 @@
 (defconst sail2-keywords
   '("val" "function" "type" "struct" "union" "enum" "let" "var" "if" "then"
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
-    "overload" "cast" "sizeof" "constraint" "default" "assert"
+    "overload" "cast" "sizeof" "constraint" "default" "assert" "newtype"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach"))
 

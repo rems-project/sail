@@ -146,6 +146,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "real") = 0 -> string "Num.num"
   | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
+  | id when Id.compare id (mk_id "ref") = 0 -> string "ref"
   | id -> zencode ctx id
 
 let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
@@ -278,7 +279,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      (string "let rec loop () =" ^//^ loop_body)
      ^/^ string "in"
      ^/^ string "loop ()"
-  | E_lit _ | E_list _ | E_id _ | E_tuple _ -> ocaml_atomic_exp ctx exp
+  | E_lit _ | E_list _ | E_id _ | E_tuple _ | E_ref _ -> ocaml_atomic_exp ctx exp
   | E_for (id, exp_from, exp_to, exp_step, ord, exp_body) ->
      let loop_var = separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"] in
      let loop_mod =
@@ -326,6 +327,7 @@ and ocaml_fexp ctx (FE_aux (FE_Fexp (id, exp), _)) =
 and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   match exp_aux with
   | E_lit lit -> ocaml_lit lit
+  | E_ref id -> zencode ctx id
   | E_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
@@ -362,10 +364,13 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
           separate space [zencode ctx id; string ":="; traced_exp]
        | _ -> separate space [zencode ctx id; string ":="; ocaml_exp ctx exp]
      end
+  | LEXP_deref ref_exp ->
+     separate space [ocaml_atomic_exp ctx ref_exp; string ":="; ocaml_exp ctx exp]
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
 and ocaml_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
   | LEXP_cast _ | LEXP_id _ -> ocaml_atomic_lexp ctx lexp
+  | LEXP_deref exp -> ocaml_exp ctx exp
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
 and ocaml_atomic_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
@@ -550,6 +555,9 @@ let ocaml_string_of_abbrev ctx id typq typ =
   separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
   ^//^ ocaml_string_typ typ arg
 
+let ocaml_string_of_variant ctx id typq cases =
+  separate space [string "let"; ocaml_string_of id; string "_"; equals; string "\"VARIANT\""]
+
 let ocaml_typedef ctx (TD_aux (td_aux, _)) =
   match td_aux with
   | TD_record (id, _, typq, fields, _) ->
@@ -561,8 +569,10 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
   | TD_variant (id, _, _, cases, _) when string_of_id id = "exception" ->
      ocaml_exceptions ctx cases
   | TD_variant (id, _, typq, cases, _) ->
-     separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
-     ^//^ ocaml_cases ctx cases
+     (separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
+      ^//^ ocaml_cases ctx cases)
+     ^^ ocaml_def_end
+     ^^ ocaml_string_of_variant ctx id typq cases
   | TD_enum (id, _, ids, _) ->
      (separate space [string "type"; zencode ctx id; equals]
       ^//^ (bar ^^ space ^^ ocaml_enum ctx ids))

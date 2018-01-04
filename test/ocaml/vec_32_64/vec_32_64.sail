@@ -1,6 +1,6 @@
-(* This example is more testing the typechecker flow typing rather
+/* This example is more testing the typechecker flow typing rather
 than the ocaml backend, but it does test that recursive functions work
-correctly *)
+correctly */
 
 val get_size : unit -> {|32, 64|}
 
@@ -8,7 +8,7 @@ function get_size () = 32
 
 val only64 = { ocaml: "(fun _ -> ())" } : bits(64) -> unit
 
-val zeros : forall 'n. atom('n) -> vector('n - 1, 'n, dec, bit)
+val zeros : forall 'n. atom('n) -> vector('n, dec, bit)
 
 function zeros n =
   if (n == 1 + 0) then 0b0 else 0b0 @ zeros('n - 1)

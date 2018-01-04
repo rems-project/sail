@@ -450,7 +450,8 @@ end = struct
 
   let add_overloads id ids env =
     typ_print ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]");
-    { env with overloads = Bindings.add id ids env.overloads }
+    let existing = try Bindings.find id env.overloads with Not_found -> [] in
+    { env with overloads = Bindings.add id (existing @ ids) env.overloads }
 
   let add_smt_op id str env =
     typ_print ("Adding smt binding " ^ string_of_id id ^ " to " ^ str);
@@ -2496,6 +2497,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
         subtyp l env typ vtyp; annot_lexp (LEXP_deref inferred_exp) typ, env
      | Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ vtyp, _)]), _) when string_of_id r = "register" ->
         subtyp l env typ vtyp; annot_lexp_effect (LEXP_deref inferred_exp) typ (mk_effect [BE_wreg]), env
+     | _ ->
+        typ_error l (string_of_typ typ  ^ " must be a ref or register type in (*" ^ string_of_exp exp ^ ")")
      end
   | LEXP_id v ->
      begin match Env.lookup_id v env with

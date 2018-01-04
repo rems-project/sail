@@ -154,7 +154,7 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ If_ In Inc Let_ Int Order Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
-%token Undefined Union With Val Constraint Throw Try Catch Exit
+%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Record Mutual Var Ref
 
@@ -962,8 +962,12 @@ atomic_exp:
     { mk_exp (E_cast ($3, $1)) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
+  | id MinusGt id Unit
+    { mk_exp (E_app (prepend_id "_mod_" $3, [mk_exp (E_ref $1) $startpos($1) $endpos($1)])) $startpos $endpos }
   | id MinusGt id Lparen exp_list Rparen
     { mk_exp (E_app (prepend_id "_mod_" $3, mk_exp (E_ref $1) $startpos($1) $endpos($1) :: $5)) $startpos $endpos }
+  | atomic_exp Dot id Unit
+    { mk_exp (E_app (prepend_id "_mod_" $3, [$1])) $startpos $endpos }
   | atomic_exp Dot id Lparen exp_list Rparen
     { mk_exp (E_app (prepend_id "_mod_" $3, $1 :: $5)) $startpos $endpos }
   | atomic_exp Dot id
@@ -1054,6 +1058,10 @@ type_def:
     { mk_td (TD_enum ($2, mk_namesectn, $4, false)) $startpos $endpos }
   | Enum id Eq Lcurly enum Rcurly
     { mk_td (TD_enum ($2, mk_namesectn, $5, false)) $startpos $endpos }
+  | Newtype id Eq type_union
+    { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], false)) $startpos $endpos }
+  | Newtype id typquant Eq type_union
+    { mk_td (TD_variant ($2, mk_namesectn, $3, [$5], false)) $startpos $endpos }
   | Union id Eq Lcurly type_unions Rcurly
     { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Union id typquant Eq Lcurly type_unions Rcurly

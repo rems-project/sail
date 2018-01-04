@@ -1,6 +1,6 @@
 default Order dec
 
-type bits ('n : Int) = vector('n - 1, 'n, dec, bit)
+type bits ('n : Int) = vector('n, dec, bit)
 
 infix 4 ==
 
@@ -20,7 +20,7 @@ val eq_real = "eq_real" : (real, real) -> bool
 
 val eq_anything = "(fun (x, y) -> x = y)" : forall ('a : Type). ('a, 'a) -> bool
 
-val length = "length" : forall 'n ('a : Type). vector('n - 1, 'n, dec, 'a) -> atom('n)
+val length = "length" : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
 
 overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
 
@@ -33,24 +33,24 @@ val vector_subrange_B = "subrange" : forall ('n : Int) ('m : Int) ('o : Int).
 overload vector_subrange = {vector_subrange_A, vector_subrange_B}
 
 val vector_access_A = "access" : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
-  (vector('n - 1, 'n, dec, 'a), atom('m)) -> 'a
+  (vector('n, dec, 'a), atom('m)) -> 'a
 
 val vector_access_B = "access" : forall ('n : Int) ('a : Type).
-  (vector('n - 1, 'n, dec, 'a), int) -> 'a
+  (vector('n, dec, 'a), int) -> 'a
 
 overload vector_access = {vector_access_A, vector_access_B}
 
 val vector_update = "update" : forall 'n ('a : Type).
-  (vector('n - 1, 'n, dec, 'a), int, 'a) -> vector('n - 1, 'n, dec, 'a)
+  (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
 
 val vector_update_subrange = "update_subrange" : forall 'n 'm 'o.
   (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
 val vcons : forall ('n : Int) ('a : Type).
-  ('a, vector('n - 1, 'n, dec, 'a)) -> vector('n, 'n + 1, dec, 'a)
+  ('a, vector('n, dec, 'a)) -> vector('n + 1, dec, 'a)
 
 val append = "append" : forall ('n : Int) ('m : Int) ('a : Type).
-  (vector('n - 1, 'n, dec, 'a), vector('m - 1, 'm, dec, 'a)) -> vector('n + 'm - 1, 'n + 'm, dec, 'a)
+  (vector('n, dec, 'a), vector('m, dec, 'a)) -> vector('n + 'm, dec, 'a)
 
 val not_bool = "not" : bool -> bool
 
