@@ -956,11 +956,11 @@ let initial_kind_env =
   ]
 
 let exp_of_string order str =
-  let exp = Parser2.exp_eof Lexer2.token (Lexing.from_string str) in
+  let exp = Parser.exp_eof Lexer.token (Lexing.from_string str) in
   to_ast_exp initial_kind_env order exp
 
 let typschm_of_string order str =
-  let typschm = Parser2.typschm_eof Lexer2.token (Lexing.from_string str) in
+  let typschm = Parser.typschm_eof Lexer.token (Lexing.from_string str) in
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
@@ -1098,5 +1098,5 @@ let process_ast order defs =
     end
 
 let ast_of_def_string order str =
-  let def = Parser2.def_eof Lexer2.token (Lexing.from_string str) in
+  let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
   process_ast order (Defs [def])

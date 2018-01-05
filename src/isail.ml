@@ -53,7 +53,7 @@ open Sail
 open Ast
 open Ast_util
 open Interpreter
-open Pretty_print_sail2
+open Pretty_print_sail
 
 type mode =
   | Evaluation of frame

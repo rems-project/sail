@@ -49,7 +49,7 @@
 (**************************************************************************)
 
 {
-open Parser2
+open Parser
 module Big_int = Nat_big_num
 open Parse_ast
 module M = Map.Make(String)

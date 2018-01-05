@@ -510,7 +510,7 @@ let rec eval_frame ast = function
         print_endline ("Returning value: " ^ string_of_value (value_of_exp v) |> Util.cyan |> Util.clear);
         Step (stack_string head, (stack_state head, snd state), stack_cont head (value_of_exp v), stack')
      | Pure exp', _ ->
-        let out' = Pretty_print_sail2.to_string (Pretty_print_sail2.doc_exp exp') in
+        let out' = Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp') in
         Step (out', state, step exp', stack)
      | Yield (Call(id, vals, cont)), _ ->
         print_endline ("Calling " ^ string_of_id id |> Util.cyan |> Util.clear);

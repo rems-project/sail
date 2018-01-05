@@ -186,7 +186,7 @@ let main() =
     let ast = convert_ast Ast_util.inc_ord ast in
 
     if !opt_convert
-    then (Pretty_print_sail2.pp_defs stdout ast; exit 0)
+    then (Pretty_print_sail.pp_defs stdout ast; exit 0)
     else ();
 
     let (ast, type_envs) = check_ast ast in
@@ -221,7 +221,7 @@ let main() =
          ()
        else ());
       (if !(opt_print_verbose)
-       then ((Pretty_print_sail2.pp_defs stdout) ast)
+       then ((Pretty_print_sail.pp_defs stdout) ast)
        else ());
       (if !(opt_print_lem_ast)
        then output "" Lem_ast_out [out_name,ast]
@@ -229,7 +229,7 @@ let main() =
       (if !(opt_print_sil)
        then
          let ast = rewrite_ast_sil ast in
-         Pretty_print_sail2.pp_defs stdout ast
+         Pretty_print_sail.pp_defs stdout ast
        else ());
       (if !(opt_print_ocaml)
        then

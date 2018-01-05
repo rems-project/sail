@@ -67,13 +67,13 @@ let get_lexbuf f =
 let parse_file (f : string) : Parse_ast.defs =
   let lexbuf, in_chan = get_lexbuf f in
     try
-      let ast = Parser2.file Lexer2.token lexbuf in
+      let ast = Parser.file Lexer.token lexbuf in
       close_in in_chan; ast
     with
-    | Parser2.Error ->
+    | Parser.Error ->
        let pos = Lexing.lexeme_start_p lexbuf in
        raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "no information")))
-    | Lexer2.LexError(s,p) ->
+    | Lexer.LexError(s,p) ->
        raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
@@ -92,7 +92,7 @@ let opt_dno_cast = ref false
 let check_ast (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
   let ienv = if !opt_dno_cast then Type_check.Env.no_casts Type_check.initial_env else Type_check.initial_env in
   let ast, env = Type_check.check ienv defs in
-  let () = if !opt_ddump_tc_ast then Pretty_print_sail2.pp_defs stdout ast else () in
+  let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 
@@ -103,7 +103,7 @@ let opt_auto_mono = ref false
 let monomorphise_ast locs type_env ast =
   let ast = Monomorphise.monomorphise (!opt_lem_mwords) (!opt_auto_mono) (!opt_dmono_analysis)
     locs type_env ast in
-  let () = if !opt_ddump_raw_mono_ast then Pretty_print_sail2.pp_defs stdout ast else () in
+  let () = if !opt_ddump_raw_mono_ast then Pretty_print_sail.pp_defs stdout ast else () in
   let ienv = Type_check.Env.no_casts Type_check.initial_env in
   Type_check.check ienv ast
 
@@ -191,7 +191,7 @@ let rewrite_step defs (name,rewriter) =
         let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
         (* output "" Lem_ast_out [filename, defs]; *)
         let ((ot,_, _) as ext_ot) = open_output_with_check_unformatted filename in
-        Pretty_print_sail2.pp_defs ot defs;
+        Pretty_print_sail.pp_defs ot defs;
         close_output_with_check ext_ot;
         opt_ddump_rewrite_ast := Some (f, i + 1)
       end

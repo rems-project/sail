@@ -625,7 +625,7 @@ let merge_mutrecs defs =
       | DEF_fundef fundef -> fundef :: fundefs
       | DEF_internal_mutrec fundefs' -> fundefs' @ fundefs
       | _ ->
-        (* let _ = Pretty_print_sail2.pp_defs stderr (Defs [def]) in *)
+        (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
         raise (Reporting_basic.err_unreachable (def_loc def)
           "Trying to merge non-function definition with mutually recursive functions") in
     (* let _ = Printf.eprintf " - Merging %s (using %s)\n" (set_to_string binds') (set_to_string uses') in *)
