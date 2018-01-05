@@ -155,6 +155,7 @@ let kw_table =
      ("while",                   (fun _ -> While));
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
+     ("bitfield",                (fun _ -> Bitfield));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));

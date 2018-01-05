@@ -3453,23 +3453,6 @@ let mk_synonym typq typ =
                                       ^ " in type synonym " ^ string_of_typ typ
                                       ^ " with " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env))
 
-let check_typedef env (TD_aux (tdef, (l, _))) =
-  let td_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Typedef") in
-  match tdef with
-  | TD_abbrev(id, nmscm, (TypSchm_aux (TypSchm_ts (typq, typ), _))) ->
-     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (mk_synonym typq typ) env
-  | TD_record(id, nmscm, typq, fields, _) ->
-     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_record id typq fields env
-  | TD_variant(id, nmscm, typq, arms, _) ->
-     let env =
-       env
-       |> Env.add_variant id (typq, arms)
-       |> (fun env -> List.fold_left (fun env tu -> check_type_union env id typq tu) env arms)
-     in
-     [DEF_type (TD_aux (tdef, (l, None)))], env
-  | TD_enum(id, nmscm, ids, _) ->
-     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
-
 let check_kinddef env (KD_aux (kdef, (l, _))) =
   let kd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented kind def") in
   match kdef with
@@ -3478,7 +3461,42 @@ let check_kinddef env (KD_aux (kdef, (l, _))) =
      Env.add_num_def id nexp env
   | _ -> kd_err ()
 
-let rec check_def env def =
+let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
+  fun env (TD_aux (tdef, (l, _))) ->
+  let td_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Typedef") in
+  match tdef with
+  | TD_abbrev (id, nmscm, (TypSchm_aux (TypSchm_ts (typq, typ), _))) ->
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (mk_synonym typq typ) env
+  | TD_record (id, nmscm, typq, fields, _) ->
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_record id typq fields env
+  | TD_variant (id, nmscm, typq, arms, _) ->
+     let env =
+       env
+       |> Env.add_variant id (typq, arms)
+       |> (fun env -> List.fold_left (fun env tu -> check_type_union env id typq tu) env arms)
+     in
+     [DEF_type (TD_aux (tdef, (l, None)))], env
+  | TD_enum (id, nmscm, ids, _) ->
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
+  | TD_bitfield (id, typ, ranges) ->
+     let typ = Env.expand_synonyms env typ in
+     begin
+       match typ with
+       (* The type of a bitfield must be a constant-width bitvector *)
+       | Typ_aux (Typ_app (v, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant size, _)), _);
+                               Typ_arg_aux (Typ_arg_order order, _);
+                               Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id b, _)), _)]), _)
+            when string_of_id v = "vector" && string_of_id b = "bit" ->
+          let size = Big_int.to_int size in
+          let (Defs defs), env = check' env (Bitfield.macro id size order ranges) in
+          defs, env
+       | _ ->
+          typ_error l "Bad bitfield type"
+     end
+  | _ -> td_err ()
+
+and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
+  fun env def ->
   let cd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Case") in
   match def with
   | DEF_kind kdef -> check_kinddef env kdef
@@ -3507,7 +3525,8 @@ let rec check_def env def =
      let defs, env = check_def env def
      in List.map (fun def -> DEF_comm (DC_comm_struct def)) defs, env
 
-let rec check' env (Defs defs) =
+and check' : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
+  fun env (Defs defs) ->
   match defs with
   | [] -> (Defs []), env
   | def :: defs ->
@@ -3515,7 +3534,8 @@ let rec check' env (Defs defs) =
      let (Defs defs, env) = check' env (Defs defs) in
      (Defs (def @ defs)), env
 
-let check env defs =
+let check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
+  fun env defs ->
   try check' env defs with
   | Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))
 

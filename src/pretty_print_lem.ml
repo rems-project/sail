@@ -1150,36 +1150,6 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
               fromInterpValuePP ^^ hardline ^^ hardline ^^
                 fromToInterpValuePP ^^ hardline
             else empty)
-  | TD_register(id,n1,n2,rs) ->
-    match n1, n2 with
-    | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
-       let dir_b = i1 < i2 in
-       let dir = (if dir_b then "true" else "false") in
-       let dir_suffix = (if dir_b then "_inc" else "_dec") in
-       let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
-       let size = if dir_b then Big_int.add (Big_int.sub i2 i1) (Big_int.of_int 1) else Big_int.add (Big_int.sub i1 i2) (Big_int.of_int 1) in
-       let vtyp = vector_typ (nconstant size) ord bit_typ in
-       let tannot = doc_tannot_lem sequential mwords false vtyp in
-       let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id_lem id);
-                                                       doc_range_lem r;]) in
-       let doc_rids = group (separate_map (semi ^^ (break 1)) doc_rid rs) in
-       doc_op equals
-         (concat [string "type";space;doc_id_lem id])
-         (doc_typ_lem sequential mwords vtyp)
-       ^^ hardline ^^
-       doc_op equals
-         (concat [string "let";space;string "cast_";doc_id_lem id;space;string "reg"])
-         (string "reg")
-       ^^ hardline ^^
-       doc_op equals
-         (concat [string "let";space;string "cast_to_";doc_id_lem id;space;string "reg"])
-         (string "reg")
-       ^^ hardline ^^
-         doc_op equals
-           (concat [string "let";space;string "build_";doc_id_lem id;space;string "regname"])
-           (string "Register" ^^ space ^^
-              align (separate space [string "regname"; doc_int size; doc_int i1; string dir;
-                                     break 0 ^^ brackets (align doc_rids)]))
     | _ -> raise (Reporting_basic.err_unreachable l "register with non-constant indices")
 
 let doc_rec_lem (Rec_aux(r,_)) = match r with
@@ -1354,7 +1324,8 @@ let doc_spec_lem sequential mwords (VS_aux (valspec,annot)) =
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 
-let find_regtypes defs =
+let find_regtypes defs = []
+                           (*
   List.fold_left
     (fun acc def ->
       match def with
@@ -1362,6 +1333,7 @@ let find_regtypes defs =
          (tname, (n1, n2, fields)) :: acc
       | _ -> acc
     ) [] defs
+                            *)
 
 let is_field_accessor regtypes fdef =
   let is_field_of regtyp field =

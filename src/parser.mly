@@ -1247,8 +1247,6 @@ type_def:
     { tdloc (TD_enum($2, mk_namesectn (), $6,false)) }
   | Typedef tid name_sect Eq Enumerate Lcurly enum_body Rcurly
     { tdloc (TD_enum($2,$3,$7,false)) }
-  | Typedef tid Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
-    { tdloc (TD_register($2, $7, $9, $12)) }
 
 default_typ:
   | Default atomic_kind tyvar

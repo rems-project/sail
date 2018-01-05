@@ -426,8 +426,11 @@ type_def_aux  :: 'TD_' ::=
   | typedef id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
 
-  | typedef  id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
-:: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
+  | bitfield id : typ = { id1 : index_range1 , ... , idn : index_rangen } :: :: bitfield
+    {{ com register mutable bitfield type definition }} {{ texlong }}
+
+% | typedef id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn }
+% :: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
 
 
 % the D(eprecated) forms here should be removed; they add complexity for no purpose.  The nexp abbreviation form should have better syntax.

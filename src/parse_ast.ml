@@ -429,8 +429,7 @@ type_def_aux =  (* Type definition body *)
  | TD_record of id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
  | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
  | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * atyp * atyp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
+ | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
 type 
 val_spec_aux =  (* Value type specification *)

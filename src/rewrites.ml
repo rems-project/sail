@@ -1527,46 +1527,8 @@ let rewrite_register_ref_writes (Defs defs) =
     | None -> E_assign (lexp, exp) in
   let rewrite_exp _ = fold_exp { id_exp_alg with e_assign = e_assign } in
 
-  let generate_field_accessors l env id n1 n2 fields =
-    let i1, i2 = match n1, n2 with
-      | Nexp_aux(Nexp_constant i1, _),Nexp_aux(Nexp_constant i2, _) -> i1, i2
-      | _ -> raise (Reporting_basic.err_typ l
-         ("Non-constant indices in register type " ^ string_of_id id)) in
-    let dir_b = i1 < i2 in
-    let dir = (if dir_b then "true" else "false") in
-    let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
-    let size = if dir_b then Big_int.succ (Big_int.sub i2 i1) else Big_int.succ (Big_int.sub i1 i2) in
-    let rtyp = mk_id_typ id in
-    let vtyp = vector_typ (nconstant size) ord bit_typ in
-    let accessors (fr, fid) =
-      let i, j = match fr with
-        | BF_aux (BF_single i, _) -> (i, i)
-        | BF_aux (BF_range (i, j), _) -> (i, j)
-        | _ -> raise (Reporting_basic.err_unreachable l "unsupported field type") in
-      let mk_num_exp i = mk_lit_exp (L_num i) in
-      let reg_pat, reg_env = bind_pat env (mk_pat (P_typ (rtyp, mk_pat (P_id (mk_id "reg"))))) rtyp in
-      let inferred_get = infer_exp reg_env (mk_exp (E_vector_subrange
-        (mk_exp (E_id (mk_id "reg")), mk_num_exp i, mk_num_exp j))) in
-      let ftyp = typ_of inferred_get in
-      let v_pat, v_env = bind_pat reg_env (mk_pat (P_typ (ftyp, mk_pat (P_id (mk_id "v"))))) ftyp in
-      let inferred_set = infer_exp v_env (mk_exp (E_vector_update_subrange
-        (mk_exp (E_id (mk_id "reg")), mk_num_exp i, mk_num_exp j, mk_exp (E_id (mk_id "v"))))) in
-      let set_args = P_aux (P_tup [reg_pat; v_pat], (l, Some (env, tuple_typ [rtyp; ftyp], no_effect))) in
-      let fsuffix = "_" ^ string_of_id id ^ "_" ^ string_of_id fid in
-      let rec_opt = Rec_aux (Rec_nonrec, l) in
-      let tannot ret_typ = Typ_annot_opt_aux (Typ_annot_opt_some (TypQ_aux (TypQ_tq [], l), ret_typ), l) in
-      let eff_opt = Effect_opt_aux (Effect_opt_pure, l) in
-      let mk_funcl id pat exp = FCL_aux (FCL_Funcl (mk_id id, Pat_aux (Pat_exp (pat, exp),(l,None))), (l, None)) in
-      let mk_fundef id pat exp ret_typ = DEF_fundef (FD_aux (FD_function (rec_opt, tannot ret_typ, eff_opt, [mk_funcl id pat exp]), (l, None))) in
-      [mk_fundef ("get" ^ fsuffix) reg_pat inferred_get ftyp;
-      mk_fundef ("set" ^ fsuffix) set_args inferred_set (typ_of inferred_set)] in
-    List.concat (List.map accessors fields) in
-
   let rewriters = { rewriters_base with rewrite_exp = rewrite_exp } in
   let rec rewrite ds = match ds with
-    | (DEF_type (TD_aux (TD_register (id, n1, n2, fields), (l, Some (env, _, _)))) as d) :: ds ->
-       let (Defs d), env = check env (Defs [d]) in
-       d @ (generate_field_accessors l env id n1 n2 fields) @ rewrite ds
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds)
     | [] -> [] in
   Defs (rewrite (write_reg_spec @ defs))
@@ -1883,7 +1845,7 @@ let rewrite_type_def_typs rw_typ rw_typquant rw_typschm (TD_aux (td, annot)) =
   | TD_variant (id, nso, typq, tus, flag) ->
      TD_aux (TD_variant (id, nso, rw_typquant typq, List.map (rewrite_type_union_typs rw_typ) tus, flag), annot)
   | TD_enum (id, nso, ids, flag) -> TD_aux (TD_enum (id, nso, ids, flag), annot)
-  | TD_register (id, n1, n2, ranges) -> TD_aux (TD_register (id, n1, n2, ranges), annot)
+  | TD_bitfield _ -> assert false (* Processed before re-writing *)
 
 (* FIXME: other reg_dec types *)
 let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
@@ -2146,8 +2108,8 @@ let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list 
   match l with
   | [] -> k []
   | exp :: exps -> f exp (fun exp -> mapCont f exps (fun exps -> k (exp :: exps)))
-                
-let rewrite_defs_letbind_effects  =  
+
+let rewrite_defs_letbind_effects  =
 
   let rec value ((E_aux (exp_aux,_)) as exp) =
     not (effectful exp || updates_vars exp)
@@ -2169,7 +2131,7 @@ let rewrite_defs_letbind_effects  =
 
   and n_fexp (fexp : 'a fexp) (k : 'a fexp -> 'a exp) : 'a exp =
     let (FE_aux (FE_Fexp (id,exp),annot)) = fexp in
-    n_exp_name exp (fun exp -> 
+    n_exp_name exp (fun exp ->
     k (fix_eff_fexp (FE_aux (FE_Fexp (id,exp),annot))))
 
   and n_fexpL (fexps : 'a fexp list) (k : 'a fexp list -> 'a exp) : 'a exp =
@@ -2209,6 +2171,9 @@ let rewrite_defs_letbind_effects  =
     let (LEXP_aux (lexp_aux,annot)) = lexp in
     match lexp_aux with
     | LEXP_id _ -> k lexp
+    | LEXP_deref exp ->
+       n_exp exp (fun exp ->
+       k (fix_eff_lexp (LEXP_aux (LEXP_deref exp, annot))))
     | LEXP_memory (id,es) ->
        n_exp_nameL es (fun es -> 
        k (fix_eff_lexp (LEXP_aux (LEXP_memory (id,es),annot))))
@@ -2254,6 +2219,7 @@ let rewrite_defs_letbind_effects  =
     | E_block es -> failwith "E_block should have been removed till now"
     | E_nondet _ -> failwith "E_nondet not supported"
     | E_id id -> k exp
+    | E_ref id -> k exp
     | E_lit _ -> k exp
     | E_cast (typ,exp') ->
        n_exp_name exp' (fun exp' ->

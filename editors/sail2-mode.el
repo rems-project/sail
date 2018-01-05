@@ -8,7 +8,7 @@
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
     "overload" "cast" "sizeof" "constraint" "default" "assert" "newtype"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and"
-    "throw" "clause" "as" "repeat" "until" "while" "do" "foreach"))
+    "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"))
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "inc" "dec"
@@ -31,9 +31,10 @@
 
 (defconst sail2-mode-syntax-table
   (let ((st (make-syntax-table)))
+    (modify-syntax-entry ?> "." st)
     (modify-syntax-entry ?_ "w" st)
     (modify-syntax-entry ?' "w" st)
-    (modify-syntax-entry ?*  ". 23" st)
+    (modify-syntax-entry ?* ". 23" st)
     (modify-syntax-entry ?/ ". 124b" st)
     (modify-syntax-entry ?\n "> b" st)
     st)

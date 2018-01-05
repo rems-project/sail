@@ -691,13 +691,12 @@ let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (unit type_de
     let td_enum = TD_aux(TD_enum(id,to_ast_namescm name_scm_opt,enums,false),(l,())) in (* Add check that all enums have unique names *)
     let k_env = List.fold_right (fun k k_env -> Envmap.insert k_env (k,{k=K_Nat})) keys (Envmap.insert k_env (key,{k=K_Typ})) in
     td_enum, (names,k_env,def_ord)
-  | Parse_ast.TD_register(id,t1,t2,ranges) -> 
+  | Parse_ast.TD_bitfield(id,typ,ranges) ->
     let id = to_ast_id id in
     let key = id_to_string id in
-    let n1 = to_ast_nexp k_env t1 in
-    let n2 = to_ast_nexp k_env t2 in
-    let ranges = List.map (fun (range,id) -> (to_ast_range range),to_ast_id id) ranges in
-    TD_aux(TD_register(id,n1,n2,ranges),(l,())), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
+    let typ = to_ast_typ k_env def_ord typ in
+    let ranges = List.map (fun (id, range) -> (to_ast_id id, to_ast_range range)) ranges in
+    TD_aux(TD_bitfield(id,typ,ranges),(l,())), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
 
 let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (unit kind_def) envs_out =
   match td with
@@ -1000,25 +999,34 @@ let undefined_typschm id typq =
     let ret_typ = app_typ id (List.concat (List.map quant_item_arg qis)) in
     mk_typschm typq (mk_typ (Typ_fn (arg_typ, ret_typ, mk_effect [BE_undef])))
 
+let have_undefined_builtins = ref false
+
 let generate_undefineds vs_ids (Defs defs) =
   let gen_vs id str =
     if (IdSet.mem id vs_ids) then [] else [val_spec_of_string dec_ord id str]
   in
-  let undefined_builtins = List.concat
-    [gen_vs (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
-     gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
-     gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
-     gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
-     gen_vs (mk_id "undefined_nat") "unit -> nat effect {undef}";
-     gen_vs (mk_id "undefined_real") "unit -> real effect {undef}";
-     gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
-     gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
-     gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
-     (* FIXME: How to handle inc/dec order correctly? *)
-     gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type). (atom('n), 'a) -> vector('n, dec,'a) effect {undef}";
-     (* Only used with lem_mwords *)
-     gen_vs (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
-     gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
+  let undefined_builtins =
+    if !have_undefined_builtins then
+      []
+    else
+      begin
+        have_undefined_builtins := true;
+        List.concat
+          [gen_vs (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
+           gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
+           gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
+           gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
+           gen_vs (mk_id "undefined_nat") "unit -> nat effect {undef}";
+           gen_vs (mk_id "undefined_real") "unit -> real effect {undef}";
+           gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
+           gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
+           gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
+           (* FIXME: How to handle inc/dec order correctly? *)
+           gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type). (atom('n), 'a) -> vector('n, dec,'a) effect {undef}";
+           (* Only used with lem_mwords *)
+           gen_vs (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
+           gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
+      end
   in
   let undefined_tu = function
     | Tu_aux (Tu_id id, _) -> mk_exp (E_id id)
@@ -1088,3 +1096,7 @@ let process_ast order defs =
       let ast = generate_undefineds vs_ids ast in
       generate_initialize_registers vs_ids ast
     end
+
+let ast_of_def_string order str =
+  let def = Parser2.def_eof Lexer2.token (Lexing.from_string str) in
+  process_ast order (Defs [def])

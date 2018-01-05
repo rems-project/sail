@@ -93,6 +93,7 @@ let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
 let mk_nc nc n m = NC_aux (nc, loc n m)
 let mk_sd s n m = SD_aux (s, loc n m)
+let mk_ir r n m = BF_aux (r, loc n m)
 
 let mk_funcl f n m = FCL_aux (f, loc n m)
 let mk_fun fn n m = FD_aux (fn, loc n m)
@@ -154,7 +155,7 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ If_ In Inc Let_ Int Order Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
-%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit
+%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Record Mutual Var Ref
 
@@ -185,8 +186,10 @@ let rec desugar_rchain chain s e =
 %start file
 %start typschm_eof
 %start exp_eof
+%start def_eof
 %type <Parse_ast.typschm> typschm_eof
 %type <Parse_ast.exp> exp_eof
+%type <Parse_ast.def> def_eof
 %type <Parse_ast.defs> file
 
 %%
@@ -1045,6 +1048,24 @@ funcls:
   | id funcl_patexp And funcls
     { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos :: $4 }
 
+index_range:
+  | Num
+    { mk_ir (BF_single $1) $startpos $endpos }
+  | Num DotDot Num
+    { mk_ir (BF_range ($1, $3)) $startpos $endpos }
+
+r_id_def:
+  | id Colon index_range
+    { $1, $3 }
+
+r_def_body:
+  | r_id_def
+    { [$1] }
+  | r_id_def Comma
+    { [$1] }
+  | r_id_def Comma r_def_body
+    { $1 :: $3 }
+
 type_def:
   | Typedef id typquant Eq typ
     { mk_td (TD_abbrev ($2, mk_namesectn, mk_typschm $3 $5 $startpos($3) $endpos)) $startpos $endpos }
@@ -1066,6 +1087,8 @@ type_def:
     { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Union id typquant Eq Lcurly type_unions Rcurly
     { mk_td (TD_variant ($2, mk_namesectn, $3, $6, false)) $startpos $endpos }
+  | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
+    { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }
 
 enum_bar:
   | id
@@ -1196,6 +1219,10 @@ defs_list:
     { [$1] }
   | def defs_list
     { $1::$2 }
+
+def_eof:
+  | def Eof
+    { $1 }
 
 defs:
   | defs_list

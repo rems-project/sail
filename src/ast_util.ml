@@ -726,6 +726,7 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   | LEXP_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
   | LEXP_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
   | LEXP_memory (id, exps) -> rewrap (E_app (id, exps))
+  | LEXP_deref exp -> rewrap (E_app (mk_id "reg_deref", [exp]))
 
 let destruct_range (Typ_aux (typ_aux, _)) =
   match typ_aux with

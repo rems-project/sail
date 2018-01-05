@@ -432,8 +432,8 @@ let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
     typ_variants consider_var bindings tunions
   | TD_enum(id,_,ids,_) ->
     Nameset.of_list (List.map string_of_id (id::ids)),mt
-  | TD_register(id,n1,n2,_) ->
-    init_env (string_of_id id), fv_of_nexp consider_var mt (fv_of_nexp consider_var mt mt n1) n2
+  | TD_bitfield(id,typ,_) ->
+    init_env (string_of_id id), Nameset.empty (* fv_of_typ consider_var mt typ *)
 
 let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
   match t with

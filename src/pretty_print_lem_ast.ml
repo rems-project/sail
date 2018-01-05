@@ -526,11 +526,11 @@ let pp_lem_typdef ppf (TD_aux(td,(l,annot))) =
         let pp_id_semi ppf id = fprintf ppf "%a%a " pp_lem_id id kwd ";" in
         fprintf ppf "@[<0>(%a %a %a [%a] false)@]"
           kwd "TD_enum" pp_lem_id id pp_lem_namescm ns (list_pp pp_id_semi pp_lem_id) enums
-      | TD_register(id,n1,n2,rs) ->
-        let pp_rid ppf (r,id) = fprintf ppf "(%a, %a)%a " pp_lem_range r pp_lem_id id kwd ";" in
+      | TD_bitfield(id,typ,rs) ->
+        let pp_rid ppf (id, r) = fprintf ppf "(%a, %a)%a " pp_lem_range r pp_lem_id id kwd ";" in
         let pp_rids = (list_pp pp_rid pp_rid) in
-        fprintf ppf "@[<0>(%a %a %a %a [%a])@]"
-          kwd "TD_register" pp_lem_id id pp_lem_nexp n1 pp_lem_nexp n2 pp_rids rs
+        fprintf ppf "@[<0>(%a %a %a [%a])@]"
+          kwd "TD_bitfield" pp_lem_id id pp_lem_typ typ pp_rids rs
   in
   fprintf ppf "@[<0>(TD_aux %a (%a, %a))@]" print_td td pp_lem_l l pp_annot annot
 
