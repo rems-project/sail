@@ -48,7 +48,6 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-let opt_new_parser = ref false
 let opt_lem_sequential = ref false
 let opt_lem_mwords = ref false
 
@@ -66,43 +65,15 @@ let get_lexbuf f =
   lexbuf, in_chan
 
 let parse_file (f : string) : Parse_ast.defs =
-  if not !opt_new_parser
-  then
-    let scanbuf, in_chan = get_lexbuf f in
-    let type_names =
-      try
-        Pre_parser.file Pre_lexer.token scanbuf
-      with
-      | Parsing.Parse_error ->
-         let pos = Lexing.lexeme_start_p scanbuf in
-         raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "pre")))
-      | Parse_ast.Parse_error_locn(l,m) ->
-         raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
-      | Lexer.LexError(s,p) ->
-         raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
-    in
-    close_in in_chan;
-    Lexer.custom_type_names := !Lexer.custom_type_names @ type_names
-  else ();
-
   let lexbuf, in_chan = get_lexbuf f in
     try
-      let ast =
-        if !opt_new_parser
-        then Parser2.file Lexer2.token lexbuf
-        else Parser.file Lexer.token lexbuf
-      in
+      let ast = Parser2.file Lexer2.token lexbuf in
       close_in in_chan; ast
     with
     | Parser2.Error ->
        let pos = Lexing.lexeme_start_p lexbuf in
        raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "no information")))
-    | Parsing.Parse_error ->
-       let pos = Lexing.lexeme_start_p lexbuf in
-       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "main")))
-    | Parse_ast.Parse_error_locn(l,m) ->
-       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
-    | Lexer.LexError(s,p) ->
+    | Lexer2.LexError(s,p) ->
        raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
@@ -132,7 +103,7 @@ let opt_auto_mono = ref false
 let monomorphise_ast locs type_env ast =
   let ast = Monomorphise.monomorphise (!opt_lem_mwords) (!opt_auto_mono) (!opt_dmono_analysis)
     locs type_env ast in
-  let () = if !opt_ddump_raw_mono_ast then Pretty_print.pp_defs stdout ast else () in
+  let () = if !opt_ddump_raw_mono_ast then Pretty_print_sail2.pp_defs stdout ast else () in
   let ienv = Type_check.Env.no_casts Type_check.initial_env in
   Type_check.check ienv ast
 

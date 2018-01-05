@@ -118,9 +118,6 @@ let options = Arg.align ([
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " (experimental) turn off effect checking");
-  ( "-new_parser",
-    Arg.Set Process_file.opt_new_parser,
-    " (experimental) use new parser");
   ( "-convert",
     Arg.Set opt_convert,
     " (experimental) convert sail to new syntax for use with -new_parser");
@@ -224,7 +221,7 @@ let main() =
          ()
        else ());
       (if !(opt_print_verbose)
-       then ((Pretty_print.pp_defs stdout) ast)
+       then ((Pretty_print_sail2.pp_defs stdout) ast)
        else ());
       (if !(opt_print_lem_ast)
        then output "" Lem_ast_out [out_name,ast]

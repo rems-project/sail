@@ -51,11 +51,6 @@
 open Ast
 open Type_check
 
-(* Prints the defs following source syntax *)
-val pp_defs : out_channel -> 'a defs -> unit 
-val pp_exp : Buffer.t -> 'a exp -> unit
-val pat_to_string : 'a pat -> string
-
 (* Prints on formatter the defs as Lem Ast nodes *)
 val pp_lem_defs : Format.formatter -> tannot defs -> unit
 val pp_defs_lem : bool -> bool -> (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
