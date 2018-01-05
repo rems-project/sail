@@ -146,8 +146,6 @@ let handle_input input =
 
 
 let () =
-  List.iter print_endline sail_logo;
-
   (* Auto complete function names based on val specs *)
   LNoise.set_completion_callback
     begin
@@ -173,5 +171,8 @@ let () =
   LNoise.history_set ~max_length:100 |> ignore;
 
   if !opt_interactive then
-    user_input handle_input
+    begin
+      List.iter print_endline sail_logo;
+      user_input handle_input
+    end
   else ()
