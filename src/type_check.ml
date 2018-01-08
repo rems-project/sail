@@ -1569,6 +1569,39 @@ let uv_nexp_constraint env (kid, uvar) =
   | U_nexp nexp -> Env.add_constraint (nc_eq (nvar kid) nexp) env
   | _ -> env
 
+(* The kid_order function takes a set of Int-kinded kids, and returns
+   a list of those kids in the order they appear in a type, as well as
+   a set containing all the kids that did not occur in the type. We
+   only care about Int-kinded kids because those are the only type
+   that can appear in an existential. *)
+
+let rec kid_order_nexp kids (Nexp_aux (aux, l) as nexp) =
+  match aux with
+  | Nexp_var kid when KidSet.mem kid kids -> ([kid], KidSet.remove kid kids)
+  | Nexp_var _ | Nexp_id _ | Nexp_constant _ -> ([], kids)
+  | Nexp_exp nexp | Nexp_neg nexp -> kid_order_nexp kids nexp
+  | Nexp_times (nexp1, nexp2) | Nexp_sum (nexp1, nexp2) | Nexp_minus (nexp1, nexp2) ->
+     let (ord, kids) = kid_order_nexp kids nexp1 in
+     let (ord', kids) = kid_order_nexp kids nexp2 in
+     (ord @ ord', kids)
+  | Nexp_app (id, nexps) ->
+     List.fold_left (fun (ord, kids) nexp -> let (ord', kids) = kid_order_nexp kids nexp in (ord @ ord', kids)) ([], kids) nexps
+
+let rec kid_order kids (Typ_aux (aux, l) as typ) =
+  match aux with
+  | Typ_var kid when KidSet.mem kid kids -> ([kid], KidSet.remove kid kids)
+  | Typ_id _ | Typ_var _ -> ([], kids)
+  | Typ_tup typs ->
+     List.fold_left (fun (ord, kids) typ -> let (ord', kids) = kid_order kids typ in (ord @ ord', kids)) ([], kids) typs
+  | Typ_app (_, args) ->
+     List.fold_left (fun (ord, kids) arg -> let (ord', kids) = kid_order_arg kids arg in (ord @ ord', kids)) ([], kids) args
+  | Typ_fn _ | Typ_exist _ -> typ_error l ("Existential or function type cannot appear within existential type: " ^ string_of_typ typ)
+and kid_order_arg kids (Typ_arg_aux (aux, l) as arg) =
+  match aux with
+  | Typ_arg_typ typ -> kid_order kids typ
+  | Typ_arg_nexp nexp -> kid_order_nexp kids nexp
+  | Typ_arg_order _ -> ([], kids)
+
 let rec alpha_equivalent env typ1 typ2 =
   let counter = ref 0 in
   let new_kid () = let kid = mk_kid ("alpha#" ^ string_of_int !counter) in (incr counter; kid) in
@@ -1583,7 +1616,9 @@ let rec alpha_equivalent env typ1 typ2 =
          let kids = List.map (fun kid -> (kid, new_kid ())) kids in
          let nc = List.fold_left (fun nc (kid, nk) -> nc_subst_nexp kid (Nexp_var nk) nc) nc kids in
          let typ = List.fold_left (fun nc (kid, nk) -> typ_subst_nexp kid (Nexp_var nk) nc) typ kids in
-         Typ_exist (List.sort Kid.compare (List.map snd kids), nc, typ)
+         let kids = List.map snd kids in
+         let (kids, _) = kid_order (KidSet.of_list kids) typ in
+         Typ_exist (kids, nc, typ)
       | Typ_app (id, args) ->
          Typ_app (id, List.map relabel_arg args)
     in
