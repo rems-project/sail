@@ -2,7 +2,7 @@ val zeros : forall ('n : Int), 'n >= 0. atom('n) -> bits('n)
 
 function zeros n = replicate_bits(0b0, 'n)
 
-val lslc : forall ('n : Int) ('shift : Int), 'n >= 0.
+val lslc : forall ('n : Int) ('shift : Int), 'n >= 1.
   (bits('n), atom('shift)) -> (bits('n), bit) effect {escape}
 
 function lslc (vec, shift) = {
@@ -13,7 +13,7 @@ function lslc (vec, shift) = {
   return((result, c))
 }
 
-val lsl : forall ('n : Int) ('shift : Int), 'n >= 0.
+val lsl : forall ('n : Int) ('shift : Int), 'n >= 1.
   (bits('n), atom('shift)) -> bits('n) effect {escape}
 
 function lsl (vec, shift) = if shift == 0 then vec else let (result, _) = lslc(vec, shift) in result

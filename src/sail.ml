@@ -60,7 +60,6 @@ let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_sil = ref false
 let opt_print_ocaml = ref false
-let opt_convert = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
@@ -118,9 +117,6 @@ let options = Arg.align ([
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " (experimental) turn off effect checking");
-  ( "-convert",
-    Arg.Set opt_convert,
-    " (experimental) convert sail to new syntax for use with -new_parser");
   ( "-just_check",
     Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking");
@@ -184,10 +180,6 @@ let main() =
       List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 
                         -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
     let ast = convert_ast Ast_util.inc_ord ast in
-
-    if !opt_convert
-    then (Pretty_print_sail.pp_defs stdout ast; exit 0)
-    else ();
 
     let (ast, type_envs) = check_ast ast in
 

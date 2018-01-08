@@ -647,7 +647,7 @@ let ocaml_main spec =
           ^//^ (string "Random.self_init ();"
                 ^/^ string "load_elf ();"
                 ^/^ string (if !opt_trace_ocaml then "Sail_lib.opt_trace := true;" else "Sail_lib.opt_trace := false;")
-                ^/^ string "initialize_registers ();"
+                ^/^ string "zinitializze_registers ();"
                 ^/^ string "Printexc.record_backtrace true;"
                 ^/^ string "zmain ()")
          ]

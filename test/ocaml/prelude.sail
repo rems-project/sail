@@ -24,27 +24,39 @@ val length = "length" : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
 
 overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
 
-val vector_subrange_A = "subrange" : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+val vector_subrange_dec = "subrange" : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
+val vector_subrange_inc = "subrange" : forall ('n : Int) ('m : Int) ('o : Int), 'm <= 'o <= 'n.
+  (vector('n, inc, bit), atom('m), atom('o)) -> vector('o - ('m - 1), inc, bit)
+
+/*
 val vector_subrange_B = "subrange" : forall ('n : Int) ('m : Int) ('o : Int).
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
+*/
 
-overload vector_subrange = {vector_subrange_A, vector_subrange_B}
+overload vector_subrange = {vector_subrange_dec, vector_subrange_inc}
 
-val vector_access_A = "access" : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
+val vector_access_dec = "access" : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
   (vector('n, dec, 'a), atom('m)) -> 'a
 
+/*
 val vector_access_B = "access" : forall ('n : Int) ('a : Type).
   (vector('n, dec, 'a), int) -> 'a
+*/
 
-overload vector_access = {vector_access_A, vector_access_B}
+overload vector_access = {vector_access_dec}
 
 val vector_update = "update" : forall 'n ('a : Type).
   (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
 
-val vector_update_subrange = "update_subrange" : forall 'n 'm 'o.
+val vector_update_subrange_dec = "update_subrange" : forall 'n 'm 'o.
   (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+
+val vector_update_subrange_inc = "update_subrange" : forall 'n 'm 'o.
+  (vector('n, inc, bit), atom('m), atom('o), vector('o - ('m - 1), inc, bit)) -> vector('n, inc, bit)
+
+overload vector_update_subrange = {vector_update_subrange_dec, vector_update_subrange_inc}
 
 val vcons : forall ('n : Int) ('a : Type).
   ('a, vector('n, dec, 'a)) -> vector('n + 1, dec, 'a)

@@ -50,7 +50,7 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 for i in `ls -d */`;
 do
     cd $DIR/$i;
-    if $SAILDIR/sail -new_parser -o out -ocaml ../prelude.sail `ls *.sail` 1> /dev/null;
+    if $SAILDIR/sail -o out -ocaml ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	./out > result;
 	if diff expect result;
@@ -74,7 +74,7 @@ cd $DIR
 for i in `ls -d */`;
 do
     cd $DIR/$i;
-    if $SAILDIR/sail -new_parser -o out -ocaml_trace ../prelude.sail `ls *.sail` 1> /dev/null;
+    if $SAILDIR/sail -o out -ocaml_trace ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	./out > result 2> /dev/null;
 	if diff expect result;

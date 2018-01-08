@@ -186,6 +186,10 @@ let value_append = function
   | [v1; v2] -> V_vector (coerce_gv v1 @ coerce_gv v2)
   | _ -> failwith "value append"
 
+let value_slice = function
+  | [v1; v2; v3] -> V_vector (Sail_lib.slice (coerce_gv v1, coerce_int v2, coerce_int v3))
+  | _ -> failwith "value slice"
+
 let value_not = function
   | [v] -> V_bool (not (coerce_bool v))
   | _ -> failwith "value not"
@@ -214,6 +218,21 @@ let value_get_slice_int = function
   | [v1; v2; v3] -> mk_vector (Sail_lib.get_slice_int (coerce_int v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value get_slice_int"
 
+let value_set_slice_int = function
+  | [v1; v2; v3; v4] ->
+     V_int (Sail_lib.set_slice_int (coerce_int v1, coerce_int v2, coerce_int v3, coerce_bv v4))
+  | _ -> failwith "value set_slice_int"
+
+let value_set_slice = function
+  | [v1; v2; v3; v4; v5] ->
+     mk_vector (Sail_lib.set_slice (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_int v4, coerce_bv v5))
+  | _ -> failwith "value set_slice"
+
+let value_hex_slice = function
+  | [v1; v2; v3] ->
+     mk_vector (Sail_lib.hex_slice (coerce_string v1, coerce_int v2, coerce_int v3))
+  | _ -> failwith "value hex_slice"
+
 let value_add = function
   | [v1; v2] -> V_int (Sail_lib.add (coerce_int v1, coerce_int v2))
   | _ -> failwith "value add"
@@ -222,12 +241,57 @@ let value_sub = function
   | [v1; v2] -> V_int (Sail_lib.sub (coerce_int v1, coerce_int v2))
   | _ -> failwith "value sub"
 
+let value_mult = function
+  | [v1; v2] -> V_int (Sail_lib.mult (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value mult"
+
+let value_quotient = function
+  | [v1; v2] -> V_int (Sail_lib.quotient (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value quotient"
+
+let value_modulus = function
+  | [v1; v2] -> V_int (Sail_lib.modulus (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value modulus"
+
+let value_add_vec_int = function
+  | [v1; v2] -> mk_vector (Sail_lib.add_vec_int (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value add_vec_int"
+
+let value_add_vec = function
+  | [v1; v2] -> mk_vector (Sail_lib.add_vec (coerce_bv v1, coerce_bv v2))
+  | _ -> failwith "value add_vec"
+
+let value_sub_vec = function
+  | [v1; v2] -> mk_vector (Sail_lib.sub_vec (coerce_bv v1, coerce_bv v2))
+  | _ -> failwith "value sub_vec"
+
+let value_shl_int = function
+  | [v1; v2] -> V_int (Sail_lib.shl_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value shl_int"
+
+let value_shr_int = function
+  | [v1; v2] -> V_int (Sail_lib.shr_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value shr_int"
+
+let value_max_int = function
+  | [v1; v2] -> V_int (Sail_lib.max_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value max_int"
+
+let value_min_int = function
+  | [v1; v2] -> V_int (Sail_lib.min_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value min_int"
+
 let value_replicate_bits = function
   | [v1; v2] -> mk_vector (Sail_lib.replicate_bits (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value replicate_bits"
 
 let is_bit = function
   | V_bit _ -> true
+  | _ -> false
+
+
+let is_ctor = function
+  | V_ctor _ -> true
   | _ -> false
 
 let rec string_of_value = function
@@ -257,9 +321,27 @@ let value_print = function
   | [v] -> print_endline (string_of_value v |> Util.red |> Util.clear); V_unit
   | _ -> assert false
 
+let value_internal_pick = function
+  | [v1] -> List.hd (coerce_listlike v1);
+  | _ -> failwith "value internal_pick"
+
 let value_undefined_vector = function
-  | [v1; v2; v3] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, coerce_int v2, v3))
+  | [v1; v2] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, v2))
   | _ -> failwith "value undefined_vector"
+
+let value_read_ram = function
+  | [v1; v2; v3; v4] -> mk_vector (Sail_lib.read_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4))
+  | _ -> failwith "value read_ram"
+
+let value_write_ram = function
+  | [v1; v2; v3; v4; v5] ->
+     Sail_lib.write_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4, coerce_bv v5);
+     V_unit
+  | _ -> failwith "value write_ram"
+
+let value_putchar = function
+  | [v] -> Sail_lib.putchar (coerce_int v); V_unit
+  | _ -> failwith "value putchar"
 
 let primops =
   List.fold_left
@@ -269,6 +351,7 @@ let primops =
       ("or_bool", or_bool);
       ("print_endline", value_print);
       ("prerr_endline", value_print);
+      ("putchar", value_putchar);
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
       ("print_bits", fun [msg; bits] -> print_endline (coerce_string msg ^ string_of_value bits); V_unit);
       ("eq_int", value_eq_int);
@@ -284,6 +367,7 @@ let primops =
       ("access", value_access);
       ("update", value_update);
       ("update_subrange", value_update_subrange);
+      ("slice", value_slice);
       ("append", value_append);
       ("not", value_not);
       ("not_vec", value_not_vec);
@@ -292,10 +376,28 @@ let primops =
       ("uint", value_uint);
       ("sint", value_sint);
       ("get_slice_int", value_get_slice_int);
+      ("set_slice_int", value_set_slice_int);
+      ("set_slice", value_set_slice);
+      ("hex_slice", value_hex_slice);
       ("add", value_add);
       ("sub", value_sub);
+      ("mult", value_mult);
+      ("quotient", value_quotient);
+      ("modulus", value_modulus);
+      ("shr_int", value_shr_int);
+      ("shl_int", value_shl_int);
+      ("max_int", value_max_int);
+      ("min_int", value_min_int);
+      ("add_vec_int", value_add_vec_int);
+      ("add_vec", value_add_vec);
+      ("sub_vec", value_sub_vec);
+      ("read_ram", value_read_ram);
+      ("write_ram", value_write_ram);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
+      ("undefined_int", fun _ -> V_int Big_int.zero);
+      ("undefined_bool", fun _ -> V_bool false);
       ("undefined_vector", value_undefined_vector);
+      ("internal_pick", value_internal_pick);
       ("replicate_bits", value_replicate_bits);
       ("Elf_loader.elf_entry", fun _ -> V_int (Big_int.of_int 0));
     ]

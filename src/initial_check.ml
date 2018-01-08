@@ -964,7 +964,8 @@ let typschm_of_string order str =
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
-let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, (fun _ -> Some (string_of_id id)), false))
+let extern_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, (fun _ -> Some (string_of_id id)), false))
+let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, (fun _ -> None), false))
 
 let val_spec_ids (Defs defs) =
   let val_spec_id (VS_aux (vs_aux, _)) =
@@ -1003,7 +1004,7 @@ let have_undefined_builtins = ref false
 
 let generate_undefineds vs_ids (Defs defs) =
   let gen_vs id str =
-    if (IdSet.mem id vs_ids) then [] else [val_spec_of_string dec_ord id str]
+    if (IdSet.mem id vs_ids) then [] else [extern_of_string dec_ord id str]
   in
   let undefined_builtins =
     if !have_undefined_builtins then
@@ -1022,7 +1023,7 @@ let generate_undefineds vs_ids (Defs defs) =
            gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
            gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
            (* FIXME: How to handle inc/dec order correctly? *)
-           gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type). (atom('n), 'a) -> vector('n, dec,'a) effect {undef}";
+           gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
            (* Only used with lem_mwords *)
            gen_vs (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
            gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]

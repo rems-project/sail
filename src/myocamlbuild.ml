@@ -69,8 +69,6 @@ let split ch s =
 let lem_dir =
   try Sys.getenv "LEM_DIR" (* LEM_DIR must contain an absolute path *)
   with Not_found -> "../../../lem" ;;
-let lem_libdir = lem_dir / "ocaml-lib" / "_build_zarith";;
-let lem_lib = lem_libdir / "extract" ;;
 let lem = lem_dir / "lem" ;;
 
 (* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
@@ -85,9 +83,8 @@ let lem_opts = [A "-lib"; P "../lem_interp";
 dispatch begin function
 | After_rules ->
     (* ocaml_lib "lem_interp/interp"; *)
-    ocaml_lib ~extern:true ~dir:lem_libdir  ~tag_name:"use_lem" lem_lib;
     ocaml_lib ~extern:false ~dir:"pprint/src" ~tag_name:"use_pprint" "pprint/src/PPrintLib";
-    
+
     rule "lem -> ml"
     ~prod: "%.ml"
     ~dep: "%.lem"

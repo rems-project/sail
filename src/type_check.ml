@@ -76,7 +76,7 @@ type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
      coercions *)
-  | Err_no_casts of type_error * type_error list
+  | Err_no_casts of unit exp * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list
   | Err_subtype of typ * typ * n_constraint list
@@ -86,11 +86,13 @@ type type_error =
 let pp_type_error err =
   let open PPrint in
   let rec pp_err = function
-    | Err_no_casts (trigger, []) ->
-       (string "Tried performing type coercion because" ^//^ pp_err trigger)
-       ^/^ string "No possible coercions"
-    | Err_no_casts (trigger, errs) ->
-       (string "Tried performing type coerction because" ^//^ pp_err trigger)
+    | Err_no_casts (exp, trigger, []) ->
+       (string "Tried performing type coercion on" ^//^ Pretty_print_sail.doc_exp exp)
+       ^/^ (string "Failed because" ^//^ pp_err trigger)
+       ^/^ string "There were no possible casts"
+    | Err_no_casts (exp, trigger, errs) ->
+       (string "Tried performing type coercion on" ^//^ Pretty_print_sail.doc_exp exp)
+       ^/^ string "Failed because" ^//^ pp_err trigger
     | Err_no_overloading (id, errs) ->
        string ("No overloadings for " ^ string_of_id id ^ ", tried:") ^//^
          group (separate_map hardline (fun (id, err) -> string (string_of_id id) ^^ colon ^^ space ^^ pp_err err) errs)
@@ -2173,7 +2175,7 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
     | _ -> failwith "Cannot switch type for unannotated function"
   in
   let rec try_casts trigger errs = function
-    | [] -> typ_raise l (Err_no_casts (trigger, errs))
+    | [] -> typ_raise l (Err_no_casts (strip_exp annotated_exp, trigger, errs))
     | (cast :: casts) -> begin
         typ_print ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " to " ^ string_of_typ typ);
         try

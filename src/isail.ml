@@ -76,7 +76,10 @@ let rec user_input callback =
   | None -> ()
   | Some v ->
      mode_clear ();
-     callback v;
+     begin
+       try callback v with
+       | Reporting_basic.Fatal_error e -> Reporting_basic.report_error e
+     end;
      user_input callback
 
 let termcode n = "\x1B[" ^ string_of_int n ^ "m"
@@ -86,25 +89,72 @@ let clear str = str ^ termcode 0
 
 let sail_logo =
   let banner str = str |> bold |> red |> clear in
-  [ "    ___       ___       ___       ___ ";
-    "   /\\  \\     /\\  \\     /\\  \\     /\\__\\";
-    "  /::\\  \\   /::\\  \\   _\\:\\  \\   /:/  /";
-    " /\\:\\:\\__\\ /::\\:\\__\\ /\\/::\\__\\ /:/__/ ";
-    " \\:\\:\\/__/ \\/\\::/  / \\::/\\/__/ \\:\\  \\ ";
-    "  \\::/  /    /:/  /   \\:\\__\\    \\:\\__\\";
-    "   \\/__/     \\/__/     \\/__/     \\/__/";
+  [ {|    ___       ___       ___       ___ |};
+    {|   /\  \     /\  \     /\  \     /\__\|};
+    {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
+    {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/ |};
+    {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \ |};
+    {|  \::/  /    /:/  /   \:\__\    \:\__\|};
+    {|   \/__/     \/__/     \/__/     \/__/|};
     ""
   ]
   |> List.map banner
 
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
+let print_program () =
+  match !current_mode with
+  | Normal -> ()
+  | Evaluation (Step (out, _, _, stack)) ->
+     let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
+     List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
+     print_endline out
+  | Evaluation _ -> ()
+
+let interactive_state = ref (initial_state !interactive_ast)
+
+let rec run () =
+  match !current_mode with
+  | Normal -> ()
+  | Evaluation frame ->
+     begin
+       match frame with
+       | Done (state, v) ->
+          interactive_state := state;
+          print_endline ("Result = " ^ Value.string_of_value v);
+          current_mode := Normal
+       | Step (out, state, _, stack) ->
+          current_mode := Evaluation (eval_frame !interactive_ast frame);
+          run ()
+       | Break frame ->
+          print_endline "Breakpoint";
+          current_mode := Evaluation frame
+     end
+
+let rec run_steps n =
+  match !current_mode with
+  | _ when n <= 0 -> ()
+  | Normal -> ()
+  | Evaluation frame ->
+     begin
+       match frame with
+       | Done (state, v) ->
+          interactive_state := state;
+          print_endline ("Result = " ^ Value.string_of_value v);
+          current_mode := Normal
+       | Step (out, state, _, stack) ->
+          current_mode := Evaluation (eval_frame !interactive_ast frame);
+          run_steps (n - 1)
+       | Break frame ->
+          print_endline "Breakpoint";
+          current_mode := Evaluation frame
+     end
+
 let handle_input input =
+  LNoise.history_add input |> ignore;
   match !current_mode with
   | Normal ->
      begin
-       LNoise.history_add input |> ignore;
-
        if input <> "" && input.[0] = ':' then
          let n = try String.index input ' ' with Not_found -> String.length input in
          let cmd = Str.string_before input n in
@@ -114,36 +164,49 @@ let handle_input input =
             let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !interactive_env in
             pretty_sail stdout (doc_binding (typq, typ));
             print_newline ();
-         | ":q" | ":quit" ->
-            exit 0
+         | ":elf" ->
+            Elf_loader.load_elf arg
+         | ":q" | ":quit" -> exit 0
          | ":i" | ":infer" ->
             let exp = Initial_check.exp_of_string dec_ord arg in
             let exp = Type_check.infer_exp !interactive_env exp in
             pretty_sail stdout (doc_typ (Type_check.typ_of exp));
             print_newline ()
          | ":v" | ":verbose" ->
-            Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 2
+            Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
+            print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
 
          | _ -> print_endline ("Unrecognised command " ^ input)
        else if input <> "" then
          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord input) in
-         current_mode := Evaluation (eval_frame !interactive_ast (Step ("", initial_state !interactive_ast, return exp, [])))
+         current_mode := Evaluation (eval_frame !interactive_ast (Step ("", !interactive_state, return exp, [])));
+         print_program ()
        else ()
      end
   | Evaluation frame ->
      begin
-       match frame with
-       | Done (_, v) ->
-          print_endline ("Result = " ^ Value.string_of_value v);
-          current_mode := Normal
-       | Step (out, _, _, stack) ->
-          let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
-          List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
-          print_endline out;
-          current_mode := Evaluation (eval_frame !interactive_ast frame)
+       if input <> "" && input.[0] = ':' then
+         let n = try String.index input ' ' with Not_found -> String.length input in
+         let cmd = Str.string_before input n in
+         let arg = String.trim (Str.string_after input n) in
+         match cmd with
+         | ":r" | ":run" ->
+            run ()
+         | ":s" | ":step" ->
+            run_steps (int_of_string arg)
+         | ":q" | ":quit" -> exit 0
+         | _ -> print_endline ("Unrecognised command " ^ input)
+       else
+         match frame with
+         | Done (state, v) ->
+            interactive_state := state;
+            print_endline ("Result = " ^ Value.string_of_value v);
+            current_mode := Normal
+         | Step (out, state, _, stack) ->
+            interactive_state := state;
+            current_mode := Evaluation (eval_frame !interactive_ast frame);
+            print_program ()
      end
-
-
 
 let () =
   (* Auto complete function names based on val specs *)

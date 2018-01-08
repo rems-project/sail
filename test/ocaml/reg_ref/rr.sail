@@ -47,7 +47,7 @@ val vector_slice : forall 'n 'm 'o, 0 <= 'm <= 'o <= 'n.
 
 function vector_slice (v, to, from) = MkSlice(from, v[to .. from])
 
-val slice_slice : forall 'n 'm 'o 'p.
+val slice_slice : forall 'n 'm 'o 'p, 'm <= 'o & 'o - 'p <= 'n.
   (slice('p, 'n), atom('o), atom('m)) -> slice('m, 'o - ('m - 1))
 
 function slice_slice (MkSlice(start, v), to, from) = MkSlice(from, v[to - start .. from - start])
