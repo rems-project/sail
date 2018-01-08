@@ -1583,7 +1583,7 @@ let rec alpha_equivalent env typ1 typ2 =
          let kids = List.map (fun kid -> (kid, new_kid ())) kids in
          let nc = List.fold_left (fun nc (kid, nk) -> nc_subst_nexp kid (Nexp_var nk) nc) nc kids in
          let typ = List.fold_left (fun nc (kid, nk) -> typ_subst_nexp kid (Nexp_var nk) nc) typ kids in
-         Typ_exist (List.map snd kids, nc, typ)
+         Typ_exist (List.sort Kid.compare (List.map snd kids), nc, typ)
       | Typ_app (id, args) ->
          Typ_app (id, List.map relabel_arg args)
     in
