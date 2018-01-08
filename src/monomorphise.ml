@@ -2460,11 +2460,156 @@ let argset_to_list splits =
   List.map argelt l
 end
 
+module MonoRewrites =
+struct
 
-let monomorphise mwords auto debug_analysis splits env defs =
+let is_constant_range = function
+  | E_aux (E_lit _,_), E_aux (E_lit _,_) -> true
+  | _ -> false
+
+let is_constant = function
+  | E_aux (E_lit _,_) -> true
+  | _ -> false
+
+let is_constant_vec_typ env typ =
+  let typ = Env.base_typ_of env typ in
+  match destruct_vector env typ with
+  | Some (_,size,_,_) ->
+     (match nexp_simp size with
+     | Nexp_aux (Nexp_constant _,_) -> true
+     | _ -> false)
+  | _ -> false
+
+let is_id env id =
+  let ids = Env.get_overloads (Id_aux (id,Parse_ast.Unknown)) env in
+  let ids = id :: List.map (fun (Id_aux (id,_)) -> id) ids in
+  fun (Id_aux (x,_)) -> List.mem x ids
+
+(* We have to add casts in here with appropriate length information so that the
+   type checker knows the expected return types. *)
+
+let rewrite_app env typ (id,args) =
+  let is_append = is_id env (Id "append") in
+  if is_append id then
+    let is_subrange = is_id env (Id "vector_subrange") in
+    let is_slice = is_id env (Id "slice") in
+    match args with
+      (* (known-size-vector @ variable-vector) @ variable-vector *)
+    | [E_aux (E_app (append,
+              [e1;
+               E_aux (E_app (subrange1,
+                             [vector1; start1; end1]),_)]),_);
+       E_aux (E_app (subrange2,
+                     [vector2; start2; end2]),_)]
+        when is_append append && is_subrange subrange1 && is_subrange subrange2 &&
+          is_constant_vec_typ env (typ_of e1) &&
+          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let midsize = nminus size size1 in
+       let midstart =
+         if is_order_inc order
+         then nconstant zero_big_int
+         else nminus midsize (nconstant unit_big_int) in
+       let midtyp = vector_typ midstart midsize order bittyp in
+       E_app (append,
+              [e1;
+               E_aux (E_cast (midtyp,
+                              E_aux (E_app (mk_id "subrange_subrange_concat",
+                                            [vector1; start1; end1; vector2; start2; end2]),
+                                     (Unknown,None))),(Unknown,None))])
+
+    (* variable-range @ variable-range *)
+    | [E_aux (E_app (subrange1,
+                     [vector1; start1; end1]),_);
+       E_aux (E_app (subrange2,
+                     [vector2; start2; end2]),_)]
+        when is_subrange subrange1 && is_subrange subrange2 &&
+          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+       E_cast (typ,
+               E_aux (E_app (mk_id "subrange_subrange_concat",
+                             [vector1; start1; end1; vector2; start2; end2]),
+                      (Unknown,None)))
+
+    (* variable-slice @ variable-slice *)
+    | [E_aux (E_app (slice1,
+                     [vector1; start1; length1]),_);
+       E_aux (E_app (slice2,
+                     [vector2; start2; length2]),_)]
+        when is_slice slice1 && is_slice slice2 &&
+          not (is_constant length1 || is_constant length2) ->
+       E_cast (typ,
+               E_aux (E_app (mk_id "slice_slice_concat",
+                             [vector1; start1; length1; vector2; start2; length2]),(Unknown,None)))
+
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "eq_vec") id then
+    (* variable-range == variable_range *)
+    let is_subrange = is_id env (Id "vector_subrange") in
+    match args with
+    | [E_aux (E_app (subrange1,
+                     [vector1; start1; end1]),_);
+       E_aux (E_app (subrange2,
+                     [vector2; start2; end2]),_)]
+        when is_subrange subrange1 && is_subrange subrange2 &&
+          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+       E_app (mk_id "subrange_subrange_eq",
+              [vector1; start1; end1; vector2; start2; end2])
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "IsZero") id then
+    match args with
+    | [E_aux (E_app (subrange1, [vector1; start1; end1]),_)]
+        when is_id env (Id "vector_subrange") subrange1 &&
+          not (is_constant_range (start1,end1)) ->
+       E_app (mk_id "is_zero_subrange",
+              [vector1; start1; end1])
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "IsOnes") id then
+    match args with
+    | [E_aux (E_app (subrange1, [vector1; start1; end1]),_)]
+        when is_id env (Id "vector_subrange") subrange1 &&
+          not (is_constant_range (start1,end1)) ->
+       E_app (mk_id "is_ones_subrange",
+              [vector1; start1; end1])
+    | _ -> E_app (id,args)
+
+  else E_app (id,args)
+
+let rewrite_aux = function
+  | (E_app (id,args),((_,Some (env,ty,_)) as annot)) ->
+     E_aux (rewrite_app env ty (id,args),annot)
+  | exp,annot -> E_aux (exp,annot)
+
+let mono_rewrite defs =
+  let open Rewriter in
+  rewrite_defs_base
+    { rewriters_base with
+      rewrite_exp = fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux } }
+    defs
+end
+
+(* TODO: put in a proper mli for this stuff *)
+type options = {
+  auto : bool;
+  debug_analysis : int;
+  rewrites : bool
+}
+
+let monomorphise mwords opts splits env defs =
+  let (defs,env) =
+    if opts.rewrites then
+      let defs = MonoRewrites.mono_rewrite defs in
+    (* TODO: is this necessary? *)
+      Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs
+    else (defs,env)
+  in
+(*let _ = Pretty_print.pp_defs stdout defs in*)
   let new_splits =
-    if auto
-    then Analysis.argset_to_list (Analysis.analyse_defs debug_analysis env defs)
+    if opts.auto
+    then Analysis.argset_to_list (Analysis.analyse_defs opts.debug_analysis env defs)
     else [] in
   let defs = split_defs (new_splits@splits) defs in
   (* TODO: currently doing this because constant propagation leaves numeric literals as
