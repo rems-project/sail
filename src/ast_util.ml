@@ -679,6 +679,14 @@ let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
   | Some id -> id
   | None -> raise (Reporting_basic.err_typ l "funcl list is empty")
 
+let id_of_type_def_aux = function
+  | TD_abbrev (id, _, _)
+  | TD_record (id, _, _, _, _)
+  | TD_variant (id, _, _, _, _)
+  | TD_enum (id, _, _, _)
+  | TD_register (id, _, _, _) -> id
+let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
+
 module BE = struct
   type t = base_effect
   let compare be1 be2 = String.compare (string_of_base_effect be1) (string_of_base_effect be2)

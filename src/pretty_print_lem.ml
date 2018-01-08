@@ -60,6 +60,9 @@ open Pretty_print_common
  * PPrint-based sail-to-lem pprinter
 ****************************************************************************)
 
+let opt_sequential = ref false
+let opt_mwords = ref false
+
 let print_to_from_interp_value = ref false
 let langlebar = string "<|"
 let ranglebar = string "|>"
@@ -195,8 +198,8 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
    updated with doc_typ_lem *)
-let rec lem_nexps_of_typ sequential mwords (Typ_aux (t,_)) =
-  let trec = lem_nexps_of_typ sequential mwords in
+let rec lem_nexps_of_typ (Typ_aux (t,_)) =
+  let trec = lem_nexps_of_typ in
   match t with
   | Typ_id _ -> NexpSet.empty
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
@@ -210,75 +213,78 @@ let rec lem_nexps_of_typ sequential mwords (Typ_aux (t,_)) =
     Typ_arg_aux (Typ_arg_order ord, _);
     Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
      let m = nexp_simp m in
-     if mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
+     if !opt_mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
        NexpSet.singleton (orig_nexp m)
      else trec elem_typ
      (* NexpSet.union
-       (if mwords then tyvars_of_nexp (nexp_simp m) else NexpSet.empty)
+       (if !opt_mwords then tyvars_of_nexp (nexp_simp m) else NexpSet.empty)
        (trec elem_typ) *)
   | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
-     if sequential then trec etyp else NexpSet.empty
+     if !opt_sequential then trec etyp else NexpSet.empty
   | Typ_app(Id_aux (Id "range", _),_)
   | Typ_app(Id_aux (Id "implicit", _),_)
   | Typ_app(Id_aux (Id "atom", _), _) -> NexpSet.empty
   | Typ_app (_,tas) ->
-     List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg sequential mwords ta))
+     List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg ta))
        NexpSet.empty tas
   | Typ_exist (kids,_,t) ->
      let s = trec t in
      List.fold_left (fun s k -> NexpSet.remove k s) s (List.map nvar kids)
-and lem_nexps_of_typ_arg sequential mwords (Typ_arg_aux (ta,_)) =
+and lem_nexps_of_typ_arg (Typ_arg_aux (ta,_)) =
   match ta with
   | Typ_arg_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
-  | Typ_arg_typ typ -> lem_nexps_of_typ sequential mwords typ
+  | Typ_arg_typ typ -> lem_nexps_of_typ typ
   | Typ_arg_order _ -> NexpSet.empty
 
-let lem_tyvars_of_typ sequential mwords typ =
+let lem_tyvars_of_typ typ =
   NexpSet.fold (fun nexp ks -> KidSet.union ks (tyvars_of_nexp nexp))
-    (lem_nexps_of_typ sequential mwords typ) KidSet.empty
+    (lem_nexps_of_typ typ) KidSet.empty
 
 (* When making changes here, check whether they affect lem_tyvars_of_typ *)
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
-  let rec typ sequential mwords ty = fn_typ sequential mwords true ty
-    and typ' sequential mwords ty = fn_typ sequential mwords false ty
-    and fn_typ (sequential : bool) (mwords : bool) atyp_needed ((Typ_aux (t, _)) as ty) = match t with
+  let rec typ ty = fn_typ true ty
+    and typ' ty = fn_typ false ty
+    and fn_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
       | Typ_fn(arg,ret,efct) ->
-         (*let exc_typ = string "string" in*)
          let ret_typ =
            if effectful efct
-           then separate space [string "_M";(*parens exc_typ;*) fn_typ sequential mwords true ret]
-           else separate space [fn_typ sequential mwords false ret] in
-         let tpp = separate space [tup_typ sequential mwords true arg; arrow;ret_typ] in
+           then separate space [string "M"; fn_typ true ret]
+           else separate space [fn_typ false ret] in
+         let arg_typs = match arg with
+           | Typ_aux (Typ_tup typs, _) ->
+              List.map (app_typ false) typs
+           | _ -> [tup_typ false arg] in
+         let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
-      | _ -> tup_typ sequential mwords atyp_needed ty
-    and tup_typ sequential mwords atyp_needed ((Typ_aux (t, _)) as ty) = match t with
+      | _ -> tup_typ atyp_needed ty
+    and tup_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
       | Typ_tup typs ->
-         parens (separate_map (space ^^ star ^^ space) (app_typ sequential mwords false) typs)
-      | _ -> app_typ sequential mwords atyp_needed ty
-    and app_typ sequential mwords atyp_needed ((Typ_aux (t, l)) as ty) = match t with
+         parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
+      | _ -> app_typ atyp_needed ty
+    and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_app(Id_aux (Id "vector", _), [
           Typ_arg_aux (Typ_arg_nexp n, _);
           Typ_arg_aux (Typ_arg_nexp m, _);
           Typ_arg_aux (Typ_arg_order ord, _);
           Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
-           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when mwords ->
+           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when !opt_mwords ->
              string "bitvector " ^^ doc_nexp_lem (nexp_simp m)
              (* (match nexp_simp m with
                | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
                | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
                | _ -> raise (Reporting_basic.err_unreachable l
                  "cannot pretty-print bitvector type with non-constant length")) *)
-           | _ -> string "vector" ^^ space ^^ typ sequential mwords elem_typ in
+           | _ -> string "vector" ^^ space ^^ typ elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
          (* TODO: Better distinguish register names and contents? *)
          (* fn_typ regtypes atyp_needed etyp *)
          let tpp =
-           if sequential
-           then string "register_ref regstate " ^^ typ sequential mwords etyp
+           if !opt_sequential
+           then string "register_ref regstate " ^^ typ etyp
            else string "register" in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
@@ -288,10 +294,10 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
          (string "integer")
       | Typ_app(id,args) ->
-         let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space (doc_typ_arg_lem sequential mwords) args) in
+         let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space doc_typ_arg_lem args) in
          if atyp_needed then parens tpp else tpp
-      | _ -> atomic_typ sequential mwords atyp_needed ty
-    and atomic_typ sequential mwords atyp_needed ((Typ_aux (t, l)) as ty) = match t with
+      | _ -> atomic_typ atyp_needed ty
+    and atomic_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_id (Id_aux (Id "bool",_)) -> string "bool"
       | Typ_id (Id_aux (Id "bit",_)) -> string "bitU"
       | Typ_id (id) ->
@@ -302,11 +308,11 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_app _ | Typ_tup _ | Typ_fn _ ->
          (* exhaustiveness matters here to avoid infinite loops
           * if we add a new Typ constructor *)
-         let tpp = typ sequential mwords ty in
+         let tpp = typ ty in
          if atyp_needed then parens tpp else tpp
       | Typ_exist (kids,_,ty) -> begin
-         let tpp = typ sequential mwords ty in
-         let visible_vars = lem_tyvars_of_typ sequential mwords ty in
+         let tpp = typ ty in
+         let visible_vars = lem_tyvars_of_typ ty in
          match List.filter (fun kid -> KidSet.mem kid visible_vars) kids with
          | [] -> if atyp_needed then parens tpp else tpp
          | bad -> raise (Reporting_basic.err_general l
@@ -314,8 +320,8 @@ let doc_typ_lem, doc_atomic_typ_lem =
                                String.concat ", " (List.map string_of_kid bad) ^
                                " escape into Lem"))
       end
-    and doc_typ_arg_lem sequential mwords (Typ_arg_aux(t,_)) = match t with
-      | Typ_arg_typ t -> app_typ sequential mwords true t
+    and doc_typ_arg_lem (Typ_arg_aux(t,_)) = match t with
+      | Typ_arg_typ t -> app_typ true t
       | Typ_arg_nexp n -> doc_nexp_lem (nexp_simp n)
       | Typ_arg_order o -> empty
   in typ', atomic_typ
@@ -325,36 +331,37 @@ let doc_typ_lem, doc_atomic_typ_lem =
    length argument are checked for variables, and the latter only if it is
    a bitvector; for other types of vectors, the length is not pretty-printed
    in the type, and the start index is never pretty-printed in vector types. *)
-let rec contains_t_pp_var mwords (Typ_aux (t,a) as typ) = match t with
+let rec contains_t_pp_var (Typ_aux (t,a) as typ) = match t with
   | Typ_id _ -> false
   | Typ_var _ -> true
   | Typ_exist _ -> true
-  | Typ_fn (t1,t2,_) -> contains_t_pp_var mwords t1 || contains_t_pp_var mwords t2
-  | Typ_tup ts -> List.exists (contains_t_pp_var mwords) ts
+  | Typ_fn (t1,t2,_) -> contains_t_pp_var t1 || contains_t_pp_var t2
+  | Typ_tup ts -> List.exists contains_t_pp_var ts
   | Typ_app (c,targs) ->
       if Ast_util.is_number typ then false
       else if is_bitvector_typ typ then
         let (_,length,_,_) = vector_typ_args_of typ in
         let length = nexp_simp length in
         not (is_nexp_constant length ||
-               (mwords && match length with Nexp_aux (Nexp_var _,_) -> true | _ -> false))
-      else List.exists (contains_t_arg_pp_var mwords) targs
-and contains_t_arg_pp_var mwords (Typ_arg_aux (targ, _)) = match targ with
-  | Typ_arg_typ t -> contains_t_pp_var mwords t
+               (!opt_mwords &&
+                 match length with Nexp_aux (Nexp_var _,_) -> true | _ -> false))
+      else List.exists contains_t_arg_pp_var targs
+and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
+  | Typ_arg_typ t -> contains_t_pp_var t
   | Typ_arg_nexp nexp -> not (is_nexp_constant (nexp_simp nexp))
   | _ -> false
 
-let doc_tannot_lem sequential mwords eff typ =
-  if contains_t_pp_var mwords typ then empty
+let doc_tannot_lem eff typ =
+  if contains_t_pp_var typ then empty
   else
-    let ta = doc_typ_lem sequential mwords typ in
-    if eff then string " : _M " ^^ parens ta
+    let ta = doc_typ_lem typ in
+    if eff then string " : M " ^^ parens ta
     else string " : " ^^ ta
 
 (* doc_lit_lem gets as an additional parameter the type information from the
  * expression around it: that's a hack, but how else can we distinguish between
  * undefined values of different types ? *)
-let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
+let doc_lit_lem in_pat (L_aux(lit,l)) a =
   match lit with
   | L_unit  -> utf8string "()"
   | L_zero  -> utf8string "B0"
@@ -377,8 +384,8 @@ let doc_lit_lem sequential mwords in_pat (L_aux(lit,l)) a =
           | Typ_app (Id_aux (Id "register", _),_) -> utf8string "UndefinedRegister 0"
           | Typ_id (Id_aux (Id "string", _)) -> utf8string "\"\""
           | _ ->
-            let ta = if contains_t_pp_var mwords typ then empty
-              else doc_tannot_lem sequential mwords false typ in
+            let ta = if contains_t_pp_var typ then empty
+              else doc_tannot_lem false typ in
             parens
               ((utf8string "(failwith \"undefined value of unsupported type\")") ^^ ta))
        | _ -> utf8string "(failwith \"undefined value of unsupported type\")")
@@ -442,19 +449,19 @@ let rec typeclass_nexps (Typ_aux(t,_)) = match t with
 | Typ_app _ -> NexpSet.empty
 | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
 
-let doc_typclasses_lem mwords t =
-  if mwords then
+let doc_typclasses_lem t =
+  if !opt_mwords then
     let nexps = typeclass_nexps t in
     if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
     (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
   else (empty, NexpSet.empty)
 
-let doc_typschm_lem sequential mwords quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
-  let pt = doc_typ_lem sequential mwords t in
+let doc_typschm_lem quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+  let pt = doc_typ_lem t in
   if quants
   then
-    let nexps_used = lem_nexps_of_typ sequential mwords t in
-    let ptyc, nexps_sizes = doc_typclasses_lem mwords t in
+    let nexps_used = lem_nexps_of_typ t in
+    let ptyc, nexps_sizes = doc_typclasses_lem t in
     let nexps_to_include = NexpSet.union nexps_used nexps_sizes in
     if NexpSet.is_empty nexps_to_include
     then pt
@@ -468,44 +475,44 @@ let is_ctor env id = match Env.lookup_id id env with
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
-let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = match p with
+let rec doc_pat_lem apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_app(id, ((_ :: _) as pats)) ->
     let ppp = doc_unop (doc_id_lem_ctor id)
-                       (parens (separate_map comma (doc_pat_lem sequential mwords true) pats)) in
+                       (parens (separate_map comma (doc_pat_lem true) pats)) in
     if apat_needed then parens ppp else ppp
   | P_app(id,[]) -> doc_id_lem_ctor id
-  | P_lit lit  -> doc_lit_lem sequential mwords true lit annot
+  | P_lit lit  -> doc_lit_lem true lit annot
   | P_wild -> underscore
   | P_id id ->
      begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
-  | P_var(p,kid) -> doc_pat_lem sequential mwords true p
-  | P_as(p,id) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_id_lem id])
+  | P_var(p,kid) -> doc_pat_lem true p
+  | P_as(p,id) -> parens (separate space [doc_pat_lem true p; string "as"; doc_id_lem id])
   | P_typ(Typ_aux (Typ_tup typs, _), P_aux (P_tup pats, _)) ->
      (* Isabelle does not seem to like type-annotated tuple patterns;
         it gives a syntax error. Avoid this by annotating the tuple elements instead *)
      let doc_elem typ (P_aux (_, annot) as pat) =
-       doc_pat_lem sequential mwords true (P_aux (P_typ (typ, pat), annot)) in
+       doc_pat_lem true (P_aux (P_typ (typ, pat), annot)) in
      parens (separate comma_sp (List.map2 doc_elem typs pats))
   | P_typ(typ,p) ->
-    let doc_p = doc_pat_lem sequential mwords true p in
-    if contains_t_pp_var mwords typ then doc_p
-    else parens (doc_op colon doc_p (doc_typ_lem sequential mwords typ))
+    let doc_p = doc_pat_lem true p in
+    if contains_t_pp_var typ then doc_p
+    else parens (doc_op colon doc_p (doc_typ_lem typ))
   | P_vector pats ->
      let ppp =
        (separate space)
-         [string "Vector";brackets (separate_map semi (doc_pat_lem sequential mwords true) pats);underscore;underscore] in
+         [string "Vector";brackets (separate_map semi (doc_pat_lem true) pats);underscore;underscore] in
      if apat_needed then parens ppp else ppp
   | P_vector_concat pats ->
      raise (Reporting_basic.err_unreachable l
        "vector concatenation patterns should have been removed before pretty-printing")
   | P_tup pats  ->
      (match pats with
-      | [p] -> doc_pat_lem sequential mwords apat_needed p
-      | _ -> parens (separate_map comma_sp (doc_pat_lem sequential mwords false) pats))
-  | P_list pats -> brackets (separate_map semi (doc_pat_lem sequential mwords false) pats) (*Never seen but easy in lem*)
-  | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem sequential mwords true p) (doc_pat_lem sequential mwords true p')
+      | [p] -> doc_pat_lem apat_needed p
+      | _ -> parens (separate_map comma_sp (doc_pat_lem false) pats))
+  | P_list pats -> brackets (separate_map semi (doc_pat_lem false) pats) (*Never seen but easy in lem*)
+  | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem true p) (doc_pat_lem true p')
   | P_record (_,_) -> empty (* TODO *)
 
 let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
@@ -537,11 +544,11 @@ let typ_id_of (Typ_aux (typ, l)) = match typ with
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
-  let rec top_exp sequential mwords (early_ret : bool) (aexp_needed : bool)
+  let rec top_exp (early_ret : bool) (aexp_needed : bool)
     (E_aux (e, (l,annot)) as full_exp) =
-    let expY = top_exp sequential mwords early_ret true in
-    let expN = top_exp sequential mwords early_ret false in
-    let expV = top_exp sequential mwords early_ret in
+    let expY = top_exp early_ret true in
+    let expN = top_exp early_ret false in
+    let expV = top_exp early_ret in
     let liftR doc =
       if early_ret && effectful (effect_of full_exp)
       then separate space [string "liftR"; parens (doc)]
@@ -563,10 +570,10 @@ let doc_exp_lem, doc_let_lem =
                    doc_id_lem id in
                  liftR ((prefix 2 1)
                    (string "write_reg_field_range")
-                   (align (doc_lexp_deref_lem sequential mwords early_ret le ^/^
+                   (align (doc_lexp_deref_lem early_ret le ^/^
                       field_ref ^/^ expY e2 ^/^ expY e3 ^/^ expY e)))
             | _ ->
-               let deref = doc_lexp_deref_lem sequential mwords early_ret le in
+               let deref = doc_lexp_deref_lem early_ret le in
                liftR ((prefix 2 1)
                  (string "write_reg_range")
                  (align (deref ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
@@ -583,10 +590,10 @@ let doc_exp_lem, doc_let_lem =
                  let call = if is_bitvector_typ (Env.base_typ_of (env_of full_exp) (typ_of_annot fannot)) then "write_reg_field_bit" else "write_reg_field_pos" in
                  liftR ((prefix 2 1)
                    (string call)
-                   (align (doc_lexp_deref_lem sequential mwords early_ret le ^/^
+                   (align (doc_lexp_deref_lem early_ret le ^/^
                      field_ref ^/^ expY e2 ^/^ expY e)))
             | LEXP_aux (_, lannot) ->
-               let deref = doc_lexp_deref_lem sequential mwords early_ret le in
+               let deref = doc_lexp_deref_lem early_ret le in
                let call = if is_bitvector_typ (Env.base_typ_of (env_of full_exp) (typ_of_annot lannot)) then "write_reg_bit" else "write_reg_pos" in
                liftR ((prefix 2 1) (string call)
                (deref ^/^ expY e2 ^/^ expY e))
@@ -600,10 +607,10 @@ let doc_exp_lem, doc_let_lem =
             string "set_field"*) in
            liftR ((prefix 2 1)
              (string "write_reg_field")
-             (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+             (doc_lexp_deref_lem early_ret le ^^ space ^^
                 field_ref ^/^ expY e))
         | _ ->
-           liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref_lem sequential mwords early_ret le ^/^ expY e)))
+           liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref_lem early_ret le ^/^ expY e)))
     | E_vector_append(le,re) ->
       raise (Reporting_basic.err_unreachable l
         "E_vector_append should have been rewritten before pretty-printing")
@@ -619,7 +626,7 @@ let doc_exp_lem, doc_let_lem =
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        raise (report l "E_for should have been removed till now")
     | E_let(leb,e) ->
-       let epp = let_exp sequential mwords early_ret leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
+       let epp = let_exp early_ret leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
        begin match f with
@@ -674,13 +681,13 @@ let doc_exp_lem, doc_let_lem =
             | [exp] ->
                let epp = separate space [string "early_return"; expY exp] in
                let aexp_needed, tepp =
-                 if contains_t_pp_var mwords (typ_of exp) ||
-                    contains_t_pp_var mwords (typ_of full_exp) then
+                 if contains_t_pp_var (typ_of exp) ||
+                    contains_t_pp_var (typ_of full_exp) then
                    aexp_needed, epp
                  else
-                   let tannot = separate space [string "_MR";
-                     doc_atomic_typ_lem sequential mwords false (typ_of full_exp);
-                     doc_atomic_typ_lem sequential mwords false (typ_of exp)] in
+                   let tannot = separate space [string "MR";
+                     doc_atomic_typ_lem false (typ_of full_exp);
+                     doc_atomic_typ_lem false (typ_of exp)] in
                    true, doc_op colon epp tannot in
                if aexp_needed then parens tepp else tepp
             | _ -> raise (Reporting_basic.err_unreachable l
@@ -698,19 +705,23 @@ let doc_exp_lem, doc_let_lem =
                     parens (separate_map comma (expV false) args) in
              if aexp_needed then parens (align epp) else epp
           | _ ->
-             let call = match annot with
+             let call, is_extern = match annot with
                | Some (env, _, _) when Env.is_extern f env "lem" ->
-                 string (Env.get_extern f env "lem")
-               | _ -> doc_id_lem f in
-             let argspp = match args with
-               | [arg] -> expV true arg
-               | args -> parens (align (separate_map (comma ^^ break 0) (expV false) args)) in
+                 string (Env.get_extern f env "lem"), true
+               | _ -> doc_id_lem f, false in
+             let argspp =
+               (* TODO Update Sail library functions to not use tupled arguments,
+                  then remove the special case here *)
+               if is_extern then
+                 parens (align (separate_map (comma ^^ break 0) (expV true) args))
+               else
+                 align (separate_map (break 1) (expV true) args) in
              let epp = align (call ^//^ argspp) in
              let (taepp,aexp_needed) =
                let t = (*Env.base_typ_of (env_of full_exp)*) (typ_of full_exp) in
                let eff = effect_of full_exp in
                if typ_needs_printed (Env.base_typ_of (env_of full_exp) t)
-               then (align epp ^^ (doc_tannot_lem sequential mwords (effectful eff) t), true)
+               then (align epp ^^ (doc_tannot_lem (effectful eff) t), true)
                else (epp, aexp_needed) in
              liftR (if aexp_needed then parens (align taepp) else taepp)
           end
@@ -732,7 +743,7 @@ let doc_exp_lem, doc_let_lem =
            let field_f = doc_id_lem tid ^^ underscore ^^ doc_id_lem id ^^ dot ^^ string "get_field" in
            let (ta,aexp_needed) =
              if typ_needs_printed t
-             then (doc_tannot_lem sequential mwords (effectful eff) t, true)
+             then (doc_tannot_lem (effectful eff) t, true)
              else (empty, aexp_needed) in
            let epp = field_f ^^ space ^^ (expY fexp) in
            if aexp_needed then parens (align epp ^^ ta) else (epp ^^ ta)
@@ -755,11 +766,11 @@ let doc_exp_lem, doc_let_lem =
        if has_effect eff BE_rreg then
          let epp = separate space [string "read_reg";doc_id_lem id] in
          if is_bitvector_typ base_typ
-         then liftR (parens (epp ^^ doc_tannot_lem sequential mwords true base_typ))
+         then liftR (parens (epp ^^ doc_tannot_lem true base_typ))
          else liftR epp
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
-    | E_lit lit -> doc_lit_lem sequential mwords false lit annot
+    | E_lit lit -> doc_lit_lem false lit annot
     | E_cast(typ,e) ->
        expV aexp_needed e
     | E_tuple exps ->
@@ -773,7 +784,7 @@ let doc_exp_lem, doc_let_lem =
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
        let epp = anglebars (space ^^ (align (separate_map
                                           (semi_sp ^^ break 1)
-                                          (doc_fexp sequential mwords early_ret recordtyp) fexps)) ^^ space) in
+                                          (doc_fexp early_ret recordtyp) fexps)) ^^ space) in
        if aexp_needed then parens epp else epp
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
        let recordtyp = match annot with
@@ -782,7 +793,7 @@ let doc_exp_lem, doc_let_lem =
            when Env.is_record tid env ->
            tid
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
-       anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp sequential mwords early_ret recordtyp) fexps))
+       anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp early_ret recordtyp) fexps))
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let (start, len, order, etyp) =
@@ -808,9 +819,9 @@ let doc_exp_lem, doc_let_lem =
        let epp =
          group (separate space [string "Vector"; brackets expspp;string start;string dir_out]) in
        let (epp,aexp_needed) =
-         if is_bit_typ etyp && mwords then
+         if is_bit_typ etyp && !opt_mwords then
            let bepp = string "vec_to_bvec" ^^ space ^^ parens (align epp) in
-           (bepp ^^ doc_tannot_lem sequential mwords false t, true)
+           (bepp ^^ doc_tannot_lem false t, true)
          else (epp,aexp_needed) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update(v,e1,e2) ->
@@ -841,10 +852,23 @@ let doc_exp_lem, doc_let_lem =
 
        let epp =
          group ((separate space [string "match"; only_integers e; string "with"]) ^/^
-                  (separate_map (break 1) (doc_case sequential mwords early_ret) pexps) ^/^
+                  (separate_map (break 1) (doc_case early_ret) pexps) ^/^
                     (string "end")) in
        if aexp_needed then parens (align epp) else align epp
-    | E_exit e -> liftR (separate space [string "exit"; expY e;])
+    | E_try (e, pexps) ->
+       if effectful (effect_of e) then
+         let try_catch = if early_ret then "try_catchR" else "try_catch" in
+         let epp =
+           group ((separate space [string try_catch; expY e; string "(function "]) ^/^
+                    (separate_map (break 1) (doc_case early_ret) pexps) ^/^
+                      (string "end)")) in
+         if aexp_needed then parens (align epp) else align epp
+       else
+         raise (Reporting_basic.err_todo l "Warning: try-block around pure expression")
+    | E_throw e ->
+       let epp = liftR (separate space [string "throw"; expY e]) in
+       if aexp_needed then parens (align epp) else align epp
+    | E_exit e -> liftR (separate space [string "exit"; expY e])
     | E_assert (e1,e2) ->
        let epp = liftR (separate space [string "assert_exp"; expY e1; expY e2]) in
        if aexp_needed then parens (align epp) else align epp
@@ -861,67 +885,67 @@ let doc_exp_lem, doc_let_lem =
             (separate space [expV b e1; string ">>"]) ^^ hardline ^^ expN e2
          | _ ->
             (separate space [expV b e1; string ">>= fun";
-                             doc_pat_lem sequential mwords true pat;arrow]) ^^ hardline ^^ expN e2 in
+                             doc_pat_lem true pat;arrow]) ^^ hardline ^^ expN e2 in
        if aexp_needed then parens (align epp) else epp
     | E_internal_return (e1) ->
        separate space [string "return"; expY e1]
     | E_sizeof nexp ->
       (match nexp_simp nexp with
-        | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem sequential mwords false (L_aux (L_num i, l)) annot
+        | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem false (L_aux (L_num i, l)) annot
         | _ ->
           raise (Reporting_basic.err_unreachable l
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
-      let ret_monad = if sequential then " : MR regstate" else " : MR" in
+      let ret_monad = if !opt_sequential then " : MR regstate" else " : MR" in
       let ta =
-        if contains_t_pp_var mwords (typ_of full_exp) || contains_t_pp_var mwords (typ_of r)
+        if contains_t_pp_var (typ_of full_exp) || contains_t_pp_var (typ_of r)
         then empty
         else separate space
           [string ret_monad;
-          parens (doc_typ_lem sequential mwords (typ_of full_exp));
-          parens (doc_typ_lem sequential mwords (typ_of r))] in
+          parens (doc_typ_lem (typ_of full_exp));
+          parens (doc_typ_lem (typ_of r))] in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ -> string "true"
     | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_exp_user _ ->
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
-  and let_exp sequential mwords early_ret (LB_aux(lb,_)) = match lb with
+  and let_exp early_ret (LB_aux(lb,_)) = match lb with
     | LB_val(pat,e) ->
        prefix 2 1
-              (separate space [string "let"; doc_pat_lem sequential mwords true pat; equals])
-              (top_exp sequential mwords early_ret false e)
+              (separate space [string "let"; doc_pat_lem true pat; equals])
+              (top_exp early_ret false e)
 
-  and doc_fexp sequential mwords early_ret recordtyp (FE_aux(FE_Fexp(id,e),_)) =
+  and doc_fexp early_ret recordtyp (FE_aux(FE_Fexp(id,e),_)) =
     let fname =
       if prefix_recordtype
       then (string (string_of_id recordtyp ^ "_")) ^^ doc_id_lem id
       else doc_id_lem id in
-    group (doc_op equals fname (top_exp sequential mwords early_ret true e))
+    group (doc_op equals fname (top_exp early_ret true e))
 
-  and doc_case sequential mwords early_ret = function
+  and doc_case early_ret = function
   | Pat_aux(Pat_exp(pat,e),_) ->
-    group (prefix 3 1 (separate space [pipe; doc_pat_lem sequential mwords false pat;arrow])
-                  (group (top_exp sequential mwords early_ret false e)))
+    group (prefix 3 1 (separate space [pipe; doc_pat_lem false pat;arrow])
+                  (group (top_exp early_ret false e)))
   | Pat_aux(Pat_when(_,_,_),(l,_)) ->
     raise (Reporting_basic.err_unreachable l
       "guarded pattern expression should have been rewritten before pretty-printing")
 
-  and doc_lexp_deref_lem sequential mwords early_ret ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
+  and doc_lexp_deref_lem early_ret ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_field (le,id) ->
-       parens (separate empty [doc_lexp_deref_lem sequential mwords early_ret le;dot;doc_id_lem id])
+       parens (separate empty [doc_lexp_deref_lem early_ret le;dot;doc_id_lem id])
     | LEXP_id id -> doc_id_lem id
     | LEXP_cast (typ,id) -> doc_id_lem id
-    | LEXP_tup lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem sequential mwords early_ret) lexps)
+    | LEXP_tup lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem early_ret) lexps)
     | _ ->
        raise (Reporting_basic.err_unreachable l ("doc_lexp_deref_lem: Unsupported lexp"))
              (* expose doc_exp_lem and doc_let *)
   in top_exp, let_exp
 
 (*TODO Upcase and downcase type and constructors as needed*)
-let doc_type_union_lem sequential mwords (Tu_aux(typ_u,_)) = match typ_u with
+let doc_type_union_lem (Tu_aux(typ_u,_)) = match typ_u with
   | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor id; string "of";
-                                        parens (doc_typ_lem sequential mwords typ)]
+                                        parens (doc_typ_lem typ)]
   | Tu_id id -> separate space [pipe; doc_id_lem_ctor id]
 
 let rec doc_range_lem (BF_aux(r,_)) = match r with
@@ -929,17 +953,17 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
-let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
+let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,nm,(TypSchm_aux (TypSchm_ts (typq, _), _) as typschm)) ->
      doc_op equals
        (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
-       (doc_typschm_lem sequential mwords false typschm)
+       (doc_typschm_lem false typschm)
   | TD_record(id,nm,typq,fs,_) ->
     let fname fid = if prefix_recordtype
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
                     else doc_id_lem_type fid in
     let f_pp (typ,fid) =
-      concat [fname fid;space;colon;space;doc_typ_lem sequential mwords typ; semi] in
+      concat [fname fid;space;colon;space;doc_typ_lem typ; semi] in
     let rectyp = match typq with
       | TypQ_aux (TypQ_tq qs, _) ->
         let quant_item = function
@@ -956,7 +980,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
         mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
           [mk_typ_arg (Typ_arg_typ rectyp);
            mk_typ_arg (Typ_arg_typ ftyp)])) in
-      let rfannot = doc_tannot_lem sequential mwords false reftyp in
+      let rfannot = doc_tannot_lem false reftyp in
       let get, set =
         string "rec_val" ^^ dot ^^ fname fid,
         anglebars (space ^^ string "rec_val with " ^^
@@ -985,7 +1009,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
     doc_op equals
            (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
            ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline ^^
-    if sequential && string_of_id id = "regstate" then empty
+    if !opt_sequential && string_of_id id = "regstate" then empty
     else separate_map hardline doc_field fs
   | TD_variant(id,nm,typq,ar,_) ->
      (match id with
@@ -999,7 +1023,7 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux ((Id "option"),_) -> empty
       | _ ->
-         let ar_doc = group (separate_map (break 1) (doc_type_union_lem sequential mwords) ar) in
+         let ar_doc = group (separate_map (break 1) doc_type_union_lem ar) in
          let typ_pp =
            (doc_op equals)
              (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem None typq])
@@ -1176,13 +1200,13 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
        let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
        let size = if dir_b then add_big_int (sub_big_int i2 i1) unit_big_int else add_big_int (sub_big_int i1 i2) unit_big_int in
        let vtyp = vector_typ (nconstant i1) (nconstant size) ord bit_typ in
-       let tannot = doc_tannot_lem sequential mwords false vtyp in
+       let tannot = doc_tannot_lem false vtyp in
        let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id_lem id);
                                                        doc_range_lem r;]) in
        let doc_rids = group (separate_map (semi ^^ (break 1)) doc_rid rs) in
        doc_op equals
          (concat [string "type";space;doc_id_lem id])
-         (doc_typ_lem sequential mwords vtyp)
+         (doc_typ_lem vtyp)
        ^^ hardline ^^
        doc_op equals
          (concat [string "let";space;string "cast_";doc_id_lem id;space;string "reg"])
@@ -1199,30 +1223,64 @@ let doc_typdef_lem sequential mwords (TD_aux(td, (l, annot))) = match td with
                                      break 0 ^^ brackets (align doc_rids)]))
     | _ -> raise (Reporting_basic.err_unreachable l "register with non-constant indices")
 
+let args_of_typ l env typ =
+  let typs = match typ with
+    | Typ_aux (Typ_tup typs, _) -> typs
+    | typ -> [typ] in
+  let arg i typ =
+    let id = mk_id ("arg" ^ string_of_int i) in
+    P_aux (P_id id, (l, Some (env, typ, no_effect))),
+    E_aux (E_id id, (l, Some (env, typ, no_effect))) in
+  List.split (List.mapi arg typs)
+
+let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
+  let env = env_of_annot annot in
+  let (Typ_aux (taux, _)) = typ_of_annot annot in
+  let identity = (fun body -> body) in
+  match paux, taux with
+  | P_tup [], _ ->
+     let annot = (l, Some (Env.empty, unit_typ, no_effect)) in
+     [P_aux (P_lit (mk_lit L_unit), annot)], identity
+  | P_tup pats, _ -> pats, identity
+  | P_wild, Typ_tup typs ->
+     let wild typ = P_aux (P_wild, (l, Some (env, typ, no_effect))) in
+     List.map wild typs, identity
+  | P_typ (_, pat), _ -> untuple_args_pat pat
+  | P_as _, Typ_tup _ | P_id _, Typ_tup _ ->
+     let argpats, argexps = args_of_typ l env (pat_typ_of pat) in
+     let argexp = E_aux (E_tuple argexps, annot) in
+     let bindargs (E_aux (_, bannot) as body) =
+       E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
+     argpats, bindargs
+  | _, _ ->
+     [pat], identity
+
 let doc_rec_lem (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> space
   | Rec_rec -> space ^^ string "rec" ^^ space
 
-let doc_tannot_opt_lem sequential mwords (Typ_annot_opt_aux(t,_)) = match t with
-  | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem sequential mwords typ)
+let doc_tannot_opt_lem (Typ_annot_opt_aux(t,_)) = match t with
+  | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem typ)
 
-let doc_fun_body_lem sequential mwords exp =
+let doc_fun_body_lem exp =
   let early_ret =contains_early_return exp in
-  let doc_exp = doc_exp_lem sequential mwords early_ret false exp in
+  let doc_exp = doc_exp_lem early_ret false exp in
   if early_ret
   then align (string "catch_early_return" ^//^ parens (doc_exp))
   else doc_exp
 
-let doc_funcl_lem sequential mwords (FCL_aux(FCL_Funcl(id,pexp),_)) =
+let doc_funcl_lem (FCL_aux(FCL_Funcl(id,pexp),_)) =
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
+  let pats, bind = untuple_args_pat pat in
+  let patspp = separate_map space (doc_pat_lem true) pats in
   let _ = match guard with
     | None -> ()
     | _ ->
        raise (Reporting_basic.err_unreachable l
-                "guarded pattern expression should have been rewritten before pretty-printing")
-  in
-  group (prefix 3 1 ((doc_pat_lem sequential mwords false pat) ^^ space ^^ arrow)
-    (doc_fun_body_lem sequential mwords exp))
+                "guarded pattern expression should have been rewritten before pretty-printing") in
+  group (prefix 3 1
+    (separate space [doc_id_lem id; patspp; equals])
+    (doc_fun_body_lem (bind exp)))
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -1230,39 +1288,16 @@ let get_id = function
 
 module StringSet = Set.Make(String)
 
-let doc_fundef_rhs_lem sequential mwords (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
-  match funcls with
-  | [] -> failwith "FD_function with empty function list"
-  | [FCL_aux(FCL_Funcl(id,pexp),_)] ->
-     let pat,guard,exp,(l,_) = destruct_pexp pexp in
-     let _ = match guard with
-       | None -> ()
-       | _ ->
-          raise (Reporting_basic.err_unreachable l
-                   "guarded pattern expression should have been rewritten before pretty-printing")
-     in
-    (prefix 2 1)
-      ((separate space)
-         [doc_id_lem id;
-          (doc_pat_lem sequential mwords true pat);
-          equals])
-      (doc_fun_body_lem sequential mwords exp)
-  | _ ->
-    let clauses =
-      (separate_map (break 1))
-        (fun fcl -> separate space [pipe;doc_funcl_lem sequential mwords fcl]) funcls in
-    (prefix 2 1)
-      ((separate space) [doc_id_lem (id_of_fundef fd);equals;string "function"])
-      (clauses ^/^ string "end")
+let doc_fundef_rhs_lem (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
+  separate_map (hardline ^^ string "and ") doc_funcl_lem funcls
 
-let doc_mutrec_lem sequential mwords = function
+let doc_mutrec_lem = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundefs ->
     string "let rec " ^^
-    separate_map (hardline ^^ string "and ")
-      (doc_fundef_rhs_lem sequential mwords) fundefs
+    separate_map (hardline ^^ string "and ") doc_fundef_rhs_lem fundefs
 
-let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
+let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | FCL_aux (FCL_Funcl(id,_),_) :: _
@@ -1291,14 +1326,16 @@ let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls)
                if StringSet.mem candidate already_used then
                  pick_name_not_clashing_with already_used (candidate ^ "'")
                else candidate in
+             let unit_pat = P_aux (P_lit (mk_lit L_unit), (l, Some (Env.empty, unit_typ, no_effect))) in
              let aux_fname = pick_name_not_clashing_with already_used_fnames (string_of_id id ^ "_" ^ ctor) in
+             let aux_args = if argspat = [] then unit_pat else P_aux (P_tup argspat,pannot) in
              let already_used_fnames = StringSet.add aux_fname already_used_fnames in
              let fcl = FCL_aux (FCL_Funcl (Id_aux (Id aux_fname,l),
-                                           Pat_aux (Pat_exp (P_aux (P_tup argspat,pannot),exp),(pexp_l,None)))
+                                           Pat_aux (Pat_exp (aux_args,exp),(pexp_l,None)))
                                   ,annot) in
              let auxiliary_functions =
                 auxiliary_functions ^^ hardline ^^ hardline ^^
-                  doc_fundef_lem sequential mwords (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
+                  doc_fundef_lem (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
              (* Bind complex patterns to names so that we can pass them to the
                 auxiliary function *)
              let name_pat idx (P_aux (p,a)) = match p with
@@ -1308,17 +1345,18 @@ let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls)
                | _ -> P_aux (P_as (P_aux (p,a), Id_aux (Id ("arg" ^ string_of_int idx),l)),a) in
              let named_argspat = List.mapi name_pat argspat in
              let named_pat = P_aux (P_app (Id_aux (Id ctor,l),named_argspat),pannot) in
+             let named_args = if argspat = [] then [unit_pat] else named_argspat in
              let doc_arg idx (P_aux (p,(l,a))) = match p with
                | P_as (pat,id) -> doc_id_lem id
-               | P_lit lit -> doc_lit_lem sequential mwords false lit a
+               | P_lit lit -> doc_lit_lem false lit a
                | P_id id -> doc_id_lem id
                | _ -> string ("arg" ^ string_of_int idx) in
              let clauses =
                clauses ^^ (break 1) ^^
                  (separate space
-                    [pipe;doc_pat_lem sequential mwords false named_pat;arrow;
+                    [pipe;doc_pat_lem false named_pat;arrow;
                      string aux_fname;
-                     parens (separate comma (List.mapi doc_arg named_argspat))]) in
+                     separate space (List.mapi doc_arg named_args)]) in
              (already_used_fnames,auxiliary_functions,clauses)
         ) (StringSet.empty,empty,empty) fcls in
 
@@ -1328,15 +1366,15 @@ let rec doc_fundef_lem sequential mwords (FD_aux(FD_function(r, typa, efa, fcls)
       (clauses ^/^ string "end")
   | FCL_aux (FCL_Funcl(id,_),annot) :: _
     when not (Env.is_extern id (env_of_annot annot) "lem") ->
-    string "let" ^^ (doc_rec_lem r) ^^ (doc_fundef_rhs_lem sequential mwords fd)
+    string "let" ^^ (doc_rec_lem r) ^^ (doc_fundef_rhs_lem fd)
   | _ -> empty
 
 
 
-let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
+let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
   | DEC_reg(typ,id) ->
-     if sequential then empty
+     if !opt_sequential then empty
      else
        let env = env_of_annot annot in
        (match typ with
@@ -1365,12 +1403,12 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
-let doc_spec_lem sequential mwords (VS_aux (valspec,annot)) =
+let doc_spec_lem (VS_aux (valspec,annot)) =
   match valspec with
   | VS_val_spec (typschm,id,ext,_) when ext "lem" = None ->
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
-     if contains_t_pp_var mwords typ then empty else *)
-     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem sequential mwords true typschm] ^/^ hardline 
+     if contains_t_pp_var typ then empty else *)
+     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem true typschm] ^/^ hardline 
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 
@@ -1392,7 +1430,7 @@ let is_field_accessor regtypes fdef =
      (access = "get" || access = "set") && is_field_of regtyp field
   | _ -> false
 
-let doc_regtype_fields sequential mwords (tname, (n1, n2, fields)) =
+let doc_regtype_fields (tname, (n1, n2, fields)) =
   let i1, i2 = match n1, n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) -> i1, i2
     | _ -> raise (Reporting_basic.err_typ Parse_ast.Unknown
@@ -1414,48 +1452,48 @@ let doc_regtype_fields sequential mwords (tname, (n1, n2, fields)) =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
         [mk_typ_arg (Typ_arg_typ (mk_id_typ (mk_id tname)));
          mk_typ_arg (Typ_arg_typ ftyp)])) in
-    let rfannot = doc_tannot_lem sequential mwords false reftyp in
+    let rfannot = doc_tannot_lem false reftyp in
     doc_op equals
      (concat [string "let "; parens (concat [string tname; underscore; doc_id_lem fid; rfannot])])
      (concat [
        space; langlebar; string " field_name = \"" ^^ doc_id_lem fid ^^ string "\";"; hardline;
        space; space; space; string (" field_start = " ^ string_of_big_int i ^ ";"); hardline;
        space; space; space; string (" field_is_inc = " ^ dir ^ ";"); hardline;
-       space; space; space; string (" get_field = (fun reg -> get_" ^ tname ^ "_" ^ string_of_id fid ^ "(reg));"); hardline;
-       space; space; space; string (" set_field = (fun reg v -> set_" ^ tname ^ "_" ^ string_of_id fid ^ "(reg, v)) "); ranglebar])
+       space; space; space; string (" get_field = get_" ^ tname ^ "_" ^ string_of_id fid ^ ";"); hardline;
+       space; space; space; string (" set_field = set_" ^ tname ^ "_" ^ string_of_id fid ^ " "); ranglebar])
   in
   separate_map hardline doc_field fields
 
-let rec doc_def_lem sequential mwords regtypes def =
+let rec doc_def_lem regtypes def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
-  | DEF_spec v_spec -> (empty,doc_spec_lem sequential mwords v_spec)
+  | DEF_spec v_spec -> (empty,doc_spec_lem v_spec)
   | DEF_fixity _ -> (empty,empty)
   | DEF_overload _ -> (empty,empty)
-  | DEF_type t_def -> (group (doc_typdef_lem sequential mwords t_def) ^/^ hardline,empty)
-  | DEF_reg_dec dec -> (group (doc_dec_lem sequential dec),empty)
+  | DEF_type t_def -> (group (doc_typdef_lem t_def) ^/^ hardline,empty)
+  | DEF_reg_dec dec -> (group (doc_dec_lem dec),empty)
 
   | DEF_default df -> (empty,empty)
   | DEF_fundef fdef ->
-     let doc_fdef = group (doc_fundef_lem sequential mwords fdef) ^/^ hardline in
+     let doc_fdef = group (doc_fundef_lem fdef) ^/^ hardline in
      if is_field_accessor regtypes fdef then (doc_fdef, empty) else (empty, doc_fdef)
   | DEF_internal_mutrec fundefs ->
-     (empty, doc_mutrec_lem sequential mwords fundefs ^/^ hardline)
-  | DEF_val lbind -> (empty,group (doc_let_lem sequential mwords false lbind) ^/^ hardline)
+     (empty, doc_mutrec_lem fundefs ^/^ hardline)
+  | DEF_val lbind -> (empty,group (doc_let_lem false lbind) ^/^ hardline)
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
   | DEF_kind _ -> (empty,empty)
 
   | DEF_comm (DC_comm s) -> (empty,comment (string s))
   | DEF_comm (DC_comm_struct d) ->
-     let (typdefs,vdefs) = doc_def_lem sequential mwords regtypes d in
+     let (typdefs,vdefs) = doc_def_lem regtypes d in
      (empty,comment (typdefs ^^ hardline ^^ vdefs))
 
 
-let doc_defs_lem sequential mwords (Defs defs) =
+let doc_defs_lem (Defs defs) =
   let regtypes = find_regtypes defs in
-  let field_refs = separate_map hardline (doc_regtype_fields sequential mwords) regtypes in
-  let (typdefs,valdefs) = List.split (List.map (doc_def_lem sequential mwords regtypes) defs) in
+  let field_refs = separate_map hardline doc_regtype_fields regtypes in
+  let (typdefs,valdefs) = List.split (List.map (doc_def_lem regtypes) defs) in
   (separate empty typdefs ^^ field_refs, separate empty valdefs)
 
 let find_registers (Defs defs) =
@@ -1470,7 +1508,13 @@ let find_registers (Defs defs) =
       | _ -> acc
     ) [] defs
 
-let doc_regstate_lem mwords registers =
+let find_exc_typ (Defs defs) =
+  let is_exc_typ_def = function
+    | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
+    | _ -> false in
+  if List.exists is_exc_typ_def defs then "exception" else "unit"
+
+let doc_regstate_lem registers =
   let l = Parse_ast.Unknown in
   let annot = (l, None) in
   let regstate = match registers with
@@ -1494,21 +1538,16 @@ let doc_regstate_lem mwords registers =
         | _ ->
            let initreg (typ, id, env) =
              let annot typ = Some (env, typ, no_effect) in
-             let initval = undefined_of_typ mwords l annot typ in
+             let initval = undefined_of_typ !opt_mwords l annot typ in
              FE_aux (FE_Fexp (id, initval), (l, annot typ)) in
            E_aux (
              E_record (FES_aux (FES_Fexps (List.map initreg registers, false), annot)),
              (l, Some (Env.empty, mk_id_typ (mk_id "regstate"), no_effect)))
       in
-      doc_op equals (string "let initial_regstate") (doc_exp_lem true mwords false false exp)
+      doc_op equals (string "let initial_regstate") (doc_exp_lem false false exp)
     else empty
   in
-  concat [
-    doc_typdef_lem true mwords (TD_aux (regstate, annot)); hardline;
-    hardline;
-    string "type _MR 'a 'r = MR regstate 'a 'r"; hardline;
-    string "type _M 'a = M regstate 'a"
-  ],
+  doc_typdef_lem (TD_aux (regstate, annot)),
   initregstate
 
 let doc_register_refs_lem registers =
@@ -1534,11 +1573,12 @@ let doc_register_refs_lem registers =
       string "  write_to = (fun s v -> (<| s with "; field; string " = v |>)) |>"] in
   separate_map hardline doc_register_ref registers
 
-let pp_defs_lem sequential mwords (types_file,types_modules) (defs_file,defs_modules) d top_line =
+let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
   (* let regtypes = find_regtypes d in *)
-  let (typdefs,valdefs) = doc_defs_lem sequential mwords d in
-  let regstate_def, initregstate_def = doc_regstate_lem mwords (find_registers d) in
+  let (typdefs,valdefs) = doc_defs_lem d in
+  let regstate_def, initregstate_def = doc_regstate_lem (find_registers d) in
   let register_refs = doc_register_refs_lem (find_registers d) in
+  let exc_typ = find_exc_typ d in
   (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
@@ -1558,12 +1598,19 @@ let pp_defs_lem sequential mwords (types_file,types_modules) (defs_file,defs_mod
         else empty;
         typdefs; hardline;
         hardline;
-        if sequential then
+        if !opt_sequential then
           concat [regstate_def; hardline;
-          hardline;
-          register_refs]
+            hardline;
+            string ("type MR 'a 'r = State.MR regstate 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = State.M regstate 'a " ^ exc_typ); hardline;
+            hardline;
+            register_refs
+          ]
         else
-          concat [string "type _MR 'a 'r = MR 'a 'r"; hardline; string "type _M 'a = M 'a"; hardline]
+          concat [
+            string ("type MR 'a 'r = Prompt.MR 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = Prompt.M 'a " ^ exc_typ); hardline
+          ]
         ]);
   (print defs_file)
     (concat

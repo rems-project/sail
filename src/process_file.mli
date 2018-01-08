@@ -63,8 +63,6 @@ val load_file_no_check : Ast.order -> string -> unit Ast.defs
 val load_file : Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t
 
 val opt_new_parser : bool ref
-val opt_lem_sequential : bool ref
-val opt_lem_mwords : bool ref
 val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref
@@ -75,7 +73,7 @@ val opt_auto_mono : bool ref
 
 type out_type =
   | Lem_ast_out
-  | Lem_out of string option (* If present, the string is a file to open in the lem backend*)
+  | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
 
 val output :
   string ->                           (* The path to the library *)

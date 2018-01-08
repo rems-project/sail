@@ -130,12 +130,11 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_record_update(e,fexps) ->
       union_effects (effect_of e) (effect_of_fexps fexps)
     | E_field (e,_) -> effect_of e
-    | E_case (e,pexps) ->
+    | E_case (e,pexps) | E_try (e,pexps) ->
       List.fold_left union_effects (effect_of e) (List.map effect_of_pexp pexps)
     | E_let (lb,e) -> union_effects (effect_of_lb lb) (effect_of e)
     | E_assign (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
-    | E_exit e -> union_effects eff (effect_of e)
-    | E_return e -> union_effects eff (effect_of e)
+    | E_exit e | E_return e | E_throw e -> union_effects eff (effect_of e)
     | E_sizeof _ | E_sizeof_internal _ | E_constraint _ -> no_effect
     | E_assert (c,m) -> union_effects eff (union_eff_exps [c; m])
     | E_comment _ | E_comment_struc _ -> no_effect

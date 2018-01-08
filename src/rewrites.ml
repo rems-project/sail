@@ -1028,6 +1028,12 @@ let bitwise_and_exp exp1 exp2 =
   let andid = Id_aux (Id "and_bool", gen_loc l) in
   annot_exp (E_app(andid,[exp1;exp2])) l (env_of exp1) bool_typ
 
+let compose_guard_opt g1 g2 = match g1, g2 with
+  | Some g1, Some g2 -> Some (bitwise_and_exp g1 g2)
+  | Some g1, None -> Some g1
+  | None, Some g2 -> Some g2
+  | None, None -> None
+
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_lit _ | P_wild | P_id _ -> false
 | P_as (pat,_) | P_typ (_,pat) -> contains_bitvector_pat pat
@@ -1122,13 +1128,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       annot_exp (E_let (letbind,body)) l env (typ_of body)) in
     (letexp, letbind) in
 
-  let compose_guards guards =
-    let conj g1 g2 = match g1, g2 with
-      | Some g1, Some g2 -> Some (bitwise_and_exp g1 g2)
-      | Some g1, None -> Some g1
-      | None, Some g2 -> Some g2
-      | None, None -> None in
-    List.fold_right conj guards None in
+  let compose_guards guards = List.fold_right compose_guard_opt guards None in
 
   let flatten_guards_decls gd =
     let (guards,decls,letbinds) = Util.split3 gd in
@@ -1294,6 +1294,38 @@ let rewrite_defs_remove_bitvector_pats (Defs defs) =
     Defs (List.flatten (List.map rewrite_def defs))
     (* )) *)
 
+(* Rewrite literal number patterns to guarded patterns
+   Those numeral patterns are not handled very well by Lem (or Isabelle)
+ *)
+let rewrite_defs_remove_numeral_pats =
+  let p_lit = function
+    | L_aux (L_num n, l) ->
+       let id = fresh_id "l__" Parse_ast.Unknown in
+       let annot_exp e_aux typ = E_aux (e_aux, simple_annot l typ) in
+       let guard =
+         annot_exp (E_app_infix (
+           annot_exp (E_id id) (atom_typ (nconstant n)),
+           mk_id "==",
+           simple_num l n
+         )) bool_typ in
+       (Some guard, P_id id)
+    | lit -> (None, P_lit lit) in
+  let guard_pat =
+    fold_pat { (compute_pat_alg None compose_guard_opt) with p_lit = p_lit } in
+  let pat_aux (pexp_aux, a) =
+    let pat,guard,exp,a = destruct_pexp (Pat_aux (pexp_aux, a)) in
+    let guard',pat = guard_pat pat in
+    match compose_guard_opt guard guard' with
+    | Some g -> Pat_aux (Pat_when (pat, g, exp), a)
+    | None -> Pat_aux (Pat_exp (pat, exp), a) in
+  let exp_alg = { id_exp_alg with pat_aux = pat_aux } in
+  let rewrite_exp _ = fold_exp exp_alg in
+  let rewrite_funcl (FCL_aux (FCL_Funcl (id, pexp), annot)) =
+    FCL_aux (FCL_Funcl (id, fold_pexp exp_alg pexp), annot) in
+  let rewrite_fun _ (FD_aux (FD_function (r_o, t_o, e_o, funcls), a)) =
+    FD_aux (FD_function (r_o, t_o, e_o, List.map rewrite_funcl funcls), a) in
+  rewrite_defs_base
+    { rewriters_base with rewrite_exp = rewrite_exp; rewrite_fun = rewrite_fun }
 
 (* Remove pattern guards by rewriting them to if-expressions within the
    pattern expression. *)
@@ -2346,6 +2378,11 @@ let rewrite_defs_letbind_effects  =
        n_exp_name exp1 (fun exp1 -> 
        n_pexpL newreturn pexps (fun pexps ->
        k (rewrap (E_case (exp1,pexps)))))
+    | E_try (exp1,pexps) ->
+       let newreturn = effectful exp1 || List.exists effectful_pexp pexps in
+       n_exp_name exp1 (fun exp1 ->
+       n_pexpL newreturn pexps (fun pexps ->
+       k (rewrap (E_try (exp1,pexps)))))
     | E_let (lb,body) ->
        n_lb lb (fun lb -> 
        rewrap (E_let (lb,n_exp body k)))
@@ -2384,6 +2421,9 @@ let rewrite_defs_letbind_effects  =
     | E_return exp' ->
        n_exp_name exp' (fun exp' ->
        k (rewrap (E_return exp')))
+    | E_throw exp' ->
+       n_exp_name exp' (fun exp' ->
+       k (rewrap (E_throw exp')))
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot)) = 
@@ -2921,6 +2961,7 @@ let rewrite_defs_lem = [
   (* ("simple_assignments", rewrite_simple_assignments); *)
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("register_ref_writes", rewrite_register_ref_writes);
