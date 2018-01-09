@@ -16,6 +16,10 @@ val "extz" : forall 'n 'm 'o 'p. (atom('p),atom('m),vector('o, 'n, dec, bit)) ->
 val extzv : forall 'n 'm 'o 'p. vector('o, 'n, dec, bit) -> vector('p, 'm, dec, bit) effect pure
 function extzv(v) = extz(sizeof('p), sizeof('m),v)
 
+val "exts" : forall 'n 'm 'o 'p. (atom('p),atom('m),vector('o, 'n, dec, bit)) -> vector('p, 'm, dec, bit) effect pure
+val extsv : forall 'n 'm 'o 'p. vector('o, 'n, dec, bit) -> vector('p, 'm, dec, bit) effect pure
+function extsv(v) = exts(sizeof('p), sizeof('m),v)
+
 (* Definitions for the rewrites *)
 
 val slice_mask : forall 'n, 'n >= 0. (int, int) -> bits('n) effect pure
@@ -38,13 +42,21 @@ function is_ones_subrange (xs, i, j) = {
   (xs & m) == m
 }
 
-val slice_slice_concat : forall 'n 'm 'p 'q 'r, 'r = 'p + 'q & 'n >= 0 & 'm >= 0 & 'p >= 0 & 'q >= 0.
-  (bits('n), int, atom('p), bits('m), int, atom('q)) -> bits('r) effect pure
+val slice_slice_concat : forall 'n 'm 'r, 'n >= 0 & 'm >= 0 & 'r >= 0.
+  (bits('n), int, int, bits('m), int, int) -> bits('r) effect pure
 
 function slice_slice_concat (xs, i, l, ys, i', l') = {
   let xs = (xs & slice_mask(i,l)) >> i in
   let ys = (ys & slice_mask(i',l')) >> i' in
   extzv(xs) << l' | extzv(ys)
+}
+
+val slice_zeros_concat : forall 'n 'p 'q 'r, 'r = 'p + 'q & 'n >= 0 & 'p >= 0 & 'q >= 0 & 'r >= 0.
+  (bits('n), int, atom('p), atom('q)) -> bits('r) effect pure
+
+function slice_zeros_concat (xs, i, l, l') = {
+  let xs = (xs & slice_mask(i,l)) >> i in
+  extzv(xs) << l'
 }
 
 (* Assumes initial vectors are of equal size *)
@@ -67,3 +79,34 @@ function subrange_subrange_concat (xs, i, j, ys, i', j') = {
   extzv(xs) << i' - (j' - 1) | extzv(ys)
 }
 
+val place_subrange : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (bits('n), int, int, int) -> bits('m) effect pure
+
+function place_subrange(xs,i,j,shift) = {
+  let xs = (xs & slice_mask(j,i-j)) >> j in
+  extzv(xs) << shift
+}
+
+val place_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (bits('n), int, int, int) -> bits('m) effect pure
+
+function place_slice(xs,i,l,shift) = {
+  let xs = (xs & slice_mask(i,l)) >> i in
+  extzv(xs) << shift
+}
+
+val zext_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (bits('n), int, int) -> bits('m) effect pure
+
+function zext_slice(xs,i,l) = {
+  let xs = (xs & slice_mask(i,l)) >> i in
+  extzv(xs)
+}
+
+val sext_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (bits('n), int, int) -> bits('m) effect pure
+
+function sext_slice(xs,i,l) = {
+  let xs = (xs & slice_mask(i,l)) >> i in
+  extsv(xs)
+}

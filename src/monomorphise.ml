@@ -2493,6 +2493,7 @@ let rewrite_app env typ (id,args) =
   if is_append id then
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
+    let is_zeros = is_id env (Id "Zeros") in
     match args with
       (* (known-size-vector @ variable-vector) @ variable-vector *)
     | [E_aux (E_app (append,
@@ -2518,6 +2519,29 @@ let rewrite_app env typ (id,args) =
                               E_aux (E_app (mk_id "subrange_subrange_concat",
                                             [vector1; start1; end1; vector2; start2; end2]),
                                      (Unknown,None))),(Unknown,None))])
+    | [E_aux (E_app (append,
+              [e1;
+               E_aux (E_app (slice1,
+                             [vector1; start1; length1]),_)]),_);
+       E_aux (E_app (slice2,
+                     [vector2; start2; length2]),_)]
+        when is_append append && is_slice slice1 && is_slice slice2 &&
+          is_constant_vec_typ env (typ_of e1) &&
+          not (is_constant length1 || is_constant length2) ->
+       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let midsize = nminus size size1 in
+       let midstart =
+         if is_order_inc order
+         then nconstant zero_big_int
+         else nminus midsize (nconstant unit_big_int) in
+       let midtyp = vector_typ midstart midsize order bittyp in
+       E_app (append,
+              [e1;
+               E_aux (E_cast (midtyp,
+                              E_aux (E_app (mk_id "slice_slice_concat",
+                                            [vector1; start1; length1; vector2; start2; length2]),
+                                     (Unknown,None))),(Unknown,None))])
 
     (* variable-range @ variable-range *)
     | [E_aux (E_app (subrange1,
@@ -2541,6 +2565,29 @@ let rewrite_app env typ (id,args) =
        E_cast (typ,
                E_aux (E_app (mk_id "slice_slice_concat",
                              [vector1; start1; length1; vector2; start2; length2]),(Unknown,None)))
+
+    | [E_aux (E_app (append1,
+                     [e1;
+                      E_aux (E_app (slice1, [vector1; start1; length1]),_)]),_);
+       E_aux (E_app (zeros1, [length2]),_)]
+        when is_append append1 && is_slice slice1 && is_zeros zeros1 &&
+          is_constant_vec_typ env (typ_of e1) &&
+          not (is_constant length1 || is_constant length2) ->
+       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let midsize = nminus size size1 in
+       let midstart =
+         if is_order_inc order
+         then nconstant zero_big_int
+         else nminus midsize (nconstant unit_big_int) in
+       let midtyp = vector_typ midstart midsize order bittyp in
+       E_cast (typ,
+               E_aux (E_app (mk_id "append",
+                             [e1;
+                              E_aux (E_cast (midtyp,
+                                             E_aux (E_app (mk_id "slice_zeros_concat",
+                                                           [vector1; start1; length1; length2]),(Unknown,None))),(Unknown,None))]),
+                      (Unknown,None)))
 
     | _ -> E_app (id,args)
 
@@ -2574,6 +2621,48 @@ let rewrite_app env typ (id,args) =
           not (is_constant_range (start1,end1)) ->
        E_app (mk_id "is_ones_subrange",
               [vector1; start1; end1])
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id then
+    let is_subrange = is_id env (Id "vector_subrange") in
+    let is_slice = is_id env (Id "slice") in
+    let is_zeros = is_id env (Id "Zeros") in
+    match args with
+    | (E_aux (E_app (append1,
+                     [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
+                      E_aux (E_app (zeros1, [len1]),_)]),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+        when is_subrange subrange1 && is_zeros zeros1 && is_append append1
+      -> E_app (mk_id "place_subrange",
+                [vector1; start1; end1; len1])
+
+    | (E_aux (E_app (append1,
+                     [E_aux (E_app (slice1, [vector1; start1; length1]), _);
+                      E_aux (E_app (zeros1, [length2]),_)]),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+        when is_slice slice1 && is_zeros zeros1 && is_append append1
+      -> E_app (mk_id "place_slice",
+                [vector1; start1; length1; length2])
+
+    (* If we've already rewritten to slice_slice_concat, we can just drop the
+       zero extension because it can do it *)
+    | (E_aux (E_cast (_, (E_aux (E_app (Id_aux (Id "slice_slice_concat",_), args),_))),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+      -> E_app (mk_id "slice_slice_concat", args)
+
+    | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
+        when is_slice slice1 && not (is_constant length1) ->
+       E_app (mk_id "zext_slice", [vector1; start1; length1])
+
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "SignExtend") id then
+    let is_slice = is_id env (Id "slice") in
+    match args with
+    | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
+        when is_slice slice1 && not (is_constant length1) ->
+       E_app (mk_id "sext_slice", [vector1; start1; length1])
+
     | _ -> E_app (id,args)
 
   else E_app (id,args)
