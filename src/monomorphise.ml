@@ -2591,14 +2591,14 @@ let mono_rewrite defs =
     defs
 end
 
-(* TODO: put in a proper mli for this stuff *)
 type options = {
   auto : bool;
   debug_analysis : int;
-  rewrites : bool
+  rewrites : bool;
+  rewrite_size_parameters : bool
 }
 
-let monomorphise mwords opts splits env defs =
+let monomorphise opts splits env defs =
   let (defs,env) =
     if opts.rewrites then
       let defs = MonoRewrites.mono_rewrite defs in
@@ -2615,7 +2615,7 @@ let monomorphise mwords opts splits env defs =
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
      type checker doesn't store the env at that point :( *)
-  if mwords then
+  if opts.rewrite_size_parameters then
     let (defs,env) = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
     let defs = AtomToItself.rewrite_size_parameters env defs in
     defs
