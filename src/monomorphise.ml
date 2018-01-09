@@ -221,7 +221,7 @@ let kidset_bigunion = function
   | h::t -> List.fold_left KidSet.union h t
 
 (* TODO: deal with non-set constraints, intersections, etc somehow *)
-let extract_set_nc var (NC_aux (_,l) as nc) =
+let extract_set_nc l var nc =
   let rec aux (NC_aux (nc,l)) =
     let re nc = NC_aux (nc,l) in
     match nc with
@@ -351,7 +351,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
        let find_insts k (insts,nc) =
          let inst,nc' =
            if KidSet.mem k vars then
-             let is,nc' = extract_set_nc k nc in
+             let is,nc' = extract_set_nc l k nc in
              Some is,nc'
            else None,nc
          in (k,inst)::insts,nc'
@@ -1257,7 +1257,7 @@ let split_defs splits defs =
          | Nexp_var kvar ->
            let ncs = Env.get_constraints env in
            let nc = List.fold_left nc_and nc_true ncs in
-           List.map mk_lit (fst (extract_set_nc kvar nc))
+           List.map mk_lit (fst (extract_set_nc l kvar nc))
          | _ -> cannot ()
        end
     | _ -> cannot ()
