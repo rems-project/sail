@@ -1613,11 +1613,11 @@ let rec alpha_equivalent env typ1 typ2 =
       | Typ_fn (typ1, typ2, eff) -> Typ_fn (relabel typ1, relabel typ2, eff)
       | Typ_tup typs -> Typ_tup (List.map relabel typs)
       | Typ_exist (kids, nc, typ) ->
+         let (kids, _) = kid_order (KidSet.of_list kids) typ in
          let kids = List.map (fun kid -> (kid, new_kid ())) kids in
          let nc = List.fold_left (fun nc (kid, nk) -> nc_subst_nexp kid (Nexp_var nk) nc) nc kids in
          let typ = List.fold_left (fun nc (kid, nk) -> typ_subst_nexp kid (Nexp_var nk) nc) typ kids in
          let kids = List.map snd kids in
-         let (kids, _) = kid_order (KidSet.of_list kids) typ in
          Typ_exist (kids, nc, typ)
       | Typ_app (id, args) ->
          Typ_app (id, List.map relabel_arg args)
