@@ -64,7 +64,7 @@
 | Address0 (d, page, imm) ->
   `AArch64Address ( translate_out_regzr Set64 d,
                     translate_out_bool page,
-                    translate_out_big_bit imm)
+                    translate_out_signed_big_bit imm)
 
 | LogicalImmediate (d, n, datasize, setflags, op, imm) ->
   let setflags' = translate_out_bool setflags in
