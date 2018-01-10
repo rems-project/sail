@@ -278,7 +278,7 @@ typedef EDSCR_type = register bits [31:0]
 }
 register (EDSCR_type) EDSCR (* External Debug Status and Control Register *)
 
-(* transactional memory, from the pre-alpha document *)
+(* transactional memory, not part of the official spec *)
 typedef TXIDR_EL0_type = register bits [63:0]
 {
   (*63..8 : RES0;*)
