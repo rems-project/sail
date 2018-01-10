@@ -784,7 +784,7 @@ let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
      IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
   | LEXP_field (le,_) -> assigned_vars_in_lexp le
 
-let split_defs splits defs =
+let split_defs continue_anyway splits defs =
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (tu,l) as tua) =
       match tu with
@@ -1196,17 +1196,22 @@ let split_defs splits defs =
     
   (* Split a variable pattern into every possible value *)
 
-  let split var l annot =
+  let split var pat_l annot =
     let v = string_of_id var in
-    let env = Type_check.env_of_annot (l, annot) in
-    let typ = Type_check.typ_of_annot (l, annot) in
+    let env = Type_check.env_of_annot (pat_l, annot) in
+    let typ = Type_check.typ_of_annot (pat_l, annot) in
     let typ = Env.expand_synonyms env typ in
     let Typ_aux (ty,l) = typ in
     let new_l = Generated l in
     let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
-    let cannot () =
-      raise (Reporting_basic.err_general l
-               ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v))
+    let cannot msg =
+      let open Reporting_basic in
+      let error =
+        Err_general (pat_l,
+                     ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
+      in if continue_anyway
+        then (print_error error; [P_aux (P_id var,(pat_l,annot)),[]])
+        else raise (Fatal_error error)
     in
     match ty with
     | Typ_id (Id_aux (Id "bool",_)) ->
@@ -1226,7 +1231,7 @@ let split_defs splits defs =
               P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
               [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))])
               [L_zero; L_one]
-         | _ -> cannot ())
+         | _ -> cannot ("don't know about type " ^ string_of_id id))
 
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
@@ -1237,15 +1242,13 @@ let split_defs splits defs =
               P_aux (P_lit lit,(l,annot)),
               [var,E_aux (E_lit lit,(new_l,annot))]) lits
           else
-            raise (Reporting_basic.err_general l
-                     ("Refusing to split vector type of length " ^ string_of_big_int sz ^
-                         " above limit " ^ string_of_int vector_split_limit ^ 
-                         " for variable " ^ v))
+            cannot ("Refusing to split vector type of length " ^ string_of_big_int sz ^
+                       " (above limit " ^ string_of_int vector_split_limit ^ ")")
        | _ ->
-          cannot ()
+          cannot ("length not constant, " ^ string_of_nexp len)
        )
     (* set constrained numbers *)
-    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp Nexp_aux (value,_),_)]) ->
+    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (value,_) as nexp),_)]) ->
        begin
          let mk_lit i =
             let lit = L_aux (L_num i,new_l) in
@@ -1257,10 +1260,12 @@ let split_defs splits defs =
          | Nexp_var kvar ->
            let ncs = Env.get_constraints env in
            let nc = List.fold_left nc_and nc_true ncs in
-           List.map mk_lit (fst (extract_set_nc l kvar nc))
-         | _ -> cannot ()
+           (match extract_set_nc l kvar nc with
+           | (is,_) -> List.map mk_lit is
+           | exception Reporting_basic.Fatal_error (Reporting_basic.Err_general (_,msg)) -> cannot msg)
+         | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
        end
-    | _ -> cannot ()
+    | _ -> cannot ("unsupported type " ^ string_of_typ typ)
   in
   
 
@@ -2698,7 +2703,8 @@ type options = {
   auto : bool;
   debug_analysis : int;
   rewrites : bool;
-  rewrite_size_parameters : bool
+  rewrite_size_parameters : bool;
+  all_split_errors : bool
 }
 
 let monomorphise opts splits env defs =
@@ -2714,7 +2720,8 @@ let monomorphise opts splits env defs =
     if opts.auto
     then Analysis.argset_to_list (Analysis.analyse_defs opts.debug_analysis env defs)
     else [] in
-  let defs = split_defs (new_splits@splits) defs in
+  let defs = split_defs opts.all_split_errors (new_splits@splits) defs in
+  (* TODO: stop if opts.all_split_errors && something went wrong *)
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
      type checker doesn't store the env at that point :( *)

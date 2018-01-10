@@ -49,10 +49,11 @@
 (**************************************************************************)
 
 type options = {
-  auto : bool;                   (* Analyse ast to find splits for monomorphisation *)
-  debug_analysis : int;          (* Debug output level for the automatic analysis *)
-  rewrites : bool;               (* Experimental rewrites for variable-sized operations *)
-  rewrite_size_parameters : bool (* Make implicit type parameters explicit for (e.g.) lem *)
+  auto : bool;                    (* Analyse ast to find splits for monomorphisation *)
+  debug_analysis : int;           (* Debug output level for the automatic analysis *)
+  rewrites : bool;                (* Experimental rewrites for variable-sized operations *)
+  rewrite_size_parameters : bool; (* Make implicit type parameters explicit for (e.g.) lem *)
+  all_split_errors : bool
 }
 
 val monomorphise :
