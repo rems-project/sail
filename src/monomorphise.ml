@@ -1958,8 +1958,7 @@ let merge rs rs' = {
 
 type env = {
   var_deps : dependencies Bindings.t;
-  kid_deps : dependencies KBindings.t;
-  control_deps : dependencies
+  kid_deps : dependencies KBindings.t
 }
 
 let rec split3 = function
@@ -1973,12 +1972,24 @@ let kids_bound_by_pat pat =
   fst (fold_pat ({ (compute_pat_alg KidSet.empty KidSet.union)
                    with p_var = (fun ((s,p),kid) -> (KidSet.add kid s, P_var (p,kid))) }) pat)
 
+(* Add bound variables from a pattern to the environment with the given dependency. *)
+
 let update_env env deps pat =
   let bound = bindings_from_pat pat in
   let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
   let kbound = kids_bound_by_pat pat in
   let kid_deps = KidSet.fold (fun v ds -> KBindings.add v deps ds) kbound env.kid_deps in
-  { env with var_deps = var_deps; kid_deps = kid_deps }
+  { var_deps = var_deps; kid_deps = kid_deps }
+
+let assigned_vars_exps es =
+  List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
+    IdSet.empty es
+
+(* For adding control dependencies to mutable variables *)
+
+let add_dep_to_assigned dep assigns es =
+  let assigned = assigned_vars_exps es in
+  Bindings.mapi (fun id d -> if IdSet.mem id assigned then dmerge dep d else d) assigns
 
 (* Functions to give dependencies for type variables in nexps, constraints, types and
    unification variables.  For function calls we also supply a list of dependencies for
@@ -2041,9 +2052,7 @@ let deps_of_uvar kid_deps arg_deps = function
 
 let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
   let remove_assigns es message =
-    let assigned =
-        List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
-          IdSet.empty es in
+    let assigned = assigned_vars_exps es in
     IdSet.fold
       (fun id asn ->
         Bindings.add id (Unknown (l, string_of_id id ^ message)) asn)
@@ -2054,8 +2063,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     let deps, _, rs = split3 (List.map (analyse_exp fn_id env assigns) es) in
     (deps, assigns, List.fold_left merge empty rs)
   in
-  let merge_deps deps =
-    List.fold_left dmerge env.control_deps deps in
+  let merge_deps deps = List.fold_left dmerge dempty deps in
   let deps, assigns, r =
     match e with
     | E_block es ->
@@ -2074,18 +2082,18 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_id id ->
        begin 
          match Bindings.find id env.var_deps with
-         | args -> (dmerge env.control_deps args,assigns,empty)
+         | args -> (args,assigns,empty)
          | exception Not_found ->
             match Bindings.find id assigns with
-            | args -> (dmerge env.control_deps args,assigns,empty)
+            | args -> (args,assigns,empty)
             | exception Not_found ->
                match Env.lookup_id id (Type_check.env_of_annot (l,annot)) with
-               | Enum _ | Union _ -> env.control_deps,assigns,empty
+               | Enum _ | Union _ -> dempty,assigns,empty
                | Register _ -> Unknown (l, string_of_id id ^ " is a register"),assigns,empty
                | _ ->
                   Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
        end
-    | E_lit _ -> (env.control_deps,assigns,empty)
+    | E_lit _ -> (dempty,assigns,empty)
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
@@ -2117,23 +2125,23 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        (merge_deps deps, assigns, r)
     | E_if (e1,e2,e3) ->
        let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
-       let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
-       let d3,a3,r3 = analyse_exp fn_id env' assigns e3 in
-       (dmerge d2 d3, dep_bindings_merge a2 a3, merge r1 (merge r2 r3))
+       let d2,a2,r2 = analyse_exp fn_id env assigns e2 in
+       let d3,a3,r3 = analyse_exp fn_id env assigns e3 in
+       let assigns = add_dep_to_assigned d1 (dep_bindings_merge a2 a3) [e2;e3] in
+       (dmerge d1 (dmerge d2 d3), assigns, merge r1 (merge r2 r3))
     | E_loop (_,e1,e2) ->
+       (* We remove all of the variables assigned in the loop, so we don't
+          need to add control dependencies *)
        let assigns = remove_assigns [e1;e2] " assigned in a loop" in
        let d1,a1,r1 = analyse_exp fn_id env assigns e1 in
-       let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
+       let d2,a2,r2 = analyse_exp fn_id env assigns e2 in
      (dempty, assigns, merge r1 r2)
     | E_for (var,efrom,eto,eby,ord,body) ->
        let d1,assigns,r1 = non_det [efrom;eto;eby] in
        let assigns = remove_assigns [body] " assigned in a loop" in
-       let d = dmerge env.control_deps (merge_deps d1) in
+       let d = merge_deps d1 in
        let loop_kid = mk_kid ("loop_" ^ string_of_id var) in
        let env' = { env with
-         control_deps = d;
          kid_deps = KBindings.add loop_kid d env.kid_deps} in
        let d2,a2,r2 = analyse_exp fn_id env' assigns body in
        (dempty, assigns, merge r1 r2)
@@ -2167,11 +2175,14 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env deps pat in
-            analyse_exp fn_id env assigns e1
+            let d,assigns,r = analyse_exp fn_id env assigns e1 in
+            let assigns = add_dep_to_assigned deps assigns [e1] in
+            (d,assigns,r)
          | Pat_when (pat,e1,e2) ->
             let env = update_env env deps pat in
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
+            let assigns = add_dep_to_assigned deps assigns [e1;e2] in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_case cases) in
@@ -2193,7 +2204,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_exit e
     | E_throw e ->
        let _, _, r = analyse_exp fn_id env assigns e in
-       (Unknown (l,"non-local flow"), Bindings.empty, r)
+       (dempty, Bindings.empty, r)
     | E_try (e,cases) ->
        let deps,_,r = analyse_exp fn_id env assigns e in
        let assigns = remove_assigns [e] " assigned in try expression" in
@@ -2201,11 +2212,14 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
-            analyse_exp fn_id env assigns e1
+            let d,assigns,r = analyse_exp fn_id env assigns e1 in
+            let assigns = add_dep_to_assigned deps assigns [e1] in
+            (d,assigns,r)
          | Pat_when (pat,e1,e2) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
+            let assigns = add_dep_to_assigned deps assigns [e1;e2] in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_handler cases) in
@@ -2356,7 +2370,7 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat =
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge kid_quant_deps kid_deps in
-  { var_deps = var_deps; kid_deps = kid_deps; control_deps = dempty }
+  { var_deps = var_deps; kid_deps = kid_deps }
 
 let print_result r =
   let _ = print_endline ("  splits: " ^ string_of_argset r.split) in
