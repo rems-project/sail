@@ -102,7 +102,7 @@ let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
      begin
        match KBindings.find kid substs with
        | Nexp_aux (Nexp_constant i,_) ->
-          if List.mem i is then re NC_true else re NC_false
+          if List.exists (fun j -> Big_int.equal i j) is then re NC_true else re NC_false
        | nexp -> 
           raise (Reporting_basic.err_general l
                    ("Unable to substitute " ^ string_of_nexp nexp ^
@@ -1691,11 +1691,10 @@ let rewrite_size_parameters env (Defs defs) =
   let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
     let sizes = size_vars pexp in
     let pat,guard,exp,pannot = destruct_pexp pexp in
-    (* TODO: what, if anything, should sequential be? *)
     let visible_tyvars =
       KidSet.union
-        (Pretty_print_lem.lem_tyvars_of_typ false true (pat_typ_of pat))
-         (Pretty_print_lem.lem_tyvars_of_typ false true (typ_of exp))
+        (Pretty_print_lem.lem_tyvars_of_typ (pat_typ_of pat))
+         (Pretty_print_lem.lem_tyvars_of_typ (typ_of exp))
     in
     let expose_tyvars = KidSet.diff sizes visible_tyvars in
     let parameters = match pat with

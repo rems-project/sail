@@ -194,6 +194,7 @@ val string_of_letbind : 'a letbind -> string
 val string_of_index_range : index_range -> string
 
 val id_of_fundef : 'a fundef -> id
+val id_of_type_def : 'a type_def -> id
 
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid

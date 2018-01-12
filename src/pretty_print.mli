@@ -53,4 +53,4 @@ open Type_check
 
 (* Prints on formatter the defs as Lem Ast nodes *)
 val pp_lem_defs : Format.formatter -> tannot defs -> unit
-val pp_defs_lem : bool -> bool -> (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
+val pp_defs_lem : (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
