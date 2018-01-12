@@ -926,7 +926,7 @@ let split_defs continue_anyway splits defs =
       -> exp,assigns
     | E_cast (t,e') ->
        let e'',assigns = const_prop_exp substs assigns e' in
-       if is_value e'' && e' <> e''
+       if is_value e''
        then reduce_cast t e'' l annot, assigns
        else re (E_cast (t, e'')) assigns
     | E_app (id,es) ->
