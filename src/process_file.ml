@@ -99,10 +99,19 @@ let check_ast (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.E
 let opt_ddump_raw_mono_ast = ref false
 let opt_dmono_analysis = ref 0
 let opt_auto_mono = ref false
+let opt_mono_rewrites = ref false
+let opt_dall_split_errors = ref false
 
 let monomorphise_ast locs type_env ast =
-  let ast = Monomorphise.monomorphise (!Pretty_print_lem.opt_mwords) (!opt_auto_mono) (!opt_dmono_analysis)
-    locs type_env ast in
+  let open Monomorphise in
+  let opts = {
+    auto = !opt_auto_mono;
+    debug_analysis = !opt_dmono_analysis;
+    rewrites = !opt_mono_rewrites;
+    rewrite_size_parameters = !Pretty_print_lem.opt_mwords;
+    all_split_errors = !opt_dall_split_errors
+  } in
+  let ast = monomorphise opts locs type_env ast in
   let () = if !opt_ddump_raw_mono_ast then Pretty_print_sail.pp_defs stdout ast else () in
   let ienv = Type_check.Env.no_casts Type_check.initial_env in
   Type_check.check ienv ast

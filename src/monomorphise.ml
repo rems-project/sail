@@ -183,6 +183,8 @@ let rec is_value (E_aux (e,(l,annot))) =
   | E_lit _ -> true
   | E_tuple es -> List.for_all is_value es
   | E_app (id,es) -> is_constructor id && List.for_all is_value es
+  (* We add casts to undefined to keep the type information in the AST *)
+  | E_cast (typ,E_aux (E_lit (L_aux (L_undef,_)),_)) -> true
 (* TODO: more? *)
   | _ -> false
 
@@ -221,7 +223,7 @@ let kidset_bigunion = function
   | h::t -> List.fold_left KidSet.union h t
 
 (* TODO: deal with non-set constraints, intersections, etc somehow *)
-let extract_set_nc var (NC_aux (_,l) as nc) =
+let extract_set_nc l var nc =
   let rec aux (NC_aux (nc,l)) =
     let re nc = NC_aux (nc,l) in
     match nc with
@@ -351,7 +353,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
        let find_insts k (insts,nc) =
          let inst,nc' =
            if KidSet.mem k vars then
-             let is,nc' = extract_set_nc k nc in
+             let is,nc' = extract_set_nc l k nc in
              Some is,nc'
            else None,nc
          in (k,inst)::insts,nc'
@@ -622,29 +624,80 @@ let lit_match = function
 
 (* There's no undefined nexp, so replace undefined sizes with a plausible size.
    32 is used as a sensible default. *)
+
+let fabricate_nexp_exist env l typ kids nc typ' =
+  match kids,nc,Env.expand_synonyms env typ' with
+  | ([kid],NC_aux (NC_set (kid',i::_),_),
+     Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+      when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 ->
+     Nexp_aux (Nexp_constant i,Unknown)
+  | ([kid],NC_aux (NC_true,_),
+     Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+      when Kid.compare kid kid'' = 0 ->
+     nint 32
+  | ([kid],NC_aux (NC_set (kid',i::_),_),
+     Typ_aux (Typ_app (Id_aux (Id "range",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+      when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
+        Kid.compare kid kid''' = 0 ->
+     Nexp_aux (Nexp_constant i,Unknown)
+  | ([kid],NC_aux (NC_true,_),
+     Typ_aux (Typ_app (Id_aux (Id "range",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+      when Kid.compare kid kid'' = 0 &&
+        Kid.compare kid kid''' = 0 ->
+     nint 32
+  | _ -> raise (Reporting_basic.err_general l
+                  ("Undefined value at unsupported type " ^ string_of_typ typ))
+
 let fabricate_nexp l = function
   | None -> nint 32
   | Some (env,typ,_) ->
      match Type_check.destruct_exist env typ with
      | None -> nint 32
-     | Some (kids,nc,typ') ->
-        match kids,nc,Env.expand_synonyms env typ' with
-        | ([kid],NC_aux (NC_set (kid',i::_),_),
-           Typ_aux (Typ_app (Id_aux (Id "range",_),
-                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
-            when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
-              Kid.compare kid kid''' = 0 ->
-           Nexp_aux (Nexp_constant i,Unknown)
-        | ([kid],NC_aux (NC_true,_),
-           Typ_aux (Typ_app (Id_aux (Id "range",_),
-                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
-            when Kid.compare kid kid'' = 0 &&
-              Kid.compare kid kid''' = 0 ->
-           nint 32
-        | _ -> raise (Reporting_basic.err_general l
-                        ("Undefined value at unsupported type " ^ string_of_typ typ))
+     | Some (kids,nc,typ') -> fabricate_nexp_exist env l typ kids nc typ'
+
+let atom_typ_kid kid = function
+  | Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                      [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_) ->
+     Kid.compare kid kid' = 0
+  | _ -> false
+
+(* We reduce casts in a few cases, in particular to ensure that where the
+   type checker has added a ({'n, true. atom('n)}) ex_int(...) cast we can
+   fill in the 'n.  For undefined we fabricate a suitable value for 'n. *)
+
+let reduce_cast typ exp l annot =
+  let env = env_of_annot (l,annot) in
+  let replace_typ typ = function
+    | Some (env,_,eff) -> Some (env,typ,eff)
+    | None -> None
+  in
+  let typ' = Env.base_typ_of env typ in
+  match exp, destruct_exist env typ' with
+  | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
+     let nc_env = Env.add_typ_var kid BK_nat env in
+     let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
+     if prove nc_env nc
+     then exp
+     else raise (Reporting_basic.err_unreachable l
+                   ("Constant propagation error: literal " ^ Big_int.to_string n ^
+                       " does not satisfy constraint " ^ string_of_n_constraint nc))
+  | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
+     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+     E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
+  | E_aux (E_cast (_,
+                   (E_aux (E_lit (L_aux (L_undef,_)),_) as exp)),_),
+     Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
+     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+     E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
+  | _ -> E_aux (E_cast (typ,exp),(l,annot))
 
 (* Used for constant propagation in pattern matches *)
 type 'a matchresult =
@@ -714,6 +767,8 @@ let try_app (l,ann) (id,args) =
   else if is_id "ex_int" then
     match args with
     | [E_aux (E_lit lit,(l,_))] -> Some (E_aux (E_lit lit,(l,ann)))
+    | [E_aux (E_cast (_,(E_aux (E_lit (L_aux (L_undef,_)),_) as e)),(l,_))] ->
+       Some (reduce_cast (typ_of_annot (l,ann)) e l ann)
     | _ -> None
   else if is_id "vector_access" || is_id "bitvector_access" then
     match args with
@@ -784,7 +839,15 @@ let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
      IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
   | LEXP_field (le,_) -> assigned_vars_in_lexp le
 
-let split_defs splits defs =
+(* Add a cast to undefined so that it retains its type, otherwise it can't be
+   substituted safely *)
+let keep_undef_typ value =
+  match value with
+  | E_aux (E_lit (L_aux (L_undef,lann)),eann) ->
+     E_aux (E_cast (typ_of_annot eann,value),(Generated Unknown,snd eann))
+  | _ -> value
+
+let split_defs continue_anyway splits defs =
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (tu,l) as tua) =
       match tu with
@@ -886,7 +949,9 @@ let split_defs splits defs =
       -> exp,assigns
     | E_cast (t,e') ->
        let e'',assigns = const_prop_exp substs assigns e' in
-       re (E_cast (t, e'')) assigns
+       if is_value e''
+       then reduce_cast t e'' l annot, assigns
+       else re (E_cast (t, e'')) assigns
     | E_app (id,es) ->
        let es',assigns = non_det_exp_list es in
        let env = Type_check.env_of_annot (l, annot) in
@@ -1010,7 +1075,7 @@ let split_defs splits defs =
               match Env.lookup_id id env with
               | Local (Mutable,_) | Unbound ->
                  if is_value e'
-                 then Bindings.add id e' assigns
+                 then Bindings.add id (keep_undef_typ e') assigns
                  else Bindings.remove id assigns
               | _ -> assigns
             end
@@ -1182,6 +1247,21 @@ let split_defs splits defs =
             (Reporting_basic.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
        in findpat_generic checkpat "literal" assigns cases
+    | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)) ->
+       let checkpat = function
+         | P_aux (P_lit (L_aux (lit_p, _)),_) -> DoesNotMatch
+         | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
+              (* For undefined we fix the type-level size (because there's no good
+                 way to construct an undefined size), but leave the term as undefined
+                 to make the meaning clear. *)
+            let nexp = fabricate_nexp l annot in
+            let typ = subst_src_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+            DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,None))],
+                       [kid,nexp])
+         | P_aux (_,(l',_)) ->
+            (Reporting_basic.print_err false true l' "Monomorphisation"
+               "Unexpected kind of pattern for literal"; GiveUp)
+       in findpat_generic checkpat "literal" assigns cases
     | _ -> None
 
   and can_match exp =
@@ -1196,17 +1276,22 @@ let split_defs splits defs =
     
   (* Split a variable pattern into every possible value *)
 
-  let split var l annot =
+  let split var pat_l annot =
     let v = string_of_id var in
-    let env = Type_check.env_of_annot (l, annot) in
-    let typ = Type_check.typ_of_annot (l, annot) in
+    let env = Type_check.env_of_annot (pat_l, annot) in
+    let typ = Type_check.typ_of_annot (pat_l, annot) in
     let typ = Env.expand_synonyms env typ in
     let Typ_aux (ty,l) = typ in
     let new_l = Generated l in
     let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
-    let cannot () =
-      raise (Reporting_basic.err_general l
-               ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v))
+    let cannot msg =
+      let open Reporting_basic in
+      let error =
+        Err_general (pat_l,
+                     ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
+      in if continue_anyway
+        then (print_error error; [P_aux (P_id var,(pat_l,annot)),[]])
+        else raise (Fatal_error error)
     in
     match ty with
     | Typ_id (Id_aux (Id "bool",_)) ->
@@ -1226,7 +1311,7 @@ let split_defs splits defs =
               P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
               [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))])
               [L_zero; L_one]
-         | _ -> cannot ())
+         | _ -> cannot ("don't know about type " ^ string_of_id id))
 
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
@@ -1237,15 +1322,13 @@ let split_defs splits defs =
               P_aux (P_lit lit,(l,annot)),
               [var,E_aux (E_lit lit,(new_l,annot))]) lits
           else
-            raise (Reporting_basic.err_general l
-                     ("Refusing to split vector type of length " ^ Big_int.to_string sz ^
-                         " above limit " ^ string_of_int vector_split_limit ^ 
-                         " for variable " ^ v))
+            cannot ("Refusing to split vector type of length " ^ Big_int.to_string sz ^
+                       " (above limit " ^ string_of_int vector_split_limit ^ ")")
        | _ ->
-          cannot ()
+          cannot ("length not constant, " ^ string_of_nexp len)
        )
     (* set constrained numbers *)
-    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp Nexp_aux (value,_),_)]) ->
+    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (value,_) as nexp),_)]) ->
        begin
          let mk_lit i =
             let lit = L_aux (L_num i,new_l) in
@@ -1257,10 +1340,12 @@ let split_defs splits defs =
          | Nexp_var kvar ->
            let ncs = Env.get_constraints env in
            let nc = List.fold_left nc_and nc_true ncs in
-           List.map mk_lit (fst (extract_set_nc kvar nc))
-         | _ -> cannot ()
+           (match extract_set_nc l kvar nc with
+           | (is,_) -> List.map mk_lit is
+           | exception Reporting_basic.Fatal_error (Reporting_basic.Err_general (_,msg)) -> cannot msg)
+         | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
        end
-    | _ -> cannot ()
+    | _ -> cannot ("unsupported type " ^ string_of_typ typ)
   in
   
 
@@ -1958,8 +2043,7 @@ let merge rs rs' = {
 
 type env = {
   var_deps : dependencies Bindings.t;
-  kid_deps : dependencies KBindings.t;
-  control_deps : dependencies
+  kid_deps : dependencies KBindings.t
 }
 
 let rec split3 = function
@@ -1973,12 +2057,24 @@ let kids_bound_by_pat pat =
   fst (fold_pat ({ (compute_pat_alg KidSet.empty KidSet.union)
                    with p_var = (fun ((s,p),kid) -> (KidSet.add kid s, P_var (p,kid))) }) pat)
 
+(* Add bound variables from a pattern to the environment with the given dependency. *)
+
 let update_env env deps pat =
   let bound = bindings_from_pat pat in
   let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
   let kbound = kids_bound_by_pat pat in
   let kid_deps = KidSet.fold (fun v ds -> KBindings.add v deps ds) kbound env.kid_deps in
-  { env with var_deps = var_deps; kid_deps = kid_deps }
+  { var_deps = var_deps; kid_deps = kid_deps }
+
+let assigned_vars_exps es =
+  List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
+    IdSet.empty es
+
+(* For adding control dependencies to mutable variables *)
+
+let add_dep_to_assigned dep assigns es =
+  let assigned = assigned_vars_exps es in
+  Bindings.mapi (fun id d -> if IdSet.mem id assigned then dmerge dep d else d) assigns
 
 (* Functions to give dependencies for type variables in nexps, constraints, types and
    unification variables.  For function calls we also supply a list of dependencies for
@@ -2041,9 +2137,7 @@ let deps_of_uvar kid_deps arg_deps = function
 
 let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
   let remove_assigns es message =
-    let assigned =
-        List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
-          IdSet.empty es in
+    let assigned = assigned_vars_exps es in
     IdSet.fold
       (fun id asn ->
         Bindings.add id (Unknown (l, string_of_id id ^ message)) asn)
@@ -2054,8 +2148,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     let deps, _, rs = split3 (List.map (analyse_exp fn_id env assigns) es) in
     (deps, assigns, List.fold_left merge empty rs)
   in
-  let merge_deps deps =
-    List.fold_left dmerge env.control_deps deps in
+  let merge_deps deps = List.fold_left dmerge dempty deps in
   let deps, assigns, r =
     match e with
     | E_block es ->
@@ -2074,18 +2167,18 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_id id ->
        begin 
          match Bindings.find id env.var_deps with
-         | args -> (dmerge env.control_deps args,assigns,empty)
+         | args -> (args,assigns,empty)
          | exception Not_found ->
             match Bindings.find id assigns with
-            | args -> (dmerge env.control_deps args,assigns,empty)
+            | args -> (args,assigns,empty)
             | exception Not_found ->
                match Env.lookup_id id (Type_check.env_of_annot (l,annot)) with
-               | Enum _ | Union _ -> env.control_deps,assigns,empty
+               | Enum _ | Union _ -> dempty,assigns,empty
                | Register _ -> Unknown (l, string_of_id id ^ " is a register"),assigns,empty
                | _ ->
                   Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
        end
-    | E_lit _ -> (env.control_deps,assigns,empty)
+    | E_lit _ -> (dempty,assigns,empty)
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
@@ -2117,23 +2210,23 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        (merge_deps deps, assigns, r)
     | E_if (e1,e2,e3) ->
        let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
-       let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
-       let d3,a3,r3 = analyse_exp fn_id env' assigns e3 in
-       (dmerge d2 d3, dep_bindings_merge a2 a3, merge r1 (merge r2 r3))
+       let d2,a2,r2 = analyse_exp fn_id env assigns e2 in
+       let d3,a3,r3 = analyse_exp fn_id env assigns e3 in
+       let assigns = add_dep_to_assigned d1 (dep_bindings_merge a2 a3) [e2;e3] in
+       (dmerge d1 (dmerge d2 d3), assigns, merge r1 (merge r2 r3))
     | E_loop (_,e1,e2) ->
+       (* We remove all of the variables assigned in the loop, so we don't
+          need to add control dependencies *)
        let assigns = remove_assigns [e1;e2] " assigned in a loop" in
        let d1,a1,r1 = analyse_exp fn_id env assigns e1 in
-       let env' = { env with control_deps = dmerge env.control_deps d1 } in
-       let d2,a2,r2 = analyse_exp fn_id env' assigns e2 in
+       let d2,a2,r2 = analyse_exp fn_id env assigns e2 in
      (dempty, assigns, merge r1 r2)
     | E_for (var,efrom,eto,eby,ord,body) ->
        let d1,assigns,r1 = non_det [efrom;eto;eby] in
        let assigns = remove_assigns [body] " assigned in a loop" in
-       let d = dmerge env.control_deps (merge_deps d1) in
+       let d = merge_deps d1 in
        let loop_kid = mk_kid ("loop_" ^ string_of_id var) in
        let env' = { env with
-         control_deps = d;
          kid_deps = KBindings.add loop_kid d env.kid_deps} in
        let d2,a2,r2 = analyse_exp fn_id env' assigns body in
        (dempty, assigns, merge r1 r2)
@@ -2167,11 +2260,14 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env deps pat in
-            analyse_exp fn_id env assigns e1
+            let d,assigns,r = analyse_exp fn_id env assigns e1 in
+            let assigns = add_dep_to_assigned deps assigns [e1] in
+            (d,assigns,r)
          | Pat_when (pat,e1,e2) ->
             let env = update_env env deps pat in
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
+            let assigns = add_dep_to_assigned deps assigns [e1;e2] in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_case cases) in
@@ -2193,7 +2289,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_exit e
     | E_throw e ->
        let _, _, r = analyse_exp fn_id env assigns e in
-       (Unknown (l,"non-local flow"), Bindings.empty, r)
+       (dempty, Bindings.empty, r)
     | E_try (e,cases) ->
        let deps,_,r = analyse_exp fn_id env assigns e in
        let assigns = remove_assigns [e] " assigned in try expression" in
@@ -2201,11 +2297,14 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
-            analyse_exp fn_id env assigns e1
+            let d,assigns,r = analyse_exp fn_id env assigns e1 in
+            let assigns = add_dep_to_assigned deps assigns [e1] in
+            (d,assigns,r)
          | Pat_when (pat,e1,e2) ->
             let env = update_env env (Unknown (l,"Exception")) pat in
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
+            let assigns = add_dep_to_assigned deps assigns [e1;e2] in
             (dmerge d1 d2, assigns, merge r1 r2)
        in
        let ds,assigns,rs = split3 (List.map analyse_handler cases) in
@@ -2356,7 +2455,7 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat =
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge kid_quant_deps kid_deps in
-  { var_deps = var_deps; kid_deps = kid_deps; control_deps = dempty }
+  { var_deps = var_deps; kid_deps = kid_deps }
 
 let print_result r =
   let _ = print_endline ("  splits: " ^ string_of_argset r.split) in
@@ -2460,17 +2559,241 @@ let argset_to_list splits =
   List.map argelt l
 end
 
+module MonoRewrites =
+struct
 
-let monomorphise mwords auto debug_analysis splits env defs =
+let is_constant_range = function
+  | E_aux (E_lit _,_), E_aux (E_lit _,_) -> true
+  | _ -> false
+
+let is_constant = function
+  | E_aux (E_lit _,_) -> true
+  | _ -> false
+
+let is_constant_vec_typ env typ =
+  let typ = Env.base_typ_of env typ in
+  match destruct_vector env typ with
+  | Some (size,_,_) ->
+     (match nexp_simp size with
+     | Nexp_aux (Nexp_constant _,_) -> true
+     | _ -> false)
+  | _ -> false
+
+let is_id env id =
+  let ids = Env.get_overloads (Id_aux (id,Parse_ast.Unknown)) env in
+  let ids = id :: List.map (fun (Id_aux (id,_)) -> id) ids in
+  fun (Id_aux (x,_)) -> List.mem x ids
+
+(* We have to add casts in here with appropriate length information so that the
+   type checker knows the expected return types. *)
+
+let rewrite_app env typ (id,args) =
+  let is_append = is_id env (Id "append") in
+  if is_append id then
+    let is_subrange = is_id env (Id "vector_subrange") in
+    let is_slice = is_id env (Id "slice") in
+    let is_zeros = is_id env (Id "Zeros") in
+    match args with
+      (* (known-size-vector @ variable-vector) @ variable-vector *)
+    | [E_aux (E_app (append,
+              [e1;
+               E_aux (E_app (subrange1,
+                             [vector1; start1; end1]),_)]),_);
+       E_aux (E_app (subrange2,
+                     [vector2; start2; end2]),_)]
+        when is_append append && is_subrange subrange1 && is_subrange subrange2 &&
+          is_constant_vec_typ env (typ_of e1) &&
+          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let midsize = nminus size size1 in
+       let midtyp = vector_typ midsize order bittyp in
+       E_app (append,
+              [e1;
+               E_aux (E_cast (midtyp,
+                              E_aux (E_app (mk_id "subrange_subrange_concat",
+                                            [vector1; start1; end1; vector2; start2; end2]),
+                                     (Unknown,None))),(Unknown,None))])
+    | [E_aux (E_app (append,
+              [e1;
+               E_aux (E_app (slice1,
+                             [vector1; start1; length1]),_)]),_);
+       E_aux (E_app (slice2,
+                     [vector2; start2; length2]),_)]
+        when is_append append && is_slice slice1 && is_slice slice2 &&
+          is_constant_vec_typ env (typ_of e1) &&
+          not (is_constant length1 || is_constant length2) ->
+       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let midsize = nminus size size1 in
+       let midtyp = vector_typ midsize order bittyp in
+       E_app (append,
+              [e1;
+               E_aux (E_cast (midtyp,
+                              E_aux (E_app (mk_id "slice_slice_concat",
+                                            [vector1; start1; length1; vector2; start2; length2]),
+                                     (Unknown,None))),(Unknown,None))])
+
+    (* variable-range @ variable-range *)
+    | [E_aux (E_app (subrange1,
+                     [vector1; start1; end1]),_);
+       E_aux (E_app (subrange2,
+                     [vector2; start2; end2]),_)]
+        when is_subrange subrange1 && is_subrange subrange2 &&
+          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+       E_cast (typ,
+               E_aux (E_app (mk_id "subrange_subrange_concat",
+                             [vector1; start1; end1; vector2; start2; end2]),
+                      (Unknown,None)))
+
+    (* variable-slice @ variable-slice *)
+    | [E_aux (E_app (slice1,
+                     [vector1; start1; length1]),_);
+       E_aux (E_app (slice2,
+                     [vector2; start2; length2]),_)]
+        when is_slice slice1 && is_slice slice2 &&
+          not (is_constant length1 || is_constant length2) ->
+       E_cast (typ,
+               E_aux (E_app (mk_id "slice_slice_concat",
+                             [vector1; start1; length1; vector2; start2; length2]),(Unknown,None)))
+
+    | [E_aux (E_app (append1,
+                     [e1;
+                      E_aux (E_app (slice1, [vector1; start1; length1]),_)]),_);
+       E_aux (E_app (zeros1, [length2]),_)]
+        when is_append append1 && is_slice slice1 && is_zeros zeros1 &&
+          is_constant_vec_typ env (typ_of e1) &&
+          not (is_constant length1 || is_constant length2) ->
+       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let midsize = nminus size size1 in
+       let midtyp = vector_typ midsize order bittyp in
+       E_cast (typ,
+               E_aux (E_app (mk_id "append",
+                             [e1;
+                              E_aux (E_cast (midtyp,
+                                             E_aux (E_app (mk_id "slice_zeros_concat",
+                                                           [vector1; start1; length1; length2]),(Unknown,None))),(Unknown,None))]),
+                      (Unknown,None)))
+
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "eq_vec") id then
+    (* variable-range == variable_range *)
+    let is_subrange = is_id env (Id "vector_subrange") in
+    match args with
+    | [E_aux (E_app (subrange1,
+                     [vector1; start1; end1]),_);
+       E_aux (E_app (subrange2,
+                     [vector2; start2; end2]),_)]
+        when is_subrange subrange1 && is_subrange subrange2 &&
+          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+       E_app (mk_id "subrange_subrange_eq",
+              [vector1; start1; end1; vector2; start2; end2])
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "IsZero") id then
+    match args with
+    | [E_aux (E_app (subrange1, [vector1; start1; end1]),_)]
+        when is_id env (Id "vector_subrange") subrange1 &&
+          not (is_constant_range (start1,end1)) ->
+       E_app (mk_id "is_zero_subrange",
+              [vector1; start1; end1])
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "IsOnes") id then
+    match args with
+    | [E_aux (E_app (subrange1, [vector1; start1; end1]),_)]
+        when is_id env (Id "vector_subrange") subrange1 &&
+          not (is_constant_range (start1,end1)) ->
+       E_app (mk_id "is_ones_subrange",
+              [vector1; start1; end1])
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id then
+    let is_subrange = is_id env (Id "vector_subrange") in
+    let is_slice = is_id env (Id "slice") in
+    let is_zeros = is_id env (Id "Zeros") in
+    match args with
+    | (E_aux (E_app (append1,
+                     [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
+                      E_aux (E_app (zeros1, [len1]),_)]),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+        when is_subrange subrange1 && is_zeros zeros1 && is_append append1
+      -> E_app (mk_id "place_subrange",
+                [vector1; start1; end1; len1])
+
+    | (E_aux (E_app (append1,
+                     [E_aux (E_app (slice1, [vector1; start1; length1]), _);
+                      E_aux (E_app (zeros1, [length2]),_)]),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+        when is_slice slice1 && is_zeros zeros1 && is_append append1
+      -> E_app (mk_id "place_slice",
+                [vector1; start1; length1; length2])
+
+    (* If we've already rewritten to slice_slice_concat, we can just drop the
+       zero extension because it can do it *)
+    | (E_aux (E_cast (_, (E_aux (E_app (Id_aux (Id "slice_slice_concat",_), args),_))),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+      -> E_app (mk_id "slice_slice_concat", args)
+
+    | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
+        when is_slice slice1 && not (is_constant length1) ->
+       E_app (mk_id "zext_slice", [vector1; start1; length1])
+
+    | _ -> E_app (id,args)
+
+  else if is_id env (Id "SignExtend") id then
+    let is_slice = is_id env (Id "slice") in
+    match args with
+    | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
+        when is_slice slice1 && not (is_constant length1) ->
+       E_app (mk_id "sext_slice", [vector1; start1; length1])
+
+    | _ -> E_app (id,args)
+
+  else E_app (id,args)
+
+let rewrite_aux = function
+  | (E_app (id,args),((_,Some (env,ty,_)) as annot)) ->
+     E_aux (rewrite_app env ty (id,args),annot)
+  | exp,annot -> E_aux (exp,annot)
+
+let mono_rewrite defs =
+  let open Rewriter in
+  rewrite_defs_base
+    { rewriters_base with
+      rewrite_exp = fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux } }
+    defs
+end
+
+type options = {
+  auto : bool;
+  debug_analysis : int;
+  rewrites : bool;
+  rewrite_size_parameters : bool;
+  all_split_errors : bool
+}
+
+let monomorphise opts splits env defs =
+  let (defs,env) =
+    if opts.rewrites then
+      let defs = MonoRewrites.mono_rewrite defs in
+    (* TODO: is this necessary? *)
+      Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs
+    else (defs,env)
+  in
+(*let _ = Pretty_print.pp_defs stdout defs in*)
   let new_splits =
-    if auto
-    then Analysis.argset_to_list (Analysis.analyse_defs debug_analysis env defs)
+    if opts.auto
+    then Analysis.argset_to_list (Analysis.analyse_defs opts.debug_analysis env defs)
     else [] in
-  let defs = split_defs (new_splits@splits) defs in
+  let defs = split_defs opts.all_split_errors (new_splits@splits) defs in
+  (* TODO: stop if opts.all_split_errors && something went wrong *)
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
      type checker doesn't store the env at that point :( *)
-  if mwords then
+  if opts.rewrite_size_parameters then
     let (defs,env) = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
     let defs = AtomToItself.rewrite_size_parameters env defs in
     defs

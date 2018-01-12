@@ -48,45 +48,17 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-val parse_file : string -> Parse_ast.defs
-val convert_ast : Ast.order -> Parse_ast.defs -> unit Ast.defs
-val check_ast: unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
-val monomorphise_ast : ((string * int) * string) list -> Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
-val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_undefined: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_interpreter : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_sil : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+type options = {
+  auto : bool;                    (* Analyse ast to find splits for monomorphisation *)
+  debug_analysis : int;           (* Debug output level for the automatic analysis *)
+  rewrites : bool;                (* Experimental rewrites for variable-sized operations *)
+  rewrite_size_parameters : bool; (* Make implicit type parameters explicit for (e.g.) lem *)
+  all_split_errors : bool
+}
 
-val load_file_no_check : Ast.order -> string -> unit Ast.defs
-val load_file : Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t
-
-val opt_lem_sequential : bool ref
-val opt_lem_mwords : bool ref
-val opt_just_check : bool ref
-val opt_ddump_tc_ast : bool ref
-val opt_ddump_rewrite_ast : ((string * int) option) ref
-val opt_dno_cast : bool ref
-val opt_ddump_raw_mono_ast : bool ref
-val opt_dmono_analysis : int ref
-val opt_auto_mono : bool ref
-val opt_mono_rewrites : bool ref
-val opt_dall_split_errors : bool ref
-
-type out_type =
-  | Lem_ast_out
-  | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
-
-val output :
-  string ->                           (* The path to the library *)
-  out_type ->                         (* Backend kind *)
-  (string * Type_check.tannot Ast.defs) list -> (*File names paired with definitions *)
-  unit
-
-(** [always_replace_files] determines whether Sail only updates modified files.
-    If it is set to [true], all output files are written, regardless of whether the
-    files existed before. If it is set to [false] and an output file already exists,
-    the output file is only updated, if its content really changes. *)
-val always_replace_files : bool ref
+val monomorphise :
+  options ->
+  ((string * int) * string) list -> (* List of splits from the command line *)
+  Type_check.Env.t ->
+  Type_check.tannot Ast.defs ->
+  Type_check.tannot Ast.defs

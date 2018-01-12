@@ -129,6 +129,12 @@ let options = Arg.align ([
   ( "-auto_mono",
     Arg.Set opt_auto_mono,
     " automatically infer how to monomorphise code");
+  ( "-mono_rewrites",
+    Arg.Set Process_file.opt_mono_rewrites,
+    " turn on rewrites for combining bitvector operations");
+  ( "-dall_split_errors",
+    Arg.Set Process_file.opt_dall_split_errors,
+    " display all case split errors from monomorphisation, rather than one");
   ( "-verbose",
     Arg.Set opt_print_verbose,
     " (debug) pretty-print the input to standard output");
