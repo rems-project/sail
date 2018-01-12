@@ -355,6 +355,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot)) as exp) =
       (list_pp pp_semi_lem_exp pp_lem_exp) exps
       kwd ")" pp_lem_l l pp_annot annot
     | E_id(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_id" pp_lem_id id pp_lem_l l (pp_annot_tag (tag_id id env)) annot
+    | E_ref(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_ref" pp_lem_id id pp_lem_l l (pp_annot_tag (tag_id id env)) annot
     | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
     | E_cast(typ,exp) ->
       fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
@@ -461,15 +462,17 @@ and pp_semi_lem_case ppf case = fprintf ppf "@[<1>%a %a@]" pp_lem_case case kwd 
 and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
   let print_le ppf lexp =
     match lexp with
-      | LEXP_id(id) -> fprintf ppf "(%a %a)" kwd "LEXP_id" pp_lem_id id
-      | LEXP_memory(id,args) ->
-        fprintf ppf "(LEXP_memory %a [%a])" pp_lem_id id (list_pp pp_semi_lem_exp pp_lem_exp) args
-      | LEXP_cast(typ,id) -> fprintf ppf "(LEXP_cast %a %a)" pp_lem_typ typ pp_lem_id id
-      | LEXP_tup tups -> fprintf ppf "(LEXP_tup [%a])" (list_pp pp_semi_lem_lexp pp_lem_lexp) tups
-      | LEXP_vector(v,exp) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_vector" pp_lem_lexp v pp_lem_exp exp
-      | LEXP_vector_range(v,e1,e2) ->
-        fprintf ppf "@[(%a %a %a %a)@]" kwd "LEXP_vector_range" pp_lem_lexp v  pp_lem_exp e1 pp_lem_exp e2
-      | LEXP_field(v,id) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_field" pp_lem_lexp v pp_lem_id id
+    | LEXP_id(id) -> fprintf ppf "(%a %a)" kwd "LEXP_id" pp_lem_id id
+    | LEXP_deref exp ->
+       fprintf ppf "(LEXP_deref %a)" pp_lem_exp exp
+    | LEXP_memory(id,args) ->
+       fprintf ppf "(LEXP_memory %a [%a])" pp_lem_id id (list_pp pp_semi_lem_exp pp_lem_exp) args
+    | LEXP_cast(typ,id) -> fprintf ppf "(LEXP_cast %a %a)" pp_lem_typ typ pp_lem_id id
+    | LEXP_tup tups -> fprintf ppf "(LEXP_tup [%a])" (list_pp pp_semi_lem_lexp pp_lem_lexp) tups
+    | LEXP_vector(v,exp) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_vector" pp_lem_lexp v pp_lem_exp exp
+    | LEXP_vector_range(v,e1,e2) ->
+       fprintf ppf "@[(%a %a %a %a)@]" kwd "LEXP_vector_range" pp_lem_lexp v  pp_lem_exp e1 pp_lem_exp e2
+    | LEXP_field(v,id) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_field" pp_lem_lexp v pp_lem_id id
   in
   fprintf ppf "@[(LEXP_aux %a (%a, %a))@]" print_le lexp pp_lem_l l pp_annot annot
 and pp_semi_lem_lexp ppf le = fprintf ppf "@[<1>%a%a@]" pp_lem_lexp le kwd ";"

@@ -206,6 +206,9 @@ let handle_input input =
             interactive_state := state;
             current_mode := Evaluation (eval_frame !interactive_ast frame);
             print_program ()
+         | Break frame ->
+            print_endline "Breakpoint";
+            current_mode := Evaluation frame
      end
 
 let () =

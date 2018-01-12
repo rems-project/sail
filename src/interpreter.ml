@@ -81,8 +81,8 @@ let initial_state ast = initial_lstate, initial_gstate ast
 let value_of_lit (L_aux (l_aux, _)) =
   match l_aux with
   | L_unit -> V_unit
-  | L_zero -> V_bit B0
-  | L_one -> V_bit B1
+  | L_zero -> V_bit Sail_lib.B0
+  | L_one -> V_bit Sail_lib.B1
   | L_true -> V_bool true
   | L_false -> V_bool false
   | L_string str -> V_string str
@@ -389,8 +389,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | [] when Env.is_extern id (env_of_annot annot) "interpreter" ->
           begin
             let extern = Env.get_extern id (env_of_annot annot) "interpreter" in
-            let primop = try StringMap.find extern primops with Not_found -> failwith ("No primop " ^ extern) in
-            return (exp_of_value (primop (List.map value_of_exp evaluated)))
+            if extern = "reg_deref" then
+              let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
+              gets >>= fun (_, gstate) ->
+              return (exp_of_value (Bindings.find (mk_id regname) gstate.registers))
+            else
+              let primop = try StringMap.find extern primops with Not_found -> failwith ("No primop " ^ extern) in
+              return (exp_of_value (primop (List.map value_of_exp evaluated)))
           end
        | [] -> liftM exp_of_value (call id (List.map value_of_exp evaluated))
      end
@@ -522,7 +527,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | Register _ ->
           puts (lstate, { gstate with registers = Bindings.add id (value_of_exp exp) gstate.registers }) >> wrap unit_exp
        | Local (Mutable, _) | Unbound ->
-          puts ({ lstate with locals = Bindings.add id (value_of_exp exp) lstate.locals }, gstate) >> wrap unit_exp
+          puts ({ locals = Bindings.add id (value_of_exp exp) lstate.locals }, gstate) >> wrap unit_exp
        | _ -> failwith "Assign"
      end
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) when not (is_value reference) ->
@@ -563,16 +568,11 @@ and exp_of_lexp (LEXP_aux (lexp_aux, _) as lexp) =
   | LEXP_id id -> mk_exp (E_id id)
   | LEXP_memory (f, args) -> mk_exp (E_app (f, args))
   | LEXP_cast (typ, id) -> mk_exp (E_cast (typ, mk_exp (E_id id)))
+  | LEXP_deref exp -> mk_exp (E_app (mk_id "_reg_deref", [exp]))
   | LEXP_tup lexps -> mk_exp (E_tuple (List.map exp_of_lexp lexps))
   | LEXP_vector (lexp, exp) -> mk_exp (E_vector_access (exp_of_lexp lexp, exp))
   | LEXP_vector_range (lexp, exp1, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, exp2))
   | LEXP_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
-
-and lexp_assign (LEXP_aux (lexp_aux, _) as lexp) value =
-  (* print_endline ("Assigning: " ^ string_of_lexp lexp ^ " to " ^ string_of_value value |> Util.yellow |> Util.clear); *)
-  match lexp_aux with
-  | LEXP_id id -> Bindings.singleton id value
-  | _ -> failwith "Unhandled lexp_assign"
 
 and pattern_match env (P_aux (p_aux, _) as pat) value =
   (* print_endline ("Matching: " ^ string_of_pat pat ^ " with " ^ string_of_value value |> Util.yellow |> Util.clear); *)
@@ -664,7 +664,6 @@ let rec eval_frame' ast = function
      | Yield (Exception v), _ ->
         print_endline ("Uncaught Exception" |> Util.cyan |> Util.clear);
         Done (state, v)
-     | _ -> assert false
 
 let eval_frame ast frame =
   try eval_frame' ast frame with

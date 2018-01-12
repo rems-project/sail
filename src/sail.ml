@@ -72,7 +72,7 @@ let options = Arg.align ([
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
   ( "-i",
-    Arg.Set opt_interactive,
+    Arg.Tuple [Arg.Set opt_interactive; Arg.Set Initial_check.opt_undefined_gen],
     " start interactive interpreter");
   ( "-ocaml",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],

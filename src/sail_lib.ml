@@ -270,6 +270,7 @@ let hex_char = function
   | 'D' | 'd' -> [B1; B1; B0; B1]
   | 'E' | 'e' -> [B1; B1; B1; B0]
   | 'F' | 'f' -> [B1; B1; B1; B1]
+  | _ -> failwith "Invalid hex character"
 
 let list_of_string s =
   let rec aux i acc =
@@ -307,6 +308,7 @@ let string_of_hex = function
   | [B1; B1; B0; B1] -> "D"
   | [B1; B1; B1; B0] -> "E"
   | [B1; B1; B1; B1] -> "F"
+  | _ -> failwith "Cannot convert binary sequence to hex"
 
 let string_of_bits bits =
   if List.length bits mod 4 == 0

@@ -3495,7 +3495,6 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
        | _ ->
           typ_error l "Bad bitfield type"
      end
-  | _ -> td_err ()
 
 and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   fun env def ->

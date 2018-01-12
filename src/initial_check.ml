@@ -536,7 +536,7 @@ and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l
        let is_ok_in_tup (LEXP_aux (le,(l,_))) =
          match le with
          | LEXP_id _ | LEXP_cast _ | LEXP_vector _ | LEXP_field _ | LEXP_vector_range _ | LEXP_tup _ -> ()
-         | LEXP_memory _ ->
+         | LEXP_memory _ | LEXP_deref _ ->
            typ_error l "only identifiers, fields, and vectors may be set in a tuple" None None None in
        List.iter is_ok_in_tup ltups;
        LEXP_tup(ltups)
@@ -1100,4 +1100,4 @@ let process_ast order defs =
 
 let ast_of_def_string order str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
-  process_ast order (Defs [def])
+  process_ast order (Parse_ast.Defs [def])

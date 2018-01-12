@@ -158,6 +158,7 @@ let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match snd annot with
   let effsum = union_effects eff (match lexp with
     | LEXP_id _ -> no_effect
     | LEXP_cast _ -> no_effect
+    | LEXP_deref e -> effect_of e
     | LEXP_memory (_,es) -> union_eff_exps es
     | LEXP_tup les ->
       List.fold_left (fun eff le -> union_effects eff (effect_of_lexp le)) no_effect les

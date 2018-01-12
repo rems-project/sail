@@ -367,13 +367,13 @@ and fv_of_pes consider_var bound used set pes =
     let bound_g,us_g,set_g = fv_of_exp consider_var bound_p us_p set g in
     let bound_e,us_e,set_e = fv_of_exp consider_var bound_g us_g set_g e in
     fv_of_pes consider_var bound us_e set_e pes
-    
+
 and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
   | LB_val(pat,exp) ->
     let bound_p, us_p = pat_bindings consider_var bound used pat in
     let _,us_e,set_e = fv_of_exp consider_var bound used set exp in
     bound_p,Nameset.union us_p us_e,set_e
-    
+
 and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
   match lexp with
   | LEXP_id id ->
@@ -382,6 +382,8 @@ and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
     if Nameset.mem i bound
     then bound, used, Nameset.add i set
     else Nameset.add i bound, Nameset.add i used, set
+  | LEXP_deref exp ->
+    fv_of_exp consider_var bound used set exp
   | LEXP_cast(typ,id) ->
     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
     let i = string_of_id id in

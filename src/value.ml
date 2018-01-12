@@ -299,8 +299,8 @@ let rec string_of_value = function
   | V_vector vs -> "[" ^ Util.string_of_list ", " string_of_value vs ^ "]"
   | V_bool true -> "true"
   | V_bool false -> "false"
-  | V_bit B0 -> "bitzero"
-  | V_bit B1 -> "bitone"
+  | V_bit Sail_lib.B0 -> "bitzero"
+  | V_bit Sail_lib.B1 -> "bitone"
   | V_int n -> Big_int.to_string n
   | V_tuple vals -> "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_list vals -> "[|" ^ Util.string_of_list ", " string_of_value vals ^ "|]"
@@ -343,6 +343,10 @@ let value_putchar = function
   | [v] -> Sail_lib.putchar (coerce_int v); V_unit
   | _ -> failwith "value putchar"
 
+let value_print_bits = function
+  | [msg; bits] -> print_endline (coerce_string msg ^ string_of_value bits); V_unit
+  | _ -> failwith "value print_bits"
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -353,7 +357,7 @@ let primops =
       ("prerr_endline", value_print);
       ("putchar", value_putchar);
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
-      ("print_bits", fun [msg; bits] -> print_endline (coerce_string msg ^ string_of_value bits); V_unit);
+      ("print_bits", value_print_bits);
       ("eq_int", value_eq_int);
       ("lteq", value_lteq);
       ("gteq", value_gteq);
@@ -399,5 +403,5 @@ let primops =
       ("undefined_vector", value_undefined_vector);
       ("internal_pick", value_internal_pick);
       ("replicate_bits", value_replicate_bits);
-      ("Elf_loader.elf_entry", fun _ -> V_int (Big_int.of_int 0));
+      ("Elf_loader.elf_entry", fun _ -> V_int (!Elf_loader.opt_elf_entry));
     ]
