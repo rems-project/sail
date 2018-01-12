@@ -183,6 +183,8 @@ let rec is_value (E_aux (e,(l,annot))) =
   | E_lit _ -> true
   | E_tuple es -> List.for_all is_value es
   | E_app (id,es) -> is_constructor id && List.for_all is_value es
+  (* We add casts to undefined to keep the type information in the AST *)
+  | E_cast (typ,E_aux (E_lit (L_aux (L_undef,_)),_)) -> true
 (* TODO: more? *)
   | _ -> false
 
@@ -671,6 +673,10 @@ let atom_typ_kid kid = function
 
 let reduce_cast typ exp l annot =
   let env = env_of_annot (l,annot) in
+  let replace_typ typ = function
+    | Some (env,_,eff) -> Some (env,typ,eff)
+    | None -> None
+  in
   let typ' = Env.base_typ_of env typ in
   match exp, destruct_exist env typ' with
   | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
@@ -683,7 +689,14 @@ let reduce_cast typ exp l annot =
                        " does not satisfy constraint " ^ string_of_n_constraint nc))
   | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
      let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
-     E_aux (E_cast (subst_src_typ (KBindings.singleton kid nexp) typ'', exp),(Generated l,None))
+     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+     E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
+  | E_aux (E_cast (_,
+                   (E_aux (E_lit (L_aux (L_undef,_)),_) as exp)),_),
+     Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
+     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+     E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
   | _ -> E_aux (E_cast (typ,exp),(l,annot))
 
 (* Used for constant propagation in pattern matches *)
@@ -754,6 +767,8 @@ let try_app (l,ann) (id,args) =
   else if is_id "ex_int" then
     match args with
     | [E_aux (E_lit lit,(l,_))] -> Some (E_aux (E_lit lit,(l,ann)))
+    | [E_aux (E_cast (_,(E_aux (E_lit (L_aux (L_undef,_)),_) as e)),(l,_))] ->
+       Some (reduce_cast (typ_of_annot (l,ann)) e l ann)
     | _ -> None
   else if is_id "vector_access" || is_id "bitvector_access" then
     match args with
@@ -823,6 +838,14 @@ let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
   | LEXP_vector_range (le,e1,e2) ->
      IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
   | LEXP_field (le,_) -> assigned_vars_in_lexp le
+
+(* Add a cast to undefined so that it retains its type, otherwise it can't be
+   substituted safely *)
+let keep_undef_typ value =
+  match value with
+  | E_aux (E_lit (L_aux (L_undef,lann)),eann) ->
+     E_aux (E_cast (typ_of_annot eann,value),(Generated Unknown,snd eann))
+  | _ -> value
 
 let split_defs continue_anyway splits defs =
   let split_constructors (Defs defs) =
@@ -1052,7 +1075,7 @@ let split_defs continue_anyway splits defs =
               match Env.lookup_id id env with
               | Local (Mutable,_) | Unbound ->
                  if is_value e'
-                 then Bindings.add id e' assigns
+                 then Bindings.add id (keep_undef_typ e') assigns
                  else Bindings.remove id assigns
               | _ -> assigns
             end
@@ -1220,6 +1243,21 @@ let split_defs continue_anyway splits defs =
                  (Reporting_basic.print_err false true lit_l "Monomorphisation"
                     "Unexpected kind of literal for var match"; GiveUp)
             end
+         | P_aux (_,(l',_)) ->
+            (Reporting_basic.print_err false true l' "Monomorphisation"
+               "Unexpected kind of pattern for literal"; GiveUp)
+       in findpat_generic checkpat "literal" assigns cases
+    | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)) ->
+       let checkpat = function
+         | P_aux (P_lit (L_aux (lit_p, _)),_) -> DoesNotMatch
+         | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
+              (* For undefined we fix the type-level size (because there's no good
+                 way to construct an undefined size), but leave the term as undefined
+                 to make the meaning clear. *)
+            let nexp = fabricate_nexp l annot in
+            let typ = subst_src_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+            DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,None))],
+                       [kid,nexp])
          | P_aux (_,(l',_)) ->
             (Reporting_basic.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
