@@ -105,6 +105,8 @@ module Env : sig
   (* Get the current set of constraints. *)
   val get_constraints : t -> n_constraint list
 
+  val add_constraint : n_constraint -> t -> t
+
   val get_typ_var : kid -> t -> base_kind_aux
 
   val get_typ_vars : t -> base_kind_aux KBindings.t

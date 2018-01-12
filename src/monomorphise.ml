@@ -622,29 +622,69 @@ let lit_match = function
 
 (* There's no undefined nexp, so replace undefined sizes with a plausible size.
    32 is used as a sensible default. *)
+
+let fabricate_nexp_exist env l typ kids nc typ' =
+  match kids,nc,Env.expand_synonyms env typ' with
+  | ([kid],NC_aux (NC_set (kid',i::_),_),
+     Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+      when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 ->
+     Nexp_aux (Nexp_constant i,Unknown)
+  | ([kid],NC_aux (NC_true,_),
+     Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+      when Kid.compare kid kid'' = 0 ->
+     nint 32
+  | ([kid],NC_aux (NC_set (kid',i::_),_),
+     Typ_aux (Typ_app (Id_aux (Id "range",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+      when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
+        Kid.compare kid kid''' = 0 ->
+     Nexp_aux (Nexp_constant i,Unknown)
+  | ([kid],NC_aux (NC_true,_),
+     Typ_aux (Typ_app (Id_aux (Id "range",_),
+                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+      when Kid.compare kid kid'' = 0 &&
+        Kid.compare kid kid''' = 0 ->
+     nint 32
+  | _ -> raise (Reporting_basic.err_general l
+                  ("Undefined value at unsupported type " ^ string_of_typ typ))
+
 let fabricate_nexp l = function
   | None -> nint 32
   | Some (env,typ,_) ->
      match Type_check.destruct_exist env typ with
      | None -> nint 32
-     | Some (kids,nc,typ') ->
-        match kids,nc,Env.expand_synonyms env typ' with
-        | ([kid],NC_aux (NC_set (kid',i::_),_),
-           Typ_aux (Typ_app (Id_aux (Id "range",_),
-                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
-            when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
-              Kid.compare kid kid''' = 0 ->
-           Nexp_aux (Nexp_constant i,Unknown)
-        | ([kid],NC_aux (NC_true,_),
-           Typ_aux (Typ_app (Id_aux (Id "range",_),
-                             [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                              Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
-            when Kid.compare kid kid'' = 0 &&
-              Kid.compare kid kid''' = 0 ->
-           nint 32
-        | _ -> raise (Reporting_basic.err_general l
-                        ("Undefined value at unsupported type " ^ string_of_typ typ))
+     | Some (kids,nc,typ') -> fabricate_nexp_exist env l typ kids nc typ'
+
+let atom_typ_kid kid = function
+  | Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                      [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_) ->
+     Kid.compare kid kid' = 0
+  | _ -> false
+
+(* We reduce casts in a few cases, in particular to ensure that where the
+   type checker has added a ({'n, true. atom('n)}) ex_int(...) cast we can
+   fill in the 'n.  For undefined we fabricate a suitable value for 'n. *)
+
+let reduce_cast typ exp l annot =
+  let env = env_of_annot (l,annot) in
+  let typ' = Env.base_typ_of env typ in
+  match exp, destruct_exist env typ' with
+  | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
+     let nc_env = Env.add_typ_var kid BK_nat env in
+     let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
+     if prove nc_env nc
+     then exp
+     else raise (Reporting_basic.err_unreachable l
+                   ("Constant propagation error: literal " ^ string_of_big_int n ^
+                       " does not satisfy constraint " ^ string_of_n_constraint nc))
+  | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
+     E_aux (E_cast (subst_src_typ (KBindings.singleton kid nexp) typ'', exp),(Generated l,None))
+  | _ -> E_aux (E_cast (typ,exp),(l,annot))
 
 (* Used for constant propagation in pattern matches *)
 type 'a matchresult =
@@ -886,7 +926,9 @@ let split_defs continue_anyway splits defs =
       -> exp,assigns
     | E_cast (t,e') ->
        let e'',assigns = const_prop_exp substs assigns e' in
-       re (E_cast (t, e'')) assigns
+       if is_value e'' && e' <> e''
+       then reduce_cast t e'' l annot, assigns
+       else re (E_cast (t, e'')) assigns
     | E_app (id,es) ->
        let es',assigns = non_det_exp_list es in
        let env = Type_check.env_of_annot (l, annot) in
