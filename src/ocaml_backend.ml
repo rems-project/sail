@@ -631,7 +631,7 @@ let ocaml_defs (Defs defs) =
   let empty_reg_init =
     if ctx.register_inits = []
     then
-      separate space [string "let"; string "initialize_registers"; string "()"; equals; string "()"]
+      separate space [string "let"; string "zinitializze_registers"; string "()"; equals; string "()"]
       ^^ ocaml_def_end
     else empty
   in

@@ -347,6 +347,10 @@ let value_print_bits = function
   | [msg; bits] -> print_endline (coerce_string msg ^ string_of_value bits); V_unit
   | _ -> failwith "value print_bits"
 
+let value_print_int = function
+  | [msg; n] -> print_endline (coerce_string msg ^ string_of_value n); V_unit
+  | _ -> failwith "value print_int"
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -356,8 +360,10 @@ let primops =
       ("print_endline", value_print);
       ("prerr_endline", value_print);
       ("putchar", value_putchar);
+      ("string_of_big_int", fun vs -> V_string (string_of_value (List.hd vs)));
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
       ("print_bits", value_print_bits);
+      ("print_int", value_print_int);
       ("eq_int", value_eq_int);
       ("lteq", value_lteq);
       ("gteq", value_gteq);

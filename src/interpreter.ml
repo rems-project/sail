@@ -54,11 +54,23 @@ open Value
 
 type gstate =
   { registers : value Bindings.t;
+    boxes : value StringMap.t;
     letbinds : (Type_check.tannot letbind) list;
   }
 
+let box_count = ref 0
+
+let box_name id =
+  let name = string_of_id id ^ " box_" ^ string_of_int !box_count in
+  incr box_count;
+  name
+
+type variable =
+  | Var_value of value
+  | Var_box of string
+
 type lstate =
-  { locals : value Bindings.t }
+  { locals : variable Bindings.t }
 
 type state = lstate * gstate
 
@@ -70,6 +82,7 @@ let rec ast_letbinds (Defs defs) =
 
 let initial_gstate ast =
   { registers = Bindings.empty;
+    boxes = StringMap.empty;
     letbinds = ast_letbinds ast;
   }
 
@@ -279,6 +292,16 @@ and subst_fexps id value (FES_aux (FES_Fexps (fexps, flag), annot)) =
 and subst_fexp id value (FE_aux (FE_Fexp (id', exp), annot)) =
   FE_aux (FE_Fexp (id', subst id value exp), annot)
 
+and local_variable id lstate gstate =
+  try
+    match Bindings.find id lstate.locals with
+    | Var_value v -> exp_of_value v
+    | Var_box b ->
+       let v = StringMap.find b gstate.boxes in
+       exp_of_value v
+  with
+  | Not_found -> failwith ("Could not find local variable " ^ string_of_id id)
+
 and subst_lexp id value (LEXP_aux (lexp_aux, annot) as lexp) =
   let wrap lexp_aux = LEXP_aux (lexp_aux, annot) in
   let lexp_aux = match lexp_aux with
@@ -327,11 +350,8 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_if (exp, then_exp, else_exp) ->
      step exp >>= fun exp' -> wrap (E_if (exp', then_exp, else_exp))
 
-  | E_loop (While, exp, body) when not (is_value exp) ->
-     step exp >>= fun exp' -> wrap (E_loop (While, exp', body))
-  | E_loop (While, exp, body) when is_true exp -> wrap (E_block [body; orig_exp])
-  | E_loop (While, exp, body) when is_false exp -> wrap unit_exp
-  | E_loop _ -> assert false (* Impossible *)
+  | E_loop (While, exp, body) -> wrap (E_if (exp, E_aux (E_block [body; orig_exp], annot), exp_of_value V_unit))
+  | E_loop (Until, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, orig_exp, exp_of_value V_unit), annot)])
 
   | E_assert (exp, msg) when is_true exp -> wrap unit_exp
   | E_assert (exp, msg) when is_false exp -> assertion_failed "FIXME"
@@ -375,6 +395,9 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | E_vector_update (vec, n, x) ->
      wrap (E_app (mk_id "vector_update", [vec; n; x]))
+  | E_vector_update_subrange (vec, n, m, x) ->
+     (* FIXME: Currently not general enough *)
+     wrap (E_app (mk_id "vector_update_subrange_dec", [vec; n; m; x]))
 
   (* otherwise left-to-right evaluation order for function applications *)
   | E_app (id, exps) ->
@@ -392,7 +415,8 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
             if extern = "reg_deref" then
               let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
               gets >>= fun (_, gstate) ->
-              return (exp_of_value (Bindings.find (mk_id regname) gstate.registers))
+              try return (exp_of_value (Bindings.find (mk_id regname) gstate.registers)) with
+              | Not_found -> return (exp_of_value (StringMap.find regname gstate.boxes))
             else
               let primop = try StringMap.find extern primops with Not_found -> failwith ("No primop " ^ extern) in
               return (exp_of_value (primop (List.map value_of_exp evaluated)))
@@ -446,7 +470,25 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_exit exp when is_value exp -> throw (V_ctor ("Exit", [value_of_exp exp]))
   | E_exit exp -> step exp >>= fun exp' -> wrap (E_exit exp')
 
-  | E_ref id -> return (exp_of_value (V_ref (string_of_id id)))
+  | E_ref id ->
+     gets >>= fun (lstate, gstate) ->
+     if Bindings.mem id gstate.registers then
+       return (exp_of_value (V_ref (string_of_id id)))
+     else if Bindings.mem id lstate.locals then
+       let b = box_name id in
+       let value = Bindings.find id lstate.locals in
+       match value with
+       | Var_box b ->
+          return (exp_of_value (V_ref b))
+       | Var_value value ->
+          let b = box_name id in
+          puts ({ locals = Bindings.add id (Var_box b) lstate.locals },
+                { gstate with boxes = StringMap.add b value gstate.boxes }) >>
+          return (exp_of_value (V_ref b))
+     else
+       failwith ("Could not find variable or register " ^ string_of_id id)
+
+     return (exp_of_value (V_ref (string_of_id id)))
   | E_id id ->
      begin
        let open Type_check in
@@ -456,11 +498,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           let exp =
             try exp_of_value (Bindings.find id gstate.registers) with
             | Not_found ->
+               (* Replace with error message? *)
                let exp = mk_exp (E_app (mk_id ("undefined_" ^ string_of_typ (typ_of orig_exp)), [mk_exp (E_lit (mk_lit (L_unit)))])) in
                Type_check.check_exp (env_of_annot annot) exp (typ_of orig_exp)
           in
           return exp
-       | Local (Mutable, _) -> return (exp_of_value (Bindings.find id lstate.locals))
+       | Local (Mutable, _) -> return (local_variable id lstate gstate)
        | Local (Immutable, _) ->
           let chain = build_letchain id gstate.letbinds orig_exp in
           return chain
@@ -519,6 +562,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
      let exp' = E_aux (E_vector_update (vec_exp, n, exp), lexp_annot) in
      wrap (E_assign (vec, exp'))
+  | E_assign (LEXP_aux (LEXP_vector_range (vec, n, m), lexp_annot), exp) ->
+     let open Type_check in
+     let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
+     (* FIXME: let the type checker check this *)
+     let exp' = E_aux (E_vector_update_subrange (vec_exp, n, m, exp), lexp_annot) in
+     wrap (E_assign (vec, exp'))
   | E_assign (LEXP_aux (LEXP_id id, _), exp) | E_assign (LEXP_aux (LEXP_cast (_, id), _), exp) ->
      begin
        let open Type_check in
@@ -527,15 +576,23 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | Register _ ->
           puts (lstate, { gstate with registers = Bindings.add id (value_of_exp exp) gstate.registers }) >> wrap unit_exp
        | Local (Mutable, _) | Unbound ->
-          puts ({ locals = Bindings.add id (value_of_exp exp) lstate.locals }, gstate) >> wrap unit_exp
+          begin
+            match try Bindings.find id lstate.locals with Not_found -> Var_value V_unit with
+            | Var_value _ -> puts ({ locals = Bindings.add id (Var_value (value_of_exp exp)) lstate.locals }, gstate) >> wrap unit_exp
+            | Var_box b ->
+               puts (lstate, { gstate with boxes = StringMap.add b (value_of_exp exp) gstate.boxes }) >> wrap unit_exp
+          end
        | _ -> failwith "Assign"
      end
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) when not (is_value reference) ->
      step reference >>= fun reference' -> wrap (E_assign (LEXP_aux (LEXP_deref reference', annot), exp))
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) ->
-     let id = Id_aux (Id (coerce_ref (value_of_exp reference)), Parse_ast.Unknown) in
+     let name = coerce_ref (value_of_exp reference) in
      gets >>= fun (lstate, gstate) ->
-     puts (lstate, { gstate with registers = Bindings.add id (value_of_exp exp) gstate.registers }) >> wrap unit_exp
+     if Bindings.mem (mk_id name) gstate.registers then
+       puts (lstate, { gstate with registers = Bindings.add (mk_id name) (value_of_exp exp) gstate.registers }) >> wrap unit_exp
+     else
+       puts (lstate, { gstate with boxes = StringMap.add name (value_of_exp exp) gstate.boxes }) >> wrap unit_exp
   | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> failwith "Tuple assignment"
      (*
      let values = coerce_tuple (value_of_exp exp) in
