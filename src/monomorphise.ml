@@ -54,8 +54,7 @@ open Ast_util
 open Big_int
 open Type_check
 
-let size_set_limit = 8
-let vector_split_limit = 4
+let size_set_limit = 16
 
 let optmap v f =
   match v with
@@ -1316,14 +1315,10 @@ let split_defs continue_anyway splits defs =
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
-          if int_of_big_int sz <= vector_split_limit then
-            let lits = make_vectors (int_of_big_int sz) in
-            List.map (fun lit ->
-              P_aux (P_lit lit,(l,annot)),
-              [var,E_aux (E_lit lit,(new_l,annot))]) lits
-          else
-            cannot ("Refusing to split vector type of length " ^ string_of_big_int sz ^
-                       " (above limit " ^ string_of_int vector_split_limit ^ ")")
+          let lits = make_vectors (int_of_big_int sz) in
+          List.map (fun lit ->
+            P_aux (P_lit lit,(l,annot)),
+            [var,E_aux (E_lit lit,(new_l,annot))]) lits
        | _ ->
           cannot ("length not constant, " ^ string_of_nexp len)
        )
@@ -1494,6 +1489,19 @@ let split_defs continue_anyway splits defs =
          in p
     in
 
+    let check_split_size lst l =
+      let size = List.length lst in
+      if size > size_set_limit then
+        let open Reporting_basic in
+        let error =
+          Err_general (l, "Case split is too large (" ^ string_of_int size ^
+            " > limit " ^ string_of_int size_set_limit ^ ")")
+        in if continue_anyway
+          then (print_error error; false)
+          else raise (Fatal_error error)
+      else true
+    in
+
     let rec map_exp ((E_aux (e,annot)) as ea) =
       let re e = E_aux (e,annot) in
       match e with
@@ -1556,13 +1564,16 @@ let split_defs continue_anyway splits defs =
       FE_aux (FE_Fexp (id,map_exp e),annot)
     and map_pexp = function
       | Pat_aux (Pat_exp (p,e),l) ->
+         let nosplit = [Pat_aux (Pat_exp (p,map_exp e),l)] in
          (match map_pat p with
-         | NoSplit -> [Pat_aux (Pat_exp (p,map_exp e),l)]
+         | NoSplit -> nosplit
          | VarSplit patsubsts ->
-            List.map (fun (pat',substs) ->
-              let exp' = subst_exp substs e in
-              Pat_aux (Pat_exp (pat', map_exp exp'),l))
-              patsubsts
+            if check_split_size patsubsts (pat_loc p) then
+              List.map (fun (pat',substs) ->
+                let exp' = subst_exp substs e in
+                Pat_aux (Pat_exp (pat', map_exp exp'),l))
+                patsubsts
+            else nosplit
          | ConstrSplit patnsubsts ->
             List.map (fun (pat',nsubst) ->
               let pat' = nexp_subst_pat nsubst pat' in
@@ -1570,14 +1581,17 @@ let split_defs continue_anyway splits defs =
               Pat_aux (Pat_exp (pat', map_exp exp'),l)
             ) patnsubsts)
       | Pat_aux (Pat_when (p,e1,e2),l) ->
+         let nosplit = [Pat_aux (Pat_when (p,map_exp e1,map_exp e2),l)] in
          (match map_pat p with
-         | NoSplit -> [Pat_aux (Pat_when (p,map_exp e1,map_exp e2),l)]
+         | NoSplit -> nosplit
          | VarSplit patsubsts ->
-            List.map (fun (pat',substs) ->
-              let exp1' = subst_exp substs e1 in
-              let exp2' = subst_exp substs e2 in
-              Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
-              patsubsts
+            if check_split_size patsubsts (pat_loc p) then
+              List.map (fun (pat',substs) ->
+                let exp1' = subst_exp substs e1 in
+                let exp2' = subst_exp substs e2 in
+                Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
+                patsubsts
+            else nosplit
          | ConstrSplit patnsubsts ->
             List.map (fun (pat',nsubst) ->
               let pat' = nexp_subst_pat nsubst pat' in
