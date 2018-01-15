@@ -82,13 +82,8 @@ let rec user_input callback =
      end;
      user_input callback
 
-let termcode n = "\x1B[" ^ string_of_int n ^ "m"
-let bold str = termcode 1 ^ str
-let red str = termcode 91 ^ str
-let clear str = str ^ termcode 0
-
 let sail_logo =
-  let banner str = str |> bold |> red |> clear in
+  let banner str = str |> Util.bold |> Util.red |> Util.clear in
   [ {|    ___       ___       ___       ___ |};
     {|   /\  \     /\  \     /\  \     /\__\|};
     {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
@@ -102,6 +97,8 @@ let sail_logo =
 
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
+let interactive_state = ref (initial_state !interactive_ast)
+
 let print_program () =
   match !current_mode with
   | Normal -> ()
@@ -110,8 +107,6 @@ let print_program () =
      List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
      print_endline out
   | Evaluation _ -> ()
-
-let interactive_state = ref (initial_state !interactive_ast)
 
 let rec run () =
   match !current_mode with
@@ -150,22 +145,42 @@ let rec run_steps n =
           current_mode := Evaluation frame
      end
 
-let handle_input input =
+type input = Command of string * string | Expression of string | Empty
+
+(* This function is called on every line of input passed to the interpreter *)
+let handle_input' input =
   LNoise.history_add input |> ignore;
-  match !current_mode with
-  | Normal ->
-     begin
-       if input <> "" && input.[0] = ':' then
-         let n = try String.index input ' ' with Not_found -> String.length input in
-         let cmd = Str.string_before input n in
-         let arg = String.trim (Str.string_after input n) in
+
+  (* Process the input and check if it's a command, a raw expression,
+     or empty. *)
+  let input =
+    if input <> "" && input.[0] = ':' then
+      let n = try String.index input ' ' with Not_found -> String.length input in
+      let cmd = Str.string_before input n in
+      let arg = String.trim (Str.string_after input n) in
+      Command (cmd, arg)
+    else if input <> "" then
+      Expression input
+    else
+      Empty
+  in
+
+  let recognised = ref true in
+
+  let unrecognised_command cmd =
+    if !recognised = false then print_endline ("Command " ^ cmd ^ " is not a valid command") else ()
+  in
+
+  (* First handle commands that are mode-independent *)
+  begin
+    match input with
+    | Command (cmd, arg) ->
+       begin
          match cmd with
          | ":t" | ":type" ->
             let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !interactive_env in
             pretty_sail stdout (doc_binding (typq, typ));
             print_newline ();
-         | ":elf" ->
-            Elf_loader.load_elf arg
          | ":q" | ":quit" -> exit 0
          | ":i" | ":infer" ->
             let exp = Initial_check.exp_of_string dec_ord arg in
@@ -175,41 +190,72 @@ let handle_input input =
          | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
+         | _ -> recognised := false
+       end
+    | _ -> ()
+  end;
 
-         | _ -> print_endline ("Unrecognised command " ^ input)
-       else if input <> "" then
-         let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord input) in
-         current_mode := Evaluation (eval_frame !interactive_ast (Step ("", !interactive_state, return exp, [])));
-         print_program ()
-       else ()
+  match !current_mode with
+  | Normal ->
+     begin
+       match input with
+       | Command (cmd, arg) ->
+          (* Normal mode commands *)
+          begin
+            match cmd with
+            | ":elf" -> Elf_loader.load_elf arg
+            | _ -> unrecognised_command cmd
+          end
+       | Expression str ->
+          (* An expression in normal mode is type checked, then puts
+             us in evaluation mode. *)
+          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord str) in
+          current_mode := Evaluation (eval_frame !interactive_ast (Step ("", !interactive_state, return exp, [])));
+          print_program ()
+       | Empty -> ()
      end
   | Evaluation frame ->
      begin
-       if input <> "" && input.[0] = ':' then
-         let n = try String.index input ' ' with Not_found -> String.length input in
-         let cmd = Str.string_before input n in
-         let arg = String.trim (Str.string_after input n) in
-         match cmd with
-         | ":r" | ":run" ->
-            run ()
-         | ":s" | ":step" ->
-            run_steps (int_of_string arg)
-         | ":q" | ":quit" -> exit 0
-         | _ -> print_endline ("Unrecognised command " ^ input)
-       else
-         match frame with
-         | Done (state, v) ->
-            interactive_state := state;
-            print_endline ("Result = " ^ Value.string_of_value v);
-            current_mode := Normal
-         | Step (out, state, _, stack) ->
-            interactive_state := state;
-            current_mode := Evaluation (eval_frame !interactive_ast frame);
-            print_program ()
-         | Break frame ->
-            print_endline "Breakpoint";
-            current_mode := Evaluation frame
+       match input with
+       | Command (cmd, arg) ->
+         (* Evaluation mode commands *)
+         begin
+           match cmd with
+           | ":r" | ":run" ->
+              run ()
+           | ":s" | ":step" ->
+              run_steps (int_of_string arg)
+           | ":n" | ":normal" ->
+              current_mode := Normal
+           | _ -> unrecognised_command cmd
+         end
+       | Expression str ->
+          print_endline "Already evaluating expression"
+       | Empty ->
+          (* Empty input will evaluate one step, or switch back to
+             normal mode when evaluation is completed. *)
+          begin
+            match frame with
+            | Done (state, v) ->
+               interactive_state := state;
+               print_endline ("Result = " ^ Value.string_of_value v);
+               current_mode := Normal
+            | Step (out, state, _, stack) ->
+               interactive_state := state;
+               current_mode := Evaluation (eval_frame !interactive_ast frame);
+               print_program ()
+            | Break frame ->
+               print_endline "Breakpoint";
+               current_mode := Evaluation frame
+          end
      end
+
+let handle_input input =
+  try handle_input' input with
+  | Type_check.Type_error (l, err) ->
+     print_endline (Type_check.string_of_type_error err)
+  | exn ->
+     print_endline (Printexc.to_string exn)
 
 let () =
   (* Auto complete function names based on val specs *)
@@ -231,6 +277,21 @@ let () =
         |> List.map (fun completion -> line_so_far ^ completion)
         |> List.iter (LNoise.add_completion ln_completions)
       else ()
+    end;
+
+  (* Read the script file if it is set with the -is option, and excute them *)
+  begin
+    match !opt_interactive_script with
+    | None -> ()
+    | Some file ->
+       let chan = open_in file in
+       try
+         while true do
+           let line = input_line chan in
+           handle_input line;
+         done;
+       with
+       | End_of_file -> ()
   end;
 
   LNoise.history_load ~filename:"sail_history" |> ignore;

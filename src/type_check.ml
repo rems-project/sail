@@ -88,14 +88,13 @@ let pp_type_error err =
   let rec pp_err = function
     | Err_no_casts (exp, trigger, []) ->
        (string "Tried performing type coercion on" ^//^ Pretty_print_sail.doc_exp exp)
-       ^/^ (string "Failed because" ^//^ pp_err trigger)
-       ^/^ string "There were no possible casts"
+       ^^ hardline ^^ (string "Failed because" ^//^ pp_err trigger)
     | Err_no_casts (exp, trigger, errs) ->
        (string "Tried performing type coercion on" ^//^ Pretty_print_sail.doc_exp exp)
        ^/^ string "Failed because" ^//^ pp_err trigger
     | Err_no_overloading (id, errs) ->
        string ("No overloadings for " ^ string_of_id id ^ ", tried:") ^//^
-         group (separate_map hardline (fun (id, err) -> string (string_of_id id) ^^ colon ^^ space ^^ pp_err err) errs)
+         group (separate_map hardline (fun (id, err) -> string (string_of_id id) ^^ colon ^//^ pp_err err) errs)
     | Err_subtype (typ1, typ2, []) ->
        separate space [ string (string_of_typ typ1);
                         string "is not a subtype of";

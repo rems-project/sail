@@ -53,6 +53,7 @@ open Process_file
 let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
 let opt_interactive = ref false
+let opt_interactive_script : string option ref = ref None
 let opt_print_version = ref false
 let opt_print_initial_env = ref false
 let opt_print_verbose = ref false
@@ -74,6 +75,10 @@ let options = Arg.align ([
   ( "-i",
     Arg.Tuple [Arg.Set opt_interactive; Arg.Set Initial_check.opt_undefined_gen],
     " start interactive interpreter");
+  ( "-is",
+    Arg.Tuple [Arg.Set opt_interactive; Arg.Set Initial_check.opt_undefined_gen;
+               Arg.String (fun s -> opt_interactive_script := Some s)],
+    "<filename> start interactive interpreter and execute commands in script");
   ( "-ocaml",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");

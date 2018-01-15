@@ -181,8 +181,8 @@ let kw_table =
 let ws = [' ''\t']+
 let letter = ['a'-'z''A'-'Z''?']
 let digit = ['0'-'9']
-let binarydigit = ['0'-'1']
-let hexdigit = ['0'-'9''A'-'F''a'-'f']
+let binarydigit = ['0'-'1''_']
+let hexdigit = ['0'-'9''A'-'F''a'-'f''_']
 let alphanum = letter|digit
 let startident = letter|'_'
 let ident = alphanum|['_''\'''#']
@@ -260,8 +260,8 @@ rule token = parse
   | "-" (digit* as i1) "." (digit+ as i2) { (Real ("-" ^ i1 ^ "." ^ i2)) }
   | digit+ as i                           { (Num(Big_int.of_string i)) }
   | "-" digit+ as i                       { (Num(Big_int.of_string i)) }
-  | "0b" (binarydigit+ as i)              { (Bin(i)) }
-  | "0x" (hexdigit+ as i)                 { (Hex(i)) }
+  | "0b" (binarydigit+ as i)              { (Bin(Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i))) }
+  | "0x" (hexdigit+ as i)                 { (Hex(Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i))) }
   | '"'                                   { (String(
                                              string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf)) }
   | eof                                   { Eof }

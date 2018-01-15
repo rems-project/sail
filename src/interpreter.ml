@@ -488,7 +488,6 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      else
        failwith ("Could not find variable or register " ^ string_of_id id)
 
-     return (exp_of_value (V_ref (string_of_id id)))
   | E_id id ->
      begin
        let open Type_check in
@@ -598,7 +597,6 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      let values = coerce_tuple (value_of_exp exp) in
      wrap (E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), (Parse_ast.Unknown, None))) lexps values))
       *)
-  | E_assign _ -> failwith (string_of_exp orig_exp);
 
   | E_try (exp, pexps) when is_value exp -> return exp
   | E_try (exp, pexps) ->
