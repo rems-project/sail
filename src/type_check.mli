@@ -206,7 +206,11 @@ val prove : Env.t -> n_constraint -> bool
 
 val subtype_check : Env.t -> typ -> typ -> bool
 
-val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t
+val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
+(* Variant that doesn't introduce new guards for literal patterns, but raises
+   a type error instead.  This should always be safe to use on patterns that
+   have previously been type checked. *)
+val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
 
 (* Partial functions: The expressions and patterns passed to these
    functions must be guaranteed to have tannots of the form Some (env,

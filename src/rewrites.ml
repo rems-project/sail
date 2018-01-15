@@ -1084,7 +1084,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
     ; fP_Fpat = (fun (id,p) -> FP_Fpat (id,p false))
     } in
-  let pat, env = bind_pat env
+  let pat, env = bind_pat_no_guard env
     (strip_pat ((fold_pat name_bitvector_roots pat) false))
     (pat_typ_of pat) in
 
@@ -1588,11 +1588,11 @@ let rewrite_register_ref_writes (Defs defs) =
         | BF_aux (BF_range (i, j), _) -> (i, j)
         | _ -> raise (Reporting_basic.err_unreachable l "unsupported field type") in
       let mk_num_exp i = mk_lit_exp (L_num i) in
-      let reg_pat, reg_env = bind_pat env (mk_pat (P_typ (rtyp, mk_pat (P_id (mk_id "reg"))))) rtyp in
+      let reg_pat, reg_env = bind_pat_no_guard env (mk_pat (P_typ (rtyp, mk_pat (P_id (mk_id "reg"))))) rtyp in
       let inferred_get = infer_exp reg_env (mk_exp (E_vector_subrange
         (mk_exp (E_id (mk_id "reg")), mk_num_exp i, mk_num_exp j))) in
       let ftyp = typ_of inferred_get in
-      let v_pat, v_env = bind_pat reg_env (mk_pat (P_typ (ftyp, mk_pat (P_id (mk_id "v"))))) ftyp in
+      let v_pat, v_env = bind_pat_no_guard reg_env (mk_pat (P_typ (ftyp, mk_pat (P_id (mk_id "v"))))) ftyp in
       let inferred_set = infer_exp v_env (mk_exp (E_vector_update_subrange
         (mk_exp (E_id (mk_id "reg")), mk_num_exp i, mk_num_exp j, mk_exp (E_id (mk_id "v"))))) in
       let set_args = P_aux (P_tup [reg_pat; v_pat], (l, Some (env, tuple_typ [rtyp; ftyp], no_effect))) in
