@@ -66,10 +66,12 @@ let prompt () =
   | Normal -> "sail> "
   | Evaluation _ -> "eval> "
 
+let eval_clear = ref true
+
 let mode_clear () =
   match !current_mode with
   | Normal -> ()
-  | Evaluation _ -> LNoise.clear_screen ()
+  | Evaluation _ -> if !eval_clear then LNoise.clear_screen () else ()
 
 let rec user_input callback =
   match LNoise.linenoise (prompt ()) with
@@ -84,16 +86,20 @@ let rec user_input callback =
 
 let sail_logo =
   let banner str = str |> Util.bold |> Util.red |> Util.clear in
-  [ {|    ___       ___       ___       ___ |};
-    {|   /\  \     /\  \     /\  \     /\__\|};
-    {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
-    {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/ |};
-    {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \ |};
-    {|  \::/  /    /:/  /   \:\__\    \:\__\|};
-    {|   \/__/     \/__/     \/__/     \/__/|};
-    ""
-  ]
-  |> List.map banner
+  let logo =
+    [ {|    ___       ___       ___       ___ |};
+      {|   /\  \     /\  \     /\  \     /\__\|};
+      {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
+      {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/ |};
+      {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \ |};
+      {|  \::/  /    /:/  /   \:\__\    \:\__\|};
+      {|   \/__/     \/__/     \/__/     \/__/|} ]
+  in
+  let help =
+    [ "Type :commands for a list of commands, and :help <command> for help.";
+      "Type expressions to evaluate them." ]
+  in
+  List.map banner logo @ [""] @ help @ [""]
 
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
@@ -145,6 +151,37 @@ let rec run_steps n =
           current_mode := Evaluation frame
      end
 
+let help = function
+  | ":t" | ":type" ->
+     "(:t | :type) <function name> - Print the type of a function."
+  | ":q" | ":quit" ->
+     "(:q | :quit) - Exit the interpreter."
+  | ":i" | ":infer" ->
+     "(:i | :infer) <expression> - Infer the type of an expression."
+  | ":v" | ":verbose" ->
+     "(:v | :verbose) - Increase the verbosity level, or reset to zero at max verbosity."
+  | ":commands" ->
+     ":commands - List all available commands."
+  | ":help" ->
+     ":help <command> - Get a description of <command>. Commands are prefixed with a colon, e.g. :help :type."
+  | ":elf" ->
+     ":elf <file> - Load an ELF file."
+  | ":r" | ":run" ->
+     "(:r | :run) - Completely evaluate the currently evaluating expression."
+  | ":s" | ":step" ->
+     "(:s | :step) <number> - Perform a number of evaluation steps."
+  | ":n" | ":normal" ->
+     "(:n | :normal) - Exit evaluation mode back to normal mode."
+  | ":clear" ->
+     ":clear (on|off) - Set whether to clear the screen or not in evaluation mode."
+  | ":l" | ":load" -> String.concat "\n"
+     [ "(:l | :load) <files> - Load sail files and add their definitions to the interactive environment.";
+       "Files containing scattered definitions must be loaded together." ]
+  | cmd ->
+     "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
+
+let append_ast (Defs ast1) (Defs ast2) = Defs (ast1 @ ast2)
+
 type input = Command of string * string | Expression of string | Empty
 
 (* This function is called on every line of input passed to the interpreter *)
@@ -168,7 +205,7 @@ let handle_input' input =
   let recognised = ref true in
 
   let unrecognised_command cmd =
-    if !recognised = false then print_endline ("Command " ^ cmd ^ " is not a valid command") else ()
+    if !recognised = false then print_endline ("Command " ^ cmd ^ " is not a valid command in this mode.") else ()
   in
 
   (* First handle commands that are mode-independent *)
@@ -190,6 +227,20 @@ let handle_input' input =
          | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
+         | ":clear" ->
+            if arg = "on" then
+              eval_clear := true
+            else if arg = "off" then
+              eval_clear := false
+            else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
+         | ":commands" ->
+            let commands =
+              [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help";
+                "Normal mode commands - :elf :(l)oad";
+                "Evaluation mode commands - :(r)un :(s)tep :(n)ormal" ]
+            in
+            List.iter print_endline commands
+         | ":help" -> print_endline (help arg)
          | _ -> recognised := false
        end
     | _ -> ()
@@ -204,6 +255,14 @@ let handle_input' input =
           begin
             match cmd with
             | ":elf" -> Elf_loader.load_elf arg
+            | ":l" | ":load" ->
+               let files = Util.split_on_char ' ' arg in
+               let (_, ast, env) = load_files !interactive_env files in
+               let ast = Process_file.rewrite_ast_interpreter ast in
+               interactive_ast := append_ast !interactive_ast ast;
+               interactive_state := initial_state !interactive_ast;
+               interactive_env := env;
+               vs_ids := Initial_check.val_spec_ids !interactive_ast
             | _ -> unrecognised_command cmd
           end
        | Expression str ->
@@ -254,6 +313,8 @@ let handle_input input =
   try handle_input' input with
   | Type_check.Type_error (l, err) ->
      print_endline (Type_check.string_of_type_error err)
+  | Reporting_basic.Fatal_error err ->
+     Reporting_basic.print_error err
   | exn ->
      print_endline (Printexc.to_string exn)
 

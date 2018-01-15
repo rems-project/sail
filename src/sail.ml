@@ -180,37 +180,42 @@ let _ =
 let interactive_ast = ref (Ast.Defs [])
 let interactive_env = ref Type_check.initial_env
 
+let load_files type_envs files =
+  if !opt_memo_z3 then Constraint.load_digests () else ();
+
+  let parsed = List.map (fun f -> (f, parse_file f)) files in
+  let ast =
+    List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
+                     -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
+  let ast = convert_ast Ast_util.inc_ord ast in
+
+  let (ast, type_envs) = check_ast type_envs ast in
+
+  let (ast, type_envs) =
+    match !opt_mono_split, !opt_auto_mono with
+    | [], false -> ast, type_envs
+    | locs, _ -> monomorphise_ast locs type_envs ast
+  in
+
+  let ast =
+    if !Initial_check.opt_undefined_gen then
+      rewrite_undefined (rewrite_ast ast)
+    else rewrite_ast ast in
+
+  let out_name = match !opt_file_out with
+    | None when parsed = [] -> "out.sail"
+    | None -> fst (List.hd parsed)
+    | Some f -> f ^ ".sail" in
+
+  if !opt_memo_z3 then Constraint.save_digests () else ();
+
+  (out_name, ast, type_envs)
+
 let main() =
   if !opt_print_version
   then Printf.printf "Sail private release \n"
   else
-    if !opt_memo_z3 then Constraint.load_digests () else ();
-
-    let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
-    let ast =
-      List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 
-                        -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
-    let ast = convert_ast Ast_util.inc_ord ast in
-
-    let (ast, type_envs) = check_ast ast in
-
-    let (ast, type_envs) =
-      match !opt_mono_split, !opt_auto_mono with
-      | [], false -> ast, type_envs
-      | locs, _ -> monomorphise_ast locs type_envs ast
-    in
-
-    let ast =
-      if !Initial_check.opt_undefined_gen then
-        rewrite_undefined (rewrite_ast ast)
-      else rewrite_ast ast in
-
-    let out_name = match !opt_file_out with
-      | None when parsed = [] -> "out.sail"
-      | None -> fst (List.hd parsed)
-      | Some f -> f ^ ".sail" in
-
-    if !opt_memo_z3 then Constraint.save_digests () else ();
+    let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
 
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
