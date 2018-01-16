@@ -1877,7 +1877,7 @@ let rewrite_size_parameters env (Defs defs) =
          let body = List.fold_left add_var_rebind body vars in
          let guard = match guard with
            | None -> None
-           | Some exp -> Some (List.fold_left add_var_rebind body vars)
+           | Some exp -> Some (List.fold_left add_var_rebind exp vars)
          in
          pat,guard,body
       | exception Not_found -> pat,guard,body
