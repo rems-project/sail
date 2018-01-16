@@ -2281,6 +2281,7 @@ let rewrite_defs_letbind_effects  =
     let exp =
       if newreturn then
         (* let typ = try typ_of exp with _ -> unit_typ in *)
+        let exp = annot_exp (E_cast (typ_of exp, exp)) l (env_of exp) (typ_of exp) in
         annot_exp (E_internal_return exp) l (env_of exp) (typ_of exp)
       else
         exp in
