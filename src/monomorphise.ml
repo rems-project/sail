@@ -1784,6 +1784,10 @@ let rewrite_size_parameters env (Defs defs) =
            { (compute_exp_alg KidSet.empty KidSet.union) with
              e_aux = (fun ((s,e),annot) -> KidSet.union s (sizes_of_annot annot), E_aux (e,annot));
              e_let = (fun ((sl,lb),(s2,e2)) -> KidSet.union sl (KidSet.diff s2 (tyvars_bound_in_lb lb)), E_let (lb,e2));
+             e_for = (fun (id,(s1,e1),(s2,e2),(s3,e3),ord,(s4,e4)) ->
+               let kid = mk_kid ("loop_" ^ string_of_id id) in
+               KidSet.union s1 (KidSet.union s2 (KidSet.union s3 (KidSet.remove kid s4))),
+               E_for (id,e1,e2,e3,ord,e4));
              pat_exp = (fun ((sp,pat),(s,e)) -> KidSet.diff s (tyvars_bound_in_pat pat), Pat_exp (pat,e))}
            pexp)
   in
@@ -1800,7 +1804,7 @@ let rewrite_size_parameters env (Defs defs) =
       | P_aux (P_tup ps,_) -> ps
       | _ -> [pat]
     in
-    let to_change = List.map
+    let to_change = Util.map_filter
       (fun kid ->
         let check (P_aux (_,(_,Some (env,typ,_)))) =
           match Env.expand_synonyms env typ with
@@ -1813,9 +1817,10 @@ let rewrite_size_parameters env (Defs defs) =
               if Kid.compare kid kid' = 0 then Some kid else None
           | _ -> None
         in match findi check parameters with
-        | None -> raise (Reporting_basic.err_general l
-                           ("Unable to find an argument for " ^ string_of_kid kid))
-        | Some i -> i)
+        | None -> (Reporting_basic.print_error (Reporting_basic.Err_general (l,
+                           ("Unable to find an argument for " ^ string_of_kid kid)));
+                   None)
+        | Some i -> Some i)
       (KidSet.elements expose_tyvars)
     in
     let ik_compare (i,k) (i',k') =
