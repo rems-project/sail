@@ -1,15 +1,9 @@
+register reg : bool
 
-register bool reg
+let A : {'n, 0 <= 'n & 'n <= 4. atom('n)} = 4
 
-let (exist 'n, 0 <= 'n & 'n <= 4. [:'n:]) A = 4
+let B : range(0, 4) = A
 
-let ([|0:4|]) B = A
+val test : unit -> {|0, 1|} effect {rreg}
 
-val unit -> exist 'n, 'n in {0, 1}. [:'n:] effect {rreg} test
-
-function test () =
-{
-  if reg
-  then 0
-  else 1
-}
+function test () = if reg then 0 else 1

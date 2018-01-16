@@ -1,23 +1,28 @@
 default Order dec
 
-val extern forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lt_range_atom = "lt"
-val extern (int, int) -> bool effect pure lt_int = "lt"
-overload (deinfix <) [lt_range_atom; lt_int]
+val lt_range_atom = {ocaml: "lt", lem: "lt"}: forall ('n : Int) ('m : Int) ('o : Int).
+  (range('n, 'm), atom('o)) -> bool
 
-val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
-    ([|'n:'m|], [|'o:'p|]) -> [|'n + 'o:'m + 'p|] effect pure add_range = "add"
-val extern (int, int) -> int effect pure add_int = "add"
-overload (deinfix +) [add_range; add_int]
+val lt_int = {ocaml: "lt", lem: "lt"}: (int, int) -> bool
 
-val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,dec,bit>, int) -> bit effect pure vector_access = "bitvector_access_dec"
+overload operator < = {lt_range_atom, lt_int}
 
-register (bit[64]) GPR00
+val add_range = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-function (unit) test ((bit) b) = {
-  (int) i := 0;
-  while (i < 64) do {
-    GPR00[i] := b;
-    i := i + 1;
+val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
+
+overload operator + = {add_range, add_int}
+
+val vector_access = "bitvector_access_dec" : forall ('l : Int), 'l >= 0.
+  (vector('l, dec, bit), int) -> bit
+
+register GPR00 : vector(64, dec, bit)
+
+function test b : bit -> unit = {
+  i : int = 0;
+  while i < 64 do {
+    GPR00[i] = b;
+    i = i + 1
   }
 }
-

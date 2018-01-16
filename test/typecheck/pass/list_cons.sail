@@ -1,1 +1,1 @@
-function list<int> foo ((int) i, (list<int>) l) = i :: l
+function foo (i : int, l : list(int)) -> list(int) = i :: l

@@ -1,7 +1,3 @@
+val test : int -> int
 
-val int -> int effect pure test
-
-function test ((int) _ as x) =
-{
-  x
-}
+function test _ : int as x = x

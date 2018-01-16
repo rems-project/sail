@@ -1,140 +1,151 @@
+enum boolean = {FALSE, TRUE}
 
-typedef boolean = enumerate {FALSE; TRUE}
+enum signal = {LOW, HIGH}
 
-typedef signal = enumerate {LOW; HIGH}
+enum __RetCode = {
+  __RC_OK,
+  __RC_UNDEFINED,
+  __RC_UNPREDICTABLE,
+  __RC_SEE,
+  __RC_IMPLEMENTATION_DEFINED,
+  __RC_SUBARCHITECTURE_DEFINED,
+  __RC_EXCEPTION_TAKEN,
+  __RC_ASSERT_FAILED,
+  __RC_UNMATCHED_CASE
+}
 
-typedef __RetCode =
-  enumerate {__RC_OK;
-  __RC_UNDEFINED;
-  __RC_UNPREDICTABLE;
-  __RC_SEE;
-  __RC_IMPLEMENTATION_DEFINED;
-  __RC_SUBARCHITECTURE_DEFINED;
-  __RC_EXCEPTION_TAKEN;
-  __RC_ASSERT_FAILED;
-  __RC_UNMATCHED_CASE}
+type TUBE_Type = vector(32, inc, bit)
 
-typedef TUBE_Type = bit[32]
+type ScheduleIRQ_Type = vector(32, inc, bit)
 
-typedef ScheduleIRQ_Type = bit[32]
+type ClearIRQ_Type = vector(32, inc, bit)
 
-typedef ClearIRQ_Type = bit[32]
+type ScheduleFIQ_Type = vector(32, inc, bit)
 
-typedef ScheduleFIQ_Type = bit[32]
+type ClearFIQ_Type = vector(32, inc, bit)
 
-typedef ClearFIQ_Type = bit[32]
+type TargetCPU_Type = vector(32, inc, bit)
 
-typedef TargetCPU_Type = bit[32]
+type AbortRgn64Lo1_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Lo1_Type = bit[32]
+type AbortRgn64Lo1_Hi_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Lo1_Hi_Type = bit[32]
+type AbortRgn64Hi1_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Hi1_Type = bit[32]
+type AbortRgn64Hi1_Hi_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Hi1_Hi_Type = bit[32]
+type AbortRgn64Lo2_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Lo2_Type = bit[32]
+type AbortRgn64Lo2_Hi_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Lo2_Hi_Type = bit[32]
+type AbortRgn64Hi2_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Hi2_Type = bit[32]
+type AbortRgn64Hi2_Hi_Type = vector(32, inc, bit)
 
-typedef AbortRgn64Hi2_Hi_Type = bit[32]
+type AXIAbortCtl_Type = vector(32, inc, bit)
 
-typedef AXIAbortCtl_Type = bit[32]
+type GTE_API_Type = vector(32, inc, bit)
 
-typedef GTE_API_Type = bit[32]
+type GTE_API_PARAM_Type = vector(32, inc, bit)
 
-typedef GTE_API_PARAM_Type = bit[32]
+type GTE_API_STATUS_Type = vector(32, inc, bit)
 
-typedef GTE_API_STATUS_Type = bit[32]
+type PPURBAR_Type = vector(32, inc, bit)
 
-typedef PPURBAR_Type = bit[32]
+type PPURSER_Type = vector(32, inc, bit)
 
-typedef PPURSER_Type = bit[32]
+type PPURACR_Type = vector(32, inc, bit)
 
-typedef PPURACR_Type = bit[32]
+type GTE_API_STATUS_64_Type = vector(32, inc, bit)
 
-typedef GTE_API_STATUS_64_Type = bit[32]
+type GTE_API_STATUS_64_HI_Type = vector(32, inc, bit)
 
-typedef GTE_API_STATUS_64_HI_Type = bit[32]
+type GTE_API_PARAM_64_Type = vector(32, inc, bit)
 
-typedef GTE_API_PARAM_64_Type = bit[32]
+type GTE_API_PARAM_64_HI_Type = vector(32, inc, bit)
 
-typedef GTE_API_PARAM_64_HI_Type = bit[32]
+enum MemAtomicOp = {
+  MemAtomicOp_ADD,
+  MemAtomicOp_BIC,
+  MemAtomicOp_EOR,
+  MemAtomicOp_ORR,
+  MemAtomicOp_SMAX,
+  MemAtomicOp_SMIN,
+  MemAtomicOp_UMAX,
+  MemAtomicOp_UMIN,
+  MemAtomicOp_SWP
+}
 
-typedef MemAtomicOp =
-  enumerate {MemAtomicOp_ADD;
-  MemAtomicOp_BIC;
-  MemAtomicOp_EOR;
-  MemAtomicOp_ORR;
-  MemAtomicOp_SMAX;
-  MemAtomicOp_SMIN;
-  MemAtomicOp_UMAX;
-  MemAtomicOp_UMIN;
-  MemAtomicOp_SWP}
+type SCRType = vector(32, inc, bit)
 
-typedef SCRType = bit[32]
+type SCTLRType = vector(32, inc, bit)
 
-typedef SCTLRType = bit[32]
+type MAIRType = vector(64, inc, bit)
 
-typedef MAIRType = bit[64]
+type ESRType = vector(32, inc, bit)
 
-typedef ESRType = bit[32]
+type FPCRType = vector(32, inc, bit)
 
-typedef FPCRType = bit[32]
+type FPSRType = vector(32, inc, bit)
 
-typedef FPSRType = bit[32]
+type FPSCRType = vector(32, inc, bit)
 
-typedef FPSCRType = bit[32]
+type CPSRType = vector(32, inc, bit)
 
-typedef CPSRType = bit[32]
+type APSRType = vector(32, inc, bit)
 
-typedef APSRType = bit[32]
+type ITSTATEType = vector(8, inc, bit)
 
-typedef ITSTATEType = bit[8]
+type CPACRType = vector(32, inc, bit)
 
-typedef CPACRType = bit[32]
+type CNTKCTLType = vector(32, inc, bit)
 
-typedef CNTKCTLType = bit[32]
+enum GTEParamType = {GTEParam_WORD, GTEParam_LIST, GTEParam_EOACCESS}
 
-typedef GTEParamType = enumerate {GTEParam_WORD; GTEParam_LIST; GTEParam_EOACCESS}
+type GTE_PPU_SizeEn_Type = vector(32, inc, bit)
 
-typedef GTE_PPU_SizeEn_Type = bit[32]
+type GTEExtObsAccess_Type = vector(16, inc, bit)
 
-typedef GTEExtObsAccess_Type = bit[16]
+type GTEASAccess_Type = vector(32, inc, bit)
 
-typedef GTEASAccess_Type = bit[32]
+type GTEASRecordedAccess_Type = vector(32, inc, bit)
 
-typedef GTEASRecordedAccess_Type = bit[32]
+enum AccType = {
+  AccType_NORMAL,
+  AccType_VEC,
+  AccType_STREAM,
+  AccType_VECSTREAM,
+  AccType_ATOMIC,
+  AccType_ORDERED,
+  AccType_UNPRIV,
+  AccType_IFETCH,
+  AccType_PTW,
+  AccType_DC,
+  AccType_IC,
+  AccType_DCZVA,
+  AccType_AT
+}
 
-typedef AccType =
-  enumerate {AccType_NORMAL;
-  AccType_VEC;
-  AccType_STREAM;
-  AccType_VECSTREAM;
-  AccType_ATOMIC;
-  AccType_ORDERED;
-  AccType_UNPRIV;
-  AccType_IFETCH;
-  AccType_PTW;
-  AccType_DC;
-  AccType_IC;
-  AccType_DCZVA;
-  AccType_AT}
+enum MemType = {MemType_Normal, MemType_Device}
 
-typedef MemType = enumerate {MemType_Normal; MemType_Device}
+enum DeviceType = {
+  DeviceType_GRE,
+  DeviceType_nGRE,
+  DeviceType_nGnRE,
+  DeviceType_nGnRnE
+}
 
-typedef DeviceType =
-  enumerate {DeviceType_GRE; DeviceType_nGRE; DeviceType_nGnRE; DeviceType_nGnRnE}
+struct MemAttrHints = {
+  attrs : vector(2, inc, bit),
+  hints : vector(2, inc, bit),
+  transient : bool
+}
 
-typedef MemAttrHints = const struct {bit[2] attrs; bit[2] hints; bool transient;}
-
-typedef MemoryAttributes =
-  const struct {MemType type;
-  DeviceType device;
-  MemAttrHints inner;
-  MemAttrHints outer;
-  bool shareable;
-  bool outershareable;}
+struct MemoryAttributes = {
+  typ : MemType,
+  device : DeviceType,
+  inner : MemAttrHints,
+  outer : MemAttrHints,
+  shareable : bool,
+  outershareable : bool
+}

@@ -1,22 +1,26 @@
+infix 4 ==
+infixl 6 /
 
-val (int, int) -> int effect pure add_int
-overload (deinfix +) [add_int]
+val add_int : (int, int) -> int
 
-val forall Type 'a. ('a, 'a) -> bool effect pure eq
-val forall Type 'a. ('a, 'a) -> bool effect pure neq
+overload operator + = {add_int}
 
-overload (deinfix ==) [eq]
-overload (deinfix !=) [neq]
+val eq : forall ('a : Type). ('a, 'a) -> bool
 
-val (int, int) -> int effect pure quotient
+val neq : forall ('a : Type). ('a, 'a) -> bool
 
-overload (deinfix quot) [quotient]
+overload operator == = {eq}
 
-typedef T = const union { int C1; int C2 }
+overload operator != = {neq}
 
-function int test ((int) x, (T) y) =
-  switch y {
-    case (C1(z)) when z == 0 -> 0
-    case (C1(z)) when z != 0 -> x quot z
-    case (C2(z)) -> z
-  }
+val quotient : (int, int) -> int
+
+overload operator / = {quotient}
+
+union T = {C1 : int, C2 : int}
+
+function test (x : int, y : T) -> int = match y {
+  C1(z) if z == 0 => 0,
+  C1(z) if z != 0 => x / z,
+  C2(z) => z
+}

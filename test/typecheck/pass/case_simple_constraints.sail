@@ -1,18 +1,17 @@
+val plus = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int).
+  (atom('n + 20), atom('m)) -> atom('n + 20 + 'm)
 
-val extern forall Nat 'n, Nat 'm. ([:'n + 20:], [:'m:]) -> [:'n + 20 + 'm:] effect pure plus = "add"
+val minus_ten_id = {ocaml: "id", lem: "id"}: forall ('n : Int), 'n <= -10.
+  atom('n) -> atom('n)
 
-val extern forall Nat 'n, 'n <= -10. [:'n:] -> [:'n:] effect pure minus_ten_id = "id"
+val ten_id = {ocaml: "id", lem: "id"}: forall ('n : Int), 'n >= 10.
+  atom('n) -> atom('n)
 
-val extern forall Nat 'n, 'n >= 10. [:'n:] -> [:'n:] effect pure ten_id = "id"
+val branch : forall ('N : Int), 'N >= 63. range(10, 'N) -> range(10, 'N)
 
-val forall Nat 'N, 'N >= 63. [|10:'N|] -> [|10:'N|] effect pure branch
-
-function forall Nat 'N, 'N >= 63. [|10:'N|] branch x =
-{
-  switch x {
-    case ([|10:30|]) y -> y
-    case ([:31:]) _ -> sizeof 'N
-    case ([|31:40|]) _ -> plus(60,3)
-  }
+function branch x = match x {
+  y : range(10, 30) => y,
+  _ : atom(31) => 'N,
+  _ : range(31, 40) => plus(60, 3)
 }
-and branch (([|51:63|]) _) = ten_id(sizeof 'N)
+and branch _ : range(51, 63) = ten_id('N)

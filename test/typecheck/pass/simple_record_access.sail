@@ -1,16 +1,11 @@
-typedef signal = enumerate {LOW; HIGH}
+enum signal = {LOW, HIGH}
 
-typedef Bit32 = bit[32]
+type Bit32 = vector(32, inc, bit)
 
-typedef Record =
-  const struct {signal rsig;
-  Bit32 bitfield;}
+struct Record = {rsig : signal, bitf : Bit32}
 
-register bit[32] R0
+register R0 : vector(32, inc, bit)
 
-val Record -> unit effect {wreg} test
+val test : Record -> unit effect {wreg}
 
-function unit test ((Record) r) =
-{
-  R0 := r.bitfield;
-}
+function test r : Record = R0 = r.bitf

@@ -1,94 +1,103 @@
+val extz : forall ('n : Int) ('m : Int) ('ord : Order).
+  vector('n, 'ord, bit) -> vector('m, 'ord, bit)
 
-(* Minimal prelude *)
+val exts : forall ('n : Int) ('m : Int) ('ord : Order).
+  vector('n, 'ord, bit) -> vector('m, 'ord, bit)
 
-val forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
-    vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extz
+overload EXTZ = {extz}
 
-val forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
-    vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure exts
+overload EXTS = {exts}
 
-overload EXTZ [extz]
-overload EXTS [exts]
+val add_vec : forall ('n : Int) ('ord : Order).
+  (vector('n, 'ord, bit), vector('n, 'ord, bit)) -> vector('n, 'ord, bit)
 
-val forall Num 'n, Num 'o, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
+overload operator + = {add_vec}
 
-overload (deinfix +) [add_vec]
+val bool_not : bool -> bool
 
-val bool -> bool effect pure bool_not
-overload ~ [bool_not]
-
-(* MIPS spec subset *)
+overload ~ = {bool_not}
 
 default Order dec
 
-register (bit[1])   CP0LLBit
-register (bit[64])  CP0LLAddr
+register CP0LLBit : vector(1, dec, bit)
 
-typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
+register CP0LLAddr : vector(64, dec, bit)
 
-typedef regno = bit[5]                      (* a register number *)
-typedef imm16 = bit[16]                     (* 16-bit immediate *)
+enum MemAccessType = {Instruction, LoadData, StoreData}
 
-typedef Exception = enumerate
-{
-   Int; TLBMod; TLBL; TLBS; AdEL; AdES; Sys; Bp; ResI; CpU; Ov; Tr; C2E; C2Trap;
-   XTLBRefillL; XTLBRefillS; XTLBInvL; XTLBInvS; MCheck
+type regno = vector(5, dec, bit)
+
+type imm16 = vector(16, dec, bit)
+
+enum Exception = {
+  EInt,
+  TLBMod,
+  TLBL,
+  TLBS,
+  AdEL,
+  AdES,
+  Sys,
+  Bp,
+  ResI,
+  CpU,
+  Ov,
+  Tr,
+  C2E,
+  C2Trap,
+  XTLBRefillL,
+  XTLBRefillS,
+  XTLBInvL,
+  XTLBInvS,
+  MCheck
 }
 
-typedef WordType = enumerate {B; H; W; D}
+enum WordType = {B, H, W, D}
 
-val bit[5] -> bit[64] effect {rreg} rGPR
-val (bit[64], WordType) -> bool effect pure isAddressAligned
-val forall Type 'o. (Exception, bit[64]) -> 'o effect pure SignalExceptionBadAddr
+val rGPR : vector(5, dec, bit) -> vector(64, dec, bit) effect {rreg}
 
-val WordType -> exist 'r, 'r in {1,2,4,8}. [:'r:] effect pure wordWidthBytes
+val isAddressAligned : (vector(64, dec, bit), WordType) -> bool
 
-function wordWidthBytes w = switch w {
-  case B -> 1
-  case H -> 2
-  case W -> 4
-  case D -> 8
+val SignalExceptionBadAddr : forall ('o : Type).
+  (Exception, vector(64, dec, bit)) -> 'o
+
+val wordWidthBytes : WordType -> {|1, 2, 4, 8|}
+
+function wordWidthBytes w = match w {
+  B => 1,
+  H => 2,
+  W => 4,
+  D => 8
 }
 
-val forall Nat 'n. (bit[64], [:'n:]) -> bit[8 * 'n] effect {rmem} MEMr_reserve_wrapper
-val forall Nat 'n. (bit[64], [:'n:]) -> bit[8 * 'n] effect {rmem} MEMr_wrapper
-val (bit[5], bit[64]) -> unit effect {wreg} wGPR
+val MEMr_reserve_wrapper : forall ('n : Int).
+  (vector(64, dec, bit), atom('n)) -> vector(8 * 'n, dec, bit) effect {rmem}
 
-function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordType) width) = addr
+val MEMr_wrapper : forall ('n : Int).
+  (vector(64, dec, bit), atom('n)) -> vector(8 * 'n, dec, bit) effect {rmem}
 
-function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = vAddr
+val wGPR : (vector(5, dec, bit), vector(64, dec, bit)) -> unit effect {wreg}
 
-scattered typedef ast = const union
+val addrWrapper : (vector(64, dec, bit), MemAccessType, WordType) -> vector(64, dec, bit)
 
-val ast -> unit effect {rmem, rreg, wreg} execute
+function addrWrapper (addr : vector(64, dec, bit), accessType : MemAccessType, width : WordType) = addr
 
-scattered function unit execute
+val TLBTranslate : (vector(64, dec, bit), MemAccessType) -> vector(64, dec, bit)
 
-union ast member (WordType, bool, bool, regno, regno, imm16) Load
+function TLBTranslate (vAddr : vector(64, dec, bit), accessType : MemAccessType) = vAddr
 
-function clause execute (Load(width, signed, linked, base, rt, offset)) =
-  {
-    (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
-    if ~ (isAddressAligned(vAddr, width)) then
-      (SignalExceptionBadAddr(AdEL, vAddr)) (* unaligned access *)
-    else
-      let pAddr = (TLBTranslate(vAddr, LoadData)) in
-          {
-	    (exist 't, 't in {1,2,4,8}. bit[8 * 't]) memResult := if linked then
-                {
-                  CP0LLBit  := 0b1;
-                  CP0LLAddr := pAddr;
-                  MEMr_reserve_wrapper(pAddr, wordWidthBytes(width));
-                }
-              else
-                MEMr_wrapper(pAddr, wordWidthBytes(width));
-            if (signed) then
-              wGPR(rt) := EXTS(memResult)
-            else
-              wGPR(rt) := EXTZ(memResult)
-          }
+union ast = {Load : (WordType, bool, bool, regno, regno, imm16)}
+
+val execute : ast -> unit effect {rmem, rreg, wreg}
+
+function execute Load(width, signed, linked, base, rt, offset) = {
+  vAddr : vector(64, dec, bit) = addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
+  if ~(isAddressAligned(vAddr, width)) then SignalExceptionBadAddr(AdEL, vAddr) else let pAddr = TLBTranslate(vAddr, LoadData) in {
+    memResult : {'t, 't in {1, 2, 4, 8}. vector(8 * 't, dec, bit)} = if linked then {
+      CP0LLBit = 0b1;
+      CP0LLAddr = pAddr;
+      MEMr_reserve_wrapper(pAddr, wordWidthBytes(width))
+    } else MEMr_wrapper(pAddr, wordWidthBytes(width));
+    if signed then wGPR(rt) = EXTS(memResult)
+    else wGPR(rt) = EXTZ(memResult)
   }
-
-end ast
-end execute
+}

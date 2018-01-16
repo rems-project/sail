@@ -1,30 +1,27 @@
+let v1 : {|0, 1|} = 0
 
-let (exist 'n, 'n in {0, 1}. [:'n:]) v1 = 0
+val test : bool -> {|0, 1|}
 
-val bool -> exist 'n, 'n in {0, 1}. [:'n:] effect pure test
+function test flag = if flag then 0 else 1
 
-function test flag =
-{
-  if flag then 0 else 1
-}
+let v2 : range(0, 1) = test(true)
 
-let ([|0:1|]) v2 = test(true)
+val add : forall 'a 'b. (atom('a), atom('b)) -> atom('a + 'b)
 
-val forall 'a, 'b. ([:'a:], [:'b:]) -> [:'a + 'b:] effect pure add
+let v3 : {|3, 4|} = 3
 
-let (exist 'k, 'k in {3, 4}. [:'k:]) v3 = 3
-
-let (exist 'q, 'q in {0, 1}. [:'q + 3:]) v4 = v3
+let v4 : {'q, 'q in {0, 1}. atom('q + 3)} = v3
 
 let v5 = add(test(true), 4)
 
-let ([:4:]) v6 = 4
+let v6 : atom(4) = 4
 
-function unit unit_fn (([:4:]) x) = ()
+val unit_fn : atom(4) -> unit
 
-val forall 'a. ([:'a:], [:'a:]) -> [:'a + 'a:] effect pure s_add
+function unit_fn x : atom(4) = ()
 
-let (exist 'k, 'k = 4. [:'k:]) v7 = 4
+val s_add : forall 'a. (atom('a), atom('a)) -> atom('a + 'a)
+
+let v7 : {'k, 'k = 4. atom('k)} = 4
 
 let v8 = s_add(v7, 4)
-

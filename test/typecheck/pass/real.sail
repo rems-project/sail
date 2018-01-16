@@ -1,2 +1,1 @@
-
-let (real) r = 2.2
+let r : real = 2.2

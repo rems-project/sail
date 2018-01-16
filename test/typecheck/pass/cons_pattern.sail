@@ -1,8 +1,6 @@
+val test : list(bit) -> unit
 
-function unit test ((list<bit>) xs) =
-{
-  switch xs {
-    case x :: xs -> ()
-    case [||||] -> ()
-  }
+function test xs = match xs {
+  x :: xs => (),
+  [||] => ()
 }

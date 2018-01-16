@@ -112,6 +112,8 @@ let print_program () =
      let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
      List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
      print_endline out
+  | Evaluation (Done (_, v)) ->
+     print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
 
 let rec run () =
@@ -177,6 +179,8 @@ let help = function
   | ":l" | ":load" -> String.concat "\n"
      [ "(:l | :load) <files> - Load sail files and add their definitions to the interactive environment.";
        "Files containing scattered definitions must be loaded together." ]
+  | ":u" | ":unload" ->
+     "(:u | :unload) - Unload all loaded files."
   | cmd ->
      "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
 
@@ -236,8 +240,10 @@ let handle_input' input =
          | ":commands" ->
             let commands =
               [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help";
-                "Normal mode commands - :elf :(l)oad";
-                "Evaluation mode commands - :(r)un :(s)tep :(n)ormal" ]
+                "Normal mode commands - :elf :(l)oad :(u)nload";
+                "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
+                "";
+                ":(c)ommand can be called as either :c or :command." ]
             in
             List.iter print_endline commands
          | ":help" -> print_endline (help arg)
@@ -263,6 +269,13 @@ let handle_input' input =
                interactive_state := initial_state !interactive_ast;
                interactive_env := env;
                vs_ids := Initial_check.val_spec_ids !interactive_ast
+            | ":u" | ":unload" ->
+               interactive_ast := Ast.Defs [];
+               interactive_env := Type_check.initial_env;
+               interactive_state := initial_state !interactive_ast;
+               vs_ids := Initial_check.val_spec_ids !interactive_ast;
+               (* See initial_check.mli for an explanation of why we need this. *)
+               Initial_check.have_undefined_builtins := false
             | _ -> unrecognised_command cmd
           end
        | Expression str ->

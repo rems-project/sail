@@ -1,12 +1,10 @@
 default Order inc
 
-val extern forall Num 'n. (bit['n], bit['n]) -> bit['n] effect pure bv_add = "add_vec"
-  
-overload (deinfix +) [bv_add]
+val bv_add = {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).
+  (vector('n, inc, bit), vector('n, inc, bit)) -> vector('n, inc, bit)
 
-val (bit[3], bit[3]) -> bit[3] effect pure test
+overload operator + = {bv_add}
 
-function bit[3] test (x, y) =
-{
-  x + y
-}
+val test : (vector(3, inc, bit), vector(3, inc, bit)) -> vector(3, inc, bit)
+
+function test (x, y) = x + y

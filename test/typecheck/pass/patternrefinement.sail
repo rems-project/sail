@@ -1,19 +1,27 @@
 default Order dec
 
-val extern forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
-    vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extz
-val extern forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure length
-val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure eq_vec
-val extern forall Num 'n, Num 'm. ([:'n:],[:'m:]) -> bool effect pure eq_atom
-val extern forall Type 'a. ('a, 'a) -> bool effect pure eq
-overload (deinfix ==) [eq_vec; eq_atom; eq]
+infix 4 ==
 
+val extz = {ocaml: "extz", lem: "extz"}: forall ('n : Int) ('m : Int) ('ord : Order).
+  vector('n, 'ord, bit) -> vector('m, 'ord, bit)
 
-val forall 'n, 'n in {32,64}. bit['n] -> bit[64] effect pure test
+val length = {ocaml: "length", lem: "length"}: forall ('m : Int) ('ord : Order) ('a : Type).
+  vector('m, 'ord, 'a) -> atom('m)
 
-function test(v) = {
-  switch (length(v)) {
-  case 32 -> extz(v)
-  case 64 -> v
-  }
+val eq_vec = {ocaml: "eq_vec", lem: "eq_vec"}: forall ('m : Int) ('ord : Order).
+  (vector('m, 'ord, bit), vector('m, 'ord, bit)) -> bool
+
+val eq_atom = {ocaml: "eq_atom", lem: "eq_atom"}: forall ('n : Int) ('m : Int).
+  (atom('n), atom('m)) -> bool
+
+val eq = {ocaml: "eq", lem: "eq"}: forall ('a : Type). ('a, 'a) -> bool
+
+overload operator == = {eq_vec, eq_atom, eq}
+
+val test : forall 'n, 'n in {32, 64}.
+  vector('n, dec, bit) -> vector(64, dec, bit)
+
+function test v = match length(v) {
+  32 => extz(v),
+  64 => v
 }

@@ -1,9 +1,11 @@
-val forall Nat 'n, Nat 'l, 'l >= 0. (vector<'n,'l,dec,bit>, [|'n - 'l + 1:'n|]) -> bit effect pure bitvector_access_dec
-val forall Nat 'n, Nat 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|]) -> bit effect pure bitvector_access_inc
+val bitvector_access_dec : forall ('n : Int), 'n >= 0.
+  (vector('n, dec, bit), range(0, 'n - 1)) -> bit
 
-overload vector_access [bitvector_access_inc; bitvector_access_dec]
+val bitvector_access_inc : forall ('n : Int), 'n >= 0.
+  (vector('n, inc, bit), range(0, 'n - 1)) -> bit
 
-function bit bv ((bit[64]) x) =
-{
-  x[32]
-}
+overload vector_access = {bitvector_access_inc, bitvector_access_dec}
+
+val bv : vector(64, inc, bit) -> bit
+
+function bv x = x[32]

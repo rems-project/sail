@@ -1,15 +1,17 @@
-val extern (int, int) -> int effect pure add_int = "add"
-overload (deinfix +) [ add_int ]
+val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
 
-val extern (int, int) -> int effect pure sub_int = "sub"
-overload (deinfix -) [ sub_int ]
+overload operator + = {add_int}
 
-function (int) foo ((int) w) = {
-  (int) x := w;
-  (int) y := w;
-  foreach (z from 0 to 10) {
-    x := x + z;
-    y := y - z;
+val sub_int = {ocaml: "sub", lem: "sub"}: (int, int) -> int
+
+overload operator - = {sub_int}
+
+function foo w : int -> int = {
+  x : int = w;
+  y : int = w;
+  foreach (z from 0 to 10 by 1 in inc) {
+    x = x + z;
+    y = y - z
   };
-  x + y;
+  x + y
 }

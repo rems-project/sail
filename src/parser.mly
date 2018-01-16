@@ -107,6 +107,7 @@ let qi_id_of_kopt (KOpt_aux (kopt_aux, l) as kopt) = QI_aux (QI_id kopt, l)
 let mk_recn = (Rec_aux((Rec_nonrec), Unknown))
 let mk_typqn = (TypQ_aux(TypQ_no_forall,Unknown))
 let mk_tannotn = Typ_annot_opt_aux(Typ_annot_opt_none,Unknown)
+let mk_tannot typq typ n m = Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ), loc n m)
 let mk_eannotn = Effect_opt_aux(Effect_opt_pure,Unknown)
 let mk_namesectn = Name_sect_aux(Name_sect_none,Unknown)
 
@@ -157,7 +158,7 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Record Mutual Var Ref
+%token Repeat Until While Do Mutual Var Ref
 
 %nonassoc Then
 %nonassoc Else
@@ -173,7 +174,7 @@ let rec desugar_rchain chain s e =
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
-%token <string> Colon ExclEq
+%token <string> Colon ColonColon ExclEq
 %token <string> GtEq
 %token <string> LtEq
 
@@ -639,6 +640,8 @@ pat1:
     { $1 }
   | atomic_pat At pat_concat
     { mk_pat (P_vector_concat ($1 :: $3)) $startpos $endpos }
+  | atomic_pat ColonColon pat1
+    { mk_pat (P_cons ($1, $3)) $startpos $endpos }
 
 pat_concat:
   | atomic_pat
@@ -679,6 +682,10 @@ atomic_pat:
     { mk_pat (P_tup ($2 :: $4)) $startpos $endpos }
   | Lsquare pat_list Rsquare
     { mk_pat (P_vector $2) $startpos $endpos }
+  | LsquareBar RsquareBar
+    { mk_pat (P_list []) $startpos $endpos }
+  | LsquareBar pat_list RsquareBar
+    { mk_pat (P_list $2) $startpos $endpos }
 
 lit:
   | True
@@ -854,6 +861,7 @@ exp5:
   | exp5l op5l exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp6 op5r exp5r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp6 At exp5r { mk_exp (E_vector_append ($1, $3)) $startpos $endpos }
+  | exp6 ColonColon exp5r { mk_exp (E_cons ($1, $3)) $startpos $endpos }
   | exp6 { $1 }
 exp5l:
   | exp6 op5 exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
@@ -863,6 +871,7 @@ exp5r:
   | exp6 op5 exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp6 op5r exp5r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp6 At exp5r { mk_exp (E_vector_append ($1, $3)) $startpos $endpos }
+  | exp6 ColonColon exp5r { mk_exp (E_cons ($1, $3)) $startpos $endpos }
   | exp6 { $1 }
 
 exp6:
@@ -999,7 +1008,7 @@ atomic_exp:
     { mk_exp (E_vector_access ($1, $3)) $startpos $endpos }
   | atomic_exp Lsquare exp DotDot exp Rsquare
     { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
-  | Record Lcurly fexp_exp_list Rcurly
+  | Struct Lcurly fexp_exp_list Rcurly
     { mk_exp (E_record $3) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
     { mk_exp (E_record_update ($2, $4)) $startpos $endpos }
@@ -1009,6 +1018,8 @@ atomic_exp:
     { mk_exp (E_vector_update ($2, $4, $6)) $startpos $endpos }
   | Lsquare exp With atomic_exp DotDot atomic_exp Eq exp Rsquare
     { mk_exp (E_vector_update_subrange ($2, $4, $6, $8)) $startpos $endpos }
+  | LsquareBar RsquareBar
+    { mk_exp (E_list []) $startpos $endpos }
   | LsquareBar exp_list RsquareBar
     { mk_exp (E_list $2) $startpos $endpos }
   | Lparen exp Rparen
@@ -1038,15 +1049,37 @@ funcl_patexp:
   | Lparen pat If_ exp Rparen Eq exp
     { mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos }
 
+funcl_patexp_typ:
+  | pat Eq exp
+    { (mk_pexp (Pat_exp ($1, $3)) $startpos $endpos, mk_tannotn) }
+  | pat MinusGt funcl_typ Eq exp
+    { (mk_pexp (Pat_exp ($1, $5)) $startpos $endpos, $3) }
+  | Lparen pat If_ exp Rparen Eq exp
+    { (mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos, mk_tannotn) }
+  | Lparen pat If_ exp Rparen MinusGt funcl_typ Eq exp
+    { (mk_pexp (Pat_when ($2, $4, $9)) $startpos $endpos, $7) }
+
 funcl:
   | id funcl_patexp
     { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos }
 
-funcls:
+funcls2:
   | id funcl_patexp
     { [mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos] }
-  | id funcl_patexp And funcls
+  | id funcl_patexp And funcls2
     { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos :: $4 }
+
+funcls:
+  | id funcl_patexp_typ
+    { let pexp, tannot = $2 in ([mk_funcl (FCL_Funcl ($1, pexp)) $startpos $endpos], tannot) }
+  | id funcl_patexp And funcls2
+    { (mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos :: $4, mk_tannotn) }
+
+funcl_typ:
+  | Forall typquant Dot typ
+    { mk_tannot $2 $4 $startpos $endpos }
+  | typ
+    { mk_tannot mk_typqn $1 $startpos $endpos }
 
 index_range:
   | Num
@@ -1130,7 +1163,7 @@ type_unions:
 
 fun_def:
   | Function_ funcls
-    { mk_fun (FD_function (mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
+    { let funcls, tannot = $2 in mk_fun (FD_function (mk_recn, tannot, mk_eannotn, funcls)) $startpos $endpos }
 
 fun_def_list:
   | fun_def

@@ -1,9 +1,5 @@
-let ([|5|]) y = 2
+let y : range(0, 5) = 2
 
-val unit -> nat effect pure test
+val test : unit -> nat
 
-function test() = {
-  let ([|5|]) x = 2 in
-  x
-}
- 
+function test () = let x : range(0, 5) = 2 in x

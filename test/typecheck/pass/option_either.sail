@@ -1,33 +1,21 @@
 default Order inc
 
-typedef option = const union forall Type 'a. {
-    None;
-    'a Some
+union option ('a : Type) = {None, Some : 'a}
+
+function none () -> forall ('a : Type). option('a) = None
+
+function some x : 'a -> forall ('a : Type). option('a) = Some(x)
+
+function test x : option('a) -> forall ('a : Type). range(0, 1) = match x {
+  None => 0,
+  Some(y) => 1
 }
 
-function forall Type 'a. option<'a> none () = None
+union either ('a : Type) ('b : Type) = {Left : 'a, Right : 'b}
 
-function forall Type 'a. option<'a> some (('a) x) = Some(x)
+val signed : forall ('n : Int), 'n >= 0. vector('n, inc, bit) -> int
 
-function forall Type 'a. int test ((option<'a>) x) =
-{
-  switch x {
-    case None -> 0
-    case (Some(y)) -> 1
-  }
-}
-
-typedef either = const union forall Type 'a, Type 'b. {
-  'a Left;
-  'b Right
-}
-
-val forall Nat 'n, 'n >= 0. bit['n] -> int effect pure signed
-
-function int test2 ((either<int,bit[1]>) x) =
-{
-  switch x {
-    case (Left(l)) -> l
-    case (Right(r)) -> signed(r)
-  }
+function test2 x : either(int, vector(1, inc, bit)) -> int = match x {
+  Left(l) => l,
+  Right(r) => signed(r)
 }

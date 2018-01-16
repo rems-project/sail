@@ -1,22 +1,21 @@
+type MyInt = {'n, true. atom('n)}
 
-typedef Int = exist 'n. [:'n:]
+val add : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = 'n + 'm. atom('o)}
 
-val forall 'n, 'm. ([:'n:], [:'m:]) -> exist 'o, 'o = 'n + 'm. [:'o:] effect pure add
+val mult : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = 'n * 'm. atom('o)}
 
-val forall 'n, 'm. ([:'n:], [:'m:]) -> exist 'o, 'o = 'n * 'm. [:'o:] effect pure mult
+overload operator + = {add}
 
-overload (deinfix +) [add]
-
-overload (deinfix * ) [mult]
+overload operator * = {mult}
 
 let x = 3 + 4
 
 let y = x + x * x
 
-let ([:7 * 8:]) z = y
+let z : atom(7 * 8) = y
 
-typedef Range = forall Num 'n, Num 'm, 'n <= 'm. exist 'o, 'n <= 'o & 'o <= 'm. [:'o:]
+type Range ('n : Int) ('m : Int), 'n <= 'm = {'o, 'n <= 'o & 'o <= 'm. atom('o)}
 
-let (Range<3,4>) a = 3
+let a : Range(3, 4) = 3
 
-let (Range<2,5>) b = a + 1
+let b : Range(2, 5) = a + 1

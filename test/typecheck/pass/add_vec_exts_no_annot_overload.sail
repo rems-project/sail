@@ -1,19 +1,15 @@
 default Order dec
 
-val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
-    vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure exts
+val exts : forall ('n : Int) ('m : Int) ('ord : Order).
+  vector('n, 'ord, bit) -> vector('m, 'ord, bit)
 
-overload EXTS [exts]
+overload EXTS = {exts}
 
-val forall Nat 'n, Nat 'o, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
+val add_vec : forall ('n : Int) ('ord : Order).
+  (vector('n, 'ord, bit), vector('n, 'ord, bit)) -> vector('n, 'ord, bit)
 
-overload (deinfix +) [add_vec]
+overload operator + = {add_vec}
 
-val (bit[32], bit[32]) -> unit effect pure test
+val test : (vector(32, dec, bit), vector(32, dec, bit)) -> unit
 
-function test (x, y) =
-{
-  let (bit[64]) z = EXTS(x) + EXTS(y) in
-  ()
-}
+function test (x, y) = let z : vector(64, dec, bit) = EXTS(x) + EXTS(y) in ()

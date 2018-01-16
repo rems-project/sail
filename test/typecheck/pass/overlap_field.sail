@@ -1,13 +1,12 @@
+struct A = {field_A : bool, shared : int}
 
-typedef A = const struct {bool field_A; int shared}
-typedef B = const struct {bool field_B; int shared}
+struct B = {field_B : bool, shared : int}
 
-val (bool, int) -> A effect {undef} makeA
+val makeA : (bool, int) -> A effect {undef}
 
-function makeA (x, y) =
-{
-  (A) record := undefined;
-  record.field_A := x;
-  record.shared := y;
+function makeA (x, y) = {
+  record : A = undefined;
+  record.field_A = x;
+  record.shared = y;
   record
 }

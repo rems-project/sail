@@ -1,8 +1,6 @@
+val return_test : forall ('N : Int), 'N >= 10. range(10, 'N) -> range(10, 'N)
 
-val forall Nat 'N, 'N >= 10. [|10:'N|] -> [|10:'N|] effect pure return_test
-
-function forall Nat 'N, 'N >= 10. [|10:'N|] return_test x =
-{
-  return x;
-  sizeof 'N
+function return_test x = {
+  return(x);
+  'N
 }

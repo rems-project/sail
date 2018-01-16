@@ -1,8 +1,9 @@
-
-val forall Nat 'n, Nat 'm, Order 'o. vector<'n,'m,'o,bit> -> vector<'n,'m,'o,bit> effect pure bitwise_not
+val bitwise_not : forall ('m : Int) ('o : Order).
+  vector('m, 'o, bit) -> vector('m, 'o, bit)
 
 default Order dec
 
-val forall 'n. bit['n] -> bit['n] effect pure test
+val test : forall 'n.
+  vector('n, dec, bit) -> vector('n, dec, bit)
 
-function forall 'n. bit['n] test ((bit['n]) x) = bitwise_not(bitwise_not(x))
+function test x : vector('n, dec, bit) = bitwise_not(bitwise_not(x))

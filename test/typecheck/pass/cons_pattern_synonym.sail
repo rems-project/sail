@@ -1,7 +1,8 @@
-typedef ty = list<(bit[8])>
+type ty = list(vector(8, inc, bit))
 
-function bool foo ((ty) l) =
-  switch l {
-    case _ :: _ -> false
-    case _ -> true
-  }
+val foo : ty -> bool
+
+function foo l = match l {
+  _ :: _ => false,
+  _ => true
+}

@@ -1,5 +1,5 @@
-val (real, real) -> real effect pure add_real
+val add_real : (real, real) -> real
 
-overload (deinfix +) [add_real]
+overload operator + = {add_real}
 
-let (real) r = 2.2 + 0.2
+let r : real = 2.2 + 0.2

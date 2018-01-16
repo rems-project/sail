@@ -1,12 +1,9 @@
-
 default Order dec
 
-val cast int -> exist 'n. [:'n:] effect pure ex_int
+val cast ex_int : int -> {'n, true. atom('n)}
 
-val forall 'n. [:'n:] -> bit['n] effect pure zeros
+val zeros : forall 'n. atom('n) -> vector('n, dec, bit)
 
-val int -> unit effect pure test
+val test : int -> unit
 
-function test n = {
-  x := zeros(n)
-}
+function test n = x = zeros(n)

@@ -1,23 +1,25 @@
 default Order dec
 
-val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
-    ([|'n:'m|], [|'o:'p|]) -> [|'n + 'o:'m + 'p|] effect pure add_range = "add"
-val extern (int, int) -> int effect pure add_int = "add"
-val forall Num 'n, Num 'o, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure add_vec_int
-overload (deinfix +) [add_vec_int; add_range; add_int]
+val add_range = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val extern bool -> bool effect pure bool_not = "not"
+val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
 
-val cast forall Num 'n, Num 'l. [:0:] -> vector<'n,'l,dec,bit> effect pure cast_0_vec_dec
+val add_vec_int : forall ('n : Int) ('ord : Order).
+  (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit)
 
-register (bit[64]) COUNT
-register (bool) INT
+overload operator + = {add_vec_int, add_range, add_int}
 
-function (unit) test () = {
-  COUNT := 0;
-  while (bool_not(INT)) do {
-    COUNT := COUNT + 1;
-  }
+val bool_not = {ocaml: "not", lem: "not"}: bool -> bool
+
+val cast cast_0_vec_dec : forall ('l : Int).
+  atom(0) -> vector('l, dec, bit)
+
+register COUNT : vector(64, dec, bit)
+
+register INT : bool
+
+function test () -> unit = {
+  COUNT = 0;
+  while bool_not(INT) do COUNT = COUNT + 1
 }
-

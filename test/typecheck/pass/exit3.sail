@@ -1,7 +1,3 @@
+val test : forall ('a : Type). unit -> 'a effect {escape}
 
-val forall Type 'a. unit -> 'a effect {escape} test
-
-function forall Type 'a. 'a test () =
-{
-  exit ();
-}
+function test () = exit(())

@@ -1,21 +1,21 @@
+val vector_access : forall ('l : Int) ('o : Order) ('a : Type), 'l >= 0.
+  (vector('l, 'o, 'a), range(0, 'l - 1)) -> 'a
 
-val forall Nat 'n, Nat 'l, Order 'o, Type 'a, 'l >= 0. (vector<'n,'l,'o,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access
+val vector_append : forall ('l1 : Int) ('l2 : Int) ('o : Order) ('a : Type), 'l1 >= 0 & 'l2 >= 0.
+  (vector('l1, 'o, 'a), vector('l2, 'o, 'a)) -> vector('l1 + 'l2, 'o, 'a)
 
-val forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
-  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'n1,'l1 + 'l2,'o,'a> effect pure vector_append
+val vector_subrange = "bitvector_subrange_inc" : forall ('l : Int) ('m : Int) ('o : Int), 'l >= 0 & 'm <= 'o & 'o <= 'l.
+  (vector('l, inc, bit), atom('m), atom('o)) -> vector('o - 'm + 1, inc, bit)
 
-val extern forall Num 'n, Num 'l, Num 'm, Num 'o, 'l >= 0, 'm <= 'o, 'o <= 'l.
-  (vector<'n,'l,inc,bit>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,bit> effect pure vector_subrange = "bitvector_subrange_inc"
-
-val forall Nat 'n, Nat 'm. ([:'n:], [:'m:]) -> [:'n - 'm:] effect pure sub
+val sub : forall ('n : Int) ('m : Int). (atom('n), atom('m)) -> atom('n - 'm)
 
 default Order inc
 
-val forall 'n, 'm, 'n >= 5. bit['n] -> bit['n - 1] effect pure test
+val test : forall 'n 'm, 'n >= 5.
+  vector('n, inc, bit) -> vector('n - 1, inc, bit)
 
-function forall 'n, 'n >= 5. bit['n - 1] test v =
-{
-  z := vector_subrange(v, 0, sub(sizeof 'n, 2));
-  z := v[0 .. sub(sizeof 'n, 2)];
+function test v = {
+  z = vector_subrange(v, 0, sub('n, 2));
+  z = v[0 .. sub('n, 2)];
   z
 }

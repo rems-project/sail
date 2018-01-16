@@ -2722,6 +2722,14 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
             | E_aux (E_app (field, [inferred_exp]) ,_) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
             | _ -> assert false (* Unreachable *)
           end
+       (* Not sure if we need to do anything different with args here. *)
+       | Typ_aux (Typ_app (rectyp, args), _) as typ when Env.is_record rectyp env ->
+          begin
+            let inferred_acc, _ = infer_funapp' l (Env.no_casts env) field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] None in
+            match inferred_acc with
+            | E_aux (E_app (field, [inferred_exp]) ,_) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
+            | _ -> assert false (* Unreachable *)
+          end
        | _ ->  typ_error l ("Field expression " ^ string_of_exp exp ^ " :: " ^ string_of_typ (typ_of inferred_exp) ^ " is not valid")
      end
   | E_tuple exps ->

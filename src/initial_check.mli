@@ -54,6 +54,15 @@ open Ast_util
 val opt_undefined_gen : bool ref
 val opt_magic_hash : bool ref
 
+(* This is a bit of a hack right now - it ensures that the undefiend
+   builtins (undefined_vector etc), only get added to the ast
+   once. The original assumption in sail is that the whole AST gets
+   processed at once (therefore they could only get added once), and
+   this isn't true any more with the interpreter. This needs to be
+   public so the interpreter can set it back to false if it unloads
+   all the loaded files. *)
+val have_undefined_builtins : bool ref
+
 val ast_of_def_string : order -> string -> unit defs
 val process_ast : order -> Parse_ast.defs -> unit defs
 

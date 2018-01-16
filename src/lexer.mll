@@ -131,7 +131,6 @@ let kw_table =
      ("let",                     (fun x -> Let_));
      ("var",                     (fun _ -> Var));
      ("ref",                     (fun _ -> Ref));
-     ("record",                  (fun _ -> Record));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
      ("pure",                    (fun x -> Pure));
@@ -201,6 +200,7 @@ rule token = parse
   | "@"                                 { (At "@") }
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ (Caret(r"^")) }
+  | "::"                                { ColonColon(r "::") }
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | ".."                                { DotDot }

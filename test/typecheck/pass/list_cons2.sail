@@ -1,7 +1,9 @@
-function list<int> foo ((int) i, (list<int>) l) = i :: l
+function foo (i : int, l : list(int)) -> list(int) = i :: l
 
-function list<int> bar () = [||||]
+val bar : forall ('a : Type). unit -> list('a)
 
-function list<int> baz ((list<int>) l) = l
+function bar () = [||]
 
-function list<int> quux () = baz ([||||])
+function baz l : list(int) -> list(int) = l
+
+function quux () -> list(int) = baz(bar ())

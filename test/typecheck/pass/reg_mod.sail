@@ -1,11 +1,9 @@
+register reg : range(0, 10)
 
-register [|0:10|] reg
+val test : unit -> unit effect {wreg}
 
-val unit -> unit effect {wreg} test
-    
-function unit test () =
-{
-  reg := 9;
-  reg := 10;
-  reg := 8
+function test () = {
+  reg = 9;
+  reg = 10;
+  reg = 8
 }

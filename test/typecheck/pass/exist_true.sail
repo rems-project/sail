@@ -1,7 +1,7 @@
+val test : unit -> unit
 
-function unit test () =
-{
-  (exist 'n. [:'n:]) x := 4;
-  (exist 'n, true. [:'n:]) y := 5;
+function test () = {
+  x : {'n, true. atom('n)} = 4;
+  y : {'n, true. atom('n)} = 5;
   ()
 }

@@ -1,22 +1,19 @@
-
 default Order dec
 
-scattered typedef ast = const union forall Num 'datasize, Num 'destsize, Num 'regsize.
+scattered union ast ('datasize : Int) ('destsize : Int) ('regsize : Int)
 
-val forall Num 'datasize, Num 'destsize, Num 'regsize.
-  ast<'datasize,'destsize,'regsize> -> unit effect pure execute
+val execute : forall ('datasize : Int) ('destsize : Int) ('regsize : Int).
+  ast('datasize, 'destsize, 'regsize) -> unit
 
-scattered function forall Num 'datasize, Num 'destsize, Num 'regsize. unit execute
+scattered function execute
 
-union ast member (bit[8], bit['regsize]) test
+union clause ast = test : (vector(8, dec, bit), vector('regsize, dec, bit))
 
-union ast member int test2
+function clause execute test(x, y) = return(())
 
-function clause execute (test (x, y)) =
-{
-  return ()
-}
+union clause ast = test2 : int
 
-end ast
+function clause execute test2(_) = return(())
 
 end execute
+end ast

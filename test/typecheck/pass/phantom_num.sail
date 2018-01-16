@@ -1,17 +1,9 @@
+val gt_int = {ocaml: "gt", lem: "gt"}: (int, int) -> bool
 
-val extern (int, int) -> bool effect pure gt_int = "gt"
+overload operator > = {gt_int}
 
-(* val cast forall Num 'n, Num 'm. [|'n:'m|] -> int effect pure cast_range_int *)
+register z : int
 
-overload (deinfix >) [gt_int]
+val test : forall ('n : Int). unit -> unit effect {wreg}
 
-register int z
-
-val forall Nat 'n. unit -> unit effect {wreg} test
-
-function forall Nat 'n. unit test () =
-{
-  if sizeof 'n > 3
-  then z := 0
-  else z := 1
-}
+function test () = if 'n > 3 then z = 0 else z = 1

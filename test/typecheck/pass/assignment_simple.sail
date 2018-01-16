@@ -1,16 +1,14 @@
+val f : (atom(10), unit) -> atom(10)
 
-val ([:10:], unit) -> [:10:] effect pure f
+function f (x, y) = x
 
-function [:10:] f (x, y) = x
+val test : unit -> atom(10)
 
-val unit -> [:10:] effect pure test
-
-function [:10:] test () =
-{
-  z := 10;
+function test () = {
+  z = 10;
   z
 }
 
-val unit -> unit effect pure test2
+val test2 : unit -> unit
 
-function unit test2 () = x := 10
+function test2 () = x = 10

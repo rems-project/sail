@@ -1,10 +1,14 @@
 default Order inc
 
-val extern forall Num 'n. (bit['n], bit['n]) -> bit['n] effect pure add_vec = "add_vec"
-val extern forall Num 'n, Num 'm, Num 'o, Num 'p. ([|'n:'m|], [|'o:'p|]) -> [|'n+'o:'m+'p|] effect pure add_range = "add_range"
+val add_vec = {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).
+  (vector('n, inc, bit), vector('n, inc, bit)) -> vector('n, inc, bit)
 
-val cast forall Num 'n. bit['n] -> [|0: 2** 'n - 1|] effect pure unsigned
+val add_range = {ocaml: "add_range", lem: "add_range"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-overload (deinfix +) [add_vec; add_range]
+val cast unsigned : forall ('n : Int).
+  vector('n, inc, bit) -> range(0, 2 ^ 'n - 1)
 
-let (range<0,30>) x = 0xF + 0x2
+overload operator + = {add_vec, add_range}
+
+let x : range(0, 30) = 0xF + 0x2

@@ -1,9 +1,3 @@
+val case_test : forall ('N : Int). (atom(10), range(10, 'N)) -> range(10, 'N)
 
-val forall Nat 'N. ([:10:], [|10:'N|]) -> [|10:'N|] effect pure case_test
-
-function forall Nat 'N. [|10:'N|] case_test (x, y) =
-{
-  switch (x, y) {
-    case _ -> y
-  }
-}
+function case_test (x, y) = match (x, y) {_ => y}

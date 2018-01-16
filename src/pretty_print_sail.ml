@@ -220,6 +220,7 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   | P_wild -> string "_"
   | P_as (pat, id) -> separate space [doc_pat pat; string "as"; doc_id id]
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
+  | P_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_pat pats ^^ string "|]"
   | _ -> string (string_of_pat pat)
 
 (* if_block_x is true if x should be printed like a block, i.e. with
@@ -285,8 +286,8 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
 
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
-  | E_cons (exp1, exp2) -> string "E_cons"
-  | E_record fexps -> separate space [string "record"; string "{"; doc_fexps fexps; string "}"]
+  | E_cons (exp1, exp2) -> doc_atomic_exp exp1 ^^ space ^^ string "::" ^^ space ^^ doc_exp exp2
+  | E_record fexps -> separate space [string "struct"; string "{"; doc_fexps fexps; string "}"]
   | E_loop (While, cond, exp) ->
      separate space [string "while"; doc_exp cond; string "do"; doc_exp exp]
   | E_loop (Until, cond, exp) ->

@@ -1,8 +1,5 @@
-
-function forall Nat 'n, 'n IN {1,2,3}. bool test (([:'n:]) x) =
-{
-  true
-}
+function test x : atom('n) -> forall 'n. bool = true
 
 let x = test(1)
+
 let y = test(3)

@@ -1,16 +1,7 @@
-
 default Order inc
 
-typedef option = const union forall Type 'a. {
-  None;
-  'a Some
-  }
+union option ('a : Type) = {None, Some : 'a}
 
-typedef Test = const union {
-  A;
-  B;
-  C
-}
+union Test = {A, B, C}
 
-
-function option<Test> test () = Some(C)
+function test () -> option(Test) = Some(C)

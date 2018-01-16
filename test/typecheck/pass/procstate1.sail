@@ -1,16 +1,16 @@
 default Order dec
 
-typedef ProcState = const struct forall Num 'n.
-{
-  bit['n] N;
-  bit[1] Z;
-  bit[1] C;
-  bit[1] V
+infix 4 ==
+
+val operator == : forall 'n. (vector('n, dec, bit), vector('n, dec, bit)) -> bool
+
+struct ProcState ('n : Int) = {
+  N : vector('n, dec, bit),
+  Z : vector(1, dec, bit),
+  C : vector(1, dec, bit),
+  V : vector(1, dec, bit)
 }
 
-register ProcState<1> PSTATE
+register PSTATE : ProcState(1)
 
-function unit test () =
-{
-  PSTATE.N := 0b1
-}
+function test () -> bool = PSTATE.N == 0b1

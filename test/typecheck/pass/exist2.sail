@@ -1,46 +1,44 @@
+let v1 : {|0, 1|} = 0
 
-let (exist 'n, 'n in {0, 1}. [:'n:]) v1 = 0
+val test : bool -> {|0, 1|}
 
-val bool -> exist 'n, 'n in {0, 1}. [:'n:] effect pure test
+function test flag = if flag then 0 else 1
 
-function test flag =
-{
-  if flag then 0 else 1
-}
+let v2 : range(0, 1) = test(true)
 
-let ([|0:1|]) v2 = test(true)
+val add : forall 'a 'b. (atom('a), atom('b)) -> atom('a + 'b)
 
-val forall 'a, 'b. ([:'a:], [:'b:]) -> [:'a + 'b:] effect pure add
+let v3 : {|3, 4|} = 3
 
-let (exist 'k, 'k in {3, 4}. [:'k:]) v3 = 3
-
-let (exist 'q, 'q in {0, 1}. [:'q + 3:]) v4 = v3
+let v4 : {'q, 'q in {0, 1}. atom('q + 3)} = v3
 
 let v5 = add(test(true), 4)
 
-let ([:4:]) v6 = 4
+let v6 : atom(4) = 4
 
-function unit unit_fn (([:4:]) x) = ()
+val unit_fn : atom(4) -> unit
 
-val forall 'a. ([:'a:], [:'a:]) -> [:'a + 'a:] effect pure s_add
+function unit_fn x : atom(4) = ()
 
-let (exist 'k, 'k = 4. [:'k:]) v7 = 4
+val s_add : forall 'a. (atom('a), atom('a)) -> atom('a + 'a)
 
-(* let v8 = s_add(test(true), 4) *)
+let v7 : {'k, 'k = 4. atom('k)} = 4
 
-let (exist 'n, 0 = 0. [:'n:]) v9 = 100
+let v9 : {'n, 0 = 0. atom('n)} = 100
 
-let (int) v10 = v9
+let v10 : int = v9
 
-typedef Int = exist 'n, 0 = 0. [:'n:]
+type MyInt = {'n, 0 = 0. atom('n)}
 
-val int -> Int effect pure existential_int
-val forall 'n, 'm. range<'n,'m> -> exist 'e, 'n <= 'e & 'e <= 'm. [:'e:] effect pure existential_range
+val existential_int : int -> MyInt
 
-overload existential [existential_int; existential_range]
+val existential_range : forall 'n 'm.
+  range('n, 'm) -> {'e, 'n <= 'e & 'e <= 'm. atom('e)}
 
-let (exist 'n, 0 = 0. [:'n:]) v11 = existential(v10)
+overload existential = {existential_int, existential_range}
 
-let (exist 'e, 0 <= 'e & 'e <= 3. [:'e:]) v12 = existential(([|0:3|]) 2)
+let v11 : {'n, 0 = 0. atom('n)} = existential(v10)
 
-let (Int) v13 = existential(v10)
+let v12 : {'e, 0 <= 'e & 'e <= 3. atom('e)} = existential(2 : range(0, 3))
+
+let v13 : MyInt = existential(v10)

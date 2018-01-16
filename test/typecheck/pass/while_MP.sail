@@ -1,17 +1,15 @@
 default Order dec
 
-val extern (int, int) -> int effect pure add_int = "add"
-overload (deinfix +) [add_vec_int; add_range; add_int]
+val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
 
-val extern bool -> bool effect pure bool_not = "not"
+overload operator + = {add_vec_int, add_range, add_int}
 
-register (bool) INT
+val bool_not = {ocaml: "not", lem: "not"}: bool -> bool
 
-function (int) test () = {
-  (int) count := 0;
-  while (bool_not(INT)) do {
-    count := count + 1;
-  };
-  return count;
+register INT : bool
+
+function test () -> int = {
+  count : int = 0;
+  while bool_not(INT) do count = count + 1;
+  return(count)
 }
-

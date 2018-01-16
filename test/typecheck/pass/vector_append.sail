@@ -1,14 +1,12 @@
-
-val extern forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, 'l1 >= 0, 'l2 >= 0.
-  (vector<'n1,'l1,'o,bit>, vector<'n2,'l2,'o,bit>) -> vector<'n1,'l1 + 'l2,'o,bit> effect pure append = "bitvector_concat"
+val append = "bitvector_concat" : forall ('l1 : Int) ('l2 : Int) ('o : Order), 'l1 >= 0 & 'l2 >= 0.
+  (vector('l1, 'o, bit), vector('l2, 'o, bit)) -> vector('l1 + 'l2, 'o, bit)
 
 default Order inc
 
-val (bit[4], bit[4]) -> bit[8] effect pure test
+val test : (vector(4, inc, bit), vector(4, inc, bit)) -> vector(8, inc, bit)
 
-function bit[8] test (v1, v2) =
-{
-  zv := append(v1, v2);
-  zv := v1 : v2;
+function test (v1, v2) = {
+  zv = append(v1, v2);
+  zv = v1 @ v2;
   zv
 }

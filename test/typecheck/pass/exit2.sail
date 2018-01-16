@@ -1,7 +1,3 @@
+val test : unit -> atom(6) effect {escape}
 
-val unit -> [:6:] effect {escape} test
-
-function [:6:] test () =
-{
-  exit ();
-}
+function test () = exit(())

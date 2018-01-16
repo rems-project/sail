@@ -1,7 +1,6 @@
+val test : unit -> int
 
-val unit -> int effect pure test
-
-function int test () = {
-  (nat) y := 10;
+function test () = {
+  y : nat = 10;
   y
 }
