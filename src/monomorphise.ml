@@ -2778,6 +2778,15 @@ let rewrite_app env typ (id,args) =
 
     | _ -> E_app (id,args)
 
+  else if is_id env (Id "UInt") id then
+    let is_slice = is_id env (Id "slice") in
+    match args with
+    | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
+        when is_slice slice1 && not (is_constant length1) ->
+       E_app (mk_id "UInt_slice", [vector1; start1; length1])
+
+    | _ -> E_app (id,args)
+
   else E_app (id,args)
 
 let rewrite_aux = function

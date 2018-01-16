@@ -110,3 +110,11 @@ function sext_slice(xs,i,l) = {
   let xs = (xs & slice_mask(i,l)) >> i in
   extsv(xs)
 }
+
+val UInt_slice : forall 'n, 'n >= 0.
+  (bits('n), int, int) -> int effect pure
+
+function UInt_slice(xs,i,l) = {
+  let xs = (xs & slice_mask(i,l)) >> i in
+  UInt(xs)
+}
