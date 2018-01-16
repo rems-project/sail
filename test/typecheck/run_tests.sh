@@ -38,7 +38,7 @@ function red {
 }
 
 function finish_suite {
-    printf "$1: Passed ${pass} out of $(( pass + fail ))\n"
+    printf "$1: Passed ${pass} out of $(( pass + fail ))\n\n"
     XML="  <testsuite name=\"$1\" tests=\"$(( pass + fail ))\" failures=\"${fail}\" timestamp=\"$(date)\">\n$XML  </testsuite>\n"
     printf "$XML" >> $DIR/tests.xml
     XML=""
