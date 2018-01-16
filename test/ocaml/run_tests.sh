@@ -81,7 +81,7 @@ do
 	then
 	    green "built $i" "ok"
 	else
-	    yellow "bad output $i" "fail"
+	    red "bad output $i" "fail"
 	fi;
 	rm out;
 	rm result;
@@ -92,5 +92,26 @@ do
 done
 
 finish_suite "Ocaml trace testing"
+
+cd $DIR
+
+for i in `ls -d */`;
+do
+    cd $DIR/$i;
+    if $SAILDIR/sail -is test.isail ../prelude.sail `ls *.sail` 1> /dev/null;
+    then
+	if diff expect result;
+	then
+	    green "interpreted $i" "ok"
+	else
+	    red "bad output $i" "fail"
+	fi;
+	rm result
+    else
+	red "interpreter crashed on $i" "fail"
+    fi
+done
+
+finish_suite "Interpreter testing"
 
 printf "</testsuites>\n" >> $DIR/tests.xml

@@ -52,6 +52,23 @@ module Big_int = Nat_big_num
 
 module StringMap = Map.Make(String)
 
+let print_chan = ref stdout
+let print_redirected = ref false
+
+let output_redirect chan =
+  print_chan := chan;
+  print_redirected := true
+
+let output_close () =
+  if !print_redirected then
+    close_out !print_chan
+  else
+    ()
+
+let output_endline str =
+  output_string !print_chan (str ^ "\n");
+  flush !print_chan
+
 type value =
   | V_vector of value list
   | V_list of value list
@@ -318,7 +335,8 @@ let value_eq_anything = function
   | _ -> failwith "value eq_anything"
 
 let value_print = function
-  | [v] -> print_endline (string_of_value v |> Util.red |> Util.clear); V_unit
+  | [V_string str] -> output_endline str; V_unit
+  | [v] -> output_endline (string_of_value v |> Util.red |> Util.clear); V_unit
   | _ -> assert false
 
 let value_internal_pick = function
@@ -344,11 +362,11 @@ let value_putchar = function
   | _ -> failwith "value putchar"
 
 let value_print_bits = function
-  | [msg; bits] -> print_endline (coerce_string msg ^ string_of_value bits); V_unit
+  | [msg; bits] -> output_endline (coerce_string msg ^ string_of_value bits); V_unit
   | _ -> failwith "value print_bits"
 
 let value_print_int = function
-  | [msg; n] -> print_endline (coerce_string msg ^ string_of_value n); V_unit
+  | [msg; n] -> output_endline (coerce_string msg ^ string_of_value n); V_unit
   | _ -> failwith "value print_int"
 
 let primops =
@@ -407,6 +425,7 @@ let primops =
       ("undefined_int", fun _ -> V_int Big_int.zero);
       ("undefined_bool", fun _ -> V_bool false);
       ("undefined_vector", value_undefined_vector);
+      ("undefined_string", fun _ -> V_string "");
       ("internal_pick", value_internal_pick);
       ("replicate_bits", value_replicate_bits);
       ("Elf_loader.elf_entry", fun _ -> V_int (!Elf_loader.opt_elf_entry));

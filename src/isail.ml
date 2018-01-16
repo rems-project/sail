@@ -181,6 +181,8 @@ let help = function
        "Files containing scattered definitions must be loaded together." ]
   | ":u" | ":unload" ->
      "(:u | :unload) - Unload all loaded files."
+  | ":output" ->
+     ":output <file> - Redirect evaluating expression output to a file."
   | cmd ->
      "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
 
@@ -222,7 +224,9 @@ let handle_input' input =
             let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !interactive_env in
             pretty_sail stdout (doc_binding (typq, typ));
             print_newline ();
-         | ":q" | ":quit" -> exit 0
+         | ":q" | ":quit" ->
+            Value.output_close ();
+            exit 0
          | ":i" | ":infer" ->
             let exp = Initial_check.exp_of_string dec_ord arg in
             let exp = Type_check.infer_exp !interactive_env exp in
@@ -239,13 +243,16 @@ let handle_input' input =
             else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
          | ":commands" ->
             let commands =
-              [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help";
+              [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output";
                 "Normal mode commands - :elf :(l)oad :(u)nload";
                 "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
                 "";
                 ":(c)ommand can be called as either :c or :command." ]
             in
             List.iter print_endline commands
+         | ":output" ->
+            let chan = open_out arg in
+            Value.output_redirect chan
          | ":help" -> print_endline (help arg)
          | _ -> recognised := false
        end

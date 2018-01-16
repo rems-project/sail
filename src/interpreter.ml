@@ -393,6 +393,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      else
        failwith "Match failure"
 
+
+  | E_vector_subrange (vec, n, m) ->
+     wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
+  | E_vector_access (vec, n) ->
+     wrap (E_app (mk_id "vector_access_dec", [vec; n]))
+
   | E_vector_update (vec, n, x) ->
      wrap (E_app (mk_id "vector_update", [vec; n; x]))
   | E_vector_update_subrange (vec, n, m, x) ->
@@ -506,9 +512,9 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | Local (Immutable, _) ->
           let chain = build_letchain id gstate.letbinds orig_exp in
           return chain
-       | Enum _ ->
+       | Enum _ | Union _ ->
           return (exp_of_value (V_ctor (string_of_id id, [])))
-       | _ -> failwith "id"
+       | _ -> failwith ("id " ^ string_of_id id)
      end
 
   | E_record (FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
@@ -661,6 +667,7 @@ and pattern_match env (P_aux (p_aux, _) as pat) value =
      let matches = List.map2 (pattern_match env) pats (coerce_gv value) in
      List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
   | P_vector_concat _ -> assert false (* TODO *)
+  | P_tup [pat] -> pattern_match env pat value
   | P_tup pats | P_list pats ->
      let matches = List.map2 (pattern_match env) pats (coerce_listlike value) in
      List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)

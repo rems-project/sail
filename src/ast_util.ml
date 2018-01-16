@@ -636,7 +636,9 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_var _ -> "INTERNAL LET"
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
-  | _ -> "INTERNAL"
+  | E_nondet _ -> "NONDET"
+  | E_internal_value _ -> "INTERNAL VALUE"
+
 and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp
 and string_of_pexp (Pat_aux (pexp, _)) =

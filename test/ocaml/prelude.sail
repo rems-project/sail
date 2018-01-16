@@ -18,7 +18,10 @@ val eq_string = "eq_string" : (string, string) -> bool
 
 val eq_real = "eq_real" : (real, real) -> bool
 
-val eq_anything = "(fun (x, y) -> x = y)" : forall ('a : Type). ('a, 'a) -> bool
+val eq_anything = {
+    ocaml: "(fun (x, y) -> x = y)",
+    interpreter: "eq_anything"
+  } : forall ('a : Type). ('a, 'a) -> bool
 
 val length = "length" : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
 
@@ -140,6 +143,9 @@ val __SignExtendSlice : forall 'm. (bits('m), int, int) -> bits('m)
 val __ZeroExtendSlice : forall 'm. (bits('m), int, int) -> bits('m)
 
 val cast cast_unit_vec : bit -> bits(1)
+
+function cast_unit_vec bitone = 0b1
+and cast_unit_vec bitzero = 0b0
 
 val print = "print_endline" : string -> unit
 
