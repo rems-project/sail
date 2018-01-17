@@ -343,6 +343,7 @@ module Env : sig
   val base_typ_of : t -> typ -> typ
   val add_smt_op : id -> string -> t -> t
   val get_smt_op : id -> t -> string
+  val have_smt_op : id -> t -> bool
   (* Well formedness-checks *)
   val wf_typ : ?exs:KidSet.t -> t -> typ -> unit
   val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
@@ -465,6 +466,9 @@ end = struct
     in
     try Bindings.find id env.smt_ops with
     | Not_found -> first_smt_op (get_overloads id env)
+
+  let have_smt_op id env =
+    try ignore(get_smt_op id env); true with Type_error _ -> false
 
   let rec infer_kind env id =
     if Bindings.mem id builtin_typs then
@@ -1336,15 +1340,27 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
        else
          if KidSet.is_empty (nexp_frees n1a)
          then unify_nexps l env goals n1b (nminus nexp2 n1a)
-         else unify_error l ("Both sides of Nat expression " ^ string_of_nexp nexp1
+         else unify_error l ("Both sides of Int expression " ^ string_of_nexp nexp1
                              ^ " contain free type variables so it cannot be unified with " ^ string_of_nexp nexp2)
     | Nexp_minus (n1a, n1b) ->
        if KidSet.is_empty (nexp_frees n1b)
        then unify_nexps l env goals n1a (nsum nexp2 n1b)
-       else  unify_error l ("Cannot unify minus Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+       else  unify_error l ("Cannot unify minus Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
     | Nexp_times (n1a, n1b) ->
-       if KidSet.is_empty (nexp_frees n1a)
-       then
+       (* If we have SMT operations div and mod, then we can use the
+          property that
+
+          mod(m, C) = 0 && C != 0 --> (C * n = m <--> n = m / C)
+
+          to help us unify multiplications.  *)
+       if Env.have_smt_op (mk_id "div") env && Env.have_smt_op (mk_id "mod") env then
+         let valid n c = prove env (nc_eq (napp (mk_id "mod") [n; c]) (nint 0)) && prove env (nc_neq c (nint 0)) in
+         if KidSet.is_empty (nexp_frees n1b) && valid nexp2 n1b then
+           unify_nexps l env goals n1a (napp (mk_id "div") [nexp2; n1b])
+         else if KidSet.is_empty (nexp_frees n1a) && valid nexp2 n1a then
+           unify_nexps l env goals n1b (napp (mk_id "div") [nexp2; n1a])
+         else unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+       else if KidSet.is_empty (nexp_frees n1a) then
          begin
            match nexp_aux2 with
            | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_equal (n1a, n2a), Parse_ast.Unknown)) ->
@@ -1354,20 +1370,19 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
                 match n1a with
                 | Nexp_aux (Nexp_constant c1,_) when Big_int.equal (Big_int.modulus c2 c1) Big_int.zero ->
                    unify_nexps l env goals n1b (mk_nexp (Nexp_constant (Big_int.div c2 c1)))
-                | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+                | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
               end
-           | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+           | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
-       else if KidSet.is_empty (nexp_frees n1b)
-       then
+       else if KidSet.is_empty (nexp_frees n1b) then
          begin
            match nexp_aux2 with
            | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
               unify_nexps l env goals n1a n2a
-           | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+           | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
-       else unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
-    | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+       else unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+    | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
 
 let string_of_uvar = function
   | U_nexp n -> string_of_nexp n
@@ -1415,6 +1430,9 @@ let merge_unifiers l kid uvar1 uvar2 =
   | None, None -> None
 
 let rec unify l env typ1 typ2 =
+  let typ1 = Env.expand_synonyms env typ1 in
+  let typ2 = Env.expand_synonyms env typ2 in
+
   typ_print ("Unify " ^ string_of_typ typ1 ^ " with " ^ string_of_typ typ2);
   let goals = KidSet.inter (KidSet.diff (typ_frees typ1) (typ_frees typ2)) (typ_frees typ1) in
   let rec unify_typ l (Typ_aux (typ1_aux, _) as typ1) (Typ_aux (typ2_aux, _) as typ2) =
@@ -1991,13 +2009,13 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          | ((E_aux (E_assert (constr_exp, assert_msg), _) as exp) :: exps) ->
             let constr_exp = crule check_exp env constr_exp bool_typ in
             let checked_msg = crule check_exp env assert_msg string_typ in
-            let cexp, env = match assert_constraint env constr_exp with
+            let env = match assert_constraint env constr_exp with
               | Some nc ->
                  typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
-                 annot_exp (E_constraint nc) bool_typ, Env.add_constraint nc env
-              | None ->
-                 constr_exp, env in
-            let texp = annot_exp_effect (E_assert (cexp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
+                 Env.add_constraint nc env
+              | None -> env
+            in
+            let texp = annot_exp_effect (E_assert (constr_exp, checked_msg)) unit_typ (mk_effect [BE_escape]) in
             texp :: check_block l env exps typ
          | (exp :: exps) ->
             let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in

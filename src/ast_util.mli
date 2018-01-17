@@ -127,6 +127,7 @@ val nsum : nexp -> nexp -> nexp
 val ntimes : nexp -> nexp -> nexp
 val npow2 : nexp -> nexp
 val nvar : kid -> nexp
+val napp : id -> nexp list -> nexp
 val nid : id -> nexp (* NOTE: Nexp_id's don't do anything currently *)
 
 (* Numeric constraint builders *)

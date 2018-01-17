@@ -74,6 +74,10 @@ let rec doc_nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_constant c -> string (Big_int.to_string c)
+    | Nexp_app (id, nexps) -> string (string_of_nexp nexp)
+    (* This segfaults??!!!!
+       doc_id id ^^ (parens (separate_map (comma ^^ space) doc_nexp nexps))
+     *)
     | Nexp_id id -> doc_id id
     | Nexp_var kid -> doc_kid kid
     | _ -> parens (nexp0 nexp)

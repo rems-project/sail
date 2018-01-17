@@ -515,8 +515,8 @@ let rewrite_sizeof (Defs defs) =
   let (params_map, defs) = List.fold_left rewrite_sizeof_def
                                           (Bindings.empty, []) defs in
   let defs = List.map (rewrite_sizeof_valspec params_map) defs in
-  Defs defs
-(* fst (check initial_env (Defs defs)) *)
+  (* Defs defs *)
+  fst (check initial_env (Defs defs))
 
 let rewrite_defs_remove_assert defs =
   let e_assert ((E_aux (eaux, (l, _)) as exp), str) = match eaux with

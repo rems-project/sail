@@ -250,6 +250,22 @@ let handle_input' input =
                 ":(c)ommand can be called as either :c or :command." ]
             in
             List.iter print_endline commands
+         | ":poly" ->
+            let is_kopt = match arg with
+              | "Int" -> is_nat_kopt
+              | "Type" -> is_typ_kopt
+              | "Order" -> is_order_kopt
+              | _ -> failwith "Invalid kind"
+            in
+            let ids = Specialize.polymorphic_functions is_kopt !interactive_ast in
+            List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements ids)
+         | ":ins" ->
+            let id = mk_id arg in
+            let instantiations = Specialize.instantiations_of id !interactive_ast in
+            let print_instantiation i =
+              print_endline (Util.string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ Type_check.string_of_uvar uvar) (KBindings.bindings i))
+            in
+            List.iter print_instantiation instantiations
          | ":output" ->
             let chan = open_out arg in
             Value.output_redirect chan

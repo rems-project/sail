@@ -5,6 +5,14 @@ type bits ('n : Int) = vector('n, dec, bit)
 
 infix 4 ==
 
+val div = {
+  smt : "div"
+} : forall 'n 'm. (atom('n), atom('m)) -> atom(div('n, 'm))
+
+val mod = {
+  smt : "mod"
+} : forall 'n 'm. (atom('n), atom('m)) -> atom(mod('n, 'm))
+
 val eq_atom = "eq_int" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
