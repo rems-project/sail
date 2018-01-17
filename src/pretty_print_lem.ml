@@ -425,29 +425,30 @@ let doc_typquant_lem (TypQ_aux(tq,_)) vars_included typ = match tq with
    machine words.  Often these will be unnecessary, but this simple
    approach will do for now. *)
 
-let rec typeclass_nexps (Typ_aux(t,_)) = match t with
-| Typ_id _
-| Typ_var _
-  -> NexpSet.empty
-| Typ_fn (t1,t2,_) -> NexpSet.union (typeclass_nexps t1) (typeclass_nexps t2)
-| Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-| Typ_app (Id_aux (Id "vector",_),
-           [_;Typ_arg_aux (Typ_arg_nexp size_nexp,_);
-            _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
-| Typ_app (Id_aux (Id "itself",_),
-           [Typ_arg_aux (Typ_arg_nexp size_nexp,_)]) ->
-   let size_nexp = nexp_simp size_nexp in
-   if is_nexp_constant size_nexp then NexpSet.empty else
-   NexpSet.singleton (orig_nexp size_nexp)
-| Typ_app _ -> NexpSet.empty
-| Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
+let rec typeclass_nexps (Typ_aux(t,_)) =
+  if !opt_mwords then
+    match t with
+    | Typ_id _
+    | Typ_var _
+      -> NexpSet.empty
+    | Typ_fn (t1,t2,_) -> NexpSet.union (typeclass_nexps t1) (typeclass_nexps t2)
+    | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
+    | Typ_app (Id_aux (Id "vector",_),
+               [_;Typ_arg_aux (Typ_arg_nexp size_nexp,_);
+                _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
+    | Typ_app (Id_aux (Id "itself",_),
+               [Typ_arg_aux (Typ_arg_nexp size_nexp,_)]) ->
+       let size_nexp = nexp_simp size_nexp in
+       if is_nexp_constant size_nexp then NexpSet.empty else
+       NexpSet.singleton (orig_nexp size_nexp)
+    | Typ_app _ -> NexpSet.empty
+    | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
+  else NexpSet.empty
 
 let doc_typclasses_lem t =
-  if !opt_mwords then
-    let nexps = typeclass_nexps t in
-    if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
-    (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
-  else (empty, NexpSet.empty)
+  let nexps = typeclass_nexps t in
+  if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
+  (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
 
 let doc_typschm_lem quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   let pt = doc_typ_lem t in
