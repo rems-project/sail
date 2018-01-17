@@ -16,3 +16,9 @@ printf "* Ocaml tests                            *\n"
 printf "******************************************\n\n"
 
 ./test/ocaml/run_tests.sh
+
+printf "******************************************\n"
+printf "* ARM spec tests                         *\n"
+printf "******************************************\n\n"
+
+./test/arm/run_tests.sh
