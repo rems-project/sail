@@ -64,133 +64,6 @@ let set_to_string n =
   list_to_string (Nameset.elements n)
 
 
-(*Query a spec for its default order if one is provided. Assumes Inc if not *)
-(* let get_default_order_sp (DT_aux(spec,_)) =
-  match spec with
-  | DT_order (Ord_aux(o,_)) ->
-    (match o with
-     | Ord_inc -> Some {order = Oinc}
-     | Ord_dec -> Some { order = Odec}
-     | _ -> Some {order = Oinc})
-  | _ -> None
-
-let get_default_order_def = function
-  | DEF_default def_spec -> get_default_order_sp def_spec
-  | _ -> None
-
-let rec default_order (Defs defs) =
-  match defs with
-  | [] -> { order = Oinc } (*When no order is specified, we assume that it's inc*)
-  | def::defs ->
-    match get_default_order_def def with
-    | None -> default_order (Defs defs)
-    | Some o -> o *)
-
-(*Is within range*)
-
-(* let check_in_range (candidate : big_int) (range : typ) : bool =
-  match range.t with
-  | Tapp("range", [TA_nexp min; TA_nexp max]) | Tabbrev(_,{t=Tapp("range", [TA_nexp min; TA_nexp max])}) ->
-    let min,max = 
-      match min.nexp,max.nexp with
-      | (Nconst min, Nconst max)
-      | (Nconst min, N2n(_, Some max))
-      | (N2n(_, Some min), Nconst max)
-      | (N2n(_, Some min), N2n(_, Some max))
-        -> min, max
-      | (Nneg n, Nconst max) | (Nneg n, N2n(_, Some max))->
-        (match n.nexp with
-         | Nconst abs_min | N2n(_,Some abs_min) ->
-           (Big_int.negate abs_min), max
-         | _ -> assert false (*Put a better error message here*))
-      | (Nconst min,Nneg n) | (N2n(_, Some min), Nneg n) ->
-        (match n.nexp with
-         | Nconst abs_max | N2n(_,Some abs_max) ->
-           min, (Big_int.negate abs_max)
-         | _ -> assert false (*Put a better error message here*))
-    | (Nneg nmin, Nneg nmax) ->
-      ((match nmin.nexp with
-          | Nconst abs_min | N2n(_,Some abs_min) -> (Big_int.negate abs_min)
-          | _ -> assert false (*Put a better error message here*)),
-       (match nmax.nexp with
-        | Nconst abs_max | N2n(_,Some abs_max) -> (Big_int.negate abs_max)
-        | _ -> assert false (*Put a better error message here*)))
-    | _ -> assert false        
-    in Big_int.less_equal min candidate && Big_int.less_equal candidate max
-  | _ -> assert false
-
-(*Rmove me when switch to zarith*)
-let rec power_big_int b n =
-  if Big_int.equal n Big_int.zero
-  then (Big_int.of_int 1)
-  else Big_int.mul b (power_big_int b (Big_int.sub n (Big_int.of_int 1)))
-
-let unpower_of_2 b =
-  let two = Big_int.of_int 2 in
-  let four = Big_int.of_int 4 in
-  let eight = Big_int.of_int 8 in
-  let sixteen = Big_int.of_int 16 in
-  let thirty_two = Big_int.of_int 32 in
-  let sixty_four = Big_int.of_int 64 in
-  let onetwentyeight = Big_int.of_int 128 in
-  let twofiftysix = Big_int.of_int 256 in
-  let fivetwelve = Big_int.of_int 512 in
-  let oneotwentyfour = Big_int.of_int 1024 in
-  let to_the_sixteen = Big_int.of_int 65536 in
-  let to_the_thirtytwo = Big_int.of_string "4294967296" in
-  let to_the_sixtyfour = Big_int.of_string "18446744073709551616" in
-  let ck i = Big_int.equal b i in
-  if      ck (Big_int.of_int 1)     then Big_int.zero
-  else if ck two              then (Big_int.of_int 1)
-  else if ck four             then two
-  else if ck eight            then Big_int.of_int 3
-  else if ck sixteen          then four
-  else if ck thirty_two       then Big_int.of_int 5
-  else if ck sixty_four       then Big_int.of_int 6
-  else if ck onetwentyeight   then Big_int.of_int 7
-  else if ck twofiftysix      then eight
-  else if ck fivetwelve       then Big_int.of_int 9
-  else if ck oneotwentyfour   then Big_int.of_int 10
-  else if ck to_the_sixteen   then sixteen
-  else if ck to_the_thirtytwo then thirty_two
-  else if ck to_the_sixtyfour then sixty_four
-  else let rec unpower b power =
-         if Big_int.equal b (Big_int.of_int 1)
-         then power
-         else (unpower (Big_int.div b  two) (Big_int.succ power)) in
-    unpower b Big_int.zero
-
-let is_within_range candidate range constraints =
-  let candidate_actual = match candidate.t with
-    | Tabbrev(_,t) -> t
-    | _ -> candidate in
-  match candidate_actual.t with
-  | Tapp("atom", [TA_nexp n]) ->
-    (match n.nexp with
-     | Nconst i | N2n(_,Some i) -> if check_in_range i range then Yes else No
-     | _ -> Maybe)
-  | Tapp("range", [TA_nexp bot; TA_nexp top]) ->
-    (match bot.nexp,top.nexp with
-     | Nconst b, Nconst t | Nconst b, N2n(_,Some t) | N2n(_, Some b), Nconst t | N2n(_,Some b), N2n(_, Some t) ->
-       let at_least_in = check_in_range b range in
-       let at_most_in = check_in_range t range in
-       if at_least_in && at_most_in
-       then Yes
-       else if at_least_in || at_most_in
-       then Maybe
-       else No
-     | _ -> Maybe)
-  | Tapp("vector", [_; TA_nexp size ; _; _]) ->
-    (match size.nexp with
-     | Nconst i | N2n(_, Some i) ->
-       if check_in_range (power_big_int (Big_int.of_int 2) i) range
-       then Yes
-       else No
-     | _ -> Maybe)
-  | _ -> Maybe
-
-let is_within_machine64 candidate constraints = is_within_range candidate int64_t constraints *)
-  
 (************************************************************************************************)
 (*FV finding analysis: identifies the free variables of a function, expression, etc *)
 
@@ -313,9 +186,11 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
     fv_of_exp consider_var bound u set e
   | E_app(id,es) ->
     let us = conditional_add_exp bound used id in
+    let us = conditional_add_exp bound us (prepend_id "val:" id) in
     list_fv bound us set es
   | E_app_infix(l,id,r) ->
     let us = conditional_add_exp bound used id in
+    let us = conditional_add_exp bound us (prepend_id "val:" id) in
     list_fv bound us set [l;r]
   | E_if(c,t,e) -> list_fv bound used set [c;t;e]
   | E_for(id,from,to_,by,_,body) ->
@@ -464,8 +339,12 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
     | [] -> failwith "fv_of_fun fell off the end looking for the function name"
     | FCL_aux(FCL_Funcl(id,_),_)::_ -> string_of_id id in
   let base_bounds = match rec_opt with
+    (* Current Sail does not have syntax for declaring functions as recursive,
+       and type checker does not check whether functions are recursive, so
+       just always add a self-dependency of functions on themselves
     | Rec_aux(Ast.Rec_rec,_) -> init_env fun_name
-    | _ -> mt in
+    | _ -> mt*)
+    | _ -> init_env fun_name in
   let base_bounds,ns_r = match tannot_opt with
     | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
       let bindings = if consider_var then typq_bindings typq else mt in
@@ -577,7 +456,9 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_val lebind -> ((fun (b,u,_) -> (b,u)) (fv_of_let consider_var mt mt mt lebind))
   | DEF_spec vspec -> fv_of_vspec consider_var vspec
   | DEF_fixity _ -> mt,mt
-  | DEF_overload (id,ids) -> init_env (string_of_id id), List.fold_left (fun ns id -> Nameset.add (string_of_id id) ns) mt ids
+  | DEF_overload (id,ids) ->
+     init_env (string_of_id id),
+     List.fold_left (fun ns id -> Nameset.add ("val:" ^ string_of_id id) ns) mt ids
   | DEF_default def -> mt,mt
   | DEF_internal_mutrec fdefs ->
      let fvs = List.map (fv_of_fun consider_var) fdefs in
@@ -590,129 +471,133 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
 
-(*******************************************************************************
- * Reorder defs take 2
-*)
 
-(*remove all of ns1 instances from ns2*)
-let remove_all ns1 ns2 =
-  List.fold_right Nameset.remove (Nameset.elements ns1) ns2
+(*
+ *  Sorting definitions, take 3
+ *)
 
-let remove_from_all_uses bs dbts =
-  List.map (fun ((b,uses),d) -> (b,remove_all bs uses),d) dbts
+module Namemap = Map.Make(String)
+(* Nodes are labeled with strings.  A graph is represented as a map associating
+   each node with its sucessors *)
+type graph = Nameset.t Namemap.t
+type node_idx = { index : int; root : int }
 
-let remove_local_or_lib_vars dbts =
-  let bound_in_dbts = List.fold_right (fun ((b,_),_) bounds -> Nameset.union b bounds) dbts mt in
-  let is_bound_in_defs s = Nameset.mem s bound_in_dbts in
-  let rec remove_from_uses = function
-    | [] -> []
-    | ((b,uses),d)::defs ->
-      ((b,(Nameset.filter is_bound_in_defs uses)),d)::remove_from_uses defs in
-  remove_from_uses dbts
+(* Find strongly connected components using Tarjan's algorithm.
+   This algorithm also returns a topological sorting of the graph components. *)
+let scc ?(original_order : string list option) (g : graph) =
+  let components = ref [] in
+  let index = ref 0 in
 
-let compare_dbts ((_,u1),_) ((_,u2),_) = Pervasives.compare (Nameset.cardinal u1) (Nameset.cardinal u2)
-
-let rec print_dependencies orig_queue work_queue names =
-  match work_queue with
-  | [] -> ()
-  | ((binds,uses),_)::wq ->
-    (if not(Nameset.is_empty(Nameset.inter names binds))
-     then ((Printf.eprintf "binds of %s has uses of %s\n" (set_to_string binds) (set_to_string uses));
-           print_dependencies orig_queue orig_queue uses));
-    print_dependencies orig_queue wq names
-
-let merge_mutrecs defs =
-  let merge_aux ((binds', uses'), def) ((binds, uses), fundefs) =
-    let fundefs = match def with
-      | DEF_fundef fundef -> fundef :: fundefs
-      | DEF_internal_mutrec fundefs' -> fundefs' @ fundefs
-      | _ ->
-        (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
-        raise (Reporting_basic.err_unreachable (def_loc def)
-          "Trying to merge non-function definition with mutually recursive functions") in
-    (* let _ = Printf.eprintf " - Merging %s (using %s)\n" (set_to_string binds') (set_to_string uses') in *)
-    ((Nameset.union binds' binds, Nameset.union uses' uses), fundefs) in
-  let ((binds, uses), fundefs) = List.fold_right merge_aux defs ((mt, mt), []) in
-  ((binds, uses), DEF_internal_mutrec fundefs)
-
-let rec topological_sort work_queue defs =
-  match work_queue with
-  | [] -> List.rev defs
-  | ((binds,uses),def)::wq ->
-    (*Assumes work queue given in sorted order, invariant mantained on appropriate recursive calls*)
-    if (Nameset.cardinal uses = 0)
-    then (*let _ = Printf.eprintf "Adding def that binds %s to definitions\n" (set_to_string binds) in*)
-      topological_sort (remove_from_all_uses binds wq) (def::defs)
-    else if not(Nameset.is_empty(Nameset.inter binds uses))
-    then topological_sort (((binds,(remove_all binds uses)),def)::wq) defs
-    else
-      match List.stable_sort compare_dbts work_queue with (*We wait to sort until there are no 0 dependency nodes on top*)
-      | [] -> failwith "sort shrunk the list???"
-      | (((n,uses),def)::rest) as wq ->
-        if (Nameset.cardinal uses = 0)
-        then topological_sort wq defs
-        else
-          let _ = Printf.eprintf "Merging (potentially) mutually recursive definitions %s and %s\n" (set_to_string n) (set_to_string uses) in
-          let is_used ((binds', uses'), def') = not(Nameset.is_empty(Nameset.inter binds' uses)) in
-          let (used, rest) = List.partition is_used rest in
-          let wq = merge_mutrecs (((n,uses),def)::used) :: rest in
-          topological_sort wq defs
-
-let rec add_to_partial_order ((binds,uses),def) = function
-  | [] ->
-(*    let _ = Printf.eprintf "add_to_partial_order for def with bindings %s, uses %s.\n Eol case.\n" (set_to_string binds) (set_to_string uses) in*)
-    [(binds,uses),def]
-  | (((bf,uf),deff)::defs as full_defs) ->
-    (*let _ = Printf.eprintf "add_to_partial_order for def with bindings %s, uses %s.\n None eol case. With first def binding %s, uses %s\n" (set_to_string binds) (set_to_string uses) (set_to_string bf) (set_to_string uf) in*)
-    if Nameset.is_empty uses
-    then ((binds,uses),def)::full_defs
-    else if Nameset.subset binds uf (*deff relies on def, so def must be defined first*)
-    then ((binds,uses),def)::((bf,(remove_all binds uf)),deff)::defs
-    else if Nameset.subset bf uses (*def relies at least on deff, but maybe more, push in*)
-    then ((bf,uf),deff)::(add_to_partial_order ((binds,(remove_all bf uses)),def) defs)
-    else (*These two are unrelated but new def might need to go further in*)
-      ((bf,uf),deff)::(add_to_partial_order ((binds,uses),def) defs)
-
-let rec gather_defs name already_included def_bind_triples =
-  match def_bind_triples with
-  | [] -> [],already_included,mt
-  | ((binds,uses),def)::def_bind_triples ->
-    let (defs,already_included,requires) = gather_defs name already_included def_bind_triples in
-    let bound_names = Nameset.elements binds in
-    if List.mem name already_included || List.exists (fun b -> List.mem b already_included) bound_names 
-    then (defs,already_included,requires)
-    else
-      let uses = List.fold_right Nameset.remove already_included uses in
-      if Nameset.mem name binds
-      then (def::defs,(bound_names@already_included), Nameset.remove name (Nameset.union uses requires))
-      else (defs,already_included,requires)
-
-let rec gather_all names already_included def_bind_triples =
-  let rec gather ns already_included defs reqs = match ns with
-    | [] -> defs,already_included,reqs
-    | name::ns ->
-      if List.mem name already_included
-      then gather ns already_included defs (Nameset.remove name reqs)
-      else
-        let (new_defs,already_included,new_reqs) = gather_defs name already_included def_bind_triples in
-        gather ns already_included (new_defs@defs) (Nameset.remove name (Nameset.union new_reqs reqs))
+  let stack = ref [] in
+  let push v = (stack := v :: !stack) in
+  let pop () =
+    begin
+      let v = List.hd !stack in
+      stack := List.tl !stack;
+      v
+    end
   in
-  let (defs,already_included,reqs) = gather names already_included [] mt in
-  if Nameset.is_empty reqs
-  then defs
-  else (gather_all (Nameset.elements reqs) already_included def_bind_triples)@defs
-    
-let restrict_defs defs name_list =
-  let defsno = gather_all name_list [] (group_defs false defs) in
-  let rdbts = group_defs true (Defs defsno) in
-  (*let partial_order =
-    List.fold_left (fun po d -> add_to_partial_order d po) [] rdbts in
-    let defs = List.map snd partial_order in*)
-  let defs = topological_sort (List.sort compare_dbts (remove_local_or_lib_vars rdbts)) [] in
-  Defs defs
 
+  let node_indices = Hashtbl.create (Namemap.cardinal g) in
+  let get_index v = (Hashtbl.find node_indices v).index in
+  let get_root v = (Hashtbl.find node_indices v).root in
+  let set_root v r =
+    Hashtbl.replace node_indices v { (Hashtbl.find node_indices v) with root = r } in
 
-let top_sort_defs defs =
-  let rdbts = group_defs true defs in
-  let defs = topological_sort (List.stable_sort compare_dbts (remove_local_or_lib_vars rdbts)) [] in
-  Defs defs
+  let rec visit_node v =
+    begin
+      Hashtbl.add node_indices v { index = !index; root = !index };
+      index := !index + 1;
+      push v;
+      if Namemap.mem v g then Nameset.iter (visit_edge v) (Namemap.find v g);
+      if get_root v = get_index v then (* v is the root of a SCC *)
+        begin
+          let component = ref [] in
+          let finished = ref false in
+          while not !finished do
+            let w = pop () in
+            component := w :: !component;
+            if String.compare v w = 0 then finished := true;
+          done;
+          components := !component :: !components;
+        end
+    end
+  and visit_edge v w =
+    if not (Hashtbl.mem node_indices w) then
+      begin
+        visit_node w;
+        if Hashtbl.mem node_indices w then set_root v (min (get_root v) (get_root w));
+      end else begin
+        if List.mem w !stack then set_root v (min (get_root v) (get_index w))
+      end
+  in
+
+  let nodes = match original_order with
+    | Some nodes -> nodes
+    | None -> List.map fst (Namemap.bindings g)
+  in
+  List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
+  List.rev !components
+
+let add_def_to_graph (prelude, original_order, defset, graph) d =
+  let bound, used = fv_of_def false true [] d in
+  try
+    (* A definition may bind multiple identifiers, e.g. "let (x, y) = ...".
+       We add all identifiers to the dependency graph as a cycle.  The actual
+       definition is attached to only one of the identifiers, so it will not
+       be duplicated in the final output. *)
+    let id = Nameset.choose bound in
+    let other_ids = Nameset.remove id bound in
+    let graph_id = Namemap.add id (Nameset.union used other_ids) graph in
+    let add_other_node id' g = Namemap.add id' (Nameset.singleton id) g in
+    prelude,
+    original_order @ [id],
+    Namemap.add id d defset,
+    Nameset.fold add_other_node other_ids graph_id
+  with
+  | Not_found ->
+     (* Some definitions do not bind any identifiers at all.  This *should*
+        only happen for default bitvector order declarations, operator fixity
+        declarations, and comments.  The sorting does not (currently) attempt
+        to preserve the positions of these AST nodes; they are collected
+        separately and placed at the beginning of the output.  Comments are
+        currently ignored by the Lem and OCaml backends, anyway.  For
+        default order and fixity declarations, this means that specifications
+        currently have to assume those declarations are moved to the
+        beginning when using a backend that requires topological sorting. *)
+     prelude @ [d], original_order, defset, graph
+
+let print_dot graph component : unit =
+  match component with
+  | root :: _ ->
+     print_endline ("// Dependency cycle including " ^ root);
+     print_endline ("digraph cycle_" ^ root ^ " {");
+     List.iter (fun caller ->
+       let print_edge callee = print_endline ("  \"" ^ caller ^ "\" -> \"" ^ callee ^ "\";") in
+       Namemap.find caller graph
+       |> Nameset.filter (fun id -> List.mem id component)
+       |> Nameset.iter print_edge) component;
+     print_endline "}"
+  | [] -> ()
+
+let def_of_component graph defset comp =
+  let get_def id = if Namemap.mem id defset then [Namemap.find id defset] else [] in
+  match List.concat (List.map get_def comp) with
+  | [] -> []
+  | [def] -> [def]
+  | (def :: _) as defs ->
+     let get_fundefs = function
+       | DEF_fundef fundef -> [fundef]
+       | DEF_internal_mutrec fundefs -> fundefs
+       | _ ->
+          raise (Reporting_basic.err_unreachable (def_loc def)
+            "Trying to merge non-function definition with mutually recursive functions") in
+     let fundefs = List.concat (List.map get_fundefs defs) in
+     print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs);
+     [DEF_internal_mutrec fundefs]
+
+let top_sort_defs (Defs defs) =
+  let prelude, original_order, defset, graph =
+    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs in
+  let components = scc ~original_order:original_order graph in
+  Defs (prelude @ List.concat (List.map (def_of_component graph defset) components))
