@@ -139,11 +139,11 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
   | id when Id.compare id (mk_id "bit") = 0 -> string "bit"
-  | id when Id.compare id (mk_id "int") = 0 -> string "big_int"
-  | id when Id.compare id (mk_id "nat") = 0 -> string "big_int"
+  | id when Id.compare id (mk_id "int") = 0 -> string "Big_int.num"
+  | id when Id.compare id (mk_id "nat") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
-  | id when Id.compare id (mk_id "real") = 0 -> string "Num.num"
+  | id when Id.compare id (mk_id "real") = 0 -> string "Rational.t"
   | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
   | id when Id.compare id (mk_id "ref") = 0 -> string "ref"
@@ -182,7 +182,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
-  | L_num n -> parens (string "big_int_of_string" ^^ space ^^ string ("\"" ^ Big_int.to_string n ^ "\""))
+  | L_num n -> parens (string "Big_int.of_string" ^^ space ^^ string ("\"" ^ Big_int.to_string n ^ "\""))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
   | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
@@ -284,14 +284,14 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      let loop_var = separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"] in
      let loop_mod =
        match ord with
-       | Ord_aux (Ord_inc, _) -> string "add_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
-       | Ord_aux (Ord_dec, _) -> string "sub_big_int" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_inc, _) -> string "Big_int.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+       | Ord_aux (Ord_dec, _) -> string "Big_int.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
        | Ord_aux (Ord_var _, _) -> failwith "Cannot have variable loop order!"
      in
      let loop_compare =
        match ord with
-       | Ord_aux (Ord_inc, _) -> string "le_big_int"
-       | Ord_aux (Ord_dec, _) -> string "gt_big_int"
+       | Ord_aux (Ord_inc, _) -> string "Big_int.less"
+       | Ord_aux (Ord_dec, _) -> string "Big_int.greater"
        | Ord_aux (Ord_var _, _) -> failwith "Cannot have variable loop order!"
      in
      let loop_body =
@@ -636,34 +636,42 @@ let ocaml_defs (Defs defs) =
     else empty
   in
   (string "open Sail_lib;;" ^^ hardline)
-  ^^ (string "open Big_int" ^^ ocaml_def_end)
+  ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) defs)
   ^^ empty_reg_init
 
-let ocaml_main spec =
-  concat [separate space [string "open"; string (String.capitalize spec)] ^^ ocaml_def_end;
-          separate space [string "open"; string "Elf_loader"] ^^ ocaml_def_end;
-          separate space [string "let"; string "()"; equals]
-          ^//^ (string "Random.self_init ();"
-                ^/^ string "load_elf ();"
-                ^/^ string (if !opt_trace_ocaml then "Sail_lib.opt_trace := true;" else "Sail_lib.opt_trace := false;")
-                ^/^ string "zinitializze_registers ();"
-                ^/^ string "Printexc.record_backtrace true;"
-                ^/^ string "zmain ()")
-         ]
+let ocaml_main spec sail_dir =
+  let lines = ref [] in
+  let chan = open_in (sail_dir ^ "/lib/main.ml") in
+  begin
+    try
+      while true do
+        let line = input_line chan in
+        lines := line :: !lines
+      done;
+    with
+    | End_of_file -> close_in chan; lines := List.rev !lines
+  end;
+  (("open " ^ String.capitalize spec ^ ";;\n\n") :: !lines
+   @ [ "  zinitializze_registers ();";
+       "  Printexc.record_backtrace true;";
+       "  zmain ()\n";])
+  |> String.concat "\n"
 
 let ocaml_pp_defs f defs =
   ToChannel.pretty 1. 80 f (ocaml_defs defs)
 
 let ocaml_compile spec defs =
-  let sail_lib_dir =
-    try Sys.getenv "SAILLIBDIR" with
-    | Not_found -> failwith "Environment variable SAILLIBDIR needs to be set"
+  let sail_dir =
+    try Sys.getenv "SAIL_DIR" with
+    | Not_found -> failwith "Environment variable SAIL_DIR needs to be set"
   in
   if Sys.file_exists "_sbuild" then () else Unix.mkdir "_sbuild" 0o775;
   let cwd = Unix.getcwd () in
   Unix.chdir "_sbuild";
-  let _ = Unix.system ("cp -r " ^ sail_lib_dir ^ "/ocaml_rts/. .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/elf_loader.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/sail_lib.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/_tags .") in
   let out_chan = open_out (spec ^ ".ml") in
   ocaml_pp_defs out_chan defs;
   close_out out_chan;
@@ -672,13 +680,13 @@ let ocaml_compile spec defs =
     begin
       print_endline "Generating main";
       let out_chan = open_out "main.ml" in
-      ToChannel.pretty 1. 80 out_chan (ocaml_main spec);
+      output_string out_chan (ocaml_main spec sail_dir);
       close_out out_chan;
-      let _ = Unix.system "ocamlbuild -pkg zarith -pkg uint main.native" in
+      let _ = Unix.system "ocamlbuild -use-ocamlfind main.native" in
       let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
       ()
     end
   else
-    let _ = Unix.system ("ocamlbuild -pkg zarith -pkg uint " ^ spec ^ ".cmo") in
+    let _ = Unix.system ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo") in
     ();
   Unix.chdir cwd

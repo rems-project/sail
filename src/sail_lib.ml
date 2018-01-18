@@ -172,11 +172,13 @@ let sint = function
      in
      Big_int.add complement (uint xs)
 
-let add (x, y) = Big_int.add x y
-let sub (x, y) = Big_int.sub x y
+let add_int (x, y) = Big_int.add x y
+let sub_int (x, y) = Big_int.sub x y
 let mult (x, y) = Big_int.mul x y
 let quotient (x, y) = Big_int.div x y
 let modulus (x, y) = Big_int.modulus x y
+
+let negate x = Big_int.negate x
 
 let add_bit_with_carry (x, y, carry) =
   match x, y, carry with
@@ -401,23 +403,23 @@ let set_slice (out_len, slice_len, out, n, slice) =
 
 let set_slice_int (_, _, _, _) = assert false
 
-(*
-let eq_real (x, y) = Num.eq_num x y
-let lt_real (x, y) = Num.lt_num x y
-let gt_real (x, y) = Num.gt_num x y
-let lteq_real (x, y) = Num.le_num x y
-let gteq_real (x, y) = Num.ge_num x y
+let eq_real (x, y) = Rational.equal x y
+let lt_real (x, y) = Rational.lt x y
+let gt_real (x, y) = Rational.gt x y
+let lteq_real (x, y) = Rational.leq x y
+let gteq_real (x, y) = Rational.geq x y
+let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
+let negate_real x = Rational.neg x
 
-let round_down x = Num.big_int_of_num (Num.floor_num x)
-let round_up x = Num.big_int_of_num (Num.ceiling_num x)
-let quotient_real (x, y) = Num.div_num x y
-let mult_real (x, y) = Num.mult_num x y
-let real_power (x, y) = Num.power_num x (Num.num_of_big_int y)
-let add_real (x, y) = Num.add_num x y
-let sub_real (x, y) = Num.sub_num x y
+let round_down x = failwith "round_down" (* Num.big_int_of_num (Num.floor_num x) *)
+let round_up x = failwith "round_up" (* Num.big_int_of_num (Num.ceiling_num x) *)
+let quotient_real (x, y) = Rational.div x y
+let mult_real (x, y) = Rational.mul x y (* Num.mult_num x y *)
+let real_power (x, y) = failwith "real_power" (* Num.power_num x (Num.num_of_big_int y) *)
+let add_real (x, y) = Rational.add x y
+let sub_real (x, y) = Rational.sub x y
 
-let abs_real x = Num.abs_num x
- *)
+let abs_real x = Rational.abs x
 
 let lt (x, y) = Big_int.less x y
 let gt (x, y) = Big_int.greater x y
@@ -430,22 +432,27 @@ let max_int (x, y) = Big_int.max x y
 let min_int (x, y) = Big_int.min x y
 let abs_int x = Big_int.abs x
 
-(*
-let undefined_real () = Num.num_of_int 0
+let string_of_int x = Big_int.to_string x
+
+let undefined_real () = Rational.of_int 0
+
+let rec pow x = function
+  | 0 -> 1
+  | n -> x * pow x (n - 1)
 
 let real_of_string str =
+  let rat_of_string sr = Rational.of_int (int_of_string str) in
   try
     let point = String.index str '.' in
-    let whole = Num.num_of_string (String.sub str 0 point) in
+    let whole = Rational.of_int (int_of_string (String.sub str 0 point)) in
     let frac_str = String.sub str (point + 1) (String.length str - (point + 1)) in
-    let frac = Num.div_num (Num.num_of_string frac_str) (Num.num_of_big_int (Big_int.pow_int_positive 10 (String.length frac_str))) in
-    Num.add_num whole frac
+    let frac = Rational.div (rat_of_string frac_str) (Rational.of_int (pow 10 (String.length frac_str))) in
+    Rational.add whole frac
   with
-  | Not_found -> Num.num_of_string str
+  | Not_found -> Rational.of_int (int_of_string str)
 
 (* Not a very good sqrt implementation *)
-let sqrt_real x = real_of_string (string_of_float (sqrt (Num.float_of_num x)))
- *)
+let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt (Num.float_of_num x))) *)
 
 let print_int (str, x) =
   print_endline (str ^ Big_int.to_string x)

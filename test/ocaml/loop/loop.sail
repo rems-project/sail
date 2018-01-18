@@ -1,4 +1,4 @@
-val string_of_int = "string_of_big_int" : int -> string
+val string_of_int = "string_of_int" : int -> string
 
 val add = "add" : (int, int) -> int
 

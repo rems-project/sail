@@ -167,10 +167,10 @@ val real_power = "real_power" : (real, int) -> real
 
 overload operator ^ = {xor_vec, int_power, real_power}
 
-val add_range = "add" : forall 'n 'm 'o 'p.
+val add_range = "add_int" : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val add_int = "add" : (int, int) -> int
+val add_int = "add_int" : (int, int) -> int
 
 val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -180,10 +180,10 @@ val add_real = "add_real" : (real, real) -> real
 
 overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
 
-val sub_range = "sub" : forall 'n 'm 'o 'p.
+val sub_range = "sub_int" : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
-val sub_int = "sub" : (int, int) -> int
+val sub_int = "sub_int" : (int, int) -> int
 
 val sub_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -191,11 +191,11 @@ val sub_vec_int = "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 val sub_real = "sub_real" : (real, real) -> real
 
-val negate_range = "minus_big_int" : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
+val negate_range = "negate" : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
 
-val negate_int = "minus_big_int" : int -> int
+val negate_int = "negate" : int -> int
 
-val negate_real = "Num.minus_num" : real -> real
+val negate_real = "negate_real" : real -> real
 
 overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
 
@@ -258,7 +258,7 @@ infixl 7 %
 
 overload operator % = {modulus}
 
-val Real = "Num.num_of_big_int" : int -> real
+val Real = "to_real" : int -> real
 
 val shl_int = "shl_int" : (int, int) -> int
 

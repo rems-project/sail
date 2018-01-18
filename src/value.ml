@@ -250,12 +250,12 @@ let value_hex_slice = function
      mk_vector (Sail_lib.hex_slice (coerce_string v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value hex_slice"
 
-let value_add = function
-  | [v1; v2] -> V_int (Sail_lib.add (coerce_int v1, coerce_int v2))
+let value_add_int = function
+  | [v1; v2] -> V_int (Sail_lib.add_int (coerce_int v1, coerce_int v2))
   | _ -> failwith "value add"
 
-let value_sub = function
-  | [v1; v2] -> V_int (Sail_lib.sub (coerce_int v1, coerce_int v2))
+let value_sub_int = function
+  | [v1; v2] -> V_int (Sail_lib.sub_int (coerce_int v1, coerce_int v2))
   | _ -> failwith "value sub"
 
 let value_mult = function
@@ -378,7 +378,7 @@ let primops =
       ("print_endline", value_print);
       ("prerr_endline", value_print);
       ("putchar", value_putchar);
-      ("string_of_big_int", fun vs -> V_string (string_of_value (List.hd vs)));
+      ("string_of_int", fun vs -> V_string (string_of_value (List.hd vs)));
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
       ("print_bits", value_print_bits);
       ("print_int", value_print_int);
@@ -407,8 +407,8 @@ let primops =
       ("set_slice_int", value_set_slice_int);
       ("set_slice", value_set_slice);
       ("hex_slice", value_hex_slice);
-      ("add", value_add);
-      ("sub", value_sub);
+      ("add_int", value_add_int);
+      ("sub_int", value_sub_int);
       ("mult", value_mult);
       ("quotient", value_quotient);
       ("modulus", value_modulus);
