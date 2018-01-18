@@ -495,7 +495,7 @@ function clause execute (CIncOffsetImmediate(cd, cb, imm)) =
   (* START_CIncOffsetImmediate *)
   checkCP2usable();
   cb_val := readCapReg(cb);
-  let (bit[64]) imm64 = EXTZ(imm) in
+  let (bit[64]) imm64 = EXTS(imm) in
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then
