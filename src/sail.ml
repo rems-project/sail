@@ -59,12 +59,10 @@ let opt_print_initial_env = ref false
 let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
-let opt_print_sil = ref false
 let opt_print_ocaml = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
-let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_mono_split = ref ([]:((string * int) * string) list)
 
@@ -85,15 +83,9 @@ let options = Arg.align ([
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
-  ( "-ocaml_lib",
-    Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
-    "<filename> provide additional library to open in OCaml output");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
     " output a Lem AST representation of the input");
-  ( "-sil",
-    Arg.Tuple [Arg.Set opt_print_sil; Arg.Set Initial_check.opt_undefined_gen],
-    " output a SIL translated version of the input");
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
@@ -106,13 +98,23 @@ let options = Arg.align ([
   ( "-lem_mwords",
     Arg.Set Pretty_print_lem.opt_mwords,
     " use native machine word library for Lem output");
-  ( "-mono-split",
+  ( "-mono_split",
     Arg.String (fun s ->
       let l = Util.split_on_char ':' s in
       match l with
       | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
       | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
       "<filename>:<line>:<variable> to case split for monomorphisation");
+  (* AA: Should use _ to be consistent with other options, but I keep
+     this case to make sure nothing breaks immediately. *)
+  ( "-mono-split",
+    Arg.String (fun s ->
+      prerr_endline (("Warning" |> Util.yellow |> Util.clear) ^ ": use -mono_split instead");
+      let l = Util.split_on_char ':' s in
+      match l with
+      | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
+      | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
+    "<filename>:<line>:<variable> to case split for monomorphisation");
   ( "-memo_z3",
     Arg.Set opt_memo_z3,
     " memoize calls to z3, improving performance when typechecking repeatedly");
@@ -167,8 +169,8 @@ let options = Arg.align ([
 ] )
 
 let usage_msg =
-    ("Sail " (*^ "pre beta"*) ^ "\n"
-     ^ "usage:       sail <options> <file1.sail> .. <fileN.sail>\n"
+    ("Sail 2.0\n"
+     ^ "usage: sail <options> <file1.sail> ... <fileN.sail>\n"
     )
 
 let _ =
@@ -213,7 +215,7 @@ let load_files type_envs files =
 
 let main() =
   if !opt_print_version
-  then Printf.printf "Sail private release \n"
+  then Printf.printf "Sail 2.0\n"
   else
     let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
 
@@ -233,11 +235,6 @@ let main() =
        else ());
       (if !(opt_print_lem_ast)
        then output "" Lem_ast_out [out_name,ast]
-       else ());
-      (if !(opt_print_sil)
-       then
-         let ast = rewrite_ast_sil ast in
-         Pretty_print_sail.pp_defs stdout ast
        else ());
       (if !(opt_print_ocaml)
        then
