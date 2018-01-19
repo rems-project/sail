@@ -1,26 +1,30 @@
-(* Definitions for use with the -mono_rewrites option *)
+/* Definitions for use with the -mono_rewrites option */
 
-(* External definitions not in the usual asl prelude *)
+/* External definitions not in the usual asl prelude */
 
-val "shiftleft" : forall 'n 'o ('ord : Order).
-    (vector('o, 'n, 'ord, bit), int) -> vector('o, 'n, 'ord, bit) effect pure
+infix 6 <<
+
+val "shiftleft" : forall 'n ('ord : Order).
+    (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
 
 overload operator << = {shiftleft}
 
-val "shiftright" : forall 'n 'o ('ord : Order).
-    (vector('o, 'n, 'ord, bit), int) -> vector('o, 'n, 'ord, bit) effect pure
+infix 6 >>
+
+val "shiftright" : forall 'n ('ord : Order).
+    (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
 
 overload operator >> = {shiftright}
 
-val "extz" : forall 'n 'm 'o 'p. (atom('p),atom('m),vector('o, 'n, dec, bit)) -> vector('p, 'm, dec, bit) effect pure
-val extzv : forall 'n 'm 'o 'p. vector('o, 'n, dec, bit) -> vector('p, 'm, dec, bit) effect pure
-function extzv(v) = extz(sizeof('p), sizeof('m),v)
+val "extz" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val extzv : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
+function extzv(v) = extz(sizeof('m),v)
 
-val "exts" : forall 'n 'm 'o 'p. (atom('p),atom('m),vector('o, 'n, dec, bit)) -> vector('p, 'm, dec, bit) effect pure
-val extsv : forall 'n 'm 'o 'p. vector('o, 'n, dec, bit) -> vector('p, 'm, dec, bit) effect pure
-function extsv(v) = exts(sizeof('p), sizeof('m),v)
+val "exts" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val extsv : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
+function extsv(v) = exts(sizeof('m),v)
 
-(* Definitions for the rewrites *)
+/* Definitions for the rewrites */
 
 val slice_mask : forall 'n, 'n >= 0. (int, int) -> bits('n) effect pure
 function slice_mask(i,l) =
@@ -59,7 +63,7 @@ function slice_zeros_concat (xs, i, l, l') = {
   extzv(xs) << l'
 }
 
-(* Assumes initial vectors are of equal size *)
+/* Assumes initial vectors are of equal size */
 
 val subrange_subrange_eq : forall 'n, 'n >= 0.
   (bits('n), int, int, bits('n), int, int) -> bool effect pure
