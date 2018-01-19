@@ -3,3 +3,6 @@ S lem_interp/
 B _build/
 B _build/lem_interp/
 B pprint/src/_build
+PKG zarith
+PKG linksem
+PKG lem
