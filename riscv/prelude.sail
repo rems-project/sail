@@ -2,7 +2,7 @@ default Order dec
 
 /* type bits ('n : Int) = vector('n - 1, 'n, dec, bit) */
 type bits ('n : Int) = vector('n, dec, bit)
-
+union option ('a : Type) = {None, Some : 'a}
 infix 4 ==
 
 val eq_atom = "eq_int" : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -276,8 +276,9 @@ val cast ex_int : int -> {'n, true. atom('n)}
 
 function ex_int 'n = n
 
-val ex_range : forall 'n 'm.
-  range('n, 'm) -> {'o, 'n <= 'o & 'o <= 'm. atom('o)}
+val cast ex_range : forall 'n 'm. range('n, 'm) -> {'o, 'n <= 'o <= 'm. atom('o)}
+
+function ex_range (n as 'N) = n
 
 val coerce_int_nat : int -> nat effect {escape}
 
@@ -297,3 +298,19 @@ union exception = {
   Error_not_implemented : string,
   Error_misaligned_access,
 }
+
+val EXTS : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val EXTZ : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+
+infix 4 <_s
+infix 4 >=_s
+infix 4 <_u
+infix 4 >=_u
+
+function operator <_s  (x : bits('n), y : bits('n)) -> forall 'n. bool = signed(x) < signed(y)
+function operator >=_s (x : bits('n), y : bits('n)) -> forall 'n. bool = signed(x) >= signed(y)
+function operator <_u  (x : bits('n), y : bits('n)) -> forall 'n. bool = unsigned(x) < unsigned(y)
+function operator >=_u (x : bits('n), y : bits('n)) -> forall 'n. bool = unsigned(x) >= unsigned(y)
+
+val cast bool_to_bits : bool -> bits(1)
+function bool_to_bits x = if x then 0b1 else 0b0

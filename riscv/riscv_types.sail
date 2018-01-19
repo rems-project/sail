@@ -5,6 +5,9 @@ function not_implemented message = throw(Error_not_implemented(message))
 type regval = bits(64)
 
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
+type regbits = bits(5)
+val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. atom('n)}
+function regbits_to_regno n = unsigned(n)
 
 /* register x0 : regval is hard-wired zero */
 register x1 : regval
@@ -59,10 +62,13 @@ val rGPR : forall 'n, 0 <= 'n < 32. regno('n) -> regval effect {rreg}
 function rGPR 0 = 0x0000000000000000
 and rGPR (r if r > 0) = reg_deref(GPRs[r - 1])
 
-val wGPR : forall 'n, 1 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}
+/*val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}*/
+val wGPR : forall 'n . (atom('n), regval) -> unit effect {wreg, escape}
 
-function wGPR (r, v) =
+function wGPR (r, v) = {
+  assert(constraint('n >= 0 & 'n < 32));
   if (r != 0) then (*GPRs[r - 1]) = v else ()
+}
 
 function check_alignment (addr : bits(64), width : atom('n)) -> forall 'n. unit =
   if unsigned(addr) % width != 0 then throw(Error_misaligned_access) else ()
@@ -157,8 +163,6 @@ enum ropw = {RISCV_ADDW, RISCV_SUBW, RISCV_SLLW, RISCV_SRLW, RISCV_SRAW} /* reg-
 enum amoop = {AMOSWAP, AMOADD, AMOXOR, AMOAND, AMOOR, AMOMIN, AMOMAX, AMOMINU, AMOMAXU} /* AMO ops */
 
 enum word_width = {BYTE, HALF, WORD, DOUBLE}
-
-/********************************************************************/
 
 /* Ideally these would be sail builtin */
 
