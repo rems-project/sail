@@ -233,6 +233,7 @@ rule token = parse
   | "->"                                { MinusGt }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
+  | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
   | "*/"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
   | "infix" ws (digit as p) ws (operator as op)
@@ -269,6 +270,11 @@ rule token = parse
                                             Printf.sprintf "Unexpected character: %c" c,
                                             Lexing.lexeme_start_p lexbuf)) }
 
+
+and line_comment pos = parse
+  | "\n"                                { () }
+  | _                                   { line_comment pos lexbuf }
+  | eof                                 { raise (LexError("File ended before newline in comment", pos)) }
 
 and comment pos depth = parse
   | "/*"                                { comment pos (depth+1) lexbuf }

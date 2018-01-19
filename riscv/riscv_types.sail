@@ -8,7 +8,7 @@ type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
 
 val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
-function regbits_to_regno n = let 'N = unsigned(n) in N
+function regbits_to_regno b = let 'r = unsigned(b) in r
 
 /* register x0 : regval is hard-wired zero */
 register x1 : regval
@@ -64,12 +64,10 @@ function rGPR 0 = 0x0000000000000000
 and rGPR (r if r > 0) = reg_deref(GPRs[r - 1])
 
 /*val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}*/
-val wGPR : forall 'n . (atom('n), regval) -> unit effect {wreg, escape}
+val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}
 
-function wGPR (r, v) = {
-  assert(constraint('n >= 0 & 'n < 32));
-  if (r != 0) then (*GPRs[r - 1]) = v else ()
-}
+function wGPR (r, v) =
+  if (r != 0) then (*GPRs[r - 1]) = v
 
 function check_alignment (addr : bits(64), width : atom('n)) -> forall 'n. unit =
   if unsigned(addr) % width != 0 then throw(Error_misaligned_access) else ()
