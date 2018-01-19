@@ -6,8 +6,9 @@ type regval = bits(64)
 
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
-val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. atom('n)}
-function regbits_to_regno n = unsigned(n)
+
+val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
+function regbits_to_regno n = let 'N = unsigned(n) in N
 
 /* register x0 : regval is hard-wired zero */
 register x1 : regval
@@ -166,13 +167,10 @@ enum word_width = {BYTE, HALF, WORD, DOUBLE}
 
 /* Ideally these would be sail builtin */
 
-/*
-function (bit[64]) shift_right_arith64 ((bit[64]) v, (bit[6]) shift) =
-    let (bit[128]) v128 = EXTS(v) in
+function shift_right_arith64 (v : bits(64), shift : bits(6)) -> bits(64) =
+    let v128 : bits(128) = EXTS(v) in
     (v128 >> shift)[63..0]
 
-function (bit[32]) shift_right_arith32 ((bit[32]) v, (bit[5]) shift) =
-    let (bit[64]) v64 = EXTS(v) in
+function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
+    let v64 : bits(64) = EXTS(v) in
     (v64 >> shift)[31..0]
-
-*/

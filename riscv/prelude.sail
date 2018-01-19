@@ -276,9 +276,11 @@ val cast ex_int : int -> {'n, true. atom('n)}
 
 function ex_int 'n = n
 
+/*
 val cast ex_range : forall 'n 'm. range('n, 'm) -> {'o, 'n <= 'o <= 'm. atom('o)}
 
 function ex_range (n as 'N) = n
+*/
 
 val coerce_int_nat : int -> nat effect {escape}
 
@@ -297,6 +299,7 @@ val print_int = "print_int" : (string, int) -> unit
 union exception = {
   Error_not_implemented : string,
   Error_misaligned_access,
+  Error_EBREAK,
 }
 
 val EXTS : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
@@ -314,3 +317,15 @@ function operator >=_u (x : bits('n), y : bits('n)) -> forall 'n. bool = unsigne
 
 val cast bool_to_bits : bool -> bits(1)
 function bool_to_bits x = if x then 0b1 else 0b0
+
+val cast bit_to_bool : bit -> bool
+function bit_to_bool bitone  = true
+and      bit_to_bool bitzero = false
+
+infix 7 >>
+infix 7 <<
+
+val operator >> : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val operator << : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+
+val vector64 : int -> bits(64)

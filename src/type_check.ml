@@ -504,6 +504,7 @@ end = struct
     else typ_error (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
   let rec expand_synonyms env (Typ_aux (typ, l) as t) =
+    typ_debug ("Expanding synonyms for " ^ string_of_typ t);
     match typ with
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
     | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
@@ -523,7 +524,31 @@ end = struct
          with
          | Not_found -> Typ_aux (Typ_id id, l)
        end
-    | typ -> Typ_aux (typ, l)
+    | Typ_exist (kids, nc, typ) ->
+       (* When expanding an existential synonym we need to take care
+          to add the type variables and constraints to the
+          environment, so we can check constraints attached to type
+          synonyms within the existential. Furthermore, we must take
+          care to avoid clobbering any existing type variables in
+          scope while doing this. *)
+       let rebindings = ref [] in
+
+       let rename_kid kid = if KBindings.mem kid env.typ_vars then prepend_kid "syn#" kid else kid in
+       let add_typ_var env kid =
+         if KBindings.mem kid env.typ_vars then
+           (rebindings := kid :: !rebindings; { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) BK_nat env.typ_vars })
+         else
+           { env with typ_vars = KBindings.add kid BK_nat env.typ_vars }
+       in
+
+       let env = List.fold_left add_typ_var env kids in
+       let kids = List.map rename_kid kids in
+       let nc = List.fold_left (fun nc kid -> nc_subst_nexp kid (Nexp_var (prepend_kid "syn#" kid)) nc) nc !rebindings in
+       let typ = List.fold_left (fun typ kid -> typ_subst_nexp kid (Nexp_var (prepend_kid "syn#" kid)) typ) typ !rebindings in
+       typ_print ("Synonym existential: {" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}");
+       let env = { env with constraints = nc :: env.constraints } in
+       Typ_aux (Typ_exist (kids, nc, expand_synonyms env typ), l)
+    | Typ_var v -> Typ_aux (Typ_var v, l)
   and expand_synonyms_arg env (Typ_arg_aux (typ_arg, l)) =
     match typ_arg with
     | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (expand_synonyms env typ), l)
@@ -551,7 +576,8 @@ end = struct
     | Typ_app (id, _) -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_exist ([], _, _) -> typ_error l ("Existential must have some type variables")
     | Typ_exist (kids, nc, typ) when KidSet.is_empty exs ->
-       wf_constraint ~exs:(KidSet.of_list kids) env nc; wf_typ ~exs:(KidSet.of_list kids) env typ
+       wf_constraint ~exs:(KidSet.of_list kids) env nc;
+       wf_typ ~exs:(KidSet.of_list kids) { env with constraints = nc :: env.constraints } typ
     | Typ_exist (_, _, _) -> typ_error l ("Nested existentials are not allowed")
   and wf_typ_arg ?exs:(exs=KidSet.empty) env (Typ_arg_aux (typ_arg_aux, _)) =
     match typ_arg_aux with
@@ -625,10 +651,11 @@ end = struct
     with
     | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
 
-  let update_val_spec id bind env =
+  let update_val_spec id (typq, typ) env =
     begin
-      typ_print ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind bind);
-      { env with top_val_specs = Bindings.add id bind env.top_val_specs }
+      let typ = expand_synonyms env typ in
+      typ_print ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind (typq, typ));
+      { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
     end
 
   let add_val_spec id bind env =
@@ -1430,11 +1457,9 @@ let merge_unifiers l kid uvar1 uvar2 =
   | None, None -> None
 
 let rec unify l env typ1 typ2 =
-  let typ1 = Env.expand_synonyms env typ1 in
-  let typ2 = Env.expand_synonyms env typ2 in
-
   typ_print ("Unify " ^ string_of_typ typ1 ^ " with " ^ string_of_typ typ2);
   let goals = KidSet.inter (KidSet.diff (typ_frees typ1) (typ_frees typ2)) (typ_frees typ1) in
+
   let rec unify_typ l (Typ_aux (typ1_aux, _) as typ1) (Typ_aux (typ2_aux, _) as typ2) =
     typ_debug ("UNIFYING TYPES " ^ string_of_typ typ1 ^ " AND " ^ string_of_typ typ2);
     match typ1_aux, typ2_aux with
@@ -1499,6 +1524,7 @@ let rec unify l env typ1 typ2 =
     | Typ_arg_order ord1, Typ_arg_order ord2 -> unify_order l ord1 ord2
     | _, _ -> unify_error l (string_of_typ_arg typ_arg1 ^ " cannot be unified with type argument " ^ string_of_typ_arg typ_arg2)
   in
+
   match destruct_exist env typ2 with
   | Some (kids, nc, typ2) ->
      let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
@@ -1643,11 +1669,14 @@ let rec subtyp l env typ1 typ2 =
      let env = Env.add_constraint nc env in
      subtyp l env typ1 typ2
   | _, Some (kids, nc, typ2) ->
+     typ_debug "XXXXXXX";
      let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
+     typ_debug "YYYYYYY";
      let unifiers, existential_kids, existential_nc =
        try unify l env typ2 typ1 with
        | Unification_error (_, m) -> typ_error l m
      in
+     typ_debug "ZZZZZZZ";
      let nc = List.fold_left (fun nc (kid, uvar) -> nc_subst_uvar kid uvar nc) nc (KBindings.bindings unifiers) in
      let env = match existential_kids, existential_nc with
        | [], None -> env
