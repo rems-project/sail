@@ -341,7 +341,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
                                         List.concat insts, Typ_aux (Typ_tup tys,l)) (cross' tys) in
        (kidset_bigunion vars, insttys)
     | Typ_app (Id_aux (Id "vector",_),
-               [_;Typ_arg_aux (Typ_arg_nexp sz,_);
+               [Typ_arg_aux (Typ_arg_nexp sz,_);
                 _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (KidSet.of_list (size_nvars_nexp sz), [[],typ])
     | Typ_app (_, tas) ->
@@ -1312,7 +1312,7 @@ let split_defs continue_anyway splits defs =
               [L_zero; L_one]
          | _ -> cannot ("don't know about type " ^ string_of_id id))
 
-    | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+    | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
           let lits = make_vectors (Big_int.to_int sz) in
@@ -1706,7 +1706,7 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
   | Typ_exist (kids,_,typ) ->
      List.fold_left (fun s k -> KidSet.remove k s) (sizes_of_typ typ) kids
   | Typ_app (Id_aux (Id "vector",_),
-             [_;Typ_arg_aux (Typ_arg_nexp size,_);
+             [Typ_arg_aux (Typ_arg_nexp size,_);
               _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
      KidSet.of_list (size_nvars_nexp size)
   | Typ_app (_,tas) ->
