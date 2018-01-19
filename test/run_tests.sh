@@ -22,3 +22,9 @@ printf "* ARM spec tests                         *\n"
 printf "******************************************\n\n"
 
 ./test/arm/run_tests.sh
+
+printf "******************************************\n"
+printf "* RISCV spec tests                       *\n"
+printf "******************************************\n\n"
+
+./test/riscv/run_tests.sh

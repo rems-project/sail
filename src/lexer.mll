@@ -270,7 +270,6 @@ rule token = parse
                                             Printf.sprintf "Unexpected character: %c" c,
                                             Lexing.lexeme_start_p lexbuf)) }
 
-
 and line_comment pos = parse
   | "\n"                                { () }
   | _                                   { line_comment pos lexbuf }
