@@ -87,6 +87,8 @@ let mk_qi_id bk kid =
   in
   QI_aux (QI_id kopt, Parse_ast.Unknown)
 
+let mk_qi_kopt kopt =QI_aux (QI_id kopt, Parse_ast.Unknown)
+
 let mk_fundef funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
   let effect_opt = Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown) in
@@ -896,3 +898,30 @@ let construct_pexp (pat,guard,exp,ann) =
   match guard with
   | None -> Pat_aux (Pat_exp (pat,exp),ann)
   | Some guard -> Pat_aux (Pat_when (pat,guard,exp),ann)
+
+let is_valspec id = function
+  | DEF_spec (VS_aux (VS_val_spec (_, id', _, _), _)) when Id.compare id id' = 0 -> true
+  | _ -> false
+
+let is_fundef id = function
+  | DEF_fundef (FD_aux (FD_function (_, _, _, FCL_aux (FCL_Funcl (id', _), _) :: _), _)) when Id.compare id' id = 0 -> true
+  | _ -> false
+
+let rename_funcl id (FCL_aux (FCL_Funcl (_, pexp), annot)) = FCL_aux (FCL_Funcl (id, pexp), annot)
+
+let rename_fundef id (FD_aux (FD_function (ropt, topt, eopt, funcls), annot)) =
+  FD_aux (FD_function (ropt, topt, eopt, List.map (rename_funcl id) funcls), annot)
+
+let rec split_defs' f defs acc =
+  match defs with
+  | [] -> None
+  | def :: defs when f def -> Some (acc, def, defs)
+  | def :: defs -> split_defs' f defs (def :: acc)
+
+let split_defs f (Defs defs) =
+  match split_defs' f defs [] with
+  | None -> None
+  | Some (pre_defs, def, post_defs) ->
+     Some (Defs (List.rev pre_defs), def, Defs post_defs)
+
+let append_ast (Defs ast1) (Defs ast2) = Defs (ast1 @ ast2)

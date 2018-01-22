@@ -298,6 +298,10 @@ let string_of_bit = function
   | B0 -> "0"
   | B1 -> "1"
 
+let char_of_bit = function
+  | B0 -> '0'
+  | B1 -> '1'
+
 let string_of_hex = function
   | [B0; B0; B0; B0] -> "0"
   | [B0; B0; B0; B1] -> "1"

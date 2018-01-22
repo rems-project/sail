@@ -477,11 +477,12 @@ let doc_typdef (TD_aux(td,_)) = match td with
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | _ -> string "TYPEDEF"
 
+
 let doc_spec (VS_aux(v,_)) =
   let doc_extern ext =
     let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
       utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
-    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"]) in
+    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"; "smt"; "interpreter"]) in
     if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with

@@ -164,6 +164,8 @@ end
 (* Push all the type variables and constraints from a typquant into an environment *)
 val add_typquant : typquant -> Env.t -> Env.t
 
+val typ_frees : ?exs:KidSet.t -> typ -> KidSet.t
+
 (* When the typechecker creates new type variables it gives them fresh
    names of the form 'fvXXX#name, where XXX is a number (not
    necessarily three digits), and name is the original name when the
@@ -238,6 +240,8 @@ type uvar =
   | U_typ of typ
 
 val string_of_uvar : uvar -> string
+
+val subst_unifiers : uvar KBindings.t -> typ -> typ
 
 val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option
 

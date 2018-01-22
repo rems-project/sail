@@ -186,7 +186,6 @@ let help = function
   | cmd ->
      "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
 
-let append_ast (Defs ast1) (Defs ast2) = Defs (ast1 @ ast2)
 
 type input = Command of string * string | Expression of string | Empty
 
@@ -259,13 +258,16 @@ let handle_input' input =
             in
             let ids = Specialize.polymorphic_functions is_kopt !interactive_ast in
             List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements ids)
-         | ":ins" ->
-            let id = mk_id arg in
-            let instantiations = Specialize.instantiations_of id !interactive_ast in
-            let print_instantiation i =
-              print_endline (Util.string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ Type_check.string_of_uvar uvar) (KBindings.bindings i))
-            in
-            List.iter print_instantiation instantiations
+         | ":spec" ->
+            let ast, env = Specialize.specialize !interactive_ast !interactive_env in
+            interactive_ast := ast;
+            interactive_env := env;
+            interactive_state := initial_state !interactive_ast
+
+         | ":ast" ->
+            let chan = open_out arg in
+            Pretty_print_sail.pp_defs chan !interactive_ast;
+            close_out chan
          | ":output" ->
             let chan = open_out arg in
             Value.output_redirect chan

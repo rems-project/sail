@@ -71,6 +71,7 @@ val mk_typschm : typquant -> typ -> typschm
 val mk_typquant : quant_item list -> typquant
 val mk_qi_id : base_kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
+val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
 val mk_fexps : (unit fexp) list -> unit fexps
 val mk_letbind : unit pat -> unit exp -> unit letbind
@@ -280,3 +281,13 @@ val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
 
 val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
 val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp
+
+val is_valspec : id -> 'a def -> bool
+
+val is_fundef : id -> 'a def -> bool
+
+val rename_fundef : id -> 'a fundef -> 'a fundef
+
+val split_defs : ('a def -> bool) -> 'a defs -> ('a defs * 'a def * 'a defs) option
+
+val append_ast : 'a defs -> 'a defs -> 'a defs

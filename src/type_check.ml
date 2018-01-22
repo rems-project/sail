@@ -567,7 +567,7 @@ end = struct
        else ()
     | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_var kid when KBindings.mem kid env.typ_vars -> ()
-    | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid)
+    | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
     | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
     | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
     | Typ_app (id, args) when bound_typ_id env id ->
@@ -3483,7 +3483,8 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
    the difference is irrelevant for the typechecker. *)
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ, env) = match vs with
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, ext_opt, is_cast) ->
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _) as typschm, id, ext_opt, is_cast) ->
+       typ_debug ("VS typschm: " ^ string_of_id id ^ ", " ^ string_of_typschm typschm);
        let env = match ext_opt "smt" with Some op -> Env.add_smt_op id op env | None -> env in
        Env.wf_typ (add_typquant quants env) typ;
        typ_debug "CHECKED WELL-FORMED VAL SPEC";
