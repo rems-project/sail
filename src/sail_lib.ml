@@ -255,6 +255,11 @@ let get_slice_int (n, m, o) =
   assert (Big_int.equal (Big_int.of_int (List.length slice)) n);
   slice
 
+let bin_char = function
+  | '0' -> B0
+  | '1' -> B1
+  | _ -> failwith "Invalid binary character"
+
 let hex_char = function
   | '0' -> [B0; B0; B0; B0]
   | '1' -> [B0; B0; B0; B1]
@@ -479,8 +484,24 @@ let rec string_of_list sep string_of = function
   | [x] -> string_of x
   | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
 
+let skip () = ()
+
 let zero_extend (vec, n) =
   let m = Big_int.to_int n in
   if m <= List.length vec
   then take m vec
   else replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
+
+
+let sign_extend (vec, n) =
+  let m = Big_int.to_int n in
+  match vec with
+  | B0 :: _ as vec -> replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
+  | [] -> replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
+  | B1 :: _ as vec -> replicate_bits ([B1], Big_int.of_int (m - List.length vec)) @ vec
+
+(* FIXME *)
+let shift_bits_right (x, y) = x
+let shift_bits_left (x, y) = x
+
+let speculate_conditional_success () = true

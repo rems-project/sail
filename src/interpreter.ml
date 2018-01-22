@@ -105,6 +105,10 @@ let value_of_lit (L_aux (l_aux, _)) =
      |> List.map (fun c -> List.map (fun b -> V_bit b) (Sail_lib.hex_char c))
      |> List.concat
      |> (fun v -> V_vector v)
+  | L_bin str ->
+     Util.string_to_list str
+     |> List.map (fun c -> V_bit (Sail_lib.bin_char c))
+     |> (fun v -> V_vector v)
   | _ -> failwith "Unimplemented value_of_lit" (* TODO *)
 
 let is_value = function

@@ -61,5 +61,5 @@ fi
 
 finish_suite "RISCV tests"
 
-prinf "</testsuites>\n" >> $DIR/tests.xml
+printf "</testsuites>\n" >> $DIR/tests.xml
 

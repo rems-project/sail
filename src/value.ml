@@ -328,6 +328,14 @@ let rec string_of_value = function
   | V_record record ->
      "{" ^ Util.string_of_list ", " (fun (field, v) -> field ^ "=" ^ string_of_value v) (StringMap.bindings record) ^ "}"
 
+let value_sign_extend = function
+  | [v1; v2] -> mk_vector (Sail_lib.sign_extend (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value sign_extend"
+
+let value_zero_extend = function
+  | [v1; v2] -> mk_vector (Sail_lib.zero_extend (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value zero_extend"
+
 let eq_value v1 v2 = string_of_value v1 = string_of_value v2
 
 let value_eq_anything = function
@@ -407,6 +415,8 @@ let primops =
       ("set_slice_int", value_set_slice_int);
       ("set_slice", value_set_slice);
       ("hex_slice", value_hex_slice);
+      ("zero_extend", value_zero_extend);
+      ("sign_extend", value_sign_extend);
       ("add_int", value_add_int);
       ("sub_int", value_sub_int);
       ("mult", value_mult);

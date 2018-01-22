@@ -142,10 +142,10 @@ val real_power = "real_power" : (real, int) -> real
 
 overload operator ^ = {xor_vec, int_power, real_power}
 
-val add_range = "add" : forall 'n 'm 'o 'p.
+val add_range = "add_int" : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val add_int = "add" : (int, int) -> int
+val add_int = "add_int" : (int, int) -> int
 
 val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -155,10 +155,10 @@ val add_real = "add_real" : (real, real) -> real
 
 overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
 
-val sub_range = "sub" : forall 'n 'm 'o 'p.
+val sub_range = "sub_int" : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
-val sub_int = "sub" : (int, int) -> int
+val sub_int = "sub_int" : (int, int) -> int
 
 val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -256,13 +256,19 @@ overload min = {min_nat, min_int}
 overload max = {max_nat, max_int}
 
 val __WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit
+  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
+
+val __RISCV_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+function __RISCV_write (addr, width, data) = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
 
 val __TraceMemoryWrite : forall 'n 'm.
   (atom('n), bits('m), bits(8 * 'n)) -> unit
 
 val __ReadRAM = "read_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n)
+  (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
+
+val __RISCV_read : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+function __RISCV_read (addr, width) = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr)
 
 val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
 
@@ -302,8 +308,14 @@ union exception = {
   Error_EBREAK,
 }
 
+val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+
 val EXTS : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 val EXTZ : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+
+function EXTS v = sign_extend(v, sizeof('m))
+function EXTZ v = zero_extend(v, sizeof('m))
 
 infix 4 <_s
 infix 4 >=_s
@@ -325,7 +337,9 @@ and      bit_to_bool bitzero = false
 infix 7 >>
 infix 7 <<
 
-val operator >> : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
-val operator << : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val operator >> = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
 
 val vector64 : int -> bits(64)
+
+function vector64 n = __raw_GetSlice_int(64, n, 0)

@@ -72,12 +72,19 @@ function wGPR (r, v) =
 function check_alignment (addr : bits(64), width : atom('n)) -> forall 'n. unit =
   if unsigned(addr) % width != 0 then throw(Error_misaligned_access) else ()
 
-val "MEMr"                         : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val "MEMr_acquire"                 : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val "MEMr_strong_acquire"          : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val "MEMr_reserved"                : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val "MEMr_reserved_acquire"        : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val "MEMr_reserved_strong_acquire" : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr                         : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_acquire                 : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_strong_acquire          : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_reserved                : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_reserved_acquire        : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_reserved_strong_acquire : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+
+function MEMr                         (addr, width) = __RISCV_read(addr, width)
+function MEMr_acquire                 (addr, width) = __RISCV_read(addr, width)
+function MEMr_strong_acquire          (addr, width) = __RISCV_read(addr, width)
+function MEMr_reserved                (addr, width) = __RISCV_read(addr, width)
+function MEMr_reserved_acquire        (addr, width) = __RISCV_read(addr, width)
+function MEMr_reserved_strong_acquire (addr, width) = __RISCV_read(addr, width)
 
 val mem_read : forall 'n. (bits(64), atom('n), bool, bool, bool) -> bits(8 * 'n) effect {rmem, escape}
 
@@ -96,12 +103,21 @@ function mem_read (addr, width, aq, rl, res) = {
   }
 }
 
-val "MEMea"                            : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val "MEMea_release"                    : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val "MEMea_strong_release"             : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val "MEMea_conditional"                : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val "MEMea_conditional_release"        : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val "MEMea_conditional_strong_release" : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea                            : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_release                    : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_strong_release             : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_conditional                : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_conditional_release        : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_conditional_strong_release : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
+
+val eamem_effect = "skip" : unit -> unit effect {eamem}
+
+function MEMea                            _ = { eamem_effect(); () }
+function MEMea_release                    _ = { eamem_effect(); () }
+function MEMea_strong_release             _ = { eamem_effect(); () }
+function MEMea_conditional                _ = { eamem_effect(); () }
+function MEMea_conditional_release        _ = { eamem_effect(); () }
+function MEMea_conditional_strong_release _ = { eamem_effect(); () }
 
 val mem_write_ea : forall 'n. (bits(64), atom('n), bool, bool, bool) -> unit effect {eamem, escape}
 
@@ -120,12 +136,19 @@ function mem_write_ea (addr, width, aq, rl, con) = {
   }
 }
 
-val "MEMval"                            : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val "MEMval_release"                    : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val "MEMval_strong_release"             : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val "MEMval_conditional"                : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val "MEMval_conditional_release"        : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val "MEMval_conditional_strong_release" : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval                            : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_release                    : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_strong_release             : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_conditional                : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_conditional_release        : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_conditional_strong_release : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+
+function MEMval                            (addr, width, data) = __RISCV_write(addr, width, data)
+function MEMval_release                    (addr, width, data) = __RISCV_write(addr, width, data)
+function MEMval_strong_release             (addr, width, data) = __RISCV_write(addr, width, data)
+function MEMval_conditional                (addr, width, data) = __RISCV_write(addr, width, data)
+function MEMval_conditional_release        (addr, width, data) = __RISCV_write(addr, width, data)
+function MEMval_conditional_strong_release (addr, width, data) = __RISCV_write(addr, width, data)
 
 val mem_write_value : forall 'n. (bits(64), atom('n), bits(8 * 'n), bool, bool, bool) -> unit effect {wmv, escape}
 
@@ -146,12 +169,12 @@ function mem_write_value (addr, width, value, aq, rl, con) = {
 
 val "speculate_conditional_success" : unit -> bool effect {exmem}
 
-val "MEM_fence_rw_rw" : unit -> unit effect {barr}
-val "MEM_fence_r_rw"  : unit -> unit effect {barr}
-val "MEM_fence_r_r"   : unit -> unit effect {barr}
-val "MEM_fence_rw_w"  : unit -> unit effect {barr}
-val "MEM_fence_w_w"   : unit -> unit effect {barr}
-val "MEM_fence_i"     : unit -> unit effect {barr}
+val MEM_fence_rw_rw = "skip" : unit -> unit effect {barr}
+val MEM_fence_r_rw  = "skip" : unit -> unit effect {barr}
+val MEM_fence_r_r   = "skip" : unit -> unit effect {barr}
+val MEM_fence_rw_w  = "skip" : unit -> unit effect {barr}
+val MEM_fence_w_w   = "skip" : unit -> unit effect {barr}
+val MEM_fence_i     = "skip" : unit -> unit effect {barr}
 
 enum uop = {RISCV_LUI, RISCV_AUIPC} /* upper immediate ops */
 enum bop = {RISCV_BEQ, RISCV_BNE, RISCV_BLT, RISCV_BGE, RISCV_BLTU, RISCV_BGEU} /* branch ops */
