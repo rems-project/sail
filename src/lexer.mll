@@ -271,7 +271,7 @@ rule token = parse
                                             Lexing.lexeme_start_p lexbuf)) }
 
 and line_comment pos = parse
-  | "\n"                                { () }
+  | "\n"                                { Lexing.new_line lexbuf; () }
   | _                                   { line_comment pos lexbuf }
   | eof                                 { raise (LexError("File ended before newline in comment", pos)) }
 
