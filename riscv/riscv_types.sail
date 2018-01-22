@@ -103,21 +103,18 @@ function mem_read (addr, width, aq, rl, res) = {
   }
 }
 
-val MEMea                            : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_release                    : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_strong_release             : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_conditional                : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_conditional_release        : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_conditional_strong_release : forall 'n. (bits(64), atom('n)) -> unit effect {eamem}
-
-val eamem_effect = "skip" : unit -> unit effect {eamem}
-
-function MEMea                            _ = { eamem_effect(); () }
-function MEMea_release                    _ = { eamem_effect(); () }
-function MEMea_strong_release             _ = { eamem_effect(); () }
-function MEMea_conditional                _ = { eamem_effect(); () }
-function MEMea_conditional_release        _ = { eamem_effect(); () }
-function MEMea_conditional_strong_release _ = { eamem_effect(); () }
+val MEMea = {ocaml: "skip", lem: "MEMea"} : forall 'n.
+  (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_release = {ocaml: "skip", lem: "MEMea_release"} : forall 'n.
+  (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_strong_release = {ocaml: "skip", lem: "MEMea_strong_release"} : forall 'n.
+  (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_conditional = {ocaml: "skip", lem: "MEMea_conditional"} : forall 'n.
+  (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_conditional_release = {ocaml: "skip", lem: "MEMea_conditional_release"} : forall 'n.
+  (bits(64), atom('n)) -> unit effect {eamem}
+val MEMea_conditional_strong_release = {ocaml: "skip", lem: "MEMea_conditional_strong_release"} : forall 'n.
+  (bits(64), atom('n)) -> unit effect {eamem}
 
 val mem_write_ea : forall 'n. (bits(64), atom('n), bool, bool, bool) -> unit effect {eamem, escape}
 
@@ -169,12 +166,12 @@ function mem_write_value (addr, width, value, aq, rl, con) = {
 
 val "speculate_conditional_success" : unit -> bool effect {exmem}
 
-val MEM_fence_rw_rw = "skip" : unit -> unit effect {barr}
-val MEM_fence_r_rw  = "skip" : unit -> unit effect {barr}
-val MEM_fence_r_r   = "skip" : unit -> unit effect {barr}
-val MEM_fence_rw_w  = "skip" : unit -> unit effect {barr}
-val MEM_fence_w_w   = "skip" : unit -> unit effect {barr}
-val MEM_fence_i     = "skip" : unit -> unit effect {barr}
+val MEM_fence_rw_rw = {ocaml: "skip", lem: "MEM_fence_rw_rw"} : unit -> unit effect {barr}
+val MEM_fence_r_rw  = {ocaml: "skip", lem: "MEM_fence_r_rw"}  : unit -> unit effect {barr}
+val MEM_fence_r_r   = {ocaml: "skip", lem: "MEM_fence_r_r"}   : unit -> unit effect {barr}
+val MEM_fence_rw_w  = {ocaml: "skip", lem: "MEM_fence_rw_w"}  : unit -> unit effect {barr}
+val MEM_fence_w_w   = {ocaml: "skip", lem: "MEM_fence_w_w"}   : unit -> unit effect {barr}
+val MEM_fence_i     = {ocaml: "skip", lem: "MEM_fence_i"}     : unit -> unit effect {barr}
 
 enum uop = {RISCV_LUI, RISCV_AUIPC} /* upper immediate ops */
 enum bop = {RISCV_BEQ, RISCV_BNE, RISCV_BLT, RISCV_BGE, RISCV_BLTU, RISCV_BGEU} /* branch ops */

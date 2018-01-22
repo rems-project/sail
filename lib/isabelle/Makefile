@@ -1,4 +1,4 @@
-THYS = Sail_impl_base.thy Sail_values.thy Sail_operators.thy Sail_operators_mwords.thy State.thy Prompt.thy
+THYS = Sail_impl_base.thy Sail_values.thy Sail_operators.thy State.thy Prompt.thy
 
 .PHONY: all heap-img clean
 

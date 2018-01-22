@@ -1,0 +1,43 @@
+open import Pervasives
+open import Pervasives_extra
+open import Sail_impl_base
+open import Sail_values
+open import Sail_operators
+open import State
+
+let MEM_fence_rw_rw () = barrier Barrier_RISCV_rw_rw
+let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw
+let MEM_fence_r_r   () = barrier Barrier_RISCV_r_r
+let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
+let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
+let MEM_fence_i     () = barrier Barrier_RISCV_i
+
+let MEMea addr size                      = write_mem_ea Write_plain addr size
+let MEMea_release addr size              = write_mem_ea Write_RISCV_release addr size
+let MEMea_strong_release addr size       = write_mem_ea Write_RISCV_strong_release addr size
+let MEMea_conditional addr size          = write_mem_ea Write_RISCV_conditional addr size
+let MEMea_conditional_release addr size  = write_mem_ea Write_RISCV_conditional_release addr size
+let MEMea_conditional_strong_release addr size
+                                          = write_mem_ea Write_RISCV_conditional_strong_release addr size
+
+let write_ram addrsize size hexRAM address value =
+  write_mem_ea Write_plain address size >>
+  write_mem_val value >>= fun _ ->
+  return ()
+
+let read_ram addrsize size hexRAM address =
+  read_mem Read_plain address size
+
+let speculate_conditional_success () = excl_result ()
+
+let get_slice_int len n lo =
+  (* TODO: Is this the intended behaviour? *)
+  let hi = lo + len - 1 in
+  let bits = bits_of_int (hi + 1) n in
+  of_bits (get_bits false bits hi lo)
+
+let sign_extend v len = exts_vec len v
+let zero_extend v len = extz_vec len v
+
+let shift_bits_right v m = shiftr v (unsigned m)
+let shift_bits_left v m = shiftl v (unsigned m)

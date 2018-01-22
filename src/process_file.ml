@@ -142,7 +142,7 @@ let output_lem filename libs defs =
   let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in
   let types_module = (filename ^ "_embed_types" ^ seq_suffix) in
   let monad_module = if !Pretty_print_lem.opt_sequential then "State" else "Prompt" in
-  let operators_module = if !Pretty_print_lem.opt_mwords then "Sail_operators_mwords" else "Sail_operators" in
+  let operators_module = "Sail_operators" (* if !Pretty_print_lem.opt_mwords then "Sail_operators_mwords" else "Sail_operators" *) in
   let libs = List.map (fun lib -> lib ^ seq_suffix) libs in
   let base_imports = [
       "Pervasives_extra";

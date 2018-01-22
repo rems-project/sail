@@ -86,12 +86,12 @@ let try_catchR m h =
      end)
 
 
-val read_mem : forall 'a 'b 'e. Bitvector 'a, Bitvector 'b => bool -> read_kind -> 'a -> integer -> M 'b 'e
-let read_mem dir rk addr sz =
+val read_mem : forall 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> M 'b 'e
+let read_mem rk addr sz =
   let addr = address_lifted_of_bitv (bits_of addr) in
   let sz = natFromInteger sz in
   let k memory_value =
-    let bitv = of_bits (internal_mem_value dir memory_value) in
+    let bitv = of_bits (internal_mem_value memory_value) in
     (Done bitv,Nothing) in
   Read_mem (rk,addr,sz) k
 

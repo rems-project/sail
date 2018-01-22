@@ -81,7 +81,7 @@ let fresh_id_pat pre ((l,annot)) =
 
 let get_loc_exp (E_aux (_,(l,_))) = l
 
-let gen_vs (id, spec) = Initial_check.val_spec_of_string dec_ord (mk_id id) spec
+let gen_vs (id, spec) = Initial_check.extern_of_string dec_ord (mk_id id) spec
 
 let annot_exp_effect e_aux l env typ effect = E_aux (e_aux, (l, Some (env, typ, effect)))
 let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ no_effect
@@ -1407,29 +1407,27 @@ let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match annot with
   | Some (_, _, eff) -> effectful_effs eff
   | _ -> false
 
-let rec rewrite_lexp_to_rhs (do_rewrite : tannot lexp -> bool) ((LEXP_aux(lexp,((l,_) as annot))) as le) =
-  if do_rewrite le then
-    match lexp with
-    | LEXP_id _ | LEXP_cast (_, _) | LEXP_tup _ | LEXP_deref _ -> (le, (fun exp -> exp))
-    | LEXP_vector (lexp, e) ->
-       let (lhs, rhs) = rewrite_lexp_to_rhs do_rewrite lexp in
-       (lhs, (fun exp -> rhs (E_aux (E_vector_update (lexp_to_exp lexp, e, exp), annot))))
-    | LEXP_vector_range (lexp, e1, e2) ->
-       let (lhs, rhs) = rewrite_lexp_to_rhs do_rewrite lexp in
-       (lhs, (fun exp -> rhs (E_aux (E_vector_update_subrange (lexp_to_exp lexp, e1, e2, exp), annot))))
-    | LEXP_field (lexp, id) ->
-       begin
-         let (lhs, rhs) = rewrite_lexp_to_rhs do_rewrite lexp in
-         let (LEXP_aux (_, lannot)) = lexp in
-         let env = env_of_annot lannot in
-         match Env.expand_synonyms env (typ_of_annot lannot) with
-         | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
-            let field_update exp = FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), annot)], false), annot) in
-            (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, field_update exp), lannot))))
-         | _ -> raise (Reporting_basic.err_unreachable l ("Unsupported lexp: " ^ string_of_lexp le))
-       end
-    | _ -> raise (Reporting_basic.err_unreachable l ("Unsupported lexp: " ^ string_of_lexp le))
-  else (le, (fun exp -> exp))
+let rec rewrite_lexp_to_rhs ((LEXP_aux(lexp,((l,_) as annot))) as le) =
+  match lexp with
+  | LEXP_id _ | LEXP_cast (_, _) | LEXP_tup _ | LEXP_deref _ -> (le, (fun exp -> exp))
+  | LEXP_vector (lexp, e) ->
+     let (lhs, rhs) = rewrite_lexp_to_rhs lexp in
+     (lhs, (fun exp -> rhs (E_aux (E_vector_update (lexp_to_exp lexp, e, exp), annot))))
+  | LEXP_vector_range (lexp, e1, e2) ->
+     let (lhs, rhs) = rewrite_lexp_to_rhs lexp in
+     (lhs, (fun exp -> rhs (E_aux (E_vector_update_subrange (lexp_to_exp lexp, e1, e2, exp), annot))))
+  | LEXP_field (lexp, id) ->
+     begin
+       let (lhs, rhs) = rewrite_lexp_to_rhs lexp in
+       let (LEXP_aux (_, lannot)) = lexp in
+       let env = env_of_annot lannot in
+       match Env.expand_synonyms env (typ_of_annot lannot) with
+       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          let field_update exp = FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), annot)], false), annot) in
+          (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, field_update exp), lannot))))
+       | _ -> raise (Reporting_basic.err_unreachable l ("Unsupported lexp: " ^ string_of_lexp le))
+     end
+  | _ -> raise (Reporting_basic.err_unreachable l ("Unsupported lexp: " ^ string_of_lexp le))
 
 let updates_vars exp =
   let e_assign ((_, lexp), (u, exp)) =
@@ -1452,7 +1450,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
       | [] -> []
       | (E_aux(E_assign(le,e), ((l, Some (env,typ,eff)) as annot)) as exp)::exps
         when lexp_is_local_intro le env && not (lexp_is_effectful le) ->
-        let (le', re') = rewrite_lexp_to_rhs (fun _ -> true) le in
+        let (le', re') = rewrite_lexp_to_rhs le in
         let e' = re' (rewrite_base e) in
         let exps' = walker exps in
         let effects = union_eff_exps exps' in
@@ -1506,7 +1504,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
       (E_aux (E_block (List.map strip_exp (walker exps)), (l, ()))) (typ_of full_exp)
   | E_assign(le,e)
     when lexp_is_local_intro le (env_of full_exp) && not (lexp_is_effectful le) ->
-    let (le', re') = rewrite_lexp_to_rhs (fun _ -> true) le in
+    let (le', re') = rewrite_lexp_to_rhs le in
     let e' = re' (rewrite_base e) in
     let block = annot_exp (E_block []) l (env_of full_exp) unit_typ in
     check_exp (env_of full_exp)
@@ -1551,7 +1549,7 @@ let rewrite_register_ref_writes (Defs defs) =
       if is_reftyp (typ_of exp) then Some exp else None
     with | _ -> None in
   let e_assign (lexp, exp) =
-    let (lhs, rhs) = rewrite_lexp_to_rhs (fun le -> lexp_ref_exp le = None) lexp in
+    let (lhs, rhs) = rewrite_lexp_to_rhs lexp in
     match lexp_ref_exp lhs with
     | Some (E_aux (_, annot) as lhs_exp) ->
        let lhs = LEXP_aux (LEXP_memory (mk_id "write_reg_ref", [lhs_exp]), annot) in
@@ -2113,7 +2111,7 @@ let rewrite_simple_assignments defs =
     let env = env_of_annot annot in
     match e_aux with
     | E_assign (lexp, exp) ->
-       let (lexp, rhs) = rewrite_lexp_to_rhs (fun _ -> true) lexp in
+       let (lexp, rhs) = rewrite_lexp_to_rhs lexp in
        let assign = mk_exp (E_assign (strip_lexp lexp, strip_exp (rhs exp))) in
        check_exp env assign unit_typ
     | _ -> E_aux (e_aux, annot)
@@ -2470,7 +2468,7 @@ let rewrite_defs_internal_lets =
       E_aux (E_assign ((LEXP_aux (_, annot) as le), exp), (l, _))), _)
       when lexp_is_local le (env_of_annot annot) && not (lexp_is_effectful le) ->
        (* Rewrite assignments to local variables into let bindings *)
-       let (lhs, rhs) = rewrite_lexp_to_rhs (fun _ -> true) le in
+       let (lhs, rhs) = rewrite_lexp_to_rhs le in
        let (LEXP_aux (_, lannot)) = lhs in
        let ltyp = typ_of_annot lannot in
        let rhs = annot_exp (E_cast (ltyp, rhs exp)) l (env_of_annot lannot) ltyp in
@@ -2957,13 +2955,14 @@ let recheck_defs defs = fst (check initial_env defs)
 let rewrite_defs_lem = [
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
-  (* ("simple_assignments", rewrite_simple_assignments); *)
+  ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
-  ("register_ref_writes", rewrite_register_ref_writes);
+  (* ("register_ref_writes", rewrite_register_ref_writes); *)
+  ("fix_val_specs", rewrite_fix_val_specs);
   ("recheck_defs", recheck_defs);
   (* ("constraint", rewrite_constraint); *)
   (* ("remove_assert", rewrite_defs_remove_assert); *)

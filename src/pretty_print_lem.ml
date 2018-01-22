@@ -209,7 +209,6 @@ let rec lem_nexps_of_typ (Typ_aux (t,_)) =
      List.fold_left (fun s t -> NexpSet.union s (trec t))
        NexpSet.empty ts
   | Typ_app(Id_aux (Id "vector", _), [
-    Typ_arg_aux (Typ_arg_nexp n, _);
     Typ_arg_aux (Typ_arg_nexp m, _);
     Typ_arg_aux (Typ_arg_order ord, _);
     Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
@@ -266,19 +265,18 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | _ -> app_typ atyp_needed ty
     and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_app(Id_aux (Id "vector", _), [
-          Typ_arg_aux (Typ_arg_nexp n, _);
           Typ_arg_aux (Typ_arg_nexp m, _);
           Typ_arg_aux (Typ_arg_order ord, _);
           Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when !opt_mwords ->
-             string "bitvector " ^^ doc_nexp_lem (nexp_simp m)
+             string "mword " ^^ doc_nexp_lem (nexp_simp m)
              (* (match nexp_simp m with
                | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
                | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
                | _ -> raise (Reporting_basic.err_unreachable l
                  "cannot pretty-print bitvector type with non-constant length")) *)
-           | _ -> string "vector" ^^ space ^^ typ elem_typ in
+           | _ -> string "list" ^^ space ^^ typ elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
          (* TODO: Better distinguish register names and contents? *)
@@ -341,11 +339,11 @@ let rec contains_t_pp_var ctxt (Typ_aux (t,a) as typ) = match t with
   | Typ_app (c,targs) ->
       if Ast_util.is_number typ then false
       else if is_bitvector_typ typ then
-        let (_,length,_,_) = vector_typ_args_of typ in
-        let length = nexp_simp length in
-        not (is_nexp_constant length ||
-               (!opt_mwords &&
-                 match length with Nexp_aux (Nexp_var _,_) -> true | _ -> false))
+        if !opt_mwords then
+          let (_,length,_,_) = vector_typ_args_of typ in
+          let length = nexp_simp length in
+          not (is_nexp_constant length || NexpSet.mem length ctxt.bound_nexps)
+        else false
       else List.exists (contains_t_arg_pp_var ctxt) targs
 and contains_t_arg_pp_var ctxt (Typ_arg_aux (targ, _)) = match targ with
   | Typ_arg_typ t -> contains_t_pp_var ctxt t
@@ -393,7 +391,8 @@ let doc_lit_lem (L_aux(lit,l)) =
     | _ ->
       raise (Reporting_basic.Fatal_error
         (Reporting_basic.Err_syntax_locn (l, "could not parse real literal"))) in
-    separate space (List.map string ["realFromFrac"; Big_int.to_string num; Big_int.to_string denom])
+    parens (separate space (List.map string [
+      "realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
 
 (* typ_doc is the doc for the type being quantified *)
 let doc_quant_item vars_included (QI_aux (qi, _)) = match qi with
@@ -429,7 +428,7 @@ let rec typeclass_nexps (Typ_aux(t,_)) =
     | Typ_fn (t1,t2,_) -> NexpSet.union (typeclass_nexps t1) (typeclass_nexps t2)
     | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
     | Typ_app (Id_aux (Id "vector",_),
-               [_;Typ_arg_aux (Typ_arg_nexp size_nexp,_);
+               [Typ_arg_aux (Typ_arg_nexp size_nexp,_);
                 _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
     | Typ_app (Id_aux (Id "itself",_),
                [Typ_arg_aux (Typ_arg_nexp size_nexp,_)]) ->
@@ -489,9 +488,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
     if contains_t_pp_var ctxt typ then doc_p
     else parens (doc_op colon doc_p (doc_typ_lem typ))
   | P_vector pats ->
-     let ppp =
-       (separate space)
-         [string "Vector";brackets (separate_map semi (doc_pat_lem ctxt true) pats);underscore;underscore] in
+     let ppp = brackets (separate_map semi (doc_pat_lem ctxt true) pats) in
      if apat_needed then parens ppp else ppp
   | P_vector_concat pats ->
      raise (Reporting_basic.err_unreachable l
@@ -598,6 +595,8 @@ let doc_exp_lem, doc_let_lem =
              (string "write_reg_field")
              (doc_lexp_deref_lem ctxt le ^^ space ^^
                 field_ref ^/^ expY e))
+        | LEXP_deref re ->
+           liftR ((prefix 2 1) (string "write_reg") (expY re ^/^ expY e))
         | _ ->
            liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref_lem ctxt le ^/^ expY e)))
     | E_vector_append(le,re) ->
@@ -605,15 +604,19 @@ let doc_exp_lem, doc_let_lem =
         "E_vector_append should have been rewritten before pretty-printing")
     | E_cons(le,re) -> doc_op (group (colon^^colon)) (expY le) (expY re)
     | E_if(c,t,e) ->
-       let (E_aux (_,(_,cannot))) = c in
+       let indent = match e with
+         | E_aux (E_if _, _) -> 0
+         | _ -> 2 in
        let epp =
          separate space [string "if";group (expY c)] ^^
            break 1 ^^
              (prefix 2 1 (string "then") (expN t)) ^^ (break 1) ^^
-               (prefix 2 1 (string "else") (expN e)) in
+               (prefix indent 1 (string "else") (expN e)) in
        if aexp_needed then parens (align epp) else epp
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
-       raise (report l "E_for should have been removed till now")
+       raise (report l "E_for should have been rewritten before pretty-printing")
+    | E_loop _ ->
+       raise (report l "E_loop should have been rewritten before pretty-printing")
     | E_let(leb,e) ->
        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
        if aexp_needed then parens epp else epp
@@ -698,18 +701,12 @@ let doc_exp_lem, doc_let_lem =
                | Some (env, _, _) when Env.is_extern f env "lem" ->
                  string (Env.get_extern f env "lem"), true
                | _ -> doc_id_lem f, false in
-             let argspp =
-               (* TODO Update Sail library functions to not use tupled arguments,
-                  then remove the special case here *)
-               if is_extern then
-                 parens (align (separate_map (comma ^^ break 0) (expV true) args))
-               else
-                 align (separate_map (break 1) (expV true) args) in
+             let argspp = align (separate_map (break 1) (expV true) args) in
              let epp = align (call ^//^ argspp) in
              let (taepp,aexp_needed) =
-               let t = (*Env.base_typ_of (env_of full_exp)*) (typ_of full_exp) in
+               let t = Env.expand_synonyms (env_of full_exp) (typ_of full_exp) in
                let eff = effect_of full_exp in
-               if typ_needs_printed (Env.base_typ_of (env_of full_exp) t)
+               if typ_needs_printed t
                then (align epp ^^ (doc_tannot_lem ctxt (effectful eff) t), true)
                else (epp, aexp_needed) in
              liftR (if aexp_needed then parens (align taepp) else taepp)
@@ -735,7 +732,7 @@ let doc_exp_lem, doc_let_lem =
     | E_block [] -> string "()"
     | E_block exps -> raise (report l "Blocks should have been removed till now.")
     | E_nondet exps -> raise (report l "Nondet blocks not supported.")
-    | E_id id ->
+    | E_id id | E_ref id ->
        let env = env_of full_exp in
        let typ = typ_of full_exp in
        let eff = effect_of full_exp in
@@ -793,11 +790,10 @@ let doc_exp_lem, doc_let_lem =
                   if count = 20 then 0 else count + 1)
                 (expN e,0) es in
             align (group expspp) in
-       let epp =
-         group (separate space [string "Vector"; brackets expspp;string start;string dir_out]) in
+       let epp = brackets expspp in
        let (epp,aexp_needed) =
          if is_bit_typ etyp && !opt_mwords then
-           let bepp = string "vec_to_bvec" ^^ space ^^ parens (align epp) in
+           let bepp = string "of_bits" ^^ space ^^ parens (align epp) in
            (bepp ^^ doc_tannot_lem ctxt false t, true)
          else (epp,aexp_needed) in
        if aexp_needed then parens (align epp) else epp
@@ -811,22 +807,6 @@ let doc_exp_lem, doc_let_lem =
        brackets (separate_map semi (expN) exps)
     | E_case(e,pexps) ->
        let only_integers e = expY e in
-       (*
-       (* This is a hack, incomplete. It's because lem does not allow
-        pattern-matching on integers *)
-         let typ = typ_of e in
-         if Ast_util.is_number typ then
-           let e_pp = expY e in
-           align (string "toNatural" ^//^ e_pp)
-         else
-           (* TODO: Where does this come from?? *)
-           (match typ with
-            | Typ_aux (Typ_tup ([t1;t2;t3;t4;t5] as ts), _) when List.for_all Ast_util.is_number ts ->
-               let e_pp = expY e in
-               align (string "toNaturalFiveTup" ^//^ e_pp)
-            | _ -> expY e)
-       in*)
-
        let epp =
          group ((separate space [string "match"; only_integers e; string "with"]) ^/^
                   (separate_map (break 1) (doc_case ctxt) pexps) ^/^
@@ -884,7 +864,8 @@ let doc_exp_lem, doc_let_lem =
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ -> string "true"
     | E_comment _ | E_comment_struc _ -> empty
-    | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_exp_user _ ->
+    | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _
+    | E_internal_exp_user _ | E_internal_value _ ->
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
   and let_exp ctxt (LB_aux(lb,_)) = match lb with
@@ -1202,9 +1183,9 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
   | _, _ ->
      [pat], identity
 
-let doc_rec_lem (Rec_aux(r,_)) = match r with
-  | Rec_nonrec -> space
-  | Rec_rec -> space ^^ string "rec" ^^ space
+let doc_rec_lem force_rec (Rec_aux(r,_)) = match r with
+  | Rec_nonrec when not force_rec -> space
+  | _ -> space ^^ string "rec" ^^ space
 
 let doc_tannot_opt_lem (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem typ)
@@ -1312,11 +1293,11 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
 
     auxiliary_functions ^^ hardline ^^ hardline ^^
     (prefix 2 1)
-      ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
+      ((separate space) [string "let" ^^ doc_rec_lem false r ^^ doc_id_lem id;equals;string "function"])
       (clauses ^/^ string "end")
   | FCL_aux (FCL_Funcl(id,_),annot) :: _
     when not (Env.is_extern id (env_of_annot annot) "lem") ->
-    string "let" ^^ (doc_rec_lem r) ^^ (doc_fundef_rhs_lem fd)
+    string "let" ^^ (doc_rec_lem (List.length fcls > 1) r) ^^ (doc_fundef_rhs_lem fd)
   | _ -> empty
 
 

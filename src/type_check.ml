@@ -2182,9 +2182,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let tpat, env = bind_pat_no_guard env pat ptyp in
      (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
      let env = match bind_exp with
-       | E_aux (E_assert (E_aux (E_constraint nc, _), _), _) ->
-          typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
-          Env.add_constraint nc env
+       | E_aux (E_assert (constr_exp, _), _) ->
+          begin
+            match assert_constraint env constr_exp with
+            | Some nc ->
+               typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
+               Env.add_constraint nc env
+            | None -> env
+          end
        | _ -> env in
      let checked_body = crule check_exp env body typ in
      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
@@ -2906,9 +2911,14 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let tpat, env = bind_pat_no_guard env pat ptyp in
      (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
      let env = match bind_exp with
-       | E_aux (E_assert (E_aux (E_constraint nc, _), _), _) ->
-          typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
-          Env.add_constraint nc env
+       | E_aux (E_assert (constr_exp, _), _) ->
+          begin
+            match assert_constraint env constr_exp with
+            | Some nc ->
+               typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
+               Env.add_constraint nc env
+            | None -> env
+          end
        | _ -> env in
      let inferred_body = irule infer_exp env body in
      annot_exp (E_internal_plet (tpat, bind_exp, inferred_body)) (typ_of inferred_body)

@@ -5,7 +5,6 @@ session "Sail" = "LEM" +
     State
     Prompt
     Sail_operators
-    Sail_operators_mwords
 
 (*session "Sail" = "Sail_Base" +
   options [document = false]

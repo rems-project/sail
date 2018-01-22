@@ -102,6 +102,12 @@ type direction =
   | D_increasing
   | D_decreasing
 
+let dir_of_bool is_inc = if is_inc then D_increasing else D_decreasing
+let bool_of_dir = function
+  | D_increasing -> true
+  | D_decreasing -> false
+  end
+
 (* at some point this should probably not mention bit_lifted anymore *)
 type register_value = <| 
     rv_bits: list bit_lifted (* MSB first, smallest index number *); 

@@ -864,9 +864,8 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
   match typ_aux with
   | Typ_id id ->
      wrap (E_app (prepend_id "undefined_" id, [wrap (E_lit (mk_lit L_unit)) unit_typ])) typ
-  | Typ_app (_,[start;size;_;_]) when mwords && is_bitvector_typ typ ->
+  | Typ_app (_,[size;_;_]) when mwords && is_bitvector_typ typ ->
      wrap (E_app (mk_id "undefined_bitvector",
-       undefined_of_typ_args mwords l annot start @
        undefined_of_typ_args mwords l annot size)) typ
   | Typ_app (atom, [Typ_arg_aux (Typ_arg_nexp i, _)]) when string_of_id atom = "atom" ->
      wrap (E_sizeof i) typ
