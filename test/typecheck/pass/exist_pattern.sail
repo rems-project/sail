@@ -8,9 +8,15 @@ register x : nat
 
 register y : nat
 
-val eq_int : (int, int) -> bool
+val eq_int = {lem: "eq"} : (int, int) -> bool
+val eq_vec = {lem: "eq_vec"} : forall ('n : Int). (vector('n, inc, bit), vector('n, inc, bit)) -> bool
 
-overload operator == = {eq_int}
+overload operator == = {eq_int, eq_vec}
+
+val "and_bool" : (bool, bool) -> bool
+
+val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_inc"} : forall ('n : Int) ('m : Int) ('o : Int), 'm <= 'o <= 'n.
+  (vector('n, inc, bit), atom('m), atom('o)) -> vector('o - ('m - 1), inc, bit)
 
 type wordsize = {'n, 'n in {8, 16, 32}. range(0, 'n)}
 

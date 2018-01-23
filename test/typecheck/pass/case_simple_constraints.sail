@@ -1,4 +1,4 @@
-val plus = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int).
+val plus = {ocaml: "add", lem: "integerAdd"}: forall ('n : Int) ('m : Int).
   (atom('n + 20), atom('m)) -> atom('n + 20 + 'm)
 
 val minus_ten_id = {ocaml: "id", lem: "id"}: forall ('n : Int), 'n <= -10.

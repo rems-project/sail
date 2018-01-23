@@ -1,4 +1,4 @@
-val append = "bitvector_concat" : forall ('l1 : Int) ('l2 : Int) ('o : Order), 'l1 >= 0 & 'l2 >= 0.
+val append = {ocaml: "append", lem: "concat_vec"} : forall ('l1 : Int) ('l2 : Int) ('o : Order), 'l1 >= 0 & 'l2 >= 0.
   (vector('l1, 'o, bit), vector('l2, 'o, bit)) -> vector('l1 + 'l2, 'o, bit)
 
 default Order inc

@@ -1,9 +1,9 @@
 default Order inc
 
-val add_range = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+val add_range = {ocaml: "add", lem: "integerAdd"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val sub_range = {ocaml: "sub", lem: "sub"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+val sub_range = {ocaml: "sub", lem: "integerMinus"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
 val lt_range_atom = {ocaml: "lt", lem: "lt"}: forall ('n : Int) ('m : Int) ('o : Int).

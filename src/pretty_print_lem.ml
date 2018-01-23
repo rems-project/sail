@@ -721,7 +721,9 @@ let doc_exp_lem, doc_let_lem =
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
        let ft = typ_of_annot (l,fannot) in
        (match fannot with
-        | Some(env, (Typ_aux (Typ_id tid, _)), _) when Env.is_record tid env ->
+        | Some(env, (Typ_aux (Typ_id tid, _)), _)
+        | Some(env, (Typ_aux (Typ_app (tid, _), _)), _)
+          when Env.is_record tid env ->
            let fname =
              if prefix_recordtype
              then (string (string_of_id tid ^ "_")) ^^ doc_id_lem id
