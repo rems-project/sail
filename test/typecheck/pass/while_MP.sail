@@ -1,6 +1,6 @@
 default Order dec
 
-val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
+val add_int = {ocaml: "add", lem: "integerAdd"}: (int, int) -> int
 
 overload operator + = {add_vec_int, add_range, add_int}
 

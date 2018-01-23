@@ -2614,7 +2614,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let typ' = Typ_aux (Typ_tup [typ_of exp;typ_of vars], gen_loc l) in
          E_aux (E_tuple [exp;vars],swaptyp typ' annot) in
 
-  let mk_varstup l es =
+  let mk_varstup l env es =
     let exp_to_pat (E_aux (eaux, annot) as exp) = match eaux with
       | E_lit lit ->
          P_aux (P_lit lit, annot)
@@ -2624,18 +2624,31 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          ("Failed to extract pattern from expression " ^ string_of_exp exp)) in
     match es with
     | [] ->
-       annot_exp (E_lit (mk_lit L_unit)) (gen_loc l) Env.empty unit_typ,
-       annot_pat P_wild (gen_loc l) Env.empty unit_typ
+       annot_exp (E_lit (mk_lit L_unit)) (gen_loc l) Env.empty unit_typ, [], []
     | [e] ->
-       let e = infer_exp (env_of e) (strip_exp e) in
-       e, annot_pat (P_typ (typ_of e, exp_to_pat e)) l (env_of e) (typ_of e)
+       let e = infer_exp env (strip_exp e) in
+       let typ = typ_of e in
+       e, [annot_pat (P_typ (typ, exp_to_pat e)) l env typ], [typ_of e]
     | e :: _ ->
-       let infer_e e = infer_exp (env_of e) (strip_exp e) in
+       let infer_e e = infer_exp env (strip_exp e) in
        let es = List.map infer_e es in
        let pats = List.map exp_to_pat es in
        let typ = tuple_typ (List.map typ_of es) in
-       annot_exp (E_tuple es) l (env_of e) typ,
-       annot_pat (P_typ (typ, annot_pat (P_tup pats) l (env_of e) typ)) l (env_of e) typ in
+       annot_exp (E_tuple es) l env typ, pats, List.map typ_of es in
+
+  let add_vars_pat overwrite l env pat vartyps varpats =
+    let typ, pat = match pat with
+      | P_aux (P_typ (typ, pat), _) -> typ, pat
+      | pat -> pat_typ_of pat, pat in
+    let typs, pats =
+      if overwrite then vartyps, varpats
+      else typ :: vartyps, pat :: varpats in
+    match typs, pats with
+      | [], [] -> annot_pat P_wild l env unit_typ
+      | [typ], [pat] -> annot_pat (P_typ (typ, pat)) l env typ
+      | _, _ ->
+         let tup_typ = tuple_typ typs in
+         annot_pat (P_typ (tup_typ, annot_pat (P_tup pats) l env typ)) l env tup_typ in
 
   let rewrite (E_aux (expaux,((el,_) as annot)) as full_exp) (P_aux (_,(pl,pannot)) as pat) =
     let env = env_of_annot annot in
@@ -2654,7 +2667,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           expects. In (Lem) pretty-printing, this turned into an anonymous
           function and passed to foreach*. *)
        let vars = List.map (fun (var,(l,t)) -> E_aux (E_id var,(l,t))) (find_updated_vars exp4) in
-       let varstuple, varspat = mk_varstup el vars in
+       let varstuple, varpats, vartyps = mk_varstup el env vars in
        let varstyp = typ_of varstuple in
        let exp4 = rewrite_var_updates (add_vars overwrite exp4 varstuple) in
        let ord_exp, lower, upper = match destruct_range (typ_of exp1), destruct_range (typ_of exp2) with
@@ -2673,13 +2686,11 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let lb = annot_letbind (lvar_pat, exp1) el env lvar_typ in
        let body = annot_exp (E_let (lb, exp4)) el env (typ_of exp4) in
        let v = annot_exp (E_app (mk_id "foreach", [exp1; exp2; exp3; ord_exp; varstuple; body])) el env (typ_of body) in
-       let pat =
-         if overwrite then varspat
-         else annot_pat (P_tup [pat; varspat]) pl env (typ_of v) in
+       let pat = add_vars_pat overwrite pl env pat vartyps varpats in
        Added_vars (v,pat)
      | E_loop(loop,cond,body) ->
         let vars = List.map (fun (var,(l,t)) -> E_aux (E_id var,(l,t))) (find_updated_vars body) in
-        let varstuple, varspat = mk_varstup el vars in
+        let varstuple, varpats, vartyps = mk_varstup el env vars in
         let varstyp = typ_of varstuple in
         (* let cond = rewrite_var_updates (add_vars false cond varstuple) in *)
         let body = rewrite_var_updates (add_vars overwrite body varstuple) in
@@ -2689,9 +2700,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           | Until -> "until" in
         let funcl = Id_aux (Id fname,gen_loc el) in
         let v = E_aux (E_app (funcl,[cond;varstuple;body]), (gen_loc el, bannot)) in
-        let pat =
-          if overwrite then varspat
-          else annot_pat (P_tup [pat; varspat]) pl env (typ_of v) in
+        let pat = add_vars_pat overwrite pl env pat vartyps varpats in
         Added_vars (v,pat)
     | E_if (c,e1,e2) ->
        let vars = List.map (fun (var,(l,t)) -> E_aux (E_id var,(l,t)))
@@ -2699,7 +2708,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        if vars = [] then
          (Same_vars (E_aux (E_if (c,rewrite_var_updates e1,rewrite_var_updates e2),annot)))
        else
-         let varstuple, varspat = mk_varstup el vars in
+         let varstuple, varpats, vartyps = mk_varstup el env vars in
          let varstyp = typ_of varstuple in
          let e1 = rewrite_var_updates (add_vars overwrite e1 varstuple) in
          let e2 = rewrite_var_updates (add_vars overwrite e2 varstuple) in
@@ -2708,9 +2717,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let typ = typ_of e1 in
          let eff = union_eff_exps [e1;e2] in
          let v = E_aux (E_if (c,e1,e2), (gen_loc el, Some (env, typ, eff))) in
-         let pat =
-           if overwrite then varspat
-           else annot_pat (P_tup [pat; varspat]) pl env (typ_of v) in
+         let pat = add_vars_pat overwrite pl env pat vartyps varpats in
          Added_vars (v,pat)
     | E_case (e1,ps) ->
        (* after rewrite_defs_letbind_effects e1 needs no rewriting *)
@@ -2727,7 +2734,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              Pat_aux (Pat_when (p,g,rewrite_var_updates e),a)) ps in
          Same_vars (E_aux (E_case (e1,ps),annot))
        else
-         let varstuple, varspat = mk_varstup el vars in
+         let varstuple, varpats, vartyps = mk_varstup el env vars in
          let varstyp = typ_of varstuple in
          let rewrite_pexp (Pat_aux (pexp, (l, _))) = match pexp with
            | Pat_exp (pat, exp) ->
@@ -2741,9 +2748,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
            | Pat_aux ((Pat_exp (_,first)|Pat_when (_,_,first)),_) :: _ -> typ_of first
            | _ -> unit_typ in
          let v = propagate_exp_effect (annot_exp (E_case (e1, List.map rewrite_pexp ps)) pl env typ) in
-         let pat =
-           if overwrite then varspat
-           else annot_pat (P_tup [pat; varspat]) pl env (typ_of v) in
+         let pat = add_vars_pat overwrite pl env pat vartyps varpats in
          Added_vars (v,pat)
     | E_assign (lexp,vexp) ->
        let mk_id_pat id = match Env.lookup_id id env with

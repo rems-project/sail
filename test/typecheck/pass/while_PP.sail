@@ -11,10 +11,10 @@ val mult_int : (int, int) -> int
 
 overload operator * = {mult_int}
 
-val add_range = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+val add_range = {ocaml: "add", lem: "integerAdd"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
+val add_int = {ocaml: "add", lem: "integerAdd"}: (int, int) -> int
 
 overload operator + = {add_range, add_int}
 

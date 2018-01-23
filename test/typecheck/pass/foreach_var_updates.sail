@@ -1,8 +1,8 @@
-val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
+val add_int = {ocaml: "add", lem: "integerAdd"}: (int, int) -> int
 
 overload operator + = {add_int}
 
-val sub_int = {ocaml: "sub", lem: "sub"}: (int, int) -> int
+val sub_int = {ocaml: "sub", lem: "integerMinus"}: (int, int) -> int
 
 overload operator - = {sub_int}
 
