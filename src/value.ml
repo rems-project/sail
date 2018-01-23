@@ -366,7 +366,10 @@ let value_write_ram = function
   | _ -> failwith "value write_ram"
 
 let value_putchar = function
-  | [v] -> Sail_lib.putchar (coerce_int v); V_unit
+  | [v] ->
+     output_char !print_chan (char_of_int (Big_int.to_int (coerce_int v)));
+     flush !print_chan;
+     V_unit
   | _ -> failwith "value putchar"
 
 let value_print_bits = function
@@ -384,7 +387,7 @@ let primops =
     [ ("and_bool", and_bool);
       ("or_bool", or_bool);
       ("print_endline", value_print);
-      ("prerr_endline", value_print);
+      ("prerr_endline", fun vs -> (prerr_endline (string_of_value (List.hd vs)); V_unit));
       ("putchar", value_putchar);
       ("string_of_int", fun vs -> V_string (string_of_value (List.hd vs)));
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));

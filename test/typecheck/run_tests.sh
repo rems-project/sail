@@ -65,9 +65,28 @@ do
 	fi
     else
 	red "tested $i expecting pass" "fail"
-    fi
+    fi;
+
+    shopt -s nullglob;
+    for file in $DIR/pass/${i%.sail}/*.sail;
+    do
+	pushd $DIR/pass > /dev/null;
+	if $SAILDIR/sail ${i%.sail}/$(basename $file) 2> result;
+	then
+	    red "failing variant of $i $(basename $file) passed" "fail"
+	else
+	    if diff ${file%.sail}.expect result;
+	    then
+		green "failing variant of $i $(basename $file)" "pass"
+	    else
+		yellow "failing variant of $i $(basename $file)" "unexpected error"
+	    fi
+	fi;
+	rm -f result;
+	popd > /dev/null
+    done
 done
 
-finish_suite "Expecting pass"
+finish_suite "Typechecking tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml

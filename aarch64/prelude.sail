@@ -28,7 +28,11 @@ val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
 
 val eq_real = {ocaml: "eq_real", lem: "eq"} : (real, real) -> bool
 
-val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
+val eq_anything = {
+  ocaml: "(fun (x, y) -> x = y)",
+  interpreter: "eq_anything",
+  lem: "eq"
+} : forall ('a : Type). ('a, 'a) -> bool
 
 val bitvector_length = {ocaml: "length", lem: "length"} : forall 'n. bits('n) -> atom('n)
 val vector_length = {ocaml: "length", lem: "length_list"} : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
@@ -157,7 +161,10 @@ val __SignExtendSlice = {lem: "exts_slice"} : forall 'm. (bits('m), int, int) ->
 
 val __ZeroExtendSlice = {lem: "extz_slice"} : forall 'm. (bits('m), int, int) -> bits('m)
 
-val cast "cast_unit_vec" : bit -> bits(1)
+val cast cast_unit_vec : bit -> bits(1)
+
+function cast_unit_vec bitzero = 0b0
+and cast_unit_vec bitone = 0b1
 
 val print = "prerr_endline" : string -> unit
 
@@ -179,10 +186,10 @@ val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> r
 
 overload operator ^ = {xor_vec, int_power, real_power}
 
-val add_range = {ocaml: "add", lem: "integerAdd"} : forall 'n 'm 'o 'p.
+val add_range = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val add_int = {ocaml: "add", lem: "integerAdd"} : (int, int) -> int
+val add_int = {ocaml: "add_int", lem: "integerAdd"} : (int, int) -> int
 
 val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -192,10 +199,10 @@ val add_real = {ocaml: "add_real", lem: "realAdd"} : (real, real) -> real
 
 overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
 
-val sub_range = {ocaml: "sub", lem: "integerMinus"} : forall 'n 'm 'o 'p.
+val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
-val sub_int = {ocaml: "sub", lem: "integerMinus"} : (int, int) -> int
+val sub_int = {ocaml: "sub_int", lem: "integerMinus"} : (int, int) -> int
 
 val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -203,11 +210,11 @@ val "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 val sub_real = {ocaml: "sub_real", lem: "realMinus"} : (real, real) -> real
 
-val negate_range = {ocaml: "minus_big_int", lem: "integerNegate"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
+val negate_range = {ocaml: "negate", lem: "integerNegate"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
 
-val negate_int = {ocaml: "minus_big_int", lem: "integerNegate"} : int -> int
+val negate_int = {ocaml: "negate", lem: "integerNegate"} : int -> int
 
-val negate_real = {ocaml: "Num.minus_num", lem: "realNegate"} : real -> real
+val negate_real = {ocaml: "negate_real", lem: "realNegate"} : real -> real
 
 overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
 
@@ -274,7 +281,7 @@ infixl 7 %
 
 overload operator % = {modulus}
 
-val Real = {ocaml: "Num.num_of_big_int", lem: "realFromInteger"} : int -> real
+val Real = {ocaml: "to_real", lem: "realFromInteger"} : int -> real
 
 val shl_int = "shl_int" : (int, int) -> int
 

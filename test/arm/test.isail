@@ -1,0 +1,7 @@
+:elf ../test/arm/test_O2.elf
+:output ../test/arm/iresult
+initialize_registers()
+:run
+main()
+:run
+:quit

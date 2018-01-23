@@ -338,6 +338,15 @@ let rec build_letchain id lbs (E_aux (_, annot) as exp) =
      build_letchain id lbs exp
   | _ :: lbs -> build_letchain id lbs exp
 
+let is_interpreter_extern id env =
+  let open Type_check in
+  Env.is_extern id env "interpreter" || Env.is_extern id env "ocaml"
+
+let get_interpreter_extern id env =
+  let open Type_check in
+  try Env.get_extern id env "interpreter" with
+  | Type_error _ -> Env.get_extern id env "ocaml"
+
 let rec step (E_aux (e_aux, annot) as orig_exp) =
   let wrap e_aux' = return (E_aux (e_aux', annot)) in
   match e_aux with
@@ -419,9 +428,9 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           step exp >>= fun exp' -> wrap (E_app (id, evaluated @ exp' :: exps))
        | [] when Env.is_union_constructor id (env_of_annot annot) ->
           return (exp_of_value (V_ctor (string_of_id id, List.map value_of_exp evaluated)))
-       | [] when Env.is_extern id (env_of_annot annot) "interpreter" ->
+       | [] when is_interpreter_extern id (env_of_annot annot) ->
           begin
-            let extern = Env.get_extern id (env_of_annot annot) "interpreter" in
+            let extern = get_interpreter_extern id (env_of_annot annot) in
             if extern = "reg_deref" then
               let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
               gets >>= fun (_, gstate) ->

@@ -79,6 +79,26 @@ else
     done
 fi
 
+printf "\nLoading specification into interpreter...\n"
+
+cd $SAILDIR/aarch64
+
+if $SAILDIR/sail -is $DIR/test.isail prelude.sail no_vector/spec.sail decode_start.sail no_vector/decode.sail decode_end.sail main.sail 1> /dev/null 2> /dev/null;
+then
+    green "loaded no_vector specification" "ok";
+
+    if diff $DIR/test_O2.expect $DIR/iresult;
+    then
+	green "interpreter success" "ok"
+    else
+	red "interpreter failed" "fail"
+    fi;
+
+    rm -f $DIR/iresult
+else
+    red "loading no_vector specification" "fail"
+fi
+
 finish_suite "ARM generated spec tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
