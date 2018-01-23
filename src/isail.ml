@@ -294,6 +294,10 @@ let handle_input' input =
                interactive_state := initial_state !interactive_ast;
                interactive_env := env;
                vs_ids := Initial_check.val_spec_ids !interactive_ast
+            | ":compile" ->
+               let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord arg) in
+               let anf = C_backend.compile_exp exp in
+               print_endline (Pretty_print_sail.to_string (C_backend.pp_aexp anf))
             | ":u" | ":unload" ->
                interactive_ast := Ast.Defs [];
                interactive_env := Type_check.initial_env;

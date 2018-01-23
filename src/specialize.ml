@@ -71,22 +71,18 @@ let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.ma
 
 let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (Util.string_to_list str))
 
-let is_typ_uvar = function
+let is_typ_ord_uvar = function
   | Type_check.U_typ _ -> true
+  | Type_check.U_order _ -> true
   | _ -> false
 
 (* We have to be careful about whether the typechecker has renamed anything returned by instantiation_of.
    This part of the typechecker API is a bit ugly. *)
 let fix_instantiation instantiation =
-  let instantiation = KBindings.bindings (KBindings.filter (fun _ uvar -> is_typ_uvar uvar) instantiation) in
+  let instantiation = KBindings.bindings (KBindings.filter (fun _ uvar -> is_typ_ord_uvar uvar) instantiation) in
   let instantiation = List.map (fun (kid, uvar) -> Type_check.orig_kid kid, uvar) instantiation in
   List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty instantiation
 
-(* Returns an IdSet with the function ids that have X-kinded
-   parameters, e.g. val f : forall ('a : X). 'a -> 'a. The first
-   argument specifies what X should be - it should be one of:
-   is_nat_kopt, is_order_kopt, or is_typ_kopt from Ast_util.
-*)
 let rec polymorphic_functions is_kopt (Defs defs) =
   match defs with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, _, externs), _)) :: defs ->
@@ -180,7 +176,7 @@ let specialize_id_valspec instantiations id ast =
 
        (* Remove type variables from the type quantifier. *)
        let kopts, constraints = quant_split typq in
-       let kopts = List.filter (fun kopt -> not (is_typ_kopt kopt)) kopts in
+       let kopts = List.filter (fun kopt -> not (is_typ_kopt kopt || is_order_kopt kopt)) kopts in
        let typq = mk_typquant (List.map (mk_qi_id BK_type) frees @ List.map mk_qi_kopt kopts @ List.map mk_qi_nc constraints) in
        let typschm = mk_typschm typq typ in
 
@@ -261,7 +257,6 @@ let remove_unused_valspecs ast =
   List.fold_left (fun ast id -> Defs (remove_unused ast id)) ast (IdSet.elements unused)
 
 let specialize_id id ast =
-  print_endline ("Specializing: " ^ string_of_id id);
   let instantiations = instantiations_of id ast in
 
   let ast = specialize_id_valspec instantiations id ast in
@@ -296,7 +291,7 @@ let specialize_ids ids ast =
   ast, env
 
 let rec specialize ast env =
-  let ids = polymorphic_functions is_typ_kopt ast in
+  let ids = polymorphic_functions (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) ast in
   if IdSet.is_empty ids then
     ast, env
   else

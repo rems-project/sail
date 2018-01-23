@@ -267,7 +267,7 @@ clean:
 	-rm -f ast.lem
 
 doc:
-	ocamlbuild sail.docdir/index.html
+	ocamlbuild -use-ocamlfind sail.docdir/index.html
 
 lib:
 	ocamlbuild pretty_print.cmxa pretty_print.cma

@@ -108,7 +108,6 @@ val option_these : 'a option list -> 'a list
     application of [f], [x] is used in case [g x] returns [None] and
     similarly [y] in case [h y] returns [None]. *)
 val changed2 : ('a -> 'b -> 'c) -> ('a -> 'a option) -> 'a -> ('b -> 'b option) -> 'b -> 'c option
-                                              
 
 (** {2 List Functions} *)
 
@@ -240,3 +239,6 @@ val yellow : string -> string
 val cyan : string -> string
 val blue : string -> string
 val clear : string -> string
+
+val zencode_string : string -> string
+val zencode_upper_string : string -> string

@@ -52,6 +52,7 @@ open Ast
 open Ast_util
 open PPrint
 open Type_check
+open Util
 
 module Big_int = Nat_big_num
 
@@ -76,25 +77,6 @@ let gensym () =
   let gs = "gs" ^ string_of_int !gensym_counter in
   incr gensym_counter;
   string gs
-
-let zchar c =
-  let zc c = "z" ^ String.make 1 c in
-  if Char.code c <= 41 then zc (Char.chr (Char.code c + 16))
-  else if Char.code c <= 47 then zc (Char.chr (Char.code c + 23))
-  else if Char.code c <= 57 then String.make 1 c
-  else if Char.code c <= 64 then zc (Char.chr (Char.code c + 13))
-  else if Char.code c <= 90 then String.make 1 c
-  else if Char.code c <= 94 then zc (Char.chr (Char.code c - 13))
-  else if Char.code c <= 95 then "_"
-  else if Char.code c <= 96 then zc (Char.chr (Char.code c - 13))
-  else if Char.code c <= 121 then String.make 1 c
-  else if Char.code c <= 122 then "zz"
-  else if Char.code c <= 126 then zc (Char.chr (Char.code c - 39))
-  else raise (Invalid_argument "zchar")
-
-let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (Util.string_to_list str))
-
-let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (Util.string_to_list str))
 
 let zencode ctx id =
   try string (string_of_id (Bindings.find id ctx.externs)) with

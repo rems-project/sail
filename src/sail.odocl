@@ -1,4 +1,5 @@
 ast
+ast_util
 finite_map
 initial_check
 lexer
@@ -6,10 +7,10 @@ sail
 parse_ast
 parser
 pp
-pre_lexer
-pre_parser
 pretty_print
 process_file
 reporting_basic
+rewriter
+specialize
 type_check
 util

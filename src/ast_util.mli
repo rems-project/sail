@@ -48,6 +48,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(** Utilities for operating on Sail ASTs *)
+
 open Ast
 module Big_int = Nat_big_num
 
