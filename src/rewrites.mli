@@ -63,6 +63,9 @@ val rewrite_defs_interpreter : (string * (tannot defs -> tannot defs)) list
 (* Perform rewrites to exclude AST nodes not supported for lem out*)
 val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list
 
+(* Perform rewrites to exclude AST nodes not supported for C compilation *)
+val rewrite_defs_c : (string * (tannot defs -> tannot defs)) list
+
 (* This is a special rewriter pass that checks AST invariants without
    actually doing any re-writing *)
 val rewrite_defs_check : (string * (tannot defs -> tannot defs)) list

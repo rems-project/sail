@@ -60,6 +60,7 @@ let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
+let opt_print_c = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
@@ -83,6 +84,9 @@ let options = Arg.align ([
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
+  ( "-c",
+    Arg.Tuple [Arg.Set opt_print_c; (* Arg.Set Initial_check.opt_undefined_gen *)],
+    " output a C translated version of the input");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
     " output a Lem AST representation of the input");
@@ -241,6 +245,11 @@ let main() =
          let ast_ocaml = rewrite_ast_ocaml ast in
          let out = match !opt_file_out with None -> "out" | Some s -> s in
          Ocaml_backend.ocaml_compile out ast_ocaml
+       else ());
+      (if !(opt_print_c)
+       then
+         let ast_c = rewrite_ast_c ast in
+         C_backend.compile_ast type_envs ast_c
        else ());
       (if !(opt_print_lem)
        then let ast_lem = rewrite_ast_lem ast in

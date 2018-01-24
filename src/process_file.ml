@@ -214,5 +214,6 @@ let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !Pretty_print_lem.opt_mwords x)]
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
+let rewrite_ast_c = rewrite Rewrites.rewrite_defs_c
 let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
 let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check

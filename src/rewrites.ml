@@ -3004,6 +3004,19 @@ let rewrite_defs_ocaml = [
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
   ]
 
+let rewrite_defs_c = [
+  ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
+  ("pat_lits", rewrite_defs_pat_lits);
+  ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
+  ("tuple_assignments", rewrite_tuple_assignments);
+  ("simple_assignments", rewrite_simple_assignments);
+  ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
+  ("constraint", rewrite_constraint);
+  ("trivial_sizeof", rewrite_trivial_sizeof);
+  ("sizeof", rewrite_sizeof);
+  ]
+
 let rewrite_defs_interpreter = [
     ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
     ("tuple_vector_assignments", rewrite_tuple_vector_assignments);

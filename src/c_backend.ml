@@ -63,6 +63,10 @@ let lvar_typ = function
   | Register typ -> typ
   | _ -> assert false
 
+(**************************************************************************)
+(* 1. Conversion to A-normal form (ANF)                                   *)
+(**************************************************************************)
+
 type aexp =
   | AE_val of aval
   | AE_app of id * aval list * typ
@@ -196,10 +200,29 @@ let rec anf (E_aux (e_aux, _) as exp) =
      let aval, wrap = to_aval aexp in
      wrap (AE_app (mk_id "throw", [aval], unit_typ))
 
+  | E_exit exp ->
+     let aexp = anf exp in
+     let aval, wrap = to_aval aexp in
+     wrap (AE_app (mk_id "exit", [aval], unit_typ))
+
   | E_return exp ->
      let aexp = anf exp in
      let aval, wrap = to_aval aexp in
-     wrap (AE_app (mk_id "return", [aval], unit_typ))
+     wrap (AE_return (aval, unit_typ))
+
+  | E_assert (exp1, exp2) ->
+     let aexp1 = anf exp1 in
+     let aexp2 = anf exp2 in
+     let aval1, wrap1 = to_aval aexp1 in
+     let aval2, wrap2 = to_aval aexp2 in
+     wrap1 (wrap2 (AE_app (mk_id "return", [aval1; aval2], unit_typ)))
+
+  | E_cons (exp1, exp2) ->
+     let aexp1 = anf exp1 in
+     let aexp2 = anf exp2 in
+     let aval1, wrap1 = to_aval aexp1 in
+     let aval2, wrap2 = to_aval aexp2 in
+     wrap1 (wrap2 (AE_app (mk_id "cons", [aval1; aval2], unit_typ)))
 
   | E_id id ->
      let lvar = Env.lookup_id id (env_of exp) in
@@ -222,6 +245,9 @@ let rec anf (E_aux (e_aux, _) as exp) =
 
   | E_cast (typ, exp) -> AE_cast (anf exp, typ)
 
+  (* Need to think about how to do exception handling *)
+  | E_try _ -> failwith "E_try TODO"
+
   | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
      (* Should be re-written by type checker *)
      failwith "encountered raw vector operation when converting to ANF"
@@ -234,6 +260,12 @@ let rec anf (E_aux (e_aux, _) as exp) =
      (* Sizeof nodes removed by sizeof rewriting pass *)
      failwith "encountered E_sizeof or E_constraint node when converting to ANF"
 
+  | _ -> failwith ("Cannot convert to ANF: " ^ string_of_exp exp)
+
+(**************************************************************************)
+(* 2. Converting sail types to C types                                    *)
+(**************************************************************************)
+
 let max_int64 = Big_int.of_int64 Int64.max_int
 let min_int64 = Big_int.of_int64 Int64.min_int
 
@@ -243,6 +275,7 @@ type ctyp =
   | CT_uint64 of int * bool
   | CT_int
   | CT_int64
+  | CT_unit
 
 let ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
@@ -261,6 +294,7 @@ let string_of_ctyp = function
   | CT_uint64 (n, false) -> "uint64_t<" ^ string_of_int n ^ ", int>"
   | CT_int64 -> "int64_t"
   | CT_int -> "int"
+  | CT_unit -> "unit"
 
 (* Convert a sail type into a C-type *)
 let ctyp_of_typ (Typ_aux (typ_aux, _) as typ) =
@@ -289,6 +323,7 @@ let ctyp_of_typ (Typ_aux (typ_aux, _) as typ) =
        | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_uint64 (Big_int.to_int n, direction)
        | _ -> CT_bv direction
      end
+  | Typ_id id when string_of_id id = "unit" -> CT_unit
   | _ -> assert false
 
 let is_stack_ctyp ctyp = match ctyp with
@@ -297,6 +332,10 @@ let is_stack_ctyp ctyp = match ctyp with
 
 let is_stack_typ typ = is_stack_ctyp (ctyp_of_typ typ)
 
+(**************************************************************************)
+(* 3. Optimization of primitives and literals                             *)
+(**************************************************************************)
+
 let literal_to_cstring (L_aux (l_aux, _) as lit) =
   match l_aux with
   | L_num n when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
@@ -304,6 +343,7 @@ let literal_to_cstring (L_aux (l_aux, _) as lit) =
   | L_hex str when String.length str <= 16 ->
      let padding = 16 - String.length str in
      Some ("0x" ^ String.make padding '0' ^ str ^ "ul")
+  | L_unit -> Some "0"
   | _ -> None
 
 let c_literals =
@@ -376,6 +416,23 @@ let analyze_primop' id args typ =
       | _ -> no_change
     end
 
+  else if string_of_id id = "xor_vec" then
+    begin
+      let n, x, y = match typ, args with
+        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _); _; _]), _), [x; y]
+             when string_of_id id = "vector" -> n, x, y
+        | _ -> failwith ("xor_vec has incorrect return type or arity " ^ string_of_typ typ)
+      in
+      match nexp_simp n with
+      | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) ->
+         let x, y = c_aval x, c_aval y in
+         if is_c_fragment x && is_c_fragment y then
+           AE_val (AV_C_fragment (c_fragment_string x ^ " ^ " ^ c_fragment_string y, typ))
+         else
+           no_change
+      | _ -> no_change
+    end
+
   else if string_of_id id = "add_vec" then
     begin
       let n, x, y = match typ, args with
@@ -401,16 +458,31 @@ let analyze_primop id args typ =
   try analyze_primop' id args typ with
   | Failure _ -> no_change
 
+(**************************************************************************)
+(* 4. Conversion to low-level AST                                         *)
+(**************************************************************************)
+
 type cval =
   | CV_id of id * ctyp
   | CV_C_fragment of string * ctyp
 
+let cval_ctyp = function
+  | CV_id (_, ctyp) -> ctyp
+  | CV_C_fragment (_, ctyp) -> ctyp
+
 type instr =
+  | I_decl of ctyp * id
   | I_alloc of ctyp * id
   | I_init of ctyp * id * cval
-  | I_assign of id * ctyp * id * cval list * ctyp
+  | I_funcall of id * id * cval list * ctyp
   | I_convert of id * ctyp * id * ctyp
+  | I_assign of id * cval
   | I_clear of ctyp * id
+  | I_return of id
+
+type cdef =
+  | CDEF_reg_dec of ctyp * id
+  | CDEF_fundef of id * id list * instr list
 
 let pp_ctyp ctyp =
   string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
@@ -423,19 +495,26 @@ and pp_cval = function
   | CV_C_fragment (str, ctyp) -> parens (pp_ctyp ctyp) ^^ (string (str |> Util.cyan |> Util.clear))
 
 let pp_instr = function
-  | I_alloc (ctyp, id) ->
+  | I_decl (ctyp, id) ->
      parens (pp_ctyp ctyp) ^^ space ^^ pp_id id
-  | I_init (ctyp, id, aval) ->
-     pp_keyword "INIT" ^^ pp_ctyp ctyp ^^ parens (pp_id id ^^ string ", " ^^ pp_cval aval)
-  | I_assign (x, ctyp1, f, args, ctyp2) ->
-     separate space [ parens (pp_ctyp ctyp1); pp_id x; string ":=";
+  | I_alloc (ctyp, id) ->
+     pp_keyword "ALLOC" ^^ parens (pp_ctyp ctyp) ^^ space ^^ pp_id id
+  | I_init (ctyp, id, cval) ->
+     pp_keyword "INIT" ^^ pp_ctyp ctyp ^^ parens (pp_id id ^^ string ", " ^^ pp_cval cval)
+  | I_funcall (x, f, args, ctyp2) ->
+     separate space [ pp_id x; string ":=";
                       pp_id ~color:Util.red f ^^ parens (separate_map (string ", ") pp_cval args);
                       string "->"; pp_ctyp ctyp2 ]
   | I_convert (x, ctyp1, y, ctyp2) ->
-     separate space [ parens (pp_ctyp ctyp1); pp_id x; string ":=";
-                      pp_keyword "CONVERT" ^^ pp_ctyp ctyp2 ^^ parens (pp_id y) ]
+     separate space [ pp_id x; string ":=";
+                      pp_keyword "CONVERT" ^^ pp_ctyp ctyp2 ^^ parens (pp_id y);
+                      string "->"; pp_ctyp ctyp1 ]
+  | I_assign (id, cval) ->
+     separate space [pp_id id; string ":="; pp_cval cval]
   | I_clear (ctyp, id) ->
      pp_keyword "CLEAR" ^^ pp_ctyp ctyp ^^ parens (pp_id id)
+  | I_return id ->
+     pp_keyword "RETURN" ^^ pp_id id
 
 let compile_funcall env id args typ =
   let setup = ref [] in
@@ -457,7 +536,7 @@ let compile_funcall env id args typ =
         CV_C_fragment (c, ctyp_of_typ typ)
       else
         let gs = gensym () in
-        setup := I_alloc (ctyp, gs) :: !setup;
+        setup := I_decl (ctyp, gs) :: !setup;
         setup := I_init (ctyp, gs, CV_C_fragment (c, ctyp_of_typ typ)) :: !setup;
         cleanup := I_clear (ctyp, gs) :: !cleanup;
         CV_id (gs, ctyp)
@@ -467,7 +546,7 @@ let compile_funcall env id args typ =
          CV_id (id, ctyp)
        else if is_stack_ctyp have_ctyp && not (is_stack_ctyp ctyp) then
          let gs = gensym () in
-         setup := I_alloc (ctyp, gs) :: !setup;
+         setup := I_decl (ctyp, gs) :: !setup;
          setup := I_init (ctyp, gs, CV_id (id, have_ctyp)) :: !setup;
          cleanup := I_clear (ctyp, gs) :: !cleanup;
          CV_id (gs, ctyp)
@@ -480,131 +559,172 @@ let compile_funcall env id args typ =
 
   let call =
     if ctyp_equal final_ctyp ret_ctyp then
-      fun ret -> I_assign (ret, ctyp_of_typ typ, id, sargs, ret_ctyp)
+      fun ret -> I_funcall (ret, id, sargs, ret_ctyp)
     else if not (is_stack_ctyp ret_ctyp) && is_stack_ctyp final_ctyp then
       let gs = gensym () in
       setup := I_alloc (ret_ctyp, gs) :: !setup;
-      setup := I_assign (gs, ret_ctyp, id, sargs, ret_ctyp) :: !setup;
+      setup := I_funcall (gs, id, sargs, ret_ctyp) :: !setup;
       cleanup := I_clear (ret_ctyp, gs) :: !cleanup;
       fun ret -> I_convert (ret, final_ctyp, gs, ret_ctyp)
     else
       assert false
   in
 
-  List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) (List.rev !setup);
-  print_endline (Pretty_print_sail.to_string (pp_instr (call (mk_id "?"))));
-  List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) !cleanup;
+  (List.rev !setup, final_ctyp, call, !cleanup)
 
-  print_string (Util.string_of_list ", " string_of_ctyp arg_ctyps);
-  print_string  " => ";
-  print_endline (string_of_ctyp ret_ctyp);
-  print_endline (string_of_ctyp final_ctyp);
-
-  AE_app (id, args, typ)
-
-(*
-type allocation =
-  | Stack of string
-  | Heap of string
-
-let string_of_allocation = function
-  | Stack str -> "S$" ^ str
-  | Heap str -> "H$" ^ str
-
-let choose_allocation typ =
-  match stack_typ typ with
-  | Some str -> Stack str
-  | None ->
-     match heap_typ typ with
-     | Some str -> Heap str
-     | _ -> failwith "don't know where to allocate type"
-
-type ccall =
-  | CCallH of (string -> string)
-  | CCallS of string
-
-let compile_funcall env id args typ =
-  let setup = ref [] in
-  let cleanup = ref [] in
-
-  let _, Typ_aux (fn_typ, _) = Env.get_val_spec id env in
-  let arg_typs, ret_typ = match fn_typ with
-    | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-    | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
-    | _ -> assert false
-  in
-  let arg_allocs = List.map choose_allocation arg_typs in
-  print_endline (Util.string_of_list ", " string_of_allocation arg_allocs);
-
-  let setup_arg alloc aval =
-    match alloc, aval with
-    | Heap str_h, AV_C_fragment (c, typ) ->
-       let Some str_s = stack_typ typ in
-       let g = gensym () in
-       setup := (str_h ^ " " ^ string_of_id g ^ ";") :: !setup;
-       setup := Printf.sprintf "init_%s_of_%s(%s, %s);" str_h str_s (string_of_id g) c :: !setup;
-       cleanup := Printf.sprintf "clear_%s(%s);" str_h (string_of_id g) :: !cleanup;
-       string_of_id g
-    | Stack str_h, AV_C_fragment (c, typ) -> c
-    | Heap str_h, AV_id (id, typ) ->
-       begin
-         match choose_allocation (lvar_typ typ) with
-         | Heap _ -> string_of_id id
-         | Stack str_s ->
-            let g = gensym () in
-            setup := (str_h ^ " " ^ string_of_id g ^ ";") :: !setup;
-            setup := Printf.sprintf "init_%s_of_%s(%s, %s);" str_h str_s (string_of_id g) (string_of_id id) :: !setup;
-            cleanup := Printf.sprintf "clear_%s(%s);" str_h (string_of_id g) :: !cleanup;
-            string_of_id g
-       end
-    | Stack str_s, AV_id (id, typ) -> string_of_id id
-    | _, AV_id _ -> "AV_id"
-    | _, AV_lit _ -> "AV_lit"
-  in
-  
-  let str_args = List.map2 setup_arg arg_allocs args in
-
-  match choose_allocation ret_typ with
-  | Heap str_h ->
-     let call ret = Printf.sprintf "sail_%s(%s, %s);" (string_of_id id) ret (String.concat ", " str_args) in
-     (List.rev !setup, str_h, CCallH call, !cleanup)
-  | Stack str_s ->
-     let call = Printf.sprintf "sail_%s(%s);" (string_of_id id) (String.concat ", " str_args) in
-     (List.rev !setup, str_s, CCallS call, !cleanup)
-       
 let rec compile_aexp env = function
-  | AE_let (id, binding, body, typ) ->
+  | AE_let (id, _, binding, body, typ) ->
      let setup, ctyp, call, cleanup = compile_aexp env binding in
-     let letb1, letb1c = match call with
-       | CCallH f -> f (string_of_id id), [Printf.sprintf "clear_%s(%s);" ctyp (string_of_id id)]
-       | CCallS str -> string_of_id id ^ " = " ^ str, []    
+     let letb1, letb1c =
+       if is_stack_ctyp ctyp then
+         [I_decl (ctyp, id); call id], []
+       else
+         [I_alloc (ctyp, id); call id], [I_clear (ctyp, id)]
      in
-     let letb2 = setup @ [ctyp ^ " " ^ string_of_id id ^ ";"; letb1] @ cleanup in
+     let letb2 = setup @ letb1 @ cleanup in
      let setup, ctyp, call, cleanup = compile_aexp env body in
      letb2 @ setup, ctyp, call, cleanup @ letb1c
-  
+
   | AE_app (id, vs, typ) ->
      compile_funcall env id vs typ
 
   | AE_val (AV_C_fragment (c, typ)) ->
-     let Some ctyp = stack_typ typ in
-     [], ctyp, CCallS c, []
+     let ctyp = ctyp_of_typ typ in
+     [], ctyp, (fun id -> I_assign (id, CV_C_fragment (c, ctyp))), []
+
+  | AE_val (AV_id (id, lvar)) ->
+     let ctyp = ctyp_of_typ (lvar_typ lvar) in
+     [], CT_unit, (fun id -> I_assign (id, CV_id (id, ctyp))), []
+
+  | AE_block (aexps, aexp, _) ->
+     let block = compile_block env aexps in
+     let setup, ctyp, call, cleanup = compile_aexp env aexp in
+     block @ setup, ctyp, call, cleanup
+
+  | AE_cast (aexp, typ) -> compile_aexp env aexp
+
+and compile_block env = function
+  | [] -> []
+  | exp :: exps ->
+     let setup, _, call, cleanup = compile_aexp env exp in
+     let rest = compile_block env exps in
+     let gs = gensym () in
+     setup @ [I_decl (CT_unit, gs); call gs] @ cleanup @ rest
+
+let compile_def env = function
+  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
+     [CDEF_reg_dec (ctyp_of_typ typ, id)]
+  | DEF_reg_dec _ -> failwith "Unsupported register declaration" (* FIXME *)
+
+  | DEF_spec _ -> []
+
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, pexp), _)]), _)) ->
+     begin
+       match pexp with
+       | Pat_aux (Pat_exp (pat, exp), _) ->
+          let aexp = map_functions analyze_primop (c_literals (anf exp)) in
+          print_endline (Pretty_print_sail.to_string (pp_aexp aexp));
+          let setup, ctyp, call, cleanup = compile_aexp env aexp in
+          let gs = gensym () in
+          let instrs =
+            if is_stack_ctyp ctyp then
+              setup @ [I_decl (ctyp, gs); call gs] @ cleanup @ [I_return gs]
+            else
+              assert false
+          in
+          [CDEF_fundef (id, [], instrs)]
+       | _ -> assert false
+     end
+
+  | _ -> assert false
+
+(**************************************************************************)
+(* 5. Code generation                                                     *)
+(**************************************************************************)
+
+let sgen_id id = Util.zencode_string (string_of_id id)
+let codegen_id id = string (sgen_id id)
+
+let sgen_ctyp = function
+  | CT_unit -> "int"
+  | CT_int -> "int"
+  | CT_uint64 _ -> "uint64_t"
+  | CT_int64 -> "int64_t"
+  | CT_mpz -> "mpz_t"
+  | CT_bv _ -> "bv_t"
+
+let sgen_cval = function
+  | CV_C_fragment (c, _) -> c
+  | CV_id (id, _) -> string_of_id id
+  | _ -> "CVAL??"
+
+let codegen_instr = function
+  | I_decl (ctyp, id) ->
+     string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (string_of_id id))
+  | I_assign (id, cval) ->
+     string (Printf.sprintf "%s = %s;" (string_of_id id) (sgen_cval cval))
+  | I_funcall (x, f, args, ctyp) ->
+     let args = Util.string_of_list ", " sgen_cval args in
+     if is_stack_ctyp ctyp then
+       string (Printf.sprintf "%s = %s(%s);" (string_of_id x) (sgen_id f) args)
+     else
+       string (Printf.sprintf "%s(%s, %s);" (sgen_id f) (string_of_id x) args)
+  | I_clear (ctyp, id) ->
+     string (Printf.sprintf "clear_%s(%s);" (sgen_ctyp ctyp) (string_of_id id))
+  | I_init (ctyp, id, cval) ->
+     string (Printf.sprintf "init_%s_of_%s(%s, %s);"
+                            (sgen_ctyp ctyp)
+                            (sgen_ctyp (cval_ctyp cval))
+                            (string_of_id id)
+                            (sgen_cval cval))
+  | I_alloc (ctyp, id) ->
+     string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (string_of_id id))
+     ^^ hardline
+     ^^ string (Printf.sprintf "init_%s(%s);" (sgen_ctyp ctyp) (string_of_id id))
+  | I_convert (x, ctyp1, y, ctyp2) ->
+     string (Printf.sprintf "%s = convert_%s_of_%s(%s);"
+                            (string_of_id x)
+                            (sgen_ctyp ctyp1)
+                            (sgen_ctyp ctyp2)
+                            (string_of_id y))
+  | I_return id ->
+     string (Printf.sprintf "return %s;" (string_of_id id))
+
+let codegen_def env = function
+  | CDEF_reg_dec (ctyp, id) ->
+     string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
+  | CDEF_fundef (id, _, instrs) ->
+     List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) instrs;
+     codegen_id id ^^ hardline
+     ^^ string "{"
+     ^^ jump 2 2 (separate_map hardline codegen_instr instrs) ^^ hardline
+     ^^ string "}"
+
+let compile_ast env (Defs defs) =
+  let cdefs = List.concat (List.map (compile_def env) defs) in
+  let docs = List.map (codegen_def env) cdefs in
+
+  let preamble = separate hardline
+    [ string "#include \"sail.h\"" ]
+  in
+
+  let hlhl = hardline ^^ hardline in
+
+  Pretty_print_sail.to_string (preamble ^^ hlhl ^^ separate hlhl docs)
+  |> print_endline
 
 let print_compiled (setup, ctyp, call, cleanup) =
-  List.iter print_endline setup;
-  begin match call with
-  | CCallH f -> print_endline (f ("?" ^ ctyp))
-  | CCallS str -> print_endline ("?" ^ ctyp ^ " = " ^ str)
-  end;
-  List.iter print_endline cleanup
-  *)
+  List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) setup;
+  print_endline (Pretty_print_sail.to_string (pp_instr (call (mk_id ("?" ^ string_of_ctyp ctyp)))));
+  List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) cleanup
 
 let compile_exp env exp =
   let aexp = anf exp in
   let aexp = c_literals aexp in
   let aexp = map_functions analyze_primop aexp in
-  let _ = map_functions (compile_funcall env) aexp in
-  (* print_compiled (compile_aexp env aexp); *)
+  print_endline "\n###################### COMPILED ######################\n";
+  print_compiled (compile_aexp env aexp);
+  print_endline "\n###################### ANF ######################\n";
   aexp
 
 
