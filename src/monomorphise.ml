@@ -2263,7 +2263,7 @@ let deps_of_uvar kid_deps arg_deps = function
   | U_typ typ -> deps_of_typ kid_deps arg_deps typ
 
 let mk_subrange_pattern vannot vstart vend =
-  let (_,len,ord,typ) = vector_typ_args_of (typ_of_annot vannot) in
+  let (_,len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
   match ord with
   | Ord_aux (Ord_var _,_) -> None
   | Ord_aux (ord',_) ->
