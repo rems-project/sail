@@ -490,6 +490,8 @@ let rec string_of_list sep string_of = function
 
 let skip () = ()
 
+let memea (_, _) = ()
+
 let zero_extend (vec, n) =
   let m = Big_int.to_int n in
   if m <= List.length vec

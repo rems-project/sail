@@ -139,7 +139,10 @@ val __SignExtendSlice = {lem: "exts_slice"} : forall 'm. (bits('m), int, int) ->
 
 val __ZeroExtendSlice = {lem: "extz_slice"} : forall 'm. (bits('m), int, int) -> bits('m)
 
-val cast "cast_unit_vec" : bit -> bits(1)
+val cast cast_unit_vec : bit -> bits(1)
+
+function cast_unit_vec bitzero = 0b0
+and cast_unit_vec bitone = 0b1
 
 val print = "prerr_endline" : string -> unit
 

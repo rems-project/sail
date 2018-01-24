@@ -103,17 +103,17 @@ function mem_read (addr, width, aq, rl, res) = {
   }
 }
 
-val MEMea = {ocaml: "skip", lem: "MEMea"} : forall 'n.
+val MEMea = {ocaml: "memea", lem: "MEMea"} : forall 'n.
   (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_release = {ocaml: "skip", lem: "MEMea_release"} : forall 'n.
+val MEMea_release = {ocaml: "memea", lem: "MEMea_release"} : forall 'n.
   (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_strong_release = {ocaml: "skip", lem: "MEMea_strong_release"} : forall 'n.
+val MEMea_strong_release = {ocaml: "memea", lem: "MEMea_strong_release"} : forall 'n.
   (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_conditional = {ocaml: "skip", lem: "MEMea_conditional"} : forall 'n.
+val MEMea_conditional = {ocaml: "memea", lem: "MEMea_conditional"} : forall 'n.
   (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_conditional_release = {ocaml: "skip", lem: "MEMea_conditional_release"} : forall 'n.
+val MEMea_conditional_release = {ocaml: "memea", lem: "MEMea_conditional_release"} : forall 'n.
   (bits(64), atom('n)) -> unit effect {eamem}
-val MEMea_conditional_strong_release = {ocaml: "skip", lem: "MEMea_conditional_strong_release"} : forall 'n.
+val MEMea_conditional_strong_release = {ocaml: "memea", lem: "MEMea_conditional_strong_release"} : forall 'n.
   (bits(64), atom('n)) -> unit effect {eamem}
 
 val mem_write_ea : forall 'n. (bits(64), atom('n), bool, bool, bool) -> unit effect {eamem, escape}
