@@ -794,9 +794,9 @@ let construct_lit_vector args =
    in the pattern. *)
 type split =
   | NoSplit
-  | VarSplit of (tannot pat *                    (* pattern for this case *)
-                   (id * tannot Ast.exp) list *  (* substitutions for arguments *)
-                   (Parse_ast.l * int) list)     (* optional locations of case expressions to reduce *)
+  | VarSplit of (tannot pat *                            (* pattern for this case *)
+      (id * tannot Ast.exp) list *                       (* substitutions for arguments *)
+      (Parse_ast.l * (int * (id * tannot exp) list)) list) (* optional locations of case expressions to reduce *)
       list
   | ConstrSplit of (tannot pat * nexp KBindings.t) list
 
@@ -849,36 +849,65 @@ let keep_undef_typ value =
      E_aux (E_cast (typ_of_annot eann,value),(Generated Unknown,snd eann))
   | _ -> value
 
-let rec remove_pat_bindings p =
+let freshen_id =
+  let counter = ref 0 in
+  fun id ->
+    let n = !counter in
+    let () = counter := n + 1 in
+    match id with
+    | Id_aux (Id x, l) -> Id_aux (Id (x ^ "#m" ^ string_of_int n),Generated l)
+    | Id_aux (DeIid x, l) -> Id_aux (DeIid (x ^ "#m" ^ string_of_int n),Generated l)
+
+(* TODO: only freshen bindings that might be shadowed *)
+let rec freshen_pat_bindings p =
   let rec aux (P_aux (p,(l,annot)) as pat) =
     let mkp p = P_aux (p,(Generated l, annot)) in
     match p with
     | P_lit _
-    | P_wild -> pat
+    | P_wild -> pat, []
     | P_as (p,_) -> aux p
-    | P_typ (typ,p) -> mkp (P_typ (typ,aux p))
-    | P_id id -> mkp P_wild
+    | P_typ (typ,p) -> let p',vs = aux p in mkp (P_typ (typ,p')),vs
+    | P_id id -> let id' = freshen_id id in mkp (P_id id'),[id,E_aux (E_id id',(Generated Unknown,None))]
     | P_var (p,_) -> aux p
-    | P_app (id,args) -> mkp (P_app (id,List.map aux args))
-    | P_record (fpats,flag) -> mkp (P_record (List.map auxr fpats,flag))
-    | P_vector ps -> mkp (P_vector (List.map aux ps))
-    | P_vector_concat ps -> mkp (P_vector_concat (List.map aux ps))
-    | P_tup ps -> mkp (P_tup (List.map aux ps))
-    | P_list ps -> mkp (P_list (List.map aux ps))
-    | P_cons (p1,p2) -> mkp (P_cons (aux p1, aux p2))
+    | P_app (id,args) ->
+       let args',vs = List.split (List.map aux args) in
+       mkp (P_app (id,args')),List.concat vs
+    | P_record (fpats,flag) ->
+       let fpats,vs = List.split (List.map auxr fpats) in
+       mkp (P_record (fpats,flag)),List.concat vs
+    | P_vector ps ->
+       let ps,vs = List.split (List.map aux ps) in
+       mkp (P_vector ps),List.concat vs
+    | P_vector_concat ps ->
+       let ps,vs = List.split (List.map aux ps) in
+       mkp (P_vector_concat ps),List.concat vs
+    | P_tup ps ->
+       let ps,vs = List.split (List.map aux ps) in
+       mkp (P_tup ps),List.concat vs
+    | P_list ps ->
+       let ps,vs = List.split (List.map aux ps) in
+       mkp (P_list ps),List.concat vs
+    | P_cons (p1,p2) ->
+       let p1,vs1 = aux p1 in
+       let p2,vs2 = aux p2 in
+       mkp (P_cons (p1, p2)), vs1@vs2
   and auxr (FP_aux (FP_Fpat (id,p),(l,annot))) =
-    FP_aux (FP_Fpat (id, aux p),(Generated l,annot))
+    let p,vs = aux p in
+    FP_aux (FP_Fpat (id, p),(Generated l,annot)), vs
   in aux p
 
 (* Use the location pairs in choices to reduce case expressions at the first
    location to the given case at the second. *)
-(* TODO bound variables! *)
 let apply_pat_choices choices =
   let rewrite_case (e,cases) =
     match List.assoc (exp_loc e) choices with
-    | choice ->
+    | choice,subst ->
        (match List.nth cases choice with
-       | Pat_aux (Pat_exp (p,E_aux (e,_)),_) -> e
+       | Pat_aux (Pat_exp (p,E_aux (e,_)),_) ->
+          let dummyannot = (Generated Unknown,None) in
+          (* TODO: use a proper substitution *)
+          List.fold_left (fun e (id,e') ->
+            E_let (LB_aux (LB_val (P_aux (P_id id, dummyannot),e'),dummyannot),E_aux (e,dummyannot))) e subst
        | Pat_aux (Pat_when _,(l,_)) ->
           raise (Reporting_basic.err_unreachable l
                    "Pattern acquired a guard after analysis!")
@@ -1458,7 +1487,8 @@ let split_defs continue_anyway splits defs =
            | Some None -> Some (split id l annot)
            | Some (Some (pats,l)) ->
               Some (List.mapi (fun i p ->
-                P_aux (P_as (remove_pat_bindings p,id),(l,annot)),[],[l,i])
+                let p',subst = freshen_pat_bindings p in
+                P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)])
                       pats)
            )
         | P_app (id,ps) ->
