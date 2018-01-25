@@ -637,6 +637,7 @@ let ocaml_main spec sail_dir =
   end;
   (("open " ^ String.capitalize spec ^ ";;\n\n") :: !lines
    @ [ "  zinitializze_registers ();";
+       if !opt_trace_ocaml then "  Sail_lib.opt_trace := true;" else "  ();";
        "  Printexc.record_backtrace true;";
        "  zmain ()\n";])
   |> String.concat "\n"
