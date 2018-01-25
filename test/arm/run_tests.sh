@@ -51,7 +51,7 @@ cd $SAILDIR/aarch64
 
 printf "Compiling specification...\n"
 
-if $SAILDIR/sail -o aarch64_test -ocaml prelude.sail no_vector/spec.sail decode_start.sail no_vector/decode.sail decode_end.sail main.sail 1> /dev/null;
+if $SAILDIR/sail -o aarch64_test -ocaml prelude.sail no_vector/spec.sail decode_start.sail no_vector/decode.sail decode_end.sail main.sail 1> /dev/null 2> /dev/null;
 then
     green "compiled no_vector specification" "ok";
     mv aarch64_test $DIR/;

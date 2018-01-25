@@ -285,10 +285,6 @@ let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_
 (* 2. Environment                                                         *)
 (**************************************************************************)
 
-type mut = Immutable | Mutable
-
-type lvar = Register of typ | Enum of typ | Local of mut * typ | Union of typquant * typ | Unbound
-
 module Env : sig
   type t
   val add_val_spec : id -> typquant * typ -> t -> t
@@ -357,6 +353,8 @@ module Env : sig
   (* This must not be exported, initial_env sets up a correct initial
      environment. *)
   val empty : t
+
+  val pattern_completeness_ctx : t -> Pattern_completeness.ctx
 end = struct
   type t =
     { top_val_specs : (typquant * typ) Bindings.t;
@@ -927,6 +925,12 @@ end = struct
     { env with poly_undefineds = true }
 
   let polymorphic_undefineds env = env.poly_undefineds
+
+  let pattern_completeness_ctx env =
+    { Pattern_completeness.lookup_id = (fun id -> lookup_id id env);
+      Pattern_completeness.enums = env.enums;
+      Pattern_completeness.variants = Bindings.map (fun (_, tus) -> IdSet.of_list (List.map type_union_id tus)) env.variants
+    }
 end
 
 
@@ -2053,6 +2057,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        annot_exp (E_block (check_block l env exps typ)) typ
      end
   | E_case (exp, cases), _ ->
+     Pattern_completeness.check l (Env.pattern_completeness_ctx env) cases;
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
      annot_exp (E_case (inferred_exp, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ

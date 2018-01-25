@@ -52,7 +52,7 @@ cd $SAILDIR/riscv
 
 printf "Checking specification...\n"
 
-if $SAILDIR/sail prelude.sail riscv_types.sail riscv.sail 1> /dev/null;
+if $SAILDIR/sail prelude.sail riscv_types.sail riscv.sail 1> /dev/null 2> /dev/null;
 then
     green "checked RISCV specification" "ok"
 else

@@ -63,13 +63,6 @@ val opt_tc_debug : int ref
    re-writer passes, so it should only be used for debugging. *)
 val opt_no_effects : bool ref
 
-type mut = Immutable | Mutable
-
-(** [lvar] is the type of variables - they can either be registers,
-   local mutable or immutable variables, nullary union constructors
-   (i.e. None in option), or unbound identifiers *)
-type lvar = Register of typ | Enum of typ | Local of mut * typ | Union of typquant * typ | Unbound
-
 (** {2 Type errors} *)
 
 type type_error =

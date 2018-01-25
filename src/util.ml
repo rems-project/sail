@@ -94,6 +94,8 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
+let opt_warnings = ref true
+
 let rec last = function
   | [x] -> x
   | _ :: xs -> last xs
@@ -414,4 +416,7 @@ let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.ma
 
 let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (string_to_list str))
 
-let warn str = prerr_endline (("Warning" |> yellow |> clear) ^ ": " ^ str)
+let warn str =
+  if !opt_warnings then
+    prerr_endline (("Warning" |> yellow |> clear) ^ ": " ^ str)
+  else ()

@@ -51,6 +51,8 @@
 (* Last element of a list *)
 val last : 'a list -> 'a
 
+val opt_warnings : bool ref
+
 val butlast : 'a list -> 'a list
 
 (** Mixed useful things *)
@@ -241,6 +243,6 @@ val blue : string -> string
 val clear : string -> string
 
 val warn : string -> unit
-                        
+
 val zencode_string : string -> string
 val zencode_upper_string : string -> string

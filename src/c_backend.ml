@@ -78,7 +78,7 @@ type aexp =
 
 and aval =
   | AV_lit of lit * typ
-  | AV_id of id * Type_check.lvar
+  | AV_id of id * lvar
   | AV_tuple of aval list
   | AV_C_fragment of string * typ
 
