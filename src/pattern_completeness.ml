@@ -272,7 +272,7 @@ let rec cases_to_pats = function
   (* We don't consider guarded cases *)
   | Pat_aux (Pat_when _, _) :: cases -> cases_to_pats cases
 
-(* Just highlight the match keyword and no the whole match block. *)
+(* Just highlight the match keyword and not the whole match block. *)
 let shrink_loc = function
   | Parse_ast.Range (n, m) ->
      Lexing.(Parse_ast.Range (n, { n with pos_cnum = n.pos_cnum + 5 }))
