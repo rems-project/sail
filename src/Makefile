@@ -76,7 +76,7 @@ isail: ast.ml
 sail.native: sail
 
 sail.byte:
-	ocamlbuild -cflag -g sail.byte
+	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
 interpreter: lem_interp/interp_ast.lem
 	ocamlbuild lem_interp/extract.cmxa

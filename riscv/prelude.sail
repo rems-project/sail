@@ -27,6 +27,8 @@ val list_length = {ocaml: "length", lem: "length_list"} : forall ('a : Type). li
 overload length = {bitvector_length, vector_length, list_length}
 
 val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+/* sneaky deref with no effect necessary for bitfield writes */
+val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
 
@@ -323,6 +325,7 @@ val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
 val print_int = "print_int" : (string, int) -> unit
+val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 
 union exception = {
   Error_not_implemented : string,

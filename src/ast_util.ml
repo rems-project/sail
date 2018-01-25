@@ -437,6 +437,9 @@ let kid_loc = function
 let pat_loc = function
   | P_aux (_, (l, _)) -> l
 
+let exp_loc = function
+  | E_aux (_, (l, _)) -> l
+
 let def_loc = function
   | DEF_kind (KD_aux (_, (l, _)))
   | DEF_type (TD_aux (_, (l, _)))
