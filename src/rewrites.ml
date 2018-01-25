@@ -1247,8 +1247,8 @@ let rewrite_exp_remove_bitvector_pat rewriters (E_aux (exp,(l,annot)) as full_ex
        let (pat',(guard',decls,_)) = remove_bitvector_pat pat in
        let body' = decls (rewrite_rec body) in
        (match guard' with
-       | Some guard' -> Pat_aux (Pat_when (pat', bitwise_and_exp guard guard', body'), annot')
-       | None -> Pat_aux (Pat_when (pat', guard, body'), annot')) in
+       | Some guard' -> Pat_aux (Pat_when (pat', bitwise_and_exp (decls guard) guard', body'), annot')
+       | None -> Pat_aux (Pat_when (pat', (decls guard), body'), annot')) in
     rewrap (E_case (e, List.map rewrite_pexp ps))
   | E_let (LB_aux (LB_val (pat,v),annot'),body) ->
      let (pat,(_,decls,_)) = remove_bitvector_pat pat in
@@ -2961,6 +2961,7 @@ let rewrite_defs_ocaml = [
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+  ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
@@ -2977,6 +2978,7 @@ let rewrite_defs_c = [
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+  ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
