@@ -45,6 +45,7 @@ module Big_int = Nat_big_num
 
 let opt_elf_threads = ref 1
 let opt_elf_entry = ref Big_int.zero
+let opt_elf_tohost = ref Big_int.zero
 
 type word8 = int
 
@@ -99,7 +100,7 @@ let read name =
        (segments, e_entry, e_machine)
     end
   in
-  (segments, e_entry)
+  (segments, e_entry, symbol_map)
 
 let load_segment seg =
   let open Elf_interpreted_segment in
@@ -115,10 +116,15 @@ let load_segment seg =
   List.iteri (fun i byte -> Sail_lib.wram (Big_int.add paddr (Big_int.of_int i)) byte) (List.map int_of_char bs)
 
 let load_elf name =
-  let segments, e_entry = read name in
+  let segments, e_entry, symbol_map = read name in
   opt_elf_entry := e_entry;
+  if List.mem_assoc "tohost" symbol_map then
+    let (_, _, tohost_addr, _, _) = List.assoc "tohost" symbol_map in
+    opt_elf_tohost := tohost_addr;
   List.iter load_segment segments
 
 (* The sail model can access this by externing a unit -> int function
    as Elf_loader.elf_entry. *)
 let elf_entry () = !opt_elf_entry
+(* Used by RISCV sail model test harness for exiting test *)
+let elf_tohost () = !opt_elf_tohost
