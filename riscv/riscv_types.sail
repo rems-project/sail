@@ -180,7 +180,7 @@ enum sop = {RISCV_SLLI, RISCV_SRLI, RISCV_SRAI} /* shift ops */
 enum rop = {RISCV_ADD, RISCV_SUB, RISCV_SLL, RISCV_SLT, RISCV_SLTU, RISCV_XOR, RISCV_SRL, RISCV_SRA, RISCV_OR, RISCV_AND} /* reg-reg ops */
 enum ropw = {RISCV_ADDW, RISCV_SUBW, RISCV_SLLW, RISCV_SRLW, RISCV_SRAW} /* reg-reg 32-bit ops */
 enum amoop = {AMOSWAP, AMOADD, AMOXOR, AMOAND, AMOOR, AMOMIN, AMOMAX, AMOMINU, AMOMAXU} /* AMO ops */
-
+enum csrop = {CSRRW, CSRRS, CSRRC}
 enum word_width = {BYTE, HALF, WORD, DOUBLE}
 
 /* Ideally these would be sail builtin */

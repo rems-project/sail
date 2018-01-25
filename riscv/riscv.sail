@@ -382,6 +382,70 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   };
 }
 
+union clause ast = CSR  : (bits(12), regbits, regbits, bool, csrop)
+
+function clause decode csr : bits(12) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, false, CSRRW))
+function clause decode csr : bits(12) @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, false, CSRRS))
+function clause decode csr : bits(12) @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, false, CSRRC))
+function clause decode csr : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRW))
+function clause decode csr : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRS))
+function clause decode csr : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRC))
+
+val isCSRImplemented : bits(12) -> bool
+function isCSRImplemented csr : bits(12) -> bool =
+  match csr {
+    0xf11 => true, // mvendorid
+    0xf12 => true, // marchdid
+    0xf13 => true, // mimpid
+    0xf14 => true, // mhartid
+    0x300 => true, // mstatus
+    0x301 => true, // misa
+    0x302 => true, // medeleg
+    0x303 => true, // mideleg
+    0x304 => true, // mie
+    0x305 => true, // mtvec
+    0x306 => true, // mcounteren
+    0x340 => true, // mscratch
+    0x341 => true, // mepc
+    0x342 => true, // mcause
+    0x343 => true, // mtval
+    0x344 => true, // mip
+    _     => false
+  }
+
+function readCSR csr: bits(12) -> bits(64) = 0x0000_0000_0000_0000
+
+function writeCSR (csr : bits(12), value : bits(64)) -> unit = ()
+
+function haveCSRPriv (csr : bits(12), isWrite : bool) -> bool =
+  let isRO = csr[11..10] == 0b11 in
+  ~ (isRO & isWrite) /* XXX TODO check priv */
+
+val signalIllegalInstruction : unit -> unit effect {escape}
+function signalIllegalInstruction () = not_implemented ("illegal instruction")
+
+function clause execute CSR(csr, rs1, rd, is_imm, op) =
+  let rs1_val : bits(64) = if is_imm then EXTZ(rs1) else rGPR(rs1) in
+  let isWrite : bool = match op {
+    CSRRW  => true,
+    CSRRWI => true,
+    _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
+  } in
+  if ~ (isCSRImplemented(csr) & haveCSRPriv(csr, isWrite)) then
+    signalIllegalInstruction ()
+  else {
+    let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
+    if isWrite then {
+      let new_val : bits(64) = match op {
+        CSRRW => rs1_val,
+        CSRRS => csr_val | rs1_val,
+        CSRRC => csr_val & ~(rs1_val)
+      } in
+      writeCSR(csr, new_val)
+    };
+    wGPR(rd, csr_val)
+  }
+
 /* ****************************************************************** */
 
 function clause decode _ = None
