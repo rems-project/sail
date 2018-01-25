@@ -182,6 +182,8 @@ let rec desugar_rchain chain s e =
 %token <string> Op0l Op1l Op2l Op3l Op4l Op5l Op6l Op7l Op8l Op9l
 %token <string> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
 
+%token <string * string> Pragma
+
 %token <Parse_ast.fixity_token> Fixity
 
 %start file
@@ -1246,6 +1248,8 @@ def:
     { DEF_default $1 }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
+  | Pragma
+    { DEF_pragma (fst $1, snd $1, loc $startpos $endpos) }
 
 defs_list:
   | def

@@ -507,6 +507,7 @@ def =  (* Top-level definition *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
  | DEF_reg_dec of dec_spec (* register declaration *)
+ | DEF_pragma of string * string * l
  | DEF_internal_mutrec of fundef list
 
 

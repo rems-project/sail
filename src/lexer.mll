@@ -186,9 +186,10 @@ let alphanum = letter|digit
 let startident = letter|'_'
 let ident = alphanum|['_''\'''#']
 let tyvar_start = '\''
-let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''@''^''|']
+let oper_char = ['!''%''&''*''+''-''.''/'':''<''=''>''@''^''|']
 let operator = (oper_char+ ('_' ident)?)
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
+let lchar = [^'\n']
 
 rule token = parse
   | ws
@@ -236,6 +237,8 @@ rule token = parse
   | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
   | "*/"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
+  | "$" (ident+ as i) (lchar* as f) "\n"
+    { Lexing.new_line lexbuf; Pragma(i, String.trim f) }
   | "infix" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
       Fixity (Infix, Big_int.of_string (Char.escaped p), op) }

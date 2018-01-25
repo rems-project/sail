@@ -19,7 +19,7 @@
   '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits"))
 
 (defconst sail2-special
-  '("_prove"))
+  '("_prove" "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif"))
 
 (defconst sail2-font-lock-keywords
   `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)

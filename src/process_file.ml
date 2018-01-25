@@ -76,12 +76,99 @@ let parse_file (f : string) : Parse_ast.defs =
     | Lexer.LexError(s,p) ->
        raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
+(* Simple preprocessor features for conditional file loading *)
+module StringSet = Set.Make(String)
+
+let symbols = ref StringSet.empty
+
+let cond_pragma defs =
+  let depth = ref 0 in
+  let in_then = ref true in
+  let then_defs = ref [] in
+  let else_defs = ref [] in
+
+  let push_def def =
+    if !in_then then
+      then_defs := (def :: !then_defs)
+    else
+      else_defs := (def :: !else_defs)
+  in
+  
+  let rec scan = function
+    | Parse_ast.DEF_pragma ("endif", _, _) :: defs when !depth = 0 ->
+       (List.rev !then_defs, List.rev !else_defs, defs)
+    | Parse_ast.DEF_pragma ("else", _, _) :: defs when !depth = 0 ->
+       in_then := false; scan defs
+    | (Parse_ast.DEF_pragma (p, _, _) as def) :: defs when p = "ifdef" || p = "ifndef" ->
+       incr depth; push_def def; scan defs
+    | (Parse_ast.DEF_pragma ("endif", _, _) as def) :: defs->
+       decr depth; push_def def; scan defs
+    | def :: defs ->
+       push_def def; scan defs
+    | [] -> failwith "$ifdef or $ifndef never ended"
+  in
+  scan defs
+         
+let rec preprocess = function
+  | [] -> []
+  | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
+     symbols := StringSet.add symbol !symbols;
+     preprocess defs
+                
+  | Parse_ast.DEF_pragma ("ifndef", symbol, _) :: defs ->
+     let then_defs, else_defs, defs = cond_pragma defs in
+     if not (StringSet.mem symbol !symbols) then
+       preprocess (then_defs @ defs)
+     else
+       preprocess (else_defs @ defs)
+
+  | Parse_ast.DEF_pragma ("ifdef", symbol, _) :: defs ->
+     let then_defs, else_defs, defs = cond_pragma defs in
+     if StringSet.mem symbol !symbols then
+       preprocess (then_defs @ defs)
+     else
+       preprocess (else_defs @ defs)
+                  
+  | Parse_ast.DEF_pragma ("include", file, l) :: defs ->
+     let len = String.length file in
+     if len = 0 then
+       (Util.warn "Skipping bad $include. No file argument."; preprocess defs)
+     else if file.[0] = '"' && file.[len - 1] = '"' then
+       let relative = match l with
+         | Parse_ast.Range (pos, _) -> Filename.dirname (Lexing.(pos.pos_fname))
+         | _ -> failwith "Couldn't figure out relative path for $include. This really shouldn't ever happen."
+       in
+       let file = String.sub file 1 (len - 2) in
+       let (Parse_ast.Defs include_defs) = parse_file (Filename.concat relative file) in
+       let include_defs = preprocess include_defs in
+       include_defs @ preprocess defs
+     else if file.[0] = '<' && file.[len - 1] = '>' then
+       let file = String.sub file 1 (len - 2) in
+       let sail_dir =
+         try Sys.getenv "SAIL_DIR" with
+         | Not_found -> (failwith ("Environment variable SAIL_DIR unset. Cannot $include " ^ file))
+       in
+       let file = Filename.concat sail_dir ("lib/" ^ file) in
+       let (Parse_ast.Defs include_defs) = parse_file file in
+       let include_defs = preprocess include_defs in
+       include_defs @ preprocess defs       
+     else
+       let help = "Make sure the filename is surrounded by quotes or angle brackets" in
+       (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess defs)
+
+  | Parse_ast.DEF_pragma (p, arg, _) :: defs ->
+     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess defs) 
+         
+  | def :: defs -> def :: preprocess defs
+
+let preprocess_ast (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess defs)
+                              
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
-let load_file_no_check order f = convert_ast order (parse_file f)
+let load_file_no_check order f = convert_ast order (preprocess_ast (parse_file f))
 
 let load_file order env f =
-  let ast = convert_ast order (parse_file f) in
+  let ast = convert_ast order (preprocess_ast (parse_file f)) in
   Type_check.check env ast
 
 let opt_just_check = ref false

@@ -826,9 +826,11 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
   | Parse_ast.DEF_reg_dec(dec) ->
     let d = to_ast_dec envs dec in
     ((Finished(DEF_reg_dec(d))),envs),partial_defs
+  | Parse_ast.DEF_pragma (_, _, l) ->
+     typ_error l "Encountered preprocessor directive in initial check" None None None
   | Parse_ast.DEF_internal_mutrec _ ->
      (* Should never occur because of remove_mutrec *)
-    typ_error Parse_ast.Unknown "Internal mutual block found when processing scattered defs" None None None
+     typ_error Parse_ast.Unknown "Internal mutual block found when processing scattered defs" None None None
   | Parse_ast.DEF_scattered(Parse_ast.SD_aux(sd,l)) ->
     (match sd with
     | Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->

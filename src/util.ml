@@ -413,3 +413,5 @@ let zchar c =
 let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (string_to_list str))
 
 let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (string_to_list str))
+
+let warn str = prerr_endline (("Warning" |> yellow |> clear) ^ ": " ^ str)

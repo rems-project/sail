@@ -240,5 +240,7 @@ val cyan : string -> string
 val blue : string -> string
 val clear : string -> string
 
+val warn : string -> unit
+                        
 val zencode_string : string -> string
 val zencode_upper_string : string -> string
