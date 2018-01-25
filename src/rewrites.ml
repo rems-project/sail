@@ -115,6 +115,65 @@ let rec small (E_aux (exp,_)) = match exp with
   | E_sizeof _ -> true
   | _ -> false
 
+let id_is_local_var id env = match Env.lookup_id id env with
+  | Local _ -> true
+  | _ -> false
+
+let id_is_unbound id env = match Env.lookup_id id env with
+  | Unbound -> true
+  | _ -> false
+
+let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
+  | LEXP_memory _ | LEXP_deref _ -> false
+  | LEXP_id id
+  | LEXP_cast (_, id) -> id_is_local_var id env
+  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
+  | LEXP_vector (lexp,_)
+  | LEXP_vector_range (lexp,_,_)
+  | LEXP_field (lexp,_) -> lexp_is_local lexp env
+
+let rec lexp_is_local_intro (LEXP_aux (lexp, _)) env = match lexp with
+  | LEXP_memory _ | LEXP_deref _ -> false
+  | LEXP_id id
+  | LEXP_cast (_, id) -> id_is_unbound id env
+  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
+  | LEXP_vector (lexp,_)
+  | LEXP_vector_range (lexp,_,_)
+  | LEXP_field (lexp,_) -> lexp_is_local_intro lexp env
+
+let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match annot with
+  | Some (_, _, eff) -> effectful_effs eff
+  | _ -> false
+
+let find_used_vars exp =
+  (* Overapproximates the set of used identifiers, but for the use cases below
+     this is acceptable. *)
+  let e_id id = IdSet.singleton id, E_id id in
+  fst (fold_exp
+    { (compute_exp_alg IdSet.empty IdSet.union) with e_id = e_id } exp)
+
+let find_introduced_vars exp =
+  let lEXP_aux ((ids, lexp), annot) =
+    let ids = match lexp with
+      | LEXP_id id | LEXP_cast (_, id)
+        when id_is_unbound id (env_of_annot annot) -> IdSet.add id ids
+      | _ -> ids in
+    (ids, LEXP_aux (lexp, annot)) in
+  fst (fold_exp
+    { (compute_exp_alg IdSet.empty IdSet.union) with lEXP_aux = lEXP_aux } exp)
+
+let find_updated_vars exp =
+  let intros = find_introduced_vars exp in
+  let lEXP_aux ((ids, lexp), annot) =
+    let ids = match lexp with
+      | LEXP_id id | LEXP_cast (_, id)
+        when id_is_local_var id (env_of_annot annot) && not (IdSet.mem id intros) ->
+         IdSet.add id ids
+      | _ -> ids in
+    (ids, LEXP_aux (lexp, annot)) in
+  fst (fold_exp
+    { (compute_exp_alg IdSet.empty IdSet.union) with lEXP_aux = lEXP_aux } exp)
+
 let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
 | Nexp_id id -> rewrite_nexp_ids env (Env.get_num_def id env)
 | Nexp_times (nexp1, nexp2) -> Nexp_aux (Nexp_times (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
@@ -636,7 +695,10 @@ let remove_vector_concat_pat pat =
         | None -> P_aux (P_id child,cannot) in
       let letbind = fix_eff_lb (LB_aux (LB_val (id_pat,subv),cannot)) in
       (letbind,
-       (fun body -> fix_eff_exp (annot_exp (E_let (letbind,body)) l env (typ_of body))),
+       (fun body ->
+         if IdSet.mem child (find_used_vars body)
+         then fix_eff_exp (annot_exp (E_let (letbind,body)) l env (typ_of body))
+         else body),
        (rootname,childname)) in
 
     let p_aux = function
@@ -1128,7 +1190,9 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     let letbind = LB_aux (LB_val (e,elem), (l, Some (env, bit_typ, no_effect))) in
     let letexp = (fun body ->
       let (E_aux (_,(_,bannot))) = body in
-      annot_exp (E_let (letbind,body)) l env (typ_of body)) in
+      if IdSet.mem id (find_used_vars body)
+      then annot_exp (E_let (letbind,body)) l env (typ_of body)
+      else body) in
     (letexp, letbind) in
 
   let compose_guards guards = List.fold_right compose_guard_opt guards None in
@@ -1376,36 +1440,6 @@ let rewrite_defs_guarded_pats =
   rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp_guarded_pats;
                     rewrite_fun = rewrite_fun_guarded_pats }
 
-
-let id_is_local_var id env = match Env.lookup_id id env with
-  | Local _ -> true
-  | _ -> false
-
-let id_is_unbound id env = match Env.lookup_id id env with
-  | Unbound -> true
-  | _ -> false
-
-let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
-  | LEXP_memory _ | LEXP_deref _ -> false
-  | LEXP_id id
-  | LEXP_cast (_, id) -> id_is_local_var id env
-  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
-  | LEXP_vector (lexp,_)
-  | LEXP_vector_range (lexp,_,_)
-  | LEXP_field (lexp,_) -> lexp_is_local lexp env
-
-let rec lexp_is_local_intro (LEXP_aux (lexp, _)) env = match lexp with
-  | LEXP_memory _ | LEXP_deref _ -> false
-  | LEXP_id id
-  | LEXP_cast (_, id) -> id_is_unbound id env
-  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
-  | LEXP_vector (lexp,_)
-  | LEXP_vector_range (lexp,_,_)
-  | LEXP_field (lexp,_) -> lexp_is_local_intro lexp env
-
-let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match annot with
-  | Some (_, _, eff) -> effectful_effs eff
-  | _ -> false
 
 let rec rewrite_lexp_to_rhs ((LEXP_aux(lexp,((l,_) as annot))) as le) =
   match lexp with
@@ -2544,28 +2578,6 @@ let rewrite_defs_pat_lits =
 (* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
  * internal let-expressions, or internal plet-expressions ended by a term that does not
  * access memory or registers and does not update variables *)
-
-let find_introduced_vars exp =
-  let lEXP_aux ((ids, lexp), annot) =
-    let ids = match lexp with
-      | LEXP_id id | LEXP_cast (_, id)
-        when id_is_unbound id (env_of_annot annot) -> IdSet.add id ids
-      | _ -> ids in
-    (ids, LEXP_aux (lexp, annot)) in
-  fst (fold_exp
-    { (compute_exp_alg IdSet.empty IdSet.union) with lEXP_aux = lEXP_aux } exp)
-
-let find_updated_vars exp =
-  let intros = find_introduced_vars exp in
-  let lEXP_aux ((ids, lexp), annot) =
-    let ids = match lexp with
-      | LEXP_id id | LEXP_cast (_, id)
-        when id_is_local_var id (env_of_annot annot) && not (IdSet.mem id intros) ->
-         IdSet.add id ids
-      | _ -> ids in
-    (ids, LEXP_aux (lexp, annot)) in
-  fst (fold_exp
-    { (compute_exp_alg IdSet.empty IdSet.union) with lEXP_aux = lEXP_aux } exp)
 
 let swaptyp typ (l,tannot) = match tannot with
   | Some (env, typ', eff) -> (l, Some (env, typ, eff))
