@@ -428,7 +428,6 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
   let rs1_val : bits(64) = if is_imm then EXTZ(rs1) else rGPR(rs1) in
   let isWrite : bool = match op {
     CSRRW  => true,
-    CSRRWI => true,
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
   if ~ (isCSRImplemented(csr) & haveCSRPriv(csr, isWrite)) then
