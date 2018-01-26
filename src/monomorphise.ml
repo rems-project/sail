@@ -3075,6 +3075,10 @@ let rewrite_app env typ (id,args) =
         when is_slice slice1 && not (is_constant length1) ->
        E_app (mk_id "zext_slice", [vector1; start1; length1])
 
+    | [E_aux (E_app (ones, [len1]),_);
+       _ (* unnecessary ZeroExtend length *)] ->
+       E_app (mk_id "zext_ones", [len1])
+
     | _ -> E_app (id,args)
 
   else if is_id env (Id "SignExtend") id then
