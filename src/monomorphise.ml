@@ -2227,6 +2227,7 @@ let merge rs rs' = {
 }
 
 type env = {
+  top_kids : kid list;
   var_deps : dependencies Bindings.t;
   kid_deps : dependencies KBindings.t
 }
@@ -2249,7 +2250,7 @@ let update_env env deps pat =
   let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
   let kbound = kids_bound_by_pat pat in
   let kid_deps = KidSet.fold (fun v ds -> KBindings.add v deps ds) kbound env.kid_deps in
-  { var_deps = var_deps; kid_deps = kid_deps }
+  { env with var_deps = var_deps; kid_deps = kid_deps }
 
 let assigned_vars_exps es =
   List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
@@ -2384,6 +2385,18 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
      | Some mk_pat -> check_dep id mk_pat
      | None -> None)
   | _ -> None
+
+let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
+  let is_equal kid =
+    prove typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+  in
+  match ne with
+  | Nexp_var _
+  | Nexp_constant _ -> nexp
+  | _ ->
+     match List.find is_equal env.top_kids with
+     | kid -> Nexp_aux (Nexp_var kid,Generated l)
+     | exception Not_found -> nexp
 
 (* Takes an environment of dependencies on vars, type vars, and flow control,
    and dependencies on mutable variables.  The latter are quite conservative,
@@ -2601,6 +2614,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let typ = Env.expand_synonyms tenv typ in
        if is_bitvector_typ typ then
          let _,size,_,_ = vector_typ_args_of typ in
+         let size = simplify_size_nexp env tenv size in
          match deps_of_nexp env.kid_deps [] size with
          | Have (args,caller,caller_kids) ->
             { r with
@@ -2737,7 +2751,8 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat set_assertions =
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge kid_quant_deps kid_deps in
-  { var_deps = var_deps; kid_deps = kid_deps }
+  let top_kids = List.map fst (KBindings.bindings kid_quant_deps) in
+  { top_kids = top_kids; var_deps = var_deps; kid_deps = kid_deps }
 
 (* When there's more than one pick the first *)
 let merge_set_asserts _ x y =
