@@ -1,12 +1,14 @@
+$include <elf.sail>
+
+// Simple top level fetch and execute loop.
 val fetch_and_execute : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
-function fetch_and_execute () = while true do {
-  let instr = aget_Mem(_PC, 4, AccType_IFETCH);
-  decode(instr);
-  if __BranchTaken then __BranchTaken = false else _PC = _PC + 4
-}
-
-val elf_entry = "Elf_loader.elf_entry" : unit -> int
+function fetch_and_execute () =
+  while true do {
+    let instr = aget_Mem(_PC, 4, AccType_IFETCH);
+    decode(instr);
+    if __BranchTaken then __BranchTaken = false else _PC = _PC + 4
+  }
 
 val main : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
