@@ -1504,8 +1504,9 @@ let split_defs continue_anyway splits defs =
            | Some (Some (pats,l)) ->
               Some (List.mapi (fun i p ->
                 match p with
-                | P_aux (P_lit lit,_) when (match lit with L_aux (L_undef,_) -> false | _ -> true) ->
-                   p,[id,E_aux (E_lit lit,(Generated Unknown,None))],[l,(i,[])]
+                | P_aux (P_lit lit,(pl,pannot))
+                    when (match lit with L_aux (L_undef,_) -> false | _ -> true) ->
+                   p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,[])]
                 | _ ->
                    let p',subst = freshen_pat_bindings p in
                    P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)])
@@ -2664,8 +2665,8 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat set_assertions =
        (match KBindings.find kid set_assertions with
        | (l,is) ->
           let l' = Generated l in
-          let pats = List.map (fun n -> P_aux (P_lit (L_aux (L_num n,l')),(l',None))) is in
-          let pats = pats @ [P_aux (P_wild,(l',None))] in
+          let pats = List.map (fun n -> P_aux (P_lit (L_aux (L_num n,l')),(l',snd annot))) is in
+          let pats = pats @ [P_aux (P_wild,(l',snd annot))] in
           Partial (pats,l)
        | exception Not_found -> Total)
     | _ -> Total
