@@ -216,9 +216,6 @@ let rec lem_nexps_of_typ (Typ_aux (t,_)) =
      if !opt_mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
        NexpSet.singleton (orig_nexp m)
      else trec elem_typ
-     (* NexpSet.union
-       (if !opt_mwords then tyvars_of_nexp (nexp_simp m) else NexpSet.empty)
-       (trec elem_typ) *)
   | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
      if !opt_sequential then trec etyp else NexpSet.empty
   | Typ_app(Id_aux (Id "range", _),_)
@@ -227,9 +224,7 @@ let rec lem_nexps_of_typ (Typ_aux (t,_)) =
   | Typ_app (_,tas) ->
      List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg ta))
        NexpSet.empty tas
-  | Typ_exist (kids,_,t) ->
-     let s = trec t in
-     List.fold_left (fun s k -> NexpSet.remove k s) s (List.map nvar kids)
+  | Typ_exist (kids,_,t) -> trec t
 and lem_nexps_of_typ_arg (Typ_arg_aux (ta,_)) =
   match ta with
   | Typ_arg_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
@@ -325,32 +320,11 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_arg_order o -> empty
   in typ', atomic_typ
 
-(* Check for variables in types that would be pretty-printed.
-   In particular, in case of vector types, only the element type and the
-   length argument are checked for variables, and the latter only if it is
-   a bitvector; for other types of vectors, the length is not pretty-printed
-   in the type, and the start index is never pretty-printed in vector types. *)
-let rec contains_t_pp_var ctxt (Typ_aux (t,a) as typ) = match t with
-  | Typ_id _ -> false
-  | Typ_var _ -> true
-  | Typ_exist _ -> true
-  | Typ_fn (t1,t2,_) -> contains_t_pp_var ctxt t1 || contains_t_pp_var ctxt t2
-  | Typ_tup ts -> List.exists (contains_t_pp_var ctxt) ts
-  | Typ_app (c,targs) ->
-      if Ast_util.is_number typ then false
-      else if is_bitvector_typ typ then
-        if !opt_mwords then
-          let (_,length,_,_) = vector_typ_args_of typ in
-          let length = nexp_simp length in
-          not (is_nexp_constant length || NexpSet.mem length ctxt.bound_nexps)
-        else false
-      else List.exists (contains_t_arg_pp_var ctxt) targs
-and contains_t_arg_pp_var ctxt (Typ_arg_aux (targ, _)) = match targ with
-  | Typ_arg_typ t -> contains_t_pp_var ctxt t
-  | Typ_arg_nexp nexp ->
-     let nexp = nexp_simp nexp in
-     not (is_nexp_constant nexp || NexpSet.mem nexp ctxt.bound_nexps)
-  | _ -> false
+(* Check for variables in types that would be pretty-printed and are not
+   bound in the val spec of the function. *)
+let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
+  NexpSet.diff (lem_nexps_of_typ typ) ctxt.bound_nexps
+  |> NexpSet.exists (fun nexp -> not (is_nexp_constant nexp))
 
 let doc_tannot_lem ctxt eff typ =
   if contains_t_pp_var ctxt typ then empty
@@ -506,6 +480,9 @@ let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
   | Typ_app (Id_aux (Id "itself",_),_) -> true
   | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists typ_needs_printed_arg targs
   | Typ_fn (t1,t2,_) -> typ_needs_printed t1 || typ_needs_printed t2
+  | Typ_exist (kids,_,t) ->
+     let visible_kids = KidSet.inter (KidSet.of_list kids) (lem_tyvars_of_typ t) in
+     typ_needs_printed t && KidSet.is_empty visible_kids
   | _ -> false
 and typ_needs_printed_arg (Typ_arg_aux (targ, _)) = match targ with
   | Typ_arg_typ t -> typ_needs_printed t
