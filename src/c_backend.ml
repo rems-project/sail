@@ -232,6 +232,7 @@ let rec anf (E_aux (e_aux, _) as exp) =
      let aval, wrap = to_aval (anf exp) in
      wrap (AE_return (aval, typ_of exp))
 
+  | E_var (LEXP_aux (LEXP_id id, _), binding, body)
   | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body) ->
      let env = env_of body in
      let lvar = Env.lookup_id id env in
@@ -611,6 +612,12 @@ and compile_block env = function
      let gs = gensym () in
      setup @ [I_decl (CT_unit, gs); call gs] @ cleanup @ rest
 
+let rec pat_ids (P_aux (p_aux, _)) =
+  match p_aux with
+  | P_id id -> [id]
+  | P_tup pats -> List.concat (List.map pat_ids pats)
+  | _ -> failwith "Bad pattern"
+
 let compile_def env = function
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
      [CDEF_reg_dec (ctyp_of_typ typ, id)]
@@ -632,7 +639,7 @@ let compile_def env = function
             else
               assert false
           in
-          [CDEF_fundef (id, [], instrs)]
+          [CDEF_fundef (id, pat_ids pat, instrs)]
        | _ -> assert false
      end
 
@@ -693,9 +700,19 @@ let codegen_instr = function
 let codegen_def env = function
   | CDEF_reg_dec (ctyp, id) ->
      string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
-  | CDEF_fundef (id, _, instrs) ->
+  | CDEF_fundef (id, args, instrs) ->
      List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) instrs;
-     codegen_id id ^^ hardline
+     let _, Typ_aux (fn_typ, _) = Env.get_val_spec id env in
+     let arg_typs, ret_typ = match fn_typ with
+       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
+       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | _ -> assert false
+     in
+     let arg_ctyps, ret_ctyp = List.map ctyp_of_typ arg_typs, ctyp_of_typ ret_typ in
+
+     let args = Util.string_of_list ", " (fun x -> x) (List.map2 (fun ctyp arg -> sgen_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args) in
+
+     string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_id id ^^ parens (string args) ^^ hardline
      ^^ string "{"
      ^^ jump 2 2 (separate_map hardline codegen_instr instrs) ^^ hardline
      ^^ string "}"
