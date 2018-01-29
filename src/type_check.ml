@@ -1850,6 +1850,8 @@ let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
      Some nc
   | E_lit (L_aux (L_true, _)) -> Some nc_true
   | E_lit (L_aux (L_false, _)) -> Some nc_false
+  | E_let (_,e) ->
+     assert_constraint env e (* TODO: beware of fresh type vars *)
   | E_app (op, [x; y]) when string_of_id op = "or_bool" ->
      option_binop nc_or (assert_constraint env x) (assert_constraint env y)
   | E_app (op, [x; y]) when string_of_id op = "and_bool" ->
