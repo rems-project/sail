@@ -442,4 +442,5 @@ let primops =
       ("internal_pick", value_internal_pick);
       ("replicate_bits", value_replicate_bits);
       ("Elf_loader.elf_entry", fun _ -> V_int (!Elf_loader.opt_elf_entry));
+      ("Elf_loader.elf_tohost", fun _ -> V_int (!Elf_loader.opt_elf_tohost));
     ]
