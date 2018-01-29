@@ -373,3 +373,5 @@ val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits
 val vector64 : int -> bits(64)
 
 function vector64 n = __raw_GetSlice_int(64, n, 0)
+
+function break () : unit -> unit = ()
