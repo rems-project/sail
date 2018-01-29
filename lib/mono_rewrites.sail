@@ -122,3 +122,10 @@ function UInt_slice(xs,i,l) = {
   let xs = (xs & slice_mask(i,l)) >> i in
   UInt(xs)
 }
+
+val zext_ones : forall 'n, 'n >= 0. int -> bits('n) effect pure
+
+function zext_ones(m) = {
+  let v : bits('n) = extsv(0b1) in
+  v >> ('n - m)
+}

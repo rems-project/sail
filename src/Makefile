@@ -270,4 +270,4 @@ doc:
 	ocamlbuild -use-ocamlfind sail.docdir/index.html
 
 lib:
-	ocamlbuild pretty_print.cmxa pretty_print.cma
+	ocamlbuild -use-ocamlfind pretty_print.cmxa pretty_print.cma

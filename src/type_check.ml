@@ -2020,6 +2020,12 @@ let strip_pat : 'a pat -> unit pat = function pat -> map_pat_annot (fun (l, _) -
 let strip_pexp : 'a pexp -> unit pexp = function pexp -> map_pexp_annot (fun (l, _) -> (l, ())) pexp
 let strip_lexp : 'a lexp -> unit lexp = function lexp -> map_lexp_annot (fun (l, _) -> (l, ())) lexp
 
+let fresh_var =
+  let counter = ref 0 in
+  fun () -> let n = !counter in
+            let () = counter := n+1 in
+            mk_id ("v#" ^ string_of_int n)
+
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
   let add_effect exp eff = match exp with
@@ -2470,8 +2476,9 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      | exception (Type_error _ as typ_exn) ->
         match pat_aux with
         | P_lit lit ->
-           let guard = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
-           let (typed_pat, env, guards) = bind_pat env (mk_pat (P_id (mk_id "p#"))) typ in
+           let var = fresh_var () in
+           let guard = mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit))) in
+           let (typed_pat, env, guards) = bind_pat env (mk_pat (P_id var)) typ in
            typed_pat, env, guard::guards
         | _ -> raise typ_exn
 

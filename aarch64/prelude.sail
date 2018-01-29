@@ -1,24 +1,11 @@
 default Order dec
 
+$include <smt.sail>
+$include <flow.sail>
+
 type bits ('n : Int) = vector('n, dec, bit)
 
 infix 4 ==
-
-val div = {
-  smt : "div",
-  lem : "integerDiv"
-} : forall 'n 'm. (atom('n), atom('m)) -> atom(div('n, 'm))
-
-val mod = {
-  smt : "mod",
-  lem : "integerMod"
-} : forall 'n 'm. (atom('n), atom('m)) -> atom(mod('n, 'm))
-
-val eq_atom = {ocaml: "eq_int", lem: "eq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
 
@@ -86,15 +73,9 @@ val vector_concat = {ocaml: "append", lem: "append_list"} : forall ('n : Int) ('
 
 overload append = {bitvector_concat, vector_concat}
 
-val not_bool = "not" : bool -> bool
-
 val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
-
-val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-
-function neq_atom (x, y) = not_bool(eq_atom(x, y))
 
 val neq_int = {lem: "neq"} : (int, int) -> bool
 
@@ -110,8 +91,6 @@ function neq_anything (x, y) = not_bool(x == y)
 
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
-val and_bool = "and_bool" : (bool, bool) -> bool
-
 val builtin_and_vec = {ocaml: "and_vec", lem: "Sail_operators.and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val and_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -119,8 +98,6 @@ val and_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
 overload operator & = {and_bool, and_vec}
-
-val or_bool = "or_bool" : (bool, bool) -> bool
 
 val builtin_or_vec = {ocaml: "or_vec", lem: "Sail_operators.or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -263,7 +240,7 @@ val abs_int = "abs_int" : int -> int
 
 val abs_real = "abs_real" : real -> real
 
-overload abs = {abs_int, abs_real}
+overload abs = {abs, abs_int, abs_real}
 
 val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : (nat, nat) -> nat
 

@@ -396,7 +396,7 @@ let initial_system_state_of_elf_file name =
         match Nat_big_num.to_int e_machine with
         | 8 (* EM_MIPS *) ->
           let startaddr =
-            let e_entry = Uint64.of_string (Nat_big_num.to_string e_entry) in
+            let e_entry = Uint64_wrapper.of_bigint e_entry in
             match Abi_mips64.abi_mips64_compute_program_entry_point segments e_entry with
             | Error.Fail s -> failwith "Failed computing entry point"
             | Error.Success s -> s

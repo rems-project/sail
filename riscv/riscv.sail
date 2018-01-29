@@ -275,7 +275,22 @@ union clause ast = ECALL
 
 function clause decode 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(ECALL)
 
-function clause execute ECALL = not_implemented("ECALL is not implemented")
+function clause execute ECALL =
+  let t : sync_exception =
+    struct { trap = match (cur_privilege) {
+                      USER => User_ECall,
+		      MACHINE => Machine_ECall
+		    },
+             badaddr = (None : option(regval)) } in
+  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+
+/* ****************************************************************** */
+union clause ast = MRET
+
+function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET)
+
+function clause execute MRET =
+  nextPC = handle_exception_ctl(cur_privilege, CTL_MRET, PC)
 
 /* ****************************************************************** */
 union clause ast = EBREAK

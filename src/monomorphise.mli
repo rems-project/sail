@@ -53,7 +53,8 @@ type options = {
   debug_analysis : int;           (* Debug output level for the automatic analysis *)
   rewrites : bool;                (* Experimental rewrites for variable-sized operations *)
   rewrite_size_parameters : bool; (* Make implicit type parameters explicit for (e.g.) lem *)
-  all_split_errors : bool
+  all_split_errors : bool;
+  dump_raw: bool
 }
 
 val monomorphise :
@@ -61,4 +62,4 @@ val monomorphise :
   ((string * int) * string) list -> (* List of splits from the command line *)
   Type_check.Env.t ->
   Type_check.tannot Ast.defs ->
-  Type_check.tannot Ast.defs
+  Type_check.tannot Ast.defs * Type_check.Env.t

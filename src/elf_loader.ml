@@ -118,9 +118,9 @@ let load_segment seg =
 let load_elf name =
   let segments, e_entry, symbol_map = read name in
   opt_elf_entry := e_entry;
-  if List.mem_assoc "tohost" symbol_map then
-    let (_, _, tohost_addr, _, _) = List.assoc "tohost" symbol_map in
-    opt_elf_tohost := tohost_addr;
+  (if List.mem_assoc "tohost" symbol_map then
+     let (_, _, tohost_addr, _, _) = List.assoc "tohost" symbol_map in
+     opt_elf_tohost := tohost_addr);
   List.iter load_segment segments
 
 (* The sail model can access this by externing a unit -> int function
