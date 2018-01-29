@@ -54,7 +54,7 @@ open Ast_util
 module Big_int = Nat_big_num
 open Type_check
 
-let size_set_limit = 16
+let size_set_limit = 32
 
 let optmap v f =
   match v with
