@@ -29,7 +29,22 @@ val elf_entry = "Elf_loader.elf_entry" : unit -> int
 
 val main : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 
+function dump_state () : unit -> unit = {
+  print("Dumping state");
+  print_bits(" PC: ", PC);
+  let instr = __RISCV_read(PC, 4);
+  print_bits(" instr: ", instr)
+}
+
 function main () = {
   PC = __GetSlice_int(64, elf_entry(), 0);
-  fetch_and_execute()
+  try {
+    fetch_and_execute()
+  } catch {
+    Error_not_implemented(s) => print_string("Error: Not implemented: ", s),
+    Error_misaligned_access  => print("Error: misaligned_access"),
+    Error_EBREAK => print("EBREAK"),
+    Error_internal_error => print("Error: internal error")
+  };
+  dump_state ()
 }

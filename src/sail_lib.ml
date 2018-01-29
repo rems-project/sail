@@ -469,6 +469,9 @@ let print_int (str, x) =
 let print_bits (str, xs) =
   print_endline (str ^ string_of_bits xs)
 
+let print_string(str, msg) =
+  print_endline (str ^ msg)
+
 let reg_deref r = !r
 
 let string_of_zbit = function

@@ -326,6 +326,7 @@ val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
 val print_int = "print_int" : (string, int) -> unit
 val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
+val print_string = "print_string" : (string, string) -> unit
 
 union exception = {
   Error_not_implemented : string,
