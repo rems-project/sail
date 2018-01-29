@@ -104,8 +104,8 @@ function clause decode 0b010000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd :
 function clause execute (SHIFTIOP(shamt, rs1, rd, op)) = 
     let rs1_val = rGPR(rs1) in
     let result : bits(64) = match op {
-      RISCV_SLLI => rs1_val >> shamt,
-      RISCV_SRLI => rs1_val << shamt,
+      RISCV_SLLI => rs1_val << shamt,
+      RISCV_SRLI => rs1_val >> shamt,
       RISCV_SRAI => shift_right_arith64(rs1_val, shamt)
     } in
     wGPR(rd, result)
@@ -220,8 +220,8 @@ function clause decode 0b0100000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd 
 function clause execute (SHIFTW(shamt, rs1, rd, op)) =
     let rs1_val = (rGPR(rs1))[31..0] in
     let result : bits(32) = match op {
-      RISCV_SLLI => rs1_val >> shamt,
-      RISCV_SRLI => rs1_val << shamt,
+      RISCV_SLLI => rs1_val << shamt,
+      RISCV_SRLI => rs1_val >> shamt,
       RISCV_SRAI => shift_right_arith32(rs1_val, shamt)
     } in
     wGPR(rd, EXTS(result))
