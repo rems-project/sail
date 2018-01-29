@@ -303,3 +303,6 @@ val split_defs : ('a def -> bool) -> 'a defs -> ('a defs * 'a def * 'a defs) opt
 val append_ast : 'a defs -> 'a defs -> 'a defs
 
 val type_union_id : type_union -> id
+
+val pat_ids : 'a pat -> IdSet.t
+val subst : id -> 'a exp -> 'a exp -> 'a exp

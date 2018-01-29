@@ -995,9 +995,7 @@ let subst_id_pat pat (id1,id2) =
   fold_pat {id_pat_alg with p_id = p_id} pat
 
 let subst_id_exp exp (id1,id2) =
-  (* TODO Don't substitute bound occurrences inside let expressions etc *)
-  let e_id (Id_aux (id,l)) = (if id = id1 then E_id (Id_aux (id2,l)) else E_id (Id_aux (id,l))) in
-  fold_exp {id_exp_alg with e_id = e_id} exp
+  Ast_util.subst (Id_aux (id1,Parse_ast.Unknown)) (E_aux (E_id (Id_aux (id2,Parse_ast.Unknown)),(Parse_ast.Unknown,None))) exp
 
 let rec pat_to_exp (P_aux (pat,(l,annot))) =
   let rewrap e = E_aux (e,(l,annot)) in
