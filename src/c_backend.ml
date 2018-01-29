@@ -63,42 +63,102 @@ let lvar_typ = function
   | Register typ -> typ
   | _ -> assert false
 
+(*
+
+1) Conversion to ANF
+
+    tannot defs -> (typ, aexp) cdefs
+
+2) Primitive operation optimizations
+
+3) Lowering to low-level imperative language
+
+  (typ, aexp) cdefs -> (ctyp, instr list) cdefs
+
+4) Low level optimizations (e.g. reducing allocations)
+
+5) Generation of C code
+
+  (ctyp, instr list) -> string
+
+*)
+
 (**************************************************************************)
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
 
+(* The first step in compiling sail is converting the Sail expression
+   grammar into A-normal form. Essentially this converts expressions
+   such as f(g(x), h(y)) into something like:
+
+   let v0 = g(x) in let v1 = h(x) in f(v0, v1)
+
+   Essentially the arguments to every function must be trivial, and
+   complex expressions must be let bound to new variables, or used in
+   a block, assignment, or control flow statement (if, for, and
+   while/until loops). The aexp datatype represents these expressions,
+   while aval represents the trivial values.
+
+   The X_aux construct in ast.ml isn't used here, but the typing
+   information is collapsed into the aexp and aval types. The
+   convention is that the type of an aexp is given by last argument to
+   a constructor. It is omitted where it is obvious - for example all
+   for loops have unit as their type. If some constituent part of the
+   aexp has an annotation, the it refers to the previous argument, so
+   in
+
+   AE_let (id, typ1, _, body, typ2)
+
+   typ1 is the type of the bound identifer, whereas typ2 is the type
+   of the whole let expression (and therefore also the body).
+
+   See Flanagan et al's 'The Essence of Compiling with Continuations' *)
 type aexp =
   | AE_val of aval
   | AE_app of id * aval list * typ
   | AE_cast of aexp * typ
-  | AE_assign of id * aexp
+  | AE_assign of id * typ * aexp
   | AE_let of id * typ * aexp * aexp * typ
   | AE_block of aexp list * aexp * typ
   | AE_return of aval * typ
+  | AE_throw of aval
+  | AE_if of aval * aexp * aexp * typ
+  | AE_for of id * aexp * aexp * aexp * order * aexp
+  | AE_loop of loop * aexp * aexp
 
 and aval =
   | AV_lit of lit * typ
   | AV_id of id * lvar
+  | AV_ref of id * lvar
   | AV_tuple of aval list
   | AV_C_fragment of string * typ
 
+(* Map over all the avals in an aexp. *)
 let rec map_aval f = function
   | AE_val v -> AE_val (f v)
   | AE_cast (aexp, typ) -> AE_cast (map_aval f aexp, typ)
-  | AE_assign (id, aexp) -> AE_assign (id, map_aval f aexp)
+  | AE_assign (id, typ, aexp) -> AE_assign (id, typ, map_aval f aexp)
   | AE_app (id, vs, typ) -> AE_app (id, List.map f vs, typ)
-  | AE_let (id, typ1, aexp1, aexp2, typ2) -> AE_let (id, typ1, map_aval f aexp1, map_aval f aexp2, typ2)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) ->
+     AE_let (id, typ1, map_aval f aexp1, map_aval f aexp2, typ2)
   | AE_block (aexps, aexp, typ) -> AE_block (List.map (map_aval f) aexps, map_aval f aexp, typ)
   | AE_return (aval, typ) -> AE_return (f aval, typ)
+  | AE_if (aval, aexp1, aexp2, typ2) ->
+     AE_if (f aval, map_aval f aexp1, map_aval f aexp2, typ2)
 
+(* Map over all the functions in an aexp. *)
 let rec map_functions f = function
   | AE_app (id, vs, typ) -> f id vs typ
   | AE_cast (aexp, typ) -> AE_cast (map_functions f aexp, typ)
-  | AE_assign (id, aexp) -> AE_assign (id, map_functions f aexp)
+  | AE_assign (id, typ, aexp) -> AE_assign (id, typ, map_functions f aexp)
   | AE_let (id, typ1, aexp1, aexp2, typ2) -> AE_let (id, typ1, map_functions f aexp1, map_functions f aexp2, typ2)
   | AE_block (aexps, aexp, typ) -> AE_block (List.map (map_functions f) aexps, map_functions f aexp, typ)
+  | AE_if (aval, aexp1, aexp2, typ) ->
+     AE_if (aval, map_functions f aexp1, map_functions f aexp2, typ)
   | AE_val _ | AE_return _ as v -> v
 
+(* For debugging we provide a pretty printer for ANF expressions. *)
+                                     
 let pp_id ?color:(color=Util.green) id =
   string (string_of_id id |> color |> Util.clear)
 
@@ -123,8 +183,8 @@ let rec pp_aexp = function
   | AE_val v -> pp_aval v
   | AE_cast (aexp, typ) ->
      pp_annot typ (string "$" ^^ pp_aexp aexp)
-  | AE_assign (id, aexp) ->
-     pp_id id ^^ string " := " ^^ pp_aexp aexp
+  | AE_assign (id, typ, aexp) ->
+     pp_annot typ (pp_id id) ^^ string " := " ^^ pp_aexp aexp
   | AE_app (id, args, typ) ->
      pp_annot typ (pp_id ~color:Util.red id ^^ parens (separate_map (comma ^^ space) pp_aval args))
   | AE_let (id, id_typ, binding, body, typ) -> group
@@ -138,6 +198,10 @@ let rec pp_aexp = function
           pp_annot typ (separate space [string "let"; pp_annot id_typ (pp_id id); string "="; pp_aexp binding; string "in"])
           ^^ hardline ^^ pp_aexp body
      end
+  | AE_if (cond, then_aexp, else_aexp, typ) ->
+     pp_annot typ (separate space [ string "if"; pp_aval cond;
+                                    string "then"; pp_aexp then_aexp;
+                                    string "else"; pp_aexp else_aexp ])
   | AE_block (aexps, aexp, typ) ->
      pp_annot typ (surround 2 0 lbrace (pp_block (aexps @ [aexp])) rbrace)
   | AE_return (v, typ) -> pp_annot typ (string "return" ^^ parens (pp_aval v))
@@ -169,7 +233,7 @@ let rec split_block = function
      exp :: exps, last
   | [] -> failwith "empty block"
 
-let rec anf (E_aux (e_aux, _) as exp) =
+let rec anf (E_aux (e_aux, exp_annot) as exp) =
   let to_aval = function
     | AE_val v -> (v, fun x -> x)
     | AE_app (_, _, typ) | AE_let (_, _, _, _, typ) | AE_return (_, typ) | AE_cast (_, typ) as aexp ->
@@ -187,8 +251,19 @@ let rec anf (E_aux (e_aux, _) as exp) =
 
   | E_assign (LEXP_aux (LEXP_id id, _), exp) ->
      let aexp = anf exp in
-     AE_assign (id, aexp)
+     AE_assign (id, lvar_typ (Env.lookup_id id (env_of exp)), aexp)
 
+  | E_if (cond, then_exp, else_exp) ->
+     let cond_val, wrap = to_aval (anf cond) in
+     let then_aexp = anf then_exp in
+     let else_aexp = anf else_exp in
+     wrap (AE_if (cond_val, then_aexp, else_aexp, typ_of then_exp))
+
+  | E_app_infix (x, Id_aux (Id op, l), y) ->
+     anf (E_aux (E_app (Id_aux (DeIid op, l), [x; y]), exp_annot))
+  | E_app_infix (x, Id_aux (DeIid op, l), y) ->
+     anf (E_aux (E_app (Id_aux (Id op, l), [x; y]), exp_annot))
+          
   | E_app (id, exps) ->
      let aexps = List.map anf exps in
      let avals = List.map to_aval aexps in
@@ -261,7 +336,13 @@ let rec anf (E_aux (e_aux, _) as exp) =
      (* Sizeof nodes removed by sizeof rewriting pass *)
      failwith "encountered E_sizeof or E_constraint node when converting to ANF"
 
+  | E_nondet _ ->
+     (* We don't compile E_nondet nodes *)
+     failwith "encountered E_nondet node when converting to ANF"
+              
+              (*
   | _ -> failwith ("Cannot convert to ANF: " ^ string_of_exp exp)
+               *)
 
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
@@ -271,13 +352,30 @@ let max_int64 = Big_int.of_int64 Int64.max_int
 let min_int64 = Big_int.of_int64 Int64.min_int
 
 type ctyp =
+  (* Arbitrary precision GMP integer, mpz_t in C. *)
   | CT_mpz
+  (* Variable length bitvector - flag represents direction, inc or dec *)
   | CT_bv of bool
+  (* Fixed length bitvector that fits within a 64-bit word. - int
+     represents length, and flag is the same as CT_bv. *)
   | CT_uint64 of int * bool
   | CT_int
+  (* Used for (signed) integers that fit within 64-bits. *)
   | CT_int64
+  (* unit is a value in sail, so we represent it as a one element type
+     here too for clarity but we actually compile it to an int which
+     is always 0. *)
   | CT_unit
-
+  | CT_bool
+  (* Abstractly represent how all the Sail user defined types get
+     mapped into C. We don't fully worry about precise implementation
+     details at this point, as C doesn't have variants or tuples
+     natively, but these need to be encoded. *)
+  | CT_tup of ctyp list
+  | CT_struct of id * ctyp Bindings.t
+  | CT_enum of id * IdSet.t
+  | CT_variant of id * ctyp Bindings.t
+                      
 let ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
   | CT_mpz, CT_mpz -> true
@@ -285,6 +383,8 @@ let ctyp_equal ctyp1 ctyp2 =
   | CT_uint64 (m1, d1), CT_uint64 (m2, d2) -> m1 = m2 && d1 = d2
   | CT_int, CT_int -> true
   | CT_int64, CT_int64 -> true
+  | CT_unit, CT_unit -> true
+  | CT_bool, CT_bool -> true
   | _, _ -> false
 
 let string_of_ctyp = function
@@ -296,12 +396,13 @@ let string_of_ctyp = function
   | CT_int64 -> "int64_t"
   | CT_int -> "int"
   | CT_unit -> "unit"
+  | CT_bool -> "bool"
 
 (* Convert a sail type into a C-type *)
 let ctyp_of_typ (Typ_aux (typ_aux, _) as typ) =
   match typ_aux with
   | Typ_id id when string_of_id id = "bit" -> CT_int
-  | Typ_id id when string_of_id id = "bool" -> CT_int
+  | Typ_id id when string_of_id id = "bool" -> CT_bool
   | Typ_id id when string_of_id id = "int" -> CT_mpz
   | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
      begin
@@ -325,10 +426,10 @@ let ctyp_of_typ (Typ_aux (typ_aux, _) as typ) =
        | _ -> CT_bv direction
      end
   | Typ_id id when string_of_id id = "unit" -> CT_unit
-  | _ -> assert false
+  | _ -> failwith ("No C-type for type " ^ string_of_typ typ)
 
 let is_stack_ctyp ctyp = match ctyp with
-  | CT_uint64 _ | CT_int64 | CT_int -> true
+  | CT_uint64 _ | CT_int64 | CT_int | CT_unit | CT_bool -> true
   | CT_bv _ | CT_mpz -> false
 
 let is_stack_typ typ = is_stack_ctyp (ctyp_of_typ typ)
@@ -345,11 +446,13 @@ let literal_to_cstring (L_aux (l_aux, _) as lit) =
      let padding = 16 - String.length str in
      Some ("0x" ^ String.make padding '0' ^ str ^ "ul")
   | L_unit -> Some "0"
+  | L_true -> Some "true"
+  | L_false -> Some "false"
   | _ -> None
 
 let c_literals =
   let c_literal = function
-    | AV_lit (lit, typ) as v ->
+    | AV_lit (lit, typ) as v when is_stack_ctyp (ctyp_of_typ typ) ->
        begin
          match literal_to_cstring lit with
          | Some str -> AV_C_fragment (str, typ)
@@ -475,11 +578,13 @@ type instr =
   | I_decl of ctyp * id
   | I_alloc of ctyp * id
   | I_init of ctyp * id * cval
+  | I_if of cval * instr list * instr list * ctyp
   | I_funcall of id * id * cval list * ctyp
   | I_convert of id * ctyp * id * ctyp
   | I_assign of id * cval
   | I_clear of ctyp * id
   | I_return of id
+  | I_comment of string
 
 type cdef =
   | CDEF_reg_dec of ctyp * id
@@ -495,9 +600,15 @@ and pp_cval = function
   | CV_id (id, ctyp) -> parens (pp_ctyp ctyp) ^^ (pp_id id)
   | CV_C_fragment (str, ctyp) -> parens (pp_ctyp ctyp) ^^ (string (str |> Util.cyan |> Util.clear))
 
-let pp_instr = function
+let rec pp_instr = function
   | I_decl (ctyp, id) ->
      parens (pp_ctyp ctyp) ^^ space ^^ pp_id id
+  | I_if (cval, then_instrs, else_instrs, ctyp) ->
+     let pp_if_block instrs = surround 2 0 lbrace (separate_map hardline pp_instr instrs) rbrace in
+     parens (pp_ctyp ctyp) ^^ space
+     ^^ pp_keyword "IF" ^^ pp_cval cval
+     ^^ pp_keyword "THEN" ^^ pp_if_block then_instrs
+     ^^ pp_keyword "ELSE" ^^ pp_if_block else_instrs
   | I_alloc (ctyp, id) ->
      pp_keyword "ALLOC" ^^ parens (pp_ctyp ctyp) ^^ space ^^ pp_id id
   | I_init (ctyp, id, cval) ->
@@ -516,7 +627,9 @@ let pp_instr = function
      pp_keyword "CLEAR" ^^ pp_ctyp ctyp ^^ parens (pp_id id)
   | I_return id ->
      pp_keyword "RETURN" ^^ pp_id id
-
+  | I_comment str ->
+     string ("// " ^ str)
+                                  
 let compile_funcall env id args typ =
   let setup = ref [] in
   let cleanup = ref [] in
@@ -592,11 +705,61 @@ let rec compile_aexp env = function
   | AE_val (AV_C_fragment (c, typ)) ->
      let ctyp = ctyp_of_typ typ in
      [], ctyp, (fun id -> I_assign (id, CV_C_fragment (c, ctyp))), []
-
+                                                                       
   | AE_val (AV_id (id, lvar)) ->
      let ctyp = ctyp_of_typ (lvar_typ lvar) in
-     [], CT_unit, (fun id -> I_assign (id, CV_id (id, ctyp))), []
+     [], ctyp, (fun id' -> I_assign (id', CV_id (id, ctyp))), []
 
+  | AE_val (AV_lit (lit, typ)) ->
+     let ctyp = ctyp_of_typ typ in
+     if is_stack_ctyp ctyp then
+       assert false
+     else
+       let gs = gensym () in
+       [I_alloc (ctyp, gs); I_comment "fix literal init"],
+       ctyp,
+       (fun id -> I_assign (id, CV_id (gs, ctyp))),
+       [I_clear (ctyp, gs)]
+
+  | AE_if (aval, then_aexp, else_aexp, if_typ) ->
+     let if_ctyp = ctyp_of_typ if_typ in
+     let compile_branch aexp =
+       let setup, ctyp, call, cleanup = compile_aexp env aexp in
+       fun id -> setup @ [call id] @ cleanup
+     in
+     let setup, ctyp, call, cleanup = compile_aexp env (AE_val aval) in
+     let gs = gensym () in
+     setup @ [I_decl (ctyp, gs); call gs],
+     if_ctyp,
+     (fun id -> I_if (CV_id (gs, ctyp),
+                      compile_branch then_aexp id,
+                      compile_branch else_aexp id,
+                      if_ctyp)),
+     cleanup
+              
+  | AE_assign (id, assign_typ, aexp) ->
+     (* assign_ctyp is the type of the C variable we are assigning to,
+        ctyp is the type of the C expression being assigned. These may
+        be different. *)
+     let assign_ctyp = ctyp_of_typ assign_typ in
+     let setup, ctyp, call, cleanup = compile_aexp env aexp in
+     let unit_fragment = CV_C_fragment ("0", CT_unit) in
+     let comment = "assign " ^ string_of_ctyp assign_ctyp ^ " := " ^ string_of_ctyp ctyp in
+     if ctyp_equal assign_ctyp ctyp then
+       setup @ [call id], CT_unit, (fun id -> I_assign (id, unit_fragment)), cleanup
+     else if not (is_stack_ctyp assign_ctyp) && is_stack_ctyp ctyp then
+       let gs = gensym () in
+       setup @ [ I_comment comment;
+                 I_decl (ctyp, gs);
+                 call gs;
+                 I_convert (id, assign_ctyp, gs, ctyp)
+               ],
+       CT_unit,
+       (fun id -> I_assign (id, unit_fragment)),
+       cleanup
+     else
+       failwith ("Failure: " ^ comment)
+                                                                               
   | AE_block (aexps, aexp, _) ->
      let block = compile_block env aexps in
      let setup, ctyp, call, cleanup = compile_aexp env aexp in
@@ -643,6 +806,8 @@ let compile_def env = function
        | _ -> assert false
      end
 
+  | DEF_default _ -> []
+       
   | _ -> assert false
 
 (**************************************************************************)
@@ -655,6 +820,7 @@ let codegen_id id = string (sgen_id id)
 let sgen_ctyp = function
   | CT_unit -> "int"
   | CT_int -> "int"
+  | CT_bool -> "bool"
   | CT_uint64 _ -> "uint64_t"
   | CT_int64 -> "int64_t"
   | CT_mpz -> "mpz_t"
@@ -665,11 +831,20 @@ let sgen_cval = function
   | CV_id (id, _) -> string_of_id id
   | _ -> "CVAL??"
 
-let codegen_instr = function
+let rec codegen_instr = function
   | I_decl (ctyp, id) ->
      string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (string_of_id id))
   | I_assign (id, cval) ->
-     string (Printf.sprintf "%s = %s;" (string_of_id id) (sgen_cval cval))
+     let ctyp = cval_ctyp cval in
+     if is_stack_ctyp ctyp then
+       string (Printf.sprintf "%s = %s;" (string_of_id id) (sgen_cval cval))
+     else
+       string (Printf.sprintf "set_%s(%s, %s);" (sgen_ctyp ctyp) (string_of_id id) (sgen_cval cval))
+  | I_if (cval, then_instrs, else_instrs, ctyp) ->
+     string "if" ^^ space ^^ parens (string (sgen_cval cval)) ^^ space
+     ^^ surround 2 0 lbrace (separate_map hardline codegen_instr then_instrs) rbrace
+     ^^ space ^^ string "else" ^^ space
+     ^^ surround 2 0 lbrace (separate_map hardline codegen_instr else_instrs) rbrace
   | I_funcall (x, f, args, ctyp) ->
      let args = Util.string_of_list ", " sgen_cval args in
      if is_stack_ctyp ctyp then
@@ -689,13 +864,22 @@ let codegen_instr = function
      ^^ hardline
      ^^ string (Printf.sprintf "init_%s(%s);" (sgen_ctyp ctyp) (string_of_id id))
   | I_convert (x, ctyp1, y, ctyp2) ->
-     string (Printf.sprintf "%s = convert_%s_of_%s(%s);"
-                            (string_of_id x)
-                            (sgen_ctyp ctyp1)
-                            (sgen_ctyp ctyp2)
-                            (string_of_id y))
+     if is_stack_ctyp ctyp1 then
+       string (Printf.sprintf "%s = convert_%s_of_%s(%s);"
+                 (string_of_id x)
+                 (sgen_ctyp ctyp1)
+                 (sgen_ctyp ctyp2)
+                 (string_of_id y))
+     else
+       string (Printf.sprintf "convert_%s_of_%s(%s, %s);"
+                 (sgen_ctyp ctyp1)
+                 (sgen_ctyp ctyp2)
+                 (string_of_id x)
+                 (string_of_id y))       
   | I_return id ->
      string (Printf.sprintf "return %s;" (string_of_id id))
+  | I_comment str ->
+     string ("/* " ^ str ^ " */")
 
 let codegen_def env = function
   | CDEF_reg_dec (ctyp, id) ->
