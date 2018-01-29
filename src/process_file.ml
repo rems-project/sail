@@ -196,12 +196,10 @@ let monomorphise_ast locs type_env ast =
     debug_analysis = !opt_dmono_analysis;
     rewrites = !opt_mono_rewrites;
     rewrite_size_parameters = !Pretty_print_lem.opt_mwords;
-    all_split_errors = !opt_dall_split_errors
+    all_split_errors = !opt_dall_split_errors;
+    dump_raw = !opt_ddump_raw_mono_ast
   } in
-  let ast = monomorphise opts locs type_env ast in
-  let () = if !opt_ddump_raw_mono_ast then Pretty_print_sail.pp_defs stdout ast else () in
-  let ienv = Type_check.Env.no_casts Type_check.initial_env in
-  Type_check.check ienv ast
+  monomorphise opts locs type_env ast
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in

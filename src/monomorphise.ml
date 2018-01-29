@@ -899,7 +899,8 @@ let rec freshen_pat_bindings p =
 (* Use the location pairs in choices to reduce case expressions at the first
    location to the given case at the second. *)
 let apply_pat_choices choices =
-  let rewrite_constraint (NC_aux (nc,l) as nconstr) =
+  let rewrite_constraint (NC_aux (nc,l) as nconstr) = E_constraint nconstr (*
+    Not right now - false cases may not type check
     match List.assoc l choices with
     | choice,_ -> begin
        match nc with
@@ -907,7 +908,7 @@ let apply_pat_choices choices =
           E_constraint (NC_aux ((if choice < List.length is then NC_true else NC_false), Generated l))
        | _ -> E_constraint nconstr
     end
-    | exception Not_found -> E_constraint nconstr
+    | exception Not_found -> E_constraint nconstr*)
   in
   let rewrite_case (e,cases) =
     match List.assoc (exp_loc e) choices with
@@ -1504,11 +1505,16 @@ let split_defs continue_anyway splits defs =
            | Some (Some (pats,l)) ->
               Some (List.mapi (fun i p ->
                 match p with
-                | P_aux (P_lit lit,_) when (match lit with L_aux (L_undef,_) -> false | _ -> true) ->
-                   p,[id,E_aux (E_lit lit,(Generated Unknown,None))],[l,(i,[])]
+                | P_aux (P_lit lit,(pl,pannot))
+                    when (match lit with L_aux (L_undef,_) -> false | _ -> true) ->
+                   p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,[])]
                 | _ ->
                    let p',subst = freshen_pat_bindings p in
-                   P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)])
+                   match p' with
+                   | P_aux (P_wild,_) ->
+                      P_aux (P_id id,(l,annot)),[],[l,(i,subst)]
+                   | _ ->
+                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)])
                       pats)
            )
         | P_app (id,ps) ->
@@ -2226,6 +2232,7 @@ let merge rs rs' = {
 }
 
 type env = {
+  top_kids : kid list;
   var_deps : dependencies Bindings.t;
   kid_deps : dependencies KBindings.t
 }
@@ -2248,7 +2255,7 @@ let update_env env deps pat =
   let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
   let kbound = kids_bound_by_pat pat in
   let kid_deps = KidSet.fold (fun v ds -> KBindings.add v deps ds) kbound env.kid_deps in
-  { var_deps = var_deps; kid_deps = kid_deps }
+  { env with var_deps = var_deps; kid_deps = kid_deps }
 
 let assigned_vars_exps es =
   List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
@@ -2383,6 +2390,18 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
      | Some mk_pat -> check_dep id mk_pat
      | None -> None)
   | _ -> None
+
+let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
+  let is_equal kid =
+    prove typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+  in
+  match ne with
+  | Nexp_var _
+  | Nexp_constant _ -> nexp
+  | _ ->
+     match List.find is_equal env.top_kids with
+     | kid -> Nexp_aux (Nexp_var kid,Generated l)
+     | exception Not_found -> nexp
 
 (* Takes an environment of dependencies on vars, type vars, and flow control,
    and dependencies on mutable variables.  The latter are quite conservative,
@@ -2600,6 +2619,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let typ = Env.expand_synonyms tenv typ in
        if is_bitvector_typ typ then
          let _,size,_,_ = vector_typ_args_of typ in
+         let size = simplify_size_nexp env tenv size in
          match deps_of_nexp env.kid_deps [] size with
          | Have (args,caller,caller_kids) ->
             { r with
@@ -2664,8 +2684,8 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat set_assertions =
        (match KBindings.find kid set_assertions with
        | (l,is) ->
           let l' = Generated l in
-          let pats = List.map (fun n -> P_aux (P_lit (L_aux (L_num n,l')),(l',None))) is in
-          let pats = pats @ [P_aux (P_wild,(l',None))] in
+          let pats = List.map (fun n -> P_aux (P_lit (L_aux (L_num n,l')),(l',snd annot))) is in
+          let pats = pats @ [P_aux (P_wild,(l',snd annot))] in
           Partial (pats,l)
        | exception Not_found -> Total)
     | _ -> Total
@@ -2736,7 +2756,8 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat set_assertions =
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge kid_quant_deps kid_deps in
-  { var_deps = var_deps; kid_deps = kid_deps }
+  let top_kids = List.map fst (KBindings.bindings kid_quant_deps) in
+  { top_kids = top_kids; var_deps = var_deps; kid_deps = kid_deps }
 
 (* When there's more than one pick the first *)
 let merge_set_asserts _ x y =
@@ -3059,6 +3080,10 @@ let rewrite_app env typ (id,args) =
         when is_slice slice1 && not (is_constant length1) ->
        E_app (mk_id "zext_slice", [vector1; start1; length1])
 
+    | [E_aux (E_app (ones, [len1]),_);
+       _ (* unnecessary ZeroExtend length *)] ->
+       E_app (mk_id "zext_ones", [len1])
+
     | _ -> E_app (id,args)
 
   else if is_id env (Id "SignExtend") id then
@@ -3099,15 +3124,23 @@ type options = {
   debug_analysis : int;
   rewrites : bool;
   rewrite_size_parameters : bool;
-  all_split_errors : bool
+  all_split_errors : bool;
+  dump_raw: bool
 }
+
+let recheck defs =
+  let w = !Util.opt_warnings in
+  let () = Util.opt_warnings := false in
+  let r = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
+  let () = Util.opt_warnings := w in
+  r
 
 let monomorphise opts splits env defs =
   let (defs,env) =
     if opts.rewrites then
       let defs = MonoRewrites.mono_rewrite defs in
     (* TODO: is this necessary? *)
-      Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs
+      recheck defs
     else (defs,env)
   in
 (*let _ = Pretty_print.pp_defs stdout defs in*)
@@ -3121,9 +3154,12 @@ let monomorphise opts splits env defs =
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
      type checker doesn't store the env at that point :( *)
-  if opts.rewrite_size_parameters then
-    let (defs,env) = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
-    let defs = AtomToItself.rewrite_size_parameters env defs in
-    defs
-  else
-    defs
+  let defs = if opts.rewrite_size_parameters then
+      let (defs,env) = recheck defs in
+      let defs = AtomToItself.rewrite_size_parameters env defs in
+      defs
+    else
+      defs
+  in
+  let () = if opts.dump_raw then Pretty_print_sail.pp_defs stdout defs else () in
+  recheck defs

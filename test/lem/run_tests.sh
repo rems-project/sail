@@ -61,6 +61,6 @@ do
     fi
 done
 
-finish_suite "Expecting pass"
+finish_suite "LEM tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
