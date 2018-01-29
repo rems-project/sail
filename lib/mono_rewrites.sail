@@ -4,25 +4,25 @@
 
 infix 6 <<
 
-val "shiftleft" : forall 'n ('ord : Order).
+val shiftleft = "shiftl" : forall 'n ('ord : Order).
     (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
 
 overload operator << = {shiftleft}
 
 infix 6 >>
 
-val "shiftright" : forall 'n ('ord : Order).
+val shiftright = "shiftr" : forall 'n ('ord : Order).
     (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
 
 overload operator >> = {shiftright}
 
-val "extz" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val "extz_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
 val extzv : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
-function extzv(v) = extz(sizeof('m),v)
+function extzv(v) = extz_vec(sizeof('m),v)
 
-val "exts" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val "exts_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
 val extsv : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
-function extsv(v) = exts(sizeof('m),v)
+function extsv(v) = exts_vec(sizeof('m),v)
 
 /* Definitions for the rewrites */
 
