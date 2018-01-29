@@ -41,3 +41,17 @@ let zero_extend v len = extz_vec len v
 
 let shift_bits_right v m = shiftr v (unsigned m)
 let shift_bits_left v m = shiftl v (unsigned m)
+
+val prerr_endline : string -> unit
+let prerr_endline _ = ()
+declare ocaml target_rep function prerr_endline = `prerr_endline`
+
+val print_int : string -> integer -> unit
+let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
+
+val print_bits : forall 'a. Bitvector 'a => string -> 'a -> unit
+let print_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))
+
+val putchar : integer -> unit
+let putchar _ = ()
+declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
