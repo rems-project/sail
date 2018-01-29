@@ -3123,15 +3123,23 @@ type options = {
   debug_analysis : int;
   rewrites : bool;
   rewrite_size_parameters : bool;
-  all_split_errors : bool
+  all_split_errors : bool;
+  dump_raw: bool
 }
+
+let recheck defs =
+  let w = !Util.opt_warnings in
+  let () = Util.opt_warnings := false in
+  let r = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
+  let () = Util.opt_warnings := w in
+  r
 
 let monomorphise opts splits env defs =
   let (defs,env) =
     if opts.rewrites then
       let defs = MonoRewrites.mono_rewrite defs in
     (* TODO: is this necessary? *)
-      Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs
+      recheck defs
     else (defs,env)
   in
 (*let _ = Pretty_print.pp_defs stdout defs in*)
@@ -3145,9 +3153,12 @@ let monomorphise opts splits env defs =
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
      type checker doesn't store the env at that point :( *)
-  if opts.rewrite_size_parameters then
-    let (defs,env) = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
-    let defs = AtomToItself.rewrite_size_parameters env defs in
-    defs
-  else
-    defs
+  let defs = if opts.rewrite_size_parameters then
+      let (defs,env) = recheck defs in
+      let defs = AtomToItself.rewrite_size_parameters env defs in
+      defs
+    else
+      defs
+  in
+  let () = if opts.dump_raw then Pretty_print_sail.pp_defs stdout defs else () in
+  recheck defs
