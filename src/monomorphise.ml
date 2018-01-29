@@ -899,7 +899,8 @@ let rec freshen_pat_bindings p =
 (* Use the location pairs in choices to reduce case expressions at the first
    location to the given case at the second. *)
 let apply_pat_choices choices =
-  let rewrite_constraint (NC_aux (nc,l) as nconstr) =
+  let rewrite_constraint (NC_aux (nc,l) as nconstr) = E_constraint nconstr (*
+    Not right now - false cases may not type check
     match List.assoc l choices with
     | choice,_ -> begin
        match nc with
@@ -907,7 +908,7 @@ let apply_pat_choices choices =
           E_constraint (NC_aux ((if choice < List.length is then NC_true else NC_false), Generated l))
        | _ -> E_constraint nconstr
     end
-    | exception Not_found -> E_constraint nconstr
+    | exception Not_found -> E_constraint nconstr*)
   in
   let rewrite_case (e,cases) =
     match List.assoc (exp_loc e) choices with
