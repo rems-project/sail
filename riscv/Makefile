@@ -5,6 +5,9 @@ export SAIL_DIR
 
 all: riscv Riscv_embed_sequential.thy
 
+check: $(SAIL_SRCS) main.sail
+	$(SAIL_DIR)/sail $^
+
 riscv: $(SAIL_SRCS) main.sail
 	$(SAIL_DIR)/sail -ocaml -o riscv $^
 

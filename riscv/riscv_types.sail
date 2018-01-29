@@ -2,6 +2,12 @@ val not_implemented : forall ('a : Type). string -> 'a effect {escape}
 
 function not_implemented message = throw(Error_not_implemented(message))
 
+val internal_error : forall ('a : Type). string -> 'a effect {escape}
+function internal_error(s) = {
+    assert (false, s);
+    throw (Error_internal_error)
+}
+
 type regval = bits(64)
 
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)

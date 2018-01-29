@@ -310,7 +310,8 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
   let result : bits(64) =
       match width {
 	WORD   => EXTS(mem_read(addr, 4, aq, rl, true)),
-	DOUBLE => mem_read(addr, 8, aq, rl, true)
+	DOUBLE => mem_read(addr, 8, aq, rl, true),
+	_      => internal_error("LOADRES expected WORD or DOUBLE")
       } in
   wGPR(rd, result)
 
@@ -328,12 +329,14 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
     addr : bits(64) = rGPR(rs1);
     match width {
       WORD   => mem_write_ea(addr, 4, aq, rl, true),
-      DOUBLE => mem_write_ea(addr, 8, aq, rl, true)
+      DOUBLE => mem_write_ea(addr, 8, aq, rl, true),
+      _      => internal_error("STORECON expected word or double")
     };
     rs2_val = rGPR(rs2);
     match width {
       WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true),
-      DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true)
+      DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true),
+      _      => internal_error("STORECON expected word or double")
     };
   };
 }
@@ -365,13 +368,15 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
 
   match width {
     WORD   => mem_write_ea(addr, 4, aq & rl, rl, true),
-    DOUBLE => mem_write_ea(addr, 8, aq & rl, rl, true)
+    DOUBLE => mem_write_ea(addr, 8, aq & rl, rl, true),
+    _      => internal_error ("AMO expected WORD or DOUBLE")
   };
 
   loaded : bits(64) =
     match width {
       WORD   => EXTS(mem_read(addr, 4, aq, aq & rl, true)),
-      DOUBLE => mem_read(addr, 8, aq, aq & rl, true)
+      DOUBLE => mem_read(addr, 8, aq, aq & rl, true),
+      _      => internal_error ("AMO expected WORD or DOUBLE")
     };
   wGPR(rd) = loaded;
 
@@ -393,7 +398,8 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
 
   match width {
     WORD   => mem_write_value(addr, 4, result[31..0], aq & rl, rl, true),
-    DOUBLE => mem_write_value(addr, 8, result,        aq & rl, rl, true)
+    DOUBLE => mem_write_value(addr, 8, result,        aq & rl, rl, true),
+    _      => internal_error("AMO expected WORD or DOUBLE")
   };
 }
 
