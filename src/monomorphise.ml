@@ -1509,7 +1509,11 @@ let split_defs continue_anyway splits defs =
                    p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,[])]
                 | _ ->
                    let p',subst = freshen_pat_bindings p in
-                   P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)])
+                   match p' with
+                   | P_aux (P_wild,_) ->
+                      P_aux (P_id id,(l,annot)),[],[l,(i,subst)]
+                   | _ ->
+                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)])
                       pats)
            )
         | P_app (id,ps) ->
