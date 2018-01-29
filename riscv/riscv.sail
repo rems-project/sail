@@ -259,7 +259,8 @@ function clause execute (FENCE(pred, succ)) = {
     (0b0010, 0b0010) => MEM_fence_r_r(),
     (0b0011, 0b0001) => MEM_fence_rw_w(),
     (0b0001, 0b0001) => MEM_fence_w_w(),
-    _ => not_implemented("unsupported fence")
+    _ => { print("FIXME: unsupported fence");
+           () }
   }
 }
 
