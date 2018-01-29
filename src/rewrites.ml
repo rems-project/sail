@@ -1379,7 +1379,11 @@ let rewrite_defs_remove_numeral_pats =
     fold_pat { (compute_pat_alg None compose_guard_opt) with p_lit = p_lit } in
   let pat_aux (pexp_aux, a) =
     let pat,guard,exp,a = destruct_pexp (Pat_aux (pexp_aux, a)) in
-    let guard',pat = guard_pat pat in
+    let guard',pat = match guard_pat pat with
+      | Some g, pat ->
+         let pat, env = bind_pat_no_guard (env_of exp) (strip_pat pat) (pat_typ_of pat) in
+         Some (check_exp env (strip_exp g) (typ_of g)), pat
+      | None, pat -> None, pat in
     match compose_guard_opt guard guard' with
     | Some g -> Pat_aux (Pat_when (pat, g, exp), a)
     | None -> Pat_aux (Pat_exp (pat, exp), a) in
