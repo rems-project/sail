@@ -431,6 +431,9 @@ function isCSRImplemented csr : bits(12) -> bool =
     0x342 => true, // mcause
     0x343 => true, // mtval
     0x344 => true, // mip
+
+    // for riscv-tests
+    0x180 => true, // satp
     _     => false
   }
 
@@ -451,9 +454,13 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     CSRRW  => true,
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
-  if ~ (isCSRImplemented(csr) & haveCSRPriv(csr, isWrite)) then
-    signalIllegalInstruction ()
-  else {
+  if ~ (isCSRImplemented(csr) & haveCSRPriv(csr, isWrite)) then {
+    let instr : regval = EXTZ(__RISCV_read(PC, 4));
+    let t : sync_exception =
+    struct { trap = Illegal_Instr,
+             badaddr = Some (instr) } in
+    nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+  } else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
     if isWrite then {
       let new_val : bits(64) = match op {
