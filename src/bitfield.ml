@@ -101,6 +101,7 @@ let index_range_getter' name field order start stop =
 let index_range_setter' name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
   let irs_val = Printf.sprintf "val _set_%s : (register(%s), %s) -> unit effect {wreg}" field name (bitvec size order) in
+  (* Read-modify-write using an internal _reg_deref function without rreg effect *)
   let irs_function = String.concat "\n"
     [ Printf.sprintf "function _set_%s (r_ref, v) = {" field;
       Printf.sprintf "  r = _get_%s(_reg_deref(r_ref));" name;

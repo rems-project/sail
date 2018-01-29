@@ -1884,7 +1884,12 @@ let rewrite_fix_val_specs (Defs defs) =
            TypSchm_aux (TypSchm_ts (tq, typ), Parse_ast.Unknown), val_specs
          end else begin
            let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
-           typschm, Bindings.add id (tq, typ) val_specs
+           (* Add rreg effect to internal _reg_deref function (cf. bitfield.ml) *)
+           let vs =
+             if string_of_id id = "_reg_deref" then
+               add_eff_to_vs (mk_effect [BE_rreg]) (tq, typ)
+             else (tq, typ) in
+           typschm, Bindings.add id vs val_specs
          end
        in
        (val_specs, defs @ [DEF_spec (VS_aux (VS_val_spec (typschm, id, ext_opt, is_cast), a))])

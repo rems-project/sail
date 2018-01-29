@@ -182,7 +182,7 @@ let write_tag t state =
   let tagstate = Map.insert taddr t state.tagstate in
   [(Value true,  <| state with tagstate = tagstate |>)]
 
-val read_reg : forall 'regs 'a 'e. register_ref 'regs 'a -> M  'regs 'a 'e
+val read_reg : forall 'regs 'a 'e. register_ref 'regs 'a -> M 'regs 'a 'e
 let read_reg reg state =
   let v = reg.read_from state.regstate in
   [(Value v,state)]
