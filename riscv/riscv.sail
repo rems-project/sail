@@ -437,9 +437,36 @@ function isCSRImplemented csr : bits(12) -> bool =
     _     => false
   }
 
-function readCSR csr: bits(12) -> bits(64) = 0x0000_0000_0000_0000
+function readCSR csr: bits(12) -> regval =
+  match csr {
+    0x300 => mstatus.bits(),
+    0x302 => medeleg.bits(),
+    0x303 => mideleg.bits(),
+    0x304 => mie.bits(),
+    0x305 => mtvec,
+    0x340 => mscratch,
+    0x341 => mepc,
+    0x342 => mcause,
+    0x343 => mtval,
+    0x344 => mip.bits(),
+    _     => { print_bits("unhandled read to CSR ", csr);
+               0x0000_0000_0000_0000 }
+  }
 
-function writeCSR (csr : bits(12), value : bits(64)) -> unit = ()
+function writeCSR (csr : bits(12), value : bits(64)) -> unit =
+  match csr {
+    0x300 => mstatus->bits() = value,
+    0x302 => medeleg->bits() = value,
+    0x303 => mideleg->bits() = value,
+    0x304 => mie->bits() = value,
+    0x305 => mtvec = value,
+    0x340 => mscratch = value,
+    0x341 => mepc = value,
+    0x342 => mcause = value,
+    0x343 => mtval = value,
+    0x344 => mip->bits() = value,
+    _     => print_bits("unhandled write to CSR ", csr)
+  }
 
 function haveCSRPriv (csr : bits(12), isWrite : bool) -> bool =
   let isRO = csr[11..10] == 0b11 in

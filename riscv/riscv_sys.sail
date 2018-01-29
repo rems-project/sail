@@ -39,6 +39,31 @@ enum ExceptionCode = {
   Store_PageFault
 }
 
+val exc_to_bits : ExceptionCode -> bits(4)
+function exc_to_bits e =
+  match (e) {
+    Misaligned_Fetch => 0x0,
+    Fetch_Access => 0x1,
+    Illegal_Instr => 0x2,
+    Breakpoint => 0x3,
+    Misaligned_Load => 0x4,
+
+    Load_Access => 0x5,
+    Misaligned_Store => 0x6,
+    Store_Access => 0x7,
+
+    User_ECall => 0x8,
+    Supervisor_ECall => 0x9,
+    ReservedExc0 => 0xa,
+    Machine_ECall => 0xb,
+
+    Fetch_PageFault => 0xc,
+    Load_PageFault => 0xd,
+    ReservedExc1 => 0xe,
+    Store_PageFaul => 0xf
+  }
+
+
 /* machine mode registers */
 
 /* FIXME: currently we have only those used by riscv-tests. */
@@ -141,6 +166,7 @@ register medeleg : Medeleg
 register mepc : regval
 register mtval : regval
 register mtvec : regval
+register mcause : regval
 register mscratch : regval
 
 /* other registers */
@@ -193,7 +219,7 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       mepc            = pc;
-      mcause          = e.trap;
+      mcause          = EXTZ(exc_to_bits(e.trap));
 
       mstatus->MPIE() = mstatus.MIE();
       mstatus->MIE()  = false;
