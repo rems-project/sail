@@ -528,7 +528,7 @@ let ocaml_string_of_enum ctx id ids =
 let ocaml_string_of_struct ctx id typq fields =
   let arg = gensym () in
   let ocaml_field (typ, id) =
-    separate space [string (string_of_id id ^ " = \""); string "^"; ocaml_string_typ typ arg ^^ string "." ^^ zencode ctx id]
+    separate space [string (string_of_id id ^ " = \""); string "^"; ocaml_string_typ typ (arg ^^ string "." ^^ zencode ctx id)]
   in
   separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
   ^//^ (string "\"{" ^^ separate_map (hardline ^^ string "^ \", ") ocaml_field fields ^^ string " ^ \"}\"")
