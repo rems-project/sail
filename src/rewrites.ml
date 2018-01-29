@@ -2343,13 +2343,14 @@ let rewrite_defs_letbind_effects =
        n_exp_nameL exps (fun exps ->
        k (rewrap (E_tuple exps)))
     | E_if (exp1,exp2,exp3) ->
-       n_exp_name exp1 (fun exp1 ->
-       let (E_aux (_,annot2)) = exp2 in
-       let (E_aux (_,annot3)) = exp3 in
-       let newreturn = effectful exp2 || effectful exp3 in
-       let exp2 = n_exp_term newreturn exp2 in
-       let exp3 = n_exp_term newreturn exp3 in
-       k (rewrap (E_if (exp1,exp2,exp3))))
+       let e_if exp1 =
+         let (E_aux (_,annot2)) = exp2 in
+         let (E_aux (_,annot3)) = exp3 in
+         let newreturn = effectful exp2 || effectful exp3 in
+         let exp2 = n_exp_term newreturn exp2 in
+         let exp3 = n_exp_term newreturn exp3 in
+         k (rewrap (E_if (exp1,exp2,exp3))) in
+       if value exp1 then e_if (n_exp_term false exp1) else n_exp_name exp1 e_if
     | E_for (id,start,stop,by,dir,body) ->
        n_exp_name start (fun start ->
        n_exp_name stop (fun stop ->
