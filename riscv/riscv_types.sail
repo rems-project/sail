@@ -66,8 +66,12 @@ and rGPR (r if r > 0) = reg_deref(GPRs[r - 1])
 /*val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}*/
 val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}
 
-function wGPR (r, v) =
-  if (r != 0) then (*GPRs[r - 1]) = v
+function wGPR (r, v) = 
+  if (r != 0) then {
+     (*GPRs[r - 1]) = v;
+     print_int("GPR ", r);
+     print_bits("<- ", v);
+  }
 
 function check_alignment (addr : bits(64), width : atom('n)) -> forall 'n. unit =
   if unsigned(addr) % width != 0 then throw(Error_misaligned_access) else ()
