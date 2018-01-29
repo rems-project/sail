@@ -331,6 +331,7 @@ union exception = {
   Error_not_implemented : string,
   Error_misaligned_access,
   Error_EBREAK,
+  Error_internal_error
 }
 
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
@@ -373,3 +374,12 @@ val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits
 val vector64 : int -> bits(64)
 
 function vector64 n = __raw_GetSlice_int(64, n, 0)
+
+val vector_update_subrange_dec = "update_subrange" : forall 'n 'm 'o.
+  (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+
+val vector_update_subrange_inc = "update_subrange" : forall 'n 'm 'o.
+  (vector('n, inc, bit), atom('m), atom('o), vector('o - ('m - 1), inc, bit)) -> vector('n, inc, bit)
+
+overload vector_update_subrange = {vector_update_subrange_dec, vector_update_subrange_inc}
+
