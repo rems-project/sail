@@ -506,8 +506,18 @@ let sign_extend (vec, n) =
   | [] -> replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
   | B1 :: _ as vec -> replicate_bits ([B1], Big_int.of_int (m - List.length vec)) @ vec
 
-(* FIXME *)
-let shift_bits_right (x, y) = x
-let shift_bits_left (x, y) = x
+let shift_bits_right (x, y) =
+  let ybi = uint(y) in
+  let yi  = Big_int.to_int ybi in
+  let zeros = replicate_bits ([B0], ybi) in
+  let rbits = zeros @ x in
+  take (List.length x) rbits
+
+let shift_bits_left (x, y) =
+  let ybi = uint(y) in
+  let yi  = Big_int.to_int ybi in
+  let zeros = replicate_bits ([B0], ybi) in
+  let rbits = x @ zeros in
+  drop yi rbits
 
 let speculate_conditional_success () = true
