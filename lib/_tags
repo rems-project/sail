@@ -1,2 +1,2 @@
-<*.m{l,li}>: package(lem), package(linksem), package(zarith), package(uint)
-<main.native>: package(lem), package(linksem), package(zarith), package(uint)
+<*.m{l,li}>: package(lem), package(linksem), package(zarith)
+<main.native>: package(lem), package(linksem), package(zarith)
