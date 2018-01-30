@@ -240,6 +240,7 @@ val red : string -> string
 val yellow : string -> string
 val cyan : string -> string
 val blue : string -> string
+val magenta : string -> string
 val clear : string -> string
 
 val warn : string -> unit

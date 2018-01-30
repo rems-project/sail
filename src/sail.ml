@@ -256,7 +256,7 @@ let main() =
       (if !(opt_print_c)
        then
          let ast_c = rewrite_ast_c ast in
-         C_backend.compile_ast type_envs ast_c
+         C_backend.compile_ast (C_backend.initial_ctx type_envs) ast_c
        else ());
       (if !(opt_print_lem)
        then let ast_lem = rewrite_ast_lem ast in
