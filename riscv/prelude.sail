@@ -376,6 +376,9 @@ val vector64 : int -> bits(64)
 
 function vector64 n = __raw_GetSlice_int(64, n, 0)
 
+val to_bits : forall 'l.(atom('l), int) -> bits('l)
+function to_bits (l, n) = __raw_GetSlice_int(l, n, 0)
+
 function break () : unit -> unit = ()
 
 val vector_update_subrange_dec = {ocaml: "update_subrange", lem: "update_subrange_vec_dec"} : forall 'n 'm 'o.
