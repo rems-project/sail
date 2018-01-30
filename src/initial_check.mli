@@ -51,9 +51,17 @@
 open Ast
 open Ast_util
 
+(* Generate undefined_T functions for every type T *)
 val opt_undefined_gen : bool ref
+
+(* Allow # in identifiers when set, like the GHC option of the same name *)
 val opt_magic_hash : bool ref
 
+(* When true enums can be automatically casted to range types and
+   back.  Otherwise generated T_of_num and num_of_T functions must be
+   manually used for each enum T *)
+val opt_enum_casts : bool ref
+                          
 (* This is a bit of a hack right now - it ensures that the undefiend
    builtins (undefined_vector etc), only get added to the ast
    once. The original assumption in sail is that the whole AST gets

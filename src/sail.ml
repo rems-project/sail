@@ -128,6 +128,9 @@ let options = Arg.align ([
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
+  ( "-enum_casts",
+    Arg.Set Initial_check.opt_enum_casts,
+    " allow enumerations to be automatically casted to numeric range types");
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " (experimental) turn off effect checking");

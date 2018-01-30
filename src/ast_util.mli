@@ -70,6 +70,7 @@ val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : unit exp_aux -> unit exp
 val mk_pat : unit pat_aux -> unit pat
+val mk_pexp : unit pexp_aux -> unit pexp
 val mk_lexp : unit lexp_aux -> unit lexp
 val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> unit exp
@@ -213,6 +214,7 @@ val id_of_kid : kid -> id
 val kid_of_id : id -> kid
 
 val prepend_id : string -> id -> id
+val append_id : id -> string -> id
 val prepend_kid : string -> kid -> kid
 
 module Id : sig

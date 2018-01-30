@@ -75,6 +75,8 @@ let unaux_exp (E_aux (exp_aux, _)) = exp_aux
 let mk_pat pat_aux = P_aux (pat_aux, no_annot)
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 
+let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
+                                       
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
@@ -471,6 +473,11 @@ let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid (str ^ v), l)
 
+let append_id id str =
+  match id with
+  | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
+  | Id_aux (DeIid v, l) -> Id_aux (DeIid (v ^ str), l)
+                                  
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
 
