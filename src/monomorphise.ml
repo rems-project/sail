@@ -2797,6 +2797,32 @@ let merge_set_asserts _ x y =
 let merge_set_asserts_by_kid sets1 sets2 =
   KBindings.merge merge_set_asserts sets1 sets2
 
+(* Set constraints in assertions don't always use the set syntax, so we also
+   handle assert('N == 1 | ...) style set constraints *)
+let set_from_exp e =
+  let mykid = ref None in
+  let check_kid kid =
+    match !mykid with
+    | None -> mykid := Some kid
+    | Some kid' -> if Kid.compare kid kid' == 0 then ()
+        else raise Not_found
+  in
+  let rec aux (E_aux (e,_)) =
+    match e with
+    | E_app (Id_aux (Id "or_bool",_),[e1;e2]) ->
+       aux e1 @ aux e2
+    | E_app (Id_aux (Id "eq_atom",_),
+             [E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_);
+              E_aux (E_lit (L_aux (L_num i,_)),_)]) ->
+       (check_kid kid; [i])
+    | _ -> raise Not_found
+  in try
+       let is = aux e in
+       match !mykid with
+       | None -> None
+       | Some kid -> Some (kid,is)
+    with Not_found -> None
+
 (* Find all the easily reached set assertions in a function body, to use as
    case splits *)
 let rec find_set_assertions (E_aux (e,_)) =
@@ -2811,10 +2837,12 @@ let rec find_set_assertions (E_aux (e,_)) =
      let kbound = kids_bound_by_pat p in
      let sets2 = KBindings.filter (fun kid _ -> not (KidSet.mem kid kbound)) sets2 in
      merge_set_asserts_by_kid sets1 sets2
-  | E_assert (E_aux (e1,_),_) -> begin
+  | E_assert (E_aux (e1,_) as exp1,_) -> begin
      match e1 with
      | E_constraint (NC_aux (NC_set (kid,is),l)) -> KBindings.singleton kid (l,is)
-     | _ -> KBindings.empty
+     | _ -> match set_from_exp exp1 with
+       | None -> KBindings.empty
+       | Some (kid,is) -> KBindings.singleton kid (exp_loc exp1,is)
      end
   | _ -> KBindings.empty
 
