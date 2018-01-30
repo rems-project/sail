@@ -4,6 +4,7 @@ open import Sail_impl_base
 open import Sail_values
 open import Sail_operators
 open import State
+open import State_monad
 
 let MEM_fence_rw_rw () = barrier Barrier_RISCV_rw_rw
 let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw

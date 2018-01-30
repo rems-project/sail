@@ -1495,15 +1495,15 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
         if !opt_sequential then
           concat [regstate_def; hardline;
             hardline;
-            string ("type MR 'a 'r = State.MR regstate 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = State.M regstate 'a " ^ exc_typ); hardline;
+            string ("type MR 'a 'r = State_monad.MR regstate 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = State_monad.M regstate 'a " ^ exc_typ); hardline;
             hardline;
             register_refs
           ]
         else
           concat [
-            string ("type MR 'a 'r = Prompt.MR 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = Prompt.M 'a " ^ exc_typ); hardline
+            string ("type MR 'a 'r = Prompt_monad.MR 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = Prompt_monad.M 'a " ^ exc_typ); hardline
           ]
         ]);
   (print defs_file)
