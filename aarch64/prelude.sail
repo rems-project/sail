@@ -5,10 +5,6 @@ $include <flow.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
-infix 4 ==
-
-val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
@@ -27,7 +23,7 @@ val list_length = {ocaml: "length", lem: "length_list"} : forall ('a : Type). li
 
 overload length = {bitvector_length, vector_length, list_length}
 
-overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
+overload operator == = {eq_vec, eq_string, eq_real, eq_anything}
 
 val vector_subrange_A = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
@@ -248,13 +244,9 @@ val quotient_real = {ocaml: "quotient_real", lem: "realDiv"} : (real, real) -> r
 
 val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
-infixl 7 /
-
 overload operator / = {quotient_nat, quotient, quotient_real}
 
 val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
-
-infixl 7 %
 
 overload operator % = {modulus}
 

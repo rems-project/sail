@@ -93,7 +93,7 @@ let cond_pragma defs =
     else
       else_defs := (def :: !else_defs)
   in
-  
+
   let rec scan = function
     | Parse_ast.DEF_pragma ("endif", _, _) :: defs when !depth = 0 ->
        (List.rev !then_defs, List.rev !else_defs, defs)
@@ -108,13 +108,13 @@ let cond_pragma defs =
     | [] -> failwith "$ifdef or $ifndef never ended"
   in
   scan defs
-         
+
 let rec preprocess = function
   | [] -> []
   | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
      symbols := StringSet.add symbol !symbols;
      preprocess defs
-                
+
   | Parse_ast.DEF_pragma ("ifndef", symbol, _) :: defs ->
      let then_defs, else_defs, defs = cond_pragma defs in
      if not (StringSet.mem symbol !symbols) then
@@ -128,7 +128,7 @@ let rec preprocess = function
        preprocess (then_defs @ defs)
      else
        preprocess (else_defs @ defs)
-                  
+
   | Parse_ast.DEF_pragma ("include", file, l) :: defs ->
      let len = String.length file in
      if len = 0 then
@@ -151,18 +151,18 @@ let rec preprocess = function
        let file = Filename.concat sail_dir ("lib/" ^ file) in
        let (Parse_ast.Defs include_defs) = parse_file file in
        let include_defs = preprocess include_defs in
-       include_defs @ preprocess defs       
+       include_defs @ preprocess defs
      else
        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
        (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess defs)
 
   | Parse_ast.DEF_pragma (p, arg, _) :: defs ->
-     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess defs) 
-         
+     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess defs)
+
   | def :: defs -> def :: preprocess defs
 
 let preprocess_ast (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess defs)
-                              
+
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
 let load_file_no_check order f = convert_ast order (preprocess_ast (parse_file f))

@@ -1,3 +1,5 @@
+$include <flow.sail>
+
 enum signal = {LOW, HIGH}
 
 type Bit32 = vector(32, inc, bit)

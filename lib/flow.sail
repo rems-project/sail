@@ -25,6 +25,10 @@ val lteq_atom_range = "lteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> boo
 val gt_atom_range = "gt"     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 val gteq_atom_range = "gteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 
+val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
+
+overload operator == = {eq_atom, eq_int}
+
 $ifdef TEST
 
 val __flow_test : forall 'n 'm. (atom('n), atom('m)) -> unit

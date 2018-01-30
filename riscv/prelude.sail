@@ -2,7 +2,6 @@ default Order dec
 
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None, Some : 'a}
-infix 4 ==
 
 val eq_atom = {ocaml: "eq_int", lem: "eq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -251,13 +250,9 @@ val quotient_real = {ocaml: "quotient_real", lem: "realDiv"} : (real, real) -> r
 
 val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
-infixl 7 /
-
 overload operator / = {quotient_nat, quotient, quotient_real}
 
 val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
-
-infixl 7 %
 
 overload operator % = {modulus}
 

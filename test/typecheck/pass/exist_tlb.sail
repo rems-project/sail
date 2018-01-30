@@ -1,3 +1,5 @@
+$include <flow.sail>
+
 val extz : forall ('n : Int) ('m : Int) ('ord : Order).
   vector('n, 'ord, bit) -> vector('m, 'ord, bit)
 
