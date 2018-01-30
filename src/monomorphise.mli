@@ -54,6 +54,7 @@ type options = {
   rewrites : bool;                (* Experimental rewrites for variable-sized operations *)
   rewrite_size_parameters : bool; (* Make implicit type parameters explicit for (e.g.) lem *)
   all_split_errors : bool;
+  continue_anyway : bool;
   dump_raw: bool
 }
 

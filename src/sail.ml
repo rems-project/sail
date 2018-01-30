@@ -152,6 +152,9 @@ let options = Arg.align ([
   ( "-dall_split_errors",
     Arg.Set Process_file.opt_dall_split_errors,
     " display all case split errors from monomorphisation, rather than one");
+  ( "-dmono_continue",
+    Arg.Set Process_file.opt_dmono_continue,
+    " continue despite monomorphisation errors");
   ( "-verbose",
     Arg.Set opt_print_verbose,
     " (debug) pretty-print the input to standard output");

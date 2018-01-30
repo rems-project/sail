@@ -932,7 +932,8 @@ let apply_pat_choices choices =
     e_constraint = rewrite_constraint;
     e_case = rewrite_case }
 
-let split_defs continue_anyway splits defs =
+let split_defs all_errors splits defs =
+  let error_happened = ref false in
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (tu,l) as tua) =
       match tu with
@@ -1374,8 +1375,10 @@ let split_defs continue_anyway splits defs =
       let error =
         Err_general (pat_l,
                      ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
-      in if continue_anyway
-        then (print_error error; [P_aux (P_id var,(pat_l,annot)),[],[]])
+      in if all_errors
+        then (error_happened := true;
+              print_error error;
+              [P_aux (P_id var,(pat_l,annot)),[],[]])
         else raise (Fatal_error error)
     in
     match ty with
@@ -1604,8 +1607,9 @@ let split_defs continue_anyway splits defs =
         let error =
           Err_general (l, "Case split is too large (" ^ string_of_int size ^
             " > limit " ^ string_of_int size_set_limit ^ ")")
-        in if continue_anyway
-          then (print_error error; false)
+        in if all_errors
+          then (error_happened := true;
+                print_error error; false)
           else raise (Fatal_error error)
       else true
     in
@@ -1757,7 +1761,8 @@ let split_defs continue_anyway splits defs =
     in
     Defs (List.concat (List.map map_def defs))
   in
-  map_locs splits defs'
+  let defs'' = map_locs splits defs' in
+  !error_happened, defs''
 
 
 
@@ -2902,15 +2907,14 @@ let analyse_defs debug env (Defs defs) =
        print_endline (string_of_argsplits splits))
     else ()
   in
-  let _ =
-    if Failures.is_empty fails then () else
-      begin
-        Failures.iter (fun l msgs ->
-          Reporting_basic.print_err false false l "Monomorphisation" (String.concat "\n" (StringSet.elements msgs)))
-          fails;
-        raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
-      end
-  in splits
+  if Failures.is_empty fails 
+  then (true,splits) else
+    begin
+      Failures.iter (fun l msgs ->
+        Reporting_basic.print_err false false l "Monomorphisation" (String.concat "\n" (StringSet.elements msgs)))
+        fails;
+      (false, splits)
+    end
 
 let argset_to_list splits =
   let l = ArgSplits.bindings splits in
@@ -3143,6 +3147,7 @@ type options = {
   rewrites : bool;
   rewrite_size_parameters : bool;
   all_split_errors : bool;
+  continue_anyway : bool;
   dump_raw: bool
 }
 
@@ -3162,13 +3167,20 @@ let monomorphise opts splits env defs =
     else (defs,env)
   in
 (*let _ = Pretty_print.pp_defs stdout defs in*)
-  let new_splits =
+  let ok_analysis, new_splits =
     if opts.auto
-    then Analysis.argset_to_list (Analysis.analyse_defs opts.debug_analysis env defs)
-    else [] in
+    then
+      let f,r = Analysis.analyse_defs opts.debug_analysis env defs in
+      if f || opts.all_split_errors || opts.continue_anyway
+      then f, Analysis.argset_to_list r
+      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+    else true, [] in
   let splits = new_splits @ (List.map (fun (loc,id) -> (loc,id,None)) splits) in
-  let defs = split_defs opts.all_split_errors splits defs in
-  (* TODO: stop if opts.all_split_errors && something went wrong *)
+  let ok_split, defs = split_defs opts.all_split_errors splits defs in
+  let () = if (ok_analysis && ok_split) || opts.continue_anyway
+      then ()
+      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+  in
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
      type checker doesn't store the env at that point :( *)
