@@ -170,6 +170,7 @@ let shift_op_bv op v n =
 
 let shiftl_bv = shift_op_bv LL_shift (*"<<"*)
 let shiftr_bv = shift_op_bv RR_shift (*">>"*)
+let arith_shiftr_bv = shift_op_bv RR_shift_arith
 let rotl_bv = shift_op_bv LL_rot (*"<<<"*)
 let rotr_bv = shift_op_bv LL_rot (*">>>"*)
 

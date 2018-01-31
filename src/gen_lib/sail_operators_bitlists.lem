@@ -128,14 +128,16 @@ let add_overflow_vec_bit_signed  = add_overflow_bv_bit_signed
 let sub_overflow_vec_bit         = sub_overflow_bv_bit
 let sub_overflow_vec_bit_signed  = sub_overflow_bv_bit_signed
 
-val shiftl : list bitU -> integer -> list bitU
-val shiftr : list bitU -> integer -> list bitU
-val rotl   : list bitU -> integer -> list bitU
-val rotr   : list bitU -> integer -> list bitU
-let shiftl = shiftl_bv
-let shiftr = shiftr_bv
-let rotl   = rotl_bv
-let rotr   = rotr_bv
+val shiftl       : list bitU -> integer -> list bitU
+val shiftr       : list bitU -> integer -> list bitU
+val arith_shiftr : list bitU -> integer -> list bitU
+val rotl         : list bitU -> integer -> list bitU
+val rotr         : list bitU -> integer -> list bitU
+let shiftl       = shiftl_bv
+let shiftr       = shiftr_bv
+let arith_shiftr = arith_shiftr_bv
+let rotl         = rotl_bv
+let rotr         = rotr_bv
 
 val mod_vec         : list bitU -> list bitU -> list bitU
 val quot_vec        : list bitU -> list bitU -> list bitU
