@@ -933,7 +933,7 @@ let apply_pat_choices choices =
     e_case = rewrite_case }
 
 let split_defs all_errors splits defs =
-  let error_happened = ref false in
+  let no_errors_happened = ref true in
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (tu,l) as tua) =
       match tu with
@@ -1376,7 +1376,7 @@ let split_defs all_errors splits defs =
         Err_general (pat_l,
                      ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
       in if all_errors
-        then (error_happened := true;
+        then (no_errors_happened := false;
               print_error error;
               [P_aux (P_id var,(pat_l,annot)),[],[]])
         else raise (Fatal_error error)
@@ -1608,7 +1608,7 @@ let split_defs all_errors splits defs =
           Err_general (l, "Case split is too large (" ^ string_of_int size ^
             " > limit " ^ string_of_int size_set_limit ^ ")")
         in if all_errors
-          then (error_happened := true;
+          then (no_errors_happened := false;
                 print_error error; false)
           else raise (Fatal_error error)
       else true
@@ -1762,7 +1762,7 @@ let split_defs all_errors splits defs =
     Defs (List.concat (List.map map_def defs))
   in
   let defs'' = map_locs splits defs' in
-  !error_happened, defs''
+  !no_errors_happened, defs''
 
 
 
