@@ -49,14 +49,23 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 
 cd $SAILDIR/riscv
 
-printf "Checking specification...\n"
+printf "Building RISCV specification...\n"
 
-if make -C $SAILDIR/riscv check;
+if make -C $SAILDIR/riscv riscv ;
 then
-    green "checked RISCV specification" "ok"
+    green "Building RISCV specification" "ok"
 else
-    red "checking RISCV specification" "fail"
+    red "Building RISCV specification" "fail"
 fi
+
+for test in $DIR/tests/*.elf; do
+    if $SAILDIR/riscv/riscv "$test" >"${test/.elf/.out}" 2>&1 && grep -q SUCCESS "${test/.elf/.out}"
+    then
+       green "$test" "ok"
+    else
+       red "$test" "fail"
+    fi
+done
 
 finish_suite "RISCV tests"
 
