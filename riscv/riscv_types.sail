@@ -49,6 +49,8 @@ register x29 : regval
 register x30 : regval
 register x31 : regval
 
+let sp : regbits = 0b00010
+
 register PC : bits(64)
 register nextPC : bits(64)
 

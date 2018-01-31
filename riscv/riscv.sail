@@ -532,7 +532,42 @@ function clause execute (ILLEGAL) = {
 
 /* ****************************************************************** */
 
+union clause ast = C_ADDI4SPN : (bits(3), bits(8))
+
+function clause decodeCompressed (0b000          @
+                                  nz54 : bits(2) @
+                                  nz96 : bits(4) @
+                                  nz2  : bits(1) @
+                                  nz3  : bits(1) @
+                                  rd   : bits(3) @
+                                  0b00)
+                                  : bits(16) = {
+  let nzimm = (nz96 @ nz54 @ nz3 @ nz2) : bits(8) in
+    Some(C_ADDI4SPN(rd, nzimm))
+}
+
+function clause execute (C_ADDI4SPN(rdc, nzimm)) = {
+  let imm : bits(12) = (0b00 @ nzimm @ 0b00) in
+  let rd  : regbits = 0b01 @ rdc in
+  /* Ideally, we could just do this here:
+       execute(ITYPE(imm, sp, rd, RISCV_ADDI))
+    But this recursive call is problematic:
+    - it currently breaks the generated lem, since recursive execute
+      is not supported
+    - it might create issues for hardware generation for a BSV generator.
+    Once those are resolved, we could use the recursive call.  For
+    now, the ADDI implementation is inlined.
+  */
+  let sp_val = rGPR(sp) in
+  let imm64 : bits(64) = EXTS(imm) in
+  let result = sp_val + imm64 in
+  wGPR(rd, result)
+}
+
+/* ****************************************************************** */
+
 function clause decode _ = None
+function clause decodeCompressed _ = None
 
 end ast
 end decode
