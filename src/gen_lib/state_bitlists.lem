@@ -1,0 +1,29 @@
+open import Pervasives_extra
+open import Sail_impl_base
+open import Sail_values
+open import Sail_operators
+open import State
+
+val write_reg : forall 'regs 'a. register_ref 'regs 'a -> 'a -> M 'regs unit
+let write_reg reg v state =
+  [(Left (), <| state with regstate = reg.write_to state.regstate v |>)]
+val update_reg : forall 'regs 'a 'b. register_ref 'regs 'a -> ('a -> 'b -> 'a) -> 'b -> M 'regs unit
+let update_reg reg f v state =
+  let current_value = get_reg state reg in
+  let new_value = f current_value v in
+  [(Left (), set_reg state reg new_value)]
+let write_reg_range reg i j = update_reg reg (update_reg_range i j)
+let write_reg_pos reg i = update_reg reg (update_reg_pos i)
+let write_reg_field reg regfield = update_reg reg regfield.set_field
+let write_reg_field_range reg regfield i j =
+  let upd regval v =
+    let current_field_value = regfield.get_field regval in
+    let new_field_value = update current_field_value i j v in
+    regfield.set_field regval new_field_value in
+  update_reg reg upd
+let write_reg_field_pos reg regfield i =
+  let upd regval v =
+    let current_field_value = regfield.get_field regval in
+    let new_field_value = update_pos current_field_value i v in
+    regfield.set_field regval new_field_value in
+  update_reg reg upd

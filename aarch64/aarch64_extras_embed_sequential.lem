@@ -1,9 +1,8 @@
 open import Pervasives_extra
 open import Sail_impl_base
 open import Sail_values
-open import Sail_operators
+open import Sail_operators_bitlists
 open import State
-
 
 type ty2048
 instance (Size ty2048) let size = 2048 end
@@ -20,12 +19,16 @@ val putchar : integer -> unit
 let putchar _ = ()
 declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
 
-let inline uint = unsigned
-let inline sint = signed
+val uint : list bitU -> integer
+let uint = unsigned
+val sint : list bitU -> integer
+let sint = signed
 
+val slice : list bitU -> integer -> integer -> list bitU
 let slice v lo len =
   subrange_vec_dec v (lo + len - 1) lo
 
+val set_slice : integer -> integer -> list bitU -> integer -> list bitU -> list bitU
 let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
   update_subrange_vec_dec out (n + slice_len - 1) n v
 
@@ -35,8 +38,10 @@ let get_slice_int_bl len n lo =
   let bits = bits_of_int (hi + 1) n in
   get_bits false bits hi lo
 
+val get_slice_int : integer -> integer -> integer -> list bitU
 let get_slice_int len n lo = of_bits (get_slice_int_bl len n lo)
 
+val set_slice_int : integer -> integer -> integer -> list bitU -> integer
 let set_slice_int len n lo v =
   let hi = lo + len - 1 in
   let bits = bitlist_of_int n in
@@ -48,7 +53,9 @@ let ext_slice signed v i j =
   let len = length v in
   let bits = get_bits false (bits_of v) i j in
   of_bits (if signed then exts_bits len bits else extz_bits len bits)
+val exts_slice : list bitU -> integer -> integer -> list bitU
 let exts_slice v i j = ext_slice true v i j
+val extz_slice : list bitU -> integer -> integer -> list bitU
 let extz_slice v i j = ext_slice false v i j
 
 val shr_int : ii -> ii -> ii
@@ -90,6 +97,7 @@ let hexstring_to_bits s =
   | _ -> failwith "hexstring_to_bits called with unexpected string"
   end
 
+val hex_slice : string -> integer -> integer -> list bitU
 let hex_slice v len lo =
   let hi = len + lo - 1 in
   let bits = extz_bits (len + lo) (hexstring_to_bits v) in
@@ -101,7 +109,9 @@ let undefined_string () = ""
 let undefined_unit () = ()
 let undefined_int () = (0:ii)
 let undefined_bool () = false
+val undefined_vector : forall 'a. integer -> 'a -> list 'a
 let undefined_vector len u = repeat [u] len
+val undefined_bitvector : integer -> list bitU
 let undefined_bitvector len = duplicate B0 len
 let undefined_bits len = undefined_bitvector len
 let undefined_bit () = B0

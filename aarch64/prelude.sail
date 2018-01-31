@@ -87,17 +87,17 @@ function neq_anything (x, y) = not_bool(x == y)
 
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
-val builtin_and_vec = {ocaml: "and_vec", lem: "Sail_operators.and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val and_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
+val and_vec = {lem: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
 overload operator & = {and_bool, and_vec}
 
-val builtin_or_vec = {ocaml: "or_vec", lem: "Sail_operators.or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val or_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {lem: "or_vec"}: forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 

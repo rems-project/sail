@@ -1,4 +1,5 @@
 THYS = Sail_impl_base.thy Sail_values.thy Sail_operators.thy \
+  Sail_operators_mwords.thy Sail_operators_bitlists.thy \
   State_monad.thy State.thy Prompt_monad.thy Prompt.thy
 EXTRA_THYS = State_monad_extras.thy Prompt_monad_extras.thy
 
@@ -22,7 +23,10 @@ Sail_values.thy: ../../src/gen_lib/sail_values.lem Sail_impl_base.thy
 Sail_operators.thy: ../../src/gen_lib/sail_operators.lem Sail_values.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_operators_mwords.thy: ../../src/gen_lib/sail_operators_mwords.lem Sail_values.thy
+Sail_operators_mwords.thy: ../../src/gen_lib/sail_operators_mwords.lem Sail_operators.thy
+	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
+
+Sail_operators_bitlists.thy: ../../src/gen_lib/sail_operators_bitlists.lem Sail_operators.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 State_monad.thy: ../../src/gen_lib/state_monad.lem Sail_values.thy

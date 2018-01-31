@@ -5,52 +5,21 @@ open import Sail_values
 
 (*** Bit vector operations *)
 
-val concat_vec : forall 'a 'b 'c. Bitvector 'a, Bitvector 'b, Bitvector 'c => 'a -> 'b -> 'c
-let concat_vec l r = of_bits (bits_of l ++ bits_of r)
+val concat_bv : forall 'a 'b 'c. Bitvector 'a, Bitvector 'b, Bitvector 'c => 'a -> 'b -> 'c
+let concat_bv l r = of_bits (bits_of l ++ bits_of r)
 
-val cons_vec : forall 'a 'b 'c. Bitvector 'a, Bitvector 'b => bitU -> 'a -> 'b
-let cons_vec b v = of_bits (b :: bits_of v)
+val cons_bv : forall 'a 'b 'c. Bitvector 'a, Bitvector 'b => bitU -> 'a -> 'b
+let cons_bv b v = of_bits (b :: bits_of v)
 
-let bool_of_vec v = extract_only_element (bits_of v)
-let vec_of_bit len b = of_bits (extz_bits len [b])
-let cast_unit_vec b = of_bits [b]
+let bool_of_bv v = extract_only_element (bits_of v)
+let cast_unit_bv b = of_bits [b]
+let bv_of_bit len b = of_bits (extz_bits len [b])
+let int_of_bv sign = if sign then signed else unsigned
 
 let most_significant v = match bits_of v with
   | b :: _ -> b
   | _ -> failwith "most_significant applied to empty vector"
   end
-
-let hardware_mod (a: integer) (b:integer) : integer = 
-  if a < 0 && b < 0
-  then (abs a) mod (abs b)
-  else if (a < 0 && b >= 0)
-  then (a mod b) - b
-  else a mod b
-
-(* There are different possible answers for integer divide regarding
-rounding behaviour on negative operands. Positive operands always
-round down so derive the one we want (trucation towards zero) from
-that *)
-let hardware_quot (a:integer) (b:integer) : integer = 
-  let q = (abs a) / (abs b) in
-  if ((a<0) = (b<0)) then
-    q  (* same sign -- result positive *)
-  else
-    ~q (* different sign -- result negative *)
-
-let int_of_vec sign = if sign then signed else unsigned
-let vec_of_int len n = of_bits (bits_of_int len n)
-
-let max_64u = (integerPow 2 64) - 1
-let max_64  = (integerPow 2 63) - 1
-let min_64  = 0 - (integerPow 2 63)
-let max_32u = (4294967295 : integer)
-let max_32  = (2147483647 : integer)
-let min_32  = (0 - 2147483648 : integer)
-let max_8   = (127 : integer)
-let min_8   = (0 - 128 : integer)
-let max_5   = (31 : integer)
-let min_5   = (0 - 32 : integer)
 
 let get_max_representable_in sign (n : integer) : integer =
   if (n = 64) then match sign with | true -> max_64 | false -> max_64u end
@@ -68,106 +37,106 @@ let get_min_representable_in _ (n : integer) : integer =
   else if n = 5 then min_5
   else 0 - (integerPow 2 (natFromInteger n))
 
-val bitwise_binop_vec : forall 'a. Bitvector 'a =>
+val bitwise_binop_bv : forall 'a. Bitvector 'a =>
   (bool -> bool -> bool) -> 'a -> 'a -> 'a
-let bitwise_binop_vec op l r = of_bits (binop_bits op (bits_of l) (bits_of r))
+let bitwise_binop_bv op l r = of_bits (binop_bits op (bits_of l) (bits_of r))
 
-let and_vec = bitwise_binop_vec (&&)
-let or_vec = bitwise_binop_vec (||)
-let xor_vec = bitwise_binop_vec xor
-let not_vec v = of_bits (not_bits (bits_of v))
+let and_bv = bitwise_binop_bv (&&)
+let or_bv = bitwise_binop_bv (||)
+let xor_bv = bitwise_binop_bv xor
+let not_bv v = of_bits (not_bits (bits_of v))
 
-val arith_op_vec : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
+val arith_op_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
   (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a -> 'b
-let arith_op_vec op sign size l r =
-  let (l',r') = (int_of_vec sign l, int_of_vec sign r) in
+let arith_op_bv op sign size l r =
+  let (l',r') = (int_of_bv sign l, int_of_bv sign r) in
   let n = op l' r' in
-  of_bits (bits_of_int (size * length l) n)
+  of_int (size * length l) n
 
 
-let add_vec = arith_op_vec integerAdd false 1
-let addS_vec = arith_op_vec integerAdd true 1
-let sub_vec = arith_op_vec integerMinus false 1
-let mult_vec = arith_op_vec integerMult false 2
-let multS_vec = arith_op_vec integerMult true 2
+let add_bv   = arith_op_bv integerAdd false 1
+let addS_bv  = arith_op_bv integerAdd true 1
+let sub_bv   = arith_op_bv integerMinus false 1
+let mult_bv  = arith_op_bv integerMult false 2
+let multS_bv = arith_op_bv integerMult true 2
 
 let inline add_mword = Machine_word.plus
 let inline sub_mword = Machine_word.minus
 val mult_mword : forall 'a 'b. Size 'b => mword 'a -> mword 'a -> mword 'b
 let mult_mword l r = times (zeroExtend l) (zeroExtend r)
 
-val arith_op_vec_int : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
+val arith_op_bv_int : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
   (integer -> integer -> integer) -> bool -> integer -> 'a -> integer -> 'b
-let arith_op_vec_int op sign size l r =
-  let l' = int_of_vec sign l in
+let arith_op_bv_int op sign size l r =
+  let l' = int_of_bv sign l in
   let n = op l' r in
-  of_bits (bits_of_int (size * length l) n)
+  of_int (size * length l) n
 
-let add_vec_int = arith_op_vec_int integerAdd false 1
-let addS_vec_int = arith_op_vec_int integerAdd true 1
-let sub_vec_int = arith_op_vec_int integerMinus false 1
-let mult_vec_int = arith_op_vec_int integerMult false 2
-let multS_vec_int = arith_op_vec_int integerMult true 2
+let add_bv_int = arith_op_bv_int integerAdd false 1
+let addS_bv_int = arith_op_bv_int integerAdd true 1
+let sub_bv_int = arith_op_bv_int integerMinus false 1
+let mult_bv_int = arith_op_bv_int integerMult false 2
+let multS_bv_int = arith_op_bv_int integerMult true 2
 
-val arith_op_int_vec : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
+val arith_op_int_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
   (integer -> integer -> integer) -> bool -> integer -> integer -> 'a -> 'b
-let arith_op_int_vec op sign size l r =
-  let r' = int_of_vec sign r in
+let arith_op_int_bv op sign size l r =
+  let r' = int_of_bv sign r in
   let n = op l r' in
-  of_bits (bits_of_int (size * length r) n)
+  of_int (size * length r) n
 
-let add_int_vec = arith_op_int_vec integerAdd false 1
-let addS_int_vec = arith_op_int_vec integerAdd true 1
-let sub_int_vec = arith_op_int_vec integerMinus false 1
-let mult_int_vec = arith_op_int_vec integerMult false 2
-let multS_int_vec = arith_op_int_vec integerMult true 2
+let add_int_bv = arith_op_int_bv integerAdd false 1
+let addS_int_bv = arith_op_int_bv integerAdd true 1
+let sub_int_bv = arith_op_int_bv integerMinus false 1
+let mult_int_bv = arith_op_int_bv integerMult false 2
+let multS_int_bv = arith_op_int_bv integerMult true 2
 
-let arith_op_vec_bit op sign (size : integer) l r =
-  let l' = int_of_vec sign l in
+let arith_op_bv_bit op sign (size : integer) l r =
+  let l' = int_of_bv sign l in
   let n = op l' (match r with | B1 -> (1 : integer) | _ -> 0 end) in
-  of_bits (bits_of_int (size * length l) n)
+  of_int (size * length l) n
 
-let add_vec_bit = arith_op_vec_bit integerAdd false 1
-let addS_vec_bit = arith_op_vec_bit integerAdd true 1
-let sub_vec_bit = arith_op_vec_bit integerMinus true 1
+let add_bv_bit = arith_op_bv_bit integerAdd false 1
+let addS_bv_bit = arith_op_bv_bit integerAdd true 1
+let sub_bv_bit = arith_op_bv_bit integerMinus true 1
 
-val arith_op_overflow_vec : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
+val arith_op_overflow_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
   (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a -> ('b * bitU * bitU)
-let arith_op_overflow_vec op sign size l r =
+let arith_op_overflow_bv op sign size l r =
   let len = length l in
   let act_size = len * size in
-  let (l_sign,r_sign) = (int_of_vec sign l,int_of_vec sign r) in
-  let (l_unsign,r_unsign) = (int_of_vec false l,int_of_vec false r) in
+  let (l_sign,r_sign) = (int_of_bv sign l,int_of_bv sign r) in
+  let (l_unsign,r_unsign) = (int_of_bv false l,int_of_bv false r) in
   let n = op l_sign r_sign in
   let n_unsign = op l_unsign r_unsign in
-  let correct_size = bits_of_int act_size n in
+  let correct_size = of_int act_size n in
   let one_more_size_u = bits_of_int (act_size + 1) n_unsign in
   let overflow =
     if n <= get_max_representable_in sign len &&
          n >= get_min_representable_in sign len
     then B0 else B1 in
   let c_out = most_significant one_more_size_u in
-  (of_bits correct_size,overflow,c_out)
+  (correct_size,overflow,c_out)
 
-let add_overflow_vec = arith_op_overflow_vec integerAdd false 1
-let add_overflow_vec_signed = arith_op_overflow_vec integerAdd true 1
-let sub_overflow_vec = arith_op_overflow_vec integerMinus false 1
-let sub_overflow_vec_signed = arith_op_overflow_vec integerMinus true 1
-let mult_overflow_vec = arith_op_overflow_vec integerMult false 2
-let mult_overflow_vec_signed = arith_op_overflow_vec integerMult true 2
+let add_overflow_bv = arith_op_overflow_bv integerAdd false 1
+let add_overflow_bv_signed = arith_op_overflow_bv integerAdd true 1
+let sub_overflow_bv = arith_op_overflow_bv integerMinus false 1
+let sub_overflow_bv_signed = arith_op_overflow_bv integerMinus true 1
+let mult_overflow_bv = arith_op_overflow_bv integerMult false 2
+let mult_overflow_bv_signed = arith_op_overflow_bv integerMult true 2
 
-val arith_op_overflow_vec_bit : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
+val arith_op_overflow_bv_bit : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
   (integer -> integer -> integer) -> bool -> integer -> 'a -> bitU -> ('b * bitU * bitU)
-let arith_op_overflow_vec_bit op sign size l r_bit =
+let arith_op_overflow_bv_bit op sign size l r_bit =
   let act_size = length l * size in
-  let l' = int_of_vec sign l in
-  let l_u = int_of_vec false l in
+  let l' = int_of_bv sign l in
+  let l_u = int_of_bv false l in
   let (n,nu,changed) = match r_bit with
     | B1 -> (op l' 1, op l_u 1, true)
     | B0 -> (l',l_u,false)
-    | BU -> failwith "arith_op_overflow_vec_bit applied to undefined bit"
+    | BU -> failwith "arith_op_overflow_bv_bit applied to undefined bit"
     end in
-  let correct_size = bits_of_int act_size n in
+  let correct_size = of_int act_size n in
   let one_larger = bits_of_int (act_size + 1) nu in
   let overflow =
     if changed
@@ -175,32 +144,34 @@ let arith_op_overflow_vec_bit op sign size l r_bit =
       if n <= get_max_representable_in sign act_size && n >= get_min_representable_in sign act_size
       then B0 else B1
     else B0 in
-  (of_bits correct_size,overflow,most_significant one_larger)
+  (correct_size,overflow,most_significant one_larger)
 
-let add_overflow_vec_bit = arith_op_overflow_vec_bit integerAdd false 1
-let add_overflow_vec_bit_signed = arith_op_overflow_vec_bit integerAdd true 1
-let sub_overflow_vec_bit = arith_op_overflow_vec_bit integerMinus false 1
-let sub_overflow_vec_bit_signed = arith_op_overflow_vec_bit integerMinus true 1
+let add_overflow_bv_bit = arith_op_overflow_bv_bit integerAdd false 1
+let add_overflow_bv_bit_signed = arith_op_overflow_bv_bit integerAdd true 1
+let sub_overflow_bv_bit = arith_op_overflow_bv_bit integerMinus false 1
+let sub_overflow_bv_bit_signed = arith_op_overflow_bv_bit integerMinus true 1
 
-type shift = LL_shift | RR_shift | LL_rot | RR_rot
+type shift = LL_shift | RR_shift | RR_shift_arith | LL_rot | RR_rot
 
-val shift_op_vec : forall 'a. Bitvector 'a => shift -> 'a -> integer -> 'a
-let shift_op_vec op v n =
+val shift_op_bv : forall 'a. Bitvector 'a => shift -> 'a -> integer -> 'a
+let shift_op_bv op v n =
   match op with
   | LL_shift ->
      of_bits (get_bits true v n (length v - 1) ++ repeat [B0] n)
   | RR_shift ->
      of_bits (repeat [B0] n ++ get_bits true v 0 (length v - n - 1))
+  | RR_shift_arith ->
+     of_bits (repeat [most_significant v] n ++ get_bits true v 0 (length v - n - 1))
   | LL_rot ->
      of_bits (get_bits true v n (length v - 1) ++ get_bits true v 0 (n - 1))
   | RR_rot ->
      of_bits (get_bits false v 0 (n - 1) ++ get_bits false v n (length v - 1))
   end
 
-let shiftl = shift_op_vec LL_shift (*"<<"*)
-let shiftr = shift_op_vec RR_shift (*">>"*)
-let rotl = shift_op_vec LL_rot (*"<<<"*)
-let rotr = shift_op_vec LL_rot (*">>>"*)
+let shiftl_bv = shift_op_bv LL_shift (*"<<"*)
+let shiftr_bv = shift_op_bv RR_shift (*">>"*)
+let rotl_bv = shift_op_bv LL_rot (*"<<<"*)
+let rotr_bv = shift_op_bv LL_rot (*">>>"*)
 
 let shiftl_mword w n = Machine_word.shiftLeft w (natFromInteger n)
 let shiftr_mword w n = Machine_word.shiftRight w (natFromInteger n)
@@ -212,11 +183,11 @@ let rec arith_op_no0 (op : integer -> integer -> integer) l r =
   then Nothing
   else Just (op l r)
 
-val arith_op_vec_no0 : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
+val arith_op_bv_no0 : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
   (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a -> 'b
-let arith_op_vec_no0 op sign size l r =
+let arith_op_bv_no0 op sign size l r =
   let act_size = length l * size in
-  let (l',r') = (int_of_vec sign l,int_of_vec sign r) in
+  let (l',r') = (int_of_bv sign l,int_of_bv sign r) in
   let n = arith_op_no0 op l' r' in
   let (representable,n') =
     match n with
@@ -225,80 +196,42 @@ let arith_op_vec_no0 op sign size l r =
          n' >= get_min_representable_in sign act_size, n')
     | _ -> (false,0)
     end in
-  of_bits (if representable then bits_of_int act_size n' else repeat [BU] act_size)
+  if representable then (of_int act_size n') else (of_bits (repeat [BU] act_size))
 
-let mod_vec = arith_op_vec_no0 hardware_mod false 1
-let quot_vec = arith_op_vec_no0 hardware_quot false 1
-let quot_vec_signed = arith_op_vec_no0 hardware_quot true 1
+let mod_bv = arith_op_bv_no0 hardware_mod false 1
+let quot_bv = arith_op_bv_no0 hardware_quot false 1
+let quot_bv_signed = arith_op_bv_no0 hardware_quot true 1
 
 let mod_mword = Machine_word.modulo
 let quot_mword = Machine_word.unsignedDivide
 let quot_mword_signed = Machine_word.signedDivide
 
-val arith_op_overflow_vec_no0 : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
-  (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a -> ('b * bitU * bitU)
-let arith_op_overflow_vec_no0 op sign size l r =
-  let rep_size = length r * size in
-  let act_size = length l * size in
-  let (l',r') = (int_of_vec sign l,int_of_vec sign r) in
-  let (l_u,r_u) = (int_of_vec false l,int_of_vec false r) in
-  let n = arith_op_no0 op l' r' in
-  let n_u = arith_op_no0 op l_u r_u in
-  let (representable,n',n_u') =
-    match (n, n_u) with
-    | (Just n',Just n_u') ->
-       ((n' <= get_max_representable_in sign rep_size &&
-           n' >= (get_min_representable_in sign rep_size)), n', n_u')
-    | _ -> (true,0,0)
-    end in
-  let (correct_size,one_more) =
-    if representable then
-      (bits_of_int act_size n', bits_of_int (act_size + 1) n_u')
-    else
-      (repeat [BU] act_size, repeat [BU] (act_size + 1)) in
-  let overflow = if representable then B0 else B1 in
-  (of_bits correct_size,overflow,most_significant one_more)
+let arith_op_bv_int_no0 op sign size l r =
+  arith_op_bv_no0 op sign size l (of_int (length l) r)
 
-let quot_overflow_vec = arith_op_overflow_vec_no0 hardware_quot false 1
-let quot_overflow_vec_signed = arith_op_overflow_vec_no0 hardware_quot true 1
+let quot_bv_int = arith_op_bv_int_no0 hardware_quot false 1
+let mod_bv_int = arith_op_bv_int_no0 hardware_mod false 1
 
-let arith_op_vec_int_no0 op sign size l r =
-  arith_op_vec_no0 op sign size l (of_bits (bits_of_int (length l) r))
+let replicate_bits_bv v count = of_bits (repeat (bits_of v) count)
+let duplicate_bit_bv bit len = replicate_bits_bv [bit] len
 
-let quot_vec_int = arith_op_vec_int_no0 hardware_quot false 1
-let mod_vec_int = arith_op_vec_int_no0 hardware_mod false 1
+val eq_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool
+let eq_bv l r = (unsigned l = unsigned r)
 
-let replicate_bits v count = of_bits (repeat v count)
-let duplicate bit len = replicate_bits [bit] len
+val neq_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool
+let neq_bv l r = (unsigned l <> unsigned r)
 
-let lt = (<)
-let gt = (>)
-let lteq = (<=)
-let gteq = (>=)
+val ucmp_bv : forall 'a. Bitvector 'a => (integer -> integer -> bool) -> 'a -> 'a -> bool
+let ucmp_bv cmp l r = cmp (unsigned l) (unsigned r)
 
-val eq : forall 'a. Eq 'a => 'a -> 'a -> bool
-let eq l r = (l = r)
+val scmp_bv : forall 'a. Bitvector 'a => (integer -> integer -> bool) -> 'a -> 'a -> bool
+let scmp_bv cmp l r = cmp (signed l) (signed r)
 
-val eq_vec : forall 'a. Bitvector 'a => 'a -> 'a -> bool
-let eq_vec l r = (unsigned l = unsigned r)
-
-val neq : forall 'a. Eq 'a => 'a -> 'a -> bool
-let neq l r = (l <> r)
-
-val neq_vec : forall 'a. Bitvector 'a => 'a -> 'a -> bool
-let neq_vec l r = (unsigned l <> unsigned r)
-
-val ucmp_vec : forall 'a. Bitvector 'a => (integer -> integer -> bool) -> 'a -> 'a -> bool
-let ucmp_vec cmp l r = cmp (unsigned l) (unsigned r)
-
-val scmp_vec : forall 'a. Bitvector 'a => (integer -> integer -> bool) -> 'a -> 'a -> bool
-let scmp_vec cmp l r = cmp (signed l) (signed r)
-
-let ult_vec = ucmp_vec (<)
-let slt_vec = scmp_vec (<)
-let ugt_vec = ucmp_vec (>)
-let sgt_vec = scmp_vec (>)
-let ulteq_vec = ucmp_vec (<=)
-let slteq_vec = scmp_vec (<=)
-let ugteq_vec = ucmp_vec (>=)
-let sgteq_vec = scmp_vec (>=)
+let ult_bv = ucmp_bv (<)
+let slt_bv = scmp_bv (<)
+let ugt_bv = ucmp_bv (>)
+let sgt_bv = scmp_bv (>)
+let ulteq_bv = ucmp_bv (<=)
+let slteq_bv = scmp_bv (<=)
+let ugteq_bv = ucmp_bv (>=)
+let sgteq_bv = scmp_bv (>=)

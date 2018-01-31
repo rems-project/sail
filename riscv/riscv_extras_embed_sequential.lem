@@ -2,9 +2,11 @@ open import Pervasives
 open import Pervasives_extra
 open import Sail_impl_base
 open import Sail_values
-open import Sail_operators
+open import Sail_operators_mwords
 open import State
 open import State_monad
+
+type bitvector 'a = mword 'a
 
 let MEM_fence_rw_rw () = barrier Barrier_RISCV_rw_rw
 let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw
@@ -12,6 +14,13 @@ let MEM_fence_r_r   () = barrier Barrier_RISCV_r_r
 let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
 let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
 let MEM_fence_i     () = barrier Barrier_RISCV_i
+
+val MEMea                            : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
+val MEMea_release                    : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
+val MEMea_strong_release             : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
+val MEMea_conditional                : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
+val MEMea_conditional_release        : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
+val MEMea_conditional_strong_release : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
 
 let MEMea addr size                      = write_mem_ea Write_plain addr size
 let MEMea_release addr size              = write_mem_ea Write_RISCV_release addr size
@@ -21,26 +30,35 @@ let MEMea_conditional_release addr size  = write_mem_ea Write_RISCV_conditional_
 let MEMea_conditional_strong_release addr size
                                           = write_mem_ea Write_RISCV_conditional_strong_release addr size
 
+val write_ram : forall 'a 'b 'r 'e. Size 'a, Size 'b =>
+  integer -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b -> M 'r unit 'e
 let write_ram addrsize size hexRAM address value =
   write_mem_ea Write_plain address size >>
   write_mem_val value >>= fun _ ->
   return ()
 
+val read_ram : forall 'a 'b 'r 'e. Size 'a, Size 'b =>
+  integer -> integer -> bitvector 'a -> bitvector 'a -> M 'r (bitvector 'b) 'e
 let read_ram addrsize size hexRAM address =
   read_mem Read_plain address size
 
 let speculate_conditional_success () = excl_result ()
 
+val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> bitvector 'a
 let get_slice_int len n lo =
   (* TODO: Is this the intended behaviour? *)
   let hi = lo + len - 1 in
   let bits = bits_of_int (hi + 1) n in
   of_bits (get_bits false bits hi lo)
 
+val sign_extend : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> integer -> bitvector 'b
 let sign_extend v len = exts_vec len v
+val zero_extend : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> integer -> bitvector 'b
 let zero_extend v len = extz_vec len v
 
+val shift_bits_right : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
 let shift_bits_right v m = shiftr v (unsigned m)
+val shift_bits_left : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
 let shift_bits_left v m = shiftl v (unsigned m)
 
 val prerr_endline : string -> unit
@@ -50,7 +68,7 @@ declare ocaml target_rep function prerr_endline = `prerr_endline`
 val print_int : string -> integer -> unit
 let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
 
-val print_bits : forall 'a. Bitvector 'a => string -> 'a -> unit
+val print_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
 let print_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))
 
 val putchar : integer -> unit

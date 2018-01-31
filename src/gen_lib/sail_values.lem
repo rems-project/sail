@@ -13,6 +13,17 @@ let pow m n = m ** (natFromInteger n)
 
 let pow2 n = pow 2 n
 
+let inline lt = (<)
+let inline gt = (>)
+let inline lteq = (<=)
+let inline gteq = (>=)
+
+val eq : forall 'a. Eq 'a => 'a -> 'a -> bool
+let inline eq l r = (l = r)
+
+val neq : forall 'a. Eq 'a => 'a -> 'a -> bool
+let inline neq l r = (l <> r)
+
 (*let add_int l r = integerAdd l r
 let add_signed l r = integerAdd l r
 let sub_int l r = integerMinus l r
@@ -58,6 +69,35 @@ let rec replace bs (n : integer) b' = match bs with
 
 let upper n = n
 
+let hardware_mod (a: integer) (b:integer) : integer =
+  if a < 0 && b < 0
+  then (abs a) mod (abs b)
+  else if (a < 0 && b >= 0)
+  then (a mod b) - b
+  else a mod b
+
+(* There are different possible answers for integer divide regarding
+rounding behaviour on negative operands. Positive operands always
+round down so derive the one we want (trucation towards zero) from
+that *)
+let hardware_quot (a:integer) (b:integer) : integer =
+  let q = (abs a) / (abs b) in
+  if ((a<0) = (b<0)) then
+    q  (* same sign -- result positive *)
+  else
+    ~q (* different sign -- result negative *)
+
+let max_64u = (integerPow 2 64) - 1
+let max_64  = (integerPow 2 63) - 1
+let min_64  = 0 - (integerPow 2 63)
+let max_32u = (4294967295 : integer)
+let max_32  = (2147483647 : integer)
+let min_32  = (0 - 2147483648 : integer)
+let max_8   = (127 : integer)
+let min_8   = (0 - 128 : integer)
+let max_5   = (31 : integer)
+let min_5   = (0 - 32 : integer)
+
 (*** Bits *)
 type bitU = B0 | B1 | BU
 
@@ -83,7 +123,7 @@ end
 
 let bool_of_bitU = function
   | B0 -> false
-  | B1  -> true
+  | B1 -> true
   | BU -> failwith "bool_of_bitU applied to BU"
   end
 
@@ -272,34 +312,34 @@ let show_bitlist bs =
 
 let inline (^^) = append_list
 
-val slice_list_inc : forall 'a. list 'a -> integer -> integer -> list 'a
-let slice_list_inc xs i j =
+val subrange_list_inc : forall 'a. list 'a -> integer -> integer -> list 'a
+let subrange_list_inc xs i j =
   let (toJ,_suffix) = List.splitAt (natFromInteger j + 1) xs in
   let (_prefix,fromItoJ) = List.splitAt (natFromInteger i) toJ in
   fromItoJ
 
-val slice_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a
-let slice_list_dec xs i j =
+val subrange_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a
+let subrange_list_dec xs i j =
   let top = (length_list xs) - 1 in
-  slice_list_inc xs (top - i) (top - j)
+  subrange_list_inc xs (top - i) (top - j)
 
-val slice_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a
-let slice_list is_inc xs i j = if is_inc then slice_list_inc xs i j else slice_list_dec xs i j
+val subrange_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a
+let subrange_list is_inc xs i j = if is_inc then subrange_list_inc xs i j else subrange_list_dec xs i j
 
-val update_slice_list_inc : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a
-let update_slice_list_inc xs i j xs' =
+val update_subrange_list_inc : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a
+let update_subrange_list_inc xs i j xs' =
   let (toJ,suffix) = List.splitAt (natFromInteger j + 1) xs in
   let (prefix,_fromItoJ) = List.splitAt (natFromInteger i) toJ in
   prefix ++ xs' ++ suffix
 
-val update_slice_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a
-let update_slice_list_dec xs i j xs' =
+val update_subrange_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a
+let update_subrange_list_dec xs i j xs' =
   let top = (length_list xs) - 1 in
-  update_slice_list_inc xs (top - i) (top - j) xs'
+  update_subrange_list_inc xs (top - i) (top - j) xs'
 
-val update_slice_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a -> list 'a
-let update_slice_list is_inc xs i j xs' =
-  if is_inc then update_slice_list_inc xs i j xs' else update_slice_list_dec xs i j xs'
+val update_subrange_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a -> list 'a
+let update_subrange_list is_inc xs i j xs' =
+  if is_inc then update_subrange_list_inc xs i j xs' else update_subrange_list_dec xs i j xs'
 
 val access_list_inc : forall 'a. list 'a -> integer -> 'a
 let access_list_inc xs n = List_extra.nth xs (natFromInteger n)
@@ -383,11 +423,28 @@ val update_mword : forall 'a. bool -> mword 'a -> integer -> bitU -> mword 'a
 let update_mword is_inc w n b =
   if is_inc then update_mword_inc w n b else update_mword_dec w n b
 
+val mword_of_int : forall 'a. Size 'a => integer -> integer -> mword 'a
+let mword_of_int len n =
+  let w = wordFromInteger n in
+  if (length_mword w = len) then w else failwith "unexpected word length"
+
+(* Translating between a type level number (itself 'n) and an integer *)
+
+let size_itself_int x = integerFromNat (size_itself x)
+
+(* NB: the corresponding sail type is forall 'n. atom('n) -> itself('n),
+   the actual integer is ignored. *)
+
+val make_the_value : forall 'n. integer -> itself 'n
+let inline make_the_value x = the_value
+
 (*** Bitvectors *)
 
 class (Bitvector 'a)
   val bits_of : 'a -> list bitU
   val of_bits : list bitU -> 'a
+  (* The first parameter specifies the desired length of the bitvector *)
+  val of_int : integer -> integer -> 'a
   val length : 'a -> integer
   val unsigned : 'a -> integer
   val signed : 'a -> integer
@@ -401,44 +458,46 @@ end
 instance forall 'a. BitU 'a => (Bitvector (list 'a))
   let bits_of v = List.map to_bitU v
   let of_bits v = List.map of_bitU v
-  let length v = length_list v
+  let of_int len n = List.map of_bitU (bits_of_int len n)
+  let length = length_list
   let unsigned v = unsigned_of_bits (List.map to_bitU v)
   let signed v = signed_of_bits (List.map to_bitU v)
   let get_bit is_inc v n = to_bitU (access_list is_inc v n)
   let set_bit is_inc v n b = update_list is_inc v n (of_bitU b)
-  let get_bits is_inc v i j = List.map to_bitU (slice_list is_inc v i j)
-  let set_bits is_inc v i j v' = update_slice_list is_inc v i j (List.map of_bitU v')
+  let get_bits is_inc v i j = List.map to_bitU (subrange_list is_inc v i j)
+  let set_bits is_inc v i j v' = update_subrange_list is_inc v i j (List.map of_bitU v')
 end
 
 instance forall 'a. Size 'a => (Bitvector (mword 'a))
   let bits_of v = List.map to_bitU (bitlistFromWord v)
   let of_bits v = wordFromBitlist (List.map of_bitU v)
+  let of_int = mword_of_int
   let length v = integerFromNat (word_length v)
-  let unsigned v = unsignedIntegerFromWord v
-  let signed v = signedIntegerFromWord v
+  let unsigned = unsignedIntegerFromWord
+  let signed = signedIntegerFromWord
   let get_bit = access_mword
   let set_bit = update_mword
   let get_bits is_inc v i j = get_bits is_inc (bitlistFromWord v) i j
   let set_bits is_inc v i j v' = wordFromBitlist (set_bits is_inc (bitlistFromWord v) i j v')
 end
 
-let access_vec_inc v n = get_bit true  v n
-let access_vec_dec v n = get_bit false v n
+let access_bv_inc v n = get_bit true  v n
+let access_bv_dec v n = get_bit false v n
 
-let update_vec_inc v n b = set_bit true  v n b
-let update_vec_dec v n b = set_bit false v n b
+let update_bv_inc v n b = set_bit true  v n b
+let update_bv_dec v n b = set_bit false v n b
 
-let subrange_vec_inc v i j = of_bits (get_bits true  v i j)
-let subrange_vec_dec v i j = of_bits (get_bits false v i j)
+let subrange_bv_inc v i j = of_bits (get_bits true  v i j)
+let subrange_bv_dec v i j = of_bits (get_bits false v i j)
 
-let update_subrange_vec_inc v i j v' = set_bits true  v i j (bits_of v')
-let update_subrange_vec_dec v i j v' = set_bits false v i j (bits_of v')
+let update_subrange_bv_inc v i j v' = set_bits true  v i j (bits_of v')
+let update_subrange_bv_dec v i j v' = set_bits false v i j (bits_of v')
 
-val extz_vec : forall 'a 'b. Bitvector 'a, Bitvector 'b => integer -> 'a -> 'b
-let extz_vec n v = of_bits (extz_bits n (bits_of v))
+val extz_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b => integer -> 'a -> 'b
+let extz_bv n v = of_bits (extz_bits n (bits_of v))
 
-val exts_vec : forall 'a 'b. Bitvector 'a, Bitvector 'b => integer -> 'a -> 'b
-let exts_vec n v = of_bits (exts_bits n (bits_of v))
+val exts_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b => integer -> 'a -> 'b
+let exts_bv n v = of_bits (exts_bits n (bits_of v))
 
 (*** Bytes and addresses *)
 
@@ -584,13 +643,13 @@ let rec external_reg_value reg_name v =
     match reg_name with 
      | Reg _ start size dir ->
         (start, (if dir = D_increasing then start else (start - (size +1))), dir)
-     | Reg_slice _ reg_start dir (slice_start, slice_end) ->
+     | Reg_slice _ reg_start dir (slice_start, _) ->
         ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
          slice_start, dir)
-     | Reg_field _ reg_start dir _ (slice_start, slice_end) ->
+     | Reg_field _ reg_start dir _ (slice_start, _) ->
         ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
          slice_start, dir)
-     | Reg_f_slice _ reg_start dir _ _ (slice_start, slice_end) ->
+     | Reg_f_slice _ reg_start dir _ _ (slice_start, _) ->
         ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
          slice_start, dir) 
      end in

@@ -232,7 +232,10 @@ let output_lem filename libs defs =
     if !Pretty_print_lem.opt_sequential
     then ["State_monad"; "State"]
     else ["Prompt_monad"; "Prompt"] in
-  let operators_module = "Sail_operators" (* if !Pretty_print_lem.opt_mwords then "Sail_operators_mwords" else "Sail_operators" *) in
+  let operators_module =
+    if !Pretty_print_lem.opt_mwords
+    then "Sail_operators_mwords"
+    else "Sail_operators_bitlists" in
   let libs = List.map (fun lib -> lib ^ seq_suffix) libs in
   let base_imports = [
       "Pervasives_extra";
