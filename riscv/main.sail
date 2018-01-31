@@ -6,12 +6,29 @@ function fetch_and_execute () =
   let tohost = __GetSlice_int(64, elf_tohost(), 0) in
   while true do {
     print_bits("PC: ", PC);
+
+    /* for now, always fetch a 32-bit value.  this would need to
+       change with privileged mode, since we could cross a page
+       boundary with PC only 16-bit aligned in C mode.  */
     let instr = __RISCV_read(PC, 4);
-    nextPC = PC + 4;
-    let instr_ast = decode(instr);
-    match instr_ast {
-      Some(ast) => execute(ast),
-      None      => {print("Decode failed"); exit (())}
+
+    let (instr_ast, instr_sz) : (option(ast), int)=
+       match (instr[1 .. 0]) {
+         0b11 => (decode(instr), 4),
+	 _    => (decodeCompressed(instr[15 .. 0]), 2)
+       };
+    /* check whether a compressed instruction is legal. */
+    if (misa.C() == 0b0 & (instr_sz == 2)) then {
+      let t : sync_exception =
+      struct { trap = Illegal_Instr,
+               badaddr = Some (EXTZ(instr)) } in
+      nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+    } else {
+      nextPC = PC + instr_sz;
+      match instr_ast {
+        Some(ast) => execute(ast),
+        None      => {print("Decode failed"); exit (())}
+      }
     };
     let tohost_val = __RISCV_read(tohost, 4);
     if unsigned(tohost_val) != 0 then {

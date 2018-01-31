@@ -68,6 +68,38 @@ function exc_to_bits e =
 
 /* FIXME: currently we have only those used by riscv-tests. */
 
+bitfield Misa : bits(64) = {
+  MXL  : 63 .. 62,
+
+  Z    : 25,
+  Y    : 24,
+  X    : 23,
+  W    : 22,
+  V    : 21,
+  U    : 20,
+  T    : 19,
+  S    : 18,
+  R    : 17,
+  Q    : 16,
+  P    : 15,
+  O    : 14,
+  N    : 13,
+  M    : 12,
+  L    : 11,
+  K    : 10,
+  J    : 9,
+  I    : 8,
+  H    : 7,
+  G    : 6,
+  F    : 5,
+  E    : 4,
+  D    : 3,
+  C    : 2,
+  B    : 1,
+  A    : 0
+}
+register misa : Misa
+
 bitfield Mstatus : bits(64) = {
   SD   : 63,
 

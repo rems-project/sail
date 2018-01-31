@@ -3,6 +3,10 @@ scattered union ast
 val decode : bits(32) -> option(ast) effect pure
 scattered function decode
 
+val decodeCompressed : bits(16) -> option(ast) effect pure
+scattered function decodeCompressed
+
+
 val execute : ast -> unit effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
 scattered function execute
 
@@ -503,8 +507,34 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
 
 /* ****************************************************************** */
 
+union clause ast = NOP
+
+function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bits(5)) @ 0b01) : bits(16) = {
+  if (and_bool((nzi1 == 0b0), (nzi0 == 0b00000)))
+  then None
+  else Some(NOP)
+}
+
+function clause execute (NOP) = ()
+
+/* ****************************************************************** */
+
+union clause ast = ILLEGAL
+
+function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b01) : bits(16) = Some(ILLEGAL)
+
+function clause execute (ILLEGAL) = {
+  let t : sync_exception =
+  struct { trap = Illegal_Instr,
+           badaddr = Some (EXTZ(0b0)) } in
+  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+}
+
+/* ****************************************************************** */
+
 function clause decode _ = None
 
 end ast
 end decode
+end decodeCompressed
 end execute
