@@ -521,7 +521,7 @@ function clause execute (NOP) = ()
 
 union clause ast = ILLEGAL
 
-function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b01) : bits(16) = Some(ILLEGAL)
+function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(ILLEGAL)
 
 function clause execute (ILLEGAL) = {
   let t : sync_exception =
