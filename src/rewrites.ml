@@ -1214,6 +1214,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
                   | Some (l,i,j,lits) -> Some (l,i,idx,lits @ [e])
                   | None -> Some (l,idx,idx,[e])) in
                 collect current' (guards, dls) idx' ps'
+              | P_aux (P_typ (typ, pat'), _) ->
+                collect current (guards, dls) idx (pat' :: ps')
               | P_aux (P_as (pat',id), (l,annot)) ->
                 let dl = letbind_bit_exp rootid l t idx id in
                 collect current (guards, dls @ [dl]) idx (pat' :: ps')
