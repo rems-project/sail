@@ -1203,45 +1203,50 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   let guard_bitvector_pat =
     let collect_guards_decls ps rootid t =
       let (start,_,ord,_) = vector_typ_args_of t in
-      let rec collect current (guards,dls) idx ps =
-        let idx' = if is_order_inc ord then Big_int.add idx (Big_int.of_int 1) else Big_int.sub idx (Big_int.of_int 1) in
-        (match ps with
-          | pat :: ps' ->
-            (match pat with
-              | P_aux (P_lit lit, (l,annot)) ->
-                let e = E_aux (E_lit lit, (gen_loc l, annot)) in
-                let current' = (match current with
-                  | Some (l,i,j,lits) -> Some (l,i,idx,lits @ [e])
-                  | None -> Some (l,idx,idx,[e])) in
-                collect current' (guards, dls) idx' ps'
-              | P_aux (P_typ (typ, pat'), _) ->
-                collect current (guards, dls) idx (pat' :: ps')
-              | P_aux (P_as (pat',id), (l,annot)) ->
-                let dl = letbind_bit_exp rootid l t idx id in
-                collect current (guards, dls @ [dl]) idx (pat' :: ps')
-              | _ ->
-                let dls' = (match pat with
-                  | P_aux (P_id id, (l,annot)) ->
-                    dls @ [letbind_bit_exp rootid l t idx id]
-                  | _ -> dls) in
-                let guards' = (match current with
-                  | Some (l,i,j,lits) ->
-                    guards @ [Some (test_subvec_exp rootid l t i j lits)]
-                  | None -> guards) in
-                collect None (guards', dls') idx' ps')
-          | [] ->
-            let guards' = (match current with
-              | Some (l,i,j,lits) ->
-                guards @ [Some (test_subvec_exp rootid l t i j lits)]
-              | None -> guards) in
-            (guards',dls)) in
-      let (guards,dls) = match start with
-      | Nexp_aux (Nexp_constant s, _) ->
-        collect None ([],[]) s ps
+      let start_idx = match start with
+      | Nexp_aux (Nexp_constant s, _) -> s
       | _ ->
-        let (P_aux (_, (l,_))) = pat in
         raise (Reporting_basic.err_unreachable l
           "guard_bitvector_pat called on pattern with non-constant start index") in
+      let add_bit_pat (idx, current, guards, dls) pat =
+        let idx' =
+          if is_order_inc ord
+          then Big_int.add idx (Big_int.of_int 1)
+          else Big_int.sub idx (Big_int.of_int 1) in
+        let ids = fst (fold_pat
+          { (compute_pat_alg IdSet.empty IdSet.union) with
+            p_id = (fun id -> IdSet.singleton id, P_id id);
+            p_as = (fun ((ids, pat), id) -> IdSet.add id ids, P_as (pat, id)) }
+          pat) in
+        let lits = fst (fold_pat
+          { (compute_pat_alg [] (@)) with
+            p_aux = (fun ((lits, paux), (l, annot)) ->
+                       let lits = match paux with
+                         | P_lit lit -> E_aux (E_lit lit, (l, annot)) :: lits
+                         | _ -> lits in
+                       lits, P_aux (paux, (l, annot))) }
+          pat) in
+        let add_letbind id dls = dls @ [letbind_bit_exp rootid l t idx id] in
+        let dls' = IdSet.fold add_letbind ids dls in
+        let current', guards' =
+          match current with
+          | Some (l, i, j, lits') ->
+             if lits = []
+             then None, guards @ [Some (test_subvec_exp rootid l t i j lits')]
+             else Some (l, i, idx, lits' @ lits), guards
+          | None ->
+             begin
+               match lits with
+               | E_aux (_, (l, _)) :: _ -> Some (l, idx, idx, lits), guards
+               | [] -> None, guards
+             end
+          in
+        (idx', current', guards', dls') in
+      let (_, final, guards, dls) = List.fold_left add_bit_pat (start_idx, None, [], []) ps in
+      let guards = match final with
+        | Some (l,i,j,lits) ->
+           guards @ [Some (test_subvec_exp rootid l t i j lits)]
+        | None -> guards in
       let (decls,letbinds) = List.split dls in
       (compose_guards guards, List.fold_right (@@) decls, letbinds) in
 
