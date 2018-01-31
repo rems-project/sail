@@ -88,12 +88,12 @@ test: sail interpreter
 	./run_tests.native
 
 THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
-BITBUCKET_ROOT=$(realpath $(dir $(THIS_MAKEFILE))../..)
+PROJECT_ROOT=$(realpath $(dir $(THIS_MAKEFILE))../..)
 
-LEM = $(BITBUCKET_ROOT)/lem/lem
-ELFDIR= $(BITBUCKET_ROOT)/linksem
+LEM = $(PROJECT_ROOT)/lem/lem
+ELFDIR= $(PROJECT_ROOT)/linksem
 
-SAIL_DIR:=$(BITBUCKET_ROOT)/sail
+SAIL_DIR:=$(PROJECT_ROOT)/sail
 MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
 
 MIPS_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
