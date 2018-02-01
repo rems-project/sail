@@ -520,7 +520,12 @@ let nexp_subst_fns substs =
       | E_id _
       | E_lit _
       | E_comment _ -> re e
-      | E_sizeof ne -> re (E_sizeof ne) (* TODO: does this need done?  does it appear in type checked code? *)
+      | E_sizeof ne -> begin
+         let ne' = subst_nexp substs ne in
+         match ne' with
+         | Nexp_aux (Nexp_constant i,l) -> re (E_lit (L_aux (L_num i,l)))
+         | _ -> re (E_sizeof ne')
+      end
       | E_constraint nc -> re (E_constraint (subst_nc substs nc))
       | E_internal_exp (l,annot) -> re (E_internal_exp (l, s_tannot annot))
       | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, s_tannot annot))
@@ -3038,7 +3043,11 @@ let add_extra_splits extras (Defs defs) =
             ("Don't know how to case split type variable " ^ string_of_kid kid);
           e)
       | Analysis.Partial (pats,_) ->
-         let pexps = List.map (fun p -> Pat_aux (Pat_exp (p,e),(l,annot))) pats
+         let ksubst = function
+           | P_aux (P_lit (L_aux (L_num i,_)),_) -> KBindings.singleton kid (nconstant i)
+           | _ -> KBindings.empty
+         in
+         let pexps = List.map (fun p -> Pat_aux (Pat_exp (p,nexp_subst_exp (ksubst p) e),(l,annot))) pats
          in
          let nexp = Nexp_aux (Nexp_var kid,l) in
          E_aux (E_case
