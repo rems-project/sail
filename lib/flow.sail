@@ -28,6 +28,11 @@ val gteq_atom_range = "gteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> boo
 val eq_range = {ocaml: "eq_int", lem: "eq"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
 
+val lteq_int = "lteq" : (int, int) -> bool
+val gteq_int = "gteq" : (int, int) -> bool
+val lt_int = "lt" : (int, int) -> bool
+val gt_int = "lt" : (int, int) -> bool
+
 overload operator == = {eq_atom, eq_range, eq_int}
 
 $ifdef TEST

@@ -204,25 +204,17 @@ overload operator * = {mult_range, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
-val gteq_int = "gteq" : (int, int) -> bool
-
 val gteq_real = {ocaml: "gteq_real", lem: "gteq"} : (real, real) -> bool
 
 overload operator >= = {gteq_atom, gteq_int, gteq_real}
-
-val lteq_int = "lteq" : (int, int) -> bool
 
 val lteq_real = {ocaml: "lteq_real", lem: "lteq"} : (real, real) -> bool
 
 overload operator <= = {lteq_atom, lteq_int, lteq_real}
 
-val gt_int = "gt" : (int, int) -> bool
-
 val gt_real = {ocaml: "gt_real", lem: "gt"} : (real, real) -> bool
 
 overload operator > = {gt_atom, gt_int, gt_real}
-
-val lt_int = "lt" : (int, int) -> bool
 
 val lt_real = {ocaml: "lt_real", lem: "lt"} : (real, real) -> bool
 

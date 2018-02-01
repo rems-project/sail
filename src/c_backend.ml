@@ -262,6 +262,9 @@ and pp_aval = function
 
 let ae_lit lit typ = AE_val (AV_lit (lit, typ))
 
+(** GLOBAL: gensym_counter is used to generate fresh identifiers where
+   needed. It should be safe to reset between top level
+   definitions. **)
 let gensym_counter = ref 0
 
 let gensym () =
@@ -727,6 +730,27 @@ let analyze_primop ctx id args typ =
 (* 4. Conversion to low-level AST                                         *)
 (**************************************************************************)
 
+(** We now define a low-level AST that is only slightly abstracted
+   away from C. To be succint in comments we usually refer to this as
+   LLcode rather than low-level AST repeatedly.
+
+   The general idea is ANF expressions are converted into lists of
+   instructions (type instr) where allocations and deallocations are
+   now made explicit. ANF values (aval) are mapped to the cval type,
+   which is even simpler still. Some things are still more abstract
+   than in C, so the type definitions follow the sail type definition
+   structure, just with typ (from ast.ml) replaced with
+   ctyp. Top-level declarations that have no meaning for the backend
+   are not included at this level.
+
+   The convention used here is that functions of the form compile_X
+   compile the type X into types in this AST, so compile_aval maps
+   avals into cvals. Note that the return types for these functions
+   are often quite complex, and they usually return some tuple
+   containing setup instructions (to allocate memory for the
+   expression), cleanup instructions (to deallocate that memory) and
+   possibly typing information about what has been translated. **)
+
 type ctype_def =
    | CTD_enum of id * IdSet.t
    | CTD_record of id * ctyp Bindings.t
@@ -760,12 +784,21 @@ type instr =
   | I_assign of id * cval
   | I_copy of clexp * cval
   | I_clear of ctyp * id
-  | I_return of cval * instr list
+  | I_return of cval
   | I_block of instr list
   | I_comment of string
   | I_label of string
   | I_goto of string
   | I_raw of string
+
+let rec map_instrs f instr =
+  match instr with
+  | I_decl _ | I_alloc _ | I_init _ -> instr
+  | I_if (cval, instrs1, instrs2, ctyp) ->
+     I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
+  | I_funcall _ | I_convert _ | I_assign _ | I_copy _ | I_clear _ | I_return _ -> instr
+  | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
+  | I_comment _ | I_label _ | I_goto _ | I_raw _ -> instr
 
 type cdef =
   | CDEF_reg_dec of ctyp * id
@@ -782,13 +815,15 @@ let rec instr_ctyps = function
   | I_convert (_, ctyp1, _, ctyp2) -> [ctyp1; ctyp2]
   | I_assign (_, cval) | I_copy (_, cval) -> [cval_ctyp cval]
   | I_block instrs -> List.concat (List.map instr_ctyps instrs)
-  | I_return (cval, instrs) -> cval_ctyp cval :: List.concat (List.map instr_ctyps instrs)
+  | I_return cval -> [cval_ctyp cval]
   | I_comment _ | I_label _ | I_goto _ | I_raw _ -> []
 
 let cdef_ctyps = function
   | CDEF_reg_dec (ctyp, _) -> [ctyp]
   | CDEF_fundef (_, _, _, instrs) -> List.concat (List.map instr_ctyps instrs)
   | CDEF_type tdef -> ctype_def_ctyps tdef
+
+(* For debugging we define a pretty printer for LLcode instructions *)
 
 let pp_ctyp ctyp =
   string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
@@ -834,9 +869,8 @@ let rec pp_instr = function
      separate space [string "let"; pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
      pp_keyword "CLEAR" ^^ pp_ctyp ctyp ^^ parens (pp_id id)
-  | I_return (cval, instrs) ->
+  | I_return cval ->
      pp_keyword "RETURN" ^^ pp_cval cval
-     ^^ surround 2 0 lbrace (separate_map hardline pp_instr instrs) rbrace
   | I_comment str ->
      string ("// " ^ str)
   | I_label str ->
@@ -964,9 +998,11 @@ let rec compile_match ctx apat cval case_label =
      end
   | _, _ -> []
 
-
 let unit_fragment = CV_C_fragment ("UNIT", CT_unit)
 
+(** GLOBAL: label_counter is used to make sure all labels have unique
+   names. Like gensym_counter it should be safe to reset between
+   top-level definitions. **)
 let label_counter = ref 0
 
 let label str =
@@ -1112,8 +1148,9 @@ let rec compile_aexp ctx = function
   | AE_cast (aexp, typ) -> compile_aexp ctx aexp
 
   | AE_return (aval, typ) ->
-     let return_setup, cval, return_cleanup = compile_aval ctx aval in
-     return_setup @ [I_return (cval, return_cleanup)],
+     (* Cleanup info will be re-added by fix_early_return *)
+     let return_setup, cval, _ = compile_aval ctx aval in
+     return_setup @ [I_return cval],
      CT_unit,
      (fun clexp -> I_copy (clexp, unit_fragment)),
      []
@@ -1133,8 +1170,16 @@ let rec pat_ids (P_aux (p_aux, _) as pat) =
   | P_id id -> [id]
   | P_tup pats -> List.concat (List.map pat_ids pats)
   | P_lit (L_aux (L_unit, _)) -> let gs = gensym () in [gs]
+  | P_wild -> let gs = gensym () in [gs]
   | _ -> failwith ("Bad pattern " ^ string_of_pat pat)
 
+(** Compile a sail type definition into a LLcode one. Most of the
+   actual work of translating the typedefs into C is done by the code
+   generator, as it's easy to keep track of structs, tuples and unions
+   in their sail form at this level, and leave the fiddly details of
+   how they get mapped to C in the next stage. This function also adds
+   details of the types it compiles to the context, ctx, which is why
+   it returns a ctypdef * ctx pair. **)
 let compile_type_def ctx (TD_aux (type_def, _)) =
   match type_def with
   | TD_enum (id, _, ids, _) ->
@@ -1161,17 +1206,78 @@ let compile_type_def ctx (TD_aux (type_def, _)) =
   (* All type abbreviations are filtered out in compile_def  *)
   | TD_abbrev _ -> assert false
 
-(*
-let instr_split_at' f (before, after) = function
-  | [] ->
- *)
+let instr_split_at f =
+  let rec instr_split_at' f before = function
+    | [] -> (List.rev before, [])
+    | instr :: instrs when f instr -> (List.rev before, instr :: instrs)
+    | instr :: instrs -> instr_split_at' f (instr :: before) instrs
+  in
+  instr_split_at' f []
 
-let fix_early_return ctx instrs =
+let generate_cleanup instrs =
+  let generate_cleanup' = function
+    | I_decl (ctyp, id) when not (is_stack_ctyp ctyp) -> [(id, I_clear (ctyp, id))]
+    | I_alloc (ctyp, id) when not (is_stack_ctyp ctyp) -> [(id, I_clear (ctyp, id))]
+    | _ -> []
+  in
+  let is_clear ids = function
+    | I_clear (_, id) -> IdSet.add id ids
+    | _ -> ids
+  in
+  let cleaned = List.fold_left is_clear IdSet.empty instrs in
+  instrs
+  |> List.map generate_cleanup'
+  |> List.concat
+  |> List.filter (fun (id, _) -> not (IdSet.mem id cleaned))
+  |> List.map snd
+
+(** Functions that have heap-allocated return types are implemented by
+   passing a pointer a location where the return value should be
+   stored. The ANF -> LLcode pass for expressions simply outputs an
+   I_return instruction for any return value, so this function walks
+   over the LLcode ast for expressions and modifies the return
+   statements into code that sets that pointer, as well as adds extra
+   control flow to cleanup heap-allocated variables correctly when a
+   function terminates early. See the generate_cleanup function for
+   how this is done. *)
+let fix_early_return ret ctx instrs =
   let end_function_label = label "end_function_" in
-  [I_raw "bool returning = false;"]
-  @ instrs
+  let is_return_recur = function
+    | I_return _ | I_if _ | I_block _ -> true
+    | _ -> false
+  in
+  let rec rewrite_return pre_cleanup instrs =
+    match instr_split_at is_return_recur instrs with
+    | instrs, [] -> instrs
+    | before, I_block instrs :: after ->
+       before
+       @ [I_block (rewrite_return (pre_cleanup @ generate_cleanup before) instrs)]
+       @ rewrite_return pre_cleanup after
+    | before, I_if (cval, then_instrs, else_instrs, ctyp) :: after ->
+       let cleanup = pre_cleanup @ generate_cleanup before in
+       before
+       @ [I_if (cval, rewrite_return cleanup then_instrs, rewrite_return cleanup else_instrs, ctyp)]
+       @ rewrite_return pre_cleanup after
+    | before, I_return cval :: after ->
+       let cleanup_label = label "cleanup_" in
+       let end_cleanup_label = label "end_cleanup_" in
+       before
+       @ [I_copy (ret, cval);
+          I_goto cleanup_label]
+       (* This is probably dead code until cleanup_label, but how can we be sure there are no jumps into it? *)
+       @ rewrite_return pre_cleanup after
+       @ [I_goto end_cleanup_label]
+       @ [I_label cleanup_label]
+       @ pre_cleanup
+       @ generate_cleanup before
+       @ [I_goto end_function_label]
+       @ [I_label end_cleanup_label]
+    | _, _ -> assert false
+  in
+  rewrite_return [] instrs
   @ [I_label end_function_label]
 
+(** Compile a Sail toplevel definition into an LLcode definition **)
 let compile_def ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
      [CDEF_reg_dec (ctyp_of_typ ctx typ, id)], ctx
@@ -1188,16 +1294,19 @@ let compile_def ctx = function
           let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
           let gs = gensym () in
           if is_stack_ctyp ctyp then
-            let instrs = [I_decl (ctyp, gs)] @ setup @ [call (CL_id gs)] @ cleanup @ [I_return (CV_id (gs, ctyp), [])] in
+            let instrs = [I_decl (ctyp, gs)] @ setup @ [call (CL_id gs)] @ cleanup @ [I_return (CV_id (gs, ctyp))] in
             [CDEF_fundef (id, None, pat_ids pat, instrs)], ctx
           else
             let instrs = setup @ [call (CL_addr (CL_id gs))] @ cleanup in
-            let instrs = fix_early_return ctx instrs in
+            let instrs = fix_early_return (CL_addr (CL_id gs)) ctx instrs in
             [CDEF_fundef (id, Some gs, pat_ids pat, instrs)], ctx
        | _ -> assert false
      end
 
+  (* All abbreviations should expanded by the typechecker, so we don't
+     need to translate type abbreviations into C typedefs. *)
   | DEF_type (TD_aux (TD_abbrev _, _)) -> [], ctx
+
   | DEF_type type_def ->
      let tdef, ctx = compile_type_def ctx type_def in
      [CDEF_type tdef], ctx
@@ -1212,6 +1321,30 @@ let compile_def ctx = function
   (* Only the parser and sail pretty printer care about this. *)
   | DEF_fixity _ -> [], ctx
 
+  | _ -> assert false
+
+(** To keep things neat we use GCC's local labels extension to limit
+   the scope of labels. We do this by iterating over all the blocks
+   and adding a __label__ declaration with all the labels local to
+   that block. The add_local_labels function is called by the code
+   generator just before it outputs C.
+
+   See https://gcc.gnu.org/onlinedocs/gcc/Local-Labels.html **)
+let add_local_labels' instrs =
+  let is_label = function
+    | I_label str -> [str]
+    | _ -> []
+  in
+  let labels = List.concat (List.map is_label instrs) in
+  let local_label_decl = I_raw ("__label__ " ^ String.concat ", " labels ^ ";\n") in
+  if labels = [] then
+    instrs
+  else
+    local_label_decl :: instrs
+
+let add_local_labels instrs =
+  match map_instrs add_local_labels' (I_block instrs) with
+  | I_block instrs -> instrs
   | _ -> assert false
 
 (**************************************************************************)
@@ -1282,9 +1415,9 @@ let rec codegen_instr ctx = function
      ^^ twice space ^^ codegen_instr ctx then_instr
   | I_if (cval, then_instrs, else_instrs, ctyp) ->
      string "  if" ^^ space ^^ parens (string (sgen_cval cval)) ^^ space
-     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr ctx) then_instrs) rbrace
+     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr ctx) then_instrs) (twice space ^^ rbrace)
      ^^ space ^^ string "else" ^^ space
-     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr ctx) else_instrs) rbrace
+     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr ctx) else_instrs) (twice space ^^ rbrace)
   | I_block instrs ->
      string "  {"
      ^^ jump 2 2 (separate_map hardline (codegen_instr ctx) instrs) ^^ hardline
@@ -1321,7 +1454,7 @@ let rec codegen_instr ctx = function
                  (sgen_ctyp_name ctyp2)
                  (sgen_clexp x)
                  (sgen_id y))
-  | I_return (cval, _) ->
+  | I_return cval ->
      string (Printf.sprintf "  return %s;" (sgen_cval cval))
   | I_comment str ->
      string ("  /* " ^ str ^ " */")
@@ -1400,6 +1533,21 @@ let codegen_type_def ctx = function
                  rbrace
      ^^ semi
 
+(** GLOBAL: because C doesn't have real anonymous tuple types
+   (anonymous structs don't quite work the way we need) every tuple
+   type in the spec becomes some generated named struct in C. This is
+   done in such a way that every possible tuple type has a unique name
+   associated with it. This global variable keeps track of these
+   generated struct names, so we never generate two copies of the
+   struct that is used to represent them in C.
+
+   The way this works is that codegen_def scans each definition's type
+   annotations for tuple types and generates the required structs
+   using codegen_type_def before the actual definition is generated by
+   codegen_def'.
+
+   This variable should be reset to empty only when the entire AST has
+   been translated to C. **)
 let generated_tuples = ref IdSet.empty
 
 let codegen_tup ctx ctyps =
@@ -1420,6 +1568,7 @@ let codegen_def' ctx = function
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
 
   | CDEF_fundef (id, ret_arg, args, instrs) ->
+     let instrs = add_local_labels instrs in
      List.iter (fun instr -> prerr_endline (Pretty_print_sail.to_string (pp_instr instr))) instrs;
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
