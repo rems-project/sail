@@ -760,7 +760,7 @@ type instr =
   | I_assign of id * cval
   | I_copy of clexp * cval
   | I_clear of ctyp * id
-  | I_return of id
+  | I_return of cval * instr list
   | I_block of instr list
   | I_comment of string
   | I_label of string
@@ -782,7 +782,8 @@ let rec instr_ctyps = function
   | I_convert (_, ctyp1, _, ctyp2) -> [ctyp1; ctyp2]
   | I_assign (_, cval) | I_copy (_, cval) -> [cval_ctyp cval]
   | I_block instrs -> List.concat (List.map instr_ctyps instrs)
-  | I_return _ | I_comment _ | I_label _ | I_goto _ | I_raw _ -> []
+  | I_return (cval, instrs) -> cval_ctyp cval :: List.concat (List.map instr_ctyps instrs)
+  | I_comment _ | I_label _ | I_goto _ | I_raw _ -> []
 
 let cdef_ctyps = function
   | CDEF_reg_dec (ctyp, _) -> [ctyp]
@@ -833,8 +834,9 @@ let rec pp_instr = function
      separate space [string "let"; pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
      pp_keyword "CLEAR" ^^ pp_ctyp ctyp ^^ parens (pp_id id)
-  | I_return id ->
-     pp_keyword "RETURN" ^^ pp_id id
+  | I_return (cval, instrs) ->
+     pp_keyword "RETURN" ^^ pp_cval cval
+     ^^ surround 2 0 lbrace (separate_map hardline pp_instr instrs) rbrace
   | I_comment str ->
      string ("// " ^ str)
   | I_label str ->
@@ -962,6 +964,9 @@ let rec compile_match ctx apat cval case_label =
      end
   | _, _ -> []
 
+
+let unit_fragment = CV_C_fragment ("UNIT", CT_unit)
+
 let label_counter = ref 0
 
 let label str =
@@ -1063,7 +1068,6 @@ let rec compile_aexp ctx = function
         be different. *)
      let assign_ctyp = ctyp_of_typ ctx assign_typ in
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
-     let unit_fragment = CV_C_fragment ("UNIT", CT_unit) in
      let comment = "assign " ^ string_of_ctyp assign_ctyp ^ " := " ^ string_of_ctyp ctyp in
      if ctyp_equal assign_ctyp ctyp then
        setup @ [call (CL_id id)], CT_unit, (fun clexp -> I_copy (clexp, unit_fragment)), cleanup
@@ -1086,7 +1090,6 @@ let rec compile_aexp ctx = function
      block @ setup, ctyp, call, cleanup
 
   | AE_loop (While, cond, body) ->
-     let unit_fragment = CV_C_fragment ("UNIT", CT_unit) in
      let loop_start_label = label "while_" in
      let loop_end_label = label "wend_" in
      let cond_setup, _, cond_call, cond_cleanup = compile_aexp ctx cond in
@@ -1107,6 +1110,15 @@ let rec compile_aexp ctx = function
      cond_cleanup
 
   | AE_cast (aexp, typ) -> compile_aexp ctx aexp
+
+  | AE_return (aval, typ) ->
+     let return_setup, cval, return_cleanup = compile_aval ctx aval in
+     return_setup @ [I_return (cval, return_cleanup)],
+     CT_unit,
+     (fun clexp -> I_copy (clexp, unit_fragment)),
+     []
+
+  | aexp -> failwith ("Cannot compile ANF expression: " ^ Pretty_print_sail.to_string (pp_aexp aexp))
 
 and compile_block ctx = function
   | [] -> []
@@ -1149,6 +1161,17 @@ let compile_type_def ctx (TD_aux (type_def, _)) =
   (* All type abbreviations are filtered out in compile_def  *)
   | TD_abbrev _ -> assert false
 
+(*
+let instr_split_at' f (before, after) = function
+  | [] ->
+ *)
+
+let fix_early_return ctx instrs =
+  let end_function_label = label "end_function_" in
+  [I_raw "bool returning = false;"]
+  @ instrs
+  @ [I_label end_function_label]
+
 let compile_def ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
      [CDEF_reg_dec (ctyp_of_typ ctx typ, id)], ctx
@@ -1165,10 +1188,11 @@ let compile_def ctx = function
           let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
           let gs = gensym () in
           if is_stack_ctyp ctyp then
-            let instrs = [I_decl (ctyp, gs)] @ setup @ [call (CL_id gs)] @ cleanup @ [I_return gs] in
+            let instrs = [I_decl (ctyp, gs)] @ setup @ [call (CL_id gs)] @ cleanup @ [I_return (CV_id (gs, ctyp), [])] in
             [CDEF_fundef (id, None, pat_ids pat, instrs)], ctx
           else
             let instrs = setup @ [call (CL_addr (CL_id gs))] @ cleanup in
+            let instrs = fix_early_return ctx instrs in
             [CDEF_fundef (id, Some gs, pat_ids pat, instrs)], ctx
        | _ -> assert false
      end
@@ -1178,9 +1202,15 @@ let compile_def ctx = function
      let tdef, ctx = compile_type_def ctx type_def in
      [CDEF_type tdef], ctx
 
+  (* Only DEF_default that matters is default Order, but all order
+     polymorphism is specialised by this point. *)
   | DEF_default _ -> [], ctx
 
+  (* Overloading resolved by type checker *)
   | DEF_overload _ -> [], ctx
+
+  (* Only the parser and sail pretty printer care about this. *)
+  | DEF_fixity _ -> [], ctx
 
   | _ -> assert false
 
@@ -1291,8 +1321,8 @@ let rec codegen_instr ctx = function
                  (sgen_ctyp_name ctyp2)
                  (sgen_clexp x)
                  (sgen_id y))
-  | I_return id ->
-     string (Printf.sprintf "  return %s;" (sgen_id id))
+  | I_return (cval, _) ->
+     string (Printf.sprintf "  return %s;" (sgen_cval cval))
   | I_comment str ->
      string ("  /* " ^ str ^ " */")
   | I_label str ->
