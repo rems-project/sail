@@ -159,9 +159,9 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
 
 
-function clause execute(LOAD(imm, rs1, rd, unsigned, width, aq, rl)) =
+function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
     let addr : bits(64) = rGPR(rs1) + EXTS(imm) in
-    let result : bits(64) = if unsigned then
+    let result : bits(64) = if is_unsigned then
         match width {
 	  BYTE   => EXTZ(mem_read(addr, 1, aq, rl, false)),
 	  HALF   => EXTZ(mem_read(addr, 2, aq, rl, false)),
