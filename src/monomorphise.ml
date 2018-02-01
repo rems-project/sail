@@ -799,9 +799,10 @@ let construct_lit_vector args =
    in the pattern. *)
 type split =
   | NoSplit
-  | VarSplit of (tannot pat *                            (* pattern for this case *)
-      (id * tannot Ast.exp) list *                       (* substitutions for arguments *)
-      (Parse_ast.l * (int * (id * tannot exp) list)) list) (* optional locations of case expressions to reduce *)
+  | VarSplit of (tannot pat *        (* pattern for this case *)
+      (id * tannot Ast.exp) list *   (* substitutions for arguments *)
+      (Parse_ast.l * (int * (id * tannot exp) list)) list * (* optional locations of case expressions to reduce *)
+      (kid * nexp) list)             (* substitutions for type variables *)
       list
   | ConstrSplit of (tannot pat * nexp KBindings.t) list
 
@@ -1383,26 +1384,26 @@ let split_defs all_errors splits defs =
       in if all_errors
         then (no_errors_happened := false;
               print_error error;
-              [P_aux (P_id var,(pat_l,annot)),[],[]])
+              [P_aux (P_id var,(pat_l,annot)),[],[],[]])
         else raise (Fatal_error error)
     in
     match ty with
     | Typ_id (Id_aux (Id "bool",_)) ->
-       [P_aux (P_lit (L_aux (L_true,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_true,new_l)),(new_l,annot))],[];
-        P_aux (P_lit (L_aux (L_false,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_false,new_l)),(new_l,annot))],[]]
+       [P_aux (P_lit (L_aux (L_true,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_true,new_l)),(new_l,annot))],[],[];
+        P_aux (P_lit (L_aux (L_false,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_false,new_l)),(new_l,annot))],[],[]]
 
     | Typ_id id ->
        (try
          (* enumerations *)
          let ns = Env.get_enum id env in
          List.map (fun n -> (P_aux (P_id (renew_id n),(l,annot)),
-                             [var,E_aux (E_id (renew_id n),(new_l,annot))],[])) ns
+                             [var,E_aux (E_id (renew_id n),(new_l,annot))],[],[])) ns
        with Type_error _ ->
          match id with
          | Id_aux (Id "bit",_) ->
             List.map (fun b ->
               P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
-              [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))],[])
+              [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))],[],[])
               [L_zero; L_one]
          | _ -> cannot ("don't know about type " ^ string_of_id id))
 
@@ -1412,25 +1413,26 @@ let split_defs all_errors splits defs =
           let lits = make_vectors (Big_int.to_int sz) in
           List.map (fun lit ->
             P_aux (P_lit lit,(l,annot)),
-            [var,E_aux (E_lit lit,(new_l,annot))],[]) lits
+            [var,E_aux (E_lit lit,(new_l,annot))],[],[]) lits
        | _ ->
           cannot ("length not constant, " ^ string_of_nexp len)
        )
     (* set constrained numbers *)
     | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (value,_) as nexp),_)]) ->
        begin
-         let mk_lit i =
+         let mk_lit kid i =
             let lit = L_aux (L_num i,new_l) in
             P_aux (P_lit lit,(l,annot)),
-            [var,E_aux (E_lit lit,(new_l,annot))],[]
+            [var,E_aux (E_lit lit,(new_l,annot))],[],
+            match kid with None -> [] | Some k -> [(k,nconstant i)]
          in
          match value with
-         | Nexp_constant i -> [mk_lit i]
+         | Nexp_constant i -> [mk_lit None i]
          | Nexp_var kvar ->
            let ncs = Env.get_constraints env in
            let nc = List.fold_left nc_and nc_true ncs in
            (match extract_set_nc l kvar nc with
-           | (is,_) -> List.map mk_lit is
+           | (is,_) -> List.map (mk_lit (Some kvar)) is
            | exception Reporting_basic.Fatal_error (Reporting_basic.Err_general (_,msg)) -> cannot msg)
          | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
        end
@@ -1464,32 +1466,32 @@ let split_defs all_errors splits defs =
         | h::t ->
            let t' =
              match list f t with
-             | None -> [t,[],[]]
+             | None -> [t,[],[],[]]
              | Some t' -> t'
            in
            let h' =
              match f h with
-             | None -> [h,[],[]]
+             | None -> [h,[],[],[]]
              | Some ps -> ps
            in
            Some (List.concat
-                   (List.map (fun (h,hsubs,hpchoices) ->
-                     List.map (fun (t,tsubs,tpchoices) ->
-                       (h::t, hsubs@tsubs, hpchoices@tpchoices)) t') h'))
+                   (List.map (fun (h,hsubs,hpchoices,hksubs) ->
+                     List.map (fun (t,tsubs,tpchoices,tksubs) ->
+                       (h::t, hsubs@tsubs, hpchoices@tpchoices, hksubs@tksubs)) t') h'))
       in
       let rec spl (P_aux (p,(l,annot))) =
         let relist f ctx ps =
           optmap (list f ps) 
             (fun ps ->
-              List.map (fun (ps,sub,pchoices) -> P_aux (ctx ps,(l,annot)),sub,pchoices) ps)
+              List.map (fun (ps,sub,pchoices,ksub) -> P_aux (ctx ps,(l,annot)),sub,pchoices,ksub) ps)
         in
         let re f p =
           optmap (spl p)
-            (fun ps -> List.map (fun (p,sub,pchoices) -> (P_aux (f p,(l,annot)), sub, pchoices)) ps)
+            (fun ps -> List.map (fun (p,sub,pchoices,ksub) -> (P_aux (f p,(l,annot)), sub, pchoices, ksub)) ps)
         in
         let fpat (FP_aux ((FP_Fpat (id,p),annot))) =
           optmap (spl p)
-            (fun ps -> List.map (fun (p,sub,pchoices) -> FP_aux (FP_Fpat (id,p), annot), sub, pchoices) ps)
+            (fun ps -> List.map (fun (p,sub,pchoices,ksub) -> FP_aux (FP_Fpat (id,p), annot), sub, pchoices, ksub) ps)
         in
         match p with
         | P_lit _
@@ -1515,14 +1517,24 @@ let split_defs all_errors splits defs =
                 match p with
                 | P_aux (P_lit lit,(pl,pannot))
                     when (match lit with L_aux (L_undef,_) -> false | _ -> true) ->
-                   p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,[])]
+                   let orig_typ = Env.base_typ_of (env_of_annot (l,annot)) (typ_of_annot (l,annot)) in
+                   let kid_subst = match lit, orig_typ with
+                     | L_aux (L_num i,_),
+                       Typ_aux
+                         (Typ_app (Id_aux (Id "atom",_),
+                                   [Typ_arg_aux (Typ_arg_nexp
+                                                   (Nexp_aux (Nexp_var var,_)),_)]),_) ->
+                        [var,nconstant i]
+                     | _ -> []
+                   in
+                   p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,[])],kid_subst
                 | _ ->
                    let p',subst = freshen_pat_bindings p in
                    match p' with
                    | P_aux (P_wild,_) ->
-                      P_aux (P_id id,(l,annot)),[],[l,(i,subst)]
+                      P_aux (P_id id,(l,annot)),[],[l,(i,subst)],[]
                    | _ ->
-                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)])
+                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)],[])
                       pats)
            )
         | P_app (id,ps) ->
@@ -1541,10 +1553,10 @@ let split_defs all_errors splits defs =
            match spl p1, spl p2 with
            | None, None -> None
            | p1', p2' ->
-              let p1' = match p1' with None -> [p1,[],[]] | Some p1' -> p1' in
-              let p2' = match p2' with None -> [p2,[],[]] | Some p2' -> p2' in
-              let ps = List.map (fun (p1',subs1,pchoices1) -> List.map (fun (p2',subs2,pchoices2) ->
-                P_aux (P_cons (p1',p2'),(l,annot)),subs1@subs2,pchoices1@pchoices2) p2') p1' in
+              let p1' = match p1' with None -> [p1,[],[],[]] | Some p1' -> p1' in
+              let p2' = match p2' with None -> [p2,[],[],[]] | Some p2' -> p2' in
+              let ps = List.map (fun (p1',subs1,pchoices1,ksub1) -> List.map (fun (p2',subs2,pchoices2,ksub2) ->
+                P_aux (P_cons (p1',p2'),(l,annot)),subs1@subs2,pchoices1@pchoices2,ksub1@ksub2) p2') p1' in
               Some (List.concat ps)
       in spl p
     in
@@ -1686,8 +1698,9 @@ let split_defs all_errors splits defs =
          | NoSplit -> nosplit
          | VarSplit patsubsts ->
             if check_split_size patsubsts (pat_loc p) then
-              List.map (fun (pat',substs,pchoices) ->
-                let exp' = subst_exp substs e in
+              List.map (fun (pat',substs,pchoices,ksubsts) ->
+                let exp' = nexp_subst_exp (kbindings_from_list ksubsts) e in
+                let exp' = subst_exp substs exp' in
                 let exp' = apply_pat_choices pchoices exp' in
                 Pat_aux (Pat_exp (pat', map_exp exp'),l))
                 patsubsts
@@ -1704,10 +1717,12 @@ let split_defs all_errors splits defs =
          | NoSplit -> nosplit
          | VarSplit patsubsts ->
             if check_split_size patsubsts (pat_loc p) then
-              List.map (fun (pat',substs,pchoices) ->
-                let exp1' = subst_exp substs e1 in
+              List.map (fun (pat',substs,pchoices,ksubsts) ->
+                let exp1' = nexp_subst_exp (kbindings_from_list ksubsts) e1 in
+                let exp1' = subst_exp substs exp1' in
                 let exp1' = apply_pat_choices pchoices exp1' in
-                let exp2' = subst_exp substs e2 in
+                let exp2' = nexp_subst_exp (kbindings_from_list ksubsts) e2 in
+                let exp2' = subst_exp substs exp2' in
                 let exp2' = apply_pat_choices pchoices exp2' in
                 Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
                 patsubsts
@@ -2729,13 +2744,11 @@ and analyse_lexp fn_id env assigns deps (LEXP_aux (lexp,_)) =
   | LEXP_field (lexp,_) -> analyse_lexp fn_id env assigns deps lexp
 
 
-let translate_id (Id_aux (_,l) as id) =
-  let rec aux l =
-    match l with
-    | Range (pos,_) -> Some (id,(pos.Lexing.pos_fname,pos.Lexing.pos_lnum))
-    | Generated l -> aux l
-    | _ -> None
-  in aux l
+let rec translate_loc l =
+  match l with
+  | Range (pos,_) -> Some (pos.Lexing.pos_fname,pos.Lexing.pos_lnum)
+  | Generated l -> translate_loc l
+  | _ -> None
 
 let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
   let pats = 
@@ -2778,10 +2791,10 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
       | P_as (pat,id) ->
          begin
            let s,v,k = aux pat in
-           match translate_id id with
-           | Some id' ->
-              ArgSplits.add id' Total s,
-              Bindings.add id (Have (ArgSplits.singleton id' Total, ExtraSplits.empty)) v,
+           match translate_loc (id_loc id) with
+           | Some loc ->
+              ArgSplits.add (id,loc) Total s,
+              Bindings.add id (Have (ArgSplits.singleton (id,loc) Total, ExtraSplits.empty)) v,
               k
            | None ->
               s,
@@ -2791,11 +2804,11 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
       | P_typ (_,pat) -> aux pat
       | P_id id ->
          begin
-         match translate_id id with
-         | Some id' ->
+         match translate_loc (id_loc id) with
+         | Some loc ->
             let kid_opt = kid_of_annot (l,annot) in
             let split = Util.option_cases kid_opt (default_split annot) (fun () -> Total) in
-            let s = ArgSplits.singleton id' split in
+            let s = ArgSplits.singleton (id,loc) split in
             s,
             Bindings.singleton id (Have (s, ExtraSplits.empty)),
             (match kid_opt with
@@ -2975,12 +2988,14 @@ let analyse_def debug env = function
 
   | _ -> empty
 
+let detail_to_split = function
+  | Total -> None
+  | Partial (pats,l) -> Some (pats,l)
 
 let argset_to_list splits =
   let l = ArgSplits.bindings splits in
   let argelt  = function
-    | ((id,(file,loc)),Total) -> ((file,loc),string_of_id id,None)
-    | ((id,(file,loc)),Partial (pats,l)) -> ((file,loc),string_of_id id,Some (pats,l))
+    | ((id,(file,loc)),detail) -> ((file,loc),string_of_id id,detail_to_split detail)
   in
   List.map argelt l
 
@@ -3031,46 +3046,51 @@ let analyse_defs debug env (Defs defs) =
 
 end
 
+let fresh_sz_var =
+  let counter = ref 0 in
+  fun () ->
+    let n = !counter in
+    let () = counter := n+1 in
+    mk_id ("sz#" ^ string_of_int n)
+
 let add_extra_splits extras (Defs defs) =
   let success = ref true in
   let add_to_body extras (E_aux (_,(l,annot)) as e) =
-    let l = Generated l in
-    KBindings.fold (fun kid detail exp ->
-      match detail with
-      | Analysis.Total ->
-         (success := false;
-          Reporting_basic.print_err false true (kid_loc kid) "Monomorphisation"
-            ("Don't know how to case split type variable " ^ string_of_kid kid);
-          e)
-      | Analysis.Partial (pats,_) ->
-         let ksubst = function
-           | P_aux (P_lit (L_aux (L_num i,_)),_) -> KBindings.singleton kid (nconstant i)
-           | _ -> KBindings.empty
-         in
-         let pexps = List.map (fun p -> Pat_aux (Pat_exp (p,nexp_subst_exp (ksubst p) e),(l,annot))) pats
-         in
+    let l' = Generated l in
+    KBindings.fold (fun kid detail (exp,split_list) ->
          let nexp = Nexp_aux (Nexp_var kid,l) in
-         E_aux (E_case
-                  (E_aux (E_sizeof nexp,
-                          (l,Some (env_of e,atom_typ nexp,no_effect))),
-                   pexps),(l,annot))
-    ) extras e
+         let var = fresh_sz_var () in
+         let size_annot = Some (env_of e,atom_typ nexp,no_effect) in
+         let loc = match Analysis.translate_loc l with
+           | Some l -> l
+           | None ->
+              (Reporting_basic.print_err false false l "Monomorphisation"
+                 "Internal error: bad location for added case";
+               ("",0))
+         in
+         let pexps = [Pat_aux (Pat_exp (P_aux (P_id var,(l,size_annot)),exp),(l',annot))] in
+         E_aux (E_case (E_aux (E_sizeof nexp, (l',size_annot)), pexps),(l',annot)),
+         ((loc, string_of_id var, Analysis.detail_to_split detail)::split_list)
+    ) extras (e,[])
   in
   let add_to_funcl (FCL_aux (FCL_Funcl (id,Pat_aux (pexp,peannot)),(l,annot))) =
-    let pexp = 
+    let pexp, splits = 
       match Analysis.ExtraSplits.find (id,l) extras with
       | extras ->
          (match pexp with
-         | Pat_exp (p,e) -> Pat_exp (p,add_to_body extras e)
-         | Pat_when (p,g,e) -> Pat_when (p,g,add_to_body extras e))
-      | exception Not_found -> pexp
-    in FCL_aux (FCL_Funcl (id,Pat_aux (pexp,peannot)),(l,annot))
+         | Pat_exp (p,e) -> let e',sp = add_to_body extras e in Pat_exp (p,e'), sp
+         | Pat_when (p,g,e) -> let e',sp = add_to_body extras e in Pat_when (p,g,e'), sp)
+      | exception Not_found -> pexp, []
+    in FCL_aux (FCL_Funcl (id,Pat_aux (pexp,peannot)),(l,annot)), splits
   in
   let add_to_def = function
     | DEF_fundef (FD_aux (FD_function (re,ta,ef,funcls),annot)) ->
-       DEF_fundef (FD_aux (FD_function (re,ta,ef,List.map add_to_funcl funcls),annot))
-    | d -> d
-  in !success, Defs (List.map add_to_def defs)
+       let funcls,splits = List.split (List.map add_to_funcl funcls) in
+       DEF_fundef (FD_aux (FD_function (re,ta,ef,funcls),annot)), List.concat splits
+    | d -> d, []
+  in 
+  let defs, splits = List.split (List.map add_to_def defs) in
+  !success, Defs defs, List.concat splits
 
 module MonoRewrites =
 struct
@@ -3323,7 +3343,8 @@ let monomorphise opts splits env defs =
       else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
     else true, [], Analysis.ExtraSplits.empty in
   let splits = new_splits @ (List.map (fun (loc,id) -> (loc,id,None)) splits) in
-  let ok_extras, defs = add_extra_splits extra_splits defs in
+  let ok_extras, defs, extra_splits = add_extra_splits extra_splits defs in
+  let splits = splits @ extra_splits in
   let () = if ok_extras || opts.all_split_errors || opts.continue_anyway
       then ()
       else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
