@@ -1969,7 +1969,7 @@ let rewrite_size_parameters env (Defs defs) =
              pat_exp = (fun ((sp,pat),(s,e)) -> KidSet.diff s (tyvars_bound_in_pat pat), Pat_exp (pat,e))}
            pexp)
   in
-  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
+  let exposed_sizes_funcl fnsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
     let sizes = size_vars pexp in
     let pat,guard,exp,pannot = destruct_pexp pexp in
     let visible_tyvars =
@@ -1978,6 +1978,10 @@ let rewrite_size_parameters env (Defs defs) =
          (Pretty_print_lem.lem_tyvars_of_typ (typ_of exp))
     in
     let expose_tyvars = KidSet.diff sizes visible_tyvars in
+    KidSet.union fnsizes expose_tyvars
+  in
+  let sizes_funcl expose_tyvars fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
+    let pat,guard,exp,pannot = destruct_pexp pexp in
     let parameters = match pat with
       | P_aux (P_tup ps,_) -> ps
       | _ -> [pat]
@@ -2009,13 +2013,16 @@ let rewrite_size_parameters env (Defs defs) =
     let to_change = List.sort ik_compare to_change in
     match Bindings.find id fsizes with
     | old -> if List.for_all2 (fun x y -> ik_compare x y = 0) old to_change then fsizes else
+        let str l = String.concat "," (List.map (fun (i,k) -> string_of_int i ^ "." ^ string_of_kid k) l) in
         raise (Reporting_basic.err_general l
-                 ("Different size type variables in different clauses of " ^ string_of_id id))
+                 ("Different size type variables in different clauses of " ^ string_of_id id ^
+                 " old: " ^ str old ^ " new: " ^ str to_change))
     | exception Not_found -> Bindings.add id to_change fsizes
   in
   let sizes_def fsizes = function
     | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) ->
-       List.fold_left sizes_funcl fsizes funcls
+       let expose_tyvars = List.fold_left exposed_sizes_funcl KidSet.empty funcls in
+       List.fold_left (sizes_funcl expose_tyvars) fsizes funcls
     | _ -> fsizes
   in
   let fn_sizes = List.fold_left sizes_def Bindings.empty defs in
