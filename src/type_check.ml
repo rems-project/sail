@@ -743,6 +743,9 @@ end = struct
   let add_local id mtyp env =
     begin
       wf_typ env (snd mtyp);
+      if Bindings.mem id env.top_val_specs then
+        typ_error (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
+      else ();
       typ_print ("Adding local binding " ^ string_of_id id ^ " :: " ^ string_of_mtyp mtyp);
       { env with locals = Bindings.add id mtyp env.locals }
     end

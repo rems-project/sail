@@ -16,9 +16,9 @@ function zeros n =
 val main : unit -> unit
 
 function main () = {
-  let 'length = get_size ();
-  let xs = zeros(length);
-  if (length == 32) then {
+  let 'len = get_size ();
+  let xs = zeros(len);
+  if (len == 32) then {
     ()
   } else {
     only64(xs)

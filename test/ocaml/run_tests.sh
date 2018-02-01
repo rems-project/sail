@@ -50,7 +50,7 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 for i in `ls -d */`;
 do
     cd $DIR/$i;
-    if $SAILDIR/sail -o out -ocaml ../prelude.sail `ls *.sail` 1> /dev/null;
+    if $SAILDIR/sail -no_warn -o out -ocaml ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	./out > result;
 	if diff expect result;
