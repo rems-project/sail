@@ -549,19 +549,7 @@ function clause decodeCompressed (0b000          @
 function clause execute (C_ADDI4SPN(rdc, nzimm)) = {
   let imm : bits(12) = (0b00 @ nzimm @ 0b00) in
   let rd  : regbits = 0b01 @ rdc in
-  /* Ideally, we could just do this here:
-       execute(ITYPE(imm, sp, rd, RISCV_ADDI))
-    But this recursive call is problematic:
-    - it currently breaks the generated lem, since recursive execute
-      is not supported
-    - it might create issues for hardware generation for a BSV generator.
-    Once those are resolved, we could use the recursive call.  For
-    now, the ADDI implementation is inlined.
-  */
-  let sp_val = rGPR(sp) in
-  let imm64 : bits(64) = EXTS(imm) in
-  let result = sp_val + imm64 in
-  wGPR(rd, result)
+    execute(ITYPE(imm, sp, rd, RISCV_ADDI))
 }
 
 /* ****************************************************************** */
