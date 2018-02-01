@@ -21,7 +21,7 @@ function fetch_and_execute () =
     if (misa.C() == 0b0 & (instr_sz == 2)) then {
       let t : sync_exception =
       struct { trap = Illegal_Instr,
-               badaddr = Some (EXTZ(instr)) } in
+               excinfo = Some (EXTZ(instr)) } in
       nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
     } else {
       nextPC = PC + instr_sz;

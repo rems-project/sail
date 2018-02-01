@@ -286,7 +286,7 @@ function clause execute ECALL =
                       USER => User_ECall,
 		      MACHINE => Machine_ECall
 		    },
-             badaddr = (None : option(regval)) } in
+             excinfo = (None : option(regval)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 
 /* ****************************************************************** */
@@ -490,7 +490,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     let instr : regval = EXTZ(__RISCV_read(PC, 4));
     let t : sync_exception =
     struct { trap = Illegal_Instr,
-             badaddr = Some (instr) } in
+             excinfo = Some (instr) } in
     nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
   } else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
@@ -526,7 +526,7 @@ function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) 
 function clause execute (ILLEGAL) = {
   let t : sync_exception =
   struct { trap = Illegal_Instr,
-           badaddr = Some (EXTZ(0b0)) } in
+           excinfo = Some (EXTZ(0b0)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 }
 

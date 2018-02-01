@@ -212,7 +212,7 @@ register mhartid : regval
 
 struct sync_exception = {
   trap : ExceptionCode,
-  badaddr : option(regval)
+  excinfo : option(regval)
 }
 
 union ctl_result = {
@@ -260,19 +260,19 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
 
       match (e.trap) {
         Misaligned_Fetch => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
         },
         Fetch_Access => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
         },
         Illegal_Instr => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
@@ -281,25 +281,25 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
         Breakpoint => not_implemented("breakpoint"),
 
         Misaligned_Load => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
         },
         Load_Access => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
         },
         Misaligned_Store => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
         },
         Store_Access => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
@@ -316,19 +316,19 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
         },
 
         Fetch_PageFault => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
         },
         Load_PageFault => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
         },
         Store_PageFault => {
-          match (e.badaddr) {
+          match (e.excinfo) {
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
