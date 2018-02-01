@@ -902,19 +902,59 @@ let rec freshen_pat_bindings p =
     FP_aux (FP_Fpat (id, p),(Generated l,annot)), vs
   in aux p
 
+(* This cuts off function bodies at false assertions that we may have produced
+   in a wildcard pattern match.  It should handle the same assertions that
+   find_set_assertions does. *)
+let stop_at_false_assertions e =
+  let rec exp (E_aux (e,ann) as ea) =
+    match e with
+    | E_block es ->
+       let rec aux = function
+         | [] -> [], false
+         | e::es -> let e,stop = exp e in
+                    if stop then [e],true else
+                      let es',stop = aux es in
+                      e::es',stop
+       in let es,stop = aux es in
+          E_aux (E_block es,ann), stop
+    | E_nondet es ->
+       let es,stops = List.split (List.map exp es) in
+       E_aux (E_nondet es,ann), List.fold_left (||) false stops
+    | E_cast (typ,e) -> let e,stop = exp e in
+                        E_aux (E_cast (typ,e),ann),stop
+    | E_let (LB_aux (LB_val (p,e1),lbann),e2) ->
+       let e1,stop = exp e1 in
+       if stop then e1,true else
+         let e2,stop = exp e2 in
+         E_aux (E_let (LB_aux (LB_val (p,e1),lbann),e2),ann), stop
+    | E_assert (E_aux (E_constraint (NC_aux (NC_false,_)),_),_) ->
+       ea, true
+    | E_assert (E_aux (E_lit (L_aux (L_false,_)),_),_) ->
+       ea, true
+    | _ -> ea, false
+  in fst (exp e)
+
 (* Use the location pairs in choices to reduce case expressions at the first
    location to the given case at the second. *)
 let apply_pat_choices choices =
-  let rewrite_constraint (NC_aux (nc,l) as nconstr) = E_constraint nconstr (*
-    Not right now - false cases may not type check
-    match List.assoc l choices with
-    | choice,_ -> begin
-       match nc with
-       | NC_set (kid,is) ->
-          E_constraint (NC_aux ((if choice < List.length is then NC_true else NC_false), Generated l))
-       | _ -> E_constraint nconstr
-    end
-    | exception Not_found -> E_constraint nconstr*)
+  let rec rewrite_ncs (NC_aux (nc,l) as nconstr) =
+    match nc with
+    | NC_set (kid,is) -> begin
+      match List.assoc l choices with
+      | choice,_ ->
+         NC_aux ((if choice < List.length is then NC_true else NC_false), Generated l)
+      | exception Not_found -> nconstr
+      end
+    | NC_and (nc1,nc2) -> begin
+      match rewrite_ncs nc1, rewrite_ncs nc2 with
+      | NC_aux (NC_false,l), _
+      | _, NC_aux (NC_false,l) -> NC_aux (NC_false,l)
+      | nc1,nc2 -> NC_aux (NC_and (nc1,nc2),l)
+      end
+    | _ -> nconstr
+  in
+  let rec rewrite_constraint nc =
+    E_constraint (rewrite_ncs nc)
   in
   let rewrite_case (e,cases) =
     match List.assoc (exp_loc e) choices with
@@ -1702,6 +1742,7 @@ let split_defs all_errors splits defs =
                 let exp' = nexp_subst_exp (kbindings_from_list ksubsts) e in
                 let exp' = subst_exp substs exp' in
                 let exp' = apply_pat_choices pchoices exp' in
+                let exp' = stop_at_false_assertions exp' in
                 Pat_aux (Pat_exp (pat', map_exp exp'),l))
                 patsubsts
             else nosplit
@@ -1724,6 +1765,7 @@ let split_defs all_errors splits defs =
                 let exp2' = nexp_subst_exp (kbindings_from_list ksubsts) e2 in
                 let exp2' = subst_exp substs exp2' in
                 let exp2' = apply_pat_choices pchoices exp2' in
+                let exp2' = stop_at_false_assertions exp2' in
                 Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
                 patsubsts
             else nosplit
@@ -2907,7 +2949,8 @@ let rec sets_from_assert e =
   | _ -> set_from_or_exps e
 
 (* Find all the easily reached set assertions in a function body, to use as
-   case splits *)
+   case splits.  Note that this should be mirrored in stop_at_false_assertions,
+   above. *)
 let rec find_set_assertions (E_aux (e,_)) =
   match e with
   | E_block es
