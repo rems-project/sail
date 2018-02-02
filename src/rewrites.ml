@@ -2958,10 +2958,10 @@ let rewrite_defs_lem = [
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
-  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("fix_val_specs", rewrite_fix_val_specs);
   ("recheck_defs", recheck_defs);
+  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("constraint", rewrite_constraint); *)
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", top_sort_defs);
