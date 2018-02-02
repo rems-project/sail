@@ -69,12 +69,11 @@ let rec replace bs (n : integer) b' = match bs with
 
 let upper n = n
 
+(* Modulus operation corresponding to quot below -- result
+   has sign of dividend. *)
 let hardware_mod (a: integer) (b:integer) : integer =
-  if a < 0 && b < 0
-  then (abs a) mod (abs b)
-  else if (a < 0 && b >= 0)
-  then (a mod b) - b
-  else a mod b
+  let m = (abs a) mod (abs b) in
+  if a < 0 then ~m else m
 
 (* There are different possible answers for integer divide regarding
 rounding behaviour on negative operands. Positive operands always

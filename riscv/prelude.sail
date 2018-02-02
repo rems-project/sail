@@ -159,7 +159,7 @@ val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
 
 val xor_vec = "xor_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val int_power = {lem: "pow"} : (int, int) -> int
+val int_power = {ocaml: "int_power", lem: "pow"} : (int, int) -> int
 
 val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> real
 
@@ -251,6 +251,9 @@ val quotient_real = {ocaml: "quotient_real", lem: "realDiv"} : (real, real) -> r
 val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
 overload operator / = {quotient_nat, quotient, quotient_real}
+
+val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot"} : (int, int) -> int
+val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod"} : (int, int) -> int
 
 val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
 
