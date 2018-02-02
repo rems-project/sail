@@ -908,32 +908,51 @@ let rec freshen_pat_bindings p =
    in a wildcard pattern match.  It should handle the same assertions that
    find_set_assertions does. *)
 let stop_at_false_assertions e =
+  let dummy_value_of_typ typ =
+    let l = Generated Unknown in
+    E_aux (E_exit (E_aux (E_lit (L_aux (L_unit,l)),(l,None))),(l,None))
+  in
   let rec exp (E_aux (e,ann) as ea) =
     match e with
     | E_block es ->
        let rec aux = function
-         | [] -> [], false
+         | [] -> [], None
          | e::es -> let e,stop = exp e in
-                    if stop then [e],true else
-                      let es',stop = aux es in
-                      e::es',stop
-       in let es,stop = aux es in
-          E_aux (E_block es,ann), stop
+                    match stop with
+                    | Some _ -> [e],stop
+                    | None ->
+                       let es',stop = aux es in
+                       e::es',stop
+       in let es,stop = aux es in begin
+          match stop with
+          | None -> E_aux (E_block es,ann), stop
+          | Some typ ->
+             let typ' = typ_of_annot ann in
+             if Type_check.alpha_equivalent (env_of_annot ann) typ typ'
+             then E_aux (E_block es,ann), stop
+             else E_aux (E_block (es@[dummy_value_of_typ typ']),ann), Some typ'
+       end
     | E_nondet es ->
        let es,stops = List.split (List.map exp es) in
-       E_aux (E_nondet es,ann), List.fold_left (||) false stops
+       let stop = List.exists (function Some _ -> true | _ -> false) stops in
+       let stop = if stop then Some (typ_of_annot ann) else None in
+       E_aux (E_nondet es,ann), stop
     | E_cast (typ,e) -> let e,stop = exp e in
+                        let stop = match stop with Some _ -> Some typ | None -> None in
                         E_aux (E_cast (typ,e),ann),stop
     | E_let (LB_aux (LB_val (p,e1),lbann),e2) ->
-       let e1,stop = exp e1 in
-       if stop then e1,true else
-         let e2,stop = exp e2 in
-         E_aux (E_let (LB_aux (LB_val (p,e1),lbann),e2),ann), stop
+       let e1,stop = exp e1 in begin
+       match stop with
+       | Some _ -> e1,stop
+       | None -> 
+          let e2,stop = exp e2 in
+          E_aux (E_let (LB_aux (LB_val (p,e1),lbann),e2),ann), stop
+       end
     | E_assert (E_aux (E_constraint (NC_aux (NC_false,_)),_),_) ->
-       ea, true
+       ea, Some (typ_of_annot ann)
     | E_assert (E_aux (E_lit (L_aux (L_false,_)),_),_) ->
-       ea, true
-    | _ -> ea, false
+       ea, Some (typ_of_annot ann)
+    | _ -> ea, None
   in fst (exp e)
 
 (* Use the location pairs in choices to reduce case expressions at the first
