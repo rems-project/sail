@@ -686,7 +686,7 @@ union clause ast = C_ADDI : (bits(6), regbits)
 
 function clause decodeCompressed (0b000 @ nzi5 : bits(1) @ rsd : regbits @ nzi40 : bits(5) @ 0b01) : bits(16) = {
   let nzi = (nzi5 @ nzi40) : bits(6) in
-  if (nzi == 0b000000) | (rsd == 0b00000) then None
+  if (nzi == 0b000000) | (rsd == zreg) then None
   else Some(C_ADDI(nzi, rsd))
 }
 
@@ -700,18 +700,212 @@ function clause execute (C_ADDI(nzi, rsd)) = {
 union clause ast = C_JAL : (bits(11))
 union clause ast = C_ADDIW : (bits(6), regbits)
 
-/* TODO: decodeCompressed. decoding differs for RVC32/RVC64 */
+/* FIXME: decoding differs for RVC32/RVC64.  Below, we are assuming
+ * RV64, and C_JAL is RV32 only. */
+
+function clause decodeCompressed (0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01) =
+  Some (C_ADDIW((imm5 @ imm40), rsd))
 
 function clause execute (C_JAL(imm)) = {
   execute(RISCV_JAL(EXTS(imm @ 0b0), ra))
 }
 
-function clause execute (C_ADDIW(nzimm, rsd)) = {
-  let imm : bits(32) = EXTS(nzimm) in
+function clause execute (C_ADDIW(imm, rsd)) = {
+  let imm : bits(32) = EXTS(imm) in
   let rs_val = rGPR(rsd) in
   let res : bits(32) = rs_val[31..0] + imm in
   wGPR(rsd, EXTS(res))
 }
+
+/* ****************************************************************** */
+
+union clause ast = C_LI : (bits(6), regbits)
+
+function clause decodeCompressed (0b010 @ imm5 : bits(1) @ rd : regbits @ imm40 : bits(5) @ 0b01) = {
+  if (rd == zreg) then None
+  else Some(C_LI(imm5 @ imm40, rd))
+}
+
+function clause execute (C_LI(imm, rd)) = {
+  let imm : bits(12) = EXTS(imm) in
+  execute(ITYPE(imm, zreg, rd, RISCV_ADDI))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_ADDI16SP : (bits(6))
+
+function clause decodeCompressed (0b011 @ nzi9 : bits(1) @ /* x2 */ 0b00010 @ nzi4 : bits(1) @ nzi6 : bits(1) @ nzi87 : bits(2) @ nzi5 : bits(1) @ 0b01) = {
+  let nzimm = nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4 in
+  if (nzimm == 0b000000) then None
+  else Some(C_ADDI16SP(nzimm))
+}
+
+function clause execute (C_ADDI16SP(imm)) = {
+  let imm : bits(12) = EXTS(imm @ 0x0) in
+  execute(ITYPE(imm, sp, sp, RISCV_ADDI))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_LUI : (bits(6), regbits)
+
+function clause decodeCompressed (0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01) = {
+  if (rd == zreg) | (rd == sp) then None
+  else Some(C_LUI(imm17 @ imm1612, rd))
+}
+
+function clause execute (C_LUI(imm, rd)) = {
+  let res : bits(20) = EXTS(imm) in
+  execute(UTYPE(res, rd, RISCV_LUI))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_SRLI : (bits(6), cregbits)
+
+function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b00 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
+  let shamt : bits(6) = nzui5 @ nzui40 in
+  if shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
+  then None
+  else Some(C_SRLI(shamt, rsd))
+}
+
+function clause execute (C_SRLI(shamt, rsd)) = {
+  let rsd = creg2reg_bits(rsd)  in
+  execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRLI))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_SRAI : (bits(6), cregbits)
+
+function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b01 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
+  let shamt : bits(6) = nzui5 @ nzui40 in
+  if shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
+  then None
+  else Some(C_SRAI(shamt, rsd))
+}
+
+function clause execute (C_SRAI(shamt, rsd)) = {
+  let rsd = creg2reg_bits(rsd)  in
+  execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRAI))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_ANDI : (bits(6), cregbits)
+
+function clause decodeCompressed (0b100 @ i5 : bits(1) @ 0b10 @ rsd : cregbits @ i40 : bits(5) @ 0b01) = Some(C_ANDI(i5 @ i40, rsd))
+
+function clause execute (C_ANDI(imm, rsd)) = {
+  let rsd = creg2reg_bits(rsd) in
+  execute(ITYPE(EXTS(imm), rsd, rsd, RISCV_ANDI))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_SUB : (cregbits, cregbits)
+
+function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01) = Some(C_SUB(rsd, rs2))
+
+function clause execute (C_SUB(rsd, rs2)) = {
+  let rsd = creg2reg_bits(rsd) in
+  let rs2 = creg2reg_bits(rs2) in
+  execute(RTYPE(rs2, rsd, rsd, RISCV_SUB))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_XOR : (cregbits, cregbits)
+
+function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_XOR(rsd, rs2))
+
+function clause execute (C_SUB(rsd, rs2)) = {
+  let rsd = creg2reg_bits(rsd) in
+  let rs2 = creg2reg_bits(rs2) in
+  execute(RTYPE(rs2, rsd, rsd, RISCV_XOR))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_OR : (cregbits, cregbits)
+
+function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b10 @ rs2 : cregbits @ 0b01) = Some(C_OR(rsd, rs2))
+
+function clause execute (C_OR(rsd, rs2)) = {
+  let rsd = creg2reg_bits(rsd) in
+  let rs2 = creg2reg_bits(rs2) in
+  execute(RTYPE(rs2, rsd, rsd, RISCV_OR))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_AND : (cregbits, cregbits)
+
+function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b11 @ rs2 : cregbits @ 0b01) = Some(C_AND(rsd, rs2))
+
+function clause execute (C_OR(rsd, rs2)) = {
+  let rsd = creg2reg_bits(rsd) in
+  let rs2 = creg2reg_bits(rs2) in
+  execute(RTYPE(rs2, rsd, rsd, RISCV_OR))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_SUBW : (cregbits, cregbits)
+
+/* TODO: invalid on RV32 */
+function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01) = Some(C_SUBW(rsd, rs2))
+
+function clause execute (C_SUBW(rsd, rs2)) = {
+  let rsd = creg2reg_bits(rsd) in
+  let rs2 = creg2reg_bits(rs2) in
+  execute(RTYPE(rs2, rsd, rsd, RISCV_SUB))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_ADDW : (cregbits, cregbits)
+
+/* TODO: invalid on RV32 */
+function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_ADDW(rsd, rs2))
+
+function clause execute (C_ADDW(rsd, rs2)) = {
+  let rsd = creg2reg_bits(rsd) in
+  let rs2 = creg2reg_bits(rs2) in
+  execute(RTYPE(rs2, rsd, rsd, RISCV_ADD))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_J : (bits(11))
+
+function clause decodeCompressed (0b101 @ i11 : bits(1) @ i4 : bits(1) @ i98 : bits(2) @ i10 : bits(1) @ i6 : bits(1) @ i7 : bits(1) @ i31 : bits(3) @ i5 : bits(1) @ 0b01) =
+  Some(C_J(i11 @ i10 @ i98 @ i7 @ i6 @ i5 @ i4 @ i31))
+
+function clause execute (C_J(imm)) =
+  execute(RISCV_JAL(EXTS(imm @ 0b0), zreg))
+
+/* ****************************************************************** */
+
+union clause ast = C_BEQZ : (bits(8), cregbits)
+
+function clause decodeCompressed (0b110 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01) =
+  Some(C_BEQZ(i8 @ i76 @ i5 @ i43 @ i21, rs))
+
+function clause execute (C_BEQZ(imm, rs)) =
+  execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BEQ))
+
+/* ****************************************************************** */
+
+union clause ast = C_BNEZ : (bits(8), cregbits)
+
+function clause decodeCompressed (0b111 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01) =
+  Some(C_BNEZ(i8 @ i76 @ i5 @ i43 @ i21, rs))
+
+function clause execute (C_BNEZ(imm, rs)) =
+  execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BNE))
 
 /* ****************************************************************** */
 
