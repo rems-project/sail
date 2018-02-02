@@ -794,6 +794,8 @@ let construct_lit_vector args =
     | _ -> None
   in aux [] args
 
+type pat_choice = Parse_ast.l * (int * int * (id * tannot exp) list)
+
 (* We may need to split up a pattern match if (1) we've been told to case split
    on a variable by the user or analysis, or (2) we monomorphised a constructor that's used
    in the pattern. *)
@@ -801,7 +803,7 @@ type split =
   | NoSplit
   | VarSplit of (tannot pat *        (* pattern for this case *)
       (id * tannot Ast.exp) list *   (* substitutions for arguments *)
-      (Parse_ast.l * (int * (id * tannot exp) list)) list * (* optional locations of case expressions to reduce *)
+      pat_choice list * (* optional locations of constraints/case expressions to reduce *)
       (kid * nexp) list)             (* substitutions for type variables *)
       list
   | ConstrSplit of (tannot pat * nexp KBindings.t) list
@@ -941,8 +943,8 @@ let apply_pat_choices choices =
     match nc with
     | NC_set (kid,is) -> begin
       match List.assoc l choices with
-      | choice,_ ->
-         NC_aux ((if choice < List.length is then NC_true else NC_false), Generated l)
+      | choice,max,_ ->
+         NC_aux ((if choice < max then NC_true else NC_false), Generated l)
       | exception Not_found -> nconstr
       end
     | NC_and (nc1,nc2) -> begin
@@ -953,12 +955,26 @@ let apply_pat_choices choices =
       end
     | _ -> nconstr
   in
-  let rec rewrite_constraint nc =
-    E_constraint (rewrite_ncs nc)
+  let rec rewrite_assert_cond (E_aux (e,(l,ann)) as exp) =
+    match List.assoc l choices with
+    | choice,max,_ ->
+       E_aux (E_lit (L_aux ((if choice < max then L_true else L_false (* wildcard *)),
+         Generated l)),(Generated l,ann))
+    | exception Not_found ->
+       match e with
+       | E_constraint nc -> E_aux (E_constraint (rewrite_ncs nc),(l,ann))
+       | E_app (Id_aux (Id "and_bool",andl), [e1;e2]) ->
+          E_aux (E_app (Id_aux (Id "and_bool",andl),
+                        [rewrite_assert_cond e1;
+                         rewrite_assert_cond e2]),(l,ann))
+       | _ -> exp
+  in
+  let rewrite_assert (e1,e2) =
+    E_assert (rewrite_assert_cond e1, e2)
   in
   let rewrite_case (e,cases) =
     match List.assoc (exp_loc e) choices with
-    | choice,subst ->
+    | choice,max,subst ->
        (match List.nth cases choice with
        | Pat_aux (Pat_exp (p,E_aux (e,_)),_) ->
           let dummyannot = (Generated Unknown,None) in
@@ -975,7 +991,7 @@ let apply_pat_choices choices =
   in
   let open Rewriter in
   fold_exp { id_exp_alg with
-    e_constraint = rewrite_constraint;
+    e_assert = rewrite_assert;
     e_case = rewrite_case }
 
 let split_defs all_errors splits defs =
@@ -1553,6 +1569,7 @@ let split_defs all_errors splits defs =
               literal as normal, but perform a more careful transformation
               otherwise *)
            | Some (Some (pats,l)) ->
+              let max = List.length pats - 1 in
               Some (List.mapi (fun i p ->
                 match p with
                 | P_aux (P_lit lit,(pl,pannot))
@@ -1567,14 +1584,14 @@ let split_defs all_errors splits defs =
                         [var,nconstant i]
                      | _ -> []
                    in
-                   p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,[])],kid_subst
+                   p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,max,[])],kid_subst
                 | _ ->
                    let p',subst = freshen_pat_bindings p in
                    match p' with
                    | P_aux (P_wild,_) ->
-                      P_aux (P_id id,(l,annot)),[],[l,(i,subst)],[]
+                      P_aux (P_id id,(l,annot)),[],[l,(i,max,subst)],[]
                    | _ ->
-                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,subst)],[])
+                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,max,subst)],[])
                       pats)
            )
         | P_app (id,ps) ->
