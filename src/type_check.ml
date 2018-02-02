@@ -634,7 +634,10 @@ end = struct
 
   let freshen_kid env kid (typq, typ) =
     let fresh = fresh_kid ~kid:kid env in
-    (typquant_subst_kid kid fresh typq, typ_subst_kid kid fresh typ)
+    if KidSet.mem kid (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then
+      (typquant_subst_kid kid fresh typq, typ_subst_kid kid fresh typ)
+    else
+      (typq, typ)
 
   let freshen_bind env bind =
     List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
@@ -2388,6 +2391,12 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             when Id.compare id (mk_id "range") == 0 ->
           let env = Env.add_typ_var kid BK_nat env in
           let env = Env.add_constraint (nc_and (nc_lteq lo (nvar kid)) (nc_lteq (nvar kid) hi)) env in
+          let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
+          annot_pat (P_var (typed_pat, kid)) typ, env, guards
+       | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
+            when Id.compare id (mk_id "atom") == 0 ->
+          let env = Env.add_typ_var kid BK_nat env in
+          let env = Env.add_constraint (nc_eq (nvar kid) n) env in
           let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
           annot_pat (P_var (typed_pat, kid)) typ, env, guards
        | None, _ -> typ_error l ("Cannot bind type variable against non existential or numeric type")
