@@ -12,9 +12,13 @@ type regval = bits(64)
 
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
+type cregbits = bits(3)
 
 val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
 function regbits_to_regno b = let 'r = unsigned(b) in r
+
+val creg2reg_bits : cregbits -> regbits
+function creg2reg_bits(creg) = 0b10 @ creg
 
 /* register x0 : regval is hard-wired zero */
 register x1 : regval
@@ -49,7 +53,10 @@ register x29 : regval
 register x30 : regval
 register x31 : regval
 
-let sp : regbits = 0b00010
+/* some arch and ABI relevant registers */
+let zreg : regbits = 0b00000
+let ra : regbits = 0b00001  /* x1 */
+let sp : regbits = 0b00010  /* x2 */
 
 register PC : bits(64)
 register nextPC : bits(64)
