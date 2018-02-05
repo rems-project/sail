@@ -151,6 +151,8 @@ val putchar = "putchar" : forall ('a : Type). 'a -> unit
 
 val concat_str = {ocaml: "concat_str", lem: "stringAppend"} : (string, string) -> string
 
+val string_of_int = "string_of_int" : int -> string
+
 val DecStr : int -> string
 
 val HexStr : int -> string

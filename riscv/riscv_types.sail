@@ -84,8 +84,7 @@ val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}
 function wGPR (r, v) = 
   if (r != 0) then {
      (*GPRs[r - 1]) = v;
-     print_int("GPR ", r);
-     print_bits("<- ", v);
+     print_string("x", concat_str(string_of_int(r), concat_str(" <- ", BitStr(v))));
   }
 
 function check_alignment (addr : bits(64), width : atom('n)) -> forall 'n. unit =
