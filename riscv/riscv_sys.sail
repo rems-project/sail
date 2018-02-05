@@ -332,7 +332,8 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
             Some(a) => mtval = a,
             None    => throw(Error_internal_error)
           }
-        }
+        },
+        _ => throw(Error_internal_error) /* Don't expect ReservedExc0 etc. here */
       };
       /* TODO: make register read explicit */
       mtvec
