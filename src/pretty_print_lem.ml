@@ -1210,7 +1210,8 @@ let doc_mutrec_lem = function
 let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | FCL_aux (FCL_Funcl(id,_),_) :: _
+  (* TODO: Move splitting of execute function to the rewriter *)
+  (*| FCL_aux (FCL_Funcl(id,_),_) :: _
     when string_of_id id = "execute" (*|| string_of_id id = "initial_analysis"*) ->
     let (_,auxiliary_functions,clauses) =
       List.fold_left
@@ -1273,7 +1274,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
     auxiliary_functions ^^ hardline ^^ hardline ^^
     (prefix 2 1)
       ((separate space) [string "let" ^^ doc_rec_lem false r ^^ doc_id_lem id;equals;string "function"])
-      (clauses ^/^ string "end")
+      (clauses ^/^ string "end")*)
   | FCL_aux (FCL_Funcl(id,_),annot) :: _
     when not (Env.is_extern id (env_of_annot annot) "lem") ->
     string "let" ^^ (doc_rec_lem (List.length fcls > 1) r) ^^ (doc_fundef_rhs_lem fd)
@@ -1495,15 +1496,15 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
         if !opt_sequential then
           concat [regstate_def; hardline;
             hardline;
-            string ("type MR 'a 'r = State.MR regstate 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = State.M regstate 'a " ^ exc_typ); hardline;
+            string ("type MR 'a 'r = State_monad.MR regstate 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = State_monad.M regstate 'a " ^ exc_typ); hardline;
             hardline;
             register_refs
           ]
         else
           concat [
-            string ("type MR 'a 'r = Prompt.MR 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = Prompt.M 'a " ^ exc_typ); hardline
+            string ("type MR 'a 'r = Prompt_monad.MR 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = Prompt_monad.M 'a " ^ exc_typ); hardline
           ]
         ]);
   (print defs_file)

@@ -152,6 +152,9 @@ let options = Arg.align ([
   ( "-dall_split_errors",
     Arg.Set Process_file.opt_dall_split_errors,
     " display all case split errors from monomorphisation, rather than one");
+  ( "-dmono_continue",
+    Arg.Set Process_file.opt_dmono_continue,
+    " continue despite monomorphisation errors");
   ( "-verbose",
     Arg.Set opt_print_verbose,
     " (debug) pretty-print the input to standard output");
@@ -256,7 +259,8 @@ let main() =
       (if !(opt_print_c)
        then
          let ast_c = rewrite_ast_c ast in
-         C_backend.compile_ast type_envs ast_c
+         let ast_c, type_envs = Specialize.specialize ast_c type_envs in
+         C_backend.compile_ast (C_backend.initial_ctx type_envs) ast_c
        else ());
       (if !(opt_print_lem)
        then let ast_lem = rewrite_ast_lem ast in

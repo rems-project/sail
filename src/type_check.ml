@@ -746,6 +746,9 @@ end = struct
   let add_local id mtyp env =
     begin
       wf_typ env (snd mtyp);
+      if Bindings.mem id env.top_val_specs then
+        typ_error (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
+      else ();
       typ_print ("Adding local binding " ^ string_of_id id ^ " :: " ^ string_of_mtyp mtyp);
       { env with locals = Bindings.add id mtyp env.locals }
     end
@@ -1283,6 +1286,8 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | Nexp_exp n1, Nexp_exp n2 -> nexp_identical n1 n2
   | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
+  | Nexp_app (f1, args1), Nexp_app (f2, args2) when List.length args1 = List.length args2 ->
+     Id.compare f1 f2 = 0 && List.for_all2 nexp_identical args1 args2
   | _, _ -> false
 
 let ord_identical (Ord_aux (ord1, _)) (Ord_aux (ord2, _)) =
@@ -3401,16 +3406,16 @@ and propagate_lexp_effect_aux = function
 (* 6. Checking toplevel definitions                                       *)
 (**************************************************************************)
 
-let check_letdef env (LB_aux (letbind, (l, _))) =
+let check_letdef orig_env (LB_aux (letbind, (l, _))) =
   begin
     match letbind with
     | LB_val (P_aux (P_typ (typ_annot, pat), _), bind) ->
-       let checked_bind = crule check_exp env (strip_exp bind) typ_annot in
-       let tpat, env = bind_pat_no_guard env (strip_pat pat) typ_annot in
-       [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot, no_effect))), checked_bind), (l, None)))], env
+       let checked_bind = crule check_exp orig_env (strip_exp bind) typ_annot in
+       let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
+       [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (orig_env, typ_annot, no_effect))), checked_bind), (l, None)))], env
     | LB_val (pat, bind) ->
-       let inferred_bind = irule infer_exp env (strip_exp bind) in
-       let tpat, env = bind_pat_no_guard env (strip_pat pat) (typ_of inferred_bind) in
+       let inferred_bind = irule infer_exp orig_env (strip_exp bind) in
+       let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) (typ_of inferred_bind) in
        [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], env
   end
 

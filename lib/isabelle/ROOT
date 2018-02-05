@@ -4,7 +4,8 @@ session "Sail" = "LEM" +
     Sail_values
     State
     Prompt
-    Sail_operators
+    Sail_operators_mwords
+    Sail_operators_bitlists
 
 (*session "Sail" = "Sail_Base" +
   options [document = false]

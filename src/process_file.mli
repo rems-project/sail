@@ -72,6 +72,7 @@ val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
 val opt_ddump_raw_mono_ast : bool ref
 val opt_dmono_analysis : int ref
+val opt_dmono_continue : bool ref
 val opt_auto_mono : bool ref
 val opt_mono_rewrites : bool ref
 val opt_dall_split_errors : bool ref

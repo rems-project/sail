@@ -3,6 +3,8 @@
 *.byte
 src/_build/
 src/sail.docdir
+_sbuild/
+test/typecheck/rtpass*/
 language/*.pdf
 language/*.uo
 language/*.ui

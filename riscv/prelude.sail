@@ -2,7 +2,6 @@ default Order dec
 
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None, Some : 'a}
-infix 4 ==
 
 val eq_atom = {ocaml: "eq_int", lem: "eq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -91,9 +90,9 @@ overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
 val and_bool = "and_bool" : (bool, bool) -> bool
 
-val builtin_and_vec = {ocaml: "and_vec", lem: "Sail_operators.and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val and_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
+val and_vec = {lem: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
@@ -101,9 +100,9 @@ overload operator & = {and_bool, and_vec}
 
 val or_bool = "or_bool" : (bool, bool) -> bool
 
-val builtin_or_vec = {ocaml: "or_vec", lem: "Sail_operators.or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val or_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {lem: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
@@ -152,6 +151,8 @@ val putchar = "putchar" : forall ('a : Type). 'a -> unit
 
 val concat_str = {ocaml: "concat_str", lem: "stringAppend"} : (string, string) -> string
 
+val string_of_int = "string_of_int" : int -> string
+
 val DecStr : int -> string
 
 val HexStr : int -> string
@@ -160,7 +161,7 @@ val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
 
 val xor_vec = "xor_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val int_power = {lem: "pow"} : (int, int) -> int
+val int_power = {ocaml: "int_power", lem: "pow"} : (int, int) -> int
 
 val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> real
 
@@ -251,13 +252,12 @@ val quotient_real = {ocaml: "quotient_real", lem: "realDiv"} : (real, real) -> r
 
 val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
-infixl 7 /
-
 overload operator / = {quotient_nat, quotient, quotient_real}
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
+val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot"} : (int, int) -> int
+val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod"} : (int, int) -> int
 
-infixl 7 %
+val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
 
 overload operator % = {modulus}
 
@@ -375,6 +375,9 @@ val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits
 val vector64 : int -> bits(64)
 
 function vector64 n = __raw_GetSlice_int(64, n, 0)
+
+val to_bits : forall 'l.(atom('l), int) -> bits('l)
+function to_bits (l, n) = __raw_GetSlice_int(l, n, 0)
 
 function break () : unit -> unit = ()
 

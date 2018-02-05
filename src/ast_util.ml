@@ -193,6 +193,10 @@ let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
 
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
 and nexp_simp_aux = function
+  (* (n - (n - m)) often appears in foreach loops *)
+  | Nexp_minus (nexp1, Nexp_aux (Nexp_minus (nexp2, Nexp_aux (n3,_)),_))
+      when nexp_identical nexp1 nexp2 ->
+     nexp_simp_aux n3
   | Nexp_minus (Nexp_aux (Nexp_sum (Nexp_aux (n1, _), nexp2), _), nexp3)
     when nexp_identical nexp2 nexp3 ->
      nexp_simp_aux n1

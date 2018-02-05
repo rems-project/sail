@@ -1,3 +1,5 @@
+$include <flow.sail>
+
 enum boolean = {FALSE, TRUE}
 
 enum signal = {LOW, HIGH}

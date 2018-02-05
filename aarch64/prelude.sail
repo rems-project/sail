@@ -5,10 +5,6 @@ $include <flow.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
-infix 4 ==
-
-val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
@@ -27,7 +23,7 @@ val list_length = {ocaml: "length", lem: "length_list"} : forall ('a : Type). li
 
 overload length = {bitvector_length, vector_length, list_length}
 
-overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
+overload operator == = {eq_vec, eq_string, eq_real, eq_anything}
 
 val vector_subrange_A = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
@@ -91,17 +87,17 @@ function neq_anything (x, y) = not_bool(x == y)
 
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
-val builtin_and_vec = {ocaml: "and_vec", lem: "Sail_operators.and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val and_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
+val and_vec = {lem: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
 overload operator & = {and_bool, and_vec}
 
-val builtin_or_vec = {ocaml: "or_vec", lem: "Sail_operators.or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val or_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {lem: "or_vec"}: forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
@@ -208,25 +204,17 @@ overload operator * = {mult_range, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
-val gteq_int = "gteq" : (int, int) -> bool
-
 val gteq_real = {ocaml: "gteq_real", lem: "gteq"} : (real, real) -> bool
 
 overload operator >= = {gteq_atom, gteq_int, gteq_real}
-
-val lteq_int = "lteq" : (int, int) -> bool
 
 val lteq_real = {ocaml: "lteq_real", lem: "lteq"} : (real, real) -> bool
 
 overload operator <= = {lteq_atom, lteq_int, lteq_real}
 
-val gt_int = "gt" : (int, int) -> bool
-
 val gt_real = {ocaml: "gt_real", lem: "gt"} : (real, real) -> bool
 
 overload operator > = {gt_atom, gt_int, gt_real}
-
-val lt_int = "lt" : (int, int) -> bool
 
 val lt_real = {ocaml: "lt_real", lem: "lt"} : (real, real) -> bool
 
@@ -248,13 +236,9 @@ val quotient_real = {ocaml: "quotient_real", lem: "realDiv"} : (real, real) -> r
 
 val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
-infixl 7 /
-
 overload operator / = {quotient_nat, quotient, quotient_real}
 
 val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
-
-infixl 7 %
 
 overload operator % = {modulus}
 

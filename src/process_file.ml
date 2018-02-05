@@ -93,7 +93,7 @@ let cond_pragma defs =
     else
       else_defs := (def :: !else_defs)
   in
-  
+
   let rec scan = function
     | Parse_ast.DEF_pragma ("endif", _, _) :: defs when !depth = 0 ->
        (List.rev !then_defs, List.rev !else_defs, defs)
@@ -108,13 +108,13 @@ let cond_pragma defs =
     | [] -> failwith "$ifdef or $ifndef never ended"
   in
   scan defs
-         
+
 let rec preprocess = function
   | [] -> []
   | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
      symbols := StringSet.add symbol !symbols;
      preprocess defs
-                
+
   | Parse_ast.DEF_pragma ("ifndef", symbol, _) :: defs ->
      let then_defs, else_defs, defs = cond_pragma defs in
      if not (StringSet.mem symbol !symbols) then
@@ -128,7 +128,7 @@ let rec preprocess = function
        preprocess (then_defs @ defs)
      else
        preprocess (else_defs @ defs)
-                  
+
   | Parse_ast.DEF_pragma ("include", file, l) :: defs ->
      let len = String.length file in
      if len = 0 then
@@ -151,18 +151,18 @@ let rec preprocess = function
        let file = Filename.concat sail_dir ("lib/" ^ file) in
        let (Parse_ast.Defs include_defs) = parse_file file in
        let include_defs = preprocess include_defs in
-       include_defs @ preprocess defs       
+       include_defs @ preprocess defs
      else
        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
        (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess defs)
 
   | Parse_ast.DEF_pragma (p, arg, _) :: defs ->
-     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess defs) 
-         
+     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess defs)
+
   | def :: defs -> def :: preprocess defs
 
 let preprocess_ast (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess defs)
-                              
+
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
 let load_file_no_check order f = convert_ast order (preprocess_ast (parse_file f))
@@ -188,6 +188,7 @@ let opt_dmono_analysis = ref 0
 let opt_auto_mono = ref false
 let opt_mono_rewrites = ref false
 let opt_dall_split_errors = ref false
+let opt_dmono_continue = ref false
 
 let monomorphise_ast locs type_env ast =
   let open Monomorphise in
@@ -197,6 +198,7 @@ let monomorphise_ast locs type_env ast =
     rewrites = !opt_mono_rewrites;
     rewrite_size_parameters = !Pretty_print_lem.opt_mwords;
     all_split_errors = !opt_dall_split_errors;
+    continue_anyway = !opt_dmono_continue;
     dump_raw = !opt_ddump_raw_mono_ast
   } in
   monomorphise opts locs type_env ast
@@ -226,16 +228,22 @@ let output_lem filename libs defs =
   let generated_line = generated_line filename in
   let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in
   let types_module = (filename ^ "_embed_types" ^ seq_suffix) in
-  let monad_module = if !Pretty_print_lem.opt_sequential then "State" else "Prompt" in
-  let operators_module = "Sail_operators" (* if !Pretty_print_lem.opt_mwords then "Sail_operators_mwords" else "Sail_operators" *) in
+  let monad_modules =
+    if !Pretty_print_lem.opt_sequential
+    then ["State_monad"; "State"]
+    else ["Prompt_monad"; "Prompt"] in
+  let operators_module =
+    if !Pretty_print_lem.opt_mwords
+    then "Sail_operators_mwords"
+    else "Sail_operators_bitlists" in
   let libs = List.map (fun lib -> lib ^ seq_suffix) libs in
   let base_imports = [
       "Pervasives_extra";
       "Sail_impl_base";
       "Sail_values";
-      operators_module;
-      monad_module
-    ] in
+      operators_module
+    ] @ monad_modules
+    in
   let ((ot,_, _) as ext_ot) =
     open_output_with_check_unformatted (filename ^ "_embed_types" ^ seq_suffix ^ ".lem") in
   let ((o,_, _) as ext_o) =

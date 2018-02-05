@@ -1203,43 +1203,50 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   let guard_bitvector_pat =
     let collect_guards_decls ps rootid t =
       let (start,_,ord,_) = vector_typ_args_of t in
-      let rec collect current (guards,dls) idx ps =
-        let idx' = if is_order_inc ord then Big_int.add idx (Big_int.of_int 1) else Big_int.sub idx (Big_int.of_int 1) in
-        (match ps with
-          | pat :: ps' ->
-            (match pat with
-              | P_aux (P_lit lit, (l,annot)) ->
-                let e = E_aux (E_lit lit, (gen_loc l, annot)) in
-                let current' = (match current with
-                  | Some (l,i,j,lits) -> Some (l,i,idx,lits @ [e])
-                  | None -> Some (l,idx,idx,[e])) in
-                collect current' (guards, dls) idx' ps'
-              | P_aux (P_as (pat',id), (l,annot)) ->
-                let dl = letbind_bit_exp rootid l t idx id in
-                collect current (guards, dls @ [dl]) idx (pat' :: ps')
-              | _ ->
-                let dls' = (match pat with
-                  | P_aux (P_id id, (l,annot)) ->
-                    dls @ [letbind_bit_exp rootid l t idx id]
-                  | _ -> dls) in
-                let guards' = (match current with
-                  | Some (l,i,j,lits) ->
-                    guards @ [Some (test_subvec_exp rootid l t i j lits)]
-                  | None -> guards) in
-                collect None (guards', dls') idx' ps')
-          | [] ->
-            let guards' = (match current with
-              | Some (l,i,j,lits) ->
-                guards @ [Some (test_subvec_exp rootid l t i j lits)]
-              | None -> guards) in
-            (guards',dls)) in
-      let (guards,dls) = match start with
-      | Nexp_aux (Nexp_constant s, _) ->
-        collect None ([],[]) s ps
+      let start_idx = match start with
+      | Nexp_aux (Nexp_constant s, _) -> s
       | _ ->
-        let (P_aux (_, (l,_))) = pat in
         raise (Reporting_basic.err_unreachable l
           "guard_bitvector_pat called on pattern with non-constant start index") in
+      let add_bit_pat (idx, current, guards, dls) pat =
+        let idx' =
+          if is_order_inc ord
+          then Big_int.add idx (Big_int.of_int 1)
+          else Big_int.sub idx (Big_int.of_int 1) in
+        let ids = fst (fold_pat
+          { (compute_pat_alg IdSet.empty IdSet.union) with
+            p_id = (fun id -> IdSet.singleton id, P_id id);
+            p_as = (fun ((ids, pat), id) -> IdSet.add id ids, P_as (pat, id)) }
+          pat) in
+        let lits = fst (fold_pat
+          { (compute_pat_alg [] (@)) with
+            p_aux = (fun ((lits, paux), (l, annot)) ->
+                       let lits = match paux with
+                         | P_lit lit -> E_aux (E_lit lit, (l, annot)) :: lits
+                         | _ -> lits in
+                       lits, P_aux (paux, (l, annot))) }
+          pat) in
+        let add_letbind id dls = dls @ [letbind_bit_exp rootid l t idx id] in
+        let dls' = IdSet.fold add_letbind ids dls in
+        let current', guards' =
+          match current with
+          | Some (l, i, j, lits') ->
+             if lits = []
+             then None, guards @ [Some (test_subvec_exp rootid l t i j lits')]
+             else Some (l, i, idx, lits' @ lits), guards
+          | None ->
+             begin
+               match lits with
+               | E_aux (_, (l, _)) :: _ -> Some (l, idx, idx, lits), guards
+               | [] -> None, guards
+             end
+          in
+        (idx', current', guards', dls') in
+      let (_, final, guards, dls) = List.fold_left add_bit_pat (start_idx, None, [], []) ps in
+      let guards = match final with
+        | Some (l,i,j,lits) ->
+           guards @ [Some (test_subvec_exp rootid l t i j lits)]
+        | None -> guards in
       let (decls,letbinds) = List.split dls in
       (compose_guards guards, List.fold_right (@@) decls, letbinds) in
 
@@ -2951,10 +2958,10 @@ let rewrite_defs_lem = [
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
-  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("fix_val_specs", rewrite_fix_val_specs);
   ("recheck_defs", recheck_defs);
+  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("constraint", rewrite_constraint); *)
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", top_sort_defs);
@@ -3021,15 +3028,25 @@ let rewrite_check_annot =
     try
       prerr_endline ("CHECKING: " ^ string_of_exp exp ^ " : " ^ string_of_typ (typ_of exp));
       let _ = check_exp (env_of exp) (strip_exp exp) (typ_of exp) in
-      (if not (alpha_equivalent (env_of exp) (typ_of exp) (Env.expand_synonyms (env_of exp) (typ_of exp)))
-       then raise (Reporting_basic.err_typ Parse_ast.Unknown "Found synonym in annotation")
+      let typ1 = typ_of exp in
+      let typ2 = Env.expand_synonyms (env_of exp) (typ_of exp) in
+      (if not (alpha_equivalent (env_of exp) typ1 typ2)
+       then raise (Reporting_basic.err_typ Parse_ast.Unknown
+                    ("Found synonym in annotation " ^ string_of_typ typ1 ^ " vs " ^ string_of_typ typ2))
        else ());
       exp
     with
       Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))
   in
+  let check_pat pat =
+    prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (pat_typ_of pat));
+    let _, _ = bind_pat_no_guard (pat_env_of pat) (strip_pat pat) (pat_typ_of pat) in
+    pat
+  in
+
   let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> check_annot (E_aux (exp, annot))) } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) }
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
+                                          rewrite_pat = (fun _ -> check_pat) }
 
 let rewrite_defs_check = [
   ("check_annotations", rewrite_check_annot);

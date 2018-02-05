@@ -389,12 +389,16 @@ let rec take n xs = match n, xs with
   | n, (x :: xs) -> x :: take (n - 1) xs 
 
 let termcode n = "\x1B[" ^ string_of_int n ^ "m"
+
 let bold str = termcode 1 ^ str
+
+let red str = termcode 91 ^ str
 let green str = termcode 92 ^ str
 let yellow str = termcode 93 ^ str
-let red str = termcode 91 ^ str
-let cyan str = termcode 96 ^ str
 let blue str = termcode 94 ^ str
+let magenta str = termcode 95 ^ str
+let cyan str = termcode 96 ^ str
+
 let clear str = str ^ termcode 0
 
 let zchar c =

@@ -16,6 +16,9 @@ val shiftright = "shiftr" : forall 'n ('ord : Order).
 
 overload operator >> = {shiftright}
 
+val arith_shiftright = "arith_shiftr" : forall 'n ('ord : Order).
+    (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
+
 val "extz_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
 val extzv : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
 function extzv(v) = extz_vec(sizeof('m),v)

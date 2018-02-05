@@ -176,6 +176,31 @@ let add_int (x, y) = Big_int.add x y
 let sub_int (x, y) = Big_int.sub x y
 let mult (x, y) = Big_int.mul x y
 let quotient (x, y) = Big_int.div x y
+
+(* Big_int does not provide divide with rounding towards zero so roll
+   our own, assuming that division of positive integers rounds down *)
+let quot_round_zero (x, y) = 
+  let posX = Big_int.greater_equal x Big_int.zero in
+  let posY = Big_int.greater_equal y Big_int.zero in
+  let absX = Big_int.abs x in
+  let absY = Big_int.abs y in
+  let q = Big_int.div absX absY in
+  if posX != posY then
+    Big_int.negate q
+  else
+    q
+
+(* The corresponding remainder function for above just respects the sign of x *)
+let rem_round_zero (x, y) = 
+  let posX = Big_int.greater_equal x Big_int.zero in
+  let absX = Big_int.abs x in
+  let absY = Big_int.abs y in
+  let r = Big_int.modulus absX absY in
+  if posX then
+    r
+  else
+    Big_int.negate r
+
 let modulus (x, y) = Big_int.modulus x y
 
 let negate x = Big_int.negate x
@@ -425,6 +450,7 @@ let round_up x = failwith "round_up" (* Num.big_int_of_num (Num.ceiling_num x) *
 let quotient_real (x, y) = Rational.div x y
 let mult_real (x, y) = Rational.mul x y (* Num.mult_num x y *)
 let real_power (x, y) = failwith "real_power" (* Num.power_num x (Num.num_of_big_int y) *)
+let int_power (x, y) = Big_int.pow_int x (Big_int.to_int y)
 let add_real (x, y) = Rational.add x y
 let sub_real (x, y) = Rational.sub x y
 

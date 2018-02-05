@@ -93,7 +93,14 @@ let mk_operator prec n op =
   | InfixR, 9 -> Op9r op
   | _, _ -> assert false
 
-let operators = ref M.empty
+let operators = ref
+  (List.fold_left
+     (fun r (x, y) -> M.add x y r)
+     M.empty
+     [ ("==", mk_operator Infix 4 "==");
+       ("/", mk_operator InfixL 7 "/");
+       ("%", mk_operator InfixL 7 "%");
+     ])
 
 let kw_table =
   List.fold_left
