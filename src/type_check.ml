@@ -634,7 +634,10 @@ end = struct
 
   let freshen_kid env kid (typq, typ) =
     let fresh = fresh_kid ~kid:kid env in
-    (typquant_subst_kid kid fresh typq, typ_subst_kid kid fresh typ)
+    if KidSet.mem kid (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then
+      (typquant_subst_kid kid fresh typq, typ_subst_kid kid fresh typ)
+    else
+      (typq, typ)
 
   let freshen_bind env bind =
     List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
@@ -1283,6 +1286,8 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | Nexp_exp n1, Nexp_exp n2 -> nexp_identical n1 n2
   | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
+  | Nexp_app (f1, args1), Nexp_app (f2, args2) when List.length args1 = List.length args2 ->
+     Id.compare f1 f2 = 0 && List.for_all2 nexp_identical args1 args2
   | _, _ -> false
 
 let ord_identical (Ord_aux (ord1, _)) (Ord_aux (ord2, _)) =
@@ -2393,6 +2398,12 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           let env = Env.add_constraint (nc_and (nc_lteq lo (nvar kid)) (nc_lteq (nvar kid) hi)) env in
           let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
           annot_pat (P_var (typed_pat, kid)) typ, env, guards
+       | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
+            when Id.compare id (mk_id "atom") == 0 ->
+          let env = Env.add_typ_var kid BK_nat env in
+          let env = Env.add_constraint (nc_eq n (nvar kid)) env in
+          let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
+          annot_pat (P_var (typed_pat, kid)) typ, env, guards
        | None, _ -> typ_error l ("Cannot bind type variable against non existential or numeric type")
      end
   | P_wild -> annot_pat P_wild typ, env, []
@@ -3395,16 +3406,16 @@ and propagate_lexp_effect_aux = function
 (* 6. Checking toplevel definitions                                       *)
 (**************************************************************************)
 
-let check_letdef env (LB_aux (letbind, (l, _))) =
+let check_letdef orig_env (LB_aux (letbind, (l, _))) =
   begin
     match letbind with
     | LB_val (P_aux (P_typ (typ_annot, pat), _), bind) ->
-       let checked_bind = crule check_exp env (strip_exp bind) typ_annot in
-       let tpat, env = bind_pat_no_guard env (strip_pat pat) typ_annot in
-       [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot, no_effect))), checked_bind), (l, None)))], env
+       let checked_bind = crule check_exp orig_env (strip_exp bind) typ_annot in
+       let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
+       [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (orig_env, typ_annot, no_effect))), checked_bind), (l, None)))], env
     | LB_val (pat, bind) ->
-       let inferred_bind = irule infer_exp env (strip_exp bind) in
-       let tpat, env = bind_pat_no_guard env (strip_pat pat) (typ_of inferred_bind) in
+       let inferred_bind = irule infer_exp orig_env (strip_exp bind) in
+       let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) (typ_of inferred_bind) in
        [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], env
   end
 

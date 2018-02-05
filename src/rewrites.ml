@@ -3028,15 +3028,25 @@ let rewrite_check_annot =
     try
       prerr_endline ("CHECKING: " ^ string_of_exp exp ^ " : " ^ string_of_typ (typ_of exp));
       let _ = check_exp (env_of exp) (strip_exp exp) (typ_of exp) in
-      (if not (alpha_equivalent (env_of exp) (typ_of exp) (Env.expand_synonyms (env_of exp) (typ_of exp)))
-       then raise (Reporting_basic.err_typ Parse_ast.Unknown "Found synonym in annotation")
+      let typ1 = typ_of exp in
+      let typ2 = Env.expand_synonyms (env_of exp) (typ_of exp) in
+      (if not (alpha_equivalent (env_of exp) typ1 typ2)
+       then raise (Reporting_basic.err_typ Parse_ast.Unknown
+                    ("Found synonym in annotation " ^ string_of_typ typ1 ^ " vs " ^ string_of_typ typ2))
        else ());
       exp
     with
       Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))
   in
+  let check_pat pat =
+    prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (pat_typ_of pat));
+    let _, _ = bind_pat_no_guard (pat_env_of pat) (strip_pat pat) (pat_typ_of pat) in
+    pat
+  in
+
   let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> check_annot (E_aux (exp, annot))) } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) }
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
+                                          rewrite_pat = (fun _ -> check_pat) }
 
 let rewrite_defs_check = [
   ("check_annotations", rewrite_check_annot);

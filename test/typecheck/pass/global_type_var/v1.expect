@@ -1,0 +1,6 @@
+Type error at file "global_type_var/v1.sail", line 23, character 14 to line 23, character 15
+
+let _ = test([41m32[49m)
+
+Tried performing type coercion on 32
+Failed because atom<32> is not a subtype of atom<'size> in context ('size = 32 | 'size = 64)
