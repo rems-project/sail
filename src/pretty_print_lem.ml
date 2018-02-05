@@ -449,7 +449,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
      begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
-  | P_var(p,kid) -> doc_pat_lem ctxt true p
+  | P_var(p,_) -> doc_pat_lem ctxt true p
   | P_as(p,id) -> parens (separate space [doc_pat_lem ctxt true p; string "as"; doc_id_lem id])
   | P_typ(Typ_aux (Typ_tup typs, _), P_aux (P_tup pats, _)) ->
      (* Isabelle does not seem to like type-annotated tuple patterns;

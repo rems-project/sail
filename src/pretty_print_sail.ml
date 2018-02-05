@@ -70,6 +70,11 @@ let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_inc -> string "inc"
   | Ord_dec -> string "dec"
 
+let rec doc_typ_pat = function
+  | TP_wild -> string "_"
+  | TP_var kid -> doc_kid kid
+  | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
+                            
 let rec doc_nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
@@ -216,9 +221,9 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   | P_typ (typ, pat) -> separate space [doc_pat pat; colon; doc_typ typ]
   | P_lit lit -> doc_lit lit
   (* P_var short form sugar *)
-  | P_var (P_aux (P_id id, _), kid) when Id.compare (id_of_kid kid) id == 0 ->
+  | P_var (P_aux (P_id id, _), TP_var kid) when Id.compare (id_of_kid kid) id == 0 ->
      doc_kid kid
-  | P_var (pat, kid) -> separate space [doc_pat pat; string "as"; doc_kid kid]
+  | P_var (pat, tpat) -> separate space [doc_pat pat; string "as"; doc_typ_pat tpat]
   | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
   | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
   | P_wild -> string "_"

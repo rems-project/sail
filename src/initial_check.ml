@@ -440,7 +440,7 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
     | Parse_ast.P_as(pat,id) -> P_as(to_ast_pat k_env def_ord pat,to_ast_id id)
     | Parse_ast.P_typ(typ,pat) -> P_typ(to_ast_typ k_env def_ord typ,to_ast_pat k_env def_ord pat)
     | Parse_ast.P_id(id) -> P_id(to_ast_id id)
-    | Parse_ast.P_var (pat, kid) -> P_var (to_ast_pat k_env def_ord pat, to_ast_var kid)
+    | Parse_ast.P_var (pat,kid) -> P_var (to_ast_pat k_env def_ord pat, TP_var (to_ast_var kid))
     | Parse_ast.P_app(id,pats) ->
       if pats = []
       then P_id (to_ast_id id)

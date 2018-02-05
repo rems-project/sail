@@ -499,7 +499,7 @@ let nexp_subst_fns substs =
     let re p = P_aux (p,(l,s_tannot annot)) in
     match p with
     | P_lit _ | P_wild | P_id _ -> re p
-    | P_var (p',kid) -> re (P_var (s_pat p',kid))
+    | P_var (p',tpat) -> re (P_var (s_pat p',tpat))
     | P_as (p',id) -> re (P_as (s_pat p', id))
     | P_typ (ty,p') -> re (P_typ (s_t ty,s_pat p'))
     | P_app (id,ps) -> re (P_app (id, List.map s_pat ps))
@@ -1310,7 +1310,7 @@ let split_defs continue_anyway splits defs =
        let checkpat = function
          | P_aux (P_lit (L_aux (lit_p, _)),_) ->
             if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
-         | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
+         | P_aux (P_var (P_aux (P_id id,p_id_annot), TP_var kid),_) ->
             begin
               match lit_e with
               | L_num i ->
@@ -1335,7 +1335,7 @@ let split_defs continue_anyway splits defs =
     | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)) ->
        let checkpat = function
          | P_aux (P_lit (L_aux (lit_p, _)),_) -> DoesNotMatch
-         | P_aux (P_var (P_aux (P_id id,p_id_annot), kid),_) ->
+         | P_aux (P_var (P_aux (P_id id,p_id_annot), TP_var kid),_) ->
               (* For undefined we fix the type-level size (because there's no good
                  way to construct an undefined size), but leave the term as undefined
                  to make the meaning clear. *)
@@ -1555,7 +1555,7 @@ let split_defs continue_anyway splits defs =
             begin
               let kid,kid_annot =
                 match args with
-                | [P_aux (P_var (_,kid),ann)] -> kid,ann
+                | [P_aux (P_var (_, TP_var kid),ann)] -> kid,ann
                 | _ -> 
                    raise (Reporting_basic.err_general l
                             "Pattern match not currently supported by monomorphisation")
@@ -1802,7 +1802,7 @@ let tyvars_bound_in_pat pat =
   let open Rewriter in
   fst (fold_pat
          { (compute_pat_alg KidSet.empty KidSet.union) with
-           p_var = (fun ((s,pat),kid) -> KidSet.add kid s, P_var (pat,kid)) }
+           p_var = (fun ((s,pat), TP_var kid) -> KidSet.add kid s, P_var (pat, TP_var kid)) }
          pat)
 let tyvars_bound_in_lb (LB_aux (LB_val (pat,_),_)) = tyvars_bound_in_pat pat
 
@@ -2056,7 +2056,7 @@ let rec pat_eq (P_aux (p1,_)) (P_aux (p2,_)) =
   | P_as (p1',id1), P_as (p2',id2) -> Id.compare id1 id2 == 0 && pat_eq p1' p2'
   | P_typ (_,p1'), P_typ (_,p2') -> pat_eq p1' p2'
   | P_id id1, P_id id2 -> Id.compare id1 id2 == 0
-  | P_var (p1',kid1), P_var (p2',kid2) -> Kid.compare kid1 kid2 == 0 && pat_eq p1' p2'
+  | P_var (p1', TP_var kid1), P_var (p2', TP_var kid2) -> Kid.compare kid1 kid2 == 0 && pat_eq p1' p2'
   | P_app (id1,args1), P_app (id2,args2) ->
      Id.compare id1 id2 == 0 && forall2 pat_eq args1 args2
   | P_record (fpats1, flag1), P_record (fpats2, flag2) ->
@@ -2246,7 +2246,7 @@ let rec split3 = function
 let kids_bound_by_pat pat =
   let open Rewriter in
   fst (fold_pat ({ (compute_pat_alg KidSet.empty KidSet.union)
-                   with p_var = (fun ((s,p),kid) -> (KidSet.add kid s, P_var (p,kid))) }) pat)
+                   with p_var = (fun ((s,p), TP_var kid) -> (KidSet.add kid s, P_var (p, TP_var kid))) }) pat)
 
 (* Add bound variables from a pattern to the environment with the given dependency. *)
 
@@ -2730,7 +2730,7 @@ let initial_env fn_id (TypQ_aux (tq,_)) pat set_assertions =
             Bindings.singleton id (Unknown (l, ("Unable to give location for " ^ string_of_id id))),
             KBindings.empty
          end
-      | P_var (pat,kid) ->
+      | P_var (pat, TP_var kid) ->
          let s,v,k = aux pat in
          s,v,KBindings.add kid (Have (ArgSplits.empty,CallerArgSet.singleton (fn_id,i),CallerKidSet.empty)) k
       | P_app (_,pats) -> of_list pats

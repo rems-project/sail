@@ -2367,7 +2367,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
           end
      end
-  | P_var (pat, kid) ->
+  | P_var (pat, TP_var kid) ->
      let typ = Env.expand_synonyms env typ in
      begin
        match destruct_exist env typ, typ with
@@ -2376,29 +2376,29 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           let ex_typ = typ_subst_nexp kid' (Nexp_var kid) ex_typ in
           let env = Env.add_constraint (nc_subst_nexp kid' (Nexp_var kid) nc) env in
           let typed_pat, env, guards = bind_pat env pat ex_typ in
-          annot_pat (P_var (typed_pat, kid)) typ, env, guards
+          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
        | Some _, _ -> typ_error l ("Cannot bind type variable pattern against multiple argument existential")
        | None, Typ_aux (Typ_id id, _) when Id.compare id (mk_id "int") == 0 ->
           let env = Env.add_typ_var kid BK_nat env in
           let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, kid)) typ, env, guards
+          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
        | None, Typ_aux (Typ_id id, _) when Id.compare id (mk_id "nat") == 0 ->
           let env = Env.add_typ_var kid BK_nat env in
           let env = Env.add_constraint (nc_gt (nvar kid) (nint 0)) env in
           let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, kid)) typ, env, guards
+          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
        | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp lo, _); Typ_arg_aux (Typ_arg_nexp hi, _)]), _)
             when Id.compare id (mk_id "range") == 0 ->
           let env = Env.add_typ_var kid BK_nat env in
           let env = Env.add_constraint (nc_and (nc_lteq lo (nvar kid)) (nc_lteq (nvar kid) hi)) env in
           let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, kid)) typ, env, guards
+          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
        | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
             when Id.compare id (mk_id "atom") == 0 ->
           let env = Env.add_typ_var kid BK_nat env in
           let env = Env.add_constraint (nc_eq (nvar kid) n) env in
           let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, kid)) typ, env, guards
+          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
        | None, _ -> typ_error l ("Cannot bind type variable against non existential or numeric type")
      end
   | P_wild -> annot_pat P_wild typ, env, []

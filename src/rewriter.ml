@@ -408,7 +408,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux
-  ; p_var            : 'pat * kid -> 'pat_aux
+  ; p_var            : 'pat * typ_pat -> 'pat_aux
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
@@ -426,7 +426,7 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_lit lit           -> alg.p_lit lit
   | P_wild              -> alg.p_wild
   | P_id id             -> alg.p_id id
-  | P_var (p, kid)      -> alg.p_var (fold_pat alg p, kid)
+  | P_var (p,tpat)      -> alg.p_var (fold_pat alg p, tpat)
   | P_as (p,id)         -> alg.p_as (fold_pat alg p, id)
   | P_typ (typ,p)       -> alg.p_typ (typ,fold_pat alg p)
   | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
@@ -454,7 +454,7 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_as             = (fun (pat,id) -> P_as (pat,id))
   ; p_typ            = (fun (typ,pat) -> P_typ (typ,pat))
   ; p_id             = (fun id -> P_id id)
-  ; p_var            = (fun (pat,kid) -> P_var (pat,kid))
+  ; p_var            = (fun (pat,tpat) -> P_var (pat,tpat))
   ; p_app            = (fun (id,ps) -> P_app (id,ps))
   ; p_record         = (fun (ps,b) -> P_record (ps,b))
   ; p_vector         = (fun ps -> P_vector ps)

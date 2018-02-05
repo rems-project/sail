@@ -516,6 +516,11 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
 % Patterns                                                     %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+typ_pat :: 'TP_' ::=
+  {{ com type pattern }}
+  | _                               :: :: wild
+  | kid                             :: :: var
+  | id ( typ_pat1 , .. , typ_patn ) :: :: app
 
 pat :: 'P_' ::= 
   {{ com pattern }}
@@ -534,7 +539,7 @@ pat :: 'P_' ::=
     {{ com typed pattern }}
   | id                                      :: :: id
     {{ com identifier  }}
-  | pat kid :: :: var
+  | pat typ_pat :: :: var
     {{ com bind pattern to type variable }}
   | id ( pat1 , .. , patn )                                     :: :: app
     {{ com union constructor pattern }}

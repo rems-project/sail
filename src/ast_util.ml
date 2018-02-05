@@ -407,7 +407,7 @@ and map_pat_annot_aux f = function
   | P_as (pat, id) -> P_as (map_pat_annot f pat, id)
   | P_typ (typ, pat) -> P_typ (typ, map_pat_annot f pat)
   | P_id id -> P_id id
-  | P_var (pat, kid) -> P_var (map_pat_annot f pat, kid)
+  | P_var (pat, tpat) -> P_var (map_pat_annot f pat, tpat)
   | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
   | P_record (fpats, b) -> P_record (List.map (map_fpat_annot f) fpats, b)
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
@@ -665,12 +665,16 @@ and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
   | Pat_exp (pat, exp) -> string_of_pat pat ^ " -> " ^ string_of_exp exp
   | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " when " ^ string_of_exp guard ^ " -> " ^ string_of_exp exp
+and string_of_tpat = function
+  | TP_wild -> "_"
+  | TP_var kid -> string_of_kid kid
+  | TP_app (f, tpats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_tpat tpats ^ ")"
 and string_of_pat (P_aux (pat, l)) =
   match pat with
   | P_lit lit -> string_of_lit lit
   | P_wild -> "_"
   | P_id v -> string_of_id v
-  | P_var (pat, kid) -> string_of_pat pat ^ " as " ^ string_of_kid kid
+  | P_var (pat, tpat) -> string_of_pat pat ^ " as " ^ string_of_tpat tpat
   | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
