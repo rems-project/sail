@@ -25,8 +25,8 @@ val lteq_atom_range = "lteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> boo
 val gt_atom_range = "gt"     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 val gteq_atom_range = "gteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 
-val eq_range = {ocaml: "eq_int", lem: "eq"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
-val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
+val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
+val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : (int, int) -> bool
 
 val lteq_int = "lteq" : (int, int) -> bool
 val gteq_int = "gteq" : (int, int) -> bool

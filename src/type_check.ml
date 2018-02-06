@@ -2572,7 +2572,7 @@ and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) 
        | nexps ->
           typ_error l ("Type " ^ string_of_typ typ ^ " has multiple numeric expressions. Cannot bind " ^ string_of_kid kid)
      end
-  | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0->
+  | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0 ->
      List.fold_left2 bind_typ_pat_arg env tpats typs
   | _, _ -> typ_error l ("Couldn't bind type " ^ string_of_typ typ ^ " with " ^ string_of_typ_pat typ_pat)
 and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
@@ -2583,7 +2583,7 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_arg_aux (typ_
   | _, Typ_arg_typ typ -> bind_typ_pat env typ_pat typ
   | _, Typ_arg_order _ -> typ_error l "Cannot bind type pattern against order"
   | _, _ -> typ_error l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
-                                                        
+
 and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
   let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, Some (env, mk_typ (Typ_id (mk_id "unit")), no_effect))) in
   let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, Some (env, typ, eff))) in
