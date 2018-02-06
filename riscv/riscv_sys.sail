@@ -195,24 +195,24 @@ bitfield Medeleg : bits(64) = {
 register medeleg : Medeleg
 
 /* exception registers */
-register mepc : regval
-register mtval : regval
-register mtvec : regval
-register mcause : regval
-register mscratch : regval
+register mepc : xlenbits
+register mtval : xlenbits
+register mtvec : xlenbits
+register mcause : xlenbits
+register mscratch : xlenbits
 
 /* other registers */
 
-register pmpaddr0 : regval
-register pmpcfg0 : regval
+register pmpaddr0 : xlenbits
+register pmpcfg0 : xlenbits
 /* TODO: this should be readonly, and always 0 for now */
-register mhartid : regval
+register mhartid : xlenbits
 
 /* instruction control flow */
 
 struct sync_exception = {
   trap : ExceptionCode,
-  excinfo : option(regval)
+  excinfo : option(xlenbits)
 }
 
 union ctl_result = {
@@ -246,7 +246,7 @@ function bits_to_priv(b : bits(2)) -> privilege =
 /* handle exceptional ctl flow by updating nextPC */
 
 function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
-                              pc: regval) -> regval =
+                              pc: xlenbits) -> xlenbits =
   /* TODO: check delegation */
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {

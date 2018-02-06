@@ -18,12 +18,12 @@ function clause decode imm : bits(20) @ rd : regbits @ 0b0110111 = Some(UTYPE(im
 function clause decode imm : bits(20) @ rd : regbits @ 0b0010111 = Some(UTYPE(imm, rd, RISCV_AUIPC))
 
 function clause execute UTYPE(imm, rd, op) =
-    let off : bits(64) = EXTS(imm @ 0x000) in
-    let ret : regval   = match op {
+    let off : xlenbits = EXTS(imm @ 0x000) in
+    let ret : xlenbits   = match op {
       RISCV_LUI   => off,
       RISCV_AUIPC => PC + off
     } in
-    wGPR(rd, ret)
+    X(rd) = ret
 
 /* ****************************************************************** */
 
@@ -32,9 +32,9 @@ union clause ast = RISCV_JAL : (bits(21), regbits)
 function clause decode imm : bits(20) @ rd : regbits @ 0b1101111 = Some (RISCV_JAL(imm[19] @ imm[7..0] @ imm[8] @ imm[18..13] @ imm[12..9] @ 0b0, rd))
 
 function clause execute (RISCV_JAL(imm, rd)) = {
-    let pc : bits(64) = PC;
-    wGPR(rd, nextPC);  /* compatible with JAL and C.JAL */
-    let offset : bits(64) = EXTS(imm);
+    let pc : xlenbits = PC;
+    X(rd) = nextPC;  /* compatible with JAL and C.JAL */
+    let offset : xlenbits = EXTS(imm);
     nextPC = pc + offset;
 }
 
@@ -46,8 +46,8 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0
 
 function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     /* write rd before anything else to prevent unintended strength */
-    wGPR(rd, nextPC); /* compatible with JALR, C.JR and C.JALR */
-    let newPC : bits(64) = rGPR(rs1) + EXTS(imm);
+    X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
+    let newPC : xlenbits = X(rs1) + EXTS(imm);
     nextPC = newPC[63..1] @ 0b0;
 }
 
@@ -62,8 +62,8 @@ function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b110 @ 
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b111 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BGEU))
 
 function clause execute (BTYPE(imm, rs2, rs1, op)) =
-  let rs1_val = rGPR(rs1) in
-  let rs2_val = rGPR(rs2) in
+  let rs1_val = X(rs1) in
+  let rs2_val = X(rs2) in
   let taken : bool = match op {
     RISCV_BEQ  => rs1_val == rs2_val,
     RISCV_BNE  => rs1_val != rs2_val,
@@ -86,17 +86,17 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_ANDI))
 
 function clause execute (ITYPE (imm, rs1, rd, op)) =
-  let rs1_val = rGPR(rs1) in
-  let imm64 : bits(64) = EXTS(imm) in
-  let result : bits(64) = match op {
-    RISCV_ADDI  => rs1_val + imm64,
-    RISCV_SLTI  => EXTZ(rs1_val <_s imm64),
-    RISCV_SLTIU => EXTZ(rs1_val <_u imm64),
-    RISCV_XORI  => rs1_val ^ imm64,
-    RISCV_ORI   => rs1_val | imm64,
-    RISCV_ANDI  => rs1_val & imm64
+  let rs1_val = X(rs1) in
+  let immext : xlenbits = EXTS(imm) in
+  let result : xlenbits = match op {
+    RISCV_ADDI  => rs1_val + immext,
+    RISCV_SLTI  => EXTZ(rs1_val <_s immext),
+    RISCV_SLTIU => EXTZ(rs1_val <_u immext),
+    RISCV_XORI  => rs1_val ^ immext,
+    RISCV_ORI   => rs1_val | immext,
+    RISCV_ANDI  => rs1_val & immext
   } in
-  wGPR(rd, result)
+  X(rd) = result
 
 /* ****************************************************************** */
 union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
@@ -106,13 +106,13 @@ function clause decode 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd :
 function clause decode 0b010000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRAI))
 
 function clause execute (SHIFTIOP(shamt, rs1, rd, op)) = 
-    let rs1_val = rGPR(rs1) in
-    let result : bits(64) = match op {
+    let rs1_val = X(rs1) in
+    let result : xlenbits = match op {
       RISCV_SLLI => rs1_val << shamt,
       RISCV_SRLI => rs1_val >> shamt,
       RISCV_SRAI => shift_right_arith64(rs1_val, shamt)
     } in
-    wGPR(rd, result)
+    X(rd) = result
 
 
 /* ****************************************************************** */
@@ -131,9 +131,9 @@ function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : 
 
 
 function clause execute (RTYPE(rs2, rs1, rd, op)) =
-  let rs1_val = rGPR(rs1) in
-  let rs2_val = rGPR(rs2) in
-  let result : bits(64) = match op {
+  let rs1_val = X(rs1) in
+  let rs2_val = X(rs2) in
+  let result : xlenbits = match op {
     RISCV_ADD  => rs1_val + rs2_val,
     RISCV_SUB  => rs1_val - rs2_val,
     RISCV_SLL  => rs1_val << (rs2_val[5..0]),
@@ -145,7 +145,7 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
     RISCV_OR   => rs1_val | rs2_val,
     RISCV_AND  => rs1_val & rs2_val
   } in
-  wGPR(rd, result)
+  X(rd) = result
 
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
@@ -160,8 +160,8 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0
 
 
 function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
-    let addr : bits(64) = rGPR(rs1) + EXTS(imm) in
-    let result : bits(64) = if is_unsigned then
+    let addr : xlenbits = X(rs1) + EXTS(imm) in
+    let result : xlenbits = if is_unsigned then
         match width {
 	  BYTE   => EXTZ(mem_read(addr, 1, aq, rl, false)),
 	  HALF   => EXTZ(mem_read(addr, 2, aq, rl, false)),
@@ -175,7 +175,7 @@ function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
 	  WORD   => EXTS(mem_read(addr, 4, aq, rl, false)),
 	  DOUBLE => mem_read(addr, 8, aq, rl, false)
         } in
-    wGPR(rd, result)
+    X(rd) = result
 
 /* ****************************************************************** */
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
@@ -186,14 +186,14 @@ function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b010 @ 
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b011 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, DOUBLE, false, false))
 
 function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
-    let addr : bits(64) = rGPR(rs1) + EXTS(imm) in {
+    let addr : xlenbits = X(rs1) + EXTS(imm) in {
       match width {
 	BYTE   => mem_write_ea(addr, 1, aq, rl, false),
 	HALF   => mem_write_ea(addr, 2, aq, rl, false),
 	WORD   => mem_write_ea(addr, 4, aq, rl, false),
 	DOUBLE => mem_write_ea(addr, 8, aq, rl, false)
       };
-      let rs2_val = rGPR(rs2) in
+      let rs2_val = X(rs2) in
       match width {
 	BYTE   => mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false),
 	HALF   => mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false),
@@ -209,10 +209,8 @@ union clause ast = ADDIW : (bits(12), regbits, regbits)
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011 = Some(ADDIW(imm, rs1, rd))
 
 function clause execute (ADDIW(imm, rs1, rd)) =
-  let imm64 : bits(64) = EXTS(imm) in
-  let result64 : bits(64) = imm64 + rGPR(rs1) in
-  let result32 : bits(64) = EXTS(result64[31..0]) in
-  wGPR(rd, result32)
+  let result : xlenbits = EXTS(imm) + X(rs1) in
+  X(rd) = EXTS(result[31..0])
 
 /* ****************************************************************** */
 union clause ast = SHIFTW : (bits(5), regbits, regbits, sop)
@@ -222,13 +220,13 @@ function clause decode 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd 
 function clause decode 0b0100000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011 = Some(SHIFTW(shamt, rs1, rd, RISCV_SRAI))
 
 function clause execute (SHIFTW(shamt, rs1, rd, op)) =
-    let rs1_val = (rGPR(rs1))[31..0] in
+    let rs1_val = (X(rs1))[31..0] in
     let result : bits(32) = match op {
       RISCV_SLLI => rs1_val << shamt,
       RISCV_SRLI => rs1_val >> shamt,
       RISCV_SRAI => shift_right_arith32(rs1_val, shamt)
     } in
-    wGPR(rd, EXTS(result))
+    X(rd) = EXTS(result)
 
 /* ****************************************************************** */
 union clause ast = RTYPEW : (regbits, regbits, regbits, ropw)
@@ -240,8 +238,8 @@ function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : 
 function clause decode 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011 = Some(RTYPEW(rs2, rs1, rd, RISCV_SRAW))
 
 function clause execute (RTYPEW(rs2, rs1, rd, op)) =
-  let rs1_val = (rGPR(rs1))[31..0] in
-  let rs2_val = (rGPR(rs2))[31..0] in
+  let rs1_val = (X(rs1))[31..0] in
+  let rs2_val = (X(rs2))[31..0] in
   let result : bits(32) = match op {
     RISCV_ADDW => rs1_val + rs2_val,
     RISCV_SUBW => rs1_val - rs2_val,
@@ -249,7 +247,7 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
     RISCV_SRLW => rs1_val >> (rs2_val[4..0]),
     RISCV_SRAW => shift_right_arith32(rs1_val, rs2_val[4..0])
   } in
-  wGPR(rd, EXTS(result))
+  X(rd) = EXTS(result)
 
 /* ****************************************************************** */
 
@@ -260,13 +258,13 @@ function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b001 @ rd : 
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd,  true,  true, false)) /* MULHSU */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd,  true, false, false)) /* MULHU */
 function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) =
-  let rs1_val = rGPR(rs1) in
-  let rs2_val = rGPR(rs2) in
+  let rs1_val = X(rs1) in
+  let rs2_val = X(rs2) in
   let rs1_int : int = if signed1 then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if signed2 then signed(rs2_val) else unsigned(rs2_val) in
   let result128 = to_bits(128, rs1_int * rs2_int) in
   let result = if high then result128[127..64] else result128[63..0] in
-  wGPR(rd, result)
+  X(rd) = result
 
 /* ****************************************************************** */
 
@@ -274,13 +272,12 @@ union clause ast = DIV : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0110011 = Some(DIV(rs2, rs1, rd,  true))  /* DIV */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011 = Some(DIV(rs2, rs1, rd, false))  /* DIVU */
 function clause execute (DIV(rs2, rs1, rd, s)) =
-  let rs1_val = rGPR(rs1) in
-  let rs2_val = rGPR(rs2) in
+  let rs1_val = X(rs1) in
+  let rs2_val = X(rs2) in
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
   let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int) in
-  let q': int = if s & q > (2 ^ 63 - 1) then  (0 - 2^63) else q in /* check for signed overflow */
-  wGPR(rd, to_bits(64, q'))
+  let q': int = if s & q > xlen_max_signed then xlen_min_signed else q in /* check for signed overflow */  X(rd) = to_bits(xlen, q')
 
 /* ****************************************************************** */
 
@@ -288,26 +285,26 @@ union clause ast = REM : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011 = Some(REM(rs2, rs1, rd,  true))  /* REM */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011 = Some(REM(rs2, rs1, rd, false))  /* REMU */
 function clause execute (REM(rs2, rs1, rd, s)) =
-  let rs1_val = rGPR(rs1) in
-  let rs2_val = rGPR(rs2) in
+  let rs1_val = X(rs1) in
+  let rs2_val = X(rs2) in
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
   let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in
   /* signed overflow case returns zero naturally as required due to -1 divisor */
-  wGPR(rd, to_bits(64, r))
+  X(rd) = to_bits(xlen, r)
 
 /* ****************************************************************** */
 
 union clause ast = MULW : (regbits, regbits, regbits)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011 = Some(MULW(rs2, rs1, rd)) /* MULW */
 function clause execute (MULW(rs2, rs1, rd)) =
-  let rs1_val = rGPR(rs1)[31..0] in
-  let rs2_val = rGPR(rs2)[31..0] in
+  let rs1_val = X(rs1)[31..0] in
+  let rs2_val = X(rs2)[31..0] in
   let rs1_int : int = signed(rs1_val) in
   let rs2_int : int = signed(rs2_val) in
   let result32 = to_bits(64, rs1_int * rs2_int)[31..0] in /* XXX surprising behaviour of to_bits requires exapnsion to 64 bits followed by truncation... */
-  let result64 : regval = EXTS(result32) in
-  wGPR(rd, result64)
+  let result : xlenbits = EXTS(result32) in
+  X(rd) = result
 
 /* ****************************************************************** */
 
@@ -315,13 +312,13 @@ union clause ast = DIVW : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0111011 = Some(DIVW(rs2, rs1, rd,  true))  /* DIVW */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011 = Some(DIVW(rs2, rs1, rd, false))  /* DIVUW */
 function clause execute (DIVW(rs2, rs1, rd, s)) =
-  let rs1_val = rGPR(rs1)[31..0] in
-  let rs2_val = rGPR(rs2)[31..0] in
+  let rs1_val = X(rs1)[31..0] in
+  let rs2_val = X(rs2)[31..0] in
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
   let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int) in
   let q': int = if s & q > (2 ^ 31 - 1) then  (0 - 2^31) else q in /* check for signed overflow */
-  wGPR(rd, EXTS(to_bits(32, q')))
+  X(rd) = EXTS(to_bits(32, q'))
 
 /* ****************************************************************** */
 
@@ -329,13 +326,13 @@ union clause ast = REMW : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0111011 = Some(REMW(rs2, rs1, rd,  true))  /* REMW */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0111011 = Some(REMW(rs2, rs1, rd, false))  /* REMUW */
 function clause execute (REMW(rs2, rs1, rd, s)) =
-  let rs1_val = rGPR(rs1)[31..0] in
-  let rs2_val = rGPR(rs2)[31..0] in
+  let rs1_val = X(rs1)[31..0] in
+  let rs2_val = X(rs2)[31..0] in
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
   let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in
   /* signed overflow case returns zero naturally as required due to -1 divisor */
-  wGPR(rd, EXTS(to_bits(32, r)))
+  X(rd) = EXTS(to_bits(32, r))
 
 /* ****************************************************************** */
 
@@ -373,7 +370,7 @@ function clause execute ECALL =
                       USER => User_ECall,
 		      MACHINE => Machine_ECall
 		    },
-             excinfo = (None : option(regval)) } in
+             excinfo = (None : option(xlenbits)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 
 /* ****************************************************************** */
@@ -398,14 +395,14 @@ function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b010 @
 function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, DOUBLE, rd))
 
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
-  let addr : bits(64) = rGPR(rs1) in
-  let result : bits(64) =
+  let addr : xlenbits = X(rs1) in
+  let result : xlenbits =
       match width {
 	WORD   => EXTS(mem_read(addr, 4, aq, rl, true)),
 	DOUBLE => mem_read(addr, 8, aq, rl, true),
 	_      => internal_error("LOADRES expected WORD or DOUBLE")
       } in
-  wGPR(rd, result)
+  X(rd) = result
 
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
@@ -415,16 +412,16 @@ function clause decode 0b00011 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0
 
 function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   status : bits(1) = if speculate_conditional_success() then 0b0 else 0b1;
-  wGPR(rd) = EXTZ(status);
+  X(rd) = EXTZ(status);
 
   if status == 0b1 then () else {
-    addr : bits(64) = rGPR(rs1);
+    addr : xlenbits = X(rs1);
     match width {
       WORD   => mem_write_ea(addr, 4, aq, rl, true),
       DOUBLE => mem_write_ea(addr, 8, aq, rl, true),
       _      => internal_error("STORECON expected word or double")
     };
-    rs2_val = rGPR(rs2);
+    rs2_val = X(rs2);
     match width {
       WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true),
       DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true),
@@ -456,7 +453,7 @@ function clause decode 0b11100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0
 function clause decode 0b11100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, DOUBLE, rd))
 
 function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
-  addr : bits(64) = rGPR(rs1);
+  addr : xlenbits = X(rs1);
 
   match width {
     WORD   => mem_write_ea(addr, 4, aq & rl, rl, true),
@@ -464,16 +461,16 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
     _      => internal_error ("AMO expected WORD or DOUBLE")
   };
 
-  loaded : bits(64) =
+  loaded : xlenbits =
     match width {
       WORD   => EXTS(mem_read(addr, 4, aq, aq & rl, true)),
       DOUBLE => mem_read(addr, 8, aq, aq & rl, true),
       _      => internal_error ("AMO expected WORD or DOUBLE")
     };
-  wGPR(rd) = loaded;
+  X(rd) = loaded;
 
-  rs2_val : bits(64) = rGPR(rs2);
-  result : bits(64) =
+  rs2_val : xlenbits = X(rs2);
+  result : xlenbits =
     match op {
       AMOSWAP => rs2_val,
       AMOADD  => rs2_val + loaded,
@@ -529,7 +526,7 @@ function isCSRImplemented csr : bits(12) -> bool =
     _     => false
   }
 
-function readCSR csr: bits(12) -> regval =
+function readCSR csr: bits(12) -> xlenbits =
   match csr {
     0x300 => mstatus.bits(),
     0x302 => medeleg.bits(),
@@ -545,7 +542,7 @@ function readCSR csr: bits(12) -> regval =
                0x0000_0000_0000_0000 }
   }
 
-function writeCSR (csr : bits(12), value : bits(64)) -> unit =
+function writeCSR (csr : bits(12), value : xlenbits) -> unit =
   match csr {
     0x300 => mstatus->bits() = value,
     0x302 => medeleg->bits() = value,
@@ -568,13 +565,13 @@ val signalIllegalInstruction : unit -> unit effect {escape}
 function signalIllegalInstruction () = not_implemented ("illegal instruction")
 
 function clause execute CSR(csr, rs1, rd, is_imm, op) =
-  let rs1_val : bits(64) = if is_imm then EXTZ(rs1) else rGPR(rs1) in
+  let rs1_val : xlenbits = if is_imm then EXTZ(rs1) else X(rs1) in
   let isWrite : bool = match op {
     CSRRW  => true,
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
   if ~ (isCSRImplemented(csr) & haveCSRPriv(csr, isWrite)) then {
-    let instr : regval = EXTZ(__RISCV_read(PC, 4));
+    let instr : xlenbits = EXTZ(__RISCV_read(PC, 4));
     let t : sync_exception =
     struct { trap = Illegal_Instr,
              excinfo = Some (instr) } in
@@ -582,14 +579,14 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
   } else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
     if isWrite then {
-      let new_val : bits(64) = match op {
+      let new_val : xlenbits = match op {
         CSRRW => rs1_val,
         CSRRS => csr_val | rs1_val,
         CSRRC => csr_val & ~(rs1_val)
       } in
       writeCSR(csr, new_val)
     };
-    wGPR(rd, csr_val)
+    X(rd) = csr_val
   }
 
 /* ****************************************************************** */
@@ -712,9 +709,9 @@ function clause execute (C_JAL(imm)) = {
 
 function clause execute (C_ADDIW(imm, rsd)) = {
   let imm : bits(32) = EXTS(imm) in
-  let rs_val = rGPR(rsd) in
+  let rs_val = X(rsd) in
   let res : bits(32) = rs_val[31..0] + imm in
-  wGPR(rsd, EXTS(res))
+  X(rsd) = EXTS(res)
 }
 
 /* ****************************************************************** */

@@ -8,7 +8,11 @@ function internal_error(s) = {
     throw (Error_internal_error)
 }
 
-type regval = bits(64)
+let xlen = 64
+type xlenbits = bits(64)
+let xlen_max_unsigned = 2 ^ xlen - 1
+let xlen_max_signed = 2 ^ (xlen - 1) - 1
+let xlen_min_signed = 0 - 2 ^ (xlen - 1)
 
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
@@ -20,82 +24,41 @@ function regbits_to_regno b = let 'r = unsigned(b) in r
 val creg2reg_bits : cregbits -> regbits
 function creg2reg_bits(creg) = 0b10 @ creg
 
-/* register x0 : regval is hard-wired zero */
-register x1 : regval
-register x2 : regval
-register x3 : regval
-register x4 : regval
-register x5 : regval
-register x6 : regval
-register x7 : regval
-register x8 : regval
-register x9 : regval
-register x10 : regval
-register x11 : regval
-register x12 : regval
-register x13 : regval
-register x14 : regval
-register x15 : regval
-register x16 : regval
-register x17 : regval
-register x18 : regval
-register x19 : regval
-register x20 : regval
-register x21 : regval
-register x22 : regval
-register x23 : regval
-register x24 : regval
-register x25 : regval
-register x26 : regval
-register x27 : regval
-register x28 : regval
-register x29 : regval
-register x30 : regval
-register x31 : regval
-
 /* some arch and ABI relevant registers */
 let zreg : regbits = 0b00000
 let ra : regbits = 0b00001  /* x1 */
 let sp : regbits = 0b00010  /* x2 */
 
-register PC : bits(64)
-register nextPC : bits(64)
+register PC : xlenbits
+register nextPC : xlenbits
 
-let GPRs : vector(31, dec, register(regval)) =
-  [ ref x31, ref x30, ref x29, ref x28,
-    ref x27, ref x26, ref x25, ref x24,
-    ref x23, ref x22, ref x21, ref x20,
-    ref x19, ref x18, ref x17, ref x16,
-    ref x15, ref x14, ref x13, ref x12,
-    ref x11, ref x10, ref x9, ref x8,
-    ref x7, ref x6, ref x5, ref x4,
-    ref x3, ref x2, ref x1 /* ref x0 */
-  ]
+register Xs : vector(32, dec, xlenbits)
 
-/* Getters and setters for registers */
-val rGPR : forall 'n, 0 <= 'n < 32. regno('n) -> regval effect {rreg}
+/* Getters and setters for X registers (special case for zeros register, x0) */
+val rX : forall 'n, 0 <= 'n < 32. regno('n) -> xlenbits effect {rreg}
 
-function rGPR 0 = 0x0000000000000000
-and rGPR (r if r > 0) = reg_deref(GPRs[r - 1])
+function rX 0 = 0x0000000000000000
+and rX (r if r > 0) = Xs[r]
 
-/*val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}*/
-val wGPR : forall 'n, 0 <= 'n < 32. (regno('n), regval) -> unit effect {wreg}
+val wX : forall 'n, 0 <= 'n < 32. (regno('n), xlenbits) -> unit effect {wreg}
 
-function wGPR (r, v) = 
+function wX (r, v) =
   if (r != 0) then {
-     (*GPRs[r - 1]) = v;
+     Xs[r] = v;
      print_string("x", concat_str(string_of_int(r), concat_str(" <- ", BitStr(v))));
   }
 
-function check_alignment (addr : bits(64), width : atom('n)) -> forall 'n. unit =
+overload X = {rX, wX}
+
+function check_alignment (addr : xlenbits, width : atom('n)) -> forall 'n. unit =
   if unsigned(addr) % width != 0 then throw(Error_misaligned_access) else ()
 
-val MEMr                         : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_acquire                 : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_strong_acquire          : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_reserved                : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_reserved_acquire        : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_reserved_strong_acquire : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr                         : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_acquire                 : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_strong_acquire          : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_reserved                : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_reserved_acquire        : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
+val MEMr_reserved_strong_acquire : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
 
 function MEMr                         (addr, width) = __RISCV_read(addr, width)
 function MEMr_acquire                 (addr, width) = __RISCV_read(addr, width)
@@ -104,7 +67,7 @@ function MEMr_reserved                (addr, width) = __RISCV_read(addr, width)
 function MEMr_reserved_acquire        (addr, width) = __RISCV_read(addr, width)
 function MEMr_reserved_strong_acquire (addr, width) = __RISCV_read(addr, width)
 
-val mem_read : forall 'n. (bits(64), atom('n), bool, bool, bool) -> bits(8 * 'n) effect {rmem, escape}
+val mem_read : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> bits(8 * 'n) effect {rmem, escape}
 
 function mem_read (addr, width, aq, rl, res) = {
   if aq | res then check_alignment(addr, width);
@@ -122,19 +85,19 @@ function mem_read (addr, width, aq, rl, res) = {
 }
 
 val MEMea = {ocaml: "memea", lem: "MEMea"} : forall 'n.
-  (bits(64), atom('n)) -> unit effect {eamem}
+  (xlenbits, atom('n)) -> unit effect {eamem}
 val MEMea_release = {ocaml: "memea", lem: "MEMea_release"} : forall 'n.
-  (bits(64), atom('n)) -> unit effect {eamem}
+  (xlenbits, atom('n)) -> unit effect {eamem}
 val MEMea_strong_release = {ocaml: "memea", lem: "MEMea_strong_release"} : forall 'n.
-  (bits(64), atom('n)) -> unit effect {eamem}
+  (xlenbits, atom('n)) -> unit effect {eamem}
 val MEMea_conditional = {ocaml: "memea", lem: "MEMea_conditional"} : forall 'n.
-  (bits(64), atom('n)) -> unit effect {eamem}
+  (xlenbits, atom('n)) -> unit effect {eamem}
 val MEMea_conditional_release = {ocaml: "memea", lem: "MEMea_conditional_release"} : forall 'n.
-  (bits(64), atom('n)) -> unit effect {eamem}
+  (xlenbits, atom('n)) -> unit effect {eamem}
 val MEMea_conditional_strong_release = {ocaml: "memea", lem: "MEMea_conditional_strong_release"} : forall 'n.
-  (bits(64), atom('n)) -> unit effect {eamem}
+  (xlenbits, atom('n)) -> unit effect {eamem}
 
-val mem_write_ea : forall 'n. (bits(64), atom('n), bool, bool, bool) -> unit effect {eamem, escape}
+val mem_write_ea : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> unit effect {eamem, escape}
 
 function mem_write_ea (addr, width, aq, rl, con) = {
   if rl | con then check_alignment(addr, width);
@@ -151,12 +114,12 @@ function mem_write_ea (addr, width, aq, rl, con) = {
   }
 }
 
-val MEMval                            : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_release                    : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_strong_release             : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_conditional                : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_conditional_release        : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_conditional_strong_release : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval                            : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_release                    : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_strong_release             : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_conditional                : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_conditional_release        : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
+val MEMval_conditional_strong_release : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
 
 function MEMval                            (addr, width, data) = __RISCV_write(addr, width, data)
 function MEMval_release                    (addr, width, data) = __RISCV_write(addr, width, data)
@@ -165,7 +128,7 @@ function MEMval_conditional                (addr, width, data) = __RISCV_write(a
 function MEMval_conditional_release        (addr, width, data) = __RISCV_write(addr, width, data)
 function MEMval_conditional_strong_release (addr, width, data) = __RISCV_write(addr, width, data)
 
-val mem_write_value : forall 'n. (bits(64), atom('n), bits(8 * 'n), bool, bool, bool) -> unit effect {wmv, escape}
+val mem_write_value : forall 'n. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> unit effect {wmv, escape}
 
 function mem_write_value (addr, width, value, aq, rl, con) = {
   if rl | con then check_alignment(addr, width);
@@ -203,10 +166,10 @@ enum word_width = {BYTE, HALF, WORD, DOUBLE}
 
 /* Ideally these would be sail builtin */
 
-function shift_right_arith64 (v : bits(64), shift : bits(6)) -> bits(64) =
+function shift_right_arith64 (v : xlenbits, shift : bits(6)) -> xlenbits =
     let v128 : bits(128) = EXTS(v) in
     (v128 >> shift)[63..0]
 
 function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
-    let v64 : bits(64) = EXTS(v) in
+    let v64 : xlenbits = EXTS(v) in
     (v64 >> shift)[31..0]
