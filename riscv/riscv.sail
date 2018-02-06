@@ -46,7 +46,7 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0
 
 function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     /* write rd before anything else to prevent unintended strength */
-    wGPR(rd, PC + 4);
+    wGPR(rd, nextPC); /* compatible with JALR, C.JR and C.JALR */
     let newPC : bits(64) = rGPR(rs1) + EXTS(imm);
     nextPC = newPC[63..1] @ 0b0;
 }
@@ -906,6 +906,132 @@ function clause decodeCompressed (0b111 @ i8 : bits(1) @ i43 : bits(2) @ rs : cr
 
 function clause execute (C_BNEZ(imm, rs)) =
   execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BNE))
+
+/* ****************************************************************** */
+
+union clause ast = C_SLLI : (bits(6), regbits)
+
+function clause decodeCompressed (0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui40 : bits(5) @ 0b10) = {
+  let shamt : bits(6) = nzui5 @ nzui40 in
+  if shamt == 0b000000 | rsd == zreg /* TODO: On RV32, also need shamt[5] == 0 */
+  then None
+  else Some(C_SLLI(shamt, rsd))
+}
+
+function clause execute (C_SLLI(shamt, rsd)) =
+  execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SLLI))
+
+/* ****************************************************************** */
+
+union clause ast = C_LWSP : (bits(6), regbits)
+
+function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10) = {
+  let uimm : bits(6) = ui76 @ ui5 @ ui42 in
+  if  rd == zreg
+  then None
+  else Some(C_LWSP(uimm, rd))
+}
+
+function clause execute (C_LWSP(uimm, rd)) = {
+  let imm : bits(12) = EXTZ(uimm @ 0b00) in
+  execute(LOAD(imm, sp, rd, false, WORD, false, false))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_LDSP : (bits(6), regbits)
+
+function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) = {
+  let uimm : bits(6) = ui86 @ ui5 @ ui43 in
+  if  rd == zreg
+  then None
+  else Some(C_LDSP(uimm, rd))
+}
+
+function clause execute (C_LDSP(uimm, rd)) = {
+  let imm : bits(12) = EXTZ(uimm @ 0b000) in
+  execute(LOAD(imm, sp, rd, false, DOUBLE, false, false))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_SWSP : (bits(6), regbits)
+
+function clause decodeCompressed (0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ rs2 : regbits @ 0b10) = {
+  let uimm : bits(6) = ui76 @ ui52 in
+  Some(C_SWSP(uimm, rs2))
+}
+
+function clause execute (C_SWSP(uimm, rs2)) = {
+  let imm : bits(12) = EXTZ(uimm @ 0b00) in
+  execute(STORE(imm, rs2, sp, WORD, false, false))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_SDSP : (bits(6), regbits)
+
+function clause decodeCompressed (0b111 @ ui53 : bits(3) @ ui86 : bits(3) @ rs2 : regbits @ 0b10) = {
+  let uimm : bits(6) = ui86 @ ui53 in
+  Some(C_SDSP(uimm, rs2))
+}
+
+function clause execute (C_SDSP(uimm, rs2)) = {
+  let imm : bits(12) = EXTZ(uimm @ 0b000) in
+  execute(STORE(imm, rs2, sp, DOUBLE, false, false))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_JR : (regbits)
+
+function clause decodeCompressed (0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10) = {
+  if rs1 == zreg
+  then None
+  else Some(C_JR(rs1))
+}
+
+function clause execute (C_JR(rs1)) =
+  execute(RISCV_JALR(EXTZ(0b0), rs1, zreg))
+
+/* ****************************************************************** */
+
+union clause ast = C_JALR : (regbits)
+
+function clause decodeCompressed (0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10) = {
+  if rs1 == zreg
+  then None
+  else Some(C_JALR(rs1))
+}
+
+function clause execute (C_JALR(rs1)) =
+  execute(RISCV_JALR(EXTZ(0b0), rs1, ra))
+
+/* ****************************************************************** */
+
+union clause ast = C_MV : (regbits, regbits)
+
+function clause decodeCompressed (0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0b10) = {
+  if rs2 == zreg | rd == zreg
+  then None
+  else Some(C_MV(rd, rs2))
+}
+
+function clause execute (C_MV(rd, rs2)) =
+  execute(RTYPE(rs2, zreg, rd, RISCV_ADD))
+
+/* ****************************************************************** */
+
+union clause ast = C_ADD : (regbits, regbits)
+
+function clause decodeCompressed (0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10) = {
+  if rsd == zreg | rs2 == zreg
+  then None
+  else Some(C_ADD(rsd, rs2))
+}
+
+function clause execute (C_ADD(rsd, rs2)) =
+  execute(RTYPE(rs2, rsd, rsd, RISCV_ADD))
 
 /* ****************************************************************** */
 
