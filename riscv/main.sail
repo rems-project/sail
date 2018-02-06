@@ -56,6 +56,7 @@ function dump_state () : unit -> unit = {
 function main () = {
   PC = __GetSlice_int(64, elf_entry(), 0);
   try {
+    init_sys ();
     fetch_and_execute()
   } catch {
     Error_not_implemented(s) => print_string("Error: Not implemented: ", s),

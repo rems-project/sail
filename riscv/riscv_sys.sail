@@ -346,3 +346,8 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
       mepc
     }
   }
+
+function init_sys () : unit -> unit = {
+  cur_privilege = MACHINE;
+  misa->C() = true;
+}
