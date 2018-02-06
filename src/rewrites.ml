@@ -2684,7 +2684,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let lvar_typ = mk_typ (Typ_exist ([lvar_kid], lvar_nc, atom_typ (nvar lvar_kid))) in
        let lvar_pat = P_typ (lvar_typ, annot_pat (P_var (
          annot_pat (P_id id) el env (atom_typ (nvar lvar_kid)),
-         TP_var lvar_kid)) el env lvar_typ) in
+         TP_aux (TP_var lvar_kid, gen_loc el))) el env lvar_typ) in
        let lb = annot_letbind (lvar_pat, exp1) el env lvar_typ in
        let body = annot_exp (E_let (lb, exp4)) el env (typ_of exp4) in
        let v = annot_exp (E_app (mk_id "foreach", [exp1; exp2; exp3; ord_exp; tuple_exp vars; body])) el env (typ_of body) in

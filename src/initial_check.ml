@@ -434,10 +434,10 @@ let to_ast_lit (Parse_ast.L_aux(lit,l)) : lit =
 
 let rec to_ast_typ_pat (Parse_ast.ATyp_aux (typ_aux, l)) =
   match typ_aux with
-  | Parse_ast.ATyp_wild -> TP_wild
-  | Parse_ast.ATyp_var kid -> TP_var (to_ast_var kid)
+  | Parse_ast.ATyp_wild -> TP_aux (TP_wild, l)
+  | Parse_ast.ATyp_var kid -> TP_aux (TP_var (to_ast_var kid), l)
   | Parse_ast.ATyp_app (f, typs) ->
-     TP_app (to_ast_id f, List.map to_ast_typ_pat typs)
+     TP_aux (TP_app (to_ast_id f, List.map to_ast_typ_pat typs), l)
   | _ -> typ_error l "Unexpected type in type pattern" None None None
                                      
 let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pat,l) : Parse_ast.pat) : unit pat =

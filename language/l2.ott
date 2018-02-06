@@ -518,6 +518,7 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
 
 typ_pat :: 'TP_' ::=
   {{ com type pattern }}
+  {{ aux _ l }}
   | _                               :: :: wild
   | kid                             :: :: var
   | id ( typ_pat1 , .. , typ_patn ) :: :: app

@@ -669,7 +669,8 @@ and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
   | Pat_exp (pat, exp) -> string_of_pat pat ^ " -> " ^ string_of_exp exp
   | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " when " ^ string_of_exp guard ^ " -> " ^ string_of_exp exp
-and string_of_typ_pat = function
+and string_of_typ_pat (TP_aux (tpat_aux, _)) =
+  match tpat_aux with
   | TP_wild -> "_"
   | TP_var kid -> string_of_kid kid
   | TP_app (f, tpats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_typ_pat tpats ^ ")"

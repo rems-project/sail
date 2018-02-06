@@ -2414,7 +2414,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           env, atom_typ (nvar kid)
        | None, _ -> typ_error l ("Cannot bind type variable against non existential or numeric type")
      in
-     let env = bind_typ_pat l env typ_pat ex_typ in
+     let env = bind_typ_pat env typ_pat ex_typ in
      let typed_pat, env, guards = bind_pat env pat ex_typ in
      annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
   | P_wild -> annot_pat P_wild typ, env, []
@@ -2559,8 +2559,8 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      guards
   | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
-and bind_typ_pat l env typ_pat (Typ_aux (typ_aux, _) as typ) =
-  match typ_pat, typ_aux with
+and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) as typ) =
+  match typ_pat_aux, typ_aux with
   | TP_wild, _ -> env
   | TP_var kid, _ ->
      begin
@@ -2573,14 +2573,14 @@ and bind_typ_pat l env typ_pat (Typ_aux (typ_aux, _) as typ) =
           typ_error l ("Type " ^ string_of_typ typ ^ " has multiple numeric expressions. Cannot bind " ^ string_of_kid kid)
      end
   | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0->
-     List.fold_left2 (bind_typ_pat_arg l) env tpats typs
+     List.fold_left2 bind_typ_pat_arg env tpats typs
   | _, _ -> typ_error l ("Couldn't bind type " ^ string_of_typ typ ^ " with " ^ string_of_typ_pat typ_pat)
-and bind_typ_pat_arg l env typ_pat (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
-  match typ_pat, typ_arg_aux with
+and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
+  match typ_pat_aux, typ_arg_aux with
   | TP_wild, _ -> env
   | TP_var kid, Typ_arg_nexp nexp ->
      Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var kid BK_nat env)
-  | _, Typ_arg_typ typ -> bind_typ_pat l env typ_pat typ
+  | _, Typ_arg_typ typ -> bind_typ_pat env typ_pat typ
   | _, Typ_arg_order _ -> typ_error l "Cannot bind type pattern against order"
   | _, _ -> typ_error l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
                                                         
