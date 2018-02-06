@@ -6,7 +6,7 @@ type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
 
 val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
-function regbits_to_regno b = let 'r = unsigned(b) in r
+function regbits_to_regno b = let r as atom(_) = unsigned(b) in r
 
 /* Architectural state */
 
