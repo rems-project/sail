@@ -461,7 +461,7 @@ let gt (x, y) = Big_int.greater x y
 let lteq (x, y) = Big_int.less_equal x y
 let gteq (x, y) = Big_int.greater_equal x y
 
-let pow2 x = Big_int.pow_int x 2
+let pow2 x = Big_int.pow_int (Big_int.of_int 2) (Big_int.to_int x)
 
 let max_int (x, y) = Big_int.max x y
 let min_int (x, y) = Big_int.min x y
