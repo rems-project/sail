@@ -1261,6 +1261,21 @@ let order_frees (Ord_aux (ord_aux, l)) =
   | Ord_var kid -> KidSet.singleton kid
   | _ -> KidSet.empty
 
+let rec typ_nexps (Typ_aux (typ_aux, l)) =
+  match typ_aux with
+  | Typ_id v -> []
+  | Typ_var kid -> []
+  | Typ_tup typs -> List.concat (List.map typ_nexps typs)
+  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
+  | Typ_exist (kids, nc, typ) -> typ_nexps typ
+  | Typ_fn (typ1, typ2, _) ->
+     typ_nexps typ1 @ typ_nexps typ2
+and typ_arg_nexps (Typ_arg_aux (typ_arg_aux, l)) =
+  match typ_arg_aux with
+  | Typ_arg_nexp n -> [n]
+  | Typ_arg_typ typ -> typ_nexps typ
+  | Typ_arg_order ord -> []
+  
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id v -> KidSet.empty
@@ -2372,40 +2387,36 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
           end
      end
-  | P_var (pat, TP_var kid) ->
+  | P_var (pat, typ_pat) ->
      let typ = Env.expand_synonyms env typ in
-     begin
-       match destruct_exist env typ, typ with
-       | Some ([kid'], nc, ex_typ), _ ->
-          let env = Env.add_typ_var kid BK_nat env in
-          let ex_typ = typ_subst_nexp kid' (Nexp_var kid) ex_typ in
-          let env = Env.add_constraint (nc_subst_nexp kid' (Nexp_var kid) nc) env in
-          let typed_pat, env, guards = bind_pat env pat ex_typ in
-          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
-       | Some _, _ -> typ_error l ("Cannot bind type variable pattern against multiple argument existential")
-       | None, Typ_aux (Typ_id id, _) when Id.compare id (mk_id "int") == 0 ->
-          let env = Env.add_typ_var kid BK_nat env in
-          let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
-       | None, Typ_aux (Typ_id id, _) when Id.compare id (mk_id "nat") == 0 ->
+     let kid = Env.fresh_kid env in
+     let env, ex_typ = match destruct_exist env typ, typ with
+       | Some (kids, nc, ex_typ), _ ->
+          let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
+          let env = Env.add_constraint nc env in
+          env, ex_typ
+       | None, Typ_aux (Typ_id id, _) when string_of_id id = "int" ->
+          Env.add_typ_var kid BK_nat env, atom_typ (nvar kid)
+       | None, Typ_aux (Typ_id id, _) when string_of_id id = "nat" ->
           let env = Env.add_typ_var kid BK_nat env in
           let env = Env.add_constraint (nc_gt (nvar kid) (nint 0)) env in
-          let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
+          env, atom_typ (nvar kid)
        | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp lo, _); Typ_arg_aux (Typ_arg_nexp hi, _)]), _)
-            when Id.compare id (mk_id "range") == 0 ->
+            when string_of_id id = "range" ->
           let env = Env.add_typ_var kid BK_nat env in
-          let env = Env.add_constraint (nc_and (nc_lteq lo (nvar kid)) (nc_lteq (nvar kid) hi)) env in
-          let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
+          let env = Env.add_constraint (nc_lteq lo (nvar kid)) env in
+          let env = Env.add_constraint (nc_lteq (nvar kid) hi) env in
+          env, atom_typ (nvar kid)
        | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
-            when Id.compare id (mk_id "atom") == 0 ->
+            when string_of_id id = "atom" ->
           let env = Env.add_typ_var kid BK_nat env in
           let env = Env.add_constraint (nc_eq (nvar kid) n) env in
-          let typed_pat, env, guards = bind_pat env pat (atom_typ (nvar kid)) in
-          annot_pat (P_var (typed_pat, TP_var kid)) typ, env, guards
+          env, atom_typ (nvar kid)
        | None, _ -> typ_error l ("Cannot bind type variable against non existential or numeric type")
-     end
+     in
+     let env = bind_typ_pat l env typ_pat ex_typ in
+     let typed_pat, env, guards = bind_pat env pat ex_typ in
+     annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
   | P_wild -> annot_pat P_wild typ, env, []
   | P_cons (hd_pat, tl_pat) ->
      begin
@@ -2548,6 +2559,31 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      guards
   | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
+and bind_typ_pat l env typ_pat (Typ_aux (typ_aux, _) as typ) =
+  match typ_pat, typ_aux with
+  | TP_wild, _ -> env
+  | TP_var kid, _ ->
+     begin
+       match typ_nexps typ with
+       | [nexp] ->
+          Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var kid BK_nat env)
+       | [] ->
+          typ_error l ("No numeric expressions in " ^ string_of_typ typ ^ " to bind " ^ string_of_kid kid ^ " to")
+       | nexps ->
+          typ_error l ("Type " ^ string_of_typ typ ^ " has multiple numeric expressions. Cannot bind " ^ string_of_kid kid)
+     end
+  | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0->
+     List.fold_left2 (bind_typ_pat_arg l) env tpats typs
+  | _, _ -> typ_error l ("Couldn't bind type " ^ string_of_typ typ ^ " with " ^ string_of_typ_pat typ_pat)
+and bind_typ_pat_arg l env typ_pat (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
+  match typ_pat, typ_arg_aux with
+  | TP_wild, _ -> env
+  | TP_var kid, Typ_arg_nexp nexp ->
+     Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var kid BK_nat env)
+  | _, Typ_arg_typ typ -> bind_typ_pat l env typ_pat typ
+  | _, Typ_arg_order _ -> typ_error l "Cannot bind type pattern against order"
+  | _, _ -> typ_error l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
+                                                        
 and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
   let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, Some (env, mk_typ (Typ_id (mk_id "unit")), no_effect))) in
   let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, Some (env, typ, eff))) in

@@ -512,6 +512,8 @@ typ9r:
 atomic_typ:
   | id
     { mk_typ (ATyp_id $1) $startpos $endpos }
+  | Under
+    { mk_typ ATyp_wild $startpos $endpos }
   | kid
     { mk_typ (ATyp_var $1) $startpos $endpos }
   | Num
@@ -654,9 +656,7 @@ pat_concat:
 pat:
   | pat1
     { $1 }
-  | pat1 As id
-    { mk_pat (P_as ($1, $3)) $startpos $endpos }
-  | pat1 As kid
+  | pat1 As typ
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
 
 pat_list:
@@ -673,7 +673,8 @@ atomic_pat:
   | id
     { mk_pat (P_id $1) $startpos $endpos }
   | kid
-    { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos, $1)) $startpos $endpos }
+    { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos,
+		     mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | atomic_pat Colon typ

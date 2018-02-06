@@ -150,6 +150,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_default_ord (* default order for increasing or decreasing signficant bits *)
  | ATyp_set of (base_effect) list (* effect set *)
  | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
+ | ATyp_wild
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
  | ATyp_exist of kid list * n_constraint * atyp
@@ -239,10 +240,9 @@ type
 pat_aux =  (* Pattern *)
    P_lit of lit (* literal constant pattern *)
  | P_wild (* wildcard *)
- | P_as of pat * id (* named pattern *)
  | P_typ of atyp * pat (* typed pattern *)
  | P_id of id (* identifier *)
- | P_var of pat * kid (* bind pat to type variable *)
+ | P_var of pat * atyp (* bind pat to type variable *)
  | P_app of id * (pat) list (* union constructor pattern *)
  | P_record of (fpat) list * bool (* struct pattern *)
  | P_vector of (pat) list (* vector pattern *)
