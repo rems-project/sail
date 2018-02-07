@@ -57,6 +57,9 @@ let msb = most_significant
 val int_of_vec : forall 'a. Size 'a => bool -> mword 'a -> integer
 let int_of_vec = int_of_bv
 
+val string_of_vec : forall 'a. Size 'a => mword 'a -> string
+let string_of_vec = string_of_bv
+
 val and_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val or_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val xor_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a

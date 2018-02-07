@@ -57,6 +57,9 @@ let msb = most_significant
 val int_of_vec : bool -> list bitU -> integer
 let int_of_vec = int_of_bv
 
+val string_of_vec : list bitU -> string
+let string_of_vec = string_of_bv
+
 val and_vec : list bitU -> list bitU -> list bitU
 val or_vec  : list bitU -> list bitU -> list bitU
 val xor_vec : list bitU -> list bitU -> list bitU

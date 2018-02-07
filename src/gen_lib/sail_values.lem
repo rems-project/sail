@@ -498,6 +498,9 @@ let extz_bv n v = of_bits (extz_bits n (bits_of v))
 val exts_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b => integer -> 'a -> 'b
 let exts_bv n v = of_bits (exts_bits n (bits_of v))
 
+val string_of_bv : forall 'a. Bitvector 'a => 'a -> string
+let string_of_bv v = show_bitlist (bits_of v)
+
 (*** Bytes and addresses *)
 
 val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
