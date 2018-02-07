@@ -22,7 +22,7 @@ val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
 function regbits_to_regno b = let 'r = unsigned(b) in r
 
 val creg2reg_bits : cregbits -> regbits
-function creg2reg_bits(creg) = 0b10 @ creg
+function creg2reg_bits(creg) = 0b01 @ creg
 
 /* some arch and ABI relevant registers */
 let zreg : regbits = 0b00000

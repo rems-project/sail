@@ -594,8 +594,8 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
 union clause ast = NOP
 
 function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bits(5)) @ 0b01) : bits(16) = {
-  if (nzi1 == 0b0) & (nzi0 == 0b00000) then None
-  else Some(NOP)
+  if (nzi1 == 0b0) & (nzi0 == 0b00000) then Some(NOP)
+  else None
 }
 
 function clause execute (NOP) = ()
@@ -642,7 +642,23 @@ function clause execute (C_LW(uimm, rsc, rdc)) = {
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   let rd = creg2reg_bits(rdc) in
   let rs = creg2reg_bits(rsc) in
-  execute(LOAD(imm, rs, rd, true, WORD, false, false))
+  execute(LOAD(imm, rs, rd, false, WORD, false, false))
+}
+
+/* ****************************************************************** */
+
+union clause ast = C_LD : (bits(5), cregbits, cregbits)
+
+function clause decodeCompressed (0b011 @ ui53 : bits(3) @ rs1 : cregbits @ ui76 : bits(2) @ rd : cregbits @ 0b00) : bits(16) = {
+  let uimm = (ui76 @ ui53) : bits(5) in
+  Some(C_LD(uimm, rs1, rd))
+}
+
+function clause execute (C_LD(uimm, rsc, rdc)) = {
+  let imm : bits(12) = EXTZ(uimm @ 0b000) in
+  let rd = creg2reg_bits(rdc) in
+  let rs = creg2reg_bits(rsc) in
+  execute(LOAD(imm, rs, rd, false, DOUBLE, false, false))
 }
 
 /* ****************************************************************** */
@@ -818,7 +834,7 @@ union clause ast = C_XOR : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_XOR(rsd, rs2))
 
-function clause execute (C_SUB(rsd, rs2)) = {
+function clause execute (C_XOR(rsd, rs2)) = {
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_XOR))
@@ -842,10 +858,10 @@ union clause ast = C_AND : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b11 @ rs2 : cregbits @ 0b01) = Some(C_AND(rsd, rs2))
 
-function clause execute (C_OR(rsd, rs2)) = {
+function clause execute (C_AND(rsd, rs2)) = {
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
-  execute(RTYPE(rs2, rsd, rsd, RISCV_OR))
+  execute(RTYPE(rs2, rsd, rsd, RISCV_AND))
 }
 
 /* ****************************************************************** */
@@ -858,7 +874,7 @@ function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b00 @ r
 function clause execute (C_SUBW(rsd, rs2)) = {
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
-  execute(RTYPE(rs2, rsd, rsd, RISCV_SUB))
+  execute(RTYPEW(rs2, rsd, rsd, RISCV_SUBW))
 }
 
 /* ****************************************************************** */
@@ -871,7 +887,7 @@ function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b01 @ r
 function clause execute (C_ADDW(rsd, rs2)) = {
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
-  execute(RTYPE(rs2, rsd, rsd, RISCV_ADD))
+  execute(RTYPEW(rs2, rsd, rsd, RISCV_ADDW))
 }
 
 /* ****************************************************************** */
@@ -938,7 +954,7 @@ function clause execute (C_LWSP(uimm, rd)) = {
 
 union clause ast = C_LDSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) = {
+function clause decodeCompressed (0b011 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) = {
   let uimm : bits(6) = ui86 @ ui5 @ ui43 in
   if  rd == zreg
   then None
