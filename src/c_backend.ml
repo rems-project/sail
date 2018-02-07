@@ -59,6 +59,9 @@ let c_verbosity = ref 1
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline str else ()
 
+let c_error ?loc:(l=Parse_ast.Unknown) message =
+  raise (Reporting_basic.err_general l ("C backend: " ^ message))
+
 let zencode_id = function
   | Id_aux (Id str, l) -> Id_aux (Id (Util.zencode_string str), l)
   | Id_aux (DeIid str, l) -> Id_aux (Id (Util.zencode_string ("op " ^ str)), l)
@@ -318,16 +321,16 @@ let rec split_block = function
   | exp :: exps ->
      let exps, last = split_block exps in
      exp :: exps, last
-  | [] -> failwith "empty block"
+  | [] -> c_error "empty block"
 
-let rec anf_pat (P_aux (p_aux, _) as pat) =
+let rec anf_pat (P_aux (p_aux, (l, _)) as pat) =
   match p_aux with
   | P_id id -> AP_id id
   | P_wild -> AP_wild
   | P_tup pats -> AP_tup (List.map anf_pat pats)
   | P_app (id, [pat]) -> AP_app (id, anf_pat pat)
   | P_app (id, pats) -> AP_app (id, AP_tup (List.map anf_pat pats))
-  | _ -> failwith ("anf_pat: " ^ string_of_pat pat)
+  | _ -> c_error ~loc:l ("anf_pat: " ^ string_of_pat pat)
 
 let rec anf (E_aux (e_aux, exp_annot) as exp) =
   let to_aval = function
@@ -361,6 +364,9 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
   | E_assign (LEXP_aux (LEXP_id id, _), exp) ->
      let aexp = anf exp in
      AE_assign (id, lvar_typ (Env.lookup_id id (env_of exp)), aexp)
+
+  | E_assign (lexp, _) ->
+     failwith ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
 
   | E_loop (loop_typ, cond, exp) ->
      let acond = anf cond in
@@ -415,20 +421,20 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
      let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
      wrap (AE_app (id, List.map fst avals, typ_of exp))
 
-  | E_throw exp ->
-     let aexp = anf exp in
+  | E_throw exn_exp ->
+     let aexp = anf exn_exp in
      let aval, wrap = to_aval aexp in
-     wrap (AE_throw (aval, unit_typ))
+     wrap (AE_throw (aval, typ_of exp))
 
   | E_exit exp ->
      let aexp = anf exp in
      let aval, wrap = to_aval aexp in
      wrap (AE_app (mk_id "exit", [aval], unit_typ))
 
-  | E_return exp ->
-     let aexp = anf exp in
+  | E_return ret_exp ->
+     let aexp = anf ret_exp in
      let aval, wrap = to_aval aexp in
-     wrap (AE_return (aval, unit_typ))
+     wrap (AE_return (aval, typ_of exp))
 
   | E_assert (exp1, exp2) ->
      let aexp1 = anf exp1 in
@@ -454,10 +460,6 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
   | E_ref id ->
      let lvar = Env.lookup_id id (env_of exp) in
      AE_val (AV_ref (id, lvar))
-
-  | E_return exp ->
-     let aval, wrap = to_aval (anf exp) in
-     wrap (AE_return (aval, typ_of exp))
 
   | E_case (match_exp, pexps) ->
      let match_aval, match_wrap = to_aval (anf match_exp) in
@@ -488,6 +490,9 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
      let lvar = Env.lookup_id id env in
      AE_let (id, lvar_typ lvar, anf binding, anf body, typ_of exp)
 
+  | E_var (lexp, _, _) ->
+     failwith ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
+
   | E_let (LB_aux (LB_val (pat, binding), _), body) ->
      anf (E_aux (E_case (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, None))]), exp_annot))
 
@@ -515,7 +520,14 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
      (* We don't compile E_nondet nodes *)
      failwith "encountered E_nondet node when converting to ANF"
 
-  | _ -> failwith ("Cannot convert to ANF: " ^ string_of_exp exp)
+  | E_comment _ | E_comment_struc _ ->
+     (* comment AST nodes not-supported *)
+     failwith "encountered E_comment or E_comment_struc node when converting to ANF"
+
+  | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_plet _ | E_internal_return _ | E_internal_exp_user _ ->
+     failwith "encountered unexpected internal node when converting to ANF"
+
+  | E_record _ -> failwith ("Cannot convert to ANF: " ^ string_of_exp exp)
 
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
@@ -527,6 +539,9 @@ let min_int64 = Big_int.of_int64 Int64.min_int
 type ctyp =
   (* Arbitrary precision GMP integer, mpz_t in C. *)
   | CT_mpz
+  (* The real type in sail. Abstract here, but implemented using
+     either GMP rationals or high-precision floating point. *)
+  | CT_real
   (* Variable length bitvector - flag represents direction, inc or dec *)
   | CT_bv of bool
   (* Fixed length bitvector that fits within a 64-bit word. - int
@@ -578,8 +593,11 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_variant (id1, _), CT_variant (id2, _) -> Id.compare id1 id2 = 0
   | CT_tup ctyps1, CT_tup ctyps2 -> List.for_all2 ctyp_equal ctyps1 ctyps2
   | CT_string, CT_string -> true
+  | CT_real, CT_real -> true
   | _, _ -> false
 
+(* String representation of ctyps here is only for debugging and
+   intermediate language pretty-printer. *)
 let rec string_of_ctyp = function
   | CT_mpz -> "mpz_t"
   | CT_bv true -> "bv_t<dec>"
@@ -590,13 +608,14 @@ let rec string_of_ctyp = function
   | CT_int -> "int"
   | CT_unit -> "unit"
   | CT_bool -> "bool"
+  | CT_real -> "real"
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " string_of_ctyp ctyps ^ ")"
   | CT_struct (id, _) | CT_enum (id, _) | CT_variant (id, _) -> string_of_id id
   | CT_string -> "string"
 
-(* Convert a sail type into a C-type *)
+(** Convert a sail type into a C-type **)
 let rec ctyp_of_typ ctx typ =
-  let Typ_aux (typ_aux, _) as typ = Env.expand_synonyms ctx.tc_env typ in
+  let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
   match typ_aux with
   | Typ_id id when string_of_id id = "bit" -> CT_int
   | Typ_id id when string_of_id id = "bool" -> CT_bool
@@ -624,6 +643,7 @@ let rec ctyp_of_typ ctx typ =
      end
   | Typ_id id when string_of_id id = "unit" -> CT_unit
   | Typ_id id when string_of_id id = "string" -> CT_string
+  | Typ_id id when string_of_id id = "real" -> CT_real
 
   | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records)
   | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants)
@@ -633,11 +653,11 @@ let rec ctyp_of_typ ctx typ =
 
   | Typ_exist (_, _, typ) -> ctyp_of_typ ctx typ
 
-  | _ -> failwith ("No C-type for type " ^ string_of_typ typ)
+  | _ -> c_error ~loc:l ("No C-type for type " ^ string_of_typ typ)
 
 let rec is_stack_ctyp ctyp = match ctyp with
   | CT_uint64 _ | CT_int64 | CT_int | CT_unit | CT_bool | CT_enum _ -> true
-  | CT_bv _ | CT_mpz | CT_string _ -> false
+  | CT_bv _ | CT_mpz | CT_real | CT_string -> false
   | CT_struct (_, fields) -> Bindings.for_all (fun _ ctyp -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> Bindings.for_all (fun _ ctyp -> is_stack_ctyp ctyp) ctors
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
@@ -829,6 +849,7 @@ type clexp =
   | CL_id of id
   | CL_field of id * id
   | CL_addr of clexp
+  | CL_raw of string
 
 type instr =
   | I_decl of ctyp * id
@@ -898,6 +919,7 @@ let rec pp_clexp = function
   | CL_id id -> pp_id id
   | CL_field (id, field) -> pp_id id ^^ string "." ^^ pp_id field
   | CL_addr clexp -> string "*" ^^ pp_clexp clexp
+  | CL_raw str -> string str
 
 let rec pp_instr = function
   | I_decl (ctyp, id) ->
@@ -945,6 +967,10 @@ let rec pp_instr = function
 
 let is_ct_enum = function
   | CT_enum _ -> true
+  | _ -> false
+
+let is_ct_variant = function
+  | CT_variant _ -> true
   | _ -> false
 
 let is_ct_tup = function
@@ -998,7 +1024,15 @@ let compile_funcall ctx id args typ =
   let setup = ref [] in
   let cleanup = ref [] in
 
-  let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
+  let _, Typ_aux (fn_typ, _) =
+    try Env.get_val_spec id ctx.tc_env with
+    | Type_error _ ->
+       (* If we can't find the function type, then it must be a nullary union constructor. *)
+       begin match Env.lookup_id id ctx.tc_env with
+       | Union (typq, typ) -> typq, function_typ unit_typ typ no_effect
+       | _ -> failwith ("Got function identifier " ^ string_of_id id ^ " which is neither a function nor a constructor.")
+       end
+  in
   let arg_typs, ret_typ = match fn_typ with
     | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
     | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
@@ -1021,7 +1055,8 @@ let compile_funcall ctx id args typ =
       cleanup := I_clear (ctyp, gs) :: !cleanup;
       CV_id (gs, ctyp)
     else
-      assert false
+      c_error ~loc:(id_loc id)
+        (Printf.sprintf "Failure when setting up function arguments: %s and %s." (string_of_ctyp have_ctyp) (string_of_ctyp ctyp))
   in
 
   let sargs = List.map2 setup_arg arg_ctyps args in
@@ -1043,6 +1078,16 @@ let compile_funcall ctx id args typ =
 
 let rec compile_match ctx apat cval case_label =
   match apat, cval with
+  | AP_id pid, _ when is_ct_variant (cval_ctyp cval) ->
+     let frag = match cval with
+       | CV_id (id, _) -> F_id id
+       | CV_C_fragment (frag, _) -> frag
+     in
+     [I_if (CV_C_fragment (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ Util.zencode_string (string_of_id pid))), CT_bool),
+            [I_goto case_label],
+            [],
+            CT_unit)],
+     []
   | AP_id pid, CV_C_fragment (code, ctyp) when is_ct_enum ctyp ->
      [I_if (CV_C_fragment (F_op (F_id pid, "!=", code), CT_bool), [I_goto case_label], [], CT_unit)], []
   | AP_id pid, CV_id (id, ctyp) when is_ct_enum ctyp ->
@@ -1054,6 +1099,19 @@ let rec compile_match ctx apat cval case_label =
   | AP_tup apats, CV_id (id, ctyp) ->
      begin
        let get_tup n ctyp = CV_C_fragment (F_field (F_id id, "ztup" ^ string_of_int n), ctyp) in
+       let fold (instrs, cleanup, n) apat ctyp =
+         let instrs', cleanup' = compile_match ctx apat (get_tup n ctyp) case_label in
+         instrs @ instrs', cleanup' @ cleanup, n + 1
+       in
+       match ctyp with
+       | CT_tup ctyps ->
+          let instrs, cleanup, _ = List.fold_left2 fold ([], [], 0) apats ctyps in
+          instrs, cleanup
+       | _ -> assert false
+     end
+  | AP_tup apats, CV_C_fragment (frag, ctyp) ->
+     begin
+       let get_tup n ctyp = CV_C_fragment (F_field (frag, "ztup" ^ string_of_int n), ctyp) in
        let fold (instrs, cleanup, n) apat ctyp =
          let instrs', cleanup' = compile_match ctx apat (get_tup n ctyp) case_label in
          instrs @ instrs', cleanup' @ cleanup, n + 1
@@ -1078,7 +1136,21 @@ let rec compile_match ctx apat cval case_label =
         cleanup
      | _ -> failwith "AP_app constructor with non-variant type"
      end
-  | _, _ -> [], []
+  | AP_app (ctor, apat), CV_C_fragment (frag, ctyp) ->
+     begin match ctyp with
+     | CT_variant (_, ctors) ->
+        let ctor_c_id = Util.zencode_string (string_of_id ctor) in
+        let ctor_ctyp = Bindings.find ctor ctors in
+        let instrs, cleanup = compile_match ctx apat (CV_C_fragment (F_field (frag, ctor_c_id), ctor_ctyp)) case_label in
+        [ I_if (CV_C_fragment (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ ctor_c_id)), CT_bool),
+                [I_goto case_label],
+                [],
+                CT_unit) ]
+        @ instrs,
+        cleanup
+     | _ -> failwith "AP_app constructor with non-variant type"
+     end
+  | AP_wild, _ -> [], []
 
 let unit_fragment = CV_C_fragment (F_lit "UNIT", CT_unit)
 
@@ -1154,7 +1226,7 @@ let rec compile_aexp ctx = function
   (* Compile try statement *)
   | AE_try (aexp, cases, typ) ->
      let aexp_setup, ctyp, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
-     let case_return_id = gensym () in
+     let try_return_id = gensym () in
      let handled_exception_label = label "handled_exception_" in
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
@@ -1163,7 +1235,7 @@ let rec compile_aexp ctx = function
          | _ -> false
        in
        let try_label = label "try_" in
-       let exn_cval = CV_C_fragment (F_lit "*current_exception", ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
+       let exn_cval = CV_C_fragment (F_lit "(*current_exception)", ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
        let destructure, destructure_cleanup = compile_match ctx apat exn_cval try_label in
        let guard_setup, _, guard_call, guard_cleanup = compile_aexp ctx guard in
        let body_setup, _, body_call, body_cleanup = compile_aexp ctx body in
@@ -1175,18 +1247,20 @@ let rec compile_aexp ctx = function
               @ [I_if (CV_C_fragment (F_unary ("!", F_id gs), CT_bool), [I_goto try_label], [], CT_unit)]
               @ [I_comment "end guard"]
             else [])
-         @ body_setup @ [body_call (CL_id case_return_id)] @ body_cleanup
+         @ body_setup @ [body_call (CL_id try_return_id)] @ body_cleanup @ destructure_cleanup
          @ [I_goto handled_exception_label]
        in
        [I_block case_instrs; I_label try_label]
      in
-     [],
+     [I_comment "begin try catch";
+      I_decl (ctyp, try_return_id)],
      ctyp,
      (fun clexp -> I_try_block (aexp_setup @ [aexp_call clexp] @ aexp_cleanup)),
      [I_if (CV_C_fragment (F_lit "!have_exception", CT_bool), [I_goto handled_exception_label], [], CT_unit)]
      @ List.concat (List.map compile_case cases)
      @ [I_raw "sail_match_failure();"]
      @ [I_label handled_exception_label]
+     @ [I_raw "have_exception = false;"]
 
   | AE_if (aval, then_aexp, else_aexp, if_typ) ->
      let if_ctyp = ctyp_of_typ ctx if_typ in
@@ -1278,7 +1352,7 @@ let rec compile_aexp ctx = function
      (* Cleanup info will be handled by fix_exceptions *)
      let throw_setup, cval, _ = compile_aval ctx aval in
      throw_setup @ [I_throw cval],
-     CT_unit,
+     ctyp_of_typ ctx typ,
      (fun clexp -> I_copy (clexp, unit_fragment)),
      []
 
@@ -1292,13 +1366,14 @@ and compile_block ctx = function
      let gs = gensym () in
      setup @ [I_decl (CT_unit, gs); call (CL_id gs)] @ cleanup @ rest
 
-let rec pat_ids (P_aux (p_aux, _) as pat) =
+let rec pat_ids (P_aux (p_aux, (l, _)) as pat) =
   match p_aux with
   | P_id id -> [id]
   | P_tup pats -> List.concat (List.map pat_ids pats)
   | P_lit (L_aux (L_unit, _)) -> let gs = gensym () in [gs]
   | P_wild -> let gs = gensym () in [gs]
-  | _ -> failwith ("Bad pattern " ^ string_of_pat pat)
+  | P_var (pat, _) -> pat_ids pat
+  | _ -> c_error ~loc:l ("Cannot compile pattern " ^ string_of_pat pat ^ " to C")
 
 (** Compile a sail type definition into a LLcode one. Most of the
    actual work of translating the typedefs into C is done by the code
@@ -1345,7 +1420,7 @@ let generate_cleanup instrs =
   let generate_cleanup' = function
     | I_decl (ctyp, id) when not (is_stack_ctyp ctyp) -> [(id, I_clear (ctyp, id))]
     | I_alloc (ctyp, id) when not (is_stack_ctyp ctyp) -> [(id, I_clear (ctyp, id))]
-    | _ -> []
+    | instr -> []
   in
   let is_clear ids = function
     | I_clear (_, id) -> IdSet.add id ids
@@ -1366,7 +1441,9 @@ let generate_cleanup instrs =
    statements into code that sets that pointer, as well as adds extra
    control flow to cleanup heap-allocated variables correctly when a
    function terminates early. See the generate_cleanup function for
-   how this is done. *)
+   how this is done. FIXME: could be some memory leaks introduced
+   here, do we do the right thing with generate_cleanup and multiple
+   returns in the same block? *)
 let fix_early_return ret ctx instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur = function
@@ -1404,6 +1481,63 @@ let fix_early_return ret ctx instrs =
   rewrite_return [] instrs
   @ [I_label end_function_label]
 
+let fix_exception_block ctx instrs =
+  let end_block_label = label "end_block_exception_" in
+  let is_exception_stop = function
+    | I_throw _ | I_if _ | I_block _ | I_funcall _ -> true
+    | _ -> false
+  in
+  let rec rewrite_exception pre_cleanup instrs =
+    match instr_split_at is_exception_stop instrs with
+    | instrs, [] -> instrs
+    | before, I_block instrs :: after ->
+       before
+       @ [I_block (rewrite_exception (pre_cleanup @ generate_cleanup before) instrs)]
+       @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+    | before, I_if (cval, then_instrs, else_instrs, ctyp) :: after ->
+       let cleanup = pre_cleanup @ generate_cleanup before in
+       before
+       @ [I_if (cval, rewrite_exception cleanup then_instrs, rewrite_exception cleanup else_instrs, ctyp)]
+       @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+    | before, I_throw cval :: after ->
+       before
+       @ [I_copy (CL_raw "current_exception", cval);
+          I_raw "have_exception = true;"]
+       @ generate_cleanup before @ pre_cleanup
+       @ [I_goto end_block_label]
+       @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+    | before, (I_funcall (x, f, args, ctyp) as funcall) :: after ->
+       let effects = match Env.get_val_spec f ctx.tc_env with
+         | _, Typ_aux (Typ_fn (_, _, effects), _) -> effects
+         | exception (Type_error _) -> no_effect (* nullary union constructor, so no val spec *)
+         | _ -> assert false (* valspec must have function type *)
+       in
+       if has_effect effects BE_escape then
+         before
+         @ [funcall;
+            I_if (CV_C_fragment (F_lit "have_exception", CT_bool), generate_cleanup before @ [I_goto end_block_label], [], CT_unit)]
+         @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+       else
+         before @ funcall :: rewrite_exception (pre_cleanup @ generate_cleanup before) after
+    | _, _ -> assert false (* unreachable *)
+  in
+  rewrite_exception [] instrs
+  @ [I_label end_block_label]
+
+let rec map_try_block f instr =
+  match instr with
+  | I_decl _ | I_alloc _ | I_init _ -> instr
+  | I_if (cval, instrs1, instrs2, ctyp) ->
+     I_if (cval, List.map (map_try_block f) instrs1, List.map (map_try_block f) instrs2, ctyp)
+  | I_funcall _ | I_convert _ | I_assign _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
+  | I_block instrs -> I_block (List.map (map_try_block f) instrs)
+  | I_try_block instrs -> I_try_block (f (List.map (map_try_block f) instrs))
+  | I_comment _ | I_label _ | I_goto _ | I_raw _ -> instr
+
+let fix_exception ctx instrs =
+  let instrs = List.map (map_try_block (fix_exception_block ctx)) instrs in
+  fix_exception_block ctx instrs
+
 (** Compile a Sail toplevel definition into an LLcode definition **)
 let compile_def ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
@@ -1422,10 +1556,12 @@ let compile_def ctx = function
           let gs = gensym () in
           if is_stack_ctyp ctyp then
             let instrs = [I_decl (ctyp, gs)] @ setup @ [call (CL_id gs)] @ cleanup @ [I_return (CV_id (gs, ctyp))] in
+            let instrs = fix_exception ctx instrs in
             [CDEF_fundef (id, None, pat_ids pat, instrs)], ctx
           else
             let instrs = setup @ [call (CL_addr (CL_id gs))] @ cleanup in
             let instrs = fix_early_return (CL_addr (CL_id gs)) ctx instrs in
+            let instrs = fix_exception ctx instrs in
             [CDEF_fundef (id, Some gs, pat_ids pat, instrs)], ctx
        | _ -> assert false
      end
@@ -1448,7 +1584,8 @@ let compile_def ctx = function
   (* Only the parser and sail pretty printer care about this. *)
   | DEF_fixity _ -> [], ctx
 
-  | _ -> assert false
+  | def ->
+     c_error ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
 
 (** To keep things neat we use GCC's local labels extension to limit
    the scope of labels. We do this by iterating over all the blocks
@@ -1521,11 +1658,14 @@ let sgen_clexp = function
   | CL_id id -> "&" ^ sgen_id id
   | CL_field (id, field) -> "&(" ^ sgen_id id ^ "." ^ sgen_id field ^ ")"
   | CL_addr (CL_id id) -> sgen_id id
+  | CL_raw str -> str
   | _ -> assert false
 
 let sgen_clexp_pure = function
   | CL_id id -> sgen_id id
   | CL_field (id, field) -> sgen_id id ^ "." ^ sgen_id field
+  | CL_raw str -> str
+  | CL_addr (CL_id id) -> sgen_id id
   | _ -> assert false
 
 let rec codegen_instr ctx = function
@@ -1537,6 +1677,7 @@ let rec codegen_instr ctx = function
        string (Printf.sprintf "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval))
      else
        string (Printf.sprintf "  set_%s(%s, %s);" (sgen_ctyp_name ctyp) (sgen_clexp clexp) (sgen_cval cval))
+  | I_assign _ -> failwith "I_assign is currently unused"
   | I_if (cval, [then_instr], [], ctyp) ->
      string (Printf.sprintf "  if (%s)" (sgen_cval cval)) ^^ hardline
      ^^ twice space ^^ codegen_instr ctx then_instr
@@ -1591,7 +1732,7 @@ let rec codegen_instr ctx = function
   | I_return cval ->
      string (Printf.sprintf "  return %s;" (sgen_cval cval))
   | I_throw cval ->
-     string "  THROW"
+     string (Printf.sprintf "  THROW(%s)" (sgen_cval cval))
   | I_comment str ->
      string ("  /* " ^ str ^ " */")
   | I_label str ->
@@ -1690,9 +1831,25 @@ let codegen_type_def ctx = function
                    rbrace
      in
      let codegen_ctor (ctor_id, ctyp) =
-       string (Printf.sprintf "void %s(struct %s *rop, %s op)" (sgen_id ctor_id) (sgen_id id) (sgen_ctyp ctyp)) ^^ hardline
+       let ctor_args, tuple =
+         let tuple_set i ctyp =
+           if is_stack_ctyp ctyp then
+             string (Printf.sprintf "op.ztup%d = op%d;" i i)
+           else
+             string (Printf.sprintf "set_%s(&op.ztup%d, op%d);" (sgen_ctyp_name ctyp) i i)
+         in
+         match ctyp with
+         | CT_tup ctyps ->
+            String.concat ", " (List.mapi (fun i ctyp -> Printf.sprintf "%s op%d" (sgen_ctyp ctyp) i) ctyps),
+            string (Printf.sprintf "%s op;" (sgen_ctyp ctyp)) ^^ hardline
+            ^^ string (Printf.sprintf "init_%s(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
+            ^^ separate hardline (List.mapi tuple_set ctyps) ^^ hardline
+         | ctyp -> Printf.sprintf "%s op" (sgen_ctyp ctyp), empty
+       in
+       string (Printf.sprintf "void %s(struct %s *rop, %s)" (sgen_id ctor_id) (sgen_id id) ctor_args) ^^ hardline
        ^^ surround 2 0 lbrace
-                   (each_ctor "rop->" (clear_field "rop") (Bindings.bindings tus) ^^ hardline
+                   (tuple
+                    ^^ each_ctor "rop->" (clear_field "rop") (Bindings.bindings tus) ^^ hardline
                     ^^ string ("rop->kind = Kind_" ^ sgen_id ctor_id) ^^ semi ^^ hardline
                     ^^ if is_stack_ctyp ctyp then
                          string (Printf.sprintf "rop->%s = op;" (sgen_id ctor_id))
@@ -1748,7 +1905,7 @@ let codegen_type_def ctx = function
      (* If this is the exception type, then we setup up some global variables to deal with exceptions. *)
      ^^ if string_of_id id = "exception" then
           twice hardline
-          ^^ separate space [string "struct"; codegen_id id; string "*current_exception = NULL;"]
+          ^^ string "struct zexception *current_exception = NULL;"
           ^^ hardline
           ^^ string "bool have_exception = false;"
         else
@@ -1841,7 +1998,12 @@ let compile_ast ctx (Defs defs) =
     let postamble = separate hardline
                              [ string "int main(void)";
                                string "{";
+                               string "  current_exception = malloc(sizeof(struct zexception));";
+                               string "  init_zexception(current_exception);";
                                string "  zmain(UNIT);";
+                               string "  clear_zexception(current_exception);";
+                               string "  free(current_exception);";
+                               string "  if (have_exception) fprintf(stderr, \"Exiting due to uncaught exception\\n\");";
                                string "}" ]
     in
 
@@ -1851,29 +2013,3 @@ let compile_ast ctx (Defs defs) =
     |> print_endline
   with
     Type_error (l, err) -> prerr_endline ("Unexpected type error when compiling to C:\n" ^ string_of_type_error err)
-
-let print_compiled (setup, ctyp, call, cleanup) =
-  List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) setup;
-  print_endline (Pretty_print_sail.to_string (pp_instr (call (CL_id (mk_id ("?" ^ string_of_ctyp ctyp))))));
-  List.iter (fun instr -> print_endline (Pretty_print_sail.to_string (pp_instr instr))) cleanup
-
-let compile_exp ctx exp =
-  let aexp = anf exp in
-  let aexp = c_literals ctx aexp in
-  let aexp = map_functions (analyze_primop ctx) aexp in
-  print_endline "\n###################### COMPILED ######################\n";
-  print_compiled (compile_aexp ctx aexp);
-  print_endline "\n###################### ANF ######################\n";
-  aexp
-
-
-(*
-
-{
-  uint64_t zx = 0x000000000000F000L;
-  uint64_t v0 = (zx + 0x000000000000000FL) & 0x000000000000FFFFL;
-  uint64_t res = (v0 + 0x000000000000FFFFL) & 0x000000000000FFFFL;
-  return res;
-}
-
-*)

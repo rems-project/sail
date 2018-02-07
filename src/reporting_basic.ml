@@ -259,8 +259,7 @@ let print_err_internal fatal verb_loc p_l m1 m2 =
 let print_err fatal verb_loc l m1 m2 =
   print_err_internal fatal verb_loc (Loc l) m1 m2
 
-
-type error = 
+type error =
   | Err_general of Parse_ast.l * string
   | Err_unreachable of Parse_ast.l * string
   | Err_todo of Parse_ast.l * string

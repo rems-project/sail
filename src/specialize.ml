@@ -52,25 +52,6 @@ open Ast
 open Ast_util
 open Rewriter
 
-let zchar c =
-  let zc c = "z" ^ String.make 1 c in
-  if Char.code c <= 41 then zc (Char.chr (Char.code c + 16))
-  else if Char.code c <= 47 then zc (Char.chr (Char.code c + 23))
-  else if Char.code c <= 57 then String.make 1 c
-  else if Char.code c <= 64 then zc (Char.chr (Char.code c + 13))
-  else if Char.code c <= 90 then String.make 1 c
-  else if Char.code c <= 94 then zc (Char.chr (Char.code c - 13))
-  else if Char.code c <= 95 then "_"
-  else if Char.code c <= 96 then zc (Char.chr (Char.code c - 13))
-  else if Char.code c <= 121 then String.make 1 c
-  else if Char.code c <= 122 then "zz"
-  else if Char.code c <= 126 then zc (Char.chr (Char.code c - 39))
-  else raise (Invalid_argument "zchar")
-
-let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (Util.string_to_list str))
-
-let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (Util.string_to_list str))
-
 let is_typ_ord_uvar = function
   | Type_check.U_typ _ -> true
   | Type_check.U_order _ -> true
@@ -96,7 +77,7 @@ let rec polymorphic_functions is_kopt (Defs defs) =
 
 let id_of_instantiation id instantiation =
   let string_of_binding (kid, uvar) = string_of_kid kid ^ " => " ^ Type_check.string_of_uvar uvar in
-  let str = zencode_string (Util.string_of_list ", " string_of_binding (KBindings.bindings instantiation)) ^ "#" in
+  let str = Util.zencode_string (Util.string_of_list ", " string_of_binding (KBindings.bindings instantiation)) ^ "#" in
   prepend_id str id
 
 (* Returns a list of all the instantiations of a function id in an
@@ -118,7 +99,6 @@ let rec instantiations_of id ast =
   !instantiations
 
 let rec rewrite_polymorphic_calls id ast =
-  print_endline ("Rewriting: " ^ string_of_id id);
   let vs_ids = Initial_check.val_spec_ids ast in
 
   let rewrite_e_aux = function
@@ -184,7 +164,6 @@ let specialize_id_valspec instantiations id ast =
        if IdSet.mem spec_id !spec_ids then [] else
          begin
            spec_ids := IdSet.add spec_id !spec_ids;
-           print_endline (string_of_id spec_id ^ " : " ^ string_of_typschm typschm);
            [DEF_spec (VS_aux (VS_val_spec (typschm, spec_id, externs, is_cast), annot))]
          end
      in
@@ -237,8 +216,6 @@ let remove_unused_valspecs ast =
   let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast in
 
   let unused = IdSet.filter (fun vs_id -> not (IdSet.mem vs_id !calls)) vs_ids in
-
-  List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements unused);
 
   let rec remove_unused (Defs defs) id =
     match defs with
