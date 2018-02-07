@@ -1,3 +1,4 @@
+
 #!/usr/bin/env bash
 set -e
 
@@ -43,31 +44,40 @@ function finish_suite {
     fail=0
 }
 
-SAILLIBDIR="$DIR/../../lib/"
-
 printf "<testsuites>\n" >> $DIR/tests.xml
 
-cd $SAILDIR/riscv
-
-printf "Building RISCV specification...\n"
-
-if make -C $SAILDIR/riscv riscv ;
-then
-    green "Building RISCV specification" "ok"
-else
-    red "Building RISCV specification" "fail"
-fi
-
-for test in $DIR/tests/*.elf; do
-    if $SAILDIR/riscv/riscv "$test" >"${test/.elf/.out}" 2>&1 && grep -q SUCCESS "${test/.elf/.out}"
+shopt -s nullglob;
+for file in $DIR/*.sail;
+do
+    if $SAILDIR/sail -no_warn -c $file 1> ${file%.sail}.c 2> /dev/null;
     then
-       green "$(basename $test)" "ok"
+	green "compiling $(basename $file)" "ok";
+	if gcc ${file%.sail}.c -lgmp;
+	then
+	    green "compiling $(basename ${file%.sail}.c)" "ok";
+	    $DIR/a.out 1> ${file%.sail}.result 2> /dev/null;
+	    if diff ${file%.sail}.result ${file%.sail}.expect;
+	    then
+		green "executing $(basename ${file%.sail})" "ok"
+	    else
+		red "executing $(basename ${file%.sail})" "fail"
+	    fi;
+	    if valgrind -q --leak-check=full --errors-for-leak-kinds=all --error-exitcode=1 $DIR/a.out 1> /dev/null 2> /dev/null;
+	    then
+		green "executing $(basename ${file%.sail}) with valgrind" "ok"
+	    else
+		red "executing $(basename ${file%.sail}) with valgrind" "fail"
+	    fi
+	else
+	    red "compiling generated C" "fail"
+	fi
     else
-       red "$(basename $test)" "fail"
-    fi
+	red "compiling $file" "fail"
+    fi;
+    rm -f ${file%.sail}.c
+    rm -r ${file%.sail}.result
 done
 
-finish_suite "RISCV tests"
+finish_suite "C testing"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
-

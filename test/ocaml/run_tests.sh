@@ -43,8 +43,6 @@ function finish_suite {
     fail=0
 }
 
-SAILLIBDIR="$DIR/../../lib/"
-
 printf "<testsuites>\n" >> $DIR/tests.xml
 
 for i in `ls -d */`;
