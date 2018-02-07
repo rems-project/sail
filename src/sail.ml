@@ -232,6 +232,7 @@ let main() =
   then Printf.printf "Sail 2.0\n"
   else
     let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
+    Util.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin

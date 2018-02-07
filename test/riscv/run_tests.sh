@@ -61,9 +61,9 @@ fi
 for test in $DIR/tests/*.elf; do
     if $SAILDIR/riscv/riscv "$test" >"${test/.elf/.out}" 2>&1 && grep -q SUCCESS "${test/.elf/.out}"
     then
-       green "$test" "ok"
+       green `basename $test` "ok"
     else
-       red "$test" "fail"
+       red `basename $test` "fail"
     fi
 done
 
