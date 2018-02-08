@@ -27,6 +27,10 @@ val "exts_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec
 val extsv : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
 function extsv(v) = exts_vec(sizeof('m),v)
 
+/* This is generated internally to deal with case splits which reveal the size
+   of a bitvector */
+val bitvector_cast = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
+
 /* Definitions for the rewrites */
 
 val slice_mask : forall 'n, 'n >= 0. (int, int) -> bits('n) effect pure
