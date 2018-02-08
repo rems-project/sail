@@ -532,7 +532,7 @@ let instruction_kindToInterpValue = function
   | IK_mem_read v -> V_ctor (Id_aux (Id "IK_mem_read") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_mem_write v -> V_ctor (Id_aux (Id "IK_mem_write") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_mem_rmw v -> V_ctor (Id_aux (Id "IK_mem_rmw") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
-  | IK_cond_branch -> V_ctor (Id_aux (Id "IK_cond_branch") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
+  | IK_branch -> V_ctor (Id_aux (Id "IK_branch") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
   | IK_trans v -> V_ctor (Id_aux (Id "IK_trans") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_simple -> V_ctor (Id_aux (Id "IK_simple") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
   end
@@ -541,7 +541,7 @@ let rec instruction_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "IK_mem_read") _) _ _ v -> IK_mem_read (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_mem_write") _) _ _ v -> IK_mem_write (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_mem_rmw") _) _ _ v -> IK_mem_rmw (fromInterpValue v)
-  | V_ctor (Id_aux (Id "IK_cond_branch") _) _ _ v -> IK_cond_branch
+  | V_ctor (Id_aux (Id "IK_branch") _) _ _ v -> IK_branch
   | V_ctor (Id_aux (Id "IK_trans") _) _ _ v -> IK_trans (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_simple") _) _ _ v -> IK_simple
   | V_tuple [v] -> instruction_kindFromInterpValue v

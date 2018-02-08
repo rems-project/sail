@@ -1457,8 +1457,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
           oR := RFull("RSP") :: oR;
           aR := ars;
           Nias := switch irm {
-          (* XXX register name is not important here -- just indicates we don't know the destination yet. *)
-            case (Rm (v))  -> NIAFP_register(RFull("RAX"))
+            case (Rm (v))  -> NIAFP_indirect_address
             case (Imm (v)) -> NIAFP_concrete_address(RIP + v)
           } :: Nias;
       }
@@ -1486,7 +1485,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     case(HLT                          ) -> ()
     case(Jcc     (c, imm64)           ) -> 
       let flags = regfp_cond(c) in {
-        ik := IK_cond_branch;
+        ik := IK_branch;
         iR := RFull("RIP") :: flags;
         Nias :=  NIAFP_concrete_address(RIP + imm64) :: Nias;
       }
@@ -1495,8 +1494,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         ik := if m then IK_mem_read(Read_plain) else IK_simple;
         iR := RFull("RIP")::append(rs, ars);
         aR := ars;
-        (* XXX register name is not important here -- just indicates we don't know the destination yet. *)
-        Nias := NIAFP_register(RFull("RAX")) :: Nias;
+        Nias := NIAFP_indirect_address :: Nias;
       }
     case(LEA     (sz, ds)             ) ->
       let (_, irs, ors, ars) = regfp_dest_src (ds) in {
@@ -1512,7 +1510,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     }
     case(LOOP    (c, imm64)           ) -> 
       let flags = regfp_cond(c) in {
-          ik := IK_cond_branch;
+          ik := IK_branch;
           iR := RFull("RCX") :: flags;
           oR := RFull("RCX") :: oR;
           Nias := NIAFP_concrete_address(RIP + imm64) :: Nias;
@@ -1578,8 +1576,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       iR := RFull("RSP") :: iR;
       oR := RFull("RSP") :: oR;
       aR := RFull("RSP") :: aR;
-      (* XXX register name is not important here -- just indicates we don't know the destination yet. *)
-      Nias := NIAFP_register(RFull("RAX")) :: Nias;
+      Nias := NIAFP_indirect_address :: Nias;
     }
     case(SET     (c, b, r_m)          ) -> 
       let flags = regfp_cond(c) in

@@ -642,7 +642,7 @@ function clause execute (BranchRegister(n,branch_type)) =
   (bit[64]) target := rX(n);
 
   if branch_type == BranchType_CALL then wX(30) := rPC() + 4;
-    BranchTo(target, branch_type);
+  BranchTo(target, branch_type);
 }
 
 (* ERET *)

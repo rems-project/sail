@@ -23,20 +23,22 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
      case (RISCV_JAL ( imm, rd)) -> {
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
             let (bit[64]) offset = EXTS(imm) in
-            Nias := [|| NIAFP_concrete_address (PC + offset) ||]
+            Nias := [|| NIAFP_concrete_address (PC + offset) ||];
+            ik := IK_branch;
      }
      case (RISCV_JALR ( imm, rs, rd)) -> {
             if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
             let (bit[64]) offset = EXTS(imm) in
-            Nias := [|| NIAFP_register (RFull(GPRstr[rs])) ||];
+            Nias := [|| NIAFP_indirect_address ||];
+            ik := IK_branch;
      }
      case (BTYPE ( imm, rs2, rs1, op)) -> {
             if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-            ik := IK_cond_branch;
+            ik := IK_branch;
             let (bit[64]) offset = EXTS(imm) in
-            Nias := NIAFP_concrete_address(PC + offset) :: Nias;
+            Nias := [|| NIAFP_concrete_address(PC + offset), NIAFP_successor ||];
      }
      case (ITYPE ( imm, rs, rd, op)) -> {
             if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;

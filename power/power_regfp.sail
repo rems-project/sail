@@ -76,7 +76,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       if LK then oR := RFull("LR") :: oR;
       (bit[64]) nia' := if AA then EXTS(LI : 0b00) else CIA + EXTS(LI : 0b00);
       Nias := [|| NIAFP_concrete_address(nia') ||];
-      ik := IK_simple (* IK_uncond_branch *);
+      ik := IK_branch
     }
     case (Bc (BO, BI, BD, AA, LK)) -> {
       iR := mode64bit_fp :: iR;
@@ -89,7 +89,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       if AA then iR := CIA_fp :: iR; 
       Nias := [|| NIAFP_successor, NIAFP_concrete_address(if AA then EXTS(BD : 0b00) else CIA + EXTS(BD : 0b00)) ||];
       if LK then {oR := RFull("LR") :: oR; iR := CIA_fp :: iR};
-      ik := IK_cond_branch
+      ik := IK_branch
     }
     case (Bclr (BO, BI, BH, LK)) -> {
       iR := mode64bit_fp :: iR;
@@ -99,18 +99,18 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       (* TODO: actually whether LR is read, NIA written depends on runtime data *)
       (* if ctr_ok .. *) iR := RSlice("LR",0,61) :: iR;
       oR := NIA_fp :: oR;
-      Nias := [|| NIAFP_successor, NIAFP_LR ||];
+      Nias := [|| NIAFP_successor, NIAFP_indirect_address ||];
       if LK then {oR := RFull("LR") :: oR; iR := CIA_fp :: iR;};
-      ik := IK_cond_branch;
+      ik := IK_branch;
     }
     case (Bcctr (BO, BI, BH, LK)) -> {
       iR := RSliceBit("CR",BI + 32) :: iR;
       (* TODO: actually whether CTR is read and NIA written depends on runtime data *)
       (* if cond_ok *) iR := RSlice("CTR",0,61) :: iR;
       oR := NIA_fp :: oR;
-      Nias := [|| NIAFP_successor, NIAFP_CTR ||];
+      Nias := [|| NIAFP_successor, NIAFP_indirect_address ||];
       if LK then {oR := RFull("LR") :: oR; iR := CIA_fp :: iR;};
-      ik := IK_cond_branch;
+      ik := IK_branch;
     }
     case (Crand (BT, BA, BB)) -> {
       iR := RSliceBit("CR",BA + 32) :: RSliceBit("CR",BB + 32) :: iR;
@@ -150,7 +150,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     }
     case (Sc (LEV)) -> {
       (* fake test end instruction *)
-      Nias := if LEV==63 then [|| ||] else [|| NIAFP_successor ||]; 
+      ();
     }
     case (Scv (LEV)) -> ()
     case (Lbz (RT, RA, D)) -> {
