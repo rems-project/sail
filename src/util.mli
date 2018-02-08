@@ -52,6 +52,7 @@
 val last : 'a list -> 'a
 
 val opt_warnings : bool ref
+val opt_colors : bool ref
 
 val butlast : 'a list -> 'a list
 

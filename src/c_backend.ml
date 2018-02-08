@@ -55,6 +55,7 @@ open PPrint
 module Big_int = Nat_big_num
 
 let c_verbosity = ref 1
+let opt_ddump_flow_graphs = ref false
 
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline str else ()
@@ -808,7 +809,7 @@ let analyze_primop ctx id args typ =
 
 (** We now define a low-level AST that is only slightly abstracted
    away from C. To be succint in comments we usually refer to this as
-   LLcode rather than low-level AST repeatedly.
+   Sail IR or IR rather than low-level AST repeatedly.
 
    The general idea is ANF expressions are converted into lists of
    instructions (type instr) where allocations and deallocations are
@@ -903,7 +904,7 @@ let cdef_ctyps = function
   | CDEF_fundef (_, _, _, instrs) -> List.concat (List.map instr_ctyps instrs)
   | CDEF_type tdef -> ctype_def_ctyps tdef
 
-(* For debugging we define a pretty printer for LLcode instructions *)
+(* For debugging we define a pretty printer for Sail IR instructions *)
 
 let pp_ctyp ctyp =
   string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
@@ -921,15 +922,18 @@ let rec pp_clexp = function
   | CL_addr clexp -> string "*" ^^ pp_clexp clexp
   | CL_raw str -> string str
 
-let rec pp_instr = function
+let rec pp_instr ?short:(short=false) = function
   | I_decl (ctyp, id) ->
      parens (pp_ctyp ctyp) ^^ space ^^ pp_id id
   | I_if (cval, then_instrs, else_instrs, ctyp) ->
-     let pp_if_block instrs = surround 2 0 lbrace (separate_map hardline pp_instr instrs) rbrace in
+     let pp_if_block instrs = lbrace ^^ separate_map semi pp_instr instrs ^^ rbrace in
      parens (pp_ctyp ctyp) ^^ space
      ^^ pp_keyword "IF" ^^ pp_cval cval
-     ^^ pp_keyword "THEN" ^^ pp_if_block then_instrs
-     ^^ pp_keyword "ELSE" ^^ pp_if_block else_instrs
+     ^^ if short then
+          empty
+        else
+          pp_keyword "THEN" ^^ pp_if_block then_instrs
+          ^^ pp_keyword "ELSE" ^^ pp_if_block else_instrs
   | I_block instrs ->
      surround 2 0 lbrace (separate_map hardline pp_instr instrs) rbrace
   | I_try_block instrs ->
@@ -1375,7 +1379,7 @@ let rec pat_ids (P_aux (p_aux, (l, _)) as pat) =
   | P_var (pat, _) -> pat_ids pat
   | _ -> c_error ~loc:l ("Cannot compile pattern " ^ string_of_pat pat ^ " to C")
 
-(** Compile a sail type definition into a LLcode one. Most of the
+(** Compile a sail type definition into a IR one. Most of the
    actual work of translating the typedefs into C is done by the code
    generator, as it's easy to keep track of structs, tuples and unions
    in their sail form at this level, and leave the fiddly details of
@@ -1435,15 +1439,15 @@ let generate_cleanup instrs =
 
 (** Functions that have heap-allocated return types are implemented by
    passing a pointer a location where the return value should be
-   stored. The ANF -> LLcode pass for expressions simply outputs an
+   stored. The ANF -> Sail IR pass for expressions simply outputs an
    I_return instruction for any return value, so this function walks
-   over the LLcode ast for expressions and modifies the return
-   statements into code that sets that pointer, as well as adds extra
-   control flow to cleanup heap-allocated variables correctly when a
-   function terminates early. See the generate_cleanup function for
-   how this is done. FIXME: could be some memory leaks introduced
-   here, do we do the right thing with generate_cleanup and multiple
-   returns in the same block? *)
+   over the IR ast for expressions and modifies the return statements
+   into code that sets that pointer, as well as adds extra control
+   flow to cleanup heap-allocated variables correctly when a function
+   terminates early. See the generate_cleanup function for how this is
+   done. FIXME: could be some memory leaks introduced here, do we do
+   the right thing with generate_cleanup and multiple returns in the
+   same block? *)
 let fix_early_return ret ctx instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur = function
@@ -1487,25 +1491,25 @@ let fix_exception_block ctx instrs =
     | I_throw _ | I_if _ | I_block _ | I_funcall _ -> true
     | _ -> false
   in
-  let rec rewrite_exception pre_cleanup instrs =
+  let rec rewrite_exception historic instrs =
     match instr_split_at is_exception_stop instrs with
     | instrs, [] -> instrs
     | before, I_block instrs :: after ->
        before
-       @ [I_block (rewrite_exception (pre_cleanup @ generate_cleanup before) instrs)]
-       @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+       @ [I_block (rewrite_exception (generate_cleanup (historic @ before)) instrs)]
+       @ rewrite_exception (historic @ before) after
     | before, I_if (cval, then_instrs, else_instrs, ctyp) :: after ->
-       let cleanup = pre_cleanup @ generate_cleanup before in
+       let historic = historic @ before in
        before
-       @ [I_if (cval, rewrite_exception cleanup then_instrs, rewrite_exception cleanup else_instrs, ctyp)]
-       @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+       @ [I_if (cval, rewrite_exception historic then_instrs, rewrite_exception historic else_instrs, ctyp)]
+       @ rewrite_exception historic after
     | before, I_throw cval :: after ->
        before
        @ [I_copy (CL_raw "current_exception", cval);
           I_raw "have_exception = true;"]
-       @ generate_cleanup before @ pre_cleanup
+       @ generate_cleanup (historic @ before)
        @ [I_goto end_block_label]
-       @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+       @ rewrite_exception (historic @ before) after
     | before, (I_funcall (x, f, args, ctyp) as funcall) :: after ->
        let effects = match Env.get_val_spec f ctx.tc_env with
          | _, Typ_aux (Typ_fn (_, _, effects), _) -> effects
@@ -1515,10 +1519,10 @@ let fix_exception_block ctx instrs =
        if has_effect effects BE_escape then
          before
          @ [funcall;
-            I_if (CV_C_fragment (F_lit "have_exception", CT_bool), generate_cleanup before @ [I_goto end_block_label], [], CT_unit)]
-         @ rewrite_exception (pre_cleanup @ generate_cleanup before) after
+            I_if (CV_C_fragment (F_lit "have_exception", CT_bool), generate_cleanup (historic @ before) @ [I_goto end_block_label], [], CT_unit)]
+         @ rewrite_exception (historic @ before) after
        else
-         before @ funcall :: rewrite_exception (pre_cleanup @ generate_cleanup before) after
+         before @ funcall :: rewrite_exception (historic @ before) after
     | _, _ -> assert false (* unreachable *)
   in
   rewrite_exception [] instrs
@@ -1538,7 +1542,7 @@ let fix_exception ctx instrs =
   let instrs = List.map (map_try_block (fix_exception_block ctx)) instrs in
   fix_exception_block ctx instrs
 
-(** Compile a Sail toplevel definition into an LLcode definition **)
+(** Compile a Sail toplevel definition into an IR definition **)
 let compile_def ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
      [CDEF_reg_dec (ctyp_of_typ ctx typ, id)], ctx
@@ -1612,7 +1616,175 @@ let add_local_labels instrs =
   | _ -> assert false
 
 (**************************************************************************)
-(* 5. Code generation                                                     *)
+(* 5. Dependency Graphs                                                   *)
+(**************************************************************************)
+
+type graph_node =
+  | G_id of id
+  | G_label of string
+  | G_instr of int * instr
+  | G_start
+
+let string_of_node = function
+  | G_id id -> string_of_id id
+  | G_label label -> label
+  | G_instr (n, instr) -> string_of_int n ^ ": " ^ Pretty_print_sail.to_string (pp_instr ~short:true instr)
+  | G_start -> "START"
+
+module Node = struct
+  type t = graph_node
+  let compare gn1 gn2 =
+    match gn1, gn2 with
+    | G_id id1, G_id id2 -> Id.compare id1 id2
+    | G_label str1, G_label str2 -> String.compare str1 str2
+    | G_instr (n1, _), G_instr (n2, _) -> compare n1 n2
+    | G_start  , _         -> 1
+    | _        , G_start   -> -1
+    | G_instr _, _         -> 1
+    | _        , G_instr _ -> -1
+    | _        , G_id _    -> 1
+    | G_id _   , _         -> -1
+end
+
+module NM = Map.Make(Node)
+module NS = Set.Make(Node)
+
+type dep_graph = NS.t NM.t
+
+let rec fragment_deps = function
+  | F_id id -> NS.singleton (G_id id)
+  | F_lit _ -> NS.empty
+  | F_field (frag, _) | F_unary (_, frag) -> fragment_deps frag
+  | F_op (frag1, _, frag2) -> NS.union (fragment_deps frag1) (fragment_deps frag2)
+
+let cval_deps = function
+  | CV_id (id, _) -> NS.singleton (G_id id)
+  | CV_C_fragment (frag, _) -> fragment_deps frag
+
+let rec clexp_deps = function
+  | CL_id id -> NS.singleton (G_id id)
+  | CL_field (id, _) -> NS.singleton (G_id id)
+  | CL_addr clexp -> clexp_deps clexp
+  | CL_raw _ -> NS.empty
+
+(** Return the direct, non program-order dependencies of a single
+   instruction **)
+let instr_deps = function
+  | I_decl (ctyp, id) -> NS.empty, NS.singleton (G_id id)
+  | I_alloc (ctyp, id) -> NS.singleton (G_id id), NS.singleton (G_id id)
+  | I_init (ctyp, id, cval) -> NS.add (G_id id) (cval_deps cval), NS.singleton (G_id id)
+  | I_if (cval, _, _, _) -> cval_deps cval, NS.empty
+  | I_funcall (clexp, _, cvals, _) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
+  | I_convert (clexp, _, id, _) -> NS.singleton (G_id id), clexp_deps clexp
+  | I_assign (id, cval) -> cval_deps cval, NS.singleton (G_id id)
+  | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
+  | I_clear (_, id) -> NS.singleton (G_id id), NS.singleton (G_id id)
+  | I_throw cval | I_return cval -> cval_deps cval, NS.empty
+  | I_block _ | I_try_block _ -> NS.empty, NS.empty
+  | I_comment _ | I_raw _ -> NS.empty, NS.empty
+  | I_label label -> NS.singleton (G_label label), NS.empty
+  | I_goto label -> NS.empty, NS.singleton (G_label label)
+
+let add_link from_node to_node graph =
+  try
+    NM.add from_node (NS.add to_node (NM.find from_node graph)) graph
+  with
+  | Not_found -> NM.add from_node (NS.singleton to_node) graph
+
+let leaves graph =
+  List.fold_left (fun acc (from_node, to_nodes) -> NS.filter (fun to_node -> Node.compare to_node from_node != 0) (NS.union acc to_nodes))
+                 NS.empty
+                 (NM.bindings graph)
+
+(* Ensure that all leaves exist in the graph *)
+let fix_leaves graph =
+  NS.fold (fun leaf graph -> if NM.mem leaf graph then graph else NM.add leaf NS.empty graph) (leaves graph) graph
+
+let instrs_graph instrs =
+  let icounter = ref 0 in
+  let graph = ref NM.empty in
+
+  let rec add_instr last_instr instr =
+    incr icounter;
+    let node = G_instr (!icounter, instr) in
+    match instr with
+    | I_block instrs | I_try_block instrs ->
+       List.fold_left add_instr last_instr instrs
+    | I_if (_, then_instrs, else_instrs, _) ->
+       begin
+         let inputs, _ = instr_deps instr in (* if has no outputs *)
+         graph := add_link last_instr node !graph;
+         NS.iter (fun input -> graph := add_link input node !graph) inputs;
+         let n1 = List.fold_left add_instr node then_instrs in
+         let n2 = List.fold_left add_instr node else_instrs in
+         incr icounter;
+         let join = G_instr (!icounter, I_comment "join") in
+         graph := add_link n1 join !graph;
+         graph := add_link n2 join !graph;
+         join
+       end
+    | I_goto label ->
+       begin
+         let _, outputs = instr_deps instr in
+         graph := add_link last_instr node !graph;
+         NS.iter (fun output -> graph := add_link node output !graph) outputs;
+         incr icounter;
+         G_instr (!icounter, I_comment "after goto")
+       end
+    | _ ->
+       begin
+         let inputs, outputs = instr_deps instr in
+         graph := add_link last_instr node !graph;
+         NS.iter (fun input -> graph := add_link input node !graph) inputs;
+         NS.iter (fun output -> graph := add_link node output !graph) outputs;
+         node
+       end
+  in
+  List.fold_left add_instr G_start instrs;
+  fix_leaves !graph
+
+let make_dot id graph =
+  Util.opt_colors := false;
+  let to_string node = String.escaped (string_of_node node) in
+  let node_color = function
+    | G_start _              -> "lightpink"
+    | G_id _                 -> "yellow"
+    | G_instr (_, I_decl _)  -> "olivedrab1"
+    | G_instr (_, I_init _)  -> "springgreen"
+    | G_instr (_, I_alloc _) -> "palegreen"
+    | G_instr (_, I_clear _) -> "peachpuff"
+    | G_instr (_, I_goto _)  -> "orange1"
+    | G_instr (_, I_label _) -> "white"
+    | G_instr (_, I_raw _)   -> "khaki"
+    | G_instr _              -> "azure"
+    | G_label _              -> "lightpink"
+  in
+  let edge_color from_node to_node =
+    match from_node, to_node with
+    | G_start _, _         -> "goldenrod4"
+    | G_label _, _         -> "darkgreen"
+    | _        , G_label _ -> "goldenrod4"
+    | G_instr _, G_instr _ -> "black"
+    | G_id _   , G_instr _ -> "blue3"
+    | G_instr _, G_id _    -> "red3"
+    | _        , _         -> "coral3"
+  in
+  let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
+  output_string out_chan "digraph DEPS {\n";
+  let make_node from_node =
+    output_string out_chan (Printf.sprintf "  \"%s\" [fillcolor=%s;style=filled];\n" (to_string from_node) (node_color from_node))
+  in
+  let make_line from_node to_node =
+    output_string out_chan (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s];\n" (to_string from_node) (to_string to_node) (edge_color from_node to_node))
+  in
+  NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
+  NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
+  output_string out_chan "}\n";
+  Util.opt_colors := true;
+  close_out out_chan
+
+(**************************************************************************)
+(* 6. Code generation                                                     *)
 (**************************************************************************)
 
 let sgen_id id = Util.zencode_string (string_of_id id)
@@ -1946,6 +2118,7 @@ let codegen_def' ctx = function
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
 
   | CDEF_fundef (id, ret_arg, args, instrs) ->
+     if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
      let instrs = add_local_labels instrs in
      List.iter (fun instr -> prerr_endline (Pretty_print_sail.to_string (pp_instr instr))) instrs;
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in

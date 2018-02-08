@@ -95,6 +95,7 @@
 (**************************************************************************)
 
 let opt_warnings = ref true
+let opt_colors = ref true
 
 let rec last = function
   | [x] -> x
@@ -388,7 +389,10 @@ let rec take n xs = match n, xs with
   | n, [] -> []
   | n, (x :: xs) -> x :: take (n - 1) xs 
 
-let termcode n = "\x1B[" ^ string_of_int n ^ "m"
+let termcode n =
+  if !opt_colors then
+    "\x1B[" ^ string_of_int n ^ "m"
+  else ""
 
 let bold str = termcode 1 ^ str
 

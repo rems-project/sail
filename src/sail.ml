@@ -164,6 +164,9 @@ let options = Arg.align ([
   ( "-ddump_rewrite_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
+  ( "-ddump_flow_graphs",
+    Arg.Set C_backend.opt_ddump_flow_graphs,
+    "(debug) dump flow analysis for Sail functions when compiling to C");
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
     "<verbosity> (debug) verbose typechecker output: 0 is silent");
