@@ -41,7 +41,6 @@ open import Ast
 
 grammar
 
-
 % Fragments are small pure snippets of (abstract) C code, mostly
 % expressions, used by the aval and cval types.
 fragment :: 'F_' ::=
@@ -53,16 +52,18 @@ fragment :: 'F_' ::=
   | op fragment           :: :: unary
   | fragment . string     :: :: field
 
+% init / clear -> create / kill
+
 ctyp :: 'CT_' ::=
   {{ com C type }}
   | mpz_t                   :: :: mpz
 % Arbitrary precision GMP integer, mpz_t in C. }}
   | bv_t ( bool )           :: :: bv
 % Variable length bitvector - flag represents direction, inc or dec }}
-  | uint64_t ( nat , bool ) :: :: uint64
+  | 'uint64_t' ( nat , bool ) :: :: uint64
 % Fixed length bitvector that fits within a 64-bit word. - int
 % represents length, and flag is the same as CT_bv. }}
-  | int64_t                 :: :: int64
+  | 'int64_t'               :: :: int64
 % Used for (signed) integers that fit within 64-bits. }}
   | unit_t                  :: :: unit
 % unit is a value in sail, so we represent it as a one element type
@@ -111,6 +112,7 @@ instr :: 'I_' ::=
   | ctyp id = cval                            :: :: init
   | if ( cval ) { instr0 ; ... ; instrn }
     else { instr0 ; ... ; instrm } : ctyp     :: :: if
+  | jump ( cval ) string                      :: :: jump
   | clexp = id ( cval0 , ... , cvaln ) : ctyp :: :: funcall
   | clexp = cval                              :: :: copy
   | clexp = ( ctyp ) id : ctyp'               :: :: convert

@@ -198,8 +198,8 @@ let rec map_functions f = function
 
 (* For debugging we provide a pretty printer for ANF expressions. *)
 
-let pp_id ?color:(color=Util.green) id =
-  string (string_of_id id |> color |> Util.clear)
+let pp_id id =
+  string (string_of_id id)
 
 let pp_lvar lvar doc =
   match lvar with
@@ -230,7 +230,7 @@ let rec pp_aexp = function
   | AE_assign (id, typ, aexp) ->
      pp_annot typ (pp_id id) ^^ string " := " ^^ pp_aexp aexp
   | AE_app (id, args, typ) ->
-     pp_annot typ (pp_id ~color:Util.red id ^^ parens (separate_map (comma ^^ space) pp_aval args))
+     pp_annot typ (pp_id id ^^ parens (separate_map (comma ^^ space) pp_aval args))
   | AE_let (id, id_typ, binding, body, typ) -> group
      begin
        match binding with
@@ -837,6 +837,8 @@ let imatch_failure ?loc:(l=Parse_ast.Unknown) () =
   I_aux (I_match_failure, (instr_number (), l))
 let iraw ?loc:(l=Parse_ast.Unknown) str =
   I_aux (I_raw str, (instr_number (), l))
+let ijump ?loc:(l=Parse_ast.Unknown) cval label =
+  I_aux (I_jump (cval, label), (instr_number (), l))
 
 let ctype_def_ctyps = function
   | CTD_enum _ -> []
@@ -850,7 +852,7 @@ let rec map_instrs f (I_aux (instr, aux)) =
     | I_decl _ | I_alloc _ | I_init _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
-    | I_funcall _ | I_convert _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
+    | I_funcall _ | I_convert _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
     | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
     | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure -> instr
@@ -868,7 +870,7 @@ let rec instr_ctyps (I_aux (instr, aux)) =
   | I_convert (_, ctyp1, _, ctyp2) -> [ctyp1; ctyp2]
   | I_copy (_, cval) -> [cval_ctyp cval]
   | I_block instrs | I_try_block instrs -> List.concat (List.map instr_ctyps instrs)
-  | I_throw cval | I_return cval -> [cval_ctyp cval]
+  | I_throw cval | I_jump (cval, _) | I_return cval -> [cval_ctyp cval]
   | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure -> []
 
 let cdef_ctyps = function
@@ -882,9 +884,9 @@ let pp_ctyp ctyp =
   string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
 
 let pp_keyword str =
-  string ((str |> Util.red |> Util.clear) ^ "$")
+  string ((str |> Util.red |> Util.clear) ^ " ")
 
-let pp_cval (frag, ctyp) = parens (pp_ctyp ctyp) ^^ (string (string_of_fragment frag |> Util.cyan |> Util.clear))
+let pp_cval (frag, ctyp) = string (string_of_fragment frag) ^^ string " : " ^^ pp_ctyp ctyp
 
 let rec pp_clexp = function
   | CL_id id -> pp_id id
@@ -896,50 +898,80 @@ let rec pp_clexp = function
 let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   match instr with
   | I_decl (ctyp, id) ->
-     parens (pp_ctyp ctyp) ^^ space ^^ pp_id id
+     pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_if (cval, then_instrs, else_instrs, ctyp) ->
-     let pp_if_block instrs = lbrace ^^ separate_map semi pp_instr instrs ^^ rbrace in
+     let pp_if_block = function
+       | [] -> string "{}"
+       | instrs -> surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
+     in
      parens (pp_ctyp ctyp) ^^ space
-     ^^ pp_keyword "IF" ^^ pp_cval cval
+     ^^ pp_keyword "if" ^^ pp_cval cval
      ^^ if short then
           empty
         else
-          pp_keyword "THEN" ^^ pp_if_block then_instrs
-          ^^ pp_keyword "ELSE" ^^ pp_if_block else_instrs
+          pp_keyword " then" ^^ pp_if_block then_instrs
+          ^^ pp_keyword " else" ^^ pp_if_block else_instrs
+  | I_jump (cval, label) ->
+     pp_keyword "jump" ^^ pp_cval cval ^^ space ^^ string (label |> Util.blue |> Util.clear)
   | I_block instrs ->
-     surround 2 0 lbrace (separate_map hardline pp_instr instrs) rbrace
+     surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
   | I_try_block instrs ->
-     pp_keyword "TRY" ^^ surround 2 0 lbrace (separate_map hardline pp_instr instrs) rbrace
+     pp_keyword "try" ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
   | I_alloc (ctyp, id) ->
-     pp_keyword "ALLOC" ^^ parens (pp_ctyp ctyp) ^^ space ^^ pp_id id
+     pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_init (ctyp, id, cval) ->
-     pp_keyword "INIT" ^^ pp_ctyp ctyp ^^ parens (pp_id id ^^ string ", " ^^ pp_cval cval)
+     pp_keyword "create" ^^ parens (pp_ctyp ctyp) ^^ string " = " ^^ pp_cval cval
   | I_funcall (x, f, args, ctyp2) ->
-     separate space [ pp_clexp x; string ":=";
-                      pp_id ~color:Util.red f ^^ parens (separate_map (string ", ") pp_cval args);
-                      string "->"; pp_ctyp ctyp2 ]
+     separate space [ pp_clexp x; string "=";
+                      string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args);
+                      string ":"; pp_ctyp ctyp2 ]
   | I_convert (x, ctyp1, y, ctyp2) ->
-     separate space [ pp_clexp x; string ":=";
-                      pp_keyword "CONVERT" ^^ pp_ctyp ctyp2 ^^ parens (pp_id y);
-                      string "->"; pp_ctyp ctyp1 ]
+     separate space [ pp_clexp x; string "=";
+                      pp_keyword "convert" ^^ pp_ctyp ctyp2 ^^ parens (pp_id y);
+                      string ":"; pp_ctyp ctyp1 ]
   | I_copy (clexp, cval) ->
-     separate space [string "let"; pp_clexp clexp; string "="; pp_cval cval]
+     separate space [pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
-     pp_keyword "CLEAR" ^^ pp_ctyp ctyp ^^ parens (pp_id id)
+     pp_keyword "kill" ^^ parens (pp_ctyp ctyp) ^^ pp_id id
   | I_return cval ->
-     pp_keyword "RETURN" ^^ pp_cval cval
+     pp_keyword "return" ^^ pp_cval cval
   | I_throw cval ->
-     pp_keyword "THROW" ^^ pp_cval cval
+     pp_keyword "throw" ^^ pp_cval cval
   | I_comment str ->
-     string ("// " ^ str)
+     string ("// " ^ str |> Util.magenta |> Util.clear)
   | I_label str ->
-     string (str ^ ":")
+     string (str |> Util.blue |> Util.clear) ^^ string ":"
   | I_goto str ->
-     pp_keyword "GOTO" ^^ string str
+     pp_keyword "goto" ^^ string (str |> Util.blue |> Util.clear)
   | I_match_failure ->
-     pp_keyword "MATCH_FAILURE"
+     pp_keyword "match_failure"
   | I_raw str ->
-     pp_keyword "C" ^^ string str
+     pp_keyword "C" ^^ string (str |> Util.cyan |> Util.clear)
+
+let pp_ctype_def = function
+  | CTD_enum (id, ids) ->
+     pp_keyword "enum" ^^ pp_id id ^^ string " = "
+     ^^ separate_map (string " | ") pp_id ids
+  | CTD_struct (id, fields) ->
+     pp_keyword "struct" ^^ pp_id id ^^ string " = "
+     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) (fun (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp) fields) rbrace
+  | CTD_variant (id, ctors) ->
+     pp_keyword "variant" ^^ pp_id id ^^ string " = "
+     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) (fun (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp) ctors) rbrace
+
+let pp_cdef = function
+  | CDEF_fundef (id, ret, args, instrs) ->
+     let ret = match ret with
+       | None -> empty
+       | Some id -> space ^^ pp_id id
+     in
+     pp_keyword "function" ^^ pp_id id ^^ ret ^^ parens (separate_map (comma ^^ space) pp_id args) ^^ space
+     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
+     ^^ hardline
+  | CDEF_reg_dec (id, ctyp) ->
+     pp_keyword "register" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+     ^^ hardline
+  | CDEF_type tdef -> pp_ctype_def tdef ^^ hardline
 
 let is_ct_enum = function
   | CT_enum _ -> true
@@ -1049,13 +1081,10 @@ let compile_funcall ctx id args typ =
 let rec compile_match ctx apat cval case_label =
   match apat, cval with
   | AP_id pid, (frag, ctyp) when is_ct_variant ctyp ->
-     [iif (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ Util.zencode_string (string_of_id pid))), CT_bool)
-          [igoto case_label]
-          []
-          CT_unit],
+     [ijump (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ Util.zencode_string (string_of_id pid))), CT_bool) case_label],
      []
   | AP_id pid, (frag, ctyp) when is_ct_enum ctyp ->
-     [iif (F_op (F_id pid, "!=", frag), CT_bool) [igoto case_label] [] CT_unit], []
+     [ijump (F_op (F_id pid, "!=", frag), CT_bool) case_label], []
   | AP_id pid, _ ->
      let ctyp = cval_ctyp cval in
      let init, cleanup = if is_stack_ctyp ctyp then idecl ctyp pid, [] else ialloc ctyp pid, [iclear ctyp pid] in
@@ -1079,10 +1108,7 @@ let rec compile_match ctx apat cval case_label =
         let ctor_c_id = Util.zencode_string (string_of_id ctor) in
         let ctor_ctyp = Bindings.find ctor (ctor_bindings ctors) in
         let instrs, cleanup = compile_match ctx apat ((F_field (frag, ctor_c_id), ctor_ctyp)) case_label in
-        [iif (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ ctor_c_id)), CT_bool)
-             [igoto case_label]
-             []
-             CT_unit]
+        [ijump (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ ctor_c_id)), CT_bool) case_label]
         @ instrs,
         cleanup
      | _ -> failwith "AP_app constructor with non-variant type"
@@ -1181,7 +1207,7 @@ let rec compile_aexp ctx = function
          destructure @ [icomment "end destructuring"]
          @ (if not trivial_guard then
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id gs)] @ guard_cleanup
-              @ [iif (F_unary ("!", F_id gs), CT_bool) [igoto try_label] [] CT_unit]
+              @ [ijump (F_unary ("!", F_id gs), CT_bool) try_label]
               @ [icomment "end guard"]
             else [])
          @ body_setup @ [body_call (CL_id try_return_id)] @ body_cleanup @ destructure_cleanup
@@ -1193,7 +1219,7 @@ let rec compile_aexp ctx = function
       idecl ctyp try_return_id],
      ctyp,
      (fun clexp -> itry_block (aexp_setup @ [aexp_call clexp] @ aexp_cleanup)),
-     [iif (F_unary ("!", F_have_exception), CT_bool) [igoto handled_exception_label] [] CT_unit]
+     [ijump (F_unary ("!", F_have_exception), CT_bool) handled_exception_label]
      @ List.concat (List.map compile_case cases)
      @ [imatch_failure ()]
      @ [ilabel handled_exception_label]
@@ -1265,7 +1291,7 @@ let rec compile_aexp ctx = function
      let loop_test = (F_unary ("!", F_id gs), CT_bool) in
      cond_setup @ [idecl CT_bool gs; idecl CT_unit unit_gs]
      @ [ilabel loop_start_label]
-     @ [iblock ([cond_call (CL_id gs); iif loop_test [igoto loop_end_label] [] CT_unit]
+     @ [iblock ([cond_call (CL_id gs); ijump loop_test loop_end_label]
                 @ body_setup
                 @ [body_call (CL_id unit_gs)]
                 @ body_cleanup
@@ -1282,7 +1308,7 @@ let rec compile_aexp ctx = function
      let return_setup, cval, _ = compile_aval ctx aval in
      return_setup @ [ireturn cval],
      CT_unit,
-     (fun clexp -> icopy clexp unit_fragment),
+     (fun clexp -> icomment "unreachable after return"),
      []
 
   | AE_throw (aval, typ) ->
@@ -1290,7 +1316,7 @@ let rec compile_aexp ctx = function
      let throw_setup, cval, _ = compile_aval ctx aval in
      throw_setup @ [ithrow cval],
      ctyp_of_typ ctx typ,
-     (fun clexp -> icopy clexp unit_fragment),
+     (fun clexp -> icomment "unreachable after throw"),
      []
 
   | aexp -> failwith ("Cannot compile ANF expression: " ^ Pretty_print_sail.to_string (pp_aexp aexp))
@@ -1476,7 +1502,7 @@ let rec map_try_block f (I_aux (instr, aux)) =
     | I_funcall _ | I_convert _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (List.map (map_try_block f) instrs)
     | I_try_block instrs -> I_try_block (f (List.map (map_try_block f) instrs))
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure -> instr
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_jump _ | I_match_failure -> instr
   in
   I_aux (instr, aux)
 
@@ -1497,7 +1523,6 @@ let compile_def ctx = function
        match pexp with
        | Pat_aux (Pat_exp (pat, exp), _) ->
           let aexp = map_functions (analyze_primop ctx) (c_literals ctx (anf exp)) in
-          prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp));
           let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
           let gs = gensym () in
           if is_stack_ctyp ctyp then
@@ -1615,9 +1640,10 @@ let rec clexp_deps = function
    instruction **)
 let instr_deps = function
   | I_decl (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_alloc (ctyp, id) -> NS.singleton (G_id id), NS.singleton (G_id id)
-  | I_init (ctyp, id, cval) -> NS.add (G_id id) (cval_deps cval), NS.singleton (G_id id)
+  | I_alloc (ctyp, id) -> NS.empty, NS.singleton (G_id id)
+  | I_init (ctyp, id, cval) -> cval_deps cval, NS.singleton (G_id id)
   | I_if (cval, _, _, _) -> cval_deps cval, NS.empty
+  | I_jump (cval, label) -> cval_deps cval, NS.singleton (G_label label)
   | I_funcall (clexp, _, cvals, _) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
   | I_convert (clexp, _, id, _) -> NS.singleton (G_id id), clexp_deps clexp
   | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
@@ -1791,6 +1817,8 @@ let rec codegen_instr ctx (I_aux (instr, _)) =
        string (Printf.sprintf "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval))
      else
        string (Printf.sprintf "  set_%s(%s, %s);" (sgen_ctyp_name ctyp) (sgen_clexp clexp) (sgen_cval cval))
+  | I_jump (cval, label) ->
+     string (Printf.sprintf "  if (%s) goto %s;" (sgen_cval cval) label)
   | I_if (cval, [then_instr], [], ctyp) ->
      string (Printf.sprintf "  if (%s)" (sgen_cval cval)) ^^ hardline
      ^^ twice space ^^ codegen_instr ctx then_instr
@@ -2060,10 +2088,9 @@ let codegen_def' ctx = function
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
 
-  | CDEF_fundef (id, ret_arg, args, instrs) ->
+  | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
      let instrs = add_local_labels instrs in
-     List.iter (fun instr -> prerr_endline (Pretty_print_sail.to_string (pp_instr instr))) instrs;
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
        | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
@@ -2098,6 +2125,7 @@ let codegen_def ctx def =
   in
   let tups = List.filter is_ct_tup (cdef_ctyps def) in
   let tups = List.map (fun ctyp -> codegen_tup ctx (untup ctyp)) tups in
+  prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
   concat tups
   ^^ codegen_def' ctx def
 
