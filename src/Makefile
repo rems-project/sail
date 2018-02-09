@@ -60,17 +60,24 @@ full: sail lib power doc test
 ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/l2.ott
 
+bytecode.lem: ../language/bytecode.ott ast.lem
+	ott -sort false -generate_aux_rules true -o bytecode.lem -picky_multiple_parses true ../language/bytecode.ott
+
 ast.ml: ast.lem
 	lem -ocaml ast.lem
 	sed -i -f ast.sed ast.ml
 
+bytecode.ml: bytecode.lem
+	lem -ocaml bytecode.lem
+	sed -i -f ast.sed bytecode.ml
+
 lem_interp/interp_ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
 
-sail: ast.ml
+sail: ast.ml bytecode.ml
 	ocamlbuild -use-ocamlfind sail.native
 
-isail: ast.ml
+isail: ast.ml bytecode.ml
 	ocamlbuild -use-ocamlfind isail.native
 
 sail.native: sail
@@ -265,6 +272,8 @@ clean:
 	-rm -rf sail.docdir
 	-rm -f ast.ml
 	-rm -f ast.lem
+	-rm -f bytecode.ml
+	-rm -f bytecode.lem
 
 doc:
 	ocamlbuild -use-ocamlfind sail.docdir/index.html
