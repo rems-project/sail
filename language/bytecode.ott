@@ -59,7 +59,7 @@ ctyp :: 'CT_' ::=
   | mpz_t                   :: :: mpz
 % Arbitrary precision GMP integer, mpz_t in C. }}
   | bv_t ( bool )           :: :: bv
-% Variable length bitvector - flag represents direction, inc or dec }}
+% Variable length bitvector - flag represents direction, true - dec or false - inc }}
   | 'uint64_t' ( nat , bool ) :: :: uint64
 % Fixed length bitvector that fits within a 64-bit word. - int
 % represents length, and flag is the same as CT_bv. }}
@@ -83,6 +83,8 @@ ctyp :: 'CT_' ::=
 % into C. We don't fully worry about precise implementation details at
 % this point, as C doesn't have variants or tuples natively, but these
 % need to be encoded.
+  | vector ( bool , ctyp )         :: :: vector
+% A vector type for non-bit vectors
 
 cval :: 'CV_' ::=
   {{ ocaml fragment * ctyp }}
@@ -130,6 +132,11 @@ instr :: 'I_' ::=
 cdef :: 'CDEF_' ::=
   | register id : ctyp :: :: reg_dec
   | ctype_def          :: :: type
+  | let nat ( id0 : ctyp0 , ... , idn : ctypn ) = {
+      instr0 ; ... ; instrm
+    } {
+      instr0 ; ... ; instri
+    } :: :: let
   | function id mid ( id0 , ... , idn ) {
       instr0 ; ... ; instrm
     } :: :: fundef

@@ -136,8 +136,11 @@ val __ZeroExtendSlice = {lem: "extz_slice"} : forall 'm. (bits('m), int, int) ->
 
 val cast cast_unit_vec : bit -> bits(1)
 
-function cast_unit_vec bitzero = 0b0
-and cast_unit_vec bitone = 0b1
+function cast_unit_vec b =
+  match b {
+    bitzero => 0b0,
+    bitone  => 0b1
+  }
 
 val print = "prerr_endline" : string -> unit
 
@@ -309,7 +312,9 @@ union exception = {
   Error_ReservedEncoding
 }
 
+/*
 union option ('a : Type) = {
   None,
   Some : 'a
 }
+*/
