@@ -124,7 +124,8 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             ik := switch (aq, rl) {
               case (false, false) -> IK_mem_write (Write_RISCV_conditional)
               case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release)
-              case (true,  _)     -> exit "not implemented"
+              case (true,  false) -> exit "not implemented"
+              case (true,  true)  -> IK_mem_write (Write_RISCV_conditional_strong_release)
             };
      }
      case (AMO( op, aq, rl, rs2, rs1, width, rd)) -> {
