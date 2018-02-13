@@ -857,6 +857,27 @@ let keep_undef_typ value =
      E_aux (E_cast (typ_of_annot eann,value),(Generated Unknown,snd eann))
   | _ -> value
 
+let rec flatten_constraints = function
+  | [] -> []
+  | (NC_aux (NC_and (nc1,nc2),_))::t -> flatten_constraints (nc1::nc2::t)
+  | h::t -> h::(flatten_constraints t)
+
+(* NB: this only looks for direct equalities with the given kid.  It would be
+   better in principle to find the entire set of equal kids, but it isn't
+   necessary to deal with the fresh kids produced by the type checker while
+   checking P_var patterns, so we don't do it for now. *)
+let equal_kids env kid =
+  let is_eq = function
+    | NC_aux (NC_equal (Nexp_aux (Nexp_var var1,_), Nexp_aux (Nexp_var var2,_)),_) ->
+       if Kid.compare kid var1 == 0 then Some var2 else
+         if Kid.compare kid var2 == 0 then Some var1 else
+           None
+    | _ -> None
+  in
+  let ncs = flatten_constraints (Env.get_constraints env) in
+  let kids = Util.map_filter is_eq ncs in
+  List.fold_left (fun s k -> KidSet.add k s) (KidSet.singleton kid) kids
+
 let freshen_id =
   let counter = ref 0 in
   fun id ->
@@ -1422,9 +1443,11 @@ let split_defs all_errors splits defs =
                  way to construct an undefined size), but leave the term as undefined
                  to make the meaning clear. *)
             let nexp = fabricate_nexp l annot in
-            let typ = subst_src_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+            let kids = equal_kids (env_of_annot p_id_annot) kid in
+            let ksubst = KidSet.fold (fun k b -> KBindings.add k nexp b) kids KBindings.empty in
+            let typ = subst_src_typ ksubst (typ_of_annot p_id_annot) in
             DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,None))],
-                       [kid,nexp])
+                       KBindings.bindings ksubst)
          | P_aux (_,(l',_)) ->
             (Reporting_basic.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
@@ -2410,11 +2433,31 @@ let rec split3 = function
      let t1,t2,t3 = split3 t in
      (h1::t1,h2::t2,h3::t3)
 
+let is_kid_in_env env kid =
+  match Env.get_typ_var kid env with
+  | _ -> true
+  | exception _ -> false
+
+let rec kids_bound_by_typ_pat (TP_aux (tp,_)) =
+  match tp with
+  | TP_wild -> KidSet.empty
+  | TP_var kid -> KidSet.singleton kid
+  | TP_app (_,pats) ->
+     kidset_bigunion (List.map kids_bound_by_typ_pat pats)
+
+(* We need both the explicitly bound kids from the AST, and any freshly
+   generated kids from the typechecker. *)
 let kids_bound_by_pat pat =
   let open Rewriter in
   fst (fold_pat ({ (compute_pat_alg KidSet.empty KidSet.union)
-                 with p_var = (fun ((s,p), (TP_aux (TP_var kid, _) as tpat)) ->
-                   (KidSet.add kid s, P_var (p, tpat))) }) pat)
+    with p_aux =
+      (function ((s,(P_var (P_aux (_,(_,Some (_,typ,_))),tpat) as p)), (_,Some (env,_,_) as ann)) ->
+        let kids = tyvars_of_typ typ in
+        let new_kids = KidSet.filter (fun kid -> not (is_kid_in_env env kid)) kids in
+        let tpat_kids = kids_bound_by_typ_pat tpat in
+        KidSet.union s (KidSet.union new_kids tpat_kids), P_aux (p, ann)
+      | ((s,p),ann) -> s, P_aux (p,ann))
+    }) pat)
 
 (* Add bound variables from a pattern to the environment with the given dependency. *)
 
@@ -3498,11 +3541,6 @@ let rec extract_value_from_guard var (E_aux (e,_)) =
      | Some i -> Some i
      | None -> extract_value_from_guard var e2)
   | _ -> None
-
-let rec flatten_constraints = function
-  | [] -> []
-  | (NC_aux (NC_and (nc1,nc2),_))::t -> flatten_constraints (nc1::nc2::t)
-  | h::t -> h::(flatten_constraints t)
 
 let fill_in_type env typ =
   let constraints = Env.get_constraints env in
