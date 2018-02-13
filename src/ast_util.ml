@@ -862,6 +862,20 @@ let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   | Nexp_neg n -> tyvars_of_nexp n
   | Nexp_app (_, nexps) -> List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_nexp nexps)
 
+let rec tyvars_of_nc (NC_aux (nc, _)) =
+  match nc with
+  | NC_equal (nexp1, nexp2)
+  | NC_bounded_ge (nexp1, nexp2)
+  | NC_bounded_le (nexp1, nexp2)
+  | NC_not_equal (nexp1, nexp2) ->
+     KidSet.union (tyvars_of_nexp nexp1) (tyvars_of_nexp nexp2)
+  | NC_set (kid, _) -> KidSet.singleton kid
+  | NC_or (nc1, nc2)
+  | NC_and (nc1, nc2) ->
+     KidSet.union (tyvars_of_nc nc1) (tyvars_of_nc nc2)
+  | NC_true
+  | NC_false -> KidSet.empty
+
 let rec tyvars_of_typ (Typ_aux (t,_)) =
   match t with
   | Typ_id _ -> KidSet.empty
@@ -873,14 +887,16 @@ let rec tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_app (_,tas) -> 
      List.fold_left (fun s ta -> KidSet.union s (tyvars_of_typ_arg ta))
        KidSet.empty tas
-  | Typ_exist (kids,_,t) ->
-     let s = tyvars_of_typ t in
+  | Typ_exist (kids, nc, t) ->
+     let s = KidSet.union (tyvars_of_typ t) (tyvars_of_nc nc) in
      List.fold_left (fun s k -> KidSet.remove k s) s kids
 and tyvars_of_typ_arg (Typ_arg_aux (ta,_)) =
   match ta with
   | Typ_arg_nexp nexp -> tyvars_of_nexp nexp
   | Typ_arg_typ typ -> tyvars_of_typ typ
   | Typ_arg_order _ -> KidSet.empty
+
+let is_kid_generated kid = String.contains (string_of_kid kid) '#'
 
 let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
   let wrap e_aux typ = E_aux (e_aux, (l, annot typ)) in

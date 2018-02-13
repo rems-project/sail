@@ -266,6 +266,8 @@ val string_of_uvar : uvar -> string
 
 val subst_unifiers : uvar KBindings.t -> typ -> typ
 
+val typ_subst_kid : kid -> kid -> typ -> typ
+
 val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option
 
 val alpha_equivalent : Env.t -> typ -> typ -> bool
