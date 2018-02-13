@@ -230,6 +230,7 @@ val is_some : 'a option -> bool
 val is_none : 'a option -> bool
 
 val take : int -> 'a list -> 'a list
+val drop : int -> 'a list -> 'a list
 
 val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 

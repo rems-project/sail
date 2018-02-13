@@ -14,7 +14,7 @@ typedef int unit;
 
 typedef struct {
   mp_bitcnt_t len;
-  mpz_t bits;
+  mpz_t *bits;
 } bv_t;
 
 typedef char *sail_string;
@@ -119,6 +119,78 @@ void neg_int(mpz_t *rop, const mpz_t op) {
 
 void abs_int(mpz_t *rop, const mpz_t op) {
   mpz_abs(*rop, op);
+}
+
+// ***** Sail bitvectors *****
+
+void init_bv_t(bv_t *rop) {
+  rop->bits = malloc(sizeof(mpz_t));
+  rop->len = 0;
+  mpz_init(*rop->bits);
+}
+
+void init_bv_t_of_uint64_t(bv_t *rop, const uint64_t op, const uint64_t len, const bool direction) {
+  rop->bits = malloc(sizeof(mpz_t));
+  rop->len = len;
+  mpz_init_set_ui(*rop->bits, op);
+}
+
+void set_bv_t(bv_t *rop, const bv_t op) {
+  rop->len = op.len;
+  mpz_set(*rop->bits, *op.bits);
+}
+
+void append_64(bv_t *rop, bv_t op, const uint64_t chunk) {
+  rop->len = rop->len + 64ul;
+  mpz_mul_2exp(*rop->bits, *op.bits, 64ul);
+  mpz_add_ui(*rop->bits, *rop->bits, chunk);
+}
+
+uint64_t convert_uint64_t_of_bv_t(const bv_t op) {
+  return mpz_get_ui(*op.bits);
+}
+
+void zeros(bv_t *rop, const mpz_t op) {
+  rop->len = mpz_get_ui(op);
+  mpz_set_ui(*rop->bits, 0ul);
+}
+
+void zero_extend(bv_t *rop, const bv_t op, const mpz_t len) {
+  rop->len = mpz_get_ui(len);
+  mpz_set(*rop->bits, *op.bits);
+}
+
+void clear_bv_t(bv_t *rop) {
+  mpz_clear(*rop->bits);
+  free(rop->bits);
+}
+
+void mask(bv_t *rop) {
+  if (mpz_sizeinbase(*rop->bits, 2) > rop->len) {
+    mpz_t m;
+    mpz_init(m);
+    mpz_ui_pow_ui(m, 2ul, rop->len);
+    mpz_sub_ui(m, m, 1ul);
+    mpz_and(*rop->bits, *rop->bits, m);
+    mpz_clear(m);
+  }
+}
+
+void add_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
+  rop->len = op1.len;
+  mpz_add(*rop->bits, *op1.bits, *op2.bits);
+  mpz_clrbit(*rop->bits, op1.len);
+}
+
+void add_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
+  rop->len = op1.len;
+  mpz_add(*rop->bits, *op1.bits, op2);
+  mask(rop);
+}
+
+unit print_bits(const sail_string str, const bv_t op) {
+  fputs(str, stdout);
+  gmp_printf("%d'0x%ZX\n", op.len, op.bits);
 }
 
 #endif

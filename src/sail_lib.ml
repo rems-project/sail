@@ -549,4 +549,6 @@ let shift_bits_left (x, y) =
   let rbits = x @ zeros in
   drop yi rbits
 
+let zeros n = replicate_bits ([B0], n)
+
 let speculate_conditional_success () = true

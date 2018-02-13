@@ -945,7 +945,7 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   | I_alloc (ctyp, id) ->
      pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_init (ctyp, id, cval) ->
-     pp_keyword "create" ^^ parens (pp_ctyp ctyp) ^^ string " = " ^^ pp_cval cval
+     pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
   | I_funcall (x, f, args, ctyp2) ->
      separate space [ pp_clexp x; string "=";
                       string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args);
@@ -1026,6 +1026,11 @@ let rec string_of_aval_bit = function
   | AV_lit (L_aux (L_zero, _), _) -> "0"
   | AV_lit (L_aux (L_one, _), _) -> "1"
 
+let rec chunkify n xs =
+  match Util.take n xs, Util.drop n xs with
+  | xs, [] -> [xs]
+  | xs, ys -> xs :: chunkify n ys
+
 let rec compile_aval ctx = function
   | AV_C_fragment (frag, typ) ->
      [], (frag, ctyp_of_typ ctx typ), []
@@ -1053,7 +1058,6 @@ let rec compile_aval ctx = function
   | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit "0", CT_bit), []
   | AV_lit (L_aux (L_one, _), _) -> [], (F_lit "1", CT_bit), []
 
-
   | AV_lit (L_aux (_, l) as lit, _) ->
      c_error ~loc:l ("Encountered unexpected literal " ^ string_of_lit lit)
 
@@ -1078,7 +1082,7 @@ let rec compile_aval ctx = function
 
   | AV_vector (avals, typ) when is_bitvector avals && List.length avals <= 64 ->
      begin
-       let bitstring = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit avals)) in
+       let bitstring = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit avals) ^ "ul") in
        let len = List.length avals in
        match destruct_vector ctx.tc_env typ with
        | Some (_, Ord_aux (Ord_inc, _), _) ->
@@ -1090,6 +1094,21 @@ let rec compile_aval ctx = function
        | None ->
           c_error "Encountered vector literal without vector type"
      end
+
+  | AV_vector (avals, typ) when is_bitvector avals ->
+     let len = List.length avals in
+     let bitstring avals = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit avals) ^ "ul") in
+     let first_chunk = bitstring (Util.take (len mod 64) avals) in
+     let chunks = Util.drop (len mod 64) avals |> chunkify 64 |> List.map bitstring in
+     let gs = gensym () in
+     [idecl (CT_bv true) gs;
+      iinit (CT_bv true) gs (first_chunk, CT_uint64 (len mod 64, true))]
+     @ List.map (fun chunk -> ifuncall (CL_id gs)
+                                       (mk_id "append_64")
+                                       [(F_id gs, CT_bv true); (chunk, CT_uint64 (64, true))]
+                                       (CT_bv true)) chunks,
+     (F_id gs, CT_bv true),
+     [iclear (CT_bv true) gs]
 
   | AV_vector _ ->
      c_error "Have AV_vector"
@@ -1140,7 +1159,7 @@ let compile_funcall ctx id args typ =
       fun ret -> ifuncall ret id sargs ret_ctyp
     else if not (is_stack_ctyp ret_ctyp) && is_stack_ctyp final_ctyp then
       let gs = gensym () in
-      setup := idecl ret_ctyp gs :: ialloc ret_ctyp gs :: !setup;
+      setup := ialloc ret_ctyp gs :: idecl ret_ctyp gs :: !setup;
       setup := ifuncall (CL_id gs) id sargs ret_ctyp :: !setup;
       cleanup := iclear ret_ctyp gs :: !cleanup;
       fun ret -> iconvert ret final_ctyp gs ret_ctyp
@@ -1901,6 +1920,15 @@ let sgen_ctyp_name = function
   | CT_variant (id, _) -> sgen_id id
   | CT_string -> "sail_string"
 
+let sgen_cval_param (frag, ctyp) =
+  match ctyp with
+  | CT_bv direction ->
+     string_of_fragment frag ^ ", " ^ string_of_bool direction
+  | CT_uint64 (len, direction) ->
+     string_of_fragment frag ^ ", " ^ string_of_int len ^ "ul , " ^ string_of_bool direction
+  | _ ->
+     string_of_fragment frag
+
 let sgen_cval = function (frag, _) -> string_of_fragment frag
 
 let sgen_clexp = function
@@ -1962,7 +1990,7 @@ let rec codegen_instr ctx (I_aux (instr, _)) =
                             (sgen_ctyp_name ctyp)
                             (sgen_ctyp_name (cval_ctyp cval))
                             (sgen_id id)
-                            (sgen_cval cval))
+                            (sgen_cval_param cval))
   | I_alloc (ctyp, id) ->
      string (Printf.sprintf "  init_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
   | I_convert (x, ctyp1, y, ctyp2) ->
