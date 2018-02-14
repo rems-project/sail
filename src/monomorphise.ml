@@ -1354,6 +1354,10 @@ let split_defs all_errors splits defs =
          | Some (exp,bindings,kbindings) ->
             let substs = bindings_from_list bindings in
             let result,_ = const_prop_exp substs Bindings.empty exp in
+            let result = match result with
+              | E_aux (E_return e,_) -> e
+              | _ -> result
+            in
             if is_value result then Some result else None
          | None -> None
 
