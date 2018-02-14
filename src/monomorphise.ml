@@ -2843,8 +2843,15 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     match annot with
     | None -> r
     | Some (tenv,typ,_) ->
-       (* TODO: existential wrappers *)
-       let typ = Env.expand_synonyms tenv typ in
+       let typ = Env.base_typ_of tenv typ in
+       let env, typ =
+         match destruct_exist tenv typ with
+         | None -> env, typ
+         | Some (kids, nc, typ) ->
+            { env with kid_deps =
+                List.fold_left (fun kds kid -> KBindings.add kid deps kds) env.kid_deps kids },
+            typ
+       in
        if is_bitvector_typ typ then
          let _,size,_,_ = vector_typ_args_of typ in
          let Nexp_aux (size,_) as size_nexp = simplify_size_nexp env tenv size in
