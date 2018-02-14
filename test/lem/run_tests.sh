@@ -46,11 +46,13 @@ function finish_suite {
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
+cd $DIR
+
 for i in `ls $TESTSDIR/ | grep sail`;
 do
-    if $SAILDIR/sail -lem -lem_sequential -o out $TESTSDIR/$i &>/dev/null;
+    if $SAILDIR/sail -lem -o out $TESTSDIR/$i &>/dev/null;
     then
-	if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib out_embed_types_sequential.lem out_embed_sequential.lem &>/dev/null;
+	if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib out_types.lem out.lem &>/dev/null;
 	then
 	    green "tested $i expecting pass" "pass"
 	else

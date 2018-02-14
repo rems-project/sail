@@ -1,8 +1,28 @@
 open import Pervasives_extra
+(*open import Sail_impl_base*)
 open import Sail_values
+open import Prompt_monad
+open import Prompt
 open import State_monad
 open import {isabelle} `State_monad_extras`
 
+(* State monad wrapper around prompt monad *)
+
+val liftState : forall 'regval 'regs 'a 'e. register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e
+let rec liftState _ (Done a)          = returnS a
+and liftState ra (Read_mem rk a sz k) = bindS (read_memS rk a sz)     (fun v -> liftState ra (k v))
+and liftState ra (Write_memv descr k) = bindS (write_mem_valS descr)  (fun v -> liftState ra (k v))
+and liftState ra (Read_reg descr k)   = bindS (read_regvalS ra descr) (fun v -> liftState ra (k v))
+and liftState ra (Excl_res k)         = bindS (excl_resultS ())       (fun v -> liftState ra (k v))
+and liftState ra (Write_ea wk a sz k) = seqS (write_mem_eaS wk a sz)  (liftState ra k)
+and liftState ra (Write_reg r v k)    = seqS (write_regvalS ra r v)   (liftState ra k)
+and liftState ra (Barrier _ k)        = liftState ra k
+and liftState _  (Fail descr)         = failS descr
+and liftState _  (Error descr)        = failS descr
+and liftState _  (Exception e)        = throwS e
+
+
+(* TODO
 val iter_aux : forall 'regs 'e 'a. integer -> (integer -> 'a -> M 'regs unit 'e) -> list 'a -> M 'regs unit 'e
 let rec iter_aux i f xs = match xs with
   | x :: xs -> f i x >> iter_aux (i + 1) f xs
@@ -97,3 +117,4 @@ let rec until_MM vars cond body s =
         (cond vars)
         (fun cond_val s''->
           if cond_val then return vars s'' else until_MM vars cond body s'') s') s
+*)

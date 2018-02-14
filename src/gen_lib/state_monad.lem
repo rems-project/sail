@@ -25,75 +25,77 @@ let init_state regs =
 
 type ex 'e =
   | Exit
-  | Assert of string
+  | Failure of string
   | Throw of 'e
 
 type result 'a 'e =
   | Value of 'a
-  | Exception of (ex 'e)
+  | Ex of (ex 'e)
 
 (* State, nondeterminism and exception monad with result value type 'a
    and exception type 'e. *)
-type M 'regs 'a 'e = sequential_state 'regs -> list (result 'a 'e * sequential_state 'regs)
+type monadS 'regs 'a 'e = sequential_state 'regs -> list (result 'a 'e * sequential_state 'regs)
 
-val return : forall 'regs 'a 'e. 'a -> M 'regs 'a 'e
-let return a s = [(Value a,s)]
+val returnS : forall 'regs 'a 'e. 'a -> monadS 'regs 'a 'e
+let returnS a s = [(Value a,s)]
 
-val bind : forall 'regs 'a 'b 'e. M 'regs 'a 'e -> ('a -> M 'regs 'b 'e) -> M 'regs 'b 'e
-let bind m f (s : sequential_state 'regs) =
+val bindS : forall 'regs 'a 'b 'e. monadS 'regs 'a 'e -> ('a -> monadS 'regs 'b 'e) -> monadS 'regs 'b 'e
+let bindS m f (s : sequential_state 'regs) =
   List.concatMap (function
                   | (Value a, s') -> f a s'
-                  | (Exception e, s') -> [(Exception e, s')]
+                  | (Ex e, s') -> [(Ex e, s')]
                   end) (m s)
 
-let inline (>>=) = bind
-val (>>): forall 'regs 'b 'e. M 'regs unit 'e -> M 'regs 'b 'e -> M 'regs 'b 'e
-let inline (>>) m n = m >>= fun (_ : unit) -> n
+val seqS: forall 'regs 'b 'e. monadS 'regs unit 'e -> monadS 'regs 'b 'e -> monadS 'regs 'b 'e
+let seqS m n = bindS m (fun (_ : unit) -> n)
 
-val throw : forall 'regs 'a 'e. 'e -> M 'regs 'a 'e
-let throw e s = [(Exception (Throw e), s)]
+val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e
+let exitS () s = [(Ex Exit, s)]
 
-val try_catch : forall 'regs 'a 'e1 'e2. M 'regs 'a 'e1 -> ('e1 -> M 'regs 'a 'e2) ->  M 'regs 'a 'e2
-let try_catch m h s =
+val failS : forall 'regs 'a 'e. string -> monadS 'regs 'a 'e
+let failS msg s = [(Ex (Failure msg), s)]
+
+val throwS : forall 'regs 'a 'e. 'e -> monadS 'regs 'a 'e
+let throwS e s = [(Ex (Throw e), s)]
+
+val try_catchS : forall 'regs 'a 'e1 'e2. monadS 'regs 'a 'e1 -> ('e1 -> monadS 'regs 'a 'e2) ->  monadS 'regs 'a 'e2
+let try_catchS m h s =
   List.concatMap (function
-                  | (Value a, s') -> return a s'
-                  | (Exception (Throw e), s') -> h e s'
-                  | (Exception Exit, s') -> [(Exception Exit, s')]
-                  | (Exception (Assert msg), s') -> [(Exception (Assert msg), s')]
+                  | (Value a, s') -> returnS a s'
+                  | (Ex (Throw e), s') -> h e s'
+                  | (Ex Exit, s') -> [(Ex Exit, s')]
+                  | (Ex (Failure msg), s') -> [(Ex (Failure msg), s')]
                   end) (m s)
 
-val exit : forall 'regs 'e 'a. unit -> M 'regs 'a 'e
-let exit () s = [(Exception Exit, s)]
-
-val assert_exp : forall 'regs 'e. bool -> string -> M 'regs unit 'e
-let assert_exp exp msg s = if exp then [(Value (), s)] else [(Exception (Assert msg), s)]
+val assert_expS : forall 'regs 'e. bool -> string -> monadS 'regs unit 'e
+let assert_expS exp msg = if exp then returnS () else failS msg
 
 (* For early return, we abuse exceptions by throwing and catching
    the return value. The exception type is "either 'r 'e", where "Right e"
    represents a proper exception and "Left r" an early return of value "r". *)
-type MR 'regs 'a 'r 'e = M 'regs 'a (either 'r 'e)
+type monadSR 'regs 'a 'r 'e = monadS 'regs 'a (either 'r 'e)
 
-val early_return : forall 'regs 'a 'r 'e. 'r -> MR 'regs 'a 'r 'e
-let early_return r = throw (Left r)
+val early_returnS : forall 'regs 'a 'r 'e. 'r -> monadSR 'regs 'a 'r 'e
+let early_returnS r = throwS (Left r)
 
-val catch_early_return : forall 'regs 'a 'e. MR 'regs 'a 'a 'e -> M 'regs 'a 'e
-let catch_early_return m =
-  try_catch m
+val catch_early_returnS : forall 'regs 'a 'e. monadSR 'regs 'a 'a 'e -> monadS 'regs 'a 'e
+let catch_early_returnS m =
+  try_catchS m
     (function
-      | Left a -> return a
-      | Right e -> throw e
+      | Left a -> returnS a
+      | Right e -> throwS e
      end)
 
 (* Lift to monad with early return by wrapping exceptions *)
-val liftR : forall 'a 'r 'regs 'e. M 'regs 'a 'e -> MR 'regs 'a 'r 'e
-let liftR m = try_catch m (fun e -> throw (Right e))
+val liftSR : forall 'a 'r 'regs 'e. monadS 'regs 'a 'e -> monadSR 'regs 'a 'r 'e
+let liftSR m = try_catchS m (fun e -> throwS (Right e))
 
 (* Catch exceptions in the presence of early returns *)
-val try_catchR : forall 'regs 'a 'r 'e1 'e2. MR 'regs 'a 'r 'e1 -> ('e1 -> MR 'regs 'a 'r 'e2) ->  MR 'regs 'a 'r 'e2
-let try_catchR m h =
-  try_catch m
+val try_catchSR : forall 'regs 'a 'r 'e1 'e2. monadSR 'regs 'a 'r 'e1 -> ('e1 -> monadSR 'regs 'a 'r 'e2) ->  monadSR 'regs 'a 'r 'e2
+let try_catchSR m h =
+  try_catchS m
     (function
-      | Left r -> throw (Left r)
+      | Left r -> throwS (Left r)
       | Right e -> h e
      end)
 
@@ -103,29 +105,35 @@ let rec range i j =
   else if i = j then [i]
   else i :: range (i+1) j
 
-val get_reg : forall 'regs 'rv 'a. sequential_state 'regs -> register_ref 'regs 'rv 'a -> 'a
-let get_reg state reg = reg.read_from state.regstate
+val get_regS : forall 'regs 'rv 'a. sequential_state 'regs -> register_ref 'regs 'rv 'a -> 'a
+let get_regS state reg = reg.read_from state.regstate
 
-val set_reg : forall 'regs 'rv 'a. sequential_state 'regs -> register_ref 'regs 'rv 'a -> 'a -> sequential_state 'regs
-let set_reg state reg v =
+val set_regS : forall 'regs 'rv 'a. sequential_state 'regs -> register_ref 'regs 'rv 'a -> 'a -> sequential_state 'regs
+let set_regS state reg v =
   <| state with regstate = reg.write_to state.regstate v |>
 
 
-val read_mem : forall 'regs 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> M 'regs 'b 'e
-let read_mem read_kind addr sz state =
-  let addr = unsigned addr in
+val read_memS : forall 'regs 'e. read_kind -> integer -> integer -> monadS 'regs (list memory_byte) 'e
+let read_memS read_kind addr sz s =
+  (*let addr = unsigned (bitv_of_address_lifted addr) in
+  let sz = integerFromNat sz in*)
   let addrs = range addr (addr+sz-1) in
-  let memory_value = List.map (fun addr -> Map_extra.find addr state.memstate) addrs in
-  let value = bits_of_bytes (List.reverse memory_value) in
-  if read_is_exclusive read_kind
-  then [(Value value, <| state with last_exclusive_operation_was_load = true |>)]
-  else [(Value value, state)]
+  match just_list (List.map (fun addr -> Map.lookup addr s.memstate) addrs) with
+    | Just mem_val ->
+       let s' =
+         if read_is_exclusive read_kind
+         then <| s with last_exclusive_operation_was_load = true |>
+         else s
+       in
+       returnS (List.reverse mem_val) s'
+    | Nothing -> failS "read_memS" s
+  end
 
 (* caps are aligned at 32 bytes *)
 let cap_alignment = (32 : integer)
 
-val read_tag : forall 'regs 'a 'e. Bitvector 'a => read_kind -> 'a -> M 'regs bitU 'e
-let read_tag read_kind addr state =
+val read_tagS : forall 'regs 'a 'e. Bitvector 'a => read_kind -> 'a -> monadS 'regs bitU 'e
+let read_tagS read_kind addr state =
   let addr = (unsigned addr) / cap_alignment in
   let tag = match (Map.lookup addr state.tagstate) with
     | Just t -> t
@@ -135,34 +143,32 @@ let read_tag read_kind addr state =
   then [(Value tag, <| state with last_exclusive_operation_was_load = true |>)]
   else [(Value tag, state)]
 
-val excl_result : forall 'regs 'e. unit -> M 'regs bool 'e
-let excl_result () state =
+val excl_resultS : forall 'regs 'e. unit -> monadS 'regs bool 'e
+let excl_resultS () state =
   let success =
     (Value true,  <| state with last_exclusive_operation_was_load = false |>) in
   (Value false, state) :: if state.last_exclusive_operation_was_load then [success] else []
 
-val write_mem_ea : forall 'regs 'a 'e. Bitvector 'a => write_kind -> 'a -> integer -> M 'regs unit 'e
-let write_mem_ea write_kind addr sz state =
-  [(Value (), <| state with write_ea = Just (write_kind,unsigned addr,sz) |>)]
+val write_mem_eaS : forall 'regs 'e. write_kind -> integer -> integer -> monadS 'regs unit 'e
+let write_mem_eaS write_kind addr sz state =
+  (*let addr = unsigned (bitv_of_address_lifted addr) in
+  let sz = integerFromNat sz in*)
+  [(Value (), <| state with write_ea = Just (write_kind, addr, sz) |>)]
 
-val write_mem_val : forall 'a 'regs 'b 'e. Bitvector 'a => 'a -> M 'regs bool 'e
-let write_mem_val v state =
+val write_mem_valS : forall 'regs 'e. list memory_byte -> monadS 'regs bool 'e
+let write_mem_valS v state =
   let (_,addr,sz) = match state.write_ea with
     | Nothing -> failwith "write ea has not been announced yet"
     | Just write_ea -> write_ea end in
   let addrs = range addr (addr+sz-1) in
-  match bytes_of_bits v with
-    | Just v ->
-       let addresses_with_value = List.zip addrs (List.reverse v) in
-       let memstate = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
-                                 state.memstate addresses_with_value in
-       [(Value true,  <| state with memstate = memstate |>)]
-    | Nothing ->
-       [(Exception (Assert "write_mem_val"), state)]
-  end
+  (*let v = external_mem_value (bits_of v) in*)
+  let addresses_with_value = List.zip addrs (List.reverse v) in
+  let memstate = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
+                            state.memstate addresses_with_value in
+  [(Value true,  <| state with memstate = memstate |>)]
 
-val write_tag : forall 'regs 'e. bitU -> M 'regs bool 'e
-let write_tag t state =
+val write_tagS : forall 'regs 'e. bitU -> monadS 'regs bool 'e
+let write_tagS t state =
   let (_,addr,_) = match state.write_ea with
     | Nothing -> failwith "write ea has not been announced yet"
     | Just write_ea -> write_ea end in
@@ -170,11 +176,11 @@ let write_tag t state =
   let tagstate = Map.insert taddr t state.tagstate in
   [(Value true,  <| state with tagstate = tagstate |>)]
 
-val read_reg : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> M 'regs 'a 'e
-let read_reg reg state =
-  let v = reg.read_from state.regstate in
-  [(Value v,state)]
-(*let read_reg_range reg i j state =
+val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e
+let read_regS reg s = [(Value (reg.read_from s.regstate), s)]
+
+(* TODO
+let read_reg_range reg i j state =
   let v = slice (get_reg state (name_of_reg reg)) i j in
   [(Value (vec_to_bvec v),state)]
 let read_reg_bit reg i state =
@@ -187,15 +193,28 @@ let read_reg_bitfield reg regfield =
   let (i,_) = register_field_indices reg regfield in
   read_reg_bit reg i *)
 
-let reg_deref = read_reg
+val read_regvalS : forall 'regs 'rv 'e.
+  register_accessors 'regs 'rv -> string -> monadS 'regs 'rv 'e
+let read_regvalS (read, _) reg s =
+  match read reg s.regstate with
+    | Just v ->  returnS v s
+    | Nothing -> failS ("read_regvalS " ^ reg) s
+  end
 
-val write_reg : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> 'a -> M 'regs unit 'e
-let write_reg reg v state =
+val write_regvalS : forall 'regs 'rv 'e.
+  register_accessors 'regs 'rv -> string -> 'rv -> monadS 'regs unit 'e
+let write_regvalS (_, write) reg v s =
+  match write reg v s.regstate with
+    | Just rs' -> returnS () (<| s with regstate = rs' |>)
+    | Nothing ->  failS ("write_regvalS " ^ reg) s
+  end
+
+val write_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> 'a -> monadS 'regs unit 'e
+let write_regS reg v state =
   [(Value (), <| state with regstate = reg.write_to state.regstate v |>)]
 
-let write_reg_ref (reg, v) = write_reg reg v
-
-val update_reg : forall 'regs 'rv 'a 'b 'e. register_ref 'regs 'rv 'a -> ('a -> 'b -> 'a) -> 'b -> M 'regs unit 'e
+(* TODO
+val update_reg : forall 'regs 'rv 'a 'b 'e. register_ref 'regs 'rv 'a -> ('a -> 'b -> 'a) -> 'b -> monadS 'regs unit 'e
 let update_reg reg f v state =
   let current_value = get_reg state reg in
   let new_value = f current_value v in
@@ -229,10 +248,4 @@ let update_reg_field_bit regfield i reg_val bit =
   let current_field_value = regfield.get_field reg_val in
   let new_field_value = set_bit (regfield.field_is_inc) current_field_value i (to_bitU bit) in
   regfield.set_field reg_val new_field_value
-let write_reg_field_bit reg regfield i = update_reg reg (update_reg_field_bit regfield i)
-
-val barrier : forall 'regs 'e. barrier_kind -> M 'regs unit 'e
-let barrier _ = return ()
-
-val footprint : forall 'regs 'e. M 'regs unit 'e
-let footprint s = return () s
+let write_reg_field_bit reg regfield i = update_reg reg (update_reg_field_bit regfield i)*)

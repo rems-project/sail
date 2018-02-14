@@ -213,16 +213,9 @@ let register_refs_lem prefix_recordtype mwords registers =
   let register_ref (typ, id) =
     let idd = string (string_of_id id) in
     let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in
-    let is_inc =
-      if is_bitvector_typ typ then
-        let _, _, ord, _ = vector_typ_args_of typ in
-        if is_order_inc ord then "true" else "false"
-      else "true"
-    in
     let of_regval, regval_of = regval_convs_lem mwords typ in
     concat [string "let "; idd; string " = <|"; hardline;
       string "  name = \""; idd; string "\";"; hardline;
-      string "  is_inc = "; string is_inc; string ";"; hardline;
       string "  read_from = (fun s -> s."; field; string ");"; hardline;
       string "  write_to = (fun s v -> (<| s with "; field; string " = v |>));"; hardline;
       string "  of_regval = "; string of_regval; string ";"; hardline;
@@ -244,7 +237,8 @@ let register_refs_lem prefix_recordtype mwords registers =
     string "let set_regval reg_name v s =" ^^ hardline ^^
     separate hardline setters ^^ hardline ^^
     string "  Nothing" ^^ hardline ^^ hardline ^^
-    string "let register_accessors = (get_regval, set_regval)" ^^ hardline ^^ hardline
+    string "let register_accessors = (get_regval, set_regval)" ^^ hardline ^^ hardline ^^
+    string "let liftS = liftState register_accessors" ^^ hardline
   in
   separate hardline [generic_convs; refs; getters_setters]
 

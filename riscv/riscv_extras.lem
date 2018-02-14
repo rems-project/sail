@@ -3,8 +3,8 @@ open import Pervasives_extra
 open import Sail_instr_kinds
 open import Sail_values
 open import Sail_operators_mwords
-open import State
-open import State_monad
+open import Prompt_monad
+open import Prompt
 
 type bitvector 'a = mword 'a
 
@@ -15,12 +15,12 @@ let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
 let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
 let MEM_fence_i     () = barrier Barrier_RISCV_i
 
-val MEMea                            : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
-val MEMea_release                    : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
-val MEMea_strong_release             : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
-val MEMea_conditional                : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
-val MEMea_conditional_release        : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
-val MEMea_conditional_strong_release : forall 'r 'a 'e. Size 'a => bitvector 'a -> integer -> M 'r unit 'e
+val MEMea                            : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_release                    : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_strong_release             : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_conditional                : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_conditional_release        : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_conditional_strong_release : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
 
 let MEMea addr size                      = write_mem_ea Write_plain addr size
 let MEMea_release addr size              = write_mem_ea Write_RISCV_release addr size
@@ -30,15 +30,15 @@ let MEMea_conditional_release addr size  = write_mem_ea Write_RISCV_conditional_
 let MEMea_conditional_strong_release addr size
                                           = write_mem_ea Write_RISCV_conditional_strong_release addr size
 
-val write_ram : forall 'a 'b 'r 'e. Size 'a, Size 'b =>
-  integer -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b -> M 'r unit 'e
+val write_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
+  integer -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b -> monad 'rv unit 'e
 let write_ram addrsize size hexRAM address value =
   write_mem_ea Write_plain address size >>
   write_mem_val value >>= fun _ ->
   return ()
 
-val read_ram : forall 'a 'b 'r 'e. Size 'a, Size 'b =>
-  integer -> integer -> bitvector 'a -> bitvector 'a -> M 'r (bitvector 'b) 'e
+val read_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
+  integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
 let read_ram addrsize size hexRAM address =
   read_mem Read_plain address size
 

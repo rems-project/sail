@@ -226,17 +226,17 @@ let generated_line f =
 
 let output_lem filename libs defs =
   let generated_line = generated_line filename in
-  let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in
-  let types_module = (filename ^ "_embed_types" ^ seq_suffix) in
-  let monad_modules =
-    if !Pretty_print_lem.opt_sequential
+  (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
+  let types_module = (filename ^ "_types") in
+  let monad_modules = ["Prompt_monad"; "Prompt"; "State"] in
+    (* if !Pretty_print_lem.opt_sequential
     then ["State_monad"; "State"]
-    else ["Prompt_monad"; "Prompt"] in
+    else ["Prompt_monad"; "Prompt"] in *)
   let operators_module =
     if !Pretty_print_lem.opt_mwords
     then "Sail_operators_mwords"
     else "Sail_operators_bitlists" in
-  let libs = List.map (fun lib -> lib ^ seq_suffix) libs in
+  (* let libs = List.map (fun lib -> lib ^ seq_suffix) libs in *)
   let base_imports = [
       "Pervasives_extra";
       "Sail_instr_kinds";
@@ -245,9 +245,9 @@ let output_lem filename libs defs =
     ] @ monad_modules
     in
   let ((ot,_, _) as ext_ot) =
-    open_output_with_check_unformatted (filename ^ "_embed_types" ^ seq_suffix ^ ".lem") in
+    open_output_with_check_unformatted (filename ^ "_types" ^ ".lem") in
   let ((o,_, _) as ext_o) =
-    open_output_with_check_unformatted (filename ^ "_embed" ^ seq_suffix ^ ".lem") in
+    open_output_with_check_unformatted (filename ^ ".lem") in
   (Pretty_print.pp_defs_lem
      (ot, base_imports)
      (o, base_imports @ (String.capitalize types_module :: libs))

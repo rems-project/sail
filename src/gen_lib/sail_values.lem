@@ -608,7 +608,7 @@ type register =
 
 type register_ref 'regstate 'regval 'a =
   <| name : string;
-     is_inc : bool;
+     (*is_inc : bool;*)
      read_from : 'regstate -> 'a;
      write_to : 'regstate -> 'a -> 'regstate;
      of_regval : 'regval -> maybe 'a;

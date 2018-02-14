@@ -1423,12 +1423,12 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
         separate empty (List.map doc_def_lem statedefs); hardline;
         hardline;
         register_refs; hardline;
-        if !opt_sequential then
+        (* if !opt_sequential then
           concat [
             string ("type MR 'a 'r = State_monad.MR regstate 'a 'r " ^ exc_typ); hardline;
             string ("type M 'a = State_monad.M regstate 'a " ^ exc_typ); hardline;
           ]
-        else
+        else *)
           concat [
             string ("type MR 'a 'r = monadR register_value 'a 'r " ^ exc_typ); hardline;
             string ("type M 'a = monad register_value 'a " ^ exc_typ); hardline
