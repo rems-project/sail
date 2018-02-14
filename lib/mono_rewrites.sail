@@ -130,6 +130,15 @@ function UInt_slice(xs,i,l) = {
   UInt(xs)
 }
 
+val UInt_subrange : forall 'n, 'n >= 0.
+  (bits('n), int, int) -> int effect pure
+
+function UInt_subrange(xs,i,j) = {
+  let xs = (xs & slice_mask(j,i-j)) >> i in
+  UInt(xs)
+}
+
+
 val zext_ones : forall 'n, 'n >= 0. int -> bits('n) effect pure
 
 function zext_ones(m) = {
