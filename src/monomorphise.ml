@@ -1598,7 +1598,6 @@ let split_defs all_errors splits defs =
         match p with
         | P_lit _
         | P_wild
-        | P_var _
           -> None
         | P_as (p',id) when id_match id <> None ->
            raise (Reporting_basic.err_general l
@@ -1606,6 +1605,18 @@ let split_defs all_errors splits defs =
         | P_as (p',id) ->
            re (fun p -> P_as (p,id)) p'
         | P_typ (t,p') -> re (fun p -> P_typ (t,p)) p'
+        | P_var (p', (TP_aux (TP_var kid,_) as tp)) ->
+           (match spl p' with
+           | None -> None
+           | Some ps ->
+              let kids = equal_kids (pat_env_of p') kid in
+              Some (List.map (fun (p,sub,pchoices,ksub) ->
+                P_aux (P_var (p,tp),(l,annot)), sub, pchoices,
+                List.concat
+                  (List.map
+                     (fun (k,nexp) -> if KidSet.mem k kids then [(kid,nexp);(k,nexp)] else [(k,nexp)])
+                     ksub)) ps))
+        | P_var (p',tp) -> re (fun p -> P_var (p,tp)) p'
         | P_id id ->
            (match id_match id with
            | None -> None
@@ -2900,22 +2911,24 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
   in
   (* For the type in an annotation, produce the corresponding tyvar (if any),
      and a default case split (a set if there's one, a full case split if not). *)
-  let kid_of_annot annot =
+  let kids_of_annot annot =
     let env = env_of_annot annot in
     let Typ_aux (typ,_) = Env.base_typ_of env (typ_of_annot annot) in
     match typ with
     | Typ_app (Id_aux (Id "atom",_),[Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)]) ->
-       Some kid
-    | _ -> None
+       equal_kids env kid
+    | _ -> KidSet.empty
   in
-  let default_split annot kid =
-    match KBindings.find kid set_assertions with
-    | (l,is) ->
+  let default_split annot kids =
+    let kids = KidSet.elements kids in
+    let try_kid kid = try Some (KBindings.find kid set_assertions) with Not_found -> None in
+    match Util.option_first try_kid kids with
+    | Some (l,is) ->
        let l' = Generated l in
        let pats = List.map (fun n -> P_aux (P_lit (L_aux (L_num n,l')),(l',annot))) is in
        let pats = pats @ [P_aux (P_wild,(l',annot))] in
        Partial (pats,l)
-    | exception Not_found -> Total
+    | None -> Total
   in
   let arg i pat =
     let rec aux (P_aux (p,(l,annot))) =
@@ -2948,14 +2961,12 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
          begin
          match translate_loc (id_loc id) with
          | Some loc ->
-            let kid_opt = kid_of_annot (l,annot) in
-            let split = Util.option_cases kid_opt (default_split annot) (fun () -> Total) in
+            let kids = kids_of_annot (l,annot) in
+            let split = default_split annot kids in
             let s = ArgSplits.singleton (id,loc) split in
             s,
             Bindings.singleton id (Have (s, ExtraSplits.empty)),
-            (match kid_opt with
-            | None -> KBindings.empty
-            | Some kid -> KBindings.singleton kid (Have (s, ExtraSplits.empty)))
+            KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty)) k) kids KBindings.empty
          | None ->
             ArgSplits.empty,
             Bindings.singleton id (Unknown (l, ("Unable to give location for " ^ string_of_id id))),
@@ -2963,7 +2974,8 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
          end
       | P_var (pat, TP_aux (TP_var kid, _)) ->
          let s,v,k = aux pat in
-         s,v,KBindings.add kid (Have (s, ExtraSplits.empty)) k
+         let kids = equal_kids (env_of_annot (l,annot)) kid in
+         s,v,KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty)) k) kids k
       | P_app (_,pats) -> of_list pats
       | P_record (fpats,_) -> of_list (List.map (fun (FP_aux (FP_Fpat (_,p),_)) -> p) fpats)
       | P_vector pats
@@ -2993,7 +3005,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
       (* When there's no argument to case split on for a kid, we'll add a
          case expression instead *)
       let env = pat_env_of pat in
-      let split = default_split (Some (env,int_typ,no_effect)) kid in
+      let split = default_split (Some (env,int_typ,no_effect)) (KidSet.singleton kid) in
       let extra_splits = ExtraSplits.singleton (fn_id, fn_l)
         (KBindings.singleton kid split) in
       KBindings.add kid (Have (ArgSplits.empty, extra_splits)) kid_deps
