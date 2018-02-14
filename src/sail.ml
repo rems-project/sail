@@ -267,8 +267,11 @@ let main() =
          C_backend.compile_ast (C_backend.initial_ctx type_envs) ast_c
        else ());
       (if !(opt_print_lem)
-       then let ast_lem = rewrite_ast_lem ast in
-            output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
+       then
+         let mwords = !Pretty_print_lem.opt_mwords in
+         let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
+         let ast_lem = rewrite_ast_lem ast_lem in
+         output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
        else ());
     end
 

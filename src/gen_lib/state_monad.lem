@@ -1,5 +1,5 @@
 open import Pervasives_extra
-open import Sail_impl_base
+open import Sail_instr_kinds
 open import Sail_values
 
 (* 'a is result type *)
@@ -103,28 +103,12 @@ let rec range i j =
   else if i = j then [i]
   else i :: range (i+1) j
 
-val get_reg : forall 'regs 'a. sequential_state 'regs -> register_ref 'regs 'a -> 'a
+val get_reg : forall 'regs 'rv 'a. sequential_state 'regs -> register_ref 'regs 'rv 'a -> 'a
 let get_reg state reg = reg.read_from state.regstate
 
-val set_reg : forall 'regs 'a. sequential_state 'regs -> register_ref 'regs 'a -> 'a -> sequential_state 'regs
+val set_reg : forall 'regs 'rv 'a. sequential_state 'regs -> register_ref 'regs 'rv 'a -> 'a -> sequential_state 'regs
 let set_reg state reg v =
   <| state with regstate = reg.write_to state.regstate v |>
-
-
-let is_exclusive = function
-  | Sail_impl_base.Read_plain -> false
-  | Sail_impl_base.Read_reserve -> true
-  | Sail_impl_base.Read_acquire -> false
-  | Sail_impl_base.Read_exclusive -> true
-  | Sail_impl_base.Read_exclusive_acquire -> true
-  | Sail_impl_base.Read_stream -> false
-  | Sail_impl_base.Read_RISCV_acquire -> false
-  | Sail_impl_base.Read_RISCV_strong_acquire -> false
-  | Sail_impl_base.Read_RISCV_reserved -> true
-  | Sail_impl_base.Read_RISCV_reserved_acquire -> true
-  | Sail_impl_base.Read_RISCV_reserved_strong_acquire -> true
-  | Sail_impl_base.Read_X86_locked -> true
-end
 
 
 val read_mem : forall 'regs 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> M 'regs 'b 'e
@@ -132,8 +116,8 @@ let read_mem read_kind addr sz state =
   let addr = unsigned addr in
   let addrs = range addr (addr+sz-1) in
   let memory_value = List.map (fun addr -> Map_extra.find addr state.memstate) addrs in
-  let value = of_bits (Sail_values.internal_mem_value memory_value) in
-  if is_exclusive read_kind
+  let value = bits_of_bytes (List.reverse memory_value) in
+  if read_is_exclusive read_kind
   then [(Value value, <| state with last_exclusive_operation_was_load = true |>)]
   else [(Value value, state)]
 
@@ -147,7 +131,7 @@ let read_tag read_kind addr state =
     | Just t -> t
     | Nothing -> B0
   end in
-  if is_exclusive read_kind
+  if read_is_exclusive read_kind
   then [(Value tag, <| state with last_exclusive_operation_was_load = true |>)]
   else [(Value tag, state)]
 
@@ -167,11 +151,15 @@ let write_mem_val v state =
     | Nothing -> failwith "write ea has not been announced yet"
     | Just write_ea -> write_ea end in
   let addrs = range addr (addr+sz-1) in
-  let v = external_mem_value (bits_of v) in
-  let addresses_with_value = List.zip addrs v in
-  let memstate = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
-                            state.memstate addresses_with_value in
-  [(Value true,  <| state with memstate = memstate |>)]
+  match bytes_of_bits v with
+    | Just v ->
+       let addresses_with_value = List.zip addrs (List.reverse v) in
+       let memstate = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
+                                 state.memstate addresses_with_value in
+       [(Value true,  <| state with memstate = memstate |>)]
+    | Nothing ->
+       [(Exception (Assert "write_mem_val"), state)]
+  end
 
 val write_tag : forall 'regs 'e. bitU -> M 'regs bool 'e
 let write_tag t state =
@@ -182,7 +170,7 @@ let write_tag t state =
   let tagstate = Map.insert taddr t state.tagstate in
   [(Value true,  <| state with tagstate = tagstate |>)]
 
-val read_reg : forall 'regs 'a 'e. register_ref 'regs 'a -> M 'regs 'a 'e
+val read_reg : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> M 'regs 'a 'e
 let read_reg reg state =
   let v = reg.read_from state.regstate in
   [(Value v,state)]
@@ -201,13 +189,13 @@ let read_reg_bitfield reg regfield =
 
 let reg_deref = read_reg
 
-val write_reg : forall 'regs 'a 'e. register_ref 'regs 'a -> 'a -> M 'regs unit 'e
+val write_reg : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> 'a -> M 'regs unit 'e
 let write_reg reg v state =
   [(Value (), <| state with regstate = reg.write_to state.regstate v |>)]
 
 let write_reg_ref (reg, v) = write_reg reg v
 
-val update_reg : forall 'regs 'a 'b 'e. register_ref 'regs 'a -> ('a -> 'b -> 'a) -> 'b -> M 'regs unit 'e
+val update_reg : forall 'regs 'rv 'a 'b 'e. register_ref 'regs 'rv 'a -> ('a -> 'b -> 'a) -> 'b -> M 'regs unit 'e
 let update_reg reg f v state =
   let current_value = get_reg state reg in
   let new_value = f current_value v in
@@ -215,14 +203,14 @@ let update_reg reg f v state =
 
 let write_reg_field reg regfield = update_reg reg regfield.set_field
 
-val update_reg_range : forall 'regs 'a 'b. Bitvector 'a, Bitvector 'b => register_ref 'regs 'a -> integer -> integer -> 'a -> 'b -> 'a
-let update_reg_range reg i j reg_val new_val = set_bits (reg.reg_is_inc) reg_val i j (bits_of new_val)
+val update_reg_range : forall 'regs 'rv 'a 'b. Bitvector 'a, Bitvector 'b => register_ref 'regs 'rv 'a -> integer -> integer -> 'a -> 'b -> 'a
+let update_reg_range reg i j reg_val new_val = set_bits (reg.is_inc) reg_val i j (bits_of new_val)
 let write_reg_range reg i j = update_reg reg (update_reg_range reg i j)
 
-let update_reg_pos reg i reg_val x = update_list reg.reg_is_inc reg_val i x
+let update_reg_pos reg i reg_val x = update_list reg.is_inc reg_val i x
 let write_reg_pos reg i = update_reg reg (update_reg_pos reg i)
 
-let update_reg_bit reg i reg_val bit = set_bit (reg.reg_is_inc) reg_val i (to_bitU bit)
+let update_reg_bit reg i reg_val bit = set_bit (reg.is_inc) reg_val i (to_bitU bit)
 let write_reg_bit reg i = update_reg reg (update_reg_bit reg i)
 
 let update_reg_field_range regfield i j reg_val new_val =

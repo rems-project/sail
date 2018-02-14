@@ -1,70 +1,88 @@
 open import Pervasives_extra
-open import Sail_impl_base
+(*open import Sail_impl_base*)
+open import Sail_instr_kinds
 open import Sail_values
 
-type M 'a 'e = outcome 'a 'e
+type register_name = string
 
-val return : forall 'a 'e. 'a -> M 'a 'e
+type monad 'regval 'a 'e =
+  | Done of 'a
+  | Read_mem of read_kind * integer * integer * (list memory_byte -> monad 'regval 'a 'e)
+  (* Tell the system a write is imminent, at address lifted, of size nat *)
+  | Write_ea of write_kind * integer * integer * monad 'regval 'a 'e
+  (* Request the result of store-exclusive *)
+  | Excl_res of (bool -> monad 'regval 'a 'e)
+  (* Request to write memory at last signalled address. Memory value should be 8
+     times the size given in ea signal *)
+  | Write_memv of list memory_byte * (bool -> monad 'regval 'a 'e)
+  (* Request a memory barrier *)
+  | Barrier of barrier_kind * monad 'regval 'a 'e
+  (* Request to read register, will track dependency when mode.track_values *)
+  | Read_reg of register_name * ('regval -> monad 'regval 'a 'e)
+  (* Request to write register *)
+  | Write_reg of register_name * 'regval * monad 'regval 'a 'e
+  (*Result of a failed assert with possible error message to report*)
+  | Fail of string
+  | Error of string
+  (* Exception of type 'e *)
+  | Exception of 'e
+  (* TODO: Reading/writing tags *)
+
+val return : forall 'rv 'a 'e. 'a -> monad 'rv 'a 'e
 let return a = Done a
 
-val bind : forall 'a 'b 'e. M 'a 'e -> ('a -> M 'b 'e) -> M 'b 'e
+val bind : forall 'rv 'a 'b 'e. monad 'rv 'a 'e -> ('a -> monad 'rv 'b 'e) -> monad 'rv 'b 'e
 let rec bind m f = match m with
-  | Done a ->              f a
-  | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
-  | Read_reg descr k ->    Read_reg descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
-  | Write_memv descr k ->  Write_memv descr (fun v -> let (o,opt) = k v in (bind o f,opt))
-  | Excl_res k ->          Excl_res         (fun v -> let (o,opt) = k v in (bind o f,opt))
-  | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s in (bind o f,opt))
-  | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s in (bind o f,opt))
-  | Footprint o_s ->       Footprint        (let (o,opt) = o_s in (bind o f,opt))
-  | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s in (bind o f,opt))
-  | Escape descr ->        Escape descr
-  | Fail descr ->          Fail descr
-  | Error descr ->         Error descr
-  | Exception e ->         Exception e
-  | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (bind o f ,opt))
+  | Done a -> f a
+  | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> bind (k v) f)
+  | Write_memv descr k -> Write_memv descr (fun v -> bind (k v) f)
+  | Read_reg descr k ->   Read_reg descr   (fun v -> bind (k v) f)
+  | Excl_res k ->         Excl_res         (fun v -> bind (k v) f)
+  | Write_ea wk a sz k -> Write_ea wk a sz (bind k f)
+  | Barrier bk k ->       Barrier bk       (bind k f)
+  | Write_reg r v k ->    Write_reg r v    (bind k f)
+  | Fail descr ->         Fail descr
+  | Error descr ->        Error descr
+  | Exception e ->        Exception e
 end
 
 let inline (>>=) = bind
-val (>>) : forall 'b 'e. M unit 'e -> M 'b 'e -> M 'b 'e
+val (>>) : forall 'rv 'b 'e. monad 'rv unit 'e -> monad 'rv 'b 'e -> monad 'rv 'b 'e
 let inline (>>) m n = m >>= fun (_ : unit) -> n
 
-val exit : forall 'a 'e. unit -> M 'a 'e
-let exit () = Fail Nothing
+val exit : forall 'rv 'a 'e. unit -> monad 'rv 'a 'e
+let exit () = Fail "exit"
 
-val assert_exp : forall 'e. bool -> string -> M unit 'e
-let assert_exp exp msg = if exp then Done () else Fail (Just msg)
+val assert_exp : forall 'rv 'e. bool -> string -> monad 'rv unit 'e
+let assert_exp exp msg = if exp then Done () else Fail msg
 
-val throw : forall 'a 'e. 'e -> M 'a 'e
+val throw : forall 'rv 'a 'e. 'e -> monad 'rv 'a 'e
 let throw e = Exception e
 
-val try_catch : forall 'a 'e1 'e2. M 'a 'e1 -> ('e1 -> M 'a 'e2) ->  M 'a 'e2
+val try_catch : forall 'rv 'a 'e1 'e2. monad 'rv 'a 'e1 -> ('e1 -> monad 'rv 'a 'e2) -> monad 'rv 'a 'e2
 let rec try_catch m h = match m with
-  | Done a ->              Done a
-  | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (try_catch o h,opt))
-  | Read_reg descr k ->    Read_reg descr   (fun v -> let (o,opt) = k v in (try_catch o h,opt))
-  | Write_memv descr k ->  Write_memv descr (fun v -> let (o,opt) = k v in (try_catch o h,opt))
-  | Excl_res k ->          Excl_res         (fun v -> let (o,opt) = k v in (try_catch o h,opt))
-  | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s in (try_catch o h,opt))
-  | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s in (try_catch o h,opt))
-  | Footprint o_s ->       Footprint        (let (o,opt) = o_s in (try_catch o h,opt))
-  | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s in (try_catch o h,opt))
-  | Escape descr ->        Escape descr
-  | Fail descr ->          Fail descr
-  | Error descr ->         Error descr
-  | Exception e ->         h e
-  | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (try_catch o h ,opt))
+  | Done a ->             Done a
+  | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> try_catch (k v) h)
+  | Write_memv descr k -> Write_memv descr (fun v -> try_catch (k v) h)
+  | Read_reg descr k ->   Read_reg descr   (fun v -> try_catch (k v) h)
+  | Excl_res k ->         Excl_res         (fun v -> try_catch (k v) h)
+  | Write_ea wk a sz k -> Write_ea wk a sz (try_catch k h)
+  | Barrier bk k ->       Barrier bk       (try_catch k h)
+  | Write_reg r v k ->    Write_reg r v    (try_catch k h)
+  | Fail descr ->         Fail descr
+  | Error descr ->        Error descr
+  | Exception e ->        h e
 end
 
 (* For early return, we abuse exceptions by throwing and catching
    the return value. The exception type is "either 'r 'e", where "Right e"
    represents a proper exception and "Left r" an early return of value "r". *)
-type MR 'a 'r 'e = M 'a (either 'r 'e)
+type monadR 'rv 'a 'r 'e = monad 'rv 'a (either 'r 'e)
 
-val early_return : forall 'a 'r 'e. 'r -> MR 'a 'r 'e
+val early_return : forall 'rv 'a 'r 'e. 'r -> monadR 'rv 'a 'r 'e
 let early_return r = throw (Left r)
 
-val catch_early_return : forall 'a 'e. MR 'a 'a 'e -> M 'a 'e
+val catch_early_return : forall 'rv 'a 'e. monadR 'rv 'a 'a 'e -> monad 'rv 'a 'e
 let catch_early_return m =
   try_catch m
     (function
@@ -73,11 +91,11 @@ let catch_early_return m =
      end)
 
 (* Lift to monad with early return by wrapping exceptions *)
-val liftR : forall 'a 'r 'e. M 'a 'e -> MR 'a 'r 'e
+val liftR : forall 'rv 'a 'r 'e. monad 'rv 'a 'e -> monadR 'rv 'a 'r 'e
 let liftR m = try_catch m (fun e -> throw (Right e))
 
 (* Catch exceptions in the presence of early returns *)
-val try_catchR : forall 'a 'r 'e1 'e2. MR 'a 'r 'e1 -> ('e1 -> MR 'a 'r 'e2) ->  MR 'a 'r 'e2
+val try_catchR : forall 'rv 'a 'r 'e1 'e2. monadR 'rv 'a 'r 'e1 -> ('e1 -> monadR 'rv 'a 'r 'e2) ->  monadR 'rv 'a 'r 'e2
 let try_catchR m h =
   try_catch m
     (function
@@ -86,59 +104,62 @@ let try_catchR m h =
      end)
 
 
-val read_mem : forall 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> M 'b 'e
+val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e
 let read_mem rk addr sz =
-  let addr = address_lifted_of_bitv (bits_of addr) in
-  let sz = natFromInteger sz in
-  let k memory_value =
-    let bitv = of_bits (internal_mem_value memory_value) in
-    (Done bitv,Nothing) in
-  Read_mem (rk,addr,sz) k
+  let addr = unsigned addr in
+  let k bytes =
+    let bitv = bits_of_bytes (List.reverse bytes) in
+    (Done bitv) in
+  Read_mem rk addr sz k
 
-val excl_result : forall 'e. unit -> M bool 'e
+val excl_result : forall 'rv 'e. unit -> monad 'rv bool 'e
 let excl_result () =
-  let k successful = (return successful,Nothing) in
+  let k successful = (return successful) in
   Excl_res k
 
-val write_mem_ea : forall 'a 'e. Bitvector 'a => write_kind -> 'a -> integer -> M unit 'e
-let write_mem_ea wk addr sz =
-  let addr = address_lifted_of_bitv (bits_of addr) in
-  let sz = natFromInteger sz in
-  Write_ea (wk,addr,sz) (Done (),Nothing)
+val write_mem_ea : forall 'rv 'a 'e. Bitvector 'a => write_kind -> 'a -> integer -> monad 'rv unit 'e
+let write_mem_ea wk addr sz = Write_ea wk (unsigned addr) sz (Done ())
 
-val write_mem_val : forall 'a 'e. Bitvector 'a => 'a -> M bool 'e
-let write_mem_val v =
-  let v = external_mem_value (bits_of v) in
-  let k successful = (return successful,Nothing) in
-  Write_memv v k
+val write_mem_val : forall 'rv 'a 'e. Bitvector 'a => 'a -> monad 'rv bool 'e
+let write_mem_val v = match bytes_of_bits v with
+  | Just v ->
+     let k successful = (return successful) in
+     Write_memv (List.reverse v) k
+  | Nothing -> fail "write_mem_val"
+end
 
-val read_reg_aux : forall 'a 'e. Bitvector 'a => reg_name -> M 'a 'e
-let read_reg_aux reg =
-  let k reg_value =
-    let v = of_bits (internal_reg_value reg_value) in
-    (Done v,Nothing) in
-  Read_reg reg k
-
+val read_reg : forall 's 'rv 'a 'e. register_ref 's 'rv 'a -> monad 'rv 'a 'e
 let read_reg reg =
-  read_reg_aux (external_reg_whole reg)
+  let k v =
+    match reg.of_regval v with
+      | Just v -> Done v
+      | Nothing -> Error "read_reg: unrecognised value"
+    end
+  in
+  Read_reg reg.name k
+
+(* TODO
+val read_reg_range : forall 's 'r 'rv 'a 'e. Bitvector 'a => register_ref 's 'rv 'r -> integer -> integer -> monad 'rv 'a 'e
 let read_reg_range reg i j =
-  read_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger j))
+  read_reg_aux of_bits (external_reg_slice reg (natFromInteger i,natFromInteger j))
+
 let read_reg_bit reg i =
-  read_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger i)) >>= fun v ->
+  read_reg_aux (fun v -> v) (external_reg_slice reg (natFromInteger i,natFromInteger i)) >>= fun v ->
   return (extract_only_element v)
+
 let read_reg_field reg regfield =
-  read_reg_aux (external_reg_field_whole reg regfield.field_name)
+  read_reg_aux (external_reg_field_whole reg regfield)
+
 let read_reg_bitfield reg regfield =
-  read_reg_aux (external_reg_field_whole reg regfield.field_name) >>= fun v ->
-  return (extract_only_element v)
+  read_reg_aux (external_reg_field_whole reg regfield) >>= fun v ->
+  return (extract_only_element v)*)
 
 let reg_deref = read_reg
 
-val write_reg_aux : forall 'a 'e. Bitvector 'a => reg_name -> 'a -> M unit 'e
-let write_reg_aux reg_name v =
-  let regval = external_reg_value reg_name (bits_of v) in
-  Write_reg (reg_name,regval) (Done (), Nothing)
+val write_reg : forall 's 'rv 'a 'e. register_ref 's 'rv 'a -> 'a -> monad 'rv unit 'e
+let write_reg reg v = Write_reg reg.name (reg.regval_of v) (Done ())
 
+(* TODO
 let write_reg reg v =
   write_reg_aux (external_reg_whole reg) v
 let write_reg_range reg i j v =
@@ -149,20 +170,17 @@ let write_reg_pos reg i v =
 let write_reg_bit = write_reg_pos
 let write_reg_field reg regfield v =
   write_reg_aux (external_reg_field_whole reg regfield.field_name) v
-(*let write_reg_field_bit reg regfield bit =
+let write_reg_field_bit reg regfield bit =
   write_reg_aux (external_reg_field_whole reg regfield.field_name)
-                (Vector [bit] 0 (is_inc_of_reg reg))*)
+                (Vector [bit] 0 (is_inc_of_reg reg))
 let write_reg_field_range reg regfield i j v =
   write_reg_aux (external_reg_field_slice reg regfield.field_name (natFromInteger i,natFromInteger j)) v
 let write_reg_field_pos reg regfield i v =
   write_reg_field_range reg regfield i i [v]
-let write_reg_field_bit = write_reg_field_pos
+let write_reg_field_bit = write_reg_field_pos*)
 
-let write_reg_ref (reg, v) = write_reg reg v
+val barrier : forall 'rv 'e. barrier_kind -> monad 'rv unit 'e
+let barrier bk = Barrier bk (Done ())
 
-val barrier : forall 'e. barrier_kind -> M unit 'e
-let barrier bk = Barrier bk (Done (), Nothing)
-
-
-val footprint : forall 'e. M unit 'e
-let footprint = Footprint (Done (),Nothing)
+(*val footprint : forall 'rv 'e. monad 'rv unit 'e
+let footprint = Footprint (Done ())*)

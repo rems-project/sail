@@ -1,5 +1,4 @@
 open import Pervasives_extra
-open import Sail_impl_base
 open import Sail_values
 open import State_monad
 open import {isabelle} `State_monad_extras`

@@ -239,7 +239,7 @@ let output_lem filename libs defs =
   let libs = List.map (fun lib -> lib ^ seq_suffix) libs in
   let base_imports = [
       "Pervasives_extra";
-      "Sail_impl_base";
+      "Sail_instr_kinds";
       "Sail_values";
       operators_module
     ] @ monad_modules

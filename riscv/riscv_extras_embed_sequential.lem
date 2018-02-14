@@ -1,6 +1,6 @@
 open import Pervasives
 open import Pervasives_extra
-open import Sail_impl_base
+open import Sail_instr_kinds
 open import Sail_values
 open import Sail_operators_mwords
 open import State

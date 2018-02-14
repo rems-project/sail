@@ -217,7 +217,7 @@ let rec lem_nexps_of_typ (Typ_aux (t,_)) =
        NexpSet.singleton (orig_nexp m)
      else trec elem_typ
   | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
-     if !opt_sequential then trec etyp else NexpSet.empty
+     trec etyp
   | Typ_app(Id_aux (Id "range", _),_)
   | Typ_app(Id_aux (Id "implicit", _),_)
   | Typ_app(Id_aux (Id "atom", _), _) -> NexpSet.empty
@@ -274,12 +274,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
            | _ -> string "list" ^^ space ^^ typ elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
-         (* TODO: Better distinguish register names and contents? *)
-         (* fn_typ regtypes atyp_needed etyp *)
-         let tpp =
-           if !opt_sequential
-           then string "register_ref regstate " ^^ typ etyp
-           else string "register" in
+         let tpp = string "register_ref regstate register_value " ^^ typ etyp in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
@@ -912,7 +907,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
         mk_typ (Typ_app (id, targs))
       | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id in
     let fs_doc = group (separate_map (break 1) f_pp fs) in
-    let doc_field (ftyp, fid) =
+    (* let doc_field (ftyp, fid) =
       let reftyp =
         mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
           [mk_typ_arg (Typ_arg_typ rectyp);
@@ -942,12 +937,12 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
           doc_op equals (string "field_start") (string (Big_int.to_string start)); semi_sp;
           doc_op equals (string "field_is_inc") (string (if is_inc then "true" else "false")); semi_sp;
           doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
-          doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in
+          doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in *)
     doc_op equals
            (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
-           ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline ^^
-    if !opt_sequential && string_of_id id = "regstate" then empty
-    else separate_map hardline doc_field fs
+           ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline
+    (* if !opt_sequential && string_of_id id = "regstate" then empty
+    else separate_map hardline doc_field fs *)
   | TD_variant(id,nm,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -1284,8 +1279,8 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
 
 let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg(typ,id) ->
-     if !opt_sequential then empty
+  | DEC_reg(typ,id) -> empty
+     (* if !opt_sequential then empty
      else
        let env = env_of_annot annot in
        let rt = Env.base_typ_of env typ in
@@ -1303,7 +1298,7 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
                                        string "[]"]))
            ^/^ hardline
          else raise (Reporting_basic.err_unreachable l ("can't deal with register type " ^ string_of_typ typ))
-       else raise (Reporting_basic.err_unreachable l ("can't deal with register type " ^ string_of_typ typ))
+       else raise (Reporting_basic.err_unreachable l ("can't deal with register type " ^ string_of_typ typ)) *)
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
@@ -1359,121 +1354,53 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let rec doc_def_lem regtypes def =
+let rec doc_def_lem def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
-  | DEF_spec v_spec -> (empty,doc_spec_lem v_spec)
-  | DEF_fixity _ -> (empty,empty)
-  | DEF_overload _ -> (empty,empty)
-  | DEF_type t_def -> (group (doc_typdef_lem t_def) ^/^ hardline,empty)
-  | DEF_reg_dec dec -> (group (doc_dec_lem dec),empty)
+  | DEF_spec v_spec -> doc_spec_lem v_spec
+  | DEF_fixity _ -> empty
+  | DEF_overload _ -> empty
+  | DEF_type t_def -> group (doc_typdef_lem t_def) ^/^ hardline
+  | DEF_reg_dec dec -> group (doc_dec_lem dec)
 
-  | DEF_default df -> (empty,empty)
-  | DEF_fundef fdef ->
-     let doc_fdef = group (doc_fundef_lem fdef) ^/^ hardline in
-     if is_field_accessor regtypes fdef then (doc_fdef, empty) else (empty, doc_fdef)
-  | DEF_internal_mutrec fundefs ->
-     (empty, doc_mutrec_lem fundefs ^/^ hardline)
-  | DEF_val lbind -> (empty,group (doc_let_lem empty_ctxt lbind) ^/^ hardline)
+  | DEF_default df -> empty
+  | DEF_fundef fdef -> group (doc_fundef_lem fdef) ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec_lem fundefs ^/^ hardline
+  | DEF_val (LB_aux (LB_val (pat, _), _) as lbind) ->
+     group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
-  | DEF_kind _ -> (empty,empty)
+  | DEF_kind _ -> empty
 
-  | DEF_comm (DC_comm s) -> (empty,comment (string s))
-  | DEF_comm (DC_comm_struct d) ->
-     let (typdefs,vdefs) = doc_def_lem regtypes d in
-     (empty,comment (typdefs ^^ hardline ^^ vdefs))
+  | DEF_comm (DC_comm s) -> comment (string s)
+  | DEF_comm (DC_comm_struct d) -> comment (doc_def_lem d)
 
 
-let doc_defs_lem (Defs defs) =
-  let regtypes = [] in
-  let field_refs = separate_map hardline doc_regtype_fields regtypes in
-  let (typdefs,valdefs) = List.split (List.map (doc_def_lem regtypes) defs) in
-  (separate empty typdefs ^^ field_refs, separate empty valdefs)
-
-let find_registers (Defs defs) =
-  List.fold_left
-    (fun acc def ->
-      match def with
-      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id), annot)) ->
-        let env = match annot with
-          | (_, Some (env, _, _)) -> env
-          | _ -> Env.empty in
-        (typ, id, env) :: acc
-      | _ -> acc
-    ) [] defs
-
-let find_exc_typ (Defs defs) =
+let find_exc_typ defs =
   let is_exc_typ_def = function
     | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let doc_regstate_lem registers =
-  let l = Parse_ast.Unknown in
-  let annot = (l, None) in
-  let regstate = match registers with
-    | [] ->
-      TD_abbrev (
-        Id_aux (Id "regstate", l),
-        Name_sect_aux (Name_sect_none, l),
-        TypSchm_aux (TypSchm_ts (TypQ_aux (TypQ_tq [], l), unit_typ), l))
-    | _ ->
-      TD_record (
-        Id_aux (Id "regstate", l),
-        Name_sect_aux (Name_sect_none, l),
-        TypQ_aux (TypQ_tq [], l),
-        List.map (fun (typ, id, env) -> (typ, id)) registers,
-        false)
-  in
-  let initregstate =
-    if !Initial_check.opt_undefined_gen then
-      let exp = match registers with
-        | [] -> E_aux (E_lit (mk_lit L_unit), (l, Some (Env.empty, unit_typ, no_effect)))
-        | _ ->
-           let initreg (typ, id, env) =
-             let annot typ = Some (env, typ, no_effect) in
-             let initval = undefined_of_typ !opt_mwords l annot typ in
-             FE_aux (FE_Fexp (id, initval), (l, annot typ)) in
-           E_aux (
-             E_record (FES_aux (FES_Fexps (List.map initreg registers, false), annot)),
-             (l, Some (Env.empty, mk_id_typ (mk_id "regstate"), no_effect)))
-      in
-      doc_op equals (string "let initial_regstate") (doc_exp_lem empty_ctxt false exp)
-    else empty
-  in
-  doc_typdef_lem (TD_aux (regstate, annot)),
-  initregstate
-
-let doc_register_refs_lem registers =
-  let doc_register_ref (typ, id, env) =
-    let idd = doc_id_lem id in
-    let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in
-    let base_typ = Env.base_typ_of env typ in
-    let (start, is_inc) =
-      try
-        let (start, _, ord, _) = vector_typ_args_of base_typ in
-        match nexp_simp start with
-        | Nexp_aux (Nexp_constant i, _) -> (i, is_order_inc ord)
-        | _ ->
-          raise (Reporting_basic.err_unreachable Parse_ast.Unknown
-            ("register " ^ string_of_id id ^ " has non-constant start index " ^ string_of_nexp start))
-      with
-      | _ -> (Big_int.zero, true) in
-    concat [string "let "; idd; string " = <|"; hardline;
-      string "  reg_name = \""; idd; string "\";"; hardline;
-      string "  reg_start = "; string (Big_int.to_string start); string ";"; hardline;
-      string "  reg_is_inc = "; string (if is_inc then "true" else "false"); string ";"; hardline;
-      string "  read_from = (fun s -> s."; field; string ");"; hardline;
-      string "  write_to = (fun s v -> (<| s with "; field; string " = v |>)) |>"] in
-  separate_map hardline doc_register_ref registers
-
-let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
+let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) top_line =
   (* let regtypes = find_regtypes d in *)
-  let (typdefs,valdefs) = doc_defs_lem d in
-  let regstate_def, initregstate_def = doc_regstate_lem (find_registers d) in
-  let register_refs = doc_register_refs_lem (find_registers d) in
-  let exc_typ = find_exc_typ d in
+  let state_ids =
+    State.generate_regstate_defs !opt_mwords defs
+    |> Initial_check.val_spec_ids
+  in
+  let is_state_def = function
+    | DEF_spec vs -> IdSet.mem (id_of_val_spec vs) state_ids
+    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) state_ids
+    | _ -> false
+  in
+  let is_typ_def = function
+    | DEF_type _ -> true
+    | _ -> false
+  in
+  let exc_typ = find_exc_typ defs in
+  let typdefs, defs = List.partition is_typ_def defs in
+  let statedefs, defs = List.partition is_state_def defs in
+  let register_refs = State.register_refs_lem prefix_recordtype !opt_mwords (State.find_registers defs) in
   (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
@@ -1491,20 +1418,20 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
              string "module SIA = Interp_ast"; hardline;
              hardline]
         else empty;
-        typdefs; hardline;
+        separate empty (List.map doc_def_lem typdefs); hardline;
         hardline;
+        separate empty (List.map doc_def_lem statedefs); hardline;
+        hardline;
+        register_refs; hardline;
         if !opt_sequential then
-          concat [regstate_def; hardline;
-            hardline;
+          concat [
             string ("type MR 'a 'r = State_monad.MR regstate 'a 'r " ^ exc_typ); hardline;
             string ("type M 'a = State_monad.M regstate 'a " ^ exc_typ); hardline;
-            hardline;
-            register_refs
           ]
         else
           concat [
-            string ("type MR 'a 'r = Prompt_monad.MR 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = Prompt_monad.M 'a " ^ exc_typ); hardline
+            string ("type MR 'a 'r = monadR register_value 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = monad register_value 'a " ^ exc_typ); hardline
           ]
         ]);
   (print defs_file)
@@ -1513,6 +1440,5 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) d top_line =
         (separate_map hardline)
           (fun lib -> separate space [string "open import";string lib]) defs_modules;hardline;
         hardline;
-        valdefs;
-        hardline;
-        initregstate_def]);
+        separate empty (List.map doc_def_lem defs);
+        hardline]);

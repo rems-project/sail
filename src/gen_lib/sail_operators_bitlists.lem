@@ -1,6 +1,5 @@
 open import Pervasives_extra
 open import Machine_word
-open import Sail_impl_base
 open import Sail_values
 open import Sail_operators
 

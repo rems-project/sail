@@ -1,24 +1,24 @@
 open import Pervasives_extra
-open import Sail_impl_base
+(*open import Sail_impl_base*)
 open import Sail_values
 open import Prompt_monad
 open import {isabelle} `Prompt_monad_extras`
 
-val iter_aux : forall 'a 'e. integer -> (integer -> 'a -> M unit 'e) -> list 'a -> M unit 'e
+val iter_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monad 'rv unit 'e) -> list 'a -> monad 'rv unit 'e
 let rec iter_aux i f xs = match xs with
   | x :: xs -> f i x >> iter_aux (i + 1) f xs
   | [] -> return ()
   end
 
-val iteri : forall 'a 'e. (integer -> 'a -> M unit 'e) -> list 'a -> M unit 'e
+val iteri : forall 'rv 'a 'e. (integer -> 'a -> monad 'rv unit 'e) -> list 'a -> monad 'rv unit 'e
 let iteri f xs = iter_aux 0 f xs
 
-val iter : forall 'a 'e. ('a -> M unit 'e) -> list 'a -> M unit 'e
+val iter : forall 'rv 'a 'e. ('a -> monad 'rv unit 'e) -> list 'a -> monad 'rv unit 'e
 let iter f xs = iteri (fun _ x -> f x) xs
 
 
-val foreachM_inc : forall 'vars 'e. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'vars 'e) -> M 'vars 'e
+val foreachM_inc : forall 'rv 'vars 'e. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec foreachM_inc (i,stop,by) vars body =
   if (by > 0 && i <= stop) || (by < 0 && stop <= i)
   then
@@ -27,8 +27,8 @@ let rec foreachM_inc (i,stop,by) vars body =
   else return vars
 
 
-val foreachM_dec : forall 'vars 'e. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'vars 'e) -> M 'vars 'e
+val foreachM_dec : forall 'rv 'vars 'e. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec foreachM_dec (i,stop,by) vars body =
   if (by > 0 && i >= stop) || (by < 0 && stop >= i)
   then
@@ -40,21 +40,21 @@ val while_PP : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'va
 let rec while_PP vars cond body =
   if cond vars then while_PP (body vars) cond body else vars
 
-val while_PM : forall 'vars 'e. 'vars -> ('vars -> bool) ->
-                ('vars -> M 'vars 'e) -> M 'vars 'e
+val while_PM : forall 'rv 'vars 'e. 'vars -> ('vars -> bool) ->
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec while_PM vars cond body =
   if cond vars then
     body vars >>= fun vars -> while_PM vars cond body
   else return vars
 
-val while_MP : forall 'vars 'e. 'vars -> ('vars -> M bool 'e) ->
-                ('vars -> 'vars) -> M 'vars 'e
+val while_MP : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+                ('vars -> 'vars) -> monad 'rv 'vars 'e
 let rec while_MP vars cond body =
   cond vars >>= fun cond_val ->
   if cond_val then while_MP (body vars) cond body else return vars
 
-val while_MM : forall 'vars 'e. 'vars -> ('vars -> M bool 'e) ->
-                ('vars -> M 'vars 'e) -> M 'vars 'e
+val while_MM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec while_MM vars cond body =
   cond vars >>= fun cond_val ->
   if cond_val then
@@ -66,21 +66,21 @@ let rec until_PP vars cond body =
   let vars = body vars in
   if (cond vars) then vars else until_PP (body vars) cond body
 
-val until_PM : forall 'vars 'e. 'vars -> ('vars -> bool) ->
-                ('vars -> M 'vars 'e) -> M 'vars 'e
+val until_PM : forall 'rv 'vars 'e. 'vars -> ('vars -> bool) ->
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec until_PM vars cond body =
   body vars >>= fun vars ->
   if (cond vars) then return vars else until_PM vars cond body
 
-val until_MP : forall 'vars 'e. 'vars -> ('vars -> M bool 'e) ->
-                ('vars -> 'vars) -> M 'vars 'e
+val until_MP : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+                ('vars -> 'vars) -> monad 'rv 'vars 'e
 let rec until_MP vars cond body =
   let vars = body vars in
   cond vars >>= fun cond_val ->
   if cond_val then return vars else until_MP vars cond body
 
-val until_MM : forall 'vars 'e. 'vars -> ('vars -> M bool 'e) ->
-                ('vars -> M 'vars 'e) -> M 'vars 'e
+val until_MM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec until_MM vars cond body =
   body vars >>= fun vars ->
   cond vars >>= fun cond_val ->

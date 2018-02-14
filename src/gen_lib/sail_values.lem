@@ -2,7 +2,7 @@
 
 open import Pervasives_extra
 open import Machine_word
-open import Sail_impl_base
+(*open import Sail_impl_base*)
 
 
 type ii = integer
@@ -57,6 +57,7 @@ val repeat : forall 'a. list 'a -> integer -> list 'a
 let rec repeat xs n =
   if n <= 0 then []
   else xs ++ repeat xs (n-1)
+declare {isabelle} termination_argument repeat = automatic
 
 let duplicate_to_list bit length = repeat [bit] length
 
@@ -66,6 +67,7 @@ let rec replace bs (n : integer) b' = match bs with
      if n = 0 then b' :: bs
               else b :: replace bs (n - 1) b'
   end
+declare {isabelle} termination_argument replace = automatic
 
 let upper n = n
 
@@ -135,7 +137,7 @@ end
 
 let cast_bit_bool = bool_of_bitU
 
-let bit_lifted_of_bitU = function
+(*let bit_lifted_of_bitU = function
   | B0 -> Bitl_zero
   | B1 -> Bitl_one
   | BU -> Bitl_undef
@@ -157,7 +159,7 @@ let bitU_of_bit_lifted = function
   | Bitl_one  -> B1
   | Bitl_undef -> BU
   | Bitl_unknown -> failwith "bitU_of_bit_lifted Bitl_unknown"
-  end
+  end*)
 
 let not_bit = function
   | B1 -> B0
@@ -200,6 +202,7 @@ val bits_of_nat_aux : natural -> list bitU
 let rec bits_of_nat_aux x =
   if x = 0 then []
   else (if x mod 2 = 1 then B1 else B0) :: bits_of_nat_aux (x / 2)
+declare {isabelle} termination_argument bits_of_nat_aux = automatic
 let bits_of_nat n = List.reverse (bits_of_nat_aux n)
 
 val nat_of_bits : list bitU -> natural
@@ -239,6 +242,7 @@ let signed_of_bits bits =
 val pad_bitlist : bitU -> list bitU -> integer -> list bitU
 let rec pad_bitlist b bits n =
   if n <= 0 then bits else pad_bitlist b (b :: bits) (n - 1)
+declare {isabelle} termination_argument pad_bitlist = automatic
 
 let ext_bits pad len bits =
   let longer = len - (integerFromNat (List.length bits)) in
@@ -259,6 +263,7 @@ let rec add_one_bit_ignore_overflow_aux bits = match bits with
   | B1 :: bits -> B0 :: add_one_bit_ignore_overflow_aux bits
   | BU :: _ -> failwith "add_one_bit_ignore_overflow: undefined bit"
 end
+declare {isabelle} termination_argument add_one_bit_ignore_overflow_aux = automatic
 
 let add_one_bit_ignore_overflow bits =
   List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
@@ -300,6 +305,7 @@ let rec hexstring_of_bits bs = match bs with
      end
   | _ -> Nothing
   end
+declare {isabelle} termination_argument hexstring_of_bits = automatic
 
 let show_bitlist bs =
   match hexstring_of_bits bs with
@@ -369,6 +375,21 @@ let extract_only_element = function
   | [e] -> e
   | _ -> failwith "extract_only_element called for list with more elements"
 end
+
+(* just_list takes a list of maybes and returns Just xs if all elements have
+   a value, and Nothing if one of the elements is Nothing. *)
+val just_list : forall 'a. list (maybe 'a) -> maybe (list 'a)
+let rec just_list [] = Just []
+and just_list (x :: xs) =
+  match (x, just_list xs) with
+    | (Just x, Just xs) -> Just (x :: xs)
+    | (_, _) -> Nothing
+  end
+declare {isabelle} termination_argument just_list = automatic
+
+lemma just_list_spec:
+  ((forall xs. (just_list xs = Nothing) <-> List.elem Nothing xs) &&
+   (forall xs es. (just_list xs = Just es) <-> (xs = List.map Just es)))
 
 (*** Machine words *)
 
@@ -503,14 +524,24 @@ let string_of_bv v = show_bitlist (bits_of v)
 
 (*** Bytes and addresses *)
 
-val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
-let rec byte_chunks n list = match (n,list) with
-  | (0,_) -> []
-  | (n+1, a::b::c::d::e::f::g::h::rest) -> [a;b;c;d;e;f;g;h] :: byte_chunks n rest
-  | _ -> failwith "byte_chunks not given enough bits"
-end
+type memory_byte = list bitU
 
-val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> list bitU
+val byte_chunks : forall 'a. list 'a -> maybe (list (list 'a))
+let rec byte_chunks bs = match bs with
+  | [] -> Just []
+  | a::b::c::d::e::f::g::h::rest ->
+     Maybe.bind (byte_chunks rest) (fun rest -> Just ([a;b;c;d;e;f;g;h] :: rest))
+  | _ -> Nothing
+end
+declare {isabelle} termination_argument byte_chunks = automatic
+
+val bytes_of_bits : forall 'a. Bitvector 'a => 'a -> maybe (list memory_byte)
+let bytes_of_bits bs = byte_chunks (bits_of bs)
+
+val bits_of_bytes : forall 'a. Bitvector 'a => list memory_byte -> 'a
+let bits_of_bytes bs = of_bits (List.concat (List.map bits_of bs))
+
+(*val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> list bitU
 let bitv_of_byte_lifteds v =
   foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v
 
@@ -545,10 +576,13 @@ let address_lifted_of_bitv v =
     end in
   Address_lifted byte_lifteds maybe_address_integer
 
+val bitv_of_address_lifted : address_lifted -> list bitU
+let bitv_of_address_lifted (Address_lifted bs _) = bitv_of_byte_lifteds bs
+
 val address_of_bitv : list bitU -> address
 let address_of_bitv v =
   let bytes = bytes_of_bitv v in
-  address_of_byte_list bytes
+  address_of_byte_list bytes*)
 
 let rec reverse_endianness_list bits =
   if List.length bits <= 8 then bits else
@@ -560,7 +594,7 @@ let reverse_endianness v = of_bits (reverse_endianness_list (bits_of v))
 
 (*** Registers *)
 
-type register_field = string
+(*type register_field = string
 type register_field_index = string * (integer * integer) (* name, start and end *)
 
 type register =
@@ -570,14 +604,19 @@ type register =
                 bool * (* is increasing *)
                   list register_field_index
   | UndefinedRegister of integer (* length *)
-  | RegisterPair of register * register
+  | RegisterPair of register * register*)
 
-type register_ref 'regstate 'a =
-  <| reg_name : string;
-     reg_start : integer;
-     reg_is_inc : bool;
+type register_ref 'regstate 'regval 'a =
+  <| name : string;
+     is_inc : bool;
      read_from : 'regstate -> 'a;
-     write_to : 'regstate -> 'a -> 'regstate |>
+     write_to : 'regstate -> 'a -> 'regstate;
+     of_regval : 'regval -> maybe 'a;
+     regval_of : 'a -> 'regval |>
+
+type register_accessors 'regstate 'regval =
+  ((string -> 'regstate -> maybe 'regval) *
+   (string -> 'regval -> 'regstate -> maybe 'regstate))
 
 type field_ref 'regtype 'a =
   <| field_name : string;
@@ -586,7 +625,7 @@ type field_ref 'regtype 'a =
      get_field : 'regtype -> 'a;
      set_field : 'regtype -> 'a -> 'regtype |>
 
-let name_of_reg = function
+(*let name_of_reg = function
   | Register name _ _ _ _ -> name
   | UndefinedRegister _ -> failwith "name_of_reg UndefinedRegister"
   | RegisterPair _ _ -> failwith "name_of_reg RegisterPair"
@@ -597,7 +636,7 @@ let size_of_reg = function
   | UndefinedRegister size -> size
   | RegisterPair _ _ -> failwith "size_of_reg RegisterPair"
 end
-                              
+
 let start_of_reg = function
   | Register _ _ start _ _ -> start
   | UndefinedRegister _ -> failwith "start_of_reg UndefinedRegister"
@@ -638,11 +677,11 @@ let register_field_indices register rfield =
 
 let register_field_indices_nat reg regfield=
   let (i,j) = register_field_indices reg regfield in
-  (natFromInteger i,natFromInteger j)
+  (natFromInteger i,natFromInteger j)*)
 
-let rec external_reg_value reg_name v = 
+(*let rec external_reg_value reg_name v =
   let (internal_start, external_start, direction) =
-    match reg_name with 
+    match reg_name with
      | Reg _ start size dir ->
         (start, (if dir = D_increasing then start else (start - (size +1))), dir)
      | Reg_slice _ reg_start dir (slice_start, _) ->
@@ -653,10 +692,10 @@ let rec external_reg_value reg_name v =
          slice_start, dir)
      | Reg_f_slice _ reg_start dir _ _ (slice_start, _) ->
         ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
-         slice_start, dir) 
+         slice_start, dir)
      end in
   let bits = bit_lifteds_of_bitv v in
-  <| rv_bits           = bits; 
+  <| rv_bits           = bits;
      rv_dir            = direction;
      rv_start          = external_start;
      rv_start_internal = internal_start |>
@@ -672,42 +711,45 @@ let external_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
   (*This is the case the thread/concurrecny model expects, so no change needed*)
   | D_increasing -> (i,j)
-  | D_decreasing -> let slice_i = start - i in 
+  | D_decreasing -> let slice_i = start - i in
                     let slice_j = (i - j) + slice_i in
                     (slice_i,slice_j)
-  end 
+  end *)
 
-let external_reg_whole reg =
-  Reg (name_of_reg reg) (start_of_reg_nat reg) (size_of_reg_nat reg) (dir_of_reg reg)
-      
-let external_reg_slice reg (i,j) =
-  let start = start_of_reg_nat reg in
-  let dir = dir_of_reg reg in
-  Reg_slice (name_of_reg reg) start dir (external_slice dir start (i,j))
+(* TODO
+let external_reg_whole r =
+  Reg (r.name) (natFromInteger r.start) (natFromInteger r.size) (dir_of_bool r.is_inc)
 
-let external_reg_field_whole reg rfield = 
+let external_reg_slice r (i,j) =
+  let start = natFromInteger r.start in
+  let dir = dir_of_bool r.is_inc in
+  Reg_slice (r.name) start dir (external_slice dir start (i,j))
+
+let external_reg_field_whole reg rfield =
   let (m,n) = register_field_indices_nat reg rfield in
   let start = start_of_reg_nat reg in
   let dir = dir_of_reg reg in
   Reg_field (name_of_reg reg) start dir rfield (external_slice dir start (m,n))
-            
-let external_reg_field_slice reg rfield (i,j) = 
+
+let external_reg_field_slice reg rfield (i,j) =
   let (m,n) = register_field_indices_nat reg rfield in
   let start = start_of_reg_nat reg in
   let dir = dir_of_reg reg in
   Reg_f_slice (name_of_reg reg) start dir rfield
               (external_slice dir start (m,n))
-              (external_slice dir start (i,j))
+              (external_slice dir start (i,j))*)
 
+(*val external_mem_value : list bitU -> memory_value
 let external_mem_value v =
   byte_lifteds_of_bitv v $> List.reverse
 
+val internal_mem_value : memory_value -> list bitU
 let internal_mem_value bytes =
-  List.reverse bytes $> bitv_of_byte_lifteds
+  List.reverse bytes $> bitv_of_byte_lifteds*)
 
 
 
-                       
+
 
 val foreach_inc :  forall 'vars. (integer * integer * integer) -> 'vars ->
                    (integer -> 'vars -> 'vars) -> 'vars
@@ -756,7 +798,7 @@ let toNaturalFiveTup (n1,n2,n3,n4,n5) =
   | RSliceBit of (string * integer)
   | RField of (string * string)
 
-type niafp = 
+type niafp =
   | NIAFP_successor
   | NIAFP_concrete_address of vector bitU
   | NIAFP_LR
@@ -764,13 +806,13 @@ type niafp =
   | NIAFP_register of regfp
 
 (* only for MIPS *)
-type diafp = 
+type diafp =
   | DIAFP_none
   | DIAFP_concrete of vector bitU
   | DIAFP_reg of regfp
 
 let regfp_to_reg (reg_info : string -> maybe string -> (nat * nat * direction * (nat * nat))) = function
-  | RFull name -> 
+  | RFull name ->
      let (start,length,direction,_) = reg_info name Nothing in
      Reg name start length direction
   | RSlice (name,i,j) ->

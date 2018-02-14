@@ -1,4 +1,4 @@
-THYS = Sail_impl_base.thy Sail_values.thy Sail_operators.thy \
+THYS = Sail_instr_kinds.thy Sail_values.thy Sail_operators.thy \
   Sail_operators_mwords.thy Sail_operators_bitlists.thy \
   State_monad.thy State.thy Prompt_monad.thy Prompt.thy
 EXTRA_THYS = State_monad_extras.thy Prompt_monad_extras.thy
@@ -14,10 +14,10 @@ heap-img: $(THYS) $(EXTRA_THYS) ROOT
 	@echo '*** and add the isabelle binary to your PATH.'
 	isabelle build -b Sail
 
-Sail_impl_base.thy: ../../src/lem_interp/sail_impl_base.lem
+Sail_instr_kinds.thy: ../../src/lem_interp/sail_instr_kinds.lem
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_values.thy: ../../src/gen_lib/sail_values.lem Sail_impl_base.thy
+Sail_values.thy: ../../src/gen_lib/sail_values.lem Sail_instr_kinds.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 Sail_operators.thy: ../../src/gen_lib/sail_operators.lem Sail_values.thy

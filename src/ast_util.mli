@@ -211,6 +211,7 @@ val string_of_index_range : index_range -> string
 
 val id_of_fundef : 'a fundef -> id
 val id_of_type_def : 'a type_def -> id
+val id_of_val_spec : 'a val_spec -> id
 
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid
@@ -306,8 +307,12 @@ val rename_fundef : id -> 'a fundef -> 'a fundef
 val split_defs : ('a def -> bool) -> 'a defs -> ('a defs * 'a def * 'a defs) option
 
 val append_ast : 'a defs -> 'a defs -> 'a defs
+val concat_ast : 'a defs list -> 'a defs
 
 val type_union_id : type_union -> id
+
+val ids_of_def : 'a def -> IdSet.t
+val ids_of_defs : 'a defs -> IdSet.t
 
 val pat_ids : 'a pat -> IdSet.t
 val subst : id -> 'a exp -> 'a exp -> 'a exp

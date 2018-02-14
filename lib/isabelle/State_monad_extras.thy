@@ -7,8 +7,8 @@ lemma bind_ext_cong[fundef_cong]:
     and f: "\<And>a s'. (Value a, s') \<in> set (m2 s) \<Longrightarrow> f1 a s' = f2 a s'"
   shows "(bind m1 f1) s = (bind m2 f2) s"
 proof -
-  have "List.concat (map (\<lambda>x. case x of (Value a, s') \<Rightarrow> f1 a s' | (Exception0 e, s') \<Rightarrow> [(Exception0 e, s')]) (m2 s)) =
-        List.concat (map (\<lambda>x. case x of (Value a, s') \<Rightarrow> f2 a s' | (Exception0 e, s') \<Rightarrow> [(Exception0 e, s')]) (m2 s))"
+  have "List.concat (map (\<lambda>x. case x of (Value a, s') \<Rightarrow> f1 a s' | (Exception e, s') \<Rightarrow> [(Exception e, s')]) (m2 s)) =
+        List.concat (map (\<lambda>x. case x of (Value a, s') \<Rightarrow> f2 a s' | (Exception e, s') \<Rightarrow> [(Exception e, s')]) (m2 s))"
     using f by (intro arg_cong[where f = List.concat]) (auto intro: map_ext split: result.splits)
   then show ?thesis using m by (auto simp: bind_def)
 qed
