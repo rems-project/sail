@@ -658,6 +658,8 @@ pat:
     { $1 }
   | pat1 As typ
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
+  | pat1 Match typ
+    { mk_pat (P_var ($1, $3)) $startpos $endpos }
 
 pat_list:
   | pat

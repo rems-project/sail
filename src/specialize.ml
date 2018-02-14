@@ -176,9 +176,16 @@ let specialize_id_fundef instantiations id ast =
   match split_defs (is_fundef id) ast with
   | None -> ast
   | Some (pre_ast, DEF_fundef fundef, post_ast) ->
-     let fundefs =
-       List.map (fun i -> DEF_fundef (rename_fundef (id_of_instantiation id i) fundef)) instantiations
+     let spec_ids = ref IdSet.empty in
+     let specialize_fundef instantiation =
+       let spec_id = id_of_instantiation id instantiation in
+       if IdSet.mem spec_id !spec_ids then [] else
+         begin
+           spec_ids := IdSet.add spec_id !spec_ids;
+           [DEF_fundef (rename_fundef spec_id fundef)]
+         end
      in
+     let fundefs = List.map specialize_fundef instantiations |> List.concat in
      append_ast pre_ast (append_ast (Defs fundefs) post_ast)
   | Some _ -> assert false (* unreachable *)
 
