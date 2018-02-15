@@ -155,6 +155,7 @@ and aval =
   | AV_tuple of aval list
   | AV_list of aval list * typ
   | AV_vector of aval list * typ
+  | AV_record of aval Bindings.t * typ
   | AV_C_fragment of fragment * typ
 
 (* Map over all the avals in an aexp. *)
@@ -175,8 +176,8 @@ let rec map_aval f = function
      AE_for (id, map_aval f aexp1, map_aval f aexp2, map_aval f aexp3, order, map_aval f aexp4)
   | AE_record_update (aval, updates, typ) ->
      AE_record_update (f aval, Bindings.map f updates, typ)
-  | AE_field (aval, id, typ) ->
-     AE_field (f aval, id, typ)
+  | AE_field (aval, field, typ) ->
+     AE_field (f aval, field, typ)
   | AE_case (aval, cases, typ) ->
      AE_case (f aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
   | AE_try (aexp, cases, typ) ->
@@ -269,7 +270,7 @@ let rec pp_aexp = function
                                    string "in " ^^ pp_order order ]))
      in
      header ^//^ pp_aexp aexp4
-  | AE_field _ -> string "FIELD"
+  | AE_field (aval, field, typ) -> pp_annot typ (parens (pp_aval aval ^^ string "." ^^ pp_id field))
   | AE_case (aval, cases, typ) ->
      pp_annot typ (separate space [string "match"; pp_aval aval; pp_cases cases])
   | AE_try (aexp, cases, typ) ->
@@ -412,8 +413,8 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
      let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
      wrap (AE_val (AV_list (List.map fst avals, typ_of exp)))
 
-  | E_field (exp, id) ->
-     let aval, wrap = to_aval (anf exp) in
+  | E_field (field_exp, id) ->
+     let aval, wrap = to_aval (anf field_exp) in
      wrap (AE_field (aval, id, typ_of exp))
 
   | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
@@ -514,6 +515,16 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
      let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
      wrap (AE_val (AV_tuple (List.map fst avals)))
 
+  | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
+     let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+       let aval, wrap = to_aval (anf exp) in
+       (id, aval), wrap
+     in
+     let fexps = List.map anf_fexp fexps in
+     let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd fexps) in
+     let record = List.fold_left (fun r (id, aval) -> Bindings.add id aval r) Bindings.empty (List.map fst fexps) in
+     wrap (AE_val (AV_record (record, typ_of exp)))
+
   | E_cast (typ, exp) -> AE_cast (anf exp, typ)
 
   | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
@@ -539,7 +550,7 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
   | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_plet _ | E_internal_return _ | E_internal_exp_user _ ->
      failwith "encountered unexpected internal node when converting to ANF"
 
-  | E_record _ -> c_error ("Cannot convert to ANF: " ^ string_of_exp exp)
+  | E_record _ -> AE_val (AV_lit (mk_lit (L_string "testing"), string_typ)) (* c_error ("Cannot convert to ANF: " ^ string_of_exp exp) *)
 
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
@@ -611,6 +622,7 @@ let rec ctyp_of_typ ctx typ =
   | Typ_id id when string_of_id id = "bit" -> CT_bit
   | Typ_id id when string_of_id id = "bool" -> CT_bool
   | Typ_id id when string_of_id id = "int" -> CT_mpz
+  | Typ_id id when string_of_id id = "nat" -> CT_mpz
   | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
      begin
        match destruct_range typ with
@@ -1109,9 +1121,25 @@ let rec compile_aval ctx = function
      in
      setup
      @ [idecl tup_ctyp gs] @ tup_setup
-     @ List.mapi (fun n cval -> icopy (CL_field (gs, "ztup" ^ string_of_int n)) cval) cvals,
+     @ List.mapi (fun n cval -> icopy (CL_field (gs, "tup" ^ string_of_int n)) cval) cvals,
      (F_id gs, CT_tup (List.map cval_ctyp cvals)),
      tup_cleanup @ cleanup
+
+  | AV_record (fields, typ) ->
+     let ctyp = ctyp_of_typ ctx typ in
+     let gs = gensym () in
+     let setup, cleanup = if is_stack_ctyp ctyp then [], [] else [ialloc ctyp gs], [iclear ctyp gs] in
+     let compile_fields (id, aval) =
+       let field_setup, cval, field_cleanup = compile_aval ctx aval in
+       field_setup
+       @ [icopy (CL_field (gs, string_of_id id)) cval]
+       @ field_cleanup
+     in
+     [idecl ctyp gs]
+     @ setup
+     @ List.concat (List.map compile_fields (Bindings.bindings fields)),
+     (F_id gs, ctyp),
+     cleanup
 
   | AV_vector ([], _) ->
      c_error "Encountered empty vector literal"
@@ -1397,18 +1425,27 @@ let rec compile_aexp ctx = function
                        if_ctyp),
      cleanup
 
+  (* FIXME: AE_record_update could be AV_record_update - would reduce some copying. *)
   | AE_record_update (aval, fields, typ) ->
-     let update_field (prev_setup, prev_calls, prev_cleanup) (field, aval) =
-       let setup, _, call, cleanup = compile_aexp ctx (AE_val aval) in
-       prev_setup @ setup, call :: prev_calls, cleanup @ prev_cleanup
-     in
-     let setup, calls, cleanup = List.fold_left update_field ([], [], []) (Bindings.bindings fields) in
      let ctyp = ctyp_of_typ ctx typ in
      let gs = gensym () in
-     [idecl ctyp gs; ialloc ctyp gs] @ setup @ List.map (fun call -> call (CL_id gs)) calls,
+     let gs_setup, gs_cleanup = if is_stack_ctyp ctyp then [], [] else [ialloc ctyp gs], [iclear ctyp gs] in
+     let compile_fields (id, aval) =
+       let field_setup, cval, field_cleanup = compile_aval ctx aval in
+       field_setup
+       @ [icopy (CL_field (gs, string_of_id id)) cval]
+       @ field_cleanup
+     in
+     let setup, cval, cleanup = compile_aval ctx aval in
+     [idecl ctyp gs]
+     @ gs_setup
+     @ setup
+     @ [icopy (CL_id gs) cval]
+     @ cleanup
+     @ List.concat (List.map compile_fields (Bindings.bindings fields)),
      ctyp,
      (fun clexp -> icopy clexp (F_id gs, ctyp)),
-     cleanup @ [iclear ctyp gs]
+     gs_cleanup
 
   | AE_assign (id, assign_typ, aexp) ->
      (* assign_ctyp is the type of the C variable we are assigning to,
@@ -1474,6 +1511,14 @@ let rec compile_aexp ctx = function
      ctyp_of_typ ctx typ,
      (fun clexp -> icomment "unreachable after throw"),
      []
+
+  | AE_field (aval, id, typ) ->
+     let ctyp = ctyp_of_typ ctx typ in
+     let setup, cval, cleanup = compile_aval ctx aval in
+     setup,
+     ctyp,
+     (fun clexp -> icopy clexp (F_field (fst cval, Util.zencode_string (string_of_id id)), ctyp)),
+     cleanup
 
   | aexp -> failwith ("Cannot compile ANF expression: " ^ Pretty_print_sail.to_string (pp_aexp aexp))
 
@@ -1999,14 +2044,14 @@ let sgen_cval = function (frag, _) -> string_of_fragment frag
 
 let sgen_clexp = function
   | CL_id id -> "&" ^ sgen_id id
-  | CL_field (id, field) -> "&(" ^ sgen_id id ^ "." ^ field ^ ")"
+  | CL_field (id, field) -> "&(" ^ sgen_id id ^ "." ^ Util.zencode_string field ^ ")"
   | CL_addr id -> sgen_id id
   | CL_have_exception -> "have_exception"
   | CL_current_exception -> "current_exception"
 
 let sgen_clexp_pure = function
   | CL_id id -> sgen_id id
-  | CL_field (id, field) -> sgen_id id ^ "." ^ field
+  | CL_field (id, field) -> sgen_id id ^ "." ^ Util.zencode_string field
   | CL_addr id -> sgen_id id
   | CL_have_exception -> "have_exception"
   | CL_current_exception -> "current_exception"
