@@ -1,0 +1,3 @@
+x.A = 4'0x8
+x.A = 4'0xF
+(struct {A = 0b1111, B = 0b11} : test).B = 2'0x3

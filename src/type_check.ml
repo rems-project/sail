@@ -2052,7 +2052,7 @@ let fresh_var =
             mk_id ("v#" ^ string_of_int n)
 
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
-  let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
+  let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, Env.expand_synonyms env typ, eff))) in
   let add_effect exp eff = match exp with
     | (E_aux (exp, (l, Some (env, typ, _)))) -> E_aux (exp, (l, Some (env, typ, eff)))
     | _ -> failwith "Tried to add effect to unannoted expression"

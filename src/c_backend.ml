@@ -283,6 +283,8 @@ and pp_apat = function
   | AP_global (id, _) -> pp_id id
   | AP_tup apats -> parens (separate_map (comma ^^ space) pp_apat apats)
   | AP_app (id, apat) -> pp_id id ^^ parens (pp_apat apat)
+  | AP_nil -> string "[||]"
+  | AP_cons (hd_apat, tl_apat) -> pp_apat hd_apat ^^ string " :: " ^^ pp_apat tl_apat
 
 and pp_cases cases = surround 2 0 lbrace (separate_map (comma ^^ hardline) pp_case cases) rbrace
 
@@ -304,6 +306,10 @@ and pp_aval = function
      pp_annot typ (string "[" ^^ separate_map (comma ^^ space) pp_aval avals ^^ string "]")
   | AV_list (avals, typ) ->
      pp_annot typ (string "[|" ^^ separate_map (comma ^^ space) pp_aval avals ^^ string "|]")
+  | AV_record (fields, typ) ->
+     pp_annot typ (string "struct {"
+                   ^^ separate_map (comma ^^ space) (fun (id, field) -> pp_id id ^^ string " = " ^^ pp_aval field) (Bindings.bindings fields)
+                   ^^ string "}")
 
 let ae_lit lit typ = AE_val (AV_lit (lit, typ))
 
@@ -339,10 +345,11 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, (l, _)) as pat) =
   | _ -> c_error ~loc:l ("Could not convert pattern to ANF: " ^ string_of_pat pat)
 
 let rec apat_globals = function
-  | AP_wild | AP_id _ -> []
+  | AP_nil | AP_wild | AP_id _ -> []
   | AP_global (id, typ) -> [(id, typ)]
   | AP_tup apats -> List.concat (List.map apat_globals apats)
   | AP_app (_, apat) -> apat_globals apat
+  | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
 
 let rec anf (E_aux (e_aux, exp_annot) as exp) =
   let to_aval = function
@@ -442,7 +449,7 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
   | E_exit exp ->
      let aexp = anf exp in
      let aval, wrap = to_aval aexp in
-     wrap (AE_app (mk_id "exit", [aval], unit_typ))
+     wrap (AE_app (mk_id "sail_exit", [aval], unit_typ))
 
   | E_return ret_exp ->
      let aexp = anf ret_exp in
@@ -454,7 +461,7 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
      let aexp2 = anf exp2 in
      let aval1, wrap1 = to_aval aexp1 in
      let aval2, wrap2 = to_aval aexp2 in
-     wrap1 (wrap2 (AE_app (mk_id "assert", [aval1; aval2], unit_typ)))
+     wrap1 (wrap2 (AE_app (mk_id "sail_assert", [aval1; aval2], unit_typ)))
 
   | E_cons (exp1, exp2) ->
      let aexp1 = anf exp1 in
@@ -1073,6 +1080,7 @@ let rec is_bitvector = function
 let rec string_of_aval_bit = function
   | AV_lit (L_aux (L_zero, _), _) -> "0"
   | AV_lit (L_aux (L_one, _), _) -> "1"
+  | _ -> assert false
 
 let rec chunkify n xs =
   match Util.take n xs, Util.drop n xs with
@@ -1087,7 +1095,7 @@ let rec compile_aval ctx = function
      [], (F_id id, ctyp_of_typ ctx (lvar_typ typ)), []
 
   | AV_lit (L_aux (L_string str, _), typ) ->
-     [], (F_lit ("\"" ^ str ^ "\""), ctyp_of_typ ctx typ), []
+     [], (F_lit ("\"" ^ String.escaped str ^ "\""), ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
      let gs = gensym () in
@@ -1105,6 +1113,9 @@ let rec compile_aval ctx = function
 
   | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit "0", CT_bit), []
   | AV_lit (L_aux (L_one, _), _) -> [], (F_lit "1", CT_bit), []
+
+  | AV_lit (L_aux (L_true, _), _) -> [], (F_lit "true", CT_bool), []
+  | AV_lit (L_aux (L_false, _), _) -> [], (F_lit "false", CT_bool), []
 
   | AV_lit (L_aux (_, l) as lit, _) ->
      c_error ~loc:l ("Encountered unexpected literal " ^ string_of_lit lit)
@@ -1144,6 +1155,7 @@ let rec compile_aval ctx = function
   | AV_vector ([], _) ->
      c_error "Encountered empty vector literal"
 
+  (* Convert a small bitvector to a uint64_t literal. *)
   | AV_vector (avals, typ) when is_bitvector avals && List.length avals <= 64 ->
      begin
        let bitstring = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit avals) ^ "ul") in
@@ -1159,6 +1171,8 @@ let rec compile_aval ctx = function
           c_error "Encountered vector literal without vector type"
      end
 
+  (* Convert a bitvector literal that is larger than 64-bits to a
+     variable size bitvector, converting it in 64-bit chunks. *)
   | AV_vector (avals, typ) when is_bitvector avals ->
      let len = List.length avals in
      let bitstring avals = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit avals) ^ "ul") in
@@ -1174,8 +1188,36 @@ let rec compile_aval ctx = function
      (F_id gs, CT_bv true),
      [iclear (CT_bv true) gs]
 
-  | AV_vector _ ->
-     c_error "Have AV_vector"
+  (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
+  | AV_vector (avals, Typ_aux (Typ_app (id, [_; Typ_arg_aux (Typ_arg_order ord, _); Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id bit_id, _)), _)]), _))
+       when string_of_id bit_id = "bit" && string_of_id id = "vector" && List.length avals <= 64 ->
+     let len = List.length avals in
+     let direction = match ord with
+       | Ord_aux (Ord_inc, _) -> false
+       | Ord_aux (Ord_dec, _) -> true
+     in
+     let gs = gensym () in
+     let ctyp = CT_uint64 (len, direction) in
+     let mask i = "0b" ^ String.make (63 - i) '0' ^ "1" ^ String.make i '0' ^ "ul" in
+     let aval_mask i aval =
+       let setup, cval, cleanup = compile_aval ctx aval in
+       match cval with
+       | (F_lit "0", _) -> []
+       | (F_lit "1", _) ->
+          [icopy (CL_id gs) (F_op (F_id gs, "|", F_lit (mask i)), ctyp)]
+       | _ ->
+          setup @ [iif cval [icopy (CL_id gs) (F_op (F_id gs, "|", F_lit (mask i)), ctyp)] [] CT_unit] @ cleanup
+     in
+     [idecl ctyp gs;
+      icopy (CL_id gs) (F_lit "0ul", ctyp)]
+     @ List.concat (List.mapi aval_mask (List.rev avals)),
+     (F_id gs, ctyp),
+     []
+                                             (*
+     c_error ("Have AV_vector (small/bits): " ^ Pretty_print_sail.to_string (separate_map (comma ^^ space) pp_aval avals)) *)
+
+  | AV_vector _ as aval ->
+     c_error ("Have AV_vector: " ^ Pretty_print_sail.to_string (pp_aval aval))
 
   | AV_list (avals, Typ_aux (typ, _)) ->
      let ctyp = match typ with
@@ -1500,7 +1542,7 @@ let rec compile_aexp ctx = function
      (* Cleanup info will be re-added by fix_early_return *)
      let return_setup, cval, _ = compile_aval ctx aval in
      return_setup @ [ireturn cval],
-     CT_unit,
+     cval_ctyp cval,
      (fun clexp -> icomment "unreachable after return"),
      []
 
@@ -1520,7 +1562,15 @@ let rec compile_aexp ctx = function
      (fun clexp -> icopy clexp (F_field (fst cval, Util.zencode_string (string_of_id id)), ctyp)),
      cleanup
 
+  | AE_for _ ->
+     [],
+     CT_unit,
+     (fun clexp -> icomment "for loop"),
+     []
+
+(*
   | aexp -> failwith ("Cannot compile ANF expression: " ^ Pretty_print_sail.to_string (pp_aexp aexp))
+ *)
 
 and compile_block ctx = function
   | [] -> []
@@ -1724,8 +1774,14 @@ let compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      let aexp = map_functions (analyze_primop ctx) (c_literals ctx (anf exp)) in
+     prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp));
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let gs = gensym () in
+     let pat = match pat with
+       | P_aux (P_tup [], annot) -> P_aux (P_lit (mk_lit L_unit), annot)
+       | _ -> pat
+     in
+     prerr_endline (string_of_id id ^ " : " ^ string_of_ctyp ctyp);
      if is_stack_ctyp ctyp then
        let instrs = [idecl ctyp gs] @ setup @ [call (CL_id gs)] @ cleanup @ [ireturn (F_id gs, ctyp)] in
        let instrs = fix_exception ctx instrs in
@@ -1998,12 +2054,12 @@ let make_dot id graph =
 let sgen_id id = Util.zencode_string (string_of_id id)
 let codegen_id id = string (sgen_id id)
 
-let upper_sgen_id id = Util.zencode_upper_string (string_of_id id)
+let upper_sgen_id id = Util.zencode_string (string_of_id id)
 let upper_codegen_id id = string (upper_sgen_id id)
 
 let sgen_ctyp = function
   | CT_unit -> "unit"
-  | CT_bit -> "bit"
+  | CT_bit -> "int"
   | CT_bool -> "bool"
   | CT_uint64 _ -> "uint64_t"
   | CT_int64 -> "int64_t"
@@ -2014,11 +2070,12 @@ let sgen_ctyp = function
   | CT_enum (id, _) -> "enum " ^ sgen_id id
   | CT_variant (id, _) -> "struct " ^ sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
+  | CT_vector _ -> "int" (* FIXME *)
   | CT_string -> "sail_string"
 
 let sgen_ctyp_name = function
   | CT_unit -> "unit"
-  | CT_bit -> "bit"
+  | CT_bit -> "int"
   | CT_bool -> "bool"
   | CT_uint64 _ -> "uint64_t"
   | CT_int64 -> "int64_t"
@@ -2029,6 +2086,7 @@ let sgen_ctyp_name = function
   | CT_enum (id, _) -> sgen_id id
   | CT_variant (id, _) -> sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
+  | CT_vector _ -> "int" (* FIXME *)
   | CT_string -> "sail_string"
 
 let sgen_cval_param (frag, ctyp) =
@@ -2399,6 +2457,9 @@ let codegen_def' ctx = function
        | _ -> assert false
      in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
+     prerr_endline (string_of_id id);
+     prerr_endline (Util.string_of_list ", " (fun arg -> sgen_id arg) args);
+     prerr_endline (Util.string_of_list ", " (fun ctyp -> sgen_ctyp ctyp) arg_ctyps);
      let args = Util.string_of_list ", " (fun x -> x) (List.map2 (fun ctyp arg -> sgen_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args) in
      let function_header =
        match ret_arg with
@@ -2451,8 +2512,9 @@ let codegen_def ctx def =
 
 let compile_ast ctx (Defs defs) =
   try
-    let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "assert") "(bool, string) -> unit effect {escape}" in
-    let ctx = { ctx with tc_env = snd (check ctx.tc_env (Defs [assert_vs])) } in
+    let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
+    let exit_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_exit") "unit -> unit effect {escape}" in
+    let ctx = { ctx with tc_env = snd (check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
     let docs = List.map (codegen_def ctx) cdefs in

@@ -105,7 +105,12 @@ function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
 overload operator | = {or_bool, or_vec}
 
-val UInt = "uint" : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+val UInt = {
+  ocaml: "uint",
+  lem: "uint",
+  interpreter: "uint",
+  c: "sail_uint"
+} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 val SInt = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
