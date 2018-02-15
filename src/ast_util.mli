@@ -74,6 +74,7 @@ val mk_pexp : unit pexp_aux -> unit pexp
 val mk_lexp : unit lexp_aux -> unit lexp
 val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> unit exp
+val mk_typ_pat : typ_pat_aux -> typ_pat
 val mk_funcl : id -> unit pat -> unit exp -> unit funcl
 val mk_fundef : (unit funcl) list -> unit def
 val mk_val_spec : val_spec_aux -> unit def

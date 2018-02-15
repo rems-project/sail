@@ -5,6 +5,8 @@ $include <flow.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
+val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anything"} : (bit, bit) -> bool
+
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
@@ -23,7 +25,7 @@ val list_length = {ocaml: "length", lem: "length_list"} : forall ('a : Type). li
 
 overload length = {bitvector_length, vector_length, list_length}
 
-overload operator == = {eq_vec, eq_string, eq_real, eq_anything}
+overload operator == = {eq_bit, eq_vec, eq_string, eq_real, eq_anything}
 
 val vector_subrange_A = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
@@ -264,13 +266,13 @@ overload min = {min_nat, min_int}
 overload max = {max_nat, max_int}
 
 val __WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit
+  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmem}
 
 val __TraceMemoryWrite : forall 'n 'm.
   (atom('n), bits('m), bits(8 * 'n)) -> unit
 
 val __ReadRAM = "read_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n)
+  (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
 val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
 

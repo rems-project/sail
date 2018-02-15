@@ -509,7 +509,7 @@ let string_of_zunit () = "()"
 let string_of_zbool = function
   | true -> "true"
   | false -> "false"
-(* let string_of_zreal r = Num.string_of_num r *)
+let string_of_zreal r = "REAL"
 let string_of_zstring str = "\"" ^ String.escaped str ^ "\""
 
 let rec string_of_list sep string_of = function

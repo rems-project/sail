@@ -2033,7 +2033,7 @@ val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   bits('M) -> bits('N) effect {escape}
 
 function Replicate x = {
-  assert('N % 'M == 0, "((N MOD M) == 0)");
+  assert(('N % 'M) == 0, "((N MOD M) == 0)");
   let 'p = ex_int('N / 'M);
   assert(constraint('N = 'p * 'M));
   return(replicate_bits(x, p))
@@ -2568,12 +2568,12 @@ val Align__1 : forall ('N : Int), 'N >= 0 & 'N >= 0. (bits('N), int) -> bits('N)
 
 overload Align = {Align__0, Align__1}
 
-function Align__0 ('x, 'y) = return(y * (x / y))
+function Align__0 ('x, 'y) = return(y * x / y)
 
 function Align__1 (x, 'y) = return(__GetSlice_int('N, Align(UInt(x), y), 0))
 
 val aset__Mem : forall ('size : Int), 8 * 'size >= 0.
-  (AddressDescriptor, atom('size), AccessDescriptor, bits(8 * 'size)) -> unit effect {escape, rreg}
+  (AddressDescriptor, atom('size), AccessDescriptor, bits(8 * 'size)) -> unit effect {escape, rreg, wmem}
 
 function aset__Mem (desc, size, accdesc, value_name) = {
   assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -2587,7 +2587,7 @@ function aset__Mem (desc, size, accdesc, value_name) = {
 }
 
 val aget__Mem : forall ('size : Int), 8 * 'size >= 0.
-  (AddressDescriptor, atom('size), AccessDescriptor) -> bits(8 * 'size) effect {escape, rreg}
+  (AddressDescriptor, atom('size), AccessDescriptor) -> bits(8 * 'size) effect {escape, rmem, rreg}
 
 function aget__Mem (desc, size, accdesc) = {
   assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -3483,7 +3483,7 @@ function FPRoundBase (op, fpcr, rounding) = {
     return(FPZero(sign))
   } else ();
   biased_exp : int = max(exponent - minimum_exp + 1, 0);
-  if biased_exp == 0 then mantissa = mantissa / 2.0 ^ (minimum_exp - exponent)
+  if biased_exp == 0 then mantissa = mantissa / (2.0 ^ (minimum_exp - exponent))
   else ();
   int_mant : int = RoundDown(mantissa * 2.0 ^ F);
   error : real = mantissa * 2.0 ^ F - Real(int_mant);
@@ -3576,7 +3576,7 @@ function FixedToFP (op, 'fbits, unsigned, fpcr, rounding) = {
   assert(fbits >= 0);
   assert(rounding != FPRounding_ODD);
   int_operand : int = asl_Int(op, unsigned);
-  real_operand : real = Real(int_operand) / 2.0 ^ fbits;
+  real_operand : real = Real(int_operand) / (2.0 ^ fbits);
   if real_operand == 0.0 then result = FPZero(0b0)
   else result = FPRound(real_operand, fpcr, rounding);
   return(result)
@@ -6784,7 +6784,7 @@ function integer_pac_autia_hint_decode (L, op0, op1, CRn, CRm, op2, Rt) = {
     [bitzero] @ [bitzero] @ [bitone] @ [bitone] @ [bitzero] @ [bitone] @ _ : bits(1) => throw(Error_See("PACIB")),
     [bitzero] @ [bitzero] @ [bitone] @ [bitone] @ [bitone] @ [bitone] @ _ : bits(1) => throw(Error_See("AUTIB")),
     0b0000111 => throw(Error_See("XPACLRI")),
-    _ => () /* throw(Error_See("HINT")) */
+    _ => throw(Error_See("HINT"))
   };
   aarch64_integer_pac_autia_dp_1src(d, n, source_is_sp)
 }
@@ -8467,7 +8467,7 @@ val aarch64_memory_atomicops_cas_pair : forall ('datasize : Int) ('regsize : Int
 
 function aarch64_memory_atomicops_cas_pair (datasize, ldacctype, n, regsize, s, stacctype, t) = {
   assert(constraint('regsize >= 0), "destsize constraint");
-  let 'dbytes = ex_int(2 * datasize / 8);
+  let 'dbytes = ex_int((2 * datasize) / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(4 * 'dbytes = 'datasize), "dbytes constraint");
   address : bits(64) = undefined;

@@ -76,8 +76,10 @@ let mk_pat pat_aux = P_aux (pat_aux, no_annot)
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 
 let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
-                                       
+
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
+
+let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
 
 let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 

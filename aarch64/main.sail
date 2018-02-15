@@ -5,8 +5,13 @@ val fetch_and_execute : unit -> unit effect {escape, undef, wreg, rreg, rmem, wm
 
 function fetch_and_execute () =
   while true do {
-    let instr = aget_Mem(_PC, 4, AccType_IFETCH);
-    decode(instr);
+    try {
+      let instr = aget_Mem(_PC, 4, AccType_IFETCH);
+      decode(instr);
+    } catch {
+      Error_See("HINT") => (),
+      exn => throw(exn)
+    };
     if __BranchTaken then __BranchTaken = false else _PC = _PC + 4
   }
 

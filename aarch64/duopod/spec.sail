@@ -498,10 +498,6 @@ enum VCGTtype = {VCGTtype_signed, VCGTtype_unsigned, VCGTtype_fp}
 
 enum __InstrEnc = {__A64, __A32, __T16, __T32}
 
-val AArch64_SecondStageTranslate : (AddressDescriptor, bits(64), AccType, bool, bool, bool, int, bool) -> AddressDescriptor effect {rreg, escape, rmem, undef, wmem}
-
-val AArch64_CheckAndUpdateDescriptor : (DescriptorUpdate, FaultRecord, bool, bits(64), AccType, bool, bool, bool) -> FaultRecord effect {escape, rreg, rmem, wmem, undef}
-
 register __unconditional : bool
 
 val __UNKNOWN_integer : unit -> int
@@ -520,10 +516,6 @@ register _R : vector(31, dec, bits(64))
 
 register _PC : bits(64)
 
-register VTTBR_EL2 : bits(64)
-
-register VTCR_EL2 : bits(32)
-
 register VBAR_EL3 : bits(64)
 
 register VBAR_EL2 : bits(64)
@@ -539,16 +531,6 @@ function ThisInstrAddr () = return(slice(_PC, 0, 'N))
 val ThisInstr : unit -> bits(32) effect {rreg}
 
 function ThisInstr () = return(__ThisInstr)
-
-register TTBR1_EL2 : bits(64)
-
-register TTBR1_EL1 : bits(64)
-
-register TTBR0_EL3 : bits(64)
-
-register TTBR0_EL2 : bits(64)
-
-register TTBR0_EL1 : bits(64)
 
 register TCR_EL3 : bits(32)
 
@@ -590,8 +572,6 @@ register SPSR_EL2 : bits(32)
 
 register SPSR_EL1 : bits(32)
 
-register SPIDEN : signal
-
 register SCTLR_EL3 : bits(32)
 
 register SCTLR_EL2 : bits(32)
@@ -614,10 +594,6 @@ function __UNKNOWN_PrefetchHint () = return(Prefetch_READ)
 
 register PSTATE : ProcState
 
-register OSLSR_EL1 : bits(32)
-
-register OSDLR_EL1 : bits(32)
-
 val __UNKNOWN_MemType : unit -> MemType
 
 function __UNKNOWN_MemType () = return(MemType_Normal)
@@ -626,29 +602,7 @@ val __UNKNOWN_MemOp : unit -> MemOp
 
 function __UNKNOWN_MemOp () = return(MemOp_LOAD)
 
-let MemHint_RWA : vector(2, dec, bit) = 0b11
-
-let MemHint_RA : vector(2, dec, bit) = 0b10
-
-let MemHint_No : vector(2, dec, bit) = 0b00
-
-let MemAttr_WT : vector(2, dec, bit) = 0b10
-
-let MemAttr_WB : vector(2, dec, bit) = 0b11
-
-let MemAttr_NC : vector(2, dec, bit) = 0b00
-
-register MDSCR_EL1 : bits(32)
-
-register MDCR_EL3 : bits(32)
-
 register MDCR_EL2 : bits(32)
-
-register MAIR_EL3 : bits(64)
-
-register MAIR_EL2 : bits(64)
-
-register MAIR_EL1 : bits(64)
 
 let M32_User : vector(5, dec, bit) = 0b10000
 
@@ -673,8 +627,6 @@ register LR_mon : bits(32)
 val __UNKNOWN_InstrSet : unit -> InstrSet
 
 function __UNKNOWN_InstrSet () = return(InstrSet_A64)
-
-register ID_AA64DFR0_EL1 : bits(64)
 
 val Hint_Prefetch : (bits(64), PrefetchHint, int, bool) -> unit
 
@@ -703,8 +655,6 @@ register HIFAR : bits(32)
 register HDFAR : bits(32)
 
 register HCR_EL2 : bits(64)
-
-register HCR2 : bits(32)
 
 register HCR : bits(32)
 
@@ -750,10 +700,6 @@ val TakeUnmaskedPhysicalSErrorInterrupts : bool -> unit effect {escape}
 
 function TakeUnmaskedPhysicalSErrorInterrupts iesb_req = assert(false, "FALSE")
 
-val StopInstructionPrefetchAndEnableITR : unit -> unit effect {escape}
-
-function StopInstructionPrefetchAndEnableITR () = assert(false, "FALSE")
-
 val __UNKNOWN_Exception : unit -> Exception
 
 function __UNKNOWN_Exception () = return(Exception_Uncategorized)
@@ -788,41 +734,11 @@ let EL1 : vector(2, dec, bit) = 0b01
 
 let EL0 : vector(2, dec, bit) = 0b00
 
-register EDSCR : bits(32)
-
 val __UNKNOWN_DeviceType : unit -> DeviceType
 
 function __UNKNOWN_DeviceType () = return(DeviceType_GRE)
 
-let DebugHalt_Watchpoint : vector(6, dec, bit) = 0b101011
-
-let DebugHalt_Breakpoint : vector(6, dec, bit) = 0b000111
-
 let DebugException_VectorCatch : vector(4, dec, bit) = 0x5
-
-register DSPSR_EL0 : bits(32)
-
-register DSPSR : bits(32)
-
-register DLR_EL0 : bits(64)
-
-register DLR : bits(32)
-
-register DBGWVR_EL1 : vector(16, dec, bits(64))
-
-register DBGWCR_EL1 : vector(16, dec, bits(32))
-
-register DBGPRCR_EL1 : bits(32)
-
-register DBGPRCR : bits(32)
-
-register DBGOSDLR : bits(32)
-
-register DBGEN : signal
-
-register DBGBVR_EL1 : vector(16, dec, bits(64))
-
-register DBGBCR_EL1 : vector(16, dec, bits(32))
 
 val __UNKNOWN_Constraint : unit -> Constraint
 
@@ -878,29 +794,9 @@ val ClearExclusiveByAddress : (FullAddress, int, int) -> unit
 
 function ClearExclusiveByAddress (paddress, 'processorid, 'size) = ()
 
-val CTI_SignalEvent : CrossTriggerIn -> unit effect {escape}
-
-function CTI_SignalEvent id = assert(false, "FALSE")
-
-register CONTEXTIDR_EL2 : bits(32)
-
-register CONTEXTIDR_EL1 : bits(32)
-
 val __UNKNOWN_AccType : unit -> AccType
 
 function __UNKNOWN_AccType () = return(AccType_NORMAL)
-
-val CreateAccessDescriptorPTW : (AccType, bool, bool, int) -> AccessDescriptor effect {undef}
-
-function CreateAccessDescriptorPTW (acctype, secondstage, s2fs1walk, 'level) = {
-  accdesc : AccessDescriptor = undefined;
-  accdesc.acctype = acctype;
-  accdesc.page_table_walk = true;
-  accdesc.secondstage = s2fs1walk;
-  accdesc.secondstage = secondstage;
-  accdesc.level = level;
-  return(accdesc)
-}
 
 val CreateAccessDescriptor : AccType -> AccessDescriptor effect {undef}
 
@@ -929,48 +825,6 @@ function AArch64_CreateFaultRecord (typ, ipaddress, 'level, acctype, write, extf
   return(fault)
 }
 
-val AArch64_TranslationFault : (bits(52), int, AccType, bool, bool, bool) -> FaultRecord effect {undef}
-
-function AArch64_TranslationFault (ipaddress, 'level, acctype, iswrite, secondstage, s2fs1walk) = {
-  extflag : bits(1) = undefined;
-  errortype : bits(2) = undefined;
-  return(AArch64_CreateFaultRecord(Fault_Translation, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
-}
-
-val AArch64_PermissionFault : (bits(52), int, AccType, bool, bool, bool) -> FaultRecord effect {undef}
-
-function AArch64_PermissionFault (ipaddress, 'level, acctype, iswrite, secondstage, s2fs1walk) = {
-  extflag : bits(1) = undefined;
-  errortype : bits(2) = undefined;
-  return(AArch64_CreateFaultRecord(Fault_Permission, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
-}
-
-val AArch64_NoFault : unit -> FaultRecord effect {undef}
-
-function AArch64_NoFault () = {
-  ipaddress : bits(52) = undefined;
-  level : int = undefined;
-  acctype : AccType = AccType_NORMAL;
-  iswrite : bool = undefined;
-  extflag : bits(1) = undefined;
-  errortype : bits(2) = undefined;
-  secondstage : bool = false;
-  s2fs1walk : bool = false;
-  return(AArch64_CreateFaultRecord(Fault_None, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
-}
-
-val AArch64_DebugFault : (AccType, bool) -> FaultRecord effect {undef}
-
-function AArch64_DebugFault (acctype, iswrite) = {
-  ipaddress : bits(52) = undefined;
-  errortype : bits(2) = undefined;
-  level : int = undefined;
-  extflag : bits(1) = undefined;
-  secondstage : bool = false;
-  s2fs1walk : bool = false;
-  return(AArch64_CreateFaultRecord(Fault_Debug, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
-}
-
 val AArch64_AlignmentFault : (AccType, bool, bool) -> FaultRecord effect {undef}
 
 function AArch64_AlignmentFault (acctype, iswrite, secondstage) = {
@@ -980,22 +834,6 @@ function AArch64_AlignmentFault (acctype, iswrite, secondstage) = {
   errortype : bits(2) = undefined;
   s2fs1walk : bool = undefined;
   return(AArch64_CreateFaultRecord(Fault_Alignment, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
-}
-
-val AArch64_AddressSizeFault : (bits(52), int, AccType, bool, bool, bool) -> FaultRecord effect {undef}
-
-function AArch64_AddressSizeFault (ipaddress, 'level, acctype, iswrite, secondstage, s2fs1walk) = {
-  extflag : bits(1) = undefined;
-  errortype : bits(2) = undefined;
-  return(AArch64_CreateFaultRecord(Fault_AddressSize, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
-}
-
-val AArch64_AccessFlagFault : (bits(52), int, AccType, bool, bool, bool) -> FaultRecord effect {undef}
-
-function AArch64_AccessFlagFault (ipaddress, 'level, acctype, iswrite, secondstage, s2fs1walk) = {
-  extflag : bits(1) = undefined;
-  errortype : bits(2) = undefined;
-  return(AArch64_CreateFaultRecord(Fault_AccessFlag, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
 }
 
 val aget_SP : forall ('width : Int), 'width >= 0.
@@ -1011,17 +849,6 @@ function aget_SP () = {
   }
 }
 
-val __IMPDEF_integer : string -> int
-
-function __IMPDEF_integer x = {
-  if x == "Maximum Physical Address Size" then return(52) else if x == "Maximum Virtual Address Size" then return(56) else ();
-  return(0)
-}
-
-val PAMax : unit -> int
-
-function PAMax () = return(__IMPDEF_integer("Maximum Physical Address Size"))
-
 val __IMPDEF_boolean : string -> bool
 
 function __IMPDEF_boolean x = {
@@ -1033,25 +860,6 @@ val ThisInstrLength : unit -> int effect {rreg}
 
 function ThisInstrLength () = return(if __ThisInstrEnc == __T16 then 16 else 32)
 
-val MemAttrDefaults : MemoryAttributes -> MemoryAttributes effect {undef}
-
-function MemAttrDefaults memattrs__arg = {
-  memattrs = memattrs__arg;
-  if memattrs.typ == MemType_Device then {
-    memattrs.inner = undefined;
-    memattrs.outer = undefined;
-    memattrs.shareable = true;
-    memattrs.outershareable = true
-  } else {
-    memattrs.device = undefined;
-    if memattrs.inner.attrs == MemAttr_NC & memattrs.outer.attrs == MemAttr_NC then {
-      memattrs.shareable = true;
-      memattrs.outershareable = true
-    } else ()
-  };
-  return(memattrs)
-}
-
 val HaveEL : bits(2) -> bool
 
 function HaveEL el = {
@@ -1062,10 +870,6 @@ function HaveEL el = {
 val HighestEL : unit -> bits(2)
 
 function HighestEL () = if HaveEL(EL3) then return(EL3) else if HaveEL(EL2) then return(EL2) else return(EL1)
-
-val Have16bitVMID : unit -> bool
-
-function Have16bitVMID () = return(HaveEL(EL2))
 
 val HasArchVersion : ArchVersion -> bool
 
@@ -1079,17 +883,9 @@ val HaveUAOExt : unit -> bool
 
 function HaveUAOExt () = return(HasArchVersion(ARMv8p2))
 
-val HaveTrapLoadStoreMultipleDeviceExt : unit -> bool
-
-function HaveTrapLoadStoreMultipleDeviceExt () = return(HasArchVersion(ARMv8p2))
-
 val HaveRASExt : unit -> bool
 
 function HaveRASExt () = return(HasArchVersion(ARMv8p2) | __IMPDEF_boolean("Has RAS extension"))
-
-val HavePrivATExt : unit -> bool
-
-function HavePrivATExt () = return(HasArchVersion(ARMv8p2))
 
 val HavePANExt : unit -> bool
 
@@ -1099,101 +895,12 @@ val HavePACExt : unit -> bool
 
 function HavePACExt () = return(HasArchVersion(ARMv8p3))
 
-val HaveNVExt : unit -> bool
-
-function HaveNVExt () = return(HasArchVersion(ARMv8p3))
-
-val HaveExtendedExecuteNeverExt : unit -> bool
-
-function HaveExtendedExecuteNeverExt () = return(HasArchVersion(ARMv8p2))
-
-val HaveDirtyBitModifierExt : unit -> bool
-
-function HaveDirtyBitModifierExt () = return(HasArchVersion(ARMv8p1))
-
-val HaveCommonNotPrivateTransExt : unit -> bool
-
-function HaveCommonNotPrivateTransExt () = return(HasArchVersion(ARMv8p2))
-
-val HaveAccessFlagUpdateExt : unit -> bool
-
-function HaveAccessFlagUpdateExt () = return(HasArchVersion(ARMv8p1))
-
-val Have52BitVAExt : unit -> bool
-
-function Have52BitVAExt () = return(HasArchVersion(ARMv8p2))
-
-val Have52BitPAExt : unit -> bool
-
-function Have52BitPAExt () = return(HasArchVersion(ARMv8p2))
-
-val AArch64_HaveHPDExt : unit -> bool
-
-function AArch64_HaveHPDExt () = return(HasArchVersion(ARMv8p1))
-
-val ExternalInvasiveDebugEnabled : unit -> bool effect {rreg}
-
-function ExternalInvasiveDebugEnabled () = return(DBGEN == HIGH)
-
-val ConstrainUnpredictableInteger : (int, int, Unpredictable) -> (Constraint, int) effect {undef}
-
-function ConstrainUnpredictableInteger (low, high, which) = {
-  c : Constraint = ConstrainUnpredictable(which);
-  if c == Constraint_UNKNOWN then return((c, low)) else return((c, undefined : int))
-}
-
 val ConstrainUnpredictableBool : Unpredictable -> bool effect {escape}
 
 function ConstrainUnpredictableBool which = {
   c : Constraint = ConstrainUnpredictable(which);
   assert(c == Constraint_TRUE | c == Constraint_FALSE, "((c == Constraint_TRUE) || (c == Constraint_FALSE))");
   return(c == Constraint_TRUE)
-}
-
-val CombineS1S2Device : (DeviceType, DeviceType) -> DeviceType effect {undef}
-
-function CombineS1S2Device (s1device, s2device) = {
-  result : DeviceType = undefined;
-  if s2device == DeviceType_nGnRnE | s1device == DeviceType_nGnRnE then result = DeviceType_nGnRnE else if s2device == DeviceType_nGnRE | s1device == DeviceType_nGnRE then result = DeviceType_nGnRE else if s2device == DeviceType_nGRE | s1device == DeviceType_nGRE then result = DeviceType_nGRE else result = DeviceType_GRE;
-  return(result)
-}
-
-val CombineS1S2AttrHints : (MemAttrHints, MemAttrHints) -> MemAttrHints effect {undef}
-
-function CombineS1S2AttrHints (s1desc, s2desc) = {
-  result : MemAttrHints = undefined;
-  if s2desc.attrs == 0b01 | s1desc.attrs == 0b01 then result.attrs = undefined else if s2desc.attrs == MemAttr_NC | s1desc.attrs == MemAttr_NC then result.attrs = MemAttr_NC else if s2desc.attrs == MemAttr_WT | s1desc.attrs == MemAttr_WT then result.attrs = MemAttr_WT else result.attrs = MemAttr_WB;
-  result.hints = s1desc.hints;
-  result.transient = s1desc.transient;
-  return(result)
-}
-
-val AArch64_InstructionDevice : (AddressDescriptor, bits(64), bits(52), int, AccType, bool, bool, bool) -> AddressDescriptor effect {escape, undef}
-
-function AArch64_InstructionDevice (addrdesc__arg, vaddress, ipaddress, 'level, acctype, iswrite, secondstage, s2fs1walk) = {
-  addrdesc = addrdesc__arg;
-  c : Constraint = ConstrainUnpredictable(Unpredictable_INSTRDEVICE);
-  assert(c == Constraint_NONE | c == Constraint_FAULT, "((c == Constraint_NONE) || (c == Constraint_FAULT))");
-  if c == Constraint_FAULT then addrdesc.fault = AArch64_PermissionFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk) else {
-    __tmp_12 : MemoryAttributes = addrdesc.memattrs;
-    __tmp_12.typ = MemType_Normal;
-    addrdesc.memattrs = __tmp_12;
-    __tmp_13 : MemAttrHints = addrdesc.memattrs.inner;
-    __tmp_13.attrs = MemAttr_NC;
-    __tmp_14 : MemoryAttributes = addrdesc.memattrs;
-    __tmp_14.inner = __tmp_13;
-    addrdesc.memattrs = __tmp_14;
-    __tmp_15 : MemAttrHints = addrdesc.memattrs.inner;
-    __tmp_15.hints = MemHint_No;
-    __tmp_16 : MemoryAttributes = addrdesc.memattrs;
-    __tmp_16.inner = __tmp_15;
-    addrdesc.memattrs = __tmp_16;
-    __tmp_17 : MemoryAttributes = addrdesc.memattrs;
-    __tmp_17.outer = addrdesc.memattrs.inner;
-    addrdesc.memattrs = __tmp_17;
-    addrdesc.memattrs = MemAttrDefaults(addrdesc.memattrs)
-  };
-  return(addrdesc)
 }
 
 val LookUpRIndex : (int, bits(5)) -> int effect {escape, undef}
@@ -1334,7 +1041,7 @@ val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   bits('M) -> bits('N) effect {escape}
 
 function Replicate x = {
-  assert('N % 'M == 0, "((N MOD M) == 0)");
+  assert(('N % 'M) == 0, "((N MOD M) == 0)");
   let 'p = ex_int('N / 'M);
   assert(constraint('N = 'p * 'M));
   return(replicate_bits(x, p))
@@ -1472,14 +1179,6 @@ function ExceptionSyndrome typ = {
   return(r)
 }
 
-val ConstrainUnpredictableBits : forall ('width : Int), 'width >= 0.
-  Unpredictable -> (Constraint, bits('width)) effect {undef}
-
-function ConstrainUnpredictableBits which = {
-  c : Constraint = ConstrainUnpredictable(which);
-  if c == Constraint_UNKNOWN then return((c, Zeros('width))) else return((c, undefined : bits('width)))
-}
-
 val SignExtend__0 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   (bits('M), atom('N)) -> bits('N) effect {escape}
 
@@ -1505,10 +1204,6 @@ function Ones__0 N = return(replicate_bits(0b1, 'N))
 
 function Ones__1 () = return(Ones('N))
 
-val IsOnes : forall ('N : Int), 'N >= 0. bits('N) -> bool
-
-function IsOnes x = return(x == Ones('N))
-
 val ExcVectorBase : unit -> bits(32) effect {rreg}
 
 function ExcVectorBase () = if [SCTLR[13]] == 0b1 then return(Ones(16) @ Zeros(16)) else return(slice(VBAR, 5, 27) @ Zeros(5))
@@ -1519,12 +1214,12 @@ val Align__1 : forall ('N : Int), 'N >= 0 & 'N >= 0. (bits('N), int) -> bits('N)
 
 overload Align = {Align__0, Align__1}
 
-function Align__0 ('x, 'y) = return(y * (x / y))
+function Align__0 ('x, 'y) = return(y * x / y)
 
 function Align__1 (x, 'y) = return(__GetSlice_int('N, Align(UInt(x), y), 0))
 
 val aset__Mem : forall ('size : Int), 8 * 'size >= 0.
-  (AddressDescriptor, atom('size), AccessDescriptor, bits(8 * 'size)) -> unit effect {escape, rreg}
+  (AddressDescriptor, atom('size), AccessDescriptor, bits(8 * 'size)) -> unit effect {escape, rreg, wmem}
 
 function aset__Mem (desc, size, accdesc, value_name) = {
   assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -1538,7 +1233,7 @@ function aset__Mem (desc, size, accdesc, value_name) = {
 }
 
 val aget__Mem : forall ('size : Int), 8 * 'size >= 0.
-  (AddressDescriptor, atom('size), AccessDescriptor) -> bits(8 * 'size) effect {escape, rreg}
+  (AddressDescriptor, atom('size), AccessDescriptor) -> bits(8 * 'size) effect {escape, rmem, rreg}
 
 function aget__Mem (desc, size, accdesc) = {
   assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -1618,52 +1313,6 @@ function IsSecondStage fault = {
 val IsFault : AddressDescriptor -> bool
 
 function IsFault addrdesc = return(addrdesc.fault.typ != Fault_None)
-
-val CombineS1S2Desc : (AddressDescriptor, AddressDescriptor) -> AddressDescriptor effect {undef}
-
-function CombineS1S2Desc (s1desc, s2desc) = {
-  result : AddressDescriptor = undefined;
-  result.paddress = s2desc.paddress;
-  if IsFault(s1desc) | IsFault(s2desc) then result = if IsFault(s1desc) then s1desc else s2desc else if s2desc.memattrs.typ == MemType_Device | s1desc.memattrs.typ == MemType_Device then {
-    __tmp_61 : MemoryAttributes = result.memattrs;
-    __tmp_61.typ = MemType_Device;
-    result.memattrs = __tmp_61;
-    if s1desc.memattrs.typ == MemType_Normal then {
-      __tmp_62 : MemoryAttributes = result.memattrs;
-      __tmp_62.device = s2desc.memattrs.device;
-      result.memattrs = __tmp_62
-    } else if s2desc.memattrs.typ == MemType_Normal then {
-      __tmp_63 : MemoryAttributes = result.memattrs;
-      __tmp_63.device = s1desc.memattrs.device;
-      result.memattrs = __tmp_63
-    } else {
-      __tmp_64 : MemoryAttributes = result.memattrs;
-      __tmp_64.device = CombineS1S2Device(s1desc.memattrs.device, s2desc.memattrs.device);
-      result.memattrs = __tmp_64
-    }
-  } else {
-    __tmp_65 : MemoryAttributes = result.memattrs;
-    __tmp_65.typ = MemType_Normal;
-    result.memattrs = __tmp_65;
-    __tmp_66 : MemoryAttributes = result.memattrs;
-    __tmp_66.device = undefined;
-    result.memattrs = __tmp_66;
-    __tmp_67 : MemoryAttributes = result.memattrs;
-    __tmp_67.inner = CombineS1S2AttrHints(s1desc.memattrs.inner, s2desc.memattrs.inner);
-    result.memattrs = __tmp_67;
-    __tmp_68 : MemoryAttributes = result.memattrs;
-    __tmp_68.outer = CombineS1S2AttrHints(s1desc.memattrs.outer, s2desc.memattrs.outer);
-    result.memattrs = __tmp_68;
-    __tmp_69 : MemoryAttributes = result.memattrs;
-    __tmp_69.shareable = s1desc.memattrs.shareable | s2desc.memattrs.shareable;
-    result.memattrs = __tmp_69;
-    __tmp_70 : MemoryAttributes = result.memattrs;
-    __tmp_70.outershareable = s1desc.memattrs.outershareable | s2desc.memattrs.outershareable;
-    result.memattrs = __tmp_70
-  };
-  result.memattrs = MemAttrDefaults(result.memattrs);
-  return(result)
-}
 
 val IsExternalSyncAbort__0 : Fault -> bool effect {escape}
 
@@ -1790,15 +1439,6 @@ function CurrentInstrSet () = {
   return(result)
 }
 
-val AArch32_ExecutingLSMInstr : unit -> bool effect {escape, rreg, undef}
-
-function AArch32_ExecutingLSMInstr () = {
-  instr : bits(32) = ThisInstr();
-  instr_set : InstrSet = CurrentInstrSet();
-  assert(instr_set == InstrSet_A32 | instr_set == InstrSet_T32, "((instr_set == InstrSet_A32) || (instr_set == InstrSet_T32))");
-  if instr_set == InstrSet_A32 then return(slice(instr, 28, 4) != 0xF & slice(instr, 25, 3) == 0b100) else if ThisInstrLength() == 16 then return(slice(instr, 12, 4) == 0xC) else return(slice(instr, 25, 7) == 0b1110100 & [instr[22]] == 0b0)
-}
-
 val AArch32_ExecutingCP10or11Instr : unit -> bool effect {escape, rreg, undef}
 
 function AArch32_ExecutingCP10or11Instr () = {
@@ -1813,17 +1453,6 @@ val HaveAArch32EL : bits(2) -> bool
 function HaveAArch32EL el = {
   if ~(HaveEL(el)) then return(false) else if ~(HaveAnyAArch32()) then return(false) else if HighestELUsingAArch32() then return(true) else if el == HighestEL() then return(false) else if el == EL0 then return(true) else ();
   return(true)
-}
-
-val Halted : unit -> bool effect {rreg}
-
-function Halted () = return(~(slice(EDSCR, 0, 6) == 0b000001 | slice(EDSCR, 0, 6) == 0b000010))
-
-val ExternalSecureInvasiveDebugEnabled : unit -> bool effect {escape, rreg, undef}
-
-function ExternalSecureInvasiveDebugEnabled () = {
-  if ~(HaveEL(EL3)) & ~(IsSecure()) then return(false) else ();
-  return(ExternalInvasiveDebugEnabled() & SPIDEN == HIGH)
 }
 
 val ELStateUsingAArch32K : (bits(2), bool) -> (bool, bool) effect {rreg, undef}
@@ -1855,116 +1484,6 @@ function ELStateUsingAArch32 (el, secure) = {
 val ELUsingAArch32 : bits(2) -> bool effect {escape, rreg, undef}
 
 function ELUsingAArch32 el = return(ELStateUsingAArch32(el, IsSecureBelowEL3()))
-
-val UpdateEDSCRFields : unit -> unit effect {escape, rreg, undef, wreg}
-
-function UpdateEDSCRFields () = {
-  if ~(Halted()) then {
-    EDSCR = __SetSlice_bits(32, 2, EDSCR, 8, 0b00);
-    EDSCR = __SetSlice_bits(32, 1, EDSCR, 18, undefined);
-    EDSCR = __SetSlice_bits(32, 4, EDSCR, 10, 0xF)
-  } else {
-    EDSCR = __SetSlice_bits(32, 2, EDSCR, 8, PSTATE.EL);
-    EDSCR = __SetSlice_bits(32, 1, EDSCR, 18, if IsSecure() then 0b0 else 0b1);
-    RW : bits(4) = undefined;
-    RW : bits(4) = __SetSlice_bits(4, 1, RW, 1, if ELUsingAArch32(EL1) then 0b0 else 0b1);
-    if PSTATE.EL != EL0 then RW = __SetSlice_bits(4, 1, RW, 0, [RW[1]]) else RW = __SetSlice_bits(4, 1, RW, 0, if UsingAArch32() then 0b0 else 0b1);
-    if ~(HaveEL(EL2)) | HaveEL(EL3) & [aget_SCR_GEN()[0]] == 0b0 then RW = __SetSlice_bits(4, 1, RW, 2, [RW[1]]) else RW = __SetSlice_bits(4, 1, RW, 2, if ELUsingAArch32(EL2) then 0b0 else 0b1);
-    if ~(HaveEL(EL3)) then RW = __SetSlice_bits(4, 1, RW, 3, [RW[2]]) else RW = __SetSlice_bits(4, 1, RW, 3, if ELUsingAArch32(EL3) then 0b0 else 0b1);
-    if [RW[3]] == 0b0 then RW = __SetSlice_bits(4, 3, RW, 0, undefined) else if [RW[2]] == 0b0 then RW = __SetSlice_bits(4, 2, RW, 0, undefined) else if [RW[1]] == 0b0 then RW = __SetSlice_bits(4, 1, RW, 0, undefined) else ();
-    EDSCR = __SetSlice_bits(32, 4, EDSCR, 10, RW)
-  };
-  ()
-}
-
-val Halt : bits(6) -> unit effect {wreg, undef, rreg, escape}
-
-function Halt reason = {
-  CTI_SignalEvent(CrossTriggerIn_CrossHalt);
-  if UsingAArch32() then {
-    DLR = ThisInstrAddr();
-    DSPSR = GetPSRFromPSTATE();
-    DSPSR[21 .. 21] = PSTATE.SS
-  } else {
-    DLR_EL0 = ThisInstrAddr();
-    DSPSR_EL0 = GetPSRFromPSTATE();
-    DSPSR_EL0[21 .. 21] = PSTATE.SS
-  };
-  EDSCR[24 .. 24] = 0b1;
-  EDSCR[28 .. 28] = 0b0;
-  if IsSecure() then EDSCR[16 .. 16] = 0b0
-  else if HaveEL(EL3) then
-    EDSCR[16 .. 16] = if ExternalSecureInvasiveDebugEnabled() then 0b0 else 0b1
-  else assert([EDSCR[16]] == 0b1, "((EDSCR).SDD == '1')");
-  EDSCR[20 .. 20] = 0b0;
-  if UsingAArch32() then {
-    (PSTATE.SS, PSTATE.A, PSTATE.I, PSTATE.F) = undefined : bits(4);
-    PSTATE.IT = 0x00;
-    PSTATE.T = 0b1
-  } else
-    (PSTATE.SS, PSTATE.D, PSTATE.A, PSTATE.I, PSTATE.F) = undefined : bits(5);
-  PSTATE.IL = 0b0;
-  StopInstructionPrefetchAndEnableITR();
-  EDSCR[5 .. 0] = reason;
-  UpdateEDSCRFields();
-  ()
-}
-
-val S2CacheDisabled : AccType -> bool effect {escape, rreg, undef}
-
-function S2CacheDisabled acctype = {
-  disable : bits(1) = undefined;
-  if ELUsingAArch32(EL2) then disable = if acctype == AccType_IFETCH then [HCR2[1]] else [HCR2[0]] else disable = if acctype == AccType_IFETCH then [HCR_EL2[33]] else [HCR_EL2[32]];
-  return(disable == 0b1)
-}
-
-val S2ConvertAttrsHints : (bits(2), AccType) -> MemAttrHints effect {escape, rreg, undef}
-
-function S2ConvertAttrsHints (attr, acctype) = {
-  assert(~(IsZero(attr)), "!(IsZero(attr))");
-  result : MemAttrHints = undefined;
-  if S2CacheDisabled(acctype) then {
-    result.attrs = MemAttr_NC;
-    result.hints = MemHint_No
-  } else match attr {
-    0b01 => {
-      result.attrs = MemAttr_NC;
-      result.hints = MemHint_No
-    },
-    0b10 => {
-      result.attrs = MemAttr_WT;
-      result.hints = MemHint_RWA
-    },
-    0b11 => {
-      result.attrs = MemAttr_WB;
-      result.hints = MemHint_RWA
-    }
-  };
-  result.transient = false;
-  return(result)
-}
-
-val S2AttrDecode : (bits(2), bits(4), AccType) -> MemoryAttributes effect {escape, rreg, undef}
-
-function S2AttrDecode (SH, attr, acctype) = {
-  memattrs : MemoryAttributes = undefined;
-  if slice(attr, 2, 2) == 0b00 then {
-    memattrs.typ = MemType_Device;
-    match slice(attr, 0, 2) {
-      0b00 => memattrs.device = DeviceType_nGnRnE,
-      0b01 => memattrs.device = DeviceType_nGnRE,
-      0b10 => memattrs.device = DeviceType_nGRE,
-      0b11 => memattrs.device = DeviceType_GRE
-    }
-  } else if slice(attr, 0, 2) != 0b00 then {
-    memattrs.typ = MemType_Normal;
-    memattrs.outer = S2ConvertAttrsHints(slice(attr, 2, 2), acctype);
-    memattrs.inner = S2ConvertAttrsHints(slice(attr, 0, 2), acctype);
-    memattrs.shareable = [SH[1]] == 0b1;
-    memattrs.outershareable = SH == 0b10
-  } else memattrs = undefined;
-  return(MemAttrDefaults(memattrs))
-}
 
 val ELIsInHost : bits(2) -> bool effect {escape, rreg, undef}
 
@@ -2067,161 +1586,9 @@ function BigEndian () = {
   return(bigend)
 }
 
-val aget_MAIR__0 : bits(2) -> bits(64) effect {rreg, undef, escape}
-
-val aget_MAIR__1 : unit -> bits(64) effect {rreg, undef, escape}
-
-overload aget_MAIR = {aget_MAIR__0, aget_MAIR__1}
-
-function aget_MAIR__0 regime = {
-  r : bits(64) = undefined;
-  match regime {
-    ? if ? == EL1 => r = MAIR_EL1,
-    ? if ? == EL2 => r = MAIR_EL2,
-    ? if ? == EL3 => r = MAIR_EL3,
-    _ => Unreachable()
-  };
-  return(r)
-}
-
-function aget_MAIR__1 () = return(aget_MAIR(S1TranslationRegime()))
-
-val S1CacheDisabled : AccType -> bool effect {escape, rreg, undef}
-
-function S1CacheDisabled acctype = {
-  enable : bits(1) = undefined;
-  if ELUsingAArch32(S1TranslationRegime()) then if PSTATE.EL == EL2 then enable = if acctype == AccType_IFETCH then [HSCTLR[12]] else [HSCTLR[2]] else enable = if acctype == AccType_IFETCH then [SCTLR[12]] else [SCTLR[2]] else enable = if acctype == AccType_IFETCH then [aget_SCTLR()[12]] else [aget_SCTLR()[2]];
-  return(enable == 0b0)
-}
-
-val ShortConvertAttrsHints : (bits(2), AccType, bool) -> MemAttrHints effect {escape, rreg, undef}
-
-function ShortConvertAttrsHints (RGN, acctype, secondstage) = {
-  result : MemAttrHints = undefined;
-  if ~(secondstage) & S1CacheDisabled(acctype) | secondstage & S2CacheDisabled(acctype) then {
-    result.attrs = MemAttr_NC;
-    result.hints = MemHint_No
-  } else match RGN {
-    0b00 => {
-      result.attrs = MemAttr_NC;
-      result.hints = MemHint_No
-    },
-    0b01 => {
-      result.attrs = MemAttr_WB;
-      result.hints = MemHint_RWA
-    },
-    0b10 => {
-      result.attrs = MemAttr_WT;
-      result.hints = MemHint_RA
-    },
-    0b11 => {
-      result.attrs = MemAttr_WB;
-      result.hints = MemHint_RA
-    }
-  };
-  result.transient = false;
-  return(result)
-}
-
-val WalkAttrDecode : (bits(2), bits(2), bits(2), bool) -> MemoryAttributes effect {escape, rreg, undef}
-
-function WalkAttrDecode (SH, ORGN, IRGN, secondstage) = {
-  memattrs : MemoryAttributes = undefined;
-  acctype : AccType = AccType_NORMAL;
-  memattrs.typ = MemType_Normal;
-  memattrs.inner = ShortConvertAttrsHints(IRGN, acctype, secondstage);
-  memattrs.outer = ShortConvertAttrsHints(ORGN, acctype, secondstage);
-  memattrs.shareable = [SH[1]] == 0b1;
-  memattrs.outershareable = SH == 0b10;
-  return(MemAttrDefaults(memattrs))
-}
-
-val LongConvertAttrsHints : (bits(4), AccType) -> MemAttrHints effect {escape, rreg, undef}
-
-function LongConvertAttrsHints (attrfield, acctype) = {
-  assert(~(IsZero(attrfield)), "!(IsZero(attrfield))");
-  result : MemAttrHints = undefined;
-  if S1CacheDisabled(acctype) then {
-    result.attrs = MemAttr_NC;
-    result.hints = MemHint_No
-  } else if slice(attrfield, 2, 2) == 0b00 then {
-    result.attrs = MemAttr_WT;
-    result.hints = slice(attrfield, 0, 2);
-    result.transient = true
-  } else if slice(attrfield, 0, 4) == 0x4 then {
-    result.attrs = MemAttr_NC;
-    result.hints = MemHint_No;
-    result.transient = false
-  } else if slice(attrfield, 2, 2) == 0b01 then {
-    result.attrs = slice(attrfield, 0, 2);
-    result.hints = MemAttr_WB;
-    result.transient = true
-  } else {
-    result.attrs = slice(attrfield, 2, 2);
-    result.hints = slice(attrfield, 0, 2);
-    result.transient = false
-  };
-  return(result)
-}
-
-val AArch64_S1AttrDecode : (bits(2), bits(3), AccType) -> MemoryAttributes effect {rreg, undef, escape}
-
-function AArch64_S1AttrDecode (SH, attr, acctype) = let 'uattr = ex_nat(UInt(attr)) in {
-  memattrs : MemoryAttributes = undefined;
-  mair : bits(64) = aget_MAIR();
-  index : atom(8 * 'uattr) = 8 * uattr;
-  attrfield : bits(8) = mair[7 + index .. index];
-  __anon1 : Constraint = undefined;
-  if attrfield[7 .. 4] != 0x0 & attrfield[3 .. 0] == 0x0 | attrfield[7 .. 4] == 0x0 & (attrfield[3 .. 0] & 0x3) != 0x0 then
-    (__anon1, attrfield) = ConstrainUnpredictableBits(Unpredictable_RESMAIR) : (Constraint, bits(8))
-  else ();
-  if attrfield[7 .. 4] == 0x0 then {
-    memattrs.typ = MemType_Device;
-    match attrfield[3 .. 0] {
-      0x0 => memattrs.device = DeviceType_nGnRnE,
-      0x4 => memattrs.device = DeviceType_nGnRE,
-      0x8 => memattrs.device = DeviceType_nGRE,
-      0xC => memattrs.device = DeviceType_GRE,
-      _ => Unreachable()
-    }
-  } else if attrfield[3 .. 0] != 0x0 then {
-    memattrs.typ = MemType_Normal;
-    memattrs.outer = LongConvertAttrsHints(attrfield[7 .. 4], acctype);
-    memattrs.inner = LongConvertAttrsHints(attrfield[3 .. 0], acctype);
-    memattrs.shareable = [SH[1]] == 0b1;
-    memattrs.outershareable = SH == 0b10
-  } else Unreachable();
-  return(MemAttrDefaults(memattrs))
-}
-
 val IsInHost : unit -> bool effect {escape, rreg, undef}
 
 function IsInHost () = return(ELIsInHost(PSTATE.EL))
-
-val HasS2Translation : unit -> bool effect {escape, rreg, undef}
-
-function HasS2Translation () = return(((HaveEL(EL2) & ~(IsSecure())) & ~(IsInHost())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1))
-
-val AArch64_SecondStageWalk : (AddressDescriptor, bits(64), AccType, bool, int, bool) -> AddressDescriptor effect {escape, rmem, rreg, undef, wmem}
-
-function AArch64_SecondStageWalk (S1, vaddress, acctype, iswrite, 'size, hwupdatewalk) = {
-  assert(HasS2Translation(), "HasS2Translation()");
-  s2fs1walk : bool = true;
-  wasaligned : bool = true;
-  return(AArch64_SecondStageTranslate(S1, vaddress, acctype, iswrite, wasaligned, s2fs1walk, size, hwupdatewalk))
-}
-
-val DoubleLockStatus : unit -> bool effect {escape, rreg, undef}
-
-function DoubleLockStatus () = if ELUsingAArch32(EL1) then return(([DBGOSDLR[0]] == 0b1 & [DBGPRCR[0]] == 0b0) & ~(Halted())) else return(([OSDLR_EL1[0]] == 0b1 & [DBGPRCR_EL1[0]] == 0b0) & ~(Halted()))
-
-val HaltingAllowed : unit -> bool effect {escape, rreg, undef}
-
-function HaltingAllowed () = if Halted() | DoubleLockStatus() then return(false) else if IsSecure() then return(ExternalSecureInvasiveDebugEnabled()) else return(ExternalInvasiveDebugEnabled())
-
-val HaltOnBreakpointOrWatchpoint : unit -> bool effect {escape, rreg, undef}
-
-function HaltOnBreakpointOrWatchpoint () = return((HaltingAllowed() & [EDSCR[14]] == 0b1) & [OSLSR_EL1[1]] == 0b0)
 
 val BadMode : bits(5) -> bool effect {undef}
 
@@ -2338,793 +1705,23 @@ function AddrTop (address, IsInstr, el) = {
   return(if tbi == 0b1 & ((~(HavePACExt()) | tbid == 0b0) | ~(IsInstr)) then 55 else 63)
 }
 
-val AArch64_WatchpointByteMatch : (int, bits(64)) -> bool effect {rreg, undef, escape}
+val AArch64_TranslateAddress : (bits(64), AccType, bool, bool, int) -> AddressDescriptor effect {escape, undef}
 
-function AArch64_WatchpointByteMatch (n, vaddress) = let 'top : {'n, true. atom('n)} = AddrTop(vaddress, false, PSTATE.EL) in {
-  bottom : int = if [DBGWVR_EL1[n][2]] == 0b1 then 2 else 3;
-  byte_select_match : bool = [DBGWCR_EL1[n][12 .. 5][UInt(vaddress[bottom - 1 .. 0])]] != 0b0;
-  mask : int = UInt(DBGWCR_EL1[n][28 .. 24]);
-  MSB : bits(8) = undefined;
-  LSB : bits(8) = undefined;
-  if mask > 0 & ~(IsOnes(DBGWCR_EL1[n][12 .. 5])) then
-    byte_select_match = ConstrainUnpredictableBool(Unpredictable_WPMASKANDBAS)
-  else {
-    LSB = DBGWCR_EL1[n][12 .. 5] & ~(DBGWCR_EL1[n][12 .. 5] - 1);
-    MSB = DBGWCR_EL1[n][12 .. 5] + LSB;
-    if ~(IsZero(MSB & MSB - 1)) then {
-      byte_select_match = ConstrainUnpredictableBool(Unpredictable_WPBASCONTIGUOUS);
-      bottom = 3
-    } else ()
-  };
-  c : Constraint = undefined;
-  if mask > 0 & mask <= 2 then {
-    (c, mask) = ConstrainUnpredictableInteger(3, 31, Unpredictable_RESWPMASK);
-    assert(c == Constraint_DISABLED | c == Constraint_NONE | c == Constraint_UNKNOWN, "((c == Constraint_DISABLED) || ((c == Constraint_NONE) || (c == Constraint_UNKNOWN)))");
-    match c {
-      Constraint_DISABLED => return(false),
-      Constraint_NONE => mask = 0
-    }
-  } else ();
-  WVR_match : bool = undefined;
-  let 'mask2 : {'n, true. atom('n)} = ex_int(mask);
-  let 'bottom2 : {'n, true. atom('n)} = ex_int(bottom);
-  if mask > bottom then {
-    assert(constraint('mask2 >= 'bottom2 + 1));
-    WVR_match = vaddress[top - mask2 + 1 - 1 + mask2 .. mask2] == DBGWVR_EL1[n][top - mask2 + 1 - 1 + mask2 .. mask2];
-    if WVR_match & ~(IsZero(DBGWVR_EL1[n][mask2 - bottom2 - 1 + bottom2 .. bottom2])) then
-      WVR_match = ConstrainUnpredictableBool(Unpredictable_WPMASKEDBITS)
-    else ()
-  } else
-    WVR_match = vaddress[top - bottom2 + 1 - 1 + bottom2 .. bottom2] == DBGWVR_EL1[n][top - bottom2 + 1 - 1 + bottom2 .. bottom2];
-  return(WVR_match & byte_select_match)
-}
+val AArch64_NoFault : unit -> FaultRecord effect {undef}
 
-val IsZero_slice : forall 'n, 'n >= 0.
-  (bits('n), int, int) -> bool effect {escape}
-
-function IsZero_slice (xs, i, 'l) = {
-  assert(constraint('l >= 0));
-  IsZero(slice(xs, i, l))
-}
-
-val IsOnes_slice : forall 'n, 'n >= 0.
-  (bits('n), int, int) -> bool effect {escape}
-
-function IsOnes_slice (xs, i, 'l) = {
-  assert(constraint('l >= 0));
-  IsOnes(slice(xs, i, l))
-}
-
-val ZeroExtend_slice_append : forall 'n 'm 'o, 'n >= 0 & 'm >= 0 & 'o >= 0.
-  (bits('n), int, int, bits('m)) -> bits('o) effect {escape}
-
-function ZeroExtend_slice_append (xs, i, 'l, ys) = {
-  assert(constraint('l >= 0));
-  ZeroExtend(slice(xs, i, l) @ ys)
-}
-
-val AArch64_TranslationTableWalk : (bits(52), bits(64), AccType, bool, bool, bool, int) -> TLBRecord effect {escape, rreg, rmem, wmem, undef}
-
-function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, secondstage, s2fs1walk, 'size) = {
-  if ~(secondstage) then assert(~(ELUsingAArch32(S1TranslationRegime()))) else assert(((HaveEL(EL2) & ~(IsSecure())) & ~(ELUsingAArch32(EL2))) & HasS2Translation());
-  result : TLBRecord = undefined;
-  descaddr : AddressDescriptor = undefined;
-  baseregister : bits(64) = undefined;
-  inputaddr : bits(64) = undefined;
-  __tmp_18 : MemoryAttributes = descaddr.memattrs;
-  __tmp_18.typ = MemType_Normal;
-  descaddr.memattrs = __tmp_18;
-  startsizecheck : int = undefined;
-  inputsizecheck : int = undefined;
-  startlevel : int = undefined;
-  level : int = undefined;
-  stride : int = undefined;
-  firstblocklevel : int = undefined;
-  grainsize : int = undefined;
-  hierattrsdisabled : bool = undefined;
-  update_AP : bool = undefined;
-  update_AF : bool = undefined;
-  singlepriv : bool = undefined;
-  lookupsecure : bool = undefined;
-  reversedescriptors : bool = undefined;
-  disabled : bool = undefined;
-  basefound : bool = undefined;
-  ps : bits(3) = undefined;
-  inputsize_min : int = undefined;
-  c : Constraint = undefined;
-  inputsize_max : int = undefined;
-  inputsize : int = undefined;
-  midgrain : bool = undefined;
-  largegrain : bool = undefined;
-  top : int = undefined;
-  if ~(secondstage) then {
-    inputaddr = ZeroExtend(vaddress);
-    top = AddrTop(inputaddr, acctype == AccType_IFETCH, PSTATE.EL);
-    if PSTATE.EL == EL3 then {
-      largegrain = slice(TCR_EL3, 14, 2) == 0b01;
-      midgrain = slice(TCR_EL3, 14, 2) == 0b10;
-      inputsize = 64 - UInt(slice(TCR_EL3, 0, 6));
-      inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
-      if inputsize > inputsize_max then {
-        c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert(c == Constraint_FORCE | c == Constraint_FAULT);
-        if c == Constraint_FORCE then inputsize = inputsize_max
-        else ()
-      } else ();
-      inputsize_min = 64 - 39;
-      if inputsize < inputsize_min then {
-        c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert(c == Constraint_FORCE | c == Constraint_FAULT);
-        if c == Constraint_FORCE then inputsize = inputsize_min
-        else ()
-      } else ();
-      ps = slice(TCR_EL3, 16, 3);
-      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
-      disabled = false;
-      baseregister = TTBR0_EL3;
-      descaddr.memattrs = WalkAttrDecode(slice(TCR_EL3, 12, 2), slice(TCR_EL3, 10, 2), slice(TCR_EL3, 8, 2), secondstage);
-      reversedescriptors = [SCTLR_EL3[25]] == 0b1;
-      lookupsecure = true;
-      singlepriv = true;
-      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL3[21]] == 0b1;
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL3[22]] == 0b1;
-      hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL3[24]] == 0b1
-    } else if IsInHost() then {
-      if [inputaddr[top]] == 0b0 then {
-        largegrain = slice(TCR_EL2, 14, 2) == 0b01;
-        midgrain = slice(TCR_EL2, 14, 2) == 0b10;
-        inputsize = 64 - UInt(slice(TCR_EL2, 0, 6));
-        inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
-        if inputsize > inputsize_max then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_max
-          else ()
-        } else ();
-        inputsize_min = 64 - 39;
-        if inputsize < inputsize_min then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_min
-          else ()
-        } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
-        disabled = [TCR_EL2[7]] == 0b1;
-        baseregister = TTBR0_EL2;
-        descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 12, 2), slice(TCR_EL2, 10, 2), slice(TCR_EL2, 8, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL2[41]] == 0b1
-      } else {
-        inputsize = 64 - UInt(slice(TCR_EL2, 16, 6));
-        largegrain = slice(TCR_EL2, 30, 2) == 0b11;
-        midgrain = slice(TCR_EL2, 30, 2) == 0b01;
-        inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
-        if inputsize > inputsize_max then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_max
-          else ()
-        } else ();
-        inputsize_min = 64 - 39;
-        if inputsize < inputsize_min then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_min
-          else ()
-        } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, top - inputsize + 1);
-        disabled = [TCR_EL2[23]] == 0b1;
-        baseregister = TTBR1_EL2;
-        descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 28, 2), slice(TCR_EL2, 26, 2), slice(TCR_EL2, 24, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL2[42]] == 0b1
-      };
-      ps = slice(TCR_EL2, 32, 3);
-      reversedescriptors = [SCTLR_EL2[25]] == 0b1;
-      lookupsecure = false;
-      singlepriv = false;
-      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL2[39]] == 0b1;
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL2[40]] == 0b1
-    } else if PSTATE.EL == EL2 then {
-      inputsize = 64 - UInt(slice(TCR_EL2, 0, 6));
-      largegrain = slice(TCR_EL2, 14, 2) == 0b01;
-      midgrain = slice(TCR_EL2, 14, 2) == 0b10;
-      inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
-      if inputsize > inputsize_max then {
-        c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert(c == Constraint_FORCE | c == Constraint_FAULT);
-        if c == Constraint_FORCE then inputsize = inputsize_max
-        else ()
-      } else ();
-      inputsize_min = 64 - 39;
-      if inputsize < inputsize_min then {
-        c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert(c == Constraint_FORCE | c == Constraint_FAULT);
-        if c == Constraint_FORCE then inputsize = inputsize_min
-        else ()
-      } else ();
-      ps = slice(TCR_EL2, 16, 3);
-      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
-      disabled = false;
-      baseregister = TTBR0_EL2;
-      descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 12, 2), slice(TCR_EL2, 10, 2), slice(TCR_EL2, 8, 2), secondstage);
-      reversedescriptors = [SCTLR_EL2[25]] == 0b1;
-      lookupsecure = false;
-      singlepriv = true;
-      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL2[39]] == 0b1;
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL2[40]] == 0b1;
-      hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL2[24]] == 0b1
-    } else {
-      if [inputaddr[top]] == 0b0 then {
-        inputsize = 64 - UInt(slice(TCR_EL1, 0, 6));
-        largegrain = slice(TCR_EL1, 14, 2) == 0b01;
-        midgrain = slice(TCR_EL1, 14, 2) == 0b10;
-        inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
-        if inputsize > inputsize_max then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_max
-          else ()
-        } else ();
-        inputsize_min = 64 - 39;
-        if inputsize < inputsize_min then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_min
-          else ()
-        } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
-        disabled = [TCR_EL1[7]] == 0b1;
-        baseregister = TTBR0_EL1;
-        descaddr.memattrs = WalkAttrDecode(slice(TCR_EL1, 12, 2), slice(TCR_EL1, 10, 2), slice(TCR_EL1, 8, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL1[41]] == 0b1
-      } else {
-        inputsize = 64 - UInt(slice(TCR_EL1, 16, 6));
-        largegrain = slice(TCR_EL1, 30, 2) == 0b11;
-        midgrain = slice(TCR_EL1, 30, 2) == 0b01;
-        inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
-        if inputsize > inputsize_max then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_max
-          else ()
-        } else ();
-        inputsize_min = 64 - 39;
-        if inputsize < inputsize_min then {
-          c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert(c == Constraint_FORCE | c == Constraint_FAULT);
-          if c == Constraint_FORCE then inputsize = inputsize_min
-          else ()
-        } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, top - inputsize + 1);
-        disabled = [TCR_EL1[23]] == 0b1;
-        baseregister = TTBR1_EL1;
-        descaddr.memattrs = WalkAttrDecode(slice(TCR_EL1, 28, 2), slice(TCR_EL1, 26, 2), slice(TCR_EL1, 24, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL1[42]] == 0b1
-      };
-      ps = slice(TCR_EL1, 32, 3);
-      reversedescriptors = [SCTLR_EL1[25]] == 0b1;
-      lookupsecure = IsSecure();
-      singlepriv = false;
-      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL1[39]] == 0b1;
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL1[40]] == 0b1
-    };
-    if largegrain then {
-      grainsize = 16;
-      firstblocklevel = if Have52BitPAExt() then 1 else 2
-    } else if midgrain then {
-      grainsize = 14;
-      firstblocklevel = 2
-    } else {
-      grainsize = 12;
-      firstblocklevel = 1
-    };
-    stride = grainsize - 3;
-    level = 4 - RoundUp(Real(inputsize - grainsize) / Real(stride))
-  } else {
-    inputaddr = ZeroExtend(ipaddress);
-    inputsize = 64 - UInt(slice(VTCR_EL2, 0, 6));
-    largegrain = slice(VTCR_EL2, 14, 2) == 0b01;
-    midgrain = slice(VTCR_EL2, 14, 2) == 0b10;
-    inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
-    if inputsize > inputsize_max then {
-      c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-      assert(c == Constraint_FORCE | c == Constraint_FAULT);
-      if c == Constraint_FORCE then inputsize = inputsize_max
-      else ()
-    } else ();
-    inputsize_min = 64 - 39;
-    if inputsize < inputsize_min then {
-      c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-      assert(c == Constraint_FORCE | c == Constraint_FAULT);
-      if c == Constraint_FORCE then inputsize = inputsize_min
-      else ()
-    } else ();
-    ps = slice(VTCR_EL2, 16, 3);
-    basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, negate(inputsize) + 64);
-    disabled = false;
-    baseregister = VTTBR_EL2;
-    descaddr.memattrs = WalkAttrDecode(slice(VTCR_EL2, 8, 2), slice(VTCR_EL2, 10, 2), slice(VTCR_EL2, 12, 2), secondstage);
-    reversedescriptors = [SCTLR_EL2[25]] == 0b1;
-    lookupsecure = false;
-    singlepriv = true;
-    update_AF = HaveAccessFlagUpdateExt() & [VTCR_EL2[21]] == 0b1;
-    update_AP = (HaveDirtyBitModifierExt() & update_AF) & [VTCR_EL2[22]] == 0b1;
-    startlevel = UInt(slice(VTCR_EL2, 6, 2));
-    if largegrain then {
-      grainsize = 16;
-      level = 3 - startlevel;
-      firstblocklevel = if Have52BitPAExt() then 1 else 2
-    } else if midgrain then {
-      grainsize = 14;
-      level = 3 - startlevel;
-      firstblocklevel = 2
-    } else {
-      grainsize = 12;
-      level = 2 - startlevel;
-      firstblocklevel = 1
-    };
-    stride = grainsize - 3;
-    if largegrain then
-      if level == 0 | level == 1 & PAMax() <= 42 then basefound = false
-      else ()
-    else if midgrain then
-      if level == 0 | level == 1 & PAMax() <= 40 then basefound = false
-      else ()
-    else if level < 0 | level == 0 & PAMax() <= 42 then basefound = false
-    else ();
-    inputsizecheck = inputsize;
-    if inputsize > PAMax() & (~(ELUsingAArch32(EL1)) | inputsize > 40) then match ConstrainUnpredictable(Unpredictable_LARGEIPA) {
-      Constraint_FORCE => {
-        inputsize = PAMax();
-        inputsizecheck = PAMax()
-      },
-      Constraint_FORCENOSLCHECK => inputsize = PAMax(),
-      Constraint_FAULT => basefound = false,
-      _ => Unreachable()
-    } else ();
-    startsizecheck = inputsizecheck - ((3 - level) * stride + grainsize);
-    if startsizecheck < 1 | startsizecheck > stride + 4 then basefound = false
-    else ()
-  };
-  if ~(basefound) | disabled then {
-    level = 0;
-    __tmp_19 : AddressDescriptor = result.addrdesc;
-    __tmp_19.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-    result.addrdesc = __tmp_19;
-    return(result)
-  } else ();
-  outputsize : int = undefined;
-  match ps {
-    0b000 => outputsize = 32,
-    0b001 => outputsize = 36,
-    0b010 => outputsize = 40,
-    0b011 => outputsize = 42,
-    0b100 => outputsize = 44,
-    0b101 => outputsize = 48,
-    0b110 => outputsize = if Have52BitPAExt() & largegrain then 52 else 48,
-    _ => outputsize = 48
-  };
-  if outputsize > PAMax() then outputsize = PAMax()
-  else ();
-  if outputsize < 48 & ~(IsZero_slice(baseregister, outputsize, negate(outputsize) + 48)) then {
-    level = 0;
-    __tmp_20 : AddressDescriptor = result.addrdesc;
-    __tmp_20.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-    result.addrdesc = __tmp_20;
-    return(result)
-  } else ();
-  let 'baselowerbound = (3 + inputsize - ((3 - level) * stride + grainsize)) : int;
-  assert(constraint(0 <= 'baselowerbound & 'baselowerbound <= 48));
-  baseaddress : bits(52) = undefined;
-  if outputsize == 52 then let 'z = (if baselowerbound < 6 then 6 else baselowerbound) : int in {
-    assert(constraint(0 <= 'z & 'z <= 48));
-    baseaddress = (slice(baseregister, 2, 4) @ slice(baseregister, z, negate(z) + 48)) @ Zeros(z)
-  } else
-    baseaddress = ZeroExtend(slice(baseregister, baselowerbound, negate(baselowerbound) + 48) @ Zeros(baselowerbound));
-  ns_table : bits(1) = if lookupsecure then 0b0 else 0b1;
-  ap_table : bits(2) = 0b00;
-  xn_table : bits(1) = 0b0;
-  pxn_table : bits(1) = 0b0;
-  addrselecttop : int = inputsize - 1;
-  apply_nvnv1_effect : bool = ((HaveNVExt() & HaveEL(EL2)) & [HCR_EL2[42]] == 0b1) & [HCR_EL2[43]] == 0b1;
-  blocktranslate : bool = undefined;
-  desc : bits(64) = undefined;
-  accdesc : AccessDescriptor = undefined;
-  hwupdatewalk : bool = undefined;
-  descaddr2 : AddressDescriptor = undefined;
-  addrselectbottom : int = undefined;
-  repeat {
-    addrselectbottom = (3 - level) * stride + grainsize;
-    index : bits(52) = ZeroExtend_slice_append(inputaddr, addrselectbottom, addrselecttop - addrselectbottom + 1, 0b000);
-    __tmp_21 : FullAddress = descaddr.paddress;
-    __tmp_21.physicaladdress = baseaddress | index;
-    descaddr.paddress = __tmp_21;
-    __tmp_22 : FullAddress = descaddr.paddress;
-    __tmp_22.NS = ns_table;
-    descaddr.paddress = __tmp_22;
-    if secondstage | ~(HasS2Translation()) then descaddr2 = descaddr
-    else {
-      hwupdatewalk = false;
-      descaddr2 = AArch64_SecondStageWalk(descaddr, vaddress, acctype, iswrite, 8, hwupdatewalk);
-      if IsFault(descaddr2) then {
-        __tmp_23 : AddressDescriptor = result.addrdesc;
-        __tmp_23.fault = descaddr2.fault;
-        result.addrdesc = __tmp_23;
-        return(result)
-      } else ()
-    };
-    descaddr2.vaddress = ZeroExtend(vaddress);
-    accdesc = CreateAccessDescriptorPTW(acctype, secondstage, s2fs1walk, level);
-    desc = aget__Mem(descaddr2, 8, accdesc);
-    if reversedescriptors then desc = BigEndianReverse(desc)
-    else ();
-    if [desc[0]] == 0b0 | slice(desc, 0, 2) == 0b01 & level == 3 then {
-      __tmp_24 : AddressDescriptor = result.addrdesc;
-      __tmp_24.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-      result.addrdesc = __tmp_24;
-      return(result)
-    } else ();
-    if slice(desc, 0, 2) == 0b01 | level == 3 then blocktranslate = true
-    else {
-      if (outputsize < 52 & largegrain) & ~(IsZero(slice(desc, 12, 4))) | outputsize < 48 & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48)) then {
-        __tmp_25 : AddressDescriptor = result.addrdesc;
-        __tmp_25.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-        result.addrdesc = __tmp_25;
-        return(result)
-      } else ();
-      let 'gsz = grainsize;
-      assert(constraint(0 <= 'gsz & 'gsz <= 48));
-      if outputsize == 52 then
-        baseaddress = (slice(desc, 12, 4) @ slice(desc, gsz, negate(gsz) + 48)) @ Zeros(gsz)
-      else
-        baseaddress = ZeroExtend(slice(desc, gsz, negate(gsz) + 48) @ Zeros(gsz));
-      if ~(secondstage) then ns_table = ns_table | [desc[63]]
-      else ();
-      if ~(secondstage) & ~(hierattrsdisabled) then {
-        ap_table = __SetSlice_bits(2, 1, ap_table, 1, [ap_table[1]] | [desc[62]]);
-        if apply_nvnv1_effect then pxn_table = pxn_table | [desc[60]]
-        else xn_table = xn_table | [desc[60]];
-        if ~(singlepriv) then
-          if ~(apply_nvnv1_effect) then {
-            pxn_table = pxn_table | [desc[59]];
-            ap_table = __SetSlice_bits(2, 1, ap_table, 0, [ap_table[0]] | [desc[61]])
-          } else ()
-        else ()
-      } else ();
-      level = level + 1;
-      addrselecttop = addrselectbottom - 1;
-      blocktranslate = false
-    }
-  } until blocktranslate;
-  if level < firstblocklevel then {
-    __tmp_26 : AddressDescriptor = result.addrdesc;
-    __tmp_26.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-    result.addrdesc = __tmp_26;
-    return(result)
-  } else ();
-  contiguousbitcheck : bool = undefined;
-  if largegrain then contiguousbitcheck = level == 2 & inputsize < 34
-  else if midgrain then contiguousbitcheck = level == 2 & inputsize < 30
-  else contiguousbitcheck = level == 1 & inputsize < 34;
-  if contiguousbitcheck & [desc[52]] == 0b1 then
-    if undefined then {
-      __tmp_27 : AddressDescriptor = result.addrdesc;
-      __tmp_27.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-      result.addrdesc = __tmp_27;
-      return(result)
-    } else ()
-  else ();
-  if (outputsize < 52 & largegrain) & ~(IsZero(slice(desc, 12, 4))) | outputsize < 48 & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48)) then {
-    __tmp_28 : AddressDescriptor = result.addrdesc;
-    __tmp_28.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-    result.addrdesc = __tmp_28;
-    return(result)
-  } else ();
-  outputaddress : bits(52) = undefined;
-  let 'asb = addrselectbottom;
-  assert(constraint(0 <= 'asb & 'asb <= 48));
-  if outputsize == 52 then
-    outputaddress = (slice(desc, 12, 4) @ slice(desc, asb, negate(asb) + 48)) @ slice(inputaddr, 0, asb)
-  else
-    outputaddress = ZeroExtend(slice(desc, asb, negate(asb) + 48) @ slice(inputaddr, 0, asb));
-  if [desc[10]] == 0b0 then
-    if ~(update_AF) then {
-      __tmp_29 : AddressDescriptor = result.addrdesc;
-      __tmp_29.fault = AArch64_AccessFlagFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-      result.addrdesc = __tmp_29;
-      return(result)
-    } else {
-      __tmp_30 : DescriptorUpdate = result.descupdate;
-      __tmp_30.AF = true;
-      result.descupdate = __tmp_30
-    }
-  else ();
-  if update_AP & [desc[51]] == 0b1 then
-    if ~(secondstage) & [desc[7]] == 0b1 then {
-      desc = __SetSlice_bits(64, 1, desc, 7, 0b0);
-      __tmp_31 : DescriptorUpdate = result.descupdate;
-      __tmp_31.AP = true;
-      result.descupdate = __tmp_31
-    } else if secondstage & [desc[7]] == 0b0 then {
-      desc = __SetSlice_bits(64, 1, desc, 7, 0b1);
-      __tmp_32 : DescriptorUpdate = result.descupdate;
-      __tmp_32.AP = true;
-      result.descupdate = __tmp_32
-    } else ()
-  else ();
-  __tmp_33 : DescriptorUpdate = result.descupdate;
-  __tmp_33.descaddr = descaddr;
-  result.descupdate = __tmp_33;
-  xn : bits(1) = undefined;
-  pxn : bits(1) = undefined;
-  if apply_nvnv1_effect then {
-    pxn = [desc[54]];
-    xn = 0b0
-  } else {
-    xn = [desc[54]];
-    pxn = [desc[53]]
-  };
-  contiguousbit : bits(1) = [desc[52]];
-  nG : bits(1) = [desc[11]];
-  sh : bits(2) = slice(desc, 8, 2);
-  ap : bits(3) = undefined;
-  if apply_nvnv1_effect then ap = [desc[7]] @ 0b01
-  else ap = slice(desc, 6, 2) @ 0b1;
-  memattr : bits(4) = slice(desc, 2, 4);
-  result.domain = undefined;
-  result.level = level;
-  result.blocksize = 2 ^ ((3 - level) * stride + grainsize);
-  if ~(secondstage) then {
-    __tmp_34 : Permissions = result.perms;
-    __tmp_34.xn = xn | xn_table;
-    result.perms = __tmp_34;
-    __tmp_35 : bits(3) = result.perms.ap;
-    __tmp_35 = __SetSlice_bits(3, 1, __tmp_35, 2, [ap[2]] | [ap_table[1]]);
-    __tmp_36 : Permissions = result.perms;
-    __tmp_36.ap = __tmp_35;
-    result.perms = __tmp_36;
-    if ~(singlepriv) then {
-      __tmp_37 : bits(3) = result.perms.ap;
-      __tmp_37 = __SetSlice_bits(3, 1, __tmp_37, 1, [ap[1]] & ~([ap_table[0]]));
-      __tmp_38 : Permissions = result.perms;
-      __tmp_38.ap = __tmp_37;
-      result.perms = __tmp_38;
-      __tmp_39 : Permissions = result.perms;
-      __tmp_39.pxn = pxn | pxn_table;
-      result.perms = __tmp_39;
-      if IsSecure() then result.nG = nG | ns_table
-      else result.nG = nG
-    } else {
-      __tmp_40 : bits(3) = result.perms.ap;
-      __tmp_40 = __SetSlice_bits(3, 1, __tmp_40, 1, 0b1);
-      __tmp_41 : Permissions = result.perms;
-      __tmp_41.ap = __tmp_40;
-      result.perms = __tmp_41;
-      __tmp_42 : Permissions = result.perms;
-      __tmp_42.pxn = 0b0;
-      result.perms = __tmp_42;
-      result.nG = 0b0
-    };
-    __tmp_43 : bits(3) = result.perms.ap;
-    __tmp_43 = __SetSlice_bits(3, 1, __tmp_43, 0, 0b1);
-    __tmp_44 : Permissions = result.perms;
-    __tmp_44.ap = __tmp_43;
-    result.perms = __tmp_44;
-    __tmp_45 : AddressDescriptor = result.addrdesc;
-    __tmp_45.memattrs = AArch64_S1AttrDecode(sh, slice(memattr, 0, 3), acctype);
-    result.addrdesc = __tmp_45;
-    __tmp_46 : FullAddress = result.addrdesc.paddress;
-    __tmp_46.NS = [memattr[3]] | ns_table;
-    __tmp_47 : AddressDescriptor = result.addrdesc;
-    __tmp_47.paddress = __tmp_46;
-    result.addrdesc = __tmp_47
-  } else {
-    __tmp_48 : bits(3) = result.perms.ap;
-    __tmp_48 = __SetSlice_bits(3, 2, __tmp_48, 1, slice(ap, 1, 2));
-    __tmp_49 : Permissions = result.perms;
-    __tmp_49.ap = __tmp_48;
-    result.perms = __tmp_49;
-    __tmp_50 : bits(3) = result.perms.ap;
-    __tmp_50 = __SetSlice_bits(3, 1, __tmp_50, 0, 0b1);
-    __tmp_51 : Permissions = result.perms;
-    __tmp_51.ap = __tmp_50;
-    result.perms = __tmp_51;
-    __tmp_52 : Permissions = result.perms;
-    __tmp_52.xn = xn;
-    result.perms = __tmp_52;
-    if HaveExtendedExecuteNeverExt() then {
-      __tmp_53 : Permissions = result.perms;
-      __tmp_53.xxn = [desc[53]];
-      result.perms = __tmp_53
-    } else ();
-    __tmp_54 : Permissions = result.perms;
-    __tmp_54.pxn = 0b0;
-    result.perms = __tmp_54;
-    result.nG = 0b0;
-    __tmp_55 : AddressDescriptor = result.addrdesc;
-    __tmp_55.memattrs = S2AttrDecode(sh, memattr, acctype);
-    result.addrdesc = __tmp_55;
-    __tmp_56 : FullAddress = result.addrdesc.paddress;
-    __tmp_56.NS = 0b1;
-    __tmp_57 : AddressDescriptor = result.addrdesc;
-    __tmp_57.paddress = __tmp_56;
-    result.addrdesc = __tmp_57
-  };
-  __tmp_58 : FullAddress = result.addrdesc.paddress;
-  __tmp_58.physicaladdress = outputaddress;
-  __tmp_59 : AddressDescriptor = result.addrdesc;
-  __tmp_59.paddress = __tmp_58;
-  result.addrdesc = __tmp_59;
-  __tmp_60 : AddressDescriptor = result.addrdesc;
-  __tmp_60.fault = AArch64_NoFault();
-  result.addrdesc = __tmp_60;
-  result.contiguous = contiguousbit == 0b1;
-  if HaveCommonNotPrivateTransExt() then result.CnP = [baseregister[0]]
-  else ();
-  return(result)
-}
-
-val IsZero_slice2 : forall 'n, 'n >= 0.
-  (bits('n), int, int) -> bool effect {escape}
-
-function IsZero_slice2 (xs, i, 'l) = {
-  assert(constraint('l >= 0));
-  IsZero(slice(xs, i, l))
-}
-
-val AArch64_TranslateAddressS1Off : (bits(64), AccType, bool) -> TLBRecord effect {rreg, undef, escape}
-
-function AArch64_TranslateAddressS1Off (vaddress, acctype, iswrite) = {
-  assert(~(ELUsingAArch32(S1TranslationRegime())));
-  result : TLBRecord = undefined;
-  Top : int = AddrTop(vaddress, false, PSTATE.EL);
-  s2fs1walk : bool = undefined;
-  secondstage : bool = undefined;
+function AArch64_NoFault () = {
   ipaddress : bits(52) = undefined;
   level : int = undefined;
-  if ~(IsZero_slice2(vaddress, PAMax(), Top + 1 - PAMax())) then {
-    level = 0;
-    ipaddress = undefined;
-    secondstage = false;
-    s2fs1walk = false;
-    __tmp_198 : AddressDescriptor = result.addrdesc;
-    __tmp_198.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
-    result.addrdesc = __tmp_198;
-    return(result)
-  } else ();
-  default_cacheable : bool = HasS2Translation() & [HCR_EL2[12]] == 0b1;
-  cacheable : bool = undefined;
-  if default_cacheable then {
-    __tmp_199 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_199.typ = MemType_Normal;
-    __tmp_200 : AddressDescriptor = result.addrdesc;
-    __tmp_200.memattrs = __tmp_199;
-    result.addrdesc = __tmp_200;
-    __tmp_201 : MemAttrHints = result.addrdesc.memattrs.inner;
-    __tmp_201.attrs = MemAttr_WB;
-    __tmp_202 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_202.inner = __tmp_201;
-    __tmp_203 : AddressDescriptor = result.addrdesc;
-    __tmp_203.memattrs = __tmp_202;
-    result.addrdesc = __tmp_203;
-    __tmp_204 : MemAttrHints = result.addrdesc.memattrs.inner;
-    __tmp_204.hints = MemHint_RWA;
-    __tmp_205 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_205.inner = __tmp_204;
-    __tmp_206 : AddressDescriptor = result.addrdesc;
-    __tmp_206.memattrs = __tmp_205;
-    result.addrdesc = __tmp_206;
-    __tmp_207 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_207.shareable = false;
-    __tmp_208 : AddressDescriptor = result.addrdesc;
-    __tmp_208.memattrs = __tmp_207;
-    result.addrdesc = __tmp_208;
-    __tmp_209 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_209.outershareable = false;
-    __tmp_210 : AddressDescriptor = result.addrdesc;
-    __tmp_210.memattrs = __tmp_209;
-    result.addrdesc = __tmp_210
-  } else if acctype != AccType_IFETCH then {
-    __tmp_211 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_211.typ = MemType_Device;
-    __tmp_212 : AddressDescriptor = result.addrdesc;
-    __tmp_212.memattrs = __tmp_211;
-    result.addrdesc = __tmp_212;
-    __tmp_213 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_213.device = DeviceType_nGnRnE;
-    __tmp_214 : AddressDescriptor = result.addrdesc;
-    __tmp_214.memattrs = __tmp_213;
-    result.addrdesc = __tmp_214;
-    __tmp_215 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_215.inner = undefined;
-    __tmp_216 : AddressDescriptor = result.addrdesc;
-    __tmp_216.memattrs = __tmp_215;
-    result.addrdesc = __tmp_216
-  } else {
-    cacheable = [aget_SCTLR()[12]] == 0b1;
-    __tmp_217 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_217.typ = MemType_Normal;
-    __tmp_218 : AddressDescriptor = result.addrdesc;
-    __tmp_218.memattrs = __tmp_217;
-    result.addrdesc = __tmp_218;
-    if cacheable then {
-      __tmp_219 : MemAttrHints = result.addrdesc.memattrs.inner;
-      __tmp_219.attrs = MemAttr_WT;
-      __tmp_220 : MemoryAttributes = result.addrdesc.memattrs;
-      __tmp_220.inner = __tmp_219;
-      __tmp_221 : AddressDescriptor = result.addrdesc;
-      __tmp_221.memattrs = __tmp_220;
-      result.addrdesc = __tmp_221;
-      __tmp_222 : MemAttrHints = result.addrdesc.memattrs.inner;
-      __tmp_222.hints = MemHint_RA;
-      __tmp_223 : MemoryAttributes = result.addrdesc.memattrs;
-      __tmp_223.inner = __tmp_222;
-      __tmp_224 : AddressDescriptor = result.addrdesc;
-      __tmp_224.memattrs = __tmp_223;
-      result.addrdesc = __tmp_224
-    } else {
-      __tmp_225 : MemAttrHints = result.addrdesc.memattrs.inner;
-      __tmp_225.attrs = MemAttr_NC;
-      __tmp_226 : MemoryAttributes = result.addrdesc.memattrs;
-      __tmp_226.inner = __tmp_225;
-      __tmp_227 : AddressDescriptor = result.addrdesc;
-      __tmp_227.memattrs = __tmp_226;
-      result.addrdesc = __tmp_227;
-      __tmp_228 : MemAttrHints = result.addrdesc.memattrs.inner;
-      __tmp_228.hints = MemHint_No;
-      __tmp_229 : MemoryAttributes = result.addrdesc.memattrs;
-      __tmp_229.inner = __tmp_228;
-      __tmp_230 : AddressDescriptor = result.addrdesc;
-      __tmp_230.memattrs = __tmp_229;
-      result.addrdesc = __tmp_230
-    };
-    __tmp_231 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_231.shareable = true;
-    __tmp_232 : AddressDescriptor = result.addrdesc;
-    __tmp_232.memattrs = __tmp_231;
-    result.addrdesc = __tmp_232;
-    __tmp_233 : MemoryAttributes = result.addrdesc.memattrs;
-    __tmp_233.outershareable = true;
-    __tmp_234 : AddressDescriptor = result.addrdesc;
-    __tmp_234.memattrs = __tmp_233;
-    result.addrdesc = __tmp_234
-  };
-  __tmp_235 : MemoryAttributes = result.addrdesc.memattrs;
-  __tmp_235.outer = result.addrdesc.memattrs.inner;
-  __tmp_236 : AddressDescriptor = result.addrdesc;
-  __tmp_236.memattrs = __tmp_235;
-  result.addrdesc = __tmp_236;
-  __tmp_237 : AddressDescriptor = result.addrdesc;
-  __tmp_237.memattrs = MemAttrDefaults(result.addrdesc.memattrs);
-  result.addrdesc = __tmp_237;
-  __tmp_238 : Permissions = result.perms;
-  __tmp_238.ap = undefined;
-  result.perms = __tmp_238;
-  __tmp_239 : Permissions = result.perms;
-  __tmp_239.xn = 0b0;
-  result.perms = __tmp_239;
-  __tmp_240 : Permissions = result.perms;
-  __tmp_240.pxn = 0b0;
-  result.perms = __tmp_240;
-  result.nG = undefined;
-  result.contiguous = undefined;
-  result.domain = undefined;
-  result.level = undefined;
-  result.blocksize = undefined;
-  __tmp_241 : FullAddress = result.addrdesc.paddress;
-  __tmp_241.physicaladdress = slice(vaddress, 0, 52);
-  __tmp_242 : AddressDescriptor = result.addrdesc;
-  __tmp_242.paddress = __tmp_241;
-  result.addrdesc = __tmp_242;
-  __tmp_243 : FullAddress = result.addrdesc.paddress;
-  __tmp_243.NS = if IsSecure() then 0b0 else 0b1;
-  __tmp_244 : AddressDescriptor = result.addrdesc;
-  __tmp_244.paddress = __tmp_243;
-  result.addrdesc = __tmp_244;
-  __tmp_245 : AddressDescriptor = result.addrdesc;
-  __tmp_245.fault = AArch64_NoFault();
-  result.addrdesc = __tmp_245;
-  return(result)
+  acctype : AccType = AccType_NORMAL;
+  iswrite : bool = undefined;
+  extflag : bits(1) = undefined;
+  errortype : bits(2) = undefined;
+  secondstage : bool = false;
+  s2fs1walk : bool = false;
+  return(AArch64_CreateFaultRecord(Fault_None, ipaddress, level, acctype, iswrite, extflag, errortype, secondstage, s2fs1walk))
 }
+
+function AArch64_TranslateAddress (vaddress, acctype, iswrite, wasaligned, 'size) = struct { fault = AArch64_NoFault(), memattrs = struct { typ = MemType_Normal, device = DeviceType_GRE, inner = struct { attrs = 0b00, hints = 0b00, transient = false }, outer = struct { attrs = 0b00, hints = 0b00, transient = false }, shareable = true, outershareable = true }, paddress = struct { physicaladdress = slice(vaddress, 0, 52) }, vaddress = ZeroExtend(vaddress) }
 
 val AArch64_MaybeZeroRegisterUppers : unit -> unit effect {wreg, undef, rreg, escape}
 
@@ -3154,21 +1751,6 @@ function AArch64_MaybeZeroRegisterUppers () = {
     } else ();
   ()
 }
-
-val AArch64_GenerateDebugExceptionsFrom : (bits(2), bool, bits(1)) -> bool effect {escape, rreg, undef}
-
-function AArch64_GenerateDebugExceptionsFrom (from, secure, mask) = {
-  if ([OSLSR_EL1[1]] == 0b1 | DoubleLockStatus()) | Halted() then return(false) else ();
-  route_to_el2 : bool = (HaveEL(EL2) & ~(secure)) & ([HCR_EL2[27]] == 0b1 | [MDCR_EL2[8]] == 0b1);
-  target : bits(2) = if route_to_el2 then EL2 else EL1;
-  enabled : bool = (~(HaveEL(EL3)) | ~(secure)) | [MDCR_EL3[16]] == 0b0;
-  if from == target then enabled = (enabled & [MDSCR_EL1[13]] == 0b1) & mask == 0b0 else enabled = enabled & UInt(target) > UInt(from);
-  return(enabled)
-}
-
-val AArch64_GenerateDebugExceptions : unit -> bool effect {escape, rreg, undef}
-
-function AArch64_GenerateDebugExceptions () = return(AArch64_GenerateDebugExceptionsFrom(PSTATE.EL, IsSecure(), PSTATE.D))
 
 val AArch64_FaultSyndrome : (bool, FaultRecord) -> bits(25) effect {escape, undef}
 
@@ -3201,24 +1783,6 @@ function AArch64_AbortSyndrome (typ, fault, vaddress) = {
     exception.ipaddress = fault.ipaddress
   } else exception.ipavalid = false;
   return(exception)
-}
-
-val AArch64_ExecutingATS1xPInstr : unit -> bool effect {rreg, undef}
-
-function AArch64_ExecutingATS1xPInstr () = {
-  if ~(HavePrivATExt()) then return(false) else ();
-  instr : bits(32) = ThisInstr();
-  op2 : bits(3) = undefined;
-  CRm : bits(4) = undefined;
-  CRn : bits(4) = undefined;
-  op1 : bits(3) = undefined;
-  if slice(instr, 22, 10) == 0b1101010100 then {
-    op1 = slice(instr, 16, 3);
-    CRn = slice(instr, 12, 4);
-    CRm = slice(instr, 8, 4);
-    op2 = slice(instr, 5, 3);
-    return(((op1 == 0b000 & CRn == 0x7) & CRm == 0x9) & (op2 == 0b000 | op2 == 0b001))
-  } else return(false)
 }
 
 val AArch64_ExceptionClass : (Exception, bits(2)) -> (int, bits(1)) effect {escape, rreg, undef}
@@ -3324,228 +1888,6 @@ function AArch64_ReportException (exception, target_el) = {
   if typ == Exception_InstructionAbort | typ == Exception_PCAlignment | typ == Exception_DataAbort | typ == Exception_Watchpoint then aset_FAR(target_el, exception.vaddress) else aset_FAR(target_el, undefined);
   if target_el == EL2 then if exception.ipavalid then HPFAR_EL2 = __SetSlice_bits(64, 40, HPFAR_EL2, 4, slice(exception.ipaddress, 12, 40)) else HPFAR_EL2 = __SetSlice_bits(64, 40, HPFAR_EL2, 4, undefined) else ();
   ()
-}
-
-val AArch64_CheckS2Permission : (Permissions, bits(64), bits(52), int, AccType, bool, bool, bool) -> FaultRecord effect {escape, rreg, undef}
-
-function AArch64_CheckS2Permission (perms, vaddress, ipaddress, 'level, acctype, iswrite, s2fs1walk, hwupdatewalk) = {
-  assert(((HaveEL(EL2) & ~(IsSecure())) & ~(ELUsingAArch32(EL2))) & HasS2Translation(), "(((HaveEL(EL2) && !(IsSecure())) && !(ELUsingAArch32(EL2))) && HasS2Translation())");
-  r : bool = [perms.ap[1]] == 0b1;
-  w : bool = [perms.ap[2]] == 0b1;
-  xn : bool = undefined;
-  if HaveExtendedExecuteNeverExt() then match perms.xn @ perms.xxn {
-    0b00 => xn = false,
-    0b01 => xn = PSTATE.EL == EL1,
-    0b10 => xn = true,
-    0b11 => xn = PSTATE.EL == EL0
-  } else xn = perms.xn == 0b1;
-  failedread : bool = undefined;
-  fail : bool = undefined;
-  if acctype == AccType_IFETCH & ~(s2fs1walk) then {
-    fail = xn;
-    failedread = true
-  } else if (acctype == AccType_ATOMICRW | acctype == AccType_ORDEREDRW) & ~(s2fs1walk) then {
-    fail = ~(r) | ~(w);
-    failedread = ~(r)
-  } else if iswrite & ~(s2fs1walk) then {
-    fail = ~(w);
-    failedread = false
-  } else if hwupdatewalk then {
-    fail = ~(w);
-    failedread = ~(iswrite)
-  } else {
-    fail = ~(r);
-    failedread = ~(iswrite)
-  };
-  secondstage : bool = undefined;
-  domain : bits(4) = undefined;
-  if fail then {
-    domain = undefined;
-    secondstage = true;
-    return(AArch64_PermissionFault(ipaddress, level, acctype, ~(failedread), secondstage, s2fs1walk))
-  } else return(AArch64_NoFault())
-}
-
-function AArch64_SecondStageTranslate (S1, vaddress, acctype, iswrite, wasaligned, s2fs1walk, 'size, hwupdatewalk) = {
-  assert(HasS2Translation(), "HasS2Translation()");
-  s2_enabled : bool = [HCR_EL2[0]] == 0b1 | [HCR_EL2[12]] == 0b1;
-  secondstage : bool = true;
-  result : AddressDescriptor = undefined;
-  S2 : TLBRecord = undefined;
-  ipaddress : bits(52) = undefined;
-  if s2_enabled then {
-    ipaddress = slice(S1.paddress.physicaladdress, 0, 52);
-    S2 = AArch64_TranslationTableWalk(ipaddress, vaddress, acctype, iswrite, secondstage, s2fs1walk, size);
-    if ((~(wasaligned) & acctype != AccType_IFETCH | acctype == AccType_DCZVA) & S2.addrdesc.memattrs.typ == MemType_Device) & ~(IsFault(S2.addrdesc)) then {
-      __tmp_71 : AddressDescriptor = S2.addrdesc;
-      __tmp_71.fault = AArch64_AlignmentFault(acctype, iswrite, secondstage);
-      S2.addrdesc = __tmp_71
-    } else ();
-    if ~(IsFault(S2.addrdesc)) then {
-      __tmp_72 : AddressDescriptor = S2.addrdesc;
-      __tmp_72.fault = AArch64_CheckS2Permission(S2.perms, vaddress, ipaddress, S2.level, acctype, iswrite, s2fs1walk, hwupdatewalk);
-      S2.addrdesc = __tmp_72
-    } else ();
-    if ((~(s2fs1walk) & ~(IsFault(S2.addrdesc))) & S2.addrdesc.memattrs.typ == MemType_Device) & acctype == AccType_IFETCH then S2.addrdesc = AArch64_InstructionDevice(S2.addrdesc, vaddress, ipaddress, S2.level, acctype, iswrite, secondstage, s2fs1walk) else ();
-    if ((s2fs1walk & ~(IsFault(S2.addrdesc))) & [HCR_EL2[2]] == 0b1) & S2.addrdesc.memattrs.typ == MemType_Device then {
-      __tmp_73 : AddressDescriptor = S2.addrdesc;
-      __tmp_73.fault = AArch64_PermissionFault(ipaddress, S2.level, acctype, iswrite, secondstage, s2fs1walk);
-      S2.addrdesc = __tmp_73
-    } else ();
-    __tmp_74 : AddressDescriptor = S2.addrdesc;
-    __tmp_74.fault = AArch64_CheckAndUpdateDescriptor(S2.descupdate, S2.addrdesc.fault, secondstage, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk);
-    S2.addrdesc = __tmp_74;
-    result = CombineS1S2Desc(S1, S2.addrdesc)
-  } else result = S1;
-  return(result)
-}
-
-function AArch64_CheckAndUpdateDescriptor (result, fault, secondstage, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk__arg) = {
-  hwupdatewalk = hwupdatewalk__arg;
-  hw_update_AF : bool = undefined;
-  if result.AF then if fault.typ == Fault_None then hw_update_AF = true else if ConstrainUnpredictable(Unpredictable_AFUPDATE) == Constraint_TRUE then hw_update_AF = true else hw_update_AF = false else ();
-  hw_update_AP : bool = undefined;
-  write_perm_req : bool = undefined;
-  if result.AP & fault.typ == Fault_None then {
-    write_perm_req = (iswrite | acctype == AccType_ATOMICRW | acctype == AccType_ORDEREDRW) & ~(s2fs1walk);
-    hw_update_AP = write_perm_req & ~(acctype == AccType_AT | acctype == AccType_DC) | hwupdatewalk
-  } else hw_update_AP = false;
-  desc : bits(64) = undefined;
-  accdesc : AccessDescriptor = undefined;
-  descaddr2 : AddressDescriptor = undefined;
-  if hw_update_AF | hw_update_AP then {
-    if secondstage | ~(HasS2Translation()) then descaddr2 = result.descaddr else {
-      hwupdatewalk = true;
-      descaddr2 = AArch64_SecondStageWalk(result.descaddr, vaddress, acctype, iswrite, 8, hwupdatewalk);
-      if IsFault(descaddr2) then return(descaddr2.fault) else ()
-    };
-    accdesc = CreateAccessDescriptor(AccType_ATOMICRW);
-    desc = aget__Mem(descaddr2, 8, accdesc);
-    if hw_update_AF then desc = __SetSlice_bits(64, 1, desc, 10, 0b1) else ();
-    if hw_update_AP then desc = __SetSlice_bits(64, 1, desc, 7, if secondstage then 0b1 else 0b0) else ();
-    aset__Mem(descaddr2, 8, accdesc, desc)
-  } else ();
-  return(fault)
-}
-
-val AArch64_BreakpointValueMatch : (int, bits(64), bool) -> bool
-
-function AArch64_BreakpointValueMatch (n__arg, vaddress, linked_to) = false
-
-val AArch64_StateMatch : (bits(2), bits(1), bits(2), bool, bits(4), bool, bool) -> bool effect {rreg, undef, escape}
-
-function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isbreakpnt, ispriv) = {
-  HMC = HMC__arg;
-  PxC = PxC__arg;
-  SSC = SSC__arg;
-  linked = linked__arg;
-  c : Constraint = undefined;
-  if (((((((HMC @ SSC) @ PxC) & 0b11100) == 0b01100 | (((HMC @ SSC) @ PxC) & 0b11101) == 0b10000 | (((HMC @ SSC) @ PxC) & 0b11101) == 0b10100 | ((HMC @ SSC) @ PxC) == 0b11010 | ((HMC @ SSC) @ PxC) == 0b11101 | (((HMC @ SSC) @ PxC) & 0b11110) == 0b11110) | (HMC == 0b0 & PxC == 0b00) & (~(isbreakpnt) | ~(HaveAArch32EL(EL1)))) | (SSC == 0b01 | SSC == 0b10) & ~(HaveEL(EL3))) | (((HMC @ SSC) != 0b000 & (HMC @ SSC) != 0b111) & ~(HaveEL(EL3))) & ~(HaveEL(EL2))) | ((HMC @ SSC) @ PxC) == 0b11100 & ~(HaveEL(EL2)) then {
-    __tmp_5 : bits(5) = undefined;
-    (c, __tmp_5) = ConstrainUnpredictableBits(Unpredictable_RESBPWPCTRL) : (Constraint, bits(5));
-    __tmp_6 : bits(5) = __tmp_5;
-    HMC = [__tmp_6[4]];
-    __tmp_7 : bits(4) = slice(__tmp_6, 0, 4);
-    SSC = slice(__tmp_7, 2, 2);
-    PxC = slice(__tmp_7, 0, 2);
-    assert(c == Constraint_DISABLED | c == Constraint_UNKNOWN, "((c == Constraint_DISABLED) || (c == Constraint_UNKNOWN))");
-    if c == Constraint_DISABLED then return(false) else ()
-  } else ();
-  EL3_match : bool = (HaveEL(EL3) & HMC == 0b1) & [SSC[0]] == 0b0;
-  EL2_match : bool = HaveEL(EL2) & HMC == 0b1;
-  EL1_match : bool = [PxC[0]] == 0b1;
-  EL0_match : bool = [PxC[1]] == 0b1;
-  priv_match : bool = undefined;
-  if ~(ispriv) & ~(isbreakpnt) then priv_match = EL0_match
-  else match PSTATE.EL {
-    EL3 => priv_match = EL3_match,
-    EL2 => priv_match = EL2_match,
-    EL1 => priv_match = EL1_match,
-    EL0 => priv_match = EL0_match
-  };
-  security_state_match : bool = undefined;
-  match SSC {
-    0b00 => security_state_match = true,
-    0b01 => security_state_match = ~(IsSecure()),
-    0b10 => security_state_match = IsSecure(),
-    0b11 => security_state_match = true
-  };
-  last_ctx_cmp : int = undefined;
-  first_ctx_cmp : int = undefined;
-  lbn : int = undefined;
-  if linked then {
-    lbn = UInt(LBN);
-    first_ctx_cmp = UInt(slice(ID_AA64DFR0_EL1, 12, 4)) - UInt(slice(ID_AA64DFR0_EL1, 28, 4));
-    last_ctx_cmp = UInt(slice(ID_AA64DFR0_EL1, 12, 4));
-    if lbn < first_ctx_cmp | lbn > last_ctx_cmp then {
-      (c, lbn) = ConstrainUnpredictableInteger(first_ctx_cmp, last_ctx_cmp, Unpredictable_BPNOTCTXCMP);
-      assert(c == Constraint_DISABLED | c == Constraint_NONE | c == Constraint_UNKNOWN, "((c == Constraint_DISABLED) || ((c == Constraint_NONE) || (c == Constraint_UNKNOWN)))");
-      match c {
-        Constraint_DISABLED => return(false),
-        Constraint_NONE => linked = false
-      }
-    } else ()
-  } else ();
-  linked_match : bool = undefined;
-  linked_to : bool = undefined;
-  vaddress : bits(64) = undefined;
-  if linked then {
-    vaddress = undefined;
-    linked_to = true;
-    linked_match = AArch64_BreakpointValueMatch(lbn, vaddress, linked_to)
-  } else ();
-  return((priv_match & security_state_match) & (~(linked) | linked_match))
-}
-
-val AArch64_WatchpointMatch : (int, bits(64), int, bool, bool) -> bool
-
-function AArch64_WatchpointMatch (n, vaddress, size, ispriv, iswrite) = false
-
-val AArch64_BreakpointMatch : (int, bits(64), int) -> bool effect {escape, rreg, undef}
-
-function AArch64_BreakpointMatch ('n, vaddress, 'size) = {
-  assert(~(ELUsingAArch32(S1TranslationRegime())), "!(ELUsingAArch32(S1TranslationRegime()))");
-  assert(n <= UInt(slice(ID_AA64DFR0_EL1, 12, 4)), "(n <= UInt((ID_AA64DFR0_EL1).BRPs))");
-  enabled : bool = [DBGBCR_EL1[n][0]] == 0b1;
-  ispriv : bool = PSTATE.EL != EL0;
-  linked : bool = (slice(DBGBCR_EL1[n], 20, 4) & 0xB) == 0x1;
-  isbreakpnt : bool = true;
-  linked_to : bool = false;
-  state_match : bool = AArch64_StateMatch(slice(DBGBCR_EL1[n], 14, 2), [DBGBCR_EL1[n][13]], slice(DBGBCR_EL1[n], 1, 2), linked, slice(DBGBCR_EL1[n], 16, 4), isbreakpnt, ispriv);
-  value_match_name : bool = AArch64_BreakpointValueMatch(n, vaddress, linked_to);
-  match_i : bool = undefined;
-  if HaveAnyAArch32() & size == 4 then {
-    match_i = AArch64_BreakpointValueMatch(n, vaddress + 2, linked_to);
-    if ~(value_match_name) & match_i then value_match_name = ConstrainUnpredictableBool(Unpredictable_BPMATCHHALF) else ()
-  } else ();
-  if [vaddress[1]] == 0b1 & slice(DBGBCR_EL1[n], 5, 4) == 0xF then if value_match_name then value_match_name = ConstrainUnpredictableBool(Unpredictable_BPMATCHHALF) else () else ();
-  val_match : bool = (value_match_name & state_match) & enabled;
-  return(val_match)
-}
-
-val AArch64_CheckBreakpoint : (bits(64), int) -> FaultRecord effect {wreg, rreg, undef, escape}
-
-function AArch64_CheckBreakpoint (vaddress, size) = {
-  assert(~(ELUsingAArch32(S1TranslationRegime())), "!(ELUsingAArch32(S1TranslationRegime()))");
-  assert(UsingAArch32() & (size == 2 | size == 4) | size == 4, "((UsingAArch32() && ((size == 2) || (size == 4))) || (size == 4))");
-  val_match : bool = false;
-  match_i : bool = undefined;
-  foreach (i from 0 to UInt(slice(ID_AA64DFR0_EL1, 12, 4)) by 1 in inc) {
-    match_i = AArch64_BreakpointMatch(i, vaddress, size);
-    val_match = val_match | match_i
-  };
-  iswrite : bool = undefined;
-  acctype : AccType = undefined;
-  reason : bits(6) = undefined;
-  if val_match & HaltOnBreakpointOrWatchpoint() then {
-    reason = DebugHalt_Breakpoint;
-    Halt(reason);
-    undefined : FaultRecord
-  } else if (val_match & [MDSCR_EL1[15]] == 0b1) & AArch64_GenerateDebugExceptions() then {
-    acctype = AccType_IFETCH;
-    iswrite = false;
-    return(AArch64_DebugFault(acctype, iswrite))
-  } else return(AArch64_NoFault())
 }
 
 val AArch64_BranchAddr : bits(64) -> bits(64) effect {rreg, undef, escape}
@@ -3701,6 +2043,38 @@ val AArch64_Abort : (bits(64), FaultRecord) -> unit effect {escape, rreg, undef,
 
 function AArch64_Abort (vaddress, fault) = if IsDebugException(fault) then if fault.acctype == AccType_IFETCH then if UsingAArch32() & fault.debugmoe == DebugException_VectorCatch then AArch64_VectorCatchException(fault) else AArch64_BreakpointException(fault) else AArch64_WatchpointException(vaddress, fault) else if fault.acctype == AccType_IFETCH then AArch64_InstructionAbort(vaddress, fault) else AArch64_DataAbort(vaddress, fault)
 
+val AArch64_aset_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
+  (bits(64), atom('size), AccType, bool, bits(8 * 'size)) -> unit effect {escape, rreg, undef, wmem, wreg}
+
+function AArch64_aset_MemSingle (address, size, acctype, wasaligned, value_name) = {
+  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
+  assert(address == Align(address, 'size), "(address == Align(address, size))");
+  memaddrdesc : AddressDescriptor = undefined;
+  iswrite : bool = true;
+  memaddrdesc = AArch64_TranslateAddress(address, acctype, iswrite, wasaligned, 'size);
+  if IsFault(memaddrdesc) then AArch64_Abort(address, memaddrdesc.fault) else ();
+  if memaddrdesc.memattrs.shareable then ClearExclusiveByAddress(memaddrdesc.paddress, ProcessorID(), 'size) else ();
+  accdesc : AccessDescriptor = CreateAccessDescriptor(acctype);
+  aset__Mem(memaddrdesc, 'size, accdesc, value_name);
+  ()
+}
+
+val AArch64_aget_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
+  (bits(64), atom('size), AccType, bool) -> bits(8 * 'size) effect {escape, rmem, rreg, undef, wreg}
+
+function AArch64_aget_MemSingle (address, size, acctype, wasaligned) = {
+  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
+  assert(address == Align(address, 'size), "(address == Align(address, size))");
+  memaddrdesc : AddressDescriptor = undefined;
+  value_name : bits(8 * 'size) = undefined;
+  iswrite : bool = false;
+  memaddrdesc = AArch64_TranslateAddress(address, acctype, iswrite, wasaligned, 'size);
+  if IsFault(memaddrdesc) then AArch64_Abort(address, memaddrdesc.fault) else ();
+  accdesc : AccessDescriptor = CreateAccessDescriptor(acctype);
+  value_name = aget__Mem(memaddrdesc, 'size, accdesc);
+  return(value_name)
+}
+
 val AArch64_CheckAlignment : (bits(64), int, AccType, bool) -> bool effect {escape, rreg, undef, wreg}
 
 function AArch64_CheckAlignment (address, 'alignment, acctype, iswrite) = {
@@ -3717,217 +2091,8 @@ function AArch64_CheckAlignment (address, 'alignment, acctype, iswrite) = {
   return(aligned)
 }
 
-val AArch32_EnterMode : (bits(5), bits(32), int, int) -> unit effect {escape, rreg, undef, wreg}
-
-function AArch32_EnterMode (target_mode, preferred_exception_return, 'lr_offset, 'vect_offset) = {
-  SynchronizeContext();
-  assert(ELUsingAArch32(EL1) & PSTATE.EL != EL2, "(ELUsingAArch32(EL1) && ((PSTATE).EL != EL2))");
-  spsr : bits(32) = GetPSRFromPSTATE();
-  if PSTATE.M == M32_Monitor then SCR = __SetSlice_bits(32, 1, SCR, 0, 0b0) else ();
-  AArch32_WriteMode(target_mode);
-  aset_SPSR(spsr);
-  aset_R(14, preferred_exception_return + lr_offset);
-  PSTATE.T = [SCTLR[30]];
-  PSTATE.SS = 0b0;
-  if target_mode == M32_FIQ then (PSTATE.A, PSTATE.I, PSTATE.F) = 0b111 else if target_mode == M32_Abort | target_mode == M32_IRQ then (PSTATE.A, PSTATE.I) = 0b11 else PSTATE.I = 0b1;
-  PSTATE.E = [SCTLR[25]];
-  PSTATE.IL = 0b0;
-  PSTATE.IT = 0x00;
-  if HavePANExt() & [SCTLR[23]] == 0b0 then PSTATE.PAN = 0b1 else ();
-  BranchTo(slice(ExcVectorBase(), 5, 27) @ __GetSlice_int(5, vect_offset, 0), BranchType_UNKNOWN);
-  EndOfInstruction()
-}
-
-val AArch64_AccessIsPrivileged : AccType -> bool effect {escape, rreg, undef}
-
-function AArch64_AccessIsPrivileged acctype = {
-  ispriv : bool = undefined;
-  if PSTATE.EL == EL0 then ispriv = false else if PSTATE.EL == EL3 then ispriv = true else if PSTATE.EL == EL2 & (~(IsInHost()) | [HCR_EL2[27]] == 0b0) then ispriv = true else if HaveUAOExt() & PSTATE.UAO == 0b1 then ispriv = true else ispriv = acctype != AccType_UNPRIV;
-  return(ispriv)
-}
-
-val AArch64_CheckWatchpoint : (bits(64), AccType, bool, int) -> FaultRecord effect {wreg, rreg, undef, escape}
-
-function AArch64_CheckWatchpoint (vaddress, acctype, iswrite, size) = {
-  assert(~(ELUsingAArch32(S1TranslationRegime())), "!(ELUsingAArch32(S1TranslationRegime()))");
-  val_match : bool = false;
-  ispriv : bool = AArch64_AccessIsPrivileged(acctype);
-  foreach (i from 0 to UInt(slice(ID_AA64DFR0_EL1, 20, 4)) by 1 in inc)
-    val_match = val_match | AArch64_WatchpointMatch(i, vaddress, size, ispriv, iswrite);
-  reason : bits(6) = undefined;
-  if val_match & HaltOnBreakpointOrWatchpoint() then {
-    reason = DebugHalt_Watchpoint;
-    Halt(reason);
-    undefined
-  } else if (val_match & [MDSCR_EL1[15]] == 0b1) & AArch64_GenerateDebugExceptions() then return(AArch64_DebugFault(acctype, iswrite)) else return(AArch64_NoFault())
-}
-
-val AArch64_CheckDebug : (bits(64), AccType, bool, int) -> FaultRecord effect {escape, rreg, undef, wreg}
-
-function AArch64_CheckDebug (vaddress, acctype, iswrite, 'size) = {
-  fault : FaultRecord = AArch64_NoFault();
-  d_side : bool = acctype != AccType_IFETCH;
-  generate_exception : bool = AArch64_GenerateDebugExceptions() & [MDSCR_EL1[15]] == 0b1;
-  halt : bool = HaltOnBreakpointOrWatchpoint();
-  if generate_exception | halt then if d_side then fault = AArch64_CheckWatchpoint(vaddress, acctype, iswrite, size) else fault = AArch64_CheckBreakpoint(vaddress, size) else ();
-  return(fault)
-}
-
-val AArch64_CheckPermission : (Permissions, bits(64), int, bits(1), AccType, bool) -> FaultRecord effect {rreg, undef, escape}
-
-function AArch64_CheckPermission (perms, vaddress, level, NS, acctype, iswrite) = {
-  assert(~(ELUsingAArch32(S1TranslationRegime())), "!(ELUsingAArch32(S1TranslationRegime()))");
-  wxn : bool = [aget_SCTLR()[19]] == 0b1;
-  xn : bool = undefined;
-  w : bool = undefined;
-  r : bool = undefined;
-  priv_xn : bool = undefined;
-  user_xn : bool = undefined;
-  pan : bits(1) = undefined;
-  ispriv : bool = undefined;
-  user_w : bool = undefined;
-  user_r : bool = undefined;
-  priv_w : bool = undefined;
-  priv_r : bool = undefined;
-  if (PSTATE.EL == EL0 | PSTATE.EL == EL1) | IsInHost() then {
-    priv_r = true;
-    priv_w = [perms.ap[2]] == 0b0;
-    user_r = [perms.ap[1]] == 0b1;
-    user_w = slice(perms.ap, 1, 2) == 0b01;
-    ispriv = AArch64_AccessIsPrivileged(acctype);
-    pan = if HavePANExt() then PSTATE.PAN else 0b0;
-    if ((((HaveNVExt() & HaveEL(EL2)) & [HCR_EL2[42]] == 0b1) & [HCR_EL2[43]] == 0b1) & ~(IsSecure())) & PSTATE.EL == EL1 then
-      pan = 0b0
-    else ();
-    if ((pan == 0b1 & user_r) & ispriv) & ~(acctype == AccType_DC | acctype == AccType_AT | acctype == AccType_IFETCH) | acctype == AccType_AT & AArch64_ExecutingATS1xPInstr() then {
-      priv_r = false;
-      priv_w = false
-    } else ();
-    user_xn = perms.xn == 0b1 | user_w & wxn;
-    priv_xn = (perms.pxn == 0b1 | priv_w & wxn) | user_w;
-    if ispriv then (r, w, xn) = (priv_r, priv_w, priv_xn)
-    else (r, w, xn) = (user_r, user_w, user_xn)
-  } else {
-    r = true;
-    w = [perms.ap[2]] == 0b0;
-    xn = perms.xn == 0b1 | w & wxn
-  };
-  if ((HaveEL(EL3) & IsSecure()) & NS == 0b1) & [SCR_EL3[9]] == 0b1 then
-    xn = true
-  else ();
-  failedread : bool = undefined;
-  fail : bool = undefined;
-  if acctype == AccType_IFETCH then {
-    fail = xn;
-    failedread = true
-  } else if acctype == AccType_ATOMICRW | acctype == AccType_ORDEREDRW then {
-    fail = ~(r) | ~(w);
-    failedread = ~(r)
-  } else if iswrite then {
-    fail = ~(w);
-    failedread = false
-  } else {
-    fail = ~(r);
-    failedread = true
-  };
-  ipaddress : bits(52) = undefined;
-  s2fs1walk : bool = undefined;
-  secondstage : bool = undefined;
-  if fail then {
-    secondstage = false;
-    s2fs1walk = false;
-    ipaddress = undefined;
-    return(AArch64_PermissionFault(ipaddress, level, acctype, ~(failedread), secondstage, s2fs1walk))
-  } else return(AArch64_NoFault())
-}
-
-val AArch64_FirstStageTranslate : (bits(64), AccType, bool, bool, int) -> AddressDescriptor effect {escape, rmem, rreg, undef, wmem}
-
-function AArch64_FirstStageTranslate (vaddress, acctype, iswrite, wasaligned, 'size) = {
-  s1_enabled : bool = undefined;
-  if HasS2Translation() then s1_enabled = ([HCR_EL2[27]] == 0b0 & [HCR_EL2[12]] == 0b0) & [SCTLR_EL1[0]] == 0b1 else s1_enabled = [aget_SCTLR()[0]] == 0b1;
-  ipaddress : bits(52) = undefined;
-  secondstage : bool = false;
-  s2fs1walk : bool = false;
-  nTLSMD : bits(1) = undefined;
-  permissioncheck : bool = undefined;
-  S1 : TLBRecord = undefined;
-  if s1_enabled then {
-    S1 = AArch64_TranslationTableWalk(ipaddress, vaddress, acctype, iswrite, secondstage, s2fs1walk, size);
-    permissioncheck = true
-  } else {
-    S1 = AArch64_TranslateAddressS1Off(vaddress, acctype, iswrite);
-    permissioncheck = false;
-    if (UsingAArch32() & HaveTrapLoadStoreMultipleDeviceExt()) & AArch32_ExecutingLSMInstr() then if S1.addrdesc.memattrs.typ == MemType_Device & S1.addrdesc.memattrs.device != DeviceType_GRE then {
-      nTLSMD = if S1TranslationRegime() == EL2 then [SCTLR_EL2[28]] else [SCTLR_EL1[28]];
-      if nTLSMD == 0b0 then {
-        __tmp_246 : AddressDescriptor = S1.addrdesc;
-        __tmp_246.fault = AArch64_AlignmentFault(acctype, iswrite, secondstage);
-        S1.addrdesc = __tmp_246
-      } else ()
-    } else () else ()
-  };
-  if ((~(wasaligned) & acctype != AccType_IFETCH | acctype == AccType_DCZVA) & S1.addrdesc.memattrs.typ == MemType_Device) & ~(IsFault(S1.addrdesc)) then {
-    __tmp_247 : AddressDescriptor = S1.addrdesc;
-    __tmp_247.fault = AArch64_AlignmentFault(acctype, iswrite, secondstage);
-    S1.addrdesc = __tmp_247
-  } else ();
-  if ~(IsFault(S1.addrdesc)) & permissioncheck then {
-    __tmp_248 : AddressDescriptor = S1.addrdesc;
-    __tmp_248.fault = AArch64_CheckPermission(S1.perms, vaddress, S1.level, S1.addrdesc.paddress.NS, acctype, iswrite);
-    S1.addrdesc = __tmp_248
-  } else ();
-  if (~(IsFault(S1.addrdesc)) & S1.addrdesc.memattrs.typ == MemType_Device) & acctype == AccType_IFETCH then S1.addrdesc = AArch64_InstructionDevice(S1.addrdesc, vaddress, ipaddress, S1.level, acctype, iswrite, secondstage, s2fs1walk) else ();
-  hwupdatewalk : bool = false;
-  s2fs1walk = false;
-  __tmp_249 : AddressDescriptor = S1.addrdesc;
-  __tmp_249.fault = AArch64_CheckAndUpdateDescriptor(S1.descupdate, S1.addrdesc.fault, secondstage, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk);
-  S1.addrdesc = __tmp_249;
-  return(S1.addrdesc)
-}
-
-val AArch64_FullTranslate : (bits(64), AccType, bool, bool, int) -> AddressDescriptor effect {escape, rmem, rreg, undef, wmem}
-
-function AArch64_FullTranslate (vaddress, acctype, iswrite, wasaligned, 'size) = {
-  S1 : AddressDescriptor = AArch64_FirstStageTranslate(vaddress, acctype, iswrite, wasaligned, size);
-  result : AddressDescriptor = undefined;
-  hwupdatewalk : bool = undefined;
-  s2fs1walk : bool = undefined;
-  if ~(IsFault(S1)) & HasS2Translation() then {
-    s2fs1walk = false;
-    hwupdatewalk = false;
-    result = AArch64_SecondStageTranslate(S1, vaddress, acctype, iswrite, wasaligned, s2fs1walk, size, hwupdatewalk)
-  } else result = S1;
-  return(result)
-}
-
-val AArch64_TranslateAddress : (bits(64), AccType, bool, bool, int) -> AddressDescriptor effect {escape, rmem, rreg, undef, wmem, wreg}
-
-function AArch64_TranslateAddress (vaddress, acctype, iswrite, wasaligned, 'size) = {
-  result : AddressDescriptor = AArch64_FullTranslate(vaddress, acctype, iswrite, wasaligned, size);
-  if ~(acctype == AccType_PTW | acctype == AccType_IC | acctype == AccType_AT) & ~(IsFault(result)) then result.fault = AArch64_CheckDebug(vaddress, acctype, iswrite, size) else ();
-  result.vaddress = ZeroExtend(vaddress);
-  return(result)
-}
-
-val AArch64_aset_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
-  (bits(64), atom('size), AccType, bool, bits(8 * 'size)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
-
-function AArch64_aset_MemSingle (address, size, acctype, wasaligned, value_name) = {
-  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
-  assert(address == Align(address, 'size), "(address == Align(address, size))");
-  memaddrdesc : AddressDescriptor = undefined;
-  iswrite : bool = true;
-  memaddrdesc = AArch64_TranslateAddress(address, acctype, iswrite, wasaligned, 'size);
-  if IsFault(memaddrdesc) then AArch64_Abort(address, memaddrdesc.fault) else ();
-  if memaddrdesc.memattrs.shareable then ClearExclusiveByAddress(memaddrdesc.paddress, ProcessorID(), 'size) else ();
-  accdesc : AccessDescriptor = CreateAccessDescriptor(acctype);
-  aset__Mem(memaddrdesc, 'size, accdesc, value_name);
-  ()
-}
-
 val aset_Mem : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
-  (bits(64), atom('size), AccType, bits(8 * 'size)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+  (bits(64), atom('size), AccType, bits(8 * 'size)) -> unit effect {escape, rreg, undef, wmem, wreg}
 
 function aset_Mem (address, size, acctype, value_name__arg) = {
   value_name = value_name__arg;
@@ -3955,24 +2120,8 @@ function aset_Mem (address, size, acctype, value_name__arg) = {
   ()
 }
 
-val AArch64_aget_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
-  (bits(64), atom('size), AccType, bool) -> bits(8 * 'size) effect {escape, rmem, rreg, undef, wmem, wreg}
-
-function AArch64_aget_MemSingle (address, size, acctype, wasaligned) = {
-  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
-  assert(address == Align(address, 'size), "(address == Align(address, size))");
-  memaddrdesc : AddressDescriptor = undefined;
-  value_name : bits(8 * 'size) = undefined;
-  iswrite : bool = false;
-  memaddrdesc = AArch64_TranslateAddress(address, acctype, iswrite, wasaligned, 'size);
-  if IsFault(memaddrdesc) then AArch64_Abort(address, memaddrdesc.fault) else ();
-  accdesc : AccessDescriptor = CreateAccessDescriptor(acctype);
-  value_name = aget__Mem(memaddrdesc, 'size, accdesc);
-  return(value_name)
-}
-
 val aget_Mem : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
-  (bits(64), atom('size), AccType) -> bits(8 * 'size) effect {escape, rmem, rreg, undef, wmem, wreg}
+  (bits(64), atom('size), AccType) -> bits(8 * 'size) effect {escape, rmem, rreg, undef, wreg}
 
 function aget_Mem (address, size, acctype) = {
   assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -3999,6 +2148,27 @@ function aget_Mem (address, size, acctype) = {
   } else value_name = AArch64_aget_MemSingle(address, 'size, acctype, aligned);
   if BigEndian() then value_name = BigEndianReverse(value_name) else ();
   return(value_name)
+}
+
+val AArch32_EnterMode : (bits(5), bits(32), int, int) -> unit effect {escape, rreg, undef, wreg}
+
+function AArch32_EnterMode (target_mode, preferred_exception_return, 'lr_offset, 'vect_offset) = {
+  SynchronizeContext();
+  assert(ELUsingAArch32(EL1) & PSTATE.EL != EL2, "(ELUsingAArch32(EL1) && ((PSTATE).EL != EL2))");
+  spsr : bits(32) = GetPSRFromPSTATE();
+  if PSTATE.M == M32_Monitor then SCR = __SetSlice_bits(32, 1, SCR, 0, 0b0) else ();
+  AArch32_WriteMode(target_mode);
+  aset_SPSR(spsr);
+  aset_R(14, preferred_exception_return + lr_offset);
+  PSTATE.T = [SCTLR[30]];
+  PSTATE.SS = 0b0;
+  if target_mode == M32_FIQ then (PSTATE.A, PSTATE.I, PSTATE.F) = 0b111 else if target_mode == M32_Abort | target_mode == M32_IRQ then (PSTATE.A, PSTATE.I) = 0b11 else PSTATE.I = 0b1;
+  PSTATE.E = [SCTLR[25]];
+  PSTATE.IL = 0b0;
+  PSTATE.IT = 0x00;
+  if HavePANExt() & [SCTLR[23]] == 0b0 then PSTATE.PAN = 0b1 else ();
+  BranchTo(slice(ExcVectorBase(), 5, 27) @ __GetSlice_int(5, vect_offset, 0), BranchType_UNKNOWN);
+  EndOfInstruction()
 }
 
 val AArch32_GeneralExceptionsToAArch64 : unit -> bool effect {escape, rreg, undef}
