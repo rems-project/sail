@@ -243,6 +243,12 @@ let register_refs_lem prefix_recordtype mwords registers =
   separate hardline [generic_convs; refs; getters_setters]
 
 let generate_regstate_defs mwords defs =
+  (* FIXME We currently don't want to generate undefined_type functions
+     for register state and values.  For the Lem backend, this would require
+     taking the dependencies of those functions into account when partitioning
+     definitions into the different lem files, which we currently don't do. *)
+  let gen_undef = !Initial_check.opt_undefined_gen in
+  Initial_check.opt_undefined_gen := false;
   let registers = find_registers defs in
   let def_ids = ids_of_defs (Defs defs) in
   let has_def name = IdSet.mem (mk_id name) def_ids in
@@ -253,12 +259,6 @@ let generate_regstate_defs mwords defs =
   in
   let regval_typ = if has_def "register_value" then [] else generate_regval_typ regtyps in
   let regstate_typ = if has_def "regstate" then [] else generate_regstate registers in
-  (* FIXME We currently don't want to generate undefined_type functions
-     for register state and values.  For the Lem backend, this would require
-     taking the dependencies of those functions into account when partitioning
-     definitions into the different lem files, which we currently don't do. *)
-  let gen_undef = !Initial_check.opt_undefined_gen in
-  Initial_check.opt_undefined_gen := false;
   let defs =
     option_typ @ regval_typ @ regstate_typ
     |> List.map defs_of_string
