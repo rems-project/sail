@@ -1,0 +1,131 @@
+open import Pervasives_extra
+open import Sail_instr_kinds
+open import Sail_values
+open import Sail_operators_mwords
+open import Prompt_monad
+open import State
+
+type ty2048
+instance (Size ty2048) let size = 2048 end
+declare isabelle target_rep type ty2048 = `2048`
+
+val prerr_endline : string -> unit
+let prerr_endline _ = ()
+declare ocaml target_rep function prerr_endline = `prerr_endline`
+
+val print_int : string -> integer -> unit
+let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
+
+val putchar : integer -> unit
+let putchar _ = ()
+declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
+
+val uint : forall 'a. Size 'a => mword 'a -> integer
+let uint = unsigned
+val sint : forall 'a. Size 'a => mword 'a -> integer
+let sint = signed
+
+val slice : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
+let slice v lo len =
+  subrange_vec_dec v (lo + len - 1) lo
+
+val set_slice : forall 'a 'b. Size 'a, Size 'b => integer -> integer -> mword 'a -> integer -> mword 'b -> mword 'a
+let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
+  update_subrange_vec_dec out (n + slice_len - 1) n v
+
+let get_slice_int_bl len n lo =
+  (* TODO: Is this the intended behaviour? *)
+  let hi = lo + len - 1 in
+  let bits = bits_of_int (hi + 1) n in
+  get_bits false bits hi lo
+
+val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> mword 'a
+let get_slice_int len n lo = of_bits (get_slice_int_bl len n lo)
+
+val set_slice_int :  forall 'a. Size 'a => integer -> integer -> integer -> mword 'a -> integer
+let set_slice_int len n lo v =
+  let hi = lo + len - 1 in
+  let bits = bitlist_of_int n in
+  let len_n = max (hi + 1) (integerFromNat (List.length bits)) in
+  let ext_bits = exts_bits len_n bits in
+  signed (set_bits false ext_bits hi lo (bits_of v))
+
+let ext_slice signed v i j =
+  let len = length v in
+  let bits = get_bits false (bits_of v) i j in
+  of_bits (if signed then exts_bits len bits else extz_bits len bits)
+val exts_slice : list bitU -> integer -> integer -> list bitU
+let exts_slice v i j = ext_slice true v i j
+val extz_slice : list bitU -> integer -> integer -> list bitU
+let extz_slice v i j = ext_slice false v i j
+
+val shr_int : ii -> ii -> ii
+let rec shr_int x s = if s > 0 then shr_int (x / 2) (s - 1) else x
+
+val shl_int : integer -> integer -> integer
+let rec shl_int i shift = if shift > 0 then 2 * shl_int i (shift - 1) else i
+
+let hexchar_to_bitlist c =
+  if c = #'0' then [B0;B0;B0;B0]
+  else if c = #'1' then [B0;B0;B0;B1]
+  else if c = #'2' then [B0;B0;B1;B0]
+  else if c = #'3' then [B0;B0;B1;B1]
+  else if c = #'4' then [B0;B1;B0;B0]
+  else if c = #'5' then [B0;B1;B0;B1]
+  else if c = #'6' then [B0;B1;B1;B0]
+  else if c = #'7' then [B0;B1;B1;B1]
+  else if c = #'8' then [B1;B0;B0;B0]
+  else if c = #'9' then [B1;B0;B0;B1]
+  else if c = #'A' then [B1;B0;B1;B0]
+  else if c = #'a' then [B1;B0;B1;B0]
+  else if c = #'B' then [B1;B0;B1;B1]
+  else if c = #'b' then [B1;B0;B1;B1]
+  else if c = #'C' then [B1;B1;B0;B0]
+  else if c = #'c' then [B1;B1;B0;B0]
+  else if c = #'D' then [B1;B1;B0;B1]
+  else if c = #'d' then [B1;B1;B0;B1]
+  else if c = #'E' then [B1;B1;B1;B0]
+  else if c = #'e' then [B1;B1;B1;B0]
+  else if c = #'F' then [B1;B1;B1;B1]
+  else if c = #'f' then [B1;B1;B1;B1]
+  else failwith "hexchar_to_bitlist given unrecognized character"
+
+let hexstring_to_bits s =
+  match (toCharList s) with
+  | z :: x :: hs ->
+    let str = if (z = #'0' && x = #'x') then hs else z :: x :: hs in
+    List.concat (List.map hexchar_to_bitlist str)
+  | _ -> failwith "hexstring_to_bits called with unexpected string"
+  end
+
+val hex_slice : forall 'n. Size 'n => string -> integer -> integer -> mword 'n
+let hex_slice v len lo =
+  let hi = len + lo - 1 in
+  let bits = extz_bits (len + lo) (hexstring_to_bits v) in
+  of_bits (get_bits false bits hi lo)
+
+let internal_pick vs = head vs
+
+let undefined_string () = ""
+let undefined_unit () = ()
+let undefined_int () = (0:ii)
+let undefined_bool () = false
+val undefined_vector : forall 'a. integer -> 'a -> list 'a
+let undefined_vector len u = repeat [u] len
+val undefined_bitvector : forall 'a. Size 'a => integer -> mword 'a
+let undefined_bitvector len = duplicate B0 len
+let undefined_bits len = undefined_bitvector len
+let undefined_bit () = B0
+let undefined_real () = realFromFrac 0 1
+let undefined_range i j = i
+let undefined_atom i = i
+let undefined_nat () = (0:ii)
+
+let write_ram addrsize size hexRAM address value =
+  write_mem_ea Write_plain address size >>
+  write_mem_val value >>= fun _ ->
+  return ()
+
+let read_ram addrsize size hexRAM address =
+  (*let _ = prerr_endline ("Reading " ^ (stringFromInteger size) ^ " bytes from address " ^ (stringFromInteger (unsigned address))) in*)
+  read_mem Read_plain address size
