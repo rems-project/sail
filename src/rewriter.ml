@@ -82,6 +82,29 @@ let effect_of_lb (LB_aux (_,(_,a))) = effect_of_annot a
 
 let simple_annot l typ = (gen_loc l, Some (initial_env, typ, no_effect))
 
+
+let lookup_generated_kid env kid =
+  let match_kid_nc kid = function
+    | NC_aux (NC_equal (Nexp_aux (Nexp_var kid1, _), Nexp_aux (Nexp_var kid2, _)), _)
+      when Kid.compare kid kid2 = 0 && not (is_kid_generated kid1) -> kid1
+    | _ -> kid
+  in
+  List.fold_left match_kid_nc kid (Env.get_constraints env)
+
+let rec remove_p_typ = function
+  | P_aux (P_typ (typ, pat), _) -> remove_p_typ pat
+  | pat -> pat
+
+let add_p_typ typ (P_aux (paux, annot) as pat) =
+  let env = pat_env_of pat in
+  let generated_kids typ = KidSet.filter is_kid_generated (tyvars_of_typ typ) in
+  let subst_kid kid typ = typ_subst_kid kid (lookup_generated_kid env kid) typ in
+  let typ' = KidSet.fold subst_kid (generated_kids typ) typ in
+  if KidSet.is_empty (generated_kids typ') then
+    P_aux (P_typ (typ', remove_p_typ pat), annot)
+  else pat
+
+
 let rec small (E_aux (exp,_)) = match exp with
   | E_id _
   | E_lit _ -> true

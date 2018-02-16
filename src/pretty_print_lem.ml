@@ -449,8 +449,8 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_typ(Typ_aux (Typ_tup typs, _), P_aux (P_tup pats, _)) ->
      (* Isabelle does not seem to like type-annotated tuple patterns;
         it gives a syntax error. Avoid this by annotating the tuple elements instead *)
-     let doc_elem typ (P_aux (_, annot) as pat) =
-       doc_pat_lem ctxt true (P_aux (P_typ (typ, pat), annot)) in
+     let doc_elem typ pat =
+       doc_pat_lem ctxt true (add_p_typ typ pat) in
      parens (separate comma_sp (List.map2 doc_elem typs pats))
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem ctxt true p in

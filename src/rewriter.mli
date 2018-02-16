@@ -204,6 +204,8 @@ val compute_exp_alg : 'b -> ('b -> 'b -> 'b) ->
 
 val simple_annot : Parse_ast.l -> typ -> Parse_ast.l * tannot
 
+val add_p_typ : typ -> tannot pat -> tannot pat
+
 val union_eff_exps : (tannot exp) list -> effect
 
 val fix_eff_exp : tannot exp -> tannot exp
