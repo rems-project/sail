@@ -15,11 +15,11 @@ val mod = {
   lem: "integerMod"
 } : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = mod('n, 'm). atom('o)}
 
-val abs = {
+val abs_atom = {
   smt : "abs",
   ocaml: "abs_int",
   lem: "abs_int"
-} : forall 'n. atom('n) -> {'o, 'o = abs('n). atom('o)}
+} : forall 'n. atom('n) -> {'o, 'o = abs_atom('n). atom('o)}
 
 $ifdef TEST
 

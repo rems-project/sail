@@ -1524,9 +1524,12 @@ let rec compile_aexp ctx = function
      let gs = gensym () in
      let unit_gs = gensym () in
      let loop_test = (F_unary ("!", F_id gs), CT_bool) in
-     cond_setup @ [idecl CT_bool gs; idecl CT_unit unit_gs]
+     [idecl CT_bool gs; idecl CT_unit unit_gs]
      @ [ilabel loop_start_label]
-     @ [iblock ([cond_call (CL_id gs); ijump loop_test loop_end_label]
+     @ [iblock (cond_setup
+                @ [cond_call (CL_id gs)]
+                @ cond_cleanup
+                @ [ijump loop_test loop_end_label]
                 @ body_setup
                 @ [body_call (CL_id unit_gs)]
                 @ body_cleanup
@@ -1534,7 +1537,7 @@ let rec compile_aexp ctx = function
      @ [ilabel loop_end_label],
      CT_unit,
      (fun clexp -> icopy clexp unit_fragment),
-     cond_cleanup
+     []
 
   | AE_cast (aexp, typ) -> compile_aexp ctx aexp
 

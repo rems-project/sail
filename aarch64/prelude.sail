@@ -105,12 +105,7 @@ function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
 overload operator | = {or_bool, or_vec}
 
-val UInt = {
-  ocaml: "uint",
-  lem: "uint",
-  interpreter: "uint",
-  c: "sail_uint"
-} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+val UInt = "uint" : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 val SInt = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
@@ -238,7 +233,7 @@ val abs_int = "abs_int" : int -> int
 
 val abs_real = "abs_real" : real -> real
 
-overload abs = {abs, abs_int, abs_real}
+overload abs = {abs_atom, abs_int, abs_real}
 
 val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : (nat, nat) -> nat
 
@@ -275,6 +270,10 @@ val __WriteRAM = "write_ram" : forall 'n 'm.
 
 val __TraceMemoryWrite : forall 'n 'm.
   (atom('n), bits('m), bits(8 * 'n)) -> unit
+
+val __InitRAM : forall 'm. (atom('m), int, bits('m), bits(8)) -> unit
+
+function __InitRAM _ = ()
 
 val __ReadRAM = "read_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
