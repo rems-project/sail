@@ -573,13 +573,11 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
          | Interp_ast.V_ctor (Id_aux (Id "DIAFP_reg") _) _ _ reg -> DIA_register (reg_to_reg_name reg) 
          | _ -> failwith "Register footprint analysis did not return dia of expected type" end in
        let nia_to_nia = function
-         | Interp_ast.V_ctor (Id_aux (Id "NIAFP_successor") _) _ _ _-> NIA_successor
+         | Interp_ast.V_ctor (Id_aux (Id "NIAFP_successor") _) _ _ _ -> NIA_successor
          | Interp_ast.V_ctor (Id_aux (Id "NIAFP_concrete_address") _) _ _ address ->
             NIA_concrete_address (get_addr address)
-         | Interp_ast.V_ctor (Id_aux (Id "NIAFP_LR") _) _ _ _ -> NIA_LR
-         | Interp_ast.V_ctor (Id_aux (Id "NIAFP_CTR") _) _ _ _ -> NIA_CTR
-         | Interp_ast.V_ctor (Id_aux (Id "NIAFP_register") _) _ _ reg ->
-            NIA_register (reg_to_reg_name reg)
+         | Interp_ast.V_ctor (Id_aux (Id "NIAFP_indirect_address") _) _ _ _ ->
+            NIA_indirect_address
          | _ -> failwith "Register footprint analysis did not return nia of expected type" end in
        let readk_to_readk = function
                          | "Read_plain" ->             Read_plain
@@ -636,8 +634,8 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
            (Interp_ast.V_tuple [(Interp_ast.V_ctor (Id_aux (Id readk) _) _ _ _) ;
                                 (Interp_ast.V_ctor (Id_aux (Id writek) _) _ _ _)]) ->
             IK_mem_rmw(readk_to_readk readk, writek_to_writek writek)
-         | Interp_ast.V_ctor (Id_aux (Id "IK_cond_branch") _) _ _ _ ->
-            IK_cond_branch
+         | Interp_ast.V_ctor (Id_aux (Id "IK_branch") _) _ _ _ ->
+            IK_branch
          | Interp_ast.V_ctor (Id_aux (Id "IK_simple") _) _ _ _ ->
             IK_simple
          | _ -> failwith "Analysis returned unexpected instruction kind"
@@ -1159,7 +1157,7 @@ let rr_interp_exhaustive mode i_state events =
 *)
 
 
-let instruction_kind_of_event : event -> maybe instruction_kind = function
+let instruction_kind_of_event nia_reg : event -> maybe instruction_kind = function
   (* this is a hack to avoid adding special events for AArch64 transactional-memory *)
   | E_read_reg (Reg "TMStartEffect" 63 64 D_decreasing) -> Just (IK_trans Transaction_start)
   | E_write_reg (Reg "TMAbortEffect" 63 64 D_decreasing) _ -> Just (IK_trans Transaction_abort)
@@ -1175,7 +1173,9 @@ let instruction_kind_of_event : event -> maybe instruction_kind = function
   | E_barrier bk -> Just (IK_barrier bk)
   | E_footprint -> Nothing
   | E_read_reg _ -> Nothing
-  | E_write_reg _ _ -> Nothing
+  | E_write_reg reg _ ->
+      if register_base_name reg = register_base_name nia_reg then Just IK_branch
+      else Nothing
   | E_error s -> failwith ("instruction_kind_of_event error: "^s)
   | E_escape -> Nothing (*failwith ("instruction_kind_of_event escape")*)
  end
@@ -1254,8 +1254,8 @@ let interp_instruction_analysis
       (interp_exhaustive : ((list (reg_name * register_value)) -> list event))
       instruction 
       nia_reg 
-      (nias_function : (list (maybe address) -> list reg_name -> list nia))
-      ism environment = 
+      (nias_function : (list (maybe address) -> list nia))
+      ism environment =
     
     let es = interp_exhaustive environment in
 
@@ -1265,19 +1265,15 @@ let interp_instruction_analysis
     let regs_feeding_address = List.concatMap regs_feeding_memory_access_address_of_event es in
 
     let nia_address = List.mapMaybe (nia_address_of_event nia_reg) es in
-
-    let nias = nias_function nia_address regs_in in
+    let nias = nias_function nia_address in
 
     let dia = DIA_none in (* FIX THIS! *)
 
-
     let inst_kind =
-      match List.mapMaybe instruction_kind_of_event es with
-      | [] -> if List.length nias > 1 then IK_cond_branch else IK_simple
+      match List.mapMaybe (instruction_kind_of_event nia_reg) es with
+      | [] -> IK_simple
+      | inst_kind :: [] -> inst_kind
       | inst_kind :: inst_kinds ->
-          let () = ensure (List.length nias > 1 --> inst_kind = IK_cond_branch)
-                      "multiple NIAs must be IK_cond_branch" in
-
           if forall (inst_kind' MEM inst_kinds). inst_kind' = inst_kind then
             inst_kind
 
@@ -1288,19 +1284,9 @@ let interp_instruction_analysis
                 | IK_mem_write _ -> true
                 | IK_mem_rmw _   -> false
                 | IK_barrier _   -> false
-                | IK_cond_branch -> false
+                | IK_branch      -> false
                 | IK_trans _     -> false
                 | IK_simple      -> false
-                end) &&
-            (exists (inst_kind' MEM (inst_kind :: inst_kinds)).
-                match inst_kind' with
-                | IK_mem_read _  -> true
-                | _              -> false
-                end) &&
-            (exists (inst_kind' MEM (inst_kind :: inst_kinds)).
-                match inst_kind' with
-                | IK_mem_write _ -> true
-                | _              -> false
                 end)
           then
             match
@@ -1357,7 +1343,7 @@ let interp_compare_analyses
       interp_exhaustive
       (instruction : Interp_ast.value)
       nia_reg
-      (nias_function : (list (maybe address) -> list reg_name -> list nia))
+      (nias_function : (list (maybe address) -> list nia))
       ism
       environment
       analysis_function

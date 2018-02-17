@@ -40,7 +40,7 @@ typedef ast = const union forall Nat 'R, 'R IN {32, 64},     (* register size *)
   ImplementationDefinedStopFetching;
   ImplementationDefinedThreadStart;
 
-  (* transactional memory, from the pre-alpha document *)
+  (* transactional memory, not part of the official spec *)
   (reg_index) TMStart;
   TMCommit;
   (boolean,bit[5]) TMAbort;
@@ -106,7 +106,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(TMStart(t));
 }
 
-(* transactional memory, from the pre-alpha document *)
+(* transactional memory, not part of the official spec *)
 function clause execute (TMStart(t)) = {
   (bit[8]) nesting := TxNestingLevel;
 
@@ -132,7 +132,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(TMCommit);
 }
 
-(* transactional memory, from the pre-alpha document *)
+(* transactional memory, not part of the official spec *)
 function clause execute (TMCommit) = {
   (bit[8]) nesting := TxNestingLevel;
 
@@ -151,7 +151,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(TMTest);
 }
 
-(* transactional memory, from the pre-alpha document *)
+(* transactional memory, not part of the official spec *)
 function clause execute (TMTest) = {
   if TxNestingLevel > 0 then
     wPSTATE_NZCV() := 0b0000
@@ -166,7 +166,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(TMAbort(R,imm5));
 }
 
-(* transactional memory, from the pre-alpha document *)
+(* transactional memory, not part of the official spec *)
 function clause execute (TMAbort(retry,reason)) = {
   if TxNestingLevel > 0 then {
     (bit[64]) status := 0;
@@ -642,7 +642,7 @@ function clause execute (BranchRegister(n,branch_type)) =
   (bit[64]) target := rX(n);
 
   if branch_type == BranchType_CALL then wX(30) := rPC() + 4;
-    BranchTo(target, branch_type);
+  BranchTo(target, branch_type);
 }
 
 (* ERET *)

@@ -327,7 +327,7 @@ module ExtraSet = functor (S : Set.S) ->
 
 let copy_file src dst = 
   let len = 5096 in
-  let b = String.make len ' ' in
+  let b = Bytes.make len ' ' in
   let read_len = ref 0 in
   let i = open_in_bin src in
   let o = open_out_bin dst  in

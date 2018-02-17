@@ -1,6 +1,6 @@
-.PHONY: all install clean doc test
+.PHONY: all install uninstall reinstall clean doc test bench
 
-OCAMLBUILD := ocamlbuild -use-ocamlfind -cflags "-g" -lflags "-g" -classic-display
+OCAMLBUILD := ocamlbuild -use-ocamlfind -classic-display
 OCAMLFIND  := ocamlfind
 DOCDIR     := doc
 MAIN       := PPrintTest
@@ -13,6 +13,14 @@ install: all
 	$(OCAMLFIND) install pprint META \
 		$(patsubst %,_build/%,$(TO_BUILD)) \
 		_build/PPrintLib.a _build/*.cmx _build/*.cmi
+
+# [make uninstall] attempts to uninstall, but succeeds even if uninstallation
+# fails (probably because the package was not installed in the first place).
+uninstall:
+	ocamlfind remove pprint || true
+
+reinstall: uninstall
+	@ $(MAKE) install
 
 clean:
 	rm -f *~
@@ -33,3 +41,6 @@ test: all
 	$(OCAMLBUILD) $(MAIN).native
 	./$(MAIN).native
 
+bench: all
+	$(OCAMLBUILD) -tag use_unix PPrintBench.native
+	time ./PPrintBench.native

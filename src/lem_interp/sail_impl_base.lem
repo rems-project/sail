@@ -148,65 +148,20 @@ type opcode = Opcode of list byte (* of length 4 *)
 
 (** typeclass instantiations *)
 
-let ~{ocaml} bitCompare (b1:bit) (b2:bit) =
-  match (b1,b2) with
-  | (Bitc_zero, Bitc_zero) -> EQ
-  | (Bitc_one, Bitc_one) -> EQ
-  | (Bitc_zero, _) -> LT
-  | (_,_) -> GT
+instance (EnumerationType bit)
+  let toNat = function
+    | Bitc_zero -> 0
+    | Bitc_one -> 1
   end
-let inline {ocaml} bitCompare = defaultCompare
-
-let ~{ocaml} bitLess b1 b2      = bitCompare b1 b2 =  LT
-let ~{ocaml} bitLessEq b1 b2    = bitCompare b1 b2 <> GT
-let ~{ocaml} bitGreater b1 b2   = bitCompare b1 b2 =  GT
-let ~{ocaml} bitGreaterEq b1 b2 = bitCompare b1 b2 <> LT
-
-let inline {ocaml} bitLess      = defaultLess
-let inline {ocaml} bitLessEq    = defaultLessEq
-let inline {ocaml} bitGreater   = defaultGreater
-let inline {ocaml} bitGreaterEq = defaultGreaterEq
-
-instance (Ord bit)
-  let compare = bitCompare
-  let (<)  = bitLess
-  let (<=) = bitLessEq
-  let (>)  = bitGreater
-  let (>=) = bitGreaterEq
 end
 
-let ~{ocaml} bit_liftedCompare (bl1:bit_lifted) (bl2:bit_lifted) =
-  match (bl1,bl2) with
-  | (Bitl_zero, Bitl_zero) -> EQ
-  | (Bitl_zero,_) -> LT
-  | (Bitl_one, Bitl_zero) -> GT
-  | (Bitl_one, Bitl_one) -> EQ
-  | (Bitl_one, _) -> LT
-  | (Bitl_undef,Bitl_zero) -> GT
-  | (Bitl_undef,Bitl_one) -> GT
-  | (Bitl_undef,Bitl_undef) -> EQ
-  | (Bitl_undef,_) -> LT
-  | (Bitl_unknown,Bitl_unknown) -> EQ
-  | (Bitl_unknown,_) -> GT
+instance (EnumerationType bit_lifted)
+  let toNat = function
+    | Bitl_zero -> 0
+    | Bitl_one -> 1
+    | Bitl_undef -> 2
+    | Bitl_unknown -> 3
   end
-let inline {ocaml} bit_liftedCompare = defaultCompare
-
-let ~{ocaml} bit_liftedLess b1 b2      = bit_liftedCompare b1 b2 =  LT
-let ~{ocaml} bit_liftedLessEq b1 b2    = bit_liftedCompare b1 b2 <> GT
-let ~{ocaml} bit_liftedGreater b1 b2   = bit_liftedCompare b1 b2 =  GT
-let ~{ocaml} bit_liftedGreaterEq b1 b2 = bit_liftedCompare b1 b2 <> LT
-
-let inline {ocaml} bit_liftedLess      = defaultLess
-let inline {ocaml} bit_liftedLessEq    = defaultLessEq
-let inline {ocaml} bit_liftedGreater   = defaultGreater
-let inline {ocaml} bit_liftedGreaterEq = defaultGreaterEq
-
-instance (Ord bit_lifted)
-  let compare = bit_liftedCompare
-  let (<)  = bit_liftedLess
-  let (<=) = bit_liftedLessEq
-  let (>)  = bit_liftedGreater
-  let (>=) = bit_liftedGreaterEq
 end
 
 let ~{ocaml} byte_liftedCompare (Byte_lifted b1) (Byte_lifted b2) = compare b1 b2
@@ -250,6 +205,10 @@ instance (Ord byte)
   let (>)  = byteGreater
   let (>=) = byteGreaterEq
 end
+
+
+
+
 
 let ~{ocaml} opcodeCompare (Opcode o1) (Opcode o2) =
   compare o1 o2
@@ -1078,32 +1037,18 @@ end
 type nia = 
   | NIA_successor
   | NIA_concrete_address of address
-  | NIA_LR   (* "LR0:61 || 0b00" in Power pseudocode *)
-  | NIA_CTR  (* "CTR0:61 || 0b00" in Power pseudocode *)
-  | NIA_register of reg_name (* the address will be in a register,
-                                corresponds to AArch64 BLR, BR, RET
-                                instructions *)
+  | NIA_indirect_address
 
 let niaCompare n1 n2 = match (n1,n2) with
   | (NIA_successor, NIA_successor) -> EQ
   | (NIA_successor, _) -> LT
-  | (NIA_concrete_address _, NIA_successor) -> GT
+  | (_, NIA_successor) -> GT
   | (NIA_concrete_address a1, NIA_concrete_address a2) -> compare a1 a2
   | (NIA_concrete_address _, _) -> LT
-  | (NIA_LR, NIA_successor) -> GT
-  | (NIA_LR, NIA_concrete_address _) -> GT
-  | (NIA_LR, NIA_LR) -> EQ
-  | (NIA_LR, _) -> LT
-  | (NIA_CTR, NIA_successor) -> GT
-  | (NIA_CTR, NIA_concrete_address _) -> GT
-  | (NIA_CTR, NIA_LR) -> GT
-  | (NIA_CTR, NIA_CTR) -> EQ
-  | (NIA_CTR, NIA_register _) -> LT
-  | (NIA_register _, NIA_successor) -> GT
-  | (NIA_register _, NIA_concrete_address _) -> GT
-  | (NIA_register _, NIA_LR) -> GT
-  | (NIA_register _, NIA_CTR) -> GT
-  | (NIA_register r1, NIA_register r2) -> compare r1 r2
+  | (_, NIA_concrete_address _) -> GT
+  | (NIA_indirect_address, NIA_indirect_address) -> EQ
+  (* | (NIA_indirect_address, _) -> LT
+  | (_, NIA_indirect_address) -> GT *)
   end
 
 instance (Ord nia)
@@ -1115,11 +1060,9 @@ instance (Ord nia)
 end
 
 let stringFromNia = function
-  | NIA_successor -> "NIA_successor"
+  | NIA_successor          -> "NIA_successor"
   | NIA_concrete_address a -> "NIA_concrete_address " ^ show a
-  | NIA_LR -> "NIA_LR"
-  | NIA_CTR -> "NIA_CTR"
-  | NIA_register r -> "NIA_register " ^ show r
+  | NIA_indirect_address   -> "NIA_indirect_address"
 end
 
 instance (Show nia)

@@ -2,12 +2,12 @@
 (*                                                                        *)
 (*  PPrint                                                                *)
 (*                                                                        *)
-(*  Francois Pottier, INRIA Paris-Rocquencourt                            *)
-(*  Nicolas Pouillard, IT University of Copenhagen                        *)
+(*  François Pottier, Inria Paris                                         *)
+(*  Nicolas Pouillard                                                     *)
 (*                                                                        *)
-(*  Copyright 2007-2014 INRIA. All rights reserved. This file is          *)
-(*  distributed under the terms of the CeCILL-C license, as described     *)
-(*  in the file LICENSE.                                                  *)
+(*  Copyright 2007-2017 Inria. All rights reserved. This file is          *)
+(*  distributed under the terms of the GNU Library General Public         *)
+(*  License, with an exception, as described in the file LICENSE.         *)
 (*                                                                        *)
 (**************************************************************************)
 
@@ -57,7 +57,13 @@ end
 
 class channel_output channel = object
   method char = output_char channel
-  method substring = output channel
+  method substring = output_substring channel
+    (* We used to use [output], but, as of OCaml 4.02 and with -safe-string
+       enabled, the type of [output] has changed: this function now expects
+       an argument of type [bytes]. The new function [output_substring] must
+       be used instead. Furthermore, as of OCaml 4.06, -safe-string is enabled
+       by default. In summary, we require OCaml 4.02, use [output_substring],
+       and enable -safe-string. *)
 end
 
 class buffer_output buffer = object
@@ -152,21 +158,21 @@ end
 
 type document =
 
-    (* [Empty] is the empty document. *)
+  (* [Empty] is the empty document. *)
 
   | Empty
 
-    (* [Char c] is a document that consists of the single character [c]. We
-       enforce the invariant that [c] is not a newline character. *)
+  (* [Char c] is a document that consists of the single character [c]. We
+     enforce the invariant that [c] is not a newline character. *)
 
   | Char of char
 
-    (* [String (s, ofs, len)] is a document that consists of the portion of
-       the string [s] delimited by the offset [ofs] and the length [len]. We
-       assume, but do not check, that this portion does not contain a newline
-       character. *)
+  (* [String s] is a document that consists of just the string [s]. We
+     assume, but do not check, that this string does not contain a newline
+     character. [String] is a special case of [FancyString], which takes up
+     less space in memory. *)
 
-  | String of string * int * int
+  | String of string
 
   (* [FancyString (s, ofs, len, apparent_length)] is a (portion of a) string
      that may contain fancy characters: color escape characters, UTF-8 or
@@ -252,7 +258,8 @@ let rec requirement = function
       0
   | Char _ ->
       1
-  | String (_, _, len)
+  | String s ->
+      String.length s
   | FancyString (_, _, _, len)
   | Blank len ->
       len
@@ -268,7 +275,7 @@ let rec requirement = function
       infinity
   | Cat (req, _, _)
   | Nest (req, _, _)
-  | Group (req, _) 
+  | Group (req, _)
   | Align (req, _) ->
       (* These nodes store their requirement -- which is computed when the
          node is constructed -- so as to allow us to answer in constant time
@@ -293,20 +300,17 @@ let char c =
 let space =
   char ' '
 
-let substring s ofs len =
-  if len = 0 then
-    empty
-  else
-    String (s, ofs, len)
-
 let string s =
-  substring s 0 (String.length s)
+  String s
 
 let fancysubstring s ofs len apparent_length =
   if len = 0 then
     empty
   else
     FancyString (s, ofs, len, apparent_length)
+
+let substring s ofs len =
+  fancysubstring s ofs len len
 
 let fancystring s apparent_length =
   fancysubstring s 0 (String.length s) apparent_length
@@ -467,8 +471,9 @@ let rec pretty
       (* assert (ok state flatten); *)
       continue output state cont
 
-  | String (s, ofs, len) ->
-      output#substring s ofs len;
+  | String s ->
+      let len = String.length s in
+      output#substring s 0 len;
       state.column <- state.column + len;
       (* assert (ok state flatten); *)
       continue output state cont
@@ -566,8 +571,9 @@ let rec compact output doc cont =
   | Char c ->
       output#char c;
       continue output cont
-  | String (s, ofs, len) ->
-      output#substring s ofs len;
+  | String s ->
+      let len = String.length s in
+      output#substring s 0 len;
       continue output cont
   | FancyString (s, ofs, len, apparent_length) ->
       output#substring s ofs len;
@@ -634,4 +640,3 @@ module ToFormatter =
     type channel = Format.formatter
     let output = new formatter_output
   end)
-

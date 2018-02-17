@@ -1,6 +1,6 @@
 #OTT=../../../rsem/ott/bin/ott
 # this is the binary that gets rebuilt by make in ott/src:
-OTT=../../../github/ott/src/ott
+OTT=../../ott/src/ott
 OTTLIB=$(dir $(shell which ott))../hol
 
 .PHONY: all

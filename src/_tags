@@ -9,8 +9,8 @@ true: -traverse, debug, use_menhir
 <*.m{l,li}>: package(lem)
 
 # see http://caml.inria.fr/mantis/view.php?id=4943
-<lem_interp/*> and not <lem_interp/*.cmxa>: use_nums, package(lem)
-<test/*> and not <test/*.cmxa>: use_nums, package(lem), use_str
+<lem_interp/*> and not <lem_interp/*.cmxa>: package(num), package(lem)
+<test/*> and not <test/*.cmxa>: package(num), package(lem), package(str)
 
 # disable partial match and unused variable warnings
 <**/*.ml>: warn_y

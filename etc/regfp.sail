@@ -16,9 +16,7 @@ typedef regfps = list <regfp>
 typedef niafp = const union {
   NIAFP_successor;
   (bit[64]) NIAFP_concrete_address;
-  NIAFP_LR;
-  NIAFP_CTR;
-  (regfp) NIAFP_register;
+  NIAFP_indirect_address;
 }
 
 typedef niafps = list <niafp>
@@ -90,7 +88,7 @@ typedef instruction_kind = const union {
   (read_kind) IK_mem_read;
   (write_kind) IK_mem_write;
   (read_kind, write_kind) IK_mem_rmw;
-  IK_cond_branch;
+  IK_branch;
   (trans_kind) IK_trans;
   IK_simple
 }

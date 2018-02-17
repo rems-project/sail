@@ -2,12 +2,12 @@
 (*                                                                        *)
 (*  PPrint                                                                *)
 (*                                                                        *)
-(*  Francois Pottier, INRIA Paris-Rocquencourt                            *)
-(*  Nicolas Pouillard, IT University of Copenhagen                        *)
+(*  François Pottier, Inria Paris                                         *)
+(*  Nicolas Pouillard                                                     *)
 (*                                                                        *)
-(*  Copyright 2007-2014 INRIA. All rights reserved. This file is          *)
-(*  distributed under the terms of the CeCILL-C license, as described     *)
-(*  in the file LICENSE.                                                  *)
+(*  Copyright 2007-2017 Inria. All rights reserved. This file is          *)
+(*  distributed under the terms of the GNU Library General Public         *)
+(*  License, with an exception, as described in the file LICENSE.         *)
 (*                                                                        *)
 (**************************************************************************)
 
@@ -133,7 +133,7 @@ val words: string -> document list
     character that satisfies the predicate [ok]. The substrings thus obtained
     are turned into documents, and a list of documents is returned. No
     information is lost: the concatenation of the documents yields the
-    original string.  This code is not UTF-8 aware. *)
+    original string. This code is not UTF-8 aware. *)
 val split: (char -> bool) -> string -> document list
 
 (** [flow sep docs] separates the documents in the list [docs] with the

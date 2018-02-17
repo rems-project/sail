@@ -217,9 +217,9 @@ let format_loc_source ff l =
     begin
       let (s, multi_line) = read_from_file_pos2 p1 p2 in
       if multi_line then 
-        Format.fprintf ff "  original input:\n%s\n" s
+        Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
       else
-        Format.fprintf ff "  original input: \"%s\"\n" s
+        Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
     end
   | _ -> ()
 
