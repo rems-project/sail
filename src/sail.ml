@@ -88,7 +88,7 @@ let options = Arg.align ([
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
   ( "-c",
-    Arg.Tuple [Arg.Set opt_print_c; (* Arg.Set Initial_check.opt_undefined_gen *)],
+    Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,

@@ -30,6 +30,8 @@ bool not(const bool b) {
   return !b;
 }
 
+int undefined_bit(unit u) { return 0; }
+
 // ***** Sail strings *****
 void init_sail_string(sail_string *str) {
   char *istr = (char *) malloc(1 * sizeof(char));
@@ -64,7 +66,7 @@ unit print_int64(const sail_string str, const int64_t op) {
   return UNIT;
 }
 
-// ***** Multiple precision integers *****
+// ***** Arbitrary precision integers *****
 
 // We wrap around the GMP functions so they follow a consistent naming
 // scheme that is shared with the other builtin sail types.
@@ -101,6 +103,10 @@ bool lt(const mpz_t op1, const mpz_t op2) {
 
 bool gt(const mpz_t op1, const mpz_t op2) {
   return mpz_cmp(op1, op2) > 0;
+}
+
+void undefined_int(mpz_t *rop, const unit u) {
+  mpz_set_ui(*rop, 0ul);
 }
 
 void add_int(mpz_t *rop, const mpz_t op1, const mpz_t op2)
@@ -165,6 +171,10 @@ void clear_bv_t(bv_t *rop) {
   free(rop->bits);
 }
 
+void undefined_bv_t(bv_t *rop, mpz_t len, int bit) {
+  zeros(rop, len);
+}
+
 void mask(bv_t *rop) {
   if (mpz_sizeinbase(*rop->bits, 2) > rop->len) {
     mpz_t m;
@@ -182,6 +192,19 @@ void add_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   mpz_clrbit(*rop->bits, op1.len);
 }
 
+uint64_t add_bits_32(const uint64_t op1, const uint64_t op2) {
+  return (op1 + op2) & 0x00000000FFFFFFFFul;
+}
+
+
+bool eq_bits(const bv_t op1, const bv_t op2) {
+  return mpz_cmp(*op1.bits, *op2.bits) == 0;
+}
+
+bool eq_bits_32(const uint64_t op1, const uint64_t op2) {
+  return (op1 == op2);
+}
+
 void add_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
   rop->len = op1.len;
   mpz_add(*rop->bits, *op1.bits, op2);
@@ -192,5 +215,29 @@ unit print_bits(const sail_string str, const bv_t op) {
   fputs(str, stdout);
   gmp_printf("%d'0x%ZX\n", op.len, op.bits);
 }
+
+// ***** Real number implementation *****
+
+#define REAL_FLOAT
+
+#ifdef REAL_FLOAT
+
+typedef mpf_t real;
+
+#define FLOAT_PRECISION 255
+
+void setup_real(void) {
+  mpf_set_default_prec(FLOAT_PRECISION);
+}
+
+void init_real(real *rop) {
+  mpf_init(*rop);
+}
+
+void clear_real(real *rop) {
+  mpf_clear(*rop);
+}
+
+#endif
 
 #endif

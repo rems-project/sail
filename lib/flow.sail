@@ -34,6 +34,8 @@ val lt_int = "lt" : (int, int) -> bool
 val gt_int = "lt" : (int, int) -> bool
 
 overload operator == = {eq_atom, eq_range, eq_int}
+overload operator | = {or_bool}
+overload operator & = {and_bool}
 
 $ifdef TEST
 
