@@ -179,10 +179,11 @@ let doc_nexp_lem nexp =
        | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
        | Nexp_exp n -> "exp_" ^ mangle_nexp n
        | Nexp_neg n -> "neg_" ^ mangle_nexp n
+       | _ ->
+          raise (Reporting_basic.err_unreachable l
+                   ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\"")) 
      end in
      string ("'" ^ mangle_nexp full_nexp)
-     (* raise (Reporting_basic.err_unreachable l
-       ("cannot pretty-print non-atomic nexp \"" ^ string_of_nexp full_nexp ^ "\"")) *)
 
 (* Rewrite mangled names of type variables to the original names *)
 let rec orig_nexp (Nexp_aux (nexp, l)) =
