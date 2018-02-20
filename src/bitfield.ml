@@ -94,16 +94,16 @@ let full_accessor name size order =
 (* For every index range, create a getter and setter *)
 let index_range_getter' name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let irg_val = Printf.sprintf "val _get_%s : %s -> %s" field name (bitvec size order) in
-  let irg_function = Printf.sprintf "function _get_%s Mk_%s(v) = v[%i .. %i]" field name start stop in
+  let irg_val = Printf.sprintf "val _get_%s_%s : %s -> %s" name field name (bitvec size order) in
+  let irg_function = Printf.sprintf "function _get_%s_%s Mk_%s(v) = v[%i .. %i]" name field name start stop in
   combine [ast_of_def_string order irg_val; ast_of_def_string order irg_function]
 
 let index_range_setter' name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let irs_val = Printf.sprintf "val _set_%s : (register(%s), %s) -> unit effect {wreg}" field name (bitvec size order) in
+  let irs_val = Printf.sprintf "val _set_%s_%s : (register(%s), %s) -> unit effect {wreg}" name field name (bitvec size order) in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
   let irs_function = String.concat "\n"
-    [ Printf.sprintf "function _set_%s (r_ref, v) = {" field;
+    [ Printf.sprintf "function _set_%s_%s (r_ref, v) = {" name field;
       Printf.sprintf "  r = _get_%s(_reg_deref(r_ref));" name;
       Printf.sprintf "  r[%i .. %i] = v;" start stop;
       Printf.sprintf "  (*r_ref) = Mk_%s(r)" name;
@@ -112,13 +112,13 @@ let index_range_setter' name field order start stop =
   in
   combine [ast_of_def_string order irs_val; ast_of_def_string order irs_function]
 
-let index_range_overload field order =
-  ast_of_def_string order (Printf.sprintf "overload _mod_%s = {_get_%s, _set_%s}" field field field)
+let index_range_overload name field order =
+  ast_of_def_string order (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
 
 let index_range_accessor name field order (BF_aux (bf_aux, l)) =
   let getter n m = index_range_getter' name field order (Big_int.to_int n) (Big_int.to_int m) in
   let setter n m = index_range_setter' name field order (Big_int.to_int n) (Big_int.to_int m) in
-  let overload = index_range_overload field order in
+  let overload = index_range_overload name field order in
   match bf_aux with
   | BF_single n -> combine [getter n n; setter n n; overload]
   | BF_range (n, m) -> combine [getter n m; setter n m; overload]
