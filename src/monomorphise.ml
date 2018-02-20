@@ -2096,8 +2096,6 @@ let rewrite_size_parameters env (Defs defs) =
     in
     let new_nexps = NexpSet.of_list (List.map fst
       (List.filter (fun (nexp,i) -> IntSet.mem i parameters_to_rewrite) nexp_list)) in
-let _ = print_endline ("Fn " ^ string_of_id id ^ " rewrite " ^
-                          String.concat "," (List.map string_of_int (IntSet.elements parameters_to_rewrite))) in
     match Bindings.find id fsizes with
     | old,old_nexps -> Bindings.add id (IntSet.union old parameters_to_rewrite,
                                         NexpSet.union old_nexps new_nexps) fsizes
