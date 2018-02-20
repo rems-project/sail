@@ -248,6 +248,10 @@ module NexpSet : sig
   include Set.S with type elt = nexp
 end
 
+module NexpMap : sig
+  include Map.S with type key = nexp
+end
+
 module BESet : sig
   include Set.S with type elt = base_effect
 end

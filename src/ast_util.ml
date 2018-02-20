@@ -182,6 +182,7 @@ module IdSet = Set.Make(Id)
 module KBindings = Map.Make(Kid)
 module KidSet = Set.Make(Kid)
 module NexpSet = Set.Make(Nexp)
+module NexpMap = Map.Make(Nexp)
 
 let rec nexp_identical nexp1 nexp2 = (Nexp.compare nexp1 nexp2 = 0)
 
