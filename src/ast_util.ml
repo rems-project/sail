@@ -236,6 +236,14 @@ and nexp_simp_aux = function
          when Big_int.equal c1 (Big_int.negate c2) -> n
        | _, _ -> Nexp_minus (n1, n2)
      end
+  | Nexp_app (Id_aux (Id "div",_) as id,[n1;n2]) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
+       | _, _ -> Nexp_app (id,[n1;n2])
+     end
   | nexp -> nexp
 
 let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
