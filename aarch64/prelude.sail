@@ -5,9 +5,9 @@ $include <flow.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
-val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anything"} : (bit, bit) -> bool
+val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anything", c: "eq_bit"} : (bit, bit) -> bool
 
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+val eq_vec = {ocaml: "eq_list", lem: "eq_vec", c: "eq_bits"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
 
@@ -16,36 +16,57 @@ val eq_real = {ocaml: "eq_real", lem: "eq"} : (real, real) -> bool
 val eq_anything = {
   ocaml: "(fun (x, y) -> x = y)",
   interpreter: "eq_anything",
-  lem: "eq"
+  lem: "eq",
+  c: "eq_anything"
 } : forall ('a : Type). ('a, 'a) -> bool
 
-val bitvector_length = {ocaml: "length", lem: "length"} : forall 'n. bits('n) -> atom('n)
-val vector_length = {ocaml: "length", lem: "length_list"} : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
-val list_length = {ocaml: "length", lem: "length_list"} : forall ('a : Type). list('a) -> int
+val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
+val vector_length = {ocaml: "length", lem: "length_list", c: "length"} : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
+val list_length = {ocaml: "length", lem: "length_list", c: "length"} : forall ('a : Type). list('a) -> int
 
 overload length = {bitvector_length, vector_length, list_length}
 
 overload operator == = {eq_bit, eq_vec, eq_string, eq_real, eq_anything}
 
-val vector_subrange_A = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+val vector_subrange_A = {
+  ocaml: "subrange",
+  lem: "subrange_vec_dec",
+  c: "subrange"
+} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
-val vector_subrange_B = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int).
+val vector_subrange_B = {
+  ocaml: "subrange",
+  lem: "subrange_vec_dec",
+  c: "subrange"
+} : forall ('n : Int) ('m : Int) ('o : Int).
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
 overload vector_subrange = {vector_subrange_A, vector_subrange_B}
 
-val bitvector_access_A = {ocaml: "access", lem: "access_vec_dec"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
-  (bits('n), atom('m)) -> bit
+val bitvector_access_A = {
+  ocaml: "access",
+  lem: "access_vec_dec",
+  c: "access"
+} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n. (bits('n), atom('m)) -> bit
 
-val bitvector_access_B = {ocaml: "access", lem: "access_vec_dec"} : forall ('n : Int).
-  (bits('n), int) -> bit
+val bitvector_access_B = {
+  ocaml: "access",
+  lem: "access_vec_dec",
+  c: "access"
+} : forall ('n : Int). (bits('n), int) -> bit
 
-val vector_access_A = {ocaml: "access", lem: "access_list_dec"} : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
-  (vector('n, dec, 'a), atom('m)) -> 'a
+val vector_access_A = {
+  ocaml: "access",
+  lem: "access_list_dec",
+  c: "access"
+} : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), atom('m)) -> 'a
 
-val vector_access_B = {ocaml: "access", lem: "access_list_dec"} : forall ('n : Int) ('a : Type).
-  (vector('n, dec, 'a), int) -> 'a
+val vector_access_B = {
+  ocaml: "access",
+  lem: "access_list_dec",
+  c: "access"
+} : forall ('n : Int) ('a : Type). (vector('n, dec, 'a), int) -> 'a
 
 overload vector_access = {bitvector_access_A, bitvector_access_B, vector_access_A, vector_access_B}
 
@@ -91,7 +112,7 @@ overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
 val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val and_vec = {lem: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val and_vec = {lem: "and_vec", c: "and_bits"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
@@ -99,13 +120,18 @@ overload operator & = {and_bool, and_vec}
 
 val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val or_vec = {lem: "or_vec"}: forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {lem: "or_vec", c: "or_bits"}: forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
 overload operator | = {or_bool, or_vec}
 
-val UInt = "uint" : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+val UInt = {
+  ocaml: "uint",
+  lem: "uint",
+  interpreter: "uint",
+  c: "sail_uint"
+} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 val SInt = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
@@ -146,7 +172,12 @@ function cast_unit_vec b =
 
 val print = "prerr_endline" : string -> unit
 
-val putchar = "putchar" : forall ('a : Type). 'a -> unit
+val putchar = {
+  ocaml: "putchar",
+  lem: "putchar",
+  interpreter: "putchar",
+  c: "sail_putchar"
+} : forall ('a : Type). 'a -> unit
 
 val concat_str = {ocaml: "concat_str", lem: "stringAppend"} : (string, string) -> string
 

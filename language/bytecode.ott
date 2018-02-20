@@ -140,6 +140,8 @@ cdef :: 'CDEF_' ::=
     } :: :: let
 % The first list of instructions creates up the global letbinding, the
 % second kills it.
+  | val id ( ctyp0 , ... , ctypn ) -> ctyp
+      :: :: spec
   | function id mid ( id0 , ... , idn ) {
       instr0 ; ... ; instrm
     } :: :: fundef
