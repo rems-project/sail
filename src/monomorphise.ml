@@ -726,6 +726,30 @@ let int_of_str_lit = function
   | L_bin bin -> Big_int.of_string ("0b" ^ bin)
   | _ -> assert false
 
+let bits_of_lit = function
+  | L_bin bin -> bin
+  | L_hex hex -> hex_to_bin hex
+  | _ -> assert false
+
+let slice_lit (L_aux (lit,ll)) i len (Ord_aux (ord,_)) =
+  let i = Big_int.to_int i in
+  let len = Big_int.to_int len in
+  match match ord with
+  | Ord_inc -> Some i
+  | Ord_dec -> Some (len - i)
+  | Ord_var _ -> None
+  with
+  | None -> None
+  | Some i ->
+     match lit with
+     | L_bin bin -> Some (L_aux (L_bin (String.sub bin i len),Generated ll))
+     | _ -> assert false
+
+let concat_vec lit1 lit2 =
+  let bits1 = bits_of_lit lit1 in
+  let bits2 = bits_of_lit lit2 in
+  L_bin (bits1 ^ bits2)
+
 let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   match l1,l2 with
   | (L_zero|L_false), (L_zero|L_false)
@@ -763,15 +787,46 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit,_), _)] ->
        Some (E_aux (E_lit (L_aux (L_num (int_of_str_lit lit),new_l)),(l,ann)))
     | _ -> None
+  else if is_id "slice" then
+    match args with
+    | [E_aux (E_lit (L_aux ((L_hex _| L_bin _),_) as lit),
+              (_,Some (_,Typ_aux (Typ_app (_,[_;Typ_arg_aux (Typ_arg_order ord,_);_]),_),_)));
+       E_aux (E_lit L_aux (L_num i,_), _);
+       E_aux (E_lit L_aux (L_num len,_), _)] ->
+       (match slice_lit lit i len ord with
+       | Some lit' -> Some (E_aux (E_lit lit',(l,ann)))
+       | None -> None)
+    | _ -> None
+  else if is_id "bitvector_concat" then
+    match args with
+    | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit1,_), _);
+       E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit2,_), _)] ->
+       Some (E_aux (E_lit (L_aux (concat_vec lit1 lit2,new_l)),(l,ann)))
+    | _ -> None
   else if is_id "shl_int" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.shift_left i (Big_int.to_int j)),new_l)),(l,ann)))
     | _ -> None
-  else if is_id "mult_int" then
+  else if is_id "mult_int" || is_id "mult_range" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.mul i j),new_l)),(l,ann)))
+    | _ -> None
+  else if is_id "quotient_nat" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (Big_int.div i j),new_l)),(l,ann)))
+    | _ -> None
+  else if is_id "add_range" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (Big_int.add i j),new_l)),(l,ann)))
+    | _ -> None
+  else if is_id "negate_range" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (Big_int.negate i),new_l)),(l,ann)))
     | _ -> None
   else if is_id "ex_int" then
     match args with

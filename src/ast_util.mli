@@ -320,3 +320,5 @@ val ids_of_defs : 'a defs -> IdSet.t
 
 val pat_ids : 'a pat -> IdSet.t
 val subst : id -> 'a exp -> 'a exp -> 'a exp
+
+val hex_to_bin : string -> string

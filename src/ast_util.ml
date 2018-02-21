@@ -1107,3 +1107,10 @@ and subst_lexp id value (LEXP_aux (lexp_aux, annot) as lexp) =
     | LEXP_field (lexp, id') -> LEXP_field (subst_lexp id value lexp, id')
   in
   wrap lexp_aux
+
+let hex_to_bin hex =
+  Util.string_to_list hex
+  |> List.map Sail_lib.hex_char
+  |> List.concat
+  |> List.map Sail_lib.char_of_bit
+  |> (fun bits -> String.init (List.length bits) (List.nth bits))
