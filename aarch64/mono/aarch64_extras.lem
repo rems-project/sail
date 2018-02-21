@@ -5,6 +5,12 @@ open import Sail_operators_mwords
 open import Prompt_monad
 open import State
 
+type ty512
+instance (Size ty512) let size = 512 end
+declare isabelle target_rep type ty512 = `512`
+type ty1024
+instance (Size ty1024) let size = 1024 end
+declare isabelle target_rep type ty1024 = `1024`
 type ty2048
 instance (Size ty2048) let size = 2048 end
 declare isabelle target_rep type ty2048 = `2048`
