@@ -92,13 +92,13 @@ let full_accessor name size order =
   combine [full_getter name size order; full_setter name size order; full_overload name order]
 
 (* For every index range, create a getter and setter *)
-let index_range_getter' name field order start stop =
+let index_range_getter name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
   let irg_val = Printf.sprintf "val _get_%s_%s : %s -> %s" name field name (bitvec size order) in
   let irg_function = Printf.sprintf "function _get_%s_%s Mk_%s(v) = v[%i .. %i]" name field name start stop in
   combine [ast_of_def_string order irg_val; ast_of_def_string order irg_function]
 
-let index_range_setter' name field order start stop =
+let index_range_setter name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
   let irs_val = Printf.sprintf "val _set_%s_%s : (register(%s), %s) -> unit effect {wreg}" name field name (bitvec size order) in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
@@ -112,16 +112,30 @@ let index_range_setter' name field order start stop =
   in
   combine [ast_of_def_string order irs_val; ast_of_def_string order irs_function]
 
+let index_range_update name field order start stop =
+  let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
+  let iru_val = Printf.sprintf "val _update_%s_%s : (%s, %s) -> %s" name field name (bitvec size order) name in
+  (* Read-modify-write using an internal _reg_deref function without rreg effect *)
+  let iru_function = String.concat "\n"
+    [ Printf.sprintf "function _update_%s_%s (Mk_%s(v), x) = {" name field name;
+      Printf.sprintf "  Mk_%s([v with %i .. %i = x]);" name start stop;
+                     "}"
+    ]
+  in
+  let iru_overload = Printf.sprintf "overload update_%s = {_update_%s_%s}" field name field in
+  combine [ast_of_def_string order iru_val; ast_of_def_string order iru_function; ast_of_def_string order iru_overload]
+
 let index_range_overload name field order =
   ast_of_def_string order (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
 
 let index_range_accessor name field order (BF_aux (bf_aux, l)) =
-  let getter n m = index_range_getter' name field order (Big_int.to_int n) (Big_int.to_int m) in
-  let setter n m = index_range_setter' name field order (Big_int.to_int n) (Big_int.to_int m) in
+  let getter n m = index_range_getter name field order (Big_int.to_int n) (Big_int.to_int m) in
+  let setter n m = index_range_setter name field order (Big_int.to_int n) (Big_int.to_int m) in
+  let update n m = index_range_update name field order (Big_int.to_int n) (Big_int.to_int m) in
   let overload = index_range_overload name field order in
   match bf_aux with
-  | BF_single n -> combine [getter n n; setter n n; overload]
-  | BF_range (n, m) -> combine [getter n m; setter n m; overload]
+  | BF_single n -> combine [getter n n; setter n n; update n n; overload]
+  | BF_range (n, m) -> combine [getter n m; setter n m; update n m; overload]
   | BF_concat _ -> failwith "Unimplemented"
 
 let field_accessor name order (id, ir) = index_range_accessor name (string_of_id id) order ir

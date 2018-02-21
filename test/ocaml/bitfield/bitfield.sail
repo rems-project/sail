@@ -29,5 +29,9 @@ function main () = {
   print_bits("CR.CR0: ", CR.CR0());
   print_bits("CR: ", CR.bits());
   CR->CR3() = 0b0;
-  print_bits("CR: ", CR.bits())
+  print_bits("CR: ", CR.bits());
+  CR = update_CR1(CR, 0b11);
+  print_bits("CR.CR1: ", CR.CR1());
+  CR = update_CR1(CR, 0b01);
+  print_bits("CR.CR1: ", CR.CR1());
 }

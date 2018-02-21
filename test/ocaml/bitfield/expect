@@ -3,3 +3,5 @@ CR: 0x0F
 CR.CR0: 0x8
 CR: 0x8F
 CR: 0x8E
+CR.CR1: 0b11
+CR.CR1: 0b01
