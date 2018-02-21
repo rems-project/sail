@@ -3005,6 +3005,7 @@ let rewrite_defs_c = [
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  ("guarded_pats", rewrite_defs_guarded_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);

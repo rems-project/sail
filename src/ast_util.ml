@@ -492,7 +492,7 @@ let append_id id str =
   match id with
   | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid (v ^ str), l)
-                                  
+
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
 

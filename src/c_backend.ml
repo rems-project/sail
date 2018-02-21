@@ -158,6 +158,107 @@ and aval =
   | AV_record of aval Bindings.t * typ
   | AV_C_fragment of fragment * typ
 
+(* Renaming variables in ANF expressions *)
+
+let rec frag_rename from_id to_id = function
+  | F_id id when Id.compare id from_id = 0 -> F_id to_id
+  | F_id id -> F_id id
+  | F_lit str -> F_lit str
+  | F_have_exception -> F_have_exception
+  | F_current_exception -> F_current_exception
+  | F_op (f1, op, f2) -> F_op (frag_rename from_id to_id f1, op, frag_rename from_id to_id f2)
+  | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
+  | F_field (f, field) -> F_field (frag_rename from_id to_id f, field)
+
+let rec apat_bindings = function
+  | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
+  | AP_id id -> IdSet.singleton id
+  | AP_global (id, typ) -> IdSet.empty
+  | AP_app (id, apat) -> apat_bindings apat
+  | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
+  | AP_nil -> IdSet.empty
+  | AP_wild -> IdSet.empty
+
+let rec aval_rename from_id to_id = function
+  | AV_lit (lit, typ) -> AV_lit (lit, typ)
+  | AV_id (id, lvar) when Id.compare id from_id = 0 -> AV_id (to_id, lvar)
+  | AV_id (id, lvar) -> AV_id (id, lvar)
+  | AV_ref (id, lvar) when Id.compare id from_id = 0 -> AV_ref (to_id, lvar)
+  | AV_ref (id, lvar) -> AV_ref (id, lvar)
+  | AV_tuple avals -> AV_tuple (List.map (aval_rename from_id to_id) avals)
+  | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
+  | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
+  | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
+  | AV_C_fragment (fragment, typ) -> AV_C_fragment (frag_rename from_id to_id fragment, typ)
+
+let rec aexp_rename from_id to_id aexp =
+  let recur = aexp_rename from_id to_id in
+  match aexp with
+  | AE_val aval -> AE_val (aval_rename from_id to_id aval)
+  | AE_app (id, avals, typ) -> AE_app (id, List.map (aval_rename from_id to_id) avals, typ)
+  | AE_cast (aexp, typ) -> AE_cast (recur aexp, typ)
+  | AE_assign (id, typ, aexp) when Id.compare from_id id = 0 -> AE_assign (to_id, typ, aexp)
+  | AE_assign (id, typ, aexp) -> AE_assign (id, typ, aexp)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 -> AE_let (id, typ1, aexp1, aexp2, typ2)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) -> AE_let (id, typ1, recur aexp1, recur aexp2, typ2)
+  | AE_block (aexps, aexp, typ) -> AE_block (List.map recur aexps, recur aexp, typ)
+  | AE_return (aval, typ) -> AE_return (aval_rename from_id to_id aval, typ)
+  | AE_throw (aval, typ) -> AE_throw (aval_rename from_id to_id aval, typ)
+  | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval_rename from_id to_id aval, recur then_aexp, recur else_aexp, typ)
+  | AE_field (aval, id, typ) -> AE_field (aval_rename from_id to_id aval, id, typ)
+  | AE_case (aval, apexps, typ) -> AE_case (aval_rename from_id to_id aval, List.map (apexp_rename from_id to_id) apexps, typ)
+  | AE_try (aexp, apexps, typ) -> AE_try (aexp_rename from_id to_id aexp, List.map (apexp_rename from_id to_id) apexps, typ)
+  | AE_record_update (aval, avals, typ) -> AE_record_update (aval_rename from_id to_id aval, Bindings.map (aval_rename from_id to_id) avals, typ)
+  | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when Id.compare from_id to_id = 0 -> AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
+  | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) -> AE_for (id, recur aexp1, recur aexp2, recur aexp3, order, recur aexp4)
+  | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, recur aexp1, recur aexp2)
+
+and apexp_rename from_id to_id (apat, aexp1, aexp2) =
+  if IdSet.mem from_id (apat_bindings apat) then
+    (apat, aexp1, aexp2)
+  else
+    (apat, aexp_rename from_id to_id aexp1, aexp_rename from_id to_id aexp2)
+
+let shadow_counter = ref 0
+
+let new_shadow id =
+  let shadow_id = append_id id ("shadow#" ^ string_of_int !shadow_counter) in
+  incr shadow_counter;
+  shadow_id
+
+let rec no_shadow ids aexp =
+  match aexp with
+  | AE_val aval -> AE_val aval
+  | AE_app (id, avals, typ) -> AE_app (id, avals, typ)
+  | AE_cast (aexp, typ) -> AE_cast (no_shadow ids aexp, typ)
+  | AE_assign (id, typ, aexp) -> AE_assign (id, typ, no_shadow ids aexp)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) when IdSet.mem id ids ->
+     let shadow_id = new_shadow id in
+     let aexp1 = no_shadow ids aexp1 in
+     let ids = IdSet.add shadow_id ids in
+     AE_let (shadow_id, typ1, aexp1, no_shadow ids (aexp_rename id shadow_id aexp2), typ2)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) ->
+     AE_let (id, typ1, no_shadow ids aexp1, no_shadow (IdSet.add id ids) aexp2, typ2)
+  | AE_block (aexps, aexp, typ) -> AE_block (List.map (no_shadow ids) aexps, no_shadow ids aexp, typ)
+  | AE_return (aval, typ) -> AE_return (aval, typ)
+  | AE_throw (aval, typ) -> AE_throw (aval, typ)
+  | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval, no_shadow ids then_aexp, no_shadow ids else_aexp, typ)
+  | AE_field (aval, id, typ) -> AE_field (aval, id, typ)
+  | AE_case (aval, apexps, typ) -> AE_case (aval, List.map (no_shadow_apexp ids) apexps, typ)
+  | AE_try (aexp, apexps, typ) -> AE_try (no_shadow ids aexp, List.map (no_shadow_apexp ids) apexps, typ)
+  | AE_record_update (aval, avals, typ) -> AE_record_update (aval, avals, typ)
+  | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
+     let ids = IdSet.add id ids in
+     AE_for (id, no_shadow ids aexp1, no_shadow ids aexp2, no_shadow ids aexp3, order, no_shadow ids aexp4)
+  | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, no_shadow ids aexp1, no_shadow ids aexp2)
+
+and no_shadow_apexp ids (apat, aexp1, aexp2) =
+  let shadows = IdSet.inter (apat_bindings apat) ids in
+  let shadows = List.map (fun id -> id, new_shadow id) (IdSet.elements shadows) in
+  let rename aexp = List.fold_left (fun aexp (from_id, to_id) -> aexp_rename from_id to_id aexp) aexp shadows in
+  let ids = IdSet.union ids (IdSet.of_list (List.map snd shadows)) in
+  (apat, no_shadow ids (rename aexp1), no_shadow ids (rename aexp2))
+
 (* Map over all the avals in an aexp. *)
 let rec map_aval f = function
   | AE_val v -> AE_val (f v)
@@ -1372,15 +1473,14 @@ let label str =
 let rec compile_aexp ctx = function
   | AE_let (id, _, binding, body, typ) ->
      let setup, ctyp, call, cleanup = compile_aexp ctx binding in
-     let letb1, letb1c =
+     let letb_setup, letb_cleanup =
        if is_stack_ctyp ctyp then
-         [idecl ctyp id; call (CL_id id)], []
+         [idecl ctyp id; iblock (setup @ [call (CL_id id)] @ cleanup)], []
        else
-         [idecl ctyp id; ialloc ctyp id; call (CL_id id)], [iclear ctyp id]
+         [idecl ctyp id; ialloc ctyp id; iblock (setup @ [call (CL_id id)] @ cleanup)], [iclear ctyp id]
      in
-     let letb2 = setup @ letb1 @ cleanup in
      let setup, ctyp, call, cleanup = compile_aexp ctx body in
-     letb2 @ setup, ctyp, call, cleanup @ letb1c
+     letb_setup @ setup, ctyp, call, cleanup @ letb_cleanup
 
   | AE_app (id, vs, typ) ->
      compile_funcall ctx id vs typ
@@ -1625,6 +1725,7 @@ and compile_block ctx = function
 
 (* FIXME: this function is a bit of a hack *)
 let rec pat_ids (Typ_aux (arg_typ_aux, _) as arg_typ) (P_aux (p_aux, (l, _)) as pat) =
+  prerr_endline (string_of_typ arg_typ);
   match p_aux, arg_typ_aux with
   | P_id id, _ -> [id]
   | P_tup pats, Typ_tup arg_typs when List.length pats = List.length arg_typs ->
@@ -1828,8 +1929,8 @@ let compile_def ctx = function
      [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
-     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (anf exp)) in
-     prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp));
+     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
+     if string_of_id id = "system_barriers_decode" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let gs = gensym () in
      let pat = match pat with
@@ -1866,7 +1967,7 @@ let compile_def ctx = function
      [CDEF_type tdef], ctx
 
   | DEF_val (LB_aux (LB_val (pat, exp), _)) ->
-     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (anf exp)) in
+     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let apat = anf_pat ~global:true pat in
      let gs = gensym () in
@@ -2212,12 +2313,25 @@ let rec codegen_instr ctx (I_aux (instr, _)) =
      let fname = if Env.is_extern f ctx.tc_env "c" then Env.get_extern f ctx.tc_env "c" else sgen_id f in
      let fname =
        match fname, ctyp with
+       | "internal_pick", _ -> Printf.sprintf "pick_%s" (sgen_ctyp_name ctyp)
+       | "eq_anything", _ ->
+          begin match args with
+          | cval :: _ -> Printf.sprintf "eq_%s" (sgen_ctyp_name (cval_ctyp cval))
+          | _ -> c_error "eq_anything function with bad arity."
+          end
+       | "length", _ ->
+          begin match args with
+          | cval :: _ -> Printf.sprintf "length_%s" (sgen_ctyp_name (cval_ctyp cval))
+          | _ -> c_error "length function with bad arity."
+          end
        | "vector_access", CT_bit -> "bitvector_access"
        | "vector_access", _ ->
           begin match args with
           | cval :: _ -> Printf.sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
           | _ -> c_error "vector access function with bad arity."
           end
+       | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
+       | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
        | "vector_update", CT_uint64 _ -> "update_uint64_t"
        | "vector_update", CT_bv _ -> "update_bv"
        | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
@@ -2287,8 +2401,14 @@ let rec codegen_instr ctx (I_aux (instr, _)) =
 
 let codegen_type_def ctx = function
   | CTD_enum (id, ids) ->
+     let codegen_eq =
+       let name = sgen_id id in
+       string (Printf.sprintf "bool eq_%s(enum %s op1, enum %s op2) { return op1 == op2; }" name name name)
+     in
      string (Printf.sprintf "// enum %s" (string_of_id id)) ^^ hardline
      ^^ separate space [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) upper_codegen_id ids; rbrace ^^ semi]
+     ^^ twice hardline
+     ^^ codegen_eq
 
   | CTD_struct (id, ctors) ->
      (* Generate a set_T function for every struct T *)
@@ -2316,6 +2436,9 @@ let codegen_type_def ctx = function
                    (separate hardline (Bindings.bindings ctors |> List.map (codegen_field_init f) |> List.concat))
                    rbrace
      in
+     let codegen_eq =
+       string (Printf.sprintf "bool eq_%s(struct %s op1, struct %s op2) { return true; }" (sgen_id id) (sgen_id id) (sgen_id id))
+     in
      (* Generate the struct and add the generated functions *)
      let codegen_ctor (id, ctyp) =
        string (sgen_ctyp ctyp) ^^ space ^^ codegen_id id
@@ -2331,6 +2454,8 @@ let codegen_type_def ctx = function
      ^^ codegen_init "init" id (ctor_bindings ctors)
      ^^ twice hardline
      ^^ codegen_init "clear" id (ctor_bindings ctors)
+     ^^ twice hardline
+     ^^ codegen_eq
 
   | CTD_variant (id, tus) ->
      let codegen_tu (ctor_id, ctyp) =
@@ -2530,6 +2655,12 @@ let codegen_cons id ctyp =
   ^^ string "  (*rop)->tl = xs;\n"
   ^^ string "}"
 
+let codegen_pick id ctyp =
+  if is_stack_ctyp ctyp then
+    string (Printf.sprintf "%s pick_%s(const %s xs) { return xs->hd; }" (sgen_ctyp ctyp) (sgen_ctyp_name ctyp) (sgen_id id))
+  else
+    string (Printf.sprintf "void pick_%s(%s *x, const %s xs) { set_%s(x, xs->hd); }" (sgen_ctyp_name ctyp) (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp))
+
 let codegen_list ctx ctyp =
   let id = mk_id (string_of_ctyp (CT_list ctyp)) in
   if IdSet.mem id !generated then
@@ -2542,6 +2673,7 @@ let codegen_list ctx ctyp =
       ^^ codegen_list_clear id ctyp ^^ twice hardline
       ^^ codegen_list_set id ctyp ^^ twice hardline
       ^^ codegen_cons id ctyp ^^ twice hardline
+      ^^ codegen_pick id ctyp ^^ twice hardline
     end
 
 let codegen_vector ctx (direction, ctyp) =
@@ -2603,7 +2735,7 @@ let codegen_vector ctx (direction, ctyp) =
         ^^ string "  return op.data[m];\n"
         ^^ string "}"
       else
-        string (Printf.sprintf "void vector_access_%s(%s *rop, %s op, mpz_t n) {\n" (sgen_ctyp_name ctyp) (sgen_ctyp ctyp) (sgen_id id))
+        string (Printf.sprintf "void vector_access_%s(%s *rop, %s op, mpz_t n) {\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
         ^^ string "  int m = mpz_get_ui(n);\n"
         ^^ string (Printf.sprintf "  set_%s(rop, op.data[m]);\n" (sgen_ctyp_name ctyp))
         ^^ string "}"
@@ -2636,10 +2768,13 @@ let codegen_def' ctx = function
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
 
-  | CDEF_spec (id, arg_ctyps, ret_ctyp) when is_stack_ctyp ret_ctyp ->
-     string (Printf.sprintf "%s %s(%s);" (sgen_ctyp ret_ctyp) (sgen_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
   | CDEF_spec (id, arg_ctyps, ret_ctyp) ->
-     string (Printf.sprintf "void %s(%s *rop, %s);" (sgen_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+     if Env.is_extern id ctx.tc_env "c" then
+       empty
+     else if is_stack_ctyp ret_ctyp then
+       string (Printf.sprintf "%s %s(%s);" (sgen_ctyp ret_ctyp) (sgen_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+     else
+       string (Printf.sprintf "void %s(%s *rop, %s);" (sgen_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
@@ -2705,7 +2840,7 @@ let codegen_def ctx def =
   let lists = List.map (fun ctyp -> codegen_list ctx (unlist ctyp)) lists in
   let vectors = List.filter is_ct_vector (cdef_ctyps ctx def) in
   let vectors = List.map (fun ctyp -> codegen_vector ctx (unvector ctyp)) vectors in
-  prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
+  (* prerr_endline (Pretty_print_sail.to_string (pp_cdef def)); *)
   concat tups
   ^^ concat lists
   ^^ concat vectors

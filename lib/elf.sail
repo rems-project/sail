@@ -1,8 +1,14 @@
 $ifndef _ELF
 $define _ELF
 
-val elf_entry = "Elf_loader.elf_entry" : unit -> int
+val elf_entry = {
+  ocaml: "Elf_loader.elf_entry",
+  c: "elf_entry"
+} : unit -> int
 
-val elf_tohost = "Elf_loader.elf_tohost" : unit -> int
+val elf_tohost = {
+  ocaml: "Elf_loader.elf_tohost",
+  c: "elf_tohost"
+} : unit -> int
 
 $endif
