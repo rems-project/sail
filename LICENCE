@@ -1,6 +1,13 @@
    Sail
 
-Copyright (c) 2013-2017
+Sail and the Sail architecture models here, comprising all files and
+directories except the PPrint library, are subject to the BSD
+two-clause licence below.
+
+The PPrint library, in src/pprint, is subject to the CeCILL-C free
+software licence agreement therein.
+
+Copyright (c) 2013-2018
   Kathyrn Gray
   Shaked Flur
   Stephen Kell
@@ -19,10 +26,10 @@ Copyright (c) 2013-2017
 
 All rights reserved.
 
-This software was developed by the University of Cambridge Computer
-Laboratory and the University of Edinburgh as part of the Rigorous
-Engineering of Mainstream Systems (REMS) project, funded by EPSRC
-grant EP/K008528/1.
+This software was developed by the above within the Rigorous
+Engineering of Mainstream Systems (REMS) project, partly funded by
+EPSRC grant EP/K008528/1, at the Universities of Cambridge and
+Edinburgh.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
