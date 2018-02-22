@@ -2,7 +2,7 @@ S .
 S lem_interp/
 B _build/
 B _build/lem_interp/
-B pprint/src/_build
+B _build/pprint/src/
 PKG zarith
 PKG linksem
 PKG lem
