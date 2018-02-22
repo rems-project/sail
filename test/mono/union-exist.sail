@@ -28,11 +28,11 @@ val use : myunion -> bits(32)
 
 function use(MyConstr((n,v) as (atom('n),bits('n)))) = extz(v)
 
-val run : unit -> bool
+val run : unit -> unit effect {escape}
 
 function run () = {
-  use(make(0b00)) == 0x00000012 &
-  use(make(0b01)) == 0x00001234 &
-  use(make(0b10)) == 0x00000056 &
-  use(make(0b11)) == 0x00005678
+  assert(use(make(0b00)) == 0x00000012);
+  assert(use(make(0b01)) == 0x00001234);
+  assert(use(make(0b10)) == 0x00000056);
+  assert(use(make(0b11)) == 0x00005678);
 }

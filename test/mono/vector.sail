@@ -1,6 +1,5 @@
 default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
-val operator & = "and_bool" : (bool, bool) -> bool
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
 overload operator == = {eq_int, eq_vec}
@@ -20,10 +19,10 @@ function test((sel : bits(2)) @ (_ : bits(30))) = {
   }
 }
 
-val run : unit -> bool
+val run : unit -> unit effect {escape}
 
 function run () = {
-  test(0x0f353533) == 5 &
-  test(0x84534656) == 1 &
-  test(0xf3463903) == 0
+  assert(test(0x0f353533) == 5);
+  assert(test(0x84534656) == 1);
+  assert(test(0xf3463903) == 0);
 }

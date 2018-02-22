@@ -1,1 +1,3 @@
-if Testout.run() then print_endline "OK" else print_endline "Failed";;
+match Testout.run() with
+| Done _ -> print_endline "OK"
+| _ -> print_endline "Failed";;

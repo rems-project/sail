@@ -77,10 +77,10 @@ function test (x) = {
   (a,b,c,d,e)
 }
 
-val run : unit -> bool effect {rreg}
+val run : unit -> unit effect {rreg,escape}
 
 function run () = {
-  test(One) == (Two,3,Two,First,Nonsense(First)) &
-  test(Two) == (Two,7,Two,Second,Stuff(Two)) &
-  test(Three) == (Three,7,Three,Second,Stuff(Three))
+  assert(test(One) == (Two,3,Two,First,Nonsense(First)));
+  assert(test(Two) == (Two,7,Two,Second,Stuff(Two)));
+  assert(test(Three) == (Three,7,Three,Second,Stuff(Three)));
 }

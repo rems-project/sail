@@ -7,3 +7,4 @@ varmatch -auto_mono
 vector -auto_mono
 union-exist -auto_mono
 set -auto_mono
+assert -auto_mono

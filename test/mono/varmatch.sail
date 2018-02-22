@@ -15,10 +15,10 @@ function foo(x) = {
   }
 }
 
-val run : unit -> bool
+val run : unit -> unit effect {escape}
 
 function run () = {
-  foo(One) == Two &
-  foo(Two) == Two &
-  foo(Three) == Three
+  assert(foo(One) == Two);
+  assert(foo(Two) == Two);
+  assert(foo(Three) == Three);
 }

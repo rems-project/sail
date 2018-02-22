@@ -35,10 +35,11 @@ function depends(n) = {
   extz(x)
 }
 
-val run : unit -> bool
+val run : unit -> unit effect {escape}
 
-function run () =
-  parametric(32) == 0x0000000080000000 &
-  parametric(64) == 0xffffffff80000000 &
-  depends(16) == 0x0000000080000000 &
-  depends(32) == 0xffffffff80000000
+function run () = {
+  assert(parametric(32) == 0x0000000080000000);
+  assert(parametric(64) == 0xffffffff80000000);
+  assert(depends(16) == 0x0000000080000000);
+  assert(depends(32) == 0xffffffff80000000);
+}
