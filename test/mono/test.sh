@@ -24,20 +24,13 @@ set +e
 
 while read -u 3 TEST ARGS; do
   if [ -z "$TESTONLY" -o "$TEST" = "$TESTONLY" ]; then
-#    echo "$TEST ocaml"
-#    rm -f -- "$OUTDIR"/*
-#    "$SAILDIR/sail" -ocaml "$SAILDIR/lib/prelude.sail" "$SAILDIR/lib/prelude_wrappers.sail" "$DIR/$TEST" -o "$OUTDIR/testout" $ARGS
-#    cp -- "$SAILDIR"/src/gen_lib/sail_values.ml .
-#    cp -- "$DIR"/test.ml .
-#    ocamlc -I "$ZARITH" "$ZARITH/zarith.cma" -dllpath "$ZARITH" -I "$LEMDIR/ocaml-lib" "$LEMDIR/ocaml-lib/extract.cma" -I "$SAILDIR/src/_build/lem_interp" "$SAILDIR/src/_build/lem_interp/extract.cma" sail_values.ml testout.ml test.ml -o test
-#    ./test
-   
+  
     echo "$TEST lem - ocaml" | tee -a -- "$LOG"
     rm -f -- "$OUTDIR"/*
-    "$SAILDIR/sail" -lem -lem_sequential -lem_mwords "$SAILDIR/lib/prelude.sail" "$SAILDIR/lib/prelude_wrappers.sail" "$DIR/$TEST".sail -o "$OUTDIR/testout" $ARGS $@ &>> "$LOG" && \
-    "$LEMDIR/bin/lem" -ocaml -lib "$SAILDIR/src/lem_interp" "$SAILDIR/src/gen_lib/sail_values.lem" "$SAILDIR/src/gen_lib/sail_operators_mwords.lem" "$SAILDIR/src/gen_lib/state.lem" testout_embed_types_sequential.lem testout_embed_sequential.lem -outdir "$OUTDIR" &>> "$LOG" && \
+    "$SAILDIR/sail" -lem -lem_mwords "$DIR/$TEST".sail -o "$OUTDIR/testout" $ARGS $@ &>> "$LOG" && \
+    "$LEMDIR/bin/lem" -ocaml -lib "$SAILDIR/src/lem_interp" "$SAILDIR/src/gen_lib/sail_values.lem" "$SAILDIR/src/gen_lib/sail_operators.lem" "$SAILDIR/src/gen_lib/sail_operators_mwords.lem" "$SAILDIR/src/lem_interp/sail_instr_kinds.lem" "$SAILDIR/src/gen_lib/prompt.lem" "$SAILDIR/src/gen_lib/state_monad.lem" "$SAILDIR/src/gen_lib/state.lem" "$SAILDIR/src/gen_lib/prompt_monad.lem" testout_types.lem testout.lem -outdir "$OUTDIR" &>> "$LOG" && \
     cp -- "$DIR"/test.ml "$OUTDIR" && \
-    ocamlc -I "$ZARITH" "$ZARITH/zarith.cma" -dllpath "$ZARITH" -I "$LEMDIR/ocaml-lib" "$LEMDIR/ocaml-lib/extract.cma" -I "$SAILDIR/src/_build/lem_interp" "$SAILDIR/src/_build/lem_interp/extract.cma" sail_values.ml sail_operators_mwords.ml state.ml testout_embed_types_sequential.ml testout_embed_sequential.ml test.ml -o test &>> "$LOG" && \
+    ocamlfind ocamlc -linkpkg -package zarith -package lem sail_values.ml sail_operators.ml sail_operators_mwords.ml sail_instr_kinds.ml prompt_monad.ml prompt.ml state_monad.ml state.ml testout_types.ml testout.ml test.ml -o test &>> "$LOG" && \
     ./test |& tee -a -- "$LOG" || \
       (echo "Failed:"; echo; tail -- "$LOG"; echo; echo)
   fi

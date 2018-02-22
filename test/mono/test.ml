@@ -1,1 +1,1 @@
-if Testout_embed_sequential.run() then print_endline "OK" else print_endline "Failed";;
+if Testout.run() then print_endline "OK" else print_endline "Failed";;
