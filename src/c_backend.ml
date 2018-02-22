@@ -138,6 +138,9 @@ type aexp =
   | AE_record_update of aval * aval Bindings.t * typ
   | AE_for of id * aexp * aexp * aexp * order * aexp
   | AE_loop of loop * aexp * aexp
+  | AE_short_circuit of sc_op * aval * aexp
+
+and sc_op = SC_and | SC_or
 
 and apat =
   | AP_tup of apat list
@@ -212,6 +215,7 @@ let rec aexp_rename from_id to_id aexp =
   | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when Id.compare from_id to_id = 0 -> AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
   | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) -> AE_for (id, recur aexp1, recur aexp2, recur aexp3, order, recur aexp4)
   | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, recur aexp1, recur aexp2)
+  | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval_rename from_id to_id aval, recur aexp)
 
 and apexp_rename from_id to_id (apat, aexp1, aexp2) =
   if IdSet.mem from_id (apat_bindings apat) then
@@ -251,6 +255,7 @@ let rec no_shadow ids aexp =
      let ids = IdSet.add id ids in
      AE_for (id, no_shadow ids aexp1, no_shadow ids aexp2, no_shadow ids aexp3, order, no_shadow ids aexp4)
   | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, no_shadow ids aexp1, no_shadow ids aexp2)
+  | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, no_shadow ids aexp)
 
 and no_shadow_apexp ids (apat, aexp1, aexp2) =
   let shadows = IdSet.inter (apat_bindings apat) ids in
@@ -283,12 +288,14 @@ let rec map_aval f = function
      AE_case (f aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
   | AE_try (aexp, cases, typ) ->
      AE_try (map_aval f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
+  | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, f aval, map_aval f aexp)
 
 (* Map over all the functions in an aexp. *)
 let rec map_functions f = function
   | AE_app (id, vs, typ) -> f id vs typ
   | AE_cast (aexp, typ) -> AE_cast (map_functions f aexp, typ)
   | AE_assign (id, typ, aexp) -> AE_assign (id, typ, map_functions f aexp)
+  | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, map_functions f aexp)
   | AE_let (id, typ1, aexp1, aexp2, typ2) -> AE_let (id, typ1, map_functions f aexp1, map_functions f aexp2, typ2)
   | AE_block (aexps, aexp, typ) -> AE_block (List.map (map_functions f) aexps, map_functions f aexp, typ)
   | AE_if (aval, aexp1, aexp2, typ) ->
@@ -337,6 +344,10 @@ let rec pp_aexp = function
      pp_annot typ (pp_id id) ^^ string " := " ^^ pp_aexp aexp
   | AE_app (id, args, typ) ->
      pp_annot typ (pp_id id ^^ parens (separate_map (comma ^^ space) pp_aval args))
+  | AE_short_circuit (SC_or, aval, aexp) ->
+     pp_aval aval ^^ string " || " ^^ pp_aexp aexp
+  | AE_short_circuit (SC_and, aval, aexp) ->
+     pp_aval aval ^^ string " && " ^^ pp_aexp aexp
   | AE_let (id, id_typ, binding, body, typ) -> group
      begin
        match binding with
@@ -455,6 +466,9 @@ let rec apat_globals = function
 let rec anf (E_aux (e_aux, exp_annot) as exp) =
   let to_aval = function
     | AE_val v -> (v, fun x -> x)
+    | AE_short_circuit (_, _, _) as aexp ->
+       let id = gensym () in
+       (AV_id (id, Local (Immutable, bool_typ)), fun x -> AE_let (id, bool_typ, aexp, x, typ_of exp))
     | AE_app (_, _, typ)
       | AE_let (_, _, _, _, typ)
       | AE_return (_, typ)
@@ -535,6 +549,18 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
     let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd fexps) in
     let record = List.fold_left (fun r (id, aval) -> Bindings.add id aval r) Bindings.empty (List.map fst fexps) in
     exp_wrap (wrap (AE_record_update (aval, record, typ_of exp)))
+
+  | E_app (id, [exp1; exp2]) when string_of_id id = "and_bool" ->
+     let aexp1 = anf exp1 in
+     let aexp2 = anf exp2 in
+     let aval1, wrap = to_aval aexp1 in
+     wrap (AE_short_circuit (SC_and, aval1, aexp2))
+
+  | E_app (id, [exp1; exp2]) when string_of_id id = "or_bool" ->
+     let aexp1 = anf exp1 in
+     let aexp2 = anf exp2 in
+     let aval1, wrap = to_aval aexp1 in
+     wrap (AE_short_circuit (SC_or, aval1, aexp2))
 
   | E_app (id, exps) ->
      let aexps = List.map anf exps in
@@ -1605,6 +1631,29 @@ let rec compile_aexp ctx = function
      ctyp,
      (fun clexp -> icopy clexp (F_id gs, ctyp)),
      gs_cleanup
+
+  | AE_short_circuit (SC_and, aval, aexp) ->
+     let left_setup, cval, left_cleanup = compile_aval ctx aval in
+     let right_setup, _, call, right_cleanup = compile_aexp ctx aexp in
+     let gs = gensym () in
+     left_setup
+     @ [ idecl CT_bool gs;
+         iif cval (right_setup @ [call (CL_id gs)] @ right_cleanup) [icopy (CL_id gs) (F_lit "false", CT_bool)] CT_bool ]
+     @ left_cleanup,
+     CT_bool,
+     (fun clexp -> icopy clexp (F_id gs, CT_bool)),
+     []
+  | AE_short_circuit (SC_or, aval, aexp) ->
+     let left_setup, cval, left_cleanup = compile_aval ctx aval in
+     let right_setup, _, call, right_cleanup = compile_aexp ctx aexp in
+     let gs = gensym () in
+     left_setup
+     @ [ idecl CT_bool gs;
+         iif cval [icopy (CL_id gs) (F_lit "true", CT_bool)] (right_setup @ [call (CL_id gs)] @ right_cleanup) CT_bool ]
+     @ left_cleanup,
+     CT_bool,
+     (fun clexp -> icopy clexp (F_id gs, CT_bool)),
+     []
 
   | AE_assign (id, assign_typ, aexp) ->
      (* assign_ctyp is the type of the C variable we are assigning to,
@@ -2786,9 +2835,6 @@ let codegen_def' ctx = function
        | _ -> assert false
      in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
-     prerr_endline (string_of_id id);
-     prerr_endline (Util.string_of_list ", " (fun arg -> sgen_id arg) args);
-     prerr_endline (Util.string_of_list ", " (fun ctyp -> sgen_ctyp ctyp) arg_ctyps);
      let args = Util.string_of_list ", " (fun x -> x) (List.map2 (fun ctyp arg -> sgen_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args) in
      let function_header =
        match ret_arg with
@@ -2888,7 +2934,7 @@ let compile_ast ctx (Defs defs) =
     let postamble = separate hardline (List.map string
        ( [ "int main(void)";
            "{";
-           "  setup_real();" ]
+           "  setup_library();" ]
        @ fst exn_boilerplate
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
        @ (if regs = [] then [] else [ "  zinitializze_registers(UNIT);" ])
@@ -2897,8 +2943,9 @@ let compile_ast ctx (Defs defs) =
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
        @ snd exn_boilerplate
-       @ [ "  return 0;" ]
-       @ [ "}" ] ))
+       @ [ "  cleanup_library();";
+           "  return 0;";
+           "}" ] ))
     in
 
     let hlhl = hardline ^^ hardline in
