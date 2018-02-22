@@ -265,7 +265,7 @@ let fixities =
         (mk_id "|", (InfixR, 2));
       ]
   in
-  ref Bindings.empty (*(fixities' : (prec * int) Bindings.t)*)
+  ref (fixities' : (prec * int) Bindings.t)
 
 let rec doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with

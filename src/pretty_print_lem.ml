@@ -179,10 +179,11 @@ let doc_nexp_lem nexp =
        | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
        | Nexp_exp n -> "exp_" ^ mangle_nexp n
        | Nexp_neg n -> "neg_" ^ mangle_nexp n
+       | _ ->
+          raise (Reporting_basic.err_unreachable l
+                   ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\"")) 
      end in
      string ("'" ^ mangle_nexp full_nexp)
-     (* raise (Reporting_basic.err_unreachable l
-       ("cannot pretty-print non-atomic nexp \"" ^ string_of_nexp full_nexp ^ "\"")) *)
 
 (* Rewrite mangled names of type variables to the original names *)
 let rec orig_nexp (Nexp_aux (nexp, l)) =
@@ -321,12 +322,30 @@ let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
   NexpSet.diff (lem_nexps_of_typ typ) ctxt.bound_nexps
   |> NexpSet.exists (fun nexp -> not (is_nexp_constant nexp))
 
-let doc_tannot_lem ctxt eff typ =
-  if contains_t_pp_var ctxt typ then empty
-  else
+let replace_typ_size ctxt env (Typ_aux (t,a)) =
+  match t with
+  | Typ_app (Id_aux (Id "vector",_) as id, [Typ_arg_aux (Typ_arg_nexp size,_);ord;typ']) ->
+     begin
+       let is_equal nexp =
+         prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+       in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
+       | nexp -> Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
+       | exception Not_found -> None
+     end
+  | _ -> None
+
+let doc_tannot_lem ctxt env eff typ =
+  let of_typ typ =
     let ta = doc_typ_lem typ in
     if eff then string " : M " ^^ parens ta
     else string " : " ^^ ta
+  in
+  if contains_t_pp_var ctxt typ
+  then
+    match replace_typ_size ctxt env typ with
+    | None -> empty
+    | Some typ -> of_typ typ
+  else of_typ typ
 
 let doc_lit_lem (L_aux(lit,l)) =
   match lit with
@@ -676,10 +695,11 @@ let doc_exp_lem, doc_let_lem =
              let argspp = align (separate_map (break 1) (expV true) args) in
              let epp = align (call ^//^ argspp) in
              let (taepp,aexp_needed) =
-               let t = Env.expand_synonyms (env_of full_exp) (typ_of full_exp) in
+               let env = env_of full_exp in
+               let t = Env.expand_synonyms env (typ_of full_exp) in
                let eff = effect_of full_exp in
                if typ_needs_printed t
-               then (align epp ^^ (doc_tannot_lem ctxt (effectful eff) t), true)
+               then (align epp ^^ (doc_tannot_lem ctxt env (effectful eff) t), true)
                else (epp, aexp_needed) in
              liftR (if aexp_needed then parens (align taepp) else taepp)
           end
@@ -714,7 +734,7 @@ let doc_exp_lem, doc_let_lem =
        if has_effect eff BE_rreg then
          let epp = separate space [string "read_reg";doc_id_lem id] in
          if is_bitvector_typ base_typ
-         then liftR (parens (epp ^^ doc_tannot_lem ctxt true base_typ))
+         then liftR (parens (epp ^^ doc_tannot_lem ctxt env true base_typ))
          else liftR epp
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
@@ -768,7 +788,7 @@ let doc_exp_lem, doc_let_lem =
        let (epp,aexp_needed) =
          if is_bit_typ etyp && !opt_mwords then
            let bepp = string "of_bits" ^^ space ^^ parens (align epp) in
-           (bepp ^^ doc_tannot_lem ctxt false t, true)
+           (bepp ^^ doc_tannot_lem ctxt (env_of full_exp) false t, true)
          else (epp,aexp_needed) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update(v,e1,e2) ->
@@ -912,7 +932,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
         mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
           [mk_typ_arg (Typ_arg_typ rectyp);
            mk_typ_arg (Typ_arg_typ ftyp)])) in
-      let rfannot = doc_tannot_lem empty_ctxt false reftyp in
+      let rfannot = doc_tannot_lem empty_ctxt env false reftyp in
       let get, set =
         string "rec_val" ^^ dot ^^ fname fid,
         anglebars (space ^^ string "rec_val with " ^^
@@ -1342,7 +1362,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
         [mk_typ_arg (Typ_arg_typ (mk_id_typ (mk_id tname)));
          mk_typ_arg (Typ_arg_typ ftyp)])) in
-    let rfannot = doc_tannot_lem empty_ctxt false reftyp in
+    let rfannot = doc_tannot_lem empty_ctxt Env.empty false reftyp in
     doc_op equals
      (concat [string "let "; parens (concat [string tname; underscore; doc_id_lem fid; rfannot])])
      (concat [

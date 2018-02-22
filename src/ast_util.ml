@@ -182,6 +182,7 @@ module IdSet = Set.Make(Id)
 module KBindings = Map.Make(Kid)
 module KidSet = Set.Make(Kid)
 module NexpSet = Set.Make(Nexp)
+module NexpMap = Map.Make(Nexp)
 
 let rec nexp_identical nexp1 nexp2 = (Nexp.compare nexp1 nexp2 = 0)
 
@@ -234,6 +235,14 @@ and nexp_simp_aux = function
        | Nexp_minus (Nexp_aux (n,_), Nexp_aux (Nexp_constant c1,_)), Nexp_constant c2
          when Big_int.equal c1 (Big_int.negate c2) -> n
        | _, _ -> Nexp_minus (n1, n2)
+     end
+  | Nexp_app (Id_aux (Id "div",_) as id,[n1;n2]) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
+       | _, _ -> Nexp_app (id,[n1;n2])
      end
   | nexp -> nexp
 
@@ -483,7 +492,7 @@ let append_id id str =
   match id with
   | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid (v ^ str), l)
-                                  
+
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
 
@@ -1098,3 +1107,10 @@ and subst_lexp id value (LEXP_aux (lexp_aux, annot) as lexp) =
     | LEXP_field (lexp, id') -> LEXP_field (subst_lexp id value lexp, id')
   in
   wrap lexp_aux
+
+let hex_to_bin hex =
+  Util.string_to_list hex
+  |> List.map Sail_lib.hex_char
+  |> List.concat
+  |> List.map Sail_lib.char_of_bit
+  |> (fun bits -> String.init (List.length bits) (List.nth bits))

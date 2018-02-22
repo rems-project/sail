@@ -1370,7 +1370,7 @@ function AArch64_SysRegWrite ('op0, 'op1, 'crn, 'crm, 'op2, val_name) = assert(f
 
 val AArch64_SysRegRead : (int, int, int, int, int) -> bits(64) effect {escape, undef}
 
-function AArch64_SysRegRead _ = {
+function AArch64_SysRegRead (_, _, _, _, _) = {
   assert(false, "Tried to read system register");
   undefined
 }

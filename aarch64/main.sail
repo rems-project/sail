@@ -10,7 +10,7 @@ function fetch_and_execute () =
       decode(instr);
     } catch {
       Error_See("HINT") => (),
-      exn => throw(exn)
+      _ => exit(())
     };
     if __BranchTaken then __BranchTaken = false else _PC = _PC + 4
   }

@@ -2,3 +2,7 @@
 :load prelude.sail no_vector/spec.sail decode_start.sail no_vector/decode.sail decode_end.sail main.sail
 initialize_registers()
 :run
+:elf ../bench.elf
+main()
+:run
+:q

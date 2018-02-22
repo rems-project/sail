@@ -58,13 +58,6 @@ type ctx =
     variants : IdSet.t Bindings.t
   }
 
-let hex_to_bin hex =
-  Util.string_to_list hex
-  |> List.map Sail_lib.hex_char
-  |> List.concat
-  |> List.map Sail_lib.char_of_bit
-  |> (fun bits -> String.init (List.length bits) (List.nth bits))
-
 type gpat =
   | GP_lit of lit
   | GP_wild

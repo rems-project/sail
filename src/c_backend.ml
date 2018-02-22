@@ -158,6 +158,107 @@ and aval =
   | AV_record of aval Bindings.t * typ
   | AV_C_fragment of fragment * typ
 
+(* Renaming variables in ANF expressions *)
+
+let rec frag_rename from_id to_id = function
+  | F_id id when Id.compare id from_id = 0 -> F_id to_id
+  | F_id id -> F_id id
+  | F_lit str -> F_lit str
+  | F_have_exception -> F_have_exception
+  | F_current_exception -> F_current_exception
+  | F_op (f1, op, f2) -> F_op (frag_rename from_id to_id f1, op, frag_rename from_id to_id f2)
+  | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
+  | F_field (f, field) -> F_field (frag_rename from_id to_id f, field)
+
+let rec apat_bindings = function
+  | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
+  | AP_id id -> IdSet.singleton id
+  | AP_global (id, typ) -> IdSet.empty
+  | AP_app (id, apat) -> apat_bindings apat
+  | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
+  | AP_nil -> IdSet.empty
+  | AP_wild -> IdSet.empty
+
+let rec aval_rename from_id to_id = function
+  | AV_lit (lit, typ) -> AV_lit (lit, typ)
+  | AV_id (id, lvar) when Id.compare id from_id = 0 -> AV_id (to_id, lvar)
+  | AV_id (id, lvar) -> AV_id (id, lvar)
+  | AV_ref (id, lvar) when Id.compare id from_id = 0 -> AV_ref (to_id, lvar)
+  | AV_ref (id, lvar) -> AV_ref (id, lvar)
+  | AV_tuple avals -> AV_tuple (List.map (aval_rename from_id to_id) avals)
+  | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
+  | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
+  | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
+  | AV_C_fragment (fragment, typ) -> AV_C_fragment (frag_rename from_id to_id fragment, typ)
+
+let rec aexp_rename from_id to_id aexp =
+  let recur = aexp_rename from_id to_id in
+  match aexp with
+  | AE_val aval -> AE_val (aval_rename from_id to_id aval)
+  | AE_app (id, avals, typ) -> AE_app (id, List.map (aval_rename from_id to_id) avals, typ)
+  | AE_cast (aexp, typ) -> AE_cast (recur aexp, typ)
+  | AE_assign (id, typ, aexp) when Id.compare from_id id = 0 -> AE_assign (to_id, typ, aexp)
+  | AE_assign (id, typ, aexp) -> AE_assign (id, typ, aexp)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 -> AE_let (id, typ1, aexp1, aexp2, typ2)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) -> AE_let (id, typ1, recur aexp1, recur aexp2, typ2)
+  | AE_block (aexps, aexp, typ) -> AE_block (List.map recur aexps, recur aexp, typ)
+  | AE_return (aval, typ) -> AE_return (aval_rename from_id to_id aval, typ)
+  | AE_throw (aval, typ) -> AE_throw (aval_rename from_id to_id aval, typ)
+  | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval_rename from_id to_id aval, recur then_aexp, recur else_aexp, typ)
+  | AE_field (aval, id, typ) -> AE_field (aval_rename from_id to_id aval, id, typ)
+  | AE_case (aval, apexps, typ) -> AE_case (aval_rename from_id to_id aval, List.map (apexp_rename from_id to_id) apexps, typ)
+  | AE_try (aexp, apexps, typ) -> AE_try (aexp_rename from_id to_id aexp, List.map (apexp_rename from_id to_id) apexps, typ)
+  | AE_record_update (aval, avals, typ) -> AE_record_update (aval_rename from_id to_id aval, Bindings.map (aval_rename from_id to_id) avals, typ)
+  | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when Id.compare from_id to_id = 0 -> AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
+  | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) -> AE_for (id, recur aexp1, recur aexp2, recur aexp3, order, recur aexp4)
+  | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, recur aexp1, recur aexp2)
+
+and apexp_rename from_id to_id (apat, aexp1, aexp2) =
+  if IdSet.mem from_id (apat_bindings apat) then
+    (apat, aexp1, aexp2)
+  else
+    (apat, aexp_rename from_id to_id aexp1, aexp_rename from_id to_id aexp2)
+
+let shadow_counter = ref 0
+
+let new_shadow id =
+  let shadow_id = append_id id ("shadow#" ^ string_of_int !shadow_counter) in
+  incr shadow_counter;
+  shadow_id
+
+let rec no_shadow ids aexp =
+  match aexp with
+  | AE_val aval -> AE_val aval
+  | AE_app (id, avals, typ) -> AE_app (id, avals, typ)
+  | AE_cast (aexp, typ) -> AE_cast (no_shadow ids aexp, typ)
+  | AE_assign (id, typ, aexp) -> AE_assign (id, typ, no_shadow ids aexp)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) when IdSet.mem id ids ->
+     let shadow_id = new_shadow id in
+     let aexp1 = no_shadow ids aexp1 in
+     let ids = IdSet.add shadow_id ids in
+     AE_let (shadow_id, typ1, aexp1, no_shadow ids (aexp_rename id shadow_id aexp2), typ2)
+  | AE_let (id, typ1, aexp1, aexp2, typ2) ->
+     AE_let (id, typ1, no_shadow ids aexp1, no_shadow (IdSet.add id ids) aexp2, typ2)
+  | AE_block (aexps, aexp, typ) -> AE_block (List.map (no_shadow ids) aexps, no_shadow ids aexp, typ)
+  | AE_return (aval, typ) -> AE_return (aval, typ)
+  | AE_throw (aval, typ) -> AE_throw (aval, typ)
+  | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval, no_shadow ids then_aexp, no_shadow ids else_aexp, typ)
+  | AE_field (aval, id, typ) -> AE_field (aval, id, typ)
+  | AE_case (aval, apexps, typ) -> AE_case (aval, List.map (no_shadow_apexp ids) apexps, typ)
+  | AE_try (aexp, apexps, typ) -> AE_try (no_shadow ids aexp, List.map (no_shadow_apexp ids) apexps, typ)
+  | AE_record_update (aval, avals, typ) -> AE_record_update (aval, avals, typ)
+  | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
+     let ids = IdSet.add id ids in
+     AE_for (id, no_shadow ids aexp1, no_shadow ids aexp2, no_shadow ids aexp3, order, no_shadow ids aexp4)
+  | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, no_shadow ids aexp1, no_shadow ids aexp2)
+
+and no_shadow_apexp ids (apat, aexp1, aexp2) =
+  let shadows = IdSet.inter (apat_bindings apat) ids in
+  let shadows = List.map (fun id -> id, new_shadow id) (IdSet.elements shadows) in
+  let rename aexp = List.fold_left (fun aexp (from_id, to_id) -> aexp_rename from_id to_id aexp) aexp shadows in
+  let ids = IdSet.union ids (IdSet.of_list (List.map snd shadows)) in
+  (apat, no_shadow ids (rename aexp1), no_shadow ids (rename aexp2))
+
 (* Map over all the avals in an aexp. *)
 let rec map_aval f = function
   | AE_val v -> AE_val (f v)
@@ -557,8 +658,6 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
   | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_plet _ | E_internal_return _ | E_internal_exp_user _ ->
      failwith "encountered unexpected internal node when converting to ANF"
 
-  | E_record _ -> AE_val (AV_lit (mk_lit (L_string "testing"), string_typ)) (* c_error ("Cannot convert to ANF: " ^ string_of_exp exp) *)
-
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
 (**************************************************************************)
@@ -927,8 +1026,14 @@ let rec instr_ctyps (I_aux (instr, aux)) =
   | I_throw cval | I_jump (cval, _) | I_return cval -> [cval_ctyp cval]
   | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure -> []
 
+let rec c_ast_registers = function
+  | CDEF_reg_dec (id, ctyp) :: ast -> (id, ctyp) :: c_ast_registers ast
+  | _ :: ast -> c_ast_registers ast
+  | [] -> []
+
 let cdef_ctyps ctx = function
   | CDEF_reg_dec (_, ctyp) -> [ctyp]
+  | CDEF_spec (_, ctyps, ctyp) -> ctyp :: ctyps
   | CDEF_fundef (id, _, _, instrs) ->
      (* TODO: Move this code to DEF_fundef -> CDEF_fundef translation, and modify bytecode.ott *)
      let _, Typ_aux (fn_typ, _) =
@@ -1036,6 +1141,8 @@ let pp_ctype_def = function
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) (fun (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp) ctors) rbrace
 
 let pp_cdef = function
+  | CDEF_spec (id, ctyps, ctyp) ->
+     pp_keyword "val" ^^ pp_id id ^^ space ^^ parens (separate_map (comma ^^ space) pp_ctyp ctyps) ^^ string " -> " ^^ pp_ctyp ctyp
   | CDEF_fundef (id, ret, args, instrs) ->
      let ret = match ret with
        | None -> empty
@@ -1071,6 +1178,10 @@ let is_ct_list = function
   | CT_list _ -> true
   | _ -> false
 
+let is_ct_vector = function
+  | CT_vector _ -> true
+  | _ -> false
+
 let rec is_bitvector = function
   | [] -> true
   | AV_lit (L_aux (L_zero, _), _) :: avals -> is_bitvector avals
@@ -1100,7 +1211,7 @@ let rec compile_aval ctx = function
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
      let gs = gensym () in
      [idecl CT_mpz gs;
-      iinit CT_mpz gs (F_lit (Big_int.to_string n ^ "L"), CT_int64)],
+      iinit CT_mpz gs (F_lit (Big_int.to_string n ^ "l"), CT_int64)],
      (F_id gs, CT_mpz),
      [iclear CT_mpz gs]
 
@@ -1116,6 +1227,13 @@ let rec compile_aval ctx = function
 
   | AV_lit (L_aux (L_true, _), _) -> [], (F_lit "true", CT_bool), []
   | AV_lit (L_aux (L_false, _), _) -> [], (F_lit "false", CT_bool), []
+
+  | AV_lit (L_aux (L_real str, _), _) ->
+     let gs = gensym () in
+     [idecl CT_real gs;
+      iinit CT_real gs (F_lit ("\"" ^ str ^ "\""), CT_string)],
+     (F_id gs, CT_real),
+     [iclear CT_real gs]
 
   | AV_lit (L_aux (_, l) as lit, _) ->
      c_error ~loc:l ("Encountered unexpected literal " ^ string_of_lit lit)
@@ -1301,7 +1419,7 @@ let rec compile_match ctx apat cval case_label =
      []
   | AP_global (pid, _), _ -> [icopy (CL_id pid) cval], []
   | AP_id pid, (frag, ctyp) when is_ct_enum ctyp ->
-     [ijump (F_op (F_id pid, "!=", frag), CT_bool) case_label], []
+     [idecl ctyp pid; ijump (F_op (F_id pid, "!=", frag), CT_bool) case_label], []
   | AP_id pid, _ ->
      let ctyp = cval_ctyp cval in
      let init, cleanup = if is_stack_ctyp ctyp then [], [] else [ialloc ctyp pid], [iclear ctyp pid] in
@@ -1355,15 +1473,14 @@ let label str =
 let rec compile_aexp ctx = function
   | AE_let (id, _, binding, body, typ) ->
      let setup, ctyp, call, cleanup = compile_aexp ctx binding in
-     let letb1, letb1c =
+     let letb_setup, letb_cleanup =
        if is_stack_ctyp ctyp then
-         [idecl ctyp id; call (CL_id id)], []
+         [idecl ctyp id; iblock (setup @ [call (CL_id id)] @ cleanup)], []
        else
-         [idecl ctyp id; ialloc ctyp id; call (CL_id id)], [iclear ctyp id]
+         [idecl ctyp id; ialloc ctyp id; iblock (setup @ [call (CL_id id)] @ cleanup)], [iclear ctyp id]
      in
-     let letb2 = setup @ letb1 @ cleanup in
      let setup, ctyp, call, cleanup = compile_aexp ctx body in
-     letb2 @ setup, ctyp, call, cleanup @ letb1c
+     letb_setup @ setup, ctyp, call, cleanup @ letb_cleanup
 
   | AE_app (id, vs, typ) ->
      compile_funcall ctx id vs typ
@@ -1539,6 +1656,29 @@ let rec compile_aexp ctx = function
      (fun clexp -> icopy clexp unit_fragment),
      []
 
+  | AE_loop (Until, cond, body) ->
+     let loop_start_label = label "repeat_" in
+     let loop_end_label = label "until_" in
+     let cond_setup, _, cond_call, cond_cleanup = compile_aexp ctx cond in
+     let body_setup, _, body_call, body_cleanup = compile_aexp ctx body in
+     let gs = gensym () in
+     let unit_gs = gensym () in
+     let loop_test = (F_unary ("!", F_id gs), CT_bool) in
+     [idecl CT_bool gs; idecl CT_unit unit_gs]
+     @ [ilabel loop_start_label]
+     @ [iblock (body_setup
+                @ [body_call (CL_id unit_gs)]
+                @ body_cleanup
+                @ cond_setup
+                @ [cond_call (CL_id gs)]
+                @ cond_cleanup
+                @ [ijump loop_test loop_end_label]
+                @ [igoto loop_start_label])]
+     @ [ilabel loop_end_label],
+     CT_unit,
+     (fun clexp -> icopy clexp unit_fragment),
+     []
+
   | AE_cast (aexp, typ) -> compile_aexp ctx aexp
 
   | AE_return (aval, typ) ->
@@ -1583,15 +1723,20 @@ and compile_block ctx = function
      let gs = gensym () in
      setup @ [idecl CT_unit gs; call (CL_id gs)] @ cleanup @ rest
 
-let rec pat_ids (P_aux (p_aux, (l, _)) as pat) =
-  match p_aux with
-  | P_id id -> [id]
-  | P_tup pats -> List.concat (List.map pat_ids pats)
-  | P_lit (L_aux (L_unit, _)) -> let gs = gensym () in [gs]
-  | P_wild -> let gs = gensym () in [gs]
-  | P_var (pat, _) -> pat_ids pat
-  | P_typ (_, pat) -> pat_ids pat
-  | _ -> c_error ~loc:l ("Cannot compile pattern " ^ string_of_pat pat ^ " to C")
+(* FIXME: this function is a bit of a hack *)
+let rec pat_ids (Typ_aux (arg_typ_aux, _) as arg_typ) (P_aux (p_aux, (l, _)) as pat) =
+  prerr_endline (string_of_typ arg_typ);
+  match p_aux, arg_typ_aux with
+  | P_id id, _ -> [id]
+  | P_tup pats, Typ_tup arg_typs when List.length pats = List.length arg_typs ->
+     List.concat (List.map2 pat_ids arg_typs pats)
+  | P_tup pats, _ -> c_error ~loc:l ("Cannot compile tuple pattern " ^ string_of_pat pat ^ " to C, as it doesn't have tuple type.")
+  | P_lit (L_aux (L_unit, _)), _ -> let gs = gensym () in [gs]
+  | P_wild, Typ_tup arg_typs -> List.map (fun _ -> let gs = gensym () in gs) arg_typs
+  | P_wild, _ -> let gs = gensym () in [gs]
+  | P_var (pat, _), _ -> pat_ids arg_typ pat
+  | P_typ (_, pat), _ -> pat_ids arg_typ pat
+  | _, _ -> c_error ~loc:l ("Cannot compile pattern " ^ string_of_pat pat ^ " to C")
 
 (** Compile a sail type definition into a IR one. Most of the
    actual work of translating the typedefs into C is done by the code
@@ -1773,27 +1918,40 @@ let compile_def ctx = function
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ)], ctx
   | DEF_reg_dec _ -> failwith "Unsupported register declaration" (* FIXME *)
 
-  | DEF_spec _ -> [], ctx
+  | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
+     let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
+     let arg_typs, ret_typ = match fn_typ with
+       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
+       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | _ -> assert false
+     in
+     let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
+     [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
-     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (anf exp)) in
-     prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp));
+     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
+     if string_of_id id = "system_barriers_decode" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let gs = gensym () in
      let pat = match pat with
        | P_aux (P_tup [], annot) -> P_aux (P_lit (mk_lit L_unit), annot)
        | _ -> pat
      in
+     let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
+     let arg_typ, ret_typ = match fn_typ with
+       | Typ_fn (arg_typ, ret_typ, _) -> arg_typ, ret_typ
+       | _ -> assert false
+     in
      prerr_endline (string_of_id id ^ " : " ^ string_of_ctyp ctyp);
      if is_stack_ctyp ctyp then
        let instrs = [idecl ctyp gs] @ setup @ [call (CL_id gs)] @ cleanup @ [ireturn (F_id gs, ctyp)] in
        let instrs = fix_exception ctx instrs in
-       [CDEF_fundef (id, None, pat_ids pat, instrs)], ctx
+       [CDEF_fundef (id, None, pat_ids arg_typ pat, instrs)], ctx
      else
        let instrs = setup @ [call (CL_addr gs)] @ cleanup in
        let instrs = fix_early_return (CL_addr gs) ctx instrs in
        let instrs = fix_exception ctx instrs in
-       [CDEF_fundef (id, Some gs, pat_ids pat, instrs)], ctx
+       [CDEF_fundef (id, Some gs, pat_ids arg_typ pat, instrs)], ctx
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
      c_error ~loc:l "Encountered function with no clauses"
@@ -1809,7 +1967,7 @@ let compile_def ctx = function
      [CDEF_type tdef], ctx
 
   | DEF_val (LB_aux (LB_val (pat, exp), _)) ->
-     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (anf exp)) in
+     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let apat = anf_pat ~global:true pat in
      let gs = gensym () in
@@ -2073,8 +2231,9 @@ let sgen_ctyp = function
   | CT_enum (id, _) -> "enum " ^ sgen_id id
   | CT_variant (id, _) -> "struct " ^ sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
-  | CT_vector _ -> "int" (* FIXME *)
+  | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
   | CT_string -> "sail_string"
+  | CT_real -> "real"
 
 let sgen_ctyp_name = function
   | CT_unit -> "unit"
@@ -2089,8 +2248,9 @@ let sgen_ctyp_name = function
   | CT_enum (id, _) -> sgen_id id
   | CT_variant (id, _) -> sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
-  | CT_vector _ -> "int" (* FIXME *)
+  | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
   | CT_string -> "sail_string"
+  | CT_real -> "real"
 
 let sgen_cval_param (frag, ctyp) =
   match ctyp with
@@ -2149,12 +2309,41 @@ let rec codegen_instr ctx (I_aux (instr, _)) =
      ^^ jump 2 2 (separate_map hardline (codegen_instr ctx) instrs) ^^ hardline
      ^^ string "  }"
   | I_funcall (x, f, args, ctyp) ->
-     let args = Util.string_of_list ", " sgen_cval args in
+     let c_args = Util.string_of_list ", " sgen_cval args in
      let fname = if Env.is_extern f ctx.tc_env "c" then Env.get_extern f ctx.tc_env "c" else sgen_id f in
+     let fname =
+       match fname, ctyp with
+       | "internal_pick", _ -> Printf.sprintf "pick_%s" (sgen_ctyp_name ctyp)
+       | "eq_anything", _ ->
+          begin match args with
+          | cval :: _ -> Printf.sprintf "eq_%s" (sgen_ctyp_name (cval_ctyp cval))
+          | _ -> c_error "eq_anything function with bad arity."
+          end
+       | "length", _ ->
+          begin match args with
+          | cval :: _ -> Printf.sprintf "length_%s" (sgen_ctyp_name (cval_ctyp cval))
+          | _ -> c_error "length function with bad arity."
+          end
+       | "vector_access", CT_bit -> "bitvector_access"
+       | "vector_access", _ ->
+          begin match args with
+          | cval :: _ -> Printf.sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
+          | _ -> c_error "vector access function with bad arity."
+          end
+       | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
+       | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
+       | "vector_update", CT_uint64 _ -> "update_uint64_t"
+       | "vector_update", CT_bv _ -> "update_bv"
+       | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
+       | "undefined_vector", CT_uint64 _ -> "undefined_uint64_t"
+       | "undefined_vector", CT_bv _ -> "undefined_bv_t"
+       | "undefined_vector", _ -> Printf.sprintf "undefined_vector_%s" (sgen_ctyp_name ctyp)
+       | fname, _ -> fname
+     in
      if is_stack_ctyp ctyp then
-       string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname args)
+       string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname c_args)
      else
-       string (Printf.sprintf "  %s(%s, %s);" fname (sgen_clexp x) args)
+       string (Printf.sprintf "  %s(%s, %s);" fname (sgen_clexp x) c_args)
   | I_clear (ctyp, id) ->
      string (Printf.sprintf "  clear_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
   | I_init (ctyp, id, cval) ->
@@ -2165,6 +2354,23 @@ let rec codegen_instr ctx (I_aux (instr, _)) =
                             (sgen_cval_param cval))
   | I_alloc (ctyp, id) ->
      string (Printf.sprintf "  init_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
+  (* FIXME: This just covers the cases we see in our specs, need a
+     special conversion code-generator for full generality *)
+  | I_convert (x, CT_tup ctyps1, y, CT_tup ctyps2) when List.length ctyps1 = List.length ctyps2 ->
+     let convert i (ctyp1, ctyp2) =
+       if ctyp_equal ctyp1 ctyp2 then string "  /* no change */"
+       else if is_stack_ctyp ctyp1 then
+         string (Printf.sprintf "  %s.ztup%i = convert_%s_of_%s(%s.ztup%i);"
+                                (sgen_clexp_pure x)
+                                i
+                                (sgen_ctyp_name ctyp1)
+                                (sgen_ctyp_name ctyp2)
+                                (sgen_id y)
+                                i)
+       else
+         c_error "Cannot compile type conversion"
+     in
+     separate hardline (List.mapi convert (List.map2 (fun x y -> (x, y)) ctyps1 ctyps2))
   | I_convert (x, ctyp1, y, ctyp2) ->
      if is_stack_ctyp ctyp1 then
        string (Printf.sprintf "  %s = convert_%s_of_%s(%s);"
@@ -2195,8 +2401,14 @@ let rec codegen_instr ctx (I_aux (instr, _)) =
 
 let codegen_type_def ctx = function
   | CTD_enum (id, ids) ->
+     let codegen_eq =
+       let name = sgen_id id in
+       string (Printf.sprintf "bool eq_%s(enum %s op1, enum %s op2) { return op1 == op2; }" name name name)
+     in
      string (Printf.sprintf "// enum %s" (string_of_id id)) ^^ hardline
      ^^ separate space [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) upper_codegen_id ids; rbrace ^^ semi]
+     ^^ twice hardline
+     ^^ codegen_eq
 
   | CTD_struct (id, ctors) ->
      (* Generate a set_T function for every struct T *)
@@ -2224,6 +2436,9 @@ let codegen_type_def ctx = function
                    (separate hardline (Bindings.bindings ctors |> List.map (codegen_field_init f) |> List.concat))
                    rbrace
      in
+     let codegen_eq =
+       string (Printf.sprintf "bool eq_%s(struct %s op1, struct %s op2) { return true; }" (sgen_id id) (sgen_id id) (sgen_id id))
+     in
      (* Generate the struct and add the generated functions *)
      let codegen_ctor (id, ctyp) =
        string (sgen_ctyp ctyp) ^^ space ^^ codegen_id id
@@ -2239,6 +2454,8 @@ let codegen_type_def ctx = function
      ^^ codegen_init "init" id (ctor_bindings ctors)
      ^^ twice hardline
      ^^ codegen_init "clear" id (ctor_bindings ctors)
+     ^^ twice hardline
+     ^^ codegen_eq
 
   | CTD_variant (id, tus) ->
      let codegen_tu (ctor_id, ctyp) =
@@ -2403,7 +2620,8 @@ let codegen_list_init id =
 let codegen_list_clear id ctyp =
   string (Printf.sprintf "void clear_%s(%s *rop) {\n" (sgen_id id) (sgen_id id))
   ^^ string (Printf.sprintf "  if (*rop == NULL) return;")
-  ^^ string (Printf.sprintf "  clear_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
+  ^^ (if is_stack_ctyp ctyp then empty
+      else string (Printf.sprintf "  clear_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
   ^^ string (Printf.sprintf "  clear_%s(&(*rop)->tl);\n" (sgen_id id))
   ^^ string "  free(*rop);"
   ^^ string "}"
@@ -2412,8 +2630,11 @@ let codegen_list_set id ctyp =
   string (Printf.sprintf "void internal_set_%s(%s *rop, const %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
   ^^ string "  if (op == NULL) { *rop = NULL; return; };\n"
   ^^ string (Printf.sprintf "  *rop = malloc(sizeof(struct node_%s));\n" (sgen_id id))
-  ^^ string (Printf.sprintf "  init_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
-  ^^ string (Printf.sprintf "  set_%s(&(*rop)->hd, op->hd);\n" (sgen_ctyp_name ctyp))
+  ^^ (if is_stack_ctyp ctyp then
+        string "  (*rop)->hd = op->hd;\n"
+      else
+        string (Printf.sprintf "  init_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
+        ^^ string (Printf.sprintf "  set_%s(&(*rop)->hd, op->hd);\n" (sgen_ctyp_name ctyp)))
   ^^ string (Printf.sprintf "  internal_set_%s(&(*rop)->tl, op->tl);\n" (sgen_id id))
   ^^ string "}"
   ^^ twice hardline
@@ -2426,10 +2647,19 @@ let codegen_cons id ctyp =
   let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
   string (Printf.sprintf "void %s(%s *rop, const %s x, const %s xs) {\n" (sgen_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
   ^^ string (Printf.sprintf "  *rop = malloc(sizeof(struct node_%s));\n" (sgen_id id))
-  ^^ string (Printf.sprintf "  init_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
-  ^^ string (Printf.sprintf "  set_%s(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp))
+  ^^ (if is_stack_ctyp ctyp then
+        string "  (*rop)->hd = x;\n"
+      else
+        string (Printf.sprintf "  init_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
+        ^^ string (Printf.sprintf "  set_%s(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp)))
   ^^ string "  (*rop)->tl = xs;\n"
   ^^ string "}"
+
+let codegen_pick id ctyp =
+  if is_stack_ctyp ctyp then
+    string (Printf.sprintf "%s pick_%s(const %s xs) { return xs->hd; }" (sgen_ctyp ctyp) (sgen_ctyp_name ctyp) (sgen_id id))
+  else
+    string (Printf.sprintf "void pick_%s(%s *x, const %s xs) { set_%s(x, xs->hd); }" (sgen_ctyp_name ctyp) (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp))
 
 let codegen_list ctx ctyp =
   let id = mk_id (string_of_ctyp (CT_list ctyp)) in
@@ -2443,12 +2673,108 @@ let codegen_list ctx ctyp =
       ^^ codegen_list_clear id ctyp ^^ twice hardline
       ^^ codegen_list_set id ctyp ^^ twice hardline
       ^^ codegen_cons id ctyp ^^ twice hardline
+      ^^ codegen_pick id ctyp ^^ twice hardline
+    end
+
+let codegen_vector ctx (direction, ctyp) =
+  let id = mk_id (string_of_ctyp (CT_vector (direction, ctyp))) in
+  if IdSet.mem id !generated then
+    empty
+  else
+    let vector_typedef =
+      string (Printf.sprintf "struct %s {\n  size_t len;\n  %s *data;\n};\n" (sgen_id id) (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "typedef struct %s %s;" (sgen_id id) (sgen_id id))
+    in
+    let vector_init =
+      string (Printf.sprintf "void init_%s(%s *rop) {\n  rop->len = 0;\n  rop->data = NULL;\n}" (sgen_id id) (sgen_id id))
+    in
+    let vector_set =
+      string (Printf.sprintf "void set_%s(%s *rop, %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
+      ^^ string (Printf.sprintf "  clear_%s(rop);\n" (sgen_id id))
+      ^^ string "  rop->len = op.len;\n"
+      ^^ string (Printf.sprintf "  rop->data = malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string "  for (int i = 0; i < op.len; i++) {\n"
+      ^^ string (if is_stack_ctyp ctyp then
+                   "    (rop->data)[i] = op.data[i];\n"
+                 else
+                   Printf.sprintf "    init_%s((rop->data) + i);\n    set_%s((rop->data) + i, op.data[i]);\n" (sgen_ctyp_name ctyp) (sgen_ctyp_name ctyp))
+      ^^ string "  }\n"
+      ^^ string "}"
+    in
+    let vector_clear =
+      string (Printf.sprintf "void clear_%s(%s *rop) {\n" (sgen_id id) (sgen_id id))
+      ^^ (if is_stack_ctyp ctyp then empty
+         else
+           string "  for (int i = 0; i < (rop->len); i++) {\n"
+           ^^ string (Printf.sprintf "    clear_%s((rop->data) + i);\n" (sgen_ctyp_name ctyp))
+           ^^ string "  }\n")
+      ^^ string "  if (rop->data != NULL) free(rop->data);\n"
+      ^^ string "}"
+    in
+    let vector_update =
+      string (Printf.sprintf "void vector_update_%s(%s *rop, %s op, mpz_t n, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
+      ^^ string "  int m = mpz_get_ui(n);\n"
+      ^^ string "  if (rop->data == op.data) {\n"
+      ^^ string (if is_stack_ctyp ctyp then
+                   "    rop->data[m] = elem;\n"
+                 else
+                   Printf.sprintf "  set_%s((rop->data) + m, elem);\n" (sgen_ctyp_name ctyp))
+      ^^ string "  } else {\n"
+      ^^ string (Printf.sprintf "    set_%s(rop, op);\n" (sgen_id id))
+      ^^ string (if is_stack_ctyp ctyp then
+                   "    rop->data[m] = elem;\n"
+                 else
+                   Printf.sprintf "  set_%s((rop->data) + m, elem);\n" (sgen_ctyp_name ctyp))
+      ^^ string "  }\n"
+      ^^ string "}"
+    in
+    let vector_access =
+      if is_stack_ctyp ctyp then
+        string (Printf.sprintf "%s vector_access_%s(%s op, mpz_t n) {\n" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
+        ^^ string "  int m = mpz_get_ui(n);\n"
+        ^^ string "  return op.data[m];\n"
+        ^^ string "}"
+      else
+        string (Printf.sprintf "void vector_access_%s(%s *rop, %s op, mpz_t n) {\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+        ^^ string "  int m = mpz_get_ui(n);\n"
+        ^^ string (Printf.sprintf "  set_%s(rop, op.data[m]);\n" (sgen_ctyp_name ctyp))
+        ^^ string "}"
+    in
+    let vector_undefined =
+      string (Printf.sprintf "void undefined_vector_%s(%s *rop, mpz_t len, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->len = mpz_get_ui(len);\n")
+      ^^ string (Printf.sprintf "  rop->data = malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string "  for (int i = 0; i < (rop->len); i++) {\n"
+      ^^ string (if is_stack_ctyp ctyp then
+                   "    (rop->data)[i] = elem;\n"
+                 else
+                   Printf.sprintf "    init_%s((rop->data) + i);\n    set_%s((rop->data) + i, elem);\n" (sgen_ctyp_name ctyp) (sgen_ctyp_name ctyp))
+      ^^ string "  }\n"
+      ^^ string "}"
+    in
+    begin
+      generated := IdSet.add id !generated;
+      vector_typedef ^^ twice hardline
+      ^^ vector_init ^^ twice hardline
+      ^^ vector_clear ^^ twice hardline
+      ^^ vector_undefined ^^ twice hardline
+      ^^ vector_access ^^ twice hardline
+      ^^ vector_set ^^ twice hardline
+      ^^ vector_update ^^ twice hardline
     end
 
 let codegen_def' ctx = function
   | CDEF_reg_dec (id, ctyp) ->
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
+
+  | CDEF_spec (id, arg_ctyps, ret_ctyp) ->
+     if Env.is_extern id ctx.tc_env "c" then
+       empty
+     else if is_stack_ctyp ret_ctyp then
+       string (Printf.sprintf "%s %s(%s);" (sgen_ctyp ret_ctyp) (sgen_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+     else
+       string (Printf.sprintf "void %s(%s *rop, %s);" (sgen_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
@@ -2504,13 +2830,20 @@ let codegen_def ctx def =
     | CT_list ctyp -> ctyp
     | _ -> assert false
   in
+  let unvector = function
+    | CT_vector (direction, ctyp) -> (direction, ctyp)
+    | _ -> assert false
+  in
   let tups = List.filter is_ct_tup (cdef_ctyps ctx def) in
   let tups = List.map (fun ctyp -> codegen_tup ctx (untup ctyp)) tups in
   let lists = List.filter is_ct_list (cdef_ctyps ctx def) in
   let lists = List.map (fun ctyp -> codegen_list ctx (unlist ctyp)) lists in
-  prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
+  let vectors = List.filter is_ct_vector (cdef_ctyps ctx def) in
+  let vectors = List.map (fun ctyp -> codegen_vector ctx (unvector ctyp)) vectors in
+  (* prerr_endline (Pretty_print_sail.to_string (pp_cdef def)); *)
   concat tups
   ^^ concat lists
+  ^^ concat vectors
   ^^ codegen_def' ctx def
 
 let compile_ast ctx (Defs defs) =
@@ -2542,14 +2875,29 @@ let compile_ast ctx (Defs defs) =
       List.map (fun n -> Printf.sprintf "  kill_letbind_%d();" n) ctx.letbinds
     in
 
+    let regs = c_ast_registers cdefs in
+
+    let register_init_clear (id, ctyp) =
+      if is_stack_ctyp ctyp then
+        [], []
+      else
+        [ Printf.sprintf "  init_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ],
+        [ Printf.sprintf "  clear_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ]
+    in
+
     let postamble = separate hardline (List.map string
        ( [ "int main(void)";
-           "{" ]
+           "{";
+           "  setup_real();" ]
        @ fst exn_boilerplate
+       @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
+       @ (if regs = [] then [] else [ "  zinitializze_registers(UNIT);" ])
        @ letbind_initializers
        @ [ "  zmain(UNIT);" ]
        @ letbind_finalizers
+       @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
        @ snd exn_boilerplate
+       @ [ "  return 0;" ]
        @ [ "}" ] ))
     in
 
