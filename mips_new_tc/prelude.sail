@@ -3,14 +3,6 @@ default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None, Some : 'a}
 
-val eq_atom = {ocaml: "eq_int", lem: "eq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
-
-val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
@@ -64,31 +56,17 @@ val vector_concat = {ocaml: "append", lem: "append_list"} : forall ('n : Int) ('
 
 overload append = {bitvector_concat, vector_concat}
 
-val not_bool = "not" : bool -> bool
-
 val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-
-function neq_atom (x, y) = not_bool(eq_atom(x, y))
-
-val neq_int = {lem: "neq"} : (int, int) -> bool
-
-function neq_int (x, y) = not_bool(eq_int(x, y))
-
 val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
-
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
 
 val neq_anything = {lem: "neq"} : forall ('a : Type). ('a, 'a) -> bool
-
 function neq_anything (x, y) = not_bool(x == y)
 
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
-
-val and_bool = "and_bool" : (bool, bool) -> bool
 
 val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -97,8 +75,6 @@ val and_vec = {lem: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
 overload operator & = {and_bool, and_vec}
-
-val or_bool = "or_bool" : (bool, bool) -> bool
 
 val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -133,8 +109,8 @@ val __raw_SetSlice_bits : forall 'n 'w.
 val __raw_GetSlice_bits : forall 'n 'w.
   (atom('n), atom('w), bits('n), int) -> bits('w)
 
-val "shiftl" : forall 'm. (bits('m), int) -> bits('m)
-val "shiftr" : forall 'm. (bits('m), int) -> bits('m)
+val "shiftl" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
+val "shiftr" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
 
 val __SignExtendSlice = {lem: "exts_slice"} : forall 'm. (bits('m), int, int) -> bits('m)
 
@@ -212,25 +188,17 @@ overload operator * = {mult_range, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
-val gteq_int = "gteq" : (int, int) -> bool
-
 val gteq_real = {ocaml: "gteq_real", lem: "gteq"} : (real, real) -> bool
 
 overload operator >= = {gteq_atom, gteq_int, gteq_real}
-
-val lteq_int = "lteq" : (int, int) -> bool
 
 val lteq_real = {ocaml: "lteq_real", lem: "lteq"} : (real, real) -> bool
 
 overload operator <= = {lteq_atom, lteq_int, lteq_real}
 
-val gt_int = "gt" : (int, int) -> bool
-
 val gt_real = {ocaml: "gt_real", lem: "gt"} : (real, real) -> bool
 
 overload operator > = {gt_atom, gt_int, gt_real}
-
-val lt_int = "lt" : (int, int) -> bool
 
 val lt_real = {ocaml: "lt_real", lem: "lt"} : (real, real) -> bool
 
@@ -282,8 +250,8 @@ overload max = {max_nat, max_int}
 val __WriteRAM = "write_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
 
-val __RISCV_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-function __RISCV_write (addr, width, data) = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
+val __MIPS_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+function __MIPS_write (addr, width, data) = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
 
 val __TraceMemoryWrite : forall 'n 'm.
   (atom('n), bits('m), bits(8 * 'n)) -> unit
@@ -291,14 +259,15 @@ val __TraceMemoryWrite : forall 'n 'm.
 val __ReadRAM = "read_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __RISCV_read : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-function __RISCV_read (addr, width) = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr)
+val __MIPS_read : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+function __MIPS_read (addr, width) = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr)
 
 val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
-infix 4 ^^
+infix 8 ^^
+val operator ^^ : forall 'n 'm . (bits('n), atom('m)) -> bits('n * 'm)
 function operator ^^ (bs, n) = replicate_bits (bs, n)
 
 val cast ex_nat : nat -> {'n, 'n >= 0. atom('n)}
@@ -369,11 +338,21 @@ val cast bit_to_bool : bit -> bool
 function bit_to_bool bitone  = true
 and      bit_to_bool bitzero = false
 
-infix 7 >>
-infix 7 <<
+val cast bits_to_bool : bits(1) -> bool
+function bits_to_bool x = bit_to_bool(x[0])
+
+infix 1 >>
+infix 1 <<
+infix 1 >>_s
 
 val operator >> = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
 val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val operator >>_s = "shift_bits_right_arith" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+
+infix 7 *_s
+val operator *_s = "mult_svec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
+infix 7 *_u
+val operator *_u = "mult_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
 
 val vector64 : int -> bits(64)
 
@@ -391,3 +370,7 @@ val vector_update_subrange_inc = {ocaml: "update_subrange", lem: "update_subrang
   (vector('n, inc, bit), atom('m), atom('o), vector('o - ('m - 1), inc, bit)) -> vector('n, inc, bit)
 
 overload vector_update_subrange = {vector_update_subrange_dec, vector_update_subrange_inc}
+
+val mask : forall 'm 'n , 'm >= 'n > 0 . bits('m) -> bits('n)
+function mask bs = bs['n - 1 .. 0]
+

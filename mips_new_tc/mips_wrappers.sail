@@ -60,7 +60,7 @@ val addrWrapper : (bits(64), MemAccessType, WordType) -> bits(64)
 function addrWrapper(addr, accessType, width) =
     addr
 
-val TranslatePC : bits(64) -> bits(64)
+val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, escape, undef}
 function TranslatePC (vAddr) = {
     incrementCP0Count();
     if (vAddr[1..0] != 0b00) then /* bad PC alignment */

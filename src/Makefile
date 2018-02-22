@@ -119,7 +119,7 @@ MIPS_SAIL_DIR:=$(SAIL_DIR)/mips_new_tc
 
 MIPS_SAILS_PRE:=$(SAIL_LIB_DIR)/flow.sail $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
-MIPS_SAILS:=$(MIPS_SAILS_PRE) $(SAIL_DIR)/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
+MIPS_SAILS:=$(MIPS_SAILS_PRE)
 
 MIPS_NOTLB_SAILS_PRE:=$(SAIL_LIB_DIR)/flow.sail $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
@@ -176,7 +176,7 @@ _build/Mips.thy: _build/mips_types.lem
 _build/mips_notlb.lem: $(MIPS_NOTLB_SAILS) ./sail.native
 	mkdir -p _build
 	cd _build ; \
-	../sail.native -lem_ast -o mips_notlb $(MIPS_NOTLB_SAILS)
+	../sail.native -lem_ast -o mips_notlb $(MIPS_NOTLB_SAILS_PRE)
 
 _build/mips_notlb.ml: $(MIPS_NOTLB_SAILS_PRE) ./sail.native
 	mkdir -p _build

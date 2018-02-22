@@ -35,10 +35,10 @@
 /* misp_insts.sail: mips instruction decode and execute clauses and AST node
    declarations */
 
-scattered type ast = const union
+scattered union ast
 
 val execute : ast -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg}
-scattered function unit execute
+scattered function execute
 
 val decode : bits(32) -> option(ast) effect pure
-scattered function option(ast) decode
+scattered function decode

@@ -38,4 +38,5 @@ end decode
 end execute
 end ast
 
-function option(ast) supported_instructions (ast) instr = Some(instr)
+val supported_instructions : ast -> option(ast)
+function supported_instructions instr = Some(instr)

@@ -43,20 +43,20 @@
    the simplest possible instruction, no undefined behaviour or exceptions
    reg, reg, immediate */
 
-union ast member regregimm16 DADDIU
+union clause ast = DADDIU : regregimm16
 
 function clause decode (0b011001 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(DADDIU(rs, rt, imm))
 
 function clause execute (DADDIU (rs, rt, imm)) =
   {
-    wGPR(rt) = rGPR(rs) + (bits(64)) (EXTS(imm))
+    wGPR(rt) = rGPR(rs) + EXTS(imm)
   }
 
 /* DADDU Doubleword Add Unsigned -- another very simple instruction,
    reg, reg, reg */
 
-union ast member regregreg DADDU
+union clause ast = DADDU : regregreg
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101101) =
   Some(DADDU(rs, rt, rd))
@@ -69,14 +69,14 @@ function clause execute (DADDU (rs, rt, rd)) =
 /* DADDI Doubleword Add Immediate
    reg, reg, imm with possible exception */
 
-union ast member regregimm16 DADDI
+union clause ast = DADDI : regregimm16
 
 function clause decode (0b011000 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(DADDI(rs, rt, imm))
 
 function clause execute (DADDI (rs, rt, imm)) =
   {
-    let sum65 : bits(65) = ((bits(65)) (EXTS(rGPR(rs))) + (bits(65)) (EXTS(imm))) in
+    let sum65 : bits(65) = EXTS(rGPR(rs)) + EXTS(imm) in
     {
       if (sum65[64] != sum65[63]) then
         (SignalException(Ov))
@@ -88,14 +88,14 @@ function clause execute (DADDI (rs, rt, imm)) =
 /* DADD Doubleword Add
    reg, reg, reg with possible exception */
 
-union ast member regregreg DADD
+union clause ast = DADD : regregreg
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101100) =
   Some(DADD(rs, rt, rd))
 
 function clause execute (DADD (rs, rt, rd)) =
   {
-    let sum65 : bits(65) = ((bits(65)) (EXTS(rGPR(rs))) + (bits(65)) (EXTS(rGPR(rt)))) in
+    let sum65 : bits(65) = EXTS(rGPR(rs)) + EXTS(rGPR(rt)) in
     {
       if sum65[64] != sum65[63] then
         (SignalException(Ov))
@@ -106,39 +106,39 @@ function clause execute (DADD (rs, rt, rd)) =
 
 /* ADD   32-bit add           -- reg, reg, reg with possible undefined behaviour or exception */
 
-union ast member regregreg ADD
+union clause ast = ADD : regregreg
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100000) =
   Some(ADD(rs, rt, rd))
 
 function clause execute (ADD(rs, rt, rd)) =
   {
-    (bits(64)) opA = rGPR(rs);
-    (bits(64)) opB = rGPR(rt);
+    opA : bits(64) = rGPR(rs);
+    opB : bits(64) = rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
-      wGPR(rd) = (bits(64)) undefined /* XXX could exit instead */
+      wGPR(rd) = undefined /* XXX could exit instead */
     else
-      let sum33 : bits(33) = ((bits(33)) (EXTS(opA[31 .. 0])) + (bits(33)) (EXTS(opB[31 .. 0]))) in
+      let sum33 : bits(33) = EXTS(opA[31 .. 0]) + EXTS(opB[31 .. 0])in
         if sum33[32] != sum33[31] then
           (SignalException(Ov))
         else
-	  wGPR(rd) = (bits(64)) (EXTS(sum33[31..0]))
+	  wGPR(rd) = EXTS(sum33[31..0])
   }
 
 /* ADDI  32-bit add immediate -- reg, reg, imm with possible undefined behaviour or exception */
 
-union ast member regregimm16 ADDI
+union clause ast = ADDI : regregimm16
 
 function clause decode (0b001000 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ADDI(rs, rt, imm))
 
 function clause execute (ADDI(rs, rt, imm)) =
   {
-    (bits(64)) opA = rGPR(rs);
+    opA = rGPR(rs);
     if NotWordVal(opA) then
-      wGPR(rt) = (bits(64)) undefined /* XXX could exit instead */
+      wGPR(rt) = undefined /* XXX could exit instead */
     else
-      let sum33 = (bits(33)) (EXTS(opA[31 .. 0])) + (bits(33)) (EXTS(imm)) in
+      let sum33 : bits(33) = EXTS(opA[31 .. 0]) + EXTS(imm) in
         if sum33[32] != sum33[31] then
           (SignalException(Ov))
         else
@@ -147,36 +147,36 @@ function clause execute (ADDI(rs, rt, imm)) =
 
 /* ADDU  32-bit add immediate -- reg, reg, reg with possible undefined behaviour */
 
-union ast member regregreg ADDU
+union clause ast = ADDU : regregreg
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100001) =
   Some(ADDU(rs, rt, rd))
 
 function clause execute (ADDU(rs, rt, rd)) =
   {
-    (bits(64)) opA = rGPR(rs);
-    (bits(64)) opB = rGPR(rt);
+    opA = rGPR(rs);
+    opB = rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
-      wGPR(rd) = (bits(64)) undefined
+      wGPR(rd) = undefined
     else
-      wGPR(rd) = (bits(64)) (EXTS(opA[31..0] + opB[31..0]))
+      wGPR(rd) = EXTZ(opA[31..0] + opB[31..0])
   }
 
 
 /* ADDIU 32-bit add immediate -- reg, reg, imm with possible undefined behaviour */
 
-union ast member regregimm16 ADDIU
+union clause ast = ADDIU : regregimm16
 
 function clause decode (0b001001 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ADDIU(rs, rt, imm))
 
 function clause execute (ADDIU(rs, rt, imm)) =
   {
-    (bits(64)) opA = rGPR(rs);
+    opA = rGPR(rs);
     if NotWordVal(opA) then
-      wGPR(rt) = (bits(64)) undefined /* XXX could exit instead */
+      wGPR(rt) = undefined /* XXX could exit instead */
     else
-      wGPR(rt) = (bits(64)) (EXTS((opA[31 .. 0]) + (bits(32)) (EXTS(imm))))
+      wGPR(rt) = EXTS((opA[31 .. 0]) + EXTS(imm))
   }
 
 /**************************************************************************************/
@@ -185,7 +185,7 @@ function clause execute (ADDIU(rs, rt, imm)) =
 
 /* DSUBU doubleword subtract 'unsigned' reg, reg, reg */
 
-union ast member regregreg DSUBU
+union clause ast = DSUBU : regregreg
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101111) =
   Some(DSUBU(rs, rt, rd))
@@ -197,14 +197,14 @@ function clause execute (DSUBU (rs, rt, rd)) =
 
 /* DSUB reg, reg, reg with possible exception */
 
-union ast member regregreg DSUB
+union clause ast = DSUB : regregreg
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101110) =
   Some(DSUB(rs, rt, rd))
 
 function clause execute (DSUB (rs, rt, rd)) =
   {
-    let temp65 : bits(65) = (bits(65)) (EXTS(rGPR(rs))) - (bits(65)) (EXTS(rGPR(rt))) in
+    let temp65 : bits(65) = EXTS(rGPR(rs)) - EXTS(rGPR(rt)) in
     {
       if temp65[64] != temp65[63] then
         (SignalException(Ov))
@@ -215,19 +215,19 @@ function clause execute (DSUB (rs, rt, rd)) =
 
 /* SUB   32-bit sub           -- reg, reg, reg with possible undefined behaviour or exception */
 
-union ast member regregreg SUB
+union clause ast = SUB : regregreg
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100010) =
   Some(SUB(rs, rt, rd))
 
 function clause execute (SUB(rs, rt, rd)) =
   {
-    (bits(64)) opA = rGPR(rs);
-    (bits(64)) opB = rGPR(rt);
+    opA = rGPR(rs);
+    opB = rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
-      wGPR(rd) = (bits(64)) undefined /* XXX could instead */
+      wGPR(rd) = undefined /* XXX could instead */
     else
-      let temp33 : bits(33) = (EXTS(opA[31..0]) - EXTS(opB[31..0])) in
+      let temp33 : bits(33) = EXTS(opA[31..0]) - EXTS(opB[31..0]) in
       if temp33[32] != temp33[31] then
         (SignalException(Ov))
       else
@@ -236,14 +236,14 @@ function clause execute (SUB(rs, rt, rd)) =
 
 /* SUBU  32-bit 'unsigned' sub -- reg, reg, reg with possible undefined behaviour */
 
-union ast member regregreg SUBU
+union clause ast = SUBU : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100011) =
     Some(SUBU(rs, rt, rd))
 
 function clause execute (SUBU(rs, rt, rd)) =
   {
-    (bits(64)) opA = rGPR(rs);
-    (bits(64)) opB = rGPR(rt);
+    opA = rGPR(rs);
+    opB = rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) = undefined
     else
@@ -256,7 +256,7 @@ function clause execute (SUBU(rs, rt, rd)) =
 
 /* AND reg, reg, reg */
 
-union ast member regregreg AND
+union clause ast = AND : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100100) =
     Some(AND(rs, rt, rd))
 
@@ -267,7 +267,7 @@ function clause execute (AND (rs, rt, rd)) =
 
 /* ANDI reg, reg, imm */
 
-union ast member regregimm16 ANDI
+union clause ast = ANDI : regregimm16
 function clause decode (0b001100 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ANDI(rs, rt, imm))
 function clause execute (ANDI (rs, rt, imm)) =
@@ -277,7 +277,7 @@ function clause execute (ANDI (rs, rt, imm)) =
 
 /* OR reg, reg, reg */
 
-union ast member regregreg OR
+union clause ast = OR : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100101) =
   Some(OR(rs, rt, rd))
 function clause execute (OR (rs, rt, rd)) =
@@ -287,7 +287,7 @@ function clause execute (OR (rs, rt, rd)) =
 
 /* ORI reg, reg, imm */
 
-union ast member regregimm16 ORI
+union clause ast = ORI : regregimm16
 function clause decode (0b001101 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ORI(rs, rt, imm))
 function clause execute (ORI (rs, rt, imm)) =
@@ -297,7 +297,7 @@ function clause execute (ORI (rs, rt, imm)) =
 
 /* NOR reg, reg, reg */
 
-union ast member regregreg NOR
+union clause ast = NOR : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100111) =
   Some(NOR(rs, rt, rd))
 function clause execute (NOR (rs, rt, rd)) =
@@ -307,7 +307,7 @@ function clause execute (NOR (rs, rt, rd)) =
 
 /* XOR reg, reg, reg */
 
-union ast member regregreg XOR
+union clause ast = XOR : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100110) =
   Some(XOR(rs, rt, rd))
 function clause execute (XOR (rs, rt, rd)) =
@@ -316,7 +316,7 @@ function clause execute (XOR (rs, rt, rd)) =
   }
 
 /* XORI reg, reg, imm */
-union ast member regregimm16 XORI
+union clause ast = XORI : regregimm16
 function clause decode (0b001110 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(XORI(rs, rt, imm))
 function clause execute (XORI (rs, rt, imm)) =
@@ -325,12 +325,12 @@ function clause execute (XORI (rs, rt, imm)) =
   }
 
 /* LUI reg, imm 32-bit load immediate into upper 16 bits */
-union ast member (regno, imm16) LUI
+union clause ast = LUI : (regno, imm16)
 function clause decode (0b001111 @ 0b00000 @ rt : regno @ imm : imm16) =
   Some(LUI(rt, imm))
 function clause execute (LUI (rt, imm)) =
   {
-    wGPR(rt) = EXTS(imm : 0x0000)
+    wGPR(rt) = EXTS(imm @ 0x0000)
   }
 
 /**************************************************************************************/
@@ -339,106 +339,102 @@ function clause execute (LUI (rt, imm)) =
 
 /* DSLL reg, reg, imm5 */
 
-union ast member regregreg DSLL
-function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ (bits(5)) sa @ 0b111000) =
+union clause ast = DSLL : regregreg
+function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111000) =
   Some(DSLL(rt, rd, sa))
 function clause execute (DSLL (rt, rd, sa)) =
   {
 
-    wGPR(rd) = (rGPR(rt) << sa) /* make tuareg mode less blue >> */
+    wGPR(rd) = (rGPR(rt) << sa)
   }
 
 /* DSLL32 reg, reg, imm5 */
 
-union ast member regregreg DSLL32
-function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ (bits(5)) sa @ 0b111100) =
+union clause ast = DSLL32 : regregreg
+function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111100) =
   Some(DSLL32(rt, rd, sa))
 function clause execute (DSLL32 (rt, rd, sa)) =
   {
-    wGPR(rd) = (rGPR(rt) << (0b1 : sa)) /* make tuareg mode less blue >> */
+    wGPR(rd) = (rGPR(rt) << (0b1 @ sa))
   }
 
 /* DSLLV reg, reg, reg */
 
-union ast member regregreg DSLLV
+union clause ast = DSLLV : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b010100) =
   Some(DSLLV(rs, rt, rd))
 function clause execute (DSLLV (rs, rt, rd)) =
   {
-    wGPR(rd) = (rGPR(rt) << ((rGPR(rs))[5 .. 0])) /* make tuareg mode less blue >> */
-    /* alternative slicing based version of above
-    sa       = (rGPR(rt))[5 .. 0];
-    v        = rGPR(rs);
-    wGPR(rd) = v[(63-sa) .. 0] : (0b0 ^^ sa)  */
+    wGPR(rd) = (rGPR(rt) << ((rGPR(rs))[5 .. 0]))
   }
 
 /* DSRA arithmetic shift duplicating sign bit - reg, reg, imm5 */
 
-union ast member regregreg DSRA
-function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ (bits(5)) sa @ 0b111011) =
+union clause ast = DSRA : regregreg
+function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111011) =
   Some(DSRA(rt, rd, sa))
 function clause execute (DSRA (rt, rd, sa)) =
   {
     temp     = rGPR(rt);
-    wGPR(rd) = EXTZ((temp[63] ^^ sa) : (temp[63 .. sa]))
+    wGPR(rd) = temp >>_s sa
   }
 
 /* DSRA32 reg, reg, imm5 */
 
-union ast member regregreg DSRA32
-function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ (bits(5)) sa @ 0b111111) =
+union clause ast = DSRA32 : regregreg
+function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111111) =
   Some(DSRA32(rt, rd, sa))
 function clause execute (DSRA32 (rt, rd, sa)) =
   {
     temp     = rGPR(rt);
-    sa32     = (0b1 : sa); /* sa+32 */
-    wGPR(rd) = EXTZ((temp[63] ^^ sa32) : (temp[63 .. sa32]))
+    sa32 = 0b1 @ sa; /* sa+32 */
+    wGPR(rd) = temp >>_s sa32
   }
 
 /* DSRAV reg, reg, reg */
-union ast member regregreg DSRAV
+union clause ast = DSRAV : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b010111) =
   Some(DSRAV(rs, rt, rd))
 function clause execute (DSRAV (rs, rt, rd)) =
   {
     temp     = rGPR(rt);
-    sa       = (rGPR(rs)) [5..0];
-    wGPR(rd) = EXTZ((temp[63] ^^ sa) : temp[63 .. sa])
+    sa = rGPR(rs)[5..0];
+    wGPR(rd) = temp >>_s sa
   }
 
 /* DSRL shift right logical - reg, reg, imm5 */
 
-union ast member regregreg DSRL
-function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ (bits(5)) sa @ 0b111010) =
+union clause ast = DSRL : regregreg
+function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111010) =
   Some(DSRL(rt, rd, sa))
 function clause execute (DSRL (rt, rd, sa)) =
   {
     temp     = rGPR(rt);
-    wGPR(rd) = EXTZ((bitzero ^^ sa) : (temp[63 .. sa]))
+    wGPR(rd) = temp >> sa;
   }
 
 /* DSRL32 reg, reg, imm5 */
 
-union ast member regregreg DSRL32
-function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ (bits(5)) sa @ 0b111110) =
+union clause ast = DSRL32 : regregreg
+function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111110) =
   Some(DSRL32(rt, rd, sa))
 function clause execute (DSRL32 (rt, rd, sa)) =
   {
     temp     = rGPR(rt);
-    sa32     = (0b1 : sa); /* sa+32 */
-    wGPR(rd) = EXTZ((bitzero ^^ sa32) : (temp[63 .. sa32]))
+    sa32 = 0b1 @ sa; /* sa+32 */
+    wGPR(rd) = temp >> sa32;
   }
 
 /* DSRLV reg, reg, reg */
 
-union ast member regregreg DSRLV
+union clause ast = DSRLV : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b010110) =
   Some(DSRLV(rs, rt, rd))
 function clause execute (DSRLV (rs, rt, rd)) =
   {
-    temp     = rGPR(rt);
-    sa       = (rGPR(rs)) [5..0];
-    wGPR(rd) = EXTZ((bitzero ^^ sa) : temp[63 .. sa])
+    temp = rGPR(rt);
+    sa = rGPR(rs)[5..0];
+    wGPR(rd) = temp >> sa;
   }
 
 /**************************************************************************************/
@@ -447,28 +443,30 @@ function clause execute (DSRLV (rs, rt, rd)) =
 
 /* SLL 32-bit shift left */
 
-union ast member regregreg SLL
+union clause ast = SLL : regregreg
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : regno @ 0b000000) =
   Some(SLL(rt, rd, sa))
 function clause execute (SLL(rt, rd, sa)) =
   {
-    wGPR(rd) = EXTZ((rGPR(rt)) [31 - sa .. 0] : (bitzero ^^ sa))
+    rt32     = rGPR(rt)[31..0];
+    wGPR(rd) = EXTS(rt32 << sa);
   }
 
 /* SLLV 32-bit shift left variable */
 
-union ast member regregreg SLLV
+union clause ast = SLLV : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000100) =
   Some(SLLV(rs, rt, rd))
 function clause execute (SLLV(rs, rt, rd)) =
   {
-    sa       = (rGPR(rs))[4..0];
-    wGPR(rd) = EXTZ((rGPR(rt)) [31 - sa .. 0] : (bitzero ^^ sa))
+    sa       = rGPR(rs)[4..0];
+    rt32     = rGPR(rt)[31..0];
+    wGPR(rd) = EXTS(rt32 << sa)
   }
 
 /* SRA 32-bit arithmetic shift right */
 
-union ast member regregreg SRA
+union clause ast = SRA : regregreg
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : regno @ 0b000011) =
   Some(SRA(rt, rd, sa))
 function clause execute (SRA(rt, rd, sa)) =
@@ -476,28 +474,32 @@ function clause execute (SRA(rt, rd, sa)) =
     temp = rGPR(rt);
     if (NotWordVal(temp)) then
       wGPR(rd) = undefined
-    else
-      wGPR(rd) = EXTZ((temp[31] ^^ (sa+32)) : temp [31..sa])
+    else {
+      rt32 = temp[31..0];
+      wGPR(rd) = EXTS(rt32 >>_s sa);
+    }
   }
 
 /* SRAV 32-bit arithmetic shift right variable */
 
-union ast member regregreg SRAV
+union clause ast = SRAV : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000111) =
   Some(SRAV(rs, rt, rd))
 function clause execute (SRAV(rs, rt, rd)) =
   {
     temp = rGPR(rt);
-    sa   = (rGPR(rs))[4..0];
+    sa   = rGPR(rs)[4..0];
     if (NotWordVal(temp)) then
       wGPR(rd) = undefined
-    else
-      wGPR(rd) = EXTZ((temp[31] ^^ (sa+32)) : temp [31..sa])
+    else {
+      rt32 = temp[31..0];
+      wGPR(rd) = EXTS(rt32 >>_s sa)
+    }
   }
 
 /* SRL 32-bit shift right */
 
-union ast member regregreg SRL
+union clause ast = SRL : regregreg
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : regno @ 0b000010) =
   Some(SRL(rt, rd, sa))
 function clause execute (SRL(rt, rd, sa)) =
@@ -505,13 +507,15 @@ function clause execute (SRL(rt, rd, sa)) =
     temp = rGPR(rt);
     if (NotWordVal(temp)) then
       wGPR(rd) = undefined
-    else
-      wGPR(rd) = EXTZ((bitzero ^^ sa) : (temp [31..sa]))
+    else {
+      rt32 = temp[31..0];
+      wGPR(rd) = EXTS(rt32 >> sa);
+    }
   }
 
 /* SRLV 32-bit shift right variable */
 
-union ast member regregreg SRLV
+union clause ast = SRLV : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000110) =
   Some(SRLV(rs, rt, rd))
 function clause execute (SRLV(rs, rt, rd)) =
@@ -520,8 +524,10 @@ function clause execute (SRLV(rs, rt, rd)) =
     sa   = (rGPR(rs))[4..0];
     if (NotWordVal(temp)) then
       wGPR(rd) = undefined
-    else
-      wGPR(rd) = EXTZ((bitzero ^^ sa) : (temp [31..sa]))
+    else {
+      rt32 = temp[31..0];
+      wGPR(rd) = EXTS(rt32 >> sa);
+    }
   }
 
 /**************************************************************************************/
@@ -530,53 +536,53 @@ function clause execute (SRLV(rs, rt, rd)) =
 
 /* SLT set if less than (signed) */
 
-union ast member regregreg SLT
+union clause ast = SLT : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101010) =
   Some(SLT(rs, rt, rd))
 function clause execute (SLT(rs, rt, rd)) =
   {
-    wGPR(rd) = if (rGPR(rs) <_s rGPR(rt)) then 1 else 0
+    wGPR(rd) = EXTZ(if (rGPR(rs) <_s rGPR(rt)) then 0b1 else 0b0)
   }
 
 /* SLT set if less than immediate (signed) */
 
-union ast member regregimm16 SLTI
+union clause ast = SLTI : regregimm16
 function clause decode (0b001010 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(SLTI(rs, rt, imm))
 function clause execute (SLTI(rs, rt, imm)) =
   {
-    let imm_val in : = signed(imm)
-    let rs_val in :  = signed(rGPR(rs))
-    wGPR(rt) = if (rs_val 0x0000000000000000 : < imm_val) then 0x0000000000000001 else
+    let imm_val = signed(imm) in
+    let rs_val = signed(rGPR(rs)) in
+    wGPR(rt) = EXTZ(if (rs_val < imm_val) then 0b1 else 0b0)
   }
 
 /* SLTU set if less than unsigned */
 
-union ast member regregreg SLTU
+union clause ast = SLTU : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101011) =
   Some(SLTU(rs, rt, rd))
 function clause execute (SLTU(rs, rt, rd)) =
   {
-    let rs_val in : = (0b0 : (rGPR(rs)))
-    let rt_val in : = (0b0 : (rGPR(rt)))
-    wGPR(rd) = (if (rs_val 0 : < rt_val) then 1 else)
+    let rs_val = rGPR(rs) in
+    let rt_val = rGPR(rt) in
+    wGPR(rd) = EXTZ(if (rs_val <_u rt_val) then 0b1 else 0b0)
   }
 
 /* SLTIU set if less than immediate unsigned */
 
-union ast member regregimm16 SLTIU
+union clause ast = SLTIU : regregimm16
 function clause decode (0b001011 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(SLTIU(rs, rt, imm))
 function clause execute (SLTIU(rs, rt, imm)) =
   {
-    let rs_val in :  = (0b0 : (rGPR(rs)))
-    let imm_val in : = (0b0 : ((bits(64))(EXTS(imm))))
-    wGPR(rt) = (if (rs_val 0 : < imm_val) then 1 else)
+    let rs_val = unsigned(rGPR(rs)) in
+    let imm_val = unsigned(imm) in
+    wGPR(rt) = EXTZ(if (rs_val < imm_val) then 0b1 else 0b0)
   }
 
 /* MOVN move if non-zero */
 
-union ast member regregreg MOVN
+union clause ast = MOVN : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b001011) =
   Some(MOVN(rs, rt, rd))
 function clause execute (MOVN(rs, rt, rd)) =
@@ -587,7 +593,7 @@ function clause execute (MOVN(rs, rt, rd)) =
 
 /* MOVZ move if zero */
 
-union ast member regregreg MOVZ
+union clause ast = MOVZ : regregreg
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b001010) =
   Some(MOVZ(rs, rt, rd))
 function clause execute (MOVZ(rs, rt, rd)) =
@@ -601,7 +607,7 @@ function clause execute (MOVZ(rs, rt, rd)) =
 /******************************************************************************/
 
 /* MFHI move from HI register */
-union ast member regno MFHI
+union clause ast = MFHI : regno
 function clause decode (0b000000 @ 0b0000000000 @ rd : regno @ 0b00000 @ 0b010000) =
   Some(MFHI(rd))
 function clause execute (MFHI(rd)) =
@@ -610,7 +616,7 @@ function clause execute (MFHI(rd)) =
   }
 
 /* MFLO move from LO register */
-union ast member regno MFLO
+union clause ast = MFLO : regno
 function clause decode (0b000000 @ 0b0000000000 @ rd : regno @ 0b00000 @ 0b010010) =
   Some(MFLO(rd))
 function clause execute (MFLO(rd)) =
@@ -619,7 +625,7 @@ function clause execute (MFLO(rd)) =
   }
 
 /* MTHI move to HI register */
-union ast member regno MTHI
+union clause ast = MTHI : regno
 function clause decode (0b000000 @ rs : regno @ 0b000000000000000 @ 0b010001) =
   Some(MTHI(rs))
 function clause execute (MTHI(rs)) =
@@ -628,7 +634,7 @@ function clause execute (MTHI(rs)) =
   }
 
 /* MTLO move to LO register */
-union ast member regno MTLO
+union clause ast = MTLO : regno
 function clause decode (0b000000 @ rs : regno @ 0b000000000000000 @ 0b010011) =
   Some(MTLO(rs))
 function clause execute (MTLO(rs)) =
@@ -637,14 +643,14 @@ function clause execute (MTLO(rs)) =
   }
 
 /* MUL 32-bit multiply into GPR */
-union ast member regregreg MUL
+union clause ast = MUL : regregreg
 function clause decode (0b011100 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000010) =
   Some(MUL(rs, rt, rd))
 function clause execute (MUL(rs, rt, rd)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    (bits(64)) result = EXTS((rsVal[31..0]) *_s (rtVal[31..0]));
+    result : bits(64) = EXTS((rsVal[31..0]) *_s (rtVal[31..0]));
     wGPR(rd) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
@@ -657,144 +663,144 @@ function clause execute (MUL(rs, rt, rd)) =
   }
 
 /* MULT 32-bit multiply into HI/LO */
-union ast member (regno, regno) MULT
+union clause ast = MULT : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011000) =
   Some(MULT(rs, rt))
 function clause execute (MULT(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    (bits(64)) result = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    result : bits(64) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-	EXTS((rsVal[31..0]) *_s (rtVal[31..0]));
+	(rsVal[31..0]) *_s (rtVal[31..0]);
     HI = EXTS(result[63..32]);
     LO = EXTS(result[31..0]);
   }
 
 /* MULTU 32-bit unsignedm rultiply into HI/LO */
-union ast member (regno, regno) MULTU
+union clause ast = MULTU : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011001) =
   Some(MULTU(rs, rt))
 function clause execute (MULTU(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    (bits(64)) result = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    result : bits(64) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-	EXTS((rsVal[31..0]) * (rtVal[31..0]));
+	(rsVal[31..0]) *_u (rtVal[31..0]);
     HI = EXTS(result[63..32]);
     LO = EXTS(result[31..0]);
   }
 
 /* DMULT 64-bit multiply into HI/LO */
-union ast member (regno, regno) DMULT
+union clause ast = DMULT : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011100) =
   Some(DMULT(rs, rt))
 function clause execute (DMULT(rs, rt)) =
   {
-    (bits(128)) result = rGPR(rs) *_s rGPR(rt);
+    result = rGPR(rs) *_s rGPR(rt);
     HI = (result[127..64]);
     LO = (result[63..0]);
   }
 
 /* DMULTU 64-bit unsigned multiply into HI/LO */
-union ast member (regno, regno) DMULTU
+union clause ast = DMULTU : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011101) =
   Some(DMULTU(rs, rt))
 function clause execute (DMULTU(rs, rt)) =
   {
-    (bits(128)) result = rGPR(rs) * rGPR(rt);
+    result = rGPR(rs) *_u rGPR(rt);
     HI = (result[127..64]);
     LO = (result[63..0]);
   }
 
 /* MADD 32-bit signed multiply and add into HI/LO */
-union ast member (regno, regno) MADD
+union clause ast = MADD : (regno, regno)
 function clause decode (0b011100 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b000000) =
   Some(MADD(rs, rt))
 function clause execute (MADD(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    (bits(64)) mul_result = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    mul_result : bits(64) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
 	rsVal[31..0] *_s rtVal[31..0];
-    (bits(64)) result = mul_result + (HI[31..0] : LO[31..0]);
+    result = mul_result + (HI[31..0] @ LO[31..0]);
     HI = EXTS(result[63..32]);
     LO = EXTS(result[31..0]);
   }
 
 /* MADDU 32-bit unsigned multiply and add into HI/LO */
-union ast member (regno, regno) MADDU
+union clause ast = MADDU : (regno, regno)
 function clause decode (0b011100 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b000001) =
   Some(MADDU(rs, rt))
 function clause execute (MADDU(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    (bits(64)) mul_result = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    mul_result : bits(64) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-	rsVal[31..0] * rtVal[31..0];
-    (bits(64)) result = mul_result + (HI[31..0] : LO[31..0]);
+	rsVal[31..0] *_u rtVal[31..0];
+    result = mul_result + (HI[31..0] @ LO[31..0]);
     HI = EXTS(result[63..32]);
     LO = EXTS(result[31..0]);
   }
 
 /* MSUB 32-bit signed multiply and sub from HI/LO */
-union ast member (regno, regno) MSUB
+union clause ast = MSUB : (regno, regno)
 function clause decode (0b011100 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b000100) =
   Some(MSUB(rs, rt))
 function clause execute (MSUB(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    (bits(64)) mul_result = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    mul_result : bits(64) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
 	rsVal[31..0] *_s rtVal[31..0];
-    (bits(64)) result = (HI[31..0] : LO[31..0]) - mul_result;
+    result = (HI[31..0] @ LO[31..0]) - mul_result;
     HI = EXTS(result[63..32]);
     LO = EXTS(result[31..0]);
   }
 
 /* MSUBU 32-bit unsigned multiply and sub from HI/LO */
-union ast member (regno, regno) MSUBU
+union clause ast = MSUBU : (regno, regno)
 function clause decode (0b011100 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b000101) =
   Some(MSUBU(rs, rt))
 function clause execute (MSUBU(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    (bits(64)) mul_result = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    mul_result : bits(64) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-	rsVal[31..0] * rtVal[31..0];
-    (bits(64)) result = (HI[31..0] : LO[31..0]) - mul_result;
+	rsVal[31..0] *_u rtVal[31..0];
+    result = (HI[31..0] @ LO[31..0]) - mul_result;
     HI = EXTS(result[63..32]);
     LO = EXTS(result[31..0]);
   }
 
 /* DIV 32-bit divide into HI/LO */
-union ast member (regno, regno) DIV
+union clause ast = DIV : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011010) =
   Some(DIV(rs, rt))
 function clause execute (DIV(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    let q : (bits(32), (bits(32))r) = (
-      if (NotWordVal(rsVal) | NotWordVal(rtVal) | (rtVal == 0)) then
-	((bits(32)) undefined, (bits(32)) undefined)
+    let (q, r) =
+      if (NotWordVal(rsVal) | NotWordVal(rtVal) | (rtVal == 0x0000000000000000)) then
+	(undefined : bits(32), undefined : bits(32))
       else
-        let si = (signed((rsVal[31..0]))) in
-        let ti = (signed((rtVal[31..0]))) in
-        let qi = (si quot ti)  in
-        let ri = (si - (ti*qi))   in
-	((bits(32)) (to_svec(qi)), (bits(32)) (to_svec(ri))))
+        let si = signed((rsVal[31..0])) in
+        let ti = signed((rtVal[31..0])) in
+        let qi = quot_round_zero(si, ti) in
+        let ri = si - (ti*qi) in
+	(to_bits(32, qi), to_bits(32, ri))
     in
     {
       HI = EXTS(r);
@@ -803,22 +809,22 @@ function clause execute (DIV(rs, rt)) =
   }
 
 /* DIVU 32-bit unsigned divide into HI/LO */
-union ast member (regno, regno) DIVU
+union clause ast = DIVU : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011011) =
   Some(DIVU(rs, rt))
 function clause execute (DIVU(rs, rt)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    let q : (bits(32), (bits(32))r) = (
-      if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0) then
-	((bits(32)) undefined, (bits(32)) undefined)
+    let (q, r) = 
+      if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0x0000000000000000) then
+	(undefined : bits(32), undefined : bits(32))
       else
         let si = unsigned(rsVal[31..0]) in
         let ti = unsigned(rtVal[31..0]) in
-        let qi = (si quot ti)  in
-        let ri = (si mod ti)   in
-	((bits(32)) (to_svec(qi)), (bits(32)) (to_svec(ri))))
+        let qi = quot_round_zero(si, ti) in
+        let ri = rem_round_zero(si, ti)   in
+	(to_bits(32, qi), to_bits(32, ri))
     in
     {
       HI = EXTS(r);
@@ -827,19 +833,20 @@ function clause execute (DIVU(rs, rt)) =
   }
 
 /* DDIV 64-bit divide into HI/LO */
-union ast member (regno, regno) DDIV
+union clause ast = DDIV : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011110) =
   Some(DDIV(rs, rt))
 function clause execute (DDIV(rs, rt)) =
   {
     rsVal = signed(rGPR(rs));
     rtVal = signed(rGPR(rt));
-    let ((bits(64))q, (bits(64))r) = (if (rtVal == 0)
-      then ((bits(64)) undefined, (bits(64)) undefined)
+    let (q , r) =
+      if (rtVal == 0)
+        then (undefined : bits(64), undefined : bits(64))
       else
-           let qi = (rsVal quot rtVal) in
-           let ri = (rsVal - (qi * rtVal)) in
-	   ((bits(64)) (to_svec(qi)), (bits(64)) (to_svec(ri)))) in
+        let qi = quot_round_zero(rsVal, rtVal) in
+        let ri = (rsVal - (qi * rtVal)) in
+	(to_bits(64, qi), to_bits(64, ri)) in
     {
       LO    = q;
       HI    = r;
@@ -847,18 +854,20 @@ function clause execute (DDIV(rs, rt)) =
   }
 
 /* DDIV 64-bit divide into HI/LO */
-union ast member (regno, regno) DDIVU
+union clause ast = DDIVU : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ 0b00000 @ 0b00000 @ 0b011111) =
   Some(DDIVU(rs, rt))
 function clause execute (DDIVU(rs, rt)) =
   {
-    (int) rsVal = rGPR(rs);
-    (int) rtVal = rGPR(rt);
-    let ((bits(64))q, (bits(64))r) = (if (rtVal == 0)
-      then ((bits(64)) undefined, (bits(64)) undefined)
-      else let qi = (rsVal quot rtVal) in
-           let ri = (rsVal mod rtVal) in
-	   ((bits(64)) (to_svec(qi)), (bits(64)) (to_svec(ri)))) in
+    rsVal = unsigned(rGPR(rs));
+    rtVal = unsigned(rGPR(rt));
+    let (q, r) =
+      if (rtVal == 0)
+        then (undefined  : bits(64), undefined : bits(64))
+      else
+        let qi = quot_round_zero(rsVal, rtVal) in
+        let ri = rem_round_zero(rsVal, rtVal) in
+	(to_bits(64, qi), to_bits(64, ri)) in
     {
       LO    = q;
       HI    = r;
@@ -870,44 +879,44 @@ function clause execute (DDIVU(rs, rt)) =
 /**************************************************************************************/
 
 /* J    - jump, the simplest control flow instruction, with branch delay slot */
-union ast member (bits(26)) J
-function clause decode (0b000010 @ (bits(26)) offset) =
+union clause ast = J : bits(26)
+function clause decode (0b000010 @ offset : bits(26)) =
   Some(J(offset))
 function clause execute (J(offset)) =
   {
-    delayedPC     = (PC + 4)[63..28] : offset : 0b00;
-    branchPending = 1
+    delayedPC     = (PC + 4)[63..28] @ offset @ 0b00;
+    branchPending = 0b1
   }
 
 /* JAL    - jump and link */
-union ast member (bits(26)) JAL
-function clause decode (0b000011 @ (bits(26)) offset) =
+union clause ast = JAL : bits(26)
+function clause decode (0b000011 @ offset : bits(26)) =
   Some(JAL(offset))
 function clause execute (JAL(offset)) =
   {
-    delayedPC     = (PC + 4)[63..28] : offset : 0b00;
-    branchPending = 1;
+    delayedPC     = (PC + 4)[63..28] @ offset @ 0b00;
+    branchPending = 0b1;
     wGPR(0b11111) = PC + 8;
   }
 
 /* JR -- jump via register */
-union ast member regno JR
+union clause ast = JR : regno
 function clause decode (0b000000 @ rs : regno @ 0b00000 @ 0b00000 @ hint : regno @ 0b001000) =
   Some(JR(rs)) /* hint is ignored */
 function clause execute (JR(rs)) =
   {
     delayedPC     = rGPR(rs);
-    branchPending = 1;
+    branchPending = 0b1;
   }
 
 /* JALR -- jump via register with link */
-union ast member (regno, regno) JALR
+union clause ast = JALR : (regno, regno)
 function clause decode (0b000000 @ rs : regno @ 0b00000 @ rd : regno @ hint : regno @ 0b001001) =
   Some(JALR(rs, rd)) /* hint is ignored */
 function clause execute (JALR(rs, rd)) =
   {
     delayedPC     = rGPR(rs);
-    branchPending = 1;
+    branchPending = 0b1;
     wGPR(rd)      = PC + 8;
   }
 
@@ -916,7 +925,7 @@ function clause execute (JALR(rs, rd)) =
 /* Conditional branch instructions with two register operands                         */
 /**************************************************************************************/
 
-union ast member (regno, regno, imm16, bool, bool) BEQ
+union clause ast = BEQ : (regno, regno, imm16, bool, bool)
 function clause decode (0b000100 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(BEQ(rs, rt, imm, false, false))  /* BEQ  */
 function clause decode (0b010100 @ rs : regno @ rt : regno @ imm : imm16) =
@@ -929,9 +938,9 @@ function clause execute (BEQ(rs, rd, imm, ne, likely)) =
   {
     if ((rGPR(rs) == rGPR(rd)) ^ ne) then
       {
-        let offset : bits(64) = (EXTS(imm : 0b00) + 4) in
+        let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
         delayedPC     = PC + offset;
-        branchPending = 1;
+        branchPending = 0b1;
       }
     else
       {
@@ -950,7 +959,7 @@ function clause execute (BEQ(rs, rd, imm, ne, likely)) =
 /* Conditional branch instructions with single register operand                       */
 /**************************************************************************************/
 
-union ast member (regno, imm16, Comparison, bool, bool) BCMPZ
+union clause ast = BCMPZ : (regno, imm16, Comparison, bool, bool)
 function clause decode (0b000001 @ rs : regno @ 0b00000 @ imm : imm16) =
   Some(BCMPZ(rs, imm, LT, false, false)) /* BLTZ */
 function clause decode (0b000001 @ rs : regno @ 0b10000 @ imm : imm16) =
@@ -981,14 +990,14 @@ function clause decode (0b010110 @ rs : regno @ 0b00000 @ imm : imm16) =
 
 function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
   {
-    (bits(64)) linkVal = PC + 8;
+    linkVal = PC + 8;
     regVal = rGPR(rs);
-    condition = compare(cmp, regVal, 0);
+    condition = compare(cmp, regVal, EXTZ(0b0));
     if (condition) then
       {
-        let offset : bits(64) = (EXTS(imm : 0b00) + 4) in
+        let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
         delayedPC     =  PC + offset;
-        branchPending = 1;
+        branchPending = 0b1;
       }
     else if (likely) then
       {
@@ -1003,62 +1012,62 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
 /**************************************************************************************/
 
 /* Co-opt syscall 0xfffff for use as thread start in pccmem  */
-union ast member unit SYSCALL_THREAD_START
+union clause ast = SYSCALL_THREAD_START : unit
 function clause decode (0b000000 @ 0xfffff @ 0b001100) =
-  Some((ast) SYSCALL_THREAD_START)
+  Some(SYSCALL_THREAD_START)
 function clause execute (SYSCALL_THREAD_START) = ()
 
 
 /* fake stop fetching instruction for ppcmem, execute doesn't do anything,
    decode never produces it */
 
-union ast member unit ImplementationDefinedStopFetching
+union clause ast = ImplementationDefinedStopFetching : unit
 function clause execute (ImplementationDefinedStopFetching) = ()
 
 
-union ast member unit SYSCALL
-function clause decode (0b000000 @ (bits(20)) code @ 0b001100) =
-  Some((ast) SYSCALL) /* code is ignored */
+union clause ast = SYSCALL : unit
+function clause decode (0b000000 @ code : bits(20) @ 0b001100) =
+  Some(SYSCALL) /* code is ignored */
 function clause execute (SYSCALL) =
   {
     (SignalException(Sys))
   }
 
 /* BREAK is identical to SYSCALL exception for the exception raised */
-union ast member unit BREAK
-function clause decode (0b000000 @ (bits(20)) code @ 0b001101) =
-  Some((ast) BREAK) /* code is ignored */
+union clause ast = BREAK : unit
+function clause decode (0b000000 @ code : bits(20) @ 0b001101) =
+  Some(BREAK) /* code is ignored */
 function clause execute (BREAK) =
   {
     (SignalException(Bp))
   }
 
 /* Accept WAIT as a NOP */
-union ast member unit WAIT
+union clause ast = WAIT : unit
 function clause decode (0b010000 @ 0x80000 @ 0b100000) =
-  Some((ast) WAIT) /* we only accept code == 0 */
+  Some(WAIT) /* we only accept code == 0 */
 function clause execute (WAIT) = {
   nextPC = PC;
 }
 
 /* Trap instructions with two register operands */
-union ast member (regno, regno, Comparison) TRAPREG
-function clause decode (0b000000 @ rs : regno @ rt : regno @ (bits(10)) code @ 0b110000) =
+union clause ast = TRAPREG : (regno, regno, Comparison)
+function clause decode (0b000000 @ rs : regno @ rt : regno @ code : bits(10) @ 0b110000) =
   Some(TRAPREG(rs, rt, GE)) /* TGE */
-function clause decode (0b000000 @ rs : regno @ rt : regno @ (bits(10)) code @ 0b110001) =
+function clause decode (0b000000 @ rs : regno @ rt : regno @ code : bits(10) @ 0b110001) =
   Some(TRAPREG(rs, rt, GEU)) /* TGEU */
-function clause decode (0b000000 @ rs : regno @ rt : regno @ (bits(10)) code @ 0b110010) =
+function clause decode (0b000000 @ rs : regno @ rt : regno @ code : bits(10) @ 0b110010) =
   Some(TRAPREG(rs, rt, LT)) /* TLT */
-function clause decode (0b000000 @ rs : regno @ rt : regno @ (bits(10)) code @ 0b110011) =
+function clause decode (0b000000 @ rs : regno @ rt : regno @ code : bits(10) @ 0b110011) =
   Some(TRAPREG(rs, rt, LTU)) /* TLTU */
-function clause decode (0b000000 @ rs : regno @ rt : regno @ (bits(10)) code @ 0b110100) =
+function clause decode (0b000000 @ rs : regno @ rt : regno @ code : bits(10) @ 0b110100) =
   Some(TRAPREG(rs, rt, EQ)) /* TEQ */
-function clause decode (0b000000 @ rs : regno @ rt : regno @ (bits(10)) code @ 0b110110) =
+function clause decode (0b000000 @ rs : regno @ rt : regno @ code : bits(10) @ 0b110110) =
   Some(TRAPREG(rs, rt, NE)) /* TNE */
 function clause execute (TRAPREG(rs, rt, cmp)) =
   {
-    rs_val rGPR : =(rs);
-    rt_val rGPR : =(rt);
+    rs_val = rGPR(rs);
+    rt_val = rGPR(rt);
     condition = compare(cmp, rs_val, rt_val);
     if (condition) then
       (SignalException(Tr))
@@ -1066,7 +1075,7 @@ function clause execute (TRAPREG(rs, rt, cmp)) =
 
 
 /* Trap instructions with one register and one immediate operand */
-union ast member (regno, imm16, Comparison) TRAPIMM
+union clause ast = TRAPIMM : (regno, imm16, Comparison)
 function clause decode (0b000001 @ rs : regno @ 0b01100 @ imm : imm16) =
   Some(TRAPIMM(rs, imm, EQ)) /* TEQI */
 function clause decode (0b000001 @ rs : regno @ 0b01110 @ imm : imm16) =
@@ -1081,8 +1090,8 @@ function clause decode (0b000001 @ rs : regno @ 0b01011 @ imm : imm16) =
   Some(TRAPIMM(rs, imm, LTU)) /* TLTIU */
 function clause execute (TRAPIMM(rs, imm, cmp)) =
   {
-    rs_val rGPR : =(rs);
-    (bits(64)) imm_val EXTS : =(imm);
+    rs_val = rGPR(rs);
+    imm_val : bits(64) = EXTS(imm);
     condition = compare(cmp, rs_val, imm_val);
     if (condition) then
       (SignalException(Tr))
@@ -1092,7 +1101,7 @@ function clause execute (TRAPIMM(rs, imm, cmp)) =
 /* Load instructions -- various width/signs                                           */
 /**************************************************************************************/
 
-union ast member (WordType, bool, bool, regno, regno, imm16) Load
+union clause ast = Load : (WordType, bool, bool, regno, regno, imm16)
 function clause decode (0b100000 @ base : regno @ rt : regno @ offset : imm16) =
   Some(Load(B, true,  false, base, rt, offset)) /* LB */
 function clause decode (0b100100 @ base : regno @ rt : regno @ offset : imm16) =
@@ -1112,39 +1121,41 @@ function clause decode (0b110000 @ base : regno @ rt : regno @ offset : imm16) =
 function clause decode (0b110100 @ base : regno @ rt : regno @ offset : imm16) =
   Some(Load(D, false, true, base, rt, offset))  /* LLD */
 
-val extendLoad : forall 'sz. (bits('sz), bool) -> bits(64) effect pure
-function extendLoad(memResult, signed) = {
-  if (signed) then
+val extendLoad : forall 'sz, 'sz <= 64 .  (bits('sz), bool) -> bits(64) effect pure
+function extendLoad(memResult, sign) = {
+  if (sign) then
     EXTS(memResult)
   else
     EXTZ(memResult)
 }
 
-function clause execute (Load(width, signed, linked, base, rt, offset)) =
+function clause execute (Load(width, sign, linked, base, rt, offset)) =
   {
-    (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
+    vAddr : bits(64) = addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
     if ~ (isAddressAligned(vAddr, width)) then
       (SignalExceptionBadAddr(AdEL, vAddr)) /* unaligned access */
     else
       let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
-            (bits(64)) memResult = if (linked) then
+            memResult : bits(64) = if (linked) then
                 {
                   CP0LLBit  = 0b1;
                   CP0LLAddr = pAddr;
-                  w = wordWidthBytes(width);
-                  if w == 1 then extendLoad(MEMr_reserve_wrapper(pAddr, 1), signed)
-                  else if w == 2 then extendLoad(MEMr_reserve_wrapper(pAddr, 2), signed)
-                  else if w == 4 then extendLoad(MEMr_reserve_wrapper(pAddr, 4), signed)
-                  else extendLoad(MEMr_reserve_wrapper(pAddr, 8), signed)
+                  match width {
+                   B => extendLoad(MEMr_reserve_wrapper(pAddr, 1), sign),
+                   H => extendLoad(MEMr_reserve_wrapper(pAddr, 2), sign),
+                   W => extendLoad(MEMr_reserve_wrapper(pAddr, 4), sign),
+                   D => extendLoad(MEMr_reserve_wrapper(pAddr, 8), sign)
+                  }
                 }
               else
                 {
-                  w = wordWidthBytes(width);
-                  if w == 1 then extendLoad(MEMr_reserve_wrapper(pAddr, 1), signed)
-                  else if w == 2 then extendLoad(MEMr_reserve_wrapper(pAddr, 2), signed)
-                  else if w == 4 then extendLoad(MEMr_reserve_wrapper(pAddr, 4), signed)
-                  else extendLoad(MEMr_reserve_wrapper(pAddr, 8), signed);
+                  match width {
+                   B => extendLoad(MEMr_wrapper(pAddr, 1), sign),
+                   H => extendLoad(MEMr_wrapper(pAddr, 2), sign),
+                   W => extendLoad(MEMr_wrapper(pAddr, 4), sign),
+                   D => extendLoad(MEMr_wrapper(pAddr, 8), sign)
+                  }
                 };
             wGPR(rt) = memResult
           }
@@ -1154,7 +1165,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
 /* Store instructions -- various widths                                               */
 /**************************************************************************************/
 
-union ast member (WordType, bool, regno, regno, imm16) Store
+union clause ast = Store : (WordType, bool, regno, regno, imm16)
 function clause decode (0b101000 @ base : regno @ rt : regno @ offset : imm16) =
   Some(Store(B, false, base, rt, offset)) /* SB */
 function clause decode (0b101001 @ base : regno @ rt : regno @ offset : imm16) =
@@ -1169,8 +1180,8 @@ function clause decode (0b111100 @ base : regno @ rt : regno @ offset : imm16) =
   Some(Store(D, true, base, rt, offset))  /* SCD */
 function clause execute (Store(width, conditional, base, rt, offset)) =
       {
-        (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, width);
-        (bits(64)) rt_val rGPR : =(rt);
+        vAddr : bits(64) = addrWrapper(EXTS(offset) + rGPR(base), StoreData, width);
+        rt_val = rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
           (SignalExceptionBadAddr(AdES, vAddr)) /* unaligned access */
         else
@@ -1178,21 +1189,21 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
           {
                 if (conditional) then
                   {
-		    success = if (CP0LLBit[0]) then (bool) match width
+		    success : bool = if (CP0LLBit[0]) then match width
                     {
-                      B  => MEMw_conditional_wrapper(pAddr, 1, rt_val[7..0])
-                      H  => MEMw_conditional_wrapper(pAddr, 2, rt_val[15..0])
-                      W  => MEMw_conditional_wrapper(pAddr, 4, rt_val[31..0])
+                      B  => MEMw_conditional_wrapper(pAddr, 1, rt_val[7..0]),
+                      H  => MEMw_conditional_wrapper(pAddr, 2, rt_val[15..0]),
+                      W  => MEMw_conditional_wrapper(pAddr, 4, rt_val[31..0]),
                       D  => MEMw_conditional_wrapper(pAddr, 8, rt_val)
                     } else false;
-		    wGPR(rt) = EXTZ([bool_to_bit(success)])
+		    wGPR(rt) = EXTZ(success)
                   }
                 else
                   match width
                     {
-                      B  => MEMw_wrapper(pAddr, 1) = rt_val[7..0]
-                      H  => MEMw_wrapper(pAddr, 2) = rt_val[15..0]
-                      W  => MEMw_wrapper(pAddr, 4) = rt_val[31..0]
+                      B  => MEMw_wrapper(pAddr, 1) = rt_val[7..0],
+                      H  => MEMw_wrapper(pAddr, 2) = rt_val[15..0],
+                      W  => MEMw_wrapper(pAddr, 4) = rt_val[31..0],
                       D  => MEMw_wrapper(pAddr, 8) = rt_val
                     }
           }
@@ -1200,161 +1211,163 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
 
 /* LWL   - Load word left (big-endian only) */
 
-union ast member regregimm16 LWL
+union clause ast = LWL : regregimm16
 function clause decode(0b100010 @ base : regno @ rt : regno @ offset : imm16) =
       Some(LWL(base, rt, offset))
 function clause execute(LWL(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
+        vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
-            mem_val interest :   = MEMr_wrapper (pAddr[63..2] : 0b00, 4); /* read word of */
-            reg_val rGPR :   =(rt);
-	    wGPR(rt)  = EXTS((bits(32)) match vAddr[1..0]
+            mem_val = MEMr_wrapper (pAddr[63..2] @ 0b00, 4); /* read word of interest */
+            reg_val = rGPR(rt);
+            result : bits(32) = match vAddr[1..0]
               {
-                0b00  => mem_val
-                0b01  => mem_val[23..0] : reg_val[07..0]
-                0b10  => mem_val[15..0] : reg_val[15..0]
-                0b11  => mem_val[07..0] : reg_val[23..0]
-	      });
+                0b00  => mem_val,
+                0b01  => mem_val[23..0] @ reg_val[07..0],
+                0b10  => mem_val[15..0] @ reg_val[15..0],
+                0b11  => mem_val[07..0] @ reg_val[23..0]
+	      };
+	    wGPR(rt) = EXTS(result);
           }
       }
-union ast member regregimm16 LWR
+union clause ast = LWR : regregimm16
 function clause decode(0b100110 @ base : regno @ rt : regno @ offset : imm16) =
       Some(LWR(base, rt, offset))
 function clause execute(LWR(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
+        vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
-            mem_val interest :   = MEMr_wrapper (pAddr[63..2] : 0b00, 4); /* read word of */
-            reg_val rGPR :   =(rt);
-	    wGPR(rt)  = EXTS((bits(32)) match vAddr[1..0] /* it is acceptable to sign extend in all cases */
+            mem_val = MEMr_wrapper(pAddr[63..2] @ 0b00, 4); /* read word of interest */
+            reg_val = rGPR(rt);
+            result : bits(32) = match vAddr[1..0]
               {
-                0b00  => reg_val[31..8]  : mem_val[31..24]
-                0b01  => reg_val[31..16] : mem_val[31..16]
-                0b10  => reg_val[31..24] : mem_val[31..8]
+                0b00  => reg_val[31..8]  @ mem_val[31..24],
+                0b01  => reg_val[31..16] @ mem_val[31..16],
+                0b10  => reg_val[31..24] @ mem_val[31..8],
                 0b11  => mem_val
-              });
+              };
+	    wGPR(rt) = EXTS(result)
           }
       }
 
 /* SWL   - Store word left */
-union ast member regregimm16 SWL
+union clause ast = SWL : regregimm16
 function clause decode(0b101010 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SWL(base, rt, offset))
 function clause execute(SWL(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
-        let pAddr = (TLBTranslate(vAddr, StoreData)) in
+        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
+        let pAddr = TLBTranslate(vAddr, StoreData) in
           {
-            reg_val rGPR :   =(rt);
+            reg_val = rGPR(rt);
             match vAddr[1..0]
             {
-              0b00  => (MEMw_wrapper(pAddr, 4) = reg_val[31..0])
-              0b01  => (MEMw_wrapper(pAddr, 3) = reg_val[31..8])
-              0b10  => (MEMw_wrapper(pAddr, 2) = reg_val[31..16])
+              0b00  => (MEMw_wrapper(pAddr, 4) = reg_val[31..0]),
+              0b01  => (MEMw_wrapper(pAddr, 3) = reg_val[31..8]),
+              0b10  => (MEMw_wrapper(pAddr, 2) = reg_val[31..16]),
               0b11  => (MEMw_wrapper(pAddr, 1) = reg_val[31..24])
             }
           }
       }
 
-union ast member regregimm16 SWR
+union clause ast = SWR : regregimm16
 function clause decode(0b101110 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SWR(base, rt, offset))
 function clause execute(SWR(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
-        let TLBTranslate : pAddr(vAddr, StoreData)) in
+        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
+        let pAddr = TLBTranslate(vAddr, StoreData) in
           {
-            wordAddr = pAddr[63..2] : 0b00;
-            reg_val rGPR :   =(rt);
+            wordAddr = pAddr[63..2] @ 0b00;
+            reg_val = rGPR(rt);
             match vAddr[1..0]
               {
-                0b00  => (MEMw_wrapper(wordAddr, 1) = reg_val[7..0])
-                0b01  => (MEMw_wrapper(wordAddr, 2) = reg_val[15..0])
-                0b10  => (MEMw_wrapper(wordAddr, 3) = reg_val[23..0])
+                0b00  => (MEMw_wrapper(wordAddr, 1) = reg_val[7..0]),
+                0b01  => (MEMw_wrapper(wordAddr, 2) = reg_val[15..0]),
+                0b10  => (MEMw_wrapper(wordAddr, 3) = reg_val[23..0]),
                 0b11  => (MEMw_wrapper(wordAddr, 4) = reg_val[31..0])
               }
           }
       }
 
 /* Load double-word left */
-union ast member regregimm16 LDL
+union clause ast = LDL : regregimm16
 function clause decode(0b011010 @ base : regno @ rt : regno @ offset : imm16) =
   Some(LDL(base, rt, offset))
 function clause execute(LDL(base, rt, offset)) =
   {
     /* XXX length check not quite right, but conservative */
-    (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
-    let pAddr = (TLBTranslate(vAddr, StoreData)) in
+    vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
+    let pAddr = TLBTranslate(vAddr, StoreData) in
       {
-        mem_val interest :   = MEMr_wrapper (pAddr[63..3] : 0b000, 8); /* read double of */
-        reg_val rGPR :   =(rt);
-        wGPR(rt)  = match vAddr[2..0]
+        mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
+        reg_val = rGPR(rt);
+        wGPR(rt) = match vAddr[2..0]
               {
-                0b000  => mem_val
-                0b001  => mem_val[55..0] : reg_val[7..0]
-                0b010  => mem_val[47..0] : reg_val[15..0]
-                0b011  => mem_val[39..0] : reg_val[23..0]
-                0b100  => mem_val[31..0] : reg_val[31..0]
-                0b101  => mem_val[23..0] : reg_val[39..0]
-                0b110  => mem_val[15..0] : reg_val[47..0]
-                0b111  => mem_val[07..0] : reg_val[55..0]
+                0b000  => mem_val,
+                0b001  => mem_val[55..0] @ reg_val[7..0],
+                0b010  => mem_val[47..0] @ reg_val[15..0],
+                0b011  => mem_val[39..0] @ reg_val[23..0],
+                0b100  => mem_val[31..0] @ reg_val[31..0],
+                0b101  => mem_val[23..0] @ reg_val[39..0],
+                0b110  => mem_val[15..0] @ reg_val[47..0],
+                0b111  => mem_val[07..0] @ reg_val[55..0]
               };
       }
   }
 
 /* Load double-word right */
-union ast member regregimm16 LDR
+union clause ast = LDR : regregimm16
 function clause decode(0b011011 @ base : regno @ rt : regno @ offset : imm16) =
   Some(LDR(base, rt, offset))
 function clause execute(LDR(base, rt, offset)) =
   {
     /* XXX length check not quite right, but conservative */
-    (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
-    let pAddr = (TLBTranslate(vAddr, StoreData)) in
+    vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
+    let pAddr = TLBTranslate(vAddr, StoreData) in
       {
-        mem_val interest :   = MEMr_wrapper (pAddr[63..3] : 0b000, 8); /* read double of */
-        reg_val rGPR :   =(rt);
+        mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
+        reg_val = rGPR(rt);
         wGPR(rt)  = match vAddr[2..0]
               {
-                0b000  => reg_val[63..08] : mem_val[63..56]
-                0b001  => reg_val[63..16] : mem_val[63..48]
-                0b010  => reg_val[63..24] : mem_val[63..40]
-                0b011  => reg_val[63..32] : mem_val[63..32]
-                0b100  => reg_val[63..40] : mem_val[63..24]
-                0b101  => reg_val[63..48] : mem_val[63..16]
-                0b110  => reg_val[63..56] : mem_val[63..08]
+                0b000  => reg_val[63..08] @ mem_val[63..56],
+                0b001  => reg_val[63..16] @ mem_val[63..48],
+                0b010  => reg_val[63..24] @ mem_val[63..40],
+                0b011  => reg_val[63..32] @ mem_val[63..32],
+                0b100  => reg_val[63..40] @ mem_val[63..24],
+                0b101  => reg_val[63..48] @ mem_val[63..16],
+                0b110  => reg_val[63..56] @ mem_val[63..08],
                 0b111  => mem_val
               };
       }
   }
 
 /* SDL   - Store double-word left */
-union ast member regregimm16 SDL
+union clause ast = SDL : regregimm16
 function clause decode(0b101100 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SDL(base, rt, offset))
 function clause execute(SDL(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
-        let pAddr = (TLBTranslate(vAddr, StoreData)) in
+        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
+        let pAddr = TLBTranslate(vAddr, StoreData) in
           {
-            reg_val rGPR : =(rt);
+            reg_val = rGPR(rt);
             match vAddr[2..0]
             {
-              0b000  => (MEMw_wrapper(pAddr, 8) = reg_val[63..00])
-              0b001  => (MEMw_wrapper(pAddr, 7) = reg_val[63..08])
-              0b010  => (MEMw_wrapper(pAddr, 6) = reg_val[63..16])
-              0b011  => (MEMw_wrapper(pAddr, 5) = reg_val[63..24])
-              0b100  => (MEMw_wrapper(pAddr, 4) = reg_val[63..32])
-              0b101  => (MEMw_wrapper(pAddr, 3) = reg_val[63..40])
-              0b110  => (MEMw_wrapper(pAddr, 2) = reg_val[63..48])
+              0b000  => (MEMw_wrapper(pAddr, 8) = reg_val[63..00]),
+              0b001  => (MEMw_wrapper(pAddr, 7) = reg_val[63..08]),
+              0b010  => (MEMw_wrapper(pAddr, 6) = reg_val[63..16]),
+              0b011  => (MEMw_wrapper(pAddr, 5) = reg_val[63..24]),
+              0b100  => (MEMw_wrapper(pAddr, 4) = reg_val[63..32]),
+              0b101  => (MEMw_wrapper(pAddr, 3) = reg_val[63..40]),
+              0b110  => (MEMw_wrapper(pAddr, 2) = reg_val[63..48]),
               0b111  => (MEMw_wrapper(pAddr, 1) = reg_val[63..56])
             }
           }
@@ -1362,26 +1375,26 @@ function clause execute(SDL(base, rt, offset)) =
 
 
 /* SDR   - Store double-word right */
-union ast member regregimm16 SDR
+union clause ast = SDR : regregimm16
 function clause decode(0b101101 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SDR(base, rt, offset))
 function clause execute(SDR(base, rt, offset)) =
   {
         /* XXX length check not quite right, but conservative */
-        (bits(64)) vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
-        let pAddr = (TLBTranslate(vAddr, StoreData)) in
+        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
+        let pAddr = TLBTranslate(vAddr, StoreData) in
           {
-            reg_val rGPR : =(rt);
-            wordAddr = pAddr[63..3] : 0b000;
+            reg_val = rGPR(rt);
+            wordAddr = pAddr[63..3] @ 0b000;
             match vAddr[2..0]
             {
-              0b000  => (MEMw_wrapper(wordAddr, 1) = reg_val[07..0])
-              0b001  => (MEMw_wrapper(wordAddr, 2) = reg_val[15..0])
-              0b010  => (MEMw_wrapper(wordAddr, 3) = reg_val[23..0])
-              0b011  => (MEMw_wrapper(wordAddr, 4) = reg_val[31..0])
-              0b100  => (MEMw_wrapper(wordAddr, 5) = reg_val[39..0])
-              0b101  => (MEMw_wrapper(wordAddr, 6) = reg_val[47..0])
-              0b110  => (MEMw_wrapper(wordAddr, 7) = reg_val[55..0])
+              0b000  => (MEMw_wrapper(wordAddr, 1) = reg_val[07..0]),
+              0b001  => (MEMw_wrapper(wordAddr, 2) = reg_val[15..0]),
+              0b010  => (MEMw_wrapper(wordAddr, 3) = reg_val[23..0]),
+              0b011  => (MEMw_wrapper(wordAddr, 4) = reg_val[31..0]),
+              0b100  => (MEMw_wrapper(wordAddr, 5) = reg_val[39..0]),
+              0b101  => (MEMw_wrapper(wordAddr, 6) = reg_val[47..0]),
+              0b110  => (MEMw_wrapper(wordAddr, 7) = reg_val[55..0]),
               0b111  => (MEMw_wrapper(wordAddr, 8) = reg_val[63..0])
             }
           }
@@ -1389,7 +1402,7 @@ function clause execute(SDR(base, rt, offset)) =
 
 /* CACHE - manipulate (non-existent) caches */
 
-union ast member regregimm16 CACHE
+union clause ast = CACHE : regregimm16
 function clause decode (0b101111 @ base : regno @ op : regno @ imm : imm16) =
   Some(CACHE(base, op, imm))
 function clause execute (CACHE(base, op, imm)) =
@@ -1397,7 +1410,7 @@ function clause execute (CACHE(base, op, imm)) =
 
 /* PREF - prefetching into (non-existent) caches */
 
-union ast member regregimm16 PREF
+union clause ast = PREF : regregimm16
 function clause decode (0b110011 @ base : regno @ op : regno @ imm : imm16) =
   Some(PREF(base, op, imm))
 function clause execute (PREF(base, op, imm)) =
@@ -1405,242 +1418,245 @@ function clause execute (PREF(base, op, imm)) =
 
 
 /* SYNC  - Memory barrier */
-union ast member unit SYNC
+union clause ast = SYNC : unit
 function clause decode (0b000000 @ 0b00000 @ 0b00000 @ 0b00000 @ stype : regno @ 0b001111) =
-  Some((ast) SYNC) /* stype is currently ignored */
+  Some(SYNC) /* stype is currently ignored */
 function clause execute(SYNC) =
   MEM_sync()
 
-union ast member (regno, regno, bits(3), bool) MFC0
-function clause decode (0b010000 @ 0b00000 @ rt : regno @ rd : regno @ 0b00000000 @ (bits(3)) sel) =
+union clause ast = MFC0 : (regno, regno, bits(3), bool)
+function clause decode (0b010000 @ 0b00000 @ rt : regno @ rd : regno @ 0b00000000 @ sel : bits(3)) =
   Some(MFC0(rt, rd, sel, false)) /* MFC0 */
-function clause decode (0b010000 @ 0b00001 @ rt : regno @ rd : regno @ 0b00000000 @ (bits(3)) sel) =
+function clause decode (0b010000 @ 0b00001 @ rt : regno @ rd : regno @ 0b00000000 @ sel : bits(3)) =
   Some(MFC0(rt, rd, sel, true))  /* DMFC0 */
 function clause execute (MFC0(rt, rd, sel, double)) = {
   checkCP0Access();
-  let result : bits(64) = match rd, sel
+  let result : bits(64) = match (rd, sel)
         {
-          (0b00000,0b000)  => let idx : bits(31) = EXTZ(TLBIndex) in
-				  (0x00000000 : TLBProbe : idx)  /* 0, TLB Index */
-          (0b00001,0b000)  => EXTZ(TLBRandom)  /* 1, TLB Random */
-          (0b00010,0b000)  => TLBEntryLo0      /* 2, TLB EntryLo0 */
-          (0b00011,0b000)  => TLBEntryLo1      /* 3, TLB EntryLo1 */
-          (0b00100,0b000)  => TLBContext       /* 4, TLB Context */
-          (0b00101,0b000)  => EXTZ(TLBPageMask : 0x000) /* 5, TLB PageMask */
-          (0b00110,0b000)  => EXTZ(TLBWired)   /* 6, TLB Wired */
-          (0b00111,0b000)  => EXTZ(CP0HWREna)  /* 7, HWREna */
-          (0b01000,0b000)  => CP0BadVAddr      /* 8, BadVAddr reg */
-          (0b01000,0b001)  => 0                /* 8, BadInstr reg XXX TODO */
-          (0b01001,0b000)  => EXTZ(CP0Count)   /* 9, Count reg */
-          (0b01010,0b000)  => TLBEntryHi       /* 10, TLB EntryHi */
-          (0b01011,0b000)  => EXTZ(CP0Compare) /* 11, Compare reg */
-          (0b01100,0b000)  => EXTZ(CP0Status)  /* 12, Status reg */
-          (0b01101,0b000)  => EXTZ(CP0Cause)   /* 13, Cause reg */
-          (0b01110,0b000)  => CP0EPC           /* 14, EPC */
-          (0b01111,0b000)  => EXTZ(0x00000400) /* 15, sel 0: PrID processor ID */
-          (0b01111,0b110)  => 0                /* 15, sel 6: CHERI core ID */
-          (0b01111,0b111)  => 0                /* 15, sel 7: CHERI thread ID */
-          (0b10000,0b000)  => EXTZ(0b1 /* M */      /* 16, sel 0: Config0 */
-                                  : 0b000000000000000 /* Impl */
-                                  : 0b1               /* BE */
-                                  : 0b10              /* AT */
-                                  : 0b000             /* AR */
-                                  : 0b001             /* MT standard TLB */
-                                  : 0b0000            /* zero */
-                                  : 0b000)
-          (0b10000,0b001)  => EXTZ( /* 16, sel 1: Config1 */
-                                           0b1      /* M */
-                                         : TLBIndexMax /* MMU size-1 */
-                                         : 0b000    /* IS icache sets */
-                                         : 0b000    /* IL icache lines */
-                                         : 0b000    /* IA icache assoc. */
-                                         : 0b000    /* DS dcache sets */
-                                         : 0b000    /* DL dcache lines */
-                                         : 0b000    /* DA dcache assoc. */
-					 : [bool_to_bit(have_cp2)] /* C2 CP2 presence */
-                                         : 0b0      /* MD MDMX implemented */
-                                         : 0b0      /* PC performance counters */
-                                         : 0b0      /* WR watch registers */
-                                         : 0b0      /* CA 16e code compression */
-                                         : 0b0      /* EP EJTAG */
-                                         : 0b0)     /* FP FPU present */
-          (0b10000,0b010)  => EXTZ( /* 16, sel 2: Config2 */
-                                           0b1     /* M */
-                                         : 0b000   /* TU L3 control  */
-                                         : 0b0000  /* TS L3 sets */
-                                         : 0b0000  /* TL L3 lines */
-                                         : 0b0000  /* TA L3 assoc. */
-                                         : 0b0000  /* SU L2 control */
-                                         : 0b0000  /* SS L2 sets */
-                                         : 0b0000  /* SL L2 lines */
-                                         : 0b0000) /* SA L2 assoc. */
-          (0b10000,0b011)  => 0x0000000000002000 /* 16, sel 3: Config3 zero except for bit 13 == ulri */
-          (0b10000,0b101)  => 0x0000000000000000 /* 16, sel 5: Config5 beri specific -- no extended TLB */
-          (0b10001,0b000)  => CP0LLAddr        /* 17, sel 0: LLAddr */
-          (0b10010,0b000)  => 0                /* 18, WatchLo */
-          (0b10011,0b000)  => 0                /* 19, WatchHi */
-          (0b10100,0b000)  => TLBXContext      /* 20, XContext */
-          (0b11110,0b000)  => CP0ErrorEPC      /* 30, ErrorEPC */
-          _                => (SignalException(ResI))
+          (0b00000,0b000) => let idx : bits(31) = EXTZ(TLBIndex) in
+			         (0x00000000 @ TLBProbe @ idx),  /* 0, TLB Index */
+          (0b00001,0b000) => EXTZ(TLBRandom),    /* 1, TLB Random */
+          (0b00010,0b000) => TLBEntryLo0.bits(), /* 2, TLB EntryLo0 */
+          (0b00011,0b000) => TLBEntryLo1.bits(), /* 3, TLB EntryLo1 */
+          (0b00100,0b000) => TLBContext.bits(),  /* 4, TLB Context */
+          (0b00101,0b000) => EXTZ(TLBPageMask @ 0x000), /* 5, TLB PageMask */
+          (0b00110,0b000) => EXTZ(TLBWired),   /* 6, TLB Wired */
+          (0b00111,0b000) => EXTZ(CP0HWREna),  /* 7, HWREna */
+          (0b01000,0b000) => CP0BadVAddr,      /* 8, BadVAddr reg */
+          (0b01000,0b001) => EXTZ(0b0),        /* 8, BadInstr reg XXX TODO */
+          (0b01001,0b000) => EXTZ(CP0Count),   /* 9, Count reg */
+          (0b01010,0b000) => TLBEntryHi.bits(),/* 10, TLB EntryHi */
+          (0b01011,0b000) => EXTZ(CP0Compare), /* 11, Compare reg */
+          (0b01100,0b000) => EXTZ(CP0Status.bits()),  /* 12, Status reg */
+          (0b01101,0b000) => EXTZ(CP0Cause.bits()),   /* 13, Cause reg */
+          (0b01110,0b000) => CP0EPC,           /* 14, EPC */
+          (0b01111,0b000) => EXTZ(0x00000400), /* 15, sel 0: PrID processor ID */
+          (0b01111,0b110) => EXTZ(0b0),        /* 15, sel 6: CHERI core ID */
+          (0b01111,0b111) => EXTZ(0b0),        /* 15, sel 7: CHERI thread ID */
+          (0b10000,0b000) => EXTZ(0b1 /* M */      /* 16, sel 0: Config0 */
+                                 @ 0b000000000000000 /* Impl */
+                                 @ 0b1               /* BE */
+                                 @ 0b10              /* AT */
+                                 @ 0b000             /* AR */
+                                 @ 0b001             /* MT standard TLB */
+                                 @ 0b0000            /* zero */
+                                 @ 0b000),
+          (0b10000,0b001) => EXTZ( /* 16, sel 1: Config1 */
+                                          0b1      /* M */
+                                        @ TLBIndexMax /* MMU size-1 */
+                                        @ 0b000    /* IS icache sets */
+                                        @ 0b000    /* IL icache lines */
+                                        @ 0b000    /* IA icache assoc. */
+                                        @ 0b000    /* DS dcache sets */
+                                        @ 0b000    /* DL dcache lines */
+                                        @ 0b000    /* DA dcache assoc. */
+			       	 @ bool_to_bits(have_cp2) /* C2 CP2 presence */
+                                        @ 0b0      /* MD MDMX implemented */
+                                        @ 0b0      /* PC performance counters */
+                                        @ 0b0      /* WR watch registers */
+                                        @ 0b0      /* CA 16e code compression */
+                                        @ 0b0      /* EP EJTAG */
+                                        @ 0b0),     /* FP FPU present */
+          (0b10000,0b010) => EXTZ( /* 16, sel 2: Config2 */
+                                          0b1     /* M */
+                                        @ 0b000   /* TU L3 control  */
+                                        @ 0b0000  /* TS L3 sets */
+                                        @ 0b0000  /* TL L3 lines */
+                                        @ 0b0000  /* TA L3 assoc. */
+                                        @ 0b0000  /* SU L2 control */
+                                        @ 0b0000  /* SS L2 sets */
+                                        @ 0b0000  /* SL L2 lines */
+                                        @ 0b0000), /* SA L2 assoc. */
+          (0b10000,0b011) => 0x0000000000002000, /* 16, sel 3: Config3 zero except for bit 13 == ulri */
+          (0b10000,0b101) => 0x0000000000000000, /* 16, sel 5: Config5 beri specific -- no extended TLB */
+          (0b10001,0b000) => CP0LLAddr,        /* 17, sel 0: LLAddr */
+          (0b10010,0b000) => EXTZ(0b0),        /* 18, WatchLo */
+          (0b10011,0b000) => EXTZ(0b0),        /* 19, WatchHi */
+          (0b10100,0b000) => TLBXContext.bits(), /* 20, XContext */
+          (0b11110,0b000) => CP0ErrorEPC,      /* 30, ErrorEPC */
+          _               => (SignalException(ResI))
         } in
   wGPR(rt) = if (double) then result else EXTS(result[31..0])
 }
 
 /* simulator halt instruction "MTC0 rt, r23" (cheri specific behaviour) */
-union ast member unit HCF
+union clause ast = HCF : unit
 function clause decode (0b010000 @ 0b00100 @ rt : regno @ 0b10111 @ 0b00000000000) =
-  Some((ast) HCF)
+  Some(HCF)
 
 function clause decode (0b010000 @ 0b00100 @ rt : regno @ 0b11010 @ 0b00000000000) =
-  Some((ast) HCF)
+  Some(HCF)
 
 function clause execute (HCF) =
   () /* halt instruction actually executed by interpreter framework */
 
-union ast member (regno, regno, bits(3), bool) MTC0
-function clause decode (0b010000 @ 0b00100 @ rt : regno @ rd : regno @ 0b00000000 @ (bits(3)) sel) =
+union clause ast = MTC0 : (regno, regno, bits(3), bool)
+function clause decode (0b010000 @ 0b00100 @ rt : regno @ rd : regno @ 0b00000000 @ sel : bits(3)) =
   Some(MTC0(rt, rd, sel, false)) /* MTC0 */
-function clause decode (0b010000 @ 0b00101 @ rt : regno @ rd : regno @ 0b00000000 @ (bits(3)) sel) =
+function clause decode (0b010000 @ 0b00101 @ rt : regno @ rd : regno @ 0b00000000 @ sel : bits(3)) =
   Some(MTC0(rt, rd, sel, true))  /* DMTC0 */
 function clause execute (MTC0(rt, rd, sel, double)) = {
   checkCP0Access();
-  let reg_val in : = (rGPR(rt))
-  match rd, sel
+  let reg_val = rGPR(rt) in
+  match (rd, sel)
     {
-      (0b00000,0b000)  => TLBIndex = mask(reg_val) /* NB no write to TLBProbe */
-      (0b00001,0b000)  => ()                        /* TLBRandom is read only */
-      (0b00010,0b000)  => TLBEntryLo0 = reg_val
-      (0b00011,0b000)  => TLBEntryLo1 = reg_val
-      (0b00100,0b000)  => (TLBContext.PTEBase) = (reg_val[63..23])
-      (0b00100,0b010)  => CP0UserLocal = reg_val
-      (0b00101,0b000)  => TLBPageMask  = (reg_val[28..13])
-      (0b00110,0b000)  => {
+      (0b00000,0b000) => TLBIndex = mask(reg_val), /* NB no write to TLBProbe */
+      (0b00001,0b000) => (),                       /* TLBRandom is read only */
+      (0b00010,0b000) => TLBEntryLo0->bits() = reg_val,
+      (0b00011,0b000) => TLBEntryLo1->bits() = reg_val,
+      (0b00100,0b000) => TLBContext->PTEBase() = reg_val[63..23],
+      (0b00100,0b010) => CP0UserLocal = reg_val,
+      (0b00101,0b000) => TLBPageMask  = reg_val[28..13],
+      (0b00110,0b000) => {
         TLBWired     = mask(reg_val);
         TLBRandom    = TLBIndexMax;
-      }
-      (0b00111,0b000)  => CP0HWREna = (reg_val[31..29] : 0b0000000000000000000000000 : reg_val[3..0])
-      (0b01000,0b000)  => () /* BadVAddr read only */
-      (0b01001,0b000)  => CP0Count = reg_val[31..0]
-      (0b01010,0b000)  => {
-        (TLBEntryHi.R)    = (reg_val[63..62]);
-        (TLBEntryHi.VPN2) = (reg_val[39..13]);
-        (TLBEntryHi.ASID) = (reg_val[7..0]);
-      }
-      (0b01011,0b000)  => {  /* 11, sel 0: Compare reg */
+      },
+      (0b00111,0b000) => CP0HWREna = (reg_val[31..29] @ 0b0000000000000000000000000 @ reg_val[3..0]),
+      (0b01000,0b000) => (), /* BadVAddr read only */
+      (0b01001,0b000) => CP0Count = reg_val[31..0],
+      (0b01010,0b000) => {
+        TLBEntryHi->R()    = reg_val[63..62];
+        TLBEntryHi->VPN2() = reg_val[39..13];
+        TLBEntryHi->ASID() = reg_val[7..0];
+      },
+      (0b01011,0b000) => {  /* 11, sel 0: Compare reg */
 	CP0Compare = reg_val[31..0];
-        (CP0Cause[15]) = bitzero;
-      }
-      (0b01100,0b000)  => {  /* 12 Status */
-        (CP0Status.CU)  = reg_val[31..28];
-        (CP0Status.BEV) = reg_val[22];
-        (CP0Status.IM)  = reg_val[15..8];
-        (CP0Status.KX)  = reg_val[7];
-        (CP0Status.SX)  = reg_val[6];
-        (CP0Status.UX)  = reg_val[5];
-        (CP0Status.KSU) = reg_val[4..3];
-        (CP0Status.ERL) = reg_val[2];
-        (CP0Status.EXL) = reg_val[1];
-        (CP0Status.IE)  = reg_val[0];
-      }
-      (0b01101,0b000)  => {   /* 13 Cause */
-        CP0Cause.IV = reg_val[23]; /* TODO special interrupt vector not implemeneted */
-        let ip = (bits(8)) (CP0Cause.IP) in
-        CP0Cause.IP = ((ip[7..2]) : (reg_val[9..8]));
-      }
-      (0b01110,0b000)  => CP0EPC      = reg_val EPC :         /* 14, */
-      (0b10000,0b000)  => () /* XXX ignore K0 cache config  16: Config0 */
-      (0b10100,0b000)  => (TLBXContext.PTEBase) = (reg_val[63..33])
-      (0b11110,0b000)  => CP0ErrorEPC = reg_val ErrorEPC :         /* 30, */
-      _                => (SignalException(ResI))
+        CP0Cause->IP() = CP0Cause.IP() & 0x7f; /* clear IP7 */
+      },
+      (0b01100,0b000) => {  /* 12 Status */
+        CP0Status->CU()  = reg_val[31..28];
+        CP0Status->BEV() = reg_val[22];
+        CP0Status->IM()  = reg_val[15..8];
+        CP0Status->KX()  = reg_val[7];
+        CP0Status->SX()  = reg_val[6];
+        CP0Status->UX()  = reg_val[5];
+        CP0Status->KSU() = reg_val[4..3];
+        CP0Status->ERL() = reg_val[2];
+        CP0Status->EXL() = reg_val[1];
+        CP0Status->IE()  = reg_val[0];
+      },
+      (0b01101,0b000) => {   /* 13 Cause */
+        CP0Cause->IV() = reg_val[23]; /* TODO special interrupt vector not implemeneted */
+        let ip = CP0Cause.IP() in
+        CP0Cause->IP() = ((ip[7..2]) @ (reg_val[9..8]));
+      },
+      (0b01110,0b000) => CP0EPC = reg_val, /* 14, EPC */
+      (0b10000,0b000) => (), /* XXX ignore K0 cache config  16: Config0 */
+      (0b10100,0b000) => TLBXContext->XPTEBase() = reg_val[63..33],
+      (0b11110,0b000) => CP0ErrorEPC = reg_val, /* 30, ErrorEPC */
+      _               => (SignalException(ResI))
     }
 }
 
-function unit TLBWriteEntry((TLBIndexT) idx) = {
-  pagemask = (bits(16)) (EXTZ(TLBPageMask)); /* XXX EXTZ here forces register read in ocaml shallow embedding */
+val TLBWriteEntry : TLBIndexT -> unit effect {rreg, wreg, escape}
+function TLBWriteEntry(idx) = {
+  pagemask = TLBPageMask;
   match pagemask {
-      0x0000  => ()
-      0x0003  => ()
-      0x000f  => ()
-      0x003f  => ()
-      0x00ff  => ()
-      0x03ff  => ()
-      0x0fff  => ()
-      0x3fff  => ()
-      0xffff  => ()
+      0x0000  => (),
+      0x0003  => (),
+      0x000f  => (),
+      0x003f  => (),
+      0x00ff  => (),
+      0x03ff  => (),
+      0x0fff  => (),
+      0x3fff  => (),
+      0xffff  => (),
       _       => (SignalException(MCheck))
   };
-  let idxr = unsigned(idx) in {
-  ((TLBEntries[idxr]).pagemask) = pagemask;
-  ((TLBEntries[idxr]).r       ) = TLBEntryHi.R;
-  ((TLBEntries[idxr]).vpn2    ) = TLBEntryHi.VPN2;
-  ((TLBEntries[idxr]).asid    ) = TLBEntryHi.ASID;
-  ((TLBEntries[idxr]).g       ) = ((TLBEntryLo0.G) & (TLBEntryLo1.G));
-  ((TLBEntries[idxr]).valid   ) = bitone;
-  ((TLBEntries[idxr]).caps0   ) = TLBEntryLo0.CapS;
-  ((TLBEntries[idxr]).capl0   ) = TLBEntryLo0.CapL;
-  ((TLBEntries[idxr]).pfn0    ) = TLBEntryLo0.PFN;
-  ((TLBEntries[idxr]).c0      ) = TLBEntryLo0.C;
-  ((TLBEntries[idxr]).d0      ) = TLBEntryLo0.D;
-  ((TLBEntries[idxr]).v0      ) = TLBEntryLo0.V;
-  ((TLBEntries[idxr]).caps1   ) = TLBEntryLo1.CapS;
-  ((TLBEntries[idxr]).capl1   ) = TLBEntryLo1.CapL;
-  ((TLBEntries[idxr]).pfn1    ) = TLBEntryLo1.PFN;
-  ((TLBEntries[idxr]).c1      ) = TLBEntryLo1.C;
-  ((TLBEntries[idxr]).d1      ) = TLBEntryLo1.D;
-  ((TLBEntries[idxr]).v1      ) = TLBEntryLo1.V;
+  let i as atom(_) = unsigned(idx) in
+  let entry = TLBEntries[i] in {
+    entry.pagemask() = pagemask;
+    entry.r()        = TLBEntryHi.R();
+    entry.vpn2()     = TLBEntryHi.VPN2();
+    entry.asid()     = TLBEntryHi.ASID();
+    entry.g()        = ((TLBEntryLo0.G()) & (TLBEntryLo1.G()));
+    entry.valid()    = bitone;
+    entry.caps0()    = TLBEntryLo0.CapS();
+    entry.capl0()    = TLBEntryLo0.CapL();
+    entry.pfn0()     = TLBEntryLo0.PFN();
+    entry.c0()       = TLBEntryLo0.C();
+    entry.d0()       = TLBEntryLo0.D();
+    entry.v0()       = TLBEntryLo0.V();
+    entry.caps1()    = TLBEntryLo1.CapS();
+    entry.capl1()    = TLBEntryLo1.CapL();
+    entry.pfn1()     = TLBEntryLo1.PFN();
+    entry.c1()       = TLBEntryLo1.C();
+    entry.d1()       = TLBEntryLo1.D();
+    entry.v1()       = TLBEntryLo1.V();
   }
 }
 
-union ast member TLBWI
+union clause ast = TLBWI : unit
 function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000010) = Some(TLBWI : ast)
 function clause execute (TLBWI) = {
   checkCP0Access();
   TLBWriteEntry(TLBIndex);
 }
 
-union ast member TLBWR
+union clause ast = TLBWR : unit
 function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000110) = Some(TLBWR : ast)
 function clause execute (TLBWR) = {
   checkCP0Access();
   TLBWriteEntry(TLBRandom);
 }
 
-union ast member TLBR
+union clause ast = TLBR : unit
 function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000001) = Some(TLBR : ast)
 function clause execute (TLBR) = {
   checkCP0Access();
-  let entry = TLBEntries[unsigned(TLBIndex)] in {
-    TLBPageMask     = entry.pagemask;
-    TLBEntryHi.R    = entry.r;
-    TLBEntryHi.VPN2 = entry.vpn2;
-    TLBEntryHi.ASID = entry.asid;
-    TLBEntryLo0.CapS= entry.caps0;
-    TLBEntryLo0.CapL= entry.capl0;
-    TLBEntryLo0.PFN = entry.pfn0;
-    TLBEntryLo0.C   = entry.c0;
-    TLBEntryLo0.D   = entry.d0;
-    TLBEntryLo0.V   = entry.v0;
-    TLBEntryLo0.G   = entry.g;
-    TLBEntryLo1.CapS= entry.caps1;
-    TLBEntryLo1.CapL= entry.capl1;
-    TLBEntryLo1.PFN = entry.pfn1;
-    TLBEntryLo1.C   = entry.c1;
-    TLBEntryLo1.D   = entry.d1;
-    TLBEntryLo1.V   = entry.v1;
-    TLBEntryLo1.G   = entry.g;
+  let i as atom(_) = unsigned(TLBIndex) in
+  let entry = reg_deref(TLBEntries[i]) in {
+    TLBPageMask        = entry.pagemask();
+    TLBEntryHi->R()    = entry.r();
+    TLBEntryHi->VPN2() = entry.vpn2();
+    TLBEntryHi->ASID() = entry.asid();
+    TLBEntryLo0->CapS()= entry.caps0();
+    TLBEntryLo0->CapL()= entry.capl0();
+    TLBEntryLo0->PFN() = entry.pfn0();
+    TLBEntryLo0->C()   = entry.c0();
+    TLBEntryLo0->D()   = entry.d0();
+    TLBEntryLo0->V()   = entry.v0();
+    TLBEntryLo0->G()   = entry.g();
+    TLBEntryLo1->CapS()= entry.caps1();
+    TLBEntryLo1->CapL()= entry.capl1();
+    TLBEntryLo1->PFN() = entry.pfn1();
+    TLBEntryLo1->C()   = entry.c1();
+    TLBEntryLo1->D()   = entry.d1();
+    TLBEntryLo1->V()   = entry.v1();
+    TLBEntryLo1->G()   = entry.g();
   }
 }
 
-union ast member TLBP
+union clause ast = TLBP : unit
 function clause decode (0b010000 @ 0b10000000000000000000 @ 0b001000) = Some(TLBP : ast)
 function clause execute ((TLBP)) = {
   checkCP0Access();
-  let result = tlbSearch(TLBEntryHi) in
+  let result = tlbSearch(TLBEntryHi.bits()) in
   match result {
     (Some(idx))  => {
       TLBProbe = [bitzero];
       TLBIndex = idx;
-    }
+    },
     None  => {
       TLBProbe = [bitone];
       TLBIndex = 0b000000;
@@ -1648,41 +1664,45 @@ function clause execute ((TLBP)) = {
   }
 }
 
-union ast member (regno, regno) RDHWR
+union clause ast = RDHWR : (regno, regno)
 function clause decode (0b011111 @ 0b00000 @ rt : regno @ rd : regno @ 0b00000 @ 0b111011) =
   Some(RDHWR(rt, rd))
 function clause execute (RDHWR(rt, rd)) = {
   let accessLevel = getAccessLevel() in
-  if ((accessLevel != Kernel) & (~((CP0Status.CU)[28])) & ~(CP0HWREna[rd])) then
+  let haveAccessLevel : bool = accessLevel == Kernel in
+  let haveCU0 : bool = bitone == (CP0Status.CU()[0]) in
+  let rdi as atom(_) = unsigned(rd) in
+  let haveHWREna : bool = bitone == (CP0HWREna[rdi]) in
+  if ~(haveAccessLevel | haveCU0 | haveHWREna) then
     (SignalException(ResI));
   let temp : bits(64) = match rd {
-    0b00000  => EXTZ([bitzero])  /* CPUNum */
-    0b00001  => EXTZ([bitzero])  /* SYNCI_step */
-    0b00010  => EXTZ(CP0Count) /* Count */
-    0b00011  => EXTZ([bitone])   /* Count resolution */
-    0b11101  => CP0UserLocal   /* User local register */
+    0b00000  => EXTZ([bitzero]),  /* CPUNum */
+    0b00001  => EXTZ([bitzero]),  /* SYNCI_step */
+    0b00010  => EXTZ(CP0Count), /* Count */
+    0b00011  => EXTZ([bitone]),   /* Count resolution */
+    0b11101  => CP0UserLocal,   /* User local register */
     _        => (SignalException(ResI))
   } in
   wGPR(rt) = temp;
 }
 
-union ast member unit ERET
+union clause ast = ERET : unit
 
 function clause decode (0b010000 @ 0b1 @ 0b0000000000000000000 @ 0b011000) =
-      Some((ast) ERET)
+      Some(ERET)
 function clause execute (ERET) =
       {
         checkCP0Access();
         ERETHook();
         CP0LLBit = 0b0;
-        if (CP0Status.ERL == bitone) then
+        if (CP0Status.ERL() == bitone) then
           {
             nextPC = CP0ErrorEPC;
-            CP0Status.ERL = 0;
+            CP0Status->ERL() = 0b0;
           }
         else
           {
             nextPC = CP0EPC;
-            CP0Status.EXL = 0;
+            CP0Status->EXL() = 0b0;
           }
       }

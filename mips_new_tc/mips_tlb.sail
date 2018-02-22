@@ -33,109 +33,116 @@
 /*========================================================================*/
 
 val tlbEntryMatch : (bits(2), bits(27), bits(8), TLBEntry) -> bool effect pure
-
-function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) =
-      let entryValid = entry.valid in
-      let entryR     = entry.r in
-      let entryMask  = entry.pagemask in
-      let entryVPN   = entry.vpn2 in
-      let entryASID  = entry.asid in
-      let entryG     = entry.g in
+function tlbEntryMatch(r, vpn2, asid, entry) =
+      let entryValid = entry.valid() in
+      let entryR     = entry.r() in
+      let entryMask  = entry.pagemask() in
+      let entryVPN   = entry.vpn2() in
+      let entryASID  = entry.asid() in
+      let entryG     = entry.g() in
+      let vpnMask : bits(27) = ~(EXTZ(entryMask)) in
       (entryValid &
        (r == entryR) &
-       ((vpn2 & ~((bits(27)) (EXTZ(entryMask)))) == ((entryVPN) & ~((bits(27)) (EXTZ(entryMask))))) &
+       ((vpn2 & vpnMask) == ((entryVPN) & vpnMask)) &
        ((asid == (entryASID)) | (entryG)))
 
-function option(TLBIndexT) tlbSearch((bits(64)) VAddr) =
+val tlbSearch : bits(64) -> option(TLBIndexT) effect {rreg}
+function tlbSearch(VAddr) =
   let r    = (VAddr[63..62]) in
   let vpn2 = (VAddr[39..13]) in
-  let asid = TLBEntryHi.ASID in {
+  let asid = TLBEntryHi.ASID() in {
     foreach (idx from 0 to 63) {
-      if(tlbEntryMatch(r, vpn2, asid, (TLBEntries[idx]))) then
-	return (Some ((TLBIndexT) (to_vec(idx))))
+      if(tlbEntryMatch(r, vpn2, asid, reg_deref(TLBEntries[idx]))) then
+	return Some(to_bits(6, idx))
     };
     None
   }
 
-function (bits(64), bool) TLBTranslate2 ((bits(64)) vAddr, (MemAccessType) accessType) = {
+/** For given virtual address and accessType returns physical address and
+bool flag indicating whether capability stores / loads are permitted for
+page (depending on access type). */
+
+val TLBTranslate2 : (bits(64), MemAccessType) -> (bits(64), bool) effect {rreg, wreg, undef, escape}
+function TLBTranslate2 (vAddr, accessType) = {
   let idx = tlbSearch(vAddr) in
   match idx {
-    (Some(idx))  =>
-    let entry = (TLBEntries[idx]) in
-    let entryMask = entry.pagemask in
-
-    let evenOddBit = ([|12:28|]) match (bits(16))(entryMask) {
-      0x0000  => 12
-      0x0003  => 14
-      0x000f  => 16
-      0x003f  => 18
-      0x00ff  => 20
-      0x03ff  => 22
-      0x0fff  => 24
-      0x3fff  => 26
-      0xffff  => 28
-      _       => undefined
-    } in
-    let isOdd = (vAddr[evenOddBit]) in
-    let if : caps, capl, pfn, d, v (isOdd) then
-	((bits(1)) (entry.caps1), (bits(1)) (entry.capl1), (bits(24)) (entry.pfn1), (bits(1)) (entry.d1), (bits(1)) (entry.v1))
+    Some(idx) =>
+      let i as atom(_) = unsigned(idx) in
+      let entry = reg_deref(TLBEntries[i]) in
+      let entryMask = entry.pagemask() in
+      let 'evenOddBit : range(12,28) = match (entryMask) {
+        0x0000  => 12,
+        0x0003  => 14,
+        0x000f  => 16,
+        0x003f  => 18,
+        0x00ff  => 20,
+        0x03ff  => 22,
+        0x0fff  => 24,
+        0x3fff  => 26,
+        0xffff  => 28,
+        _       => undefined
+      } in
+      let isOdd = (vAddr[evenOddBit]) in
+      let (caps : bits(1), capl : bits(1), pfn : bits(24), d : bits(1), v : bits(1))  =
+        if (isOdd) then
+          (entry.caps1(), entry.capl1(), entry.pfn1(), entry.d1(), entry.v1())
+        else
+          (entry.caps0(), entry.capl0(), entry.pfn0(), entry.d0(), entry.v0()) in
+      if (~(v)) then
+        SignalExceptionTLB(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr)
+      else if ((accessType == StoreData) & ~(d)) then
+        SignalExceptionTLB(TLBMod, vAddr)
       else
-	((bits(1)) (entry.caps0), (bits(1)) (entry.capl0), (bits(24)) (entry.pfn0), (bits(1)) (entry.d0), (bits(1)) (entry.v0)) in
-    if (~(v)) then
-      (SignalExceptionTLB(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr))
-    else if ((accessType == StoreData) & ~(d)) then
-      (SignalExceptionTLB(TLBMod, vAddr))
-    else
-      let res = (bits(64)) (EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])) in
-      (res, (bool) (if (accessType == StoreData) then caps else capl)) /* FIXME: get rid of explicit cast here */
-    None  =>  (SignalExceptionTLB(
-      if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr))
+        let res : bits(64) = EXTZ(pfn[23..(evenOddBit - 12)] @ vAddr[(evenOddBit - 1) .. 0]) in
+        (res,  bits_to_bool(if (accessType == StoreData) then caps else capl)),
+    None  =>  SignalExceptionTLB(
+      if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr)
   }
 }
 
-val cast_AccessLevel : cast AccessLevel -> [|0:2|] effect pure
-
-function [|0:2|] cast_AccessLevel level =
-{
-  switch level {
-    User  => 0
-    Supervisor  => 1
-    Kernel  => 2
+val cast_AccessLevel : AccessLevel -> int effect pure
+function cast_AccessLevel level =
+  match level {
+    User        => 0,
+    Supervisor  => 1,
+    Kernel      => 2
   }
-}
 
 /* perform TLB translation. bool is CHERI specific TLB bits noStoreCap/suppressTag */
-function (bits(64), bool) TLBTranslateC ((bits(64)) vAddr, (MemAccessType) accessType) = 
+val TLBTranslateC : (bits(64), MemAccessType) -> (bits(64), bool) effect {escape, rreg, undef, wreg}
+function TLBTranslateC (vAddr, accessType) = 
   {
     let currentAccessLevel = getAccessLevel() in
     let compat32 = (vAddr[61..31] == 0b1111111111111111111111111111111) in
-    let AccessLevel : requiredLevel, addr, option(bits(64)))) match (bits(2)) (vAddr[63..62]) {
-      0b11  => match compat32, (bits(2)) (vAddr[30..29]) { /* xkseg */
-	(true, 0b11)  => (Kernel, (option(bits(64))) None)               /* kseg3 mapped 32-bit compat */
-	(true, 0b10)  => (Supervisor, (option(bits(64))) None)           /* sseg  mapped 32-bit compat */
-	(true, 0b01)  => (Kernel, Some((bits(64)) (EXTZ(vAddr[28..0])))) /* kseg1 unmapped uncached 32-bit compat */
-	(true, 0b00)  => (Kernel, Some((bits(64)) (EXTZ(vAddr[28..0])))) /* kseg0 unmapped cached 32-bit compat */
-	(_, _)  => (Kernel, (option(bits(64))) None) /* xkseg mapped */
-      }
-      0b10  => (Kernel, Some((bits(64)) (EXTZ(vAddr[58..0]))))       /* xkphys bits 61-59 are cache mode (ignored) */
-      0b01  => (Supervisor, (option(bits(64))) None)                       /* xsseg - supervisor mapped */
-      0b00  => (User, (option(bits(64))) None) /* xuseg - user mapped */
+    let (requiredLevel, addr) : (AccessLevel, option(bits(64))) = match (vAddr[63..62]) {
+      0b11  => match (compat32, vAddr[30..29]) { /* xkseg */
+	(true, 0b11)  => (Kernel, None : option(bits(64))),               /* kseg3 mapped 32-bit compat */
+	(true, 0b10)  => (Supervisor, None : option(bits(64))),           /* sseg  mapped 32-bit compat */
+	(true, 0b01)  => (Kernel, Some(0x00000000 @ 0b000 @ vAddr[28..0])), /* kseg1 unmapped uncached 32-bit compat */
+	(true, 0b00)  => (Kernel, Some(0x00000000 @ 0b000 @ vAddr[28..0])), /* kseg0 unmapped cached 32-bit compat */
+	(_, _)        => (Kernel, None : option(bits(64))) /* xkseg mapped */
+      },
+      0b10  => (Kernel, Some(0b00000 @ vAddr[58..0])), /* xkphys bits 61-59 are cache mode (ignored) */
+      0b01  => (Supervisor, None : option(bits(64))),  /* xsseg - supervisor mapped */
+      0b00  => (User, None : option(bits(64)))         /* xuseg - user mapped */
     } in
-    if (((nat)currentAccessLevel) < ((nat)requiredLevel)) then
-      (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
+    if (cast_AccessLevel(currentAccessLevel) < cast_AccessLevel(requiredLevel)) then
+      SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr)
     else
-      let bit : pa, c[64], bool)) match addr {
-      (Some(a))  => (a, false)
-      None       => if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
-          (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
-        else
-          TLBTranslate2(vAddr, accessType)
+      let (pa, c) : (bits(64), bool) = match addr {
+        Some(a) => (a, false),
+        None    => if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
+            SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr)
+          else
+            TLBTranslate2(vAddr, accessType)
       }
       in if (unsigned(pa) > MAX_PA) then
-          (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
+          SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr)
         else
           (pa, c)
   }
 
-function (bits(64)) TLBTranslate ((bits(64)) vAddr, (MemAccessType) accessType) = 
-      let TLBTranslateC : addr, c(vAddr, accessType) in addr
+/* TLB translate function for MIPS (throws away capability flag) */
+val TLBTranslate : (bits(64), MemAccessType) -> bits(64) effect {rreg, wreg, escape, undef}
+function TLBTranslate (vAddr, accessType) = 
+      let (addr, c) = TLBTranslateC(vAddr, accessType) in addr

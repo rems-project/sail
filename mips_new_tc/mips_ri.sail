@@ -35,7 +35,7 @@
 /* mips_ri.sail: only use if want unknown instructions to throw
    exception (like real hardware) instead of die (convenient for ppcmem) */
 
-union ast member unit RI
+union clause ast = RI : unit
 function clause decode _ = Some(RI)
 function clause execute (RI) =
       SignalException (ResI)

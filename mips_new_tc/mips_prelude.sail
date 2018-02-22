@@ -35,9 +35,6 @@
 /* mips_prelude.sail: declarations of mips registers, and functions common 
    to mips instructions (e.g. address translation) */
 
-/* bit vectors have indices decreasing from left i.e. msb is highest index */
-default Order dec
-
 register PC : bits(64)
 register nextPC : bits(64)
 
@@ -80,9 +77,9 @@ bitfield ContextReg : bits(64) = {
 }
 
 bitfield XContextReg : bits(64) = {
-  PTEBase : 63.. 33,
-  R : 32.. 31,
-  BadVPN2 : 30..  4,
+  XPTEBase : 63.. 33,
+  XR : 32.. 31,
+  XBadVPN2 : 30..  4,
 }
 
 let TLBNumEntries = 64
@@ -128,7 +125,137 @@ register TLBWired : TLBIndexT
 register TLBEntryHi : TLBEntryHiReg
 register TLBXContext : XContextReg
 
-register TLBEntries : vector(64, dec, TLBEntry)
+register TLBEntry00 : TLBEntry
+register TLBEntry01 : TLBEntry
+register TLBEntry02 : TLBEntry
+register TLBEntry03 : TLBEntry
+register TLBEntry04 : TLBEntry
+register TLBEntry05 : TLBEntry
+register TLBEntry06 : TLBEntry
+register TLBEntry07 : TLBEntry
+register TLBEntry08 : TLBEntry
+register TLBEntry09 : TLBEntry
+register TLBEntry10 : TLBEntry
+register TLBEntry11 : TLBEntry
+register TLBEntry12 : TLBEntry
+register TLBEntry13 : TLBEntry
+register TLBEntry14 : TLBEntry
+register TLBEntry15 : TLBEntry
+register TLBEntry16 : TLBEntry
+register TLBEntry17 : TLBEntry
+register TLBEntry18 : TLBEntry
+register TLBEntry19 : TLBEntry
+register TLBEntry20 : TLBEntry
+register TLBEntry21 : TLBEntry
+register TLBEntry22 : TLBEntry
+register TLBEntry23 : TLBEntry
+register TLBEntry24 : TLBEntry
+register TLBEntry25 : TLBEntry
+register TLBEntry26 : TLBEntry
+register TLBEntry27 : TLBEntry
+register TLBEntry28 : TLBEntry
+register TLBEntry29 : TLBEntry
+register TLBEntry30 : TLBEntry
+register TLBEntry31 : TLBEntry
+register TLBEntry32 : TLBEntry
+register TLBEntry33 : TLBEntry
+register TLBEntry34 : TLBEntry
+register TLBEntry35 : TLBEntry
+register TLBEntry36 : TLBEntry
+register TLBEntry37 : TLBEntry
+register TLBEntry38 : TLBEntry
+register TLBEntry39 : TLBEntry
+register TLBEntry40 : TLBEntry
+register TLBEntry41 : TLBEntry
+register TLBEntry42 : TLBEntry
+register TLBEntry43 : TLBEntry
+register TLBEntry44 : TLBEntry
+register TLBEntry45 : TLBEntry
+register TLBEntry46 : TLBEntry
+register TLBEntry47 : TLBEntry
+register TLBEntry48 : TLBEntry
+register TLBEntry49 : TLBEntry
+register TLBEntry50 : TLBEntry
+register TLBEntry51 : TLBEntry
+register TLBEntry52 : TLBEntry
+register TLBEntry53 : TLBEntry
+register TLBEntry54 : TLBEntry
+register TLBEntry55 : TLBEntry
+register TLBEntry56 : TLBEntry
+register TLBEntry57 : TLBEntry
+register TLBEntry58 : TLBEntry
+register TLBEntry59 : TLBEntry
+register TLBEntry60 : TLBEntry
+register TLBEntry61 : TLBEntry
+register TLBEntry62 : TLBEntry
+register TLBEntry63 : TLBEntry
+
+let TLBEntries : vector(64, dec, register(TLBEntry)) = [
+    ref TLBEntry63,
+    ref TLBEntry62,
+    ref TLBEntry61,
+    ref TLBEntry60,
+    ref TLBEntry59,
+    ref TLBEntry58,
+    ref TLBEntry57,
+    ref TLBEntry56,
+    ref TLBEntry55,
+    ref TLBEntry54,
+    ref TLBEntry53,
+    ref TLBEntry52,
+    ref TLBEntry51,
+    ref TLBEntry50,
+    ref TLBEntry49,
+    ref TLBEntry48,
+    ref TLBEntry47,
+    ref TLBEntry46,
+    ref TLBEntry45,
+    ref TLBEntry44,
+    ref TLBEntry43,
+    ref TLBEntry42,
+    ref TLBEntry41,
+    ref TLBEntry40,
+    ref TLBEntry39,
+    ref TLBEntry38,
+    ref TLBEntry37,
+    ref TLBEntry36,
+    ref TLBEntry35,
+    ref TLBEntry34,
+    ref TLBEntry33,
+    ref TLBEntry32,
+    ref TLBEntry31,
+    ref TLBEntry30,
+    ref TLBEntry29,
+    ref TLBEntry28,
+    ref TLBEntry27,
+    ref TLBEntry26,
+    ref TLBEntry25,
+    ref TLBEntry24,
+    ref TLBEntry23,
+    ref TLBEntry22,
+    ref TLBEntry21,
+    ref TLBEntry20,
+    ref TLBEntry19,
+    ref TLBEntry18,
+    ref TLBEntry17,
+    ref TLBEntry16,
+    ref TLBEntry15,
+    ref TLBEntry14,
+    ref TLBEntry13,
+    ref TLBEntry12,
+    ref TLBEntry11,
+    ref TLBEntry10,
+    ref TLBEntry09,
+    ref TLBEntry08,
+    ref TLBEntry07,
+    ref TLBEntry06,
+    ref TLBEntry05,
+    ref TLBEntry04,
+    ref TLBEntry03,
+    ref TLBEntry02,
+    ref TLBEntry01,
+    ref TLBEntry00
+]
 
 register CP0Compare : bits(32)
 register CP0Cause : CauseReg
@@ -180,19 +307,21 @@ register UART_RVALID : bits(1)
 
 /* Check whether a given 64-bit vector is a properly sign extended 32-bit word */
 val NotWordVal : bits(64) -> bool effect pure
-function bool NotWordVal (word) =
+function NotWordVal (word) =
     (word[31] ^^ 32) != word[63..32]
 
 /* Read numbered GP reg. (r0 is always zero) */
 val rGPR : bits(5) -> bits(64) effect {rreg}
 function rGPR idx = {
-         if idx == 0 then 0 else GPR[idx]
+         let i as atom(_) = unsigned(idx) in
+         if i == 0 then 0x0000000000000000 else GPR[i]
 }
 
 /* Write numbered GP reg. (writes to r0 ignored) */
 val wGPR : (bits(5), bits(64)) -> unit effect {wreg}
 function wGPR (idx, v) = {
-         if idx == 0 then () else GPR[idx] = v
+         let i as atom(_) = unsigned(idx) in
+         if i == 0 then () else GPR[i] = v
 }
 
 val MEMr         : forall 'n. ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
@@ -212,52 +341,52 @@ enum Exception =
 
 /* Return the ISA defined code for an exception condition */
 function ExceptionCode (ex) : Exception -> bits(5)=
-   match ex
+   let x : bits(8) = match ex
    {
-      Interrupt    => mask(0x00), /* Interrupt */
-      TLBMod       => mask(0x01), /* TLB modification exception */
-      TLBL         => mask(0x02), /* TLB exception (load or fetch) */
-      TLBS         => mask(0x03), /* TLB exception (store) */
-      AdEL         => mask(0x04), /* Address error (load or fetch) */
-      AdES         => mask(0x05), /* Address error (store) */
-      Sys          => mask(0x08), /* Syscall */
-      Bp           => mask(0x09), /* Breakpoint */
-      ResI         => mask(0x0a), /* Reserved instruction */
-      CpU          => mask(0x0b), /* Coprocessor Unusable */
-      Ov           => mask(0x0c), /* Arithmetic overflow */
-      Tr           => mask(0x0d), /* Trap */
-      C2E          => mask(0x12), /* C2E coprocessor 2 exception */
-      C2Trap       => mask(0x12), /* C2Trap maps to same exception code, different vector */
-      XTLBRefillL  => mask(0x02),
-      XTLBRefillS  => mask(0x03),
-      XTLBInvL     => mask(0x02),
-      XTLBInvS     => mask(0x03),
-      MCheck       => mask(0x18)
-   }
+      Interrupt    => 0x00, /* Interrupt */
+      TLBMod       => 0x01, /* TLB modification exception */
+      TLBL         => 0x02, /* TLB exception (load or fetch) */
+      TLBS         => 0x03, /* TLB exception (store) */
+      AdEL         => 0x04, /* Address error (load or fetch) */
+      AdES         => 0x05, /* Address error (store) */
+      Sys          => 0x08, /* Syscall */
+      Bp           => 0x09, /* Breakpoint */
+      ResI         => 0x0a, /* Reserved instruction */
+      CpU          => 0x0b, /* Coprocessor Unusable */
+      Ov           => 0x0c, /* Arithmetic overflow */
+      Tr           => 0x0d, /* Trap */
+      C2E          => 0x12, /* C2E coprocessor 2 exception */
+      C2Trap       => 0x12, /* C2Trap maps to same exception code, different vector */
+      XTLBRefillL  => 0x02,
+      XTLBRefillS  => 0x03,
+      XTLBInvL     => 0x02,
+      XTLBInvS     => 0x03,
+      MCheck       => 0x18
+   } in x[4..0]
 
 
-val SignalExceptionMIPS : forall ('o : Type) . (Exception, bits(64)) -> 'o effect {escape}
+val SignalExceptionMIPS : forall ('o : Type) . (Exception, bits(64)) -> 'o effect {escape, rreg, wreg}
 function SignalExceptionMIPS (ex, kccBase) = 
   {
     /* Only update EPC and BD if not already in EXL mode */
-    if (~ (CP0Status.EXL)) then 
+    if (~ (CP0Status.EXL())) then 
       {
         if (inBranchDelay[0]) then
           {
             CP0EPC = PC - 4;
-            CP0Cause.BD = 1;
+            CP0Cause->BD() = 0b1;
           }
         else
           {
             CP0EPC = PC;
-            CP0Cause.BD = 0;
+            CP0Cause->BD() = 0b0;
           }
       };
 
       /* choose an exception vector to branch to. Some are not supported 
          e.g. Reset */
       vectorOffset = 
-        if (CP0Status.EXL) then
+        if (CP0Status.EXL()) then
           0x180 /* Always use common vector if in exception mode already */
         else if ((ex == XTLBRefillL) | (ex == XTLBRefillS)) then 
           0x080
@@ -265,15 +394,15 @@ function SignalExceptionMIPS (ex, kccBase) =
           0x280 /* Special vector for CHERI traps */
         else
           0x180; /* Common vector */
-      vectorBase : bits(64) = if CP0Status.BEV then
+      vectorBase : bits(64) = if CP0Status.BEV() then
                    0xFFFFFFFFBFC00200
                 else
                    0xFFFFFFFF80000000;
       /* On CHERI we have to subtract KCC.base so that we end up at the 
          right absolute vector address after indirecting via new PCC */
       nextPC = vectorBase + EXTS(vectorOffset) - kccBase;
-      CP0Cause.ExcCode      = ExceptionCode(ex);
-      CP0Status.EXL         = 1;
+      CP0Cause->ExcCode() = ExceptionCode(ex);
+      CP0Status->EXL()    = 0b1;
       exit (());
   }
 
@@ -289,11 +418,11 @@ function  SignalExceptionBadAddr(ex, badAddr) =
 val SignalExceptionTLB : forall ('o : Type) . (Exception, bits(64)) -> 'o effect {escape, rreg, wreg}
 function SignalExceptionTLB(ex, badAddr) = {
   CP0BadVAddr = badAddr;
-  (TLBContext.BadVPN2) = (badAddr[31..13]);
-  (TLBXContext.BadVPN2)= (badAddr[39..13]);
-  (TLBXContext.R)      = (badAddr[63..62]);
-  (TLBEntryHi.R)       = (badAddr[63..62]);
-  (TLBEntryHi.VPN2)    = (badAddr[39..13]);
+  TLBContext->BadVPN2()  = (badAddr[31..13]);
+  TLBXContext->XBadVPN2()= (badAddr[39..13]);
+  TLBXContext->XR()      = (badAddr[63..62]);
+  TLBEntryHi->R()        = (badAddr[63..62]);
+  TLBEntryHi->VPN2()     = (badAddr[39..13]);
   SignalException(ex);
 }
 
@@ -301,9 +430,9 @@ enum MemAccessType = {Instruction, LoadData, StoreData}
 enum AccessLevel = {User, Supervisor, Kernel} 
 
 function getAccessLevel() : unit -> AccessLevel=
-  if ((CP0Status.EXL) | (CP0Status.ERL)) then
+  if ((CP0Status.EXL()) | (CP0Status.ERL())) then
     Kernel
-  else match CP0Status.KSU
+  else match CP0Status.KSU()
     {
       0b00  => Kernel,
       0b01  => Supervisor,
@@ -311,30 +440,32 @@ function getAccessLevel() : unit -> AccessLevel=
       _     => User /* behaviour undefined, assume user */
     }
 
+val checkCP0Access : unit->unit effect{escape, rreg, wreg}
 function checkCP0Access () =
   {
     let accessLevel = getAccessLevel() in
-    if ((accessLevel != Kernel) & (~(CP0Status[28] /*CU0*/))) then
+    if ((accessLevel != Kernel) & (~(CP0Status.CU()[0]))) then
       {
-        (CP0Cause.CE) = 0b00;
+        CP0Cause->CE() = 0b00;
         SignalException(CpU);
       }
   }
 
+val incrementCP0Count : unit -> unit effect {rreg,wreg,escape}
 function incrementCP0Count() = {
   TLBRandom = (if (TLBRandom == TLBWired)
     then (TLBIndexMax) else (TLBRandom - 1));
 
   CP0Count = (CP0Count + 1);
   if (CP0Count == CP0Compare) then {
-    (CP0Cause[15]) = bitone; /* XXX indexing IP field here doesn't seem to work  */
+    CP0Cause->IP() = CP0Cause.IP() | 0x80; /* IP7 is timer interrupt  */
   };
 
-  let ims = CP0Status.IM in
-  let ips = CP0Cause.IP in
-  let ie  = CP0Status.IE in
-  let exl = CP0Status.EXL in
-  let erl = CP0Status.ERL in
+  let ims = CP0Status.IM() in
+  let ips = CP0Cause.IP() in
+  let ie  = CP0Status.IE() in
+  let exl = CP0Status.EXL() in
+  let erl = CP0Status.ERL() in
   if ((~(exl)) & (~(erl)) & ie & ((ips & ims) != 0x00)) then
     SignalException(Interrupt);
 }
@@ -367,22 +498,19 @@ enum Comparison = {
 
 val compare : (Comparison, bits(64), bits(64)) -> bool
 function compare (cmp, valA, valB) =
-   /* sail comparisons are signed so extend to 65 bits for unsigned comparisons */
-  let valA65 = (0b0 : valA) in
-  let valB65 = (0b0 : valB) in
   match cmp {
     EQ   => valA ==   valB,
     NE   => valA !=   valB,
-    GE   => valA >=   valB,
-    GEU  => valA65 >= valB65,
-    GT   => valA >    valB,
-    LE   => valA <=   valB,
-    LT   => valA <    valB,
-    LTU  => valA65 <  valB65
+    GE   => valA >=_s valB,
+    GEU  => valA >=_u valB,
+    GT   => valB <_s  valA,
+    LE   => valB >=_s valA,
+    LT   => valA <_s  valB,
+    LTU  => valA <_u  valB
   }
 enum WordType = { B, H, W, D}
 
-val wordWidthBytes : Wordwidthbytes -> range(1, 8)
+val wordWidthBytes : WordType -> range(1, 8)
 function wordWidthBytes(w) =
   match w {
     B  => 1,
@@ -415,10 +543,11 @@ let alignment_width = 16
 val isAddressAligned : (bits(64), WordType) -> bool
 function isAddressAligned (addr, wordType) =
   let a = unsigned(addr) in
-  quot(a, alignment_width) == quot(a + wordWidthBytes(wordType) - 1, alignment_width)
+  a / alignment_width == (a + wordWidthBytes(wordType) - 1) / alignment_width
 
-/*val reverse_endianness : forall Nat 'W, 'W >= 1. ([:'W:], bits(8 * 'W)) -> bits(8 * 'W) effect pure'
+val reverse_endianness = "reverse_endianness" : forall 'W, 'W >= 1. bits(8 * 'W) -> bits(8 * 'W) effect pure
 
+/*
 function rec forall Nat 'W, 'W >= 1. bits(8 * 'W) reverse_endianness' (w, value) =
 {
     ([:8 * 'W:]) width = length(value);
@@ -427,15 +556,16 @@ function rec forall Nat 'W, 'W >= 1. bits(8 * 'W) reverse_endianness' (w, value)
     else value[7..0] : reverse_endianness'(w - 1, value[(width - 1) .. 8])
 }
 
-val reverse_endianness : forall Nat 'W, 'W >= 1. bits(8 * 'W) -> bits(8 * 'W) effect pure
+
 
 function rec forall Nat 'W, 'W >= 1. bits(8 * 'W) reverse_endianness ((bits(8 * 'W)) value) =
 {
     reverse_endianness'(sizeof 'W, value)
 }*/
 
-val MEMr_wrapper : forall 'n, 1 <= 'n <=8 . (bits(64), atom('n)) -> bits(8*n) effect {rmem}
-function MEMr_wrapper (addr, size) = reverse_endianness(MEMr (addr, size)) /* TODO
+val MEMr_wrapper : forall 'n, 1 <= 'n <=8 . (bits(64), atom('n)) -> bits(8*'n) effect {rmem}
+function MEMr_wrapper (addr, size) = reverse_endianness(MEMr (addr, size))
+/* TODO
     if (addr == 0x000000007f000000) then
       {
         let rvalid = UART_RVALID in
@@ -450,6 +580,6 @@ function MEMr_wrapper (addr, size) = reverse_endianness(MEMr (addr, size)) /* TO
     else
       reverse_endianness(MEMr(addr, size)) /* MEMr assumes little endian */ */
 
-val MEMr_reserve_wrapper : forall 'n. ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
+val MEMr_reserve_wrapper : forall 'n, 1 <= 'n <= 8 . ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
 function MEMr_reserve_wrapper (addr , size) =
     reverse_endianness(MEMr_reserve(addr, size))
