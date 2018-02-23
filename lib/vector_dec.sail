@@ -7,7 +7,11 @@ type bits ('n : Int) = vector('n, dec, bit)
 
 val "eq_bit" : (bit, bit) -> bool
 
-val "eq_bits" : forall 'n. (vector('n, dec, bit), vector('n, dec, bit)) -> bool
+val eq_bits = {
+  ocaml: "eq_list",
+  lem: "eq_vec",
+  c: "eq_bits"
+} : forall 'n. (vector('n, dec, bit), vector('n, dec, bit)) -> bool
 
 overload operator == = {eq_bit, eq_bits}
 
@@ -29,7 +33,11 @@ val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
 val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
-val "truncate" : forall 'm 'n, 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
+val truncate = {
+  ocaml: "vector_truncate",
+  lem: "vector_truncate",
+  c: "truncate"
+} : forall 'm 'n, 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 
 val mask : forall 'len 'v, 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)
 

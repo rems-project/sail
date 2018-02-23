@@ -21,8 +21,8 @@ typedef char *sail_string;
 
 // This function should be called whenever a pattern match failure
 // occurs. Pattern match failures are always fatal.
-void sail_match_failure(void) {
-  fprintf(stderr, "Pattern match failure\n");
+void sail_match_failure(sail_string msg) {
+  fprintf(stderr, "Pattern match failure in %s\n", msg);
   exit(1);
 }
 
@@ -41,12 +41,12 @@ void elf_entry(mpz_t *rop, const unit u) {
   mpz_set_ui(*rop, 0x400130ul);
 }
 
-// Sail bits are mapped to ints where bitzero = 0 and bitone = 1
-bool eq_bit(const int a, const int b) {
+// Sail bits are mapped to uint64_t where bitzero = 0ul and bitone = 1ul
+bool eq_bit(const uint64_t a, const uint64_t b) {
   return a == b;
 }
 
-int undefined_bit(unit u) { return 0; }
+uint64_t undefined_bit(unit u) { return 0; }
 
 // ***** Sail booleans *****
 
@@ -683,7 +683,7 @@ void read_ram(bv_t *data, const mpz_t m, const mpz_t n, const bv_t x, const bv_t
 
   mpz_set_ui(*data->bits, instr);
   data->len = 32;
-  print_bits("instruction = ", *data);
+  // print_bits("instruction = ", *data);
 }
 
 // ***** Setup and cleanup functions for library code *****

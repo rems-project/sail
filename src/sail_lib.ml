@@ -149,6 +149,7 @@ let update_subrange (xs, n, m, ys) =
   in
   aux xs n ys
 
+let vector_truncate (xs, n) = take (Big_int.to_int n) xs
 
 let length xs = Big_int.of_int (List.length xs)
 
