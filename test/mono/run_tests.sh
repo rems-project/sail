@@ -52,10 +52,17 @@ mkdir -p "$OUTPUTDIR"
 
 echo > log
 
-for i in `ls $TESTSDIR/pass`;
+if [ -z "$1" ]
+then
+    TESTS=`ls $TESTSDIR/pass`
+else
+    TESTS="$@"
+fi
+
+for i in $TESTS;
 do
-    echo "Running test $i" >> log
     cd "$DIR"
+    echo "Running test $i" >> log
     if "$SAILDIR/sail" -lem -lem_mwords -lem_lib Test_extra -o out $(< "$TESTSDIR/pass/$i") &>>log;
     then
         mv out.lem out_types.lem "$OUTPUTDIR"
@@ -78,9 +85,9 @@ do
                          sail_operators_mwords.ml sail_instr_kinds.ml \
                          prompt_monad.ml prompt.ml state_monad.ml state.ml \
                          test_extra.ml out_types.ml out.ml ../test.ml \
-                         -o test &>>log
+                         -o test &>>"$DIR/log"
             then
-                if ./test &>>log
+                if ./test &>>"$DIR/log"
                 then
 	            green "tested $i expecting pass" "pass"
                 else
@@ -95,7 +102,7 @@ do
     else
 	red "tested $i expecting pass" "failed to generate Lem"
     fi
-    echo >> log
+    echo >> "$DIR/log"
 done
 
 finish_suite "monomorphisation tests"
