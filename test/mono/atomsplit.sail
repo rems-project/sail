@@ -10,22 +10,21 @@ overload operator * = {mult_range, mult_int, mult_real}
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 overload operator < = {lt_atom, lt_int}
 
-/* Should find a set constraint below the let */
+/* Test splitting required because there's a size calculation in the function */
 
-val f : forall 'n. atom('n) -> unit effect {escape}
+val foo : forall 'n. atom('n) -> unit effect {escape}
 
-function f(n) = {
-    let 'm = 2 * n in {
-      assert(constraint('n in {8,16}));
-      let x : bits('m) = replicate_bits(0b0,'m) in
-      ()
-    }
+function foo(n) = {
+  assert(constraint('n in {2,4}));
+  let 'm = 8 * n in
+  let x : bits('m) = replicate_bits(0b0,m) in
+  let y : bits('n) = replicate_bits(0b0,n) in
+  ()
 }
-
 
 val run : unit -> unit effect {escape}
 
 function run () = {
-    f(8);
-    f(16);
+    foo(2);
+    foo(4);
 }

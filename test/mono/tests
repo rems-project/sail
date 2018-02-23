@@ -8,3 +8,13 @@ vector -auto_mono
 union-exist -auto_mono
 set -auto_mono
 assert -auto_mono
+assert2 -auto_mono
+atomsplit -auto_mono
+castreq -auto_mono -undefined_gen
+control_deps -auto_mono
+exint -auto_mono -undefined_gen
+feature -auto_mono -undefined_gen -no_effects
+feature -auto_mono -undefined_gen
+times8div8 -auto_mono -undefined_gen
+times8 -auto_mono
+times8 -auto_mono -dmono_continue -dall_split_errors
