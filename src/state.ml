@@ -238,7 +238,7 @@ let register_refs_lem prefix_recordtype mwords registers =
     separate hardline setters ^^ hardline ^^
     string "  Nothing" ^^ hardline ^^ hardline ^^
     string "let register_accessors = (get_regval, set_regval)" ^^ hardline ^^ hardline ^^
-    string "let liftS = liftState register_accessors" ^^ hardline
+    string "let liftS s = liftState register_accessors s" ^^ hardline
   in
   separate hardline [generic_convs; refs; getters_setters]
 

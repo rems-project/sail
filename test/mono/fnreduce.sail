@@ -1,69 +1,86 @@
-(* Test constant propagation part of monomorphisation involving
+val add_int = {ocaml: "add_int", lem: "integerAdd"} : (int, int) -> int
+overload operator + = {add_int}
+val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
+val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
+overload operator == = {eq_int, eq_anything}
+
+
+/* Test constant propagation part of monomorphisation involving
    functions.  We should reduce a function application when the
    arguments are suitable values, the function is pure and the result
    is a value.
- *)
+ */
 
-typedef AnEnum = enumerate { One; Two; Three }
+enum AnEnum = One | Two | Three
 
-typedef EnumlikeUnion = const union { First; Second }
+union EnumlikeUnion = { First, Second }
 
-typedef ProperUnion = const union {
-  (AnEnum) Stuff;
-  (EnumlikeUnion) Nonsense;
+union ProperUnion = {
+  Stuff : AnEnum,
+  Nonsense : EnumLikeUnion
 }
 
-function AnEnum canReduce ((AnEnum) x) = {
-  switch (x) {
-  case One -> Two
-  case x -> x
+val canReduce : AnEnum -> AnEnum
+
+function canReduce (x) = {
+  match (x) {
+  One => Two,
+  x => x
   }
 }
 
-function nat cannotReduce ((AnEnum) x) = {
-  let (nat) y = switch (x) { case One -> 1 case _ -> 5 } in
+val cannotReduce : AnEnum -> int
+
+function cannotReduce (x) = {
+  let y : int = match (x) { One => 1, _ => 5 } in
   2 + y
 }
 
-function AnEnum effect {rreg} fakeUnpure ((AnEnum) x) = {
-  switch (x) {
-  case One -> Two
-  case x -> x
+register whatever : int
+
+val impure : AnEnum -> AnEnum effect {rreg}
+
+function impure (x) = {
+  match (x) {
+  One => Two,
+  x => let _ = whatever in x
   }
 }
 
-function EnumlikeUnion canReduceUnion ((AnEnum) x) = {
-  switch (x) {
-  case One -> First
-  case _ -> Second
+val canReduceUnion : AnEnum -> EnumlikeUnion
+
+function canReduceUnion (x) = {
+  match (x) {
+  One => First,
+  _ => Second
   }
 }
 
-function ProperUnion canReduceUnion2 ((AnEnum) x) = {
-  switch (x) {
-  case One -> Nonsense(First)
-  case y -> Stuff(y)
+val canReduceUnion2 : AnEnum -> ProperUnion
+
+function canReduceUnion2 (x) = {
+  match (x) {
+  One => Nonsense(First),
+  y => Stuff(y)
   }
 }
 
-(* FIXME LATER: once effect handling is in place we should get an error
-   because this isn't pure *)
 
-val AnEnum -> (AnEnum,nat,AnEnum,EnumlikeUnion,ProperUnion) effect pure test
+val test : AnEnum -> (AnEnum,int,AnEnum,EnumlikeUnion,ProperUnion) effect {rreg}
 
 function test (x) = {
   let a = canReduce(x) in
   let b = cannotReduce(x) in
-  let c = fakeUnpure(x) in
+  let c = impure(x) in
   let d = canReduceUnion(x) in
   let e = canReduceUnion2(x) in
   (a,b,c,d,e)
 }
 
-val unit -> bool effect pure run
+val run : unit -> unit effect {rreg,escape}
 
 function run () = {
-  test(One) == (Two,3,Two,First,Nonsense(First)) &
-  test(Two) == (Two,7,Two,Second,Stuff(Two)) &
-  test(Three) == (Three,7,Three,Second,Stuff(Three))
+  assert(test(One) == (Two,3,Two,First,Nonsense(First)));
+  assert(test(Two) == (Two,7,Two,Second,Stuff(Two)));
+  assert(test(Three) == (Three,7,Three,Second,Stuff(Three)));
 }

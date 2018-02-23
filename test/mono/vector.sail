@@ -1,21 +1,28 @@
-(* Check case splitting on a vector *)
-
 default Order dec
+type bits ('n : Int) = vector('n, dec, bit)
+val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
+overload operator == = {eq_int, eq_vec}
+val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+  (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
-val bit[32] -> nat effect pure test
 
-function nat test((bit[2]) sel : (bit[30]) _) = {
-  switch (sel) {
-    case 0b00 -> 5
-    case 0b10 -> 1
-    case _ -> 0
+/* Check case splitting on a vector */
+
+val test : bits(32) -> nat
+
+function test((sel : bits(2)) @ (_ : bits(30))) = {
+  match (sel) {
+    0b00 => 5,
+    0b10 => 1,
+    _ => 0
   }
 }
 
-val unit -> bool effect pure run
+val run : unit -> unit effect {escape}
 
 function run () = {
-  test(0x0f353533) == 5 &
-  test(0x84534656) == 1 &
-  test(0xf3463903) == 0
+  assert(test(0x0f353533) == 5);
+  assert(test(0x84534656) == 1);
+  assert(test(0xf3463903) == 0);
 }

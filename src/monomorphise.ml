@@ -993,6 +993,20 @@ let stop_at_false_assertions e =
     let l = Generated Unknown in
     E_aux (E_exit (E_aux (E_lit (L_aux (L_unit,l)),(l,None))),(l,None))
   in
+  let rec nc_false (NC_aux (nc,_)) =
+    match nc with
+    | NC_false -> true
+    | NC_and (nc1,nc2) -> nc_false nc1 || nc_false nc2
+    | _ -> false
+  in
+  let rec exp_false (E_aux (e,_)) =
+    match e with
+    | E_constraint nc -> nc_false nc
+    | E_lit (L_aux (L_false,_)) -> true
+    | E_app (Id_aux (Id "and_bool",_),[e1;e2]) ->
+       exp_false e1 || exp_false e2
+    | _ -> false
+  in
   let rec exp (E_aux (e,ann) as ea) =
     match e with
     | E_block es ->
@@ -1029,9 +1043,7 @@ let stop_at_false_assertions e =
           let e2,stop = exp e2 in
           E_aux (E_let (LB_aux (LB_val (p,e1),lbann),e2),ann), stop
        end
-    | E_assert (E_aux (E_constraint (NC_aux (NC_false,_)),_),_) ->
-       ea, Some (typ_of_annot ann)
-    | E_assert (E_aux (E_lit (L_aux (L_false,_)),_),_) ->
+    | E_assert (e1,_) when exp_false e1 ->
        ea, Some (typ_of_annot ann)
     | _ -> ea, None
   in fst (exp e)

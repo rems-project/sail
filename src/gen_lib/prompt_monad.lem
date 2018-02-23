@@ -125,7 +125,7 @@ let write_mem_val v = match bytes_of_bits v with
   | Just v ->
      let k successful = (return successful) in
      Write_memv (List.reverse v) k
-  | Nothing -> fail "write_mem_val"
+  | Nothing -> Fail "write_mem_val"
 end
 
 val read_reg : forall 's 'rv 'a 'e. register_ref 's 'rv 'a -> monad 'rv 'a 'e

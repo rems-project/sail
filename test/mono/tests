@@ -1,9 +1,20 @@
-fnreduce -mono-split fnreduce.sail:43:x
-varmatch -mono-split varmatch.sail:7:x
-vector -mono-split vector.sail:7:sel
-union-exist -mono-split union-exist.sail:9:v
+fnreduce -mono_split fnreduce.sail:43:x
+varmatch -mono_split varmatch.sail:7:x
+vector -mono_split vector.sail:7:sel
+union-exist -mono_split union-exist.sail:9:v
 fnreduce -auto_mono
 varmatch -auto_mono
 vector -auto_mono
 union-exist -auto_mono
 set -auto_mono
+assert -auto_mono
+assert2 -auto_mono
+atomsplit -auto_mono
+castreq -auto_mono -undefined_gen
+control_deps -auto_mono
+exint -auto_mono -undefined_gen
+feature -auto_mono -undefined_gen -no_effects
+feature -auto_mono -undefined_gen
+times8div8 -auto_mono -undefined_gen
+times8 -auto_mono
+times8 -auto_mono -dmono_continue -dall_split_errors

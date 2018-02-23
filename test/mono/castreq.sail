@@ -1,3 +1,25 @@
+$include <smt.sail>
+$include <flow.sail>
+default Order dec
+type bits ('n : Int) = vector('n, dec, bit)
+val operator & = "and_bool" : (bool, bool) -> bool
+val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+overload operator == = {eq_int, eq_vec}
+val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
+overload operator * = {mult_range, mult_int, mult_real}
+val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
+overload operator < = {lt_atom, lt_int}
+val "extz_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val extzv : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
+function extzv(v) = extz_vec(sizeof('m),v)
+val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append"} : forall ('n : Int) ('m : Int).
+  (bits('n), bits('m)) -> bits('n + 'm)
+overload append = {bitvector_concat}
+val bitvector_cast = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
+val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
+overload length = {bitvector_length}
+
+/* Test generation of casts across case splits (e.g., going from bits('m) to bits(32)) */
 
 val foo : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. bits('m) -> bits('n) effect pure
 
@@ -41,6 +63,7 @@ function assign(x) = {
   r
 }
 
+/* Adding casts for top-level pattern matches is not yet supported
 
 val foo2 : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (atom('n), bits('m)) -> bits('n) effect pure
 
@@ -58,4 +81,19 @@ function bar2(8,x) =
 and bar2(16,x) =
   use(x)
 
+*/
 
+val run : unit -> unit effect {escape,undef}
+
+function run () = {
+    bar(0x12);
+    bar(0x3456);
+    assert((ret(0x34) : bits(32)) == 0x00340034);
+    assert((ret(0x34) : bits(64)) == 0x0034003400340034);
+    assert((ret(0x3456) : bits(32)) == 0x34563456);
+    assert((ret(0x3456) : bits(64)) == 0x3456345634563456);
+    assert((assign(0x12) : bits(32)) == 0x00120012);
+    assert((assign(0x1234) : bits(32)) == 0x12341234);
+    assert((assign(0x12) : bits(64)) == 0x0012001200120012);
+    assert((assign(0x1234) : bits(64)) == 0x1234123412341234);
+}

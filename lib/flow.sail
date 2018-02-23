@@ -37,6 +37,11 @@ overload operator == = {eq_atom, eq_range, eq_int}
 overload operator | = {or_bool}
 overload operator & = {and_bool}
 
+overload operator <= = {lteq_atom, lteq_range_atom, lteq_atom_range}
+overload operator < = {lt_atom, lt_range_atom, lt_atom_range}
+overload operator >= = {gteq_atom, gteq_range_atom, gteq_atom_range}
+overload operator > = {gt_atom, gt_range_atom, gt_atom_range}
+
 $ifdef TEST
 
 val __flow_test : forall 'n 'm. (atom('n), atom('m)) -> unit

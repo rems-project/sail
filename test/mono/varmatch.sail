@@ -1,19 +1,24 @@
-(* Check that when we case split on a variable that the constant propagation
-   handles the default case correctly. *)
+val operator & = "and_bool" : (bool, bool) -> bool
+val operator == = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
 
-typedef AnEnum = enumerate { One; Two; Three }
+/* Check that when we case split on a variable that the constant propagation
+   handles the default case correctly. */
 
-function AnEnum foo((AnEnum) x) = {
-  switch (x) {
-  case One -> Two
-  case y -> y
+enum AnEnum = One | Two | Three
+
+val foo : AnEnum -> AnEnum
+
+function foo(x) = {
+  match (x) {
+  One => Two,
+  y => y
   }
 }
 
-val unit -> bool effect pure run
+val run : unit -> unit effect {escape}
 
 function run () = {
-  foo(One) == Two &
-  foo(Two) == Two &
-  foo(Three) == Three
+  assert(foo(One) == Two);
+  assert(foo(Two) == Two);
+  assert(foo(Three) == Three);
 }

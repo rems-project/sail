@@ -1,1 +1,3 @@
-if Testout_embed_sequential.run() then print_endline "OK" else print_endline "Failed";;
+match Out.run() with
+| Done _ -> exit 0
+| _ -> exit 1

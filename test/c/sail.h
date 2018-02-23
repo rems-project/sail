@@ -38,7 +38,7 @@ unit sail_exit(const unit u) {
 }
 
 void elf_entry(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, 0x8000ul);
+  mpz_set_ui(*rop, 0x400130ul);
 }
 
 // Sail bits are mapped to ints where bitzero = 0 and bitone = 1
@@ -240,6 +240,11 @@ void pow2(mpz_t *rop, mpz_t exp) {
 
 // ***** Sail bitvectors *****
 
+unit print_bits(const sail_string str, const bv_t op) {
+  fputs(str, stdout);
+  gmp_printf("%d'0x%ZX\n", op.len, op.bits);
+}
+
 void length_bv_t(mpz_t *rop, const bv_t op) {
   mpz_set_ui(*rop, op.len);
 }
@@ -278,13 +283,22 @@ void replicate_bits(bv_t *rop, const bv_t op1, const mpz_t op2) {
   rop->len = op1.len * op2_ui;
   mpz_set(*rop->bits, *op1.bits);
   for (int i = 1; i < op2_ui; i++) {
-    mpz_mul_2exp(*rop->bits, *rop->bits, op2_ui);
-    mpz_add(*rop->bits, *rop->bits, *op1.bits);
+    mpz_mul_2exp(*rop->bits, *rop->bits, op1.len);
+    mpz_ior(*rop->bits, *rop->bits, *op1.bits);
   }
 }
 
-void slice(bv_t *rop, const bv_t op, const mpz_t i, const mpz_t len) {
-  // TODO
+void slice(bv_t *rop, const bv_t op, const mpz_t start_mpz, const mpz_t len_mpz)
+{
+  uint64_t start = mpz_get_ui(start_mpz);
+  uint64_t len = mpz_get_ui(len_mpz);
+
+  mpz_set_ui(*rop->bits, 0ul);
+  rop->len = len;
+
+  for (uint64_t i = 0; i < len; i++) {
+    if (mpz_tstbit(*op.bits, i + start)) mpz_setbit(*rop->bits, i);
+  }
 }
 
 uint64_t convert_uint64_t_of_bv_t(const bv_t op) {
@@ -321,6 +335,12 @@ void mask(bv_t *rop) {
   }
 }
 
+void truncate(bv_t *rop, const bv_t op, const mpz_t len) {
+  rop->len = mpz_get_ui(len);
+  mpz_set(*rop->bits, *op.bits);
+  mask(rop);
+}
+
 void and_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len;
   mpz_and(*rop->bits, *op1.bits, *op2.bits);
@@ -341,8 +361,11 @@ void xor_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   mpz_xor(*rop->bits, *op1.bits, *op2.bits);
 }
 
+mpz_t eq_bits_test;
+
 bool eq_bits(const bv_t op1, const bv_t op2) {
-  return mpz_cmp(*op1.bits, *op2.bits) == 0;
+  mpz_xor(eq_bits_test, *op1.bits, *op2.bits);
+  return mpz_popcount(eq_bits_test) == 0;
 }
 
 void sail_uint(mpz_t *rop, const bv_t op) {
@@ -382,37 +405,122 @@ void sub_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
   mask(rop);
 }
 
-void get_slice_int(bv_t *rop, const mpz_t n, const mpz_t m, const mpz_t o) {
-  // TODO
+// Takes a slice of the (two's complement) binary representation of
+// integer n, starting at bit start, and of length len. With the
+// argument in the following order:
+//
+// get_slice_int(len, n, start)
+//
+// For example:
+//
+// get_slice_int(8, 1680, 4) =
+//
+//                    11           0
+//                    V            V
+// get_slice_int(8, 0b0110_1001_0000, 4) = 0b0110_1001
+//                    <-------^
+//                    (8 bit) 4
+//
+void get_slice_int(bv_t *rop, const mpz_t len_mpz, const mpz_t n, const mpz_t start_mpz)
+{
+  uint64_t start = mpz_get_ui(start_mpz);
+  uint64_t len = mpz_get_ui(len_mpz);
+
+  mpz_set_ui(*rop->bits, 0ul);
+  rop->len = len;
+
+  for (uint64_t i = 0; i < len; i++) {
+    if (mpz_tstbit(n, i + start)) mpz_setbit(*rop->bits, i);
+  }
 }
 
-void set_slice_int(mpz_t *rop, const mpz_t n, const mpz_t m, const mpz_t o, const bv_t op) {
-  // TODO
+// Set slice uses the same indexing scheme as get_slice_int, but it
+// puts a bitvector slice into an integer rather than returning it.
+void set_slice_int(mpz_t *rop,
+		   const mpz_t len_mpz,
+		   const mpz_t n,
+		   const mpz_t start_mpz,
+		   const bv_t slice)
+{
+  uint64_t start = mpz_get_ui(start_mpz);
+
+  mpz_set(*rop, n);
+
+  for (uint64_t i = 0; i < slice.len; i++) {
+    if (mpz_tstbit(*slice.bits, i)) {
+      mpz_setbit(*rop, i + start);
+    } else {
+      mpz_clrbit(*rop, i + start);
+    }
+  }
 }
 
-void vector_update_subrange_bv_t(bv_t *rop, const bv_t op, const mpz_t n, const mpz_t m, const bv_t slice) {
-  // TODO
+void vector_update_subrange_bv_t(bv_t *rop,
+				 const bv_t op,
+				 const mpz_t n_mpz,
+				 const mpz_t m_mpz,
+				 const bv_t slice)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  uint64_t m = mpz_get_ui(m_mpz);
+
+  mpz_set(*rop->bits, *op.bits);
+
+  for (uint64_t i = 0; i < n - (m - 1ul); i++) {
+    if (mpz_tstbit(*slice.bits, i)) {
+      mpz_setbit(*rop->bits, i + m);
+    } else {
+      mpz_clrbit(*rop->bits, i + m);
+    }
+  }
 }
 
-void vector_subrange_bv_t(bv_t *rop, const bv_t op, const mpz_t n, const mpz_t m) {
-  // TODO
+void vector_subrange_bv_t(bv_t *rop, const bv_t op, const mpz_t n_mpz, const mpz_t m_mpz)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  uint64_t m = mpz_get_ui(m_mpz);
+
+  mpz_set_ui(*rop->bits, 0ul);
+  rop->len = n - (m - 1ul);
+
+  for (uint64_t i = 0; i < rop->len; i++) {
+    if (mpz_tstbit(*op.bits, i + m)) {
+      mpz_setbit(*rop->bits, i);
+    } else {
+      mpz_clrbit(*rop->bits, i);
+    }
+  }
 }
 
-int bitvector_access(const bv_t op, const mpz_t n) {
-  return 0; // TODO
+int bitvector_access(const bv_t op, const mpz_t n_mpz) {
+  uint64_t n = mpz_get_ui(n_mpz);
+  return mpz_tstbit(*op.bits, n);
 }
 
 void hex_slice (bv_t *rop, const sail_string hex, const mpz_t n, const mpz_t m) {
-  // TODO
+  fprintf(stderr, "hex_slice unimplemented");
+  exit(1);
 }
 
-void set_slice (bv_t *rop, const mpz_t len, const mpz_t slen, const bv_t op, const mpz_t i, const bv_t slice) {
-  // TODO
-}
+void set_slice (bv_t *rop,
+		const mpz_t len_mpz,
+		const mpz_t slen_mpz,
+		const bv_t op,
+		const mpz_t start_mpz,
+		const bv_t slice)
+{
+  uint64_t start = mpz_get_ui(start_mpz);
 
-unit print_bits(const sail_string str, const bv_t op) {
-  fputs(str, stdout);
-  gmp_printf("%d'0x%ZX\n", op.len, op.bits);
+  mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
+
+  for (uint64_t i = 0; i < slice.len; i++) {
+    if (mpz_tstbit(*slice.bits, i)) {
+      mpz_setbit(*rop->bits, i + start);
+    } else {
+      mpz_clrbit(*rop->bits, i + start);
+    }
+  }
 }
 
 // ***** Real number implementation *****
@@ -424,10 +532,6 @@ unit print_bits(const sail_string str, const bv_t op) {
 typedef mpf_t real;
 
 #define FLOAT_PRECISION 255
-
-void setup_real(void) {
-  mpf_set_default_prec(FLOAT_PRECISION);
-}
 
 void init_real(real *rop) {
   mpf_init(*rop);
@@ -528,9 +632,67 @@ void init_real_of_sail_string(real *rop, const sail_string op) {
 // ***** Memory *****
 
 unit write_ram(const mpz_t m, const mpz_t n, const bv_t x, const bv_t y, const bv_t data) {
-  return UNIT;
+  fprintf(stderr, "write_ram unimplemented");
+  exit(1);
 }
 
-void read_ram(bv_t *data, const mpz_t m, const mpz_t n, const bv_t x, const bv_t y) {
-  // TODO
+void read_ram(bv_t *data, const mpz_t m, const mpz_t n, const bv_t x, const bv_t addr_bv) {
+  uint64_t addr = mpz_get_ui(*addr_bv.bits);
+  uint32_t instr;
+  switch (addr) {
+    // print_char
+  case 0x400110: instr = 0xd10043ffu; break;
+  case 0x400114: instr = 0x39003fe0u; break;
+  case 0x400118: instr = 0x39403fe0u; break;
+  case 0x40011c: instr = 0x580003e1u; break;
+  case 0x400120: instr = 0x39000020u; break;
+  case 0x400124: instr = 0xd503201fu; break;
+  case 0x400128: instr = 0x910043ffu; break;
+  case 0x40012c: instr = 0xd65f03c0u; break;
+    // _start
+  case 0x400130: instr = 0xa9be7bfdu; break;
+  case 0x400134: instr = 0x910003fdu; break;
+  case 0x400138: instr = 0x94000007u; break;
+  case 0x40013c: instr = 0xb9001fa0u; break;
+  case 0x400140: instr = 0x52800080u; break;
+  case 0x400144: instr = 0x97fffff3u; break;
+  case 0x400148: instr = 0xd503201fu; break;
+  case 0x40014c: instr = 0xa8c27bfdu; break;
+  case 0x400150: instr = 0xd65f03c0u; break;
+    // main
+  case 0x400154: instr = 0xd10043ffu; break;
+  case 0x400158: instr = 0xb9000fffu; break;
+  case 0x40015c: instr = 0xb9000bffu; break;
+  case 0x400160: instr = 0x14000007u; break;
+  case 0x400164: instr = 0xb9400fe0u; break;
+  case 0x400168: instr = 0x11000400u; break;
+  case 0x40016c: instr = 0xb9000fe0u; break;
+  case 0x400170: instr = 0xb9400be0u; break;
+  case 0x400174: instr = 0x11000400u; break;
+  case 0x400178: instr = 0xb9000be0u; break;
+  case 0x40017c: instr = 0xb9400be0u; break;
+  case 0x400180: instr = 0x710fa01fu; break;
+  case 0x400184: instr = 0x54ffff0du; break;
+  case 0x400188: instr = 0xb9400fe0u; break;
+  case 0x40018c: instr = 0x910043ffu; break;
+  case 0x400190: instr = 0xd65f03c0u; break;
+  case 0x400194: instr = 0x00000000u; break;
+  case 0x400198: instr = 0x13000000u; break;
+  case 0x40019c: instr = 0x00000000u; break;
+  }
+
+  mpz_set_ui(*data->bits, instr);
+  data->len = 32;
+  print_bits("instruction = ", *data);
+}
+
+// ***** Setup and cleanup functions for library code *****
+
+void setup_library(void) {
+  mpf_set_default_prec(FLOAT_PRECISION);
+  mpz_init(eq_bits_test);
+}
+
+void cleanup_library(void) {
+  mpz_clear(eq_bits_test);
 }

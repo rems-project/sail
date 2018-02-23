@@ -379,11 +379,13 @@ end
 (* just_list takes a list of maybes and returns Just xs if all elements have
    a value, and Nothing if one of the elements is Nothing. *)
 val just_list : forall 'a. list (maybe 'a) -> maybe (list 'a)
-let rec just_list [] = Just []
-and just_list (x :: xs) =
-  match (x, just_list xs) with
-    | (Just x, Just xs) -> Just (x :: xs)
-    | (_, _) -> Nothing
+let rec just_list l = match l with
+  | [] -> Just []
+  | (x :: xs) ->
+    match (x, just_list xs) with
+      | (Just x, Just xs) -> Just (x :: xs)
+      | (_, _) -> Nothing
+    end
   end
 declare {isabelle} termination_argument just_list = automatic
 
