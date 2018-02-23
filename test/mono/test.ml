@@ -1,3 +1,3 @@
-match Testout.run() with
-| Done _ -> print_endline "OK"
-| _ -> print_endline "Failed";;
+match Out.run() with
+| Done _ -> exit 0
+| _ -> exit 1
