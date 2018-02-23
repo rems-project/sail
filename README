@@ -1,6 +1,6 @@
 Sail README
 
-[Note that this describes the original Sail language, on the github master branch.  The current development version, on the github sail2 branch, is somewhat different; documentation for that is in progress] 
+[Note that this describes the original Sail language, on the github master branch.  The current development version, on the github sail2 branch, is somewhat different; documentation for that is in progress]
 
 
 Kathryn E. Gray and Peter Sewell
@@ -50,7 +50,7 @@ SAIL COMPILER
 The Sail compiler requires OCaml; it is tested on version 4.02.3.
 
 Run "make" in the top level sail directory; this will generate an executable
-called sail in this directory and will compile the interpreter files. 
+called sail in this directory and will compile the interpreter files.
 
 make clean will remove this executable as well as the build files in
 subdirectories.
@@ -61,13 +61,13 @@ The Sail interpreter relies on external access to two external tools:
 
     Lem: a specification language that generates theorem prover code
     for HOL4, Isabelle, and Coq, and executable OCaml code from a
-    specification.  It is a publicly available Bitbucket repository
-    https://bitbucket.org/Peter_Sewell/lem
+    specification.  It is a publicly available Github repository
+    https://github.com/rems-project/lem
 
     Linksem: a formal specification of ELF that includes the facility
     to read in an ELF file and represent them in uniform ways.  It is
-    a public Bitbucket repository
-    https://bitbucket.org/Peter_Sewell/linksem
+    a public Github repository
+    https://github.com/rems-project/linksem
 
 The Sail build system expects to find these repositories in the same
 directory as the sail repository by default. This can be changed with
@@ -80,7 +80,7 @@ directory.
 The interpreter currently only evaluates binaries and requires modifications
 to a file within the src/lem_interp directory to support new architectures.
 There is 'bit-rotted' support for evaluating separate sail files and function
-calls. 
+calls.
 
 MIPS SEQUENTIAL EVALUATOR
 
@@ -97,7 +97,7 @@ Todo: describe interpreter commands
 **************************************************************************
 EMACS MODE
 
-There is an emacs mode implementation very similar to the Tuareg mode in sail/editors 
+There is an emacs mode implementation very similar to the Tuareg mode in sail/editors
 
 **************************************************************************
 To get started, one probably wants to develop a new definition by
@@ -154,8 +154,8 @@ the 2-clause BSD licence in the headers of those files.
 ******************************************************************************
 DIRECTORY STRUCTURE
 
-Sail sources and binaries are to be found in the directories of
-bitbucket/sail  (l2 is the previous working name of sail).
+Sail sources and binaries are to be found in the directories of sail
+(l2 is the previous working name of sail).
 
 Top level directories
 src/            ML implementation of Sail frontend, Sail executable, subdirectories
@@ -190,7 +190,7 @@ gen_lib/                source directory of libaries used by generated back ends
 initial_check.ml        translate l2_parse grammar to l2 grammar
 initial_check_full.ml   performs sames checks as above as to kind well-formedness but over l2 grammar
 lem_interp/             source directory of interpreter
-lexer.mll               
+lexer.mll
 myocamlbuild.ml
 parse_ast.ml            symlink to language/l2_parse.ml
 parse.mly
@@ -215,7 +215,7 @@ Relevant make commands:
 make            Builds Sail executable (does not remake language files automatically)
 make interpreter Builds sail interpeter
 make run_mips.native Builds an executable sequential interpreter for MIPS Elf binaries
-make clean      
+make clean
 
 lem_interp directory
 instruction_extractor.lem processes a specification and identifies the ast nodes of instructions with appropriate tags to convert data types into/out of sail value type
