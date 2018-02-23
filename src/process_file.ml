@@ -48,6 +48,9 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+open PPrint
+open Pretty_print_common
+
 let opt_lem_sequential = ref false
 let opt_lem_mwords = ref false
 
@@ -243,7 +246,22 @@ let output_lem filename libs defs =
       "Sail_values";
       operators_module
     ] @ monad_modules
-    in
+  in
+  let isa_thy_name = String.capitalize filename ^ "_lemmas" in
+  let isa_lemmas =
+    separate hardline [
+      string ("theory " ^ isa_thy_name);
+      string  "  imports";
+      string  "    Sail.Sail_values_extras";
+      string  "    Sail.State_extras";
+      string ("    " ^ String.capitalize filename);
+      string  "begin";
+      string  "";
+      State.generate_isa_lemmas !Pretty_print_lem.opt_mwords defs;
+      string  "";
+      string  "end"
+    ] ^^ hardline
+  in
   let ((ot,_, _) as ext_ot) =
     open_output_with_check_unformatted (filename ^ "_types" ^ ".lem") in
   let ((o,_, _) as ext_o) =
@@ -253,7 +271,11 @@ let output_lem filename libs defs =
      (o, base_imports @ (String.capitalize types_module :: libs))
      defs generated_line);
   close_output_with_check ext_ot;
-  close_output_with_check ext_o
+  close_output_with_check ext_o;
+  let ((ol, _, _) as ext_ol) =
+    open_output_with_check_unformatted (isa_thy_name ^ ".thy") in
+  print ol isa_lemmas;
+  close_output_with_check ext_ol
 
 let rec iterate (f : int -> unit) (n : int) : unit =
   if n = 0 then ()

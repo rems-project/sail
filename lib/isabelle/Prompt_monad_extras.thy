@@ -1,5 +1,7 @@
 theory Prompt_monad_extras
-  imports Prompt_monad
+  imports
+    Prompt_monad
+    Sail_values_extras
 begin
 
 lemma All_bind_dom: "bind_dom (m, f)"
@@ -21,14 +23,18 @@ lemmas try_catch_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Wr
 
 datatype 'regval event =
   (* Request to read memory *)
-    e_read_mem read_kind int int "memory_byte list"
+    e_read_mem read_kind "bitU list" nat "memory_byte list"
+  | e_read_tag "bitU list" bitU
   (* Write is imminent, at address lifted, of size nat *)
-  | e_write_ea write_kind int int
+  | e_write_ea write_kind "bitU list" nat
   (* Request the result of store-exclusive *)
   | e_excl_res bool
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal *)
   | e_write_memv "memory_byte list" bool
+  | e_write_tagv bitU bool
+  (* Tell the system to dynamically recalculate dependency footprint *)
+  | e_footprint
   (* Request a memory barrier *)
   | e_barrier " barrier_kind "
   (* Request to read register *)
@@ -38,9 +44,12 @@ datatype 'regval event =
 
 inductive_set T :: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a, 'e) monad) set" where
   Read_mem: "((Read_mem rk addr sz k), e_read_mem rk addr sz v, k v) \<in> T"
+| Read_tag: "((Read_tag addr k), e_read_tag addr v, k v) \<in> T"
 | Write_ea: "((Write_ea wk addr sz k), e_write_ea wk addr sz, k) \<in> T"
 | Excl_res: "((Excl_res k), e_excl_res r, k r) \<in> T"
 | Write_memv: "((Write_memv v k), e_write_memv v r, k r) \<in> T"
+| Write_tagv: "((Write_tagv v k), e_write_tagv v r, k r) \<in> T"
+| Footprint: "((Footprint k), e_footprint, k) \<in> T"
 | Barrier: "((Barrier bk k), e_barrier bk, k) \<in> T"
 | Read_reg: "((Read_reg r k), e_read_reg r v, k v) \<in> T"
 | Write_reg: "((Write_reg r v k), e_write_reg r v, k) \<in> T"
@@ -58,6 +67,29 @@ lemmas Traces_ConsI = T.intros[THEN Step, rotated]
 
 inductive_cases Traces_NilE[elim]: "(s, [], s') \<in> Traces"
 inductive_cases Traces_ConsE[elim]: "(s, e # t, s') \<in> Traces"
+
+lemma Traces_cases:
+  fixes m :: "('rv, 'a, 'e) monad"
+  assumes Run: "(m, t, m') \<in> Traces"
+  obtains (Nil) a where "m = m'" and "t = []"
+  | (Read_mem) rk addr s k t' v where "m = Read_mem rk addr s k" and "t = e_read_mem rk addr s v # t'" and "(k v, t', m') \<in> Traces"
+  | (Read_tag) addr k t' v where "m = Read_tag addr k" and "t = e_read_tag addr v # t'" and "(k v, t', m') \<in> Traces"
+  | (Write_memv) val k t' v where "m = Write_memv val k" and "t = e_write_memv val v # t'" and "(k v, t', m') \<in> Traces"
+  | (Write_tagv) val k t' v where "m = Write_tagv val k" and "t = e_write_tagv val v # t'" and "(k v, t', m') \<in> Traces"
+  | (Barrier) bk k t' v where "m = Barrier bk k" and "t = e_barrier bk # t'" and "(k, t', m') \<in> Traces"
+  | (Read_reg) reg k t' v where "m = Read_reg reg k" and "t = e_read_reg reg v # t'" and "(k v, t', m') \<in> Traces"
+  | (Excl_res) k t' v where "m = Excl_res k" and "t = e_excl_res v # t'" and "(k v, t', m') \<in> Traces"
+  | (Write_ea) wk addr s k t' where "m = Write_ea wk addr s k" and "t = e_write_ea wk addr s # t'" and "(k, t', m') \<in> Traces"
+  | (Footprint) k t' where "m = Footprint k" and "t = e_footprint # t'" and "(k, t', m') \<in> Traces"
+  | (Write_reg) reg v k t' where "m = Write_reg reg v k" and "t = e_write_reg reg v # t'" and "(k, t', m') \<in> Traces"
+proof (use Run in \<open>cases m t m' set: Traces\<close>)
+  case Nil
+  then show ?thesis by (auto intro: that(1))
+next
+  case (Step e m'' t')
+  from \<open>(m, e, m'') \<in> T\<close> and \<open>t = e # t'\<close> and \<open>(m'', t', m') \<in> Traces\<close>
+  show ?thesis by (cases m e m'' rule: T.cases; elim that; blast)
+qed
 
 abbreviation Run :: "('rv, 'a, 'e) monad \<Rightarrow> 'rv event list \<Rightarrow> 'a \<Rightarrow> bool"
   where "Run s t a \<equiv> (s, t, Done a) \<in> Traces"
@@ -113,11 +145,6 @@ lemma Run_DoneE:
 
 lemma Run_Done_iff_Nil[simp]: "Run (Done a) t a' \<longleftrightarrow> t = [] \<and> a' = a"
   by (auto elim: Run_DoneE)
-
-lemma Run_BarrierE[elim!]:
-  assumes "Run (Barrier bk k) t a"
-  obtains t' where "t = e_barrier bk # t'" and "Run k t' a"
-  using assms by cases (auto elim: T.cases)
 
 lemma bind_cong[fundef_cong]:
   assumes m: "m1 = m2"

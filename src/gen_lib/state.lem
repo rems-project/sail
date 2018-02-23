@@ -11,12 +11,15 @@ open import {isabelle} `State_monad_extras`
 val liftState : forall 'regval 'regs 'a 'e. register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e
 let rec liftState ra s = match s with
   | (Done a)             -> returnS a
-  | (Read_mem rk a sz k) -> bindS (read_memS rk a sz)     (fun v -> liftState ra (k v))
-  | (Write_memv descr k) -> bindS (write_mem_valS descr)  (fun v -> liftState ra (k v))
-  | (Read_reg descr k)   -> bindS (read_regvalS ra descr) (fun v -> liftState ra (k v))
-  | (Excl_res k)         -> bindS (excl_resultS ())       (fun v -> liftState ra (k v))
-  | (Write_ea wk a sz k) -> seqS (write_mem_eaS wk a sz)  (liftState ra k)
-  | (Write_reg r v k)    -> seqS (write_regvalS ra r v)   (liftState ra k)
+  | (Read_mem rk a sz k) -> bindS (read_mem_bytesS rk a sz) (fun v -> liftState ra (k v))
+  | (Read_tag t k)       -> bindS (read_tagS t)             (fun v -> liftState ra (k v))
+  | (Write_memv a k)     -> bindS (write_mem_bytesS a)      (fun v -> liftState ra (k v))
+  | (Write_tagv t k)     -> bindS (write_tagS t)            (fun v -> liftState ra (k v))
+  | (Read_reg r k)       -> bindS (read_regvalS ra r)       (fun v -> liftState ra (k v))
+  | (Excl_res k)         -> bindS (excl_resultS ())         (fun v -> liftState ra (k v))
+  | (Write_ea wk a sz k) -> seqS (write_mem_eaS wk a sz)    (liftState ra k)
+  | (Write_reg r v k)    -> seqS (write_regvalS ra r v)     (liftState ra k)
+  | (Footprint k)        -> liftState ra k
   | (Barrier _ k)        -> liftState ra k
   | (Fail descr)         -> failS descr
   | (Error descr)        -> failS descr
@@ -24,99 +27,43 @@ let rec liftState ra s = match s with
 end
 
 
-(* TODO
-val iter_aux : forall 'regs 'e 'a. integer -> (integer -> 'a -> M 'regs unit 'e) -> list 'a -> M 'regs unit 'e
-let rec iter_aux i f xs = match xs with
-  | x :: xs -> f i x >> iter_aux (i + 1) f xs
-  | [] -> return ()
+val iterS_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
+let rec iterS_aux i f xs = match xs with
+  | x :: xs -> f i x >>$ iterS_aux (i + 1) f xs
+  | [] -> returnS ()
   end
 
-val iteri : forall 'regs 'e 'a. (integer -> 'a -> M 'regs unit 'e) -> list 'a -> M 'regs unit 'e
-let iteri f xs = iter_aux 0 f xs
+declare {isabelle} termination_argument iterS_aux = automatic
 
-val iter : forall 'regs 'e 'a. ('a -> M 'regs unit 'e) -> list 'a -> M 'regs unit 'e
-let iter f xs = iteri (fun _ x -> f x) xs
+val iteriS : forall 'rv 'a 'e. (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
+let iteriS f xs = iterS_aux 0 f xs
 
-val foreachM_inc : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'regs 'vars 'e) -> M 'regs 'vars 'e
-let rec foreachM_inc (i,stop,by) vars body =
-  if (by > 0 && i <= stop) || (by < 0 && stop <= i)
-  then
-    body i vars >>= fun vars ->
-    foreachM_inc (i + by,stop,by) vars body
-  else return vars
+val iterS : forall 'rv 'a 'e. ('a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
+let iterS f xs = iteriS (fun _ x -> f x) xs
+
+val foreachS : forall 'a 'rv 'vars 'e.
+  list 'a -> 'vars -> ('a -> 'vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e
+let rec foreachS xs vars body = match xs with
+  | [] -> returnS vars
+  | x :: xs ->
+     body x vars >>$= fun vars ->
+     foreachS xs vars body
+end
+
+declare {isabelle} termination_argument foreachS = automatic
 
 
-val foreachM_dec : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'regs 'vars 'e) -> M 'regs 'vars 'e
-let rec foreachM_dec (i,stop,by) vars body =
-  if (by > 0 && i >= stop) || (by < 0 && stop >= i)
-  then
-    body i vars >>= fun vars ->
-    foreachM_dec (i - by,stop,by) vars body
-  else return vars
+val whileS : forall 'rv 'vars 'e. 'vars -> ('vars -> monadS 'rv bool 'e) ->
+                ('vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e
+let rec whileS vars cond body s =
+  (cond vars >>$= (fun cond_val s' ->
+  if cond_val then
+    (body vars >>$= (fun vars s'' -> whileS vars cond body s'')) s'
+  else returnS vars s')) s
 
-val while_PP : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
-let rec while_PP vars cond body =
-  if cond vars then while_PP (body vars) cond body else vars
-
-val while_PM : forall 'regs 'vars 'e. 'vars -> ('vars -> bool) ->
-                ('vars -> M 'regs 'vars 'e) -> M 'regs 'vars 'e
-let rec while_PM vars cond body s =
-  if cond vars then
-    bind (body vars) (fun vars s' -> while_PM vars cond body s') s
-  else return vars s
-
-val while_MP : forall 'regs 'vars 'e. 'vars -> ('vars -> M 'regs bool 'e) ->
-                ('vars -> 'vars) -> M 'regs 'vars 'e
-let rec while_MP vars cond body s =
-  bind
-    (cond vars)
-    (fun cond_val s' ->
-      if cond_val then while_MP (body vars) cond body s' else return vars s') s
-
-val while_MM : forall 'regs 'vars 'e. 'vars -> ('vars -> M 'regs bool 'e) ->
-                ('vars -> M 'regs 'vars 'e) -> M 'regs 'vars 'e
-let rec while_MM vars cond body s =
-  bind
-    (cond vars)
-    (fun cond_val s' ->
-      if cond_val then
-        bind
-          (body vars)
-          (fun vars s'' -> while_MM vars cond body s'') s'
-      else return vars s') s
-
-val until_PP : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
-let rec until_PP vars cond body =
-  let vars = body vars in
-  if (cond vars) then vars else until_PP (body vars) cond body
-
-val until_PM : forall 'regs 'vars 'e. 'vars -> ('vars -> bool) ->
-                ('vars -> M 'regs 'vars 'e) -> M 'regs 'vars 'e
-let rec until_PM vars cond body s =
-  bind
-    (body vars)
-    (fun vars s' ->
-      if (cond vars) then return vars s' else until_PM vars cond body s') s
-
-val until_MP : forall 'regs 'vars 'e. 'vars -> ('vars -> M 'regs bool 'e) ->
-                ('vars -> 'vars) -> M 'regs 'vars 'e
-let rec until_MP vars cond body s =
-  let vars = body vars in
-  bind
-    (cond vars)
-    (fun cond_val s' ->
-      if cond_val then return vars s' else until_MP vars cond body s') s
-
-val until_MM : forall 'regs 'vars 'e. 'vars -> ('vars -> M 'regs bool 'e) ->
-                ('vars -> M 'regs 'vars 'e) -> M 'regs 'vars 'e
-let rec until_MM vars cond body s =
-  bind
-    (body vars)
-    (fun vars s' ->
-      bind
-        (cond vars)
-        (fun cond_val s''->
-          if cond_val then return vars s'' else until_MM vars cond body s'') s') s
-*)
+val untilS : forall 'rv 'vars 'e. 'vars -> ('vars -> monadS 'rv bool 'e) ->
+                ('vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e
+let rec untilS vars cond body s =
+  (body vars >>$= (fun vars s' ->
+  (cond vars >>$= (fun cond_val s'' ->
+  if cond_val then returnS vars s'' else untilS vars cond body s'')) s')) s

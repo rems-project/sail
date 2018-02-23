@@ -622,13 +622,13 @@ let doc_exp_lem, doc_let_lem =
                  | E_aux (E_let (LB_aux (LB_val (
                      P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _), _), _), body), _) -> id, body
                  | _ -> raise (Reporting_basic.err_unreachable l ("Unable to find loop variable in " ^ string_of_exp body)) in
-               let combinator = match effectful (effect_of body), ord_exp with
-                 | false, E_aux (E_lit (L_aux (L_false, _)), _) -> "foreach_dec"
-                 | false, E_aux (E_lit (L_aux (L_true, _)), _) -> "foreach_inc"
-                 | true, E_aux (E_lit (L_aux (L_false, _)), _) -> "foreachM_dec"
-                 | true, E_aux (E_lit (L_aux (L_true, _)), _) -> "foreachM_inc"
-                 | _ -> raise (Reporting_basic.err_unreachable l "Unable to figure out loop combinator") in
-               let indices_pp = parens (separate_map comma expY [exp1; exp2; exp3]) in
+               let step = match ord_exp with
+                 | E_aux (E_lit (L_aux (L_false, _)), _) ->
+                    parens (separate space [string "integerNegate"; expY exp3])
+                 | _ -> expY exp3
+               in
+               let combinator = if effectful (effect_of body) then "foreachM" else "foreach" in
+               let indices_pp = parens (separate space [string "index_list"; expY exp1; expY exp2; step]) in
                parens (
                    (prefix 2 1)
                      ((separate space) [string combinator; indices_pp; expY vartuple])
@@ -643,11 +643,14 @@ let doc_exp_lem, doc_let_lem =
           begin
             match args with
             | [cond; varstuple; body] ->
-               let csuffix = match effectful (effect_of cond), effectful (effect_of body) with
-                 | false, false -> "_PP"
-                 | false, true  -> "_PM"
-                 | true,  false -> "_MP"
-                 | true,  true  -> "_MM" in
+               let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
+               let csuffix, cond, body =
+                 match effectful (effect_of cond), effectful (effect_of body) with
+                   | false, false -> "", cond, body
+                   | false, true  -> "M", return cond, body
+                   | true,  false -> "M", cond, return body
+                   | true,  true  -> "M", cond, body
+               in
                parens (
                    (prefix 2 1)
                      ((separate space) [string (combinator ^ csuffix); expY varstuple])
@@ -717,7 +720,7 @@ let doc_exp_lem, doc_let_lem =
         | Some(env, (Typ_aux (Typ_app (tid, _), _)), _)
           when Env.is_record tid env ->
            let fname =
-             if prefix_recordtype
+             if prefix_recordtype && string_of_id tid <> "regstate"
              then (string (string_of_id tid ^ "_")) ^^ doc_id_lem id
              else doc_id_lem id in
            expY fexp ^^ dot ^^ fname
@@ -732,10 +735,11 @@ let doc_exp_lem, doc_let_lem =
        let eff = effect_of full_exp in
        let base_typ = Env.base_typ_of env typ in
        if has_effect eff BE_rreg then
-         let epp = separate space [string "read_reg";doc_id_lem id] in
+         let epp = separate space [string "read_reg";doc_id_lem (append_id id "_ref")] in
          if is_bitvector_typ base_typ
          then liftR (parens (epp ^^ doc_tannot_lem ctxt env true base_typ))
          else liftR epp
+       else if Env.is_register id env then doc_id_lem (append_id id "_ref")
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
     | E_lit lit -> doc_lit_lem lit
@@ -870,7 +874,7 @@ let doc_exp_lem, doc_let_lem =
 
   and doc_fexp ctxt recordtyp (FE_aux(FE_Fexp(id,e),_)) =
     let fname =
-      if prefix_recordtype
+      if prefix_recordtype && string_of_id recordtyp <> "regstate"
       then (string (string_of_id recordtyp ^ "_")) ^^ doc_id_lem id
       else doc_id_lem id in
     group (doc_op equals fname (top_exp ctxt true e))
@@ -886,8 +890,8 @@ let doc_exp_lem, doc_let_lem =
   and doc_lexp_deref_lem ctxt ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_field (le,id) ->
        parens (separate empty [doc_lexp_deref_lem ctxt le;dot;doc_id_lem id])
-    | LEXP_id id -> doc_id_lem id
-    | LEXP_cast (typ,id) -> doc_id_lem id
+    | LEXP_id id -> doc_id_lem (append_id id "_ref")
+    | LEXP_cast (typ,id) -> doc_id_lem (append_id id "_ref")
     | LEXP_tup lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem ctxt) lexps)
     | _ ->
        raise (Reporting_basic.err_unreachable l ("doc_lexp_deref_lem: Unsupported lexp"))
@@ -911,7 +915,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
        (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
        (doc_typschm_lem false typschm)
   | TD_record(id,nm,typq,fs,_) ->
-    let fname fid = if prefix_recordtype
+    let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
                     else doc_id_lem_type fid in
     let f_pp (typ,fid) =
@@ -1420,7 +1424,7 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
   let exc_typ = find_exc_typ defs in
   let typdefs, defs = List.partition is_typ_def defs in
   let statedefs, defs = List.partition is_state_def defs in
-  let register_refs = State.register_refs_lem prefix_recordtype !opt_mwords (State.find_registers defs) in
+  let register_refs = State.register_refs_lem !opt_mwords (State.find_registers defs) in
   (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;

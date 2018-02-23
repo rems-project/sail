@@ -1,7 +1,7 @@
 session "Sail" = "LEM" +
   options [document = false]
   theories
-    Sail_values
+    Sail_values_extras
     Prompt
     State_extras
     Sail_operators_mwords

@@ -4,17 +4,25 @@ open import Sail_instr_kinds
 open import Sail_values
 
 type register_name = string
+type address = list bitU
 
 type monad 'regval 'a 'e =
   | Done of 'a
-  | Read_mem of read_kind * integer * integer * (list memory_byte -> monad 'regval 'a 'e)
+  (* Read a number of bytes from memory, returned in little endian order *)
+  | Read_mem of read_kind * address * nat * (list memory_byte -> monad 'regval 'a 'e)
+  (* Read the tag of a memory address *)
+  | Read_tag of address * (bitU -> monad 'regval 'a 'e)
   (* Tell the system a write is imminent, at address lifted, of size nat *)
-  | Write_ea of write_kind * integer * integer * monad 'regval 'a 'e
+  | Write_ea of write_kind * address * nat * monad 'regval 'a 'e
   (* Request the result of store-exclusive *)
   | Excl_res of (bool -> monad 'regval 'a 'e)
   (* Request to write memory at last signalled address. Memory value should be 8
-     times the size given in ea signal *)
+     times the size given in ea signal, given in little endian order *)
   | Write_memv of list memory_byte * (bool -> monad 'regval 'a 'e)
+  (* Request to write the tag at last signalled address. *)
+  | Write_tagv of bitU * (bool -> monad 'regval 'a 'e)
+  (* Tell the system to dynamically recalculate dependency footprint *)
+  | Footprint of monad 'regval 'a 'e
   (* Request a memory barrier *)
   | Barrier of barrier_kind * monad 'regval 'a 'e
   (* Request to read register, will track dependency when mode.track_values *)
@@ -35,10 +43,13 @@ val bind : forall 'rv 'a 'b 'e. monad 'rv 'a 'e -> ('a -> monad 'rv 'b 'e) -> mo
 let rec bind m f = match m with
   | Done a -> f a
   | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> bind (k v) f)
+  | Read_tag a k ->       Read_tag a       (fun v -> bind (k v) f)
   | Write_memv descr k -> Write_memv descr (fun v -> bind (k v) f)
+  | Write_tagv t k ->     Write_tagv t     (fun v -> bind (k v) f)
   | Read_reg descr k ->   Read_reg descr   (fun v -> bind (k v) f)
   | Excl_res k ->         Excl_res         (fun v -> bind (k v) f)
   | Write_ea wk a sz k -> Write_ea wk a sz (bind k f)
+  | Footprint k ->        Footprint        (bind k f)
   | Barrier bk k ->       Barrier bk       (bind k f)
   | Write_reg r v k ->    Write_reg r v    (bind k f)
   | Fail descr ->         Fail descr
@@ -63,10 +74,13 @@ val try_catch : forall 'rv 'a 'e1 'e2. monad 'rv 'a 'e1 -> ('e1 -> monad 'rv 'a 
 let rec try_catch m h = match m with
   | Done a ->             Done a
   | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> try_catch (k v) h)
+  | Read_tag a k ->       Read_tag a       (fun v -> try_catch (k v) h)
   | Write_memv descr k -> Write_memv descr (fun v -> try_catch (k v) h)
+  | Write_tagv t k ->     Write_tagv t     (fun v -> try_catch (k v) h)
   | Read_reg descr k ->   Read_reg descr   (fun v -> try_catch (k v) h)
   | Excl_res k ->         Excl_res         (fun v -> try_catch (k v) h)
   | Write_ea wk a sz k -> Write_ea wk a sz (try_catch k h)
+  | Footprint k ->        Footprint        (try_catch k h)
   | Barrier bk k ->       Barrier bk       (try_catch k h)
   | Write_reg r v k ->    Write_reg r v    (try_catch k h)
   | Fail descr ->         Fail descr
@@ -106,11 +120,8 @@ let try_catchR m h =
 
 val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e
 let read_mem rk addr sz =
-  let addr = unsigned addr in
-  let k bytes =
-    let bitv = bits_of_bytes (List.reverse bytes) in
-    (Done bitv) in
-  Read_mem rk addr sz k
+  let k bytes = Done (bits_of_mem_bytes bytes) in
+  Read_mem rk (bits_of addr) (natFromInteger sz) k
 
 val excl_result : forall 'rv 'e. unit -> monad 'rv bool 'e
 let excl_result () =
@@ -118,13 +129,11 @@ let excl_result () =
   Excl_res k
 
 val write_mem_ea : forall 'rv 'a 'e. Bitvector 'a => write_kind -> 'a -> integer -> monad 'rv unit 'e
-let write_mem_ea wk addr sz = Write_ea wk (unsigned addr) sz (Done ())
+let write_mem_ea wk addr sz = Write_ea wk (bits_of addr) (natFromInteger sz) (Done ())
 
 val write_mem_val : forall 'rv 'a 'e. Bitvector 'a => 'a -> monad 'rv bool 'e
-let write_mem_val v = match bytes_of_bits v with
-  | Just v ->
-     let k successful = (return successful) in
-     Write_memv (List.reverse v) k
+let write_mem_val v = match mem_bytes_of_bits v with
+  | Just v -> Write_memv v return
   | Nothing -> Fail "write_mem_val"
 end
 
@@ -182,5 +191,5 @@ let write_reg_field_bit = write_reg_field_pos*)
 val barrier : forall 'rv 'e. barrier_kind -> monad 'rv unit 'e
 let barrier bk = Barrier bk (Done ())
 
-(*val footprint : forall 'rv 'e. monad 'rv unit 'e
-let footprint = Footprint (Done ())*)
+val footprint : forall 'rv 'e. unit -> monad 'rv unit 'e
+let footprint _ = Footprint (Done ())

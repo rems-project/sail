@@ -148,6 +148,8 @@ module Env : sig
 
   val is_union_constructor : id -> t -> bool
 
+  val is_register : id -> t -> bool
+
   (** Return a fresh kind identifier that doesn't exist in the
      environment. The optional argument bases the new identifer on the
      old one. *)

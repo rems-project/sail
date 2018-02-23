@@ -205,18 +205,15 @@ let rec bits_of_nat_aux x =
 declare {isabelle} termination_argument bits_of_nat_aux = automatic
 let bits_of_nat n = List.reverse (bits_of_nat_aux n)
 
-val nat_of_bits : list bitU -> natural
-let nat_of_bits bits =
-  let (sum,_) =
-    List.foldr
-      (fun b (acc,exp) ->
-        match b with
-        | B1 -> (acc + naturalPow 2 exp, exp + 1)
-        | B0 -> (acc, exp + 1)
-        | BU -> failwith "nat_of_bits: bitvector has undefined bits"
-        end)
-      (0,0) bits in
-  sum
+val nat_of_bits_aux : natural -> list bitU -> natural
+let rec nat_of_bits_aux acc bs = match bs with
+  | [] -> acc
+  | B1 :: bs -> nat_of_bits_aux ((2 * acc) + 1) bs
+  | B0 :: bs -> nat_of_bits_aux (2 * acc) bs
+  | BU :: _ -> failwith "nat_of_bits_aux: bit list has undefined bits"
+end
+declare {isabelle} termination_argument nat_of_bits_aux = automatic
+let nat_of_bits bits = nat_of_bits_aux 0 bits
 
 let not_bits = List.map not_bit
 
@@ -543,6 +540,9 @@ let bytes_of_bits bs = byte_chunks (bits_of bs)
 val bits_of_bytes : forall 'a. Bitvector 'a => list memory_byte -> 'a
 let bits_of_bytes bs = of_bits (List.concat (List.map bits_of bs))
 
+let mem_bytes_of_bits bs = Maybe.map List.reverse (bytes_of_bits bs)
+let bits_of_mem_bytes bs = bits_of_bytes (List.reverse bs)
+
 (*val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> list bitU
 let bitv_of_byte_lifteds v =
   foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v
@@ -612,7 +612,7 @@ type register_ref 'regstate 'regval 'a =
   <| name : string;
      (*is_inc : bool;*)
      read_from : 'regstate -> 'a;
-     write_to : 'regstate -> 'a -> 'regstate;
+     write_to : 'a -> 'regstate -> 'regstate;
      of_regval : 'regval -> maybe 'a;
      regval_of : 'a -> 'regval |>
 
@@ -750,24 +750,28 @@ let internal_mem_value bytes =
   List.reverse bytes $> bitv_of_byte_lifteds*)
 
 
+val foreach : forall 'a 'vars.
+  (list 'a) -> 'vars -> ('a -> 'vars -> 'vars) -> 'vars
+let rec foreach [] vars _ = vars
+and foreach (x :: xs) vars body = foreach xs (body x vars) body
 
+declare {isabelle} termination_argument foreach = automatic
 
+val index_list : integer -> integer -> integer -> list integer
+let rec index_list from to step =
+  if (step > 0 && from <= to) || (step < 0 && to <= from) then
+    from :: index_list (from + step) to step
+  else []
 
-val foreach_inc :  forall 'vars. (integer * integer * integer) -> 'vars ->
-                   (integer -> 'vars -> 'vars) -> 'vars
-let rec foreach_inc (i,stop,by) vars body =
-  if (by > 0 && i <= stop) || (by < 0 && stop <= i)
-  then let vars = body i vars in
-       foreach_inc (i + by,stop,by) vars body
-  else vars
+val while : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
+let rec while vars cond body =
+  if cond vars then while (body vars) cond body else vars
 
-val foreach_dec : forall 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> 'vars) -> 'vars
-let rec foreach_dec (i,stop,by) vars body =
-  if (by > 0 && i >= stop) || (by < 0 && stop >= i)
-  then let vars = body i vars in
-       foreach_dec (i - by,stop,by) vars body
-  else vars
+val until : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
+let rec until vars cond body =
+  let vars = body vars in
+  if cond vars then vars else until (body vars) cond body
+
 
 let assert' b msg_opt =
   let msg = match msg_opt with

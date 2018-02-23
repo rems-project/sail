@@ -177,7 +177,7 @@ let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
      let id = string_of_id (regval_constr_id mwords typ) in
      "(fun v -> " ^ id ^ "_of_regval v)", "(fun v -> regval_of_" ^ id ^ " v)"
 
-let register_refs_lem prefix_recordtype mwords registers =
+let register_refs_lem mwords registers =
   let generic_convs =
     separate_map hardline string [
       "val vector_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (list 'a)";
@@ -212,20 +212,20 @@ let register_refs_lem prefix_recordtype mwords registers =
   in
   let register_ref (typ, id) =
     let idd = string (string_of_id id) in
-    let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in
+    (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_lem mwords typ in
-    concat [string "let "; idd; string " = <|"; hardline;
+    concat [string "let "; idd; string "_ref = <|"; hardline;
       string "  name = \""; idd; string "\";"; hardline;
-      string "  read_from = (fun s -> s."; field; string ");"; hardline;
-      string "  write_to = (fun s v -> (<| s with "; field; string " = v |>));"; hardline;
+      string "  read_from = (fun s -> s."; idd; string ");"; hardline;
+      string "  write_to = (fun v s -> (<| s with "; idd; string " = v |>));"; hardline;
       string "  of_regval = "; string of_regval; string ";"; hardline;
       string "  regval_of = "; string regval_of; string " |>"; hardline]
   in
   let refs = separate_map hardline register_ref registers in
   let get_set_reg (_, id) =
     let idd = string_of_id id in
-    string ("  if reg_name = \"" ^ idd ^ "\" then Just (" ^ idd ^ ".regval_of (" ^ idd ^ ".read_from s)) else"),
-    string ("  if reg_name = \"" ^ idd ^ "\" then Maybe.map (" ^ idd ^ ".write_to s) (" ^ idd ^ ".of_regval v) else")
+    string ("  if reg_name = \"" ^ idd ^ "\" then Just (" ^ idd ^ "_ref.regval_of (" ^ idd ^ "_ref.read_from s)) else"),
+    string ("  if reg_name = \"" ^ idd ^ "\" then Maybe.map (fun v -> " ^ idd ^ "_ref.write_to v s) (" ^ idd ^ "_ref.of_regval v) else")
   in
   let getters_setters =
     let getters, setters = List.split (List.map get_set_reg registers) in
@@ -237,10 +237,71 @@ let register_refs_lem prefix_recordtype mwords registers =
     string "let set_regval reg_name v s =" ^^ hardline ^^
     separate hardline setters ^^ hardline ^^
     string "  Nothing" ^^ hardline ^^ hardline ^^
-    string "let register_accessors = (get_regval, set_regval)" ^^ hardline ^^ hardline ^^
-    string "let liftS s = liftState register_accessors s" ^^ hardline
+    string "let register_accessors = (get_regval, set_regval)" ^^ hardline ^^ hardline
+    (* string "let liftS s = liftState register_accessors s" ^^ hardline *)
   in
   separate hardline [generic_convs; refs; getters_setters]
+
+let generate_isa_lemmas mwords (Defs defs : tannot defs) =
+  let rec drop_while f = function
+    | x :: xs when f x -> drop_while f xs
+    | xs -> xs
+  in
+  let remove_leading_underscores str =
+    String.concat "_" (drop_while (fun s -> s = "") (Util.split_on_char '_' str))
+  in
+  let remove_trailing_underscores str =
+    Util.split_on_char '_' str |> List.rev |>
+    drop_while (fun s -> s = "") |> List.rev |>
+    String.concat "_"
+  in
+  let registers = find_registers defs in
+  let regtyp_ids =
+    register_base_types mwords (List.map fst registers)
+    |> Bindings.bindings |> List.map fst
+  in
+  let register_defs =
+    let reg_id id = remove_leading_underscores (string_of_id id) in
+    hang 2 (flow_map (break 1) string
+      (["lemmas register_defs"; "="; "get_regval_def"; "set_regval_def"] @
+      (List.map (fun (typ, id) -> reg_id id ^ "_ref_def") registers)))
+  in
+  let conv_lemma typ_id =
+    let typ_id = remove_trailing_underscores (string_of_id typ_id) in
+    let typ_id' = remove_leading_underscores typ_id in
+    string ("lemma regval_" ^ typ_id ^ "[simp]:") ^^ hardline ^^
+    string ("  \"" ^ typ_id' ^ "_of_regval (regval_of_" ^ typ_id ^ " v) = Some v\"") ^^ hardline ^^
+    string ("  by (auto simp: regval_of_" ^ typ_id ^ "_def)")
+  in
+  let register_lemmas (typ, id) =
+    let id = remove_leading_underscores (string_of_id id) in
+    let id' = remove_trailing_underscores id in
+    separate_map hardline string [
+      "lemma liftS_read_reg_" ^ id ^ "[simp]:";
+      "  \"liftS (read_reg " ^ id ^ "_ref) = readS (" ^ id' ^ " \\<circ> regstate)\"";
+      "  by (auto simp: liftState_read_reg_readS register_defs)";
+      "";
+      "lemma liftS_write_reg_" ^ id ^ "[simp]:";
+      "  \"liftS (write_reg " ^ id ^ "_ref v) = updateS (regstate_update (" ^ id' ^ "_update (\\<lambda>_. v)))\"";
+      "  by (auto simp: liftState_write_reg_updateS register_defs)"
+    ]
+  in
+  string "abbreviation \"liftS \\<equiv> liftState (get_regval, set_regval)\"" ^^
+  hardline ^^ hardline ^^
+  register_defs ^^
+  hardline ^^ hardline ^^
+  separate_map (hardline ^^ hardline) conv_lemma regtyp_ids ^^
+  hardline ^^ hardline ^^
+  separate_map hardline string [
+    "lemma vector_of_rv_rv_of_vector[simp]:";
+    "  assumes \"\\<And>v. of_rv (rv_of v) = Some v\"";
+    "  shows \"vector_of_regval of_rv (regval_of_vector rv_of len is_inc v) = Some v\"";
+    "proof -";
+    "  from assms have \"of_rv \\<circ> rv_of = Some\" by auto";
+    "  then show ?thesis by (auto simp: vector_of_regval_def regval_of_vector_def)";
+    "qed"] ^^
+  hardline ^^ hardline ^^
+  separate_map (hardline ^^ hardline) register_lemmas registers
 
 let generate_regstate_defs mwords defs =
   (* FIXME We currently don't want to generate undefined_type functions
