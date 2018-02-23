@@ -249,36 +249,54 @@ let rec replicate_bits (bits, n) =
 
 let identity x = x
 
-let rec bits_of_big_int bit n =
-  if not (Big_int.equal bit Big_int.zero)
-  then
-    begin
-      if Big_int.greater (Big_int.div n bit) Big_int.zero
-      then B1 :: bits_of_big_int (Big_int.div bit (Big_int.of_int 2)) (Big_int.sub n bit)
-      else B0 :: bits_of_big_int (Big_int.div bit (Big_int.of_int 2)) n
-    end
-  else []
+
+
+(* 
+Returns list of n bits of integer m starting from offset o >= 0 (bits numbered from least significant). 
+Uses twos-complement representation for m<0 and pads most significant bits in sign-extended way. 
+Most significant bit is head of returned list.
+ *)
+let rec get_slice_int' (n, m, o) =
+  if n <= 0 then
+    []
+  else
+    let bit = if (Big_int.extract_num m (n + o - 1) 1) == Big_int.zero then B0 else B1 in
+    bit :: get_slice_int' (n-1, m, o)
+
+(* as above but taking Big_int for all arguments *)
+let get_slice_int (n, m, o) = get_slice_int' (Big_int.to_int n, m, Big_int.to_int o)
+
+(* as above but omitting offset, len is ocaml int *)
+let to_bits' (len, n) = get_slice_int' (len, n, 0)
+
+(* as above but taking big_int for length *)
+let to_bits (len, n) = get_slice_int' (Big_int.to_int len, n, 0)
+
+(* unsigned multiplication of two n bit lists producing a list of 2n bits *)
+let mult_vec (x, y) =
+  let xi = uint(x) in
+  let yi = uint(y) in
+  let len = List.length x in
+  let prod = Big_int.mul xi yi in
+  to_bits' (2*len, prod)
+
+(* signed multiplication of two n bit lists producing a list of 2n bits. *)
+let mult_svec (x, y) =
+  let xi = sint(x) in
+  let yi = sint(y) in
+  let len = List.length x in
+  let prod = Big_int.mul xi yi in
+  to_bits' (2*len, prod)
 
 let add_vec_int (v, n) =
-  let n_bits = bits_of_big_int (Big_int.pow_int_positive 2 (List.length v - 1)) n in
+  let n_bits = to_bits'(List.length v, n) in
   add_vec(v, n_bits)
 
 let sub_vec (xs, ys) = add_vec (xs, add_vec_int (not_vec ys, (Big_int.of_int 1)))
 
 let sub_vec_int (v, n) =
-  let n_bits = bits_of_big_int (Big_int.pow_int_positive 2 (List.length v - 1)) n in
+  let n_bits = to_bits'(List.length v, n) in
   sub_vec(v, n_bits)
-
-let get_slice_int (n, m, o) =
-  let bits = bits_of_big_int (Big_int.pow_int_positive 2 (Big_int.add n o |> Big_int.to_int)) (Big_int.abs m) in
-  let bits =
-    if Big_int.less m Big_int.zero
-    then sub_vec (List.map (fun _ -> B0) bits, bits)
-    else bits
-  in
-  let slice = List.rev (take (Big_int.to_int n) (drop (Big_int.to_int o) (List.rev bits))) in
-  assert (Big_int.equal (Big_int.of_int (List.length slice)) n);
-  slice
 
 let bin_char = function
   | '0' -> B0
@@ -535,20 +553,25 @@ let sign_extend (vec, n) =
   | [] -> replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
   | B1 :: _ as vec -> replicate_bits ([B1], Big_int.of_int (m - List.length vec)) @ vec
 
+let zeros n = replicate_bits ([B0], n)
+
+let shift_bits_right_arith (x, y) =
+  let ybi = uint(y) in
+  let msbs = replicate_bits (take 1 x, ybi) in
+  let rbits = msbs @ x in
+  take (List.length x) rbits
+                                                                                      
 let shift_bits_right (x, y) =
   let ybi = uint(y) in
-  let yi  = Big_int.to_int ybi in
-  let zeros = replicate_bits ([B0], ybi) in
+  let zeros = zeros ybi in
   let rbits = zeros @ x in
   take (List.length x) rbits
 
 let shift_bits_left (x, y) =
   let ybi = uint(y) in
   let yi  = Big_int.to_int ybi in
-  let zeros = replicate_bits ([B0], ybi) in
+  let zeros = zeros ybi in
   let rbits = x @ zeros in
   drop yi rbits
-
-let zeros n = replicate_bits ([B0], n)
 
 let speculate_conditional_success () = true
