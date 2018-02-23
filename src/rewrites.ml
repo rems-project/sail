@@ -963,6 +963,7 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
            then Some [(id2,id1)] else None
   | P_id id1, _ ->
     if Env.lookup_id id1 (env_of_annot annot1) = Unbound then Some [] else None
+  | P_var (pat1,_), P_var (pat2,_) -> subsumes_pat pat1 pat2
   | P_wild, _ -> Some []
   | P_app (Id_aux (id1,l1),args1), P_app (Id_aux (id2,_),args2) ->
     if id1 = id2 then subsumes_list subsumes_pat args1 args2 else None
