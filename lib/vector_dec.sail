@@ -101,4 +101,13 @@ val set_slice_bits = "set_slice" : forall 'n 'm.
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
+val unsigned = {
+  ocaml: "uint",
+  lem: "uint",
+  interpreter: "uint",
+  c: "sail_uint"
+} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+
+val signed = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+
 $endif

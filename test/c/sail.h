@@ -363,46 +363,65 @@ void xor_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
 
 mpz_t eq_bits_test;
 
-bool eq_bits(const bv_t op1, const bv_t op2) {
-  mpz_xor(eq_bits_test, *op1.bits, *op2.bits);
-  return mpz_popcount(eq_bits_test) == 0;
+bool eq_bits(const bv_t op1, const bv_t op2)
+{
+  for (mp_bitcnt_t i = 0; i < op1.len; i++) {
+    if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return false;
+  }
+  return true;
 }
 
+// These aren't very efficient, but they work. Question is how best to
+// do these given GMP uses a sign bit representation?
 void sail_uint(mpz_t *rop, const bv_t op) {
-  mpz_set(*rop, *op.bits);
+  mpz_set_ui(*rop, 0ul);
+  for (mp_bitcnt_t i = 0; i < op.len; ++i) {
+    if (mpz_tstbit(*op.bits, i)) {
+      mpz_setbit(*rop, i);
+    } else {
+      mpz_clrbit(*rop, i);
+    }
+  }
 }
 
-void sint(mpz_t *rop, const bv_t op) {
+void sint(mpz_t *rop, const bv_t op)
+{
+  mpz_set_ui(*rop, 0ul);
   if (mpz_tstbit(*op.bits, op.len - 1)) {
-    mpz_set(*rop, *op.bits);
-    mpz_clrbit(*rop, op.len - 1);
-    mpz_t x;
-    mpz_init(x);
-    mpz_setbit(x, op.len - 1);
-    mpz_neg(x, x);
-    mpz_add(*rop, *rop, *op.bits);
-    mpz_clear(x);
+    for (mp_bitcnt_t i = 0; i < op.len; ++i) {
+      if (mpz_tstbit(*op.bits, i)) {
+	mpz_clrbit(*rop, i);
+      } else {
+	mpz_setbit(*rop, i);
+      }
+    };
+    mpz_add_ui(*rop, *rop, 1ul);
+    mpz_neg(*rop, *rop);
   } else {
-    mpz_set(*rop, *op.bits);
+    for (mp_bitcnt_t i = 0; i < op.len; ++i) {
+      if (mpz_tstbit(*op.bits, i)) {
+	mpz_setbit(*rop, i);
+      } else {
+	mpz_clrbit(*rop, i);
+      }
+    }
   }
 }
 
 void add_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len;
   mpz_add(*rop->bits, *op1.bits, *op2.bits);
-  mpz_clrbit(*rop->bits, op1.len);
 }
 
 void add_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
   rop->len = op1.len;
   mpz_add(*rop->bits, *op1.bits, op2);
-  mask(rop);
 }
 
 void sub_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
+  printf("sub_bits_int\n");
   rop->len = op1.len;
   mpz_sub(*rop->bits, *op1.bits, op2);
-  mask(rop);
 }
 
 // Takes a slice of the (two's complement) binary representation of
@@ -497,9 +516,12 @@ int bitvector_access(const bv_t op, const mpz_t n_mpz) {
   return mpz_tstbit(*op.bits, n);
 }
 
-void hex_slice (bv_t *rop, const sail_string hex, const mpz_t n, const mpz_t m) {
-  fprintf(stderr, "hex_slice unimplemented");
-  exit(1);
+// Like slice but slices from a hexadecimal string.
+void hex_slice (bv_t *rop, const sail_string hex, const mpz_t len_mpz, const mpz_t start_mpz) {
+  mpz_t op;
+  mpz_init_set_str(op, hex, 0);
+  get_slice_int(rop, len_mpz, op, start_mpz);
+  mpz_clear(op);
 }
 
 void set_slice (bv_t *rop,
@@ -579,6 +601,7 @@ void abs_real(real *rop, const real op) {
 
 void round_up(mpz_t *rop, const real op) {
   mpf_t x;
+  mpf_init(x);
   mpf_ceil(x, op);
   mpz_set_ui(*rop, mpf_get_ui(x));
   mpf_clear(x);
@@ -586,6 +609,7 @@ void round_up(mpz_t *rop, const real op) {
 
 void round_down(mpz_t *rop, const real op) {
   mpf_t x;
+  mpf_init(x);
   mpf_floor(x, op);
   mpz_set_ui(*rop, mpf_get_ui(x));
   mpf_clear(x);
@@ -629,70 +653,205 @@ void init_real_of_sail_string(real *rop, const sail_string op) {
 
 #endif
 
-// ***** Memory *****
+/* ***** Sail memory builtins ***** */
 
-unit write_ram(const mpz_t m, const mpz_t n, const bv_t x, const bv_t y, const bv_t data) {
-  fprintf(stderr, "write_ram unimplemented");
-  exit(1);
-}
+/* We organise memory available to the sail model into a linked list
+   of dynamically allocated MASK + 1 size blocks. The most recently
+   written block is moved to the front of the list, so contiguous
+   accesses should be as fast as possible. */
 
-void read_ram(bv_t *data, const mpz_t m, const mpz_t n, const bv_t x, const bv_t addr_bv) {
-  uint64_t addr = mpz_get_ui(*addr_bv.bits);
-  uint32_t instr;
-  switch (addr) {
-    // print_char
-  case 0x400110: instr = 0xd10043ffu; break;
-  case 0x400114: instr = 0x39003fe0u; break;
-  case 0x400118: instr = 0x39403fe0u; break;
-  case 0x40011c: instr = 0x580003e1u; break;
-  case 0x400120: instr = 0x39000020u; break;
-  case 0x400124: instr = 0xd503201fu; break;
-  case 0x400128: instr = 0x910043ffu; break;
-  case 0x40012c: instr = 0xd65f03c0u; break;
-    // _start
-  case 0x400130: instr = 0xa9be7bfdu; break;
-  case 0x400134: instr = 0x910003fdu; break;
-  case 0x400138: instr = 0x94000007u; break;
-  case 0x40013c: instr = 0xb9001fa0u; break;
-  case 0x400140: instr = 0x52800080u; break;
-  case 0x400144: instr = 0x97fffff3u; break;
-  case 0x400148: instr = 0xd503201fu; break;
-  case 0x40014c: instr = 0xa8c27bfdu; break;
-  case 0x400150: instr = 0xd65f03c0u; break;
-    // main
-  case 0x400154: instr = 0xd10043ffu; break;
-  case 0x400158: instr = 0xb9000fffu; break;
-  case 0x40015c: instr = 0xb9000bffu; break;
-  case 0x400160: instr = 0x14000007u; break;
-  case 0x400164: instr = 0xb9400fe0u; break;
-  case 0x400168: instr = 0x11000400u; break;
-  case 0x40016c: instr = 0xb9000fe0u; break;
-  case 0x400170: instr = 0xb9400be0u; break;
-  case 0x400174: instr = 0x11000400u; break;
-  case 0x400178: instr = 0xb9000be0u; break;
-  case 0x40017c: instr = 0xb9400be0u; break;
-  case 0x400180: instr = 0x710fa01fu; break;
-  case 0x400184: instr = 0x54ffff0du; break;
-  case 0x400188: instr = 0xb9400fe0u; break;
-  case 0x40018c: instr = 0x910043ffu; break;
-  case 0x400190: instr = 0xd65f03c0u; break;
-  case 0x400194: instr = 0x00000000u; break;
-  case 0x400198: instr = 0x13000000u; break;
-  case 0x40019c: instr = 0x00000000u; break;
+struct block {
+  uint64_t block_id;
+  uint8_t *mem;
+  struct block *next;
+};
+
+struct block *sail_memory = NULL;
+
+/* Must be one less than a power of two. */
+uint64_t MASK = 0xFFFFul;
+
+// All sail vectors are at least 64-bits, but only the bottom 8 bits
+// are used in the second argument.
+void write_mem(uint64_t address, uint64_t byte)
+{
+  uint64_t mask = address & ~MASK;
+  uint64_t offset = address & MASK;
+
+  struct block *prev = NULL;
+  struct block *current = sail_memory; 
+  
+  while (current != NULL) {
+    if (current->block_id == mask) {
+      current->mem[offset] = (uint8_t) byte;
+
+      /* Move the accessed block to the front of the block list */
+      if (prev != NULL) {
+        prev->next = current->next;
+      }
+      current->next = sail_memory->next;
+      sail_memory = current;
+      
+      return;
+    } else {
+      prev = current;
+      current = current->next;
+    }
   }
 
-  mpz_set_ui(*data->bits, instr);
-  data->len = 32;
-  // print_bits("instruction = ", *data);
+  /* If we couldn't find a block matching the mask, allocate a new
+     one, write the byte, and put it at the front of the block
+     list. */
+  struct block *new_block = malloc(sizeof(struct block));
+  new_block->block_id = mask;
+  new_block->mem = calloc(MASK + 1, sizeof(uint8_t));
+  new_block->mem[offset] = byte;
+  new_block->next = sail_memory;
+  sail_memory = new_block;
+}
+
+uint64_t read_mem(uint64_t address)
+{
+  uint64_t mask = address & ~MASK;
+  uint64_t offset = address & MASK;
+
+  struct block *current = sail_memory;
+
+  while (current != NULL) {
+    if (current->block_id == mask) {
+      return (uint64_t) current->mem[offset];
+    } else {
+      current = current->next;
+    }
+  }
+
+  return 0;
+}
+
+void kill_mem()
+{  
+  while (sail_memory != NULL) {
+    struct block *next = sail_memory->next;
+
+    free(sail_memory->mem);
+    free(sail_memory);
+    
+    sail_memory = next;
+  }
+}
+
+// ***** ARM Memory builtins *****
+
+// These memory builtins are intended to match the semantics for the
+// __ReadRAM and __WriteRAM functions in ASL.
+
+unit write_ram(const mpz_t addr_size,     // Either 32 or 64
+	       const mpz_t data_size_mpz, // Number of bytes
+	       const bv_t  hex_ram,       // Currently unused
+	       const bv_t  addr_bv,
+	       const bv_t  data)
+{
+  uint64_t addr = mpz_get_ui(*addr_bv.bits);
+  uint64_t data_size = mpz_get_ui(data_size_mpz);
+
+  mpz_t buf;
+  mpz_init_set(buf, *data.bits);
+
+  uint64_t byte;
+  for(uint64_t i = 0; i < data_size; ++i) {
+    // Take the 8 low bits of buf and write to addr.
+    byte = mpz_get_ui(buf) & 0xFF;
+    write_mem(addr + i, byte);
+
+    // Then shift buf 8 bits right, and increment addr.
+    mpz_fdiv_q_2exp(buf, buf, 8);
+  }
+
+  mpz_clear(buf);
+  return UNIT;
+}
+
+void read_ram(bv_t *data,
+	      const mpz_t addr_size,
+	      const mpz_t data_size_mpz,
+	      const bv_t hex_ram,
+	      const bv_t addr_bv)
+{
+  uint64_t addr = mpz_get_ui(*addr_bv.bits);
+  uint64_t data_size = mpz_get_ui(data_size_mpz);
+
+  mpz_set_ui(*data->bits, 0);
+  data->len = data_size * 8;
+
+  mpz_t byte;
+  mpz_init(byte);
+  for(uint64_t i = data_size; i > 0; --i) {
+    mpz_set_ui(byte, read_mem(addr + (i - 1)));
+    mpz_mul_2exp(*data->bits, *data->bits, 8);
+    mpz_add(*data->bits, *data->bits, byte);
+  }
+
+  mpz_clear(byte);
+}
+
+void load_instr(uint64_t addr, uint32_t instr) {
+  write_mem(addr, instr       & 0xFF);
+  write_mem(addr + 1, instr >> 8  & 0xFF);
+  write_mem(addr + 2, instr >> 16 & 0xFF);
+  write_mem(addr + 3, instr >> 24 & 0xFF);
+}
+
+void elf_hack(void) {
+  // print_char
+  load_instr(0x400110ul, 0xd10043ffu);
+  load_instr(0x400114ul, 0x39003fe0u);
+  load_instr(0x400118ul, 0x39403fe0u);
+  load_instr(0x40011cul, 0x580003e1u);
+  load_instr(0x400120ul, 0x39000020u);
+  load_instr(0x400124ul, 0xd503201fu);
+  load_instr(0x400128ul, 0x910043ffu);
+  load_instr(0x40012cul, 0xd65f03c0u);
+  // _start
+  load_instr(0x400130ul, 0xa9be7bfdu);
+  load_instr(0x400134ul, 0x910003fdu);
+  load_instr(0x400138ul, 0x94000007u);
+  load_instr(0x40013cul, 0xb9001fa0u);
+  load_instr(0x400140ul, 0x52800080u);
+  load_instr(0x400144ul, 0x97fffff3u);
+  load_instr(0x400148ul, 0xd503201fu);
+  load_instr(0x40014cul, 0xa8c27bfdu);
+  load_instr(0x400150ul, 0xd65f03c0u);
+  // main
+  load_instr(0x400154ul, 0xd10043ffu);
+  load_instr(0x400158ul, 0xb9000fffu);
+  load_instr(0x40015cul, 0xb9000bffu);
+  load_instr(0x400160ul, 0x14000007u);
+  load_instr(0x400164ul, 0xb9400fe0u);
+  load_instr(0x400168ul, 0x11000400u);
+  load_instr(0x40016cul, 0xb9000fe0u);
+  load_instr(0x400170ul, 0xb9400be0u);
+  load_instr(0x400174ul, 0x11000400u);
+  load_instr(0x400178ul, 0xb9000be0u);
+  load_instr(0x40017cul, 0xb9400be0u);
+  load_instr(0x400180ul, 0x710fa01fu);
+  load_instr(0x400184ul, 0x54ffff0du);
+  load_instr(0x400188ul, 0xb9400fe0u);
+  load_instr(0x40018cul, 0x910043ffu);
+  load_instr(0x400190ul, 0xd65f03c0u);
+  load_instr(0x400194ul, 0x00000000u);
+  load_instr(0x400198ul, 0x13000000u);
+  load_instr(0x40019cul, 0x00000000u);
 }
 
 // ***** Setup and cleanup functions for library code *****
 
 void setup_library(void) {
+  elf_hack();
   mpf_set_default_prec(FLOAT_PRECISION);
   mpz_init(eq_bits_test);
 }
 
 void cleanup_library(void) {
   mpz_clear(eq_bits_test);
+  kill_mem();
 }
