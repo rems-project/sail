@@ -159,7 +159,7 @@ function clause execute (ADDU(rs, rt, rd)) =
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) = undefined
     else
-      wGPR(rd) = EXTZ(opA[31..0] + opB[31..0])
+      wGPR(rd) = EXTS(opA[31..0] + opB[31..0])
   }
 
 
