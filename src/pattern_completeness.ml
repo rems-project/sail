@@ -232,8 +232,7 @@ let rec join ctx gpat1 gpat2 =
        | None, None -> None
        | Some args1, None -> Some args1
        | None, Some args2 -> Some args2
-       | Some args1, Some args2 ->
-          assert false
+       | Some args1, Some args2 -> Some (join ctx args1 args2)
      in
      let ctors = Bindings.merge ctor_merge ctors1 ctors2 in
      if Bindings.for_all (fun _ gpat -> is_wild gpat) ctors then
