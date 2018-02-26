@@ -80,7 +80,8 @@ let read name =
                      (elf_epi: Sail_interface.executable_process_image),
                      (symbol_map: Elf_file.global_symbol_init_info))
       ->
-       prerr_endline (Sail_interface.string_of_executable_process_image elf_epi);
+       (* XXX disabled because it crashes if entry_point overflows an ocaml int :-(
+       prerr_endline (Sail_interface.string_of_executable_process_image elf_epi);*)
        (elf_file, elf_epi, symbol_map)
     end
   in
