@@ -301,6 +301,7 @@ val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 val print_string = "print_string" : (string, string) -> unit
 
 union exception = {
+  ISAException,
   Error_not_implemented : string,
   Error_misaligned_access,
   Error_EBREAK,
