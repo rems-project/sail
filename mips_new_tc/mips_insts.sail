@@ -43,7 +43,7 @@
    the simplest possible instruction, no undefined behaviour or exceptions
    reg, reg, immediate */
 
-union clause ast = DADDIU : regregimm16
+union clause ast = DADDIU : (regno, regno, imm16)
 
 function clause decode (0b011001 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(DADDIU(rs, rt, imm))
@@ -56,7 +56,7 @@ function clause execute (DADDIU (rs, rt, imm)) =
 /* DADDU Doubleword Add Unsigned -- another very simple instruction,
    reg, reg, reg */
 
-union clause ast = DADDU : regregreg
+union clause ast = DADDU : (regno, regno, regno)
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101101) =
   Some(DADDU(rs, rt, rd))
@@ -69,7 +69,7 @@ function clause execute (DADDU (rs, rt, rd)) =
 /* DADDI Doubleword Add Immediate
    reg, reg, imm with possible exception */
 
-union clause ast = DADDI : regregimm16
+union clause ast = DADDI : (regno, regno, bits(16))
 
 function clause decode (0b011000 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(DADDI(rs, rt, imm))
@@ -88,7 +88,7 @@ function clause execute (DADDI (rs, rt, imm)) =
 /* DADD Doubleword Add
    reg, reg, reg with possible exception */
 
-union clause ast = DADD : regregreg
+union clause ast = DADD : (regno, regno, regno)
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101100) =
   Some(DADD(rs, rt, rd))
@@ -106,7 +106,7 @@ function clause execute (DADD (rs, rt, rd)) =
 
 /* ADD   32-bit add           -- reg, reg, reg with possible undefined behaviour or exception */
 
-union clause ast = ADD : regregreg
+union clause ast = ADD : (regno, regno, regno)
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100000) =
   Some(ADD(rs, rt, rd))
@@ -127,7 +127,7 @@ function clause execute (ADD(rs, rt, rd)) =
 
 /* ADDI  32-bit add immediate -- reg, reg, imm with possible undefined behaviour or exception */
 
-union clause ast = ADDI : regregimm16
+union clause ast = ADDI : (regno, regno, bits(16))
 
 function clause decode (0b001000 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ADDI(rs, rt, imm))
@@ -147,7 +147,7 @@ function clause execute (ADDI(rs, rt, imm)) =
 
 /* ADDU  32-bit add immediate -- reg, reg, reg with possible undefined behaviour */
 
-union clause ast = ADDU : regregreg
+union clause ast = ADDU : (regno, regno, regno)
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100001) =
   Some(ADDU(rs, rt, rd))
@@ -165,7 +165,7 @@ function clause execute (ADDU(rs, rt, rd)) =
 
 /* ADDIU 32-bit add immediate -- reg, reg, imm with possible undefined behaviour */
 
-union clause ast = ADDIU : regregimm16
+union clause ast = ADDIU : (regno, regno, bits(16))
 
 function clause decode (0b001001 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ADDIU(rs, rt, imm))
@@ -185,7 +185,7 @@ function clause execute (ADDIU(rs, rt, imm)) =
 
 /* DSUBU doubleword subtract 'unsigned' reg, reg, reg */
 
-union clause ast = DSUBU : regregreg
+union clause ast = DSUBU : (regno, regno, regno)
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101111) =
   Some(DSUBU(rs, rt, rd))
@@ -197,7 +197,7 @@ function clause execute (DSUBU (rs, rt, rd)) =
 
 /* DSUB reg, reg, reg with possible exception */
 
-union clause ast = DSUB : regregreg
+union clause ast = DSUB : (regno, regno, regno)
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101110) =
   Some(DSUB(rs, rt, rd))
@@ -215,7 +215,7 @@ function clause execute (DSUB (rs, rt, rd)) =
 
 /* SUB   32-bit sub           -- reg, reg, reg with possible undefined behaviour or exception */
 
-union clause ast = SUB : regregreg
+union clause ast = SUB : (regno, regno, regno)
 
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100010) =
   Some(SUB(rs, rt, rd))
@@ -236,7 +236,7 @@ function clause execute (SUB(rs, rt, rd)) =
 
 /* SUBU  32-bit 'unsigned' sub -- reg, reg, reg with possible undefined behaviour */
 
-union clause ast = SUBU : regregreg
+union clause ast = SUBU : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100011) =
     Some(SUBU(rs, rt, rd))
 
@@ -256,7 +256,7 @@ function clause execute (SUBU(rs, rt, rd)) =
 
 /* AND reg, reg, reg */
 
-union clause ast = AND : regregreg
+union clause ast = AND : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100100) =
     Some(AND(rs, rt, rd))
 
@@ -267,7 +267,7 @@ function clause execute (AND (rs, rt, rd)) =
 
 /* ANDI reg, reg, imm */
 
-union clause ast = ANDI : regregimm16
+union clause ast = ANDI : (regno, regno, bits(16))
 function clause decode (0b001100 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ANDI(rs, rt, imm))
 function clause execute (ANDI (rs, rt, imm)) =
@@ -277,7 +277,7 @@ function clause execute (ANDI (rs, rt, imm)) =
 
 /* OR reg, reg, reg */
 
-union clause ast = OR : regregreg
+union clause ast = OR : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100101) =
   Some(OR(rs, rt, rd))
 function clause execute (OR (rs, rt, rd)) =
@@ -287,7 +287,7 @@ function clause execute (OR (rs, rt, rd)) =
 
 /* ORI reg, reg, imm */
 
-union clause ast = ORI : regregimm16
+union clause ast = ORI : (regno, regno, bits(16))
 function clause decode (0b001101 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ORI(rs, rt, imm))
 function clause execute (ORI (rs, rt, imm)) =
@@ -297,7 +297,7 @@ function clause execute (ORI (rs, rt, imm)) =
 
 /* NOR reg, reg, reg */
 
-union clause ast = NOR : regregreg
+union clause ast = NOR : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100111) =
   Some(NOR(rs, rt, rd))
 function clause execute (NOR (rs, rt, rd)) =
@@ -307,7 +307,7 @@ function clause execute (NOR (rs, rt, rd)) =
 
 /* XOR reg, reg, reg */
 
-union clause ast = XOR : regregreg
+union clause ast = XOR : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b100110) =
   Some(XOR(rs, rt, rd))
 function clause execute (XOR (rs, rt, rd)) =
@@ -316,7 +316,7 @@ function clause execute (XOR (rs, rt, rd)) =
   }
 
 /* XORI reg, reg, imm */
-union clause ast = XORI : regregimm16
+union clause ast = XORI : (regno, regno, bits(16))
 function clause decode (0b001110 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(XORI(rs, rt, imm))
 function clause execute (XORI (rs, rt, imm)) =
@@ -339,7 +339,7 @@ function clause execute (LUI (rt, imm)) =
 
 /* DSLL reg, reg, imm5 */
 
-union clause ast = DSLL : regregreg
+union clause ast = DSLL : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111000) =
   Some(DSLL(rt, rd, sa))
 function clause execute (DSLL (rt, rd, sa)) =
@@ -350,7 +350,7 @@ function clause execute (DSLL (rt, rd, sa)) =
 
 /* DSLL32 reg, reg, imm5 */
 
-union clause ast = DSLL32 : regregreg
+union clause ast = DSLL32 : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111100) =
   Some(DSLL32(rt, rd, sa))
 function clause execute (DSLL32 (rt, rd, sa)) =
@@ -360,7 +360,7 @@ function clause execute (DSLL32 (rt, rd, sa)) =
 
 /* DSLLV reg, reg, reg */
 
-union clause ast = DSLLV : regregreg
+union clause ast = DSLLV : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b010100) =
   Some(DSLLV(rs, rt, rd))
 function clause execute (DSLLV (rs, rt, rd)) =
@@ -370,7 +370,7 @@ function clause execute (DSLLV (rs, rt, rd)) =
 
 /* DSRA arithmetic shift duplicating sign bit - reg, reg, imm5 */
 
-union clause ast = DSRA : regregreg
+union clause ast = DSRA : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111011) =
   Some(DSRA(rt, rd, sa))
 function clause execute (DSRA (rt, rd, sa)) =
@@ -381,7 +381,7 @@ function clause execute (DSRA (rt, rd, sa)) =
 
 /* DSRA32 reg, reg, imm5 */
 
-union clause ast = DSRA32 : regregreg
+union clause ast = DSRA32 : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111111) =
   Some(DSRA32(rt, rd, sa))
 function clause execute (DSRA32 (rt, rd, sa)) =
@@ -392,7 +392,7 @@ function clause execute (DSRA32 (rt, rd, sa)) =
   }
 
 /* DSRAV reg, reg, reg */
-union clause ast = DSRAV : regregreg
+union clause ast = DSRAV : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b010111) =
   Some(DSRAV(rs, rt, rd))
 function clause execute (DSRAV (rs, rt, rd)) =
@@ -404,7 +404,7 @@ function clause execute (DSRAV (rs, rt, rd)) =
 
 /* DSRL shift right logical - reg, reg, imm5 */
 
-union clause ast = DSRL : regregreg
+union clause ast = DSRL : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111010) =
   Some(DSRL(rt, rd, sa))
 function clause execute (DSRL (rt, rd, sa)) =
@@ -415,7 +415,7 @@ function clause execute (DSRL (rt, rd, sa)) =
 
 /* DSRL32 reg, reg, imm5 */
 
-union clause ast = DSRL32 : regregreg
+union clause ast = DSRL32 : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : bits(5) @ 0b111110) =
   Some(DSRL32(rt, rd, sa))
 function clause execute (DSRL32 (rt, rd, sa)) =
@@ -427,7 +427,7 @@ function clause execute (DSRL32 (rt, rd, sa)) =
 
 /* DSRLV reg, reg, reg */
 
-union clause ast = DSRLV : regregreg
+union clause ast = DSRLV : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b010110) =
   Some(DSRLV(rs, rt, rd))
 function clause execute (DSRLV (rs, rt, rd)) =
@@ -443,7 +443,7 @@ function clause execute (DSRLV (rs, rt, rd)) =
 
 /* SLL 32-bit shift left */
 
-union clause ast = SLL : regregreg
+union clause ast = SLL : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : regno @ 0b000000) =
   Some(SLL(rt, rd, sa))
 function clause execute (SLL(rt, rd, sa)) =
@@ -454,7 +454,7 @@ function clause execute (SLL(rt, rd, sa)) =
 
 /* SLLV 32-bit shift left variable */
 
-union clause ast = SLLV : regregreg
+union clause ast = SLLV : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000100) =
   Some(SLLV(rs, rt, rd))
 function clause execute (SLLV(rs, rt, rd)) =
@@ -466,7 +466,7 @@ function clause execute (SLLV(rs, rt, rd)) =
 
 /* SRA 32-bit arithmetic shift right */
 
-union clause ast = SRA : regregreg
+union clause ast = SRA : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : regno @ 0b000011) =
   Some(SRA(rt, rd, sa))
 function clause execute (SRA(rt, rd, sa)) =
@@ -482,7 +482,7 @@ function clause execute (SRA(rt, rd, sa)) =
 
 /* SRAV 32-bit arithmetic shift right variable */
 
-union clause ast = SRAV : regregreg
+union clause ast = SRAV : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000111) =
   Some(SRAV(rs, rt, rd))
 function clause execute (SRAV(rs, rt, rd)) =
@@ -499,7 +499,7 @@ function clause execute (SRAV(rs, rt, rd)) =
 
 /* SRL 32-bit shift right */
 
-union clause ast = SRL : regregreg
+union clause ast = SRL : (regno, regno, regno)
 function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : regno @ 0b000010) =
   Some(SRL(rt, rd, sa))
 function clause execute (SRL(rt, rd, sa)) =
@@ -515,7 +515,7 @@ function clause execute (SRL(rt, rd, sa)) =
 
 /* SRLV 32-bit shift right variable */
 
-union clause ast = SRLV : regregreg
+union clause ast = SRLV : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000110) =
   Some(SRLV(rs, rt, rd))
 function clause execute (SRLV(rs, rt, rd)) =
@@ -536,7 +536,7 @@ function clause execute (SRLV(rs, rt, rd)) =
 
 /* SLT set if less than (signed) */
 
-union clause ast = SLT : regregreg
+union clause ast = SLT : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101010) =
   Some(SLT(rs, rt, rd))
 function clause execute (SLT(rs, rt, rd)) =
@@ -546,7 +546,7 @@ function clause execute (SLT(rs, rt, rd)) =
 
 /* SLT set if less than immediate (signed) */
 
-union clause ast = SLTI : regregimm16
+union clause ast = SLTI : (regno, regno, bits(16))
 function clause decode (0b001010 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(SLTI(rs, rt, imm))
 function clause execute (SLTI(rs, rt, imm)) =
@@ -558,7 +558,7 @@ function clause execute (SLTI(rs, rt, imm)) =
 
 /* SLTU set if less than unsigned */
 
-union clause ast = SLTU : regregreg
+union clause ast = SLTU : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b101011) =
   Some(SLTU(rs, rt, rd))
 function clause execute (SLTU(rs, rt, rd)) =
@@ -570,7 +570,7 @@ function clause execute (SLTU(rs, rt, rd)) =
 
 /* SLTIU set if less than immediate unsigned */
 
-union clause ast = SLTIU : regregimm16
+union clause ast = SLTIU : (regno, regno, bits(16))
 function clause decode (0b001011 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(SLTIU(rs, rt, imm))
 function clause execute (SLTIU(rs, rt, imm)) =
@@ -583,7 +583,7 @@ function clause execute (SLTIU(rs, rt, imm)) =
 
 /* MOVN move if non-zero */
 
-union clause ast = MOVN : regregreg
+union clause ast = MOVN : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b001011) =
   Some(MOVN(rs, rt, rd))
 function clause execute (MOVN(rs, rt, rd)) =
@@ -594,7 +594,7 @@ function clause execute (MOVN(rs, rt, rd)) =
 
 /* MOVZ move if zero */
 
-union clause ast = MOVZ : regregreg
+union clause ast = MOVZ : (regno, regno, regno)
 function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b001010) =
   Some(MOVZ(rs, rt, rd))
 function clause execute (MOVZ(rs, rt, rd)) =
@@ -644,7 +644,7 @@ function clause execute (MTLO(rs)) =
   }
 
 /* MUL 32-bit multiply into GPR */
-union clause ast = MUL : regregreg
+union clause ast = MUL : (regno, regno, regno)
 function clause decode (0b011100 @ rs : regno @ rt : regno @ rd : regno @ 0b00000 @ 0b000010) =
   Some(MUL(rs, rt, rd))
 function clause execute (MUL(rs, rt, rd)) =
@@ -1212,7 +1212,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
 
 /* LWL   - Load word left (big-endian only) */
 
-union clause ast = LWL : regregimm16
+union clause ast = LWL : (regno, regno, bits(16))
 function clause decode(0b100010 @ base : regno @ rt : regno @ offset : imm16) =
       Some(LWL(base, rt, offset))
 function clause execute(LWL(base, rt, offset)) =
@@ -1233,7 +1233,7 @@ function clause execute(LWL(base, rt, offset)) =
 	    wGPR(rt) = EXTS(result);
           }
       }
-union clause ast = LWR : regregimm16
+union clause ast = LWR : (regno, regno, bits(16))
 function clause decode(0b100110 @ base : regno @ rt : regno @ offset : imm16) =
       Some(LWR(base, rt, offset))
 function clause execute(LWR(base, rt, offset)) =
@@ -1256,7 +1256,7 @@ function clause execute(LWR(base, rt, offset)) =
       }
 
 /* SWL   - Store word left */
-union clause ast = SWL : regregimm16
+union clause ast = SWL : (regno, regno, bits(16))
 function clause decode(0b101010 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SWL(base, rt, offset))
 function clause execute(SWL(base, rt, offset)) =
@@ -1276,7 +1276,7 @@ function clause execute(SWL(base, rt, offset)) =
           }
       }
 
-union clause ast = SWR : regregimm16
+union clause ast = SWR : (regno, regno, bits(16))
 function clause decode(0b101110 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SWR(base, rt, offset))
 function clause execute(SWR(base, rt, offset)) =
@@ -1298,7 +1298,7 @@ function clause execute(SWR(base, rt, offset)) =
       }
 
 /* Load double-word left */
-union clause ast = LDL : regregimm16
+union clause ast = LDL : (regno, regno, bits(16))
 function clause decode(0b011010 @ base : regno @ rt : regno @ offset : imm16) =
   Some(LDL(base, rt, offset))
 function clause execute(LDL(base, rt, offset)) =
@@ -1324,7 +1324,7 @@ function clause execute(LDL(base, rt, offset)) =
   }
 
 /* Load double-word right */
-union clause ast = LDR : regregimm16
+union clause ast = LDR : (regno, regno, bits(16))
 function clause decode(0b011011 @ base : regno @ rt : regno @ offset : imm16) =
   Some(LDR(base, rt, offset))
 function clause execute(LDR(base, rt, offset)) =
@@ -1350,7 +1350,7 @@ function clause execute(LDR(base, rt, offset)) =
   }
 
 /* SDL   - Store double-word left */
-union clause ast = SDL : regregimm16
+union clause ast = SDL : (regno, regno, bits(16))
 function clause decode(0b101100 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SDL(base, rt, offset))
 function clause execute(SDL(base, rt, offset)) =
@@ -1376,7 +1376,7 @@ function clause execute(SDL(base, rt, offset)) =
 
 
 /* SDR   - Store double-word right */
-union clause ast = SDR : regregimm16
+union clause ast = SDR : (regno, regno, bits(16))
 function clause decode(0b101101 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SDR(base, rt, offset))
 function clause execute(SDR(base, rt, offset)) =
@@ -1403,7 +1403,7 @@ function clause execute(SDR(base, rt, offset)) =
 
 /* CACHE - manipulate (non-existent) caches */
 
-union clause ast = CACHE : regregimm16
+union clause ast = CACHE : (regno, regno, bits(16))
 function clause decode (0b101111 @ base : regno @ op : regno @ imm : imm16) =
   Some(CACHE(base, op, imm))
 function clause execute (CACHE(base, op, imm)) =
@@ -1411,7 +1411,7 @@ function clause execute (CACHE(base, op, imm)) =
 
 /* PREF - prefetching into (non-existent) caches */
 
-union clause ast = PREF : regregimm16
+union clause ast = PREF : (regno, regno, bits(16))
 function clause decode (0b110011 @ base : regno @ op : regno @ imm : imm16) =
   Some(PREF(base, op, imm))
 function clause execute (PREF(base, op, imm)) =
