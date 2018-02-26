@@ -44,13 +44,14 @@ grammar
 % Fragments are small pure snippets of (abstract) C code, mostly
 % expressions, used by the aval and cval types.
 fragment :: 'F_' ::=
-  | id                    :: :: id
-  | string                :: :: lit
-  | have_exception        :: :: have_exception
-  | current_exception     :: :: current_exception
-  | fragment op fragment' :: :: op
-  | op fragment           :: :: unary
-  | fragment . string     :: :: field
+  | id                                     :: :: id
+  | string                                 :: :: lit
+  | have_exception                         :: :: have_exception
+  | current_exception                      :: :: current_exception
+  | fragment op fragment'                  :: :: op
+  | op fragment                            :: :: unary
+  | string ( fragment0 , ... , fragmentn ) :: :: call
+  | fragment . string                      :: :: field
 
 % init / clear -> create / kill
 
@@ -130,6 +131,10 @@ instr :: 'I_' ::=
   | goto string                               :: :: goto
   | match_failure                             :: :: match_failure
 
+% For optimising away allocations.
+  | reset ctyp id                             :: :: reset
+  | ctyp id = cval                            :: :: reinit
+
 cdef :: 'CDEF_' ::=
   | register id : ctyp :: :: reg_dec
   | ctype_def          :: :: type
@@ -145,3 +150,9 @@ cdef :: 'CDEF_' ::=
   | function id mid ( id0 , ... , idn ) {
       instr0 ; ... ; instrm
     } :: :: fundef
+  | startup id {
+      instr0 ; ... ; instrn
+    } :: :: startup
+  | finish id {
+      instr0 ; ... ; instrn
+    } :: :: finish

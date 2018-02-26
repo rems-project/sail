@@ -988,7 +988,7 @@ let destruct_vector env typ =
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
                              Typ_arg_aux (Typ_arg_order o, _);
                              Typ_arg_aux (Typ_arg_typ vtyp, _)]
-                       ), _) when string_of_id id = "vector" -> Some (n1, o, vtyp)
+                       ), _) when string_of_id id = "vector" -> Some (nexp_simp n1, o, vtyp)
     | typ -> None
   in
   destruct_vector' (Env.expand_synonyms env typ)

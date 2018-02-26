@@ -91,7 +91,10 @@ let options = Arg.align ([
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
   ( "-O",
-    Arg.Tuple [Arg.Set C_backend.optimize_primops],
+    Arg.Tuple [Arg.Set C_backend.optimize_primops;
+               Arg.Set C_backend.optimize_hoist_allocations;
+               Arg.Set C_backend.optimize_enum_undefined;
+               Arg.Set C_backend.optimize_struct_undefined],
     " turn on optimizations for C compilation");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
