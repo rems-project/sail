@@ -1,7 +1,7 @@
-theory State_monad_extras
+theory State_monad_lemmas
   imports
     State_monad
-    Sail_values_extras
+    Sail_values_lemmas
 begin
 
 context

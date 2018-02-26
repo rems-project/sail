@@ -2,7 +2,7 @@ open import Pervasives_extra
 (*open import Sail_impl_base*)
 open import Sail_values
 open import Prompt_monad
-open import {isabelle} `Prompt_monad_extras`
+open import {isabelle} `Prompt_monad_lemmas`
 
 val iter_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monad 'rv unit 'e) -> list 'a -> monad 'rv unit 'e
 let rec iter_aux i f xs = match xs with

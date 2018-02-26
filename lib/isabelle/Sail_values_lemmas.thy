@@ -1,4 +1,4 @@
-theory Sail_values_extras
+theory Sail_values_lemmas
   imports Sail_values
 begin
 

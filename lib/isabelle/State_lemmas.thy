@@ -1,4 +1,4 @@
-theory State_extras
+theory State_lemmas
   imports State
 begin
 

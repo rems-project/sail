@@ -4,7 +4,7 @@ open import Sail_values
 open import Prompt_monad
 open import Prompt
 open import State_monad
-open import {isabelle} `State_monad_extras`
+open import {isabelle} `State_monad_lemmas`
 
 (* State monad wrapper around prompt monad *)
 

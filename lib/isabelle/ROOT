@@ -1,9 +1,9 @@
 session "Sail" = "LEM" +
   options [document = false]
   theories
-    Sail_values_extras
+    Sail_values_lemmas
     Prompt
-    State_extras
+    State_lemmas
     Sail_operators_mwords
     Sail_operators_bitlists
 

@@ -1,7 +1,7 @@
 THYS = Sail_instr_kinds.thy Sail_values.thy Sail_operators.thy \
   Sail_operators_mwords.thy Sail_operators_bitlists.thy \
   State_monad.thy State.thy Prompt_monad.thy Prompt.thy
-EXTRA_THYS = State_monad_extras.thy State_extras.thy Prompt_monad_extras.thy
+EXTRA_THYS = State_monad_lemmas.thy State_lemmas.thy Prompt_monad_lemmas.thy
 
 .PHONY: all heap-img clean
 
@@ -32,13 +32,13 @@ Sail_operators_bitlists.thy: ../../src/gen_lib/sail_operators_bitlists.lem Sail_
 Prompt_monad.thy: ../../src/gen_lib/prompt_monad.lem Sail_values.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Prompt.thy: ../../src/gen_lib/prompt.lem Prompt_monad.thy Prompt_monad_extras.thy
+Prompt.thy: ../../src/gen_lib/prompt.lem Prompt_monad.thy Prompt_monad_lemmas.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 State_monad.thy: ../../src/gen_lib/state_monad.lem Sail_values.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-State.thy: ../../src/gen_lib/state.lem Prompt.thy State_monad.thy State_monad_extras.thy
+State.thy: ../../src/gen_lib/state.lem Prompt.thy State_monad.thy State_monad_lemmas.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 clean:

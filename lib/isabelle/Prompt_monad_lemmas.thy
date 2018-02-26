@@ -1,7 +1,7 @@
-theory Prompt_monad_extras
+theory Prompt_monad_lemmas
   imports
     Prompt_monad
-    Sail_values_extras
+    Sail_values_lemmas
 begin
 
 lemma All_bind_dom: "bind_dom (m, f)"
