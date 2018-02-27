@@ -741,9 +741,8 @@ let slice_lit (L_aux (lit,ll)) i len (Ord_aux (ord,_)) =
   with
   | None -> None
   | Some i ->
-     match lit with
-     | L_bin bin -> Some (L_aux (L_bin (String.sub bin i len),Generated ll))
-     | _ -> assert false
+     let bin = bits_of_lit lit in
+     Some (L_aux (L_bin (String.sub bin i len),Generated ll))
 
 let concat_vec lit1 lit2 =
   let bits1 = bits_of_lit lit1 in
@@ -790,12 +789,15 @@ let try_app (l,ann) (id,args) =
   else if is_id "slice" then
     match args with
     | [E_aux (E_lit (L_aux ((L_hex _| L_bin _),_) as lit),
-              (_,Some (_,Typ_aux (Typ_app (_,[_;Typ_arg_aux (Typ_arg_order ord,_);_]),_),_)));
+              (_,Some (vec_env,vec_typ,_)));
        E_aux (E_lit L_aux (L_num i,_), _);
        E_aux (E_lit L_aux (L_num len,_), _)] ->
-       (match slice_lit lit i len ord with
-       | Some lit' -> Some (E_aux (E_lit lit',(l,ann)))
-       | None -> None)
+       (match Env.base_typ_of vec_env vec_typ with
+       | Typ_aux (Typ_app (_,[_;Typ_arg_aux (Typ_arg_order ord,_);_]),_) ->
+          (match slice_lit lit i len ord with
+          | Some lit' -> Some (E_aux (E_lit lit',(l,ann)))
+          | None -> None)
+       | _ -> None)
     | _ -> None
   else if is_id "bitvector_concat" then
     match args with
