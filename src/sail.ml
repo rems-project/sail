@@ -94,6 +94,7 @@ let options = Arg.align ([
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
                Arg.Set C_backend.optimize_enum_undefined;
+               Arg.Set C_backend.optimize_struct_updates;
                Arg.Set C_backend.optimize_struct_undefined],
     " turn on optimizations for C compilation");
   ( "-lem_ast",

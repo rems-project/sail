@@ -33,8 +33,8 @@ unit sail_assert(bool b, sail_string msg) {
 }
 
 unit sail_exit(const unit u) {
-  fprintf(stderr, "Unexpected exit\n");
-  exit(1);
+  fprintf(stderr, "exit\n");
+  exit(0);
 }
 
 void elf_entry(mpz_t *rop, const unit u) {
@@ -72,6 +72,13 @@ bool undefined_bool(const unit u) {
 
 // ***** Sail strings *****
 void init_sail_string(sail_string *str) {
+  char *istr = (char *) malloc(1 * sizeof(char));
+  istr[0] = '\0';
+  *str = istr;
+}
+
+void reinit_sail_string(sail_string *str) {
+  free(*str);
   char *istr = (char *) malloc(1 * sizeof(char));
   istr[0] = '\0';
   *str = istr;
@@ -131,6 +138,10 @@ void init_mpz_t(mpz_t *op) {
   mpz_init(*op);
 }
 
+void reinit_mpz_t(mpz_t *op) {
+  mpz_set_ui(*op, 0);
+}
+
 void clear_mpz_t(mpz_t *op) {
   mpz_clear(*op);
 }
@@ -139,8 +150,16 @@ void init_mpz_t_of_int64_t(mpz_t *rop, int64_t op) {
   mpz_init_set_si(*rop, op);
 }
 
+void reinit_mpz_t_of_int64_t(mpz_t *rop, int64_t op) {
+  mpz_set_si(*rop, op);
+}
+
 void init_mpz_t_of_sail_string(mpz_t *rop, sail_string str) {
   mpz_init_set_str(*rop, str, 10);
+}
+
+void reinit_mpz_t_of_sail_string(mpz_t *rop, sail_string str) {
+  mpz_set_str(*rop, str, 10);
 }
 
 int64_t convert_int64_t_of_mpz_t(const mpz_t op) {
@@ -240,9 +259,37 @@ void pow2(mpz_t *rop, mpz_t exp) {
 
 // ***** Sail bitvectors *****
 
-unit print_bits(const sail_string str, const bv_t op) {
+unit print_bits(const sail_string str, const bv_t op)
+{
   fputs(str, stdout);
-  gmp_printf("%d'0x%ZX\n", op.len, op.bits);
+
+  if (op.len % 4 == 0) {
+    fputs("0x", stdout);
+    mpz_t buf;
+    mpz_init_set(buf, *op.bits);
+
+    char *hex = malloc((op.len / 4) * sizeof(char));
+
+    for (int i = 0; i < op.len / 4; ++i) {
+      char c = (char) ((0xF & mpz_get_ui(buf)) + 0x30);
+      hex[i] = (c < 0x3A) ? c : c + 0x7;
+      mpz_fdiv_q_2exp(buf, buf, 4);
+    }
+
+    for (int i = op.len / 4; i > 0; --i) {
+      fputc(hex[i - 1], stdout);
+    }
+
+    free(hex);
+    mpz_clear(buf);
+  } else {
+    fputs("0b", stdout);
+    for (int i = op.len; i > 0; --i) {
+      fputc(mpz_tstbit(*op.bits, i - 1) + 0x30, stdout);
+    }
+  }
+
+  fputs("\n", stdout);
 }
 
 void length_bv_t(mpz_t *rop, const bv_t op) {
@@ -255,10 +302,20 @@ void init_bv_t(bv_t *rop) {
   mpz_init(*rop->bits);
 }
 
+void reinit_bv_t(bv_t *rop) {
+  rop->len = 0;
+  mpz_set_ui(*rop->bits, 0);
+}
+
 void init_bv_t_of_uint64_t(bv_t *rop, const uint64_t op, const uint64_t len, const bool direction) {
   rop->bits = malloc(sizeof(mpz_t));
   rop->len = len;
   mpz_init_set_ui(*rop->bits, op);
+}
+
+void reinit_bv_t_of_uint64_t(bv_t *rop, const uint64_t op, const uint64_t len, const bool direction) {
+  rop->len = len;
+  mpz_set_ui(*rop->bits, op);
 }
 
 void set_bv_t(bv_t *rop, const bv_t op) {
@@ -286,6 +343,14 @@ void replicate_bits(bv_t *rop, const bv_t op1, const mpz_t op2) {
     mpz_mul_2exp(*rop->bits, *rop->bits, op1.len);
     mpz_ior(*rop->bits, *rop->bits, *op1.bits);
   }
+}
+
+uint64_t fast_replicate_bits(const uint64_t shift, const uint64_t v, const int64_t times) {
+  uint64_t r = 0;
+  for (int i = 0; i < times; ++i) {
+    r |= v << shift;
+  }
+  return r;
 }
 
 void slice(bv_t *rop, const bv_t op, const mpz_t start_mpz, const mpz_t len_mpz)
@@ -557,6 +622,10 @@ typedef mpf_t real;
 
 void init_real(real *rop) {
   mpf_init(*rop);
+}
+
+void reinit_real(real *rop) {
+  mpf_set_ui(*rop, 0);
 }
 
 void clear_real(real *rop) {
