@@ -20,10 +20,13 @@ let iter f xs = iteri (fun _ x -> f x) xs
 
 val foreachM : forall 'a 'rv 'vars 'e.
   list 'a -> 'vars -> ('a -> 'vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
-let rec foreachM [] vars _ = return vars
-and foreachM (x :: xs) vars body =
+let rec foreachM l vars body =
+match l with
+| [] -> return vars
+| (x :: xs) ->
   body x vars >>= fun vars ->
   foreachM xs vars body
+end
 
 declare {isabelle} termination_argument foreachM = automatic
 

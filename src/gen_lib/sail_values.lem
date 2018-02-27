@@ -752,8 +752,11 @@ let internal_mem_value bytes =
 
 val foreach : forall 'a 'vars.
   (list 'a) -> 'vars -> ('a -> 'vars -> 'vars) -> 'vars
-let rec foreach [] vars _ = vars
-and foreach (x :: xs) vars body = foreach xs (body x vars) body
+let rec foreach l vars body =
+match l with
+| [] -> vars
+| (x :: xs) -> foreach xs (body x vars) body
+end
 
 declare {isabelle} termination_argument foreach = automatic
 
