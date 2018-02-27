@@ -324,14 +324,21 @@ function wGPR (idx, v) = {
          if i == 0 then () else GPR[i] = v
 }
 
-val MEMr         : forall 'n. ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
-val MEMr_reserve : forall 'n. ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
-val MEM_sync     : unit -> unit effect { barr }
+val MEMr = {lem: "MEMr"} : forall 'n.
+  ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
+val MEMr_reserve = {lem: "MEMr_reserve"} : forall 'n.
+  ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
+val MEM_sync = {lem: "MEM_sync"} :
+  unit -> unit effect { barr }
 
-val MEMea              : forall 'n. ( bits(64) , atom('n)) -> unit effect { eamem }
-val MEMea_conditional  : forall 'n. ( bits(64) , atom('n)) -> unit effect { eamem }
-val MEMval             : forall 'n. ( bits(64) , atom('n), bits(8*'n)) -> unit effect { wmv }
-val MEMval_conditional : forall 'n. ( bits(64) , atom('n), bits(8*'n)) -> bool effect { wmv }
+val MEMea = {lem: "MEMea"} : forall 'n.
+  ( bits(64) , atom('n)) -> unit effect { eamem }
+val MEMea_conditional = {lem: "MEMea_conditional"} : forall 'n.
+  ( bits(64) , atom('n)) -> unit effect { eamem }
+val MEMval = {lem: "MEMval"} : forall 'n.
+  ( bits(64) , atom('n), bits(8*'n)) -> unit effect { wmv }
+val MEMval_conditional = {lem: "MEMval_conditional"} : forall 'n.
+  ( bits(64) , atom('n), bits(8*'n)) -> bool effect { wmv }
 
 /* Extern nops with effects, sometimes useful for faking effect */
 val skip_eamem = "skip" : unit -> unit effect {eamem}

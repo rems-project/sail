@@ -54,10 +54,10 @@ let arith_op_bv op sign size l r =
 
 
 let add_bv   = arith_op_bv integerAdd false 1
-let addS_bv  = arith_op_bv integerAdd true 1
+let sadd_bv  = arith_op_bv integerAdd true 1
 let sub_bv   = arith_op_bv integerMinus false 1
 let mult_bv  = arith_op_bv integerMult false 2
-let multS_bv = arith_op_bv integerMult true 2
+let smult_bv = arith_op_bv integerMult true 2
 
 let inline add_mword = Machine_word.plus
 let inline sub_mword = Machine_word.minus
@@ -72,10 +72,10 @@ let arith_op_bv_int op sign size l r =
   of_int (size * length l) n
 
 let add_bv_int = arith_op_bv_int integerAdd false 1
-let addS_bv_int = arith_op_bv_int integerAdd true 1
+let sadd_bv_int = arith_op_bv_int integerAdd true 1
 let sub_bv_int = arith_op_bv_int integerMinus false 1
 let mult_bv_int = arith_op_bv_int integerMult false 2
-let multS_bv_int = arith_op_bv_int integerMult true 2
+let smult_bv_int = arith_op_bv_int integerMult true 2
 
 val arith_op_int_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
   (integer -> integer -> integer) -> bool -> integer -> integer -> 'a -> 'b
@@ -85,10 +85,10 @@ let arith_op_int_bv op sign size l r =
   of_int (size * length r) n
 
 let add_int_bv = arith_op_int_bv integerAdd false 1
-let addS_int_bv = arith_op_int_bv integerAdd true 1
+let sadd_int_bv = arith_op_int_bv integerAdd true 1
 let sub_int_bv = arith_op_int_bv integerMinus false 1
 let mult_int_bv = arith_op_int_bv integerMult false 2
-let multS_int_bv = arith_op_int_bv integerMult true 2
+let smult_int_bv = arith_op_int_bv integerMult true 2
 
 let arith_op_bv_bit op sign (size : integer) l r =
   let l' = int_of_bv sign l in
@@ -96,7 +96,7 @@ let arith_op_bv_bit op sign (size : integer) l r =
   of_int (size * length l) n
 
 let add_bv_bit = arith_op_bv_bit integerAdd false 1
-let addS_bv_bit = arith_op_bv_bit integerAdd true 1
+let sadd_bv_bit = arith_op_bv_bit integerAdd true 1
 let sub_bv_bit = arith_op_bv_bit integerMinus true 1
 
 val arith_op_overflow_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b =>

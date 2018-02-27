@@ -282,7 +282,7 @@ let mult_vec (x, y) =
   to_bits' (2*len, prod)
 
 (* signed multiplication of two n bit lists producing a list of 2n bits. *)
-let mult_svec (x, y) =
+let smult_vec (x, y) =
   let xi = sint(x) in
   let yi = sint(y) in
   let len = List.length x in

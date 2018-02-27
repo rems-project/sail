@@ -267,7 +267,7 @@ val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
 infix 8 ^^
-val operator ^^ : forall 'n 'm . (bits('n), atom('m)) -> bits('n * 'm)
+val operator ^^ = {lem: "replicate_bits"} : forall 'n 'm . (bits('n), atom('m)) -> bits('n * 'm)
 function operator ^^ (bs, n) = replicate_bits (bs, n)
 
 val cast ex_nat : nat -> {'n, 'n >= 0. atom('n)}
@@ -351,7 +351,7 @@ val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits
 val operator >>_s = "shift_bits_right_arith" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
 
 infix 7 *_s
-val operator *_s = "mult_svec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
+val operator *_s = "smult_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
 infix 7 *_u
 val operator *_u = "mult_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
 
@@ -374,4 +374,3 @@ overload vector_update_subrange = {vector_update_subrange_dec, vector_update_sub
 
 val mask : forall 'm 'n , 'm >= 'n > 0 . bits('m) -> bits('n)
 function mask bs = bs['n - 1 .. 0]
-

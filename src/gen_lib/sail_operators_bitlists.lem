@@ -69,43 +69,43 @@ let xor_vec = xor_bv
 let not_vec = not_bv
 
 val add_vec   : list bitU -> list bitU -> list bitU
-val addS_vec  : list bitU -> list bitU -> list bitU
+val sadd_vec  : list bitU -> list bitU -> list bitU
 val sub_vec   : list bitU -> list bitU -> list bitU
 val mult_vec  : list bitU -> list bitU -> list bitU
-val multS_vec : list bitU -> list bitU -> list bitU
+val smult_vec : list bitU -> list bitU -> list bitU
 let add_vec   = add_bv
-let addS_vec  = addS_bv
+let sadd_vec  = sadd_bv
 let sub_vec   = sub_bv
 let mult_vec  = mult_bv
-let multS_vec = multS_bv
+let smult_vec = smult_bv
 
 val add_vec_int   : list bitU -> integer -> list bitU
-val addS_vec_int  : list bitU -> integer -> list bitU
+val sadd_vec_int  : list bitU -> integer -> list bitU
 val sub_vec_int   : list bitU -> integer -> list bitU
 val mult_vec_int  : list bitU -> integer -> list bitU
-val multS_vec_int : list bitU -> integer -> list bitU
+val smult_vec_int : list bitU -> integer -> list bitU
 let add_vec_int   = add_bv_int
-let addS_vec_int  = addS_bv_int
+let sadd_vec_int  = sadd_bv_int
 let sub_vec_int   = sub_bv_int
 let mult_vec_int  = mult_bv_int
-let multS_vec_int = multS_bv_int
+let smult_vec_int = smult_bv_int
 
 val add_int_vec   : integer -> list bitU -> list bitU
-val addS_int_vec  : integer -> list bitU -> list bitU
+val sadd_int_vec  : integer -> list bitU -> list bitU
 val sub_int_vec   : integer -> list bitU -> list bitU
 val mult_int_vec  : integer -> list bitU -> list bitU
-val multS_int_vec : integer -> list bitU -> list bitU
+val smult_int_vec : integer -> list bitU -> list bitU
 let add_int_vec   = add_int_bv
-let addS_int_vec  = addS_int_bv
+let sadd_int_vec  = sadd_int_bv
 let sub_int_vec   = sub_int_bv
 let mult_int_vec  = mult_int_bv
-let multS_int_vec = multS_int_bv
+let smult_int_vec = smult_int_bv
 
 val add_vec_bit  : list bitU -> bitU -> list bitU
-val addS_vec_bit : list bitU -> bitU -> list bitU
+val sadd_vec_bit : list bitU -> bitU -> list bitU
 val sub_vec_bit  : list bitU -> bitU -> list bitU
 let add_vec_bit  = add_bv_bit
-let addS_vec_bit = addS_bv_bit
+let sadd_vec_bit = sadd_bv_bit
 let sub_vec_bit  = sub_bv_bit
 
 val add_overflow_vec         : list bitU -> list bitU -> (list bitU * bitU * bitU)

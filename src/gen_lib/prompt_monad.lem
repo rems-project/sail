@@ -123,6 +123,9 @@ let read_mem rk addr sz =
   let k bytes = Done (bits_of_mem_bytes bytes) in
   Read_mem rk (bits_of addr) (natFromInteger sz) k
 
+val read_tag : forall 'rv 'a 'e. Bitvector 'a => 'a -> monad 'rv bitU 'e
+let read_tag addr = Read_tag (bits_of addr) return
+
 val excl_result : forall 'rv 'e. unit -> monad 'rv bool 'e
 let excl_result () =
   let k successful = (return successful) in
@@ -136,6 +139,9 @@ let write_mem_val v = match mem_bytes_of_bits v with
   | Just v -> Write_memv v return
   | Nothing -> Fail "write_mem_val"
 end
+
+val write_tag_val : forall 'rv 'e. bitU -> monad 'rv bool 'e
+let write_tag_val b = Write_tagv b return
 
 val read_reg : forall 's 'rv 'a 'e. register_ref 's 'rv 'a -> monad 'rv 'a 'e
 let read_reg reg =

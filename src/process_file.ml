@@ -252,8 +252,8 @@ let output_lem filename libs defs =
     separate hardline [
       string ("theory " ^ isa_thy_name);
       string  "  imports";
-      string  "    Sail.Sail_values_extras";
-      string  "    Sail.State_extras";
+      string  "    Sail.Sail_values_lemmas";
+      string  "    Sail.State_lemmas";
       string ("    " ^ String.capitalize filename);
       string  "begin";
       string  "";
