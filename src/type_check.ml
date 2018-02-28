@@ -289,6 +289,7 @@ module Env : sig
   type t
   val add_val_spec : id -> typquant * typ -> t -> t
   val update_val_spec : id -> typquant * typ -> t -> t
+  val define_val_spec : id -> t -> t
   val get_val_spec : id -> t -> typquant * typ
   val is_union_constructor : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
@@ -358,6 +359,7 @@ module Env : sig
 end = struct
   type t =
     { top_val_specs : (typquant * typ) Bindings.t;
+      defined_val_specs : IdSet.t;
       locals : (mut * typ) Bindings.t;
       union_ids : (typquant * typ) Bindings.t;
       registers : typ Bindings.t;
@@ -383,6 +385,7 @@ end = struct
 
   let empty =
     { top_val_specs = Bindings.empty;
+      defined_val_specs = IdSet.empty;
       locals = Bindings.empty;
       union_ids = Bindings.empty;
       registers = Bindings.empty;
@@ -663,6 +666,11 @@ end = struct
     if Bindings.mem id env.top_val_specs
     then typ_error (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound")
     else update_val_spec id bind env
+
+  let define_val_spec id env =
+    if IdSet.mem id env.defined_val_specs
+    then typ_error (id_loc id) ("Function " ^ string_of_id id ^ " has already been declared")
+    else { env with defined_val_specs = IdSet.add id env.defined_val_specs }
 
   let is_union_constructor id env =
     let is_ctor id (Tu_aux (tu, _)) = match tu with
@@ -3547,6 +3555,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
       [mk_val_spec quant typ id], Env.add_val_spec id (quant, typ) env, eff
     else [], env, declared_eff
   in
+  let env = Env.define_val_spec id env in
   if (equal_effects eff declared_eff || !opt_no_effects)
   then
     vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None)))], env
