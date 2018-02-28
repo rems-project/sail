@@ -2980,7 +2980,6 @@ let rewrite_defs_lem = [
   ]
 
 let rewrite_defs_ocaml = [
-    (* ("top_sort_defs", top_sort_defs); *)
     (* ("undefined", rewrite_undefined); *)
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("pat_lits", rewrite_defs_pat_lits);
@@ -2990,6 +2989,7 @@ let rewrite_defs_ocaml = [
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
+  ("top_sort_defs", top_sort_defs);
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
   ("sizeof", rewrite_sizeof);

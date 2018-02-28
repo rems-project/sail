@@ -587,6 +587,8 @@ let nf_group doc =
 let ocaml_def ctx def = match def with
   | DEF_reg_dec ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
   | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
+  | DEF_internal_mutrec fds ->
+     separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
   | DEF_type td -> nf_group (ocaml_typedef ctx td) ^^ ocaml_def_end
   | DEF_val lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
   | _ -> empty
