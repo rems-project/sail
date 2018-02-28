@@ -577,7 +577,6 @@ function clause execute (SLTIU(rs, rt, imm)) =
   {
     let rs_val = rGPR(rs) in
     let immext : bits(64) = EXTS(imm) in /* NB defined to sign extend here even though comparison is unsigned! */
-    let imm_val = unsigned(immext) in
     wGPR(rt) = EXTZ(if (rs_val <_u immext) then 0b1 else 0b0)
   }
 

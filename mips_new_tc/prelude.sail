@@ -60,6 +60,9 @@ val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
+val not : bool -> bool
+function not (b) = not_bool(b)
+
 val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
 
@@ -225,7 +228,7 @@ overload operator / = {quotient_nat, quotient, quotient_real}
 val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot"} : (int, int) -> int
 val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod"} : (int, int) -> int
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
+val modulus = {ocaml: "modulus", lem: "hardware_mod"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
 
 overload operator % = {modulus}
 
@@ -316,6 +319,9 @@ val EXTZ : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 
 function EXTS v = sign_extend(v, sizeof('m))
 function EXTZ v = zero_extend(v, sizeof('m))
+
+val zeros : forall 'n, 'n >= 0 . unit -> bits('n)
+function zeros() = replicate_bits (0b0,'n)
 
 infix 4 <_s
 infix 4 >=_s
