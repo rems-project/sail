@@ -90,7 +90,31 @@ let null_cap : CapStruct = struct {
   length = 0xffffffffffffffff
 }
 
+let default_cap : CapStruct = struct {
+  tag = true,
+  padding = zeros(),
+  otype = zeros(),
+  uperms = ones(),
+  perm_reserved11_14 = zeros(),
+  access_system_regs = true,
+  perm_reserved9 = false,
+  permit_ccall = true,
+  permit_seal = true,
+  permit_store_local_cap = true,
+  permit_store_cap = true,
+  permit_load_cap = true,
+  permit_store = true,
+  permit_load = true,
+  permit_execute = true,
+  global = true,
+  sealed = false,
+  offset = zeros(),
+  base = zeros(),
+  length = 0xffffffffffffffff
+}
+
 let 'cap_size = 32
+let cap_addr_mask = to_bits(64, pow2(64) - cap_size)
 
 function capRegToCapStruct(capReg) : CapReg -> CapStruct =
   struct {

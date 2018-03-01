@@ -556,6 +556,7 @@ function forall Nat 'r, 'r IN {1,2,4,8}.[:'r:] wordWidthBytes((WordType) w) =
     case D -> 8
   }
 
+
 (* This function checks that memory accesses are naturally aligned
    -- it is disabled in favour of BERI specific behaviour below.
 function bool isAddressAligned(addr, (WordType) wordType) =

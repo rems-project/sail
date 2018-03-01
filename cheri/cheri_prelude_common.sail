@@ -35,12 +35,11 @@
 
 scattered union ast
 
-val execute : ast -> unit effect {barr, eamem, escape, rmem, rmemt, rreg, undef, wmvt, wreg}
+val execute : ast -> unit effect {barr, eamem, escape, rmem, rmemt, rreg, undef, wmv, wmvt, wreg}
 scattered function execute
 
 val decode : bits(32) -> option(ast) effect pure
 scattered function decode
-
 
 register PCC        : CapReg
 register nextPCC    : CapReg
@@ -256,41 +255,52 @@ function register_inaccessible(r) =
   else
     false
 
-val MEMr_tag         : forall 'n. ( bits(64) , atom('n) ) -> (bool, bits(8 * 'n)) effect { rmemt }
-val MEMr_tag_reserve : forall 'n. ( bits(64) , atom('n) ) -> (bool, bits(8 * 'n)) effect { rmemt }
+val MEMr_tag = "read_tag"  : bits(64) -> bool effect { rmemt }
+val MEMw_tag = "write_tag" : (bits(64) , bool) -> unit effect { wmvt }
 
-val MEMval_tag : forall 'n. ( bits(64) , atom('n), bool, bits(8*'n)) -> unit effect { wmvt }
-val MEMval_tag_conditional : forall 'n. ( bits(64) , atom('n), bool, bits(8*'n)) -> bool effect { wmvt }
-
-val MEMr_tagged : bits(64) -> (bool, bits('cap_size * 8)) effect { rmemt }
+val MEMr_tagged : bits(64) -> (bool, bits('cap_size * 8)) effect { escape, rmem, rmemt }
 function MEMr_tagged (addr) =
+{
   /* assumes addr is cap. aligned */
-  let (tag, data) =  MEMr_tag (addr, cap_size) in
+  assert(unsigned(addr) % cap_size == 0);
+  let tag  = MEMr_tag(addr) in
+  let data = MEMr(addr, cap_size) in
   (tag, reverse_endianness(data))
+}
 
-val MEMr_tagged_reserve : bits(64) -> (bool, bits('cap_size * 8)) effect { rmemt }
+val MEMr_tagged_reserve : bits(64) -> (bool, bits('cap_size * 8)) effect { escape, rmem, rmemt }
 function MEMr_tagged_reserve (addr) =
+{
   /* assumes addr is cap. aligned */
-  let (tag, data) = MEMr_tag_reserve(addr, cap_size) in
+  assert(unsigned(addr) % cap_size == 0);
+  let tag = MEMr_tag(addr) in
+  let data = MEMr_reserve(addr, cap_size) in
   (tag, reverse_endianness(data))
+}
 
-val MEMw_tagged : (bits(64), bool, bits('cap_size * 8)) -> unit effect { eamem, wmvt }
+val MEMw_tagged : (bits(64), bool, bits('cap_size * 8)) -> unit effect { escape, eamem, wmv, wmvt }
 function MEMw_tagged(addr, tag, data) =
 {
   /* assumes addr is cap. aligned */
+  assert(unsigned(addr) % cap_size == 0);
   MEMea(addr, cap_size);
-  MEMval_tag(addr, cap_size,  tag, reverse_endianness(data));
+  MEMval(addr, cap_size, reverse_endianness(data));
+  MEMw_tag(addr, tag);
 }
 
-val MEMw_tagged_conditional : (bits(64), bool, bits('cap_size * 8)) -> bool effect { eamem, wmvt }
+val MEMw_tagged_conditional : (bits(64), bool, bits('cap_size * 8)) -> bool effect { escape, eamem, wmv, wmvt }
 function MEMw_tagged_conditional(addr, tag, data) =
 {
   /* assumes addr is cap. aligned */
+  assert(unsigned(addr) % cap_size == 0);
   MEMea_conditional(addr, cap_size);
-  MEMval_tag_conditional(addr, cap_size, tag, reverse_endianness(data));
+  success = MEMval_conditional(addr, cap_size, reverse_endianness(data));
+  if success then
+     MEMw_tag(addr, tag);
+  success;
 }
 
-val MEMw_wrapper : forall 'n, 'n >= 1. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmvt, wreg, eamem}
+val MEMw_wrapper : forall 'n, 'n >= 1. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {escape, wmv, wmvt, wreg, eamem}
 function MEMw_wrapper(addr, size, data) =
   let ledata = reverse_endianness(data) in
   if (addr == 0x000000007f000000) then
@@ -300,17 +310,25 @@ function MEMw_wrapper(addr, size, data) =
   }
   else
   {
-    /* On cheri non-capability writes must clear the corresponding tag */
+    /* require that writes don't cross capability boundaries (should be true due to mips alignment requirements) */  
+    assert((addr & cap_addr_mask) == ((addr + to_bits(64, size - 1)) & cap_addr_mask));
     MEMea(addr, size);
-    MEMval_tag(addr, size, false, ledata);
+    MEMval(addr, size, ledata);
+    /* On cheri non-capability writes must clear the corresponding tag*/
+    MEMw_tag(addr & cap_addr_mask, false);
   }
 
-val MEMw_conditional_wrapper : forall 'n, 'n >= 1. (bits(64), atom('n), bits(8 * 'n)) -> bool effect {wmvt, eamem}
+val MEMw_conditional_wrapper : forall 'n, 'n >= 1. (bits(64), atom('n), bits(8 * 'n)) -> bool effect {escape, wmv, wmvt, eamem}
 function MEMw_conditional_wrapper(addr, size, data) =
   {
-    /* On cheri non-capability writes must clear the corresponding tag*/
+    /* require that writes don't cross capability boundaries (should be true due to mips alignment requirements) */
+    assert((addr & cap_addr_mask) == ((addr + to_bits(64, size - 1)) & cap_addr_mask));
     MEMea_conditional(addr, size);
-    MEMval_tag_conditional(addr,size,false,reverse_endianness(data));
+    success = MEMval_conditional(addr,size,reverse_endianness(data));
+    if success then
+       /* On cheri non-capability writes must clear the corresponding tag */
+       MEMw_tag(addr & cap_addr_mask, false);
+    success;
   }
 
 val addrWrapper : (bits(64), MemAccessType, WordType) -> bits(64) effect {rreg, wreg, escape}
@@ -343,10 +361,10 @@ function addrWrapper(addr, accessType, width) =
 val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, undef, escape}
 function TranslatePC (vAddr) = {
   incrementCP0Count();
-  let pcc = capRegToCapStruct(PCC) in
-  let base  = getCapBase(pcc) in
-  let top   = getCapTop(pcc) in
-  let absPC = base + unsigned(vAddr) in
+  let pcc = capRegToCapStruct(PCC);
+  let base  = getCapBase(pcc);
+  let top   = getCapTop(pcc);
+  let absPC = base + unsigned(vAddr);
   if ((absPC % 4)  != 0) then /* bad PC alignment */
     (SignalExceptionBadAddr(AdEL, to_bits(64, absPC))) /* XXX absPC may be truncated */
   else if ((absPC + 4) > top) then
@@ -361,3 +379,37 @@ function checkCP2usable ()  =
       (CP0Cause->CE()) = 0b10;
       (SignalException(CpU));
     }
+
+function init_cp2_state () = {
+  let defaultBits = capStructToCapReg(default_cap);
+  PCC = defaultBits;
+  nextPCC = defaultBits;
+  delayedPCC = defaultBits;
+  foreach(i from 0 to 31) {
+    let idx = to_bits(5, i) in
+    writeCapReg(idx, default_cap);
+  }
+}
+
+val capToString : CapStruct -> string
+function capToString cap =
+         concat_str(" t:",
+         concat_str(if cap.tag then "1" else "0",
+         concat_str(" s:",
+         concat_str(if cap.sealed then "1" else "0",
+         concat_str(" perms:",
+         concat_str(BitStr(0b0 @ getCapPerms(cap)),
+         concat_str(" type:",
+         concat_str(BitStr(cap.otype),
+         concat_str(" offset:",
+         concat_str(BitStr(to_bits(64, getCapOffset(cap))),
+         concat_str(" base:",
+         concat_str(BitStr(to_bits(64, getCapBase(cap))),
+         concat_str(" length:", BitStr(to_bits(64, getCapLength(cap))))))))))))))))
+
+function dump_cp2_state () = {
+  print(concat_str("DEBUG CAP PCC", capToString(capRegToCapStruct(PCC))));
+  foreach(i from 0 to 31) {
+    print(concat_str("DEBUG CAP REG", concat_str(string_of_int(i), capToString(readCapReg(to_bits(5, i))))))
+  }
+}

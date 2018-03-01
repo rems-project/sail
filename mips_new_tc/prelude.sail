@@ -60,8 +60,7 @@ val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val not : bool -> bool
-function not (b) = not_bool(b)
+val not = "not" : bool -> bool
 
 val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
@@ -322,6 +321,9 @@ function EXTZ v = zero_extend(v, sizeof('m))
 
 val zeros : forall 'n, 'n >= 0 . unit -> bits('n)
 function zeros() = replicate_bits (0b0,'n)
+
+val ones : forall 'n, 'n >= 0 . unit -> bits('n)
+function ones() = replicate_bits (0b1,'n)
 
 infix 4 <_s
 infix 4 >=_s

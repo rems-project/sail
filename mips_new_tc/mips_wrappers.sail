@@ -76,8 +76,10 @@ function TranslatePC (vAddr) = {
 
 let have_cp2 = false
 
-
-
+function SignalException (ex) = SignalExceptionMIPS(ex, 0x0000000000000000)
 
 val ERETHook : unit -> unit
 function ERETHook() = ()
+
+function init_cp2_state () = skip_wreg()
+function dump_cp2_state () = skip_rreg()

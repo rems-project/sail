@@ -28,4 +28,4 @@ M%.thy: m%.lem m%_types.lem mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 clean:
-	rm -rf _sbuild
+	rm -rf mips Mips.thy mips.lem _sbuild

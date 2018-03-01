@@ -7,9 +7,7 @@ CHERI_SAIL_DIR:=$(SAIL_DIR)/cheri
 SAIL:=$(SAIL_DIR)/sail
 SAIL_LIB_HEADERS:=$(SAIL_LIB_DIR)/flow.sail
 
-MIPS_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail $(MIPS_SAIL_DIR)/main.sail
-
-CHERI_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_256.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+CHERI_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_256.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail $(MIPS_SAIL_DIR)/main.sail
 
 CHERI128_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_types.sail  $(CHERI_SAIL_DIR)/cheri_prelude_128.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
@@ -17,7 +15,7 @@ cheri: $(CHERI_SAILS)
 	$(SAIL) -ocaml -o cheri $(CHERI_SAILS)
 
 clean:
-	rm -rf _sbuild
+	rm -rf cheri _sbuild
 
 EXTRACT_INST=sed -n "/START_${1}\b/,/END_${1}\b/p" cheri_insts.sail | sed 's/^  //;1d;$$d' > inst_$1.sail
 extract: cheri_insts.sail

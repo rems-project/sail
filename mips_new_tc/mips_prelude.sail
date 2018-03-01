@@ -343,6 +343,10 @@ val MEMval_conditional = {lem: "MEMval_conditional"} : forall 'n.
 /* Extern nops with effects, sometimes useful for faking effect */
 val skip_eamem = "skip" : unit -> unit effect {eamem}
 val skip_barr = "skip" : unit -> unit effect {barr}
+val skip_wreg = "skip" : unit -> unit effect {wreg}
+val skip_rreg = "skip" : unit -> unit effect {rreg}
+val skip_wmvt = "skip" : unit -> unit effect {wmvt}
+val skip_rmemt = "skip" : unit -> unit effect {rmemt}
 
 function MEMr (addr, size) = __MIPS_read(addr, size)
 function MEMr_reserve (addr, size) = __MIPS_read(addr, size)
@@ -426,8 +430,8 @@ function SignalExceptionMIPS (ex, kccBase) =
       throw (ISAException);
   }
 
+/* Defined either in mips_wrappers (directly calling SignalExceptionMIPS) or in cheri_prelude_common (cheri things plus above) */
 val SignalException : forall ('o : Type) . Exception -> 'o effect {escape, rreg, wreg}
-function SignalException (ex) = SignalExceptionMIPS(ex, 0x0000000000000000)
 
 val SignalExceptionBadAddr : forall ('o : Type) . (Exception, bits(64)) -> 'o effect {escape, rreg, wreg}
 function  SignalExceptionBadAddr(ex, badAddr) =
@@ -604,3 +608,11 @@ function MEMr_wrapper (addr, size) = reverse_endianness(MEMr (addr, size))
 val MEMr_reserve_wrapper : forall 'n, 1 <= 'n <= 8 . ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
 function MEMr_reserve_wrapper (addr , size) =
     reverse_endianness(MEMr_reserve(addr, size))
+
+
+function init_cp0_state () : unit -> unit = {
+  CP0Status->BEV() = bitone;
+}
+
+val init_cp2_state : unit -> unit effect {wreg}
+val dump_cp2_state : unit -> unit effect {rreg}
