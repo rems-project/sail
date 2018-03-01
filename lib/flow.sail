@@ -31,7 +31,7 @@ val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : (int, int) -> bool
 val lteq_int = "lteq" : (int, int) -> bool
 val gteq_int = "gteq" : (int, int) -> bool
 val lt_int = "lt" : (int, int) -> bool
-val gt_int = "lt" : (int, int) -> bool
+val gt_int = "gt" : (int, int) -> bool
 
 overload operator == = {eq_atom, eq_range, eq_int}
 overload operator | = {or_bool}
