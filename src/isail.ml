@@ -263,7 +263,18 @@ let handle_input' input =
             interactive_ast := ast;
             interactive_env := env;
             interactive_state := initial_state !interactive_ast
-
+         | ":bytecode" ->
+            let open PPrint in
+            let open C_backend in
+            let ast = Process_file.rewrite_ast_c !interactive_ast in
+            let ast, env = Specialize.specialize ast !interactive_env in
+            let ctx = initial_ctx env in
+            let byte_ast = bytecode_ast ctx (fun cdefs -> List.concat (List.map (flatten_instrs ctx) cdefs)) ast in
+            let chan = open_out arg in
+            Util.opt_colors := false;
+            Pretty_print_sail.pretty_sail chan (separate_map hardline pp_cdef byte_ast);
+            Util.opt_colors := true;
+            close_out chan
          | ":ast" ->
             let chan = open_out arg in
             Pretty_print_sail.pp_defs chan !interactive_ast;

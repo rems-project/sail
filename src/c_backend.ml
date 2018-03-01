@@ -744,10 +744,10 @@ let rec ctyp_equal ctyp1 ctyp2 =
    intermediate language pretty-printer. *)
 let rec string_of_ctyp = function
   | CT_mpz -> "mpz_t"
-  | CT_bv true -> "bv_t<dec>"
-  | CT_bv false -> "bv_t<inc>"
-  | CT_uint64 (n, true) -> "uint64_t<" ^ string_of_int n ^ ", dec>"
-  | CT_uint64 (n, false) -> "uint64_t<" ^ string_of_int n ^ ", int>"
+  | CT_bv true -> "bv_t(dec)"
+  | CT_bv false -> "bv_t(inc)"
+  | CT_uint64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
+  | CT_uint64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
   | CT_int64 -> "int64_t"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
@@ -756,9 +756,9 @@ let rec string_of_ctyp = function
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " string_of_ctyp ctyps ^ ")"
   | CT_struct (id, _) | CT_enum (id, _) | CT_variant (id, _) -> string_of_id id
   | CT_string -> "string"
-  | CT_vector (true, ctyp) -> "vector<dec, " ^ string_of_ctyp ctyp ^ ">"
-  | CT_vector (false, ctyp) -> "vector<inc, " ^ string_of_ctyp ctyp ^ ">"
-  | CT_list ctyp -> "list<" ^ string_of_ctyp ctyp ^ ">"
+  | CT_vector (true, ctyp) -> "vector(dec, " ^ string_of_ctyp ctyp ^ ")"
+  | CT_vector (false, ctyp) -> "vector(inc, " ^ string_of_ctyp ctyp ^ ")"
+  | CT_list ctyp -> "list(" ^ string_of_ctyp ctyp ^ ")"
 
 (** Convert a sail type into a C-type **)
 let rec ctyp_of_typ ctx typ =
@@ -1129,7 +1129,7 @@ let rec pp_clexp = function
 let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   match instr with
   | I_decl (ctyp, id) ->
-     pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+     pp_keyword "var" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_if (cval, then_instrs, else_instrs, ctyp) ->
      let pp_if_block = function
        | [] -> string "{}"
@@ -1161,13 +1161,12 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
                       string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args);
                       string ":"; pp_ctyp ctyp2 ]
   | I_convert (x, ctyp1, y, ctyp2) ->
-     separate space [ pp_clexp x; string "=";
-                      pp_keyword "convert" ^^ pp_ctyp ctyp2 ^^ parens (pp_id y);
-                      string ":"; pp_ctyp ctyp1 ]
+     separate space [ pp_clexp x; colon; pp_ctyp ctyp1; string "=";
+                      pp_keyword "convert" ^^ pp_id y; colon; pp_ctyp ctyp2 ]
   | I_copy (clexp, cval) ->
      separate space [pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
-     pp_keyword "kill" ^^ parens (pp_ctyp ctyp) ^^ pp_id id
+     pp_keyword "kill" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_return cval ->
      pp_keyword "return" ^^ pp_cval cval
   | I_throw cval ->
@@ -1191,12 +1190,13 @@ let pp_ctype_def = function
      pp_keyword "struct" ^^ pp_id id ^^ string " = "
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) (fun (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp) fields) rbrace
   | CTD_variant (id, ctors) ->
-     pp_keyword "variant" ^^ pp_id id ^^ string " = "
+     pp_keyword "union" ^^ pp_id id ^^ string " = "
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) (fun (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp) ctors) rbrace
 
 let pp_cdef = function
   | CDEF_spec (id, ctyps, ctyp) ->
-     pp_keyword "val" ^^ pp_id id ^^ space ^^ parens (separate_map (comma ^^ space) pp_ctyp ctyps) ^^ string " -> " ^^ pp_ctyp ctyp
+     pp_keyword "val" ^^ pp_id id ^^ string " : " ^^ parens (separate_map (comma ^^ space) pp_ctyp ctyps) ^^ string " -> " ^^ pp_ctyp ctyp
+     ^^ hardline
   | CDEF_fundef (id, ret, args, instrs) ->
      let ret = match ret with
        | None -> empty
@@ -2379,10 +2379,9 @@ let hoist_ctyp = function
   | _ -> false
 
 let hoist_counter = ref 0
-
 let hoist_id () =
-  let id = mk_id ("gh#" ^ string_of_int !gensym_counter) in
-  incr gensym_counter;
+  let id = mk_id ("gh#" ^ string_of_int !hoist_counter) in
+  incr hoist_counter;
   id
 
 let hoist_allocations ctx = function
@@ -2438,6 +2437,48 @@ let hoist_allocations ctx = function
        [CDEF_startup (function_id, List.rev !decls);
         CDEF_fundef (function_id, heap_return, args, body);
         CDEF_finish (function_id, !cleanups)]
+
+  | cdef -> [cdef]
+
+let flat_counter = ref 0
+let flat_id () =
+  let id = mk_id ("local#" ^ string_of_int !flat_counter) in
+  incr flat_counter;
+  id
+
+let flatten_instrs ctx =
+  let rec flatten = function
+    | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
+       let fid = flat_id () in
+       I_aux (I_decl (ctyp, fid), aux) :: flatten (instrs_rename decl_id fid instrs)
+
+    | I_aux ((I_block block | I_try_block block), _) :: instrs ->
+       flatten block @ flatten instrs
+
+    | I_aux (I_if (cval, then_instrs, else_instrs, _), _) :: instrs ->
+       let then_label = label "then_" in
+       let endif_label = label "endif_" in
+       [ijump cval then_label]
+       @ flatten else_instrs
+       @ [igoto endif_label]
+       @ [ilabel then_label]
+       @ flatten then_instrs
+       @ [ilabel endif_label]
+       @ flatten instrs
+
+    | I_aux (I_comment _, _) :: instrs -> flatten instrs
+
+    | instr :: instrs -> instr :: flatten instrs
+    | [] -> []
+  in
+  function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     flat_counter := 0;
+     [CDEF_fundef (function_id, heap_return, args, flatten body)]
+
+  | CDEF_let (n, bindings, instrs, cleanup) ->
+    flat_counter := 0;
+    [CDEF_let (n, bindings, flatten instrs, flatten cleanup)]
 
   | cdef -> [cdef]
 
@@ -3149,6 +3190,14 @@ let sgen_finish = function
   | CDEF_startup (id, _) ->
      Printf.sprintf "  finish_%s();" (sgen_id id)
   | _ -> assert false
+
+let bytecode_ast ctx rewrites (Defs defs) =
+  let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
+  let exit_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_exit") "unit -> unit effect {escape}" in
+  let ctx = { ctx with tc_env = snd (check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
+  let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
+  let cdefs = List.concat (List.rev chunks) in
+  rewrites cdefs
 
 let compile_ast ctx (Defs defs) =
   try

@@ -16,10 +16,11 @@
     "exmem" "undef" "unspec" "nondet" "escape"))
 
 (defconst sail2-types
-  '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits"))
+  '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits"
+    "uint64_t" "int64_t" "bv_t" "mpz_t"))
 
 (defconst sail2-special
-  '("_prove" "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif"))
+  '("_prove" "create" "kill" "convert" "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif"))
 
 (defconst sail2-font-lock-keywords
   `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)
