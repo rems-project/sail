@@ -409,13 +409,18 @@ let ocaml_funcls ctx =
   let trace_info typ1 typ2 =
      let arg_sym = gensym () in
      let ret_sym = gensym () in
+     let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
+     let foralls =
+       if KidSet.is_empty kids then empty else
+         separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot;
+     in
      let string_of_arg =
-       separate space [function_header (); arg_sym; parens (string "arg" ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1);
-                       colon; string "string"; equals; ocaml_string_typ typ1 (string "arg")]
+       separate space [function_header (); arg_sym; colon; foralls; ocaml_typ ctx typ1; string "-> string = fun arg ->";
+                       ocaml_string_typ typ1 (string "arg")]
      in
      let string_of_ret =
-       separate space [function_header (); ret_sym; parens (string "arg" ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ2);
-                       colon; string "string"; equals; ocaml_string_typ typ2 (string "arg")]
+       separate space [function_header (); ret_sym; colon; foralls; ocaml_typ ctx typ2; string "-> string = fun arg ->";
+                       ocaml_string_typ typ2 (string "arg")]
      in
      (arg_sym, string_of_arg, ret_sym, string_of_ret)
   in
@@ -437,14 +442,23 @@ let ocaml_funcls ctx =
        | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
        | _ -> failwith "Found val spec which was not a function!"
      in
+     (* Any remaining type variables after simple_typ rewrite should
+        indicate Type-polymorphism. If we have it, we need to generate
+        explicit type signatures with universal quantification. *)
+     let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
      let pat_sym = gensym () in
      let pat, exp =
        match pexp with
-       | Pat_aux (Pat_exp (pat,exp),_) -> pat,exp
-       | Pat_aux (Pat_when (pat,wh,exp),_) -> failwith "OCaml: top-level pattern guards not supported"
+       | Pat_aux (Pat_exp (pat, exp),_) -> pat,exp
+       | Pat_aux (Pat_when (pat, wh, exp),_) -> failwith "OCaml: top-level pattern guards not supported"
      in
      let annot_pat =
-       let pat = parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1) in
+       let pat =
+         if KidSet.is_empty kids then
+           parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1)
+         else
+           ocaml_pat ctx pat
+       in
        if !opt_trace_ocaml
        then parens (separate space [pat; string "as"; pat_sym])
        else pat
@@ -452,10 +466,20 @@ let ocaml_funcls ctx =
      let call_header = function_header () in
      let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
      let call =
-       separate space [call_header; zencode ctx id; annot_pat; colon; ocaml_typ ctx typ2; equals;
-                       sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
-       ^//^ ocaml_exp ctx exp
-       ^^ rparen
+       if KidSet.is_empty kids then
+         separate space [call_header; zencode ctx id;
+                         annot_pat; colon; ocaml_typ ctx typ2; equals;
+                         sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
+         ^//^ ocaml_exp ctx exp
+         ^^ rparen
+       else
+         separate space [call_header; zencode ctx id; colon;
+                         separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot;
+                         ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2; equals;
+                         string "fun"; annot_pat; string "->";
+                         sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
+         ^//^ ocaml_exp ctx exp
+         ^^ rparen
      in
      ocaml_funcl call string_of_arg string_of_ret
   | funcls ->
@@ -465,6 +489,8 @@ let ocaml_funcls ctx =
        | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
        | _ -> failwith "Found val spec which was not a function!"
      in
+     let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
+     if not (KidSet.is_empty kids) then failwith "Cannot handle polymorphic multi-clause function in OCaml backend" else ();
      let pat_sym = gensym () in
      let call_header = function_header () in
      let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
