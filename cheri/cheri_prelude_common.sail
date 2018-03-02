@@ -391,6 +391,15 @@ function init_cp2_state () = {
   }
 }
 
+function cp2_next_pc () = {
+  PCC = nextPCC;
+  if inBranchDelay then {
+    nextPCC = delayedPCC;
+  } else {
+    inCCallDelay = 0b0;
+  };
+}
+
 val capToString : CapStruct -> string
 function capToString cap =
          concat_str(" t:",

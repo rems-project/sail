@@ -615,4 +615,5 @@ function init_cp0_state () : unit -> unit = {
 }
 
 val init_cp2_state : unit -> unit effect {wreg}
+val cp2_next_pc:     unit -> unit effect {rreg, wreg}
 val dump_cp2_state : unit -> unit effect {rreg}

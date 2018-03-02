@@ -82,4 +82,5 @@ val ERETHook : unit -> unit
 function ERETHook() = ()
 
 function init_cp2_state () = skip_wreg()
+function cp2_next_pc()     = {skip_wreg(); skip_rreg()}
 function dump_cp2_state () = skip_rreg()

@@ -8,7 +8,8 @@ function fetch_and_execute () = {
     inBranchDelay = branchPending;
     branchPending = 0b0;
     nextPC = if inBranchDelay then delayedPC else PC + 4;
-
+    cp2_next_pc();
+    
     print_bits("PC: ", PC);
     try {
       let pc_pa = TranslatePC(PC);
