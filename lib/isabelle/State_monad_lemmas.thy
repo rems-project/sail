@@ -274,7 +274,7 @@ lemma no_throw_mem_builtins:
   "\<And>BC wk a sz s. ignore_throw (write_mem_eaS BC wk a sz) s = write_mem_eaS BC wk a sz s"
   "\<And>v s. ignore_throw (write_mem_bytesS v) s = write_mem_bytesS v s"
   "\<And>BC v s. ignore_throw (write_mem_valS BC v) s = write_mem_valS BC v s"
-  "\<And>t s. ignore_throw (write_tagS t) s = write_tagS t s"
+  "\<And>BC a t s. ignore_throw (write_tagS BC a t) s = write_tagS BC a t s"
   "\<And>s. ignore_throw (excl_resultS ()) s = excl_resultS () s"
   "\<And>s. ignore_throw (undefined_boolS ()) s = undefined_boolS () s"
   unfolding read_mem_bytesS_def read_memS_def read_tagS_def write_mem_eaS_def

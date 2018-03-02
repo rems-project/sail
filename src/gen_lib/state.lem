@@ -14,7 +14,7 @@ let rec liftState ra s = match s with
   | (Read_mem rk a sz k) -> bindS (read_mem_bytesS rk a sz) (fun v -> liftState ra (k v))
   | (Read_tag t k)       -> bindS (read_tagS t)             (fun v -> liftState ra (k v))
   | (Write_memv a k)     -> bindS (write_mem_bytesS a)      (fun v -> liftState ra (k v))
-  | (Write_tagv t k)     -> bindS (write_tagS t)            (fun v -> liftState ra (k v))
+  | (Write_tag a t k)    -> bindS (write_tagS a t)          (fun v -> liftState ra (k v))
   | (Read_reg r k)       -> bindS (read_regvalS ra r)       (fun v -> liftState ra (k v))
   | (Excl_res k)         -> bindS (excl_resultS ())         (fun v -> liftState ra (k v))
   | (Undefined k)        -> bindS (undefined_boolS ())      (fun v -> liftState ra (k v))

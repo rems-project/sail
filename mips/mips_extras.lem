@@ -42,10 +42,10 @@ val MEMval_conditional     : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b
 val MEMval_tag             : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b => 'a -> integer -> bool -> 'b -> monad 'regval unit 'e
 val MEMval_tag_conditional : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b => 'a -> integer -> bool -> 'b -> monad 'regval bool 'e
 
-let MEMval _ size v                   = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional _ size v       = write_mem_val v >>= fun b -> return (if b then true else false)
-let MEMval_tag  _ size t v            = write_mem_val v >>= fun _ -> write_tag_val (bitU_of_bool t) >>= fun _ -> return ()
-let MEMval_tag_conditional _ size t v = write_mem_val v >>= fun b -> write_tag_val (bitU_of_bool t) >>= fun _ -> return (if b then true else false)
+let MEMval _ size v                      = write_mem_val v >>= fun _ -> return ()
+let MEMval_conditional _ size v          = write_mem_val v >>= fun b -> return (if b then true else false)
+let MEMval_tag addr size t v             = write_mem_val v >>= fun _ -> write_tag addr (bitU_of_bool t) >>= fun _ -> return ()
+let MEMval_tag_conditional addr size t v = write_mem_val v >>= fun b -> write_tag addr (bitU_of_bool t) >>= fun _ -> return (if b then true else false)
 
 val MEM_sync  : forall 'regval 'e. unit -> monad 'regval unit 'e
 
@@ -86,9 +86,12 @@ val undefined_vector : forall 'a. integer -> 'a -> list 'a
 let undefined_vector len u = repeat [u] len
 val undefined_bitvector : forall 'a. Bitvector 'a => integer -> 'a
 let undefined_bitvector len = of_bits (repeat [B0] len)
+val undefined_bits : forall 'a. Bitvector 'a => integer -> 'a
 let undefined_bits len = undefined_bitvector len
 let undefined_bit () = B0
 let undefined_real () = realFromFrac 0 1
 let undefined_range i j = i
 let undefined_atom i = i
 let undefined_nat () = (0:ii)
+
+let skip () = return ()

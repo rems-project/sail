@@ -32,7 +32,7 @@ datatype 'regval event =
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal *)
   | e_write_memv "memory_byte list" bool
-  | e_write_tagv bitU bool
+  | e_write_tag "bitU list" bitU bool
   (* Tell the system to dynamically recalculate dependency footprint *)
   | e_footprint
   (* Request a memory barrier *)
@@ -50,7 +50,7 @@ inductive_set T :: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a, '
 | Write_ea: "((Write_ea wk addr sz k), e_write_ea wk addr sz, k) \<in> T"
 | Excl_res: "((Excl_res k), e_excl_res r, k r) \<in> T"
 | Write_memv: "((Write_memv v k), e_write_memv v r, k r) \<in> T"
-| Write_tagv: "((Write_tagv v k), e_write_tagv v r, k r) \<in> T"
+| Write_tag: "((Write_tag a v k), e_write_tag a v r, k r) \<in> T"
 | Footprint: "((Footprint k), e_footprint, k) \<in> T"
 | Barrier: "((Barrier bk k), e_barrier bk, k) \<in> T"
 | Read_reg: "((Read_reg r k), e_read_reg r v, k v) \<in> T"
@@ -79,7 +79,7 @@ lemma Traces_cases:
   | (Read_mem) rk addr s k t' v where "m = Read_mem rk addr s k" and "t = e_read_mem rk addr s v # t'" and "(k v, t', m') \<in> Traces"
   | (Read_tag) addr k t' v where "m = Read_tag addr k" and "t = e_read_tag addr v # t'" and "(k v, t', m') \<in> Traces"
   | (Write_memv) val k t' v where "m = Write_memv val k" and "t = e_write_memv val v # t'" and "(k v, t', m') \<in> Traces"
-  | (Write_tagv) val k t' v where "m = Write_tagv val k" and "t = e_write_tagv val v # t'" and "(k v, t', m') \<in> Traces"
+  | (Write_tag) a val k t' v where "m = Write_tag a val k" and "t = e_write_tag a val v # t'" and "(k v, t', m') \<in> Traces"
   | (Barrier) bk k t' v where "m = Barrier bk k" and "t = e_barrier bk # t'" and "(k, t', m') \<in> Traces"
   | (Read_reg) reg k t' v where "m = Read_reg reg k" and "t = e_read_reg reg v # t'" and "(k v, t', m') \<in> Traces"
   | (Excl_res) k t' v where "m = Excl_res k" and "t = e_excl_res v # t'" and "(k v, t', m') \<in> Traces"

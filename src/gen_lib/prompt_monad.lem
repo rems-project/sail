@@ -19,8 +19,8 @@ type monad 'regval 'a 'e =
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal, given in little endian order *)
   | Write_memv of list memory_byte * (bool -> monad 'regval 'a 'e)
-  (* Request to write the tag at last signalled address. *)
-  | Write_tagv of bitU * (bool -> monad 'regval 'a 'e)
+  (* Request to write the tag at given address. *)
+  | Write_tag of address * bitU * (bool -> monad 'regval 'a 'e)
   (* Tell the system to dynamically recalculate dependency footprint *)
   | Footprint of monad 'regval 'a 'e
   (* Request a memory barrier *)
@@ -48,7 +48,7 @@ let rec bind m f = match m with
   | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> bind (k v) f)
   | Read_tag a k ->       Read_tag a       (fun v -> bind (k v) f)
   | Write_memv descr k -> Write_memv descr (fun v -> bind (k v) f)
-  | Write_tagv t k ->     Write_tagv t     (fun v -> bind (k v) f)
+  | Write_tag a t k ->    Write_tag a t    (fun v -> bind (k v) f)
   | Read_reg descr k ->   Read_reg descr   (fun v -> bind (k v) f)
   | Excl_res k ->         Excl_res         (fun v -> bind (k v) f)
   | Undefined k ->        Undefined        (fun v -> bind (k v) f)
@@ -84,7 +84,7 @@ let rec try_catch m h = match m with
   | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> try_catch (k v) h)
   | Read_tag a k ->       Read_tag a       (fun v -> try_catch (k v) h)
   | Write_memv descr k -> Write_memv descr (fun v -> try_catch (k v) h)
-  | Write_tagv t k ->     Write_tagv t     (fun v -> try_catch (k v) h)
+  | Write_tag a t k ->    Write_tag a t    (fun v -> try_catch (k v) h)
   | Read_reg descr k ->   Read_reg descr   (fun v -> try_catch (k v) h)
   | Excl_res k ->         Excl_res         (fun v -> try_catch (k v) h)
   | Undefined k ->        Undefined        (fun v -> try_catch (k v) h)
@@ -150,8 +150,8 @@ let write_mem_val v = match mem_bytes_of_bits v with
   | Nothing -> Fail "write_mem_val"
 end
 
-val write_tag_val : forall 'rv 'e. bitU -> monad 'rv bool 'e
-let write_tag_val b = Write_tagv b return
+val write_tag : forall 'rv 'a 'e. Bitvector 'a => 'a -> bitU -> monad 'rv bool 'e
+let write_tag addr b = Write_tag (bits_of addr) b return
 
 val read_reg : forall 's 'rv 'a 'e. register_ref 's 'rv 'a -> monad 'rv 'a 'e
 let read_reg reg =

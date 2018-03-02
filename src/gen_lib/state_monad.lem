@@ -179,15 +179,11 @@ let write_mem_valS v = match mem_bytes_of_bits v with
   | Nothing -> failS "write_mem_val"
 end
 
-val write_tagS : forall 'regs 'e. bitU -> monadS 'regs bool 'e
-let write_tagS t =
-  readS (fun s -> s.write_ea) >>$= (function
-      | Nothing -> failS "write ea has not been announced yet"
-      | Just (_, addr, _) ->
-         (*let taddr = addr / cap_alignment in*)
-         updateS (fun s -> <| s with tagstate = Map.insert addr t s.tagstate |>) >>$
-         returnS true
-    end)
+val write_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> bitU -> monadS 'regs bool 'e
+let write_tagS addr t =
+   (*let taddr = addr / cap_alignment in*)
+   updateS (fun s -> <| s with tagstate = Map.insert (unsigned addr) t s.tagstate |>) >>$
+   returnS true
 
 val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e
 let read_regS reg = readS (fun s -> reg.read_from s.regstate)
