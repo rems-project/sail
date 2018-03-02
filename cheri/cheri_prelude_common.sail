@@ -385,7 +385,7 @@ function init_cp2_state () = {
   PCC = defaultBits;
   nextPCC = defaultBits;
   delayedPCC = defaultBits;
-  foreach(i from 0 to 31) {
+  foreach(i from 0 to 32) {
     let idx = to_bits(5, i) in
     writeCapReg(idx, default_cap);
   }
@@ -418,7 +418,7 @@ function capToString cap =
 
 function dump_cp2_state () = {
   print(concat_str("DEBUG CAP PCC", capToString(capRegToCapStruct(PCC))));
-  foreach(i from 0 to 31) {
+  foreach(i from 0 to 32) {
     print(concat_str("DEBUG CAP REG ", concat_str(string_of_int(i), capToString(readCapReg(to_bits(5, i))))))
   }
 }
