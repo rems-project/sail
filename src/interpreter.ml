@@ -516,6 +516,23 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | Right exp' -> wrap (E_try (exp', pexps))
      end
 
+  | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_from && is_value exp_to && is_value exp_step ->
+     let v_from = value_of_exp exp_from in
+     let v_to = value_of_exp exp_to in
+     let v_step = value_of_exp exp_step in
+     begin match value_gt [v_from; v_to] with
+     | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
+     | V_bool false ->
+        wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_add_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
+     | _ -> assert false
+     end
+  | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_to && is_value exp_step ->
+     step exp_from >>= fun exp_from' -> wrap (E_for (id, exp_from', exp_to, exp_step, ord, body))
+  | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_step ->
+     step exp_to >>= fun exp_to' -> wrap (E_for (id, exp_from, exp_to', exp_step, ord, body))
+  | E_for (id, exp_from, exp_to, exp_step, ord, body) ->
+     step exp_step >>= fun exp_step' -> wrap (E_for (id, exp_from, exp_to, exp_step', ord, body))
+
   | E_sizeof _ | E_constraint _ -> assert false (* Must be re-written before interpreting *)
 
   | _ -> failwith ("Unimplemented " ^ string_of_exp orig_exp)

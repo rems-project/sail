@@ -273,8 +273,8 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      in
      let loop_compare =
        match ord with
-       | Ord_aux (Ord_inc, _) -> string "Big_int.less"
-       | Ord_aux (Ord_dec, _) -> string "Big_int.greater"
+       | Ord_aux (Ord_inc, _) -> string "Big_int.less_equal"
+       | Ord_aux (Ord_dec, _) -> string "Big_int.greater_equal"
        | Ord_aux (Ord_var _, _) -> failwith "Cannot have variable loop order!"
      in
      let loop_body =
