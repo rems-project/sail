@@ -815,6 +815,10 @@ let destruct_range (Typ_aux (typ_aux, _)) =
        when string_of_id f = "range" -> Some (n1, n2)
   | _ -> None
 
+let is_unit_typ = function
+  | Typ_aux (Typ_id u, _) -> string_of_id u = "unit"
+  | _ -> false
+
 let rec is_number (Typ_aux (t,_)) =
   match t with
   | Typ_id (Id_aux (Id "int", _))

@@ -274,6 +274,7 @@ val is_nexp_constant : nexp -> bool
 
 val lexp_to_exp : 'a lexp -> 'a exp
 
+val is_unit_typ : typ -> bool
 val is_number : typ -> bool
 val is_reftyp : typ -> bool
 val is_vector_typ : typ -> bool
