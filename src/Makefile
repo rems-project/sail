@@ -82,7 +82,7 @@ ast.ml: ast.lem
 	sed -i -f ast.sed ast.ml
 
 bytecode.ml: bytecode.lem
-	lem -ocaml bytecode.lem
+	lem -ocaml bytecode.lem -lib . -lib gen_lib/
 	sed -i -f ast.sed bytecode.ml
 
 lem_interp/interp_ast.lem: ../language/l2.ott
@@ -234,8 +234,8 @@ _build/%_trimmed.sail: _build/%_all.sail
 count: _build/cheri_trimmed.sail _build/mips_trimmed.sail
 	wc -l $^
 
-%.ml: %.lem
-	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
+# %.ml: %.lem
+#	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
 
 #run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml interpreter
 #	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(ZARITH_DIR) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ZARITH_LIB) $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
@@ -280,6 +280,7 @@ clean:
 	-rm -rf tex-doc
 	-rm -rf lem lib
 	-rm -rf sail.docdir
+	-rm -f gen_lib/*.ml
 	-rm -f ast.ml
 	-rm -f ast.lem
 	-rm -f bytecode.ml

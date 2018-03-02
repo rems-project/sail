@@ -32,10 +32,16 @@ metavar bool ::=
   {{ ocaml bool }}
   {{ lem bool }}
 
+metavar value ::=
+  {{ phantom }}
+  {{ lem vl }}
+  {{ ocaml vl }}
+
 embed
 {{ lem
 
 open import Ast
+open import Value2
 
 }}
 
@@ -45,7 +51,7 @@ grammar
 % expressions, used by the aval and cval types.
 fragment :: 'F_' ::=
   | id                                     :: :: id
-  | string                                 :: :: lit
+  | value                                  :: :: lit
   | have_exception                         :: :: have_exception
   | current_exception                      :: :: current_exception
   | fragment op fragment'                  :: :: op

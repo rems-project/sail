@@ -1,16 +1,15 @@
 true: -traverse, debug, use_menhir
 <**/*.ml>: bin_annot, annot
-# <lem_interp> or <test>: include
+
 <sail.{byte,native}>: package(zarith), package(linksem), package(lem), use_pprint
 <isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), use_pprint
+
 <isail.ml>: package(linenoise)
 <elf_loader.ml>: package(linksem)
-<pprint> or <pprint/src>: include
-<*.m{l,li}>: package(lem)
+<**/*.m{l,li}>: package(lem)
 
-# see http://caml.inria.fr/mantis/view.php?id=4943
-<lem_interp/*> and not <lem_interp/*.cmxa>: package(num), package(lem)
-<test/*> and not <test/*.cmxa>: package(num), package(lem), package(str)
+<gen_lib>: include
+<pprint> or <pprint/src>: include
 
 # disable partial match and unused variable warnings
 <**/*.ml>: warn_y

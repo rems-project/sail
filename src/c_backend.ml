@@ -53,6 +53,7 @@ open Ast_util
 open Bytecode
 open Type_check
 open PPrint
+open Value2
 module Big_int = Nat_big_num
 
 let c_verbosity = ref 1
@@ -82,10 +83,23 @@ let lvar_typ = function
   (* | Union (_, typ) -> typ *)
   | _ -> assert false
 
+let string_of_value = function
+  | V_bits bs -> Sail_values.show_bitlist bs ^ "ul"
+  | V_int i -> Big_int.to_string i ^ "l"
+  | V_bool true -> "true"
+  | V_bool false -> "false"
+  | V_null -> "NULL"
+  | V_unit -> "UNIT"
+  | V_bit Sail_values.B0 -> "0ul"
+  | V_bit Sail_values.B1 -> "1ul"
+  | V_string str -> "\"" ^ str ^ "\""
+  | V_ctor_kind str -> "Kind_" ^ Util.zencode_string str
+  | _ -> failwith "Cannot convert value to string"
+
 let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_id id when zencode -> Util.zencode_string (string_of_id id)
   | F_id id -> string_of_id id
-  | F_lit str -> str
+  | F_lit v -> string_of_value v
   | F_call (str, frags) ->
      Printf.sprintf "%s(%s)" str (Util.string_of_list ", " (string_of_fragment ~zencode:zencode) frags)
   | F_field (f, field) ->
@@ -175,7 +189,7 @@ and aval =
 let rec frag_rename from_id to_id = function
   | F_id id when Id.compare id from_id = 0 -> F_id to_id
   | F_id id -> F_id id
-  | F_lit str -> F_lit str
+  | F_lit v -> F_lit v
   | F_have_exception -> F_have_exception
   | F_current_exception -> F_current_exception
   | F_call (call, frags) -> F_call (call, List.map (frag_rename from_id to_id) frags)
@@ -829,16 +843,39 @@ let ctor_bindings = List.fold_left (fun map (id, ctyp) -> Bindings.add id ctyp m
 (* 3. Optimization of primitives and literals                             *)
 (**************************************************************************)
 
+let hex_char =
+  let open Sail_values in
+  function
+  | '0' -> [B0; B0; B0; B0]
+  | '1' -> [B0; B0; B0; B1]
+  | '2' -> [B0; B0; B1; B0]
+  | '3' -> [B0; B0; B1; B1]
+  | '4' -> [B0; B1; B0; B0]
+  | '5' -> [B0; B1; B0; B1]
+  | '6' -> [B0; B1; B1; B0]
+  | '7' -> [B0; B1; B1; B1]
+  | '8' -> [B1; B0; B0; B0]
+  | '9' -> [B1; B0; B0; B1]
+  | 'A' | 'a' -> [B1; B0; B1; B0]
+  | 'B' | 'b' -> [B1; B0; B1; B1]
+  | 'C' | 'c' -> [B1; B1; B0; B0]
+  | 'D' | 'd' -> [B1; B1; B0; B1]
+  | 'E' | 'e' -> [B1; B1; B1; B0]
+  | 'F' | 'f' -> [B1; B1; B1; B1]
+  | _ -> failwith "Invalid hex character"
+
 let literal_to_fragment (L_aux (l_aux, _) as lit) =
   match l_aux with
   | L_num n when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
-     Some (F_lit (Big_int.to_string n ^ "L"))
+     Some (F_lit (V_int n))
   | L_hex str when String.length str <= 16 ->
      let padding = 16 - String.length str in
-     Some (F_lit ("0x" ^ String.make padding '0' ^ str ^ "ul"))
-  | L_unit -> Some (F_lit "UNIT")
-  | L_true -> Some (F_lit "true")
-  | L_false -> Some (F_lit "false")
+     let padding = Util.list_init padding (fun _ -> Sail_values.B0) in
+     let content = Util.string_to_list str |> List.map hex_char |> List.concat in
+     Some (F_lit (V_bits (padding @ content)))
+  | L_unit -> Some (F_lit V_unit)
+  | L_true -> Some (F_lit (V_bool true))
+  | L_false -> Some (F_lit (V_bool false))
   | _ -> None
 
 let c_literals ctx =
@@ -869,9 +906,9 @@ let rec is_bitvector = function
   | AV_lit (L_aux (L_one, _), _) :: avals -> is_bitvector avals
   | _ :: _ -> false
 
-let rec string_of_aval_bit = function
-  | AV_lit (L_aux (L_zero, _), _) -> "0"
-  | AV_lit (L_aux (L_one, _), _) -> "1"
+let rec value_of_aval_bit = function
+  | AV_lit (L_aux (L_zero, _), _) -> Sail_values.B0
+  | AV_lit (L_aux (L_one, _), _) -> Sail_values.B1
   | _ -> assert false
 
 let rec c_aval ctx = function
@@ -893,7 +930,7 @@ let rec c_aval ctx = function
        | _ -> v
      end
   | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
-     let bitstring = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit v) ^ "ul") in
+     let bitstring = F_lit (V_bits (List.map value_of_aval_bit v)) in
      AV_C_fragment (bitstring, typ)
   | AV_tuple avals -> AV_tuple (List.map (c_aval ctx) avals)
   | aval -> aval
@@ -912,31 +949,33 @@ let analyze_primop' ctx id args typ =
   let extern = if Env.is_extern id ctx.tc_env "c" then Env.get_extern id ctx.tc_env "c" else failwith "Not extern" in
   (* prerr_endline ("Analysing: " ^ string_of_typ typ ^ " " ^ extern ^ Pretty_print_sail.to_string (separate_map (string ", ") pp_aval args)); *)
 
+  let v_one = F_lit (V_int (Big_int.of_int 1)) in
+
   match extern, args with
   | "eq_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "==", v2), typ))
 
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] ->
-     let len = F_op (f, "-", F_op (t, "-", F_lit "1L")) in
-     AE_val (AV_C_fragment (F_op (F_op (F_op (F_lit "1L", "<<", len), "-", F_lit "1L"), "&", F_op (vec, ">>", t)), typ))
+     let len = F_op (f, "-", F_op (t, "-", v_one)) in
+     AE_val (AV_C_fragment (F_op (F_op (F_op (v_one, "<<", len), "-", v_one), "&", F_op (vec, ">>", t)), typ))
 
   | "vector_access", [AV_C_fragment (vec, _); AV_C_fragment (n, _)] ->
-     AE_val (AV_C_fragment (F_op (F_lit "1L", "&", F_op (vec, ">>", n)), typ))
+     AE_val (AV_C_fragment (F_op (v_one, "&", F_op (vec, ">>", n)), typ))
 
   | "eq_bit", [AV_C_fragment (a, _); AV_C_fragment (b, _)] ->
      AE_val (AV_C_fragment (F_op (a, "==", b), typ))
 
   | "slice", [AV_C_fragment (vec, _); AV_C_fragment (start, _); AV_C_fragment (len, _)] ->
-     AE_val (AV_C_fragment (F_op (F_op (F_op (F_lit "1L", "<<", len), "-", F_lit "1L"), "&", F_op (vec, ">>", start)), typ))
+     AE_val (AV_C_fragment (F_op (F_op (F_op (v_one, "<<", len), "-", v_one), "&", F_op (vec, ">>", start)), typ))
 
   | "undefined_bit", _ ->
-     AE_val (AV_C_fragment (F_lit "0ul", typ))
+     AE_val (AV_C_fragment (F_lit (V_bit Sail_values.B0), typ))
 
   | "undefined_vector", [AV_C_fragment (len, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-       AE_val (AV_C_fragment (F_lit "0ul", typ))
+       AE_val (AV_C_fragment (F_lit (V_bit Sail_values.B0), typ))
      | _ -> no_change
      end
 
@@ -953,12 +992,12 @@ let analyze_primop' ctx id args typ =
      begin match destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp with
      | Some (Nexp_aux (Nexp_constant n, _), _, _), Some (Nexp_aux (Nexp_constant m, _), _, _)
           when Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (F_call ("fast_replicate_bits", [F_lit (Big_int.to_string m); vec; times]), typ))
+        AE_val (AV_C_fragment (F_call ("fast_replicate_bits", [F_lit (V_int m); vec; times]), typ))
      | _ -> no_change
      end
 
   | "undefined_bool", _ ->
-     AE_val (AV_C_fragment (F_lit "false", typ))
+     AE_val (AV_C_fragment (F_lit (V_bool false), typ))
 
   | _, _ -> no_change
 
@@ -1261,32 +1300,32 @@ let rec compile_aval ctx = function
      [], (F_id id, ctyp_of_typ ctx (lvar_typ typ)), []
 
   | AV_lit (L_aux (L_string str, _), typ) ->
-     [], (F_lit ("\"" ^ String.escaped str ^ "\""), ctyp_of_typ ctx typ), []
+     [], (F_lit (V_string (String.escaped str)), ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
      let gs = gensym () in
      [idecl CT_mpz gs;
-      iinit CT_mpz gs (F_lit (Big_int.to_string n ^ "l"), CT_int64)],
+      iinit CT_mpz gs (F_lit (V_int n), CT_int64)],
      (F_id gs, CT_mpz),
      [iclear CT_mpz gs]
 
   | AV_lit (L_aux (L_num n, _), typ) ->
      let gs = gensym () in
      [idecl CT_mpz gs;
-      iinit CT_mpz gs (F_lit ("\"" ^ Big_int.to_string n ^ "\""), CT_string)],
+      iinit CT_mpz gs (F_lit (V_string (Big_int.to_string n)), CT_string)],
      (F_id gs, CT_mpz),
      [iclear CT_mpz gs]
 
-  | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit "0", CT_bit), []
-  | AV_lit (L_aux (L_one, _), _) -> [], (F_lit "1", CT_bit), []
+  | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit (V_bit Sail_values.B0), CT_bit), []
+  | AV_lit (L_aux (L_one, _), _) -> [], (F_lit (V_bit Sail_values.B1), CT_bit), []
 
-  | AV_lit (L_aux (L_true, _), _) -> [], (F_lit "true", CT_bool), []
-  | AV_lit (L_aux (L_false, _), _) -> [], (F_lit "false", CT_bool), []
+  | AV_lit (L_aux (L_true, _), _) -> [], (F_lit (V_bool true), CT_bool), []
+  | AV_lit (L_aux (L_false, _), _) -> [], (F_lit (V_bool false), CT_bool), []
 
   | AV_lit (L_aux (L_real str, _), _) ->
      let gs = gensym () in
      [idecl CT_real gs;
-      iinit CT_real gs (F_lit ("\"" ^ str ^ "\""), CT_string)],
+      iinit CT_real gs (F_lit (V_string str), CT_string)],
      (F_id gs, CT_real),
      [iclear CT_real gs]
 
@@ -1331,7 +1370,7 @@ let rec compile_aval ctx = function
   (* Convert a small bitvector to a uint64_t literal. *)
   | AV_vector (avals, typ) when is_bitvector avals && List.length avals <= 64 ->
      begin
-       let bitstring = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit avals) ^ "ul") in
+       let bitstring = F_lit (V_bits (List.map value_of_aval_bit avals)) in
        let len = List.length avals in
        match destruct_vector ctx.tc_env typ with
        | Some (_, Ord_aux (Ord_inc, _), _) ->
@@ -1348,7 +1387,7 @@ let rec compile_aval ctx = function
      variable size bitvector, converting it in 64-bit chunks. *)
   | AV_vector (avals, typ) when is_bitvector avals ->
      let len = List.length avals in
-     let bitstring avals = F_lit ("0b" ^ String.concat "" (List.map string_of_aval_bit avals) ^ "ul") in
+     let bitstring avals = F_lit (V_bits (List.map value_of_aval_bit avals)) in
      let first_chunk = bitstring (Util.take (len mod 64) avals) in
      let chunks = Util.drop (len mod 64) avals |> chunkify 64 |> List.map bitstring in
      let gs = gensym () in
@@ -1372,18 +1411,18 @@ let rec compile_aval ctx = function
      in
      let gs = gensym () in
      let ctyp = CT_uint64 (len, direction) in
-     let mask i = "0b" ^ String.make (63 - i) '0' ^ "1" ^ String.make i '0' ^ "ul" in
+     let mask i = V_bits (Util.list_init (63 - i) (fun _ -> Sail_values.B0) @ [Sail_values.B1] @ Util.list_init i (fun _ -> Sail_values.B0)) in
      let aval_mask i aval =
        let setup, cval, cleanup = compile_aval ctx aval in
        match cval with
-       | (F_lit "0", _) -> []
-       | (F_lit "1", _) ->
+       | (F_lit (V_bit Sail_values.B0), _) -> []
+       | (F_lit (V_bit Sail_values.B1), _) ->
           [icopy (CL_id gs) (F_op (F_id gs, "|", F_lit (mask i)), ctyp)]
        | _ ->
           setup @ [iif cval [icopy (CL_id gs) (F_op (F_id gs, "|", F_lit (mask i)), ctyp)] [] CT_unit] @ cleanup
      in
      [idecl ctyp gs;
-      icopy (CL_id gs) (F_lit "0ul", ctyp)]
+      icopy (CL_id gs) (F_lit (V_bits (Util.list_init 64 (fun _ -> Sail_values.B0))), ctyp)]
      @ List.concat (List.mapi aval_mask (List.rev avals)),
      (F_id gs, ctyp),
      []
@@ -1471,7 +1510,7 @@ let compile_funcall ctx id args typ =
 let rec compile_match ctx apat cval case_label =
   match apat, cval with
   | AP_id pid, (frag, ctyp) when is_ct_variant ctyp ->
-     [ijump (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ Util.zencode_string (string_of_id pid))), CT_bool) case_label],
+     [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind (string_of_id pid))), CT_bool) case_label],
      []
   | AP_global (pid, _), _ -> [icopy (CL_id pid) cval], []
   | AP_id pid, (frag, ctyp) when is_ct_enum ctyp ->
@@ -1499,10 +1538,10 @@ let rec compile_match ctx apat cval case_label =
   | AP_app (ctor, apat), (frag, ctyp) ->
      begin match ctyp with
      | CT_variant (_, ctors) ->
-        let ctor_c_id = Util.zencode_string (string_of_id ctor) in
+        let ctor_c_id = string_of_id ctor in
         let ctor_ctyp = Bindings.find ctor (ctor_bindings ctors) in
-        let instrs, cleanup = compile_match ctx apat ((F_field (frag, ctor_c_id), ctor_ctyp)) case_label in
-        [ijump (F_op (F_field (frag, "kind"), "!=", F_lit ("Kind_" ^ ctor_c_id)), CT_bool) case_label]
+        let instrs, cleanup = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), ctor_ctyp)) case_label in
+        [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
         @ instrs,
         cleanup
      | _ -> failwith "AP_app constructor with non-variant type"
@@ -1512,12 +1551,12 @@ let rec compile_match ctx apat cval case_label =
   | AP_cons (hd_apat, tl_apat), (frag, CT_list ctyp) ->
      let hd_setup, hd_cleanup = compile_match ctx hd_apat (F_field (F_unary ("*", frag), "hd"), ctyp) case_label in
      let tl_setup, tl_cleanup = compile_match ctx tl_apat (F_field (F_unary ("*", frag), "tl"), CT_list ctyp) case_label in
-     [ijump (F_op (frag, "==", F_lit "NULL"), CT_bool) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup
+     [ijump (F_op (frag, "==", F_lit V_null), CT_bool) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup
   | AP_cons _, (_, _) -> c_error "Tried to pattern match cons on non list type"
 
-  | AP_nil, (frag, _) -> [ijump (F_op (frag, "!=", F_lit "NULL"), CT_bool) case_label], []
+  | AP_nil, (frag, _) -> [ijump (F_op (frag, "!=", F_lit V_null), CT_bool) case_label], []
 
-let unit_fragment = (F_lit "UNIT", CT_unit)
+let unit_fragment = (F_lit V_unit, CT_unit)
 
 (** GLOBAL: label_counter is used to make sure all labels have unique
    names. Like gensym_counter it should be safe to reset between
@@ -1557,7 +1596,7 @@ let rec compile_aexp ctx = function
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
          | AE_val (AV_lit (L_aux (L_true, _), _))
-         | AE_val (AV_C_fragment (F_lit "true", _)) -> true
+         | AE_val (AV_C_fragment (F_lit (V_bool true), _)) -> true
          | _ -> false
        in
        let case_label = label "case_" in
@@ -1596,7 +1635,7 @@ let rec compile_aexp ctx = function
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
          | AE_val (AV_lit (L_aux (L_true, _), _))
-         | AE_val (AV_C_fragment (F_lit "true", _)) -> true
+         | AE_val (AV_C_fragment (F_lit (V_bool true), _)) -> true
          | _ -> false
        in
        let try_label = label "try_" in
@@ -1625,7 +1664,7 @@ let rec compile_aexp ctx = function
      @ List.concat (List.map compile_case cases)
      @ [imatch_failure ()]
      @ [ilabel handled_exception_label]
-     @ [icopy CL_have_exception (F_lit "false", CT_bool)]
+     @ [icopy CL_have_exception (F_lit (V_bool false), CT_bool)]
 
   | AE_if (aval, then_aexp, else_aexp, if_typ) ->
      let if_ctyp = ctyp_of_typ ctx if_typ in
@@ -1671,7 +1710,7 @@ let rec compile_aexp ctx = function
      let gs = gensym () in
      left_setup
      @ [ idecl CT_bool gs;
-         iif cval (right_setup @ [call (CL_id gs)] @ right_cleanup) [icopy (CL_id gs) (F_lit "false", CT_bool)] CT_bool ]
+         iif cval (right_setup @ [call (CL_id gs)] @ right_cleanup) [icopy (CL_id gs) (F_lit (V_bool false), CT_bool)] CT_bool ]
      @ left_cleanup,
      CT_bool,
      (fun clexp -> icopy clexp (F_id gs, CT_bool)),
@@ -1682,7 +1721,7 @@ let rec compile_aexp ctx = function
      let gs = gensym () in
      left_setup
      @ [ idecl CT_bool gs;
-         iif cval [icopy (CL_id gs) (F_lit "true", CT_bool)] (right_setup @ [call (CL_id gs)] @ right_cleanup) CT_bool ]
+         iif cval [icopy (CL_id gs) (F_lit (V_bool true), CT_bool)] (right_setup @ [call (CL_id gs)] @ right_cleanup) CT_bool ]
      @ left_cleanup,
      CT_bool,
      (fun clexp -> icopy clexp (F_id gs, CT_bool)),
@@ -1996,7 +2035,7 @@ let fix_exception_block ctx instrs =
     | before, I_aux (I_throw cval, _) :: after ->
        before
        @ [icopy CL_current_exception cval;
-          icopy CL_have_exception (F_lit "true", CT_bool)]
+          icopy CL_have_exception (F_lit (V_bool true), CT_bool)]
        @ generate_cleanup (historic @ before)
        @ [igoto end_block_label]
        @ rewrite_exception (historic @ before) after

@@ -394,6 +394,13 @@ let rec drop n xs = match n, xs with
   | n, [] -> []
   | n, (x :: xs) -> drop (n - 1) xs
 
+let list_init len f =
+  let rec list_init' len f acc =
+    if acc >= len then []
+    else f acc :: list_init' len f (acc + 1)
+  in
+  list_init' len f 0
+
 let termcode n =
   if !opt_colors then
     "\x1B[" ^ string_of_int n ^ "m"

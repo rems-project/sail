@@ -108,6 +108,12 @@ let showBitU = function
   | BU -> "U"
 end
 
+let bitU_char = function
+  | B0 -> #'0'
+  | B1 -> #'1'
+  | BU -> #'?'
+end
+
 instance (Show bitU)
   let show = showBitU
 end
@@ -307,7 +313,7 @@ declare {isabelle} termination_argument hexstring_of_bits = automatic
 let show_bitlist bs =
   match hexstring_of_bits bs with
   | Just s -> toString (#'0' :: #'x' :: s)
-  | Nothing -> show bs
+  | Nothing -> toString (#'0' :: #'b' :: map bitU_char bs)
   end
 
 (*** List operations *)

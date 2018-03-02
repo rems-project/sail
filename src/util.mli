@@ -219,6 +219,8 @@ module ExtraSet : functor (S : Set.S) ->
      val list_inter : S.t list -> S.t
    end
 
+val list_init : int -> (int -> 'a) -> 'a list
+
 (*Formatting functions*)
 val string_of_list : string -> ('a -> string) -> 'a list -> string
 
