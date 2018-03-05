@@ -22,6 +22,7 @@ let rec liftState ra s = match s with
   | (Write_reg r v k)    -> seqS (write_regvalS ra r v)     (liftState ra k)
   | (Footprint k)        -> liftState ra k
   | (Barrier _ k)        -> liftState ra k
+  | (Print _ k)          -> liftState ra k (* TODO *)
   | (Fail descr)         -> failS descr
   | (Error descr)        -> failS descr
   | (Exception e)        -> throwS e

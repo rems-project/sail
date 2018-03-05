@@ -30,6 +30,8 @@ type monad 'regval 'a 'e =
   (* Request to write register *)
   | Write_reg of register_name * 'regval * monad 'regval 'a 'e
   | Undefined of (bool -> monad 'regval 'a 'e)
+  (* Print debugging or tracing information *)
+  | Print of string * monad 'regval 'a 'e
   (*Result of a failed assert with possible error message to report*)
   | Fail of string
   | Error of string
@@ -54,6 +56,7 @@ let rec bind m f = match m with
   | Footprint k ->        Footprint        (bind k f)
   | Barrier bk k ->       Barrier bk       (bind k f)
   | Write_reg r v k ->    Write_reg r v    (bind k f)
+  | Print msg k ->        Print msg        (bind k f)
   | Fail descr ->         Fail descr
   | Error descr ->        Error descr
   | Exception e ->        Exception e
@@ -89,6 +92,7 @@ let rec try_catch m h = match m with
   | Footprint k ->        Footprint        (try_catch k h)
   | Barrier bk k ->       Barrier bk       (try_catch k h)
   | Write_reg r v k ->    Write_reg r v    (try_catch k h)
+  | Print msg k ->        Print msg        (try_catch k h)
   | Fail descr ->         Fail descr
   | Error descr ->        Error descr
   | Exception e ->        h e
