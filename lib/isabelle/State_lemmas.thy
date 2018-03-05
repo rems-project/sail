@@ -25,6 +25,7 @@ lemma liftState_exit[simp]: "liftState r (exit0 ()) = exitS ()" by (auto simp: e
 lemma liftState_exclResult[simp]: "liftState r (excl_result ()) = excl_resultS ()" by (auto simp: excl_result_def)
 lemma liftState_barrier[simp]: "liftState r (barrier bk) = returnS ()" by (auto simp: barrier_def)
 lemma liftState_footprint[simp]: "liftState r (footprint ()) = returnS ()" by (auto simp: footprint_def)
+lemma liftState_undefined[simp]: "liftState r (undefined_bool ()) = undefined_boolS ()" by (auto simp: undefined_bool_def)
 
 lemma liftState_try_catch[simp]:
   "liftState r (try_catch m h) = try_catchS (liftState r m) (liftState r \<circ> h)"

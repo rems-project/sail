@@ -622,6 +622,7 @@ type register_ref 'regstate 'regval 'a =
      of_regval : 'regval -> maybe 'a;
      regval_of : 'a -> 'regval |>
 
+(* Register accessors: pair of functions for reading and writing register values *)
 type register_accessors 'regstate 'regval =
   ((string -> 'regstate -> maybe 'regval) *
    (string -> 'regval -> 'regstate -> maybe 'regstate))

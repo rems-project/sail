@@ -29,6 +29,7 @@ type monad 'regval 'a 'e =
   | Read_reg of register_name * ('regval -> monad 'regval 'a 'e)
   (* Request to write register *)
   | Write_reg of register_name * 'regval * monad 'regval 'a 'e
+  | Undefined of (bool -> monad 'regval 'a 'e)
   (*Result of a failed assert with possible error message to report*)
   | Fail of string
   | Error of string
@@ -48,6 +49,7 @@ let rec bind m f = match m with
   | Write_tagv t k ->     Write_tagv t     (fun v -> bind (k v) f)
   | Read_reg descr k ->   Read_reg descr   (fun v -> bind (k v) f)
   | Excl_res k ->         Excl_res         (fun v -> bind (k v) f)
+  | Undefined k ->        Undefined        (fun v -> bind (k v) f)
   | Write_ea wk a sz k -> Write_ea wk a sz (bind k f)
   | Footprint k ->        Footprint        (bind k f)
   | Barrier bk k ->       Barrier bk       (bind k f)
@@ -64,6 +66,9 @@ let inline (>>) m n = m >>= fun (_ : unit) -> n
 val exit : forall 'rv 'a 'e. unit -> monad 'rv 'a 'e
 let exit () = Fail "exit"
 
+val undefined_bool : forall 'rv 'e. unit -> monad 'rv bool 'e
+let undefined_bool () = Undefined return
+
 val assert_exp : forall 'rv 'e. bool -> string -> monad 'rv unit 'e
 let assert_exp exp msg = if exp then Done () else Fail msg
 
@@ -79,6 +84,7 @@ let rec try_catch m h = match m with
   | Write_tagv t k ->     Write_tagv t     (fun v -> try_catch (k v) h)
   | Read_reg descr k ->   Read_reg descr   (fun v -> try_catch (k v) h)
   | Excl_res k ->         Excl_res         (fun v -> try_catch (k v) h)
+  | Undefined k ->        Undefined        (fun v -> try_catch (k v) h)
   | Write_ea wk a sz k -> Write_ea wk a sz (try_catch k h)
   | Footprint k ->        Footprint        (try_catch k h)
   | Barrier bk k ->       Barrier bk       (try_catch k h)

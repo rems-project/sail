@@ -13,15 +13,20 @@ type sequential_state 'regs =
      memstate : memstate;
      tagstate : tagstate;
      write_ea : maybe (write_kind * integer * integer);
-     last_exclusive_operation_was_load : bool|>
+     last_exclusive_operation_was_load : bool;
+     (* Random bool generator for use as an undefined bit oracle *)
+     next_bool : nat -> (bool * nat);
+     seed : nat |>
 
-val init_state : forall 'regs. 'regs -> sequential_state 'regs
-let init_state regs =
+val init_state : forall 'regs. 'regs -> (nat -> (bool* nat)) -> nat -> sequential_state 'regs
+let init_state regs o s =
   <| regstate = regs;
      memstate = Map.empty;
      tagstate = Map.empty;
      write_ea = Nothing;
-     last_exclusive_operation_was_load = false |>
+     last_exclusive_operation_was_load = false;
+     next_bool = o;
+     seed = s |>
 
 type ex 'e =
   | Failure of string
@@ -62,6 +67,12 @@ let updateS f = (fun s -> returnS () (f s))
 
 val failS : forall 'regs 'a 'e. string -> monadS 'regs 'a 'e
 let failS msg s = [(Ex (Failure msg), s)]
+
+val undefined_boolS : forall 'regval 'regs 'a 'e. unit -> monadS 'regs bool 'e
+let undefined_boolS () =
+  readS (fun s -> s.next_bool (s.seed)) >>$= (fun (b, seed) ->
+  updateS (fun s -> <| s with seed = seed |>) >>$
+  returnS b)
 
 val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e
 let exitS () = failS "exit"

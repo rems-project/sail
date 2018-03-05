@@ -126,8 +126,11 @@ lemma no_throw_mem_builtins:
   "\<And>BC v s. ignore_throw (write_mem_valS BC v) s = write_mem_valS BC v s"
   "\<And>t s. ignore_throw (write_tagS t) s = write_tagS t s"
   "\<And>s. ignore_throw (excl_resultS ()) s = excl_resultS () s"
-  unfolding read_mem_bytesS_def read_memS_def read_tagS_def write_mem_eaS_def write_mem_valS_def write_mem_bytesS_def write_tagS_def excl_resultS_def
-  by (auto simp: bindS_def chooseS_def Let_def split: option.splits)+
+  "\<And>s. ignore_throw (undefined_boolS ()) s = undefined_boolS () s"
+  unfolding read_mem_bytesS_def read_memS_def read_tagS_def write_mem_eaS_def
+  unfolding write_mem_valS_def write_mem_bytesS_def write_tagS_def
+  unfolding excl_resultS_def undefined_boolS_def
+  by (auto simp: bindS_def chooseS_def Let_def split: option.splits prod.splits)+
 
 lemma no_throw_read_memS: "ignore_throw (read_memS BCa BCb rk a sz) s = read_memS BCa BCb rk a sz s"
   by (auto simp: read_memS_def no_throw_mem_builtins cong: bindS_cong)

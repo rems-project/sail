@@ -30,6 +30,19 @@ end
 
 declare {isabelle} termination_argument foreachM = automatic
 
+val bool_of_bitU_undef : forall 'rv 'e. bitU -> monad 'rv bool 'e
+let bool_of_bitU_undef = function
+  | B0 -> return false
+  | B1 -> return true
+  | BU -> undefined_bool ()
+end
+
+val bools_of_bitUs : forall 'rv 'e. list bitU -> monad 'rv (list bool) 'e
+let bools_of_bitUs bits =
+  foreachM bits []
+    (fun b bools ->
+      bool_of_bitU_undef b >>= (fun b ->
+      return (bools ++ [b])))
 
 val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
