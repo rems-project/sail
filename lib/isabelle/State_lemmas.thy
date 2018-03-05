@@ -13,7 +13,7 @@ lemma liftState_bind[simp]:
 lemma liftState_return[simp]: "liftState r (return a) = returnS a" by (auto simp: return_def)
 
 lemma Value_liftState_Run:
-  assumes "(Value a, s') \<in> set (liftState r m s)"
+  assumes "(Value a, s') \<in> liftState r m s"
   obtains t where "Run m t a"
   by (use assms in \<open>induction r m arbitrary: s s' rule: liftState.induct\<close>;
       auto simp add: failS_def throwS_def returnS_def simp del: read_regvalS.simps;
@@ -101,8 +101,8 @@ lemma liftState_foreachM[simp]:
 
 lemma whileS_dom_step:
   assumes "whileS_dom (vars, cond, body, s)"
-    and "(Value True, s') \<in> set (cond vars s)"
-    and "(Value vars', s'') \<in> set (body vars s')"
+    and "(Value True, s') \<in> cond vars s"
+    and "(Value vars', s'') \<in> body vars s'"
   shows "whileS_dom (vars', cond, body, s'')"
   by (use assms in \<open>induction vars cond body s arbitrary: vars' s' s'' rule: whileS.pinduct\<close>)
      (auto intro: whileS.domintros)
@@ -143,7 +143,7 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
         show "\<exists>t. Run (cond vars) t True" using while that by (auto elim: Value_liftState_Run)
         show "\<exists>t'. Run (body vars) t' vars'" using while' that by (auto elim: Value_liftState_Run)
       qed
-      then show ?case using while while' that by (auto intro: IH)
+      then show ?case using while while' that IH by auto
     qed auto
     then show ?case by auto
   qed auto
