@@ -347,6 +347,7 @@ val skip_wreg = "skip" : unit -> unit effect {wreg}
 val skip_rreg = "skip" : unit -> unit effect {rreg}
 val skip_wmvt = "skip" : unit -> unit effect {wmvt}
 val skip_rmemt = "skip" : unit -> unit effect {rmemt}
+val skip_escape = "skip" : unit -> unit effect {escape}
 
 function MEMr (addr, size) = __MIPS_read(addr, size)
 function MEMr_reserve (addr, size) = __MIPS_read(addr, size)
@@ -616,4 +617,4 @@ function init_cp0_state () : unit -> unit = {
 
 val init_cp2_state : unit -> unit effect {wreg}
 val cp2_next_pc:     unit -> unit effect {rreg, wreg}
-val dump_cp2_state : unit -> unit effect {rreg}
+val dump_cp2_state : unit -> unit effect {rreg, escape}

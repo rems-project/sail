@@ -42,7 +42,7 @@ val main : unit -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wre
 
 function dump_mips_state () : unit -> unit = {
   print_bits("DEBUG MIPS PC ", PC);
-  foreach (idx from 0 to 32) {
+  foreach (idx from 0 to 31) {
     print(concat_str("DEBUG MIPS REG ", concat_str(string_of_int(idx), concat_str(" ", BitStr(rGPR(to_bits(5,idx)))))));
   }
 }

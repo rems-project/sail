@@ -35,123 +35,145 @@
 /* 128 bit cap + tag */
 type CapReg = bits(129)
 
+/*
 val cast_bool_bit : cast extern bool -> bit effect pure
 val cast_boolvec_bitvec : cast extern forall 'n, 'm. vector<'n,'m,dec,bool> -> vector<'n,'m,dec,bit> effect pure
 val cast_range_bitvec : cast forall 'm. [|0:2**'m - 1|] -> vector<'m - 1,'m,dec,bit> effect pure
 function vector<'m - 1,'m,dec,bit> cast_range_bitvec (v) = to_vec (v)
 val not : extern bool -> bool effect pure
+*/
 
-type uint64 = range<0, (2** 64) - 1>
-
-type CapStruct = const struct {
-  bool    tag;
-  bits(4)  uperms;
-  bool    access_system_regs;
-  bool    perm_reserved9;
-  bool    permit_ccall;
-  bool    permit_seal;
-  bool    permit_store_local_cap;
-  bool    permit_store_cap;
-  bool    permit_load_cap;
-  bool    permit_store;
-  bool    permit_load;
-  bool    permit_execute;
-  bool    global;
-  bits(2)  reserved;
-  bits(6)  E;
-  bool    sealed;
-  bits(20) B;
-  bits(20) T;
-  bits(24) otype;
-  bits(64) address;
+struct CapStruct = {
+  tag                    : bool    ,
+  uperms                 : bits(4) ,
+  access_system_regs     : bool    ,
+  perm_reserved9         : bool    ,
+  permit_ccall           : bool    ,
+  permit_seal            : bool    ,
+  permit_store_local_cap : bool    ,
+  permit_store_cap       : bool    ,
+  permit_load_cap        : bool    ,
+  permit_store           : bool    ,
+  permit_load            : bool    ,
+  permit_execute         : bool    ,
+  global                 : bool    ,
+  reserved               : bits(2) ,
+  E                      : bits(6) ,
+  sealed                 : bool    ,
+  B                      : bits(20),
+  T                      : bits(20),
+  otype                  : bits(24),
+  address                : bits(64)
 }
 
-let null_cap : CapStruct = {
-  tag                    = false;
-  uperms                 = 0;
-  access_system_regs     = false;
-  perm_reserved9         = false;
-  permit_ccall           = false;
-  permit_seal            = false;
-  permit_store_local_cap = false;
-  permit_store_cap       = false;
-  permit_load_cap        = false;
-  permit_store           = false;
-  permit_load            = false;
-  permit_execute         = false;
-  global                 = false;
-  reserved               = 0;
-  E                      = 48; /* encoded as 0 in memory due to xor */
-  sealed                 = false;
-  B                      = 0;
-  T                      = 0x10000;
-  otype                  = 0;
-  address                = 0;
+let null_cap : CapStruct = struct {
+  tag                    = false,
+  uperms                 = zeros(),
+  access_system_regs     = false,
+  perm_reserved9         = false,
+  permit_ccall           = false,
+  permit_seal            = false,
+  permit_store_local_cap = false,
+  permit_store_cap       = false,
+  permit_load_cap        = false,
+  permit_store           = false,
+  permit_load            = false,
+  permit_execute         = false,
+  global                 = false,
+  reserved               = zeros(),
+  E                      = 0b110000, /* 48, encoded as 0 in memory due to xor */
+  sealed                 = false,
+  B                      = zeros(),
+  T                      = 0x10000,
+  otype                  = zeros(),
+  address                = zeros()
 }
 
-def Nat cap_size_t  = 16 /* cap size in bytes */
-let cap_size : [:cap_size_t:] = 16
+let default_cap : CapStruct = struct {
+  tag                    = true,
+  uperms                 = ones(),
+  access_system_regs     = true,
+  perm_reserved9         = true,
+  permit_ccall           = true,
+  permit_seal            = true,
+  permit_store_local_cap = true,
+  permit_store_cap       = true,
+  permit_load_cap        = true,
+  permit_store           = true,
+  permit_load            = true,
+  permit_execute         = true,
+  global                 = true,
+  reserved               = zeros(),
+  E                      = 0b110000, /* 48, encoded as 0 in memory due to xor */
+  sealed                 = false,
+  B                      = zeros(),
+  T                      = 0x10000,
+  otype                  = zeros(),
+  address                = zeros()
+}
 
-function CapStruct capRegToCapStruct((CapReg) c) =
+let 'cap_size = 16
+
+function capRegToCapStruct(c) : CapReg -> CapStruct =
   let s : bool  = c[104] in
-  let Bc : bits(20) = if s then c[103..96] : 0x000 else c[103..84] in
-  let Tc : bits(20) = if s then c[83..76] : 0x000 else c[83..64] in
-  let otype : bits(24) = if s then c[95..84] : c[75..64] else 0 in
-  {
-    tag                    = c[128];
-    uperms                 = c[127..124];
-    access_system_regs     = c[123];
-    perm_reserved9         = c[122];
-    permit_ccall           = c[121];
-    permit_seal            = c[120];
-    permit_store_local_cap = c[119];
-    permit_store_cap       = c[118];
-    permit_load_cap        = c[117];
-    permit_store           = c[116];
-    permit_load            = c[115];
-    permit_execute         = c[114];
-    global                 = c[113];
-    reserved               = c[112..111];
-    E                      = c[110..105] ^ 0b110000;
-    sealed                 = s;
-    B                      = Bc;
-    T                      = Tc;
-    otype                  = otype;
-    address                = c[63..0];
+  let Bc : bits(20) = if s then c[103..96] @ 0x000 else c[103..84] in
+  let Tc : bits(20) = if s then c[83..76] @ 0x000 else c[83..64] in
+  let otype : bits(24) = if s then c[95..84] @ c[75..64] else zeros() in
+  struct {
+    tag                    = c[128],
+    uperms                 = c[127..124],
+    access_system_regs     = c[123],
+    perm_reserved9         = c[122],
+    permit_ccall           = c[121],
+    permit_seal            = c[120],
+    permit_store_local_cap = c[119],
+    permit_store_cap       = c[118],
+    permit_load_cap        = c[117],
+    permit_store           = c[116],
+    permit_load            = c[115],
+    permit_execute         = c[114],
+    global                 = c[113],
+    reserved               = c[112..111],
+    E                      = c[110..105] ^ 0b110000,
+    sealed                 = s,
+    B                      = Bc,
+    T                      = Tc,
+    otype                  = otype,
+    address                = c[63..0]
   }
 
-function (bits(11)) getCapHardPerms((CapStruct) cap) =
-   ([cap.access_system_regs]
-  : [cap.perm_reserved9]
-  : [cap.permit_ccall]
-  : [cap.permit_seal]
-  : [cap.permit_store_local_cap]
-  : [cap.permit_store_cap]
-  : [cap.permit_load_cap]
-  : [cap.permit_store]
-  : [cap.permit_load]
-  : [cap.permit_execute]
-  : [cap.global])
+function getCapHardPerms(cap) : CapStruct -> bits(11) =
+   (cap.access_system_regs
+  @ cap.perm_reserved9
+  @ cap.permit_ccall
+  @ cap.permit_seal
+  @ cap.permit_store_local_cap
+  @ cap.permit_store_cap
+  @ cap.permit_load_cap
+  @ cap.permit_store
+  @ cap.permit_load
+  @ cap.permit_execute
+  @ cap.global)
 
-function (bits(128)) capStructToMemBits128((CapStruct) cap) =
-    let b : bits(20) = if cap.sealed then (cap.B)[19..12] : (cap.otype)[23..12] else cap.B in
-    let t : bits(20) = if cap.sealed then (cap.T)[19..12] : (cap.otype)[11..0]  else cap.T in
+function capStructToMemBits128(cap) : CapStruct -> bits(128) =
+    let b : bits(20) = if cap.sealed then (cap.B)[19..12] @ (cap.otype)[23..12] else cap.B in
+    let t : bits(20) = if cap.sealed then (cap.T)[19..12] @ (cap.otype)[11..0]  else cap.T in
     ( cap.uperms
-    : getCapHardPerms(cap)
-    : cap.reserved
-    : (cap.E ^ 0b110000) /* XXX brackets required otherwise sail interpreter error */
-    : [cap.sealed]
-    : b
-    : t
-    : cap.address
+    @ getCapHardPerms(cap)
+    @ cap.reserved
+    @ cap.E ^ 0b110000
+    @ cap.sealed
+    @ b
+    @ t
+    @ cap.address
     )
 
-function (CapReg) capStructToCapReg((CapStruct) cap) =
-    ([cap.tag] : capStructToMemBits128(cap))
+function capStructToCapReg(cap) : CapStruct -> CapReg =
+    (cap.tag @ capStructToMemBits128(cap))
 
 /* Reverse of above used when reading from memory */
-function (CapReg) memBitsToCapBits128((bool) tag, (bits(128)) b) =
-  ([tag] : b)
+function memBitsToCapBits128(tag, b) : (bool, bits(128)) -> CapReg=
+  (tag @ b)
 
 /* When saving/restoring capabilities xor them with bits of null_cap --
    this ensures that canonical null_cap is always all-zeros in memory
@@ -159,85 +181,91 @@ function (CapReg) memBitsToCapBits128((bool) tag, (bits(128)) b) =
 
 let null_cap_bits : bits(128) = capStructToMemBits128(null_cap)
 
-function (bits(128)) capStructToMemBits((CapStruct) cap) =
+function capStructToMemBits(cap) : CapStruct -> bits(128) =
   capStructToMemBits128(cap) ^ null_cap_bits
 
-function (bits(129)) memBitsToCapBits((bool) tag, (bits(128)) b) =
+function memBitsToCapBits(tag, b) : (bool, bits(128)) -> bits(129) =
   memBitsToCapBits128(tag, b ^ null_cap_bits)
 
-function (bits(31)) getCapPerms((CapStruct) cap) = 
+function getCapPerms(cap) : CapStruct -> bits(31) = 
     let perms : bits(15) = EXTS(getCapHardPerms(cap)) in /* NB access_system copied into 14-11 */
     (0x000 /* uperms 30-19 */
-  : cap.uperms
-  : perms)
+  @ cap.uperms
+  @ perms)
 
-function CapStruct setCapPerms((CapStruct) cap, (bits(31)) perms) =
+function setCapPerms(cap, perms) : (CapStruct, bits(31)) -> CapStruct =
     { cap with
-      uperms                 = perms[18..15];
+      uperms                 = perms[18..15],
       /* 14..11 reserved -- ignore */
-      access_system_regs     = perms[10];
-      perm_reserved9         = perms[9];
-      permit_ccall           = perms[8];
-      permit_seal            = perms[7];
-      permit_store_local_cap = perms[6];
-      permit_store_cap       = perms[5];
-      permit_load_cap        = perms[4];
-      permit_store           = perms[3];
-      permit_load            = perms[2];
-      permit_execute         = perms[1];
-      global                 = perms[0];
+      access_system_regs     = perms[10],
+      perm_reserved9         = perms[9],
+      permit_ccall           = perms[8],
+      permit_seal            = perms[7],
+      permit_store_local_cap = perms[6],
+      permit_store_cap       = perms[5],
+      permit_load_cap        = perms[4],
+      permit_store           = perms[3],
+      permit_load            = perms[2],
+      permit_execute         = perms[1],
+      global                 = perms[0]
       }
 
-function (bool, CapStruct) sealCap((CapStruct) cap, (bits(24)) otype) =
-    if (((cap.T)[11..0] == 0) & ((cap.B)[11..0] == 0)) then
-        (true, {cap with sealed=true; otype=otype})
+function sealCap(cap, otype) : (CapStruct, bits(24)) -> (bool, CapStruct) =
+    if (((cap.T)[11..0] == zeros()) & ((cap.B)[11..0] == zeros())) then
+        (true, {cap with sealed=true, otype=otype})
     else
-        (false, cap /* was undefined but ocaml shallow embedding can't handle it */ )
+        (false, cap /* XXX should be undefined? */ )
 
-function [|-1:1|] a_top_correction((bits(20)) a_mid, (bits(20)) R, (bits(20)) bound) =
-    match a_mid < R, bound < R {
-      (false, false)  => 0
-      (false, true)   => 1
-      (true, false)   => -1
-      (true, true)    => 0
+function a_top_correction(a_mid, R, bound) : (bits(20), bits(20), bits(20)) -> bits(65) =
+    match (a_mid <_u R, bound <_u R) {
+      (false, false)  => zeros(),
+      (false, true)   => EXTZ(0b1),
+      (true, false)   => ones(),
+      (true, true)    => zeros()
     }
 
-function uint64 getCapBase((CapStruct) c)  = 
-    let E : [|48|] = min(unsigned(c.E), 48) in
+function getCapBase(c) : CapStruct -> uint64 =
+    let E = min(unsigned(c.E), 48) in
     let Bc : bits(20) = c.B in
     let a : bits(65) = EXTZ(c.address) in
     let R : bits(20) = Bc - 0x01000 in /* wraps */
-    let a_mid : bits(20) = mask(a >> E) in
+    let a_mid : bits(20) = mask(shiftr(a, E)) in
     let correction = a_top_correction(a_mid, R, Bc) in
-    let a_top = a >> (E+20) in
-    let base : bits(64) = EXTZ((a_top + correction) : Bc) << E in
+    let a_top = shiftr(a, E+20) in
+    let base : bits(64) = mask(shiftl((a_top + correction) @ Bc, E)) in
     unsigned(base)
 
-function CapLen getCapTop ((CapStruct) c)  = 
-    let E : [|45|] = min(unsigned(c.E), 48) in
+function getCapTop (c) : CapStruct -> CapLen = 
+    let E = min(unsigned(c.E), 48) in
     let Bc : bits(20) = c.B in
     let T : bits(20) = c.T in
     let a : bits(65) = EXTZ(c.address)  in
     let R : bits(20) = Bc - 0x01000 in /* wraps */
-    let a_mid : bits(20) = mask(a >> E) in
+    let a_mid : bits(20) = mask(shiftr(a, E)) in
     let correction = a_top_correction(a_mid, R, T) in
-    let a_top = a >> (E+20) in
-    let top1 : bits(65) = EXTZ((a_top + correction) : T) in
-    (CapLen) (top1 << E)
+    let a_top = shiftr(a, E+20) in
+    let top1 : bits(65) = mask((a_top + correction) @ T) in
+    unsigned(shiftl(top1, E))
 
-function uint64 getCapOffset((CapStruct) c) = 
+function getCapOffset(c) : CapStruct -> uint64 = 
     let base = getCapBase(c) in
-    unsigned(c.address) - base
+    (unsigned(c.address) - base) % pow2(64)
 
-function CapLen getCapLength((CapStruct) c)  = getCapTop(c) - getCapBase(c)
+function getCapLength(c) : CapStruct -> CapLen =
+         let 'top = getCapTop(c) in
+         let 'base = getCapBase(c) in {
+             assert (top >= base);
+             top - base
+         }
 
-function uint64 getCapCursor((CapStruct) cap) = unsigned(cap.address)
+function getCapCursor(cap) : CapStruct -> uint64 = unsigned(cap.address)
 
-function bool fastRepCheck((CapStruct) c, (bits(64)) i) =
-    if ((c.E) >= 44) then
+function fastRepCheck(c, i) : (CapStruct, bits(64)) -> bool=
+    let 'E = unsigned(c.E) in
+    if (E >= 44) then
         true /* in this case representable region is whole address space */
     else
-        let E        = min(unsigned(c.E), 43) in
+        let E'       = min(E, 43) in
         let i_top    = signed(i[63..E+20]) in
         let i_mid : bits(20) = i[E+19..E] in
         let a_mid : bits(20) = (c.address)[E+19..E] in
@@ -252,18 +280,18 @@ function bool fastRepCheck((CapStruct) c, (bits(64)) i) =
         if (i_top == 0) then
           i_mid <_u diff1
         else if (i_top == -1) then
-          unsigned(i_mid) >= unsigned(diff) & (R != a_mid) /* XXX sail missing unsigned >= */
+          (i_mid >=_u diff) & (R != a_mid)
         else
           false
 
-function (bool, CapStruct) setCapOffset((CapStruct) c, (bits(64)) offset) =
-    let base : bits(64)       = (bits(64)) (getCapBase(c)) in
+function setCapOffset(c, offset) : (CapStruct, bits(64)) -> (bool, CapStruct) =
+    let base : bits(64)       = to_bits(64, getCapBase(c)) in
     let newAddress : bits(64) = base + offset in
     let newCap     = { c with address = newAddress } in
     let representable = fastRepCheck(c, (newAddress - c.address)) in
     (representable, newCap)
 
-function (bool, CapStruct) incCapOffset((CapStruct) c, (bits(64)) delta) =
+function incCapOffset(c, delta) : (CapStruct, bits(64)) -> (bool, CapStruct) =
     let newAddress : bits(64) = c.address + delta in
     let newCap     = { c with address = newAddress } in
     let representable = fastRepCheck(c, delta) in
@@ -271,46 +299,41 @@ function (bool, CapStruct) incCapOffset((CapStruct) c, (bits(64)) delta) =
 
 /** FUNCTION:integer HighestSetBit(bits(N) x) */
 
-function forall Nat 'N. option([|0:('N + -1)|]) HighestSetBit((bits('N)) x) = {
-  let N = (length(x)) in {
-  ([|('N + -1)|]) result = 0;
-  (bool) break = false;
-  foreach (i from (N - 1) downto 0)
-    if ~(break) & x[i] == 1 then {
-      result = i;
-      break = true;
-    };
-
-  if break then Some(result) else None;
-}}
+val HighestSetBit : forall 'N , 'N >= 2. bits('N) -> {'n, -1 <= 'n < 'N . atom('n)}
+function HighestSetBit x = {
+  foreach (i from ('N - 1) to 0 by 1 in dec)
+    if [x[i]] == 0b1 then return i else ();
+  return -1
+}
 
 /* hw rounds up E to multiple of 4 */
-function [|48|] roundUp(([|45|]) e) =
-    let r = e mod 4 in
+function roundUp(e) : range(0, 45) -> range(0, 48) =
+    let 'r = e % 4 in
     if (r == 0)
     then e
     else (e - r + 4)
 
-
-function [|48|] computeE ((bits(65)) rlength) =
-    let msb = HighestSetBit((rlength + (rlength >> 6)) >> 19) in
+function computeE (rlength) : bits(65) -> range(0, 48) =
+    let msb = HighestSetBit(shiftr(rlength + shiftr(rlength, 6), 19)) in
     match msb {
+      -1  => 0,
       /* above will always return <= 45 because 19 bits of zero are shifted in from right */
-      (Some(b))  => {assert(b <= 45, None); roundUp (min(b,45)) }
-      None     => 0
+      'b   => {assert(0 <= b & b <= 45); roundUp (min(b,45)) }
       }
 
-function (bool, CapStruct) setCapBounds((CapStruct) cap, (bits(64)) base, (bits(65)) top) =
+function setCapBounds(cap, base, top) : (CapStruct, bits(64), bits(65)) -> (bool, CapStruct) =
     /* {cap with base=base; length=(bits(64)) length; offset=0} */
-    let e : [|48|] = computeE(top - (0b0 : base)) in
-    let Bc : bits(20) = base[19+e..e] in
-    let T : bits(20) = top[19+e..e] in
-    let T2 : bits(20) = T + if (top[(e - 1)..0] == 0) then 0 else 1 in
-    let newCap  = {cap with E=(bits(6)) e; B=Bc; T=T2} in
+    let 'e = computeE(top - (0b0 @ base)) in
+    let Bc : bits(20) = mask(shiftr(base, e)) in
+    let T : bits(20) = mask(shiftr(top, e)) in
+    let e_mask : bits(65) = EXTZ(replicate_bits(0b1, e)) in
+    let e_bits = top & e_mask in
+    let T2 : bits(20) = T + (if unsigned(e_bits) == 0 then 0x00000 else 0x00001) in
+    let newCap  = {cap with E=to_bits(6, e), B=Bc, T=T2} in
     let newBase = getCapBase(newCap) in
     let newTop  = getCapTop(newCap) in
-    let exact   = (base == newBase) & (top == newTop) in
+    let exact   = (unsigned(base) == newBase) & (unsigned(top) == newTop) in
     (exact, newCap)
 
-function CapStruct int_to_cap ((bits(64)) offset) = 
+function int_to_cap (offset) : bits(64) -> CapStruct = 
     {null_cap with address = offset}

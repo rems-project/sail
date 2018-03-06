@@ -571,18 +571,22 @@ let shift_bits_right_arith (x, y) =
   let msbs = replicate_bits (take 1 x, ybi) in
   let rbits = msbs @ x in
   take (List.length x) rbits
-                                                                                      
-let shift_bits_right (x, y) =
-  let ybi = uint(y) in
-  let zeros = zeros ybi in
+
+let shiftr (x, y) =
+  let zeros = zeros y in
   let rbits = zeros @ x in
   take (List.length x) rbits
+  
+let shift_bits_right (x, y) =
+  shiftr (x, uint(y))
 
-let shift_bits_left (x, y) =
-  let ybi = uint(y) in
-  let yi  = Big_int.to_int ybi in
-  let zeros = zeros ybi in
+let shiftl (x, y) =
+  let yi  = Big_int.to_int y in
+  let zeros = zeros y in
   let rbits = x @ zeros in
   drop yi rbits
+
+let shift_bits_left (x, y) =
+  shiftl (x, uint(y))
 
 let speculate_conditional_success () = true

@@ -42,8 +42,6 @@ val cast_range_bitvec : forall 'm. [|0:2**'m - 1|] -> vector<'m - 1,'m,dec,bit> 
 function vector<'m - 1,'m,dec,bit> cast_range_bitvec (v) = to_vec (v)
 val not : extern bool -> bool effect pure */
 
-type uint64 = range(0, (2 ^ 64) - 1)
-
 struct CapStruct = {
   tag                     : bool    ,
   padding                 : bits(8) ,
@@ -114,7 +112,6 @@ let default_cap : CapStruct = struct {
 }
 
 let 'cap_size = 32
-let cap_addr_mask = to_bits(64, pow2(64) - cap_size)
 
 function capRegToCapStruct(capReg) : CapReg -> CapStruct =
   struct {

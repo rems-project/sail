@@ -300,6 +300,8 @@ function MEMw_tagged_conditional(addr, tag, data) =
   success;
 }
 
+let cap_addr_mask = to_bits(64, pow2(64) - cap_size)
+
 val MEMw_wrapper : forall 'n, 'n >= 1. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {escape, wmv, wmvt, wreg, eamem}
 function MEMw_wrapper(addr, size, data) =
   let ledata = reverse_endianness(data) in
@@ -400,8 +402,9 @@ function cp2_next_pc () = {
   };
 }
 
-val capToString : CapStruct -> string
-function capToString cap =
+val capToString : CapStruct -> string effect {escape}
+function capToString cap = {
+         skip_escape(); /* because cheri128 getCapX functions contain asserts but cheri256 ones do not */
          concat_str(" t:",
          concat_str(if cap.tag then "1" else "0",
          concat_str(" s:",
@@ -414,7 +417,8 @@ function capToString cap =
          concat_str(BitStr(to_bits(64, getCapOffset(cap))),
          concat_str(" base:",
          concat_str(BitStr(to_bits(64, getCapBase(cap))),
-         concat_str(" length:", BitStr(to_bits(64, getCapLength(cap))))))))))))))))
+         concat_str(" length:", BitStr(to_bits(64, min(getCapLength(cap), MAX(64)))))))))))))))))
+         }
 
 function dump_cp2_state () = {
   print(concat_str("DEBUG CAP PCC", capToString(capRegToCapStruct(PCC))));
