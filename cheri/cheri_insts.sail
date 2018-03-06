@@ -1271,6 +1271,8 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
     raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
     raise_c2_exception(CapEx_SealViolation, cb)
+  else if not (cb_val.permit_store) then
+    raise_c2_exception(CapEx_PermitStoreViolation, cb)
   else if not (cb_val.permit_store_cap) then
     raise_c2_exception(CapEx_PermitStoreCapViolation, cb)
   else if not (cb_val.permit_store_local_cap) & (cs_val.tag) & not (cs_val.global) then
@@ -1320,6 +1322,8 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
     raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
     raise_c2_exception(CapEx_SealViolation, cb)
+  else if not (cb_val.permit_load) then
+    raise_c2_exception(CapEx_PermitLoadViolation, cb)
   else
     {
       cursor := getCapCursor(cb_val);
