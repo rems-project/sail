@@ -111,9 +111,6 @@ val __raw_SetSlice_bits : forall 'n 'w.
 val __raw_GetSlice_bits : forall 'n 'w.
   (atom('n), atom('w), bits('n), int) -> bits('w)
 
-val "shiftl" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
-val "shiftr" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
-
 val __SignExtendSlice = {lem: "exts_slice"} : forall 'm. (bits('m), int, int) -> bits('m)
 
 val __ZeroExtendSlice = {lem: "extz_slice"} : forall 'm. (bits('m), int, int) -> bits('m)
@@ -358,8 +355,14 @@ infix 1 >>
 infix 1 <<
 infix 1 >>_s
 
-val operator >> = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
-val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+
+val "shiftl" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
+val "shiftr" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
+
+overload operator >> = {shift_bits_right, shiftr}
+overload operator << = {shift_bits_left, shiftl}
 val operator >>_s = "shift_bits_right_arith" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
 
 infix 7 *_s

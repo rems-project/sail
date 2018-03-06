@@ -229,10 +229,10 @@ function getCapBase(c) : CapStruct -> uint64 =
     let Bc : bits(20) = c.B in
     let a : bits(65) = EXTZ(c.address) in
     let R : bits(20) = Bc - 0x01000 in /* wraps */
-    let a_mid : bits(20) = mask(shiftr(a, E)) in
+    let a_mid : bits(20) = mask(a >> E) in
     let correction = a_top_correction(a_mid, R, Bc) in
-    let a_top = shiftr(a, E+20) in
-    let base : bits(64) = mask(shiftl((a_top + correction) @ Bc, E)) in
+    let a_top = a >> E+20 in
+    let base : bits(64) = mask(((a_top + correction) @ Bc) << E) in
     unsigned(base)
 
 function getCapTop (c) : CapStruct -> CapLen = 
@@ -241,11 +241,11 @@ function getCapTop (c) : CapStruct -> CapLen =
     let T : bits(20) = c.T in
     let a : bits(65) = EXTZ(c.address)  in
     let R : bits(20) = Bc - 0x01000 in /* wraps */
-    let a_mid : bits(20) = mask(shiftr(a, E)) in
+    let a_mid : bits(20) = mask(a >> E) in
     let correction = a_top_correction(a_mid, R, T) in
-    let a_top = shiftr(a, E+20) in
+    let a_top = a >> E+20 in
     let top1 : bits(65) = mask((a_top + correction) @ T) in
-    unsigned(shiftl(top1, E))
+    unsigned(top1 << E)
 
 function getCapOffset(c) : CapStruct -> uint64 = 
     let base = getCapBase(c) in
@@ -314,7 +314,7 @@ function roundUp(e) : range(0, 45) -> range(0, 48) =
     else (e - r + 4)
 
 function computeE (rlength) : bits(65) -> range(0, 48) =
-    let msb = HighestSetBit(shiftr(rlength + shiftr(rlength, 6), 19)) in
+    let msb = HighestSetBit((rlength + (rlength >> 6)) >> 19) in
     match msb {
       -1  => 0,
       /* above will always return <= 45 because 19 bits of zero are shifted in from right */
@@ -324,8 +324,8 @@ function computeE (rlength) : bits(65) -> range(0, 48) =
 function setCapBounds(cap, base, top) : (CapStruct, bits(64), bits(65)) -> (bool, CapStruct) =
     /* {cap with base=base; length=(bits(64)) length; offset=0} */
     let 'e = computeE(top - (0b0 @ base)) in
-    let Bc : bits(20) = mask(shiftr(base, e)) in
-    let T : bits(20) = mask(shiftr(top, e)) in
+    let Bc : bits(20) = mask(base >> e) in
+    let T : bits(20) = mask(top >> e) in
     let e_mask : bits(65) = EXTZ(replicate_bits(0b1, e)) in
     let e_bits = top & e_mask in
     let T2 : bits(20) = T + (if unsigned(e_bits) == 0 then 0x00000 else 0x00001) in
