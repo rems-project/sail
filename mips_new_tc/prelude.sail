@@ -245,9 +245,13 @@ val max_nat = {ocaml: "max_int", lem: "max"} : (nat, nat) -> nat
 
 val max_int = {ocaml: "max_int", lem: "max"} : (int, int) -> int
 
-overload min = {min_nat, min_int}
+val min_atom = {ocaml: "min_int", lem: "min"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
-overload max = {max_nat, max_int}
+val max_atom = {ocaml: "max_int", lem: "max"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
+
+overload min = {min_atom, min_nat, min_int}
+
+overload max = {max_atom, max_nat, max_int}
 
 val __WriteRAM = "write_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
