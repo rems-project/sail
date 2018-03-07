@@ -18,15 +18,15 @@ function fetch_and_execute () = {
       /*print_bits("hex: ", instr);*/
       let instr_ast = decode(instr);
       match instr_ast {
-        Some(HCF) => {
+        Some(HCF()) => {
                        print("simulation stopped due to halt instruction.");
                        return ();
                      },
         Some(ast) => execute(ast),
-        None      => {print("Decode failed"); exit (())} /* Never expect this -- unknown instruction should actually result in reserved instruction ISA-level exception (see mips_ri.sail). */
+        None()    => {print("Decode failed"); exit (())} /* Never expect this -- unknown instruction should actually result in reserved instruction ISA-level exception (see mips_ri.sail). */
       }
     } catch {
-      ISAException => print("EXCEPTION")
+      ISAException() => print("EXCEPTION")
       /* ISA-level exception occurrred either during TranslatePC or execute --
          just continue from nextPC, which should have been set to the appropriate
          exception vector (along with clearing branchPending etc.) . */

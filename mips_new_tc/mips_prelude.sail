@@ -428,7 +428,7 @@ function SignalExceptionMIPS (ex, kccBase) =
       nextPC = vectorBase + EXTS(vectorOffset) - kccBase;
       CP0Cause->ExcCode() = ExceptionCode(ex);
       CP0Status->EXL()    = 0b1;
-      throw (ISAException);
+      throw (ISAException());
   }
 
 /* Defined either in mips_wrappers (directly calling SignalExceptionMIPS) or in cheri_prelude_common (cheri things plus above) */

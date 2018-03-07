@@ -55,7 +55,7 @@ function tlbSearch(VAddr) =
       if(tlbEntryMatch(r, vpn2, asid, reg_deref(TLBEntries[idx]))) then
 	return Some(to_bits(6, idx))
     };
-    None
+    None()
   }
 
 /** For given virtual address and accessType returns physical address and
@@ -95,7 +95,7 @@ function TLBTranslate2 (vAddr, accessType) = {
       else
         let res : bits(64) = EXTZ(pfn[23..(evenOddBit - 12)] @ vAddr[(evenOddBit - 1) .. 0]) in
         (res,  bits_to_bool(if (accessType == StoreData) then caps else capl)),
-    None  =>  SignalExceptionTLB(
+    None()  =>  SignalExceptionTLB(
       if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr)
   }
 }
@@ -116,22 +116,22 @@ function TLBTranslateC (vAddr, accessType) =
     let compat32 = (vAddr[61..31] == 0b1111111111111111111111111111111) in
     let (requiredLevel, addr) : (AccessLevel, option(bits(64))) = match (vAddr[63..62]) {
       0b11  => match (compat32, vAddr[30..29]) { /* xkseg */
-	(true, 0b11)  => (Kernel, None : option(bits(64))),               /* kseg3 mapped 32-bit compat */
-	(true, 0b10)  => (Supervisor, None : option(bits(64))),           /* sseg  mapped 32-bit compat */
+	(true, 0b11)  => (Kernel, None() : option(bits(64))),               /* kseg3 mapped 32-bit compat */
+	(true, 0b10)  => (Supervisor, None() : option(bits(64))),           /* sseg  mapped 32-bit compat */
 	(true, 0b01)  => (Kernel, Some(0x00000000 @ 0b000 @ vAddr[28..0])), /* kseg1 unmapped uncached 32-bit compat */
 	(true, 0b00)  => (Kernel, Some(0x00000000 @ 0b000 @ vAddr[28..0])), /* kseg0 unmapped cached 32-bit compat */
-	(_, _)        => (Kernel, None : option(bits(64))) /* xkseg mapped */
+	(_, _)        => (Kernel, None() : option(bits(64))) /* xkseg mapped */
       },
       0b10  => (Kernel, Some(0b00000 @ vAddr[58..0])), /* xkphys bits 61-59 are cache mode (ignored) */
-      0b01  => (Supervisor, None : option(bits(64))),  /* xsseg - supervisor mapped */
-      0b00  => (User, None : option(bits(64)))         /* xuseg - user mapped */
+      0b01  => (Supervisor, None() : option(bits(64))),  /* xsseg - supervisor mapped */
+      0b00  => (User, None() : option(bits(64)))         /* xuseg - user mapped */
     } in
     if (cast_AccessLevel(currentAccessLevel) < cast_AccessLevel(requiredLevel)) then
       SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr)
     else
       let (pa, c) : (bits(64), bool) = match addr {
         Some(a) => (a, false),
-        None    => if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
+        None()  => if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
             SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr)
           else
             TLBTranslate2(vAddr, accessType)

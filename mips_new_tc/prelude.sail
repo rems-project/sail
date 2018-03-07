@@ -1,7 +1,7 @@
 default Order dec
 
 type bits ('n : Int) = vector('n, dec, bit)
-union option ('a : Type) = {None, Some : 'a}
+union option ('a : Type) = {None : unit, Some : 'a}
 
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -304,11 +304,11 @@ val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 val print_string = "print_string" : (string, string) -> unit
 
 union exception = {
-  ISAException,
+  ISAException : unit,
   Error_not_implemented : string,
-  Error_misaligned_access,
-  Error_EBREAK,
-  Error_internal_error
+  Error_misaligned_access : unit,
+  Error_EBREAK : unit,
+  Error_internal_error : unit
 }
 
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)

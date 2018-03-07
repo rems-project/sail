@@ -1014,21 +1014,21 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
 /* Co-opt syscall 0xfffff for use as thread start in pccmem  */
 union clause ast = SYSCALL_THREAD_START : unit
 function clause decode (0b000000 @ 0xfffff @ 0b001100) =
-  Some(SYSCALL_THREAD_START)
-function clause execute (SYSCALL_THREAD_START) = ()
+  Some(SYSCALL_THREAD_START())
+function clause execute (SYSCALL_THREAD_START()) = ()
 
 
 /* fake stop fetching instruction for ppcmem, execute doesn't do anything,
    decode never produces it */
 
 union clause ast = ImplementationDefinedStopFetching : unit
-function clause execute (ImplementationDefinedStopFetching) = ()
+function clause execute (ImplementationDefinedStopFetching()) = ()
 
 
 union clause ast = SYSCALL : unit
 function clause decode (0b000000 @ code : bits(20) @ 0b001100) =
-  Some(SYSCALL) /* code is ignored */
-function clause execute (SYSCALL) =
+  Some(SYSCALL()) /* code is ignored */
+function clause execute (SYSCALL()) =
   {
     (SignalException(Sys))
   }
@@ -1036,8 +1036,8 @@ function clause execute (SYSCALL) =
 /* BREAK is identical to SYSCALL exception for the exception raised */
 union clause ast = BREAK : unit
 function clause decode (0b000000 @ code : bits(20) @ 0b001101) =
-  Some(BREAK) /* code is ignored */
-function clause execute (BREAK) =
+  Some(BREAK()) /* code is ignored */
+function clause execute (BREAK()) =
   {
     (SignalException(Bp))
   }
@@ -1045,8 +1045,8 @@ function clause execute (BREAK) =
 /* Accept WAIT as a NOP */
 union clause ast = WAIT : unit
 function clause decode (0b010000 @ 0x80000 @ 0b100000) =
-  Some(WAIT) /* we only accept code == 0 */
-function clause execute (WAIT) = {
+  Some(WAIT()) /* we only accept code == 0 */
+function clause execute (WAIT()) = {
   nextPC = PC;
 }
 
@@ -1420,8 +1420,8 @@ function clause execute (PREF(base, op, imm)) =
 /* SYNC  - Memory barrier */
 union clause ast = SYNC : unit
 function clause decode (0b000000 @ 0b00000 @ 0b00000 @ 0b00000 @ stype : regno @ 0b001111) =
-  Some(SYNC) /* stype is currently ignored */
-function clause execute(SYNC) =
+  Some(SYNC()) /* stype is currently ignored */
+function clause execute(SYNC()) =
   MEM_sync()
 
 union clause ast = MFC0 : (regno, regno, bits(3), bool)
@@ -1502,12 +1502,12 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
 /* simulator halt instruction "MTC0 rt, r23" (cheri specific behaviour) */
 union clause ast = HCF : unit
 function clause decode (0b010000 @ 0b00100 @ rt : regno @ 0b10111 @ 0b00000000000) =
-  Some(HCF)
+  Some(HCF())
 
 function clause decode (0b010000 @ 0b00100 @ rt : regno @ 0b11010 @ 0b00000000000) =
-  Some(HCF)
+  Some(HCF())
 
-function clause execute (HCF) =
+function clause execute (HCF()) =
   () /* halt instruction actually executed by interpreter framework */
 
 union clause ast = MTC0 : (regno, regno, bits(3), bool)
@@ -1607,22 +1607,22 @@ function TLBWriteEntry(idx) = {
 }
 
 union clause ast = TLBWI : unit
-function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000010) = Some(TLBWI : ast)
-function clause execute (TLBWI) = {
+function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000010) = Some(TLBWI() : ast)
+function clause execute (TLBWI()) = {
   checkCP0Access();
   TLBWriteEntry(TLBIndex);
 }
 
 union clause ast = TLBWR : unit
-function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000110) = Some(TLBWR : ast)
-function clause execute (TLBWR) = {
+function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000110) = Some(TLBWR() : ast)
+function clause execute (TLBWR()) = {
   checkCP0Access();
   TLBWriteEntry(TLBRandom);
 }
 
 union clause ast = TLBR : unit
-function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000001) = Some(TLBR : ast)
-function clause execute (TLBR) = {
+function clause decode (0b010000 @ 0b10000000000000000000 @ 0b000001) = Some(TLBR() : ast)
+function clause execute (TLBR()) = {
   checkCP0Access();
   let i as atom(_) = unsigned(TLBIndex) in
   let entry = reg_deref(TLBEntries[i]) in {
@@ -1648,8 +1648,8 @@ function clause execute (TLBR) = {
 }
 
 union clause ast = TLBP : unit
-function clause decode (0b010000 @ 0b10000000000000000000 @ 0b001000) = Some(TLBP : ast)
-function clause execute ((TLBP)) = {
+function clause decode (0b010000 @ 0b10000000000000000000 @ 0b001000) = Some(TLBP() : ast)
+function clause execute (TLBP()) = {
   checkCP0Access();
   let result = tlbSearch(TLBEntryHi.bits()) in
   match result {
@@ -1657,7 +1657,7 @@ function clause execute ((TLBP)) = {
       TLBProbe = [bitzero];
       TLBIndex = idx;
     },
-    None  => {
+    None()  => {
       TLBProbe = [bitone];
       TLBIndex = 0b000000;
     }
@@ -1689,8 +1689,8 @@ function clause execute (RDHWR(rt, rd)) = {
 union clause ast = ERET : unit
 
 function clause decode (0b010000 @ 0b1 @ 0b0000000000000000000 @ 0b011000) =
-      Some(ERET)
-function clause execute (ERET) =
+      Some(ERET())
+function clause execute (ERET()) =
       {
         checkCP0Access();
         ERETHook();

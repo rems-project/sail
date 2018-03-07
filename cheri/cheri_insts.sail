@@ -41,7 +41,7 @@ function clause decode (0b010010 @ 0b00000 @ rd : regno @ cb : regno @ 0b0000000
 function clause decode (0b010010 @ 0b00000 @ rd : regno @ cb : regno @ 0b00000000 @ 0b110) = Some(CGetSealed(rd, cb))
 function clause decode (0b010010 @ 0b00000 @ rd : regno @    0b00000 @ 0b00000000 @ 0b100) = Some(CGetCause(rd))
 
-function clause decode (0b010010 @ 0b00110 @ 0b000000000000000000000) = Some(CReturn)
+function clause decode (0b010010 @ 0b00110 @ 0b000000000000000000000) = Some(CReturn())
 
 function clause decode (0b010010 @ 0b01101 @ rd : regno @ cb : regno @ 0b00000000 @ 0b010) = Some(CGetOffset(rd, cb)) /* NB encoding does not follow pattern */
 function clause decode (0b010010 @ 0b00100 @ 0b00000 @ 0b00000 @ rt : regno @ 0b000 @ 0b100) = Some(CSetCause(rt))
@@ -140,7 +140,7 @@ function clause decode (0b010010 @ 0b01010 @ cd : regno @ imm : bits(16)) = Some
 function clause decode (0b010010 @ 0b10001 @ cd : regno @ imm : bits(16)) = Some(CBZ(cd, imm, false)) /* CBEZ */
 function clause decode (0b010010 @ 0b10010 @ cd : regno @ imm : bits(16)) = Some(CBZ(cd, imm, true))  /* CBNZ */
 
-function clause decode (0b010010 @ 0b00101 @    0b00000 @    0b00000 @ 0b11111111111) = Some(CReturn)
+function clause decode (0b010010 @ 0b00101 @    0b00000 @    0b00000 @ 0b11111111111) = Some(CReturn())
 function clause decode (0b010010 @ 0b00101 @ cs : regno @ cb : regno @ selector : bits(11)) = Some(CCall(cs, cb, selector))
 
 function clause decode (0b010010 @ 0b01111 @ 0b00000 @ imm : bits(16)) = Some(ClearRegs(GPLo, imm))
@@ -1070,7 +1070,7 @@ function clause execute (CCall(cs, cb, 0b00000000001)) = /* selector=1 */
 }
 
 union clause ast = CReturn : unit
-function clause execute (CReturn) =
+function clause execute (CReturn()) =
 {
   /* START_CReturn */
   checkCP2usable();
