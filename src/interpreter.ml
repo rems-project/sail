@@ -415,7 +415,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | Local (Immutable, _) ->
           let chain = build_letchain id gstate.letbinds orig_exp in
           return chain
-       | Enum _ | Union _ ->
+       | Enum _ ->
           return (exp_of_value (V_ctor (string_of_id id, [])))
        | _ -> failwith ("id " ^ string_of_id id)
      end
@@ -568,7 +568,7 @@ and pattern_match env (P_aux (p_aux, _) as pat) value =
      let open Type_check in
      begin
        match Env.lookup_id id env with
-       | Enum _ | Union _ ->
+       | Enum _ ->
           if is_ctor value && string_of_id id = fst (coerce_ctor value)
           then true, Bindings.empty
           else false, Bindings.empty

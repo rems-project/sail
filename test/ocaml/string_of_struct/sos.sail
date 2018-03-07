@@ -3,7 +3,7 @@ struct would cause the ocaml backend to generate a bad string_of
 function for the struct */
 
 union option ('a : Type) = {
-  None,
+  None : unit,
   Some : 'a
 }
 

@@ -648,15 +648,9 @@ let rec to_ast_range (Parse_ast.BF_aux(r,l)) = (* TODO add check that ranges are
     | Parse_ast.BF_concat(ir1,ir2) -> BF_concat( to_ast_range ir1, to_ast_range ir2)),
     l)
 
-let to_ast_type_union k_env default_order (Parse_ast.Tu_aux(tu,l)) =
-  match tu with
-  | Parse_ast.Tu_ty_id(atyp,id) ->
-    let typ = to_ast_typ k_env default_order atyp in
-    (match typ with
-     | Typ_aux(Typ_id (Id_aux (Id "unit",_)),_) ->
-       Tu_aux(Tu_id(to_ast_id id),l)
-     | _ -> Tu_aux(Tu_ty_id(typ, to_ast_id id), l))
-  | Parse_ast.Tu_id id -> (Tu_aux(Tu_id(to_ast_id id),l))
+let to_ast_type_union k_env default_order (Parse_ast.Tu_aux (Parse_ast.Tu_ty_id (atyp, id), l)) =
+  let typ = to_ast_typ k_env default_order atyp in
+  Tu_aux (Tu_ty_id (typ, to_ast_id id), l)
 
 let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (unit type_def) envs_out =
   match td with
@@ -1042,7 +1036,6 @@ let generate_undefineds vs_ids (Defs defs) =
       end
   in
   let undefined_tu = function
-    | Tu_aux (Tu_id id, _) -> mk_exp (E_id id)
     | Tu_aux (Tu_ty_id (Typ_aux (Typ_tup typs, _), id), _) ->
        mk_exp (E_app (id, List.map (fun _ -> mk_lit_exp L_undef) typs))
     | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_lit_exp L_undef]))

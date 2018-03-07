@@ -221,15 +221,16 @@ union ctl_result = {
   CTL_URET,
   CTL_SRET,
 */
-  CTL_MRET
+  CTL_MRET : unit
 }
 
 /* privilege level */
 
-union privilege = {
+enum privilege = {
   MACHINE,
   USER
 }
+
 register cur_privilege : privilege
 
 function priv_to_bits(p : privilege) -> bits(2) =
@@ -262,19 +263,19 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
         Misaligned_Fetch => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
         Fetch_Access => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
         Illegal_Instr => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
 
@@ -283,25 +284,25 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
         Misaligned_Load => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
         Load_Access => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
         Misaligned_Store => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
         Store_Access => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
 
@@ -318,27 +319,27 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
         Fetch_PageFault => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
         Load_PageFault => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
         Store_PageFault => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-            None    => throw(Error_internal_error)
+	    None()  => throw Error_internal_error()
           }
         },
-        _ => throw(Error_internal_error) /* Don't expect ReservedExc0 etc. here */
+        _ => throw Error_internal_error() /* Don't expect ReservedExc0 etc. here */
       };
       /* TODO: make register read explicit */
       mtvec
     },
-    (_, CTL_MRET) => {
+    (_, CTL_MRET()) => {
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = true;
       cur_privilege   = bits_to_priv(mstatus.MPP());

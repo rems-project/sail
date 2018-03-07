@@ -165,9 +165,7 @@ let pat_id_is_variable env id =
   | Local _
   | Register _
     -> true
-  | Enum _
-  | Union _
-    -> false
+  | Enum _ -> false
 
 let rec is_value (E_aux (e,(l,annot))) =
   let is_constructor id =
@@ -179,7 +177,7 @@ let rec is_value (E_aux (e,(l,annot))) =
     | Some (env,_,_) ->
        Env.is_union_constructor id env ||
          (match Env.lookup_id id env with
-         | Enum _ | Union _ -> true 
+         | Enum _ -> true
          | Unbound | Local _ | Register _ -> false)
   in
   match e with
@@ -1118,15 +1116,12 @@ let is_env_inconsistent env ksubsts =
 let split_defs all_errors splits defs =
   let no_errors_happened = ref true in
   let split_constructors (Defs defs) =
-    let sc_type_union q (Tu_aux (tu,l) as tua) =
-      match tu with
-      | Tu_id id -> [],[tua]
-      | Tu_ty_id (ty,id) ->
-         (match split_src_type id ty q with
-         | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
-         | Some variants ->
-            ([(id,variants)],
-             List.map (fun (insts, id', ty) -> Tu_aux (Tu_ty_id (ty,id'),Generated l)) variants))
+    let sc_type_union q (Tu_aux (Tu_ty_id (ty, id), l) as tua) =
+      match split_src_type id ty q with
+      | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
+      | Some variants ->
+         ([(id,variants)],
+          List.map (fun (insts, id', ty) -> Tu_aux (Tu_ty_id (ty,id'),Generated l)) variants)
     in
     let sc_type_def ((TD_aux (tda,annot)) as td) =
       match tda with
@@ -2799,7 +2794,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
             | args -> (args,assigns,empty)
             | exception Not_found ->
                match Env.lookup_id id (Type_check.env_of_annot (l,annot)) with
-               | Enum _ | Union _ -> dempty,assigns,empty
+               | Enum _ -> dempty,assigns,empty
                | Register _ -> Unknown (l, string_of_id id ^ " is a register"),assigns,empty
                | _ ->
                   Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty

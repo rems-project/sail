@@ -144,7 +144,7 @@ let add_regval_conv id typ defs =
   let from_val = Printf.sprintf "val %s : register_value -> option(%s)" from_name typ_str in
   let from_function = String.concat "\n" [
     Printf.sprintf "function %s Regval_%s(v) = Some(v)" from_name id;
-    Printf.sprintf "and %s _ = None" from_name
+    Printf.sprintf "and %s _ = None()" from_name
     ] in
   let from_defs = if is_defined from_name then [] else [from_val; from_function] in
   (* Create a function that converts from target type to regval. *)
@@ -316,7 +316,7 @@ let generate_regstate_defs mwords defs =
   let regtyps = register_base_types mwords (List.map fst registers) in
   let option_typ =
     if has_def "option" then [] else
-      ["union option ('a : Type) = {None, Some : 'a}"]
+      ["union option ('a : Type) = {None : unit, Some : 'a}"]
   in
   let regval_typ = if has_def "register_value" then [] else generate_regval_typ regtyps in
   let regstate_typ = if has_def "regstate" then [] else generate_regstate registers in

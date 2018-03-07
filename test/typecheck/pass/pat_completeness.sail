@@ -1,11 +1,11 @@
-union option ('a : Type) = {None, Some : 'a}
+union option ('a : Type) = {None : unit, Some : 'a}
 
 union ast = {Foo : unit}
 
-let x : option(ast) = Some(Foo)
+let x : option(ast) = Some(Foo())
 
 let y : unit = match(x) {
-  Some(Foo) => (),
+  Some(Foo()) => (),
   Some(a)   => (),
-  None      => ()
+  None()    => ()
 }

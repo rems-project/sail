@@ -54,7 +54,7 @@ module Big_int = Nat_big_num
 
 type mut = Immutable | Mutable
 
-type lvar = Register of typ | Enum of typ | Local of mut * typ | Union of typquant * typ | Unbound
+type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
 
 let no_annot = (Parse_ast.Unknown, ())
 
@@ -1009,10 +1009,7 @@ let split_defs f (Defs defs) =
 let append_ast (Defs ast1) (Defs ast2) = Defs (ast1 @ ast2)
 let concat_ast asts = List.fold_right append_ast asts (Defs [])
 
-let type_union_id (Tu_aux (aux, _)) = match aux with
-  | Tu_id id -> id
-  | Tu_ty_id (_, id) -> id
-
+let type_union_id (Tu_aux (Tu_ty_id (_, id), _)) = id
 
 let rec subst id value (E_aux (e_aux, annot) as exp) =
   let wrap e_aux = E_aux (e_aux, annot) in

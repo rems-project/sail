@@ -353,40 +353,40 @@ function clause execute (FENCE(pred, succ)) = {
 }
 
 /* ****************************************************************** */
-union clause ast = FENCEI
+union clause ast = FENCEI : unit
 
-function clause decode 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111 = Some(FENCEI)
+function clause decode 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111 = Some(FENCEI())
 
-function clause execute FENCEI = MEM_fence_i()
+function clause execute FENCEI() = MEM_fence_i()
 
 /* ****************************************************************** */
-union clause ast = ECALL
+union clause ast = ECALL : unit
 
-function clause decode 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(ECALL)
+function clause decode 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(ECALL())
 
-function clause execute ECALL =
+function clause execute ECALL() =
   let t : sync_exception =
     struct { trap = match (cur_privilege) {
                       USER => User_ECall,
 		      MACHINE => Machine_ECall
 		    },
-             excinfo = (None : option(xlenbits)) } in
+	     excinfo = (None() : option(xlenbits)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 
 /* ****************************************************************** */
-union clause ast = MRET
+union clause ast = MRET : unit
 
-function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET)
+function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
 
-function clause execute MRET =
-  nextPC = handle_exception_ctl(cur_privilege, CTL_MRET, PC)
+function clause execute MRET() =
+  nextPC = handle_exception_ctl(cur_privilege, CTL_MRET(), PC)
 
 /* ****************************************************************** */
-union clause ast = EBREAK
+union clause ast = EBREAK : unit
 
-function clause decode 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(EBREAK)
+function clause decode 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(EBREAK())
 
-function clause execute EBREAK = { throw(Error_EBREAK) }
+function clause execute EBREAK() = { throw Error_EBREAK() }
 
 /* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
@@ -591,22 +591,22 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
 
 /* ****************************************************************** */
 
-union clause ast = NOP
+union clause ast = NOP : unit
 
 function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bits(5)) @ 0b01) : bits(16) = {
-  if (nzi1 == 0b0) & (nzi0 == 0b00000) then Some(NOP)
-  else None
+  if (nzi1 == 0b0) & (nzi0 == 0b00000) then Some(NOP())
+  else None()
 }
 
-function clause execute (NOP) = ()
+function clause execute NOP() = ()
 
 /* ****************************************************************** */
 
-union clause ast = ILLEGAL
+union clause ast = ILLEGAL : unit
 
-function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(ILLEGAL)
+function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(ILLEGAL())
 
-function clause execute (ILLEGAL) = {
+function clause execute ILLEGAL() = {
   let t : sync_exception =
   struct { trap = Illegal_Instr,
            excinfo = Some (EXTZ(0b0)) } in
@@ -619,7 +619,7 @@ union clause ast = C_ADDI4SPN : (cregbits, bits(8))
 
 function clause decodeCompressed (0b000 @ nz54 : bits(2) @ nz96 : bits(4) @ nz2 : bits(1) @ nz3 : bits(1) @ rd : cregbits @ 0b00) : bits(16) = {
   let nzimm = (nz96 @ nz54 @ nz3 @ nz2) : bits(8) in
-  if nzimm == 0b00000000 then None
+  if nzimm == 0b00000000 then None()
   else Some(C_ADDI4SPN(rd, nzimm))
 }
 
@@ -699,7 +699,7 @@ union clause ast = C_ADDI : (bits(6), regbits)
 
 function clause decodeCompressed (0b000 @ nzi5 : bits(1) @ rsd : regbits @ nzi40 : bits(5) @ 0b01) : bits(16) = {
   let nzi = (nzi5 @ nzi40) : bits(6) in
-  if (nzi == 0b000000) | (rsd == zreg) then None
+  if (nzi == 0b000000) | (rsd == zreg) then None()
   else Some(C_ADDI(nzi, rsd))
 }
 
@@ -735,7 +735,7 @@ function clause execute (C_ADDIW(imm, rsd)) = {
 union clause ast = C_LI : (bits(6), regbits)
 
 function clause decodeCompressed (0b010 @ imm5 : bits(1) @ rd : regbits @ imm40 : bits(5) @ 0b01) = {
-  if (rd == zreg) then None
+  if (rd == zreg) then None()
   else Some(C_LI(imm5 @ imm40, rd))
 }
 
@@ -750,7 +750,7 @@ union clause ast = C_ADDI16SP : (bits(6))
 
 function clause decodeCompressed (0b011 @ nzi9 : bits(1) @ /* x2 */ 0b00010 @ nzi4 : bits(1) @ nzi6 : bits(1) @ nzi87 : bits(2) @ nzi5 : bits(1) @ 0b01) = {
   let nzimm = nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4 in
-  if (nzimm == 0b000000) then None
+  if (nzimm == 0b000000) then None()
   else Some(C_ADDI16SP(nzimm))
 }
 
@@ -764,7 +764,7 @@ function clause execute (C_ADDI16SP(imm)) = {
 union clause ast = C_LUI : (bits(6), regbits)
 
 function clause decodeCompressed (0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01) = {
-  if (rd == zreg) | (rd == sp) then None
+  if (rd == zreg) | (rd == sp) then None()
   else Some(C_LUI(imm17 @ imm1612, rd))
 }
 
@@ -780,7 +780,7 @@ union clause ast = C_SRLI : (bits(6), cregbits)
 function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b00 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
   let shamt : bits(6) = nzui5 @ nzui40 in
   if shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
-  then None
+  then None()
   else Some(C_SRLI(shamt, rsd))
 }
 
@@ -796,7 +796,7 @@ union clause ast = C_SRAI : (bits(6), cregbits)
 function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b01 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
   let shamt : bits(6) = nzui5 @ nzui40 in
   if shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
-  then None
+  then None()
   else Some(C_SRAI(shamt, rsd))
 }
 
@@ -927,7 +927,7 @@ union clause ast = C_SLLI : (bits(6), regbits)
 function clause decodeCompressed (0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui40 : bits(5) @ 0b10) = {
   let shamt : bits(6) = nzui5 @ nzui40 in
   if shamt == 0b000000 | rsd == zreg /* TODO: On RV32, also need shamt[5] == 0 */
-  then None
+  then None()
   else Some(C_SLLI(shamt, rsd))
 }
 
@@ -941,7 +941,7 @@ union clause ast = C_LWSP : (bits(6), regbits)
 function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10) = {
   let uimm : bits(6) = ui76 @ ui5 @ ui42 in
   if  rd == zreg
-  then None
+  then None()
   else Some(C_LWSP(uimm, rd))
 }
 
@@ -957,7 +957,7 @@ union clause ast = C_LDSP : (bits(6), regbits)
 function clause decodeCompressed (0b011 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) = {
   let uimm : bits(6) = ui86 @ ui5 @ ui43 in
   if  rd == zreg
-  then None
+  then None()
   else Some(C_LDSP(uimm, rd))
 }
 
@@ -1000,7 +1000,7 @@ union clause ast = C_JR : (regbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10) = {
   if rs1 == zreg
-  then None
+  then None()
   else Some(C_JR(rs1))
 }
 
@@ -1013,7 +1013,7 @@ union clause ast = C_JALR : (regbits)
 
 function clause decodeCompressed (0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10) = {
   if rs1 == zreg
-  then None
+  then None()
   else Some(C_JALR(rs1))
 }
 
@@ -1026,7 +1026,7 @@ union clause ast = C_MV : (regbits, regbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0b10) = {
   if rs2 == zreg | rd == zreg
-  then None
+  then None()
   else Some(C_MV(rd, rs2))
 }
 
@@ -1039,7 +1039,7 @@ union clause ast = C_ADD : (regbits, regbits)
 
 function clause decodeCompressed (0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10) = {
   if rsd == zreg | rs2 == zreg
-  then None
+  then None()
   else Some(C_ADD(rsd, rs2))
 }
 
@@ -1048,8 +1048,8 @@ function clause execute (C_ADD(rsd, rs2)) =
 
 /* ****************************************************************** */
 
-function clause decode _ = None
-function clause decodeCompressed _ = None
+function clause decode _ = None()
+function clause decodeCompressed _ = None()
 
 end ast
 end decode

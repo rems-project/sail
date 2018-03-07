@@ -674,7 +674,6 @@ end = struct
 
   let is_union_constructor id env =
     let is_ctor id (Tu_aux (tu, _)) = match tu with
-      | Tu_id ctor_id when Id.compare id ctor_id = 0 -> true
       | Tu_ty_id (_, ctor_id) when Id.compare id ctor_id = 0 -> true
       | _ -> false
     in
@@ -835,14 +834,7 @@ end = struct
                 let (enum, _) = List.find (fun (enum, ctors) -> IdSet.mem id ctors) (Bindings.bindings env.enums) in
                 Enum (mk_typ (Typ_id enum))
               with
-              | Not_found ->
-                 begin
-                   try
-                     let (typq, typ) = freshen_bind env (Bindings.find id env.union_ids) in
-                     Union (typq, typ)
-                   with
-                   | Not_found -> Unbound
-                 end
+              | Not_found -> Unbound
             end
        end
 
@@ -2024,11 +2016,6 @@ let rec filter_casts env from_typ to_typ casts =
      end
   | [] -> []
 
-let is_union_id id env =
-  match Env.lookup_id id env with
-  | Union (_, _) -> true
-  | _ -> false
-
 let crule r env exp typ =
   incr depth;
   typ_print ("Check " ^ string_of_exp exp ^ " <= " ^ string_of_typ typ);
@@ -2246,14 +2233,6 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      if is_typ_monomorphic typ || Env.polymorphic_undefineds env
      then annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
      else typ_error l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
-  | E_id id, _ when is_union_id id env ->
-     begin
-       match Env.lookup_id id env with
-       | Union (typq, ctor_typ) ->
-          let inferred_exp = fst (infer_funapp' l env id (typq, mk_typ (Typ_fn (unit_typ, ctor_typ, no_effect))) [mk_lit_exp L_unit] (Some typ)) in
-          annot_exp (E_id id) (typ_of inferred_exp)
-       | _ -> assert false (* Unreachble due to guard *)
-     end
   | _, _ ->
      let inferred_exp = irule infer_exp env exp in
      type_coercion env inferred_exp typ
@@ -2381,19 +2360,18 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
   match pat_aux with
   | P_id v ->
      begin
+       (* If the identifier we're matching on is also a constructor of
+          a union, that's probably a mistake, so warn about it. *)
+       if Env.is_union_constructor v env then
+         Util.warn (Printf.sprintf "Identifier %s found in pattern is also a union constructor at %s\n"
+                                   (string_of_id v)
+                                   (Reporting_basic.loc_to_string l))
+       else ();
        match Env.lookup_id v env with
        | Local (Immutable, _) | Unbound -> annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env, []
        | Local (Mutable, _) | Register _ ->
           typ_error l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
        | Enum enum -> subtyp l env enum typ; annot_pat (P_id v) typ, env, []
-       | Union (typq, ctor_typ) ->
-          begin
-            try
-              let _ = unify l env ctor_typ typ in
-              annot_pat (P_id v) typ, env, []
-            with
-            | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
-          end
      end
   | P_var (pat, typ_pat) ->
      let typ = Env.expand_synonyms env typ in
@@ -2523,7 +2501,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
   | P_id v ->
      begin
        match Env.lookup_id v env with
-       | Local (Immutable, _) | Unbound | Union _ ->
+       | Local (Immutable, _) | Unbound ->
           typ_error l ("Cannot infer identifier in pattern " ^ string_of_pat pat ^ " - try adding a type annotation")
        | Local (Mutable, _) | Register _ ->
           typ_error l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
@@ -2617,7 +2595,6 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
               let is_immutable, vtyp, is_register = match Env.lookup_id v env with
                 | Unbound -> typ_error l "Cannot assign to element of unbound vector"
                 | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
-                | Union _ -> typ_error l "Cannot vector assign to union element"
                 | Local (Immutable, vtyp) -> true, vtyp, false
                 | Local (Mutable, vtyp) -> false, vtyp, false
                 | Register vtyp -> false, vtyp, true
@@ -2678,8 +2655,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      end
   | LEXP_id v ->
      begin match Env.lookup_id v env with
-     | Local (Immutable, _) | Enum _ | Union _ ->
-        typ_error l ("Cannot modify let-bound constant, union or enumeration constructor " ^ string_of_id v)
+     | Local (Immutable, _) | Enum _ ->
+        typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
      | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
      | Register vtyp -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ (mk_effect [BE_wreg]), env
      | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
@@ -2687,8 +2664,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   | LEXP_cast (typ_annot, v) ->
      begin
        match Env.lookup_id v env with
-       | Local (Immutable, _) | Enum _ | Union _ ->
-          typ_error l ("Cannot modify let-bound constant, union or enumeration constructor " ^ string_of_id v)
+       | Local (Immutable, _) | Enum _ ->
+          typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
        | Local (Mutable, vtyp) ->
           begin
             subtyp l env typ typ_annot;
@@ -2732,8 +2709,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
                  | LEXP_aux (LEXP_id v, _) ->
                     begin
                       match Env.lookup_id v env with
-                      | Local (Immutable, _) | Enum _ | Union _ ->
-                         typ_error l ("Cannot modify let-bound constant, union or enumeration constructor " ^ string_of_id v)
+                      | Local (Immutable, _) | Enum _ ->
+                         typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
                       | Unbound ->
                          typ_error l "Unbound variable in vector tuple assignment"
                       | Local (Mutable, vtyp) | Register vtyp ->
@@ -2773,7 +2750,6 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        let is_immutable, is_register, vtyp = match Env.lookup_id v env with
          | Unbound -> typ_error l "Cannot assign to element of unbound vector"
          | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
-         | Union _ -> typ_error l "Cannot vector assign to union element"
          | Local (Immutable, vtyp) -> true, false, vtyp
          | Local (Mutable, vtyp) -> false, false, vtyp
          | Register vtyp -> false, true, vtyp
@@ -2798,7 +2774,6 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        let is_immutable, is_register, vtyp = match Env.lookup_id v env with
          | Unbound -> typ_error l "Cannot assign to element of unbound vector"
          | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
-         | Union _ -> typ_error l "Cannot vector assign to union element"
          | Local (Immutable, vtyp) -> true, false, vtyp
          | Local (Mutable, vtyp) -> false, false, vtyp
          | Register vtyp -> false, true, vtyp
@@ -2840,10 +2815,6 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | Local (_, typ) | Enum typ -> annot_exp (E_id v) typ
        | Register typ -> annot_exp_effect (E_id v) typ (mk_effect [BE_rreg])
        | Unbound -> typ_error l ("Identifier " ^ string_of_id v ^ " is unbound")
-       | Union (typq, typ) ->
-          if quant_items typq = []
-          then annot_exp (E_id v) typ
-          else typ_error l ("Cannot infer the type of polymorphic union indentifier " ^ string_of_id v)
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)])))
@@ -3610,7 +3581,6 @@ let fold_union_quant quants (QI_aux (qi, l)) =
 let check_type_union env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
-  | Tu_id v -> Env.add_union_id v (typq, ret_typ) env
   | Tu_ty_id (typ, v) ->
      let typ' = mk_typ (Typ_fn (typ, ret_typ, no_effect)) in
      env

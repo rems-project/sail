@@ -289,9 +289,7 @@ let init_env s = Nameset.singleton s
 
 let typ_variants consider_var bound tunions =
   List.fold_right
-    (fun (Tu_aux(t,_)) (b,n) -> match t with
-       | Tu_id id -> Nameset.add (string_of_id id) b,n
-       | Tu_ty_id(t,id) -> Nameset.add (string_of_id id) b, fv_of_typ consider_var b n t)
+    (fun (Tu_aux(Tu_ty_id(t,id),_)) (b,n) -> Nameset.add (string_of_id id) b, fv_of_typ consider_var b n t)
     tunions
     (bound,mt)
 

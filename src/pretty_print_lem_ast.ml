@@ -517,11 +517,9 @@ let pp_lem_typdef ppf (TD_aux(td,(l,annot))) =
         fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]"
           kwd "TD_record" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp f_pp f_pp) fs
       | TD_variant(id,nm,typq,ar,_) ->
-        let a_pp ppf (Tu_aux(typ_u,l)) =
-          match typ_u with
-            | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_aux (Tu_ty_id %a %a) %a);@]"
-                                  pp_lem_typ typ pp_lem_id id pp_lem_l l
-            | Tu_id(id) -> fprintf ppf "@[<1>(Tu_aux (Tu_id %a) %a);@]" pp_lem_id id pp_lem_l l
+        let a_pp ppf (Tu_aux(Tu_ty_id(typ,id),l)) =
+          fprintf ppf "@[<1>(Tu_aux (Tu_ty_id %a %a) %a);@]"
+                  pp_lem_typ typ pp_lem_id id pp_lem_l l
         in
         fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]"
           kwd "TD_variant" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar

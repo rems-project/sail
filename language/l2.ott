@@ -459,7 +459,6 @@ kind_def :: 'KD_' ::=
 type_union :: 'Tu_' ::=
   {{ com type union constructors }}
   {{ aux _ l }}
-  | id                                                  :: :: id
   | typ id                                              :: :: ty_id
 
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 

@@ -434,6 +434,7 @@ let primops =
       ("sub_vec", value_sub_vec);
       ("read_ram", value_read_ram);
       ("write_ram", value_write_ram);
+      ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
       ("undefined_int", fun _ -> V_int Big_int.zero);
       ("undefined_bool", fun _ -> V_bool false);

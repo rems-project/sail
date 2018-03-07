@@ -1,7 +1,7 @@
 default Order inc
 
-union option ('a : Type) = {None, Some : 'a}
+union option ('a : Type) = {None : unit, Some : 'a}
 
-union Test = {A, B, C}
+union Test = {A : unit, B : unit, C : unit}
 
-function test () -> option(Test) = Some(C)
+function test () -> option(Test) = Some(C())

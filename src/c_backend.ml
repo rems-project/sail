@@ -80,7 +80,6 @@ let lvar_typ = function
   | Local (_, typ) -> typ
   | Register typ -> typ
   | Enum typ -> typ
-  (* | Union (_, typ) -> typ *)
   | _ -> assert false
 
 let string_of_value = function
@@ -348,8 +347,6 @@ let pp_lvar lvar doc =
      string "[I/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
   | Enum typ ->
      string "[E/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
-  | Union (typq, typ) ->
-     string "[U/" ^^ string (string_of_typquant typq ^ "/" ^ string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
   | Unbound -> string "[?]" ^^ doc
 
 let pp_annot typ doc =
@@ -627,7 +624,6 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
   | E_id id ->
      let lvar = Env.lookup_id id (env_of exp) in
      begin match lvar with
-     | Union (_, typ) -> AE_app (id, [AV_lit (mk_lit L_unit, unit_typ)], typ)
      | _ -> AE_val (AV_id (id, lvar))
      end
 
@@ -1123,16 +1119,7 @@ let cdef_ctyps ctx = function
   | CDEF_reg_dec (_, ctyp) -> [ctyp]
   | CDEF_spec (_, ctyps, ctyp) -> ctyp :: ctyps
   | CDEF_fundef (id, _, _, instrs) ->
-     (* TODO: Move this code to DEF_fundef -> CDEF_fundef translation, and modify bytecode.ott *)
-     let _, Typ_aux (fn_typ, _) =
-       try Env.get_val_spec id ctx.tc_env with
-       | Type_error _ ->
-          (* If we can't find the function type, then it must be a nullary union constructor. *)
-          begin match Env.lookup_id id ctx.tc_env with
-          | Union (typq, typ) -> typq, function_typ unit_typ typ no_effect
-          | _ -> failwith ("Got function identifier " ^ string_of_id id ^ " which is neither a function nor a constructor.")
-          end
-     in
+     let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
        | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
        | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
@@ -1455,15 +1442,7 @@ let compile_funcall ctx id args typ =
   let setup = ref [] in
   let cleanup = ref [] in
 
-  let _, Typ_aux (fn_typ, _) =
-    try Env.get_val_spec id ctx.tc_env with
-    | Type_error _ ->
-       (* If we can't find the function type, then it must be a nullary union constructor. *)
-       begin match Env.lookup_id id ctx.tc_env with
-       | Union (typq, typ) -> typq, function_typ unit_typ typ no_effect
-       | _ -> failwith ("Got function identifier " ^ string_of_id id ^ " which is neither a function nor a constructor.")
-       end
-  in
+  let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
   let arg_typs, ret_typ = match fn_typ with
     | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
     | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
@@ -1892,11 +1871,7 @@ let compile_type_def ctx (TD_aux (type_def, _)) =
      { ctx with records = Bindings.add id ctors ctx.records }
 
   | TD_variant (id, _, _, tus, _) ->
-     let compile_tu (Tu_aux (tu_aux, _)) =
-       match tu_aux with
-       | Tu_id id -> CT_unit, id
-       | Tu_ty_id (typ, id) -> ctyp_of_typ ctx typ, id
-     in
+     let compile_tu (Tu_aux (Tu_ty_id (typ, id), _)) = ctyp_of_typ ctx typ, id in
      let ctus = List.fold_left (fun ctus (ctyp, id) -> Bindings.add id ctyp ctus) Bindings.empty (List.map compile_tu tus) in
      CTD_variant (id, Bindings.bindings ctus),
      { ctx with variants = Bindings.add id ctus ctx.variants }

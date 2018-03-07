@@ -361,8 +361,7 @@ funcl_aux =  (* Function clause *)
 
 type 
 type_union_aux =  (* Type union constructors *)
-   Tu_id of id
- | Tu_ty_id of atyp * id
+   Tu_ty_id of atyp * id
 
 
 type 

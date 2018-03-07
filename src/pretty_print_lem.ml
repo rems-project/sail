@@ -445,24 +445,22 @@ let doc_typschm_lem quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   else pt
 
 let is_ctor env id = match Env.lookup_id id env with
-| Enum _ | Union _ -> true
+| Enum _ -> true
 | _ -> false
 
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
 let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
+  | P_app(id, _) when string_of_id id = "None" -> string "Nothing"
   | P_app(id, ((_ :: _) as pats)) ->
     let ppp = doc_unop (doc_id_lem_ctor id)
                        (parens (separate_map comma (doc_pat_lem ctxt true) pats)) in
     if apat_needed then parens ppp else ppp
-  | P_app(id,[]) -> doc_id_lem_ctor id
+  | P_app(id, []) -> doc_id_lem_ctor id
   | P_lit lit  -> doc_lit_lem lit
   | P_wild -> underscore
-  | P_id id ->
-     begin match id with
-     | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
-     | _ -> doc_id_lem id end
+  | P_id id -> doc_id_lem id
   | P_var(p,_) -> doc_pat_lem ctxt true p
   | P_as(p,id) -> parens (separate space [doc_pat_lem ctxt true p; string "as"; doc_id_lem id])
   | P_typ(Typ_aux (Typ_tup typs, _), P_aux (P_tup pats, _)) ->
@@ -614,6 +612,7 @@ let doc_exp_lem, doc_let_lem =
     | E_app(f,args) ->
        begin match f with
        (* temporary hack to make the loop body a function of the temporary variables *)
+       | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
        | Id_aux (Id "foreach", _) ->
           begin
             match args with
@@ -681,7 +680,7 @@ let doc_exp_lem, doc_let_lem =
           end
        | _ ->
           begin match annot with
-          | Some (env, _, _) when (is_ctor env f) ->
+          | Some (env, _, _) when Env.is_union_constructor f env ->
              let epp =
                match args with
                | [] -> doc_id_lem_ctor f
@@ -899,10 +898,9 @@ let doc_exp_lem, doc_let_lem =
   in top_exp, let_exp
 
 (*TODO Upcase and downcase type and constructors as needed*)
-let doc_type_union_lem (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor id; string "of";
-                                        parens (doc_typ_lem typ)]
-  | Tu_id id -> separate space [pipe; doc_id_lem_ctor id]
+let doc_type_union_lem (Tu_aux(Tu_ty_id(typ,id),_)) =
+  separate space [pipe; doc_id_lem_ctor id; string "of";
+                  parens (doc_typ_lem typ)]
 
 let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
@@ -995,19 +993,12 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
              (separate space [string "let rec";fromInterpValueF;string "v";equals;string "match v with"])
              (
                ((separate_map (break 1))
-                  (fun (Tu_aux (tu,_)) ->
-                    match tu with
-                    | Tu_ty_id (ty,cid) ->
-                       (separate space)
-                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
-                          arrow;
-                          doc_id_lem_ctor cid;
-                          parens (string "fromInterpValue v")]
-                    | Tu_id cid ->
-                       (separate space)
-                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
-                          arrow;
-                          doc_id_lem_ctor cid])
+                  (fun (Tu_aux (Tu_ty_id (ty,cid),_)) ->
+                    (separate space)
+                      [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                       arrow;
+                       doc_id_lem_ctor cid;
+                       parens (string "fromInterpValue v")])
                   ar) ^/^
 
                   ((separate space) [pipe;string "SI.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
@@ -1024,24 +1015,14 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
              (separate space [string "let";toInterpValueF;equals;string "function"])
              (
                ((separate_map (break 1))
-                  (fun (Tu_aux (tu,_)) ->
-                    match tu with
-                    | Tu_ty_id (ty,cid) ->
-                       (separate space)
-                         [pipe;doc_id_lem_ctor cid;string "v";arrow;
-                          string "SI.V_ctor";
-                          parens (make_id false cid);
-                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                          string "SI.C_Union";
-                          parens (string "toInterpValue v")]
-                    | Tu_id cid ->
-                       (separate space)
-                         [pipe;doc_id_lem_ctor cid;arrow;
-                          string "SI.V_ctor";
-                          parens (make_id false cid);
-                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                          string "SI.C_Union";
-                          parens (string "toInterpValue ()")])
+                  (fun (Tu_aux (Tu_ty_id (ty,cid),_)) ->
+                    (separate space)
+                      [pipe;doc_id_lem_ctor cid;string "v";arrow;
+                       string "SI.V_ctor";
+                       parens (make_id false cid);
+                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                       string "SI.C_Union";
+                       parens (string "toInterpValue v")])
                   ar) ^/^
                  string "end") in
          let fromToInterpValuePP =

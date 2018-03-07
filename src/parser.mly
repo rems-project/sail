@@ -677,6 +677,8 @@ atomic_pat:
   | kid
     { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos,
 		     mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }
+  | id Unit
+    { mk_pat (P_app ($1, [mk_pat P_wild $startpos $endpos])) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | atomic_pat Colon typ
@@ -999,6 +1001,8 @@ atomic_exp:
     { mk_exp (E_app ($1, [mk_lit_exp L_unit $startpos($2) $endpos])) $startpos $endpos }
   | id Lparen exp_list Rparen
     { mk_exp (E_app ($1, $3)) $startpos $endpos }
+  | Exit Unit
+    { mk_exp (E_exit (mk_lit_exp L_unit $startpos $endpos)) $startpos $endpos }
   | Exit Lparen exp Rparen
     { mk_exp (E_exit $3) $startpos $endpos }
   | Sizeof Lparen typ Rparen
@@ -1155,8 +1159,6 @@ struct_fields:
 type_union:
   | id Colon typ
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
-  | id
-    { Tu_aux (Tu_id $1, loc $startpos $endpos) }
 
 type_unions:
   | type_union

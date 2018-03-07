@@ -1952,10 +1952,8 @@ let rewrite_constraint =
 
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_e_constraint) }
 
-let rewrite_type_union_typs rw_typ (Tu_aux (tu, annot)) =
-  match tu with
-  | Tu_id id -> Tu_aux (Tu_id id, annot)
-  | Tu_ty_id (typ, id) -> Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
+let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) =
+  Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
 
 let rewrite_type_def_typs rw_typ rw_typquant rw_typschm (TD_aux (td, annot)) =
   match td with

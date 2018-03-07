@@ -5,7 +5,7 @@ function not_implemented message = throw(Error_not_implemented(message))
 val internal_error : forall ('a : Type). string -> 'a effect {escape}
 function internal_error(s) = {
     assert (false, s);
-    throw (Error_internal_error)
+    throw Error_internal_error()
 }
 
 let xlen = 64
@@ -51,7 +51,7 @@ function wX (r, v) =
 overload X = {rX, wX}
 
 function check_alignment (addr : xlenbits, width : atom('n)) -> forall 'n. unit =
-  if unsigned(addr) % width != 0 then throw(Error_misaligned_access) else ()
+  if unsigned(addr) % width != 0 then throw Error_misaligned_access() else ()
 
 val MEMr                         : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
 val MEMr_acquire                 : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}

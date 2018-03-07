@@ -58,7 +58,7 @@ type mut = Immutable | Mutable
 (** [lvar] is the type of variables - they can either be registers,
    local mutable or immutable variables, nullary union constructors
    (i.e. None in option), or unbound identifiers *)
-type lvar = Register of typ | Enum of typ | Local of mut * typ | Union of typquant * typ | Unbound
+type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
 
 val no_annot : unit annot
 val gen_loc : Parse_ast.l -> Parse_ast.l

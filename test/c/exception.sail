@@ -5,7 +5,7 @@ val print_int = "print_int" : (string, int) -> unit
 
 union exception = {
   Epair : (range(0, 255), range(0, 255)),
-  Eunknown,
+  Eunknown : unit,
   Estring : string
 }
 
@@ -28,9 +28,9 @@ function main () = {
     print(g());
     f(); // will throw Estring
     throw(Epair(42, 24));
-    throw(Eunknown);
+    throw(Eunknown());
   } catch {
-    Eunknown     => print("Caught Eunknown"),
+    Eunknown()   => print("Caught Eunknown"),
     Epair(x, y)  => print("Caught Epair"),
     Estring(str) => {
       print("Caught Estring");

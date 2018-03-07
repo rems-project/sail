@@ -177,7 +177,6 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
        match Env.lookup_id id (pat_env_of pat) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
        | Enum _ -> zencode_upper ctx id
-       | Union _ -> zencode_upper ctx id
        | _ -> failwith ("Ocaml: Cannot pattern match on mutable variable or register:" ^ string_of_pat pat)
      end
   | P_lit lit -> ocaml_lit lit
@@ -315,7 +314,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
      begin
        match Env.lookup_id id (env_of exp) with
        | Local (Immutable, _) | Unbound -> zencode ctx id
-       | Enum _ | Union _ -> zencode_upper ctx id
+       | Enum _ -> zencode_upper ctx id
        | Register _ when is_passed_by_name (typ_of exp) -> zencode ctx id
        | Register typ ->
           if !opt_trace_ocaml then
@@ -515,9 +514,8 @@ let rec ocaml_fields ctx =
   | [] -> empty
 
 let rec ocaml_cases ctx =
-  let ocaml_case = function
-    | Tu_aux (Tu_id id, _) -> separate space [bar; zencode_upper ctx id]
-    | Tu_aux (Tu_ty_id (typ, id), _) -> separate space [bar; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
+  let ocaml_case (Tu_aux (Tu_ty_id (typ, id), _)) =
+    separate space [bar; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
   in
   function
   | [tu] -> ocaml_case tu
@@ -525,10 +523,8 @@ let rec ocaml_cases ctx =
   | [] -> empty
 
 let rec ocaml_exceptions ctx =
-  let ocaml_exception = function
-    | Tu_aux (Tu_id id, _) -> separate space [string "exception"; zencode_upper ctx id]
-    | Tu_aux (Tu_ty_id (typ, id), _) ->
-       separate space [string "exception"; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
+  let ocaml_exception (Tu_aux (Tu_ty_id (typ, id), _)) =
+    separate space [string "exception"; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
   in
   function
   | [tu] -> ocaml_exception tu

@@ -27,7 +27,7 @@ function fetch_and_execute () =
       nextPC = PC + instr_sz;
       match instr_ast {
         Some(ast) => execute(ast),
-        None      => {print("Decode failed"); exit (())}
+	None()    => {print("Decode failed"); exit()}
       }
     };
     let tohost_val = __RISCV_read(tohost, 4);
@@ -60,9 +60,9 @@ function main () = {
     fetch_and_execute()
   } catch {
     Error_not_implemented(s) => print_string("Error: Not implemented: ", s),
-    Error_misaligned_access  => print("Error: misaligned_access"),
-    Error_EBREAK => print("EBREAK"),
-    Error_internal_error => print("Error: internal error")
+    Error_misaligned_access() => print("Error: misaligned_access"),
+    Error_EBREAK() => print("EBREAK"),
+    Error_internal_error() => print("Error: internal error")
   };
   dump_state ()
 }

@@ -18,6 +18,6 @@ function main () = {
   }
 }
 
-union clause exception = Test_other
+union clause exception = Test_other : unit
 
 end exception

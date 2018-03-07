@@ -456,9 +456,7 @@ let doc_dec (DEC_aux (reg,_)) =
 let doc_field (typ, id) =
   separate space [doc_id id; colon; doc_typ typ]
 
-let doc_union (Tu_aux (tu, l)) = match tu with
-  | Tu_id id -> doc_id id
-  | Tu_ty_id (typ, id) -> separate space [doc_id id; colon; doc_typ typ]
+let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
 let doc_typdef (TD_aux(td,_)) = match td with
   | TD_abbrev (id, _, typschm) ->

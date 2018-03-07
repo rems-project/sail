@@ -24,7 +24,7 @@ struct TestStruct = {
 
 register SREG : TestStruct
 
-union option ('a : Type) = {None, Some : 'a}
+union option ('a : Type) = {None : unit, Some : 'a}
 
 register OREG : option(byte)
 
@@ -37,8 +37,8 @@ function main () = {
   SIGNALREG = High;
   print(if SIGNALREG == High then "pass" else "fail");
   SREG.field1 = 0b00;
-  print(if SREG.field1 == 0b00 then "pass" else "faiL");
+  print(if SREG.field1 == 0b00 then "pass" else "fail");
   SREG.field1 = 0b11;
-  print(if SREG.field1 == 0b11 then "pass" else "faiL");
+  print(if SREG.field1 == 0b11 then "pass" else "fail");
   print("pass")
 }

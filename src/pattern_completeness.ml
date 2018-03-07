@@ -97,7 +97,7 @@ let rec generalize ctx (P_aux (p_aux, _) as pat) =
        | Unbound -> GP_wild
        | Local (Immutable, _) -> GP_wild
        | Register _ | Local (Mutable, _) -> Util.warn "Matching on register or mutable variable"; GP_wild
-       | Enum _ | Union _ -> GP_app (Bindings.singleton id GP_wild)
+       | Enum _ -> GP_app (Bindings.singleton id GP_wild)
      end
   | P_var (pat, _) -> generalize ctx pat
   | P_vector pats ->

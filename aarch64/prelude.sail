@@ -366,10 +366,10 @@ val break : unit -> unit
 function break () = ()
 
 union exception = {
-  Error_Undefined,
+  Error_Undefined : unit,
   Error_See : string,
   Error_Implementation_Defined : string,
-  Error_ReservedEncoding
+  Error_ReservedEncoding : unit
 }
 
 /*
