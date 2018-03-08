@@ -2,7 +2,7 @@ THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
 SAIL_DIR:=$(realpath $(dir $(THIS_MAKEFILE))..)
 export SAIL_DIR
 SAIL_LIB_DIR:=$(SAIL_DIR)/lib
-MIPS_SAIL_DIR:=$(SAIL_DIR)/mips_new_tc
+MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
 CHERI_SAIL_DIR:=$(SAIL_DIR)/cheri
 SAIL:=$(SAIL_DIR)/sail
 SAIL_LIB_HEADERS:=$(SAIL_LIB_DIR)/flow.sail

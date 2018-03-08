@@ -115,7 +115,7 @@ LEM = $(PROJECT_ROOT)/lem/lem
 ELFDIR= $(PROJECT_ROOT)/linksem
 
 SAIL_LIB_DIR:=$(SAIL_DIR)/lib
-MIPS_SAIL_DIR:=$(SAIL_DIR)/mips_new_tc
+MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
 
 MIPS_SAILS_PRE:=$(SAIL_LIB_DIR)/flow.sail $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
