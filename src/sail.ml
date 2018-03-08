@@ -271,6 +271,7 @@ let main() =
        then
          let ast_c = rewrite_ast_c ast in
          let ast_c, type_envs = Specialize.specialize ast_c type_envs in
+         let ast_c = Spec_analysis.top_sort_defs ast_c in
          C_backend.compile_ast (C_backend.initial_ctx type_envs) ast_c
        else ());
       (if !(opt_print_lem)

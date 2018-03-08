@@ -309,8 +309,8 @@ let specialize_id_overloads instantiations id (Defs defs) =
    therefore remove all unused valspecs. Remaining polymorphic
    valspecs are then re-specialized. This process is iterated until
    the whole spec is specialized. *)
-let remove_unused_valspecs ast =
-  let calls = ref (IdSet.of_list [mk_id "main"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"]) in
+let remove_unused_valspecs env ast =
+  let calls = ref (IdSet.of_list [mk_id "main"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"; mk_id "append_64"]) in
   let vs_ids = Initial_check.val_spec_ids ast in
 
   let inspect_exp = function
@@ -328,7 +328,9 @@ let remove_unused_valspecs ast =
   let rec remove_unused (Defs defs) id =
     match defs with
     | def :: defs when is_fundef id def -> remove_unused (Defs defs) id
-    | def :: defs when is_valspec id def -> remove_unused (Defs defs) id
+    | def :: defs when is_valspec id def ->
+       prerr_endline ("Removing: " ^ string_of_id id);
+       remove_unused (Defs defs) id
     | DEF_overload (overload_id, overloads) :: defs ->
        begin
          match List.filter (fun id' -> Id.compare id id' <> 0) overloads with
@@ -372,13 +374,93 @@ let specialize_ids ids ast =
   let ast, _ = Type_check.check Type_check.initial_env ast in
   let ast = List.fold_left (fun ast id -> rewrite_polymorphic_calls id ast) ast (IdSet.elements ids) in
   let ast, env = Type_check.check Type_check.initial_env ast in
-  let ast = remove_unused_valspecs ast in
+  let ast = remove_unused_valspecs env ast in
   ast, env
+
+(***** Specialising polymorphic variant types, e.g. option *****)
+
+let rec variant_generic_typ id (Defs defs) =
+  match defs with
+  | DEF_type (TD_aux (TD_variant (id', _, typq, _, _), _)) :: _ ->
+     mk_typ (Typ_app (id', List.map (fun kopt -> mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var (kopt_kid kopt))))) (quant_kopts typq)))
+  | _ :: defs -> variant_generic_typ id (Defs defs)
+  | [] -> failwith ("No variant with id " ^ string_of_id id)
+
+let rewrite_polymorphic_constructors id ast =
+  let rewrite_e_aux = function
+    | E_aux (E_app (id', args), annot) as exp when Id.compare id id' = 0 ->
+       let instantiation = fix_instantiation (Type_check.instantiation_of exp) in
+       let spec_id = id_of_instantiation id instantiation in
+       E_aux (E_app (spec_id, args), annot)
+    | exp -> exp
+  in
+  let rewrite_p_aux = function
+    | P_aux (P_app (id', args), annot) as pat when Id.compare id id' = 0 ->
+       begin match Type_check.typ_of_annot annot with
+       | Typ_aux (Typ_app (variant_id, _), _) as typ ->
+          let open Type_check in
+          let instantiation, _, _ = unify (fst annot) (env_of_annot annot)
+                                          (variant_generic_typ variant_id ast)
+                                          (typ_of_annot annot)
+          in
+          (* FIXME: What if instantiation only involves U_nexps? *)
+          let instantiation = fix_instantiation instantiation in
+          P_aux (P_app (id_of_instantiation id' instantiation, args), annot)
+       | Typ_aux (Typ_id variant_id, _) -> pat
+       | _ -> failwith ("Union constructor " ^ string_of_pat pat ^ " has non-union type")
+       end
+    | pat -> pat
+  in
+
+  let rewrite_pat = { id_pat_alg with p_aux = (fun (pat, annot) -> rewrite_p_aux (P_aux (pat, annot))) } in
+  let rewrite_exp = { id_exp_alg with pat_alg = rewrite_pat;
+                                      e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
+                                          rewrite_pat = (fun _ -> fold_pat rewrite_pat)} ast
+
+let specialize_variants ((Defs defs) as ast) env =
+  let ctors = ref [] in
+
+  let specialize_variant (TD_aux (tdef_aux, annot)) ast env =
+    match tdef_aux with
+    | TD_variant (id, name_scheme, typq, tus, flag) as variant ->
+       let kopts = List.filter (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) (quant_kopts typq) in
+       if kopts = [] then
+         (* If non-polymorphic, then do nothing. *)
+         TD_aux (variant, annot)
+       else
+         let specialize_tu (Tu_aux (Tu_ty_id (typ, id), annot)) =
+           ctors := id :: !ctors;
+           let is = instantiations_of id ast in
+           let is = List.sort_uniq (fun i1 i2 -> String.compare (string_of_instantiation i1) (string_of_instantiation i2)) is in
+           List.map (fun i -> Tu_aux (Tu_ty_id (Type_check.subst_unifiers i typ, id_of_instantiation id i), annot)) is
+         in
+         (*
+         let kopts, constraints = quant_split typq in
+         let kopts = List.filter (fun kopt -> not (is_typ_kopt kopt || is_order_kopt kopt)) kopts in
+         let typq = mk_typquant (List.map mk_qi_kopt kopts @ List.map mk_qi_nc constraints) in
+          *)
+         TD_aux (TD_variant (id, name_scheme, typq, List.concat (List.map specialize_tu tus), flag), annot)
+    | _ -> assert false
+  in
+
+  let rec specialize_variants' = function
+    | DEF_type (TD_aux (TD_variant _, _) as tdef) :: defs ->
+       DEF_type (specialize_variant tdef ast env) :: specialize_variants' defs
+    | def :: defs ->
+       def :: specialize_variants' defs
+    | [] -> []
+  in
+
+  let ast = Defs (specialize_variants' defs) in
+  let ast = List.fold_left (fun ast id -> rewrite_polymorphic_constructors id ast) ast !ctors in
+  Type_check.check Type_check.initial_env ast
 
 let rec specialize ast env =
   let ids = polymorphic_functions (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) ast in
   if IdSet.is_empty ids then
-    ast, env
+    specialize_variants ast env
   else
+    (prerr_endline (Util.string_of_list ", " string_of_id (IdSet.elements ids));
     let ast, env = specialize_ids ids ast in
-    specialize ast env
+    specialize ast env)

@@ -519,6 +519,10 @@ let rec anf (E_aux (e_aux, exp_annot) as exp) =
      let alast = anf last in
      AE_block (aexps, alast, typ_of exp)
 
+  | E_assign (LEXP_aux (LEXP_deref dexp, _), exp) ->
+     let gs = gensym () in
+     AE_let (gs, typ_of dexp, anf dexp, AE_assign (gs, typ_of dexp, anf exp), unit_typ)
+
   | E_assign (LEXP_aux (LEXP_id id, _), exp)
   | E_assign (LEXP_aux (LEXP_cast (_, id), _), exp) ->
      let aexp = anf exp in
@@ -748,6 +752,7 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_real, CT_real -> true
   | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) -> d1 = d2 && ctyp_equal ctyp1 ctyp2
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_equal ctyp1 ctyp2
+  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
   | _, _ -> false
 
 (* String representation of ctyps here is only for debugging and
@@ -769,6 +774,7 @@ let rec string_of_ctyp = function
   | CT_vector (true, ctyp) -> "vector(dec, " ^ string_of_ctyp ctyp ^ ")"
   | CT_vector (false, ctyp) -> "vector(inc, " ^ string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "list(" ^ string_of_ctyp ctyp ^ ")"
+  | CT_ref ctyp -> "ref(" ^ string_of_ctyp ctyp ^ ")"
 
 (** Convert a sail type into a C-type **)
 let rec ctyp_of_typ ctx typ =
@@ -814,6 +820,9 @@ let rec ctyp_of_typ ctx typ =
   | Typ_id id when string_of_id id = "string" -> CT_string
   | Typ_id id when string_of_id id = "real" -> CT_real
 
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "register" || string_of_id id = "ref" ->
+     CT_ref (ctyp_of_typ ctx typ)
+
   | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> Bindings.bindings)
   | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> Bindings.bindings)
   | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
@@ -830,6 +839,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
+  | CT_ref ctyp -> is_stack_ctyp ctyp
 
 let is_stack_typ ctx typ = is_stack_ctyp (ctyp_of_typ ctx typ)
 
@@ -1286,6 +1296,9 @@ let rec compile_aval ctx = function
   | AV_id (id, typ) ->
      [], (F_id id, ctyp_of_typ ctx (lvar_typ typ)), []
 
+  | AV_ref (id, typ) ->
+     [], (F_id id, CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
+
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], (F_lit (V_string (String.escaped str)), ctyp_of_typ ctx typ), []
 
@@ -1435,9 +1448,6 @@ let rec compile_aval ctx = function
      (F_id gs, CT_list ctyp),
      [iclear (CT_list ctyp) gs]
 
-  | AV_ref _ ->
-     c_error "Have AV_ref"
-
 let compile_funcall ctx id args typ =
   let setup = ref [] in
   let cleanup = ref [] in
@@ -1466,7 +1476,7 @@ let compile_funcall ctx id args typ =
       (F_id gs, ctyp)
     else
       c_error ~loc:(id_loc id)
-        (Printf.sprintf "Failure when setting up function arguments: %s and %s." (string_of_ctyp have_ctyp) (string_of_ctyp ctyp))
+        (Printf.sprintf "Failure when setting up function %s arguments: %s and %s." (string_of_id id) (string_of_ctyp have_ctyp) (string_of_ctyp ctyp))
   in
 
   let sargs = List.map2 setup_arg arg_ctyps args in
@@ -1725,11 +1735,18 @@ let rec compile_aexp ctx = function
      (* assign_ctyp is the type of the C variable we are assigning to,
         ctyp is the type of the C expression being assigned. These may
         be different. *)
+     let pointer_assign ctyp1 ctyp2 =
+       match ctyp1 with
+       | CT_ref ctyp1 -> ctyp_equal ctyp1 ctyp2
+       | _ -> false
+     in
      let assign_ctyp = ctyp_of_typ ctx assign_typ in
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let comment = "assign " ^ string_of_ctyp assign_ctyp ^ " := " ^ string_of_ctyp ctyp in
      if ctyp_equal assign_ctyp ctyp then
        setup @ [call (CL_id id)], CT_unit, (fun clexp -> icopy clexp unit_fragment), cleanup
+     else if pointer_assign assign_ctyp ctyp then
+       setup @ [call (CL_addr id)], CT_unit, (fun clexp -> icopy clexp unit_fragment), cleanup
      else if not (is_stack_ctyp assign_ctyp) && is_stack_ctyp ctyp then
        let gs = gensym () in
        setup @ [ icomment comment;
@@ -1850,7 +1867,8 @@ let rec pat_ids (Typ_aux (arg_typ_aux, _) as arg_typ) (P_aux (p_aux, (l, _)) as 
   | P_wild, _ -> let gs = gensym () in [gs]
   | P_var (pat, _), _ -> pat_ids arg_typ pat
   | P_typ (_, pat), _ -> pat_ids arg_typ pat
-  | _, _ -> c_error ~loc:l ("Cannot compile pattern " ^ string_of_pat pat ^ " to C")
+  | P_app _, _ -> let gs = gensym () in [gs]
+  | _, _ -> c_error ~loc:l ("Cannot compile pattern " ^ string_of_pat pat ^ " : " ^ string_of_typ arg_typ ^ " to C")
 
 (** Compile a sail type definition into a IR one. Most of the
    actual work of translating the typedefs into C is done by the code
@@ -2513,7 +2531,7 @@ let codegen_id id = string (sgen_id id)
 let upper_sgen_id id = Util.zencode_string (string_of_id id)
 let upper_codegen_id id = string (upper_sgen_id id)
 
-let sgen_ctyp = function
+let rec sgen_ctyp = function
   | CT_unit -> "unit"
   | CT_bit -> "int"
   | CT_bool -> "bool"
@@ -2529,8 +2547,9 @@ let sgen_ctyp = function
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
   | CT_string -> "sail_string"
   | CT_real -> "real"
+  | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
 
-let sgen_ctyp_name = function
+let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
   | CT_bit -> "int"
   | CT_bool -> "bool"
@@ -2546,6 +2565,7 @@ let sgen_ctyp_name = function
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
   | CT_string -> "sail_string"
   | CT_real -> "real"
+  | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
 
 let sgen_cval_param (frag, ctyp) =
   match ctyp with

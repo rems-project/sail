@@ -93,6 +93,7 @@ ctyp :: 'CT_' ::=
   | vector ( bool , ctyp )         :: :: vector
   | list ( ctyp )                  :: :: list
 % A vector type for non-bit vectors, and a list type.
+  | ref ( ctyp )                   :: :: ref
 
 cval :: 'CV_' ::=
   {{ ocaml fragment * ctyp }}

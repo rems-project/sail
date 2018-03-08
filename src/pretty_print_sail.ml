@@ -75,7 +75,7 @@ let rec doc_typ_pat (TP_aux (tpat_aux, _)) =
   | TP_wild -> string "_"
   | TP_var kid -> doc_kid kid
   | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
-                            
+
 let rec doc_nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
@@ -228,7 +228,7 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
   | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
   | P_wild -> string "_"
-  | P_as (pat, id) -> separate space [doc_pat pat; string "as"; doc_id id]
+  | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
   | P_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_pat pats ^^ string "|]"
   | _ -> string (string_of_pat pat)
@@ -486,7 +486,7 @@ let doc_spec (VS_aux(v,_)) =
   let doc_extern ext =
     let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
       utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
-    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"; "smt"; "interpreter"]) in
+    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"; "smt"; "interpreter"; "c"]) in
     if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with

@@ -11,6 +11,8 @@ val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
 
+val "eq_bit" : (bit, bit) -> bool
+
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
@@ -29,7 +31,7 @@ val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 /* sneaky deref with no effect necessary for bitfield writes */
 val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
-overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
+overload operator == = {eq_atom, eq_int, eq_bit, eq_vec, eq_string, eq_real, eq_anything}
 
 val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
@@ -142,8 +144,10 @@ val __ZeroExtendSlice = {lem: "extz_slice"} : forall 'm. (bits('m), int, int) ->
 
 val cast cast_unit_vec : bit -> bits(1)
 
-function cast_unit_vec bitzero = 0b0
-and cast_unit_vec bitone = 0b1
+function cast_unit_vec b = match b {
+  bitzero => 0b0,
+  bitone  => 0b1
+}
 
 val print = "prerr_endline" : string -> unit
 
@@ -363,8 +367,10 @@ val cast bool_to_bits : bool -> bits(1)
 function bool_to_bits x = if x then 0b1 else 0b0
 
 val cast bit_to_bool : bit -> bool
-function bit_to_bool bitone  = true
-and      bit_to_bool bitzero = false
+function bit_to_bool b = match b {
+  bitone  => true,
+  bitzero => false
+}
 
 infix 7 >>
 infix 7 <<
