@@ -1,0 +1,17 @@
+open import Pervasives_extra
+open import Sail_instr_kinds
+open import Sail_values
+open import Sail_operators_mwords
+open import Prompt_monad
+open import State
+
+let undefined_int () = (0:ii)
+val undefined_bitvector : forall 'a. Size 'a => integer -> mword 'a
+let undefined_bitvector len = duplicate B0 len
+
+val uint : forall 'a. Size 'a => mword 'a -> integer
+let uint = unsigned
+
+val slice : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
+let slice v lo len =
+  subrange_vec_dec v (lo + len - 1) lo
