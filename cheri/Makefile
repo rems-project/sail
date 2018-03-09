@@ -18,7 +18,7 @@ cheri128: $(CHERI128_SAILS)
 	$(SAIL) -ocaml -o $@ $^
 
 clean:
-	rm -rf cheri cheri128 _sbuild
+	rm -rf cheri cheri128 _sbuild inst_*.sail
 
 EXTRACT_INST=sed -n "/START_${1}\b/,/END_${1}\b/p" cheri_insts.sail | sed 's/^  //;1d;$$d' > inst_$1.sail
 extract: cheri_insts.sail
@@ -38,21 +38,30 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CSub)
 	$(call EXTRACT_INST,CPtrCmp)
 	$(call EXTRACT_INST,CIncOffset)
+	$(call EXTRACT_INST,CIncOffsetImmediate)
 	$(call EXTRACT_INST,CSetOffset)
 	$(call EXTRACT_INST,CSetBounds)
+	$(call EXTRACT_INST,CSetBoundsImmediate)
 	$(call EXTRACT_INST,CSetBoundsExact)
 	$(call EXTRACT_INST,CClearTag)
+	$(call EXTRACT_INST,CMOVX)
 	$(call EXTRACT_INST,ClearRegs)
 	$(call EXTRACT_INST,CFromPtr)
+	$(call EXTRACT_INST,CBuildCap)
+	$(call EXTRACT_INST,CCopyType)
 	$(call EXTRACT_INST,CCheckPerm)
 	$(call EXTRACT_INST,CCheckType)
+	$(call EXTRACT_INST,CTestSubset)
 	$(call EXTRACT_INST,CSeal)
 	$(call EXTRACT_INST,CUnseal)
 	$(call EXTRACT_INST,CCall)
+	$(call EXTRACT_INST,CCall2)
 	$(call EXTRACT_INST,CReturn)
-	$(call EXTRACT_INST,CBx)
+	$(call EXTRACT_INST,CBtag)
+	$(call EXTRACT_INST,CBz)
 	$(call EXTRACT_INST,CJALR)
 	$(call EXTRACT_INST,CLoad)
 	$(call EXTRACT_INST,CStore)
 	$(call EXTRACT_INST,CSC)
-	$(call EXTRACT_INST,CLC)                 
+	$(call EXTRACT_INST,CLC)
+

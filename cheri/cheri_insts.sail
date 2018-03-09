@@ -565,7 +565,7 @@ function clause execute (CSetBounds(cd, cb, rt)) =
 union clause ast = CSetBoundsImmediate : (regno, regno, bits(11))
 function clause execute (CSetBoundsImmediate(cd, cb, imm)) =
 {
-  /* START_CSetBoundsImmedate */
+  /* START_CSetBoundsImmediate */
   checkCP2usable();
   cb_val = readCapReg(cb);
   immU   = unsigned(imm);
@@ -1079,29 +1079,29 @@ function clause execute (CReturn()) =
 }
 
 union clause ast = CBX : (regno, bits(16), bool)
-function clause execute (CBX(cb, imm, invert)) =
+function clause execute (CBX(cb, imm, notset)) =
 {
-  /* START_CBx */
+  /* START_CBtag */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
-  else if (((readCapReg(cb)).tag) ^ invert) then
+  else if (((readCapReg(cb)).tag) ^ notset) then
     {
       let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
       delayedPC     = PC + offset;
       branchPending = 0b1;
     }
-  /* END_CBx */
+  /* END_CBtag */
 }
 
 union clause ast = CBZ : (regno, bits(16), bool)
-function clause execute (CBZ(cb, imm, invert)) =
+function clause execute (CBZ(cb, imm, notzero)) =
 {
   /* START_CBz */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
-  else if (((readCapReg(cb)) == null_cap) ^ invert) then
+  else if (((readCapReg(cb)) == null_cap) ^ notzero) then
     {
       let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
       delayedPC     = PC + offset;
