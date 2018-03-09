@@ -5,7 +5,9 @@ struct State ('a : Type) ('n : Int) = {
   Z : vector(1, dec, bit)
 }
 
-let myStateM : State(bit, 1) = {
+val myStateM : unit -> State(bit, 1) effect {undef}
+
+function myStateM () = {
   r : State(bit, 1) = undefined;
   r.N = 0b1;
   r.Z = 0b1;

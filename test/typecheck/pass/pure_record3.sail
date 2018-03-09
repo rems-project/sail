@@ -7,7 +7,9 @@ struct State ('a : Type) ('n : Int) = {
 
 register procState : State(bit, 1)
 
-let myStateM : State(bit, 1) = {
+val myStateM : unit -> State(bit, 1) effect {undef}
+
+function myStateM () = {
   r : State(bit, 1) = undefined;
   r.N = 0b1;
   r.Z = 0b1;

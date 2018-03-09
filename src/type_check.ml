@@ -3425,13 +3425,19 @@ let check_letdef orig_env (LB_aux (letbind, (l, _))) =
   begin
     match letbind with
     | LB_val (P_aux (P_typ (typ_annot, pat), _), bind) ->
-       let checked_bind = crule check_exp orig_env (strip_exp bind) typ_annot in
+       let checked_bind = propagate_exp_effect (crule check_exp orig_env (strip_exp bind) typ_annot) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
-       [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (orig_env, typ_annot, no_effect))), checked_bind), (l, None)))], env
+       if (BESet.is_empty (effect_set (effect_of checked_bind)) || !opt_no_effects)
+       then
+         [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (orig_env, typ_annot, no_effect))), checked_bind), (l, None)))], env
+       else typ_error l ("Top-level definition with effects " ^ string_of_effect (effect_of checked_bind))
     | LB_val (pat, bind) ->
-       let inferred_bind = irule infer_exp orig_env (strip_exp bind) in
+       let inferred_bind = propagate_exp_effect (irule infer_exp orig_env (strip_exp bind)) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) (typ_of inferred_bind) in
-       [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], env
+       if (BESet.is_empty (effect_set (effect_of inferred_bind)) || !opt_no_effects)
+       then
+         [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], env
+       else typ_error l ("Top-level definition with effects " ^ string_of_effect (effect_of inferred_bind))
   end
 
 let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
