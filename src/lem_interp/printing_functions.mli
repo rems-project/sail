@@ -26,6 +26,7 @@ type ppmode =
   | Interp_ascii
   | Interp_html
 val set_interp_ppmode : ppmode -> unit
+val set_color_enabled : bool -> unit
 
 val red : string -> string
 val blue : string -> string
