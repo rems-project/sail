@@ -568,14 +568,14 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
 let print_dot graph component : unit =
   match component with
   | root :: _ ->
-     print_endline ("// Dependency cycle including " ^ root);
-     print_endline ("digraph cycle_" ^ root ^ " {");
+     prerr_endline ("// Dependency cycle including " ^ root);
+     prerr_endline ("digraph cycle_" ^ root ^ " {");
      List.iter (fun caller ->
-       let print_edge callee = print_endline ("  \"" ^ caller ^ "\" -> \"" ^ callee ^ "\";") in
+       let print_edge callee = prerr_endline ("  \"" ^ caller ^ "\" -> \"" ^ callee ^ "\";") in
        Namemap.find caller graph
        |> Nameset.filter (fun id -> List.mem id component)
        |> Nameset.iter print_edge) component;
-     print_endline "}"
+     prerr_endline "}"
   | [] -> ()
 
 let def_of_component graph defset comp =

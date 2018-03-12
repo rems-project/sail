@@ -556,7 +556,6 @@ let zero_extend (vec, n) =
   then take m vec
   else replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
 
-
 let sign_extend (vec, n) =
   let m = Big_int.to_int n in
   match vec with
@@ -576,7 +575,7 @@ let shiftr (x, y) =
   let zeros = zeros y in
   let rbits = zeros @ x in
   take (List.length x) rbits
-  
+
 let shift_bits_right (x, y) =
   shiftr (x, uint(y))
 

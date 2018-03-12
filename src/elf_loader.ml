@@ -103,7 +103,14 @@ let read name =
   in
   (segments, e_entry, symbol_map)
 
-let load_segment seg =
+let write_sail_lib paddr i byte =
+  Sail_lib.wram (Big_int.add paddr (Big_int.of_int i)) byte
+
+let write_file chan paddr i byte =
+  output_string chan (Big_int.to_string (Big_int.add paddr (Big_int.of_int i)) ^ "\n");
+  output_string chan (string_of_int byte ^ "\n")
+
+let load_segment ?writer:(writer=write_sail_lib) seg =
   let open Elf_interpreted_segment in
   let (Byte_sequence.Sequence bs) = seg.elf64_segment_body in
   let paddr = seg.elf64_segment_paddr in
@@ -114,15 +121,15 @@ let load_segment seg =
   prerr_endline ("Segment base address: " ^ Big_int.to_string base);
   prerr_endline ("Segment physical address: " ^ Big_int.to_string paddr);
   print_segment seg;
-  List.iteri (fun i byte -> Sail_lib.wram (Big_int.add paddr (Big_int.of_int i)) byte) (List.map int_of_char bs)
+  List.iteri (writer paddr) (List.map int_of_char bs)
 
-let load_elf name =
+let load_elf ?writer:(writer=write_sail_lib) name =
   let segments, e_entry, symbol_map = read name in
   opt_elf_entry := e_entry;
   (if List.mem_assoc "tohost" symbol_map then
      let (_, _, tohost_addr, _, _) = List.assoc "tohost" symbol_map in
      opt_elf_tohost := tohost_addr);
-  List.iter load_segment segments
+  List.iter (load_segment ~writer:writer) segments
 
 (* The sail model can access this by externing a unit -> int function
    as Elf_loader.elf_entry. *)

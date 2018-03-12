@@ -66,6 +66,7 @@ let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_mono_split = ref ([]:((string * int) * string) list)
+let opt_process_elf : string option ref = ref None
 
 let options = Arg.align ([
   ( "-o",
@@ -90,6 +91,9 @@ let options = Arg.align ([
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
+  ( "-elf",
+    Arg.String (fun elf -> opt_process_elf := Some elf),
+    " process an elf file so that it can be executed by compiled C code");
   ( "-O",
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
@@ -243,6 +247,21 @@ let main() =
   else
     let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
     Util.opt_warnings := false; (* Don't show warnings during re-writing for now *)
+
+    begin match !opt_process_elf, !opt_file_out with
+    | Some elf, Some out ->
+       begin
+         let open Elf_loader in
+         let chan = open_out out in
+         load_elf ~writer:(write_file chan) elf;
+         close_out chan;
+         exit 0
+       end
+    | Some _, None ->
+       prerr_endline "Failure: No output file given for processed ELF (option -o).";
+       exit 1
+    | None, _ -> ()
+    end;
 
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
