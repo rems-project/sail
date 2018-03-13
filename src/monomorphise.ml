@@ -48,6 +48,12 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(* Could fix list:
+   - Can probably trigger non-termination in the analysis or constant
+     propagation with carefully constructed recursive (or mutually
+     recursive) functions
+*)
+
 open Parse_ast
 open Ast
 open Ast_util
