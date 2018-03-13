@@ -65,9 +65,10 @@ function h(b) = {
 }
 */
 
-val run : unit -> unit /*effect {escape}*/
+val run : unit -> unit effect {escape}
 
 function run () = {
+  assert(true);
   f(false,false);
   f(false,true);
   g(false,false);

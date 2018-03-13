@@ -54,16 +54,17 @@ echo > log
 
 if [ -z "$1" ]
 then
-    TESTS=`ls $TESTSDIR/pass`
+    TESTS=`find $TESTSDIR/pass -type f | sort`
 else
     TESTS="$@"
 fi
 
-for i in $TESTS;
+for i_full in $TESTS;
 do
     cd "$DIR"
+    i=`basename "$i_full"`
     echo "Running test $i" >> log
-    if "$SAILDIR/sail" -lem -lem_mwords -lem_lib Test_extra -o out $(< "$TESTSDIR/pass/$i") &>>log;
+    if "$SAILDIR/sail" -lem -lem_mwords -lem_lib Test_extra -o out $(< "$i_full") &>>log;
     then
         mv out.lem out_types.lem "$OUTPUTDIR"
 	if lem -ocaml -lib "$SAILDIR/src/lem_interp" \
