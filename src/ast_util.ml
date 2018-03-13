@@ -940,6 +940,11 @@ and tyvars_of_typ_arg (Typ_arg_aux (ta,_)) =
   | Typ_arg_typ typ -> tyvars_of_typ typ
   | Typ_arg_order _ -> KidSet.empty
 
+let tyvars_of_quant_item (QI_aux (qi, _)) = match qi with
+  | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
+     KidSet.singleton kid
+  | QI_const nc -> tyvars_of_nc nc
+
 let is_kid_generated kid = String.contains (string_of_kid kid) '#'
 
 let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =

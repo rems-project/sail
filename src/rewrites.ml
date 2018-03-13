@@ -1783,6 +1783,118 @@ let rewrite_defs_early_return (Defs defs) =
     { rewriters_base with rewrite_fun = rewrite_fun_early_return }
     (Defs (early_ret_spec @ defs))
 
+let swaptyp typ (l,tannot) = match tannot with
+  | Some (env, typ', eff) -> (l, Some (env, typ, eff))
+  | _ -> raise (Reporting_basic.err_unreachable l "swaptyp called with empty type annotation")
+
+let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
+  let pat,guard,exp,pannot = destruct_pexp pexp in
+  let exp = match guard with None -> exp
+    | Some exp' -> E_aux (E_block [exp';exp],(Parse_ast.Unknown,None)) in
+  fst (fold_exp
+    { (compute_exp_alg false (||) ) with
+      e_app = (fun (f, es) ->
+        let (rs, es) = List.split es in
+        (List.fold_left (||) (string_of_id f = string_of_id id) rs,
+         E_app (f, es)));
+      e_app_infix = (fun ((r1,e1), f, (r2,e2)) ->
+        (r1 || r2 || (string_of_id f = string_of_id id),
+         E_app_infix (e1, f, e2))) }
+    exp)
+
+(* Split out function clauses for individual union constructor patterns
+   (e.g. AST nodes) into auxiliary functions.  Used for the execute function. *)
+let rewrite_split_fun_constr_pats fun_name (Defs defs) =
+  let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, e_o, clauses), ((l, _) as fdannot))) =
+    let rec_clauses, clauses = List.partition is_funcl_rec clauses in
+    let clauses, aux_funs =
+      List.fold_left
+        (fun (clauses, aux_funs) (FCL_aux (FCL_Funcl (id, pexp), fannot) as clause) ->
+           let pat, guard, exp, annot = destruct_pexp pexp in
+           match pat with
+             | P_aux (P_app (constr_id, args), pannot) ->
+                let argstup_typ = tuple_typ (List.map pat_typ_of args) in
+                let pannot' = swaptyp argstup_typ pannot in
+                let pat' = P_aux (P_tup args, pannot') in
+                let pexp' = construct_pexp (pat', guard, exp, annot) in
+                let aux_fun_id = prepend_id (fun_name ^ "_") constr_id in
+                let aux_funcl = FCL_aux (FCL_Funcl (aux_fun_id, pexp'), pannot') in
+                begin
+                  match Bindings.find_opt aux_fun_id aux_funs with
+                    | Some aux_clauses ->
+                       clauses,
+                       Bindings.add aux_fun_id (aux_clauses @ [aux_funcl]) aux_funs
+                    | None ->
+                       let argpats, argexps = List.split (List.mapi
+                         (fun idx (P_aux (paux, a)) ->
+                            let id = match paux with
+                              | P_as (_, id) | P_id id -> id
+                              | _ -> mk_id ("arg" ^ string_of_int idx)
+                            in
+                            P_aux (P_id id, a), E_aux (E_id id, a))
+                         args)
+                       in
+                       let pexp = construct_pexp
+                         (P_aux (P_app (constr_id, argpats), pannot),
+                          None,
+                          E_aux (E_app (aux_fun_id, argexps), annot),
+                          annot)
+                       in
+                       clauses @ [FCL_aux (FCL_Funcl (id, pexp), fannot)],
+                       Bindings.add aux_fun_id [aux_funcl] aux_funs
+                end
+             | _ -> clauses @ [clause], aux_funs)
+        ([], Bindings.empty) clauses
+    in
+    let add_aux_def id funcls defs =
+      let env, args_typ, ret_typ = match funcls with
+        | FCL_aux (FCL_Funcl (_, pexp), _) :: _ ->
+           let pat, _, exp, _ = destruct_pexp pexp in
+           env_of exp, pat_typ_of pat, typ_of exp
+        | _ ->
+           raise (Reporting_basic.err_unreachable l
+             "rewrite_split_fun_constr_pats: empty auxiliary function")
+      in
+      let eff = List.fold_left
+        (fun eff (FCL_aux (FCL_Funcl (_, pexp), _)) ->
+           let _, _, exp, _ = destruct_pexp pexp in
+           union_effects eff (effect_of exp))
+        no_effect funcls
+      in
+      let fun_typ = function_typ args_typ ret_typ eff in
+      let typquant = match typquant with
+        | TypQ_aux (TypQ_tq qis, l) ->
+           let qis =
+             List.filter
+               (fun qi -> KidSet.subset (tyvars_of_quant_item qi) (tyvars_of_typ fun_typ))
+               qis
+           in
+           TypQ_aux (TypQ_tq qis, l)
+        | _ -> typquant
+      in
+      let val_spec =
+        VS_aux (VS_val_spec
+          (mk_typschm typquant fun_typ, id, (fun _ -> None), false),
+          (Parse_ast.Unknown, None))
+      in
+      let fundef = FD_aux (FD_function (r_o, t_o, e_o, funcls), fdannot) in
+      [DEF_spec val_spec; DEF_fundef fundef] @ defs
+    in
+    Bindings.fold add_aux_def aux_funs
+      [DEF_fundef (FD_aux (FD_function (r_o, t_o, e_o, rec_clauses @ clauses), fdannot))]
+  in
+  let typquant = List.fold_left (fun tq def -> match def with
+    | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tq, _), _), id, _, _), _))
+      when string_of_id id = fun_name -> tq
+    | _ -> tq) (mk_typquant []) defs
+  in
+  let defs = List.fold_right (fun def defs -> match def with
+    | DEF_fundef fundef when string_of_id (id_of_fundef fundef) = fun_name ->
+       rewrite_fundef typquant fundef @ defs
+    | _ -> def :: defs) defs []
+  in
+  Defs defs
+
 (* Propagate effects of functions, if effect checking and propagation
    have not been performed already by the type checker. *)
 let rewrite_fix_val_specs (Defs defs) =
@@ -1841,21 +1953,6 @@ let rewrite_fix_val_specs (Defs defs) =
     let (val_specs, funcls) = List.fold_left rewrite_funcl (val_specs, []) funcls in
     (* Repeat once to cross-propagate effects between clauses *)
     let (val_specs, funcls) = List.fold_left rewrite_funcl (val_specs, []) funcls in
-    let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
-      let pat,guard,exp,pannot = destruct_pexp pexp in
-      let exp = match guard with None -> exp
-        | Some exp' -> E_aux (E_block [exp';exp],(Parse_ast.Unknown,None)) in
-      fst (fold_exp
-        { (compute_exp_alg false (||) ) with
-          e_app = (fun (f, es) ->
-            let (rs, es) = List.split es in
-            (List.fold_left (||) (string_of_id f = string_of_id id) rs,
-             E_app (f, es)));
-          e_app_infix = (fun ((r1,e1), f, (r2,e2)) ->
-            (r1 || r2 || (string_of_id f = string_of_id id),
-             E_app_infix (e1, f, e2))) }
-        exp)
-    in
     let recopt =
       if List.exists is_funcl_rec funcls then
         Rec_aux (Rec_rec, Parse_ast.Unknown)
@@ -2592,10 +2689,6 @@ let rewrite_defs_pat_lits =
  * internal let-expressions, or internal plet-expressions ended by a term that does not
  * access memory or registers and does not update variables *)
 
-let swaptyp typ (l,tannot) = match tannot with
-  | Some (env, typ', eff) -> (l, Some (env, typ, eff))
-  | _ -> raise (Reporting_basic.err_unreachable l "swaptyp called with empty type annotation")
-
 type 'a updated_term =
   | Added_vars of 'a exp * 'a pat
   | Same_vars of 'a exp
@@ -2984,6 +3077,7 @@ let rewrite_defs_lem = [
   ("guarded_pats", rewrite_defs_guarded_pats);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("fix_val_specs", rewrite_fix_val_specs);
+  ("split_execute", rewrite_split_fun_constr_pats "execute");
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("constraint", rewrite_constraint); *)
