@@ -1522,7 +1522,7 @@ let rec compile_match ctx apat cval case_label =
        | CT_tup ctyps ->
           let instrs, cleanup, _ = List.fold_left2 fold ([], [], 0) apats ctyps in
           instrs, cleanup
-       | _ -> assert false
+       | _ -> failwith ("AP_tup with ctyp " ^ string_of_ctyp ctyp)
      end
   | AP_app (ctor, apat), (frag, ctyp) ->
      begin match ctyp with
@@ -1855,21 +1855,6 @@ and compile_block ctx = function
      let gs = gensym () in
      setup @ [idecl CT_unit gs; call (CL_id gs)] @ cleanup @ rest
 
-(* FIXME: this function is a bit of a hack *)
-let rec pat_ids (Typ_aux (arg_typ_aux, _) as arg_typ) (P_aux (p_aux, (l, _)) as pat) =
-  match p_aux, arg_typ_aux with
-  | P_id id, _ -> [id]
-  | P_tup pats, Typ_tup arg_typs when List.length pats = List.length arg_typs ->
-     List.concat (List.map2 pat_ids arg_typs pats)
-  | P_tup pats, _ -> c_error ~loc:l ("Cannot compile tuple pattern " ^ string_of_pat pat ^ " to C, as it doesn't have tuple type.")
-  | P_lit (L_aux (L_unit, _)), _ -> let gs = gensym () in [gs]
-  | P_wild, Typ_tup arg_typs -> List.map (fun _ -> let gs = gensym () in gs) arg_typs
-  | P_wild, _ -> let gs = gensym () in [gs]
-  | P_var (pat, _), _ -> pat_ids arg_typ pat
-  | P_typ (_, pat), _ -> pat_ids arg_typ pat
-  | P_app _, _ -> let gs = gensym () in [gs]
-  | _, _ -> c_error ~loc:l ("Cannot compile pattern " ^ string_of_pat pat ^ " : " ^ string_of_typ arg_typ ^ " to C")
-
 (** Compile a sail type definition into a IR one. Most of the
    actual work of translating the typedefs into C is done by the code
    generator, as it's easy to keep track of structs, tuples and unions
@@ -2066,6 +2051,34 @@ let fix_exception ctx instrs =
   let instrs = List.map (map_try_block (fix_exception_block ctx)) instrs in
   fix_exception_block ctx instrs
 
+let arg_pats ctx (Typ_aux (arg_typ_aux, _) as arg_typ) (P_aux (p_aux, (l, _)) as pat) =
+  match p_aux, arg_typ_aux with
+  | P_tup pats, Typ_tup arg_typs when List.length pats = List.length arg_typs ->
+     List.map2 (fun pat arg_typ -> pat, ctyp_of_typ ctx arg_typ) pats arg_typs
+  | P_wild, Typ_tup arg_typs -> List.map (fun arg_typ -> pat, ctyp_of_typ ctx arg_typ) arg_typs
+  | _, _ -> [(pat, ctyp_of_typ ctx arg_typ)]
+
+let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat, ctyp) =
+  match p_aux with
+  | P_id id -> (id, ([], []))
+  | P_wild -> let gs = gensym () in (gs, ([], []))
+  | P_tup [] | P_lit (L_aux (L_unit, _)) -> let gs = gensym () in (gs, ([], []))
+  | P_var (pat, _) -> compile_arg_pat ctx label (pat, ctyp)
+  | P_typ (_, pat) -> compile_arg_pat ctx label (pat, ctyp)
+  | _ ->
+     let apat = anf_pat pat in
+     let gs = gensym () in
+     let destructure, cleanup = compile_match ctx apat (F_id gs, ctyp) label in
+     (gs, (destructure, cleanup))
+
+let combine_destructure_cleanup xs = List.concat (List.map fst xs), List.concat (List.rev (List.map snd xs))
+
+let fix_destructure fail_label = function
+  | ([], cleanup) -> ([], cleanup)
+  | destructure, cleanup ->
+     let body_label = label "fundef_body_" in
+     (destructure @ [igoto body_label; ilabel fail_label; imatch_failure (); ilabel body_label], cleanup)
+
 let letdef_count = ref 0
 
 (** Compile a Sail toplevel definition into an IR definition **)
@@ -2086,28 +2099,28 @@ let rec compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
-     if string_of_id id = "main" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
-     let gs = gensym () in
-     let pat = match pat with
-       | P_aux (P_tup [], annot) -> P_aux (P_lit (mk_lit L_unit), annot)
-       | _ -> pat
-     in
+     let fundef_label = label "fundef_fail_" in
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typ, ret_typ = match fn_typ with
        | Typ_fn (arg_typ, ret_typ, _) -> arg_typ, ret_typ
        | _ -> assert false
      in
+     let compiled_args = List.map (compile_arg_pat ctx fundef_label) (arg_pats ctx arg_typ pat) in
+     let gs = gensym () in
+     let destructure, destructure_cleanup =
+       compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label
+     in
      if is_stack_ctyp ctyp then
-       let instrs = [idecl ctyp gs] @ setup @ [call (CL_id gs)] @ cleanup @ [ireturn (F_id gs, ctyp)] in
+       let instrs = destructure @ [idecl ctyp gs] @ setup @ [call (CL_id gs)] @ cleanup @ destructure_cleanup @ [ireturn (F_id gs, ctyp)] in
        let instrs = fix_early_stack_return ctx instrs in
        let instrs = fix_exception ctx instrs in
-       [CDEF_fundef (id, None, pat_ids arg_typ pat, instrs)], ctx
+       [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], ctx
      else
-       let instrs = setup @ [call (CL_addr gs)] @ cleanup in
+       let instrs = destructure @ setup @ [call (CL_addr gs)] @ cleanup @ destructure_cleanup in
        let instrs = fix_early_return (CL_addr gs) ctx instrs in
        let instrs = fix_exception ctx instrs in
-       [CDEF_fundef (id, Some gs, pat_ids arg_typ pat, instrs)], ctx
+       [CDEF_fundef (id, Some gs, List.map fst compiled_args, instrs)], ctx
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
      c_error ~loc:l "Encountered function with no clauses"
