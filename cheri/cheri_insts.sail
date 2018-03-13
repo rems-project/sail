@@ -1167,10 +1167,10 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
     raise_c2_exception(CapEx_PermitLoadViolation, cb)
   else
     {
-      size   = wordWidthBytes(width);
-      cursor = getCapCursor(cb_val);
-      vAddr  = cursor + unsigned(rGPR(rt)) + (size*signed(offset));
-      vAddr64= to_bits(64, vAddr);
+      let 'size   = wordWidthBytes(width);
+      let cursor  = getCapCursor(cb_val);
+      let vAddr   = cursor + unsigned(rGPR(rt)) + (size*signed(offset));
+      let vAddr64 = to_bits(64, vAddr);
       if ((vAddr + size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < getCapBase(cb_val)) then
@@ -1180,23 +1180,14 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
       else
         {
           pAddr      = (TLBTranslate(vAddr64, LoadData));
-          widthBytes = wordWidthBytes(width);
           memResult : bits(64) = if (linked) then
               {
                 CP0LLBit  = 0b1;
                 CP0LLAddr = pAddr;
-                if widthBytes == 1 then extendLoad(MEMr_reserve_wrapper(pAddr, 1), signext)
-                else if widthBytes == 2 then extendLoad(MEMr_reserve_wrapper(pAddr, 2), signext)
-                else if widthBytes == 4 then extendLoad(MEMr_reserve_wrapper(pAddr, 4), signext)
-                else extendLoad(MEMr_reserve_wrapper(pAddr, 8), signext)
+                extendLoad(MEMr_reserve_wrapper(pAddr, size), signext)
               }
             else
-              {
-                if widthBytes == 1 then extendLoad(MEMr_wrapper(pAddr, 1), signext)
-                else if widthBytes == 2 then extendLoad(MEMr_wrapper(pAddr, 2), signext)
-                else if widthBytes == 4 then extendLoad(MEMr_wrapper(pAddr, 4), signext)
-                else extendLoad(MEMr_wrapper(pAddr, 8), signext)
-              };
+              extendLoad(MEMr_wrapper(pAddr, size), signext);
           wGPR(rd) = memResult;
         }
     }
