@@ -53,6 +53,7 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CCheckType)
 	$(call EXTRACT_INST,CTestSubset)
 	$(call EXTRACT_INST,CSeal)
+	$(call EXTRACT_INST,CCSeal)
 	$(call EXTRACT_INST,CUnseal)
 	$(call EXTRACT_INST,CCall)
 	$(call EXTRACT_INST,CCall2)
