@@ -1198,6 +1198,9 @@ let get_id = function
 
 module StringSet = Set.Make(String)
 
+(* Strictly speaking, Lem doesn't support multiple clauses for a single function
+   joined by "and", although it has worked for Isabelle before.  However, all
+   the funcls should have been merged by the merge_funcls rewrite now. *)   
 let doc_fundef_rhs_lem (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
   separate_map (hardline ^^ string "and ") doc_funcl_lem funcls
 

@@ -2952,6 +2952,26 @@ let rewrite_defs_remove_e_assign (Defs defs) =
     ; rewrite_defs = rewrite_defs_base
     } (Defs (loop_specs @ defs))
 
+let merge_funcls (Defs defs) =
+  let merge_function (FD_aux (FD_function (r,t,e,fcls),ann) as f) =
+    match fcls with
+    | [] | [_] -> f
+    | (FCL_aux (FCL_Funcl (id,_),(l,_)))::_ ->
+       let var = mk_id "merge#var" in
+       let l_g = Parse_ast.Generated l in
+       let ann_g : _ * tannot = (l_g,None) in
+       let clauses = List.map (fun (FCL_aux (FCL_Funcl (_,pexp),_)) -> pexp) fcls in
+       FD_aux (FD_function (r,t,e,[
+         FCL_aux (FCL_Funcl (id,Pat_aux (Pat_exp (P_aux (P_id var,ann_g),
+                                                  E_aux (E_case (E_aux (E_id var,ann_g),clauses),ann_g)),ann_g)),
+                  (l,None))]),ann)
+  in
+  let merge_in_def = function
+    | DEF_fundef f -> DEF_fundef (merge_function f)
+    | DEF_internal_mutrec fs -> DEF_internal_mutrec (List.map merge_function fs)
+    | d -> d
+  in Defs (List.map merge_in_def defs)
+
 let recheck_defs defs = fst (check initial_env defs)
 
 let rewrite_defs_lem = [
@@ -2980,6 +3000,7 @@ let rewrite_defs_lem = [
   ("internal_lets", rewrite_defs_internal_lets);
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
   ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
+  ("merge function clauses", merge_funcls);
   ("recheck_defs", recheck_defs)
   ]
 
