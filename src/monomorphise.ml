@@ -224,12 +224,48 @@ let kidset_bigunion = function
   | [] -> KidSet.empty
   | h::t -> List.fold_left KidSet.union h t
 
+let rec flatten_constraints = function
+  | [] -> []
+  | (NC_aux (NC_and (nc1,nc2),_))::t -> flatten_constraints (nc1::nc2::t)
+  | h::t -> h::(flatten_constraints t)
+
+(* NB: this only looks for direct equalities with the given kid.  It would be
+   better in principle to find the entire set of equal kids, but it isn't
+   necessary to deal with the fresh kids produced by the type checker while
+   checking P_var patterns, so we don't do it for now. *)
+let equal_kids_ncs kid ncs =
+  let is_eq = function
+    | NC_aux (NC_equal (Nexp_aux (Nexp_var var1,_), Nexp_aux (Nexp_var var2,_)),_) ->
+       if Kid.compare kid var1 == 0 then Some var2 else
+         if Kid.compare kid var2 == 0 then Some var1 else
+           None
+    | _ -> None
+  in
+  let kids = Util.map_filter is_eq ncs in
+  List.fold_left (fun s k -> KidSet.add k s) (KidSet.singleton kid) kids
+
+let equal_kids env kid =
+  let ncs = flatten_constraints (Env.get_constraints env) in
+  equal_kids_ncs kid ncs
+
 (* TODO: deal with non-set constraints, intersections, etc somehow *)
 let extract_set_nc l var nc =
-  let rec aux (NC_aux (nc,l)) =
+  let vars = equal_kids_ncs var [nc] in
+  let rec aux_or (NC_aux (nc,l)) =
+    match nc with
+    | NC_equal (Nexp_aux (Nexp_var id,_), Nexp_aux (Nexp_constant n,_))
+        when KidSet.mem id vars ->
+       Some [n]
+    | NC_or (nc1,nc2) ->
+       (match aux_or nc1, aux_or nc2 with
+       | Some l1, Some l2 -> Some (l1 @ l2)
+       | _, _ -> None)
+    | _ -> None
+  in
+  let rec aux (NC_aux (nc,l) as nc_full) =
     let re nc = NC_aux (nc,l) in
     match nc with
-    | NC_set (id,is) when Kid.compare id var = 0 -> Some (is,re NC_true)
+    | NC_set (id,is) when KidSet.mem id vars -> Some (is,re NC_true)
     | NC_and (nc1,nc2) ->
        (match aux nc1, aux nc2 with
        | None, None -> None
@@ -237,11 +273,16 @@ let extract_set_nc l var nc =
        | Some (is,nc1'), None -> Some (is, re (NC_and (nc1',nc2)))
        | Some _, Some _ ->
           raise (Reporting_basic.err_general l ("Multiple set constraints for " ^ string_of_kid var)))
+    | NC_or _ ->
+       (match aux_or nc_full with
+       | Some is -> Some (is, re NC_true)
+       | None -> None)
     | _ -> None
   in match aux nc with
   | Some is -> is
   | None ->
-     raise (Reporting_basic.err_general l ("No set constraint for " ^ string_of_kid var))
+     raise (Reporting_basic.err_general l ("No set constraint for " ^ string_of_kid var ^
+                                              " in " ^ string_of_n_constraint nc))
 
 let rec peel = function
   | [], l -> ([], l)
@@ -917,27 +958,6 @@ let keep_undef_typ value =
      E_aux (E_cast (typ_of_annot eann,value),(Generated Unknown,snd eann))
   | _ -> value
 
-let rec flatten_constraints = function
-  | [] -> []
-  | (NC_aux (NC_and (nc1,nc2),_))::t -> flatten_constraints (nc1::nc2::t)
-  | h::t -> h::(flatten_constraints t)
-
-(* NB: this only looks for direct equalities with the given kid.  It would be
-   better in principle to find the entire set of equal kids, but it isn't
-   necessary to deal with the fresh kids produced by the type checker while
-   checking P_var patterns, so we don't do it for now. *)
-let equal_kids env kid =
-  let is_eq = function
-    | NC_aux (NC_equal (Nexp_aux (Nexp_var var1,_), Nexp_aux (Nexp_var var2,_)),_) ->
-       if Kid.compare kid var1 == 0 then Some var2 else
-         if Kid.compare kid var2 == 0 then Some var1 else
-           None
-    | _ -> None
-  in
-  let ncs = flatten_constraints (Env.get_constraints env) in
-  let kids = Util.map_filter is_eq ncs in
-  List.fold_left (fun s k -> KidSet.add k s) (KidSet.singleton kid) kids
-
 let freshen_id =
   let counter = ref 0 in
   fun id ->
@@ -1053,7 +1073,8 @@ let stop_at_false_assertions e =
 let apply_pat_choices choices =
   let rec rewrite_ncs (NC_aux (nc,l) as nconstr) =
     match nc with
-    | NC_set (kid,is) -> begin
+    | NC_set _
+    | NC_or _ -> begin
       match List.assoc l choices with
       | choice,max,_ ->
          NC_aux ((if choice < max then NC_true else NC_false), Generated l)
@@ -3175,10 +3196,24 @@ let rec sets_from_assert e =
          | Some kid -> KBindings.singleton kid (l,is)
       with Not_found -> KBindings.empty
   in
-  let rec sets_from_nc (NC_aux (nc,l)) =
+  let rec set_from_nc_or (NC_aux (nc,_)) =
+    match nc with
+    | NC_equal (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant n,_)) ->
+       Some (kid,[n])
+    | NC_or (nc1, nc2) ->
+       (match set_from_nc_or nc1, set_from_nc_or nc2 with
+       | Some (kid1,l1), Some (kid2,l2) when Kid.compare kid1 kid2 == 0 -> Some (kid1,l1 @ l2)
+       | _ -> None)
+    | _ -> None
+  in
+  let rec sets_from_nc (NC_aux (nc,l) as nc_full) =
     match nc with
     | NC_and (nc1,nc2) -> merge_set_asserts_by_kid (sets_from_nc nc1) (sets_from_nc nc2)
     | NC_set (kid,is) -> KBindings.singleton kid (l,is)
+    | NC_or _ ->
+       (match set_from_nc_or nc_full with
+       | Some (kid, is) -> KBindings.singleton kid (l,is)
+       | None -> KBindings.empty)
     | _ -> KBindings.empty
   in
   match e with
