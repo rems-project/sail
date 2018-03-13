@@ -12,6 +12,10 @@ typedef int unit;
 
 #define UNIT 0
 
+unit undefined_unit(const unit u) {
+  return UNIT;
+}
+
 typedef struct {
   mp_bitcnt_t len;
   mpz_t *bits;

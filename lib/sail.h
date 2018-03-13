@@ -12,6 +12,10 @@ typedef int unit;
 
 #define UNIT 0
 
+unit undefined_unit(const unit u) {
+  return UNIT;
+}
+
 typedef struct {
   mp_bitcnt_t len;
   mpz_t *bits;
@@ -867,7 +871,7 @@ void load_image(char *file) {
   FILE *fp = fopen(file, "r");
 
   if (!fp) {
-    fprintf(stderr, "Image file could not be loaded\n");
+    fprintf(stderr, "Image file %s could not be loaded\n", file);
     exit(EXIT_FAILURE);
   }
 
@@ -898,8 +902,7 @@ void load_instr(uint64_t addr, uint32_t instr) {
 
 // ***** Setup and cleanup functions for library code *****
 
-void setup_library(char *file) {
-  load_image(file);
+void setup_library(void) {
   mpf_set_default_prec(FLOAT_PRECISION);
   mpz_init(eq_bits_test);
 }

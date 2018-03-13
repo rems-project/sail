@@ -837,7 +837,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_uint64 _ | CT_int64 | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
   | CT_bv _ | CT_mpz | CT_real | CT_string | CT_list _ | CT_vector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
-  | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors
+  | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (*FIXME*)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> is_stack_ctyp ctyp
 
@@ -1498,7 +1498,7 @@ let compile_funcall ctx id args typ =
 
 let rec compile_match ctx apat cval case_label =
   match apat, cval with
-  | AP_id pid, (frag, ctyp) when is_ct_variant ctyp ->
+  | AP_id pid, (frag, ctyp) when Env.is_union_constructor pid ctx.tc_env ->
      [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind (string_of_id pid))), CT_bool) case_label],
      []
   | AP_global (pid, _), _ -> [icopy (CL_id pid) cval], []

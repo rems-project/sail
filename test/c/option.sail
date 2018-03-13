@@ -1,0 +1,40 @@
+default Order dec
+
+val print = "print_endline" : string -> unit
+
+val "print_int" : (string, int) -> unit
+val "print_bits" : forall 'n. (string, vector('n, dec, bit)) -> unit
+
+union option ('a : Type) = {
+  None : unit,
+  Some : 'a
+}
+
+union soption ('a : Type) = {
+  sNone : unit,
+  sSome : 'a
+}
+
+val main : unit -> unit
+
+function main () = {
+  let x : option(int) = Some(5);
+  let y : option(int) = None();
+  let z : option(vector(4, dec, bit)) = Some(0xF);
+
+  match x {
+    Some(a) => print_int("a = ", 5),
+    None()  => print("None")
+  };
+
+  match z {
+    Some(b) => print_bits("b = ", b),
+    None()  => print("None")
+  };
+
+  let q : soption(vector(4, dec, bit)) = sSome(0xA);
+
+  match q {
+    sSome(c) => print_bits("c = ", c)
+  }
+}

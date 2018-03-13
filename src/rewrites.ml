@@ -3036,6 +3036,8 @@ let rewrite_defs_c = [
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
   ("sizeof", rewrite_sizeof);
+  ("merge function clauses", merge_funcls);
+  ("recheck_defs", recheck_defs)
   ]
 
 let rewrite_defs_interpreter = [
