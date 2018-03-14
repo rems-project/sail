@@ -30,19 +30,34 @@ end
 
 declare {isabelle} termination_argument foreachM = automatic
 
-val bool_of_bitU_undef : forall 'rv 'e. bitU -> monad 'rv bool 'e
-let bool_of_bitU_undef = function
+val bool_of_bitU_fail : forall 'rv 'e. bitU -> monad 'rv bool 'e
+let bool_of_bitU_fail = function
+  | B0 -> return false
+  | B1 -> return true
+  | BU -> Fail "bool_of_bitU"
+end
+
+val bool_of_bitU_oracle : forall 'rv 'e. bitU -> monad 'rv bool 'e
+let bool_of_bitU_oracle = function
   | B0 -> return false
   | B1 -> return true
   | BU -> undefined_bool ()
 end
 
-val bools_of_bitUs : forall 'rv 'e. list bitU -> monad 'rv (list bool) 'e
-let bools_of_bitUs bits =
+val bools_of_bits_oracle : forall 'rv 'e. list bitU -> monad 'rv (list bool) 'e
+let bools_of_bits_oracle bits =
   foreachM bits []
     (fun b bools ->
-      bool_of_bitU_undef b >>= (fun b ->
+      bool_of_bitU_oracle b >>= (fun b ->
       return (bools ++ [b])))
+
+val of_bits_oracle : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
+let of_bits_oracle bits =
+  bools_of_bits_oracle bits >>= (fun bs ->
+  return (of_bools bs))
+
+val of_bits_fail : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
+let of_bits_fail bits = maybe_fail "of_bits" (of_bits bits)
 
 val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e

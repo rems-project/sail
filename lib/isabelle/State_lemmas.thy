@@ -26,6 +26,8 @@ lemma liftState_exclResult[simp]: "liftState r (excl_result ()) = excl_resultS (
 lemma liftState_barrier[simp]: "liftState r (barrier bk) = returnS ()" by (auto simp: barrier_def)
 lemma liftState_footprint[simp]: "liftState r (footprint ()) = returnS ()" by (auto simp: footprint_def)
 lemma liftState_undefined[simp]: "liftState r (undefined_bool ()) = undefined_boolS ()" by (auto simp: undefined_bool_def)
+lemma liftState_maybe_fail[simp]: "liftState r (maybe_fail msg x) = maybe_failS msg x"
+  by (auto simp: maybe_fail_def maybe_failS_def split: option.splits)
 
 lemma liftState_try_catch[simp]:
   "liftState r (try_catch m h) = try_catchS (liftState r m) (liftState r \<circ> h)"
@@ -47,19 +49,26 @@ lemma liftState_try_catchR[simp]:
   "liftState r (try_catchR m h) = try_catchSR (liftState r m) (liftState r \<circ> h)"
   by (auto simp: try_catchR_def try_catchSR_def sum.case_distrib cong: sum.case_cong)
 
-lemma liftState_read_mem_BC[simp]:
+lemma liftState_read_mem_BC:
   assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
   shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
-  using assms by (auto simp: read_mem_def read_memS_def read_mem_bytesS_def)
-lemmas liftState_read_mem[simp] =
-  liftState_read_mem_BC[OF unsigned_bits_of_mword] liftState_read_mem_BC[OF unsigned_bits_of_bitU_list]
+  using assms
+  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def split: option.splits)
+
+lemma liftState_read_mem[simp]:
+  "\<And>a. liftState r (read_mem BC_mword BC_mword rk a sz) = read_memS BC_mword BC_mword rk a sz"
+  "\<And>a. liftState r (read_mem BC_bitU_list BC_bitU_list rk a sz) = read_memS BC_bitU_list BC_bitU_list rk a sz"
+  by (auto simp: liftState_read_mem_BC)
 
 lemma liftState_write_mem_ea_BC:
   assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
-  shows "liftState r (write_mem_ea BCa rk a sz) = write_mem_eaS BCa rk a sz"
+  shows "liftState r (write_mem_ea BCa rk a sz) = write_mem_eaS BCa rk a (nat sz)"
   using assms by (auto simp: write_mem_ea_def write_mem_eaS_def)
-lemmas liftState_write_mem_ea[simp] =
-  liftState_write_mem_ea_BC[OF unsigned_bits_of_mword] liftState_write_mem_ea_BC[OF unsigned_bits_of_bitU_list]
+
+lemma liftState_write_mem_ea[simp]:
+  "\<And>a. liftState r (write_mem_ea BC_mword rk a sz) = write_mem_eaS BC_mword rk a (nat sz)"
+  "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = write_mem_eaS BC_bitU_list rk a (nat sz)"
+  by (auto simp: liftState_write_mem_ea_BC)
 
 lemma liftState_write_mem_val:
   "liftState r (write_mem_val BC v) = write_mem_valS BC v"
@@ -80,7 +89,7 @@ qed
 lemma liftState_write_reg_updateS:
   assumes "\<And>s. set_regval' (name reg) (regval_of reg v) s = Some (write_to reg v s)"
   shows "liftState (get_regval', set_regval') (write_reg reg v) = updateS (regstate_update (write_to reg v))"
-  using assms by (auto simp: write_reg_def bindS_readS updateS_def returnS_def)
+  using assms by (auto simp: write_reg_def updateS_def returnS_def bindS_readS)
 
 lemma liftState_iter_aux[simp]:
   shows "liftState r (iter_aux i f xs) = iterS_aux i (\<lambda>i x. liftState r (f i x)) xs"

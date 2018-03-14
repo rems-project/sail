@@ -23,10 +23,10 @@ Sail_values.thy: ../../src/gen_lib/sail_values.lem Sail_instr_kinds.thy
 Sail_operators.thy: ../../src/gen_lib/sail_operators.lem Sail_values.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_operators_mwords.thy: ../../src/gen_lib/sail_operators_mwords.lem Sail_operators.thy
+Sail_operators_mwords.thy: ../../src/gen_lib/sail_operators_mwords.lem Sail_operators.thy Prompt.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_operators_bitlists.thy: ../../src/gen_lib/sail_operators_bitlists.lem Sail_operators.thy
+Sail_operators_bitlists.thy: ../../src/gen_lib/sail_operators_bitlists.lem Sail_operators.thy Prompt.thy
 	lem -isa -outdir . -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 Prompt_monad.thy: ../../src/gen_lib/prompt_monad.lem Sail_values.thy

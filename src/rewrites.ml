@@ -95,13 +95,13 @@ let simple_num l n = E_aux (
     (atom_typ (Nexp_aux (Nexp_constant n, gen_loc l))))
 
 let effectful_effs = function
-  | Effect_aux (Effect_set effs, _) ->
-    List.exists
+  | Effect_aux (Effect_set effs, _) -> not (effs = [])
+    (*List.exists
       (fun (BE_aux (be,_)) ->
        match be with
        | BE_nondet | BE_unspec | BE_undef | BE_lset -> false
        | _ -> true
-      ) effs
+      ) effs*)
 
 let effectful eaux = effectful_effs (effect_of (propagate_exp_effect eaux))
 let effectful_pexp pexp = effectful_effs (snd (propagate_pexp_effect pexp))
@@ -212,6 +212,26 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
     rewriters_base with rewrite_exp = (fun _ -> map_exp_annot rewrite_annot)
     },
   rewrite_typ
+
+
+let rewrite_bitvector_exps defs =
+  let e_aux = function
+    | (E_vector es, ((l, Some (env, typ, eff)) as a)) when is_bitvector_typ typ ->
+       begin
+         try
+           let len = mk_lit_exp (L_num (Big_int.of_int (List.length es))) in
+           let es = mk_exp (E_list (List.map strip_exp es)) in
+           let exp = mk_exp (E_app (mk_id "bitvector_of_bitlist", [len; es])) in
+           check_exp env exp typ
+         with
+         | _ -> E_aux (E_vector es, a)
+       end
+    | (e_aux, a) -> E_aux (e_aux, a)
+  in
+  let rewrite_exp _ = fold_exp { id_exp_alg with e_aux = e_aux } in
+  if IdSet.mem (mk_id "bitvector_of_bitlist") (Initial_check.val_spec_ids defs) then
+    rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp } defs
+  else defs
 
 
 (* Re-write trivial sizeof expressions - trivial meaning that the
@@ -1555,7 +1575,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
       (strip_exp (E_aux (E_var(le', e', block), annot))) (typ_of full_exp)
   | _ -> rewrite_base full_exp
 
-let rewrite_lexp_lift_assign_intro rewriters ((LEXP_aux(lexp,annot)) as le) =
+(*let rewrite_lexp_lift_assign_intro rewriters ((LEXP_aux(lexp,annot)) as le) =
   let rewrap le = LEXP_aux(le,annot) in
   let rewrite_base = rewrite_lexp rewriters in
   match lexp, annot with
@@ -1564,14 +1584,14 @@ let rewrite_lexp_lift_assign_intro rewriters ((LEXP_aux(lexp,annot)) as le) =
     | Unbound | Local _ ->
       LEXP_aux (lexp, (l, Some (env, typ, union_effects eff (mk_effect [BE_lset]))))
     | _ -> rewrap lexp)
-  | _ -> rewrite_base le
+  | _ -> rewrite_base le*)
 
 
 let rewrite_defs_exp_lift_assign defs = rewrite_defs_base
     {rewrite_exp = rewrite_exp_lift_assign_intro;
      rewrite_pat = rewrite_pat;
      rewrite_let = rewrite_let;
-     rewrite_lexp = rewrite_lexp_lift_assign_intro;
+     rewrite_lexp = rewrite_lexp (*_lift_assign_intro*);
      rewrite_fun = rewrite_fun;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs
@@ -3075,6 +3095,7 @@ let rewrite_defs_lem = [
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
+  ("bitvector_exps", rewrite_bitvector_exps);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("fix_val_specs", rewrite_fix_val_specs);
   ("split_execute", rewrite_split_fun_constr_pats "execute");

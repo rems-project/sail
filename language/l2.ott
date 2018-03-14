@@ -230,9 +230,7 @@ base_effect :: 'BE_' ::=
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism, from $[[nondet]]$ }}
-  | escape                              :: :: escape {{ com potential call of  $[[exit]]$ }}
-  | lset                                :: :: lset {{ com local mutation; not user-writable }}
-  | lret                                :: :: lret {{ com local return; not user-writable }}
+  | escape                              :: :: escape {{ com potential exception }}
 
 effect :: 'Effect_' ::=
   {{ com effect set, of kind $[[Effect]]$ }}

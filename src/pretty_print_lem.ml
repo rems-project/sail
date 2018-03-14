@@ -148,14 +148,16 @@ let simple_num l n = E_aux (
   simple_annot (Parse_ast.Generated l)
     (atom_typ (Nexp_aux (Nexp_constant n, Parse_ast.Generated l))))
 
-let effectful_set =
-  List.exists
+let effectful_set = function
+  | [] -> false
+  | _ -> true
+  (*List.exists
     (fun (BE_aux (eff,_)) ->
       match eff with
       | BE_rreg | BE_wreg | BE_rmem | BE_rmemt | BE_wmem | BE_eamem
       | BE_exmem | BE_wmv | BE_wmvt | BE_barr | BE_depend | BE_nondet
       | BE_escape -> true
-      | _ -> false)
+      | _ -> false)*)
 
 let effectful (Effect_aux (Effect_set effs, _)) = effectful_set effs
 
@@ -362,7 +364,7 @@ let doc_lit_lem (L_aux(lit,l)) =
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
-     utf8string "(failwith \"undefined value of unsupported type\")"
+     utf8string "(return (failwith \"undefined value of unsupported type\"))"
   | L_string s -> utf8string ("\"" ^ s ^ "\"")
   | L_real s ->
     (* Lem does not support decimal syntax, so we translate a string
@@ -790,7 +792,7 @@ let doc_exp_lem, doc_let_lem =
        let epp = brackets expspp in
        let (epp,aexp_needed) =
          if is_bit_typ etyp && !opt_mwords then
-           let bepp = string "of_bits" ^^ space ^^ parens (align epp) in
+           let bepp = string "of_bits_failwith" ^^ space ^^ parens (align epp) in
            (bepp ^^ doc_tannot_lem ctxt (env_of full_exp) false t, true)
          else (epp,aexp_needed) in
        if aexp_needed then parens (align epp) else epp

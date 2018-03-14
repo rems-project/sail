@@ -512,8 +512,8 @@ let string_of_base_effect_aux = function
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet"
   | BE_escape -> "escape"
-  | BE_lset -> "lset"
-  | BE_lret -> "lret"
+  (*| BE_lset -> "lset"
+  | BE_lret -> "lret"*)
 
 let string_of_base_kind_aux = function
   | BK_type -> "Type"

@@ -120,14 +120,21 @@ let try_catchSR m h =
       | Right e -> h e
      end)
 
+val maybe_failS : forall 'regs 'a 'e. string -> maybe 'a -> monadS 'regs 'a 'e
+let maybe_failS msg = function
+  | Just a  -> returnS a
+  | Nothing -> failS msg
+end
+
 val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e
 let read_tagS addr =
-  readS (fun s -> fromMaybe B0 (Map.lookup (unsigned addr) s.tagstate))
+  maybe_failS "unsigned" (unsigned addr) >>$= (fun addr ->
+  readS (fun s -> fromMaybe B0 (Map.lookup addr s.tagstate)))
 
 (* Read bytes from memory and return in little endian order *)
 val read_mem_bytesS : forall 'regs 'e 'a. Bitvector 'a => read_kind -> 'a -> nat -> monadS 'regs (list memory_byte) 'e
 let read_mem_bytesS read_kind addr sz =
-  let addr = unsigned addr in
+  maybe_failS "unsigned" (unsigned addr) >>$= (fun addr ->
   let sz = integerFromNat sz in
   let addrs = index_list addr (addr+sz-1) 1 in
   let read_byte s addr = Map.lookup addr s.memstate in
@@ -139,12 +146,12 @@ let read_mem_bytesS read_kind addr sz =
          else s) >>$
        returnS mem_val
     | Nothing -> failS "read_memS"
-  end)
+  end))
 
 val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e
 let read_memS rk a sz =
-  read_mem_bytesS rk a (natFromInteger sz) >>$= (fun bytes ->
-  returnS (bits_of_mem_bytes bytes))
+  read_mem_bytesS rk a (nat_of_int sz) >>$= (fun bytes ->
+  maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)))
 
 val excl_resultS : forall 'regs 'e. unit -> monadS 'regs bool 'e
 let excl_resultS () =
@@ -154,9 +161,9 @@ let excl_resultS () =
 
 val write_mem_eaS : forall 'regs 'e 'a. Bitvector 'a => write_kind -> 'a -> nat -> monadS 'regs unit 'e
 let write_mem_eaS write_kind addr sz =
-  let addr = unsigned addr in
+  maybe_failS "unsigned" (unsigned addr) >>$= (fun addr ->
   let sz = integerFromNat sz in
-  updateS (fun s -> <| s with write_ea = Just (write_kind, addr, sz) |>)
+  updateS (fun s -> <| s with write_ea = Just (write_kind, addr, sz) |>))
 
 (* Write little-endian list of bytes to previously announced address *)
 val write_mem_bytesS : forall 'regs 'e. list memory_byte -> monadS 'regs bool 'e
@@ -181,9 +188,9 @@ end
 
 val write_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> bitU -> monadS 'regs bool 'e
 let write_tagS addr t =
-   (*let taddr = addr / cap_alignment in*)
-   updateS (fun s -> <| s with tagstate = Map.insert (unsigned addr) t s.tagstate |>) >>$
-   returnS true
+   maybe_failS "unsigned" (unsigned addr) >>$= (fun addr ->
+   updateS (fun s -> <| s with tagstate = Map.insert addr t s.tagstate |>) >>$
+   returnS true)
 
 val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e
 let read_regS reg = readS (fun s -> reg.read_from s.regstate)

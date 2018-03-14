@@ -2,8 +2,32 @@ open import Pervasives_extra
 open import Machine_word
 open import Sail_values
 open import Sail_operators
+open import Prompt_monad
+open import Prompt
+
+val mword_zero : forall 'a. Size 'a => mword 'a
+let mword_zero = wordFromInteger 0
 
 (* Specialisation of operators to machine words *)
+
+let uint v = unsignedIntegerFromWord v
+let uint_maybe v = Just (uint v)
+let uint_fail v = return (uint v)
+let uint_oracle v = return (uint v)
+
+let sint v = signedIntegerFromWord v
+let sint_maybe v = Just (sint v)
+let sint_fail v = return (sint v)
+let sint_oracle v = return (sint v)
+
+val vec_of_bits_failwith : forall 'a. Size 'a => integer -> list bitU -> mword 'a
+let vec_of_bits_failwith _ bits = of_bits_failwith bits
+
+val vec_of_bits_fail : forall 'rv 'a 'e. Size 'a => integer -> list bitU -> monad 'rv (mword 'a) 'e
+let vec_of_bits_fail _ bits = of_bits_fail bits
+
+val vec_of_bits_oracle : forall 'rv 'a 'e. Size 'a => integer -> list bitU -> monad 'rv (mword 'a) 'e
+let vec_of_bits_oracle _ bits = of_bits_oracle bits
 
 val access_vec_inc : forall 'a. Size 'a => mword 'a -> integer -> bitU
 let access_vec_inc = access_bv_inc
@@ -11,50 +35,76 @@ let access_vec_inc = access_bv_inc
 val access_vec_dec : forall 'a. Size 'a => mword 'a -> integer -> bitU
 let access_vec_dec = access_bv_dec
 
-val update_vec_inc : forall 'a. Size 'a => mword 'a -> integer -> bitU -> mword 'a
-let update_vec_inc = update_bv_inc
+let update_vec_dec_maybe w i b = update_mword_dec w i b
+let update_vec_dec_fail w i b =
+  bool_of_bitU_fail b >>= (fun b ->
+  return (update_mword_bool_dec w i b))
+let update_vec_dec_oracle w i b =
+  bool_of_bitU_oracle b >>= (fun b ->
+  return (update_mword_bool_dec w i b))
+let update_vec_dec w i b = maybe_failwith (update_vec_dec_maybe w i b)
 
-val update_vec_dec : forall 'a. Size 'a => mword 'a -> integer -> bitU -> mword 'a
-let update_vec_dec = update_bv_dec
-
-val subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
-let subrange_vec_inc = subrange_bv_inc
+let update_vec_inc_maybe w i b = update_mword_inc w i b
+let update_vec_inc_fail w i b =
+  bool_of_bitU_fail b >>= (fun b ->
+  return (update_mword_bool_inc w i b))
+let update_vec_inc_oracle w i b =
+  bool_of_bitU_oracle b >>= (fun b ->
+  return (update_mword_bool_inc w i b))
+let update_vec_inc w i b = maybe_failwith (update_vec_inc_maybe w i b)
 
 val subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
-let subrange_vec_dec = subrange_bv_dec
+let subrange_vec_dec w i j = Machine_word.word_extract (nat_of_int i) (nat_of_int j) w
 
-val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
-let update_subrange_vec_inc = update_subrange_bv_inc
+val subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
+let subrange_vec_inc w i j = subrange_vec_dec w (length w - 1 - i) (length w - 1 - j)
 
 val update_subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
-let update_subrange_vec_dec = update_subrange_bv_dec
+let update_subrange_vec_dec w i j w' = Machine_word.word_update w (nat_of_int i) (nat_of_int j) w'
+
+val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
+let update_subrange_vec_inc w i j w' = update_subrange_vec_dec w (length w - 1 - i) (length w - 1 - j) w'
 
 val extz_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
-let extz_vec = extz_bv
+let extz_vec _ w = Machine_word.zeroExtend w
 
 val exts_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
-let exts_vec = exts_bv
+let exts_vec _ w = Machine_word.signExtend w
 
 val concat_vec : forall 'a 'b 'c. Size 'a, Size 'b, Size 'c => mword 'a -> mword 'b -> mword 'c
-let concat_vec = concat_bv
+let concat_vec = Machine_word.word_concat
 
-val cons_vec : forall 'a 'b 'c. Size 'a, Size 'b => bitU -> mword 'a -> mword 'b
-let cons_vec = cons_bv
+val cons_vec_bool : forall 'a 'b 'c. Size 'a, Size 'b => bool -> mword 'a -> mword 'b
+let cons_vec_bool b w = wordFromBitlist (b :: bitlistFromWord w)
+let cons_vec_maybe b w = Maybe.map (fun b -> cons_vec_bool b w) (bool_of_bitU b)
+let cons_vec_fail b w = bool_of_bitU_fail b >>= (fun b -> return (cons_vec_bool b w))
+let cons_vec_oracle b w = bool_of_bitU_oracle b >>= (fun b -> return (cons_vec_bool b w))
+let cons_vec b w = maybe_failwith (cons_vec_maybe b w)
 
-val bool_of_vec : mword ty1 -> bitU
-let bool_of_vec = bool_of_bv
+val vec_of_bool : forall 'a. Size 'a => integer -> bool -> mword 'a
+let vec_of_bool _ b = wordFromBitlist [b]
+let vec_of_bit_maybe len b = Maybe.map (vec_of_bool len) (bool_of_bitU b)
+let vec_of_bit_fail len b = bool_of_bitU_fail b >>= (fun b -> return (vec_of_bool len b))
+let vec_of_bit_oracle len b = bool_of_bitU_oracle b >>= (fun b -> return (vec_of_bool len b))
+let vec_of_bit len b = maybe_failwith (vec_of_bit_maybe len b)
 
-val cast_unit_vec : bitU -> mword ty1
-let cast_unit_vec = cast_unit_bv
-
-val vec_of_bit : forall 'a. Size 'a => integer -> bitU -> mword 'a
-let vec_of_bit = bv_of_bit
+val cast_bool_vec : bool -> mword ty1
+let cast_bool_vec b = vec_of_bool 1 b
+let cast_unit_vec_maybe b = vec_of_bit_maybe 1 b
+let cast_unit_vec_fail b = bool_of_bitU_fail b >>= (fun b -> return (cast_bool_vec b))
+let cast_unit_vec_oracle b = bool_of_bitU_oracle b >>= (fun b -> return (cast_bool_vec b))
+let cast_unit_vec b = maybe_failwith (cast_unit_vec_maybe b)
 
 val msb : forall 'a. Size 'a => mword 'a -> bitU
 let msb = most_significant
 
 val int_of_vec : forall 'a. Size 'a => bool -> mword 'a -> integer
-let int_of_vec = int_of_bv
+let int_of_vec sign w =
+  if sign
+  then signedIntegerFromWord w
+  else unsignedIntegerFromWord w
+let int_of_vec_maybe sign w = Just (int_of_vec sign w)
+let int_of_vec_fail sign w = return (int_of_vec sign w)
 
 val string_of_vec : forall 'a. Size 'a => mword 'a -> string
 let string_of_vec = string_of_bv
@@ -63,63 +113,83 @@ val and_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val or_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val xor_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val not_vec : forall 'a. Size 'a => mword 'a -> mword 'a
-let and_vec = and_bv
-let or_vec  = or_bv
-let xor_vec = xor_bv
-let not_vec = not_bv
+let and_vec = Machine_word.lAnd
+let or_vec  = Machine_word.lOr
+let xor_vec = Machine_word.lXor
+let not_vec = Machine_word.lNot
 
 val add_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val sadd_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+val adds_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val sub_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val mult_vec  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b
-val smult_vec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b
-let add_vec   = add_bv
-let sadd_vec  = sadd_bv
-let sub_vec   = sub_bv
-let mult_vec  = mult_bv
-let smult_vec = smult_bv
+val mults_vec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b
+let add_vec   l r = arith_op_bv integerAdd   false l r
+let adds_vec  l r = arith_op_bv integerAdd   true  l r
+let sub_vec   l r = arith_op_bv integerMinus true  l r
+let mult_vec  l r = arith_op_bv integerMult  false (zeroExtend l : mword 'b) (zeroExtend r : mword 'b)
+let mults_vec l r = arith_op_bv integerMult  true  (signExtend l : mword 'b) (signExtend r : mword 'b)
 
 val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val sadd_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
+val adds_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
-val smult_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
-let add_vec_int   = add_bv_int
-let sadd_vec_int  = sadd_bv_int
-let sub_vec_int   = sub_bv_int
-let mult_vec_int  = mult_bv_int
-let smult_vec_int = smult_bv_int
+val mults_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
+let add_vec_int   l r = arith_op_bv_int integerAdd   false l r
+let adds_vec_int  l r = arith_op_bv_int integerAdd   true  l r
+let sub_vec_int   l r = arith_op_bv_int integerMinus true  l r
+let mult_vec_int  l r = arith_op_bv_int integerMult  false (zeroExtend l : mword 'b) r
+let mults_vec_int l r = arith_op_bv_int integerMult  true  (signExtend l : mword 'b) r
 
 val add_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
-val sadd_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
+val adds_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
 val sub_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
 val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
-val smult_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
-let add_int_vec   = add_int_bv
-let sadd_int_vec  = sadd_int_bv
-let sub_int_vec   = sub_int_bv
-let mult_int_vec  = mult_int_bv
-let smult_int_vec = smult_int_bv
+val mults_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
+let add_int_vec   l r = arith_op_int_bv integerAdd   false l r
+let adds_int_vec  l r = arith_op_int_bv integerAdd   true  l r
+let sub_int_vec   l r = arith_op_int_bv integerMinus true  l r
+let mult_int_vec  l r = arith_op_int_bv integerMult  false l (zeroExtend r : mword 'b)
+let mults_int_vec l r = arith_op_int_bv integerMult  true  l (signExtend r : mword 'b)
 
-val add_vec_bit  : forall 'a. Size 'a => mword 'a -> bitU -> mword 'a
-val sadd_vec_bit : forall 'a. Size 'a => mword 'a -> bitU -> mword 'a
-val sub_vec_bit  : forall 'a. Size 'a => mword 'a -> bitU -> mword 'a
-let add_vec_bit  = add_bv_bit
-let sadd_vec_bit = sadd_bv_bit
-let sub_vec_bit  = sub_bv_bit
+val add_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
+val adds_vec_bool : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
+val sub_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
 
-val add_overflow_vec         : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val add_overflow_vec_signed  : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val sub_overflow_vec         : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val sub_overflow_vec_signed  : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val mult_overflow_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val mult_overflow_vec_signed : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-let add_overflow_vec         = add_overflow_bv
-let add_overflow_vec_signed  = add_overflow_bv_signed
-let sub_overflow_vec         = sub_overflow_bv
-let sub_overflow_vec_signed  = sub_overflow_bv_signed
-let mult_overflow_vec        = mult_overflow_bv
-let mult_overflow_vec_signed = mult_overflow_bv_signed
+let add_vec_bool        l r = arith_op_bv_bool integerAdd false l r
+let add_vec_bit_maybe   l r = Maybe.map (add_vec_bool l) (bool_of_bitU r)
+let add_vec_bit_fail    l r = bool_of_bitU_fail r >>= (fun r -> return (add_vec_bool l r))
+let add_vec_bit_oracle  l r = bool_of_bitU_oracle r >>= (fun r -> return (add_vec_bool l r))
+let add_vec_bit         l r = maybe_failwith (add_vec_bit_maybe  l r)
+
+let adds_vec_bool       l r = arith_op_bv_bool integerAdd true  l r
+let adds_vec_bit_maybe  l r = Maybe.map (adds_vec_bool l) (bool_of_bitU r)
+let adds_vec_bit_fail   l r = bool_of_bitU_fail r >>= (fun r -> return (adds_vec_bool l r))
+let adds_vec_bit_oracle l r = bool_of_bitU_oracle r >>= (fun r -> return (adds_vec_bool l r))
+let adds_vec_bit        l r = maybe_failwith (adds_vec_bit_maybe l r)
+
+let sub_vec_bool        l r = arith_op_bv_bool integerMinus true  l r
+let sub_vec_bit_maybe   l r = Maybe.map (sub_vec_bool l) (bool_of_bitU r)
+let sub_vec_bit_fail    l r = bool_of_bitU_fail r >>= (fun r -> return (sub_vec_bool l r))
+let sub_vec_bit_oracle  l r = bool_of_bitU_oracle r >>= (fun r -> return (sub_vec_bool l r))
+let sub_vec_bit         l r = maybe_failwith (sub_vec_bit_maybe  l r)
+
+(* TODO
+val maybe_mword_of_bits_overflow : forall 'a. Size 'a => (list bitU * bitU * bitU) -> maybe (mword 'a * bitU * bitU)
+let maybe_mword_of_bits_overflow (bits, overflow, carry) =
+  Maybe.map (fun w -> (w, overflow, carry)) (of_bits bits)
+
+val add_overflow_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a * bitU * bitU)
+val adds_overflow_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a * bitU * bitU)
+val sub_overflow_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a * bitU * bitU)
+val subs_overflow_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a * bitU * bitU)
+val mult_overflow_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a * bitU * bitU)
+val mults_overflow_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a * bitU * bitU)
+let add_overflow_vec   l r = maybe_mword_of_bits_overflow (add_overflow_bv l r)
+let adds_overflow_vec  l r = maybe_mword_of_bits_overflow (adds_overflow_bv l r)
+let sub_overflow_vec   l r = maybe_mword_of_bits_overflow (sub_overflow_bv l r)
+let subs_overflow_vec  l r = maybe_mword_of_bits_overflow (subs_overflow_bv l r)
+let mult_overflow_vec  l r = maybe_mword_of_bits_overflow (mult_overflow_bv l r)
+let mults_overflow_vec l r = maybe_mword_of_bits_overflow (mults_overflow_bv l r)
 
 val add_overflow_vec_bit         : forall 'a. Size 'a => mword 'a -> bitU -> (mword 'a * bitU * bitU)
 val add_overflow_vec_bit_signed  : forall 'a. Size 'a => mword 'a -> bitU -> (mword 'a * bitU * bitU)
@@ -128,36 +198,40 @@ val sub_overflow_vec_bit_signed  : forall 'a. Size 'a => mword 'a -> bitU -> (mw
 let add_overflow_vec_bit         = add_overflow_bv_bit
 let add_overflow_vec_bit_signed  = add_overflow_bv_bit_signed
 let sub_overflow_vec_bit         = sub_overflow_bv_bit
-let sub_overflow_vec_bit_signed  = sub_overflow_bv_bit_signed
+let sub_overflow_vec_bit_signed  = sub_overflow_bv_bit_signed*)
 
 val shiftl       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val shiftr       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val arith_shiftr : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val rotl         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val rotr         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-let shiftl       = shiftl_bv
-let shiftr       = shiftr_bv
-let arith_shiftr = arith_shiftr_bv
-let rotl         = rotl_bv
-let rotr         = rotr_bv
+let shiftl       = shiftl_mword
+let shiftr       = shiftr_mword
+let arith_shiftr = arith_shiftr_mword
+let rotl         = rotl_mword
+let rotr         = rotr_mword
 
-val mod_vec         : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val quot_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val quot_vec_signed : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-let mod_vec         = mod_bv
-let quot_vec        = quot_bv
-let quot_vec_signed = quot_bv_signed
+val mod_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+val quot_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+val quots_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+let mod_vec   = mod_mword
+let quot_vec  = quot_mword
+let quots_vec = quots_mword
 
 val mod_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val quot_vec_int : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-let mod_vec_int  = mod_bv_int
-let quot_vec_int = quot_bv_int
+let mod_vec_int  = mod_mword_int
+let quot_vec_int = quot_mword_int
 
 val replicate_bits : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
-let replicate_bits = replicate_bits_bv
+let replicate_bits v count = wordFromBitlist (repeat (bitlistFromWord v) count)
 
-val duplicate : forall 'a. Size 'a => bitU -> integer -> mword 'a
-let duplicate = duplicate_bit_bv
+val duplicate_bool : forall 'a. Size 'a => bool -> integer -> mword 'a
+let duplicate_bool   b n = wordFromBitlist (repeat [b] n)
+let duplicate_maybe  b n = Maybe.map (fun b -> duplicate_bool b n) (bool_of_bitU b)
+let duplicate_fail   b n = bool_of_bitU_fail b >>= (fun b -> return (duplicate_bool b n))
+let duplicate_oracle b n = bool_of_bitU_oracle b >>= (fun b -> return (duplicate_bool b n))
+let duplicate        b n = maybe_failwith (duplicate_maybe b n)
 
 val eq_vec    : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val neq_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
@@ -169,13 +243,13 @@ val ulteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val slteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val ugteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val sgteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-let eq_vec    = eq_bv
-let neq_vec   = neq_bv
-let ult_vec   = ult_bv
-let slt_vec   = slt_bv
-let ugt_vec   = ugt_bv
-let sgt_vec   = sgt_bv
-let ulteq_vec = ulteq_bv
-let slteq_vec = slteq_bv
-let ugteq_vec = ugteq_bv
-let sgteq_vec = sgteq_bv
+let eq_vec    = eq_mword
+let neq_vec   = neq_mword
+let ult_vec   = ucmp_mword (<)
+let slt_vec   = scmp_mword (<)
+let ugt_vec   = ucmp_mword (>)
+let sgt_vec   = scmp_mword (>)
+let ulteq_vec = ucmp_mword (<=)
+let slteq_vec = scmp_mword (<=)
+let ugteq_vec = ucmp_mword (>=)
+let sgteq_vec = scmp_mword (>=)

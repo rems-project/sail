@@ -49,7 +49,7 @@ let get_slice_int len n lo =
   (* TODO: Is this the intended behaviour? *)
   let hi = lo + len - 1 in
   let bits = bits_of_int (hi + 1) n in
-  of_bits (get_bits false bits hi lo)
+  of_bits_failwith (subrange_list false bits hi lo)
 
 val sign_extend : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> integer -> bitvector 'b
 let sign_extend v len = exts_vec len v
@@ -57,9 +57,9 @@ val zero_extend : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> integer -> b
 let zero_extend v len = extz_vec len v
 
 val shift_bits_right : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
-let shift_bits_right v m = shiftr v (unsigned m)
+let shift_bits_right v m = shiftr v (uint m)
 val shift_bits_left : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
-let shift_bits_left v m = shiftl v (unsigned m)
+let shift_bits_left v m = shiftl v (uint m)
 
 val prerr_endline : string -> unit
 let prerr_endline _ = ()
