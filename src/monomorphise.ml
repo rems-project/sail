@@ -2121,13 +2121,25 @@ let change_parameter_pat = function
   | P_aux (_,(l,_)) -> raise (Reporting_basic.err_unreachable l
                                 "Expected variable pattern")
 
+(* TODO: make more precise, preferably with a proper free variables function
+   which deals with shadowing *)
+let var_maybe_used_in_exp exp var =
+  let open Rewriter in
+  fst (fold_exp {
+    (compute_exp_alg false (||)) with
+      e_id = fun id -> (Id.compare id var == 0, E_id id) } exp)
+
 (* We add code to change the itself('n) parameter into the corresponding
-   integer. *)
-let add_var_rebind exp var =
-  let l = Generated Unknown in
-  let annot = (l,None) in
-  E_aux (E_let (LB_aux (LB_val (P_aux (P_id var,annot),
-                                E_aux (E_app (mk_id "size_itself_int",[E_aux (E_id var,annot)]),annot)),annot),exp),annot)
+   integer.  We always do this for the function body (otherwise we'd have to do
+   something clever with E_sizeof to avoid making things more complex), but
+   only for guards when they actually use the variable. *)
+let add_var_rebind unconditional exp var =
+  if unconditional || var_maybe_used_in_exp exp var then
+    let l = Generated Unknown in
+    let annot = (l,None) in
+    E_aux (E_let (LB_aux (LB_val (P_aux (P_id var,annot),
+                                  E_aux (E_app (mk_id "size_itself_int",[E_aux (E_id var,annot)]),annot)),annot),exp),annot)
+  else exp
 
 (* atom('n) arguments to function calls need to be rewritten *)
 let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
@@ -2266,11 +2278,10 @@ let rewrite_size_parameters env (Defs defs) =
                    pat, [var]
               end
          in
-         (* TODO: only add bindings that are necessary (esp for guards) *)
-         let body = List.fold_left add_var_rebind body vars in
+         let body = List.fold_left (add_var_rebind true) body vars in
          let guard = match guard with
            | None -> None
-           | Some exp -> Some (List.fold_left add_var_rebind exp vars)
+           | Some exp -> Some (List.fold_left (add_var_rebind false) exp vars)
          in
          pat,guard,body,nexps
       | exception Not_found -> pat,guard,body,NexpSet.empty
