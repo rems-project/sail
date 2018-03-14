@@ -83,8 +83,8 @@ do
             cd "$OUTPUTDIR"
             if ocamlfind ocamlc -linkpkg -package zarith -package lem \
                          sail_values.ml sail_operators.ml \
-                         sail_operators_mwords.ml sail_instr_kinds.ml \
-                         prompt_monad.ml prompt.ml state_monad.ml state.ml \
+                         sail_instr_kinds.ml prompt_monad.ml prompt.ml \
+                         sail_operators_mwords.ml state_monad.ml state.ml \
                          test_extra.ml out_types.ml out.ml ../test.ml \
                          -o test &>>"$DIR/log"
             then
