@@ -51,13 +51,13 @@ let update_vec_inc_oracle w i b =
 let update_vec_inc w i b = maybe_failwith (update_vec_inc_maybe w i b)
 
 val subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
-let subrange_vec_dec w i j = Machine_word.word_extract (nat_of_int i) (nat_of_int j) w
+let subrange_vec_dec w i j = Machine_word.word_extract (nat_of_int j) (nat_of_int i) w
 
 val subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
 let subrange_vec_inc w i j = subrange_vec_dec w (length w - 1 - i) (length w - 1 - j)
 
 val update_subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
-let update_subrange_vec_dec w i j w' = Machine_word.word_update w (nat_of_int i) (nat_of_int j) w'
+let update_subrange_vec_dec w i j w' = Machine_word.word_update w (nat_of_int j) (nat_of_int i) w'
 
 val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
 let update_subrange_vec_inc w i j w' = update_subrange_vec_dec w (length w - 1 - i) (length w - 1 - j) w'
