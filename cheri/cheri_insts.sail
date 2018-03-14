@@ -203,7 +203,7 @@ function clause execute (CGetPerm(rd, cb)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
-    wGPR(rd) = EXTZ(getCapPerms(capVal));
+    wGPR(rd) = zero_extend(getCapPerms(capVal));
   /* END_CGetPerms */
 }
 
@@ -216,7 +216,7 @@ function clause execute (CGetType(rd, cb)) =
   else
     let capVal = readCapReg(cb) in
     wGPR(rd) = if (capVal.sealed)
-      then EXTZ(capVal.otype)
+      then zero_extend(capVal.otype)
       else (bitone ^^ 64)
   /* END_CGetType */
 }
@@ -266,7 +266,7 @@ function clause execute (CGetTag(rd, cb)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
-    wGPR(rd) = EXTZ(capVal.tag);
+    wGPR(rd) = zero_extend(capVal.tag);
   /* END_CGetTag */
 }
 
@@ -278,7 +278,7 @@ function clause execute (CGetSealed(rd, cb)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
-    wGPR(rd) = EXTZ(capVal.sealed);
+    wGPR(rd) = zero_extend(capVal.sealed);
   /* END_CGetSealed */
 }
 
@@ -325,7 +325,7 @@ function clause execute (CGetCause(rd)) =
   if not (pcc_access_system_regs ()) then
     raise_c2_exception_noreg(CapEx_AccessSystemRegsViolation)
   else
-    wGPR(rd) = EXTZ(CapCause.bits())
+    wGPR(rd) = zero_extend(CapCause.bits())
   /* END_CGetCause */
 }
 
@@ -462,7 +462,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
         CEXEQ  => cb_val == ct_val,
         CNEXEQ => cb_val != ct_val
       };
-      wGPR(rd) = EXTZ (cmp)
+      wGPR(rd) = zero_extend (cmp)
     }
   /* END_CPtrCmp */
 }
@@ -495,7 +495,7 @@ function clause execute (CIncOffsetImmediate(cd, cb, imm)) =
   /* START_CIncOffsetImmediate */
   checkCP2usable();
   let cb_val = readCapReg(cb);
-  let imm64 : bits(64) = EXTS(imm) in
+  let imm64 : bits(64) = sign_extend(imm) in
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then
@@ -787,7 +787,7 @@ function clause execute (CCheckPerm(cs, rt)) =
   /* START_CCheckPerm */
   checkCP2usable();
   cs_val = readCapReg(cs);
-  cs_perms : bits(64) = EXTZ(getCapPerms(cs_val));
+  cs_perms : bits(64) = zero_extend(getCapPerms(cs_val));
   rt_perms = rGPR(rt);
   if (register_inaccessible(cs)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cs)
@@ -856,7 +856,7 @@ function clause execute (CTestSubset(rd, cb, ct)) =
              0b0
         else
              0b1;
-     wGPR(rd) = EXTZ(result);
+     wGPR(rd) = zero_extend(result);
   }
   /* END_CTestSubset */
 }
@@ -1087,7 +1087,7 @@ function clause execute (CBX(cb, imm, notset)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else if (((readCapReg(cb)).tag) ^ notset) then
     {
-      let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
+      let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
       delayedPC     = PC + offset;
       branchPending = 0b1;
     }
@@ -1103,7 +1103,7 @@ function clause execute (CBZ(cb, imm, notzero)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else if (((readCapReg(cb)) == null_cap) ^ notzero) then
     {
-      let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
+      let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
       delayedPC     = PC + offset;
       branchPending = 0b1;
     }
@@ -1237,7 +1237,7 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
                     }
                 else
                   false;
-              wGPR(rd) = EXTZ(success);
+              wGPR(rd) = zero_extend(success);
             }
             else
           match width
@@ -1295,7 +1295,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
                   MEMw_tagged_conditional(pAddr, cs_val.tag, capStructToMemBits(cs_val))
                 else
                   false;
-              wGPR(rd) = EXTZ(success);
+              wGPR(rd) = zero_extend(success);
             }
           else
             MEMw_tagged(pAddr, cs_val.tag, capStructToMemBits(cs_val));

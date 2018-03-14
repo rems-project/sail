@@ -188,7 +188,7 @@ function memBitsToCapBits(tag, b) : (bool, bits(128)) -> bits(129) =
   memBitsToCapBits128(tag, b ^ null_cap_bits)
 
 function getCapPerms(cap) : CapStruct -> bits(31) = 
-    let perms : bits(15) = EXTS(getCapHardPerms(cap)) in /* NB access_system copied into 14-11 */
+    let perms : bits(15) = sign_extend(getCapHardPerms(cap)) in /* NB access_system copied into 14-11 */
     (0x000 /* uperms 30-19 */
   @ cap.uperms
   @ perms)
@@ -219,7 +219,7 @@ function sealCap(cap, otype) : (CapStruct, bits(24)) -> (bool, CapStruct) =
 function a_top_correction(a_mid, R, bound) : (bits(20), bits(20), bits(20)) -> bits(65) =
     match (a_mid <_u R, bound <_u R) {
       (false, false)  => zeros(),
-      (false, true)   => EXTZ(0b1),
+      (false, true)   => zero_extend(0b1),
       (true, false)   => ones(),
       (true, true)    => zeros()
     }
@@ -227,7 +227,7 @@ function a_top_correction(a_mid, R, bound) : (bits(20), bits(20), bits(20)) -> b
 function getCapBase(c) : CapStruct -> uint64 =
     let E = min(unsigned(c.E), 48) in
     let Bc : bits(20) = c.B in
-    let a : bits(65) = EXTZ(c.address) in
+    let a : bits(65) = zero_extend(c.address) in
     let R : bits(20) = Bc - 0x01000 in /* wraps */
     let a_mid : bits(20) = mask(a >> E) in
     let correction = a_top_correction(a_mid, R, Bc) in
@@ -239,7 +239,7 @@ function getCapTop (c) : CapStruct -> CapLen =
     let E = min(unsigned(c.E), 48) in
     let Bc : bits(20) = c.B in
     let T : bits(20) = c.T in
-    let a : bits(65) = EXTZ(c.address)  in
+    let a : bits(65) = zero_extend(c.address)  in
     let R : bits(20) = Bc - 0x01000 in /* wraps */
     let a_mid : bits(20) = mask(a >> E) in
     let correction = a_top_correction(a_mid, R, T) in
@@ -326,7 +326,7 @@ function setCapBounds(cap, base, top) : (CapStruct, bits(64), bits(65)) -> (bool
     let 'e = computeE(top - (0b0 @ base)) in
     let Bc : bits(20) = mask(base >> e) in
     let T : bits(20) = mask(top >> e) in
-    let e_mask : bits(65) = EXTZ(replicate_bits(0b1, e)) in
+    let e_mask : bits(65) = zero_extend(replicate_bits(0b1, e)) in
     let e_bits = top & e_mask in
     let T2 : bits(20) = T + (if unsigned(e_bits) == 0 then 0x00000 else 0x00001) in
     let newCap  = {cap with E=to_bits(6, e), B=Bc, T=T2} in

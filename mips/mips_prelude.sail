@@ -425,7 +425,7 @@ function SignalExceptionMIPS (ex, kccBase) =
                    0xFFFFFFFF80000000;
       /* On CHERI we have to subtract KCC.base so that we end up at the 
          right absolute vector address after indirecting via new PCC */
-      nextPC = vectorBase + EXTS(vectorOffset) - kccBase;
+      nextPC = vectorBase + sign_extend(vectorOffset) - kccBase;
       CP0Cause->ExcCode() = ExceptionCode(ex);
       CP0Status->EXL()    = 0b1;
       throw (ISAException());

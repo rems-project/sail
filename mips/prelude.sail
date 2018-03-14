@@ -311,14 +311,14 @@ union exception = {
   Error_internal_error : unit
 }
 
-val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
-val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val _sign_extend =  "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val _zero_extend =  "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
-val EXTS : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
-val EXTZ : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val sign_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val zero_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 
-function EXTS v = sign_extend(v, sizeof('m))
-function EXTZ v = zero_extend(v, sizeof('m))
+function sign_extend v = _sign_extend(v, sizeof('m))
+function zero_extend v = _zero_extend(v, sizeof('m))
 
 val zeros : forall 'n, 'n >= 0 . unit -> bits('n)
 function zeros() = replicate_bits (0b0,'n)

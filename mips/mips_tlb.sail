@@ -40,7 +40,7 @@ function tlbEntryMatch(r, vpn2, asid, entry) =
       let entryVPN   = entry.vpn2() in
       let entryASID  = entry.asid() in
       let entryG     = entry.g() in
-      let vpnMask : bits(27) = ~(EXTZ(entryMask)) in
+      let vpnMask : bits(27) = ~(zero_extend(entryMask)) in
       (entryValid &
        (r == entryR) &
        ((vpn2 & vpnMask) == ((entryVPN) & vpnMask)) &
@@ -93,7 +93,7 @@ function TLBTranslate2 (vAddr, accessType) = {
       else if ((accessType == StoreData) & ~(d)) then
         SignalExceptionTLB(TLBMod, vAddr)
       else
-        let res : bits(64) = EXTZ(pfn[23..(evenOddBit - 12)] @ vAddr[(evenOddBit - 1) .. 0]) in
+        let res : bits(64) = zero_extend(pfn[23..(evenOddBit - 12)] @ vAddr[(evenOddBit - 1) .. 0]) in
         (res,  bits_to_bool(if (accessType == StoreData) then caps else capl)),
     None()  =>  SignalExceptionTLB(
       if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr)

@@ -349,7 +349,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       ik = IK_cond_branch;
       if rs == 0 then () else iR = RFull(GPRs[rs]) :: iR;
       if rd == 0 then () else iR = RFull(GPRs[rd]) :: iR;
-      let offset : bits(64) = (EXTS(imm : 0b00) + 4) in
+      let offset : bits(64) = (sign_extend(imm : 0b00) + 4) in
       Dia = DIAFP_concrete (PC + offset);
     }
     (BCMPZ(rs, imm, cmp, link, likely))  => {
@@ -357,7 +357,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       if rs == 0 then () else iR = RFull(GPRs[rs]) :: iR;
       if link then
         oR = RFull("GPR31") :: oR;
-      let offset : bits(64) = (EXTS(imm : 0b00) + 4) in
+      let offset : bits(64) = (sign_extend(imm : 0b00) + 4) in
       Dia = DIAFP_concrete (PC + offset);
     }
     (SYSCALL_THREAD_START)  => ()

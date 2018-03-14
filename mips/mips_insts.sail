@@ -50,7 +50,7 @@ function clause decode (0b011001 @ rs : regno @ rt : regno @ imm : imm16) =
 
 function clause execute (DADDIU (rs, rt, imm)) =
   {
-    wGPR(rt) = rGPR(rs) + EXTS(imm)
+    wGPR(rt) = rGPR(rs) + sign_extend(imm)
   }
 
 /* DADDU Doubleword Add Unsigned -- another very simple instruction,
@@ -76,7 +76,7 @@ function clause decode (0b011000 @ rs : regno @ rt : regno @ imm : imm16) =
 
 function clause execute (DADDI (rs, rt, imm)) =
   {
-    let sum65 : bits(65) = EXTS(rGPR(rs)) + EXTS(imm) in
+    let sum65 : bits(65) = sign_extend(rGPR(rs)) + sign_extend(imm) in
     {
       if (sum65[64] != sum65[63]) then
         (SignalException(Ov))
@@ -95,7 +95,7 @@ function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b0000
 
 function clause execute (DADD (rs, rt, rd)) =
   {
-    let sum65 : bits(65) = EXTS(rGPR(rs)) + EXTS(rGPR(rt)) in
+    let sum65 : bits(65) = sign_extend(rGPR(rs)) + sign_extend(rGPR(rt)) in
     {
       if sum65[64] != sum65[63] then
         (SignalException(Ov))
@@ -118,11 +118,11 @@ function clause execute (ADD(rs, rt, rd)) =
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) = undefined /* XXX could exit instead */
     else
-      let sum33 : bits(33) = EXTS(opA[31 .. 0]) + EXTS(opB[31 .. 0])in
+      let sum33 : bits(33) = sign_extend(opA[31 .. 0]) + sign_extend(opB[31 .. 0])in
         if sum33[32] != sum33[31] then
           (SignalException(Ov))
         else
-	  wGPR(rd) = EXTS(sum33[31..0])
+	  wGPR(rd) = sign_extend(sum33[31..0])
   }
 
 /* ADDI  32-bit add immediate -- reg, reg, imm with possible undefined behaviour or exception */
@@ -138,11 +138,11 @@ function clause execute (ADDI(rs, rt, imm)) =
     if NotWordVal(opA) then
       wGPR(rt) = undefined /* XXX could exit instead */
     else
-      let sum33 : bits(33) = EXTS(opA[31 .. 0]) + EXTS(imm) in
+      let sum33 : bits(33) = sign_extend(opA[31 .. 0]) + sign_extend(imm) in
         if sum33[32] != sum33[31] then
           (SignalException(Ov))
         else
-	  wGPR(rt) = EXTS(sum33[31..0])
+	  wGPR(rt) = sign_extend(sum33[31..0])
   }
 
 /* ADDU  32-bit add immediate -- reg, reg, reg with possible undefined behaviour */
@@ -159,7 +159,7 @@ function clause execute (ADDU(rs, rt, rd)) =
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) = undefined
     else
-      wGPR(rd) = EXTS(opA[31..0] + opB[31..0])
+      wGPR(rd) = sign_extend(opA[31..0] + opB[31..0])
   }
 
 
@@ -176,7 +176,7 @@ function clause execute (ADDIU(rs, rt, imm)) =
     if NotWordVal(opA) then
       wGPR(rt) = undefined /* XXX could exit instead */
     else
-      wGPR(rt) = EXTS((opA[31 .. 0]) + EXTS(imm))
+      wGPR(rt) = sign_extend((opA[31 .. 0]) + sign_extend(imm))
   }
 
 /**************************************************************************************/
@@ -204,7 +204,7 @@ function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b0000
 
 function clause execute (DSUB (rs, rt, rd)) =
   {
-    let temp65 : bits(65) = EXTS(rGPR(rs)) - EXTS(rGPR(rt)) in
+    let temp65 : bits(65) = sign_extend(rGPR(rs)) - sign_extend(rGPR(rt)) in
     {
       if temp65[64] != temp65[63] then
         (SignalException(Ov))
@@ -227,11 +227,11 @@ function clause execute (SUB(rs, rt, rd)) =
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) = undefined /* XXX could instead */
     else
-      let temp33 : bits(33) = EXTS(opA[31..0]) - EXTS(opB[31..0]) in
+      let temp33 : bits(33) = sign_extend(opA[31..0]) - sign_extend(opB[31..0]) in
       if temp33[32] != temp33[31] then
         (SignalException(Ov))
       else
-        wGPR(rd) = EXTS(temp33[31..0])
+        wGPR(rd) = sign_extend(temp33[31..0])
   }
 
 /* SUBU  32-bit 'unsigned' sub -- reg, reg, reg with possible undefined behaviour */
@@ -247,7 +247,7 @@ function clause execute (SUBU(rs, rt, rd)) =
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) = undefined
     else
-      wGPR(rd) = EXTS(opA[31..0] - opB[31..0])
+      wGPR(rd) = sign_extend(opA[31..0] - opB[31..0])
   }
 
 /**************************************************************************************/
@@ -272,7 +272,7 @@ function clause decode (0b001100 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ANDI(rs, rt, imm))
 function clause execute (ANDI (rs, rt, imm)) =
   {
-    wGPR(rt) = (rGPR(rs) & EXTZ(imm))
+    wGPR(rt) = (rGPR(rs) & zero_extend(imm))
   }
 
 /* OR reg, reg, reg */
@@ -292,7 +292,7 @@ function clause decode (0b001101 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(ORI(rs, rt, imm))
 function clause execute (ORI (rs, rt, imm)) =
   {
-    wGPR(rt) = (rGPR(rs) | EXTZ(imm))
+    wGPR(rt) = (rGPR(rs) | zero_extend(imm))
   }
 
 /* NOR reg, reg, reg */
@@ -321,7 +321,7 @@ function clause decode (0b001110 @ rs : regno @ rt : regno @ imm : imm16) =
   Some(XORI(rs, rt, imm))
 function clause execute (XORI (rs, rt, imm)) =
   {
-    wGPR(rt) = (rGPR(rs) ^ EXTZ(imm))
+    wGPR(rt) = (rGPR(rs) ^ zero_extend(imm))
   }
 
 /* LUI reg, imm 32-bit load immediate into upper 16 bits */
@@ -330,7 +330,7 @@ function clause decode (0b001111 @ 0b00000 @ rt : regno @ imm : imm16) =
   Some(LUI(rt, imm))
 function clause execute (LUI (rt, imm)) =
   {
-    wGPR(rt) = EXTS(imm @ 0x0000)
+    wGPR(rt) = sign_extend(imm @ 0x0000)
   }
 
 /**************************************************************************************/
@@ -449,7 +449,7 @@ function clause decode (0b000000 @ 0b00000 @ rt : regno @ rd : regno @ sa : regn
 function clause execute (SLL(rt, rd, sa)) =
   {
     rt32     = rGPR(rt)[31..0];
-    wGPR(rd) = EXTS(rt32 << sa);
+    wGPR(rd) = sign_extend(rt32 << sa);
   }
 
 /* SLLV 32-bit shift left variable */
@@ -461,7 +461,7 @@ function clause execute (SLLV(rs, rt, rd)) =
   {
     sa       = rGPR(rs)[4..0];
     rt32     = rGPR(rt)[31..0];
-    wGPR(rd) = EXTS(rt32 << sa)
+    wGPR(rd) = sign_extend(rt32 << sa)
   }
 
 /* SRA 32-bit arithmetic shift right */
@@ -476,7 +476,7 @@ function clause execute (SRA(rt, rd, sa)) =
       wGPR(rd) = undefined
     else {
       rt32 = temp[31..0];
-      wGPR(rd) = EXTS(rt32 >>_s sa);
+      wGPR(rd) = sign_extend(rt32 >>_s sa);
     }
   }
 
@@ -493,7 +493,7 @@ function clause execute (SRAV(rs, rt, rd)) =
       wGPR(rd) = undefined
     else {
       rt32 = temp[31..0];
-      wGPR(rd) = EXTS(rt32 >>_s sa)
+      wGPR(rd) = sign_extend(rt32 >>_s sa)
     }
   }
 
@@ -509,7 +509,7 @@ function clause execute (SRL(rt, rd, sa)) =
       wGPR(rd) = undefined
     else {
       rt32 = temp[31..0];
-      wGPR(rd) = EXTS(rt32 >> sa);
+      wGPR(rd) = sign_extend(rt32 >> sa);
     }
   }
 
@@ -526,7 +526,7 @@ function clause execute (SRLV(rs, rt, rd)) =
       wGPR(rd) = undefined
     else {
       rt32 = temp[31..0];
-      wGPR(rd) = EXTS(rt32 >> sa);
+      wGPR(rd) = sign_extend(rt32 >> sa);
     }
   }
 
@@ -541,7 +541,7 @@ function clause decode (0b000000 @ rs : regno @ rt : regno @ rd : regno @ 0b0000
   Some(SLT(rs, rt, rd))
 function clause execute (SLT(rs, rt, rd)) =
   {
-    wGPR(rd) = EXTZ(if (rGPR(rs) <_s rGPR(rt)) then 0b1 else 0b0)
+    wGPR(rd) = zero_extend(if (rGPR(rs) <_s rGPR(rt)) then 0b1 else 0b0)
   }
 
 /* SLT set if less than immediate (signed) */
@@ -553,7 +553,7 @@ function clause execute (SLTI(rs, rt, imm)) =
   {
     let imm_val = signed(imm) in
     let rs_val = signed(rGPR(rs)) in
-    wGPR(rt) = EXTZ(if (rs_val < imm_val) then 0b1 else 0b0)
+    wGPR(rt) = zero_extend(if (rs_val < imm_val) then 0b1 else 0b0)
   }
 
 /* SLTU set if less than unsigned */
@@ -565,7 +565,7 @@ function clause execute (SLTU(rs, rt, rd)) =
   {
     let rs_val = rGPR(rs) in
     let rt_val = rGPR(rt) in
-    wGPR(rd) = EXTZ(if (rs_val <_u rt_val) then 0b1 else 0b0)
+    wGPR(rd) = zero_extend(if (rs_val <_u rt_val) then 0b1 else 0b0)
   }
 
 /* SLTIU set if less than immediate unsigned */
@@ -576,8 +576,8 @@ function clause decode (0b001011 @ rs : regno @ rt : regno @ imm : imm16) =
 function clause execute (SLTIU(rs, rt, imm)) =
   {
     let rs_val = rGPR(rs) in
-    let immext : bits(64) = EXTS(imm) in /* NB defined to sign extend here even though comparison is unsigned! */
-    wGPR(rt) = EXTZ(if (rs_val <_u immext) then 0b1 else 0b0)
+    let immext : bits(64) = sign_extend(imm) in /* NB defined to sign extend here even though comparison is unsigned! */
+    wGPR(rt) = zero_extend(if (rs_val <_u immext) then 0b1 else 0b0)
   }
 
 /* MOVN move if non-zero */
@@ -650,11 +650,11 @@ function clause execute (MUL(rs, rt, rd)) =
   {
     rsVal = rGPR(rs);
     rtVal = rGPR(rt);
-    result : bits(64) = EXTS((rsVal[31..0]) *_s (rtVal[31..0]));
+    result : bits(64) = sign_extend((rsVal[31..0]) *_s (rtVal[31..0]));
     wGPR(rd) = if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        EXTS(result[31..0]);
+        sign_extend(result[31..0]);
     /* HI and LO are technically undefined after MUL, but this causes problems with tests and
        (potentially) context switch so just leave them alone
     HI = undefined;
@@ -674,8 +674,8 @@ function clause execute (MULT(rs, rt)) =
         undefined
       else
 	(rsVal[31..0]) *_s (rtVal[31..0]);
-    HI = EXTS(result[63..32]);
-    LO = EXTS(result[31..0]);
+    HI = sign_extend(result[63..32]);
+    LO = sign_extend(result[31..0]);
   }
 
 /* MULTU 32-bit unsignedm rultiply into HI/LO */
@@ -690,8 +690,8 @@ function clause execute (MULTU(rs, rt)) =
         undefined
       else
 	(rsVal[31..0]) *_u (rtVal[31..0]);
-    HI = EXTS(result[63..32]);
-    LO = EXTS(result[31..0]);
+    HI = sign_extend(result[63..32]);
+    LO = sign_extend(result[31..0]);
   }
 
 /* DMULT 64-bit multiply into HI/LO */
@@ -729,8 +729,8 @@ function clause execute (MADD(rs, rt)) =
       else
 	rsVal[31..0] *_s rtVal[31..0];
     result = mul_result + (HI[31..0] @ LO[31..0]);
-    HI = EXTS(result[63..32]);
-    LO = EXTS(result[31..0]);
+    HI = sign_extend(result[63..32]);
+    LO = sign_extend(result[31..0]);
   }
 
 /* MADDU 32-bit unsigned multiply and add into HI/LO */
@@ -746,8 +746,8 @@ function clause execute (MADDU(rs, rt)) =
       else
 	rsVal[31..0] *_u rtVal[31..0];
     result = mul_result + (HI[31..0] @ LO[31..0]);
-    HI = EXTS(result[63..32]);
-    LO = EXTS(result[31..0]);
+    HI = sign_extend(result[63..32]);
+    LO = sign_extend(result[31..0]);
   }
 
 /* MSUB 32-bit signed multiply and sub from HI/LO */
@@ -763,8 +763,8 @@ function clause execute (MSUB(rs, rt)) =
       else
 	rsVal[31..0] *_s rtVal[31..0];
     result = (HI[31..0] @ LO[31..0]) - mul_result;
-    HI = EXTS(result[63..32]);
-    LO = EXTS(result[31..0]);
+    HI = sign_extend(result[63..32]);
+    LO = sign_extend(result[31..0]);
   }
 
 /* MSUBU 32-bit unsigned multiply and sub from HI/LO */
@@ -780,8 +780,8 @@ function clause execute (MSUBU(rs, rt)) =
       else
 	rsVal[31..0] *_u rtVal[31..0];
     result = (HI[31..0] @ LO[31..0]) - mul_result;
-    HI = EXTS(result[63..32]);
-    LO = EXTS(result[31..0]);
+    HI = sign_extend(result[63..32]);
+    LO = sign_extend(result[31..0]);
   }
 
 /* DIV 32-bit divide into HI/LO */
@@ -803,8 +803,8 @@ function clause execute (DIV(rs, rt)) =
 	(to_bits(32, qi), to_bits(32, ri))
     in
     {
-      HI = EXTS(r);
-      LO = EXTS(q);
+      HI = sign_extend(r);
+      LO = sign_extend(q);
     }
   }
 
@@ -827,8 +827,8 @@ function clause execute (DIVU(rs, rt)) =
 	(to_bits(32, qi), to_bits(32, ri))
     in
     {
-      HI = EXTS(r);
-      LO = EXTS(q);
+      HI = sign_extend(r);
+      LO = sign_extend(q);
     }
   }
 
@@ -938,7 +938,7 @@ function clause execute (BEQ(rs, rd, imm, ne, likely)) =
   {
     if ((rGPR(rs) == rGPR(rd)) ^ ne) then
       {
-        let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
+        let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
         delayedPC     = PC + offset;
         branchPending = 0b1;
       }
@@ -992,10 +992,10 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
   {
     linkVal = PC + 8;
     regVal = rGPR(rs);
-    condition = compare(cmp, regVal, EXTZ(0b0));
+    condition = compare(cmp, regVal, zero_extend(0b0));
     if (condition) then
       {
-        let offset : bits(64) = (EXTS(imm @ 0b00) + 4) in
+        let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
         delayedPC     =  PC + offset;
         branchPending = 0b1;
       }
@@ -1091,7 +1091,7 @@ function clause decode (0b000001 @ rs : regno @ 0b01011 @ imm : imm16) =
 function clause execute (TRAPIMM(rs, imm, cmp)) =
   {
     rs_val = rGPR(rs);
-    imm_val : bits(64) = EXTS(imm);
+    imm_val : bits(64) = sign_extend(imm);
     condition = compare(cmp, rs_val, imm_val);
     if (condition) then
       (SignalException(Tr))
@@ -1124,14 +1124,14 @@ function clause decode (0b110100 @ base : regno @ rt : regno @ offset : imm16) =
 val extendLoad : forall 'sz, 'sz <= 64 .  (bits('sz), bool) -> bits(64) effect pure
 function extendLoad(memResult, sign) = {
   if (sign) then
-    EXTS(memResult)
+    sign_extend(memResult)
   else
-    EXTZ(memResult)
+    zero_extend(memResult)
 }
 
 function clause execute (Load(width, sign, linked, base, rt, offset)) =
   {
-    vAddr : bits(64) = addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
+    vAddr : bits(64) = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, width);
     if ~ (isAddressAligned(vAddr, width)) then
       (SignalExceptionBadAddr(AdEL, vAddr)) /* unaligned access */
     else
@@ -1180,7 +1180,7 @@ function clause decode (0b111100 @ base : regno @ rt : regno @ offset : imm16) =
   Some(Store(D, true, base, rt, offset))  /* SCD */
 function clause execute (Store(width, conditional, base, rt, offset)) =
       {
-        vAddr : bits(64) = addrWrapper(EXTS(offset) + rGPR(base), StoreData, width);
+        vAddr : bits(64) = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, width);
         rt_val = rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
           (SignalExceptionBadAddr(AdES, vAddr)) /* unaligned access */
@@ -1196,7 +1196,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
                       W  => MEMw_conditional_wrapper(pAddr, 4, rt_val[31..0]),
                       D  => MEMw_conditional_wrapper(pAddr, 8, rt_val)
                     } else false;
-		    wGPR(rt) = EXTZ(success)
+		    wGPR(rt) = zero_extend(success)
                   }
                 else
                   match width
@@ -1217,7 +1217,7 @@ function clause decode(0b100010 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(LWL(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
+        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, W);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             mem_val = MEMr_wrapper (pAddr[63..2] @ 0b00, 4); /* read word of interest */
@@ -1229,7 +1229,7 @@ function clause execute(LWL(base, rt, offset)) =
                 0b10  => mem_val[15..0] @ reg_val[15..0],
                 0b11  => mem_val[07..0] @ reg_val[23..0]
 	      };
-	    wGPR(rt) = EXTS(result);
+	    wGPR(rt) = sign_extend(result);
           }
       }
 union clause ast = LWR : (regno, regno, bits(16))
@@ -1238,7 +1238,7 @@ function clause decode(0b100110 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(LWR(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
+        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, W);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             mem_val = MEMr_wrapper(pAddr[63..2] @ 0b00, 4); /* read word of interest */
@@ -1250,7 +1250,7 @@ function clause execute(LWR(base, rt, offset)) =
                 0b10  => reg_val[31..24] @ mem_val[31..8],
                 0b11  => mem_val
               };
-	    wGPR(rt) = EXTS(result)
+	    wGPR(rt) = sign_extend(result)
           }
       }
 
@@ -1261,7 +1261,7 @@ function clause decode(0b101010 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(SWL(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
+        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, W);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             reg_val = rGPR(rt);
@@ -1281,7 +1281,7 @@ function clause decode(0b101110 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(SWR(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
+        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, W);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             wordAddr = pAddr[63..2] @ 0b00;
@@ -1303,7 +1303,7 @@ function clause decode(0b011010 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(LDL(base, rt, offset)) =
   {
     /* XXX length check not quite right, but conservative */
-    vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
+    vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, D);
     let pAddr = TLBTranslate(vAddr, StoreData) in
       {
         mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
@@ -1329,7 +1329,7 @@ function clause decode(0b011011 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(LDR(base, rt, offset)) =
   {
     /* XXX length check not quite right, but conservative */
-    vAddr = addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
+    vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, D);
     let pAddr = TLBTranslate(vAddr, StoreData) in
       {
         mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
@@ -1355,7 +1355,7 @@ function clause decode(0b101100 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(SDL(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
+        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, D);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             reg_val = rGPR(rt);
@@ -1381,7 +1381,7 @@ function clause decode(0b101101 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(SDR(base, rt, offset)) =
   {
         /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
+        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, D);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             reg_val = rGPR(rt);
@@ -1433,27 +1433,27 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
   checkCP0Access();
   let result : bits(64) = match (rd, sel)
         {
-          (0b00000,0b000) => let idx : bits(31) = EXTZ(TLBIndex) in
+          (0b00000,0b000) => let idx : bits(31) = zero_extend(TLBIndex) in
 			         (0x00000000 @ TLBProbe @ idx),  /* 0, TLB Index */
-          (0b00001,0b000) => EXTZ(TLBRandom),    /* 1, TLB Random */
+          (0b00001,0b000) => zero_extend(TLBRandom),    /* 1, TLB Random */
           (0b00010,0b000) => TLBEntryLo0.bits(), /* 2, TLB EntryLo0 */
           (0b00011,0b000) => TLBEntryLo1.bits(), /* 3, TLB EntryLo1 */
           (0b00100,0b000) => TLBContext.bits(),  /* 4, TLB Context */
-          (0b00101,0b000) => EXTZ(TLBPageMask @ 0x000), /* 5, TLB PageMask */
-          (0b00110,0b000) => EXTZ(TLBWired),   /* 6, TLB Wired */
-          (0b00111,0b000) => EXTZ(CP0HWREna),  /* 7, HWREna */
+          (0b00101,0b000) => zero_extend(TLBPageMask @ 0x000), /* 5, TLB PageMask */
+          (0b00110,0b000) => zero_extend(TLBWired),   /* 6, TLB Wired */
+          (0b00111,0b000) => zero_extend(CP0HWREna),  /* 7, HWREna */
           (0b01000,0b000) => CP0BadVAddr,      /* 8, BadVAddr reg */
-          (0b01000,0b001) => EXTZ(0b0),        /* 8, BadInstr reg XXX TODO */
-          (0b01001,0b000) => EXTZ(CP0Count),   /* 9, Count reg */
+          (0b01000,0b001) => zero_extend(0b0),        /* 8, BadInstr reg XXX TODO */
+          (0b01001,0b000) => zero_extend(CP0Count),   /* 9, Count reg */
           (0b01010,0b000) => TLBEntryHi.bits(),/* 10, TLB EntryHi */
-          (0b01011,0b000) => EXTZ(CP0Compare), /* 11, Compare reg */
-          (0b01100,0b000) => EXTZ(CP0Status.bits()),  /* 12, Status reg */
-          (0b01101,0b000) => EXTZ(CP0Cause.bits()),   /* 13, Cause reg */
+          (0b01011,0b000) => zero_extend(CP0Compare), /* 11, Compare reg */
+          (0b01100,0b000) => zero_extend(CP0Status.bits()),  /* 12, Status reg */
+          (0b01101,0b000) => zero_extend(CP0Cause.bits()),   /* 13, Cause reg */
           (0b01110,0b000) => CP0EPC,           /* 14, EPC */
-          (0b01111,0b000) => EXTZ(0x00000400), /* 15, sel 0: PrID processor ID */
-          (0b01111,0b110) => EXTZ(0b0),        /* 15, sel 6: CHERI core ID */
-          (0b01111,0b111) => EXTZ(0b0),        /* 15, sel 7: CHERI thread ID */
-          (0b10000,0b000) => EXTZ(0b1 /* M */      /* 16, sel 0: Config0 */
+          (0b01111,0b000) => zero_extend(0x00000400), /* 15, sel 0: PrID processor ID */
+          (0b01111,0b110) => zero_extend(0b0),        /* 15, sel 6: CHERI core ID */
+          (0b01111,0b111) => zero_extend(0b0),        /* 15, sel 7: CHERI thread ID */
+          (0b10000,0b000) => zero_extend(0b1 /* M */      /* 16, sel 0: Config0 */
                                  @ 0b000000000000000 /* Impl */
                                  @ 0b1               /* BE */
                                  @ 0b10              /* AT */
@@ -1461,7 +1461,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
                                  @ 0b001             /* MT standard TLB */
                                  @ 0b0000            /* zero */
                                  @ 0b000),
-          (0b10000,0b001) => EXTZ( /* 16, sel 1: Config1 */
+          (0b10000,0b001) => zero_extend( /* 16, sel 1: Config1 */
                                           0b1      /* M */
                                         @ TLBIndexMax /* MMU size-1 */
                                         @ 0b000    /* IS icache sets */
@@ -1477,7 +1477,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
                                         @ 0b0      /* CA 16e code compression */
                                         @ 0b0      /* EP EJTAG */
                                         @ 0b0),     /* FP FPU present */
-          (0b10000,0b010) => EXTZ( /* 16, sel 2: Config2 */
+          (0b10000,0b010) => zero_extend( /* 16, sel 2: Config2 */
                                           0b1     /* M */
                                         @ 0b000   /* TU L3 control  */
                                         @ 0b0000  /* TS L3 sets */
@@ -1490,13 +1490,13 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
           (0b10000,0b011) => 0x0000000000002000, /* 16, sel 3: Config3 zero except for bit 13 == ulri */
           (0b10000,0b101) => 0x0000000000000000, /* 16, sel 5: Config5 beri specific -- no extended TLB */
           (0b10001,0b000) => CP0LLAddr,        /* 17, sel 0: LLAddr */
-          (0b10010,0b000) => EXTZ(0b0),        /* 18, WatchLo */
-          (0b10011,0b000) => EXTZ(0b0),        /* 19, WatchHi */
+          (0b10010,0b000) => zero_extend(0b0),        /* 18, WatchLo */
+          (0b10011,0b000) => zero_extend(0b0),        /* 19, WatchHi */
           (0b10100,0b000) => TLBXContext.bits(), /* 20, XContext */
           (0b11110,0b000) => CP0ErrorEPC,      /* 30, ErrorEPC */
           _               => (SignalException(ResI))
         } in
-  wGPR(rt) = if (double) then result else EXTS(result[31..0])
+  wGPR(rt) = if (double) then result else sign_extend(result[31..0])
 }
 
 /* simulator halt instruction "MTC0 rt, r23" (cheri specific behaviour) */
@@ -1676,10 +1676,10 @@ function clause execute (RDHWR(rt, rd)) = {
   if ~(haveAccessLevel | haveCU0 | haveHWREna) then
     (SignalException(ResI));
   let temp : bits(64) = match rd {
-    0b00000  => EXTZ([bitzero]),  /* CPUNum */
-    0b00001  => EXTZ([bitzero]),  /* SYNCI_step */
-    0b00010  => EXTZ(CP0Count), /* Count */
-    0b00011  => EXTZ([bitone]),   /* Count resolution */
+    0b00000  => zero_extend([bitzero]),  /* CPUNum */
+    0b00001  => zero_extend([bitzero]),  /* SYNCI_step */
+    0b00010  => zero_extend(CP0Count), /* Count */
+    0b00011  => zero_extend([bitone]),   /* Count resolution */
     0b11101  => CP0UserLocal,   /* User local register */
     _        => (SignalException(ResI))
   } in
