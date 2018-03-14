@@ -65,6 +65,10 @@ let doc_kid kid = string (Ast_util.string_of_kid kid)
 
 let doc_int n = string (Big_int.to_string n)
 
+let docstring (l, _) = match l with
+  | Parse_ast.Documented (str, _) -> string "/**" ^^ string str ^^ string "*/" ^^ hardline
+  | _ -> empty
+
 let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_var v -> doc_kid v
   | Ord_inc -> string "inc"
@@ -425,9 +429,7 @@ and doc_letbind (LB_aux (lb_aux, _)) =
   | LB_val (pat, exp) ->
      separate space [doc_pat pat; equals; doc_exp exp]
 
-let doc_funcl funcl = string "FUNCL"
-
-let doc_funcl (FCL_aux  (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
+let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
   match pexp with
   | Pat_exp (pat,exp) ->
      group (separate space [doc_id id; doc_pat pat; equals; doc_exp exp])
@@ -482,7 +484,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | _ -> string "TYPEDEF"
 
 
-let doc_spec (VS_aux(v,_)) =
+let doc_spec (VS_aux (v, annot)) =
   let doc_extern ext =
     let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
       utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
@@ -491,7 +493,8 @@ let doc_spec (VS_aux(v,_)) =
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->
-     string "val" ^^ space
+     docstring annot
+     ^^ string "val" ^^ space
      ^^ (if is_cast then (string "cast" ^^ space) else empty)
      ^^ doc_id id ^^ space
      ^^ doc_extern ext

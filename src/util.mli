@@ -241,6 +241,7 @@ val termcode : int -> string
 val bold : string -> string
 val green : string -> string
 val red : string -> string
+val red_bg : string -> string
 val yellow : string -> string
 val cyan : string -> string
 val blue : string -> string

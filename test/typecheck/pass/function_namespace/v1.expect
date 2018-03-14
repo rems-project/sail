@@ -1,5 +1,5 @@
 Type error at file "function_namespace/v1.sail", line 9, character 7 to line 9, character 10
 
-  let [41mtest[49m = true;
+  let [41mtest[0m = true;
 
 Local variable test is already bound as a function name

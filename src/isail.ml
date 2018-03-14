@@ -263,6 +263,8 @@ let handle_input' input =
             interactive_ast := ast;
             interactive_env := env;
             interactive_state := initial_state !interactive_ast
+         | ":pretty" ->
+            print_endline (Pretty_print_sail.to_string (Latex.latex_defs !interactive_ast))
          | ":bytecode" ->
             let open PPrint in
             let open C_backend in

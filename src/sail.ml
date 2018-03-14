@@ -61,6 +61,7 @@ let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
+let opt_print_latex = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
@@ -88,6 +89,9 @@ let options = Arg.align ([
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
+  ( "-latex",
+    Arg.Set opt_print_latex,
+    " pretty print the input to latex");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -299,6 +303,15 @@ let main() =
          let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
          let ast_lem = rewrite_ast_lem ast_lem in
          output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
+       else ());
+      (if !(opt_print_latex)
+       then
+         begin
+           let out = match !opt_file_out with None -> "out.tex" | Some s -> s ^ ".tex" in
+           let chan = open_out out in
+           output_string chan (Pretty_print_sail.to_string (Latex.latex_defs ast));
+           close_out chan
+         end
        else ());
     end
 

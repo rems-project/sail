@@ -115,11 +115,9 @@ let print_code1 ff fname lnum1 cnum1 cnum2 =
       try
         skip_lines in_chan (lnum1 - 1);
         let line = input_line in_chan in
-        Format.fprintf ff "%s%s%s%s%s"
+        Format.fprintf ff "%s%s%s"
                        (Str.string_before line cnum1)
-                       (termcode 41)
-                       (Str.string_before (Str.string_after line cnum1) (cnum2 - cnum1))
-                       (termcode 49)
+                       Util.(Str.string_before (Str.string_after line cnum1) (cnum2 - cnum1) |> red_bg |> clear)
                        (Str.string_after line cnum2);
         close_in in_chan
       with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
@@ -143,18 +141,14 @@ let print_code2 ff fname lnum1 cnum1 lnum2 cnum2 =
       try
         skip_lines in_chan (lnum1 - 1);
         let line = input_line in_chan in
-        Format.fprintf ff "%s%s%s%s\n"
+        Format.fprintf ff "%s%s\n"
                        (Str.string_before line cnum1)
-                       (termcode 41)
-                       (Str.string_after line cnum1)
-                       (termcode 49);
+                       Util.(Str.string_after line cnum1 |> red_bg |> clear);
         let lines = read_lines in_chan (lnum2 - lnum1 - 1) in
-        List.iter (fun l -> Format.fprintf ff "%s%s%s\n" (termcode 41) l (termcode 49)) lines;
+        List.iter (fun l -> Format.fprintf ff "%s\n" Util.(l |> red_bg |> clear)) lines;
         let line = input_line in_chan in
-        Format.fprintf ff "%s%s%s%s"
-                       (termcode 41)
-                       (Str.string_before line cnum2)
-                       (termcode 49)
+        Format.fprintf ff "%s%s"
+                       Util.(Str.string_before line cnum2 |> red_bg |> clear)
                        (Str.string_after line cnum2);
         close_in in_chan
       with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
@@ -205,9 +199,10 @@ let rec format_loc_aux ff l =
   let (l_org, mod_s) = dest_loc l in
   let _ = match l_org with
     | Parse_ast.Unknown -> Format.fprintf ff "no location information available"
-    | Parse_ast.Generated l -> Format.fprintf ff "Code generated: original nearby source is "; (format_loc_aux ff l)
+    | Parse_ast.Generated l -> Format.fprintf ff "code generated: original nearby source is "; (format_loc_aux ff l)
     | Parse_ast.Range(p1,p2) -> format_pos2 ff p1 p2
     | Parse_ast.Int(s,_) -> Format.fprintf ff "code in lib from: %s" s
+    | Parse_ast.Documented(_, l) -> format_loc_aux ff l
   in
   ()
 

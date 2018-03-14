@@ -75,7 +75,7 @@ function clause execute(LOAD(imm, rs1, rd)) =
 
 /* ****************************************************************** */
 
-function clause decode _ = None
+function clause decode _ = None()
 
 end ast
 end decode

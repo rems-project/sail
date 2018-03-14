@@ -859,8 +859,8 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
 	  let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s\n" v' (kind_to_string k) ) (Envmap.union k k_env) in *)
 	  (match !d with
 	  | DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),false ->
-	    let funcl = to_ast_funcl (names,Envmap.union k k_env,def_ord) funcl in
-	    d:= DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[funcl]),fl)),false;
+            let (FCL_aux (funcl_aux, _)) = to_ast_funcl (names,Envmap.union k k_env,def_ord) funcl in
+            d:= DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[FCL_aux (funcl_aux, (l, ()))]),fl)),false;
 	    (No_def,envs),partial_defs
 	  | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None None
 	  | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))

@@ -93,6 +93,7 @@ let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
 let mk_nc nc n m = NC_aux (nc, loc n m)
 let mk_sd s n m = SD_aux (s, loc n m)
+let mk_sd_doc s str n m = SD_aux (s, Documented (str, loc n m))
 let mk_ir r n m = BF_aux (r, loc n m)
 
 let mk_funcl f n m = FCL_aux (f, loc n m)
@@ -101,6 +102,8 @@ let mk_td t n m = TD_aux (t, loc n m)
 let mk_vs v n m = VS_aux (v, loc n m)
 let mk_reg_dec d n m = DEC_aux (d, loc n m)
 let mk_default d n m = DT_aux (d, loc n m)
+
+let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
 
 let qi_id_of_kopt (KOpt_aux (kopt_aux, l) as kopt) = QI_aux (QI_id kopt, l)
 
@@ -177,6 +180,8 @@ let rec desugar_rchain chain s e =
 %token <string> Colon ColonColon ExclEq
 %token <string> GtEq
 %token <string> LtEq
+
+%token <string> Doc
 
 %token <string> Op0 Op1 Op2 Op3 Op4 Op5 Op6 Op7 Op8 Op9
 %token <string> Op0l Op1l Op2l Op3l Op4l Op5l Op6l Op7l Op8l Op9l
@@ -1189,6 +1194,8 @@ externs:
     { (string_of_id $1, $3) :: $5 }
 
 val_spec_def:
+  | Doc val_spec_def
+    { doc_vs $1 $2 }
   | Val id Colon typschm
     { mk_vs (VS_val_spec ($4, $2, (fun _ -> None), false)) $startpos $endpos }
   | Val Cast id Colon typschm
@@ -1224,6 +1231,12 @@ scattered_def:
   | Function_ id
     { mk_sd (SD_scattered_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
 
+scattered_clause:
+  | Doc Function_ Clause funcl
+    { mk_sd_doc (SD_scattered_funcl $4) $1 $startpos($2) $endpos }
+  | Function_ Clause funcl
+    { mk_sd (SD_scattered_funcl $3) $startpos $endpos }
+
 def:
   | fun_def
     { DEF_fundef $1 }
@@ -1243,8 +1256,8 @@ def:
     { DEF_overload ($2, $4) }
   | Scattered scattered_def
     { DEF_scattered $2 }
-  | Function_ Clause funcl
-    { DEF_scattered (mk_sd (SD_scattered_funcl $3) $startpos $endpos) }
+  | scattered_clause
+    { DEF_scattered $1 }
   | Union Clause id Eq type_union
     { DEF_scattered (mk_sd (SD_scattered_unioncl ($3, $5)) $startpos $endpos) }
   | End id

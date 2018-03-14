@@ -59,6 +59,7 @@ type l =
   | Int of string * l option
   | Generated of l
   | Range of Lexing.position * Lexing.position
+  | Documented of string * l
 
 type 'a annot = l * 'a
 
