@@ -48,6 +48,8 @@ let trace_call str =
 
 type bit = B0 | B1
 
+let eq_bit (a, b) = a = b
+                  
 let and_bit = function
   | B1, B1 -> B1
   | _, _ -> B0
