@@ -1,7 +1,7 @@
 open import Pervasives_extra
 open import Sail_instr_kinds
 open import Sail_values
-open import Sail_operators_mwords
+open import Sail_operators_bitlists
 open import Prompt_monad
 open import Prompt
 
@@ -26,11 +26,11 @@ val putchar : integer -> unit
 let putchar _ = ()
 declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
 
-val slice : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
+val slice : list bitU -> integer -> integer -> list bitU
 let slice v lo len =
   subrange_vec_dec v (lo + len - 1) lo
 
-val set_slice : forall 'a 'b. Size 'a, Size 'b => integer -> integer -> mword 'a -> integer -> mword 'b -> mword 'a
+val set_slice : integer -> integer -> list bitU -> integer -> list bitU -> list bitU
 let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
   update_subrange_vec_dec out (n + slice_len - 1) n v
 
@@ -40,16 +40,16 @@ let get_slice_int_bl len n lo =
   let bs = bools_of_int (hi + 1) n in
   subrange_list false bs hi lo
 
-val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> mword 'a
+val get_slice_int : integer -> integer -> integer -> list bitU
 let get_slice_int len n lo = of_bools (get_slice_int_bl len n lo)
 
-val set_slice_int :  forall 'a. Size 'a => integer -> integer -> integer -> mword 'a -> integer
+val set_slice_int : integer -> integer -> integer -> list bitU -> integer
 let set_slice_int len n lo v =
   let hi = lo + len - 1 in
-  let bs = bool_list_of_int n in
+  let bs = bit_list_of_int n in
   let len_n = max (hi + 1) (integerFromNat (List.length bs)) in
-  let ext_bs = exts_bools len_n bs in
-  signed_of_bools (update_subrange_list false ext_bs hi lo (bitlistFromWord v))
+  let ext_bs = exts_bits len_n bs in
+  maybe_failwith (signed (update_subrange_list false ext_bs hi lo (bits_of v)))
 
 (*let ext_slice signed v i j =
   let len = length v in
@@ -99,7 +99,7 @@ let hexstring_to_bools s =
     | _ -> Nothing
   end
 
-val hex_slice : forall 'rv 'n 'e. Size 'n => string -> integer -> integer -> monad 'rv (mword 'n) 'e
+val hex_slice : forall 'rv 'e. string -> integer -> integer -> monad 'rv (list bitU) 'e
 let hex_slice v len lo =
   match hexstring_to_bools v with
     | Just bs ->
@@ -117,9 +117,9 @@ let undefined_unit () = return ()
 let undefined_int () = return (0:ii)
 val undefined_vector : forall 'rv 'a 'e. integer -> 'a -> monad 'rv (list 'a) 'e
 let undefined_vector len u = return (repeat [u] len)
-val undefined_bitvector : forall 'rv 'a 'e. Size 'a => integer -> monad 'rv (mword 'a) 'e
+val undefined_bitvector : forall 'rv 'e. integer -> monad 'rv (list bitU) 'e
 let undefined_bitvector len = return (of_bools (repeat [false] len))
-val undefined_bits : forall 'rv 'a 'e. Size 'a => integer -> monad 'rv (mword 'a) 'e
+val undefined_bits : forall 'rv 'e. integer -> monad 'rv (list bitU) 'e
 let undefined_bits = undefined_bitvector
 let undefined_bit () = return B0
 let undefined_real () = return (realFromFrac 0 1)
@@ -133,5 +133,4 @@ let write_ram addrsize size hexRAM address value =
   return ()
 
 let read_ram addrsize size hexRAM address =
-  (*let _ = prerr_endline ("Reading " ^ (stringFromInteger size) ^ " bytes from address " ^ (stringFromInteger (unsigned address))) in*)
   read_mem Read_plain address size

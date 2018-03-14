@@ -255,8 +255,8 @@ function register_inaccessible(r) =
   else
     false
 
-val MEMr_tag = "read_tag"  : bits(64) -> bool effect { rmemt }
-val MEMw_tag = "write_tag" : (bits(64) , bool) -> unit effect { wmvt }
+val MEMr_tag = "read_tag_bool"  : bits(64) -> bool effect { rmemt }
+val MEMw_tag = "write_tag_bool" : (bits(64) , bool) -> unit effect { wmvt }
 
 val MEMr_tagged : bits(64) -> (bool, bits('cap_size * 8)) effect { escape, rmem, rmemt }
 function MEMr_tagged (addr) =
@@ -360,7 +360,12 @@ function addrWrapper(addr, accessType, width) =
       to_bits(64, vAddr); /* XXX vAddr not truncated because top <= 2^64 and size > 0 */
   }
 
-val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, undef, escape}
+$ifdef _MIPS_TLB_STUB
+val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, escape}
+$else
+val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, escape, undef}
+$endif
+
 function TranslatePC (vAddr) = {
   incrementCP0Count();
   let pcc = capRegToCapStruct(PCC);

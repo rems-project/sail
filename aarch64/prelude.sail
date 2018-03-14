@@ -142,7 +142,7 @@ val UInt = {
 
 val SInt = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
-val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm)
+val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm) effect {escape}
 
 val __SetSlice_bits = "set_slice" : forall 'n 'm.
   (atom('n), atom('m), bits('n), int, bits('m)) -> bits('n)

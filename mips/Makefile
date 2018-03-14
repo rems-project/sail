@@ -13,15 +13,15 @@ MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.s
 MIPS_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 
 mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
-	$(SAIL) -ocaml -o mips $^
+	$(SAIL) -ocaml -o mips -memo_z3 $^
 
 mips_no_tlb.lem: $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS)
-	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen $^
+	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 mips_no_tlb_types.lem: mips_no_tlb.lem
 
 # TODO: Use monomorphisation so that we can switch to machine words
 mips.lem: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS)
-	$(SAIL) -lem -o mips -lem_lib Mips_extras -undefined_gen $^
+	$(SAIL) -lem -o mips -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 mips_types.lem: mips.lem
 
 M%.thy: m%.lem m%_types.lem mips_extras.lem

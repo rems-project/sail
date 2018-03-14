@@ -5,9 +5,6 @@ open import Sail_operators
 open import Prompt_monad
 open import Prompt
 
-val mword_zero : forall 'a. Size 'a => mword 'a
-let mword_zero = wordFromInteger 0
-
 (* Specialisation of operators to machine words *)
 
 let uint v = unsignedIntegerFromWord v
@@ -232,6 +229,9 @@ let duplicate_maybe  b n = Maybe.map (fun b -> duplicate_bool b n) (bool_of_bitU
 let duplicate_fail   b n = bool_of_bitU_fail b >>= (fun b -> return (duplicate_bool b n))
 let duplicate_oracle b n = bool_of_bitU_oracle b >>= (fun b -> return (duplicate_bool b n))
 let duplicate        b n = maybe_failwith (duplicate_maybe b n)
+
+val reverse_endianness : forall 'a. Size 'a => mword 'a -> mword 'a
+let reverse_endianness v = wordFromBitlist (reverse_endianness_list (bitlistFromWord v))
 
 val eq_vec    : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val neq_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool

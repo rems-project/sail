@@ -437,11 +437,11 @@ let read_ram (addr_size, data_size, hex_ram, addr) =
 
 let tag_ram : bool RAM.t = RAM.create 256
 
-let write_tag (addr, tag) =
+let write_tag_bool (addr, tag) =
   let addri = uint addr in
   RAM.add tag_ram addri tag
 
-let read_tag addr =
+let read_tag_bool addr =
   let addri = uint addr in
   try RAM.find tag_ram addri with Not_found -> false
 

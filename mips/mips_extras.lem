@@ -14,15 +14,23 @@ val MEMr_tag_reserve : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b => 'a
 let MEMr addr size             = read_mem Read_plain addr size
 let MEMr_reserve addr size     = read_mem Read_reserve addr size
 
+val read_tag_bool : forall 'regval 'a 'e. Bitvector 'a => 'a -> monad 'regval bool 'e
+let read_tag_bool addr =
+  read_tag addr >>= fun t ->
+  maybe_fail "read_tag_bool" (bool_of_bitU t)
+
+val write_tag_bool : forall 'regval 'a 'e. Bitvector 'a => 'a -> bool -> monad 'regval unit 'e
+let write_tag_bool addr t = write_tag addr (bitU_of_bool t) >>= fun _ -> return ()
+
 let MEMr_tag addr size =
   read_mem Read_plain addr size >>= fun v ->
-  read_tag addr >>= fun t ->
-  return (bool_of_bitU t, v)
+  read_tag_bool addr >>= fun t ->
+  return (t, v)
 
 let MEMr_tag_reserve addr size =
   read_mem Read_plain addr size >>= fun v ->
-  read_tag addr >>= fun t ->
-  return (bool_of_bitU t, v)
+  read_tag_bool addr >>= fun t ->
+  return (t, v)
 
 
 val MEMea                 : forall 'regval 'a 'e. Bitvector 'a => 'a -> integer -> monad 'regval unit 'e
@@ -44,8 +52,8 @@ val MEMval_tag_conditional : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b
 
 let MEMval _ size v                      = write_mem_val v >>= fun _ -> return ()
 let MEMval_conditional _ size v          = write_mem_val v >>= fun b -> return (if b then true else false)
-let MEMval_tag addr size t v             = write_mem_val v >>= fun _ -> write_tag addr (bitU_of_bool t) >>= fun _ -> return ()
-let MEMval_tag_conditional addr size t v = write_mem_val v >>= fun b -> write_tag addr (bitU_of_bool t) >>= fun _ -> return (if b then true else false)
+let MEMval_tag addr size t v             = write_mem_val v >>= fun _ -> write_tag_bool addr t >>= fun _ -> return ()
+let MEMval_tag_conditional addr size t v = write_mem_val v >>= fun b -> write_tag_bool addr t >>= fun _ -> return (if b then true else false)
 
 val MEM_sync  : forall 'regval 'e. unit -> monad 'regval unit 'e
 
@@ -57,11 +65,11 @@ let MEM_sync () = barrier Barrier_MIPS_SYNC
 let get_slice_int_bl len n lo =
   (* TODO: Is this the intended behaviour? *)
   let hi = lo + len - 1 in
-  let bits = bits_of_int (hi + 1) n in
-  get_bits false bits hi lo
+  let bs = bools_of_int (hi + 1) n in
+  subrange_list false bs hi lo
 
 val get_slice_int : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a
-let get_slice_int len n lo = of_bits (get_slice_int_bl len n lo)
+let get_slice_int len n lo = of_bools (get_slice_int_bl len n lo)
 
 let write_ram _ size _ addr data =
   MEMea addr size >>
@@ -69,29 +77,48 @@ let write_ram _ size _ addr data =
 
 let read_ram _ size _ addr = MEMr addr size
 
-let sign_extend bits len = exts_bv len bits
-let zero_extend bits len = extz_bv len bits
+let string_of_bits bs = string_of_bv (bits_of bs)
+let string_of_int = show
 
-let shift_bits_left v n = shiftl_bv v (unsigned n)
-let shift_bits_right v n = shiftr_bv v (unsigned n)
-let shift_bits_right_arith v n = arith_shiftr_bv v (unsigned n)
+val prerr_endline : string -> unit
+let prerr_endline _ = ()
+declare ocaml target_rep function prerr_endline = `prerr_endline`
 
-(* TODO: These could be monadic instead of hardcoded *)
-let internal_pick vs = head vs
-let undefined_string () = ""
-let undefined_unit () = ()
-let undefined_int () = (0:ii)
-let undefined_bool () = false
-val undefined_vector : forall 'a. integer -> 'a -> list 'a
-let undefined_vector len u = repeat [u] len
-val undefined_bitvector : forall 'a. Bitvector 'a => integer -> 'a
-let undefined_bitvector len = of_bits (repeat [B0] len)
-val undefined_bits : forall 'a. Bitvector 'a => integer -> 'a
-let undefined_bits len = undefined_bitvector len
-let undefined_bit () = B0
-let undefined_real () = realFromFrac 0 1
-let undefined_range i j = i
-let undefined_atom i = i
-let undefined_nat () = (0:ii)
+val print_int : string -> integer -> unit
+let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
+
+val putchar : integer -> unit
+let putchar _ = ()
+declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
+
+let sign_extend bits len = maybe_failwith (of_bits (exts_bv len bits))
+let zero_extend bits len = maybe_failwith (of_bits (extz_bv len bits))
+
+let shift_bits_left v n =
+  let r = Maybe.bind (unsigned n) (fun n -> of_bits (shiftl_bv v n)) in
+  maybe_fail "shift_bits_left" r
+let shift_bits_right v n =
+  let r = Maybe.bind (unsigned n) (fun n -> of_bits (shiftr_bv v n)) in
+  maybe_fail "shift_bits_right" r
+let shift_bits_right_arith v n =
+  let r = Maybe.bind (unsigned n) (fun n -> of_bits (arith_shiftr_bv v n)) in
+  maybe_fail "shift_bits_right_arith" r
+
+(* Use constants for undefined values for now *)
+let internal_pick vs = return (head vs)
+let undefined_string () = return ""
+let undefined_unit () = return ()
+let undefined_int () = return (0:ii)
+val undefined_vector : forall 'rv 'a 'e. integer -> 'a -> monad 'rv (list 'a) 'e
+let undefined_vector len u = return (repeat [u] len)
+val undefined_bitvector : forall 'rv 'a 'e. Bitvector 'a => integer -> monad 'rv 'a 'e
+let undefined_bitvector len = return (of_bools (repeat [false] len))
+val undefined_bits : forall 'rv 'a 'e. Bitvector 'a => integer -> monad 'rv 'a 'e
+let undefined_bits = undefined_bitvector
+let undefined_bit () = return B0
+let undefined_real () = return (realFromFrac 0 1)
+let undefined_range i j = return i
+let undefined_atom i = return i
+let undefined_nat () = return (0:ii)
 
 let skip () = return ()

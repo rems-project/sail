@@ -220,6 +220,9 @@ let duplicate_oracle b n =
   bool_of_bitU_oracle b >>= (fun b ->
   return (duplicate (bitU_of_bool b) n))
 
+val reverse_endianness : list bitU -> list bitU
+let reverse_endianness v = reverse_endianness_list v
+
 val eq_vec    : list bitU -> list bitU -> bool
 val neq_vec   : list bitU -> list bitU -> bool
 val ult_vec   : list bitU -> list bitU -> bool

@@ -36,7 +36,7 @@ $ifndef _MIPS_TLB_STUB
 $define _MIPS_TLB_STUB
 
 val tlbEntryMatch : (bits(2), bits(27), bits(8), TLBEntry) -> bool effect pure
-function tlbSearch(VAddr) : bits(64) -> option(TLBIndexT) = None
+function tlbSearch(VAddr) : bits(64) -> option(TLBIndexT) = None()
 
 val TLBTranslate2 : (bits(64), MemAccessType) -> (bits(64), bool) effect pure
 function TLBTranslate (vAddr, accessType) : (bits(64), MemAccessType) -> bits(64) = 

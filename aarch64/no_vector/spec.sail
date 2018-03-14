@@ -2544,7 +2544,7 @@ function PACInvSub Tinput = {
   return(Toutput)
 }
 
-val ComputePAC : (bits(64), bits(64), bits(64), bits(64)) -> bits(64) effect {rreg, undef, wreg}
+val ComputePAC : (bits(64), bits(64), bits(64), bits(64)) -> bits(64) effect {escape, rreg, undef, wreg}
 
 function ComputePAC (data, modifier, key0, key1) = {
   workingval : bits(64) = undefined;

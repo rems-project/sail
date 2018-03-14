@@ -86,9 +86,9 @@ function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
 overload operator | = {or_bool, or_vec}
 
-val unsigned = {ocaml: "uint", lem: "unsigned"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+val unsigned = {ocaml: "uint", lem: "uint"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
-val signed = {ocaml: "sint", lem: "signed"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+val signed = {ocaml: "sint", lem: "sint"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm)
 
@@ -355,18 +355,18 @@ infix 1 >>
 infix 1 <<
 infix 1 >>_s
 
-val "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
-val "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n) effect {undef}
+val "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n) effect {undef}
 
 val "shiftl" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
 val "shiftr" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
 
 overload operator >> = {shift_bits_right, shiftr}
 overload operator << = {shift_bits_left, shiftl}
-val operator >>_s = "shift_bits_right_arith" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val operator >>_s = "shift_bits_right_arith" : forall 'n 'm. (bits('n), bits('m)) -> bits('n) effect {undef}
 
 infix 7 *_s
-val operator *_s = "smult_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
+val operator *_s = "mults_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
 infix 7 *_u
 val operator *_u = "mult_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
 
