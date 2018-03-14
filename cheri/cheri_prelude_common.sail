@@ -185,6 +185,13 @@ bitfield CapCauseReg : bits(16) = {
 
 register CapCause : CapCauseReg
 
+val execute_branch_pcc : CapStruct -> unit effect {wreg}
+function execute_branch_pcc(newPCC) = {
+  delayedPC = to_bits(64, getCapOffset(newPCC));
+  delayedPCC = capStructToCapReg(newPCC);
+  branchPending = 0b1;
+}
+
 function SignalException (ex) = 
   {
     if (not (CP0Status.EXL())) then {

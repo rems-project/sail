@@ -1053,13 +1053,11 @@ function clause execute (CCall(cs, cb, 0b00000000001)) = /* selector=1 */
   else if (cs_cursor >= getCapTop(cs_val)) then
     raise_c2_exception(CapEx_LengthViolation, cs)
   else
-    let csUnsealed = capStructToCapReg({cs_val with
+    {
+      execute_branch_pcc({cs_val with
         sealed=false,
         otype=zeros()
-    }) in {
-      delayedPC = to_bits(64, getCapOffset(cs_val));
-      delayedPCC = csUnsealed;
-      branchPending = 0b1;
+      });
       inCCallDelay  = 0b1;
       C26 = capStructToCapReg({cb_val with
         sealed=false,
@@ -1088,8 +1086,7 @@ function clause execute (CBX(cb, imm, notset)) =
   else if (((readCapReg(cb)).tag) ^ notset) then
     {
       let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
-      delayedPC     = PC + offset;
-      branchPending = 0b1;
+      execute_branch(PC + offset);
     }
   /* END_CBtag */
 }
@@ -1104,8 +1101,7 @@ function clause execute (CBZ(cb, imm, notzero)) =
   else if (((readCapReg(cb)) == null_cap) ^ notzero) then
     {
       let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
-      delayedPC     = PC + offset;
-      branchPending = 0b1;
+      execute_branch(PC + offset);
     }
   /* END_CBz */
 }
@@ -1144,9 +1140,7 @@ function clause execute(CJALR(cd, cb, link)) =
             writeCapReg(cd, linkCap)
         else
             assert(false, "");
-      delayedPC =  to_bits(64, getCapOffset(cb_val));
-      delayedPCC = capStructToCapReg(cb_val);
-      branchPending = 0b1;
+      execute_branch_pcc(cb_val);
     }
   /* END_CJALR */
 }

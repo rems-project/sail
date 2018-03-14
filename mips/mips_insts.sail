@@ -884,8 +884,7 @@ function clause decode (0b000010 @ offset : bits(26)) =
   Some(J(offset))
 function clause execute (J(offset)) =
   {
-    delayedPC     = (PC + 4)[63..28] @ offset @ 0b00;
-    branchPending = 0b1
+    execute_branch((PC + 4)[63..28] @ offset @ 0b00);
   }
 
 /* JAL    - jump and link */
@@ -894,8 +893,7 @@ function clause decode (0b000011 @ offset : bits(26)) =
   Some(JAL(offset))
 function clause execute (JAL(offset)) =
   {
-    delayedPC     = (PC + 4)[63..28] @ offset @ 0b00;
-    branchPending = 0b1;
+    execute_branch((PC + 4)[63..28] @ offset @ 0b00);
     wGPR(0b11111) = PC + 8;
   }
 
@@ -905,8 +903,7 @@ function clause decode (0b000000 @ rs : regno @ 0b00000 @ 0b00000 @ hint : regno
   Some(JR(rs)) /* hint is ignored */
 function clause execute (JR(rs)) =
   {
-    delayedPC     = rGPR(rs);
-    branchPending = 0b1;
+    execute_branch(rGPR(rs));
   }
 
 /* JALR -- jump via register with link */
@@ -915,8 +912,7 @@ function clause decode (0b000000 @ rs : regno @ 0b00000 @ rd : regno @ hint : re
   Some(JALR(rs, rd)) /* hint is ignored */
 function clause execute (JALR(rs, rd)) =
   {
-    delayedPC     = rGPR(rs);
-    branchPending = 0b1;
+    execute_branch(rGPR(rs));
     wGPR(rd)      = PC + 8;
   }
 
@@ -939,8 +935,7 @@ function clause execute (BEQ(rs, rd, imm, ne, likely)) =
     if ((rGPR(rs) == rGPR(rd)) ^ ne) then
       {
         let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
-        delayedPC     = PC + offset;
-        branchPending = 0b1;
+        execute_branch(PC + offset);
       }
     else
       {
@@ -996,8 +991,7 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
     if (condition) then
       {
         let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
-        delayedPC     =  PC + offset;
-        branchPending = 0b1;
+        execute_branch(PC + offset);
       }
     else if (likely) then
       {

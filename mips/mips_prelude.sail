@@ -289,6 +289,12 @@ register branchPending : bits(1)      /* Set by branch instructions to implement
 register inBranchDelay : bits(1)      /* Needs to be set by outside world when in branch delay slot */
 register delayedPC : bits(64)          /* Set by branch instructions to implement branch delay */
 
+val execute_branch : bits(64) -> unit effect {wreg}
+function execute_branch(pc) = {
+  delayedPC = pc;
+  branchPending = 0b1;
+}
+
 /* General purpose registers */
 
 
