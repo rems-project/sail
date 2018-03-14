@@ -175,10 +175,7 @@ let find_updated_vars exp =
     { (compute_exp_alg IdSet.empty IdSet.union) with lEXP_aux = lEXP_aux } exp)
 
 let lookup_equal_kids env =
-  let get_eq_kids kid eqs = match KBindings.find_opt kid eqs with
-    | Some kids -> kids
-    | None -> KidSet.singleton kid
-  in
+  let get_eq_kids kid eqs = try KBindings.find kid eqs with Not_found -> KidSet.singleton kid in
   let add_eq_kids kid1 kid2 eqs =
     let kids = KidSet.union (get_eq_kids kid2 eqs) (get_eq_kids kid1 eqs) in
     eqs
@@ -193,16 +190,16 @@ let lookup_equal_kids env =
   List.fold_left add_nc KBindings.empty (Env.get_constraints env)
 
 let lookup_constant_kid env kid =
-  match KBindings.find_opt kid (lookup_equal_kids env) with
-    | Some kids ->
-       let check_nc const nc = match const, nc with
-         | None, NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant i, _)), _)
-           when KidSet.mem kid kids ->
-            Some i
-         | _, _ -> const
-       in
-       List.fold_left check_nc None (Env.get_constraints env)
-    | None -> None
+  try
+    let kids = KBindings.find kid (lookup_equal_kids env) in
+    let check_nc const nc = match const, nc with
+      | None, NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant i, _)), _)
+        when KidSet.mem kid kids ->
+         Some i
+      | _, _ -> const
+    in
+    List.fold_left check_nc None (Env.get_constraints env)
+  with Not_found -> None
 
 let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
   | Nexp_id id -> rewrite_nexp_ids env (Env.get_num_def id env)
@@ -1876,28 +1873,28 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
                 let aux_fun_id = prepend_id (fun_name ^ "_") constr_id in
                 let aux_funcl = FCL_aux (FCL_Funcl (aux_fun_id, pexp'), pannot') in
                 begin
-                  match Bindings.find_opt aux_fun_id aux_funs with
-                    | Some aux_clauses ->
-                       clauses,
-                       Bindings.add aux_fun_id (aux_clauses @ [aux_funcl]) aux_funs
-                    | None ->
-                       let argpats, argexps = List.split (List.mapi
-                         (fun idx (P_aux (paux, a)) ->
-                            let id = match paux with
-                              | P_as (_, id) | P_id id -> id
-                              | _ -> mk_id ("arg" ^ string_of_int idx)
-                            in
-                            P_aux (P_id id, a), E_aux (E_id id, a))
-                         args)
-                       in
-                       let pexp = construct_pexp
-                         (P_aux (P_app (constr_id, argpats), pannot),
-                          None,
-                          E_aux (E_app (aux_fun_id, argexps), annot),
-                          annot)
-                       in
-                       clauses @ [FCL_aux (FCL_Funcl (id, pexp), fannot)],
-                       Bindings.add aux_fun_id [aux_funcl] aux_funs
+                  try
+                    let aux_clauses = Bindings.find aux_fun_id aux_funs in
+                    clauses,
+                    Bindings.add aux_fun_id (aux_clauses @ [aux_funcl]) aux_funs
+                  with Not_found ->
+                    let argpats, argexps = List.split (List.mapi
+                     (fun idx (P_aux (paux, a)) ->
+                        let id = match paux with
+                          | P_as (_, id) | P_id id -> id
+                          | _ -> mk_id ("arg" ^ string_of_int idx)
+                        in
+                        P_aux (P_id id, a), E_aux (E_id id, a))
+                     args)
+                    in
+                    let pexp = construct_pexp
+                     (P_aux (P_app (constr_id, argpats), pannot),
+                      None,
+                      E_aux (E_app (aux_fun_id, argexps), annot),
+                      annot)
+                    in
+                    clauses @ [FCL_aux (FCL_Funcl (id, pexp), fannot)],
+                    Bindings.add aux_fun_id [aux_funcl] aux_funs
                 end
              | _ -> clauses @ [clause], aux_funs)
         ([], Bindings.empty) clauses
