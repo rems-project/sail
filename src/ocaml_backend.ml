@@ -669,6 +669,19 @@ let ocaml_main spec sail_dir =
 let ocaml_pp_defs f defs =
   ToChannel.pretty 1. 80 f (ocaml_defs defs)
 
+let system_checked str =
+  match Unix.system str with
+  | Unix.WEXITED 0 -> ()
+  | Unix.WEXITED n ->
+     prerr_endline (str ^ " terminated with code " ^ string_of_int n);
+     exit 1
+  | Unix.WSIGNALED _ ->
+     prerr_endline (str ^ " was killed by a signal");
+     exit 1
+  | Unix.WSTOPPED _ ->
+     prerr_endline (str ^ " was stopped by a signal");
+     exit 1
+
 let ocaml_compile spec defs =
   let sail_dir =
     try Sys.getenv "SAIL_DIR" with
@@ -690,11 +703,10 @@ let ocaml_compile spec defs =
       let out_chan = open_out "main.ml" in
       output_string out_chan (ocaml_main spec sail_dir);
       close_out out_chan;
-      let _ = Unix.system "ocamlbuild -use-ocamlfind main.native" in
+      system_checked "ocamlbuild -use-ocamlfind main.native";
       let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
       ()
     end
   else
-    let _ = Unix.system ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo") in
-    ();
+    system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo");
   Unix.chdir cwd
