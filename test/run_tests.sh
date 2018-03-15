@@ -40,3 +40,9 @@ printf "* RISCV spec tests                       *\n"
 printf "******************************************\n\n"
 
 ./test/riscv/run_tests.sh
+
+printf "******************************************\n"
+printf "* CHERI spec tests                       *\n"
+printf "******************************************\n\n"
+
+./test/cheri/run_tests.sh
