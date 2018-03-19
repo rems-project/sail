@@ -98,6 +98,8 @@ let string_of_value = function
 let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_id id when zencode -> Util.zencode_string (string_of_id id)
   | F_id id -> string_of_id id
+  | F_ref id when zencode -> "&" ^ Util.zencode_string (string_of_id id)
+  | F_ref id -> "&" ^ string_of_id id
   | F_lit v -> string_of_value v
   | F_call (str, frags) ->
      Printf.sprintf "%s(%s)" str (Util.string_of_list ", " (string_of_fragment ~zencode:zencode) frags)
@@ -188,6 +190,8 @@ and aval =
 let rec frag_rename from_id to_id = function
   | F_id id when Id.compare id from_id = 0 -> F_id to_id
   | F_id id -> F_id id
+  | F_ref id when Id.compare id from_id = 0 -> F_ref to_id
+  | F_ref id -> F_id id
   | F_lit v -> F_lit v
   | F_have_exception -> F_have_exception
   | F_current_exception -> F_current_exception
@@ -204,6 +208,16 @@ let rec apat_bindings = function
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
   | AP_nil -> IdSet.empty
   | AP_wild -> IdSet.empty
+
+let rec apat_rename from_id to_id = function
+  | AP_tup apats -> AP_tup (List.map (apat_rename from_id to_id) apats)
+  | AP_id id when Id.compare id from_id = 0 -> AP_id to_id
+  | AP_id id -> AP_id id
+  | AP_global (id, typ) -> AP_global (id, typ)
+  | AP_app (ctor, apat) -> AP_app (ctor, apat_rename from_id to_id apat)
+  | AP_cons (apat1, apat2) -> AP_cons (apat_rename from_id to_id apat1, apat_rename from_id to_id apat2)
+  | AP_nil -> AP_nil
+  | AP_wild -> AP_wild
 
 let rec aval_rename from_id to_id = function
   | AV_lit (lit, typ) -> AV_lit (lit, typ)
@@ -284,8 +298,9 @@ and no_shadow_apexp ids (apat, aexp1, aexp2) =
   let shadows = IdSet.inter (apat_bindings apat) ids in
   let shadows = List.map (fun id -> id, new_shadow id) (IdSet.elements shadows) in
   let rename aexp = List.fold_left (fun aexp (from_id, to_id) -> aexp_rename from_id to_id aexp) aexp shadows in
-  let ids = IdSet.union ids (IdSet.of_list (List.map snd shadows)) in
-  (apat, no_shadow ids (rename aexp1), no_shadow ids (rename aexp2))
+  let rename_apat apat = List.fold_left (fun apat (from_id, to_id) -> apat_rename from_id to_id apat) apat shadows in
+  let ids = IdSet.union (apat_bindings apat) (IdSet.union ids (IdSet.of_list (List.map snd shadows))) in
+  (rename_apat apat, no_shadow ids (rename aexp1), no_shadow ids (rename aexp2))
 
 (* Map over all the avals in an aexp. *)
 let rec map_aval f = function
@@ -839,7 +854,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (*FIXME*)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
-  | CT_ref ctyp -> is_stack_ctyp ctyp
+  | CT_ref ctyp -> true
 
 let is_stack_typ ctx typ = is_stack_ctyp (ctyp_of_typ ctx typ)
 
@@ -1284,6 +1299,10 @@ let is_ct_struct = function
   | CT_struct _ -> true
   | _ -> false
 
+let is_ct_ref = function
+  | CT_ref _ -> true
+  | _ -> false
+
 let rec chunkify n xs =
   match Util.take n xs, Util.drop n xs with
   | xs, [] -> [xs]
@@ -1297,7 +1316,7 @@ let rec compile_aval ctx = function
      [], (F_id id, ctyp_of_typ ctx (lvar_typ typ)), []
 
   | AV_ref (id, typ) ->
-     [], (F_id id, CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
+     [], (F_ref id, CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
 
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], (F_lit (V_string (String.escaped str)), ctyp_of_typ ctx typ), []
@@ -1567,7 +1586,17 @@ let rec compile_aexp ctx = function
          [idecl ctyp id; ialloc ctyp id; iblock (setup @ [call (CL_id id)] @ cleanup)], [iclear ctyp id]
      in
      let setup, ctyp, call, cleanup = compile_aexp ctx body in
-     letb_setup @ setup, ctyp, call, cleanup @ letb_cleanup
+     let body_ctyp = ctyp_of_typ ctx typ in
+     if ctyp_equal body_ctyp ctyp then
+       letb_setup @ setup, ctyp, call, cleanup @ letb_cleanup
+     else
+       begin
+         let gs = gensym () in
+         letb_setup @ setup @ [idecl ctyp gs; ialloc ctyp gs; call (CL_id gs)],
+         body_ctyp,
+         (fun clexp -> iconvert clexp body_ctyp gs ctyp),
+         [iclear ctyp gs] @ cleanup @ letb_cleanup
+       end
 
   | AE_app (id, vs, typ) ->
      compile_funcall ctx id vs typ
@@ -2098,7 +2127,7 @@ let rec compile_def ctx = function
      [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
-     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
+     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow (pat_ids pat) (anf exp))) in
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let fundef_label = label "fundef_fail_" in
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
@@ -2248,7 +2277,7 @@ module NS = Set.Make(Node)
 type dep_graph = NS.t NM.t
 
 let rec fragment_deps = function
-  | F_id id -> NS.singleton (G_id id)
+  | F_id id | F_ref id -> NS.singleton (G_id id)
   | F_lit _ -> NS.empty
   | F_field (frag, _) | F_unary (_, frag) -> fragment_deps frag
   | F_call (_, frags) -> List.fold_left NS.union NS.empty (List.map fragment_deps frags)
@@ -2708,7 +2737,13 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
                                 (sgen_id y)
                                 i)
        else
-         c_error "Cannot compile type conversion"
+         string (Printf.sprintf "  convert_%s_of_%s(%s.ztup%i, %s.ztup%i);"
+                                (sgen_ctyp_name ctyp1)
+                                (sgen_ctyp_name ctyp2)
+                                (sgen_clexp x)
+                                i
+                                (sgen_id y)
+                                i)
      in
      separate hardline (List.mapi convert (List.map2 (fun x y -> (x, y)) ctyps1 ctyps2))
   | I_convert (x, ctyp1, y, ctyp2) ->
@@ -2827,6 +2862,10 @@ let codegen_type_def ctx = function
                        else empty)
                    rbrace
      in
+     let codegen_reinit =
+       let n = sgen_id id in
+       string (Printf.sprintf "void reinit_%s(struct %s *op) {}" n n)
+     in
      let clear_field v ctor_id ctyp =
        if is_stack_ctyp ctyp then
          string (Printf.sprintf "/* do nothing */")
@@ -2906,6 +2945,8 @@ let codegen_type_def ctx = function
      ^^ semi
      ^^ twice hardline
      ^^ codegen_init
+     ^^ twice hardline
+     ^^ codegen_reinit
      ^^ twice hardline
      ^^ codegen_clear
      ^^ twice hardline
@@ -3218,7 +3259,7 @@ let codegen_def ctx def =
   let lists = List.map (fun ctyp -> codegen_list ctx (unlist ctyp)) lists in
   let vectors = List.filter is_ct_vector (cdef_ctyps ctx def) in
   let vectors = List.map (fun ctyp -> codegen_vector ctx (unvector ctyp)) vectors in
-  prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
+  (* prerr_endline (Pretty_print_sail.to_string (pp_cdef def)); *)
   concat tups
   ^^ concat lists
   ^^ concat vectors

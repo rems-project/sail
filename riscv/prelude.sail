@@ -3,7 +3,7 @@ default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
 
-val eq_atom = {ocaml: "eq_int", lem: "eq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool

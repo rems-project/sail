@@ -1,6 +1,9 @@
 val fetch_and_execute : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 
-val elf_tohost = "Elf_loader.elf_tohost" :  unit -> int
+val elf_tohost = {
+  ocaml: "Elf_loader.elf_tohost",
+  c: "elf_tohost"
+} :  unit -> int
 
 function fetch_and_execute () =
   let tohost = __GetSlice_int(64, elf_tohost(), 0) in
@@ -42,7 +45,10 @@ function fetch_and_execute () =
   PC = nextPC
 }
 
-val elf_entry = "Elf_loader.elf_entry" : unit -> int
+val elf_entry = {
+  ocaml: "Elf_loader.elf_entry",
+  c: "elf_entry"
+} : unit -> int
 
 val main : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 

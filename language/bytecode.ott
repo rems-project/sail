@@ -51,6 +51,7 @@ grammar
 % expressions, used by the aval and cval types.
 fragment :: 'F_' ::=
   | id                                     :: :: id
+  | '&' id                                 :: :: ref
   | value                                  :: :: lit
   | have_exception                         :: :: have_exception
   | current_exception                      :: :: current_exception
