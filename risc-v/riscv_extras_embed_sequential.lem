@@ -34,20 +34,23 @@ let MEMea_conditional_release (addr,size) = write_mem_ea Write_RISCV_conditional
 let MEMea_conditional_strong_release (addr,size)
                                           = write_mem_ea Write_RISCV_conditional_strong_release addr size
 
-val MEMval                     : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_release             : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_strong_release      : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional         : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional_release : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional_strong_release : (vector bitU * integer * vector bitU) -> M unit
+val MEMval                : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_release        : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_strong_release : (vector bitU * integer * vector bitU) -> M unit
 
-let MEMval (_,_,v)                     = write_mem_val v >>= fun _ -> return ()
-let MEMval_release (_,_,v)             = write_mem_val v >>= fun _ -> return ()
-let MEMval_strong_release (_,_,v)      = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional (_,_,v)         = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional_release (_,_,v) = write_mem_val v >>= fun _ -> return ()
+let MEMval (_,_,v)                = write_mem_val v >>= fun _ -> return ()
+let MEMval_release (_,_,v)        = write_mem_val v >>= fun _ -> return ()
+let MEMval_strong_release (_,_,v) = write_mem_val v >>= fun _ -> return ()
+
+val MEMval_conditional         : (vector bitU * integer * vector bitU) -> M bitU
+val MEMval_conditional_release : (vector bitU * integer * vector bitU) -> M bitU
+val MEMval_conditional_strong_release
+                               : (vector bitU * integer * vector bitU) -> M bitU
+
+let MEMval_conditional (_,_,v)         = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval_conditional_release (_,_,v) = write_mem_val v >>= fun b -> return (if b then B1 else B0)
 let MEMval_conditional_strong_release (_,_,v)
-                                       = write_mem_val v >>= fun _ -> return ()
+                                       = write_mem_val v >>= fun b -> return (if b then B1 else B0)
 
 let speculate_conditional_success () = excl_result () >>= fun b -> return (if b then B1 else B0)
 

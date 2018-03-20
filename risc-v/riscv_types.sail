@@ -113,24 +113,32 @@ function forall Nat 'n. unit effect { eamem, escape } mem_write_ea( (bit[64]) ad
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_release
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_strong_release
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional_release
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional_strong_release
 
-function forall Nat 'n. unit effect { wmv, escape } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) aq, (bool) rl, (bool) con) =
+function forall Nat 'n. unit effect { wmv, escape } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) aq, (bool) rl) =
 {
-  if (rl | con) then
-    check_alignment(addr, width);
+  if rl then check_alignment(addr, width);
 
-  switch (aq, rl, con) {
-    case (false, false, false) -> MEMval(addr, width, value)
-    case (false, true,  false) -> MEMval_release(addr, width, value)
-    case (false, false, true)  -> MEMval_conditional(addr, width, value)
-    case (false, true,  true)  -> MEMval_conditional_release(addr, width, value)
-    case (true,  false, false) -> not_implemented("store.aq is not implemented")
-    case (true,  true,  false) -> MEMval_strong_release(addr, width, value)
-    case (true,  false, true)  -> not_implemented("sc.aq is not implemented")
-    case (true,  true,  true)  -> MEMval_conditional_strong_release(addr, width, value)
+  switch (aq, rl) {
+    case (false, false) -> MEMval(addr, width, value)
+    case (false, true)  -> MEMval_release(addr, width, value)
+    case (true,  false) -> not_implemented("store.aq is not implemented")
+    case (true,  true)  -> MEMval_strong_release(addr, width, value)
+  }
+}
+
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional_release
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional_strong_release
+
+function forall Nat 'n. bool effect { wmv, escape } mem_cond_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) aq, (bool) rl) =
+{
+  check_alignment(addr, width);
+
+  switch (aq, rl) {
+    case (false, false) -> MEMval_conditional(addr, width, value)
+    case (false, true)  -> MEMval_conditional_release(addr, width, value)
+    case (true,  false) -> not_implemented("sc.aq is not implemented")
+    case (true,  true)  -> MEMval_conditional_strong_release(addr, width, value)
   }
 }
 

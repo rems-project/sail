@@ -195,10 +195,10 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
       };
       let rs2_val = rGPR(rs2) in
       switch (width) {
-        case BYTE   -> mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false)
-        case HALF   -> mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false)
-        case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], aq, rl, false)
-        case DOUBLE -> mem_write_value(addr, 8, rs2_val,        aq, rl, false)
+        case BYTE   -> mem_write_value(addr, 1, rs2_val[7..0],  aq, rl)
+        case HALF   -> mem_write_value(addr, 2, rs2_val[15..0], aq, rl)
+        case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], aq, rl)
+        case DOUBLE -> mem_write_value(addr, 8, rs2_val,        aq, rl)
       }
     }
 
@@ -270,7 +270,9 @@ function clause execute (FENCE(pred, succ)) = {
 (********************************************************************)
 union ast member unit FENCEI
 function clause decode (0b000000000000 : 0b00000 : 0b001 : 0b00000 : 0b0001111) = Some(FENCEI)
-function clause execute FENCEI = MEM_fence_i()
+function clause execute FENCEI = ()
+  (* the memory model group decided fence.i is a NOP for all memory model purposes *)
+  (* MEM_fence_i() *)
 
 (********************************************************************)
 union ast member unit ECALL
@@ -305,21 +307,24 @@ function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b01
   Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
 
 function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
-  (*(bit)*) status := if speculate_conditional_success() then 0 else 1;
-  wGPR(rd) := (bit[64]) (EXTZ([status]));
-
-  if status == 1 then () else {
+  if speculate_conditional_success() then {
     (bit[64]) addr := rGPR(rs1);
     switch width {
       case WORD   -> mem_write_ea(addr, 4, aq, rl, true)
       case DOUBLE -> mem_write_ea(addr, 8, aq, rl, true)
     };
+
     rs2_val := rGPR(rs2);
-    switch width {
-      case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true)
-      case DOUBLE -> mem_write_value(addr, 8, rs2_val,        aq, rl, true)
-    };
-  };
+    if
+      switch width {
+        case WORD   -> mem_cond_write_value(addr, 4, rs2_val[31..0], aq, rl)
+        case DOUBLE -> mem_cond_write_value(addr, 8, rs2_val,        aq, rl)
+      }
+    then wGPR(rd) := 0x0000000000000000
+    else wGPR(rd) := 0x0000000000000001
+  } else {
+    wGPR(rd) := 0x0000000000000001
+  }
 }
 
 (********************************************************************)
@@ -364,38 +369,46 @@ function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b01
 
 function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   (bit[64]) addr := rGPR(rs1);
-
   switch (width) {
     case WORD   -> mem_write_ea(addr, 4, aq & rl, rl, true)
     case DOUBLE -> mem_write_ea(addr, 8, aq & rl, rl, true)
   };
 
-  (bit[64]) loaded :=
-    switch (width) {
-      case WORD   -> EXTS(mem_read(addr, 4, aq, aq & rl, true))
-      case DOUBLE -> mem_read(addr, 8, aq, aq & rl, true)
-    };
-  wGPR(rd, loaded);
-
   (bit[64]) rs2_val := rGPR(rs2);
-  (bit[64]) result :=
-    switch(op) {
-      case AMOSWAP -> rs2_val
-      case AMOADD  -> rs2_val + loaded
-      case AMOXOR  -> rs2_val ^ loaded
-      case AMOAND  -> rs2_val & loaded
-      case AMOOR   -> rs2_val | loaded
 
-      case AMOMIN  -> (bit[64]) (min(signed(rs2_val),   signed(loaded)))
-      case AMOMAX  -> (bit[64]) (max(signed(rs2_val),   signed(loaded)))
-      case AMOMINU -> (bit[64]) (min(unsigned(rs2_val), unsigned(loaded)))
-      case AMOMAXU -> (bit[64]) (max(unsigned(rs2_val), unsigned(loaded)))
-    };
+  (*atomic_memory_access_begin();*)
+  (** this code should have a memoryload, followed by a memory store,
+  and have no other effects **)
 
-  switch (width) {
-    case WORD   -> mem_write_value(addr, 4, result[31..0], aq & rl, rl, true)
-    case DOUBLE -> mem_write_value(addr, 8, result,        aq & rl, rl, true)
+  (bit[64]) loaded := switch (width) {
+    case WORD   -> EXTS(mem_read(addr, 4, aq, aq & rl, true))
+    case DOUBLE ->      mem_read(addr, 8, aq, aq & rl, true)
   };
+
+  (bit[64]) result := switch(op) {
+    case AMOSWAP -> rs2_val
+    case AMOADD  -> rs2_val + loaded
+    case AMOXOR  -> rs2_val ^ loaded
+    case AMOAND  -> rs2_val & loaded
+    case AMOOR   -> rs2_val | loaded
+
+    case AMOMIN  -> (bit[64]) (min(signed(rs2_val),   signed(loaded)))
+    case AMOMAX  -> (bit[64]) (max(signed(rs2_val),   signed(loaded)))
+    case AMOMINU -> (bit[64]) (min(unsigned(rs2_val), unsigned(loaded)))
+    case AMOMAXU -> (bit[64]) (max(unsigned(rs2_val), unsigned(loaded)))
+  };
+
+  let success =
+    switch (width) {
+      case WORD   -> mem_cond_write_value(addr, 4, result[31..0], aq & rl, rl)
+      case DOUBLE -> mem_cond_write_value(addr, 8, result,        aq & rl, rl)
+    }
+  in
+  assert(success, Some("an AMO store has failed"));
+
+  (*atomic_memory_access_end();*)
+
+  wGPR(rd, loaded);
 }
 
 (********************************************************************)

@@ -102,7 +102,8 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
               };
      }
      case (FENCEI) -> {
-            ik := IK_barrier (Barrier_RISCV_i);
+            (* ik := IK_barrier (Barrier_RISCV_i); *)
+            ()
      }
      case (LOADRES ( aq, rl, rs1, width, rd)) -> {
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
