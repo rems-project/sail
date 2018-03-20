@@ -1275,7 +1275,7 @@ and typ_arg_nexps (Typ_arg_aux (typ_arg_aux, l)) =
   | Typ_arg_nexp n -> [n]
   | Typ_arg_typ typ -> typ_nexps typ
   | Typ_arg_order ord -> []
-  
+
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id v -> KidSet.empty
@@ -3587,6 +3587,11 @@ let fold_union_quant quants (QI_aux (qi, l)) =
 let check_type_union env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
+  | Tu_ty_id (Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) as typ, v) ->
+     let typq = mk_typquant (List.map (mk_qi_id BK_type) (KidSet.elements (typ_frees typ))) in
+     env
+     |> Env.add_union_id v (typq, typ)
+     |> Env.add_val_spec v (typq, typ)
   | Tu_ty_id (typ, v) ->
      let typ' = mk_typ (Typ_fn (typ, ret_typ, no_effect)) in
      env

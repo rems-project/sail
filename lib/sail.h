@@ -42,7 +42,11 @@ unit sail_exit(const unit u) {
 }
 
 void elf_entry(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, 0x400168ul);
+  mpz_set_ui(*rop, 0x400130ul);
+}
+
+void elf_tohost(mpz_t *rop, const unit u) {
+  mpz_set_ui(*rop, 0x0ul);
 }
 
 // Sail bits are mapped to uint64_t where bitzero = 0ul and bitone = 1ul
@@ -102,12 +106,17 @@ bool eq_string(const sail_string str1, const sail_string str2) {
   return strcmp(str1, str2) == 0;
 }
 
-unit print_endline(sail_string str) {
+unit print_endline(const sail_string str) {
   printf("%s\n", str);
   return UNIT;
 }
 
-unit prerr_endline(sail_string str) {
+unit print_string(const sail_string str1, const sail_string str2) {
+  printf("%s%s\n", str1, str2);
+  return UNIT;
+}
+
+unit prerr_endline(const sail_string str) {
   fprintf(stderr, "%s\n", str);
   return UNIT;
 }
@@ -168,6 +177,10 @@ void reinit_mpz_t_of_sail_string(mpz_t *rop, sail_string str) {
 
 int64_t convert_int64_t_of_mpz_t(const mpz_t op) {
   return mpz_get_si(op);
+}
+
+void convert_mpz_t_of_int64_t(mpz_t *rop, const int64_t op) {
+  mpz_set_si(*rop, op);
 }
 
 // ***** Sail builtins for integers *****
@@ -380,6 +393,12 @@ void zeros(bv_t *rop, const mpz_t op) {
 }
 
 void zero_extend(bv_t *rop, const bv_t op, const mpz_t len) {
+  rop->len = mpz_get_ui(len);
+  mpz_set(*rop->bits, *op.bits);
+}
+
+/* FIXME */
+void sign_extend(bv_t *rop, const bv_t op, const mpz_t len) {
   rop->len = mpz_get_ui(len);
   mpz_set(*rop->bits, *op.bits);
 }

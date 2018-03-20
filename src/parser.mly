@@ -1164,6 +1164,8 @@ struct_fields:
 type_union:
   | id Colon typ
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
+  | id Colon typ MinusGt typ
+    { (fun s e -> Tu_aux (Tu_ty_id (mk_typ (ATyp_fn ($3, $5, mk_typ (ATyp_set []) s e)) s e, $1), loc s e)) $startpos $endpos }
 
 type_unions:
   | type_union

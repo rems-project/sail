@@ -230,7 +230,7 @@ function getCapLength(c) : CapStruct -> CapLen = unsigned(c.length)
 function getCapCursor(cap) : CapStruct -> uint64 = 
   (unsigned(cap.base) + unsigned(cap.offset)) % (pow2(64))
 
-function setCapOffset(c, offset) : (CapStruct, bits(64)) -> (bool, CapStruct) = 
+function setCapOffset(c, offset) : (CapStruct, bits(64)) -> (bool, CapStruct) =
     (true, {c with offset=offset})
 
 function incCapOffset(c, delta) : (CapStruct, bits(64)) -> (bool, CapStruct) =

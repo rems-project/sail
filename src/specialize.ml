@@ -57,11 +57,34 @@ let is_typ_ord_uvar = function
   | Type_check.U_order _ -> true
   | _ -> false
 
+let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
+  let typ_aux = match typ_aux with
+    | Typ_id v -> Typ_id v
+    | Typ_var kid -> Typ_var kid
+    | Typ_tup typs -> Typ_tup (List.map nexp_simp_typ typs)
+    | Typ_app (f, args) -> Typ_app (f, List.map nexp_simp_typ_arg args)
+    | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, nexp_simp_typ typ)
+    | Typ_fn (typ1, typ2, effect) -> Typ_fn (nexp_simp_typ typ1, nexp_simp_typ typ2, effect)
+  in
+  Typ_aux (typ_aux, l)
+and nexp_simp_typ_arg (Typ_arg_aux (typ_arg_aux, l)) =
+  let typ_arg_aux = match typ_arg_aux with
+    | Typ_arg_nexp n -> Typ_arg_nexp (nexp_simp n)
+    | Typ_arg_typ typ -> Typ_arg_typ (nexp_simp_typ typ)
+    | Typ_arg_order ord -> Typ_arg_order ord
+  in
+  Typ_arg_aux (typ_arg_aux, l)
+
+let nexp_simp_uvar = function
+  | Type_check.U_nexp nexp -> (prerr_endline ("Simp nexp " ^ string_of_nexp nexp); Type_check.U_nexp (nexp_simp nexp))
+  | Type_check.U_typ typ -> Type_check.U_typ (nexp_simp_typ typ)
+  | uvar -> uvar
+
 (* We have to be careful about whether the typechecker has renamed anything returned by instantiation_of.
    This part of the typechecker API is a bit ugly. *)
 let fix_instantiation instantiation =
   let instantiation = KBindings.bindings (KBindings.filter (fun _ uvar -> is_typ_ord_uvar uvar) instantiation) in
-  let instantiation = List.map (fun (kid, uvar) -> Type_check.orig_kid kid, uvar) instantiation in
+  let instantiation = List.map (fun (kid, uvar) -> Type_check.orig_kid kid, nexp_simp_uvar uvar) instantiation in
   List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty instantiation
 
 let rec polymorphic_functions is_kopt (Defs defs) =
@@ -440,12 +463,28 @@ let rewrite_polymorphic_constructors id ast =
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
                                           rewrite_pat = (fun _ -> fold_pat rewrite_pat)} ast
 
+let kinded_id_arg kind_id =
+  let typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown) in
+  match kind_id with
+  | KOpt_aux (KOpt_none kid, _) -> typ_arg (Typ_arg_nexp (nvar kid))
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), kid), _) -> typ_arg (Typ_arg_nexp (nvar kid))
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), kid), _) ->
+     typ_arg (Typ_arg_order (Ord_aux (Ord_var kid, Parse_ast.Unknown)))
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), kid), _) ->
+     typ_arg (Typ_arg_typ (mk_typ (Typ_var kid)))
+  | KOpt_aux (KOpt_kind (K_aux (K_kind kinds, _), kid), l) -> assert false
+
+let fold_union_quant quants (QI_aux (qi, l)) =
+  match qi with
+  | QI_id kind_id -> quants @ [kinded_id_arg kind_id]
+  | _ -> quants
+
 let specialize_variants ((Defs defs) as ast) env =
   let ctors = ref [] in
 
   let specialize_variant (TD_aux (tdef_aux, annot)) ast env =
     match tdef_aux with
-    | TD_variant (id, name_scheme, typq, tus, flag) as variant ->
+    | TD_variant (v_id, name_scheme, typq, tus, flag) as variant ->
        let kopts = List.filter (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) (quant_kopts typq) in
        if kopts = [] then
          (* If non-polymorphic, then do nothing. *)
@@ -455,14 +494,18 @@ let specialize_variants ((Defs defs) as ast) env =
            ctors := id :: !ctors;
            let is = instantiations_of id ast in
            let is = List.sort_uniq (fun i1 i2 -> String.compare (string_of_instantiation i1) (string_of_instantiation i2)) is in
-           List.map (fun i -> Tu_aux (Tu_ty_id (Type_check.subst_unifiers i typ, id_of_instantiation id i), annot)) is
+           List.map (fun i ->
+               let i = fix_instantiation i in
+               let ret_typ = app_typ v_id (List.fold_left fold_union_quant [] (quant_items typq)) in
+               let ret_typ = Type_check.subst_unifiers i ret_typ in
+               Tu_aux (Tu_ty_id (Type_check.subst_unifiers i (mk_typ (Typ_fn (typ, ret_typ, no_effect))), id_of_instantiation id i), annot)) is
          in
          (*
          let kopts, constraints = quant_split typq in
          let kopts = List.filter (fun kopt -> not (is_typ_kopt kopt || is_order_kopt kopt)) kopts in
          let typq = mk_typquant (List.map mk_qi_kopt kopts @ List.map mk_qi_nc constraints) in
           *)
-         TD_aux (TD_variant (id, name_scheme, typq, List.concat (List.map specialize_tu tus), flag), annot)
+         TD_aux (TD_variant (v_id, name_scheme, typq, List.concat (List.map specialize_tu tus), flag), annot)
     | _ -> assert false
   in
 

@@ -3,6 +3,8 @@ default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
 
+val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anything", c: "eq_bit"} : (bit, bit) -> bool
+
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
@@ -117,8 +119,10 @@ val __ZeroExtendSlice = {lem: "extz_slice"} : forall 'm. (bits('m), int, int) ->
 
 val cast cast_unit_vec : bit -> bits(1)
 
-function cast_unit_vec bitzero = 0b0
-and cast_unit_vec bitone = 0b1
+function cast_unit_vec b = match b {
+  bitzero => 0b0,
+  bitone => 0b1
+}
 
 val print = "prerr_endline" : string -> unit
 
@@ -345,8 +349,10 @@ val cast bool_to_bits : bool -> bits(1)
 function bool_to_bits x = if x then 0b1 else 0b0
 
 val cast bit_to_bool : bit -> bool
-function bit_to_bool bitone  = true
-and      bit_to_bool bitzero = false
+function bit_to_bool b = match b {
+  bitone => true,
+  bitzero => false
+}
 
 val cast bits_to_bool : bits(1) -> bool
 function bits_to_bool x = bit_to_bool(x[0])

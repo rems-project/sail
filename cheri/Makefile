@@ -25,6 +25,9 @@ CHERI_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 cheri: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
 
+cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
+	$(SAIL) -memo_z3 -c $^ 1> $@
+
 cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
 
@@ -54,7 +57,7 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' C$*_types.thy
 
 clean:
-	rm -rf cheri cheri128 _sbuild inst_*.sail
+	rm -rf cheri cheri128 _sbuild inst_*.sail cheri.c
 
 EXTRACT_INST=sed -n "/START_${1}\b/,/END_${1}\b/p" cheri_insts.sail | sed 's/^  //;1d;$$d' > inst_$1.sail
 extract: cheri_insts.sail
@@ -67,7 +70,7 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CGetSealed)
 	$(call EXTRACT_INST,CGetPCC)
 	$(call EXTRACT_INST,CGetPCCSetOffset)
-	$(call EXTRACT_INST,CGetCause)
+	$(call EXTRACT_INST,CGetCause
 	$(call EXTRACT_INST,CSetCause)
 	$(call EXTRACT_INST,CAndPerm)
 	$(call EXTRACT_INST,CToPtr)

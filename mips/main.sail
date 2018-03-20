@@ -9,7 +9,7 @@ function fetch_and_execute () = {
     branchPending = 0b0;
     nextPC = if inBranchDelay then delayedPC else PC + 4;
     cp2_next_pc();
-    
+
     print_bits("PC: ", PC);
     try {
       let pc_pa = TranslatePC(PC);
@@ -36,7 +36,10 @@ function fetch_and_execute () = {
   skip_wmvt();
 }
 
-val elf_entry = "Elf_loader.elf_entry" : unit -> int
+val elf_entry = {
+  ocaml: "Elf_loader.elf_entry",
+  c: "elf_entry"
+} : unit -> int
 
 val main : unit -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg, rmemt, wmvt}
 
