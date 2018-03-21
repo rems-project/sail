@@ -795,8 +795,6 @@ function clause execute (CCheckPerm(cs, rt)) =
     raise_c2_exception(CapEx_TagViolation, cs)
   else if ((cs_perms & rt_perms) != rt_perms) then
     raise_c2_exception(CapEx_UserDefViolation, cs)
-  else
-    ()
   /* END_CCheckPerm */
 }
 
@@ -821,8 +819,6 @@ function clause execute (CCheckType(cs, cb)) =
     raise_c2_exception(CapEx_SealViolation, cb)
   else if ((cs_val.otype) != (cb_val.otype)) then
     raise_c2_exception(CapEx_TypeViolation, cs)
-  else
-    ()
   /* END_CCheckType */
 }
 

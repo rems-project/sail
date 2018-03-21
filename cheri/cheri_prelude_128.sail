@@ -302,7 +302,7 @@ function incCapOffset(c, delta) : (CapStruct, bits(64)) -> (bool, CapStruct) =
 val HighestSetBit : forall 'N , 'N >= 2. bits('N) -> {'n, 0 <= 'n < 'N . option(atom('n))}
 function HighestSetBit x = {
   foreach (i from ('N - 1) to 0 by 1 in dec)
-    if [x[i]] == 0b1 then return Some(i) else ();
+    if [x[i]] == 0b1 then return Some(i);
   return None() : option(atom(0))
 }
 
