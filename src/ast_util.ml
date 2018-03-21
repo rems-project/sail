@@ -71,9 +71,17 @@ let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
 
 let mk_exp exp_aux = E_aux (exp_aux, no_annot)
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
+let uncast_exp = function
+  | E_aux (E_internal_return (E_aux (E_cast (typ, exp), _)), a) ->
+     E_aux (E_internal_return exp, a), Some typ
+  | E_aux (E_cast (typ, exp), _) -> exp, Some typ
+  | exp -> exp, None
 
 let mk_pat pat_aux = P_aux (pat_aux, no_annot)
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
+let untyp_pat = function
+  | P_aux (P_typ (typ, pat), _) -> pat, Some typ
+  | pat -> pat, None
 
 let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
 

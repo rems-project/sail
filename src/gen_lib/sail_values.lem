@@ -45,12 +45,12 @@ let negate_real r = realNegate r
 let abs_real r = realAbs r
 let power_real b e = realPowInteger b e*)
 
-let or_bool l r = (l || r)
-let and_bool l r = (l && r)
-let xor_bool l r = xor l r
+let inline or_bool l r = (l || r)
+let inline and_bool l r = (l && r)
+let inline xor_bool l r = xor l r
 
-let append_list l r = l ++ r
-let length_list xs = integerFromNat (List.length xs)
+let inline append_list l r = l ++ r
+let inline length_list xs = integerFromNat (List.length xs)
 let take_list n xs = List.take (nat_of_int n) xs
 let drop_list n xs = List.drop (nat_of_int n) xs
 
@@ -467,7 +467,7 @@ end
 (*** Machine words *)
 
 val length_mword : forall 'a. mword 'a -> integer
-let length_mword w = integerFromNat (word_length w)
+let inline length_mword w = integerFromNat (word_length w)
 
 val slice_mword_dec : forall 'a 'b. mword 'a -> integer -> integer -> mword 'b
 let slice_mword_dec w i j = word_extract (nat_of_int i) (nat_of_int j) w
@@ -526,7 +526,7 @@ let size_itself_int x = integerFromNat (size_itself x)
    the actual integer is ignored. *)
 
 val make_the_value : forall 'n. integer -> itself 'n
-let inline make_the_value = (fun _ -> the_value)
+let make_the_value _ = the_value
 
 (*** Bitvectors *)
 

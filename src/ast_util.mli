@@ -93,6 +93,9 @@ val unaux_nexp : nexp -> nexp_aux
 val unaux_order : order -> order_aux
 val unaux_typ : typ -> typ_aux
 
+val untyp_pat : 'a pat -> 'a pat * typ option
+val uncast_exp : 'a exp -> 'a exp * typ option
+
 val inc_ord : order
 val dec_ord : order
 

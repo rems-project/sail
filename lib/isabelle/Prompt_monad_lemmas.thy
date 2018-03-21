@@ -4,6 +4,11 @@ theory Prompt_monad_lemmas
     Sail_values_lemmas
 begin
 
+notation bind (infixr "\<bind>" 54)
+
+abbreviation seq :: "('rv,unit,'e)monad \<Rightarrow> ('rv,'b,'e)monad \<Rightarrow>('rv,'b,'e)monad" (infixr "\<then>" 54) where
+  "m \<then> n \<equiv> m \<bind> (\<lambda>_. n)"
+
 lemma All_bind_dom: "bind_dom (m, f)"
   by (induction m) (auto intro: bind.domintros)
 

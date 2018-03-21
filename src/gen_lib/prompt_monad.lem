@@ -62,10 +62,6 @@ let rec bind m f = match m with
   | Exception e ->        Exception e
 end
 
-let inline (>>=) = bind
-val (>>) : forall 'rv 'b 'e. monad 'rv unit 'e -> monad 'rv 'b 'e -> monad 'rv 'b 'e
-let inline (>>) m n = m >>= fun (_ : unit) -> n
-
 val exit : forall 'rv 'a 'e. unit -> monad 'rv 'a 'e
 let exit () = Fail "exit"
 
@@ -139,8 +135,10 @@ let read_mem_bytes rk addr sz =
 
 val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e
 let read_mem rk addr sz =
-  read_mem_bytes rk addr sz >>= (fun bytes ->
-  maybe_fail "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)))
+  bind
+    (read_mem_bytes rk addr sz)
+    (fun bytes ->
+       maybe_fail "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)))
 
 val read_tag : forall 'rv 'a 'e. Bitvector 'a => 'a -> monad 'rv bitU 'e
 let read_tag addr = Read_tag (bits_of addr) return

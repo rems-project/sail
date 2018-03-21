@@ -142,6 +142,10 @@ let doc_id_lem_ctor (Id_aux(i,_)) =
 
 let doc_var_lem kid = string (fix_id true (string_of_kid kid))
 
+let doc_docstring_lem (l, _) = match l with
+  | Parse_ast.Documented (str, _) -> string ("(*" ^ str ^ "*)") ^^ hardline
+  | _ -> empty
+
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ, no_effect))
 let simple_num l n = E_aux (
   E_lit (L_aux (L_num n, Parse_ast.Generated l)),
@@ -595,14 +599,7 @@ let doc_exp_lem, doc_let_lem =
         "E_vector_append should have been rewritten before pretty-printing")
     | E_cons(le,re) -> doc_op (group (colon^^colon)) (expY le) (expY re)
     | E_if(c,t,e) ->
-       let indent = match e with
-         | E_aux (E_if _, _) -> 0
-         | _ -> 2 in
-       let epp =
-         separate space [string "if";group (expY c)] ^^
-           break 1 ^^
-             (prefix 2 1 (string "then") (expN t)) ^^ (break 1) ^^
-               (prefix indent 1 (string "else") (expN e)) in
+       let epp = if_exp ctxt false c t e in
        if aexp_needed then parens (align epp) else epp
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        raise (report l "E_for should have been rewritten before pretty-printing")
@@ -696,14 +693,13 @@ let doc_exp_lem, doc_let_lem =
                | Some (env, _, _) when Env.is_extern f env "lem" ->
                  string (Env.get_extern f env "lem"), true
                | _ -> doc_id_lem f, false in
-             let argspp = align (separate_map (break 1) (expV true) args) in
-             let epp = align (call ^//^ argspp) in
+             let epp = hang 2 (flow (break 1) (call :: List.map expY args)) in
              let (taepp,aexp_needed) =
                let env = env_of full_exp in
                let t = Env.expand_synonyms env (typ_of full_exp) in
                let eff = effect_of full_exp in
                if typ_needs_printed t
-               then (align epp ^^ (doc_tannot_lem ctxt env (effectful eff) t), true)
+               then (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env (effectful eff) t))), true)
                else (epp, aexp_needed) in
              liftR (if aexp_needed then parens (align taepp) else taepp)
           end
@@ -738,7 +734,7 @@ let doc_exp_lem, doc_let_lem =
        if has_effect eff BE_rreg then
          let epp = separate space [string "read_reg";doc_id_lem (append_id id "_ref")] in
          if is_bitvector_typ base_typ
-         then liftR (parens (epp ^^ doc_tannot_lem ctxt env true base_typ))
+         then liftR (parens (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env true base_typ)))))
          else liftR epp
        else if Env.is_register id env then doc_id_lem (append_id id "_ref")
        else if is_ctor env id then doc_id_lem_ctor id
@@ -747,7 +743,7 @@ let doc_exp_lem, doc_let_lem =
     | E_cast(typ,e) ->
        expV aexp_needed e
     | E_tuple exps ->
-       parens (separate_map comma expN exps)
+       parens (align (group (separate_map (comma ^^ break 1) expN exps)))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
        let recordtyp = match annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
@@ -792,8 +788,8 @@ let doc_exp_lem, doc_let_lem =
        let epp = brackets expspp in
        let (epp,aexp_needed) =
          if is_bit_typ etyp && !opt_mwords then
-           let bepp = string "of_bits_failwith" ^^ space ^^ parens (align epp) in
-           (bepp ^^ doc_tannot_lem ctxt (env_of full_exp) false t, true)
+           let bepp = string "vec_of_bits" ^^ space ^^ align epp in
+           (align (group (prefix 0 1 bepp (doc_tannot_lem ctxt (env_of full_exp) false t))), true)
          else (epp,aexp_needed) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update(v,e1,e2) ->
@@ -836,12 +832,21 @@ let doc_exp_lem, doc_let_lem =
     | E_internal_plet (pat,e1,e2) ->
        let epp =
          let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
-         match pat with
-         | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
-            (separate space [expV b e1; string ">>"]) ^^ hardline ^^ expN e2
-         | _ ->
-            (separate space [expV b e1; string ">>= fun";
-                             doc_pat_lem ctxt true pat;arrow]) ^^ hardline ^^ expN e2 in
+         let middle =
+           match fst (untyp_pat pat) with
+           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
+              string ">>"
+           | P_aux (P_tup _, _) ->
+              (* TODO Make sure to avoid name-clashes with temp variable *)
+              separate space
+                [string ">>= fun varstup -> let";
+                 doc_pat_lem ctxt true pat;
+                 string "= varstup in"]
+           | _ ->
+              separate space [string ">>= fun"; doc_pat_lem ctxt true pat; arrow]
+         in
+         infix 0 1 middle (expV b e1) (expN e2)
+       in
        if aexp_needed then parens (align epp) else epp
     | E_internal_return (e1) ->
        separate space [string "return"; expY e1]
@@ -867,6 +872,19 @@ let doc_exp_lem, doc_let_lem =
     | E_internal_exp_user _ | E_internal_value _ ->
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
+  and if_exp ctxt (elseif : bool) c t e =
+    let if_pp = string (if elseif then "else if" else "if") in
+    let else_pp = match e with
+      | E_aux (E_if (c', t', e'), _)
+      | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
+         if_exp ctxt true c' t' e'
+      | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
+    in
+    (prefix 2 1
+      (soft_surround 2 1 if_pp (top_exp ctxt true c) (string "then"))
+      (top_exp ctxt false t)) ^^
+    break 1 ^^
+    else_pp
   and let_exp ctxt (LB_aux(lb,_)) = match lb with
     | LB_val(pat,e) ->
        prefix 2 1
@@ -1252,6 +1270,7 @@ let doc_spec_lem (VS_aux (valspec,annot)) =
   | VS_val_spec (typschm,id,ext,_) when ext "lem" = None ->
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
+     doc_docstring_lem annot ^^
      separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem true typschm] ^/^ hardline 
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty

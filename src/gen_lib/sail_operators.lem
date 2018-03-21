@@ -187,12 +187,12 @@ let duplicate_bit_bv bit len = replicate_bits_bv [bit] len
 val eq_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool
 let eq_bv l r = (bits_of l = bits_of r)
 
-let eq_mword l r = (l = r)
+let inline eq_mword l r = (l = r)
 
 val neq_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool
 let neq_bv l r = not (eq_bv l r)
 
-let neq_mword l r = (l <> r)
+let inline neq_mword l r = (l <> r)
 
 val ult_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool
 let ult_bv l r = lexicographicLess (List.reverse (bits_of l)) (List.reverse (bits_of r))
@@ -219,7 +219,7 @@ let sgt_bv l r = not (slteq_bv l r)
 let sgteq_bv l r = (eq_bv l r) || (sgt_bv l r)
 
 val ucmp_mword : forall 'a. Size 'a => (integer -> integer -> bool) -> mword 'a -> mword 'a -> bool
-let ucmp_mword cmp l r = cmp (unsignedIntegerFromWord l) (unsignedIntegerFromWord r)
+let inline ucmp_mword cmp l r = cmp (unsignedIntegerFromWord l) (unsignedIntegerFromWord r)
 
 val scmp_mword : forall 'a. Size 'a => (integer -> integer -> bool) -> mword 'a -> mword 'a -> bool
-let scmp_mword cmp l r = cmp (signedIntegerFromWord l) (signedIntegerFromWord r)
+let inline scmp_mword cmp l r = cmp (signedIntegerFromWord l) (signedIntegerFromWord r)

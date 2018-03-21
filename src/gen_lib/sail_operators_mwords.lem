@@ -7,24 +7,26 @@ open import Prompt
 
 (* Specialisation of operators to machine words *)
 
-let uint v = unsignedIntegerFromWord v
+let inline uint v = unsignedIntegerFromWord v
 let uint_maybe v = Just (uint v)
 let uint_fail v = return (uint v)
 let uint_oracle v = return (uint v)
 
-let sint v = signedIntegerFromWord v
+let inline sint v = signedIntegerFromWord v
 let sint_maybe v = Just (sint v)
 let sint_fail v = return (sint v)
 let sint_oracle v = return (sint v)
 
-val vec_of_bits_failwith : forall 'a. Size 'a => integer -> list bitU -> mword 'a
-let vec_of_bits_failwith _ bits = of_bits_failwith bits
-
-val vec_of_bits_fail : forall 'rv 'a 'e. Size 'a => integer -> list bitU -> monad 'rv (mword 'a) 'e
-let vec_of_bits_fail _ bits = of_bits_fail bits
-
-val vec_of_bits_oracle : forall 'rv 'a 'e. Size 'a => integer -> list bitU -> monad 'rv (mword 'a) 'e
-let vec_of_bits_oracle _ bits = of_bits_oracle bits
+val vec_of_bits_maybe    : forall 'a. Size 'a => list bitU -> maybe (mword 'a)
+val vec_of_bits_fail     : forall 'rv 'a 'e. Size 'a => list bitU -> monad 'rv (mword 'a) 'e
+val vec_of_bits_oracle   : forall 'rv 'a 'e. Size 'a => list bitU -> monad 'rv (mword 'a) 'e
+val vec_of_bits_failwith : forall 'a. Size 'a => list bitU -> mword 'a
+val vec_of_bits          : forall 'a. Size 'a => list bitU -> mword 'a
+let vec_of_bits_maybe bits = of_bits bits
+let vec_of_bits_fail bits = of_bits_fail bits
+let vec_of_bits_oracle bits = of_bits_oracle bits
+let vec_of_bits_failwith bits = of_bits_failwith bits
+let vec_of_bits bits = of_bits_failwith bits
 
 val access_vec_inc : forall 'a. Size 'a => mword 'a -> integer -> bitU
 let access_vec_inc = access_bv_inc
@@ -243,13 +245,13 @@ val ulteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val slteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val ugteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val sgteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-let eq_vec    = eq_mword
-let neq_vec   = neq_mword
-let ult_vec   = ucmp_mword (<)
-let slt_vec   = scmp_mword (<)
-let ugt_vec   = ucmp_mword (>)
-let sgt_vec   = scmp_mword (>)
-let ulteq_vec = ucmp_mword (<=)
-let slteq_vec = scmp_mword (<=)
-let ugteq_vec = ucmp_mword (>=)
-let sgteq_vec = scmp_mword (>=)
+let inline eq_vec    = eq_mword
+let inline neq_vec   = neq_mword
+let inline ult_vec   = ucmp_mword (<)
+let inline slt_vec   = scmp_mword (<)
+let inline ugt_vec   = ucmp_mword (>)
+let inline sgt_vec   = scmp_mword (>)
+let inline ulteq_vec = ucmp_mword (<=)
+let inline slteq_vec = scmp_mword (<=)
+let inline ugteq_vec = ucmp_mword (>=)
+let inline sgteq_vec = scmp_mword (>=)
