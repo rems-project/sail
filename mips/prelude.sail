@@ -311,8 +311,8 @@ union exception = {
   Error_internal_error : unit
 }
 
-val _sign_extend =  "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
-val _zero_extend =  "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val _sign_extend = {ocaml: "sign_extend", lem: "_sign_extend"} : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val _zero_extend = {ocaml: "zero_extend", lem: "_zero_extend"} : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
 val sign_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 val zero_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
