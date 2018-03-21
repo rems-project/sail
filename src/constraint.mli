@@ -60,6 +60,8 @@ val save_digests : unit -> unit
 
 val call_z3 : t -> smt_result
 
+val solve_z3 : t -> int -> Big_int.num option
+
 val string_of : t -> string
 
 val implies : t -> t -> t

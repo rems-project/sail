@@ -220,6 +220,8 @@ val infer_exp : Env.t -> unit exp -> tannot exp
 
 val prove : Env.t -> n_constraint -> bool
 
+val solve : Env.t -> nexp -> Big_int.num option
+
 val subtype_check : Env.t -> typ -> typ -> bool
 
 val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list

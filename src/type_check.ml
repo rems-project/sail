@@ -345,6 +345,7 @@ module Env : sig
   val have_smt_op : id -> t -> bool
   (* Well formedness-checks *)
   val wf_typ : ?exs:KidSet.t -> t -> typ -> unit
+  val wf_nexp : ?exs:KidSet.t -> t -> nexp -> unit
   val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
 
   (* Some of the code in the environment needs to use the Z3 prover,
@@ -1170,6 +1171,24 @@ let prove_z3' env constr =
 let prove_z3 env nc =
   typ_print ("Prove " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc);
   prove_z3' env (fun var_of -> Constraint.negate (nc_constraint env var_of nc))
+
+let solve env nexp =
+  typ_print ("Solve " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_nexp nexp ^ " = ?");
+  let bindings = ref KBindings.empty  in
+  let fresh_var kid =
+    let n = KBindings.cardinal !bindings in
+    bindings := KBindings.add kid n !bindings;
+    n
+  in
+  let var_of kid =
+    try KBindings.find kid !bindings with
+    | Not_found -> fresh_var kid
+  in
+  let env = Env.add_typ_var Parse_ast.Unknown (mk_kid "solve#") BK_nat env in
+  let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env))
+                               (nc_constraint env var_of (nc_eq (nvar (mk_kid "solve#")) nexp))
+  in
+  Constraint.solve_z3 constr (var_of (mk_kid "solve#"))
 
 let prove env (NC_aux (nc_aux, _) as nc) =
   let compare_const f (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
@@ -2212,6 +2231,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      if prove env nc
      then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      else typ_error l ("Cannot prove " ^ string_of_n_constraint nc)
+  | E_app (f, [E_aux (E_sizeof nexp, _)]), _ when Id.compare f (mk_id "__solve") = 0 ->
+     Env.wf_nexp env nexp;
+     begin match solve env nexp with
+     | None -> typ_error l ("Coud not solve " ^ string_of_nexp nexp)
+     | Some n ->
+        print_endline ("Solved " ^ string_of_nexp nexp ^ " = " ^ Big_int.to_string n);
+        annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+     end
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))

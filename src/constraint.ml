@@ -170,11 +170,13 @@ let rec sexpr_of_constraint = function
   | Boolean true -> Atom "true"
   | Boolean false -> Atom "false"
 
-let smtlib_of_constraints constr : string =
+let smtlib_of_constraints ?get_model:(get_model=false) constr : string =
   "(push)\n"
   ^ var_decs constr ^ "\n"
   ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; sexpr_of_constraint constr])
-  ^ "\n(assert constraint)\n(check-sat)\n(pop)"
+  ^ "\n(assert constraint)\n(check-sat)"
+  ^ (if get_model then "\n(get-model)" else "")
+  ^ "\n(pop)"
 
 type t = nexp constraint_bool
 
@@ -259,7 +261,40 @@ let rec call_z3 constraints : smt_result =
          else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
     end
 
-let string_of = smtlib_of_constraints
+let rec solve_z3 constraints var =
+  let problems = [constraints] in
+  let z3_file = smtlib_of_constraints ~get_model:true constraints in
+
+  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
+
+  let rec input_all chan =
+    try
+      let l = input_line chan in
+      let ls = input_all chan in
+      l :: ls
+    with
+      End_of_file -> []
+  in
+
+  let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
+  output_string tmp_chan z3_file;
+  close_out tmp_chan;
+  let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
+  let z3_output = String.concat " " (input_all z3_chan) in
+  let _ = Unix.close_process_in z3_chan in
+  Sys.remove input_file;
+  let regexp = {|(define-fun v|} ^ string_of_int var ^ {| () Int[ ]+\([0-9]+\))|} in
+  try
+    let _ = Str.search_forward (Str.regexp regexp) z3_output 0 in
+    let result = Big_int.of_string (Str.matched_group 1 z3_output) in
+    begin match call_z3 (BFun (And, constraints, CFun (NEq, NConstant result, NVar var))) with
+    | Unsat -> Some result
+    | _ -> None
+    end
+  with
+    Not_found -> None
+
+let string_of constr = smtlib_of_constraints constr
 
 (* ===== Abstract API for building constraints ===== *)
 
