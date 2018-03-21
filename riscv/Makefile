@@ -29,6 +29,7 @@ Riscv.thy: riscv.lem riscv_extras.lem
 		riscv_extras.lem \
 		riscv_types.lem \
 		riscv.lem
+	sed -i 's/datatype ast/datatype (plugins only: size) ast/' Riscv_types.thy
 
 riscv.lem: $(SAIL_SRCS)
 	$(SAIL_DIR)/sail -lem -o riscv -lem_mwords -lem_lib Riscv_extras $^
