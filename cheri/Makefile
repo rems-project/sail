@@ -70,7 +70,7 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CGetSealed)
 	$(call EXTRACT_INST,CGetPCC)
 	$(call EXTRACT_INST,CGetPCCSetOffset)
-	$(call EXTRACT_INST,CGetCause
+	$(call EXTRACT_INST,CGetCause)
 	$(call EXTRACT_INST,CSetCause)
 	$(call EXTRACT_INST,CAndPerm)
 	$(call EXTRACT_INST,CToPtr)
