@@ -119,25 +119,25 @@ iannot :: 'IA_' ::=
 
 instr :: 'I_' ::=
   {{ aux _ iannot }}
-  | ctyp id                                   :: :: decl
-  | alloc ctyp id                             :: :: alloc
-  | ctyp id = cval                            :: :: init
+  | ctyp id                                        :: :: decl
+  | alloc ctyp id                                  :: :: alloc
+  | ctyp id = cval                                 :: :: init
   | if ( cval ) { instr0 ; ... ; instrn }
-    else { instr0 ; ... ; instrm } : ctyp     :: :: if
-  | jump ( cval ) string                      :: :: jump
-  | clexp = id ( cval0 , ... , cvaln ) : ctyp :: :: funcall
-  | clexp = cval                              :: :: copy
-  | clexp = ( ctyp ) id : ctyp'               :: :: convert
-  | clear ctyp id                             :: :: clear
-  | return cval                               :: :: return
-  | { instr0 ; ... ; instrn }                 :: :: block
-  | try { instr0 ; ... ; instrn }             :: :: try_block
-  | throw cval                                :: :: throw
-  | '//' string                               :: :: comment
-  | C string                                  :: :: raw % only used for GCC attributes
-  | string :                                  :: :: label
-  | goto string                               :: :: goto
-  | match_failure                             :: :: match_failure
+    else { instr0 ; ... ; instrm } : ctyp          :: :: if
+  | jump ( cval ) string                           :: :: jump
+  | clexp = bool id ( cval0 , ... , cvaln ) : ctyp :: :: funcall
+  | clexp = cval                                   :: :: copy
+  | clexp = ( ctyp ) id : ctyp'                    :: :: convert
+  | clear ctyp id                                  :: :: clear
+  | return cval                                    :: :: return
+  | { instr0 ; ... ; instrn }                      :: :: block
+  | try { instr0 ; ... ; instrn }                  :: :: try_block
+  | throw cval                                     :: :: throw
+  | '//' string                                    :: :: comment
+  | C string                                       :: :: raw % only used for GCC attributes
+  | string :                                       :: :: label
+  | goto string                                    :: :: goto
+  | match_failure                                  :: :: match_failure
 
 % For optimising away allocations.
   | reset ctyp id                             :: :: reset
