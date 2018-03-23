@@ -515,6 +515,11 @@ let contains_early_return exp =
   { (Rewriter.compute_exp_alg false (||))
     with e_return = (fun (_, r) -> (true, E_return r)); e_app = e_app } exp)
 
+let find_e_ids exp =
+  let e_id id = IdSet.singleton id, E_id id in
+  fst (fold_exp
+    { (compute_exp_alg IdSet.empty IdSet.union) with e_id = e_id } exp)
+
 let typ_id_of (Typ_aux (typ, l)) = match typ with
   | Typ_id id -> id
   | Typ_app (register, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)])
@@ -627,11 +632,27 @@ let doc_exp_lem, doc_let_lem =
                in
                let combinator = if effectful (effect_of body) then "foreachM" else "foreach" in
                let indices_pp = parens (separate space [string "index_list"; expY exp1; expY exp2; step]) in
+               let used_vars_body = find_e_ids body in
+               let body_lambda =
+                 (* Work around indentation issues in Lem when translating
+                    tuple or literal unit patterns to Isabelle *)
+                 match fst (uncast_exp vartuple) with
+                   | E_aux (E_tuple _, _)
+                     when not (IdSet.mem (mk_id "varstup") used_vars_body)->
+                      separate space [string "fun"; doc_id_lem loopvar; string "varstup"; arrow]
+                      ^^ break 1 ^^
+                      separate space [string "let"; expY vartuple; string "= varstup in"]
+                   | E_aux (E_lit (L_aux (L_unit, _)), _)
+                     when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
+                      separate space [string "fun"; doc_id_lem loopvar; string "unit_var"; arrow]
+                   | _ ->
+                      separate space [string "fun"; doc_id_lem loopvar; expY vartuple; arrow]
+               in
                parens (
                    (prefix 2 1)
                      ((separate space) [string combinator; indices_pp; expY vartuple])
                      (parens
-                        (prefix 1 1 (separate space [string "fun"; doc_id_lem loopvar; expY vartuple; arrow]) (expN body))
+                        (prefix 2 1 (group body_lambda) (expN body))
                      )
                  )
           | _ -> raise (Reporting_basic.err_unreachable l
@@ -649,12 +670,27 @@ let doc_exp_lem, doc_let_lem =
                    | true,  false -> "M", cond, return body
                    | true,  true  -> "M", cond, body
                in
+               let used_vars_body = find_e_ids body in
+               let lambda =
+                 (* Work around indentation issues in Lem when translating
+                    tuple or literal unit patterns to Isabelle *)
+                 match fst (uncast_exp varstuple) with
+                   | E_aux (E_tuple _, _)
+                     when not (IdSet.mem (mk_id "varstup") used_vars_body)->
+                      separate space [string "fun varstup"; arrow] ^^ break 1 ^^
+                      separate space [string "let"; expY varstuple; string "= varstup in"]
+                   | E_aux (E_lit (L_aux (L_unit, _)), _)
+                     when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
+                      separate space [string "fun unit_var"; arrow]
+                   | _ ->
+                      separate space [string "fun"; expY varstuple; arrow]
+               in
                parens (
                    (prefix 2 1)
                      ((separate space) [string (combinator ^ csuffix); expY varstuple])
                      ((prefix 0 1)
-                       (parens (prefix 1 1 (separate space [string "fun"; expY varstuple; arrow]) (expN cond)))
-                       (parens (prefix 1 1 (separate space [string "fun"; expY varstuple; arrow]) (expN body))))
+                       (parens (prefix 2 1 (group lambda) (expN cond)))
+                       (parens (prefix 2 1 (group lambda) (expN body))))
                  )
             | _ -> raise (Reporting_basic.err_unreachable l
                "Unexpected number of arguments for loop combinator")
@@ -836,8 +872,10 @@ let doc_exp_lem, doc_let_lem =
            match fst (untyp_pat pat) with
            | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
               string ">>"
-           | P_aux (P_tup _, _) ->
-              (* TODO Make sure to avoid name-clashes with temp variable *)
+           | P_aux (P_tup _, _)
+             when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
+              (* Work around indentation issues in Lem when translating
+                 tuple patterns to Isabelle *)
               separate space
                 [string ">>= fun varstup -> let";
                  doc_pat_lem ctxt true pat;
