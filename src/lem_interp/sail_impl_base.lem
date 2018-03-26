@@ -781,8 +781,9 @@ let register_value_ones dir width start_index =
 
 val register_value_for_reg : reg_name -> list bit_lifted -> register_value
 let register_value_for_reg r bs : register_value =
-  let () = ensure (width_of_reg_name r = List.length bs)
-      ("register_value_for_reg (\"" ^ show (register_base_name r) ^ "\") length mismatch: "
+  let () = 
+    if width_of_reg_name r = List.length bs then ()
+    else failwith ("register_value_for_reg (\"" ^ show (register_base_name r) ^ "\") length mismatch: "
           ^ show (width_of_reg_name r) ^ " vs " ^ show (List.length bs))
   in
   let (j1, j2) = slice_of_reg_name r in
