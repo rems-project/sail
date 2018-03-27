@@ -444,9 +444,13 @@ type read_kind =
   (* AArch64 reads *)
   | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
   (* RISC-V reads *)
-  | Read_RISCV_acquire  | Read_RISCV_strong_acquire
-  | Read_RISCV_reserved | Read_RISCV_reserved_acquire
-  | Read_RISCV_reserved_strong_acquire
+  | Read_RISCV_acquire_RCpc
+  | Read_RISCV_acquire_RCsc
+  | Read_RISCV_acquire_release
+  | Read_RISCV_reserved
+  | Read_RISCV_reserved_acquire_RCpc
+  | Read_RISCV_reserved_acquire_RCsc
+  | Read_RISCV_reserved_acquire_release
   (* x86 reads *)
   | Read_X86_locked (* the read part of a lock'd instruction (rmw) *)
 
@@ -458,11 +462,13 @@ instance (Show read_kind)
     | Read_exclusive -> "Read_exclusive"
     | Read_exclusive_acquire -> "Read_exclusive_acquire"
     | Read_stream -> "Read_stream"
-    | Read_RISCV_acquire -> "Read_RISCV_acquire"
-    | Read_RISCV_strong_acquire -> "Read_RISCV_strong_acquire"
-    | Read_RISCV_reserved -> "Read_RISCV_reserved"
-    | Read_RISCV_reserved_acquire -> "Read_RISCV_reserved_acquire"
-    | Read_RISCV_reserved_strong_acquire -> "Read_RISCV_reserved_strong_acquire"
+    | Read_RISCV_acquire_RCpc             -> "Read_RISCV_acquire_RCpc"
+    | Read_RISCV_acquire_RCsc             -> "Read_RISCV_acquire_RCsc"
+    | Read_RISCV_acquire_release          -> "Read_RISCV_acquire_release"
+    | Read_RISCV_reserved                 -> "Read_RISCV_reserved"
+    | Read_RISCV_reserved_acquire_RCpc    -> "Read_RISCV_reserved_acquire_RCpc"
+    | Read_RISCV_reserved_acquire_RCsc    -> "Read_RISCV_reserved_acquire_RCsc"
+    | Read_RISCV_reserved_acquire_release -> "Read_RISCV_reserved_acquire_release"
     | Read_X86_locked -> "Read_X86_locked"
   end
 end
@@ -475,9 +481,13 @@ type write_kind =
   (* AArch64 writes *)
   | Write_release | Write_exclusive | Write_exclusive_release
   (* RISC-V *)
-  | Write_RISCV_release     | Write_RISCV_strong_release
-  | Write_RISCV_conditional | Write_RISCV_conditional_release
-  | Write_RISCV_conditional_strong_release
+  | Write_RISCV_release_RCpc
+  | Write_RISCV_release_RCsc
+  | Write_RISCV_acquire_release
+  | Write_RISCV_conditional
+  | Write_RISCV_conditional_release_RCpc
+  | Write_RISCV_conditional_release_RCsc
+  | Write_RISCV_conditional_acquire_release
   (* x86 writes *)
   | Write_X86_locked (* the write part of a lock'd instruction (rmw) *)
 
@@ -488,11 +498,13 @@ instance (Show write_kind)
     | Write_release -> "Write_release"
     | Write_exclusive -> "Write_exclusive"
     | Write_exclusive_release -> "Write_exclusive_release"
-    | Write_RISCV_release -> "Write_RISCV_release"
-    | Write_RISCV_strong_release -> "Write_RISCV_strong_release"
-    | Write_RISCV_conditional -> "Write_RISCV_conditional"
-    | Write_RISCV_conditional_release -> "Write_RISCV_conditional_release"
-    | Write_RISCV_conditional_strong_release -> "Write_RISCV_conditional_strong_release"
+    | Write_RISCV_release_RCpc                -> "Write_RISCV_release_RCpc"
+    | Write_RISCV_release_RCsc                -> "Write_RISCV_release_RCsc"
+    | Write_RISCV_acquire_release             -> "Write_RISCV_acquire_release"
+    | Write_RISCV_conditional                 -> "Write_RISCV_conditional"
+    | Write_RISCV_conditional_release_RCpc    -> "Write_RISCV_conditional_release_RCpc"
+    | Write_RISCV_conditional_release_RCsc    -> "Write_RISCV_conditional_release_RCsc"
+    | Write_RISCV_conditional_acquire_release -> "Write_RISCV_conditional_acquire_release"
     | Write_X86_locked -> "Write_X86_locked"
   end
 end
@@ -588,12 +600,14 @@ instance (EnumerationType read_kind)
     | Read_exclusive -> 3
     | Read_exclusive_acquire -> 4
     | Read_stream -> 5
-    | Read_RISCV_acquire -> 6
-    | Read_RISCV_strong_acquire -> 7
-    | Read_RISCV_reserved -> 8
-    | Read_RISCV_reserved_acquire -> 9
-    | Read_RISCV_reserved_strong_acquire -> 10
-    | Read_X86_locked -> 11
+    | Read_RISCV_acquire_RCpc -> 6
+    | Read_RISCV_acquire_RCsc -> 7
+    | Read_RISCV_acquire_release -> 8
+    | Read_RISCV_reserved -> 9
+    | Read_RISCV_reserved_acquire_RCpc -> 10
+    | Read_RISCV_reserved_acquire_RCsc -> 11
+    | Read_RISCV_reserved_acquire_release -> 12
+    | Read_X86_locked -> 13
   end
 end
 
@@ -602,14 +616,16 @@ instance (EnumerationType write_kind)
     | Write_plain -> 0
     | Write_conditional -> 1
     | Write_release -> 2
-    | Write_exclusive -> 3 
+    | Write_exclusive -> 3
     | Write_exclusive_release -> 4
-    | Write_RISCV_release -> 5
-    | Write_RISCV_strong_release -> 6
-    | Write_RISCV_conditional -> 7
-    | Write_RISCV_conditional_release -> 8
-    | Write_RISCV_conditional_strong_release -> 9
-    | Write_X86_locked -> 10
+    | Write_RISCV_release_RCpc -> 5
+    | Write_RISCV_release_RCsc -> 6
+    | Write_RISCV_acquire_release -> 7
+    | Write_RISCV_conditional -> 8
+    | Write_RISCV_conditional_release_RCpc -> 9
+    | Write_RISCV_conditional_release_RCsc -> 10
+    | Write_RISCV_conditional_acquire_release -> 11
+    | Write_X86_locked -> 12
   end
 end
 

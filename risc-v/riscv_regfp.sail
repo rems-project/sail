@@ -60,9 +60,10 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             ik :=
               switch (aq, rl) {
                 case (false, false) -> IK_mem_read (Read_plain)
-                case (true,  false) -> IK_mem_read (Read_RISCV_acquire)
+                case (true,  false) -> IK_mem_read (Read_RISCV_acquire_RCpc)
+                case (true,  true)  -> IK_mem_read (Read_RISCV_acquire_RCsc)
+
                 case (false, true)  -> exit "not implemented"
-                case (true,  true)  -> IK_mem_read (Read_RISCV_strong_acquire)
               };
      }
      case (STORE( imm, rs2, rs1, width, aq, rl)) -> {
@@ -72,9 +73,10 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             ik :=
               switch (aq, rl) {
                 case (false, false) -> IK_mem_write (Write_plain)
+                case (false, true)  -> IK_mem_write (Write_RISCV_release_RCpc)
+                case (true,  true)  -> IK_mem_write (Write_RISCV_release_RCsc)
+
                 case (true,  false) -> exit "not implemented"
-                case (false, true)  -> IK_mem_write (Write_RISCV_release)
-                case (true,  true)  -> IK_mem_write (Write_RISCV_strong_release)
               };
      }
      case (ADDIW ( imm, rs, rd)) -> {
@@ -111,9 +113,10 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             aR := iR;
             ik := switch (aq, rl) {
               case (false, false) -> IK_mem_read (Read_RISCV_reserved)
-              case (true,  false) -> IK_mem_read (Read_RISCV_reserved_acquire)
+              case (true,  false) -> IK_mem_read (Read_RISCV_reserved_acquire_RCsc)
+              case (true,  true)  -> IK_mem_read (Read_RISCV_reserved_acquire_release)
+
               case (false, true)  -> exit "not implemented"
-              case (true,  true)  -> IK_mem_read (Read_RISCV_reserved_strong_acquire)
             };
      }
      case (STORECON( aq, rl, rs2, rs1, width, rd)) -> {
@@ -124,9 +127,10 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
 
             ik := switch (aq, rl) {
               case (false, false) -> IK_mem_write (Write_RISCV_conditional)
-              case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release)
+              case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release_RCsc)
+              case (true,  true)  -> IK_mem_write (Write_RISCV_conditional_acquire_release)
+
               case (true,  false) -> exit "not implemented"
-              case (true,  true)  -> IK_mem_write (Write_RISCV_conditional_strong_release)
             };
      }
      case (AMO( op, aq, rl, rs2, rs1, width, rd)) -> {
@@ -137,11 +141,11 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
 
             ik := switch (aq, rl) {
               case (false, false) -> IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional)
-              case (false, true)  -> IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional_release)
-              case (true,  false) -> IK_mem_rmw (Read_RISCV_reserved_acquire,
+              case (false, true)  -> IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional_release_RCsc)
+              case (true,  false) -> IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
                                                                       Write_RISCV_conditional)
-              case (true,  true)  -> IK_mem_rmw (Read_RISCV_reserved_strong_acquire,
-                                                                      Write_RISCV_conditional_strong_release)
+              case (true,  true)  -> IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
+                                                                      Write_RISCV_conditional_release_RCsc)
             };
      }
   };

@@ -32,27 +32,30 @@ let memory_parameter_transformer_option_address _mode v =
 
 
 let riscv_read_memory_functions : memory_reads =
-  [ ("MEMr",                  (MR Read_plain                  memory_parameter_transformer));
-    ("MEMr_acquire",          (MR Read_RISCV_acquire          memory_parameter_transformer));
-    ("MEMr_strong_acquire",   (MR Read_RISCV_strong_acquire   memory_parameter_transformer));
-    ("MEMr_reserved",         (MR Read_RISCV_reserved         memory_parameter_transformer));
-    ("MEMr_reserved_acquire", (MR Read_RISCV_reserved_acquire memory_parameter_transformer));
-    ("MEMr_reserved_strong_acquire",
-                              (MR Read_RISCV_reserved_acquire memory_parameter_transformer));
+  [ ("MEMr",                 (MR Read_plain                 memory_parameter_transformer));
+    ("MEMr_acquire_RCpc",    (MR Read_RISCV_acquire_RCpc    memory_parameter_transformer));
+    ("MEMr_acquire_RCsc",    (MR Read_RISCV_acquire_RCsc    memory_parameter_transformer));
+    ("MEMr_acquire_release", (MR Read_RISCV_acquire_release memory_parameter_transformer));
+
+    ("MEMr_reserved",                 (MR Read_RISCV_reserved                 memory_parameter_transformer));
+    ("MEMr_reserved_acquire_RCpc",    (MR Read_RISCV_reserved_acquire_RCpc    memory_parameter_transformer));
+    ("MEMr_reserved_acquire_RCsc",    (MR Read_RISCV_reserved_acquire_RCsc    memory_parameter_transformer));
+    ("MEMr_reserved_acquire_release", (MR Read_RISCV_reserved_acquire_release memory_parameter_transformer));
   ]
 
 let riscv_memory_writes : memory_writes =
   []
 
 let riscv_memory_eas : memory_write_eas =
-  [ ("MEMea",                     (MEA Write_plain                     memory_parameter_transformer));
-    ("MEMea_release",             (MEA Write_RISCV_release             memory_parameter_transformer));
-    ("MEMea_strong_release",      (MEA Write_RISCV_strong_release      memory_parameter_transformer));
-    ("MEMea_conditional",         (MEA Write_RISCV_conditional         memory_parameter_transformer));
-    ("MEMea_conditional_release", (MEA Write_RISCV_conditional_release memory_parameter_transformer));
-    ("MEMea_conditional_strong_release",
-                                  (MEA Write_RISCV_conditional_strong_release
-                                                                       memory_parameter_transformer));
+  [ ("MEMea",                 (MEA Write_plain                 memory_parameter_transformer));
+    ("MEMea_release_RCpc",    (MEA Write_RISCV_release_RCpc    memory_parameter_transformer));
+    ("MEMea_release_RCsc",    (MEA Write_RISCV_release_RCsc    memory_parameter_transformer));
+    ("MEMea_acquire_release", (MEA Write_RISCV_acquire_release memory_parameter_transformer));
+
+    ("MEMea_conditional",                 (MEA Write_RISCV_conditional                 memory_parameter_transformer));
+    ("MEMea_conditional_release_RCpc",    (MEA Write_RISCV_conditional_release_RCpc    memory_parameter_transformer));
+    ("MEMea_conditional_release_RCsc",    (MEA Write_RISCV_conditional_release_RCsc    memory_parameter_transformer));
+    ("MEMea_conditional_acquire_release", (MEA Write_RISCV_conditional_acquire_release memory_parameter_transformer));
   ]
 
 let sc_fail_success = fun (IState interp context) b ->
@@ -61,13 +64,14 @@ let sc_fail_success = fun (IState interp context) b ->
 
 let riscv_memory_vals : memory_write_vals =
   [ ("MEMval",                    (MV memory_parameter_transformer_option_address Nothing));
-    ("MEMval_release",            (MV memory_parameter_transformer_option_address Nothing));
-    ("MEMval_strong_release",     (MV memory_parameter_transformer_option_address Nothing));
-    ("MEMval_conditional",        (MV memory_parameter_transformer_option_address (Just sc_fail_success)));
-    ("MEMval_conditional_release",(MV memory_parameter_transformer_option_address (Just sc_fail_success)));
-    ("MEMval_conditional_strong_release",
-                                  (MV memory_parameter_transformer_option_address (Just sc_fail_success)));
+    ("MEMval_release_RCpc",       (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_release_RCsc",       (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_acquire_release",    (MV memory_parameter_transformer_option_address Nothing));
 
+    ("MEMval_conditional",                 (MV memory_parameter_transformer_option_address (Just sc_fail_success)));
+    ("MEMval_conditional_release_RCpc",    (MV memory_parameter_transformer_option_address (Just sc_fail_success)));
+    ("MEMval_conditional_release_RCsc",    (MV memory_parameter_transformer_option_address (Just sc_fail_success)));
+    ("MEMval_conditional_acquire_release", (MV memory_parameter_transformer_option_address (Just sc_fail_success)));
   ]
 
 let riscv_speculate_conditional_success : excl_res =

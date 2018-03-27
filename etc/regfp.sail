@@ -35,11 +35,13 @@ typedef read_kind = enumerate {
   Read_exclusive;
   Read_exclusive_acquire;
   Read_stream;
-  Read_RISCV_acquire;
-  Read_RISCV_strong_acquire;
+  Read_RISCV_acquire_RCpc;
+  Read_RISCV_acquire_RCsc;
+  Read_RISCV_acquire_release;
   Read_RISCV_reserved;
-  Read_RISCV_reserved_acquire;
-  Read_RISCV_reserved_strong_acquire;
+  Read_RISCV_reserved_acquire_RCpc;
+  Read_RISCV_reserved_acquire_RCsc;
+  Read_RISCV_reserved_acquire_release;
   Read_X86_locked;
 }
 
@@ -49,11 +51,13 @@ typedef write_kind = enumerate {
   Write_release;
   Write_exclusive;
   Write_exclusive_release;
-  Write_RISCV_release;
-  Write_RISCV_strong_release;
+  Write_RISCV_release_RCpc;
+  Write_RISCV_release_RCsc;
+  Write_RISCV_acquire_release;
   Write_RISCV_conditional;
-  Write_RISCV_conditional_release;
-  Write_RISCV_conditional_strong_release;
+  Write_RISCV_conditional_release_RCpc;
+  Write_RISCV_conditional_release_RCsc;
+  Write_RISCV_conditional_acquire_release;
   Write_X86_locked;
 }
 
