@@ -1,5 +1,5 @@
 
-
+register instCount : int
 
 val fetch_and_execute : unit -> unit effect {barr, eamem, escape, rmem, rreg, wmv, wreg, undef, wmvt, rmemt}
 function fetch_and_execute () = {
@@ -9,7 +9,7 @@ function fetch_and_execute () = {
     branchPending = 0b0;
     nextPC = if inBranchDelay then delayedPC else PC + 4;
     cp2_next_pc();
-
+    instCount = instCount + 1;
     print_bits("PC: ", PC);
     try {
       let pc_pa = TranslatePC(PC);
@@ -54,7 +54,15 @@ function main () = {
   init_cp0_state();
   init_cp2_state();
   nextPC = to_bits(64, elf_entry());
+  startTime = get_time_ns();
   fetch_and_execute();
+  endTime = get_time_ns();
+  elapsed = endTime - startTime;
+  inst_1e9 = instCount * 1000000000;
+  ips = inst_1e9 / elapsed;
   dump_mips_state ();
-  dump_cp2_state ()
+  dump_cp2_state ();
+  print_int("Executed instructions: ", instCount);
+  print_int("Nanoseconds elapsed: ", elapsed);
+  print_int("Instructions per second: ", ips);
 }

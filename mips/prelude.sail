@@ -395,3 +395,5 @@ overload vector_update_subrange = {vector_update_subrange_dec, vector_update_sub
 
 val mask : forall 'm 'n , 'm >= 'n > 0 . bits('m) -> bits('n)
 function mask bs = bs['n - 1 .. 0]
+
+val "get_time_ns" : unit -> int

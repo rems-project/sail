@@ -591,3 +591,7 @@ let shift_bits_left (x, y) =
   shiftl (x, uint(y))
 
 let speculate_conditional_success () = true
+
+(* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
+let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
+
