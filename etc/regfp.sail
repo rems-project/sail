@@ -76,8 +76,12 @@ typedef barrier_kind = enumerate {
   Barrier_MIPS_SYNC;
   Barrier_RISCV_rw_rw;
   Barrier_RISCV_r_rw;
+  Barrier_RISCV_w_rw;
+  Barrier_RISCV_rw_r;
   Barrier_RISCV_r_r;
+  Barrier_RISCV_w_r;
   Barrier_RISCV_rw_w;
+  Barrier_RISCV_r_w;
   Barrier_RISCV_w_w;
   Barrier_RISCV_i;
   Barrier_x86_MFENCE;

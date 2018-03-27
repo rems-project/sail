@@ -612,19 +612,30 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
          | Interp_ast.V_ctor (Id_aux (Id "IK_barrier") _) _ _
            (Interp_ast.V_ctor (Id_aux (Id b) _) _ _ _) ->
             IK_barrier (match b with
-                        | "Barrier_Sync" ->   Barrier_Sync
-                        | "Barrier_LwSync" -> Barrier_LwSync
-                        | "Barrier_Eieio" ->  Barrier_Eieio
-                        | "Barrier_Isync" ->  Barrier_Isync
-                        | "Barrier_DMB" ->    Barrier_DMB
-                        | "Barrier_DMB_ST" -> Barrier_DMB_ST
-                        | "Barrier_DMB_LD" -> Barrier_DMB_LD
-                        | "Barrier_DSB" ->    Barrier_DSB
-                        | "Barrier_DSB_ST" -> Barrier_DSB_ST
-                        | "Barrier_DSB_LD" -> Barrier_DSB_LD
-                        | "Barrier_ISB" ->    Barrier_ISB
-                        | "Barrier_MIPS_SYNC" -> Barrier_MIPS_SYNC
-                        | "Barrier_x86_MFENCE" -> Barrier_x86_MFENCE
+                        | "Barrier_Sync"        -> Barrier_Sync
+                        | "Barrier_LwSync"      -> Barrier_LwSync
+                        | "Barrier_Eieio"       -> Barrier_Eieio
+                        | "Barrier_Isync"       -> Barrier_Isync
+                        | "Barrier_DMB"         -> Barrier_DMB
+                        | "Barrier_DMB_ST"      -> Barrier_DMB_ST
+                        | "Barrier_DMB_LD"      -> Barrier_DMB_LD
+                        | "Barrier_DSB"         -> Barrier_DSB
+                        | "Barrier_DSB_ST"      -> Barrier_DSB_ST
+                        | "Barrier_DSB_LD"      -> Barrier_DSB_LD
+                        | "Barrier_ISB"         -> Barrier_ISB
+                        | "Barrier_TM_COMMIT"   -> Barrier_TM_COMMIT
+                        | "Barrier_MIPS_SYNC"   -> Barrier_MIPS_SYNC
+                        | "Barrier_RISCV_rw_rw" -> Barrier_RISCV_rw_rw
+                        | "Barrier_RISCV_r_rw"  -> Barrier_RISCV_r_rw
+                        | "Barrier_RISCV_w_rw"  -> Barrier_RISCV_w_rw
+                        | "Barrier_RISCV_rw_r"  -> Barrier_RISCV_rw_r
+                        | "Barrier_RISCV_r_r"   -> Barrier_RISCV_r_r
+                        | "Barrier_RISCV_w_r"   -> Barrier_RISCV_w_r
+                        | "Barrier_RISCV_rw_w"  -> Barrier_RISCV_rw_w
+                        | "Barrier_RISCV_r_w"   -> Barrier_RISCV_r_w
+                        | "Barrier_RISCV_w_w"   -> Barrier_RISCV_w_w
+                        | "Barrier_RISCV_i"     -> Barrier_RISCV_i
+                        | "Barrier_x86_MFENCE"  -> Barrier_x86_MFENCE
                         end)
          | Interp_ast.V_ctor (Id_aux (Id "IK_mem_read") _) _ _
            (Interp_ast.V_ctor (Id_aux (Id r) _) _ _ _) ->

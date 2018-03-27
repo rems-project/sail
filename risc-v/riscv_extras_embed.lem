@@ -68,16 +68,26 @@ let speculate_conditional_success () = excl_result () >>= fun b -> return (if b 
 
 val MEM_fence_rw_rw : unit -> M unit
 val MEM_fence_r_rw  : unit -> M unit
+val MEM_fence_w_rw  : unit -> M unit
+val MEM_fence_rw_r  : unit -> M unit
 val MEM_fence_r_r   : unit -> M unit
+val MEM_fence_w_r   : unit -> M unit
 val MEM_fence_rw_w  : unit -> M unit
+val MEM_fence_r_w   : unit -> M unit
 val MEM_fence_w_w   : unit -> M unit
-val MEM_fence_i     : unit -> M unit
 
 let MEM_fence_rw_rw () = barrier Barrier_RISCV_rw_rw
 let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw
+let MEM_fence_w_rw  () = barrier Barrier_RISCV_w_rw
+let MEM_fence_rw_r  () = barrier Barrier_RISCV_rw_r
 let MEM_fence_r_r   () = barrier Barrier_RISCV_r_r
+let MEM_fence_w_r   () = barrier Barrier_RISCV_w_r
 let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
+let MEM_fence_r_w   () = barrier Barrier_RISCV_r_w
 let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
+
+
+val MEM_fence_i     : unit -> M unit
 let MEM_fence_i     () = barrier Barrier_RISCV_i
 
 let duplicate (bit,len) =

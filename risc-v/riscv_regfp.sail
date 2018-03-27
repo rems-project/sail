@@ -97,8 +97,14 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
               switch(pred, succ) {
                 case (0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
                 case (0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
+                case (0b0001, 0b0011) -> IK_barrier (Barrier_RISCV_w_rw)
+
+                case (0b0011, 0b0010) -> IK_barrier (Barrier_RISCV_rw_r)
                 case (0b0010, 0b0010) -> IK_barrier (Barrier_RISCV_r_r)
+                case (0b0001, 0b0010) -> IK_barrier (Barrier_RISCV_w_r)
+
                 case (0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
+                case (0b0010, 0b0001) -> IK_barrier (Barrier_RISCV_r_w)
                 case (0b0001, 0b0001) -> IK_barrier (Barrier_RISCV_w_w)
                 case _ -> exit "not implemented"
               };

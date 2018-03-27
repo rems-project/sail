@@ -486,12 +486,16 @@ let barrier_kindToInterpValue = function
   | Barrier_TM_COMMIT -> V_ctor (Id_aux (Id "Barrier_TM_COMMIT") Unknown) (T_id "barrier_kind") (C_Enum 11) (toInterpValue ())
   | Barrier_MIPS_SYNC -> V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") Unknown) (T_id "barrier_kind") (C_Enum 12) (toInterpValue ())
   | Barrier_RISCV_rw_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") Unknown) (T_id "barrier_kind") (C_Enum 13) (toInterpValue ())
-  | Barrier_RISCV_r_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") Unknown) (T_id "barrier_kind") (C_Enum 14) (toInterpValue ())
-  | Barrier_RISCV_r_r -> V_ctor (Id_aux (Id "Barrier_RISCV_r_r") Unknown) (T_id "barrier_kind") (C_Enum 15) (toInterpValue ())
-  | Barrier_RISCV_rw_w -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") Unknown) (T_id "barrier_kind") (C_Enum 16) (toInterpValue ())
-  | Barrier_RISCV_w_w -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w") Unknown) (T_id "barrier_kind") (C_Enum 17) (toInterpValue ())
-  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 18) (toInterpValue ())
-  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 19) (toInterpValue ())
+  | Barrier_RISCV_r_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_r_rw")  Unknown) (T_id "barrier_kind") (C_Enum 14) (toInterpValue ())
+  | Barrier_RISCV_w_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_w_rw")  Unknown) (T_id "barrier_kind") (C_Enum 15) (toInterpValue ())
+  | Barrier_RISCV_rw_r  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_r")  Unknown) (T_id "barrier_kind") (C_Enum 16) (toInterpValue ())
+  | Barrier_RISCV_r_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_r")   Unknown) (T_id "barrier_kind") (C_Enum 17) (toInterpValue ())
+  | Barrier_RISCV_w_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_r")   Unknown) (T_id "barrier_kind") (C_Enum 18) (toInterpValue ())
+  | Barrier_RISCV_rw_w  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w")  Unknown) (T_id "barrier_kind") (C_Enum 19) (toInterpValue ())
+  | Barrier_RISCV_r_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_w")   Unknown) (T_id "barrier_kind") (C_Enum 20) (toInterpValue ())
+  | Barrier_RISCV_w_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w")   Unknown) (T_id "barrier_kind") (C_Enum 21) (toInterpValue ())
+  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 22) (toInterpValue ())
+  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 23) (toInterpValue ())
   end
 let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
@@ -508,10 +512,14 @@ let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_TM_COMMIT") _) _ _ v -> Barrier_TM_COMMIT
   | V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") _) _ _ v -> Barrier_MIPS_SYNC
   | V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") _) _ _ v -> Barrier_RISCV_rw_rw
-  | V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") _) _ _ v -> Barrier_RISCV_r_rw
-  | V_ctor (Id_aux (Id "Barrier_RISCV_r_r") _) _ _ v -> Barrier_RISCV_r_r
-  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") _) _ _ v -> Barrier_RISCV_rw_w
-  | V_ctor (Id_aux (Id "Barrier_RISCV_w_w") _) _ _ v -> Barrier_RISCV_w_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") _) _ _ v  -> Barrier_RISCV_r_rw
+  | V_ctor (Id_aux (Id "Barrier_RISCV_w_rw") _) _ _ v  -> Barrier_RISCV_w_rw
+  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_r") _) _ _ v  -> Barrier_RISCV_rw_r
+  | V_ctor (Id_aux (Id "Barrier_RISCV_r_r") _) _ _ v   -> Barrier_RISCV_r_r
+  | V_ctor (Id_aux (Id "Barrier_RISCV_w_r") _) _ _ v   -> Barrier_RISCV_w_r
+  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") _) _ _ v  -> Barrier_RISCV_rw_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_r_w") _) _ _ v   -> Barrier_RISCV_r_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_w_w") _) _ _ v   -> Barrier_RISCV_w_w
   | V_ctor (Id_aux (Id "Barrier_RISCV_i") _) _ _ v -> Barrier_RISCV_i
   | V_ctor (Id_aux (Id "Barrier_x86_MFENCE") _) _ _ v -> Barrier_x86_MFENCE
   | V_tuple [v] -> barrier_kindFromInterpValue v

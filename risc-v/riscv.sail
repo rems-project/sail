@@ -260,9 +260,16 @@ function clause execute (FENCE(pred, succ)) = {
   switch(pred, succ) {
     case (0b0011, 0b0011) -> MEM_fence_rw_rw()
     case (0b0010, 0b0011) -> MEM_fence_r_rw()
+    case (0b0001, 0b0011) -> MEM_fence_w_rw()
+
+    case (0b0011, 0b0010) -> MEM_fence_rw_r()
     case (0b0010, 0b0010) -> MEM_fence_r_r()
+    case (0b0001, 0b0010) -> MEM_fence_w_r()
+
     case (0b0011, 0b0001) -> MEM_fence_rw_w()
+    case (0b0010, 0b0001) -> MEM_fence_r_w()
     case (0b0001, 0b0001) -> MEM_fence_w_w()
+
     case _ -> not_implemented("unsupported fence")
   }
 }
