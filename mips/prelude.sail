@@ -23,7 +23,7 @@ val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 /* sneaky deref with no effect necessary for bitfield writes */
 val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
-overload operator == = {eq_atom, eq_int, eq_vec, eq_string, eq_real, eq_anything}
+overload operator == = {eq_atom, eq_int, eq_bit, eq_vec, eq_string, eq_real, eq_anything}
 
 val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
