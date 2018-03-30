@@ -170,15 +170,19 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | _ -> false
 
 let doc_nexp_lem nexp =
+  let nice_kid kid =
+    let (Kid_aux (Var kid,l)) = orig_kid kid in
+    Kid_aux (Var (String.map (function '#' -> '_' | c -> c) kid),l)
+  in
   let (Nexp_aux (nexp, l) as full_nexp) = nexp_simp nexp in
   match nexp with
   | Nexp_constant i -> string ("ty" ^ Big_int.to_string i)
-  | Nexp_var v -> string (string_of_kid (orig_kid v))
+  | Nexp_var v -> string (string_of_kid (nice_kid v))
   | _ ->
      let rec mangle_nexp (Nexp_aux (nexp, _)) = begin
        match nexp with
        | Nexp_id id -> string_of_id id
-       | Nexp_var kid -> string_of_id (id_of_kid (orig_kid kid))
+       | Nexp_var kid -> string_of_id (id_of_kid (nice_kid kid))
        | Nexp_constant i -> Pretty_print_lem_ast.lemnum Big_int.to_string i
        | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
        | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2

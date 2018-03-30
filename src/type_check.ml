@@ -140,7 +140,9 @@ let string_of_bind (typquant, typ) = string_of_typquant typquant ^ ". " ^ string
 let orig_kid (Kid_aux (Var v, l) as kid) =
   try
     let i = String.rindex v '#' in
-    Kid_aux (Var ("'" ^ String.sub v (i + 1) (String.length v - i - 1)), l)
+    if i >= 3 && String.sub v 0 3 = "'fv" then
+      Kid_aux (Var ("'" ^ String.sub v (i + 1) (String.length v - i - 1)), l)
+    else kid
   with
   | Not_found -> kid
 
@@ -3553,7 +3555,13 @@ let infer_funtyp l env tannotopt funcls =
      end
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error l "Cannot infer function type for unannotated function"
 
-let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, (fun _ -> None), false), (Parse_ast.Unknown, None)))
+let mk_val_spec env typq typ id =
+  let eff =
+    match typ with
+    | Typ_aux (Typ_fn (_,_,eff),_) -> eff
+    | _ -> no_effect
+  in
+  DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, (fun _ -> None), false), (Parse_ast.Unknown, Some (env,typ,eff))))
 
 let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
@@ -3595,7 +3603,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     if not have_val_spec
     then
       let typ = Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, eff), vl) in
-      [mk_val_spec quant typ id], Env.add_val_spec id (quant, typ) env, eff
+      [mk_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env, eff
     else [], env, declared_eff
   in
   let env = Env.define_val_spec id env in
@@ -3608,6 +3616,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)
 let check_val_spec env (VS_aux (vs, (l, _))) =
+  let annotate vs typ eff = DEF_spec (VS_aux (vs, (l, Some (env,typ,eff)))) in
   let (id, quants, typ, env) = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _) as typschm, id, ext_opt, is_cast) ->
        typ_debug ("VS typschm: " ^ string_of_id id ^ ", " ^ string_of_typschm typschm);
@@ -3623,7 +3632,12 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        let env = if is_cast then Env.add_cast id env else env in
        (id, quants, typ, env)
   in
-  [DEF_spec (VS_aux (vs, (l, None)))], Env.add_val_spec id (quants, Env.expand_synonyms (add_typquant quants env) typ) env
+  let eff =
+    match typ with
+    | Typ_aux (Typ_fn (_,_,eff),_) -> eff
+    | _ -> no_effect
+  in
+  [annotate vs typ eff], Env.add_val_spec id (quants, Env.expand_synonyms (add_typquant quants env) typ) env
 
 let check_default env (DT_aux (ds, l)) =
   match ds with

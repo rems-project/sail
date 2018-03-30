@@ -190,6 +190,7 @@ let opt_ddump_raw_mono_ast = ref false
 let opt_dmono_analysis = ref 0
 let opt_auto_mono = ref false
 let opt_mono_rewrites = ref false
+let opt_mono_complex_nexps = ref false
 let opt_dall_split_errors = ref false
 let opt_dmono_continue = ref false
 
@@ -199,6 +200,7 @@ let monomorphise_ast locs type_env ast =
     auto = !opt_auto_mono;
     debug_analysis = !opt_dmono_analysis;
     rewrites = !opt_mono_rewrites;
+    rewrite_toplevel_nexps = !opt_mono_complex_nexps;
     rewrite_size_parameters = !Pretty_print_lem.opt_mwords;
     all_split_errors = !opt_dall_split_errors;
     continue_anyway = !opt_dmono_continue;

@@ -52,6 +52,7 @@ type options = {
   auto : bool;                    (* Analyse ast to find splits for monomorphisation *)
   debug_analysis : int;           (* Debug output level for the automatic analysis *)
   rewrites : bool;                (* Experimental rewrites for variable-sized operations *)
+  rewrite_toplevel_nexps : bool;  (* Move complex nexps in function signatures into constraints *)
   rewrite_size_parameters : bool; (* Make implicit type parameters explicit for (e.g.) lem *)
   all_split_errors : bool;
   continue_anyway : bool;

@@ -3817,10 +3817,172 @@ let add_bitvector_casts (Defs defs) =
   in Defs (List.map rewrite_def defs)
 end
 
+let replace_nexp_in_typ env typ orig new_nexp =
+  let rec aux (Typ_aux (t,l) as typ) =
+    match t with
+    | Typ_id _
+    | Typ_var _
+        -> false, typ
+    | Typ_fn (arg,res,eff) ->
+       let f1, arg = aux arg in
+       let f2, res = aux res in
+       f1 || f2, Typ_aux (Typ_fn (arg, res, eff),l)
+    | Typ_tup typs ->
+       let fs, typs = List.split (List.map aux typs) in
+       List.exists (fun x -> x) fs, Typ_aux (Typ_tup typs,l)
+    | Typ_exist (kids,nc,typ') -> (* TODO avoid capture *)
+       let f, typ' = aux typ' in
+       f, Typ_aux (Typ_exist (kids,nc,typ'),l)
+    | Typ_app (id, targs) ->
+       let fs, targs = List.split (List.map aux_targ targs) in
+       List.exists (fun x -> x) fs, Typ_aux (Typ_app (id, targs),l)
+  and aux_targ (Typ_arg_aux (ta,l) as typ_arg) =
+    match ta with
+    | Typ_arg_nexp nexp ->
+       if prove env (nc_eq nexp orig)
+       then true, Typ_arg_aux (Typ_arg_nexp new_nexp,l)
+       else false, typ_arg
+    | Typ_arg_typ typ ->
+       let f, typ = aux typ in
+       f, Typ_arg_aux (Typ_arg_typ typ,l)
+    | Typ_arg_order _ -> false, typ_arg
+  in aux typ
+
+(* TODO: replace with more informative mangled name *)
+let fresh_top_kid =
+  let counter = ref 0 in
+  fun () ->
+    let n = !counter in
+    let () = counter := n+1 in
+    mk_kid ("mono#nexp#" ^ string_of_int n)
+
+let rewrite_toplevel_nexps (Defs defs) =
+  let find_nexp env nexp_map nexp =
+    let is_equal (kid,nexp') = prove env (nc_eq nexp nexp') in
+    List.find is_equal nexp_map
+  in
+  let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
+    match t with
+    | Typ_fn (args,res,eff) ->
+       let nexp_map, args = rewrite_typ_in_spec env nexp_map args in
+       let nexp_map, res = rewrite_typ_in_spec env nexp_map res in
+       nexp_map, Typ_aux (Typ_fn (args,res,eff),ann)
+    | Typ_tup typs ->
+       let nexp_map, typs =
+         List.fold_right (fun typ (nexp_map,t) ->
+           let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
+           (nexp_map, typ::t)) typs (nexp_map,[])
+       in nexp_map, Typ_aux (Typ_tup typs,ann)
+    | _ ->
+       let typ' = Env.base_typ_of env typ_full in
+       let nexp_opt =
+         match destruct_atom_nexp env typ' with
+         | Some nexp -> Some nexp
+         | None ->
+            if is_bitvector_typ typ' then
+              let (_,size,_,_) = vector_typ_args_of typ' in
+              Some size
+            else None
+       in match nexp_opt with
+       | None -> nexp_map, typ_full
+       | Some (Nexp_aux (Nexp_constant _,_))
+       | Some (Nexp_aux (Nexp_var _,_)) -> nexp_map, typ_full
+       | Some nexp ->
+          let nexp_map, kid =
+            match find_nexp env nexp_map nexp with
+            | (kid,_) -> nexp_map, kid
+            | exception Not_found ->
+               let kid = fresh_top_kid () in
+               (kid, nexp)::nexp_map, kid
+          in
+          let new_nexp = nvar kid in
+          (* Try to avoid expanding the original type *)
+          let changed, typ = replace_nexp_in_typ env typ_full nexp new_nexp in
+          if changed then nexp_map, typ
+          else nexp_map, snd (replace_nexp_in_typ env typ' nexp new_nexp)
+  in
+  let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs,typ),ts_l),id,ext_opt,is_cast),ann)) =
+    match tqs, ext_opt "lem" with (* does it really matter if this is wrong? *)
+    | _, Some _
+    | TypQ_aux (TypQ_no_forall,_), _ -> None
+    | TypQ_aux (TypQ_tq qs, tq_l), None ->
+       let env = env_of_annot ann in
+       let env = add_typquant tqs env in
+       let nexp_map, typ = rewrite_typ_in_spec env [] typ in
+       match nexp_map with
+       | [] -> None
+       | _ ->
+          let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (KOpt_aux (KOpt_none kid,Generated Unknown)), Generated tq_l)) nexp_map in
+          let new_constraints = List.map (fun (kid,nexp) -> QI_aux (QI_const (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map in
+          let tqs = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints),tq_l) in
+          let vs =
+            VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs,typ),ts_l),id,ext_opt,is_cast),ann) in
+          Some (id, nexp_map, vs)
+  in
+  let rewrite_typ_in_body env nexp_map typ =
+    let rec aux (Typ_aux (t,l) as typ_full) =
+    match t with
+    | Typ_tup typs -> Typ_aux (Typ_tup (List.map aux typs),l)
+    | Typ_exist (kids,nc,typ') -> (* TODO: avoid shadowing *)
+       Typ_aux (Typ_exist (kids,(* TODO? *) nc, aux typ'),l)
+    | Typ_app (id,targs) -> Typ_aux (Typ_app (id,List.map aux_targ targs),l)
+    | _ -> typ_full
+    and aux_targ (Typ_arg_aux (ta,l) as ta_full) =
+      match ta with
+      | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (aux typ),l)
+      | Typ_arg_order _ -> ta_full
+      | Typ_arg_nexp nexp ->
+         match find_nexp env nexp_map nexp with
+         | (kid,_) -> Typ_arg_aux (Typ_arg_nexp (nvar kid),l)
+         | exception Not_found -> ta_full
+    in aux typ
+  in
+  let rewrite_one_exp nexp_map (e,ann) =
+    match e with
+    | E_cast (typ,e') -> E_aux (E_cast (rewrite_typ_in_body (env_of_annot ann) nexp_map typ,e'),ann)
+    | E_sizeof nexp ->
+       (match find_nexp (env_of_annot ann) nexp_map nexp with
+       | (kid,_) -> E_aux (E_sizeof (nvar kid),ann)
+       | exception Not_found -> E_aux (e,ann))
+    | _ -> E_aux (e,ann)
+  in
+  let rewrite_one_pat nexp_map (p,ann) =
+    match p with
+    | P_typ (typ,p') -> P_aux (P_typ (rewrite_typ_in_body (env_of_annot ann) nexp_map typ,p'),ann)
+    | _ -> P_aux (p,ann)
+  in
+  let rewrite_body nexp_map pexp =
+    let open Rewriter in
+    fold_pexp { id_exp_alg with
+      e_aux = rewrite_one_exp nexp_map;
+      pat_alg = { id_pat_alg with p_aux = rewrite_one_pat nexp_map }
+    } pexp
+  in
+  let rewrite_funcl spec_map (FCL_aux (FCL_Funcl (id,pexp),ann) as funcl) =
+    match Bindings.find id spec_map with
+    | nexp_map -> FCL_aux (FCL_Funcl (id,rewrite_body nexp_map pexp),ann)
+    | exception Not_found -> funcl
+  in
+  let rewrite_def spec_map def =
+    match def with
+    | DEF_spec vs -> (match rewrite_valspec vs with
+      | None -> spec_map, def
+      | Some (id, nexp_map, vs) -> Bindings.add id nexp_map spec_map, DEF_spec vs)
+    | DEF_fundef (FD_aux (FD_function (recopt,tann,eff,funcls),ann)) ->
+       spec_map,
+       DEF_fundef (FD_aux (FD_function (recopt,tann,eff,List.map (rewrite_funcl spec_map) funcls),ann))
+    | _ -> spec_map, def
+  in
+  let _, defs = List.fold_left (fun (spec_map,t) def ->
+    let spec_map, def = rewrite_def spec_map def in
+    (spec_map, def::t)) (Bindings.empty, []) defs
+  in Defs (List.rev defs)
+
 type options = {
   auto : bool;
   debug_analysis : int;
   rewrites : bool;
+  rewrite_toplevel_nexps : bool;
   rewrite_size_parameters : bool;
   all_split_errors : bool;
   continue_anyway : bool;
@@ -3835,14 +3997,17 @@ let recheck defs =
   r
 
 let monomorphise opts splits env defs =
+  let defs =
+    if opts.rewrite_toplevel_nexps
+      then rewrite_toplevel_nexps defs
+      else defs
+  in
   let (defs,env) =
     if opts.rewrites then
       let defs = MonoRewrites.mono_rewrite defs in
-    (* TODO: is this necessary? *)
       recheck defs
-    else (defs,env)
+    else recheck defs
   in
-(*let _ = Pretty_print.pp_defs stdout defs in*)
   let ok_analysis, new_splits, extra_splits =
     if opts.auto
     then

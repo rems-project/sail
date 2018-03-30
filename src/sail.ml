@@ -164,6 +164,9 @@ let options = Arg.align ([
   ( "-mono_rewrites",
     Arg.Set Process_file.opt_mono_rewrites,
     " turn on rewrites for combining bitvector operations");
+  ( "-mono_complex_nexps",
+    Arg.Set Process_file.opt_mono_complex_nexps,
+    " move complex size expressions in function signatures into constraints");
   ( "-dall_split_errors",
     Arg.Set Process_file.opt_dall_split_errors,
     " display all case split errors from monomorphisation, rather than one");
