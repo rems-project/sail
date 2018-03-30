@@ -2655,13 +2655,13 @@ let add_dep_to_assigned dep assigns es =
    unification variables.  For function calls we also supply a list of dependencies for
    arguments so that we can find dependencies for existentially bound sizes. *)
 
-let deps_of_tyvars kid_deps arg_deps kids =
+let deps_of_tyvars l kid_deps arg_deps kids =
   let check kid deps =
     match KBindings.find kid kid_deps with
     | deps' -> dmerge deps deps'
     | exception Not_found ->
        match kid with
-       | Kid_aux (Var kidstr, l) ->
+       | Kid_aux (Var kidstr, _) ->
           let unknown = Unknown (l, "Unknown type variable " ^ string_of_kid kid) in
           (* Tyvars from existentials in arguments have a special format *)
           if String.length kidstr > 5 && String.sub kidstr 0 4 = "'arg" then
@@ -2675,9 +2675,9 @@ let deps_of_tyvars kid_deps arg_deps kids =
   in
   KidSet.fold check kids dempty
 
-let deps_of_nexp kid_deps arg_deps nexp =
+let deps_of_nexp l kid_deps arg_deps nexp =
   let kids = nexp_frees nexp in
-  deps_of_tyvars kid_deps arg_deps kids
+  deps_of_tyvars l kid_deps arg_deps kids
 
 let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
   match nc with
@@ -2685,11 +2685,11 @@ let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
   | NC_bounded_ge (nexp1,nexp2)
   | NC_bounded_le (nexp1,nexp2)
   | NC_not_equal (nexp1,nexp2)
-    -> dmerge (deps_of_nexp kid_deps [] nexp1) (deps_of_nexp kid_deps [] nexp2)
+    -> dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
   | NC_set (kid,_) ->
      (match KBindings.find kid kid_deps with
      | deps -> deps
-     | exception Not_found -> Unknown (l, "Unknown type variable " ^ string_of_kid kid))
+     | exception Not_found -> Unknown (l, "Unknown type variable in constraint " ^ string_of_kid kid))
   | NC_or (nc1,nc2)
   | NC_and (nc1,nc2)
     -> dmerge (deps_of_nc kid_deps nc1) (deps_of_nc kid_deps nc2)
@@ -2697,17 +2697,17 @@ let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
   | NC_false
     -> dempty
 
-let deps_of_typ kid_deps arg_deps typ =
-  deps_of_tyvars kid_deps arg_deps (tyvars_of_typ typ)
+let deps_of_typ l kid_deps arg_deps typ =
+  deps_of_tyvars l kid_deps arg_deps (tyvars_of_typ typ)
 
-let deps_of_uvar fn_id env arg_deps = function
+let deps_of_uvar l fn_id env arg_deps = function
   | U_nexp (Nexp_aux (Nexp_var kid,_))
       when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
      Parents (CallerKidSet.singleton (fn_id,kid))
-  | U_nexp nexp -> InFun (deps_of_nexp env.kid_deps arg_deps nexp)
+  | U_nexp nexp -> InFun (deps_of_nexp l env.kid_deps arg_deps nexp)
   | U_order _
   | U_effect _ -> InFun dempty
-  | U_typ typ -> InFun (deps_of_typ env.kid_deps arg_deps typ)
+  | U_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
 
 let mk_subrange_pattern vannot vstart vend =
   let (_,len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
@@ -2853,7 +2853,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let kid_inst = instantiation_of exp in
        (* Change kids in instantiation to the canonical ones from the type signature *)
        let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
-       let kid_deps = KBindings.map (deps_of_uvar fn_id env deps) kid_inst in
+       let kid_deps = KBindings.map (deps_of_uvar l fn_id env deps) kid_inst in
        let rdep,r' =
          if Id.compare fn_id id == 0 then
            let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
@@ -2946,7 +2946,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let assigns,r2 = analyse_lexp fn_id env assigns d1 lexp in
        (dempty, assigns, merge r1 r2)
     | E_sizeof nexp ->
-       (deps_of_nexp env.kid_deps [] nexp, assigns, empty)
+       (deps_of_nexp l env.kid_deps [] nexp, assigns, empty)
     | E_return e
     | E_exit e
     | E_throw e ->
@@ -3021,7 +3021,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          | Nexp_var v when is_tyvar_parameter v ->
              { r with kid_in_caller = CallerKidSet.add (fn_id,v) r.kid_in_caller }
          | _ ->
-             match deps_of_nexp env.kid_deps [] size_nexp with
+             match deps_of_nexp l env.kid_deps [] size_nexp with
              | Have (args,extras) ->
                 { r with
                   split = ArgSplits.merge merge_detail r.split args;
