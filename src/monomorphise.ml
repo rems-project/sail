@@ -3807,6 +3807,10 @@ let add_bitvector_casts (Defs defs) =
     in
     let pat,guard,body,annot = destruct_pexp pexp in
     let body = rewrite_body ret_typ body in
+    (* Also add a cast around the entire function clause body, if necessary *)
+    let body =
+      make_bitvector_cast_exp (fill_in_type (env_of body) (typ_of body)) ret_typ body
+    in
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)
   in
