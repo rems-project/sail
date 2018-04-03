@@ -112,6 +112,8 @@ let internal_pick list =
 
 let eq_int (n, m) = Big_int.equal n m
 
+let eq_bool ((x : bool), (y : bool)) : bool = x = y
+
 let rec drop n xs =
   match n, xs with
   | 0, xs -> xs
@@ -151,7 +153,7 @@ let update_subrange (xs, n, m, ys) =
   in
   aux xs n ys
 
-let vector_truncate (xs, n) = take (Big_int.to_int n) xs
+let vector_truncate (xs, n) = List.rev (take (Big_int.to_int n) (List.rev xs))
 
 let length xs = Big_int.of_int (List.length xs)
 
