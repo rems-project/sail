@@ -74,6 +74,15 @@ and foo2(64,x) =
   let y : bits(16) = extzv(x) in
   let z = y@y@y@y in let dfsf = 4 in z
 
+val foo3 : forall 'm 'n, 'n in {4,8}. (atom('n), bits('m)) -> bits(8 * 'n) effect pure
+
+function foo3(4,x) =
+  let y : bits(16) = extzv(x) in
+  y@y
+and foo3(8,x) =
+  let y : bits(16) = extzv(x) in
+  let z = y@y@y@y in let dfsf = 4 in z
+
 /* Casting an argument isn't supported yet 
 val bar2 : forall 'n, 'n in {8,16}. (atom('n),bits('n)) -> unit effect pure
 
@@ -99,4 +108,6 @@ function run () = {
     assert((assign(0x1234) : bits(64)) == 0x1234123412341234);
     assert(foo2(32,0x12) == 0x00120012);
     assert(foo2(64,0x12) == 0x0012001200120012);
+    assert(foo3(4,0x12) == 0x00120012);
+    assert(foo3(8,0x12) == 0x0012001200120012);
 }

@@ -3755,13 +3755,16 @@ let rec extract_value_from_guard var (E_aux (e,_)) =
   | _ -> None
 
 let fill_in_type env typ =
-  let constraints = Env.get_constraints env in
-  let constraints = flatten_constraints constraints in
-  let subst = Util.map_filter (function
-    | NC_aux (NC_equal (Nexp_aux (Nexp_var var,_), (Nexp_aux (Nexp_constant _,_) as i)),_) -> Some (var,i)
-    | NC_aux (NC_equal (Nexp_aux (Nexp_constant _,_) as i, Nexp_aux (Nexp_var var,_)),_) -> Some (var,i)
-    | _ -> None) constraints in
-  subst_src_typ (kbindings_from_list subst) typ
+  let tyvars = tyvars_of_typ typ in
+  let subst = KidSet.fold (fun kid subst ->
+    match Env.get_typ_var kid env with
+    | BK_type
+    | BK_order -> subst
+    | BK_nat ->
+       match solve env (nvar kid) with
+       | None -> subst
+       | Some n -> KBindings.add kid (nconstant n) subst) tyvars KBindings.empty in
+  subst_src_typ subst typ
 
 (* TODO: top-level patterns *)
 let add_bitvector_casts (Defs defs) =
@@ -4014,16 +4017,16 @@ let recheck defs =
   r
 
 let monomorphise opts splits env defs =
-  let defs =
-    if opts.rewrite_toplevel_nexps
-      then rewrite_toplevel_nexps defs
-      else defs
-  in
   let (defs,env) =
     if opts.rewrites then
       let defs = MonoRewrites.mono_rewrite defs in
       recheck defs
-    else recheck defs
+    else defs,env
+  in
+  let defs,env =
+    if opts.rewrite_toplevel_nexps
+      then recheck (rewrite_toplevel_nexps defs)
+      else defs,env
   in
   let ok_analysis, new_splits, extra_splits =
     if opts.auto
@@ -4045,6 +4048,7 @@ let monomorphise opts splits env defs =
       then ()
       else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
   in
+  let defs,env = recheck defs in
   let defs = BitvectorSizeCasts.add_bitvector_casts defs in
   (* TODO: currently doing this because constant propagation leaves numeric literals as
      int, try to avoid this later; also use final env for DEF_spec case above, because the
