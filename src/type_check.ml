@@ -1184,7 +1184,7 @@ let solve env nexp =
     try KBindings.find kid !bindings with
     | Not_found -> fresh_var kid
   in
-  let env = Env.add_typ_var Parse_ast.Unknown (mk_kid "solve#") BK_nat env in
+  let env = Env.add_typ_var (mk_kid "solve#") BK_nat env in
   let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env))
                                (nc_constraint env var_of (nc_eq (nvar (mk_kid "solve#")) nexp))
   in
