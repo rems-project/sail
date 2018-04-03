@@ -155,6 +155,10 @@ let value_eq_int = function
   | [v1; v2] -> V_bool (Sail_lib.eq_int (coerce_int v1, coerce_int v2))
   | _ -> failwith "value eq_int"
 
+let value_eq_bool = function
+  | [v1; v2] -> V_bool (Sail_lib.eq_bool (coerce_bool v1, coerce_bool v2))
+  | _ -> failwith "value eq_bool"
+
 let value_lteq = function
   | [v1; v2] -> V_bool (Sail_lib.lteq (coerce_int v1, coerce_int v2))
   | _ -> failwith "value lteq"
@@ -399,6 +403,7 @@ let primops =
       ("lt", value_lt);
       ("gt", value_gt);
       ("eq_list", value_eq_list);
+      ("eq_bool", value_eq_bool);
       ("eq_string", value_eq_string);
       ("eq_anything", value_eq_anything);
       ("length", value_length);
