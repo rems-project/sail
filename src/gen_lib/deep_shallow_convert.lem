@@ -390,12 +390,16 @@ let read_kindToInterpValue = function
   | Read_exclusive -> V_ctor (Id_aux (Id "Read_exclusive") Unknown) (T_id "read_kind") (C_Enum 3) (toInterpValue ())
   | Read_exclusive_acquire -> V_ctor (Id_aux (Id "Read_exclusive_acquire") Unknown) (T_id "read_kind") (C_Enum 4) (toInterpValue ())
   | Read_stream -> V_ctor (Id_aux (Id "Read_stream") Unknown) (T_id "read_kind") (C_Enum 5) (toInterpValue ())
-  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_acquire") Unknown) (T_id "read_kind") (C_Enum 6) (toInterpValue ())
-  | Read_RISCV_strong_acquire -> V_ctor (Id_aux (Id "Read_RISCV_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 7) (toInterpValue ())
-  | Read_RISCV_reserved -> V_ctor (Id_aux (Id "Read_RISCV_reserved") Unknown) (T_id "read_kind") (C_Enum 8) (toInterpValue ())
-  | Read_RISCV_reserved_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire") Unknown) (T_id "read_kind") (C_Enum 9) (toInterpValue ())
-  | Read_RISCV_reserved_strong_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
-  | Read_X86_locked -> V_ctor (Id_aux (Id "Read_X86_locked") Unknown) (T_id "read_kind") (C_Enum 11) (toInterpValue ())
+
+  | Read_RISCV_acquire_RCpc             -> V_ctor (Id_aux (Id "Read_RISCV_acquire_RCpc")             Unknown) (T_id "read_kind") (C_Enum 6) (toInterpValue ())
+  | Read_RISCV_acquire_RCsc             -> V_ctor (Id_aux (Id "Read_RISCV_acquire_RCsc")             Unknown) (T_id "read_kind") (C_Enum 7) (toInterpValue ())
+  | Read_RISCV_acquire_release          -> V_ctor (Id_aux (Id "Read_RISCV_acquire_release")          Unknown) (T_id "read_kind") (C_Enum 8) (toInterpValue ())
+  | Read_RISCV_reserved                 -> V_ctor (Id_aux (Id "Read_RISCV_reserved")                 Unknown) (T_id "read_kind") (C_Enum 9) (toInterpValue ())
+  | Read_RISCV_reserved_acquire_RCpc    -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCpc")    Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
+  | Read_RISCV_reserved_acquire_RCsc    -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCsc")    Unknown) (T_id "read_kind") (C_Enum 11) (toInterpValue ())
+  | Read_RISCV_reserved_acquire_release -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_release") Unknown) (T_id "read_kind") (C_Enum 12) (toInterpValue ())
+
+  | Read_X86_locked -> V_ctor (Id_aux (Id "Read_X86_locked") Unknown) (T_id "read_kind") (C_Enum 13) (toInterpValue ())
   end
 let rec read_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Read_plain") _) _ _ v -> Read_plain
@@ -404,11 +408,15 @@ let rec read_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Read_exclusive") _) _ _ v -> Read_exclusive
   | V_ctor (Id_aux (Id "Read_exclusive_acquire") _) _ _ v -> Read_exclusive_acquire
   | V_ctor (Id_aux (Id "Read_stream") _) _ _ v -> Read_stream
-  | V_ctor (Id_aux (Id "Read_RISCV_acquire") _) _ _ v -> Read_RISCV_acquire
-  | V_ctor (Id_aux (Id "Read_RISCV_strong_acquire") _) _ _ v -> Read_RISCV_strong_acquire
-  | V_ctor (Id_aux (Id "Read_RISCV_reserved") _) _ _ v -> Read_RISCV_reserved
-  | V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire") _) _ _ v -> Read_RISCV_reserved_acquire
-  | V_ctor (Id_aux (Id "Read_RISCV_reserved_strong_acquire") _) _ _ v -> Read_RISCV_reserved_strong_acquire
+
+  | V_ctor (Id_aux (Id "Read_RISCV_acquire_RCpc") _) _ _ v             -> Read_RISCV_acquire_RCpc
+  | V_ctor (Id_aux (Id "Read_RISCV_acquire_RCsc") _) _ _ v             -> Read_RISCV_acquire_RCsc
+  | V_ctor (Id_aux (Id "Read_RISCV_acquire_release") _) _ _ v          -> Read_RISCV_acquire_release
+  | V_ctor (Id_aux (Id "Read_RISCV_reserved") _) _ _ v                 -> Read_RISCV_reserved
+  | V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCpc") _) _ _ v    -> Read_RISCV_reserved_acquire_RCpc
+  | V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCsc") _) _ _ v    -> Read_RISCV_reserved_acquire_RCsc
+  | V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_release") _) _ _ v -> Read_RISCV_reserved_acquire_release
+
   | V_ctor (Id_aux (Id "Read_X86_locked") _) _ _ v -> Read_X86_locked
   | V_tuple [v] -> read_kindFromInterpValue v
   | v -> failwith ("fromInterpValue read_kind: unexpected value. " ^
@@ -426,12 +434,16 @@ let write_kindToInterpValue = function
   | Write_release -> V_ctor (Id_aux (Id "Write_release") Unknown) (T_id "write_kind") (C_Enum 2) (toInterpValue ())
   | Write_exclusive -> V_ctor (Id_aux (Id "Write_exclusive") Unknown) (T_id "write_kind") (C_Enum 3) (toInterpValue ())
   | Write_exclusive_release -> V_ctor (Id_aux (Id "Write_exclusive_release") Unknown) (T_id "write_kind") (C_Enum 4) (toInterpValue ())
-  | Write_RISCV_release -> V_ctor (Id_aux (Id "Write_RISCV_release") Unknown) (T_id "write_kind") (C_Enum 5) (toInterpValue ())
-  | Write_RISCV_strong_release -> V_ctor (Id_aux (Id "Write_RISCV_strong_release") Unknown) (T_id "write_kind") (C_Enum 6) (toInterpValue ())
-  | Write_RISCV_conditional -> V_ctor (Id_aux (Id "Write_RISCV_conditional") Unknown) (T_id "write_kind") (C_Enum 7) (toInterpValue ())
-  | Write_RISCV_conditional_release -> V_ctor (Id_aux (Id "Write_RISCV_conditional_release") Unknown) (T_id "write_kind") (C_Enum 8) (toInterpValue ())
-  | Write_RISCV_conditional_strong_release -> V_ctor (Id_aux (Id "Write_RISCV_conditional_strong_release") Unknown) (T_id "write_kind") (C_Enum 9) (toInterpValue ())
-  | Write_X86_locked -> V_ctor (Id_aux (Id "Write_X86_locked") Unknown) (T_id "write_kind") (C_Enum 10) (toInterpValue ())
+
+  | Write_RISCV_release_RCpc                -> V_ctor (Id_aux (Id "Write_RISCV_release_RCpc") Unknown) (T_id "write_kind") (C_Enum 5) (toInterpValue ())
+  | Write_RISCV_release_RCsc                -> V_ctor (Id_aux (Id "Write_RISCV_release_RCsc") Unknown) (T_id "write_kind") (C_Enum 6) (toInterpValue ())
+  | Write_RISCV_acquire_release             -> V_ctor (Id_aux (Id "Write_RISCV_acquire_release") Unknown) (T_id "write_kind") (C_Enum 7) (toInterpValue ())
+  | Write_RISCV_conditional                 -> V_ctor (Id_aux (Id "Write_RISCV_conditional") Unknown) (T_id "write_kind") (C_Enum 8) (toInterpValue ())
+  | Write_RISCV_conditional_release_RCpc    -> V_ctor (Id_aux (Id "Write_RISCV_conditional_release_RCpc") Unknown) (T_id "write_kind") (C_Enum 9) (toInterpValue ())
+  | Write_RISCV_conditional_release_RCsc    -> V_ctor (Id_aux (Id "Write_RISCV_conditional_release_RCsc") Unknown) (T_id "write_kind") (C_Enum 10) (toInterpValue ())
+  | Write_RISCV_conditional_acquire_release -> V_ctor (Id_aux (Id "Write_RISCV_conditional_acquire_release") Unknown) (T_id "write_kind") (C_Enum 11) (toInterpValue ())
+
+  | Write_X86_locked -> V_ctor (Id_aux (Id "Write_X86_locked") Unknown) (T_id "write_kind") (C_Enum 12) (toInterpValue ())
   end
 let rec write_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Write_plain") _) _ _ v -> Write_plain
@@ -439,11 +451,15 @@ let rec write_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Write_release") _) _ _ v -> Write_release
   | V_ctor (Id_aux (Id "Write_exclusive") _) _ _ v -> Write_exclusive
   | V_ctor (Id_aux (Id "Write_exclusive_release") _) _ _ v -> Write_exclusive_release
-  | V_ctor (Id_aux (Id "Write_RISCV_release") _) _ _ v -> Write_RISCV_release
-  | V_ctor (Id_aux (Id "Write_RISCV_strong_release") _) _ _ v -> Write_RISCV_strong_release
-  | V_ctor (Id_aux (Id "Write_RISCV_conditional") _) _ _ v -> Write_RISCV_conditional
-  | V_ctor (Id_aux (Id "Write_RISCV_conditional_release") _) _ _ v -> Write_RISCV_conditional_release
-  | V_ctor (Id_aux (Id "Write_RISCV_conditional_strong_release") _) _ _ v -> Write_RISCV_conditional_strong_release
+
+  | V_ctor (Id_aux (Id "Write_RISCV_release_RCpc") _) _ _ v                -> Write_RISCV_release_RCpc
+  | V_ctor (Id_aux (Id "Write_RISCV_release_RCsc") _) _ _ v                -> Write_RISCV_release_RCsc
+  | V_ctor (Id_aux (Id "Write_RISCV_acquire_release") _) _ _ v             -> Write_RISCV_acquire_release
+  | V_ctor (Id_aux (Id "Write_RISCV_conditional") _) _ _ v                 -> Write_RISCV_conditional
+  | V_ctor (Id_aux (Id "Write_RISCV_conditional_release_RCpc") _) _ _ v    -> Write_RISCV_conditional_release_RCpc
+  | V_ctor (Id_aux (Id "Write_RISCV_conditional_release_RCsc") _) _ _ v    -> Write_RISCV_conditional_release_RCsc
+  | V_ctor (Id_aux (Id "Write_RISCV_conditional_acquire_release") _) _ _ v -> Write_RISCV_conditional_acquire_release
+
   | V_ctor (Id_aux (Id "Write_X86_locked") _) _ _ v -> Write_X86_locked
   | V_tuple [v] -> write_kindFromInterpValue v
   | v -> failwith ("fromInterpValue write_kind: unexpected value " ^
@@ -470,12 +486,16 @@ let barrier_kindToInterpValue = function
   | Barrier_TM_COMMIT -> V_ctor (Id_aux (Id "Barrier_TM_COMMIT") Unknown) (T_id "barrier_kind") (C_Enum 11) (toInterpValue ())
   | Barrier_MIPS_SYNC -> V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") Unknown) (T_id "barrier_kind") (C_Enum 12) (toInterpValue ())
   | Barrier_RISCV_rw_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") Unknown) (T_id "barrier_kind") (C_Enum 13) (toInterpValue ())
-  | Barrier_RISCV_r_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") Unknown) (T_id "barrier_kind") (C_Enum 14) (toInterpValue ())
-  | Barrier_RISCV_r_r -> V_ctor (Id_aux (Id "Barrier_RISCV_r_r") Unknown) (T_id "barrier_kind") (C_Enum 15) (toInterpValue ())
-  | Barrier_RISCV_rw_w -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") Unknown) (T_id "barrier_kind") (C_Enum 16) (toInterpValue ())
-  | Barrier_RISCV_w_w -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w") Unknown) (T_id "barrier_kind") (C_Enum 17) (toInterpValue ())
-  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 18) (toInterpValue ())
-  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 19) (toInterpValue ())
+  | Barrier_RISCV_r_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_r_rw")  Unknown) (T_id "barrier_kind") (C_Enum 14) (toInterpValue ())
+  | Barrier_RISCV_w_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_w_rw")  Unknown) (T_id "barrier_kind") (C_Enum 15) (toInterpValue ())
+  | Barrier_RISCV_rw_r  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_r")  Unknown) (T_id "barrier_kind") (C_Enum 16) (toInterpValue ())
+  | Barrier_RISCV_r_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_r")   Unknown) (T_id "barrier_kind") (C_Enum 17) (toInterpValue ())
+  | Barrier_RISCV_w_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_r")   Unknown) (T_id "barrier_kind") (C_Enum 18) (toInterpValue ())
+  | Barrier_RISCV_rw_w  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w")  Unknown) (T_id "barrier_kind") (C_Enum 19) (toInterpValue ())
+  | Barrier_RISCV_r_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_w")   Unknown) (T_id "barrier_kind") (C_Enum 20) (toInterpValue ())
+  | Barrier_RISCV_w_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w")   Unknown) (T_id "barrier_kind") (C_Enum 21) (toInterpValue ())
+  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 22) (toInterpValue ())
+  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 23) (toInterpValue ())
   end
 let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
@@ -492,10 +512,14 @@ let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_TM_COMMIT") _) _ _ v -> Barrier_TM_COMMIT
   | V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") _) _ _ v -> Barrier_MIPS_SYNC
   | V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") _) _ _ v -> Barrier_RISCV_rw_rw
-  | V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") _) _ _ v -> Barrier_RISCV_r_rw
-  | V_ctor (Id_aux (Id "Barrier_RISCV_r_r") _) _ _ v -> Barrier_RISCV_r_r
-  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") _) _ _ v -> Barrier_RISCV_rw_w
-  | V_ctor (Id_aux (Id "Barrier_RISCV_w_w") _) _ _ v -> Barrier_RISCV_w_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") _) _ _ v  -> Barrier_RISCV_r_rw
+  | V_ctor (Id_aux (Id "Barrier_RISCV_w_rw") _) _ _ v  -> Barrier_RISCV_w_rw
+  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_r") _) _ _ v  -> Barrier_RISCV_rw_r
+  | V_ctor (Id_aux (Id "Barrier_RISCV_r_r") _) _ _ v   -> Barrier_RISCV_r_r
+  | V_ctor (Id_aux (Id "Barrier_RISCV_w_r") _) _ _ v   -> Barrier_RISCV_w_r
+  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") _) _ _ v  -> Barrier_RISCV_rw_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_r_w") _) _ _ v   -> Barrier_RISCV_r_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_w_w") _) _ _ v   -> Barrier_RISCV_w_w
   | V_ctor (Id_aux (Id "Barrier_RISCV_i") _) _ _ v -> Barrier_RISCV_i
   | V_ctor (Id_aux (Id "Barrier_x86_MFENCE") _) _ _ v -> Barrier_x86_MFENCE
   | V_tuple [v] -> barrier_kindFromInterpValue v
@@ -532,7 +556,7 @@ let instruction_kindToInterpValue = function
   | IK_mem_read v -> V_ctor (Id_aux (Id "IK_mem_read") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_mem_write v -> V_ctor (Id_aux (Id "IK_mem_write") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_mem_rmw v -> V_ctor (Id_aux (Id "IK_mem_rmw") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
-  | IK_cond_branch -> V_ctor (Id_aux (Id "IK_cond_branch") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
+  | IK_branch -> V_ctor (Id_aux (Id "IK_branch") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
   | IK_trans v -> V_ctor (Id_aux (Id "IK_trans") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_simple -> V_ctor (Id_aux (Id "IK_simple") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
   end
@@ -541,7 +565,7 @@ let rec instruction_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "IK_mem_read") _) _ _ v -> IK_mem_read (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_mem_write") _) _ _ v -> IK_mem_write (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_mem_rmw") _) _ _ v -> IK_mem_rmw (fromInterpValue v)
-  | V_ctor (Id_aux (Id "IK_cond_branch") _) _ _ v -> IK_cond_branch
+  | V_ctor (Id_aux (Id "IK_branch") _) _ _ v -> IK_branch
   | V_ctor (Id_aux (Id "IK_trans") _) _ _ v -> IK_trans (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_simple") _) _ _ v -> IK_simple
   | V_tuple [v] -> instruction_kindFromInterpValue v

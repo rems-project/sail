@@ -168,7 +168,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) effect pure initia
       let (i,o) = BranchToFP(iR,oR) in {iR := i; oR := o};
       (bit[64]) nia' := rPC() + offset;
       Nias := [|| NIAFP_successor, NIAFP_concrete_address(nia') ||];
-      ik := IK_cond_branch;
+      ik := IK_branch;
     }
     case (BranchConditional(offset,condition)) -> {
       iR := append(iR,ConditionHoldsIFP(condition));
@@ -176,7 +176,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) effect pure initia
          ConditionHolds(condition) *)
       let (i,o) = BranchToFP(iR,oR) in {iR := i; oR := o};
       Nias := [|| NIAFP_successor, NIAFP_concrete_address(rPC() + offset) ||];
-      ik := IK_cond_branch;
+      ik := IK_branch;
     }
     case (GenerateExceptionEL1(imm)) -> not_implemented("GenerateExceptionEL1")
     case (GenerateExceptionEL2(imm)) -> not_implemented("GenerateExceptionEL2")
@@ -271,14 +271,14 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) effect pure initia
          operand[bit_pos] == bit_val *)
       let (i,o) = BranchToFP(iR,oR) in {iR := i; oR := o}; 
       Nias := [|| NIAFP_successor, NIAFP_concrete_address(rPC() + offset) ||];
-      ik := IK_cond_branch;
+      ik := IK_branch;
     }
     case (BranchImmediate(branch_type,offset)) -> {
       if branch_type == BranchType_CALL
         then {iR := _PCfp :: iR; oR := append(xFP(30),oR)};
       let (i,o) = BranchToFP(iR,oR) in {iR := i; oR := o}; 
       Nias := [|| NIAFP_concrete_address(rPC() + offset) ||];
-      ik := IK_simple (* IK_uncond_branch *)
+      ik := IK_branch
     }
     case (BranchRegister(n,branch_type)) -> {
       iR := append(iR,xFP(n));
@@ -287,8 +287,8 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) effect pure initia
       let (i,o) = BranchToFP(iR,oR) in {iR := i; oR := o};
       Nias := if n ==31
               then [|| NIAFP_concrete_address(0) ||]
-              else [|| NIAFP_register(RFull(_Rs[n]))||];
-      ik := IK_simple (* IK_uncond_branch *)
+              else [|| NIAFP_indirect_address ||];
+      ik := IK_branch
     }
     case (ExceptionReturn) -> not_implemented("ExceptionReturn")
     case (DebugRestorePState) -> not_implemented("DebugRestorePState")

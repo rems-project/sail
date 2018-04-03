@@ -54,11 +54,13 @@ let is_exclusive = function
   | Sail_impl_base.Read_exclusive -> true
   | Sail_impl_base.Read_exclusive_acquire -> true
   | Sail_impl_base.Read_stream -> false
-  | Sail_impl_base.Read_RISCV_acquire -> false
-  | Sail_impl_base.Read_RISCV_strong_acquire -> false
-  | Sail_impl_base.Read_RISCV_reserved -> true
-  | Sail_impl_base.Read_RISCV_reserved_acquire -> true
-  | Sail_impl_base.Read_RISCV_reserved_strong_acquire -> true
+  | Sail_impl_base.Read_RISCV_acquire_RCpc             -> false
+  | Sail_impl_base.Read_RISCV_acquire_RCsc             -> false
+  | Sail_impl_base.Read_RISCV_acquire_release          -> false
+  | Sail_impl_base.Read_RISCV_reserved                 -> true
+  | Sail_impl_base.Read_RISCV_reserved_acquire_RCpc    -> true
+  | Sail_impl_base.Read_RISCV_reserved_acquire_RCsc    -> true
+  | Sail_impl_base.Read_RISCV_reserved_acquire_release -> true
   | Sail_impl_base.Read_X86_locked -> true
 end
 

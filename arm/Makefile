@@ -38,7 +38,7 @@ apply_header:
 .PHONY: apply_header
 
 ######################################################################
-IDLARM=../../../rsem/idlarm
+IDLARM=../../rsem/idlarm
 
 pull_from_idlarm:
 	$(MAKE) -C $(IDLARM) clean

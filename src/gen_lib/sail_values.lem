@@ -912,9 +912,7 @@ type regfp =
 type niafp = 
   | NIAFP_successor
   | NIAFP_concrete_address of vector bitU
-  | NIAFP_LR
-  | NIAFP_CTR
-  | NIAFP_register of regfp
+  | NIAFP_indirect_address
 
 (* only for MIPS *)
 type diafp = 
@@ -946,9 +944,7 @@ end
 let niafp_to_nia reginfo = function
   | NIAFP_successor -> NIA_successor
   | NIAFP_concrete_address v -> NIA_concrete_address (address_of_bitv v)
-  | NIAFP_LR -> NIA_LR
-  | NIAFP_CTR -> NIA_CTR
-  | NIAFP_register r -> NIA_register (regfp_to_reg reginfo r)
+  | NIAFP_indirect_address -> NIA_indirect_address
 end
 
 let diafp_to_dia reginfo = function

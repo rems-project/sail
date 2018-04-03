@@ -16,9 +16,7 @@ typedef regfps = list <regfp>
 typedef niafp = const union {
   NIAFP_successor;
   (bit[64]) NIAFP_concrete_address;
-  NIAFP_LR;
-  NIAFP_CTR;
-  (regfp) NIAFP_register;
+  NIAFP_indirect_address;
 }
 
 typedef niafps = list <niafp>
@@ -37,11 +35,13 @@ typedef read_kind = enumerate {
   Read_exclusive;
   Read_exclusive_acquire;
   Read_stream;
-  Read_RISCV_acquire;
-  Read_RISCV_strong_acquire;
+  Read_RISCV_acquire_RCpc;
+  Read_RISCV_acquire_RCsc;
+  Read_RISCV_acquire_release;
   Read_RISCV_reserved;
-  Read_RISCV_reserved_acquire;
-  Read_RISCV_reserved_strong_acquire;
+  Read_RISCV_reserved_acquire_RCpc;
+  Read_RISCV_reserved_acquire_RCsc;
+  Read_RISCV_reserved_acquire_release;
   Read_X86_locked;
 }
 
@@ -51,11 +51,13 @@ typedef write_kind = enumerate {
   Write_release;
   Write_exclusive;
   Write_exclusive_release;
-  Write_RISCV_release;
-  Write_RISCV_strong_release;
+  Write_RISCV_release_RCpc;
+  Write_RISCV_release_RCsc;
+  Write_RISCV_acquire_release;
   Write_RISCV_conditional;
-  Write_RISCV_conditional_release;
-  Write_RISCV_conditional_strong_release;
+  Write_RISCV_conditional_release_RCpc;
+  Write_RISCV_conditional_release_RCsc;
+  Write_RISCV_conditional_acquire_release;
   Write_X86_locked;
 }
 
@@ -74,8 +76,12 @@ typedef barrier_kind = enumerate {
   Barrier_MIPS_SYNC;
   Barrier_RISCV_rw_rw;
   Barrier_RISCV_r_rw;
+  Barrier_RISCV_w_rw;
+  Barrier_RISCV_rw_r;
   Barrier_RISCV_r_r;
+  Barrier_RISCV_w_r;
   Barrier_RISCV_rw_w;
+  Barrier_RISCV_r_w;
   Barrier_RISCV_w_w;
   Barrier_RISCV_i;
   Barrier_x86_MFENCE;
@@ -90,7 +96,7 @@ typedef instruction_kind = const union {
   (read_kind) IK_mem_read;
   (write_kind) IK_mem_write;
   (read_kind, write_kind) IK_mem_rmw;
-  IK_cond_branch;
+  IK_branch;
   (trans_kind) IK_trans;
   IK_simple
 }

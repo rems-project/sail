@@ -322,38 +322,34 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       oR := RFull("HI") :: RFull ("LO") :: oR;
     }
     case (J(offset)) -> {
-      (* XXX actually unconditional jump *)
-      (*ik := IK_cond_branch;*)
+      ik := IK_branch;
       Dia := DIAFP_concrete((PC + 4)[63..28] : offset : 0b00);
     }
     case (JAL(offset)) -> {
-      (* XXX actually unconditional jump *)
-      (*ik := IK_cond_branch;*)
+      ik := IK_branch;
       oR := RFull("GPR31") :: oR;
       Dia := DIAFP_concrete((PC + 4)[63..28] : offset : 0b00);
     }
     case (JR(rs)) -> {
-      (* XXX actually unconditional jump *)
-      (*ik := IK_cond_branch;*)
+      ik := IK_branch;
       iR := RFull(GPRs[rs]) :: iR;
       Dia := DIAFP_reg(RFull(GPRs[rs]));
     }
     case (JALR(rs, rd)) -> {
-      (* XXX actually unconditional jump *)
-      (*ik := IK_cond_branch;*)
+      ik := IK_branch;
       iR := RFull(GPRs[rs]) :: iR;
       oR := RFull("GPR31") :: oR;
       Dia := DIAFP_reg(RFull(GPRs[rs]));
     }
     case (BEQ(rs, rd, imm, ne, likely)) -> {
-      ik := IK_cond_branch;
+      ik := IK_branch;
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
       if rd == 0 then () else iR := RFull(GPRs[rd]) :: iR;
       let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
       Dia := DIAFP_concrete (PC + offset);
     }
     case (BCMPZ(rs, imm, cmp, link, likely)) -> {
-      ik := IK_cond_branch;
+      ik := IK_branch;
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
       if link then
         oR := RFull("GPR31") :: oR;

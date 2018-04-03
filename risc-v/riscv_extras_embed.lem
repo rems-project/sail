@@ -4,65 +4,90 @@ open import Sail_impl_base
 open import Sail_values
 open import Prompt
 
-val MEMr                  : (vector bitU * integer) -> M (vector bitU)
-val MEMr_acquire          : (vector bitU * integer) -> M (vector bitU)
-val MEMr_strong_acquire   : (vector bitU * integer) -> M (vector bitU)
-val MEMr_reserved         : (vector bitU * integer) -> M (vector bitU)
-val MEMr_reserved_acquire : (vector bitU * integer) -> M (vector bitU)
-val MEMr_reserved_strong_acquire : (vector bitU * integer) -> M (vector bitU)
+val MEMr                 : (vector bitU * integer) -> M (vector bitU)
+val MEMr_acquire_RCpc    : (vector bitU * integer) -> M (vector bitU)
+val MEMr_acquire_RCsc    : (vector bitU * integer) -> M (vector bitU)
+val MEMr_acquire_release : (vector bitU * integer) -> M (vector bitU)
+val MEMr_reserved                 : (vector bitU * integer) -> M (vector bitU)
+val MEMr_reserved_acquire_RCpc    : (vector bitU * integer) -> M (vector bitU)
+val MEMr_reserved_acquire_RCsc    : (vector bitU * integer) -> M (vector bitU)
+val MEMr_reserved_acquire_release : (vector bitU * integer) -> M (vector bitU)
 
-let MEMr (addr,size)                  = read_mem false Read_plain addr size
-let MEMr_acquire (addr,size)          = read_mem false Read_RISCV_acquire addr size
-let MEMr_strong_acquire (addr,size)   = read_mem false Read_RISCV_strong_acquire addr size
-let MEMr_reserved (addr,size)         = read_mem false Read_RISCV_reserved addr size
-let MEMr_reserved_acquire (addr,size) = read_mem false Read_RISCV_reserved_acquire addr size
-let MEMr_reserved_strong_acquire (addr,size)
-                                      = read_mem false Read_RISCV_reserved_strong_acquire addr size
+let MEMr (addr,size)                 = read_mem false Read_plain addr size
+let MEMr_acquire_RCpc (addr,size)    = read_mem false Read_RISCV_acquire_RCpc addr size
+let MEMr_acquire_RCsc (addr,size)    = read_mem false Read_RISCV_acquire_RCsc addr size
+let MEMr_acquire_release (addr,size) = read_mem false Read_RISCV_acquire_release addr size
+let MEMr_reserved (addr,size)                 = read_mem false Read_RISCV_reserved addr size
+let MEMr_reserved_acquire_RCpc (addr,size)    = read_mem false Read_RISCV_reserved_acquire_RCpc addr size
+let MEMr_reserved_acquire_RCsc (addr,size)    = read_mem false Read_RISCV_reserved_acquire_RCsc addr size
+let MEMr_reserved_acquire_release (addr,size) = read_mem false Read_RISCV_reserved_acquire_release addr size
 
-val MEMea                     : (vector bitU * integer) -> M unit
-val MEMea_release             : (vector bitU * integer) -> M unit
-val MEMea_strong_release             : (vector bitU * integer) -> M unit
-val MEMea_conditional         : (vector bitU * integer) -> M unit
-val MEMea_conditional_release : (vector bitU * integer) -> M unit
-val MEMea_conditional_strong_release : (vector bitU * integer) -> M unit
 
-let MEMea (addr,size)                     = write_mem_ea Write_plain addr size
-let MEMea_release (addr,size)             = write_mem_ea Write_RISCV_release addr size
-let MEMea_strong_release (addr,size)      = write_mem_ea Write_RISCV_strong_release addr size
-let MEMea_conditional (addr,size)         = write_mem_ea Write_RISCV_conditional addr size
-let MEMea_conditional_release (addr,size) = write_mem_ea Write_RISCV_conditional_release addr size
-let MEMea_conditional_strong_release (addr,size)
-                                          = write_mem_ea Write_RISCV_conditional_strong_release addr size
+val MEMea                 : (vector bitU * integer) -> M unit
+val MEMea_release_RCpc    : (vector bitU * integer) -> M unit
+val MEMea_release_RCsc    : (vector bitU * integer) -> M unit
+val MEMea_acquire_release : (vector bitU * integer) -> M unit
+val MEMea_conditional                 : (vector bitU * integer) -> M unit
+val MEMea_conditional_release_RCpc    : (vector bitU * integer) -> M unit
+val MEMea_conditional_release_RCsc    : (vector bitU * integer) -> M unit
+val MEMea_conditional_acquire_release : (vector bitU * integer) -> M unit
 
-val MEMval                     : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_release             : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_strong_release      : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional         : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional_release : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional_strong_release : (vector bitU * integer * vector bitU) -> M unit
+let MEMea (addr,size)                 = write_mem_ea Write_plain addr size
+let MEMea_release_RCpc (addr,size)    = write_mem_ea Write_RISCV_release_RCpc addr size
+let MEMea_release_RCsc (addr,size)    = write_mem_ea Write_RISCV_release_RCsc addr size
+let MEMea_acquire_release (addr,size) = write_mem_ea Write_RISCV_acquire_release addr size
+let MEMea_conditional (addr,size)                 = write_mem_ea Write_RISCV_conditional addr size
+let MEMea_conditional_release_RCpc (addr,size)    = write_mem_ea Write_RISCV_conditional_release_RCpc addr size
+let MEMea_conditional_release_RCsc (addr,size)    = write_mem_ea Write_RISCV_conditional_release_RCsc addr size
+let MEMea_conditional_acquire_release (addr,size) = write_mem_ea Write_RISCV_conditional_acquire_release addr size
 
-let MEMval (_,_,v)                     = write_mem_val v >>= fun _ -> return ()
-let MEMval_release (_,_,v)             = write_mem_val v >>= fun _ -> return ()
-let MEMval_strong_release (_,_,v)      = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional (_,_,v)         = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional_release (_,_,v) = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional_strong_release (_,_,v)
-                                       = write_mem_val v >>= fun _ -> return ()
+
+val MEMval                 : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_release_RCpc    : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_release_RCsc    : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_acquire_release : (vector bitU * integer * vector bitU) -> M unit
+
+let MEMval (_,_,v)                 = write_mem_val v >>= fun _ -> return ()
+let MEMval_release_RCpc (_,_,v)    = write_mem_val v >>= fun _ -> return ()
+let MEMval_release_RCsc (_,_,v)    = write_mem_val v >>= fun _ -> return ()
+let MEMval_acquire_release (_,_,v) = write_mem_val v >>= fun _ -> return ()
+
+
+val MEMval_conditional                 : (vector bitU * integer * vector bitU) -> M bitU
+val MEMval_conditional_release_RCpc    : (vector bitU * integer * vector bitU) -> M bitU
+val MEMval_conditional_release_RCsc    : (vector bitU * integer * vector bitU) -> M bitU
+val MEMval_conditional_acquire_release : (vector bitU * integer * vector bitU) -> M bitU
+
+let MEMval_conditional (_,_,v)                 = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval_conditional_release_RCpc (_,_,v)    = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval_conditional_release_RCsc (_,_,v)    = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval_conditional_acquire_release (_,_,v) = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+
 
 let speculate_conditional_success () = excl_result () >>= fun b -> return (if b then B1 else B0)
 
 val MEM_fence_rw_rw : unit -> M unit
 val MEM_fence_r_rw  : unit -> M unit
+val MEM_fence_w_rw  : unit -> M unit
+val MEM_fence_rw_r  : unit -> M unit
 val MEM_fence_r_r   : unit -> M unit
+val MEM_fence_w_r   : unit -> M unit
 val MEM_fence_rw_w  : unit -> M unit
+val MEM_fence_r_w   : unit -> M unit
 val MEM_fence_w_w   : unit -> M unit
-val MEM_fence_i     : unit -> M unit
 
 let MEM_fence_rw_rw () = barrier Barrier_RISCV_rw_rw
 let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw
+let MEM_fence_w_rw  () = barrier Barrier_RISCV_w_rw
+let MEM_fence_rw_r  () = barrier Barrier_RISCV_rw_r
 let MEM_fence_r_r   () = barrier Barrier_RISCV_r_r
+let MEM_fence_w_r   () = barrier Barrier_RISCV_w_r
 let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
+let MEM_fence_r_w   () = barrier Barrier_RISCV_r_w
 let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
+
+
+val MEM_fence_i     : unit -> M unit
 let MEM_fence_i     () = barrier Barrier_RISCV_i
 
 let duplicate (bit,len) =

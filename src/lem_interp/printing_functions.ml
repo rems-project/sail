@@ -402,6 +402,9 @@ let ppmode = ref Interp_ascii
 let set_interp_ppmode ppm = ppmode := ppm 
 
 let disable_color = ref false
+
+let set_color_enabled on = disable_color := not on
+
 let color bright code s =
   if !disable_color then s
   else sprintf "\x1b[%s3%dm%s\x1b[m" (if bright then "1;" else "") code s

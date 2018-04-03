@@ -444,9 +444,13 @@ type read_kind =
   (* AArch64 reads *)
   | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
   (* RISC-V reads *)
-  | Read_RISCV_acquire  | Read_RISCV_strong_acquire
-  | Read_RISCV_reserved | Read_RISCV_reserved_acquire
-  | Read_RISCV_reserved_strong_acquire
+  | Read_RISCV_acquire_RCpc
+  | Read_RISCV_acquire_RCsc
+  | Read_RISCV_acquire_release
+  | Read_RISCV_reserved
+  | Read_RISCV_reserved_acquire_RCpc
+  | Read_RISCV_reserved_acquire_RCsc
+  | Read_RISCV_reserved_acquire_release
   (* x86 reads *)
   | Read_X86_locked (* the read part of a lock'd instruction (rmw) *)
 
@@ -458,11 +462,13 @@ instance (Show read_kind)
     | Read_exclusive -> "Read_exclusive"
     | Read_exclusive_acquire -> "Read_exclusive_acquire"
     | Read_stream -> "Read_stream"
-    | Read_RISCV_acquire -> "Read_RISCV_acquire"
-    | Read_RISCV_strong_acquire -> "Read_RISCV_strong_acquire"
-    | Read_RISCV_reserved -> "Read_RISCV_reserved"
-    | Read_RISCV_reserved_acquire -> "Read_RISCV_reserved_acquire"
-    | Read_RISCV_reserved_strong_acquire -> "Read_RISCV_reserved_strong_acquire"
+    | Read_RISCV_acquire_RCpc             -> "Read_RISCV_acquire_RCpc"
+    | Read_RISCV_acquire_RCsc             -> "Read_RISCV_acquire_RCsc"
+    | Read_RISCV_acquire_release          -> "Read_RISCV_acquire_release"
+    | Read_RISCV_reserved                 -> "Read_RISCV_reserved"
+    | Read_RISCV_reserved_acquire_RCpc    -> "Read_RISCV_reserved_acquire_RCpc"
+    | Read_RISCV_reserved_acquire_RCsc    -> "Read_RISCV_reserved_acquire_RCsc"
+    | Read_RISCV_reserved_acquire_release -> "Read_RISCV_reserved_acquire_release"
     | Read_X86_locked -> "Read_X86_locked"
   end
 end
@@ -475,9 +481,13 @@ type write_kind =
   (* AArch64 writes *)
   | Write_release | Write_exclusive | Write_exclusive_release
   (* RISC-V *)
-  | Write_RISCV_release     | Write_RISCV_strong_release
-  | Write_RISCV_conditional | Write_RISCV_conditional_release
-  | Write_RISCV_conditional_strong_release
+  | Write_RISCV_release_RCpc
+  | Write_RISCV_release_RCsc
+  | Write_RISCV_acquire_release
+  | Write_RISCV_conditional
+  | Write_RISCV_conditional_release_RCpc
+  | Write_RISCV_conditional_release_RCsc
+  | Write_RISCV_conditional_acquire_release
   (* x86 writes *)
   | Write_X86_locked (* the write part of a lock'd instruction (rmw) *)
 
@@ -488,11 +498,13 @@ instance (Show write_kind)
     | Write_release -> "Write_release"
     | Write_exclusive -> "Write_exclusive"
     | Write_exclusive_release -> "Write_exclusive_release"
-    | Write_RISCV_release -> "Write_RISCV_release"
-    | Write_RISCV_strong_release -> "Write_RISCV_strong_release"
-    | Write_RISCV_conditional -> "Write_RISCV_conditional"
-    | Write_RISCV_conditional_release -> "Write_RISCV_conditional_release"
-    | Write_RISCV_conditional_strong_release -> "Write_RISCV_conditional_strong_release"
+    | Write_RISCV_release_RCpc                -> "Write_RISCV_release_RCpc"
+    | Write_RISCV_release_RCsc                -> "Write_RISCV_release_RCsc"
+    | Write_RISCV_acquire_release             -> "Write_RISCV_acquire_release"
+    | Write_RISCV_conditional                 -> "Write_RISCV_conditional"
+    | Write_RISCV_conditional_release_RCpc    -> "Write_RISCV_conditional_release_RCpc"
+    | Write_RISCV_conditional_release_RCsc    -> "Write_RISCV_conditional_release_RCsc"
+    | Write_RISCV_conditional_acquire_release -> "Write_RISCV_conditional_acquire_release"
     | Write_X86_locked -> "Write_X86_locked"
   end
 end
@@ -509,8 +521,12 @@ type barrier_kind =
   (* RISC-V barriers *)
   | Barrier_RISCV_rw_rw
   | Barrier_RISCV_r_rw
+  | Barrier_RISCV_w_rw
+  | Barrier_RISCV_rw_r
   | Barrier_RISCV_r_r
+  | Barrier_RISCV_w_r
   | Barrier_RISCV_rw_w
+  | Barrier_RISCV_r_w
   | Barrier_RISCV_w_w
   | Barrier_RISCV_i
   (* X86 *)
@@ -534,8 +550,12 @@ instance (Show barrier_kind)
     | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
     | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
     | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
+    | Barrier_RISCV_w_rw  -> "Barrier_RISCV_w_rw"
+    | Barrier_RISCV_rw_r  -> "Barrier_RISCV_rw_r"
     | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
+    | Barrier_RISCV_w_r   -> "Barrier_RISCV_w_r"
     | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
+    | Barrier_RISCV_r_w   -> "Barrier_RISCV_r_w"
     | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
     | Barrier_RISCV_i     -> "Barrier_RISCV_i"
     | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
@@ -559,10 +579,9 @@ type instruction_kind =
   | IK_mem_read  of read_kind
   | IK_mem_write of write_kind
   | IK_mem_rmw   of (read_kind * write_kind)
-  | IK_cond_branch
-  (* unconditional branches are not distinguished in the instruction_kind;
-  they just have particular nias (and will be IK_simple *)
-  (* | IK_uncond_branch *)
+  | IK_branch (* this includes conditional-branch (multiple nias, none of which is NIA_indirect_address),
+  indirect/computed-branch (single nia of kind NIA_indirect_address)
+  and branch/jump (single nia of kind NIA_concrete_address) *)
   | IK_trans     of trans_kind
   | IK_simple
 
@@ -573,7 +592,7 @@ instance (Show instruction_kind)
     | IK_mem_read read_kind   -> "IK_mem_read " ^ (show read_kind)
     | IK_mem_write write_kind -> "IK_mem_write " ^ (show write_kind)
     | IK_mem_rmw (r, w)       -> "IK_mem_rmw " ^ (show r) ^ " " ^ (show w)
-    | IK_cond_branch          -> "IK_cond_branch"
+    | IK_branch               -> "IK_branch"
     | IK_trans trans_kind     -> "IK_trans " ^ (show trans_kind)
     | IK_simple               -> "IK_simple"
   end
@@ -589,12 +608,14 @@ instance (EnumerationType read_kind)
     | Read_exclusive -> 3
     | Read_exclusive_acquire -> 4
     | Read_stream -> 5
-    | Read_RISCV_acquire -> 6
-    | Read_RISCV_strong_acquire -> 7
-    | Read_RISCV_reserved -> 8
-    | Read_RISCV_reserved_acquire -> 9
-    | Read_RISCV_reserved_strong_acquire -> 10
-    | Read_X86_locked -> 11
+    | Read_RISCV_acquire_RCpc -> 6
+    | Read_RISCV_acquire_RCsc -> 7
+    | Read_RISCV_acquire_release -> 8
+    | Read_RISCV_reserved -> 9
+    | Read_RISCV_reserved_acquire_RCpc -> 10
+    | Read_RISCV_reserved_acquire_RCsc -> 11
+    | Read_RISCV_reserved_acquire_release -> 12
+    | Read_X86_locked -> 13
   end
 end
 
@@ -603,14 +624,16 @@ instance (EnumerationType write_kind)
     | Write_plain -> 0
     | Write_conditional -> 1
     | Write_release -> 2
-    | Write_exclusive -> 3 
+    | Write_exclusive -> 3
     | Write_exclusive_release -> 4
-    | Write_RISCV_release -> 5
-    | Write_RISCV_strong_release -> 6
-    | Write_RISCV_conditional -> 7
-    | Write_RISCV_conditional_release -> 8
-    | Write_RISCV_conditional_strong_release -> 9
-    | Write_X86_locked -> 10
+    | Write_RISCV_release_RCpc -> 5
+    | Write_RISCV_release_RCsc -> 6
+    | Write_RISCV_acquire_release -> 7
+    | Write_RISCV_conditional -> 8
+    | Write_RISCV_conditional_release_RCpc -> 9
+    | Write_RISCV_conditional_release_RCsc -> 10
+    | Write_RISCV_conditional_acquire_release -> 11
+    | Write_X86_locked -> 12
   end
 end
 
@@ -630,12 +653,16 @@ instance (EnumerationType barrier_kind)
     | Barrier_TM_COMMIT -> 11
     | Barrier_MIPS_SYNC -> 12
     | Barrier_RISCV_rw_rw -> 13
-    | Barrier_RISCV_r_rw -> 14
-    | Barrier_RISCV_r_r -> 15
-    | Barrier_RISCV_rw_w -> 16
-    | Barrier_RISCV_w_w -> 17
-    | Barrier_RISCV_i -> 18
-    | Barrier_x86_MFENCE -> 19
+    | Barrier_RISCV_r_rw  -> 14
+    | Barrier_RISCV_w_rw  -> 15
+    | Barrier_RISCV_rw_r  -> 16
+    | Barrier_RISCV_r_r   -> 17
+    | Barrier_RISCV_w_r   -> 18
+    | Barrier_RISCV_rw_w  -> 19
+    | Barrier_RISCV_r_w   -> 20
+    | Barrier_RISCV_w_w   -> 21
+    | Barrier_RISCV_i     -> 22
+    | Barrier_x86_MFENCE -> 23
   end
 end
 
@@ -782,8 +809,9 @@ let register_value_ones dir width start_index =
 
 val register_value_for_reg : reg_name -> list bit_lifted -> register_value
 let register_value_for_reg r bs : register_value =
-  let () = ensure (width_of_reg_name r = List.length bs)
-      ("register_value_for_reg (\"" ^ show (register_base_name r) ^ "\") length mismatch: "
+  let () = 
+    if width_of_reg_name r = List.length bs then ()
+    else failwith ("register_value_for_reg (\"" ^ show (register_base_name r) ^ "\") length mismatch: "
           ^ show (width_of_reg_name r) ^ " vs " ^ show (List.length bs))
   in
   let (j1, j2) = slice_of_reg_name r in
@@ -1232,32 +1260,18 @@ end
 type nia = 
   | NIA_successor
   | NIA_concrete_address of address
-  | NIA_LR   (* "LR0:61 || 0b00" in Power pseudocode *)
-  | NIA_CTR  (* "CTR0:61 || 0b00" in Power pseudocode *)
-  | NIA_register of reg_name (* the address will be in a register,
-                                corresponds to AArch64 BLR, BR, RET
-                                instructions *)
+  | NIA_indirect_address
 
 let niaCompare n1 n2 = match (n1,n2) with
   | (NIA_successor, NIA_successor) -> EQ
   | (NIA_successor, _) -> LT
-  | (NIA_concrete_address _, NIA_successor) -> GT
+  | (_, NIA_successor) -> GT
   | (NIA_concrete_address a1, NIA_concrete_address a2) -> compare a1 a2
   | (NIA_concrete_address _, _) -> LT
-  | (NIA_LR, NIA_successor) -> GT
-  | (NIA_LR, NIA_concrete_address _) -> GT
-  | (NIA_LR, NIA_LR) -> EQ
-  | (NIA_LR, _) -> LT
-  | (NIA_CTR, NIA_successor) -> GT
-  | (NIA_CTR, NIA_concrete_address _) -> GT
-  | (NIA_CTR, NIA_LR) -> GT
-  | (NIA_CTR, NIA_CTR) -> EQ
-  | (NIA_CTR, NIA_register _) -> LT
-  | (NIA_register _, NIA_successor) -> GT
-  | (NIA_register _, NIA_concrete_address _) -> GT
-  | (NIA_register _, NIA_LR) -> GT
-  | (NIA_register _, NIA_CTR) -> GT
-  | (NIA_register r1, NIA_register r2) -> compare r1 r2
+  | (_, NIA_concrete_address _) -> GT
+  | (NIA_indirect_address, NIA_indirect_address) -> EQ
+  (* | (NIA_indirect_address, _) -> LT
+  | (_, NIA_indirect_address) -> GT *)
   end
 
 instance (Ord nia)
@@ -1269,11 +1283,9 @@ instance (Ord nia)
 end
 
 let stringFromNia = function
-  | NIA_successor -> "NIA_successor"
+  | NIA_successor          -> "NIA_successor"
   | NIA_concrete_address a -> "NIA_concrete_address " ^ show a
-  | NIA_LR -> "NIA_LR"
-  | NIA_CTR -> "NIA_CTR"
-  | NIA_register r -> "NIA_register " ^ show r
+  | NIA_indirect_address   -> "NIA_indirect_address"
 end
 
 instance (Show nia)

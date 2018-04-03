@@ -42,13 +42,13 @@
   { match ($2, $4) with
     | (Fence_RW, Fence_RW) -> `RISCVFENCE (0b0011, 0b0011)
     | (Fence_R,  Fence_RW) -> `RISCVFENCE (0b0010, 0b0011)
+    | (Fence_W,  Fence_RW) -> `RISCVFENCE (0b0001, 0b0011)
+    | (Fence_RW, Fence_R)  -> `RISCVFENCE (0b0011, 0b0010)
     | (Fence_R,  Fence_R)  -> `RISCVFENCE (0b0010, 0b0010)
+    | (Fence_W,  Fence_R)  -> `RISCVFENCE (0b0001, 0b0010)
     | (Fence_RW, Fence_W)  -> `RISCVFENCE (0b0011, 0b0001)
+    | (Fence_R,  Fence_W)  -> `RISCVFENCE (0b0010, 0b0001)
     | (Fence_W,  Fence_W)  -> `RISCVFENCE (0b0001, 0b0001)
-    | (Fence_RW, Fence_R)  -> failwith "'fence rw,r' is not supported"
-    | (Fence_R,  Fence_W)  -> failwith "'fence r,w' is not supported"
-    | (Fence_W,  Fence_RW) -> failwith "'fence w,rw' is not supported"
-    | (Fence_W,  Fence_R)  -> failwith "'fence w,r' is not supported"
   }
 | FENCEI
   { `RISCVFENCEI }
