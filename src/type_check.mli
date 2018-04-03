@@ -279,6 +279,9 @@ val alpha_equivalent : Env.t -> typ -> typ -> bool
 (** Throws Invalid_argument if the argument is not a E_app expression *)
 val instantiation_of : tannot exp -> uvar KBindings.t
 
+(* Type variable instantiations that inference will extract from constraints *)
+val instantiate_simple_equations : quant_item list -> uvar KBindings.t
+
 val propagate_exp_effect : tannot exp -> tannot exp
 
 val propagate_pexp_effect : tannot pexp -> tannot pexp * effect

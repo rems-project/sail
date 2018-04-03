@@ -3095,6 +3095,16 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
        Partial (pats,l)
     | None -> Total
   in
+  let qs =
+    match tq with
+    | TypQ_no_forall -> []
+    | TypQ_tq qs -> qs
+  in
+  let eqn_instantiations = Type_check.instantiate_simple_equations qs in
+  let eqn_kid_deps = KBindings.map (function
+    | U_nexp nexp -> Some (nexp_frees nexp)
+    | _ -> None) eqn_instantiations
+  in
   let arg i pat =
     let rec aux (P_aux (p,(l,annot))) =
       let of_list pats =
@@ -3156,11 +3166,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
        Some kid
     | QI_aux (QI_const _,_) -> None
   in
-  let top_kids =
-    match tq with
-    | TypQ_no_forall -> []
-    | TypQ_tq qs -> Util.map_filter quant qs
-  in
+  let top_kids = Util.map_filter quant qs in
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge KBindings.empty kid_deps in
@@ -3176,6 +3182,13 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat set_assertions =
       KBindings.add kid (Have (ArgSplits.empty, extra_splits)) kid_deps
   in
   let kid_deps = List.fold_left note_no_arg kid_deps top_kids in
+  let merge_kid_deps_eqns k kdeps eqn_kids =
+    match kdeps, eqn_kids with
+    | _, Some (Some kids) -> Some (KidSet.fold (fun kid deps -> dmerge deps (KBindings.find kid kid_deps)) kids dempty)
+    | Some deps, _ -> Some deps
+    | _, _ -> None
+  in
+  let kid_deps = KBindings.merge merge_kid_deps_eqns kid_deps eqn_kid_deps in
   { top_kids = top_kids; var_deps = var_deps; kid_deps = kid_deps }
 
 (* When there's more than one pick the first *)
