@@ -162,6 +162,13 @@ let rec preprocess = function
   | Parse_ast.DEF_pragma (p, arg, _) :: defs ->
      (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess defs)
 
+  | (Parse_ast.DEF_default (Parse_ast.DT_aux (Parse_ast.DT_order (_, Parse_ast.ATyp_aux (atyp, _)), _)) as def) :: defs ->
+     begin match atyp with
+     | Parse_ast.ATyp_inc -> symbols := StringSet.add "_DEFAULT_INC" !symbols; def :: preprocess defs
+     | Parse_ast.ATyp_dec -> symbols := StringSet.add "_DEFAULT_DEC" !symbols; def :: preprocess defs
+     | _ -> def :: preprocess defs
+     end
+
   | def :: defs -> def :: preprocess defs
 
 let preprocess_ast (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess defs)

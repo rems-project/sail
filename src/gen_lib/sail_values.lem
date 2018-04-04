@@ -276,6 +276,8 @@ let ext_list pad len xs =
   if longer < 0 then drop (nat_of_int (abs (longer))) xs
   else pad_list pad xs longer
 
+let vector_truncate bs len = ext_list B0 len bs
+
 let extz_bools len bs = ext_list false len bs
 let exts_bools len bs =
   match bs with
@@ -340,6 +342,8 @@ let exts_bits len bits =
   | B1 :: _ -> ext_list B1 len bits
   | _ -> ext_list B0 len bits
   end
+
+let zero_extend bits len = extz_bits len bits
 
 let rec add_one_bit_ignore_overflow_aux bits = match bits with
   | [] -> []

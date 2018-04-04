@@ -46,4 +46,26 @@ val shl_int = "shl_int" : (int, int) -> int
 
 val shr_int = "shr_int" : (int, int) -> int
 
+// ***** div and mod *****
+
+val div_int = {
+  smt: "div",
+  ocaml: "quotient",
+  lem: "integerDiv",
+  c: "div_int"
+} : (int, int) -> int
+
+val mod_int = {
+  smt: "mod",
+  ocaml: "modulus",
+  lem: "integerMod",
+  c: "mod_int"
+} : (int, int) -> int
+
+val abs_int = {
+  smt : "abs",
+  ocaml: "abs_int",
+  lem: "abs_int"
+} : (int, int) -> int
+
 $endif

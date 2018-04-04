@@ -6,19 +6,22 @@ $define _SMT
 val div = {
   smt: "div",
   ocaml: "quotient",
-  lem: "integerDiv"
+  lem: "integerDiv",
+  c: "div_int"
 } : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = div('n, 'm). atom('o)}
 
 val mod = {
   smt: "mod",
   ocaml: "modulus",
-  lem: "integerMod"
+  lem: "integerMod",
+  c: "mod_int"
 } : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = mod('n, 'm). atom('o)}
 
 val abs_atom = {
   smt : "abs",
   ocaml: "abs_int",
-  lem: "abs_int"
+  lem: "abs_int",
+  c: "abs_int"
 } : forall 'n. atom('n) -> {'o, 'o = abs_atom('n). atom('o)}
 
 $ifdef TEST
