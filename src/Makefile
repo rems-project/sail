@@ -71,8 +71,8 @@ all: sail lib doc
 
 full: sail lib power doc test
 
-ast.lem: ../language/l2.ott
-	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/l2.ott
+ast.lem: ../language/sail.ott
+	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/sail.ott
 
 bytecode.lem: ../language/bytecode.ott ast.lem
 	ott -sort false -generate_aux_rules true -o bytecode.lem -picky_multiple_parses true ../language/bytecode.ott
