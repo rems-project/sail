@@ -5,7 +5,8 @@ scattered function option<ast> decode
 
 scattered function unit execute
 
-(********************************************************************)
+(** RV32I ***********************************************************)
+
 union ast member ((bit[20]), regno, uop) UTYPE
 
 function clause decode ((bit[20]) imm : (regno) rd : 0b0110111) = Some(UTYPE(imm, rd, RISCV_LUI))
@@ -98,22 +99,6 @@ function clause execute (ITYPE (imm, rs1, rd, op)) =
   wGPR(rd, result)
 
 (********************************************************************)
-union ast member ((bit[6]), regno, regno, sop) SHIFTIOP
-
-function clause decode (0b000000 : (bit[6]) shamt : (regno) rs1 : 0b001 : (regno) rd : 0b0010011) = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SLLI))
-function clause decode (0b000000 : (bit[6]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0010011) = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRLI))
-function clause decode (0b010000 : (bit[6]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0010011) = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRAI))
-
-function clause execute (SHIFTIOP(shamt, rs1, rd, op)) = 
-    let rs1_val = rGPR(rs1) in
-    let result = switch(op) {
-      case RISCV_SLLI -> rs1_val >> shamt
-      case RISCV_SRLI -> rs1_val << shamt
-      case RISCV_SRAI -> shift_right_arith64(rs1_val, shamt)
-    } in
-    wGPR(rd, result)
-
-(********************************************************************)
 union ast member (regno, regno, regno, rop) RTYPE
 
 function clause decode (0b0000000 : (regno) rs2 : (regno) rs1 : 0b000 : (regno) rd : 0b0110011) = Some(RTYPE(rs2, rs1, rd, RISCV_ADD))
@@ -150,14 +135,12 @@ union ast member ((bit[12]), regno, regno, bool, word_width, bool, bool) LOAD
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, BYTE,   false, false))
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b001 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, HALF,   false, false))
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b010 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, WORD,   false, false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, DOUBLE, false, false))
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b100 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  BYTE,   false, false))
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b101 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  HALF,   false, false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
 
 function clause execute(LOAD(imm, rs1, rd, unsigned, width, aq, rl)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in
-    let (bit[64]) result = if unsigned then 
+    let (bit[64]) result = if unsigned then
         switch (width) {
           case BYTE   -> EXTZ(mem_read(addr, 1, aq, rl, false))
           case HALF   -> EXTZ(mem_read(addr, 2, aq, rl, false))
@@ -182,8 +165,6 @@ function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit
   Some(STORE(imm7 : imm5, rs2, rs1, HALF, false, false))
 function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b010 : (bit[5]) imm5 : 0b0100011) =
   Some(STORE(imm7 : imm5, rs2, rs1, WORD, false, false))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) =
-  Some(STORE(imm7 : imm5, rs2, rs1, DOUBLE, false, false))
 
 function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in {
@@ -201,55 +182,6 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
         case DOUBLE -> mem_write_value(addr, 8, rs2_val,        aq, rl)
       }
     }
-
-(********************************************************************)
-union ast member ((bit[12]), regno, regno) ADDIW
-
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0011011) =
-  Some(ADDIW(imm, rs1, rd))
-
-function clause execute (ADDIW(imm, rs1, rd)) =
-  let (bit[64]) imm64 = EXTS(imm) in
-  let (bit[64]) result64 = imm64 + rGPR(rs1) in
-  let (bit[64]) result32 = EXTS(result64[31..0]) in
-  wGPR(rd, result32)
-
-(********************************************************************)
-union ast member ((bit[5]), regno, regno, sop) SHIFTW
-
-function clause decode (0b0000000 : (bit[5]) shamt : (regno) rs1 : 0b001 : (regno) rd : 0b0011011) = Some(SHIFTW(shamt, rs1, rd, RISCV_SLLI))
-function clause decode (0b0000000 : (bit[5]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0011011) = Some(SHIFTW(shamt, rs1, rd, RISCV_SRLI))
-function clause decode (0b0100000 : (bit[5]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0011011) = Some(SHIFTW(shamt, rs1, rd, RISCV_SRAI))
-
-function clause execute (SHIFTW(shamt, rs1, rd, op)) = 
-    let rs1_val = (rGPR(rs1))[31..0] in
-    let result = switch(op) {
-      case RISCV_SLLI -> rs1_val >> shamt
-      case RISCV_SRLI -> rs1_val << shamt
-      case RISCV_SRAI -> shift_right_arith32(rs1_val, shamt)
-    } in
-    wGPR(rd, EXTS(result))
-
-(********************************************************************)
-union ast member (regno, regno, regno, ropw) RTYPEW
-
-function clause decode (0b0000000 : (regno) rs2 : (regno) rs1 : 0b000 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_ADDW))
-function clause decode (0b0100000 : (regno) rs2 : (regno) rs1 : 0b000 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SUBW))
-function clause decode (0b0000000 : (regno) rs2 : (regno) rs1 : 0b001 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SLLW))
-function clause decode (0b0000000 : (regno) rs2 : (regno) rs1 : 0b101 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SRLW))
-function clause decode (0b0100000 : (regno) rs2 : (regno) rs1 : 0b101 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SRAW))
-
-function clause execute (RTYPEW(rs2, rs1, rd, op)) =
-  let rs1_val = (rGPR(rs1))[31..0] in
-  let rs2_val = (rGPR(rs2))[31..0] in
-  let (bit[32]) result = switch(op) {
-    case RISCV_ADDW -> rs1_val + rs2_val
-    case RISCV_SUBW -> rs1_val - rs2_val
-    case RISCV_SLLW -> rs1_val << (rs2_val[4..0])
-    case RISCV_SRLW -> rs1_val >> (rs2_val[4..0])
-    case RISCV_SRAW -> shift_right_arith32(rs1_val, rs2_val[4..0])
-  } in
-  wGPR(rd, EXTS(result))
 
 (********************************************************************)
 union ast member (bit[4], bit[4]) FENCE
@@ -289,13 +221,103 @@ function clause execute ECALL = not_implemented("ECALL is not implemented")
 (********************************************************************)
 union ast member unit EBREAK
 function clause decode (0b000000000001 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(EBREAK ())
-function clause execute EBREAK = { exit () }
+function clause execute EBREAK = not_implemented("EBREAK is not implemented")
 
 (********************************************************************)
+union ast member (csrrop, (bit[12]), regno, regno) CSRR
+function clause decode ((bit[12]) csr : (regno) rs1 : 0b001 : (regno) rd : 0b1110011) = Some(CSRR (RISCV_CSRRW, csr, rs1, rd))
+function clause decode ((bit[12]) csr : (regno) rs1 : 0b010 : (regno) rd : 0b1110011) = Some(CSRR (RISCV_CSRRS, csr, rs1, rd))
+function clause decode ((bit[12]) csr : (regno) rs1 : 0b011 : (regno) rd : 0b1110011) = Some(CSRR (RISCV_CSRRC, csr, rs1, rd))
+function clause execute (CSRR (op, csr, rs1, rd)) = not_implemented("CSRR* is not implemented")
+
+(********************************************************************)
+union ast member (csrrop, (bit[12]), (bit[5]), regno) CSRRI
+function clause decode ((bit[12]) csr : (bit[5]) zimm : 0b101 : (regno) rd : 0b1110011) = Some(CSRRI (RISCV_CSRRW, csr, zimm, rd))
+function clause decode ((bit[12]) csr : (bit[5]) zimm : 0b110 : (regno) rd : 0b1110011) = Some(CSRRI (RISCV_CSRRS, csr, zimm, rd))
+function clause decode ((bit[12]) csr : (bit[5]) zimm : 0b111 : (regno) rd : 0b1110011) = Some(CSRRI (RISCV_CSRRC, csr, zimm, rd))
+function clause execute (CSRRI (op, csr, zimm, rd)) = not_implemented("CSRR*I is not implemented")
+
+
+(** RV64I (in addition to RV32I) ************************************)
+
+union ast member ((bit[6]), regno, regno, sop) SHIFTIOP
+
+function clause decode (0b000000 : (bit[6]) shamt : (regno) rs1 : 0b001 : (regno) rd : 0b0010011) = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SLLI))
+function clause decode (0b000000 : (bit[6]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0010011) = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRLI))
+function clause decode (0b010000 : (bit[6]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0010011) = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRAI))
+
+function clause execute (SHIFTIOP(shamt, rs1, rd, op)) = 
+    let rs1_val = rGPR(rs1) in
+    let result = switch(op) {
+      case RISCV_SLLI -> rs1_val >> shamt
+      case RISCV_SRLI -> rs1_val << shamt
+      case RISCV_SRAI -> shift_right_arith64(rs1_val, shamt)
+    } in
+    wGPR(rd, result)
+
+(********************************************************************)
+union ast member ((bit[12]), regno, regno) ADDIW
+
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0011011) =
+  Some(ADDIW(imm, rs1, rd))
+
+function clause execute (ADDIW(imm, rs1, rd)) =
+  let (bit[64]) imm64 = EXTS(imm) in
+  let (bit[64]) result64 = imm64 + rGPR(rs1) in
+  let (bit[64]) result32 = EXTS(result64[31..0]) in
+  wGPR(rd, result32)
+
+(********************************************************************)
+union ast member ((bit[5]), regno, regno, sop) SHIFTW
+
+function clause decode (0b0000000 : (bit[5]) shamt : (regno) rs1 : 0b001 : (regno) rd : 0b0011011) = Some(SHIFTW(shamt, rs1, rd, RISCV_SLLI))
+function clause decode (0b0000000 : (bit[5]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0011011) = Some(SHIFTW(shamt, rs1, rd, RISCV_SRLI))
+function clause decode (0b0100000 : (bit[5]) shamt : (regno) rs1 : 0b101 : (regno) rd : 0b0011011) = Some(SHIFTW(shamt, rs1, rd, RISCV_SRAI))
+
+function clause execute (SHIFTW(shamt, rs1, rd, op)) =
+    let rs1_val = (rGPR(rs1))[31..0] in
+    let result = switch(op) {
+      case RISCV_SLLI -> rs1_val >> shamt
+      case RISCV_SRLI -> rs1_val << shamt
+      case RISCV_SRAI -> shift_right_arith32(rs1_val, shamt)
+    } in
+    wGPR(rd, EXTS(result))
+
+(********************************************************************)
+union ast member (regno, regno, regno, ropw) RTYPEW
+
+function clause decode (0b0000000 : (regno) rs2 : (regno) rs1 : 0b000 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_ADDW))
+function clause decode (0b0100000 : (regno) rs2 : (regno) rs1 : 0b000 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SUBW))
+function clause decode (0b0000000 : (regno) rs2 : (regno) rs1 : 0b001 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SLLW))
+function clause decode (0b0000000 : (regno) rs2 : (regno) rs1 : 0b101 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SRLW))
+function clause decode (0b0100000 : (regno) rs2 : (regno) rs1 : 0b101 : (regno) rd : 0b0111011) = Some(RTYPEW(rs2, rs1, rd, RISCV_SRAW))
+
+function clause execute (RTYPEW(rs2, rs1, rd, op)) =
+  let rs1_val = (rGPR(rs1))[31..0] in
+  let rs2_val = (rGPR(rs2))[31..0] in
+  let (bit[32]) result = switch(op) {
+    case RISCV_ADDW -> rs1_val + rs2_val
+    case RISCV_SUBW -> rs1_val - rs2_val
+    case RISCV_SLLW -> rs1_val << (rs2_val[4..0])
+    case RISCV_SRLW -> rs1_val >> (rs2_val[4..0])
+    case RISCV_SRAW -> shift_right_arith32(rs1_val, rs2_val[4..0])
+  } in
+  wGPR(rd, EXTS(result))
+
+(********************************************************************)
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, DOUBLE, false, false))
+
+(********************************************************************)
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) =
+  Some(STORE(imm7 : imm5, rs2, rs1, DOUBLE, false, false))
+
+(** RV32A ***********************************************************)
+
 union ast member (bool, bool, regno, word_width, regno) LOADRES
 
 function clause decode (0b00010 : [aq] : [rl] : 0b00000 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(LOADRES(aq, rl, rs1, WORD, rd))
-function clause decode (0b00010 : [aq] : [rl] : 0b00000 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(LOADRES(aq, rl, rs1, DOUBLE, rd))
+
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
   let (bit[64]) addr = rGPR(rs1) in
   let (bit[64]) result =
@@ -310,8 +332,6 @@ union ast member (bool, bool, regno, regno, word_width, regno) STORECON
 
 function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(STORECON(aq, rl, rs2, rs1, WORD, rd))
-function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
 
 function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   if speculate_conditional_success() then {
@@ -339,40 +359,22 @@ union ast member (amoop, bool, bool, regno, regno, word_width, regno) AMO
 
 function clause decode (0b00001 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOSWAP, aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b00001 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOSWAP, aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b00000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOADD , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b00000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOADD , aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b00100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOXOR , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b00100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOXOR , aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b01100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOAND , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b01100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOAND , aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b01000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOOR  , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b01000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOOR  , aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b10000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOMIN , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b10000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOMIN , aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b10100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOMAX , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b10100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOMAX , aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b11000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOMINU, aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b11000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOMINU, aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) =
   Some(AMO(AMOMAXU, aq, rl, rs2, rs1, WORD,   rd))
-function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
-  Some(AMO(AMOMAXU, aq, rl, rs2, rs1, DOUBLE, rd))
 
 function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   (bit[64]) addr := rGPR(rs1);
@@ -417,6 +419,34 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
 
   wGPR(rd, loaded);
 }
+
+(** RV64A (in addition to RV32A) ************************************)
+
+function clause decode (0b00010 : [aq] : [rl] : 0b00000 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(LOADRES(aq, rl, rs1, DOUBLE, rd))
+
+(********************************************************************)
+function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
+
+(********************************************************************)
+function clause decode (0b00001 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOSWAP, aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b00000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOADD , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b00100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOXOR , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b01100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOAND , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b01000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOOR  , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b10000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOMIN , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b10100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOMAX , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b11000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOMINU, aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) =
+  Some(AMO(AMOMAXU, aq, rl, rs2, rs1, DOUBLE, rd))
 
 (********************************************************************)
 

@@ -178,6 +178,7 @@ typedef rop = enumerate {RISCV_ADD; RISCV_SUB; RISCV_SLL; RISCV_SLT; RISCV_SLTU;
 typedef ropw = enumerate {RISCV_ADDW; RISCV_SUBW; RISCV_SLLW; RISCV_SRLW; RISCV_SRAW} (* reg-reg 32-bit ops *)
 typedef amoop = enumerate {AMOSWAP; AMOADD; AMOXOR; AMOAND; AMOOR;
     AMOMIN; AMOMAX; AMOMINU; AMOMAXU} (* AMO ops *)
+typedef csrrop = enumerate {RISCV_CSRRW; RISCV_CSRRS; RISCV_CSRRC} (* CSRR* ops *)
 
 typedef word_width = enumerate {BYTE; HALF; WORD; DOUBLE}
 
