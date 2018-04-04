@@ -52,8 +52,27 @@ open Ast
 open Ast_util
 open PPrint
 
+let replace_numbers str =
+  str
+  |> Str.global_replace (Str.regexp "0") "zero"
+  |> Str.global_replace (Str.regexp "1") "one"
+  |> Str.global_replace (Str.regexp "2") "two"
+  |> Str.global_replace (Str.regexp "3") "three"
+  |> Str.global_replace (Str.regexp "4") "four"
+  |> Str.global_replace (Str.regexp "5") "five"
+  |> Str.global_replace (Str.regexp "6") "six"
+  |> Str.global_replace (Str.regexp "7") "seven"
+  |> Str.global_replace (Str.regexp "8") "eight"
+  |> Str.global_replace (Str.regexp "9") "nine"
+
+let namecode_string str =
+  let str = Str.global_replace (Str.regexp "_") "" (Util.zencode_string str) in
+  replace_numbers (String.sub str 1 (String.length str - 1))
+
+let namecode_id id = namecode_string (string_of_id id)
+
 let refcode_string str =
-  Str.global_replace (Str.regexp "_") "zy" (Util.zencode_string str)
+  replace_numbers (Str.global_replace (Str.regexp "_") "zy" (Util.zencode_string str))
 
 let refcode_id id = refcode_string (string_of_id id)
 
@@ -105,34 +124,74 @@ let latex_code ?label:(label=None) no_loc ((l, _) as annot) =
   ^^ latex_loc no_loc l
   ^^ string "\\end{lstlisting}"
 
+module StringSet = Set.Make(String)
+
+let commands = ref StringSet.empty
+
+let rec latex_command ?label:(label=None) cmd no_loc ((l, _) as annot) =
+  let labelling = match label with
+    | None -> ""
+    | Some l -> Printf.sprintf "\\phantomsection\\label{%s}" l
+  in
+  if StringSet.mem cmd !commands then
+    latex_command ~label:label (cmd ^ "v") no_loc annot
+  else
+    begin
+      commands := StringSet.add cmd !commands;
+      docstring l
+      ^^ string (Printf.sprintf "\\newsavebox{\\box%s}\n\\begin{lrbox}{\\box%s}\n\\begin{lstlisting}" cmd cmd) ^^ hardline
+      ^^ latex_loc no_loc l
+      ^^ string "\\end{lstlisting}\n\\end{lrbox}" ^^ hardline
+      ^^ string (Printf.sprintf "\\newcommand{\\sail%s}{\\noindent\\usebox{\\box%s}%s}" cmd cmd labelling)
+    end
+
+let latex_command_id id no_loc annot = latex_command ~label:(Some (refcode_id id)) (namecode_id id) no_loc annot
+
 let latex_label str id =
   string (Printf.sprintf "\\label{%s:%s}" str (Util.zencode_string (string_of_id id)))
 
+let counter = ref 0
+
+let rec app_code (E_aux (exp, _)) =
+  match exp with
+  | E_app (f, [exp]) -> namecode_id f ^ app_code exp
+  | E_app (f, _) -> namecode_id f
+  | E_id id -> namecode_id id
+  | _ -> ""
+
 let rec latex_funcls def =
   let next funcls = twice hardline ^^ latex_funcls def funcls in
+  let funcl_command (FCL_Funcl (id, pexp)) =
+    match pexp with
+    | Pat_aux (Pat_exp (P_aux (P_app (ctor, _), _), _), _) -> namecode_id id ^ namecode_id ctor
+    | Pat_aux (Pat_exp (_, exp), _) -> namecode_id id ^ app_code exp
+    | _ -> (incr counter; refcode_id id ^ String.make 1 (Char.chr (!counter + 64)))
+  in
   function
-  | (FCL_aux (_, annot) as funcl) :: funcls ->
-     latex_code (Pretty_print_sail.doc_funcl funcl) annot ^^ next funcls
+  | (FCL_aux (funcl_aux, annot) as funcl) :: funcls ->
+     latex_command (funcl_command funcl_aux) (Pretty_print_sail.doc_funcl funcl) annot ^^ next funcls
   | [] -> empty
 
 let rec latex_defs (Defs defs) =
   let next defs = twice hardline ^^ latex_defs (Defs defs) in
   match defs with
-  | DEF_overload (id, ids) :: defs ->
+  | DEF_overload (id, ids) :: defs -> next defs
+                                        (*
      string (Printf.sprintf {|\begin{lstlisting}[label={%s}]|} (refcode_id id)) ^^ hardline
      ^^ string (Printf.sprintf "overload %s = {%s}" (string_of_id id) (Util.string_of_list ", " string_of_id ids))
      ^^ string {|\end{lstlisting}|}
      ^^ next defs
+                                         *)
   | (DEF_type (TD_aux (TD_abbrev (id, _, _), annot)) as def) :: defs ->
-     latex_code ~label:(Some (refcode_id id)) (Pretty_print_sail.doc_def def) annot ^^ next defs
+     latex_command_id id (Pretty_print_sail.doc_def def) annot ^^ next defs
   | (DEF_type (TD_aux (TD_record (id, _, _, _, _), annot)) as def) :: defs ->
-     latex_code ~label:(Some (refcode_id id)) (Pretty_print_sail.doc_def def) annot ^^ next defs
+     latex_command_id id (Pretty_print_sail.doc_def def) annot ^^ next defs
   | (DEF_type (TD_aux (TD_enum (id, _, _, _), annot)) as def) :: defs ->
-     latex_code ~label:(Some (refcode_id id)) (Pretty_print_sail.doc_def def) annot ^^ next defs
+     latex_command_id id (Pretty_print_sail.doc_def def) annot ^^ next defs
   | (DEF_spec (VS_aux (VS_val_spec (_, id, _, _), annot)) as def) :: defs ->
-     latex_code ~label:(Some (refcode_id id)) (Pretty_print_sail.doc_def def) annot ^^ next defs
-  | (DEF_fundef (FD_aux (FD_function (_, _, _, [_]), annot)) as def) :: defs ->
-     latex_code (Pretty_print_sail.doc_def def) annot ^^ next defs
+     latex_command_id id (Pretty_print_sail.doc_def def) annot ^^ next defs
+  | (DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def) :: defs ->
+     latex_command_id id (Pretty_print_sail.doc_def def) annot ^^ next defs
   | (DEF_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) as def) :: defs -> latex_funcls def funcls ^^ next defs
   | _ :: defs -> latex_defs (Defs defs)
   | [] -> empty
