@@ -1174,21 +1174,24 @@ let prove_z3 env nc =
 
 let solve env nexp =
   typ_print ("Solve " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_nexp nexp ^ " = ?");
-  let bindings = ref KBindings.empty  in
-  let fresh_var kid =
-    let n = KBindings.cardinal !bindings in
-    bindings := KBindings.add kid n !bindings;
-    n
-  in
-  let var_of kid =
-    try KBindings.find kid !bindings with
-    | Not_found -> fresh_var kid
-  in
-  let env = Env.add_typ_var (mk_kid "solve#") BK_nat env in
-  let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env))
-                               (nc_constraint env var_of (nc_eq (nvar (mk_kid "solve#")) nexp))
-  in
-  Constraint.solve_z3 constr (var_of (mk_kid "solve#"))
+  match nexp with
+  | Nexp_aux (Nexp_constant n,_) -> Some n
+  | _ ->
+    let bindings = ref KBindings.empty  in
+    let fresh_var kid =
+      let n = KBindings.cardinal !bindings in
+      bindings := KBindings.add kid n !bindings;
+      n
+    in
+    let var_of kid =
+      try KBindings.find kid !bindings with
+      | Not_found -> fresh_var kid
+    in
+    let env = Env.add_typ_var (mk_kid "solve#") BK_nat env in
+    let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env))
+                                 (nc_constraint env var_of (nc_eq (nvar (mk_kid "solve#")) nexp))
+    in
+    Constraint.solve_z3 constr (var_of (mk_kid "solve#"))
 
 let prove env (NC_aux (nc_aux, _) as nc) =
   let compare_const f (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
