@@ -6,7 +6,7 @@ MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
 
 SAIL:=$(SAIL_DIR)/sail
 
-MIPS_PRE:=$(SAIL_LIB_DIR)/flow.sail $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail
+MIPS_PRE:=$(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail
 MIPS_TLB:=$(MIPS_SAIL_DIR)/mips_tlb.sail
 MIPS_TLB_STUB:=$(MIPS_SAIL_DIR)/mips_tlb_stub.sail
 MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail

@@ -5,7 +5,7 @@ SAIL_LIB_DIR:=$(SAIL_DIR)/lib
 MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
 CHERI_SAIL_DIR:=$(SAIL_DIR)/cheri
 SAIL:=$(SAIL_DIR)/sail
-SAIL_LIB_HEADERS:=$(SAIL_LIB_DIR)/flow.sail
+SAIL_LIB_HEADERS:=
 
 MIPS_PRE:=$(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail
 MIPS_TLB:=$(MIPS_SAIL_DIR)/mips_tlb.sail
@@ -27,6 +27,9 @@ cheri: $(CHERI_SAILS) $(CHERI_MAIN)
 
 cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -memo_z3 -c $^ 1> $@
+
+latex: $(CHERI_SAILS)
+	$(SAIL) -latex $^
 
 cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
