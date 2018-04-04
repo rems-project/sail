@@ -2779,16 +2779,23 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
   | _ -> None
 
 let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
-  let is_equal kid =
-    prove typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
-  in
-  match ne with
-  | Nexp_var _
-  | Nexp_constant _ -> nexp
-  | _ ->
-     match List.find is_equal env.top_kids with
-     | kid -> Nexp_aux (Nexp_var kid,Generated l)
-     | exception Not_found -> nexp
+  match solve typ_env nexp with
+  | Some n -> nconstant n
+  | None ->
+     let is_equal kid =
+       prove typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+     in
+     match ne with
+     | Nexp_var _
+     | Nexp_constant _ -> nexp
+     | _ ->
+        match List.find is_equal env.top_kids with
+        | kid -> Nexp_aux (Nexp_var kid,Generated l)
+        | exception Not_found -> nexp
+
+let simplify_size_uvar env typ_env = function
+  | U_nexp nexp -> U_nexp (simplify_size_nexp env typ_env nexp)
+  | x -> x
 
 (* Takes an environment of dependencies on vars, type vars, and flow control,
    and dependencies on mutable variables.  The latter are quite conservative,
@@ -2841,7 +2848,8 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
        let deps, assigns, r = non_det args in
-       let (_,fn_typ) = Env.get_val_spec id (env_of_annot (l,annot)) in
+       let typ_env = env_of_annot (l,annot) in
+       let (_,fn_typ) = Env.get_val_spec id typ_env in
        let fn_effect = match fn_typ with
          | Typ_aux (Typ_fn (_,_,eff),_) -> eff
          | _ -> Effect_aux (Effect_set [],Unknown)
@@ -2851,6 +2859,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          | _ -> Unknown (l, "Effects from function application")
        in
        let kid_inst = instantiation_of exp in
+       let kid_inst = KBindings.map (simplify_size_uvar env typ_env) kid_inst in
        (* Change kids in instantiation to the canonical ones from the type signature *)
        let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
        let kid_deps = KBindings.map (deps_of_uvar l fn_id env deps) kid_inst in

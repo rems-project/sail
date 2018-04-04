@@ -190,7 +190,7 @@ let opt_ddump_raw_mono_ast = ref false
 let opt_dmono_analysis = ref 0
 let opt_auto_mono = ref false
 let opt_mono_rewrites = ref false
-let opt_mono_complex_nexps = ref false
+let opt_mono_complex_nexps = ref true
 let opt_dall_split_errors = ref false
 let opt_dmono_continue = ref false
 

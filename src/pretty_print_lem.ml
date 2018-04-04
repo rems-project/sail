@@ -336,11 +336,17 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
   match t with
   | Typ_app (Id_aux (Id "vector",_) as id, [Typ_arg_aux (Typ_arg_nexp size,_);ord;typ']) ->
      begin
-       let is_equal nexp =
-         prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
-       in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
-       | nexp -> Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
-       | exception Not_found -> None
+       let mk_typ nexp = 
+         Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
+       in
+       match Type_check.solve env size with
+       | Some n -> mk_typ (nconstant n)
+       | None ->
+          let is_equal nexp =
+            prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
+          | nexp -> mk_typ nexp
+          | exception Not_found -> None
      end
   | _ -> None
 
