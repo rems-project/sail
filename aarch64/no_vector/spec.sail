@@ -498,6 +498,10 @@ enum VCGTtype = {VCGTtype_signed, VCGTtype_unsigned, VCGTtype_fp}
 
 enum __InstrEnc = {__A64, __A32, __T16, __T32}
 
+val AArch64_CheckAndUpdateDescriptor_SecondStage : (DescriptorUpdate, FaultRecord, bits(64), AccType, bool, bool, bool) -> FaultRecord effect {escape, rreg, rmem, wmem, undef}
+
+val AArch64_TranslationTableWalk_SecondStage : (bits(52), bits(64), AccType, bool, bool, int) -> TLBRecord effect {escape, rreg, rmem, undef}
+
 val AArch64_SecondStageTranslate : (AddressDescriptor, bits(64), AccType, bool, bool, bool, int, bool) -> AddressDescriptor effect {rreg, escape, rmem, undef, wmem}
 
 val AArch64_CheckAndUpdateDescriptor : (DescriptorUpdate, FaultRecord, bool, bits(64), AccType, bool, bool, bool) -> FaultRecord effect {escape, rreg, rmem, wmem, undef}
@@ -1023,9 +1027,9 @@ function WaitForInterrupt () = {
   ()
 }
 
-val EndOfInstruction : unit -> unit
+val EndOfInstruction : unit -> unit effect {escape}
 
-function EndOfInstruction () = ()
+function EndOfInstruction () = throw(Error_ExceptionTaken())
 
 register ESR_EL3 : bits(32)
 
@@ -1370,7 +1374,7 @@ function AArch64_SysRegWrite ('op0, 'op1, 'crn, 'crm, 'op2, val_name) = assert(f
 
 val AArch64_SysRegRead : (int, int, int, int, int) -> bits(64) effect {escape, undef}
 
-function AArch64_SysRegRead (_, _, _, _, _) = {
+function AArch64_SysRegRead _ = {
   assert(false, "Tried to read system register");
   undefined
 }
@@ -1520,7 +1524,7 @@ val aget_SP : forall ('width : Int), 'width >= 0.
   unit -> bits('width) effect {escape, rreg}
 
 function aget_SP () = {
-  assert(('width == 8) | (('width == 16) | (('width == 32) | ('width == 64))), "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
+  assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64, "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
   if PSTATE.SP == 0b0 then return(slice(SP_EL0, 0, 'width)) else match PSTATE.EL {
     ? if ? == EL0 => return(slice(SP_EL0, 0, 'width)),
     ? if ? == EL1 => return(slice(SP_EL1, 0, 'width)),
@@ -1572,7 +1576,7 @@ function Restarting () = return(slice(EDSCR, 0, 6) == 0b000001)
 
 val PtrHasUpperAndLowerAddRanges : unit -> bool effect {rreg}
 
-function PtrHasUpperAndLowerAddRanges () = return(((PSTATE.EL == EL1) | (PSTATE.EL == EL0)) | ((PSTATE.EL == EL2) & ([HCR_EL2[34]] == 0b1)))
+function PtrHasUpperAndLowerAddRanges () = return((PSTATE.EL == EL1 | PSTATE.EL == EL0) | PSTATE.EL == EL2 & [HCR_EL2[34]] == 0b1)
 
 val MemAttrDefaults : MemoryAttributes -> MemoryAttributes effect {undef}
 
@@ -1585,7 +1589,7 @@ function MemAttrDefaults memattrs__arg = {
     memattrs.outershareable = true
   } else {
     memattrs.device = undefined;
-    if (memattrs.inner.attrs == MemAttr_NC) & (memattrs.outer.attrs == MemAttr_NC) then {
+    if memattrs.inner.attrs == MemAttr_NC & memattrs.outer.attrs == MemAttr_NC then {
       memattrs.shareable = true;
       memattrs.outershareable = true
     } else ()
@@ -1600,7 +1604,7 @@ function IsEventRegisterSet () = return(EventRegister == 0b1)
 val HaveEL : bits(2) -> bool
 
 function HaveEL el = {
-  if (el == EL1) | (el == EL0) then return(true) else ();
+  if el == EL1 | el == EL0 then return(true) else ();
   return(true)
 }
 
@@ -1614,7 +1618,7 @@ function Have16bitVMID () = return(HaveEL(EL2))
 
 val HasArchVersion : ArchVersion -> bool
 
-function HasArchVersion version = return((version == ARMv8p0) | ((version == ARMv8p1) | ((version == ARMv8p2) | (version == ARMv8p3))))
+function HasArchVersion version = return(version == ARMv8p0 | version == ARMv8p1 | version == ARMv8p2 | version == ARMv8p3)
 
 val HaveVirtHostExt : unit -> bool
 
@@ -1707,7 +1711,7 @@ val ConstrainUnpredictableBool : Unpredictable -> bool effect {escape}
 
 function ConstrainUnpredictableBool which = {
   c : Constraint = ConstrainUnpredictable(which);
-  assert((c == Constraint_TRUE) | (c == Constraint_FALSE), "((c == Constraint_TRUE) || (c == Constraint_FALSE))");
+  assert(c == Constraint_TRUE | c == Constraint_FALSE, "((c == Constraint_TRUE) || (c == Constraint_FALSE))");
   return(c == Constraint_TRUE)
 }
 
@@ -1715,7 +1719,7 @@ val CombineS1S2Device : (DeviceType, DeviceType) -> DeviceType effect {undef}
 
 function CombineS1S2Device (s1device, s2device) = {
   result : DeviceType = undefined;
-  if (s2device == DeviceType_nGnRnE) | (s1device == DeviceType_nGnRnE) then result = DeviceType_nGnRnE else if (s2device == DeviceType_nGnRE) | (s1device == DeviceType_nGnRE) then result = DeviceType_nGnRE else if (s2device == DeviceType_nGRE) | (s1device == DeviceType_nGRE) then result = DeviceType_nGRE else result = DeviceType_GRE;
+  if s2device == DeviceType_nGnRnE | s1device == DeviceType_nGnRnE then result = DeviceType_nGnRnE else if s2device == DeviceType_nGnRE | s1device == DeviceType_nGnRE then result = DeviceType_nGnRE else if s2device == DeviceType_nGRE | s1device == DeviceType_nGRE then result = DeviceType_nGRE else result = DeviceType_GRE;
   return(result)
 }
 
@@ -1723,7 +1727,7 @@ val CombineS1S2AttrHints : (MemAttrHints, MemAttrHints) -> MemAttrHints effect {
 
 function CombineS1S2AttrHints (s1desc, s2desc) = {
   result : MemAttrHints = undefined;
-  if (s2desc.attrs == 0b01) | (s1desc.attrs == 0b01) then result.attrs = undefined else if (s2desc.attrs == MemAttr_NC) | (s1desc.attrs == MemAttr_NC) then result.attrs = MemAttr_NC else if (s2desc.attrs == MemAttr_WT) | (s1desc.attrs == MemAttr_WT) then result.attrs = MemAttr_WT else result.attrs = MemAttr_WB;
+  if s2desc.attrs == 0b01 | s1desc.attrs == 0b01 then result.attrs = undefined else if s2desc.attrs == MemAttr_NC | s1desc.attrs == MemAttr_NC then result.attrs = MemAttr_NC else if s2desc.attrs == MemAttr_WT | s1desc.attrs == MemAttr_WT then result.attrs = MemAttr_WT else result.attrs = MemAttr_WB;
   result.hints = s1desc.hints;
   result.transient = s1desc.transient;
   return(result)
@@ -1734,7 +1738,7 @@ val AArch64_InstructionDevice : (AddressDescriptor, bits(64), bits(52), int, Acc
 function AArch64_InstructionDevice (addrdesc__arg, vaddress, ipaddress, 'level, acctype, iswrite, secondstage, s2fs1walk) = {
   addrdesc = addrdesc__arg;
   c : Constraint = ConstrainUnpredictable(Unpredictable_INSTRDEVICE);
-  assert((c == Constraint_NONE) | (c == Constraint_FAULT), "((c == Constraint_NONE) || (c == Constraint_FAULT))");
+  assert(c == Constraint_NONE | c == Constraint_FAULT, "((c == Constraint_NONE) || (c == Constraint_FAULT))");
   if c == Constraint_FAULT then addrdesc.fault = AArch64_PermissionFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk) else {
     __tmp_12 : MemoryAttributes = addrdesc.memattrs;
     __tmp_12.typ = MemType_Normal;
@@ -1761,10 +1765,10 @@ val aget_Vpart : forall ('width : Int), 'width >= 0.
   (int, int) -> bits('width) effect {escape, rreg}
 
 function aget_Vpart ('n, 'part) = {
-  assert((n >= 0) & (n <= 31), "((n >= 0) && (n <= 31))");
-  assert((part == 0) | (part == 1), "((part == 0) || (part == 1))");
+  assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
+  assert(part == 0 | part == 1, "((part == 0) || (part == 1))");
   if part == 0 then {
-    assert(('width == 8) | (('width == 16) | (('width == 32) | ('width == 64))), "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
+    assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64, "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
     return(slice(_V[n], 0, 'width))
   } else {
     assert('width == 64, "(width == 64)");
@@ -1776,15 +1780,15 @@ val aget_V : forall ('width : Int), 'width >= 0.
   int -> bits('width) effect {escape, rreg}
 
 function aget_V 'n = {
-  assert((n >= 0) & (n <= 31), "((n >= 0) && (n <= 31))");
-  assert(('width == 8) | (('width == 16) | (('width == 32) | (('width == 64) | ('width == 128)))), "((width == 8) || ((width == 16) || ((width == 32) || ((width == 64) || (width == 128)))))");
+  assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
+  assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64 | 'width == 128, "((width == 8) || ((width == 16) || ((width == 32) || ((width == 64) || (width == 128)))))");
   return(slice(_V[n], 0, 'width))
 }
 
 val LookUpRIndex : (int, bits(5)) -> int effect {escape, undef}
 
 function LookUpRIndex ('n, mode) = {
-  assert((n >= 0) & (n <= 14), "((n >= 0) && (n <= 14))");
+  assert(n >= 0 & n <= 14, "((n >= 0) && (n <= 14))");
   result : int = undefined;
   match n {
     8 => result = RBankSelect(mode, 8, 24, 8, 8, 8, 8, 8),
@@ -1826,7 +1830,7 @@ function BitReverse data = {
 
 val NextInstrAddr : forall ('N : Int), 'N >= 0. unit -> bits('N) effect {rreg}
 
-function NextInstrAddr () = return(slice(_PC + (ThisInstrLength() / 8), 0, 'N))
+function NextInstrAddr () = return(slice(_PC + ThisInstrLength() / 8, 0, 'N))
 
 val AArch32_ExceptionClass : Exception -> (int, bits(1)) effect {escape, rreg, undef}
 
@@ -1865,7 +1869,7 @@ function AArch32_ExceptionClass typ = {
     Exception_FPTrappedException => ec = 40,
     _ => Unreachable()
   };
-  if ((ec == 32) | (ec == 36)) & (PSTATE.EL == EL2) then ec = ec + 1 else ();
+  if (ec == 32 | ec == 36) & PSTATE.EL == EL2 then ec = ec + 1 else ();
   return((ec, il))
 }
 
@@ -1883,7 +1887,7 @@ val FPNeg : forall ('N : Int), 'N >= 0 & 'N >= 0.
   bits('N) -> bits('N) effect {escape}
 
 function FPNeg op = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   return(~([op['N - 1]]) @ slice(op, 0, 'N - 1))
 }
 
@@ -1891,7 +1895,7 @@ val FPAbs : forall ('N : Int), 'N >= 0 & 'N >= 0.
   bits('N) -> bits('N) effect {escape}
 
 function FPAbs op = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   return(0b0 @ slice(op, 0, 'N - 1))
 }
 
@@ -1902,29 +1906,29 @@ function EncodeLDFSC (typ, 'level) = {
   match typ {
     Fault_AddressSize => {
       result = 0x0 @ __GetSlice_int(2, level, 0);
-      assert((level == 0) | ((level == 1) | ((level == 2) | (level == 3))), "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
+      assert(level == 0 | level == 1 | level == 2 | level == 3, "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
     },
     Fault_AccessFlag => {
       result = 0x2 @ __GetSlice_int(2, level, 0);
-      assert((level == 1) | ((level == 2) | (level == 3)), "((level == 1) || ((level == 2) || (level == 3)))")
+      assert(level == 1 | level == 2 | level == 3, "((level == 1) || ((level == 2) || (level == 3)))")
     },
     Fault_Permission => {
       result = 0x3 @ __GetSlice_int(2, level, 0);
-      assert((level == 1) | ((level == 2) | (level == 3)), "((level == 1) || ((level == 2) || (level == 3)))")
+      assert(level == 1 | level == 2 | level == 3, "((level == 1) || ((level == 2) || (level == 3)))")
     },
     Fault_Translation => {
       result = 0x1 @ __GetSlice_int(2, level, 0);
-      assert((level == 0) | ((level == 1) | ((level == 2) | (level == 3))), "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
+      assert(level == 0 | level == 1 | level == 2 | level == 3, "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
     },
     Fault_SyncExternal => result = 0b010000,
     Fault_SyncExternalOnWalk => {
       result = 0x5 @ __GetSlice_int(2, level, 0);
-      assert((level == 0) | ((level == 1) | ((level == 2) | (level == 3))), "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
+      assert(level == 0 | level == 1 | level == 2 | level == 3, "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
     },
     Fault_SyncParity => result = 0b011000,
     Fault_SyncParityOnWalk => {
       result = 0x7 @ __GetSlice_int(2, level, 0);
-      assert((level == 0) | ((level == 1) | ((level == 2) | (level == 3))), "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
+      assert(level == 0 | level == 1 | level == 2 | level == 3, "((level == 0) || ((level == 1) || ((level == 2) || (level == 3))))")
     },
     Fault_AsyncParity => result = 0b011001,
     Fault_AsyncExternal => result = 0b010001,
@@ -1942,7 +1946,7 @@ val BigEndianReverse : forall ('width : Int), 'width >= 0 & 'width >= 0.
   bits('width) -> bits('width) effect {escape}
 
 function BigEndianReverse value_name = {
-  assert(('width == 8) | (('width == 16) | (('width == 32) | (('width == 64) | ('width == 128)))));
+  assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64 | 'width == 128);
   let 'half = 'width / 2;
   assert(constraint('half * 2 = 'width));
   if 'width == 8 then return(value_name) else ();
@@ -1957,9 +1961,9 @@ function AArch32_ReportHypEntry exception = {
   ec : int = undefined;
   (ec, il) = AArch32_ExceptionClass(typ);
   iss : bits(25) = exception.syndrome;
-  if ((ec == 36) | (ec == 37)) & ([iss[24]] == 0b0) then il = 0b1 else ();
+  if (ec == 36 | ec == 37) & [iss[24]] == 0b0 then il = 0b1 else ();
   HSR = (__GetSlice_int(6, ec, 0) @ il) @ iss;
-  if (typ == Exception_InstructionAbort) | (typ == Exception_PCAlignment) then {
+  if typ == Exception_InstructionAbort | typ == Exception_PCAlignment then {
     HIFAR = slice(exception.vaddress, 0, 32);
     HDFAR = undefined
   } else if typ == Exception_DataAbort then {
@@ -1980,7 +1984,7 @@ overload aset_Elem = {aset_Elem__0, aset_Elem__1}
 
 function aset_Elem__0 (vector_name__arg, 'e, size, value_name) = {
   vector_name = vector_name__arg;
-  assert((e >= 0) & (((e + 1) * 'size) <= 'N), "((e >= 0) && (((e + 1) * size) <= N))");
+  assert(e >= 0 & (e + 1) * 'size <= 'N, "((e >= 0) && (((e + 1) * size) <= N))");
   vector_name = __SetSlice_bits('N, 'size, vector_name, e * 'size, value_name);
   return(vector_name)
 }
@@ -2000,7 +2004,7 @@ val aget_Elem__1 : forall ('N : Int) ('size : Int), 'N >= 0 & 'size >= 0.
 overload aget_Elem = {aget_Elem__0, aget_Elem__1}
 
 function aget_Elem__0 (vector_name, 'e, size) = {
-  assert((e >= 0) & (((e + 1) * 'size) <= 'N), "((e >= 0) && (((e + 1) * size) <= N))");
+  assert(e >= 0 & (e + 1) * 'size <= 'N, "((e >= 0) && (((e + 1) * size) <= N))");
   return(slice(vector_name, e * 'size, 'size))
 }
 
@@ -2012,8 +2016,8 @@ val UnsignedSatQ : forall ('N : Int), 'N >= 0.
 function UnsignedSatQ ('i, N) = {
   saturated : bool = undefined;
   result : int = undefined;
-  if i > ((2 ^ 'N) - 1) then {
-    result = (2 ^ 'N) - 1;
+  if i > 2 ^ 'N - 1 then {
+    result = 2 ^ 'N - 1;
     saturated = true
   } else if i < 0 then {
     result = 0;
@@ -2031,8 +2035,8 @@ val SignedSatQ : forall ('N : Int), 'N >= 0.
 function SignedSatQ ('i, N) = {
   saturated : bool = undefined;
   result : int = undefined;
-  if i > ((2 ^ ('N - 1)) - 1) then {
-    result = (2 ^ ('N - 1)) - 1;
+  if i > 2 ^ ('N - 1) - 1 then {
+    result = 2 ^ ('N - 1) - 1;
     saturated = true
   } else if i < negate(2 ^ ('N - 1)) then {
     result = negate(2 ^ ('N - 1));
@@ -2058,7 +2062,7 @@ val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   bits('M) -> bits('N) effect {escape}
 
 function Replicate x = {
-  assert(('N % 'M) == 0, "((N MOD M) == 0)");
+  assert('N % 'M == 0, "((N MOD M) == 0)");
   let 'p = ex_int('N / 'M);
   assert(constraint('N = 'p * 'M));
   return(replicate_bits(x, p))
@@ -2100,10 +2104,10 @@ val aset_Vpart : forall ('width : Int), 'width >= 0.
   (int, int, bits('width)) -> unit effect {escape, wreg, rreg}
 
 function aset_Vpart (n, part, value_name) = {
-  assert((n >= 0) & (n <= 31), "((n >= 0) && (n <= 31))");
-  assert((part == 0) | (part == 1), "((part == 0) || (part == 1))");
+  assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
+  assert(part == 0 | part == 1, "((part == 0) || (part == 1))");
   if part == 0 then {
-    assert(('width == 8) | (('width == 16) | (('width == 32) | ('width == 64))), "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
+    assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64, "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
     _V[n] = ZeroExtend(value_name) : bits(128)
   } else {
     assert('width == 64, "(width == 64)");
@@ -2117,8 +2121,8 @@ val aset_V : forall ('width : Int), 'width >= 0.
   (int, bits('width)) -> unit effect {escape, wreg}
 
 function aset_V (n, value_name) = {
-  assert((n >= 0) & (n <= 31), "((n >= 0) && (n <= 31))");
-  assert(('width == 8) | (('width == 16) | (('width == 32) | (('width == 64) | ('width == 128)))), "((width == 8) || ((width == 16) || ((width == 32) || ((width == 64) || (width == 128)))))");
+  assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
+  assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64 | 'width == 128, "((width == 8) || ((width == 16) || ((width == 32) || ((width == 64) || (width == 128)))))");
   _V[n] = ZeroExtend(value_name) : bits(128);
   ()
 }
@@ -2134,7 +2138,7 @@ val aset_SP : forall ('width : Int), 'width >= 0.
   bits('width) -> unit effect {escape, rreg, wreg}
 
 function aset_SP value_name = {
-  assert(('width == 32) | ('width == 64), "((width == 32) || (width == 64))");
+  assert('width == 32 | 'width == 64, "((width == 32) || (width == 64))");
   if PSTATE.SP == 0b0 then SP_EL0 = ZeroExtend(value_name) else match PSTATE.EL {
     ? if ? == EL0 => SP_EL0 = ZeroExtend(value_name),
     ? if ? == EL1 => SP_EL1 = ZeroExtend(value_name),
@@ -2277,7 +2281,7 @@ val FPZero : forall ('N : Int), 1 >= 0 & 'N >= 0.
   bits(1) -> bits('N) effect {escape}
 
 function FPZero sign = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
   exp : bits('E) = Zeros(E);
@@ -2333,7 +2337,7 @@ val VFPExpandImm : forall ('N : Int), 8 >= 0 & 'N >= 0.
   bits(8) -> bits('N) effect {escape}
 
 function VFPExpandImm imm8 = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
   sign : bits(1) = [imm8[7]];
@@ -2409,7 +2413,7 @@ val FPMaxNormal : forall ('N : Int), 1 >= 0 & 'N >= 0.
   bits(1) -> bits('N) effect {escape}
 
 function FPMaxNormal sign = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
   exp : bits('E) = append(Ones(E - 1), 0b0);
@@ -2421,7 +2425,7 @@ val FPInfinity : forall ('N : Int), 1 >= 0 & 'N >= 0.
   bits(1) -> bits('N) effect {escape}
 
 function FPInfinity sign = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
   exp : bits('E) = Ones(E);
@@ -2432,7 +2436,7 @@ function FPInfinity sign = {
 val FPDefaultNaN : forall ('N : Int), 'N >= 0. unit -> bits('N) effect {escape}
 
 function FPDefaultNaN () = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
   sign : bits(1) = 0b0;
@@ -2445,8 +2449,8 @@ val FPConvertNaN : forall ('N : Int) ('M : Int), 'N >= 0 & 'M >= 0.
   bits('N) -> bits('M) effect {escape, undef}
 
 function FPConvertNaN op = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
-  assert(('M == 16) | (('M == 32) | ('M == 64)), "((M == 16) || ((M == 32) || (M == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('M == 16 | 'M == 32 | 'M == 64, "((M == 16) || ((M == 32) || (M == 64)))");
   result : bits('M) = undefined;
   frac : bits(51) = undefined;
   sign : bits(1) = [op['N - 1]];
@@ -2615,7 +2619,7 @@ val aset__Mem : forall ('size : Int), 8 * 'size >= 0.
   (AddressDescriptor, atom('size), AccessDescriptor, bits(8 * 'size)) -> unit effect {escape, rreg, wmem}
 
 function aset__Mem (desc, size, accdesc, value_name) = {
-  assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
+  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
   address : bits(52) = desc.paddress.physicaladdress;
   assert(address == Align(address, 'size), "(address == Align(address, size))");
   if address == hex_slice("0x13000000", 52, 0) then if UInt(value_name) == 4 then {
@@ -2629,7 +2633,7 @@ val aget__Mem : forall ('size : Int), 8 * 'size >= 0.
   (AddressDescriptor, atom('size), AccessDescriptor) -> bits(8 * 'size) effect {escape, rmem, rreg}
 
 function aget__Mem (desc, size, accdesc) = {
-  assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
+  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
   address : bits(52) = desc.paddress.physicaladdress;
   assert(address == Align(address, 'size), "(address == Align(address, size))");
   return(__ReadRAM(52, 'size, __Memory, address))
@@ -2639,8 +2643,8 @@ val aset_X : forall ('width : Int), 'width >= 0.
   (int, bits('width)) -> unit effect {wreg, escape}
 
 function aset_X (n, value_name) = {
-  assert((n >= 0) & (n <= 31), "((n >= 0) && (n <= 31))");
-  assert(('width == 32) | ('width == 64), "((width == 32) || (width == 64))");
+  assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
+  assert('width == 32 | 'width == 64, "((width == 32) || (width == 64))");
   if n != 31 then _R[n] = ZeroExtend(value_name, 64)
   else ();
   ()
@@ -2699,8 +2703,8 @@ val aget_X : forall ('width : Int), 'width >= 0.
   int -> bits('width) effect {escape, rreg}
 
 function aget_X 'n = {
-  assert((n >= 0) & (n <= 31), "((n >= 0) && (n <= 31))");
-  assert(('width == 8) | (('width == 16) | (('width == 32) | ('width == 64))), "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
+  assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
+  assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64, "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
   if n != 31 then return(slice(_R[n], 0, 'width)) else return(Zeros('width))
 }
 
@@ -2751,7 +2755,7 @@ function aarch64_integer_arithmetic_rev ('container_size, 'd, 'datasize, 'n) = {
   index : int = 0;
   rev_index : int = undefined;
   foreach (c from 0 to (containers - 1) by 1 in inc) {
-    rev_index = index + ((elements_per_container - 1) * 8);
+    rev_index = index + (elements_per_container - 1) * 8;
     foreach (e from 0 to (elements_per_container - 1) by 1 in inc) {
       result = __SetSlice_bits(datasize, 8, result, rev_index, slice(operand, index, 8));
       index = index + 8;
@@ -2819,7 +2823,7 @@ function aarch64_integer_arithmetic_mul_widening_3264 ('a, 'd, 'datasize, 'dests
   operand2 : bits('datasize) = aget_X(m);
   operand3 : bits('destsize) = aget_X(a);
   result : int = undefined;
-  if sub_op then result = asl_Int(operand3, unsigned) - (asl_Int(operand1, unsigned) * asl_Int(operand2, unsigned)) else result = asl_Int(operand3, unsigned) + (asl_Int(operand1, unsigned) * asl_Int(operand2, unsigned));
+  if sub_op then result = asl_Int(operand3, unsigned) - asl_Int(operand1, unsigned) * asl_Int(operand2, unsigned) else result = asl_Int(operand3, unsigned) + asl_Int(operand1, unsigned) * asl_Int(operand2, unsigned);
   aset_X(d, __GetSlice_int(64, result, 0))
 }
 
@@ -2849,7 +2853,7 @@ function aarch64_integer_arithmetic_mul_uniform_addsub ('a, 'd, 'datasize, 'dest
   operand2 : bits('datasize) = aget_X(m);
   operand3 : bits('destsize) = aget_X(a);
   result : int = undefined;
-  if sub_op then result = UInt(operand3) - (UInt(operand1) * UInt(operand2)) else result = UInt(operand3) + (UInt(operand1) * UInt(operand2));
+  if sub_op then result = UInt(operand3) - UInt(operand1) * UInt(operand2) else result = UInt(operand3) + UInt(operand1) * UInt(operand2);
   aset_X(d, __GetSlice_int(destsize, result, 0))
 }
 
@@ -2945,7 +2949,7 @@ val ExtendReg : forall ('N : Int), 'N >= 0.
   (int, ExtendType, int) -> bits('N) effect {escape, rreg, undef}
 
 function ExtendReg (reg, typ, shift) = {
-  assert((shift >= 0) & (shift <= 4), "((shift >= 0) && (shift <= 4))");
+  assert(shift >= 0 & shift <= 4, "((shift >= 0) && (shift <= 4))");
   val_name : bits('N) = aget_X(reg);
   unsigned : bool = undefined;
   len : int = undefined;
@@ -3042,9 +3046,9 @@ function aarch64_integer_bitfield ('R, 'S, 'd, datasize, extend, inzero, 'n, tma
   assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
   dst : bits('datasize) = if inzero then Zeros() else aget_X(d);
   src : bits('datasize) = aget_X(n);
-  bot : bits('datasize) = (dst & ~(wmask)) | (ROR(src, R) & wmask);
+  bot : bits('datasize) = dst & ~(wmask) | ROR(src, R) & wmask;
   top : bits('datasize) = if extend then Replicate([src[S]]) else dst;
-  aset_X(d, (top & ~(tmask)) | (bot & tmask))
+  aset_X(d, top & ~(tmask) | bot & tmask)
 }
 
 val ShiftReg : forall ('N : Int), 'N >= 0.
@@ -3155,7 +3159,7 @@ val CombineS1S2Desc : (AddressDescriptor, AddressDescriptor) -> AddressDescripto
 function CombineS1S2Desc (s1desc, s2desc) = {
   result : AddressDescriptor = undefined;
   result.paddress = s2desc.paddress;
-  if IsFault(s1desc) | IsFault(s2desc) then result = if IsFault(s1desc) then s1desc else s2desc else if (s2desc.memattrs.typ == MemType_Device) | (s1desc.memattrs.typ == MemType_Device) then {
+  if IsFault(s1desc) | IsFault(s2desc) then result = if IsFault(s1desc) then s1desc else s2desc else if s2desc.memattrs.typ == MemType_Device | s1desc.memattrs.typ == MemType_Device then {
     __tmp_61 : MemoryAttributes = result.memattrs;
     __tmp_61.typ = MemType_Device;
     result.memattrs = __tmp_61;
@@ -3204,7 +3208,7 @@ overload IsExternalSyncAbort = {IsExternalSyncAbort__0, IsExternalSyncAbort__1}
 
 function IsExternalSyncAbort__0 typ = {
   assert(typ != Fault_None);
-  return((typ == Fault_SyncExternal) | ((typ == Fault_SyncParity) | ((typ == Fault_SyncExternalOnWalk) | (typ == Fault_SyncParityOnWalk))))
+  return(typ == Fault_SyncExternal | typ == Fault_SyncParity | typ == Fault_SyncExternalOnWalk | typ == Fault_SyncParityOnWalk)
 }
 
 function IsExternalSyncAbort__1 fault = return(IsExternalSyncAbort(fault.typ))
@@ -3217,7 +3221,7 @@ overload IsExternalAbort = {IsExternalAbort__0, IsExternalAbort__1}
 
 function IsExternalAbort__0 typ = {
   assert(typ != Fault_None);
-  return((typ == Fault_SyncExternal) | ((typ == Fault_SyncParity) | ((typ == Fault_SyncExternalOnWalk) | ((typ == Fault_SyncParityOnWalk) | ((typ == Fault_AsyncExternal) | (typ == Fault_AsyncParity))))))
+  return(typ == Fault_SyncExternal | typ == Fault_SyncParity | typ == Fault_SyncExternalOnWalk | typ == Fault_SyncParityOnWalk | typ == Fault_AsyncExternal | typ == Fault_AsyncParity)
 }
 
 function IsExternalAbort__1 fault = return(IsExternalAbort(fault.typ))
@@ -3233,7 +3237,7 @@ val IPAValid : FaultRecord -> bool effect {escape}
 
 function IPAValid fault = {
   assert(fault.typ != Fault_None, "((fault).type != Fault_None)");
-  if fault.s2fs1walk then return((fault.typ == Fault_AccessFlag) | ((fault.typ == Fault_Permission) | ((fault.typ == Fault_Translation) | (fault.typ == Fault_AddressSize)))) else if fault.secondstage then return((fault.typ == Fault_AccessFlag) | ((fault.typ == Fault_Translation) | (fault.typ == Fault_AddressSize))) else return(false)
+  if fault.s2fs1walk then return(fault.typ == Fault_AccessFlag | fault.typ == Fault_Permission | fault.typ == Fault_Translation | fault.typ == Fault_AddressSize) else if fault.secondstage then return(fault.typ == Fault_AccessFlag | fault.typ == Fault_Translation | fault.typ == Fault_AddressSize) else return(false)
 }
 
 val aarch64_integer_logical_immediate : forall ('datasize : Int).
@@ -3251,7 +3255,7 @@ function aarch64_integer_logical_immediate ('d, datasize, imm, 'n, op, setflags)
     LogicalOp_EOR => result = operand1 ^ operand2
   };
   if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = ([result[datasize - 1]] @ IsZeroBit(result)) @ 0b00 else ();
-  if (d == 31) & ~(setflags) then aset_SP(result) else aset_X(d, result)
+  if d == 31 & ~(setflags) then aset_SP(result) else aset_X(d, result)
 }
 
 val aarch64_integer_arithmetic_addsub_immediate : forall ('datasize : Int).
@@ -3271,7 +3275,7 @@ function aarch64_integer_arithmetic_addsub_immediate ('d, datasize, imm, 'n, set
   } else carry_in = 0b0;
   (result, nzcv) = AddWithCarry(operand1, operand2, carry_in);
   if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = nzcv else ();
-  if (d == 31) & ~(setflags) then aset_SP(result) else aset_X(d, result)
+  if d == 31 & ~(setflags) then aset_SP(result) else aset_X(d, result)
 }
 
 val aarch64_integer_arithmetic_addsub_extendedreg : (int, int, ExtendType, int, int, bool, int, bool) -> unit effect {escape, rreg, undef, wreg}
@@ -3290,7 +3294,7 @@ function aarch64_integer_arithmetic_addsub_extendedreg ('d, 'datasize, extend_ty
   } else carry_in = 0b0;
   (result, nzcv) = AddWithCarry(operand1, operand2, carry_in);
   if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = nzcv else ();
-  if (d == 31) & ~(setflags) then aset_SP(result) else aset_X(d, result)
+  if d == 31 & ~(setflags) then aset_SP(result) else aset_X(d, result)
 }
 
 val RestoredITBits : bits(32) -> bits(8) effect {escape, rreg}
@@ -3302,18 +3306,18 @@ function RestoredITBits spsr = {
   else ();
   if ~(IsZero(it[7 .. 4])) & IsZero(it[3 .. 0]) then return(0x00) else ();
   itd : bits(1) = if PSTATE.EL == EL2 then [HSCTLR[7]] else [SCTLR[7]];
-  if (([spsr[5]] == 0b0) & ~(IsZero(it))) | ((itd == 0b1) & ~(IsZero(it[2 .. 0]))) then return(0x00) else return(it)
+  if [spsr[5]] == 0b0 & ~(IsZero(it)) | itd == 0b1 & ~(IsZero(it[2 .. 0])) then return(0x00) else return(it)
 }
 
 val IsEL1TransRegimeRegs : unit -> bool effect {rreg}
 
-function IsEL1TransRegimeRegs () = return((~(HaveEL(EL2)) | (PSTATE.EL == EL1)) | ((PSTATE.EL == EL0) & (([HCR_EL2[34]] == 0b0) | ([HCR_EL2[27]] == 0b0))))
+function IsEL1TransRegimeRegs () = return((~(HaveEL(EL2)) | PSTATE.EL == EL1) | PSTATE.EL == EL0 & ([HCR_EL2[34]] == 0b0 | [HCR_EL2[27]] == 0b0))
 
 val CalculateTBI : (bits(64), bool) -> bool effect {rreg}
 
 function CalculateTBI (ptr, data) = {
   tbi : bool = false;
-  if PtrHasUpperAndLowerAddRanges() then if IsEL1TransRegimeRegs() then if data then tbi = if [ptr[55]] == 0b1 then [TCR_EL1[38]] == 0b1 else [TCR_EL1[37]] == 0b1 else if [ptr[55]] == 0b1 then tbi = ([TCR_EL1[38]] == 0b1) & ([TCR_EL1[52]] == 0b0) else tbi = ([TCR_EL1[37]] == 0b1) & ([TCR_EL1[51]] == 0b0) else if data then tbi = if [ptr[55]] == 0b1 then [TCR_EL2[38]] == 0b1 else [TCR_EL2[37]] == 0b1 else if [ptr[55]] == 0b1 then tbi = ([TCR_EL2[38]] == 0b1) & ([TCR_EL2[52]] == 0b0) else tbi = ([TCR_EL2[37]] == 0b1) & ([TCR_EL2[51]] == 0b0) else if PSTATE.EL == EL2 then tbi = if data then [TCR_EL2[20]] == 0b1 else ([TCR_EL2[20]] == 0b1) & ([TCR_EL2[29]] == 0b0) else if PSTATE.EL == EL3 then tbi = if data then [TCR_EL3[20]] == 0b1 else ([TCR_EL3[20]] == 0b1) & ([TCR_EL3[29]] == 0b0) else ();
+  if PtrHasUpperAndLowerAddRanges() then if IsEL1TransRegimeRegs() then if data then tbi = if [ptr[55]] == 0b1 then [TCR_EL1[38]] == 0b1 else [TCR_EL1[37]] == 0b1 else if [ptr[55]] == 0b1 then tbi = [TCR_EL1[38]] == 0b1 & [TCR_EL1[52]] == 0b0 else tbi = [TCR_EL1[37]] == 0b1 & [TCR_EL1[51]] == 0b0 else if data then tbi = if [ptr[55]] == 0b1 then [TCR_EL2[38]] == 0b1 else [TCR_EL2[37]] == 0b1 else if [ptr[55]] == 0b1 then tbi = [TCR_EL2[38]] == 0b1 & [TCR_EL2[52]] == 0b0 else tbi = [TCR_EL2[37]] == 0b1 & [TCR_EL2[51]] == 0b0 else if PSTATE.EL == EL2 then tbi = if data then [TCR_EL2[20]] == 0b1 else [TCR_EL2[20]] == 0b1 & [TCR_EL2[29]] == 0b0 else if PSTATE.EL == EL3 then tbi = if data then [TCR_EL3[20]] == 0b1 else [TCR_EL3[20]] == 0b1 & [TCR_EL3[29]] == 0b0 else ();
   return(tbi)
 }
 
@@ -3337,13 +3341,13 @@ function CalculateBottomPACBit (ptr, top_bit) = {
   c : Constraint = undefined;
   if tsz_field > max_limit_tsz_field then {
     c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-    assert((c == Constraint_FORCE) | (c == Constraint_NONE), "((c == Constraint_FORCE) || (c == Constraint_NONE))");
+    assert(c == Constraint_FORCE | c == Constraint_NONE, "((c == Constraint_FORCE) || (c == Constraint_NONE))");
     if c == Constraint_FORCE then tsz_field = max_limit_tsz_field else ()
   } else ();
-  tszmin : int = if using64k & (VAMax() == 52) then 12 else 16;
+  tszmin : int = if using64k & VAMax() == 52 then 12 else 16;
   if tsz_field < tszmin then {
     c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-    assert((c == Constraint_FORCE) | (c == Constraint_NONE), "((c == Constraint_FORCE) || (c == Constraint_NONE))");
+    assert(c == Constraint_FORCE | c == Constraint_NONE, "((c == Constraint_FORCE) || (c == Constraint_NONE))");
     if c == Constraint_FORCE then tsz_field = tszmin else ()
   } else ();
   return(64 - tsz_field)
@@ -3373,7 +3377,7 @@ function Auth (ptr, modifier, K, data, keynumber) = {
       error_code = keynumber @ ~(keynumber);
       result = (original_ptr[63 .. 55] @ error_code) @ original_ptr[52 .. 0]
     }
-  else if (PAC[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit] == ptr[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit]) & (PAC[63 .. 56] == ptr[63 .. 56]) then
+  else if PAC[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit] == ptr[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit] & PAC[63 .. 56] == ptr[63 .. 56] then
     result = original_ptr
   else {
     error_code = keynumber @ ~(keynumber);
@@ -3457,7 +3461,7 @@ function aget_SPSR () = {
 val IsSecure : unit -> bool effect {escape, rreg, undef}
 
 function IsSecure () = {
-  if (HaveEL(EL3) & ~(UsingAArch32())) & (PSTATE.EL == EL3) then return(true) else if (HaveEL(EL3) & UsingAArch32()) & (PSTATE.M == M32_Monitor) then return(true) else ();
+  if (HaveEL(EL3) & ~(UsingAArch32())) & PSTATE.EL == EL3 then return(true) else if (HaveEL(EL3) & UsingAArch32()) & PSTATE.M == M32_Monitor then return(true) else ();
   return(IsSecureBelowEL3())
 }
 
@@ -3482,7 +3486,7 @@ val FPRoundBase : forall ('N : Int), 32 >= 0 & 'N >= 0.
   (real, bits(32), FPRounding) -> bits('N) effect {escape, wreg, rreg, undef}
 
 function FPRoundBase (op, fpcr, rounding) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)));
+  assert('N == 16 | 'N == 32 | 'N == 64);
   assert(op != 0.0);
   assert(rounding != FPRounding_TIEAWAY);
   result : bits('N) = undefined;
@@ -3523,30 +3527,30 @@ function FPRoundBase (op, fpcr, rounding) = {
     mantissa = mantissa / 2.0;
     exponent = exponent + 1
   };
-  if ((([fpcr[24]] == 0b1) & ('N != 16)) | (([fpcr[19]] == 0b1) & ('N == 16))) & (exponent < minimum_exp) then {
+  if ([fpcr[24]] == 0b1 & 'N != 16 | [fpcr[19]] == 0b1 & 'N == 16) & exponent < minimum_exp then {
     if UsingAArch32() then FPSCR = __SetSlice_bits(32, 1, FPSCR, 3, 0b1)
     else FPSR = __SetSlice_bits(32, 1, FPSR, 3, 0b1);
     return(FPZero(sign))
   } else ();
   biased_exp : int = max((exponent - minimum_exp) + 1, 0);
-  if biased_exp == 0 then mantissa = mantissa / (2.0 ^ (minimum_exp - exponent))
+  if biased_exp == 0 then mantissa = mantissa / 2.0 ^ (minimum_exp - exponent)
   else ();
-  int_mant : int = RoundDown(mantissa * (2.0 ^ F));
-  error : real = (mantissa * (2.0 ^ F)) - Real(int_mant);
-  if (biased_exp == 0) & ((error != 0.0) | ([fpcr[11]] == 0b1)) then FPProcessException(FPExc_Underflow, fpcr) else ();
+  int_mant : int = RoundDown(mantissa * 2.0 ^ F);
+  error : real = mantissa * 2.0 ^ F - Real(int_mant);
+  if biased_exp == 0 & (error != 0.0 | [fpcr[11]] == 0b1) then FPProcessException(FPExc_Underflow, fpcr) else ();
   overflow_to_inf : bool = undefined;
   round_up : bool = undefined;
   match rounding {
     FPRounding_TIEEVEN => {
-      round_up = (error > 0.5) | ((error == 0.5) & (__GetSlice_int(1, int_mant, 0) == 0b1));
+      round_up = error > 0.5 | error == 0.5 & __GetSlice_int(1, int_mant, 0) == 0b1;
       overflow_to_inf = true
     },
     FPRounding_POSINF => {
-      round_up = (error != 0.0) & (sign == 0b0);
+      round_up = error != 0.0 & sign == 0b0;
       overflow_to_inf = sign == 0b0
     },
     FPRounding_NEGINF => {
-      round_up = (error != 0.0) & (sign == 0b1);
+      round_up = error != 0.0 & sign == 0b1;
       overflow_to_inf = sign == 0b1
     },
     FPRounding_ZERO => {
@@ -3567,11 +3571,11 @@ function FPRoundBase (op, fpcr, rounding) = {
       int_mant = int_mant / 2
     } else ()
   } else ();
-  if (error != 0.0) & (rounding == FPRounding_ODD) then
+  if error != 0.0 & rounding == FPRounding_ODD then
     int_mant = __SetSlice_int(1, int_mant, 0, 0b1)
   else ();
-  if ('N != 16) | ([fpcr[26]] == 0b0) then
-    if biased_exp >= (pow2(E) - 1) then {
+  if 'N != 16 | [fpcr[26]] == 0b0 then
+    if biased_exp >= pow2(E) - 1 then {
       result = if overflow_to_inf then FPInfinity(sign) else FPMaxNormal(sign);
       FPProcessException(FPExc_Overflow, fpcr);
       error = 1.0
@@ -3616,13 +3620,13 @@ val FixedToFP : forall ('M : Int) ('N : Int), 'M >= 0 & 32 >= 0 & 'N >= 0.
   (bits('M), int, bool, bits(32), FPRounding) -> bits('N) effect {escape, undef, wreg, rreg}
 
 function FixedToFP (op, 'fbits, unsigned, fpcr, rounding) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)));
-  assert(('M == 16) | (('M == 32) | ('M == 64)));
+  assert('N == 16 | 'N == 32 | 'N == 64);
+  assert('M == 16 | 'M == 32 | 'M == 64);
   result : bits('N) = undefined;
   assert(fbits >= 0);
   assert(rounding != FPRounding_ODD);
   int_operand : int = asl_Int(op, unsigned);
-  real_operand : real = Real(int_operand) / (2.0 ^ fbits);
+  real_operand : real = Real(int_operand) / 2.0 ^ fbits;
   if real_operand == 0.0 then result = FPZero(0b0)
   else result = FPRound(real_operand, fpcr, rounding);
   return(result)
@@ -3632,8 +3636,8 @@ val FPProcessNaN : forall ('N : Int), 'N >= 0 & 32 >= 0 & 'N >= 0.
   (FPType, bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPProcessNaN (typ, op, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
-  assert((typ == FPType_QNaN) | (typ == FPType_SNaN), "((type == FPType_QNaN) || (type == FPType_SNaN))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
+  assert(typ == FPType_QNaN | typ == FPType_SNaN, "((type == FPType_QNaN) || (type == FPType_SNaN))");
   topfrac : int = undefined;
   match 'N {
     16 => topfrac = 9,
@@ -3653,7 +3657,7 @@ val FPProcessNaNs3 : forall ('N : Int), 'N >= 0 & 'N >= 0 & 'N >= 0 & 32 >= 0 & 
   (FPType, FPType, FPType, bits('N), bits('N), bits('N), bits(32)) -> (bool, bits('N)) effect {escape, rreg, undef, wreg}
 
 function FPProcessNaNs3 (type1, type2, type3, op1, op2, op3, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   result : bits('N) = undefined;
   done : bool = undefined;
   if type1 == FPType_SNaN then {
@@ -3685,7 +3689,7 @@ val FPProcessNaNs : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
   (FPType, FPType, bits('N), bits('N), bits(32)) -> (bool, bits('N)) effect {escape, rreg, undef, wreg}
 
 function FPProcessNaNs (type1, type2, op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   result : bits('N) = undefined;
   done : bool = undefined;
   if type1 == FPType_SNaN then {
@@ -3720,8 +3724,8 @@ val AArch32_ExecutingLSMInstr : unit -> bool effect {escape, rreg, undef}
 function AArch32_ExecutingLSMInstr () = {
   instr : bits(32) = ThisInstr();
   instr_set : InstrSet = CurrentInstrSet();
-  assert((instr_set == InstrSet_A32) | (instr_set == InstrSet_T32), "((instr_set == InstrSet_A32) || (instr_set == InstrSet_T32))");
-  if instr_set == InstrSet_A32 then return((slice(instr, 28, 4) != 0xF) & (slice(instr, 25, 3) == 0b100)) else if ThisInstrLength() == 16 then return(slice(instr, 12, 4) == 0xC) else return((slice(instr, 25, 7) == 0b1110100) & ([instr[22]] == 0b0))
+  assert(instr_set == InstrSet_A32 | instr_set == InstrSet_T32, "((instr_set == InstrSet_A32) || (instr_set == InstrSet_T32))");
+  if instr_set == InstrSet_A32 then return(slice(instr, 28, 4) != 0xF & slice(instr, 25, 3) == 0b100) else if ThisInstrLength() == 16 then return(slice(instr, 12, 4) == 0xC) else return(slice(instr, 25, 7) == 0b1110100 & [instr[22]] == 0b0)
 }
 
 val AArch32_ExecutingCP10or11Instr : unit -> bool effect {escape, rreg, undef}
@@ -3729,8 +3733,8 @@ val AArch32_ExecutingCP10or11Instr : unit -> bool effect {escape, rreg, undef}
 function AArch32_ExecutingCP10or11Instr () = {
   instr : bits(32) = ThisInstr();
   instr_set : InstrSet = CurrentInstrSet();
-  assert((instr_set == InstrSet_A32) | (instr_set == InstrSet_T32), "((instr_set == InstrSet_A32) || (instr_set == InstrSet_T32))");
-  if instr_set == InstrSet_A32 then return(((slice(instr, 24, 4) == 0xE) | (slice(instr, 25, 3) == 0b110)) & ((slice(instr, 8, 4) & 0xE) == 0xA)) else return((((slice(instr, 28, 4) & 0xE) == 0xE) & ((slice(instr, 24, 4) == 0xE) | (slice(instr, 25, 3) == 0b110))) & ((slice(instr, 8, 4) & 0xE) == 0xA))
+  assert(instr_set == InstrSet_A32 | instr_set == InstrSet_T32, "((instr_set == InstrSet_A32) || (instr_set == InstrSet_T32))");
+  if instr_set == InstrSet_A32 then return((slice(instr, 24, 4) == 0xE | slice(instr, 25, 3) == 0b110) & (slice(instr, 8, 4) & 0xE) == 0xA) else return(((slice(instr, 28, 4) & 0xE) == 0xE & (slice(instr, 24, 4) == 0xE | slice(instr, 25, 3) == 0b110)) & (slice(instr, 8, 4) & 0xE) == 0xA)
 }
 
 val HaveAnyAArch64 : unit -> bool
@@ -3796,13 +3800,13 @@ function AArch64_ResetSpecialRegisters () = {
 
 val Halted : unit -> bool effect {rreg}
 
-function Halted () = return(~((slice(EDSCR, 0, 6) == 0b000001) | (slice(EDSCR, 0, 6) == 0b000010)))
+function Halted () = return(~(slice(EDSCR, 0, 6) == 0b000001 | slice(EDSCR, 0, 6) == 0b000010))
 
 val FPUnpackBase : forall ('N : Int), 'N >= 0 & 32 >= 0 & 1 >= 0.
   (bits('N), bits(32)) -> (FPType, bits(1), real) effect {escape, rreg, undef, wreg}
 
 function FPUnpackBase (fpval, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   frac64 : bits(52) = undefined;
   exp64 : bits(11) = undefined;
   frac32 : bits(23) = undefined;
@@ -3816,13 +3820,13 @@ function FPUnpackBase (fpval, fpcr) = {
     sign = [fpval[15]];
     exp16 = slice(fpval, 10, 5);
     frac16 = slice(fpval, 0, 10);
-    if IsZero(exp16) then if IsZero(frac16) | ([fpcr[19]] == 0b1) then {
+    if IsZero(exp16) then if IsZero(frac16) | [fpcr[19]] == 0b1 then {
       typ = FPType_Zero;
       value_name = 0.0
     } else {
       typ = FPType_Nonzero;
-      value_name = (2.0 ^ negate(14)) * (Real(UInt(frac16)) * (2.0 ^ negate(10)))
-    } else if IsOnes(exp16) & ([fpcr[26]] == 0b0) then if IsZero(frac16) then {
+      value_name = 2.0 ^ negate(14) * (Real(UInt(frac16)) * 2.0 ^ negate(10))
+    } else if IsOnes(exp16) & [fpcr[26]] == 0b0 then if IsZero(frac16) then {
       typ = FPType_Infinity;
       value_name = 2.0 ^ 1000000
     } else {
@@ -3830,19 +3834,19 @@ function FPUnpackBase (fpval, fpcr) = {
       value_name = 0.0
     } else {
       typ = FPType_Nonzero;
-      value_name = (2.0 ^ (UInt(exp16) - 15)) * (1.0 + (Real(UInt(frac16)) * (2.0 ^ negate(10))))
+      value_name = 2.0 ^ (UInt(exp16) - 15) * (1.0 + Real(UInt(frac16)) * 2.0 ^ negate(10))
     }
   } else if 'N == 32 then {
     sign = [fpval[31]];
     exp32 = slice(fpval, 23, 8);
     frac32 = slice(fpval, 0, 23);
-    if IsZero(exp32) then if IsZero(frac32) | ([fpcr[24]] == 0b1) then {
+    if IsZero(exp32) then if IsZero(frac32) | [fpcr[24]] == 0b1 then {
       typ = FPType_Zero;
       value_name = 0.0;
       if ~(IsZero(frac32)) then FPProcessException(FPExc_InputDenorm, fpcr) else ()
     } else {
       typ = FPType_Nonzero;
-      value_name = (2.0 ^ negate(126)) * (Real(UInt(frac32)) * (2.0 ^ negate(23)))
+      value_name = 2.0 ^ negate(126) * (Real(UInt(frac32)) * 2.0 ^ negate(23))
     } else if IsOnes(exp32) then if IsZero(frac32) then {
       typ = FPType_Infinity;
       value_name = 2.0 ^ 1000000
@@ -3851,19 +3855,19 @@ function FPUnpackBase (fpval, fpcr) = {
       value_name = 0.0
     } else {
       typ = FPType_Nonzero;
-      value_name = (2.0 ^ (UInt(exp32) - 127)) * (1.0 + (Real(UInt(frac32)) * (2.0 ^ negate(23))))
+      value_name = 2.0 ^ (UInt(exp32) - 127) * (1.0 + Real(UInt(frac32)) * 2.0 ^ negate(23))
     }
   } else {
     sign = [fpval[63]];
     exp64 = slice(fpval, 52, 11);
     frac64 = slice(fpval, 0, 52);
-    if IsZero(exp64) then if IsZero(frac64) | ([fpcr[24]] == 0b1) then {
+    if IsZero(exp64) then if IsZero(frac64) | [fpcr[24]] == 0b1 then {
       typ = FPType_Zero;
       value_name = 0.0;
       if ~(IsZero(frac64)) then FPProcessException(FPExc_InputDenorm, fpcr) else ()
     } else {
       typ = FPType_Nonzero;
-      value_name = (2.0 ^ negate(1022)) * (Real(UInt(frac64)) * (2.0 ^ negate(52)))
+      value_name = 2.0 ^ negate(1022) * (Real(UInt(frac64)) * 2.0 ^ negate(52))
     } else if IsOnes(exp64) then if IsZero(frac64) then {
       typ = FPType_Infinity;
       value_name = 2.0 ^ 1000000
@@ -3872,7 +3876,7 @@ function FPUnpackBase (fpval, fpcr) = {
       value_name = 0.0
     } else {
       typ = FPType_Nonzero;
-      value_name = (2.0 ^ (UInt(exp64) - 1023)) * (1.0 + (Real(UInt(frac64)) * (2.0 ^ negate(52))))
+      value_name = 2.0 ^ (UInt(exp64) - 1023) * (1.0 + Real(UInt(frac64)) * 2.0 ^ negate(52))
     }
   };
   if sign == 0b1 then value_name = negate(value_name) else ();
@@ -3901,19 +3905,19 @@ val FPConvert__1 : forall ('N : Int) ('M : Int), 'N >= 0 & 32 >= 0 & 'M >= 0.
 overload FPConvert = {FPConvert__0, FPConvert__1}
 
 function FPConvert__0 (op, fpcr, rounding) = {
-  assert(('M == 16) | (('M == 32) | ('M == 64)));
-  assert(('N == 16) | (('N == 32) | ('N == 64)));
+  assert('M == 16 | 'M == 32 | 'M == 64);
+  assert('N == 16 | 'N == 32 | 'N == 64);
   result : bits('M) = undefined;
   value_name : real = undefined;
   sign : bits(1) = undefined;
   typ : FPType = undefined;
   (typ, sign, value_name) = FPUnpackCV(op, fpcr);
-  alt_hp : bool = ('M == 16) & ([fpcr[26]] == 0b1);
-  if (typ == FPType_SNaN) | (typ == FPType_QNaN) then {
+  alt_hp : bool = 'M == 16 & [fpcr[26]] == 0b1;
+  if typ == FPType_SNaN | typ == FPType_QNaN then {
     if alt_hp then result = FPZero(sign)
     else if [fpcr[25]] == 0b1 then result = FPDefaultNaN()
     else result = FPConvertNaN(op);
-    if (typ == FPType_SNaN) | alt_hp then FPProcessException(FPExc_InvalidOp, fpcr) else ()
+    if typ == FPType_SNaN | alt_hp then FPProcessException(FPExc_InvalidOp, fpcr) else ()
   } else if typ == FPType_Infinity then
     if alt_hp then {
       result = sign @ Ones('M - 1);
@@ -3943,30 +3947,30 @@ val FPToFixedJS : forall ('M : Int) ('N : Int), 'M >= 0 & 32 >= 0 & 'N >= 0.
   (bits('M), bits(32), bool) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPToFixedJS (op, fpcr, Is64) = {
-  assert(('M == 64) & ('N == 32), "((M == 64) && (N == 32))");
+  assert('M == 64 & 'N == 32, "((M == 64) && (N == 32))");
   value_name : real = undefined;
   sign : bits(1) = undefined;
   typ : FPType = undefined;
   (typ, sign, value_name) = FPUnpack(op, fpcr);
   Z : bits(1) = 0b1;
-  if (typ == FPType_SNaN) | (typ == FPType_QNaN) then {
+  if typ == FPType_SNaN | typ == FPType_QNaN then {
     FPProcessException(FPExc_InvalidOp, fpcr);
     Z = 0b0
   } else ();
   int_result : int = RoundDown(value_name);
   error : real = value_name - Real(int_result);
-  round_it_up : bool = (error != 0.0) & (int_result < 0);
+  round_it_up : bool = error != 0.0 & int_result < 0;
   if round_it_up then int_result = int_result + 1 else ();
   result : int = undefined;
-  if int_result < 0 then result = int_result - ((2 ^ 32) * RoundUp(Real(int_result) / Real(2 ^ 32))) else result = int_result - ((2 ^ 32) * RoundDown(Real(int_result) / Real(2 ^ 32)));
-  if (int_result < negate(2 ^ 31)) | (int_result > ((2 ^ 31) - 1)) then {
+  if int_result < 0 then result = int_result - 2 ^ 32 * RoundUp(Real(int_result) / Real(2 ^ 32)) else result = int_result - 2 ^ 32 * RoundDown(Real(int_result) / Real(2 ^ 32));
+  if int_result < negate(2 ^ 31) | int_result > 2 ^ 31 - 1 then {
     FPProcessException(FPExc_InvalidOp, fpcr);
     Z = 0b0
   } else if error != 0.0 then {
     FPProcessException(FPExc_Inexact, fpcr);
     Z = 0b0
   } else ();
-  if (sign == 0b1) & (value_name == 0.0) then Z = 0b0 else ();
+  if sign == 0b1 & value_name == 0.0 then Z = 0b0 else ();
   if typ == FPType_Infinity then result = 0 else ();
   if Is64 then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = (0b0 @ Z) @ 0b00 else FPSCR = __SetSlice_bits(32, 4, FPSCR, 28, (0b0 @ Z) @ 0b00);
   return(__GetSlice_int(32, result, 0))
@@ -3976,25 +3980,25 @@ val FPToFixed : forall ('N : Int) ('M : Int), 'N >= 0 & 32 >= 0 & 'M >= 0.
   (bits('N), int, bool, bits(32), FPRounding) -> bits('M) effect {escape, rreg, undef, wreg}
 
 function FPToFixed (op, 'fbits, unsigned, fpcr, rounding) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
-  assert(('M == 16) | (('M == 32) | ('M == 64)), "((M == 16) || ((M == 32) || (M == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('M == 16 | 'M == 32 | 'M == 64, "((M == 16) || ((M == 32) || (M == 64)))");
   assert(fbits >= 0, "(fbits >= 0)");
   assert(rounding != FPRounding_ODD, "(rounding != FPRounding_ODD)");
   value_name : real = undefined;
   sign : bits(1) = undefined;
   typ : FPType = undefined;
   (typ, sign, value_name) = FPUnpack(op, fpcr);
-  if (typ == FPType_SNaN) | (typ == FPType_QNaN) then FPProcessException(FPExc_InvalidOp, fpcr) else ();
-  value_name = value_name * (2.0 ^ fbits);
+  if typ == FPType_SNaN | typ == FPType_QNaN then FPProcessException(FPExc_InvalidOp, fpcr) else ();
+  value_name = value_name * 2.0 ^ fbits;
   int_result : int = RoundDown(value_name);
   error : real = value_name - Real(int_result);
   round_up : bool = undefined;
   match rounding {
-    FPRounding_TIEEVEN => round_up = (error > 0.5) | ((error == 0.5) & (__GetSlice_int(1, int_result, 0) == 0b1)),
+    FPRounding_TIEEVEN => round_up = error > 0.5 | error == 0.5 & __GetSlice_int(1, int_result, 0) == 0b1,
     FPRounding_POSINF => round_up = error != 0.0,
     FPRounding_NEGINF => round_up = false,
-    FPRounding_ZERO => round_up = (error != 0.0) & (int_result < 0),
-    FPRounding_TIEAWAY => round_up = (error > 0.5) | ((error == 0.5) & (int_result >= 0))
+    FPRounding_ZERO => round_up = error != 0.0 & int_result < 0,
+    FPRounding_TIEAWAY => round_up = error > 0.5 | error == 0.5 & int_result >= 0
   };
   if round_up then int_result = int_result + 1 else ();
   overflow : bool = undefined;
@@ -4008,13 +4012,13 @@ val FPSqrt : forall ('N : Int), 'N >= 0 & 32 >= 0 & 'N >= 0.
   (bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPSqrt (op, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   value_name : real = undefined;
   sign : bits(1) = undefined;
   typ : FPType = undefined;
   (typ, sign, value_name) = FPUnpack(op, fpcr);
   result : bits('N) = undefined;
-  if (typ == FPType_SNaN) | (typ == FPType_QNaN) then result = FPProcessNaN(typ, op, fpcr) else if typ == FPType_Zero then result = FPZero(sign) else if (typ == FPType_Infinity) & (sign == 0b0) then result = FPInfinity(sign) else if sign == 0b1 then {
+  if typ == FPType_SNaN | typ == FPType_QNaN then result = FPProcessNaN(typ, op, fpcr) else if typ == FPType_Zero then result = FPZero(sign) else if typ == FPType_Infinity & sign == 0b0 then result = FPInfinity(sign) else if sign == 0b1 then {
     result = FPDefaultNaN();
     FPProcessException(FPExc_InvalidOp, fpcr)
   } else result = FPRound(Sqrt(value_name), fpcr);
@@ -4026,7 +4030,7 @@ val FPRoundInt : forall ('N : Int), 'N >= 0 & 32 >= 0 & 'N >= 0.
 
 function FPRoundInt (op, fpcr, rounding, exact) = {
   assert(rounding != FPRounding_ODD, "(rounding != FPRounding_ODD)");
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   value_name : real = undefined;
   sign : bits(1) = undefined;
   typ : FPType = undefined;
@@ -4036,20 +4040,20 @@ function FPRoundInt (op, fpcr, rounding, exact) = {
   error : real = undefined;
   int_result : int = undefined;
   result : bits('N) = undefined;
-  if (typ == FPType_SNaN) | (typ == FPType_QNaN) then result = FPProcessNaN(typ, op, fpcr) else if typ == FPType_Infinity then result = FPInfinity(sign) else if typ == FPType_Zero then result = FPZero(sign) else {
+  if typ == FPType_SNaN | typ == FPType_QNaN then result = FPProcessNaN(typ, op, fpcr) else if typ == FPType_Infinity then result = FPInfinity(sign) else if typ == FPType_Zero then result = FPZero(sign) else {
     int_result = RoundDown(value_name);
     error = value_name - Real(int_result);
     match rounding {
-      FPRounding_TIEEVEN => round_up = (error > 0.5) | ((error == 0.5) & (__GetSlice_int(1, int_result, 0) == 0b1)),
+      FPRounding_TIEEVEN => round_up = error > 0.5 | error == 0.5 & __GetSlice_int(1, int_result, 0) == 0b1,
       FPRounding_POSINF => round_up = error != 0.0,
       FPRounding_NEGINF => round_up = false,
-      FPRounding_ZERO => round_up = (error != 0.0) & (int_result < 0),
-      FPRounding_TIEAWAY => round_up = (error > 0.5) | ((error == 0.5) & (int_result >= 0))
+      FPRounding_ZERO => round_up = error != 0.0 & int_result < 0,
+      FPRounding_TIEAWAY => round_up = error > 0.5 | error == 0.5 & int_result >= 0
     };
     if round_up then int_result = int_result + 1 else ();
     real_result = Real(int_result);
     if real_result == 0.0 then result = FPZero(sign) else result = FPRound(real_result, fpcr, FPRounding_ZERO);
-    if (error != 0.0) & exact then FPProcessException(FPExc_Inexact, fpcr) else ()
+    if error != 0.0 & exact then FPProcessException(FPExc_Inexact, fpcr) else ()
   };
   return(result)
 }
@@ -4058,7 +4062,7 @@ val FPCompare : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 4 >= 0.
   (bits('N), bits('N), bool, bits(32)) -> bits(4) effect {escape, rreg, undef, wreg}
 
 function FPCompare (op1, op2, signal_nans, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   value1_name : real = undefined;
   sign1 : bits(1) = undefined;
   type1 : FPType = undefined;
@@ -4068,9 +4072,9 @@ function FPCompare (op1, op2, signal_nans, fpcr) = {
   type2 : FPType = undefined;
   (type2, sign2, value2_name) = FPUnpack(op2, fpcr);
   result : bits(4) = undefined;
-  if (((type1 == FPType_SNaN) | (type1 == FPType_QNaN)) | (type2 == FPType_SNaN)) | (type2 == FPType_QNaN) then {
+  if ((type1 == FPType_SNaN | type1 == FPType_QNaN) | type2 == FPType_SNaN) | type2 == FPType_QNaN then {
     result = 0x3;
-    if ((type1 == FPType_SNaN) | (type2 == FPType_SNaN)) | signal_nans then FPProcessException(FPExc_InvalidOp, fpcr) else ()
+    if (type1 == FPType_SNaN | type2 == FPType_SNaN) | signal_nans then FPProcessException(FPExc_InvalidOp, fpcr) else ()
   } else if value1_name == value2_name then result = 0x6 else if value1_name < value2_name then result = 0x8 else result = 0x2;
   return(result)
 }
@@ -4079,7 +4083,7 @@ val FPSub : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
   (bits('N), bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPSub (op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   rounding : FPRounding = FPRoundingMode(fpcr);
   value1_name : real = undefined;
   sign1 : bits(1) = undefined;
@@ -4103,10 +4107,10 @@ function FPSub (op1, op2, fpcr) = {
     inf2 = type2 == FPType_Infinity;
     zero1 = type1 == FPType_Zero;
     zero2 = type2 == FPType_Zero;
-    if (inf1 & inf2) & (sign1 == sign2) then {
+    if (inf1 & inf2) & sign1 == sign2 then {
       result = FPDefaultNaN();
       FPProcessException(FPExc_InvalidOp, fpcr)
-    } else if (inf1 & (sign1 == 0b0)) | (inf2 & (sign2 == 0b1)) then result = FPInfinity(0b0) else if (inf1 & (sign1 == 0b1)) | (inf2 & (sign2 == 0b0)) then result = FPInfinity(0b1) else if (zero1 & zero2) & (sign1 == ~(sign2)) then result = FPZero(sign1) else {
+    } else if inf1 & sign1 == 0b0 | inf2 & sign2 == 0b1 then result = FPInfinity(0b0) else if inf1 & sign1 == 0b1 | inf2 & sign2 == 0b0 then result = FPInfinity(0b1) else if (zero1 & zero2) & sign1 == ~(sign2) then result = FPZero(sign1) else {
       result_value = value1_name - value2_name;
       if result_value == 0.0 then {
         result_sign = if rounding == FPRounding_NEGINF then 0b1 else 0b0;
@@ -4121,7 +4125,7 @@ val FPMulAdd : forall ('N : Int), 'N >= 0 & 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 
   (bits('N), bits('N), bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPMulAdd (addend, op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   rounding : FPRounding = FPRoundingMode(fpcr);
   valueA_name : real = undefined;
   signA : bits(1) = undefined;
@@ -4142,7 +4146,7 @@ function FPMulAdd (addend, op1, op2, fpcr) = {
   result : bits('N) = undefined;
   done : bool = undefined;
   (done, result) = FPProcessNaNs3(typeA, type1, type2, addend, op1, op2, fpcr);
-  if (typeA == FPType_QNaN) & ((inf1 & zero2) | (zero1 & inf2)) then {
+  if typeA == FPType_QNaN & (inf1 & zero2 | zero1 & inf2) then {
     result = FPDefaultNaN();
     FPProcessException(FPExc_InvalidOp, fpcr)
   } else ();
@@ -4159,11 +4163,11 @@ function FPMulAdd (addend, op1, op2, fpcr) = {
     signP = sign1 ^ sign2;
     infP = inf1 | inf2;
     zeroP = zero1 | zero2;
-    if ((inf1 & zero2) | (zero1 & inf2)) | ((infA & infP) & (signA != signP)) then {
+    if (inf1 & zero2 | zero1 & inf2) | (infA & infP) & signA != signP then {
       result = FPDefaultNaN();
       FPProcessException(FPExc_InvalidOp, fpcr)
-    } else if (infA & (signA == 0b0)) | (infP & (signP == 0b0)) then result = FPInfinity(0b0) else if (infA & (signA == 0b1)) | (infP & (signP == 0b1)) then result = FPInfinity(0b1) else if (zeroA & zeroP) & (signA == signP) then result = FPZero(signA) else {
-      result_value = valueA_name + (value1_name * value2_name);
+    } else if infA & signA == 0b0 | infP & signP == 0b0 then result = FPInfinity(0b0) else if infA & signA == 0b1 | infP & signP == 0b1 then result = FPInfinity(0b1) else if (zeroA & zeroP) & signA == signP then result = FPZero(signA) else {
+      result_value = valueA_name + value1_name * value2_name;
       if result_value == 0.0 then {
         result_sign = if rounding == FPRounding_NEGINF then 0b1 else 0b0;
         result = FPZero(result_sign)
@@ -4177,7 +4181,7 @@ val FPMul : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
   (bits('N), bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPMul (op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   value1_name : real = undefined;
   sign1 : bits(1) = undefined;
   type1 : FPType = undefined;
@@ -4198,7 +4202,7 @@ function FPMul (op1, op2, fpcr) = {
     inf2 = type2 == FPType_Infinity;
     zero1 = type1 == FPType_Zero;
     zero2 = type2 == FPType_Zero;
-    if (inf1 & zero2) | (zero1 & inf2) then {
+    if inf1 & zero2 | zero1 & inf2 then {
       result = FPDefaultNaN();
       FPProcessException(FPExc_InvalidOp, fpcr)
     } else if inf1 | inf2 then result = FPInfinity(sign1 ^ sign2) else if zero1 | zero2 then result = FPZero(sign1 ^ sign2) else result = FPRound(value1_name * value2_name, fpcr)
@@ -4210,7 +4214,7 @@ val FPMin : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
   (bits('N), bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPMin (op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   value1_name : real = undefined;
   sign1 : bits(1) = undefined;
   type1 : FPType = undefined;
@@ -4241,7 +4245,7 @@ val FPMinNum : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
 function FPMinNum (op1__arg, op2__arg, fpcr) = {
   op1 = op1__arg;
   op2 = op2__arg;
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   __anon2 : real = undefined;
   __anon1 : bits(1) = undefined;
   type1 : FPType = undefined;
@@ -4250,7 +4254,7 @@ function FPMinNum (op1__arg, op2__arg, fpcr) = {
   __anon3 : bits(1) = undefined;
   type2 : FPType = undefined;
   (type2, __anon3, __anon4) = FPUnpack(op2, fpcr);
-  if (type1 == FPType_QNaN) & (type2 != FPType_QNaN) then op1 = FPInfinity(0b0) else if (type1 != FPType_QNaN) & (type2 == FPType_QNaN) then op2 = FPInfinity(0b0) else ();
+  if type1 == FPType_QNaN & type2 != FPType_QNaN then op1 = FPInfinity(0b0) else if type1 != FPType_QNaN & type2 == FPType_QNaN then op2 = FPInfinity(0b0) else ();
   return(FPMin(op1, op2, fpcr))
 }
 
@@ -4258,7 +4262,7 @@ val FPMax : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
   (bits('N), bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPMax (op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   value1_name : real = undefined;
   sign1 : bits(1) = undefined;
   type1 : FPType = undefined;
@@ -4289,7 +4293,7 @@ val FPMaxNum : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
 function FPMaxNum (op1__arg, op2__arg, fpcr) = {
   op1 = op1__arg;
   op2 = op2__arg;
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   __anon2 : real = undefined;
   __anon1 : bits(1) = undefined;
   type1 : FPType = undefined;
@@ -4298,7 +4302,7 @@ function FPMaxNum (op1__arg, op2__arg, fpcr) = {
   __anon3 : bits(1) = undefined;
   type2 : FPType = undefined;
   (type2, __anon3, __anon4) = FPUnpack(op2, fpcr);
-  if (type1 == FPType_QNaN) & (type2 != FPType_QNaN) then op1 = FPInfinity(0b1) else if (type1 != FPType_QNaN) & (type2 == FPType_QNaN) then op2 = FPInfinity(0b1) else ();
+  if type1 == FPType_QNaN & type2 != FPType_QNaN then op1 = FPInfinity(0b1) else if type1 != FPType_QNaN & type2 == FPType_QNaN then op2 = FPInfinity(0b1) else ();
   return(FPMax(op1, op2, fpcr))
 }
 
@@ -4306,7 +4310,7 @@ val FPDiv : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
   (bits('N), bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPDiv (op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   value1_name : real = undefined;
   sign1 : bits(1) = undefined;
   type1 : FPType = undefined;
@@ -4327,7 +4331,7 @@ function FPDiv (op1, op2, fpcr) = {
     inf2 = type2 == FPType_Infinity;
     zero1 = type1 == FPType_Zero;
     zero2 = type2 == FPType_Zero;
-    if (inf1 & inf2) | (zero1 & zero2) then {
+    if inf1 & inf2 | zero1 & zero2 then {
       result = FPDefaultNaN();
       FPProcessException(FPExc_InvalidOp, fpcr)
     } else if inf1 | zero2 then {
@@ -4342,7 +4346,7 @@ val FPAdd : forall ('N : Int), 'N >= 0 & 'N >= 0 & 32 >= 0 & 'N >= 0.
   (bits('N), bits('N), bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 function FPAdd (op1, op2, fpcr) = {
-  assert(('N == 16) | (('N == 32) | ('N == 64)), "((N == 16) || ((N == 32) || (N == 64)))");
+  assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   rounding : FPRounding = FPRoundingMode(fpcr);
   value1_name : real = undefined;
   sign1 : bits(1) = undefined;
@@ -4366,10 +4370,10 @@ function FPAdd (op1, op2, fpcr) = {
     inf2 = type2 == FPType_Infinity;
     zero1 = type1 == FPType_Zero;
     zero2 = type2 == FPType_Zero;
-    if (inf1 & inf2) & (sign1 == ~(sign2)) then {
+    if (inf1 & inf2) & sign1 == ~(sign2) then {
       result = FPDefaultNaN();
       FPProcessException(FPExc_InvalidOp, fpcr)
-    } else if (inf1 & (sign1 == 0b0)) | (inf2 & (sign2 == 0b0)) then result = FPInfinity(0b0) else if (inf1 & (sign1 == 0b1)) | (inf2 & (sign2 == 0b1)) then result = FPInfinity(0b1) else if (zero1 & zero2) & (sign1 == sign2) then result = FPZero(sign1) else {
+    } else if inf1 & sign1 == 0b0 | inf2 & sign2 == 0b0 then result = FPInfinity(0b0) else if inf1 & sign1 == 0b1 | inf2 & sign2 == 0b1 then result = FPInfinity(0b1) else if (zero1 & zero2) & sign1 == sign2 then result = FPZero(sign1) else {
       result_value = value1_name + value2_name;
       if result_value == 0.0 then {
         result_sign = if rounding == FPRounding_NEGINF then 0b1 else 0b0;
@@ -4384,7 +4388,7 @@ val ExternalSecureInvasiveDebugEnabled : unit -> bool effect {escape, rreg, unde
 
 function ExternalSecureInvasiveDebugEnabled () = {
   if ~(HaveEL(EL3)) & ~(IsSecure()) then return(false) else ();
-  return(ExternalInvasiveDebugEnabled() & (SPIDEN == HIGH))
+  return(ExternalInvasiveDebugEnabled() & SPIDEN == HIGH)
 }
 
 val ExternalDebugInterruptsDisabled : bits(2) -> bool effect {escape, rreg, undef}
@@ -4392,9 +4396,9 @@ val ExternalDebugInterruptsDisabled : bits(2) -> bool effect {escape, rreg, unde
 function ExternalDebugInterruptsDisabled target = {
   int_dis : bool = undefined;
   match target {
-    ? if ? == EL3 => int_dis = (slice(EDSCR, 22, 2) == 0b11) & ExternalSecureInvasiveDebugEnabled(),
-    ? if ? == EL2 => int_dis = ((slice(EDSCR, 22, 2) & 0b10) == 0b10) & ExternalInvasiveDebugEnabled(),
-    ? if ? == EL1 => if IsSecure() then int_dis = ((slice(EDSCR, 22, 2) & 0b10) == 0b10) & ExternalSecureInvasiveDebugEnabled() else int_dis = (slice(EDSCR, 22, 2) != 0b00) & ExternalInvasiveDebugEnabled()
+    ? if ? == EL3 => int_dis = slice(EDSCR, 22, 2) == 0b11 & ExternalSecureInvasiveDebugEnabled(),
+    ? if ? == EL2 => int_dis = (slice(EDSCR, 22, 2) & 0b10) == 0b10 & ExternalInvasiveDebugEnabled(),
+    ? if ? == EL1 => if IsSecure() then int_dis = (slice(EDSCR, 22, 2) & 0b10) == 0b10 & ExternalSecureInvasiveDebugEnabled() else int_dis = slice(EDSCR, 22, 2) != 0b00 & ExternalInvasiveDebugEnabled()
   };
   return(int_dis)
 }
@@ -4407,9 +4411,9 @@ function ELStateUsingAArch32K (el, secure) = {
   aarch32_at_el1 : bool = undefined;
   aarch32_below_el3 : bool = undefined;
   if ~(HaveAArch32EL(el)) then aarch32 = false else if HighestELUsingAArch32() then aarch32 = true else {
-    aarch32_below_el3 = HaveEL(EL3) & ([SCR_EL3[10]] == 0b0);
-    aarch32_at_el1 = aarch32_below_el3 | (((HaveEL(EL2) & ~(secure)) & ([HCR_EL2[31]] == 0b0)) & ~((([HCR_EL2[34]] == 0b1) & ([HCR_EL2[27]] == 0b1)) & HaveVirtHostExt()));
-    if (el == EL0) & ~(aarch32_at_el1) then if PSTATE.EL == EL0 then aarch32 = PSTATE.nRW == 0b1 else known = false else aarch32 = (aarch32_below_el3 & (el != EL3)) | (aarch32_at_el1 & ((el == EL1) | (el == EL0)))
+    aarch32_below_el3 = HaveEL(EL3) & [SCR_EL3[10]] == 0b0;
+    aarch32_at_el1 = aarch32_below_el3 | ((HaveEL(EL2) & ~(secure)) & [HCR_EL2[31]] == 0b0) & ~(([HCR_EL2[34]] == 0b1 & [HCR_EL2[27]] == 0b1) & HaveVirtHostExt());
+    if el == EL0 & ~(aarch32_at_el1) then if PSTATE.EL == EL0 then aarch32 = PSTATE.nRW == 0b1 else known = false else aarch32 = aarch32_below_el3 & el != EL3 | aarch32_at_el1 & (el == EL1 | el == EL0)
   };
   if ~(known) then aarch32 = undefined else ();
   return((known, aarch32))
@@ -4446,7 +4450,7 @@ function UpdateEDSCRFields () = {
     RW : bits(4) = undefined;
     RW : bits(4) = __SetSlice_bits(4, 1, RW, 1, if ELUsingAArch32(EL1) then 0b0 else 0b1);
     if PSTATE.EL != EL0 then RW = __SetSlice_bits(4, 1, RW, 0, [RW[1]]) else RW = __SetSlice_bits(4, 1, RW, 0, if UsingAArch32() then 0b0 else 0b1);
-    if ~(HaveEL(EL2)) | (HaveEL(EL3) & ([aget_SCR_GEN()[0]] == 0b0)) then RW = __SetSlice_bits(4, 1, RW, 2, [RW[1]]) else RW = __SetSlice_bits(4, 1, RW, 2, if ELUsingAArch32(EL2) then 0b0 else 0b1);
+    if ~(HaveEL(EL2)) | HaveEL(EL3) & [aget_SCR_GEN()[0]] == 0b0 then RW = __SetSlice_bits(4, 1, RW, 2, [RW[1]]) else RW = __SetSlice_bits(4, 1, RW, 2, if ELUsingAArch32(EL2) then 0b0 else 0b1);
     if ~(HaveEL(EL3)) then RW = __SetSlice_bits(4, 1, RW, 3, [RW[2]]) else RW = __SetSlice_bits(4, 1, RW, 3, if ELUsingAArch32(EL3) then 0b0 else 0b1);
     if [RW[3]] == 0b0 then RW = __SetSlice_bits(4, 3, RW, 0, undefined) else if [RW[2]] == 0b0 then RW = __SetSlice_bits(4, 2, RW, 0, undefined) else if [RW[1]] == 0b0 then RW = __SetSlice_bits(4, 1, RW, 0, undefined) else ();
     EDSCR = __SetSlice_bits(32, 4, EDSCR, 10, RW)
@@ -4549,7 +4553,7 @@ function S2AttrDecode (SH, attr, acctype) = {
 
 val ELIsInHost : bits(2) -> bool effect {escape, rreg, undef}
 
-function ELIsInHost el = return((((~(IsSecureBelowEL3()) & HaveVirtHostExt()) & ~(ELUsingAArch32(EL2))) & ([HCR_EL2[34]] == 0b1)) & ((el == EL2) | ((el == EL0) & ([HCR_EL2[27]] == 0b1))))
+function ELIsInHost el = return((((~(IsSecureBelowEL3()) & HaveVirtHostExt()) & ~(ELUsingAArch32(EL2))) & [HCR_EL2[34]] == 0b1) & (el == EL2 | el == EL0 & [HCR_EL2[27]] == 0b1))
 
 val S1TranslationRegime__0 : bits(2) -> bits(2) effect {rreg, undef, escape}
 
@@ -4557,7 +4561,7 @@ val S1TranslationRegime__1 : unit -> bits(2) effect {rreg, undef, escape}
 
 overload S1TranslationRegime = {S1TranslationRegime__0, S1TranslationRegime__1}
 
-function S1TranslationRegime__0 el = if el != EL0 then return(el) else if (HaveEL(EL3) & ELUsingAArch32(EL3)) & ([SCR[0]] == 0b0) then return(EL3) else if HaveVirtHostExt() & ELIsInHost(el) then return(EL2) else return(EL1)
+function S1TranslationRegime__0 el = if el != EL0 then return(el) else if (HaveEL(EL3) & ELUsingAArch32(EL3)) & [SCR[0]] == 0b0 then return(EL3) else if HaveVirtHostExt() & ELIsInHost(el) then return(EL2) else return(EL1)
 
 function S1TranslationRegime__1 () = return(S1TranslationRegime(PSTATE.EL))
 
@@ -4679,7 +4683,7 @@ val ShortConvertAttrsHints : (bits(2), AccType, bool) -> MemAttrHints effect {es
 
 function ShortConvertAttrsHints (RGN, acctype, secondstage) = {
   result : MemAttrHints = undefined;
-  if (~(secondstage) & S1CacheDisabled(acctype)) | (secondstage & S2CacheDisabled(acctype)) then {
+  if ~(secondstage) & S1CacheDisabled(acctype) | secondstage & S2CacheDisabled(acctype) then {
     result.attrs = MemAttr_NC;
     result.hints = MemHint_No
   } else match RGN {
@@ -4753,7 +4757,7 @@ function AArch64_S1AttrDecode (SH, attr, acctype) = let 'uattr = ex_nat(UInt(att
   index : atom(8 * 'uattr) = 8 * uattr;
   attrfield : bits(8) = mair[7 + index .. index];
   __anon1 : Constraint = undefined;
-  if ((attrfield[7 .. 4] != 0x0) & (attrfield[3 .. 0] == 0x0)) | ((attrfield[7 .. 4] == 0x0) & ((attrfield[3 .. 0] & 0x3) != 0x0)) then
+  if attrfield[7 .. 4] != 0x0 & attrfield[3 .. 0] == 0x0 | attrfield[7 .. 4] == 0x0 & (attrfield[3 .. 0] & 0x3) != 0x0 then
     (__anon1, attrfield) = ConstrainUnpredictableBits(Unpredictable_RESMAIR) : (Constraint, bits(8))
   else ();
   if attrfield[7 .. 4] == 0x0 then {
@@ -4788,7 +4792,7 @@ function aget_CPACR () = {
 
 val HasS2Translation : unit -> bool effect {escape, rreg, undef}
 
-function HasS2Translation () = return(((HaveEL(EL2) & ~(IsSecure())) & ~(IsInHost())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1)))
+function HasS2Translation () = return(((HaveEL(EL2) & ~(IsSecure())) & ~(IsInHost())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1))
 
 val AArch64_SecondStageWalk : (AddressDescriptor, bits(64), AccType, bool, int, bool) -> AddressDescriptor effect {escape, rmem, rreg, undef, wmem}
 
@@ -4801,7 +4805,7 @@ function AArch64_SecondStageWalk (S1, vaddress, acctype, iswrite, 'size, hwupdat
 
 val DoubleLockStatus : unit -> bool effect {escape, rreg, undef}
 
-function DoubleLockStatus () = if ELUsingAArch32(EL1) then return((([DBGOSDLR[0]] == 0b1) & ([DBGPRCR[0]] == 0b0)) & ~(Halted())) else return((([OSDLR_EL1[0]] == 0b1) & ([DBGPRCR_EL1[0]] == 0b0)) & ~(Halted()))
+function DoubleLockStatus () = if ELUsingAArch32(EL1) then return(([DBGOSDLR[0]] == 0b1 & [DBGPRCR[0]] == 0b0) & ~(Halted())) else return(([OSDLR_EL1[0]] == 0b1 & [DBGPRCR_EL1[0]] == 0b0) & ~(Halted()))
 
 val HaltingAllowed : unit -> bool effect {escape, rreg, undef}
 
@@ -4811,19 +4815,19 @@ val system_exceptions_debug_halt_decode : (bits(3), bits(16), bits(3), bits(2)) 
 
 function system_exceptions_debug_halt_decode (opc, imm16, op2, LL) = {
   __unconditional = true;
-  if ([EDSCR[14]] == 0b0) | ~(HaltingAllowed()) then UndefinedFault() else ();
+  if [EDSCR[14]] == 0b0 | ~(HaltingAllowed()) then UndefinedFault() else ();
   aarch64_system_exceptions_debug_halt()
 }
 
 val HaltOnBreakpointOrWatchpoint : unit -> bool effect {escape, rreg, undef}
 
-function HaltOnBreakpointOrWatchpoint () = return((HaltingAllowed() & ([EDSCR[14]] == 0b1)) & ([OSLSR_EL1[1]] == 0b0))
+function HaltOnBreakpointOrWatchpoint () = return((HaltingAllowed() & [EDSCR[14]] == 0b1) & [OSLSR_EL1[1]] == 0b0)
 
 val DebugTargetFrom : bool -> bits(2) effect {escape, rreg, undef}
 
 function DebugTargetFrom secure = {
   route_to_el2 : bool = undefined;
-  if HaveEL(EL2) & ~(secure) then if ELUsingAArch32(EL2) then route_to_el2 = ([HDCR[8]] == 0b1) | ([HCR[27]] == 0b1) else route_to_el2 = ([MDCR_EL2[8]] == 0b1) | ([HCR_EL2[27]] == 0b1) else route_to_el2 = false;
+  if HaveEL(EL2) & ~(secure) then if ELUsingAArch32(EL2) then route_to_el2 = [HDCR[8]] == 0b1 | [HCR[27]] == 0b1 else route_to_el2 = [MDCR_EL2[8]] == 0b1 | [HCR_EL2[27]] == 0b1 else route_to_el2 = false;
   target : bits(2) = undefined;
   if route_to_el2 then target = EL2 else if (HaveEL(EL3) & HighestELUsingAArch32()) & secure then target = EL3 else target = EL1;
   return(target)
@@ -4840,8 +4844,8 @@ val SSAdvance : unit -> unit effect {escape, rreg, undef, wreg}
 
 function SSAdvance () = {
   target : bits(2) = DebugTarget();
-  step_enabled : bool = ~(ELUsingAArch32(target)) & ([MDSCR_EL1[0]] == 0b1);
-  active_not_pending : bool = step_enabled & (PSTATE.SS == 0b1);
+  step_enabled : bool = ~(ELUsingAArch32(target)) & [MDSCR_EL1[0]] == 0b1;
+  active_not_pending : bool = step_enabled & PSTATE.SS == 0b1;
   if active_not_pending then PSTATE.SS = 0b0 else ();
   ()
 }
@@ -4855,12 +4859,12 @@ function ConditionHolds cond = {
     0b001 => result = PSTATE.C == 0b1,
     0b010 => result = PSTATE.N == 0b1,
     0b011 => result = PSTATE.V == 0b1,
-    0b100 => result = (PSTATE.C == 0b1) & (PSTATE.Z == 0b0),
+    0b100 => result = PSTATE.C == 0b1 & PSTATE.Z == 0b0,
     0b101 => result = PSTATE.N == PSTATE.V,
-    0b110 => result = (PSTATE.N == PSTATE.V) & (PSTATE.Z == 0b0),
+    0b110 => result = PSTATE.N == PSTATE.V & PSTATE.Z == 0b0,
     0b111 => result = true
   };
-  if ([cond[0]] == 0b1) & (cond != 0xF) then result = ~(result) else ();
+  if [cond[0]] == 0b1 & cond != 0xF then result = ~(result) else ();
   return(result)
 }
 
@@ -4995,7 +4999,7 @@ function BranchToAddr (target, branch_type) = {
     assert(UsingAArch32(), "UsingAArch32()");
     _PC = ZeroExtend(target)
   } else {
-    assert(('N == 64) & ~(UsingAArch32()), "((N == 64) && !(UsingAArch32()))");
+    assert('N == 64 & ~(UsingAArch32()), "((N == 64) && !(UsingAArch32()))");
     _PC = slice(target, 0, 64)
   };
   ()
@@ -5023,7 +5027,7 @@ function BadMode mode = {
 val aset_Rmode : (int, bits(5), bits(32)) -> unit effect {wreg, rreg, undef, escape}
 
 function aset_Rmode (n, mode, value_name) = {
-  assert((n >= 0) & (n <= 14), "((n >= 0) && (n <= 14))");
+  assert(n >= 0 & n <= 14, "((n >= 0) && (n <= 14))");
   if ~(IsSecure()) then assert(mode != M32_Monitor, "(mode != M32_Monitor)") else ();
   assert(~(BadMode(mode)), "!(BadMode(mode))");
   if mode == M32_Monitor then
@@ -5067,14 +5071,14 @@ function ELFromM32 mode = {
     ? if ? == M32_Monitor => el = EL3,
     ? if ? == M32_Hyp => {
       el = EL2;
-      valid_name = valid_name & (~(HaveEL(EL3)) | ([aget_SCR_GEN()[0]] == 0b1))
+      valid_name = valid_name & (~(HaveEL(EL3)) | [aget_SCR_GEN()[0]] == 0b1)
     },
-    ? if ? == M32_FIQ => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & ([SCR[0]] == 0b0) then EL3 else EL1,
-    ? if ? == M32_IRQ => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & ([SCR[0]] == 0b0) then EL3 else EL1,
-    ? if ? == M32_Svc => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & ([SCR[0]] == 0b0) then EL3 else EL1,
-    ? if ? == M32_Abort => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & ([SCR[0]] == 0b0) then EL3 else EL1,
-    ? if ? == M32_Undef => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & ([SCR[0]] == 0b0) then EL3 else EL1,
-    ? if ? == M32_System => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & ([SCR[0]] == 0b0) then EL3 else EL1,
+    ? if ? == M32_FIQ => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & [SCR[0]] == 0b0 then EL3 else EL1,
+    ? if ? == M32_IRQ => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & [SCR[0]] == 0b0 then EL3 else EL1,
+    ? if ? == M32_Svc => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & [SCR[0]] == 0b0 then EL3 else EL1,
+    ? if ? == M32_Abort => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & [SCR[0]] == 0b0 then EL3 else EL1,
+    ? if ? == M32_Undef => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & [SCR[0]] == 0b0 then EL3 else EL1,
+    ? if ? == M32_System => el = if (HaveEL(EL3) & HighestELUsingAArch32()) & [SCR[0]] == 0b0 then EL3 else EL1,
     ? if ? == M32_User => el = EL0,
     _ => valid_name = false
   };
@@ -5089,7 +5093,7 @@ function ELFromSPSR spsr = {
   el : bits(2) = undefined;
   if [spsr[4]] == 0b0 then {
     el = slice(spsr, 2, 2);
-    if HighestELUsingAArch32() then valid_name = false else if ~(HaveEL(el)) then valid_name = false else if [spsr[1]] == 0b1 then valid_name = false else if (el == EL0) & ([spsr[0]] == 0b1) then valid_name = false else if ((el == EL2) & HaveEL(EL3)) & ([SCR_EL3[0]] == 0b0) then valid_name = false else valid_name = true
+    if HighestELUsingAArch32() then valid_name = false else if ~(HaveEL(el)) then valid_name = false else if [spsr[1]] == 0b1 then valid_name = false else if el == EL0 & [spsr[0]] == 0b1 then valid_name = false else if (el == EL2 & HaveEL(EL3)) & [SCR_EL3[0]] == 0b0 then valid_name = false else valid_name = true
   } else if ~(HaveAnyAArch32()) then valid_name = false else (valid_name, el) = ELFromM32(slice(spsr, 0, 5));
   if ~(valid_name) then el = undefined else ();
   return((valid_name, el))
@@ -5107,10 +5111,10 @@ function IllegalExceptionReturn spsr = {
   target_el_is_aarch32 : bool = undefined;
   known : bool = undefined;
   (known, target_el_is_aarch32) = ELUsingAArch32K(target);
-  assert(known | ((target == EL0) & ~(ELUsingAArch32(EL1))), "(known || ((target == EL0) && !(ELUsingAArch32(EL1))))");
-  if known & (spsr_mode_is_aarch32 != target_el_is_aarch32) then return(true) else ();
+  assert(known | target == EL0 & ~(ELUsingAArch32(EL1)), "(known || ((target == EL0) && !(ELUsingAArch32(EL1))))");
+  if known & spsr_mode_is_aarch32 != target_el_is_aarch32 then return(true) else ();
   if UsingAArch32() & ~(spsr_mode_is_aarch32) then return(true) else ();
-  if ((HaveEL(EL2) & (target == EL1)) & ~(IsSecureBelowEL3())) & ([HCR_EL2[27]] == 0b1) then return(true) else ();
+  if ((HaveEL(EL2) & target == EL1) & ~(IsSecureBelowEL3())) & [HCR_EL2[27]] == 0b1 then return(true) else ();
   return(false)
 }
 
@@ -5124,7 +5128,7 @@ function AArch32_WriteMode mode = {
   PSTATE.M = mode;
   PSTATE.EL = el;
   PSTATE.nRW = 0b1;
-  PSTATE.SP = if (mode == M32_User) | (mode == M32_System) then 0b0 else 0b1;
+  PSTATE.SP = if mode == M32_User | mode == M32_System then 0b0 else 0b1;
   ()
 }
 
@@ -5152,7 +5156,7 @@ function AddrTop (address, IsInstr, el) = {
       if HavePACExt() then tbid = [TCR_EL3[29]] else ()
     }
   };
-  return(if (tbi == 0b1) & ((~(HavePACExt()) | (tbid == 0b0)) | ~(IsInstr)) then 55 else 63)
+  return(if tbi == 0b1 & ((~(HavePACExt()) | tbid == 0b0) | ~(IsInstr)) then 55 else 63)
 }
 
 val AddPAC : (bits(64), bits(64), bits(128), bool) -> bits(64) effect {escape, wreg, rreg, undef}
@@ -5168,14 +5172,14 @@ function AddPAC (ptr, modifier, K, data) = {
   if PtrHasUpperAndLowerAddRanges() then
     if IsEL1TransRegimeRegs() then
       if data then
-        selbit = if ([TCR_EL1[38]] == 0b1) | ([TCR_EL1[37]] == 0b1) then [ptr[55]] else [ptr[63]]
-      else if (([TCR_EL1[38]] == 0b1) & ([TCR_EL1[52]] == 0b0)) | (([TCR_EL1[37]] == 0b1) & ([TCR_EL1[51]] == 0b0)) then
+        selbit = if [TCR_EL1[38]] == 0b1 | [TCR_EL1[37]] == 0b1 then [ptr[55]] else [ptr[63]]
+      else if [TCR_EL1[38]] == 0b1 & [TCR_EL1[52]] == 0b0 | [TCR_EL1[37]] == 0b1 & [TCR_EL1[51]] == 0b0 then
         selbit = [ptr[55]]
       else selbit = [ptr[63]]
     else if data then
-      selbit = if (HaveEL(EL2) & ([TCR_EL2[38]] == 0b1)) | (HaveEL(EL2) & ([TCR_EL2[37]] == 0b1)) then [ptr[55]] else [ptr[63]]
+      selbit = if HaveEL(EL2) & [TCR_EL2[38]] == 0b1 | HaveEL(EL2) & [TCR_EL2[37]] == 0b1 then [ptr[55]] else [ptr[63]]
     else
-      selbit = if ((HaveEL(EL2) & ([TCR_EL2[38]] == 0b1)) & ([TCR_EL1[52]] == 0b0)) | ((HaveEL(EL2) & ([TCR_EL2[37]] == 0b1)) & ([TCR_EL1[51]] == 0b0)) then [ptr[55]] else [ptr[63]]
+      selbit = if (HaveEL(EL2) & [TCR_EL2[38]] == 0b1) & [TCR_EL1[52]] == 0b0 | (HaveEL(EL2) & [TCR_EL2[37]] == 0b1) & [TCR_EL1[51]] == 0b0 then [ptr[55]] else [ptr[63]]
   else selbit = if tbi then [ptr[55]] else [ptr[63]];
   let 'bottom_PAC_bit : {'n, true. atom('n)} = ex_int(CalculateBottomPACBit(ptr, selbit));
   assert(constraint('bottom_PAC_bit <= 55));
@@ -5198,11 +5202,11 @@ function AddPAC (ptr, modifier, K, data) = {
 val AArch64_vESBOperation : unit -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_vESBOperation () = {
-  assert((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1)), "((HaveEL(EL2) && !(IsSecure())) && (((PSTATE).EL == EL0) || ((PSTATE).EL == EL1)))");
-  vSEI_enabled : bool = ([HCR_EL2[27]] == 0b0) & ([HCR_EL2[5]] == 0b1);
-  vSEI_pending : bool = vSEI_enabled & ([HCR_EL2[8]] == 0b1);
+  assert((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1), "((HaveEL(EL2) && !(IsSecure())) && (((PSTATE).EL == EL0) || ((PSTATE).EL == EL1)))");
+  vSEI_enabled : bool = [HCR_EL2[27]] == 0b0 & [HCR_EL2[5]] == 0b1;
+  vSEI_pending : bool = vSEI_enabled & [HCR_EL2[8]] == 0b1;
   vintdis : bool = Halted() | ExternalDebugInterruptsDisabled(EL1);
-  vmasked : bool = vintdis | (PSTATE.A == 0b1);
+  vmasked : bool = vintdis | PSTATE.A == 0b1;
   VDISR_EL2 : bits(64) = undefined;
   VDISR : bits(32) = undefined;
   if vSEI_pending & vmasked then {
@@ -5220,20 +5224,20 @@ function AArch64_WatchpointByteMatch (n, vaddress) = let 'top : {'n, true. atom(
   mask : int = UInt(DBGWCR_EL1[n][28 .. 24]);
   MSB : bits(8) = undefined;
   LSB : bits(8) = undefined;
-  if (mask > 0) & ~(IsOnes(DBGWCR_EL1[n][12 .. 5])) then
+  if mask > 0 & ~(IsOnes(DBGWCR_EL1[n][12 .. 5])) then
     byte_select_match = ConstrainUnpredictableBool(Unpredictable_WPMASKANDBAS)
   else {
     LSB = DBGWCR_EL1[n][12 .. 5] & ~(DBGWCR_EL1[n][12 .. 5] - 1);
     MSB = DBGWCR_EL1[n][12 .. 5] + LSB;
-    if ~(IsZero(MSB & (MSB - 1))) then {
+    if ~(IsZero(MSB & MSB - 1)) then {
       byte_select_match = ConstrainUnpredictableBool(Unpredictable_WPBASCONTIGUOUS);
       bottom = 3
     } else ()
   };
   c : Constraint = undefined;
-  if (mask > 0) & (mask <= 2) then {
+  if mask > 0 & mask <= 2 then {
     (c, mask) = ConstrainUnpredictableInteger(3, 31, Unpredictable_RESWPMASK);
-    assert((c == Constraint_DISABLED) | ((c == Constraint_NONE) | (c == Constraint_UNKNOWN)), "((c == Constraint_DISABLED) || ((c == Constraint_NONE) || (c == Constraint_UNKNOWN)))");
+    assert(c == Constraint_DISABLED | c == Constraint_NONE | c == Constraint_UNKNOWN, "((c == Constraint_DISABLED) || ((c == Constraint_NONE) || (c == Constraint_UNKNOWN)))");
     match c {
       Constraint_DISABLED => return(false),
       Constraint_NONE => mask = 0
@@ -5321,28 +5325,28 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
       inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
       if inputsize > inputsize_max then {
         c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+        assert(c == Constraint_FORCE | c == Constraint_FAULT);
         if c == Constraint_FORCE then inputsize = inputsize_max
         else ()
       } else ();
       inputsize_min = 64 - 39;
       if inputsize < inputsize_min then {
         c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+        assert(c == Constraint_FORCE | c == Constraint_FAULT);
         if c == Constraint_FORCE then inputsize = inputsize_min
         else ()
       } else ();
       ps = slice(TCR_EL3, 16, 3);
-      basefound = ((inputsize >= inputsize_min) & (inputsize <= inputsize_max)) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
+      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
       disabled = false;
       baseregister = TTBR0_EL3;
       descaddr.memattrs = WalkAttrDecode(slice(TCR_EL3, 12, 2), slice(TCR_EL3, 10, 2), slice(TCR_EL3, 8, 2), secondstage);
       reversedescriptors = [SCTLR_EL3[25]] == 0b1;
       lookupsecure = true;
       singlepriv = true;
-      update_AF = HaveAccessFlagUpdateExt() & ([TCR_EL3[21]] == 0b1);
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & ([TCR_EL3[22]] == 0b1);
-      hierattrsdisabled = AArch64_HaveHPDExt() & ([TCR_EL3[24]] == 0b1)
+      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL3[21]] == 0b1;
+      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL3[22]] == 0b1;
+      hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL3[24]] == 0b1
     } else if IsInHost() then {
       if [inputaddr[top]] == 0b0 then {
         largegrain = slice(TCR_EL2, 14, 2) == 0b01;
@@ -5351,22 +5355,22 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
         inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
         if inputsize > inputsize_max then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_max
           else ()
         } else ();
         inputsize_min = 64 - 39;
         if inputsize < inputsize_min then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = ((inputsize >= inputsize_min) & (inputsize <= inputsize_max)) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL2[7]] == 0b1;
         baseregister = TTBR0_EL2;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 12, 2), slice(TCR_EL2, 10, 2), slice(TCR_EL2, 8, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & ([TCR_EL2[41]] == 0b1)
+        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL2[41]] == 0b1
       } else {
         inputsize = 64 - UInt(slice(TCR_EL2, 16, 6));
         largegrain = slice(TCR_EL2, 30, 2) == 0b11;
@@ -5374,29 +5378,29 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
         inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
         if inputsize > inputsize_max then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_max
           else ()
         } else ();
         inputsize_min = 64 - 39;
         if inputsize < inputsize_min then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = ((inputsize >= inputsize_min) & (inputsize <= inputsize_max)) & IsOnes_slice(inputaddr, inputsize, (top - inputsize) + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL2[23]] == 0b1;
         baseregister = TTBR1_EL2;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 28, 2), slice(TCR_EL2, 26, 2), slice(TCR_EL2, 24, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & ([TCR_EL2[42]] == 0b1)
+        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL2[42]] == 0b1
       };
       ps = slice(TCR_EL2, 32, 3);
       reversedescriptors = [SCTLR_EL2[25]] == 0b1;
       lookupsecure = false;
       singlepriv = false;
-      update_AF = HaveAccessFlagUpdateExt() & ([TCR_EL2[39]] == 0b1);
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & ([TCR_EL2[40]] == 0b1)
+      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL2[39]] == 0b1;
+      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL2[40]] == 0b1
     } else if PSTATE.EL == EL2 then {
       inputsize = 64 - UInt(slice(TCR_EL2, 0, 6));
       largegrain = slice(TCR_EL2, 14, 2) == 0b01;
@@ -5404,28 +5408,28 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
       inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
       if inputsize > inputsize_max then {
         c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+        assert(c == Constraint_FORCE | c == Constraint_FAULT);
         if c == Constraint_FORCE then inputsize = inputsize_max
         else ()
       } else ();
       inputsize_min = 64 - 39;
       if inputsize < inputsize_min then {
         c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-        assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+        assert(c == Constraint_FORCE | c == Constraint_FAULT);
         if c == Constraint_FORCE then inputsize = inputsize_min
         else ()
       } else ();
       ps = slice(TCR_EL2, 16, 3);
-      basefound = ((inputsize >= inputsize_min) & (inputsize <= inputsize_max)) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
+      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
       disabled = false;
       baseregister = TTBR0_EL2;
       descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 12, 2), slice(TCR_EL2, 10, 2), slice(TCR_EL2, 8, 2), secondstage);
       reversedescriptors = [SCTLR_EL2[25]] == 0b1;
       lookupsecure = false;
       singlepriv = true;
-      update_AF = HaveAccessFlagUpdateExt() & ([TCR_EL2[39]] == 0b1);
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & ([TCR_EL2[40]] == 0b1);
-      hierattrsdisabled = AArch64_HaveHPDExt() & ([TCR_EL2[24]] == 0b1)
+      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL2[39]] == 0b1;
+      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL2[40]] == 0b1;
+      hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL2[24]] == 0b1
     } else {
       if [inputaddr[top]] == 0b0 then {
         inputsize = 64 - UInt(slice(TCR_EL1, 0, 6));
@@ -5434,22 +5438,22 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
         inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
         if inputsize > inputsize_max then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_max
           else ()
         } else ();
         inputsize_min = 64 - 39;
         if inputsize < inputsize_min then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = ((inputsize >= inputsize_min) & (inputsize <= inputsize_max)) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL1[7]] == 0b1;
         baseregister = TTBR0_EL1;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL1, 12, 2), slice(TCR_EL1, 10, 2), slice(TCR_EL1, 8, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & ([TCR_EL1[41]] == 0b1)
+        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL1[41]] == 0b1
       } else {
         inputsize = 64 - UInt(slice(TCR_EL1, 16, 6));
         largegrain = slice(TCR_EL1, 30, 2) == 0b11;
@@ -5457,29 +5461,29 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
         inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
         if inputsize > inputsize_max then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_max
           else ()
         } else ();
         inputsize_min = 64 - 39;
         if inputsize < inputsize_min then {
           c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-          assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+          assert(c == Constraint_FORCE | c == Constraint_FAULT);
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = ((inputsize >= inputsize_min) & (inputsize <= inputsize_max)) & IsOnes_slice(inputaddr, inputsize, (top - inputsize) + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL1[23]] == 0b1;
         baseregister = TTBR1_EL1;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL1, 28, 2), slice(TCR_EL1, 26, 2), slice(TCR_EL1, 24, 2), secondstage);
-        hierattrsdisabled = AArch64_HaveHPDExt() & ([TCR_EL1[42]] == 0b1)
+        hierattrsdisabled = AArch64_HaveHPDExt() & [TCR_EL1[42]] == 0b1
       };
       ps = slice(TCR_EL1, 32, 3);
       reversedescriptors = [SCTLR_EL1[25]] == 0b1;
       lookupsecure = IsSecure();
       singlepriv = false;
-      update_AF = HaveAccessFlagUpdateExt() & ([TCR_EL1[39]] == 0b1);
-      update_AP = (HaveDirtyBitModifierExt() & update_AF) & ([TCR_EL1[40]] == 0b1)
+      update_AF = HaveAccessFlagUpdateExt() & [TCR_EL1[39]] == 0b1;
+      update_AP = (HaveDirtyBitModifierExt() & update_AF) & [TCR_EL1[40]] == 0b1
     };
     if largegrain then {
       grainsize = 16;
@@ -5501,27 +5505,27 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
     inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
     if inputsize > inputsize_max then {
       c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-      assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+      assert(c == Constraint_FORCE | c == Constraint_FAULT);
       if c == Constraint_FORCE then inputsize = inputsize_max
       else ()
     } else ();
     inputsize_min = 64 - 39;
     if inputsize < inputsize_min then {
       c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
-      assert((c == Constraint_FORCE) | (c == Constraint_FAULT));
+      assert(c == Constraint_FORCE | c == Constraint_FAULT);
       if c == Constraint_FORCE then inputsize = inputsize_min
       else ()
     } else ();
     ps = slice(VTCR_EL2, 16, 3);
-    basefound = ((inputsize >= inputsize_min) & (inputsize <= inputsize_max)) & IsZero_slice(inputaddr, inputsize, negate(inputsize) + 64);
+    basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, negate(inputsize) + 64);
     disabled = false;
     baseregister = VTTBR_EL2;
     descaddr.memattrs = WalkAttrDecode(slice(VTCR_EL2, 8, 2), slice(VTCR_EL2, 10, 2), slice(VTCR_EL2, 12, 2), secondstage);
     reversedescriptors = [SCTLR_EL2[25]] == 0b1;
     lookupsecure = false;
     singlepriv = true;
-    update_AF = HaveAccessFlagUpdateExt() & ([VTCR_EL2[21]] == 0b1);
-    update_AP = (HaveDirtyBitModifierExt() & update_AF) & ([VTCR_EL2[22]] == 0b1);
+    update_AF = HaveAccessFlagUpdateExt() & [VTCR_EL2[21]] == 0b1;
+    update_AP = (HaveDirtyBitModifierExt() & update_AF) & [VTCR_EL2[22]] == 0b1;
     startlevel = UInt(slice(VTCR_EL2, 6, 2));
     if largegrain then {
       grainsize = 16;
@@ -5538,16 +5542,15 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
     };
     stride = grainsize - 3;
     if largegrain then
-      if (level == 0) | ((level == 1) & (PAMax() <= 42)) then basefound = false
+      if level == 0 | level == 1 & PAMax() <= 42 then basefound = false
       else ()
     else if midgrain then
-      if (level == 0) | ((level == 1) & (PAMax() <= 40)) then basefound = false
+      if level == 0 | level == 1 & PAMax() <= 40 then basefound = false
       else ()
-    else if (level < 0) | ((level == 0) & (PAMax() <= 42)) then
-      basefound = false
+    else if level < 0 | level == 0 & PAMax() <= 42 then basefound = false
     else ();
     inputsizecheck = inputsize;
-    if (inputsize > PAMax()) & (~(ELUsingAArch32(EL1)) | (inputsize > 40)) then match ConstrainUnpredictable(Unpredictable_LARGEIPA) {
+    if inputsize > PAMax() & (~(ELUsingAArch32(EL1)) | inputsize > 40) then match ConstrainUnpredictable(Unpredictable_LARGEIPA) {
       Constraint_FORCE => {
         inputsize = PAMax();
         inputsizecheck = PAMax()
@@ -5556,9 +5559,8 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
       Constraint_FAULT => basefound = false,
       _ => Unreachable()
     } else ();
-    startsizecheck = inputsizecheck - (((3 - level) * stride) + grainsize);
-    if (startsizecheck < 1) | (startsizecheck > (stride + 4)) then
-      basefound = false
+    startsizecheck = inputsizecheck - ((3 - level) * stride + grainsize);
+    if startsizecheck < 1 | startsizecheck > stride + 4 then basefound = false
     else ()
   };
   if ~(basefound) | disabled then {
@@ -5581,14 +5583,14 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
   };
   if outputsize > PAMax() then outputsize = PAMax()
   else ();
-  if (outputsize < 48) & ~(IsZero_slice(baseregister, outputsize, negate(outputsize) + 48)) then {
+  if outputsize < 48 & ~(IsZero_slice(baseregister, outputsize, negate(outputsize) + 48)) then {
     level = 0;
     __tmp_20 : AddressDescriptor = result.addrdesc;
     __tmp_20.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
     result.addrdesc = __tmp_20;
     return(result)
   } else ();
-  let 'baselowerbound = ((3 + inputsize) - (((3 - level) * stride) + grainsize)) : int;
+  let 'baselowerbound = ((3 + inputsize) - ((3 - level) * stride + grainsize)) : int;
   assert(constraint(0 <= 'baselowerbound & 'baselowerbound <= 48));
   baseaddress : bits(52) = undefined;
   if outputsize == 52 then let 'z = (if baselowerbound < 6 then 6 else baselowerbound) : int in {
@@ -5601,7 +5603,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
   xn_table : bits(1) = 0b0;
   pxn_table : bits(1) = 0b0;
   addrselecttop : int = inputsize - 1;
-  apply_nvnv1_effect : bool = ((HaveNVExt() & HaveEL(EL2)) & ([HCR_EL2[42]] == 0b1)) & ([HCR_EL2[43]] == 0b1);
+  apply_nvnv1_effect : bool = ((HaveNVExt() & HaveEL(EL2)) & [HCR_EL2[42]] == 0b1) & [HCR_EL2[43]] == 0b1;
   blocktranslate : bool = undefined;
   desc : bits(64) = undefined;
   accdesc : AccessDescriptor = undefined;
@@ -5609,7 +5611,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
   descaddr2 : AddressDescriptor = undefined;
   addrselectbottom : int = undefined;
   repeat {
-    addrselectbottom = ((3 - level) * stride) + grainsize;
+    addrselectbottom = (3 - level) * stride + grainsize;
     index : bits(52) = ZeroExtend_slice_append(inputaddr, addrselectbottom, (addrselecttop - addrselectbottom) + 1, 0b000);
     __tmp_21 : FullAddress = descaddr.paddress;
     __tmp_21.physicaladdress = baseaddress | index;
@@ -5633,15 +5635,15 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
     desc = aget__Mem(descaddr2, 8, accdesc);
     if reversedescriptors then desc = BigEndianReverse(desc)
     else ();
-    if ([desc[0]] == 0b0) | ((slice(desc, 0, 2) == 0b01) & (level == 3)) then {
+    if [desc[0]] == 0b0 | slice(desc, 0, 2) == 0b01 & level == 3 then {
       __tmp_24 : AddressDescriptor = result.addrdesc;
       __tmp_24.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
       result.addrdesc = __tmp_24;
       return(result)
     } else ();
-    if (slice(desc, 0, 2) == 0b01) | (level == 3) then blocktranslate = true
+    if slice(desc, 0, 2) == 0b01 | level == 3 then blocktranslate = true
     else {
-      if (((outputsize < 52) & largegrain) & ~(IsZero(slice(desc, 12, 4)))) | ((outputsize < 48) & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48))) then {
+      if (outputsize < 52 & largegrain) & ~(IsZero(slice(desc, 12, 4))) | outputsize < 48 & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48)) then {
         __tmp_25 : AddressDescriptor = result.addrdesc;
         __tmp_25.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
         result.addrdesc = __tmp_25;
@@ -5678,10 +5680,10 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
     return(result)
   } else ();
   contiguousbitcheck : bool = undefined;
-  if largegrain then contiguousbitcheck = (level == 2) & (inputsize < 34)
-  else if midgrain then contiguousbitcheck = (level == 2) & (inputsize < 30)
-  else contiguousbitcheck = (level == 1) & (inputsize < 34);
-  if contiguousbitcheck & ([desc[52]] == 0b1) then
+  if largegrain then contiguousbitcheck = level == 2 & inputsize < 34
+  else if midgrain then contiguousbitcheck = level == 2 & inputsize < 30
+  else contiguousbitcheck = level == 1 & inputsize < 34;
+  if contiguousbitcheck & [desc[52]] == 0b1 then
     if undefined then {
       __tmp_27 : AddressDescriptor = result.addrdesc;
       __tmp_27.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
@@ -5689,7 +5691,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
       return(result)
     } else ()
   else ();
-  if (((outputsize < 52) & largegrain) & ~(IsZero(slice(desc, 12, 4)))) | ((outputsize < 48) & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48))) then {
+  if (outputsize < 52 & largegrain) & ~(IsZero(slice(desc, 12, 4))) | outputsize < 48 & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48)) then {
     __tmp_28 : AddressDescriptor = result.addrdesc;
     __tmp_28.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, secondstage, s2fs1walk);
     result.addrdesc = __tmp_28;
@@ -5714,13 +5716,13 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
       result.descupdate = __tmp_30
     }
   else ();
-  if update_AP & ([desc[51]] == 0b1) then
-    if ~(secondstage) & ([desc[7]] == 0b1) then {
+  if update_AP & [desc[51]] == 0b1 then
+    if ~(secondstage) & [desc[7]] == 0b1 then {
       desc = __SetSlice_bits(64, 1, desc, 7, 0b0);
       __tmp_31 : DescriptorUpdate = result.descupdate;
       __tmp_31.AP = true;
       result.descupdate = __tmp_31
-    } else if secondstage & ([desc[7]] == 0b0) then {
+    } else if secondstage & [desc[7]] == 0b0 then {
       desc = __SetSlice_bits(64, 1, desc, 7, 0b1);
       __tmp_32 : DescriptorUpdate = result.descupdate;
       __tmp_32.AP = true;
@@ -5748,7 +5750,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
   memattr : bits(4) = slice(desc, 2, 4);
   result.domain = undefined;
   result.level = level;
-  result.blocksize = 2 ^ (((3 - level) * stride) + grainsize);
+  result.blocksize = 2 ^ ((3 - level) * stride + grainsize);
   if ~(secondstage) then {
     __tmp_34 : Permissions = result.perms;
     __tmp_34.xn = xn | xn_table;
@@ -5867,7 +5869,7 @@ function AArch64_TranslateAddressS1Off (vaddress, acctype, iswrite) = {
     result.addrdesc = __tmp_198;
     return(result)
   } else ();
-  default_cacheable : bool = HasS2Translation() & ([HCR_EL2[12]] == 0b1);
+  default_cacheable : bool = HasS2Translation() & [HCR_EL2[12]] == 0b1;
   cacheable : bool = undefined;
   if default_cacheable then {
     __tmp_199 : MemoryAttributes = result.addrdesc.memattrs;
@@ -6009,11 +6011,11 @@ function AArch64_MaybeZeroRegisterUppers () = {
   include_R15_name : bool = undefined;
   last : range(14, 30) = undefined;
   first : atom(0) = 0;
-  if (PSTATE.EL == EL0) & ~(ELUsingAArch32(EL1)) then {
+  if PSTATE.EL == EL0 & ~(ELUsingAArch32(EL1)) then {
     first = 0;
     last = 14;
     include_R15_name = false
-  } else if ((((PSTATE.EL == EL0) | (PSTATE.EL == EL1)) & HaveEL(EL2)) & ~(IsSecure())) & ~(ELUsingAArch32(EL2)) then {
+  } else if (((PSTATE.EL == EL0 | PSTATE.EL == EL1) & HaveEL(EL2)) & ~(IsSecure())) & ~(ELUsingAArch32(EL2)) then {
     first = 0;
     last = 30;
     include_R15_name = false
@@ -6023,7 +6025,7 @@ function AArch64_MaybeZeroRegisterUppers () = {
     include_R15_name = true
   };
   foreach (n from first to last by 1 in inc)
-    if ((n : int != 15 : int) | include_R15_name) & ConstrainUnpredictableBool(Unpredictable_ZEROUPPER) then {
+    if (n : int != 15 : int | include_R15_name) & ConstrainUnpredictableBool(Unpredictable_ZEROUPPER) then {
       __tmp_3 : bits(64) = _R[n];
       __tmp_3[63 .. 32] = Zeros(32);
       _R[n] = __tmp_3
@@ -6037,10 +6039,10 @@ function DCPSInstruction target_el = {
   SynchronizeContext();
   handle_el : bits(2) = undefined;
   match target_el {
-    ? if ? == EL1 => if (PSTATE.EL == EL2) | ((PSTATE.EL == EL3) & ~(UsingAArch32())) then handle_el = PSTATE.EL else if (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[27]] == 0b1) then UndefinedFault() else handle_el = EL1,
-    ? if ? == EL2 => if ~(HaveEL(EL2)) then UndefinedFault() else if (PSTATE.EL == EL3) & ~(UsingAArch32()) then handle_el = EL3 else if IsSecure() then UndefinedFault() else handle_el = EL2,
+    ? if ? == EL1 => if PSTATE.EL == EL2 | PSTATE.EL == EL3 & ~(UsingAArch32()) then handle_el = PSTATE.EL else if (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[27]] == 0b1 then UndefinedFault() else handle_el = EL1,
+    ? if ? == EL2 => if ~(HaveEL(EL2)) then UndefinedFault() else if PSTATE.EL == EL3 & ~(UsingAArch32()) then handle_el = EL3 else if IsSecure() then UndefinedFault() else handle_el = EL2,
     ? if ? == EL3 => {
-      if ([EDSCR[16]] == 0b1) | ~(HaveEL(EL3)) then UndefinedFault() else ();
+      if [EDSCR[16]] == 0b1 | ~(HaveEL(EL3)) then UndefinedFault() else ();
       handle_el = EL3
     },
     _ => Unreachable()
@@ -6052,7 +6054,7 @@ function DCPSInstruction target_el = {
     match handle_el {
       ? if ? == EL1 => {
         AArch32_WriteMode(M32_Svc);
-        if HavePANExt() & ([SCTLR[23]] == 0b0) then PSTATE.PAN = 0b1 else ()
+        if HavePANExt() & [SCTLR[23]] == 0b0 then PSTATE.PAN = 0b1 else ()
       },
       ? if ? == EL2 => AArch32_WriteMode(M32_Hyp),
       ? if ? == EL3 => {
@@ -6073,7 +6075,7 @@ function DCPSInstruction target_el = {
     PSTATE.nRW = 0b0;
     PSTATE.SP = 0b1;
     PSTATE.EL = handle_el;
-    if HavePANExt() & (((handle_el == EL1) & ([SCTLR_EL1[23]] == 0b0)) | ((((handle_el == EL2) & ([HCR_EL2[34]] == 0b1)) & ([HCR_EL2[27]] == 0b1)) & ([SCTLR_EL2[23]] == 0b0))) then PSTATE.PAN = 0b1 else ();
+    if HavePANExt() & (handle_el == EL1 & [SCTLR_EL1[23]] == 0b0 | ((handle_el == EL2 & [HCR_EL2[34]] == 0b1) & [HCR_EL2[27]] == 0b1) & [SCTLR_EL2[23]] == 0b0) then PSTATE.PAN = 0b1 else ();
     aset_ELR(undefined);
     aset_SPSR(undefined);
     aset_ESR(undefined);
@@ -6082,7 +6084,7 @@ function DCPSInstruction target_el = {
     if HaveUAOExt() then PSTATE.UAO = 0b0 else ()
   };
   UpdateEDSCRFields();
-  if (HaveRASExt() & ([aget_SCTLR()[21]] == 0b1)) & ConstrainUnpredictableBool(Unpredictable_IESBinDebug) then ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All) else ();
+  if (HaveRASExt() & [aget_SCTLR()[21]] == 0b1) & ConstrainUnpredictableBool(Unpredictable_IESBinDebug) then ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All) else ();
   ()
 }
 
@@ -6093,11 +6095,11 @@ function aarch64_system_exceptions_debug_exception target_level = DCPSInstructio
 val AArch64_GenerateDebugExceptionsFrom : (bits(2), bool, bits(1)) -> bool effect {escape, rreg, undef}
 
 function AArch64_GenerateDebugExceptionsFrom (from, secure, mask) = {
-  if (([OSLSR_EL1[1]] == 0b1) | DoubleLockStatus()) | Halted() then return(false) else ();
-  route_to_el2 : bool = (HaveEL(EL2) & ~(secure)) & (([HCR_EL2[27]] == 0b1) | ([MDCR_EL2[8]] == 0b1));
+  if ([OSLSR_EL1[1]] == 0b1 | DoubleLockStatus()) | Halted() then return(false) else ();
+  route_to_el2 : bool = (HaveEL(EL2) & ~(secure)) & ([HCR_EL2[27]] == 0b1 | [MDCR_EL2[8]] == 0b1);
   target : bits(2) = if route_to_el2 then EL2 else EL1;
-  enabled : bool = (~(HaveEL(EL3)) | ~(secure)) | ([MDCR_EL3[16]] == 0b0);
-  if from == target then enabled = (enabled & ([MDSCR_EL1[13]] == 0b1)) & (mask == 0b0) else enabled = enabled & (UInt(target) > UInt(from));
+  enabled : bool = (~(HaveEL(EL3)) | ~(secure)) | [MDCR_EL3[16]] == 0b0;
+  if from == target then enabled = (enabled & [MDSCR_EL1[13]] == 0b1) & mask == 0b0 else enabled = enabled & UInt(target) > UInt(from);
   return(enabled)
 }
 
@@ -6113,7 +6115,7 @@ function AArch64_FaultSyndrome (d_side, fault) = {
   if HaveRASExt() & IsExternalSyncAbort(fault) then iss = __SetSlice_bits(25, 2, iss, 11, fault.errortype) else ();
   if d_side then {
     if IsSecondStage(fault) & ~(fault.s2fs1walk) then iss = __SetSlice_bits(25, 11, iss, 14, LSInstructionSyndrome()) else ();
-    if (fault.acctype == AccType_DC) | ((fault.acctype == AccType_IC) | (fault.acctype == AccType_AT)) then {
+    if fault.acctype == AccType_DC | fault.acctype == AccType_IC | fault.acctype == AccType_AT then {
       iss = __SetSlice_bits(25, 1, iss, 8, 0b1);
       iss = __SetSlice_bits(25, 1, iss, 6, 0b1)
     } else iss = __SetSlice_bits(25, 1, iss, 6, if fault.write then 0b1 else 0b0)
@@ -6128,7 +6130,7 @@ val AArch64_AbortSyndrome : (Exception, FaultRecord, bits(64)) -> ExceptionRecor
 
 function AArch64_AbortSyndrome (typ, fault, vaddress) = {
   exception : ExceptionRecord = ExceptionSyndrome(typ);
-  d_side : bool = (typ == Exception_DataAbort) | (typ == Exception_Watchpoint);
+  d_side : bool = typ == Exception_DataAbort | typ == Exception_Watchpoint;
   exception.syndrome = AArch64_FaultSyndrome(d_side, fault);
   exception.vaddress = ZeroExtend(vaddress);
   if IPAValid(fault) then {
@@ -6152,7 +6154,7 @@ function AArch64_ExecutingATS1xPInstr () = {
     CRn = slice(instr, 12, 4);
     CRm = slice(instr, 8, 4);
     op2 = slice(instr, 5, 3);
-    return((((op1 == 0b000) & (CRn == 0x7)) & (CRm == 0x9)) & ((op2 == 0b000) | (op2 == 0b001)))
+    return(((op1 == 0b000 & CRn == 0x7) & CRm == 0x9) & (op2 == 0b000 | op2 == 0b001))
   } else return(false)
 }
 
@@ -6161,7 +6163,7 @@ val AArch64_ExceptionClass : (Exception, bits(2)) -> (int, bits(1)) effect {esca
 function AArch64_ExceptionClass (typ, target_el) = {
   il : bits(1) = if ThisInstrLength() == 32 then 0b1 else 0b0;
   from_32 : bool = UsingAArch32();
-  assert(from_32 | (il == 0b1), "(from_32 || (il == '1'))");
+  assert(from_32 | il == 0b1, "(from_32 || (il == '1'))");
   ec : int = undefined;
   match typ {
     Exception_Uncategorized => {
@@ -6241,8 +6243,8 @@ function AArch64_ExceptionClass (typ, target_el) = {
     },
     _ => Unreachable()
   };
-  if ((ec == 32) | ((ec == 36) | ((ec == 48) | ((ec == 50) | (ec == 52))))) & (target_el == PSTATE.EL) then ec = ec + 1 else ();
-  if ((ec == 17) | ((ec == 18) | ((ec == 19) | ((ec == 40) | (ec == 56))))) & ~(from_32) then ec = ec + 4 else ();
+  if (ec == 32 | ec == 36 | ec == 48 | ec == 50 | ec == 52) & target_el == PSTATE.EL then ec = ec + 1 else ();
+  if (ec == 17 | ec == 18 | ec == 19 | ec == 40 | ec == 56) & ~(from_32) then ec = ec + 4 else ();
   return((ec, il))
 }
 
@@ -6254,9 +6256,9 @@ function AArch64_ReportException (exception, target_el) = {
   ec : int = undefined;
   (ec, il) = AArch64_ExceptionClass(typ, target_el);
   iss : bits(25) = exception.syndrome;
-  if ((ec == 36) | (ec == 37)) & ([iss[24]] == 0b0) then il = 0b1 else ();
+  if (ec == 36 | ec == 37) & [iss[24]] == 0b0 then il = 0b1 else ();
   aset_ESR(target_el, (__GetSlice_int(6, ec, 0) @ il) @ iss);
-  if (typ == Exception_InstructionAbort) | ((typ == Exception_PCAlignment) | ((typ == Exception_DataAbort) | (typ == Exception_Watchpoint))) then aset_FAR(target_el, exception.vaddress) else aset_FAR(target_el, undefined);
+  if typ == Exception_InstructionAbort | typ == Exception_PCAlignment | typ == Exception_DataAbort | typ == Exception_Watchpoint then aset_FAR(target_el, exception.vaddress) else aset_FAR(target_el, undefined);
   if target_el == EL2 then if exception.ipavalid then HPFAR_EL2 = __SetSlice_bits(64, 40, HPFAR_EL2, 4, slice(exception.ipaddress, 12, 40)) else HPFAR_EL2 = __SetSlice_bits(64, 40, HPFAR_EL2, 4, undefined) else ();
   ()
 }
@@ -6264,17 +6266,17 @@ function AArch64_ReportException (exception, target_el) = {
 val AArch64_ESBOperation : unit -> unit effect {escape, wreg, undef, rreg}
 
 function AArch64_ESBOperation () = {
-  route_to_el3 : bool = HaveEL(EL3) & ([SCR_EL3[3]] == 0b1);
-  route_to_el2 : bool = (HaveEL(EL2) & ~(IsSecure())) & (([HCR_EL2[27]] == 0b1) | ([HCR_EL2[5]] == 0b1));
+  route_to_el3 : bool = HaveEL(EL3) & [SCR_EL3[3]] == 0b1;
+  route_to_el2 : bool = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[27]] == 0b1 | [HCR_EL2[5]] == 0b1);
   target : bits(2) = if route_to_el3 then EL3 else if route_to_el2 then EL2 else EL1;
   mask_active : bool = undefined;
-  if target == EL1 then mask_active = (PSTATE.EL == EL0) | (PSTATE.EL == EL1)
-  else if (HaveVirtHostExt() & (target == EL2)) & (((HCR_EL2[34], HCR_EL2[27])) == ((bitone, bitone))) then
-    mask_active = (PSTATE.EL == EL0) | (PSTATE.EL == EL2)
+  if target == EL1 then mask_active = PSTATE.EL == EL0 | PSTATE.EL == EL1
+  else if (HaveVirtHostExt() & target == EL2) & ((HCR_EL2[34], HCR_EL2[27])) == ((bitone, bitone)) then
+    mask_active = PSTATE.EL == EL0 | PSTATE.EL == EL2
   else mask_active = PSTATE.EL == target;
   mask_set : bool = PSTATE.A == 0b1;
   intdis : bool = Halted() | ExternalDebugInterruptsDisabled(target);
-  masked : bool = ((UInt(target) < UInt(PSTATE.EL)) | intdis) | (mask_active & mask_set);
+  masked : bool = (UInt(target) < UInt(PSTATE.EL) | intdis) | mask_active & mask_set;
   DISR_EL1 : bits(64) = undefined;
   syndrome64 : bits(25) = undefined;
   implicit_esb : bool = undefined;
@@ -6309,10 +6311,10 @@ function AArch64_CheckS2Permission (perms, vaddress, ipaddress, 'level, acctype,
   } else xn = perms.xn == 0b1;
   failedread : bool = undefined;
   fail : bool = undefined;
-  if (acctype == AccType_IFETCH) & ~(s2fs1walk) then {
+  if acctype == AccType_IFETCH & ~(s2fs1walk) then {
     fail = xn;
     failedread = true
-  } else if ((acctype == AccType_ATOMICRW) | (acctype == AccType_ORDEREDRW)) & ~(s2fs1walk) then {
+  } else if (acctype == AccType_ATOMICRW | acctype == AccType_ORDEREDRW) & ~(s2fs1walk) then {
     fail = ~(r) | ~(w);
     failedread = ~(r)
   } else if iswrite & ~(s2fs1walk) then {
@@ -6334,17 +6336,348 @@ function AArch64_CheckS2Permission (perms, vaddress, ipaddress, 'level, acctype,
   } else return(AArch64_NoFault())
 }
 
+function AArch64_CheckAndUpdateDescriptor_SecondStage (result, fault, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk__arg) = {
+  hwupdatewalk = hwupdatewalk__arg;
+  hw_update_AF : bool = undefined;
+  if result.AF then
+    if fault.typ == Fault_None then hw_update_AF = true
+    else if ConstrainUnpredictable(Unpredictable_AFUPDATE) == Constraint_TRUE then
+      hw_update_AF = true
+    else hw_update_AF = false
+  else ();
+  hw_update_AP : bool = undefined;
+  write_perm_req : bool = undefined;
+  if result.AP & fault.typ == Fault_None then {
+    write_perm_req = (iswrite | acctype == AccType_ATOMICRW | acctype == AccType_ORDEREDRW) & ~(s2fs1walk);
+    hw_update_AP = write_perm_req & ~(acctype == AccType_AT | acctype == AccType_DC) | hwupdatewalk
+  } else hw_update_AP = false;
+  desc : bits(64) = undefined;
+  accdesc : AccessDescriptor = undefined;
+  descaddr2 : AddressDescriptor = undefined;
+  if hw_update_AF | hw_update_AP then {
+    descaddr2 = result.descaddr;
+    accdesc = CreateAccessDescriptor(AccType_ATOMICRW);
+    desc = aget__Mem(descaddr2, 8, accdesc);
+    if hw_update_AF then desc = __SetSlice_bits(64, 1, desc, 10, 0b1)
+    else ();
+    if hw_update_AP then desc = __SetSlice_bits(64, 1, desc, 7, 0b1)
+    else ();
+    aset__Mem(descaddr2, 8, accdesc, desc)
+  } else ();
+  return(fault)
+}
+
+function AArch64_TranslationTableWalk_SecondStage (ipaddress, vaddress, acctype, iswrite, s2fs1walk, 'size) = {
+  assert(((HaveEL(EL2) & ~(IsSecure())) & ~(ELUsingAArch32(EL2))) & HasS2Translation());
+  result : TLBRecord = undefined;
+  descaddr : AddressDescriptor = undefined;
+  baseregister : bits(64) = undefined;
+  inputaddr : bits(64) = undefined;
+  __tmp_18 : MemoryAttributes = descaddr.memattrs;
+  __tmp_18.typ = MemType_Normal;
+  descaddr.memattrs = __tmp_18;
+  startsizecheck : int = undefined;
+  inputsizecheck : int = undefined;
+  startlevel : int = undefined;
+  level : int = undefined;
+  stride : int = undefined;
+  firstblocklevel : int = undefined;
+  grainsize : int = undefined;
+  hierattrsdisabled : bool = undefined;
+  update_AP : bool = undefined;
+  update_AF : bool = undefined;
+  singlepriv : bool = undefined;
+  lookupsecure : bool = undefined;
+  reversedescriptors : bool = undefined;
+  disabled : bool = undefined;
+  basefound : bool = undefined;
+  ps : bits(3) = undefined;
+  inputsize_min : int = undefined;
+  c : Constraint = undefined;
+  inputsize_max : int = undefined;
+  inputsize : int = undefined;
+  midgrain : bool = undefined;
+  largegrain : bool = undefined;
+  top : int = undefined;
+  inputaddr = ZeroExtend(ipaddress);
+  inputsize = 64 - UInt(slice(VTCR_EL2, 0, 6));
+  largegrain = slice(VTCR_EL2, 14, 2) == 0b01;
+  midgrain = slice(VTCR_EL2, 14, 2) == 0b10;
+  inputsize_max = if Have52BitVAExt() & largegrain then 52 else 48;
+  if inputsize > inputsize_max then {
+    c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
+    assert(c == Constraint_FORCE | c == Constraint_FAULT);
+    if c == Constraint_FORCE then inputsize = inputsize_max
+    else ()
+  } else ();
+  inputsize_min = 64 - 39;
+  if inputsize < inputsize_min then {
+    c = ConstrainUnpredictable(Unpredictable_RESTnSZ);
+    assert(c == Constraint_FORCE | c == Constraint_FAULT);
+    if c == Constraint_FORCE then inputsize = inputsize_min
+    else ()
+  } else ();
+  ps = slice(VTCR_EL2, 16, 3);
+  basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, negate(inputsize) + 64);
+  disabled = false;
+  baseregister = VTTBR_EL2;
+  descaddr.memattrs = WalkAttrDecode(slice(VTCR_EL2, 8, 2), slice(VTCR_EL2, 10, 2), slice(VTCR_EL2, 12, 2), true);
+  reversedescriptors = [SCTLR_EL2[25]] == 0b1;
+  lookupsecure = false;
+  singlepriv = true;
+  update_AF = HaveAccessFlagUpdateExt() & [VTCR_EL2[21]] == 0b1;
+  update_AP = (HaveDirtyBitModifierExt() & update_AF) & [VTCR_EL2[22]] == 0b1;
+  startlevel = UInt(slice(VTCR_EL2, 6, 2));
+  if largegrain then {
+    grainsize = 16;
+    level = 3 - startlevel;
+    firstblocklevel = if Have52BitPAExt() then 1 else 2
+  } else if midgrain then {
+    grainsize = 14;
+    level = 3 - startlevel;
+    firstblocklevel = 2
+  } else {
+    grainsize = 12;
+    level = 2 - startlevel;
+    firstblocklevel = 1
+  };
+  stride = grainsize - 3;
+  if largegrain then
+    if level == 0 | level == 1 & PAMax() <= 42 then basefound = false
+    else ()
+  else if midgrain then
+    if level == 0 | level == 1 & PAMax() <= 40 then basefound = false
+    else ()
+  else if level < 0 | level == 0 & PAMax() <= 42 then basefound = false
+  else ();
+  inputsizecheck = inputsize;
+  if inputsize > PAMax() & (~(ELUsingAArch32(EL1)) | inputsize > 40) then match ConstrainUnpredictable(Unpredictable_LARGEIPA) {
+    Constraint_FORCE => {
+      inputsize = PAMax();
+      inputsizecheck = PAMax()
+    },
+    Constraint_FORCENOSLCHECK => inputsize = PAMax(),
+    Constraint_FAULT => basefound = false,
+    _ => Unreachable()
+  } else ();
+  startsizecheck = inputsizecheck - ((3 - level) * stride + grainsize);
+  if startsizecheck < 1 | startsizecheck > stride + 4 then basefound = false
+  else ();
+  if ~(basefound) | disabled then {
+    level = 0;
+    __tmp_19 : AddressDescriptor = result.addrdesc;
+    __tmp_19.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+    result.addrdesc = __tmp_19;
+    return(result)
+  } else ();
+  outputsize : int = undefined;
+  match ps {
+    0b000 => outputsize = 32,
+    0b001 => outputsize = 36,
+    0b010 => outputsize = 40,
+    0b011 => outputsize = 42,
+    0b100 => outputsize = 44,
+    0b101 => outputsize = 48,
+    0b110 => outputsize = if Have52BitPAExt() & largegrain then 52 else 48,
+    _ => outputsize = 48
+  };
+  if outputsize > PAMax() then outputsize = PAMax()
+  else ();
+  if outputsize < 48 & ~(IsZero_slice(baseregister, outputsize, negate(outputsize) + 48)) then {
+    level = 0;
+    __tmp_20 : AddressDescriptor = result.addrdesc;
+    __tmp_20.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+    result.addrdesc = __tmp_20;
+    return(result)
+  } else ();
+  let 'baselowerbound = ((3 + inputsize) - ((3 - level) * stride + grainsize)) : int;
+  assert(constraint(0 <= 'baselowerbound & 'baselowerbound <= 48));
+  baseaddress : bits(52) = undefined;
+  if outputsize == 52 then let 'z = (if baselowerbound < 6 then 6 else baselowerbound) : int in {
+    assert(constraint(0 <= 'z & 'z <= 48));
+    baseaddress = (slice(baseregister, 2, 4) @ slice(baseregister, z, negate(z) + 48)) @ Zeros(z)
+  } else
+    baseaddress = ZeroExtend(slice(baseregister, baselowerbound, negate(baselowerbound) + 48) @ Zeros(baselowerbound));
+  ns_table : bits(1) = if lookupsecure then 0b0 else 0b1;
+  ap_table : bits(2) = 0b00;
+  xn_table : bits(1) = 0b0;
+  pxn_table : bits(1) = 0b0;
+  addrselecttop : int = inputsize - 1;
+  apply_nvnv1_effect : bool = ((HaveNVExt() & HaveEL(EL2)) & [HCR_EL2[42]] == 0b1) & [HCR_EL2[43]] == 0b1;
+  blocktranslate : bool = undefined;
+  desc : bits(64) = undefined;
+  accdesc : AccessDescriptor = undefined;
+  hwupdatewalk : bool = undefined;
+  descaddr2 : AddressDescriptor = undefined;
+  addrselectbottom : int = undefined;
+  repeat {
+    addrselectbottom = (3 - level) * stride + grainsize;
+    index : bits(52) = ZeroExtend_slice_append(inputaddr, addrselectbottom, (addrselecttop - addrselectbottom) + 1, 0b000);
+    __tmp_21 : FullAddress = descaddr.paddress;
+    __tmp_21.physicaladdress = baseaddress | index;
+    descaddr.paddress = __tmp_21;
+    __tmp_22 : FullAddress = descaddr.paddress;
+    __tmp_22.NS = ns_table;
+    descaddr.paddress = __tmp_22;
+    descaddr2 = descaddr;
+    descaddr2.vaddress = ZeroExtend(vaddress);
+    accdesc = CreateAccessDescriptorPTW(acctype, true, s2fs1walk, level);
+    desc = aget__Mem(descaddr2, 8, accdesc);
+    if reversedescriptors then desc = BigEndianReverse(desc)
+    else ();
+    if [desc[0]] == 0b0 | slice(desc, 0, 2) == 0b01 & level == 3 then {
+      __tmp_24 : AddressDescriptor = result.addrdesc;
+      __tmp_24.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+      result.addrdesc = __tmp_24;
+      return(result)
+    } else ();
+    if slice(desc, 0, 2) == 0b01 | level == 3 then blocktranslate = true
+    else {
+      if (outputsize < 52 & largegrain) & ~(IsZero(slice(desc, 12, 4))) | outputsize < 48 & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48)) then {
+        __tmp_25 : AddressDescriptor = result.addrdesc;
+        __tmp_25.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+        result.addrdesc = __tmp_25;
+        return(result)
+      } else ();
+      let 'gsz = grainsize;
+      assert(constraint(0 <= 'gsz & 'gsz <= 48));
+      if outputsize == 52 then
+        baseaddress = (slice(desc, 12, 4) @ slice(desc, gsz, negate(gsz) + 48)) @ Zeros(gsz)
+      else
+        baseaddress = ZeroExtend(slice(desc, gsz, negate(gsz) + 48) @ Zeros(gsz));
+      level = level + 1;
+      addrselecttop = addrselectbottom - 1;
+      blocktranslate = false
+    }
+  } until blocktranslate;
+  if level < firstblocklevel then {
+    __tmp_26 : AddressDescriptor = result.addrdesc;
+    __tmp_26.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+    result.addrdesc = __tmp_26;
+    return(result)
+  } else ();
+  contiguousbitcheck : bool = undefined;
+  if largegrain then contiguousbitcheck = level == 2 & inputsize < 34
+  else if midgrain then contiguousbitcheck = level == 2 & inputsize < 30
+  else contiguousbitcheck = level == 1 & inputsize < 34;
+  if contiguousbitcheck & [desc[52]] == 0b1 then
+    if undefined then {
+      __tmp_27 : AddressDescriptor = result.addrdesc;
+      __tmp_27.fault = AArch64_TranslationFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+      result.addrdesc = __tmp_27;
+      return(result)
+    } else ()
+  else ();
+  if (outputsize < 52 & largegrain) & ~(IsZero(slice(desc, 12, 4))) | outputsize < 48 & ~(IsZero_slice(desc, outputsize, negate(outputsize) + 48)) then {
+    __tmp_28 : AddressDescriptor = result.addrdesc;
+    __tmp_28.fault = AArch64_AddressSizeFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+    result.addrdesc = __tmp_28;
+    return(result)
+  } else ();
+  outputaddress : bits(52) = undefined;
+  let 'asb = addrselectbottom;
+  assert(constraint(0 <= 'asb & 'asb <= 48));
+  if outputsize == 52 then
+    outputaddress = (slice(desc, 12, 4) @ slice(desc, asb, negate(asb) + 48)) @ slice(inputaddr, 0, asb)
+  else
+    outputaddress = ZeroExtend(slice(desc, asb, negate(asb) + 48) @ slice(inputaddr, 0, asb));
+  if [desc[10]] == 0b0 then
+    if ~(update_AF) then {
+      __tmp_29 : AddressDescriptor = result.addrdesc;
+      __tmp_29.fault = AArch64_AccessFlagFault(ipaddress, level, acctype, iswrite, true, s2fs1walk);
+      result.addrdesc = __tmp_29;
+      return(result)
+    } else {
+      __tmp_30 : DescriptorUpdate = result.descupdate;
+      __tmp_30.AF = true;
+      result.descupdate = __tmp_30
+    }
+  else ();
+  if update_AP & [desc[51]] == 0b1 then
+    if [desc[7]] == 0b0 then {
+      desc = __SetSlice_bits(64, 1, desc, 7, 0b1);
+      __tmp_32 : DescriptorUpdate = result.descupdate;
+      __tmp_32.AP = true;
+      result.descupdate = __tmp_32
+    } else ()
+  else ();
+  __tmp_33 : DescriptorUpdate = result.descupdate;
+  __tmp_33.descaddr = descaddr;
+  result.descupdate = __tmp_33;
+  xn : bits(1) = undefined;
+  pxn : bits(1) = undefined;
+  if apply_nvnv1_effect then {
+    pxn = [desc[54]];
+    xn = 0b0
+  } else {
+    xn = [desc[54]];
+    pxn = [desc[53]]
+  };
+  contiguousbit : bits(1) = [desc[52]];
+  nG : bits(1) = [desc[11]];
+  sh : bits(2) = slice(desc, 8, 2);
+  ap : bits(3) = undefined;
+  if apply_nvnv1_effect then ap = [desc[7]] @ 0b01
+  else ap = slice(desc, 6, 2) @ 0b1;
+  memattr : bits(4) = slice(desc, 2, 4);
+  result.domain = undefined;
+  result.level = level;
+  result.blocksize = 2 ^ ((3 - level) * stride + grainsize);
+  __tmp_48 : bits(3) = result.perms.ap;
+  __tmp_48 = __SetSlice_bits(3, 2, __tmp_48, 1, slice(ap, 1, 2));
+  __tmp_49 : Permissions = result.perms;
+  __tmp_49.ap = __tmp_48;
+  result.perms = __tmp_49;
+  __tmp_50 : bits(3) = result.perms.ap;
+  __tmp_50 = __SetSlice_bits(3, 1, __tmp_50, 0, 0b1);
+  __tmp_51 : Permissions = result.perms;
+  __tmp_51.ap = __tmp_50;
+  result.perms = __tmp_51;
+  __tmp_52 : Permissions = result.perms;
+  __tmp_52.xn = xn;
+  result.perms = __tmp_52;
+  if HaveExtendedExecuteNeverExt() then {
+    __tmp_53 : Permissions = result.perms;
+    __tmp_53.xxn = [desc[53]];
+    result.perms = __tmp_53
+  } else ();
+  __tmp_54 : Permissions = result.perms;
+  __tmp_54.pxn = 0b0;
+  result.perms = __tmp_54;
+  result.nG = 0b0;
+  __tmp_55 : AddressDescriptor = result.addrdesc;
+  __tmp_55.memattrs = S2AttrDecode(sh, memattr, acctype);
+  result.addrdesc = __tmp_55;
+  __tmp_56 : FullAddress = result.addrdesc.paddress;
+  __tmp_56.NS = 0b1;
+  __tmp_57 : AddressDescriptor = result.addrdesc;
+  __tmp_57.paddress = __tmp_56;
+  result.addrdesc = __tmp_57;
+  __tmp_58 : FullAddress = result.addrdesc.paddress;
+  __tmp_58.physicaladdress = outputaddress;
+  __tmp_59 : AddressDescriptor = result.addrdesc;
+  __tmp_59.paddress = __tmp_58;
+  result.addrdesc = __tmp_59;
+  __tmp_60 : AddressDescriptor = result.addrdesc;
+  __tmp_60.fault = AArch64_NoFault();
+  result.addrdesc = __tmp_60;
+  result.contiguous = contiguousbit == 0b1;
+  if HaveCommonNotPrivateTransExt() then result.CnP = [baseregister[0]]
+  else ();
+  return(result)
+}
+
 function AArch64_SecondStageTranslate (S1, vaddress, acctype, iswrite, wasaligned, s2fs1walk, 'size, hwupdatewalk) = {
   assert(HasS2Translation(), "HasS2Translation()");
-  s2_enabled : bool = ([HCR_EL2[0]] == 0b1) | ([HCR_EL2[12]] == 0b1);
+  s2_enabled : bool = [HCR_EL2[0]] == 0b1 | [HCR_EL2[12]] == 0b1;
   secondstage : bool = true;
   result : AddressDescriptor = undefined;
   S2 : TLBRecord = undefined;
   ipaddress : bits(52) = undefined;
   if s2_enabled then {
     ipaddress = slice(S1.paddress.physicaladdress, 0, 52);
-    S2 = AArch64_TranslationTableWalk(ipaddress, vaddress, acctype, iswrite, secondstage, s2fs1walk, size);
-    if (((~(wasaligned) & (acctype != AccType_IFETCH)) | (acctype == AccType_DCZVA)) & (S2.addrdesc.memattrs.typ == MemType_Device)) & ~(IsFault(S2.addrdesc)) then {
+    S2 = AArch64_TranslationTableWalk_SecondStage(ipaddress, vaddress, acctype, iswrite, s2fs1walk, size);
+    if ((~(wasaligned) & acctype != AccType_IFETCH | acctype == AccType_DCZVA) & S2.addrdesc.memattrs.typ == MemType_Device) & ~(IsFault(S2.addrdesc)) then {
       __tmp_71 : AddressDescriptor = S2.addrdesc;
       __tmp_71.fault = AArch64_AlignmentFault(acctype, iswrite, secondstage);
       S2.addrdesc = __tmp_71
@@ -6354,14 +6687,16 @@ function AArch64_SecondStageTranslate (S1, vaddress, acctype, iswrite, wasaligne
       __tmp_72.fault = AArch64_CheckS2Permission(S2.perms, vaddress, ipaddress, S2.level, acctype, iswrite, s2fs1walk, hwupdatewalk);
       S2.addrdesc = __tmp_72
     } else ();
-    if ((~(s2fs1walk) & ~(IsFault(S2.addrdesc))) & (S2.addrdesc.memattrs.typ == MemType_Device)) & (acctype == AccType_IFETCH) then S2.addrdesc = AArch64_InstructionDevice(S2.addrdesc, vaddress, ipaddress, S2.level, acctype, iswrite, secondstage, s2fs1walk) else ();
-    if ((s2fs1walk & ~(IsFault(S2.addrdesc))) & ([HCR_EL2[2]] == 0b1)) & (S2.addrdesc.memattrs.typ == MemType_Device) then {
+    if ((~(s2fs1walk) & ~(IsFault(S2.addrdesc))) & S2.addrdesc.memattrs.typ == MemType_Device) & acctype == AccType_IFETCH then
+      S2.addrdesc = AArch64_InstructionDevice(S2.addrdesc, vaddress, ipaddress, S2.level, acctype, iswrite, secondstage, s2fs1walk)
+    else ();
+    if ((s2fs1walk & ~(IsFault(S2.addrdesc))) & [HCR_EL2[2]] == 0b1) & S2.addrdesc.memattrs.typ == MemType_Device then {
       __tmp_73 : AddressDescriptor = S2.addrdesc;
       __tmp_73.fault = AArch64_PermissionFault(ipaddress, S2.level, acctype, iswrite, secondstage, s2fs1walk);
       S2.addrdesc = __tmp_73
     } else ();
     __tmp_74 : AddressDescriptor = S2.addrdesc;
-    __tmp_74.fault = AArch64_CheckAndUpdateDescriptor(S2.descupdate, S2.addrdesc.fault, secondstage, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk);
+    __tmp_74.fault = AArch64_CheckAndUpdateDescriptor_SecondStage(S2.descupdate, S2.addrdesc.fault, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk);
     S2.addrdesc = __tmp_74;
     result = CombineS1S2Desc(S1, S2.addrdesc)
   } else result = S1;
@@ -6374,9 +6709,9 @@ function AArch64_CheckAndUpdateDescriptor (result, fault, secondstage, vaddress,
   if result.AF then if fault.typ == Fault_None then hw_update_AF = true else if ConstrainUnpredictable(Unpredictable_AFUPDATE) == Constraint_TRUE then hw_update_AF = true else hw_update_AF = false else ();
   hw_update_AP : bool = undefined;
   write_perm_req : bool = undefined;
-  if result.AP & (fault.typ == Fault_None) then {
-    write_perm_req = (iswrite | ((acctype == AccType_ATOMICRW) | (acctype == AccType_ORDEREDRW))) & ~(s2fs1walk);
-    hw_update_AP = (write_perm_req & ~((acctype == AccType_AT) | (acctype == AccType_DC))) | hwupdatewalk
+  if result.AP & fault.typ == Fault_None then {
+    write_perm_req = (iswrite | acctype == AccType_ATOMICRW | acctype == AccType_ORDEREDRW) & ~(s2fs1walk);
+    hw_update_AP = write_perm_req & ~(acctype == AccType_AT | acctype == AccType_DC) | hwupdatewalk
   } else hw_update_AP = false;
   desc : bits(64) = undefined;
   accdesc : AccessDescriptor = undefined;
@@ -6408,7 +6743,7 @@ function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isb
   SSC = SSC__arg;
   linked = linked__arg;
   c : Constraint = undefined;
-  if ((((((((HMC @ SSC) @ PxC) & 0b11100) == 0b01100) | (((((HMC @ SSC) @ PxC) & 0b11101) == 0b10000) | (((((HMC @ SSC) @ PxC) & 0b11101) == 0b10100) | ((((HMC @ SSC) @ PxC) == 0b11010) | ((((HMC @ SSC) @ PxC) == 0b11101) | ((((HMC @ SSC) @ PxC) & 0b11110) == 0b11110)))))) | (((HMC == 0b0) & (PxC == 0b00)) & (~(isbreakpnt) | ~(HaveAArch32EL(EL1))))) | (((SSC == 0b01) | (SSC == 0b10)) & ~(HaveEL(EL3)))) | (((((HMC @ SSC) != 0b000) & ((HMC @ SSC) != 0b111)) & ~(HaveEL(EL3))) & ~(HaveEL(EL2)))) | ((((HMC @ SSC) @ PxC) == 0b11100) & ~(HaveEL(EL2))) then {
+  if (((((((HMC @ SSC) @ PxC) & 0b11100) == 0b01100 | (((HMC @ SSC) @ PxC) & 0b11101) == 0b10000 | (((HMC @ SSC) @ PxC) & 0b11101) == 0b10100 | ((HMC @ SSC) @ PxC) == 0b11010 | ((HMC @ SSC) @ PxC) == 0b11101 | (((HMC @ SSC) @ PxC) & 0b11110) == 0b11110) | (HMC == 0b0 & PxC == 0b00) & (~(isbreakpnt) | ~(HaveAArch32EL(EL1)))) | (SSC == 0b01 | SSC == 0b10) & ~(HaveEL(EL3))) | (((HMC @ SSC) != 0b000 & (HMC @ SSC) != 0b111) & ~(HaveEL(EL3))) & ~(HaveEL(EL2))) | ((HMC @ SSC) @ PxC) == 0b11100 & ~(HaveEL(EL2)) then {
     __tmp_5 : bits(5) = undefined;
     (c, __tmp_5) = ConstrainUnpredictableBits(Unpredictable_RESBPWPCTRL) : (Constraint, bits(5));
     __tmp_6 : bits(5) = __tmp_5;
@@ -6416,11 +6751,11 @@ function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isb
     __tmp_7 : bits(4) = slice(__tmp_6, 0, 4);
     SSC = slice(__tmp_7, 2, 2);
     PxC = slice(__tmp_7, 0, 2);
-    assert((c == Constraint_DISABLED) | (c == Constraint_UNKNOWN), "((c == Constraint_DISABLED) || (c == Constraint_UNKNOWN))");
+    assert(c == Constraint_DISABLED | c == Constraint_UNKNOWN, "((c == Constraint_DISABLED) || (c == Constraint_UNKNOWN))");
     if c == Constraint_DISABLED then return(false) else ()
   } else ();
-  EL3_match : bool = (HaveEL(EL3) & (HMC == 0b1)) & ([SSC[0]] == 0b0);
-  EL2_match : bool = HaveEL(EL2) & (HMC == 0b1);
+  EL3_match : bool = (HaveEL(EL3) & HMC == 0b1) & [SSC[0]] == 0b0;
+  EL2_match : bool = HaveEL(EL2) & HMC == 0b1;
   EL1_match : bool = [PxC[0]] == 0b1;
   EL0_match : bool = [PxC[1]] == 0b1;
   priv_match : bool = undefined;
@@ -6445,9 +6780,9 @@ function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isb
     lbn = UInt(LBN);
     first_ctx_cmp = UInt(slice(ID_AA64DFR0_EL1, 12, 4)) - UInt(slice(ID_AA64DFR0_EL1, 28, 4));
     last_ctx_cmp = UInt(slice(ID_AA64DFR0_EL1, 12, 4));
-    if (lbn < first_ctx_cmp) | (lbn > last_ctx_cmp) then {
+    if lbn < first_ctx_cmp | lbn > last_ctx_cmp then {
       (c, lbn) = ConstrainUnpredictableInteger(first_ctx_cmp, last_ctx_cmp, Unpredictable_BPNOTCTXCMP);
-      assert((c == Constraint_DISABLED) | ((c == Constraint_NONE) | (c == Constraint_UNKNOWN)), "((c == Constraint_DISABLED) || ((c == Constraint_NONE) || (c == Constraint_UNKNOWN)))");
+      assert(c == Constraint_DISABLED | c == Constraint_NONE | c == Constraint_UNKNOWN, "((c == Constraint_DISABLED) || ((c == Constraint_NONE) || (c == Constraint_UNKNOWN)))");
       match c {
         Constraint_DISABLED => return(false),
         Constraint_NONE => linked = false
@@ -6482,11 +6817,11 @@ function AArch64_BreakpointMatch ('n, vaddress, 'size) = {
   state_match : bool = AArch64_StateMatch(slice(DBGBCR_EL1[n], 14, 2), [DBGBCR_EL1[n][13]], slice(DBGBCR_EL1[n], 1, 2), linked, slice(DBGBCR_EL1[n], 16, 4), isbreakpnt, ispriv);
   value_match_name : bool = AArch64_BreakpointValueMatch(n, vaddress, linked_to);
   match_i : bool = undefined;
-  if HaveAnyAArch32() & (size == 4) then {
+  if HaveAnyAArch32() & size == 4 then {
     match_i = AArch64_BreakpointValueMatch(n, vaddress + 2, linked_to);
     if ~(value_match_name) & match_i then value_match_name = ConstrainUnpredictableBool(Unpredictable_BPMATCHHALF) else ()
   } else ();
-  if ([vaddress[1]] == 0b1) & (slice(DBGBCR_EL1[n], 5, 4) == 0xF) then if value_match_name then value_match_name = ConstrainUnpredictableBool(Unpredictable_BPMATCHHALF) else () else ();
+  if [vaddress[1]] == 0b1 & slice(DBGBCR_EL1[n], 5, 4) == 0xF then if value_match_name then value_match_name = ConstrainUnpredictableBool(Unpredictable_BPMATCHHALF) else () else ();
   val_match : bool = (value_match_name & state_match) & enabled;
   return(val_match)
 }
@@ -6495,7 +6830,7 @@ val AArch64_CheckBreakpoint : (bits(64), int) -> FaultRecord effect {wreg, rreg,
 
 function AArch64_CheckBreakpoint (vaddress, size) = {
   assert(~(ELUsingAArch32(S1TranslationRegime())), "!(ELUsingAArch32(S1TranslationRegime()))");
-  assert((UsingAArch32() & ((size == 2) | (size == 4))) | (size == 4), "((UsingAArch32() && ((size == 2) || (size == 4))) || (size == 4))");
+  assert(UsingAArch32() & (size == 2 | size == 4) | size == 4, "((UsingAArch32() && ((size == 2) || (size == 4))) || (size == 4))");
   val_match : bool = false;
   match_i : bool = undefined;
   foreach (i from 0 to UInt(slice(ID_AA64DFR0_EL1, 12, 4)) by 1 in inc) {
@@ -6509,7 +6844,7 @@ function AArch64_CheckBreakpoint (vaddress, size) = {
     reason = DebugHalt_Breakpoint;
     Halt(reason);
     undefined : FaultRecord
-  } else if (val_match & ([MDSCR_EL1[15]] == 0b1)) & AArch64_GenerateDebugExceptions() then {
+  } else if (val_match & [MDSCR_EL1[15]] == 0b1) & AArch64_GenerateDebugExceptions() then {
     acctype = AccType_IFETCH;
     iswrite = false;
     return(AArch64_DebugFault(acctype, iswrite))
@@ -6521,7 +6856,7 @@ val AArch64_BranchAddr : bits(64) -> bits(64) effect {rreg, undef, escape}
 function AArch64_BranchAddr vaddress = {
   assert(~(UsingAArch32()), "!(UsingAArch32())");
   msbit : nat = coerce_int_nat(AddrTop(vaddress, true, PSTATE.EL));
-  if msbit == 63 then return(vaddress) else if (((PSTATE.EL == EL0) | (PSTATE.EL == EL1)) | IsInHost()) & ([vaddress[msbit]] == 0b1) then return(SignExtend(slice(vaddress, 0, msbit + 1))) else return(ZeroExtend(slice(vaddress, 0, msbit + 1)))
+  if msbit == 63 then return(vaddress) else if ((PSTATE.EL == EL0 | PSTATE.EL == EL1) | IsInHost()) & [vaddress[msbit]] == 0b1 then return(SignExtend(slice(vaddress, 0, msbit + 1))) else return(ZeroExtend(slice(vaddress, 0, msbit + 1)))
 }
 
 val BranchTo : forall ('N : Int), 'N >= 0.
@@ -6534,7 +6869,7 @@ function BranchTo (target, branch_type) = {
     assert(UsingAArch32(), "UsingAArch32()");
     _PC = ZeroExtend(target)
   } else {
-    assert(('N == 64) & ~(UsingAArch32()), "((N == 64) && !(UsingAArch32()))");
+    assert('N == 64 & ~(UsingAArch32()), "((N == 64) && !(UsingAArch32()))");
     _PC = AArch64_BranchAddr(slice(target, 0, 64))
   };
   ()
@@ -6651,17 +6986,17 @@ val AArch64_TakeException : (bits(2), ExceptionRecord, bits(64), int) -> unit ef
 function AArch64_TakeException (target_el, exception, preferred_exception_return, vect_offset__arg) = {
   vect_offset = vect_offset__arg;
   SynchronizeContext();
-  assert((HaveEL(target_el) & ~(ELUsingAArch32(target_el))) & (UInt(target_el) >= UInt(PSTATE.EL)), "((HaveEL(target_el) && !(ELUsingAArch32(target_el))) && (UInt(target_el) >= UInt((PSTATE).EL)))");
+  assert((HaveEL(target_el) & ~(ELUsingAArch32(target_el))) & UInt(target_el) >= UInt(PSTATE.EL), "((HaveEL(target_el) && !(ELUsingAArch32(target_el))) && (UInt(target_el) >= UInt((PSTATE).EL)))");
   from_32 : bool = UsingAArch32();
   if from_32 then AArch64_MaybeZeroRegisterUppers() else ();
   if UInt(target_el) > UInt(PSTATE.EL) then {
     lower_32 : bool = undefined;
-    if target_el == EL3 then if ~(IsSecure()) & HaveEL(EL2) then lower_32 = ELUsingAArch32(EL2) else lower_32 = ELUsingAArch32(EL1) else if (IsInHost() & (PSTATE.EL == EL0)) & (target_el == EL2) then lower_32 = ELUsingAArch32(EL0) else lower_32 = ELUsingAArch32(target_el - 1);
+    if target_el == EL3 then if ~(IsSecure()) & HaveEL(EL2) then lower_32 = ELUsingAArch32(EL2) else lower_32 = ELUsingAArch32(EL1) else if (IsInHost() & PSTATE.EL == EL0) & target_el == EL2 then lower_32 = ELUsingAArch32(EL0) else lower_32 = ELUsingAArch32(target_el - 1);
     vect_offset = vect_offset + (if lower_32 then 1536 else 1024)
   } else if PSTATE.SP == 0b1 then vect_offset = vect_offset + 512 else ();
   spsr : bits(32) = GetPSRFromPSTATE();
   if HaveUAOExt() then PSTATE.UAO = 0b0 else ();
-  if ~((exception.typ == Exception_IRQ) | (exception.typ == Exception_FIQ)) then AArch64_ReportException(exception, target_el) else ();
+  if ~(exception.typ == Exception_IRQ | exception.typ == Exception_FIQ) then AArch64_ReportException(exception, target_el) else ();
   PSTATE.EL = target_el;
   PSTATE.nRW = 0b0;
   PSTATE.SP = 0b1;
@@ -6674,10 +7009,10 @@ function AArch64_TakeException (target_el, exception, preferred_exception_return
     PSTATE.IT = 0x00;
     PSTATE.T = 0b0
   } else ();
-  if (HavePANExt() & ((PSTATE.EL == EL1) | ((PSTATE.EL == EL2) & ELIsInHost(EL0)))) & ([aget_SCTLR()[23]] == 0b0) then PSTATE.PAN = 0b1 else ();
+  if (HavePANExt() & (PSTATE.EL == EL1 | PSTATE.EL == EL2 & ELIsInHost(EL0))) & [aget_SCTLR()[23]] == 0b0 then PSTATE.PAN = 0b1 else ();
   BranchTo(slice(aget_VBAR(), 11, 53) @ __GetSlice_int(11, vect_offset, 0), BranchType_EXCEPTION);
   iesb_req : bool = undefined;
-  if HaveRASExt() & ([aget_SCTLR()[21]] == 0b1) then {
+  if HaveRASExt() & [aget_SCTLR()[21]] == 0b1 then {
     ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All);
     iesb_req = true;
     TakeUnmaskedPhysicalSErrorInterrupts(iesb_req)
@@ -6688,7 +7023,7 @@ function AArch64_TakeException (target_el, exception, preferred_exception_return
 val TrapPACUse : bits(2) -> unit effect {escape, rreg, undef, wreg}
 
 function TrapPACUse target_el = {
-  assert((HaveEL(target_el) & (target_el != EL0)) & (UInt(target_el) >= UInt(PSTATE.EL)), "((HaveEL(target_el) && (target_el != EL0)) && (UInt(target_el) >= UInt((PSTATE).EL)))");
+  assert((HaveEL(target_el) & target_el != EL0) & UInt(target_el) >= UInt(PSTATE.EL), "((HaveEL(target_el) && (target_el != EL0)) && (UInt(target_el) >= UInt((PSTATE).EL)))");
   preferred_exception_return : bits(64) = ThisInstrAddr();
   exception : ExceptionRecord = undefined;
   vect_offset : int = 0;
@@ -6713,17 +7048,17 @@ function Strip (A, data) = {
     original_ptr = slice(extfield, 0, negate(bottom_PAC_bit) + 64) @ slice(A, 0, bottom_PAC_bit);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       TrapEL2 = false;
@@ -6761,20 +7096,20 @@ function AuthIB (X, Y) = {
   APIBKey_EL1 : bits(128) = slice(APIBKeyHi_EL1, 0, 64) @ slice(APIBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[30]] else [SCTLR_EL2[30]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[30]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[30]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[30]];
@@ -6835,20 +7170,20 @@ function AuthIA (X, Y) = {
   APIAKey_EL1 : bits(128) = slice(APIAKeyHi_EL1, 0, 64) @ slice(APIAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[31]] else [SCTLR_EL2[31]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[31]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[31]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[31]];
@@ -6922,20 +7257,20 @@ function AuthDB (X, Y) = {
   APDBKey_EL1 : bits(128) = slice(APDBKeyHi_EL1, 0, 64) @ slice(APDBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[13]] else [SCTLR_EL2[13]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[13]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[13]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[13]];
@@ -6965,20 +7300,20 @@ function AuthDA (X, Y) = {
   APDAKey_EL1 : bits(128) = slice(APDAKeyHi_EL1, 0, 64) @ slice(APDAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[27]] else [SCTLR_EL2[27]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[27]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[27]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[27]];
@@ -7008,20 +7343,20 @@ function AddPACIB (X, Y) = {
   APIBKey_EL1 : bits(128) = slice(APIBKeyHi_EL1, 0, 64) @ slice(APIBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[30]] else [SCTLR_EL2[30]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[30]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[30]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[30]];
@@ -7082,20 +7417,20 @@ function AddPACIA (X, Y) = {
   APIAKey_EL1 : bits(128) = slice(APIAKeyHi_EL1, 0, 64) @ slice(APIAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[31]] else [SCTLR_EL2[31]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[31]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[31]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[31]];
@@ -7155,17 +7490,17 @@ function AddPACGA (X, Y) = {
   APGAKey_EL1 : bits(128) = slice(APGAKeyHi_EL1, 0, 64) @ slice(APGAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = [SCR_EL3[17]] == 0b0
     },
     EL1 => {
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       TrapEL2 = false;
@@ -7194,20 +7529,20 @@ function AddPACDB (X, Y) = {
   APDBKey_EL1 : bits(128) = slice(APDBKeyHi_EL1, 0, 64) @ slice(APDBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[13]] else [SCTLR_EL2[13]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[13]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[13]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[13]];
@@ -7237,20 +7572,20 @@ function AddPACDA (X, Y) = {
   APDAKey_EL1 : bits(128) = slice(APDAKeyHi_EL1, 0, 64) @ slice(APDAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
     EL0 => {
-      IsEL1Regime : bool = (~(HaveEL(EL2)) | ([HCR_EL2[27]] == 0b0)) | ([HCR_EL2[34]] == 0b0);
+      IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[27]] else [SCTLR_EL2[27]];
-      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL1 => {
       Enable = [SCTLR_EL1[27]];
-      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[41]] == 0b0);
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL2 => {
       Enable = [SCTLR_EL2[27]];
       TrapEL2 = false;
-      TrapEL3 = HaveEL(EL3) & ([SCR_EL3[17]] == 0b0)
+      TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
     EL3 => {
       Enable = [SCTLR_EL3[27]];
@@ -7275,11 +7610,11 @@ val AArch64_WatchpointException : (bits(64), FaultRecord) -> unit effect {escape
 
 function AArch64_WatchpointException (vaddress, fault) = {
   assert(PSTATE.EL != EL3, "((PSTATE).EL != EL3)");
-  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1))) & (([HCR_EL2[27]] == 0b1) | ([MDCR_EL2[8]] == 0b1));
+  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1)) & ([HCR_EL2[27]] == 0b1 | [MDCR_EL2[8]] == 0b1);
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   exception : ExceptionRecord = AArch64_AbortSyndrome(Exception_Watchpoint, fault, vaddress);
-  if (PSTATE.EL == EL2) | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
+  if PSTATE.EL == EL2 | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
 }
 
 val AArch64_WFxTrap : (bits(2), bool) -> unit effect {escape, rreg, undef, wreg}
@@ -7295,7 +7630,7 @@ function AArch64_WFxTrap (target_el, is_wfe) = {
   __tmp_273 : bits(25) = exception.syndrome;
   __tmp_273 = __SetSlice_bits(25, 1, __tmp_273, 0, if is_wfe then 0b1 else 0b0);
   exception.syndrome = __tmp_273;
-  if (((target_el == EL1) & HaveEL(EL2)) & ~(IsSecure())) & ([HCR_EL2[27]] == 0b1) then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(target_el, exception, preferred_exception_return, vect_offset)
+  if ((target_el == EL1 & HaveEL(EL2)) & ~(IsSecure())) & [HCR_EL2[27]] == 0b1 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(target_el, exception, preferred_exception_return, vect_offset)
 }
 
 val AArch64_CheckForWFxTrap : (bits(2), bool) -> unit effect {escape, rreg, undef, wreg}
@@ -7317,14 +7652,14 @@ function aarch64_system_hints op = match op {
   SystemHintOp_YIELD => Hint_Yield(),
   SystemHintOp_WFE => if IsEventRegisterSet() then ClearEventRegister() else {
     if PSTATE.EL == EL0 then AArch64_CheckForWFxTrap(EL1, true) else ();
-    if ((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1))) & ~(IsInHost()) then AArch64_CheckForWFxTrap(EL2, true) else ();
-    if HaveEL(EL3) & (PSTATE.EL != EL3) then AArch64_CheckForWFxTrap(EL3, true) else ();
+    if ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1)) & ~(IsInHost()) then AArch64_CheckForWFxTrap(EL2, true) else ();
+    if HaveEL(EL3) & PSTATE.EL != EL3 then AArch64_CheckForWFxTrap(EL3, true) else ();
     WaitForEvent()
   },
   SystemHintOp_WFI => if ~(InterruptPending()) then {
     if PSTATE.EL == EL0 then AArch64_CheckForWFxTrap(EL1, false) else ();
-    if ((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1))) & ~(IsInHost()) then AArch64_CheckForWFxTrap(EL2, false) else ();
-    if HaveEL(EL3) & (PSTATE.EL != EL3) then AArch64_CheckForWFxTrap(EL3, false) else ();
+    if ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1)) & ~(IsInHost()) then AArch64_CheckForWFxTrap(EL2, false) else ();
+    if HaveEL(EL3) & PSTATE.EL != EL3 then AArch64_CheckForWFxTrap(EL3, false) else ();
     WaitForInterrupt()
   } else (),
   SystemHintOp_SEV => SendEvent(),
@@ -7332,7 +7667,7 @@ function aarch64_system_hints op = match op {
   SystemHintOp_ESB => {
     ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All);
     AArch64_ESBOperation();
-    if (HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1)) then AArch64_vESBOperation() else ();
+    if (HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1) then AArch64_vESBOperation() else ();
     TakeUnmaskedSErrorInterrupts()
   },
   SystemHintOp_PSB => ProfilingSynchronizationBarrier(),
@@ -7371,7 +7706,7 @@ val AArch64_VectorCatchException : FaultRecord -> unit effect {escape, rreg, und
 
 function AArch64_VectorCatchException fault = {
   assert(PSTATE.EL != EL2, "((PSTATE).EL != EL2)");
-  assert((HaveEL(EL2) & ~(IsSecure())) & (([HCR_EL2[27]] == 0b1) | ([MDCR_EL2[8]] == 0b1)), "((HaveEL(EL2) && !(IsSecure())) && (((HCR_EL2).TGE == '1') || ((MDCR_EL2).TDE == '1')))");
+  assert((HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[27]] == 0b1 | [MDCR_EL2[8]] == 0b1), "((HaveEL(EL2) && !(IsSecure())) && (((HCR_EL2).TGE == '1') || ((MDCR_EL2).TDE == '1')))");
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   vaddress : bits(64) = undefined;
@@ -7382,7 +7717,7 @@ function AArch64_VectorCatchException fault = {
 val AArch64_UndefinedFault : unit -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_UndefinedFault () = {
-  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0)) & ([HCR_EL2[27]] == 0b1);
+  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & PSTATE.EL == EL0) & [HCR_EL2[27]] == 0b1;
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   exception : ExceptionRecord = ExceptionSyndrome(Exception_Uncategorized);
@@ -7417,13 +7752,13 @@ function AArch64_SystemRegisterTrap (target_el, op0, op2, op1, crn, rt, crm, dir
   __tmp_286 : bits(25) = exception.syndrome;
   __tmp_286 = __SetSlice_bits(25, 1, __tmp_286, 0, dir);
   exception.syndrome = __tmp_286;
-  if (((target_el == EL1) & HaveEL(EL2)) & ~(IsSecure())) & ([HCR_EL2[27]] == 0b1) then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(target_el, exception, preferred_exception_return, vect_offset)
+  if ((target_el == EL1 & HaveEL(EL2)) & ~(IsSecure())) & [HCR_EL2[27]] == 0b1 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(target_el, exception, preferred_exception_return, vect_offset)
 }
 
 val AArch64_SoftwareBreakpoint : bits(16) -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_SoftwareBreakpoint immediate = {
-  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1))) & (([HCR_EL2[27]] == 0b1) | ([MDCR_EL2[8]] == 0b1));
+  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1)) & ([HCR_EL2[27]] == 0b1 | [MDCR_EL2[8]] == 0b1);
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   exception : ExceptionRecord = ExceptionSyndrome(Exception_SoftwareBreakpoint);
@@ -7451,7 +7786,7 @@ function AArch64_SPAlignmentFault () = {
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   exception : ExceptionRecord = ExceptionSyndrome(Exception_SPAlignment);
-  if UInt(PSTATE.EL) > UInt(EL1) then AArch64_TakeException(PSTATE.EL, exception, preferred_exception_return, vect_offset) else if (HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[27]] == 0b1) then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
+  if UInt(PSTATE.EL) > UInt(EL1) then AArch64_TakeException(PSTATE.EL, exception, preferred_exception_return, vect_offset) else if (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[27]] == 0b1 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
 }
 
 val CheckSPAlignment : unit -> unit effect {escape, rreg, undef, wreg}
@@ -7460,36 +7795,36 @@ function CheckSPAlignment () = {
   sp : bits(64) = aget_SP();
   stack_align_check : bool = undefined;
   if PSTATE.EL == EL0 then stack_align_check = [aget_SCTLR()[4]] != 0b0 else stack_align_check = [aget_SCTLR()[3]] != 0b0;
-  if stack_align_check & (sp != Align(sp, 16)) then AArch64_SPAlignmentFault() else ();
+  if stack_align_check & sp != Align(sp, 16) then AArch64_SPAlignmentFault() else ();
   ()
 }
 
 val AArch64_InstructionAbort : (bits(64), FaultRecord) -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_InstructionAbort (vaddress, fault) = {
-  route_to_el3 : bool = (HaveEL(EL3) & ([SCR_EL3[3]] == 0b1)) & IsExternalAbort(fault);
-  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1))) & ((([HCR_EL2[27]] == 0b1) | IsSecondStage(fault)) | ((HaveRASExt() & ([HCR_EL2[37]] == 0b1)) & IsExternalAbort(fault)));
+  route_to_el3 : bool = (HaveEL(EL3) & [SCR_EL3[3]] == 0b1) & IsExternalAbort(fault);
+  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1)) & (([HCR_EL2[27]] == 0b1 | IsSecondStage(fault)) | (HaveRASExt() & [HCR_EL2[37]] == 0b1) & IsExternalAbort(fault));
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   exception : ExceptionRecord = AArch64_AbortSyndrome(Exception_InstructionAbort, fault, vaddress);
-  if (PSTATE.EL == EL3) | route_to_el3 then AArch64_TakeException(EL3, exception, preferred_exception_return, vect_offset) else if (PSTATE.EL == EL2) | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
+  if PSTATE.EL == EL3 | route_to_el3 then AArch64_TakeException(EL3, exception, preferred_exception_return, vect_offset) else if PSTATE.EL == EL2 | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
 }
 
 val AArch64_DataAbort : (bits(64), FaultRecord) -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_DataAbort (vaddress, fault) = {
-  route_to_el3 : bool = (HaveEL(EL3) & ([SCR_EL3[3]] == 0b1)) & IsExternalAbort(fault);
-  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1))) & ((([HCR_EL2[27]] == 0b1) | IsSecondStage(fault)) | ((HaveRASExt() & ([HCR_EL2[37]] == 0b1)) & IsExternalAbort(fault)));
+  route_to_el3 : bool = (HaveEL(EL3) & [SCR_EL3[3]] == 0b1) & IsExternalAbort(fault);
+  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1)) & (([HCR_EL2[27]] == 0b1 | IsSecondStage(fault)) | (HaveRASExt() & [HCR_EL2[37]] == 0b1) & IsExternalAbort(fault));
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   exception : ExceptionRecord = AArch64_AbortSyndrome(Exception_DataAbort, fault, vaddress);
-  if (PSTATE.EL == EL3) | route_to_el3 then AArch64_TakeException(EL3, exception, preferred_exception_return, vect_offset) else if (PSTATE.EL == EL2) | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
+  if PSTATE.EL == EL3 | route_to_el3 then AArch64_TakeException(EL3, exception, preferred_exception_return, vect_offset) else if PSTATE.EL == EL2 | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
 }
 
 val AArch64_CheckForERetTrap : (bool, bool) -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_CheckForERetTrap (eret_with_pac, pac_uses_key_a) = {
-  route_to_el2 : bool = (((HaveNVExt() & HaveEL(EL2)) & ~(IsSecure())) & (PSTATE.EL == EL1)) & ([HCR_EL2[42]] == 0b1);
+  route_to_el2 : bool = (((HaveNVExt() & HaveEL(EL2)) & ~(IsSecure())) & PSTATE.EL == EL1) & [HCR_EL2[42]] == 0b1;
   vect_offset : int = undefined;
   if route_to_el2 then {
     exception : ExceptionRecord = undefined;
@@ -7529,7 +7864,7 @@ val AArch64_CallSupervisor : bits(16) -> unit effect {escape, rreg, undef, wreg}
 function AArch64_CallSupervisor immediate = {
   if UsingAArch32() then AArch32_ITAdvance() else ();
   SSAdvance();
-  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0)) & ([HCR_EL2[27]] == 0b1);
+  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & PSTATE.EL == EL0) & [HCR_EL2[27]] == 0b1;
   preferred_exception_return : bits(64) = NextInstrAddr();
   vect_offset : int = 0;
   exception : ExceptionRecord = ExceptionSyndrome(Exception_SupervisorCall);
@@ -7585,26 +7920,26 @@ val AArch64_BreakpointException : FaultRecord -> unit effect {escape, rreg, unde
 
 function AArch64_BreakpointException fault = {
   assert(PSTATE.EL != EL3, "((PSTATE).EL != EL3)");
-  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & ((PSTATE.EL == EL0) | (PSTATE.EL == EL1))) & (([HCR_EL2[27]] == 0b1) | ([MDCR_EL2[8]] == 0b1));
+  route_to_el2 : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0 | PSTATE.EL == EL1)) & ([HCR_EL2[27]] == 0b1 | [MDCR_EL2[8]] == 0b1);
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
   vaddress : bits(64) = undefined;
   exception : ExceptionRecord = AArch64_AbortSyndrome(Exception_Breakpoint, fault, vaddress);
-  if (PSTATE.EL == EL2) | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
+  if PSTATE.EL == EL2 | route_to_el2 then AArch64_TakeException(EL2, exception, preferred_exception_return, vect_offset) else AArch64_TakeException(EL1, exception, preferred_exception_return, vect_offset)
 }
 
 val AArch64_Abort : (bits(64), FaultRecord) -> unit effect {escape, rreg, undef, wreg}
 
-function AArch64_Abort (vaddress, fault) = if IsDebugException(fault) then if fault.acctype == AccType_IFETCH then if UsingAArch32() & (fault.debugmoe == DebugException_VectorCatch) then AArch64_VectorCatchException(fault) else AArch64_BreakpointException(fault) else AArch64_WatchpointException(vaddress, fault) else if fault.acctype == AccType_IFETCH then AArch64_InstructionAbort(vaddress, fault) else AArch64_DataAbort(vaddress, fault)
+function AArch64_Abort (vaddress, fault) = if IsDebugException(fault) then if fault.acctype == AccType_IFETCH then if UsingAArch32() & fault.debugmoe == DebugException_VectorCatch then AArch64_VectorCatchException(fault) else AArch64_BreakpointException(fault) else AArch64_WatchpointException(vaddress, fault) else if fault.acctype == AccType_IFETCH then AArch64_InstructionAbort(vaddress, fault) else AArch64_DataAbort(vaddress, fault)
 
 val AArch64_CheckAlignment : (bits(64), int, AccType, bool) -> bool effect {escape, rreg, undef, wreg}
 
 function AArch64_CheckAlignment (address, 'alignment, acctype, iswrite) = {
   aligned : bool = address == Align(address, alignment);
-  atomic : bool = (acctype == AccType_ATOMIC) | (acctype == AccType_ATOMICRW);
-  ordered : bool = (acctype == AccType_ORDERED) | ((acctype == AccType_ORDEREDRW) | (acctype == AccType_LIMITEDORDERED));
+  atomic : bool = acctype == AccType_ATOMIC | acctype == AccType_ATOMICRW;
+  ordered : bool = acctype == AccType_ORDERED | acctype == AccType_ORDEREDRW | acctype == AccType_LIMITEDORDERED;
   vector_name : bool = acctype == AccType_VEC;
-  check : bool = (atomic | ordered) | ([aget_SCTLR()[1]] == 0b1);
+  check : bool = (atomic | ordered) | [aget_SCTLR()[1]] == 0b1;
   secondstage : bool = undefined;
   if check & ~(aligned) then {
     secondstage = false;
@@ -7617,7 +7952,7 @@ val AArch32_EnterMode : (bits(5), bits(32), int, int) -> unit effect {escape, rr
 
 function AArch32_EnterMode (target_mode, preferred_exception_return, 'lr_offset, 'vect_offset) = {
   SynchronizeContext();
-  assert(ELUsingAArch32(EL1) & (PSTATE.EL != EL2), "(ELUsingAArch32(EL1) && ((PSTATE).EL != EL2))");
+  assert(ELUsingAArch32(EL1) & PSTATE.EL != EL2, "(ELUsingAArch32(EL1) && ((PSTATE).EL != EL2))");
   spsr : bits(32) = GetPSRFromPSTATE();
   if PSTATE.M == M32_Monitor then SCR = __SetSlice_bits(32, 1, SCR, 0, 0b0) else ();
   AArch32_WriteMode(target_mode);
@@ -7625,11 +7960,11 @@ function AArch32_EnterMode (target_mode, preferred_exception_return, 'lr_offset,
   aset_R(14, preferred_exception_return + lr_offset);
   PSTATE.T = [SCTLR[30]];
   PSTATE.SS = 0b0;
-  if target_mode == M32_FIQ then (PSTATE.A, PSTATE.I, PSTATE.F) = 0b111 else if (target_mode == M32_Abort) | (target_mode == M32_IRQ) then (PSTATE.A, PSTATE.I) = 0b11 else PSTATE.I = 0b1;
+  if target_mode == M32_FIQ then (PSTATE.A, PSTATE.I, PSTATE.F) = 0b111 else if target_mode == M32_Abort | target_mode == M32_IRQ then (PSTATE.A, PSTATE.I) = 0b11 else PSTATE.I = 0b1;
   PSTATE.E = [SCTLR[25]];
   PSTATE.IL = 0b0;
   PSTATE.IT = 0x00;
-  if HavePANExt() & ([SCTLR[23]] == 0b0) then PSTATE.PAN = 0b1 else ();
+  if HavePANExt() & [SCTLR[23]] == 0b0 then PSTATE.PAN = 0b1 else ();
   BranchTo(slice(ExcVectorBase(), 5, 27) @ __GetSlice_int(5, vect_offset, 0), BranchType_UNKNOWN);
   EndOfInstruction()
 }
@@ -7639,7 +7974,7 @@ val AArch64_AdvSIMDFPAccessTrap : bits(2) -> unit effect {escape, rreg, undef, w
 function AArch64_AdvSIMDFPAccessTrap target_el = {
   preferred_exception_return : bits(64) = ThisInstrAddr();
   vect_offset : int = 0;
-  route_to_el2 : bool = (((target_el == EL1) & HaveEL(EL2)) & ~(IsSecure())) & ([HCR_EL2[27]] == 0b1);
+  route_to_el2 : bool = ((target_el == EL1 & HaveEL(EL2)) & ~(IsSecure())) & [HCR_EL2[27]] == 0b1;
   exception : ExceptionRecord = undefined;
   if route_to_el2 then {
     exception = ExceptionSyndrome(Exception_Uncategorized);
@@ -7658,10 +7993,10 @@ val AArch64_CheckFPAdvSIMDTrap : unit -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_CheckFPAdvSIMDTrap () = {
   disabled : bool = undefined;
-  if HaveEL(EL2) & ~(IsSecure()) then if HaveVirtHostExt() & ([HCR_EL2[34]] == 0b1) then {
+  if HaveEL(EL2) & ~(IsSecure()) then if HaveVirtHostExt() & [HCR_EL2[34]] == 0b1 then {
     match slice(CPTR_EL2, 20, 2) {
-      _ : bits(1) @ [bitzero] => disabled = ~((PSTATE.EL == EL1) & ([HCR_EL2[27]] == 0b1)),
-      0b01 => disabled = (PSTATE.EL == EL0) & ([HCR_EL2[27]] == 0b1),
+      _ : bits(1) @ [bitzero] => disabled = ~(PSTATE.EL == EL1 & [HCR_EL2[27]] == 0b1),
+      0b01 => disabled = PSTATE.EL == EL0 & [HCR_EL2[27]] == 0b1,
       0b11 => disabled = false
     };
     if disabled then AArch64_AdvSIMDFPAccessTrap(EL2) else ()
@@ -7674,7 +8009,7 @@ val AArch64_CheckFPAdvSIMDEnabled : unit -> unit effect {escape, rreg, undef, wr
 
 function AArch64_CheckFPAdvSIMDEnabled () = {
   disabled : bool = undefined;
-  if (PSTATE.EL == EL0) | (PSTATE.EL == EL1) then {
+  if PSTATE.EL == EL0 | PSTATE.EL == EL1 then {
     match slice(aget_CPACR(), 20, 2) {
       _ : bits(1) @ [bitzero] => disabled = true,
       0b01 => disabled = PSTATE.EL == EL0,
@@ -7908,7 +8243,7 @@ val AArch64_AccessIsPrivileged : AccType -> bool effect {escape, rreg, undef}
 
 function AArch64_AccessIsPrivileged acctype = {
   ispriv : bool = undefined;
-  if PSTATE.EL == EL0 then ispriv = false else if PSTATE.EL == EL3 then ispriv = true else if (PSTATE.EL == EL2) & (~(IsInHost()) | ([HCR_EL2[27]] == 0b0)) then ispriv = true else if HaveUAOExt() & (PSTATE.UAO == 0b1) then ispriv = true else ispriv = acctype != AccType_UNPRIV;
+  if PSTATE.EL == EL0 then ispriv = false else if PSTATE.EL == EL3 then ispriv = true else if PSTATE.EL == EL2 & (~(IsInHost()) | [HCR_EL2[27]] == 0b0) then ispriv = true else if HaveUAOExt() & PSTATE.UAO == 0b1 then ispriv = true else ispriv = acctype != AccType_UNPRIV;
   return(ispriv)
 }
 
@@ -7925,7 +8260,7 @@ function AArch64_CheckWatchpoint (vaddress, acctype, iswrite, size) = {
     reason = DebugHalt_Watchpoint;
     Halt(reason);
     undefined
-  } else if (val_match & ([MDSCR_EL1[15]] == 0b1)) & AArch64_GenerateDebugExceptions() then return(AArch64_DebugFault(acctype, iswrite)) else return(AArch64_NoFault())
+  } else if (val_match & [MDSCR_EL1[15]] == 0b1) & AArch64_GenerateDebugExceptions() then return(AArch64_DebugFault(acctype, iswrite)) else return(AArch64_NoFault())
 }
 
 val AArch64_CheckDebug : (bits(64), AccType, bool, int) -> FaultRecord effect {escape, rreg, undef, wreg}
@@ -7933,7 +8268,7 @@ val AArch64_CheckDebug : (bits(64), AccType, bool, int) -> FaultRecord effect {e
 function AArch64_CheckDebug (vaddress, acctype, iswrite, 'size) = {
   fault : FaultRecord = AArch64_NoFault();
   d_side : bool = acctype != AccType_IFETCH;
-  generate_exception : bool = AArch64_GenerateDebugExceptions() & ([MDSCR_EL1[15]] == 0b1);
+  generate_exception : bool = AArch64_GenerateDebugExceptions() & [MDSCR_EL1[15]] == 0b1;
   halt : bool = HaltOnBreakpointOrWatchpoint();
   if generate_exception | halt then if d_side then fault = AArch64_CheckWatchpoint(vaddress, acctype, iswrite, size) else fault = AArch64_CheckBreakpoint(vaddress, size) else ();
   return(fault)
@@ -7955,30 +8290,30 @@ function AArch64_CheckPermission (perms, vaddress, level, NS, acctype, iswrite) 
   user_r : bool = undefined;
   priv_w : bool = undefined;
   priv_r : bool = undefined;
-  if ((PSTATE.EL == EL0) | (PSTATE.EL == EL1)) | IsInHost() then {
+  if (PSTATE.EL == EL0 | PSTATE.EL == EL1) | IsInHost() then {
     priv_r = true;
     priv_w = [perms.ap[2]] == 0b0;
     user_r = [perms.ap[1]] == 0b1;
     user_w = slice(perms.ap, 1, 2) == 0b01;
     ispriv = AArch64_AccessIsPrivileged(acctype);
     pan = if HavePANExt() then PSTATE.PAN else 0b0;
-    if ((((HaveNVExt() & HaveEL(EL2)) & ([HCR_EL2[42]] == 0b1)) & ([HCR_EL2[43]] == 0b1)) & ~(IsSecure())) & (PSTATE.EL == EL1) then
+    if ((((HaveNVExt() & HaveEL(EL2)) & [HCR_EL2[42]] == 0b1) & [HCR_EL2[43]] == 0b1) & ~(IsSecure())) & PSTATE.EL == EL1 then
       pan = 0b0
     else ();
-    if ((((pan == 0b1) & user_r) & ispriv) & ~((acctype == AccType_DC) | ((acctype == AccType_AT) | (acctype == AccType_IFETCH)))) | ((acctype == AccType_AT) & AArch64_ExecutingATS1xPInstr()) then {
+    if ((pan == 0b1 & user_r) & ispriv) & ~(acctype == AccType_DC | acctype == AccType_AT | acctype == AccType_IFETCH) | acctype == AccType_AT & AArch64_ExecutingATS1xPInstr() then {
       priv_r = false;
       priv_w = false
     } else ();
-    user_xn = (perms.xn == 0b1) | (user_w & wxn);
-    priv_xn = ((perms.pxn == 0b1) | (priv_w & wxn)) | user_w;
+    user_xn = perms.xn == 0b1 | user_w & wxn;
+    priv_xn = (perms.pxn == 0b1 | priv_w & wxn) | user_w;
     if ispriv then (r, w, xn) = (priv_r, priv_w, priv_xn)
     else (r, w, xn) = (user_r, user_w, user_xn)
   } else {
     r = true;
     w = [perms.ap[2]] == 0b0;
-    xn = (perms.xn == 0b1) | (w & wxn)
+    xn = perms.xn == 0b1 | w & wxn
   };
-  if ((HaveEL(EL3) & IsSecure()) & (NS == 0b1)) & ([SCR_EL3[9]] == 0b1) then
+  if ((HaveEL(EL3) & IsSecure()) & NS == 0b1) & [SCR_EL3[9]] == 0b1 then
     xn = true
   else ();
   failedread : bool = undefined;
@@ -7986,7 +8321,7 @@ function AArch64_CheckPermission (perms, vaddress, level, NS, acctype, iswrite) 
   if acctype == AccType_IFETCH then {
     fail = xn;
     failedread = true
-  } else if (acctype == AccType_ATOMICRW) | (acctype == AccType_ORDEREDRW) then {
+  } else if acctype == AccType_ATOMICRW | acctype == AccType_ORDEREDRW then {
     fail = ~(r) | ~(w);
     failedread = ~(r)
   } else if iswrite then {
@@ -8011,7 +8346,7 @@ val AArch64_FirstStageTranslate : (bits(64), AccType, bool, bool, int) -> Addres
 
 function AArch64_FirstStageTranslate (vaddress, acctype, iswrite, wasaligned, 'size) = {
   s1_enabled : bool = undefined;
-  if HasS2Translation() then s1_enabled = (([HCR_EL2[27]] == 0b0) & ([HCR_EL2[12]] == 0b0)) & ([SCTLR_EL1[0]] == 0b1) else s1_enabled = [aget_SCTLR()[0]] == 0b1;
+  if HasS2Translation() then s1_enabled = ([HCR_EL2[27]] == 0b0 & [HCR_EL2[12]] == 0b0) & [SCTLR_EL1[0]] == 0b1 else s1_enabled = [aget_SCTLR()[0]] == 0b1;
   ipaddress : bits(52) = undefined;
   secondstage : bool = false;
   s2fs1walk : bool = false;
@@ -8024,7 +8359,7 @@ function AArch64_FirstStageTranslate (vaddress, acctype, iswrite, wasaligned, 's
   } else {
     S1 = AArch64_TranslateAddressS1Off(vaddress, acctype, iswrite);
     permissioncheck = false;
-    if (UsingAArch32() & HaveTrapLoadStoreMultipleDeviceExt()) & AArch32_ExecutingLSMInstr() then if (S1.addrdesc.memattrs.typ == MemType_Device) & (S1.addrdesc.memattrs.device != DeviceType_GRE) then {
+    if (UsingAArch32() & HaveTrapLoadStoreMultipleDeviceExt()) & AArch32_ExecutingLSMInstr() then if S1.addrdesc.memattrs.typ == MemType_Device & S1.addrdesc.memattrs.device != DeviceType_GRE then {
       nTLSMD = if S1TranslationRegime() == EL2 then [SCTLR_EL2[28]] else [SCTLR_EL1[28]];
       if nTLSMD == 0b0 then {
         __tmp_246 : AddressDescriptor = S1.addrdesc;
@@ -8033,7 +8368,7 @@ function AArch64_FirstStageTranslate (vaddress, acctype, iswrite, wasaligned, 's
       } else ()
     } else () else ()
   };
-  if (((~(wasaligned) & (acctype != AccType_IFETCH)) | (acctype == AccType_DCZVA)) & (S1.addrdesc.memattrs.typ == MemType_Device)) & ~(IsFault(S1.addrdesc)) then {
+  if ((~(wasaligned) & acctype != AccType_IFETCH | acctype == AccType_DCZVA) & S1.addrdesc.memattrs.typ == MemType_Device) & ~(IsFault(S1.addrdesc)) then {
     __tmp_247 : AddressDescriptor = S1.addrdesc;
     __tmp_247.fault = AArch64_AlignmentFault(acctype, iswrite, secondstage);
     S1.addrdesc = __tmp_247
@@ -8043,7 +8378,7 @@ function AArch64_FirstStageTranslate (vaddress, acctype, iswrite, wasaligned, 's
     __tmp_248.fault = AArch64_CheckPermission(S1.perms, vaddress, S1.level, S1.addrdesc.paddress.NS, acctype, iswrite);
     S1.addrdesc = __tmp_248
   } else ();
-  if (~(IsFault(S1.addrdesc)) & (S1.addrdesc.memattrs.typ == MemType_Device)) & (acctype == AccType_IFETCH) then S1.addrdesc = AArch64_InstructionDevice(S1.addrdesc, vaddress, ipaddress, S1.level, acctype, iswrite, secondstage, s2fs1walk) else ();
+  if (~(IsFault(S1.addrdesc)) & S1.addrdesc.memattrs.typ == MemType_Device) & acctype == AccType_IFETCH then S1.addrdesc = AArch64_InstructionDevice(S1.addrdesc, vaddress, ipaddress, S1.level, acctype, iswrite, secondstage, s2fs1walk) else ();
   hwupdatewalk : bool = false;
   s2fs1walk = false;
   __tmp_249 : AddressDescriptor = S1.addrdesc;
@@ -8071,7 +8406,7 @@ val AArch64_TranslateAddress : (bits(64), AccType, bool, bool, int) -> AddressDe
 
 function AArch64_TranslateAddress (vaddress, acctype, iswrite, wasaligned, 'size) = {
   result : AddressDescriptor = AArch64_FullTranslate(vaddress, acctype, iswrite, wasaligned, size);
-  if ~((acctype == AccType_PTW) | ((acctype == AccType_IC) | (acctype == AccType_AT))) & ~(IsFault(result)) then result.fault = AArch64_CheckDebug(vaddress, acctype, iswrite, size) else ();
+  if ~(acctype == AccType_PTW | acctype == AccType_IC | acctype == AccType_AT) & ~(IsFault(result)) then result.fault = AArch64_CheckDebug(vaddress, acctype, iswrite, size) else ();
   result.vaddress = ZeroExtend(vaddress);
   return(result)
 }
@@ -8080,7 +8415,7 @@ val AArch64_aset_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
   (bits(64), atom('size), AccType, bool, bits(8 * 'size)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function AArch64_aset_MemSingle (address, size, acctype, wasaligned, value_name) = {
-  assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
+  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
   assert(address == Align(address, 'size), "(address == Align(address, size))");
   memaddrdesc : AddressDescriptor = undefined;
   iswrite : bool = true;
@@ -8102,19 +8437,19 @@ function aset_Mem (address, size, acctype, value_name__arg) = {
   if BigEndian() then value_name = BigEndianReverse(value_name) else ();
   aligned : bool = AArch64_CheckAlignment(address, 'size, acctype, iswrite);
   atomic : bool = undefined;
-  if ('size != 16) | ~((acctype == AccType_VEC) | (acctype == AccType_VECSTREAM)) then atomic = aligned else atomic = address == Align(address, 8);
+  if 'size != 16 | ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM) then atomic = aligned else atomic = address == Align(address, 8);
   c : Constraint = undefined;
   if ~(atomic) then {
     assert('size > 1, "(size > 1)");
     AArch64_aset_MemSingle(address, 1, acctype, aligned, slice(value_name, 0, 8));
     if ~(aligned) then {
       c = ConstrainUnpredictable(Unpredictable_DEVPAGE2);
-      assert((c == Constraint_FAULT) | (c == Constraint_NONE), "((c == Constraint_FAULT) || (c == Constraint_NONE))");
+      assert(c == Constraint_FAULT | c == Constraint_NONE, "((c == Constraint_FAULT) || (c == Constraint_NONE))");
       if c == Constraint_NONE then aligned = true else ()
     } else ();
     foreach (i from 1 to ('size - 1) by 1 in inc)
       AArch64_aset_MemSingle(address + i, 1, acctype, aligned, slice(value_name, 8 * i, 8))
-  } else if ('size == 16) & ((acctype == AccType_VEC) | (acctype == AccType_VECSTREAM)) then {
+  } else if 'size == 16 & (acctype == AccType_VEC | acctype == AccType_VECSTREAM) then {
     AArch64_aset_MemSingle(address, 8, acctype, aligned, slice(value_name, 0, 64));
     AArch64_aset_MemSingle(address + 8, 8, acctype, aligned, slice(value_name, 64, 64))
   } else AArch64_aset_MemSingle(address, 'size, acctype, aligned, value_name);
@@ -8125,7 +8460,7 @@ val AArch64_aget_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
   (bits(64), atom('size), AccType, bool) -> bits(8 * 'size) effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function AArch64_aget_MemSingle (address, size, acctype, wasaligned) = {
-  assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
+  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
   assert(address == Align(address, 'size), "(address == Align(address, size))");
   memaddrdesc : AddressDescriptor = undefined;
   value_name : bits(8 * 'size) = undefined;
@@ -8141,25 +8476,25 @@ val aget_Mem : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
   (bits(64), atom('size), AccType) -> bits(8 * 'size) effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function aget_Mem (address, size, acctype) = {
-  assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
+  assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
   value_name : bits(8 * 'size) = undefined;
   i : int = undefined;
   iswrite : bool = false;
   aligned : bool = AArch64_CheckAlignment(address, 'size, acctype, iswrite);
   atomic : bool = undefined;
-  if ('size != 16) | ~((acctype == AccType_VEC) | (acctype == AccType_VECSTREAM)) then atomic = aligned else atomic = address == Align(address, 8);
+  if 'size != 16 | ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM) then atomic = aligned else atomic = address == Align(address, 8);
   c : Constraint = undefined;
   if ~(atomic) then {
     assert('size > 1, "(size > 1)");
     value_name = __SetSlice_bits(8 * 'size, 8, value_name, 0, AArch64_aget_MemSingle(address, 1, acctype, aligned));
     if ~(aligned) then {
       c = ConstrainUnpredictable(Unpredictable_DEVPAGE2);
-      assert((c == Constraint_FAULT) | (c == Constraint_NONE), "((c == Constraint_FAULT) || (c == Constraint_NONE))");
+      assert(c == Constraint_FAULT | c == Constraint_NONE, "((c == Constraint_FAULT) || (c == Constraint_NONE))");
       if c == Constraint_NONE then aligned = true else ()
     } else ();
     foreach (i from 1 to ('size - 1) by 1 in inc)
       value_name = __SetSlice_bits(8 * 'size, 8, value_name, 8 * i, AArch64_aget_MemSingle(address + i, 1, acctype, aligned))
-  } else if ('size == 16) & ((acctype == AccType_VEC) | (acctype == AccType_VECSTREAM)) then {
+  } else if 'size == 16 & (acctype == AccType_VEC | acctype == AccType_VECSTREAM) then {
     value_name = __SetSlice_bits(8 * 'size, 64, value_name, 0, AArch64_aget_MemSingle(address, 8, acctype, aligned));
     value_name = __SetSlice_bits(8 * 'size, 64, value_name, 64, AArch64_aget_MemSingle(address + 8, 8, acctype, aligned))
   } else value_name = AArch64_aget_MemSingle(address, 'size, acctype, aligned);
@@ -8647,24 +8982,24 @@ val AArch32_SelfHostedSecurePrivilegedInvasiveDebugEnabled : unit -> bool effect
 
 function AArch32_SelfHostedSecurePrivilegedInvasiveDebugEnabled () = {
   if ~(HaveEL(EL3)) & ~(IsSecure()) then return(false) else ();
-  return((DBGEN == HIGH) & (SPIDEN == HIGH))
+  return(DBGEN == HIGH & SPIDEN == HIGH)
 }
 
 val AArch32_GenerateDebugExceptionsFrom : (bits(2), bool) -> bool effect {escape, rreg, undef}
 
 function AArch32_GenerateDebugExceptionsFrom (from, secure) = {
   mask : bits(1) = undefined;
-  if (from == EL0) & ~(ELStateUsingAArch32(EL1, secure)) then {
+  if from == EL0 & ~(ELStateUsingAArch32(EL1, secure)) then {
     mask = undefined;
     return(AArch64_GenerateDebugExceptionsFrom(from, secure, mask))
   } else ();
-  if (([DBGOSLSR[1]] == 0b1) | DoubleLockStatus()) | Halted() then return(false) else ();
+  if ([DBGOSLSR[1]] == 0b1 | DoubleLockStatus()) | Halted() then return(false) else ();
   enabled : bool = undefined;
   spd : bits(2) = undefined;
   if HaveEL(EL3) & secure then {
     spd = if ELUsingAArch32(EL3) then slice(SDCR, 14, 2) else slice(MDCR_EL3, 14, 2);
     if [spd[1]] == 0b1 then enabled = [spd[0]] == 0b1 else enabled = AArch32_SelfHostedSecurePrivilegedInvasiveDebugEnabled();
-    if from == EL0 then enabled = enabled | ([SDER[0]] == 0b1) else ()
+    if from == EL0 then enabled = enabled | [SDER[0]] == 0b1 else ()
   } else enabled = from != EL2;
   return(enabled)
 }
@@ -8676,7 +9011,7 @@ function AArch32_GenerateDebugExceptions () = return(AArch32_GenerateDebugExcept
 val DebugExceptionReturnSS : bits(32) -> bits(1) effect {escape, rreg, undef}
 
 function DebugExceptionReturnSS spsr = {
-  assert((Halted() | Restarting()) | (PSTATE.EL != EL0), "((Halted() || Restarting()) || ((PSTATE).EL != EL0))");
+  assert((Halted() | Restarting()) | PSTATE.EL != EL0, "((Halted() || Restarting()) || ((PSTATE).EL != EL0))");
   SS_bit : bits(1) = 0b0;
   ELd : bits(2) = undefined;
   mask : bits(1) = undefined;
@@ -8691,7 +9026,7 @@ function DebugExceptionReturnSS spsr = {
       (valid_name, dest) = ELFromSPSR(spsr);
       assert(valid_name, "valid")
     };
-    secure = IsSecureBelowEL3() | (dest == EL3);
+    secure = IsSecureBelowEL3() | dest == EL3;
     if ELUsingAArch32(dest) then enabled_at_dest = AArch32_GenerateDebugExceptionsFrom(dest, secure) else {
       mask = [spsr[9]];
       enabled_at_dest = AArch64_GenerateDebugExceptionsFrom(dest, secure, mask)
@@ -8715,7 +9050,7 @@ function SetPSTATEFromPSR spsr__arg = {
       PSTATE.SP = [spsr[0]]
     }
   };
-  if (PSTATE.IL == 0b1) & (PSTATE.nRW == 0b1) then if ConstrainUnpredictableBool(Unpredictable_ILZEROT) then spsr = __SetSlice_bits(32, 1, spsr, 5, 0b0) else () else ();
+  if PSTATE.IL == 0b1 & PSTATE.nRW == 0b1 then if ConstrainUnpredictableBool(Unpredictable_ILZEROT) then spsr = __SetSlice_bits(32, 1, spsr, 5, 0b0) else () else ();
   (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = slice(spsr, 28, 4);
   if PSTATE.nRW == 0b1 then {
     PSTATE.Q = [spsr[27]];
@@ -8734,7 +9069,7 @@ val DRPSInstruction : unit -> unit effect {wreg, rreg, undef, escape}
 
 function DRPSInstruction () = {
   SynchronizeContext();
-  if (HaveRASExt() & ([aget_SCTLR()[21]] == 0b1)) & ConstrainUnpredictableBool(Unpredictable_IESBinDebug) then ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All) else ();
+  if (HaveRASExt() & [aget_SCTLR()[21]] == 0b1) & ConstrainUnpredictableBool(Unpredictable_IESBinDebug) then ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All) else ();
   SetPSTATEFromPSR(aget_SPSR());
   if UsingAArch32() then {
     (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V, PSTATE.Q, PSTATE.GE, PSTATE.SS, PSTATE.A, PSTATE.I, PSTATE.F) = undefined : bits(13);
@@ -8761,7 +9096,7 @@ function AArch64_ExceptionReturn (new_pc__arg, spsr) = {
   new_pc = new_pc__arg;
   SynchronizeContext();
   iesb_req : bool = undefined;
-  if HaveRASExt() & ([aget_SCTLR()[21]] == 0b1) then {
+  if HaveRASExt() & [aget_SCTLR()[21]] == 0b1 then {
     ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All);
     iesb_req = true;
     TakeUnmaskedPhysicalSErrorInterrupts(iesb_req)
@@ -8787,7 +9122,7 @@ function aarch64_branch_unconditional_eret (pac, use_key_a) = {
 
 val AArch32_GeneralExceptionsToAArch64 : unit -> bool effect {escape, rreg, undef}
 
-function AArch32_GeneralExceptionsToAArch64 () = return(((PSTATE.EL == EL0) & ~(ELUsingAArch32(EL1))) | (((HaveEL(EL2) & ~(IsSecure())) & ~(ELUsingAArch32(EL2))) & ([HCR_EL2[27]] == 0b1)))
+function AArch32_GeneralExceptionsToAArch64 () = return(PSTATE.EL == EL0 & ~(ELUsingAArch32(EL1)) | ((HaveEL(EL2) & ~(IsSecure())) & ~(ELUsingAArch32(EL2))) & [HCR_EL2[27]] == 0b1)
 
 val AArch32_EnterHypMode : (ExceptionRecord, bits(32), int) -> unit effect {escape, rreg, undef, wreg}
 
@@ -8795,15 +9130,15 @@ function AArch32_EnterHypMode (exception, preferred_exception_return, 'vect_offs
   SynchronizeContext();
   assert((HaveEL(EL2) & ~(IsSecure())) & ELUsingAArch32(EL2), "((HaveEL(EL2) && !(IsSecure())) && ELUsingAArch32(EL2))");
   spsr : bits(32) = GetPSRFromPSTATE();
-  if ~((exception.typ == Exception_IRQ) | (exception.typ == Exception_FIQ)) then AArch32_ReportHypEntry(exception) else ();
+  if ~(exception.typ == Exception_IRQ | exception.typ == Exception_FIQ) then AArch32_ReportHypEntry(exception) else ();
   AArch32_WriteMode(M32_Hyp);
   aset_SPSR(spsr);
   ELR_hyp = preferred_exception_return;
   PSTATE.T = [HSCTLR[30]];
   PSTATE.SS = 0b0;
-  if ~(HaveEL(EL3)) | ([aget_SCR_GEN()[3]] == 0b0) then PSTATE.A = 0b1 else ();
-  if ~(HaveEL(EL3)) | ([aget_SCR_GEN()[1]] == 0b0) then PSTATE.I = 0b1 else ();
-  if ~(HaveEL(EL3)) | ([aget_SCR_GEN()[2]] == 0b0) then PSTATE.F = 0b1 else ();
+  if ~(HaveEL(EL3)) | [aget_SCR_GEN()[3]] == 0b0 then PSTATE.A = 0b1 else ();
+  if ~(HaveEL(EL3)) | [aget_SCR_GEN()[1]] == 0b0 then PSTATE.I = 0b1 else ();
+  if ~(HaveEL(EL3)) | [aget_SCR_GEN()[2]] == 0b0 then PSTATE.F = 0b1 else ();
   PSTATE.E = [HSCTLR[25]];
   PSTATE.IL = 0b0;
   PSTATE.IT = 0x00;
@@ -8826,7 +9161,7 @@ function AArch32_TakeUndefInstrException__0 () = {
 }
 
 function AArch32_TakeUndefInstrException__1 exception = {
-  route_to_hyp : bool = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL0)) & ([HCR[27]] == 0b1);
+  route_to_hyp : bool = ((HaveEL(EL2) & ~(IsSecure())) & PSTATE.EL == EL0) & [HCR[27]] == 0b1;
   preferred_exception_return : bits(32) = ThisInstrAddr();
   vect_offset : int = 4;
   lr_offset : int = if CurrentInstrSet() == InstrSet_A32 then 4 else 2;
@@ -8843,7 +9178,7 @@ function UnallocatedEncoding () = {
 val aarch64_system_exceptions_runtime_hvc : bits(16) -> unit effect {escape, rreg, undef, wreg}
 
 function aarch64_system_exceptions_runtime_hvc imm = {
-  if (~(HaveEL(EL2)) | (PSTATE.EL == EL0)) | ((PSTATE.EL == EL1) & IsSecure()) then UnallocatedEncoding() else ();
+  if (~(HaveEL(EL2)) | PSTATE.EL == EL0) | PSTATE.EL == EL1 & IsSecure() then UnallocatedEncoding() else ();
   hvc_enable : bits(1) = if HaveEL(EL3) then [SCR_EL3[8]] else ~([HCR_EL2[29]]);
   if hvc_enable == 0b0 then AArch64_UndefinedFault() else AArch64_CallHypervisor(imm)
 }
@@ -8871,9 +9206,9 @@ function aarch64_memory_single_general_register (acctype, datasize, extend_type,
   wb_unknown : bool = false;
   rt_unknown : bool = false;
   c : Constraint = undefined;
-  if (((memop == MemOp_LOAD) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_LOAD & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPLD);
-    assert((c == Constraint_WBSUPPRESS) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_WBSUPPRESS | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_WBSUPPRESS => wback = false,
       Constraint_UNKNOWN => wb_unknown = true,
@@ -8881,9 +9216,9 @@ function aarch64_memory_single_general_register (acctype, datasize, extend_type,
       Constraint_NOP => EndOfInstruction()
     }
   } else ();
-  if (((memop == MemOp_STORE) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_STORE & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPST);
-    assert((c == Constraint_NONE) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_NONE | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_NONE => rt_unknown = false,
       Constraint_UNKNOWN => rt_unknown = true,
@@ -8931,9 +9266,9 @@ function aarch64_memory_single_general_immediate_unsigned (acctype, datasize, me
   wb_unknown : bool = false;
   rt_unknown : bool = false;
   c : Constraint = undefined;
-  if (((memop == MemOp_LOAD) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_LOAD & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPLD);
-    assert((c == Constraint_WBSUPPRESS) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_WBSUPPRESS | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_WBSUPPRESS => wback = false,
       Constraint_UNKNOWN => wb_unknown = true,
@@ -8941,9 +9276,9 @@ function aarch64_memory_single_general_immediate_unsigned (acctype, datasize, me
       Constraint_NOP => EndOfInstruction()
     }
   } else ();
-  if (((memop == MemOp_STORE) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_STORE & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPST);
-    assert((c == Constraint_NONE) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_NONE | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_NONE => rt_unknown = false,
       Constraint_UNKNOWN => rt_unknown = true,
@@ -8991,9 +9326,9 @@ function aarch64_memory_single_general_immediate_signed_postidx (acctype, datasi
   wb_unknown : bool = false;
   rt_unknown : bool = false;
   c : Constraint = undefined;
-  if (((memop == MemOp_LOAD) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_LOAD & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPLD);
-    assert((c == Constraint_WBSUPPRESS) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_WBSUPPRESS | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_WBSUPPRESS => wback = false,
       Constraint_UNKNOWN => wb_unknown = true,
@@ -9001,9 +9336,9 @@ function aarch64_memory_single_general_immediate_signed_postidx (acctype, datasi
       Constraint_NOP => EndOfInstruction()
     }
   } else ();
-  if (((memop == MemOp_STORE) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_STORE & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPST);
-    assert((c == Constraint_NONE) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_NONE | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_NONE => rt_unknown = false,
       Constraint_UNKNOWN => rt_unknown = true,
@@ -9045,9 +9380,9 @@ function aarch64_memory_single_general_immediate_signed_pac ('n, offset, 't, use
   data : bits(64) = undefined;
   wb_unknown : bool = false;
   c : Constraint = undefined;
-  if (wback & (n == t)) & (n != 31) then {
+  if (wback & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPLD);
-    assert((c == Constraint_WBSUPPRESS) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_WBSUPPRESS | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_WBSUPPRESS => wback = false,
       Constraint_UNKNOWN => wb_unknown = true,
@@ -9083,9 +9418,9 @@ function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 
   wb_unknown : bool = false;
   rt_unknown : bool = false;
   c : Constraint = undefined;
-  if (((memop == MemOp_LOAD) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_LOAD & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPLD);
-    assert((c == Constraint_WBSUPPRESS) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_WBSUPPRESS | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_WBSUPPRESS => wback = false,
       Constraint_UNKNOWN => wb_unknown = true,
@@ -9093,9 +9428,9 @@ function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 
       Constraint_NOP => EndOfInstruction()
     }
   } else ();
-  if (((memop == MemOp_STORE) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_STORE & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPST);
-    assert((c == Constraint_NONE) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_NONE | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_NONE => rt_unknown = false,
       Constraint_UNKNOWN => rt_unknown = true,
@@ -9143,9 +9478,9 @@ function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 
   wb_unknown : bool = false;
   rt_unknown : bool = false;
   c : Constraint = undefined;
-  if (((memop == MemOp_LOAD) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_LOAD & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPLD);
-    assert((c == Constraint_WBSUPPRESS) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_WBSUPPRESS | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_WBSUPPRESS => wback = false,
       Constraint_UNKNOWN => wb_unknown = true,
@@ -9153,9 +9488,9 @@ function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 
       Constraint_NOP => EndOfInstruction()
     }
   } else ();
-  if (((memop == MemOp_STORE) & wback) & (n == t)) & (n != 31) then {
+  if ((memop == MemOp_STORE & wback) & n == t) & n != 31 then {
     c = ConstrainUnpredictable(Unpredictable_WBOVERLAPST);
-    assert((c == Constraint_NONE) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_NONE | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_NONE => rt_unknown = false,
       Constraint_UNKNOWN => rt_unknown = true,
@@ -9200,9 +9535,9 @@ function aarch64_memory_pair_simdfp_postidx (acctype, datasize, memop, n, offset
   data1 : bits('datasize) = undefined;
   data2 : bits('datasize) = undefined;
   rt_unknown : bool = false;
-  if (memop == MemOp_LOAD) & (t == t2) then {
+  if memop == MemOp_LOAD & t == t2 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_LDPOVERLAP);
-    assert((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP)), "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
+    assert(c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
     match c {
       Constraint_UNKNOWN => rt_unknown = true,
       Constraint_UNDEF => UnallocatedEncoding(),
@@ -9251,9 +9586,9 @@ function aarch64_memory_pair_simdfp_noalloc (acctype, datasize, memop, n, offset
   data1 : bits('datasize) = undefined;
   data2 : bits('datasize) = undefined;
   rt_unknown : bool = false;
-  if (memop == MemOp_LOAD) & (t == t2) then {
+  if memop == MemOp_LOAD & t == t2 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_LDPOVERLAP);
-    assert((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP)), "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
+    assert(c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
     match c {
       Constraint_UNKNOWN => rt_unknown = true,
       Constraint_UNDEF => UnallocatedEncoding(),
@@ -9303,9 +9638,9 @@ function aarch64_memory_pair_general_postidx (acctype, datasize, memop, n, offse
   data2 : bits('datasize) = undefined;
   rt_unknown : bool = false;
   wb_unknown : bool = false;
-  if (((memop == MemOp_LOAD) & wback) & ((t == n) | (t2 == n))) & (n != 31) then {
+  if ((memop == MemOp_LOAD & wback) & (t == n | t2 == n)) & n != 31 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_WBOVERLAPLD);
-    assert((c == Constraint_WBSUPPRESS) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_WBSUPPRESS | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_WBSUPPRESS) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_WBSUPPRESS => wback = false,
       Constraint_UNKNOWN => wb_unknown = true,
@@ -9313,9 +9648,9 @@ function aarch64_memory_pair_general_postidx (acctype, datasize, memop, n, offse
       Constraint_NOP => EndOfInstruction()
     }
   } else ();
-  if (((memop == MemOp_STORE) & wback) & ((t == n) | (t2 == n))) & (n != 31) then {
+  if ((memop == MemOp_STORE & wback) & (t == n | t2 == n)) & n != 31 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_WBOVERLAPST);
-    assert((c == Constraint_NONE) | ((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+    assert(c == Constraint_NONE | c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_NONE) || ((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
     match c {
       Constraint_NONE => rt_unknown = false,
       Constraint_UNKNOWN => rt_unknown = true,
@@ -9323,9 +9658,9 @@ function aarch64_memory_pair_general_postidx (acctype, datasize, memop, n, offse
       Constraint_NOP => EndOfInstruction()
     }
   } else ();
-  if (memop == MemOp_LOAD) & (t == t2) then {
+  if memop == MemOp_LOAD & t == t2 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_LDPOVERLAP);
-    assert((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP)), "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
+    assert(c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
     match c {
       Constraint_UNKNOWN => rt_unknown = true,
       Constraint_UNDEF => UnallocatedEncoding(),
@@ -9340,9 +9675,9 @@ function aarch64_memory_pair_general_postidx (acctype, datasize, memop, n, offse
   else ();
   match memop {
     MemOp_STORE => {
-      if rt_unknown & (t == n) then data1 = undefined
+      if rt_unknown & t == n then data1 = undefined
       else data1 = aget_X(t);
-      if rt_unknown & (t2 == n) then data2 = undefined
+      if rt_unknown & t2 == n then data2 = undefined
       else data2 = aget_X(t2);
       aset_Mem(address + 0, dbytes, acctype, data1);
       aset_Mem(address + dbytes, dbytes, acctype, data2)
@@ -9381,9 +9716,9 @@ function aarch64_memory_pair_general_noalloc (acctype, datasize, memop, n, offse
   data1 : bits('datasize) = undefined;
   data2 : bits('datasize) = undefined;
   rt_unknown : bool = false;
-  if (memop == MemOp_LOAD) & (t == t2) then {
+  if memop == MemOp_LOAD & t == t2 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_LDPOVERLAP);
-    assert((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP)), "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
+    assert(c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
     match c {
       Constraint_UNKNOWN => rt_unknown = true,
       Constraint_UNDEF => UnallocatedEncoding(),
@@ -9398,9 +9733,9 @@ function aarch64_memory_pair_general_noalloc (acctype, datasize, memop, n, offse
   else ();
   match memop {
     MemOp_STORE => {
-      if rt_unknown & (t == n) then data1 = undefined
+      if rt_unknown & t == n then data1 = undefined
       else data1 = aget_X(t);
-      if rt_unknown & (t2 == n) then data2 = undefined
+      if rt_unknown & t2 == n then data2 = undefined
       else data2 = aget_X(t2);
       aset_Mem(address + 0, dbytes, acctype, data1);
       aset_Mem(address + dbytes, dbytes, acctype, data2)
@@ -9436,9 +9771,9 @@ function aarch64_memory_exclusive_single (acctype, datasize, elsize, memop, n, p
   data : bits('datasize) = undefined;
   rt_unknown : bool = false;
   rn_unknown : bool = false;
-  if ((memop == MemOp_LOAD) & pair) & (t == t2) then {
+  if (memop == MemOp_LOAD & pair) & t == t2 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_LDPOVERLAP);
-    assert((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP)), "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
+    assert(c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
     match c {
       Constraint_UNKNOWN => rt_unknown = true,
       Constraint_UNDEF => UnallocatedEncoding(),
@@ -9446,9 +9781,9 @@ function aarch64_memory_exclusive_single (acctype, datasize, elsize, memop, n, p
     }
   } else ();
   if memop == MemOp_STORE then {
-    if (s == t) | (pair & (s == t2)) then {
+    if s == t | pair & s == t2 then {
       c : Constraint = ConstrainUnpredictable(Unpredictable_DATAOVERLAP);
-      assert((c == Constraint_UNKNOWN) | ((c == Constraint_NONE) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+      assert(c == Constraint_UNKNOWN | c == Constraint_NONE | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
       match c {
         Constraint_UNKNOWN => rt_unknown = true,
         Constraint_NONE => rt_unknown = false,
@@ -9456,9 +9791,9 @@ function aarch64_memory_exclusive_single (acctype, datasize, elsize, memop, n, p
         Constraint_NOP => EndOfInstruction()
       }
     } else ();
-    if (s == n) & (n != 31) then {
+    if s == n & n != 31 then {
       c : Constraint = ConstrainUnpredictable(Unpredictable_BASEOVERLAP);
-      assert((c == Constraint_UNKNOWN) | ((c == Constraint_NONE) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+      assert(c == Constraint_UNKNOWN | c == Constraint_NONE | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
       match c {
         Constraint_UNKNOWN => rn_unknown = true,
         Constraint_NONE => rn_unknown = false,
@@ -9549,9 +9884,9 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
   data : bits('datasize) = undefined;
   rt_unknown : bool = false;
   rn_unknown : bool = false;
-  if ((memop == MemOp_LOAD) & pair) & (t == t2) then {
+  if (memop == MemOp_LOAD & pair) & t == t2 then {
     c : Constraint = ConstrainUnpredictable(Unpredictable_LDPOVERLAP);
-    assert((c == Constraint_UNKNOWN) | ((c == Constraint_UNDEF) | (c == Constraint_NOP)), "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
+    assert(c == Constraint_UNKNOWN | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_UNDEF) || (c == Constraint_NOP)))");
     match c {
       Constraint_UNKNOWN => rt_unknown = true,
       Constraint_UNDEF => UnallocatedEncoding(),
@@ -9559,9 +9894,9 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
     }
   } else ();
   if memop == MemOp_STORE then {
-    if (s == t) | (pair & (s == t2)) then {
+    if s == t | pair & s == t2 then {
       c : Constraint = ConstrainUnpredictable(Unpredictable_DATAOVERLAP);
-      assert((c == Constraint_UNKNOWN) | ((c == Constraint_NONE) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+      assert(c == Constraint_UNKNOWN | c == Constraint_NONE | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
       match c {
         Constraint_UNKNOWN => rt_unknown = true,
         Constraint_NONE => rt_unknown = false,
@@ -9569,9 +9904,9 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
         Constraint_NOP => EndOfInstruction()
       }
     } else ();
-    if (s == n) & (n != 31) then {
+    if s == n & n != 31 then {
       c : Constraint = ConstrainUnpredictable(Unpredictable_BASEOVERLAP);
-      assert((c == Constraint_UNKNOWN) | ((c == Constraint_NONE) | ((c == Constraint_UNDEF) | (c == Constraint_NOP))), "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
+      assert(c == Constraint_UNKNOWN | c == Constraint_NONE | c == Constraint_UNDEF | c == Constraint_NOP, "((c == Constraint_UNKNOWN) || ((c == Constraint_NONE) || ((c == Constraint_UNDEF) || (c == Constraint_NOP))))");
       match c {
         Constraint_UNKNOWN => rn_unknown = true,
         Constraint_NONE => rn_unknown = false,
@@ -9718,7 +10053,7 @@ function memory_vector_single_postinc_aarch64_memory_vector_single_nowb__decode 
   index : int = undefined;
   match scale {
     3 => {
-      if (L == 0b0) | (S == 0b1) then UnallocatedEncoding() else ();
+      if L == 0b0 | S == 0b1 then UnallocatedEncoding() else ();
       scale = UInt(size);
       replicate = true
     },
@@ -9756,7 +10091,7 @@ function memory_vector_single_nowb_aarch64_memory_vector_single_nowb__decode (Q,
   index : int = undefined;
   match scale {
     3 => {
-      if (L == 0b0) | (S == 0b1) then UnallocatedEncoding() else ();
+      if L == 0b0 | S == 0b1 then UnallocatedEncoding() else ();
       scale = UInt(size);
       replicate = true
     },
@@ -9894,7 +10229,7 @@ function memory_single_general_register_aarch64_memory_single_general_register__
     if [opc[0]] == 0b1 then UnallocatedEncoding() else ()
   } else {
     memop = MemOp_LOAD;
-    if (size == 0b10) & ([opc[0]] == 0b1) then UnallocatedEncoding() else ();
+    if size == 0b10 & [opc[0]] == 0b1 then UnallocatedEncoding() else ();
     regsize = if [opc[0]] == 0b1 then 32 else 64;
     signed = true
   };
@@ -9925,7 +10260,7 @@ function memory_single_general_immediate_unsigned_aarch64_memory_single_general_
     if [opc[0]] == 0b1 then UnallocatedEncoding() else ()
   } else {
     memop = MemOp_LOAD;
-    if (size == 0b10) & ([opc[0]] == 0b1) then UnallocatedEncoding() else ();
+    if size == 0b10 & [opc[0]] == 0b1 then UnallocatedEncoding() else ();
     regsize = if [opc[0]] == 0b1 then 32 else 64;
     signed = true
   };
@@ -9953,7 +10288,7 @@ function memory_single_general_immediate_unsigned_aarch64_memory_single_general_
     signed = false
   } else if size == 0b11 then UnallocatedEncoding() else {
     memop = MemOp_LOAD;
-    if (size == 0b10) & ([opc[0]] == 0b1) then UnallocatedEncoding() else ();
+    if size == 0b10 & [opc[0]] == 0b1 then UnallocatedEncoding() else ();
     regsize = if [opc[0]] == 0b1 then 32 else 64;
     signed = true
   };
@@ -9981,7 +10316,7 @@ function memory_single_general_immediate_signed_preidx_aarch64_memory_single_gen
     signed = false
   } else if size == 0b11 then UnallocatedEncoding() else {
     memop = MemOp_LOAD;
-    if (size == 0b10) & ([opc[0]] == 0b1) then UnallocatedEncoding() else ();
+    if size == 0b10 & [opc[0]] == 0b1 then UnallocatedEncoding() else ();
     regsize = if [opc[0]] == 0b1 then 32 else 64;
     signed = true
   };
@@ -10009,7 +10344,7 @@ function memory_single_general_immediate_signed_postidx_aarch64_memory_single_ge
     signed = false
   } else if size == 0b11 then UnallocatedEncoding() else {
     memop = MemOp_LOAD;
-    if (size == 0b10) & ([opc[0]] == 0b1) then UnallocatedEncoding() else ();
+    if size == 0b10 & [opc[0]] == 0b1 then UnallocatedEncoding() else ();
     regsize = if [opc[0]] == 0b1 then 32 else 64;
     signed = true
   };
@@ -10021,7 +10356,7 @@ val memory_single_general_immediate_signed_pac_decode : (bits(2), bits(1), bits(
 
 function memory_single_general_immediate_signed_pac_decode (size, V, M, S, imm9, W, Rn, Rt) = {
   __unconditional = true;
-  if ~(HavePACExt()) | (size != 0b11) then UnallocatedEncoding() else ();
+  if ~(HavePACExt()) | size != 0b11 then UnallocatedEncoding() else ();
   t : int = UInt(Rt);
   n : int = UInt(Rn);
   wback : bool = W == 0b1;
@@ -10043,7 +10378,7 @@ function memory_single_general_immediate_signed_offset_unpriv_aarch64_memory_sin
   n : int = UInt(Rn);
   t : int = UInt(Rt);
   acctype : AccType = AccType_UNPRIV;
-  if ((HaveNVExt() & HaveEL(EL2)) & ([HCR_EL2[42]] == 0b1)) & ([HCR_EL2[43]] == 0b1) then
+  if ((HaveNVExt() & HaveEL(EL2)) & [HCR_EL2[42]] == 0b1) & [HCR_EL2[43]] == 0b1 then
     acctype = AccType_NORMAL
   else ();
   memop : MemOp = undefined;
@@ -10055,7 +10390,7 @@ function memory_single_general_immediate_signed_offset_unpriv_aarch64_memory_sin
     signed = false
   } else if size == 0b11 then UnallocatedEncoding() else {
     memop = MemOp_LOAD;
-    if (size == 0b10) & ([opc[0]] == 0b1) then UnallocatedEncoding() else ();
+    if size == 0b10 & [opc[0]] == 0b1 then UnallocatedEncoding() else ();
     regsize = if [opc[0]] == 0b1 then 32 else 64;
     signed = true
   };
@@ -10086,7 +10421,7 @@ function memory_single_general_immediate_signed_offset_normal_aarch64_memory_sin
     if [opc[0]] == 0b1 then UnallocatedEncoding() else ()
   } else {
     memop = MemOp_LOAD;
-    if (size == 0b10) & ([opc[0]] == 0b1) then UnallocatedEncoding() else ();
+    if size == 0b10 & [opc[0]] == 0b1 then UnallocatedEncoding() else ();
     regsize = if [opc[0]] == 0b1 then 32 else 64;
     signed = true
   };
@@ -10177,7 +10512,7 @@ function memory_pair_general_preidx_aarch64_memory_pair_general_postidx__decode 
   t2 : int = UInt(Rt2);
   acctype : AccType = AccType_NORMAL;
   memop : MemOp = if L == 0b1 then MemOp_LOAD else MemOp_STORE;
-  if ((L @ [opc[0]]) == 0b01) | (opc == 0b11) then UnallocatedEncoding() else ();
+  if (L @ [opc[0]]) == 0b01 | opc == 0b11 then UnallocatedEncoding() else ();
   signed : bool = [opc[0]] != 0b0;
   scale : int = 2 + UInt([opc[1]]);
   datasize : int = shl_int(8, scale);
@@ -10196,7 +10531,7 @@ function memory_pair_general_postidx_aarch64_memory_pair_general_postidx__decode
   t2 : int = UInt(Rt2);
   acctype : AccType = AccType_NORMAL;
   memop : MemOp = if L == 0b1 then MemOp_LOAD else MemOp_STORE;
-  if ((L @ [opc[0]]) == 0b01) | (opc == 0b11) then UnallocatedEncoding() else ();
+  if (L @ [opc[0]]) == 0b01 | opc == 0b11 then UnallocatedEncoding() else ();
   signed : bool = [opc[0]] != 0b0;
   scale : int = 2 + UInt([opc[1]]);
   datasize : int = shl_int(8, scale);
@@ -10215,7 +10550,7 @@ function memory_pair_general_offset_aarch64_memory_pair_general_postidx__decode 
   t2 : int = UInt(Rt2);
   acctype : AccType = AccType_NORMAL;
   memop : MemOp = if L == 0b1 then MemOp_LOAD else MemOp_STORE;
-  if ((L @ [opc[0]]) == 0b01) | (opc == 0b11) then UnallocatedEncoding() else ();
+  if (L @ [opc[0]]) == 0b01 | opc == 0b11 then UnallocatedEncoding() else ();
   signed : bool = [opc[0]] != 0b0;
   scale : int = 2 + UInt([opc[1]]);
   datasize : int = shl_int(8, scale);
@@ -10268,7 +10603,7 @@ function memory_atomicops_swp_decode (size, V, A, R, Rs, o3, opc, Rn, Rt) = {
   s : int = UInt(Rs);
   datasize : int = shl_int(8, UInt(size));
   regsize : int = if datasize == 64 then 64 else 32;
-  ldacctype : AccType = if (A == 0b1) & (Rt != 0b11111) then AccType_ORDEREDRW else AccType_ATOMICRW;
+  ldacctype : AccType = if A == 0b1 & Rt != 0b11111 then AccType_ORDEREDRW else AccType_ATOMICRW;
   stacctype : AccType = if R == 0b1 then AccType_ORDEREDRW else AccType_ATOMICRW;
   aarch64_memory_atomicops_swp(datasize, ldacctype, n, regsize, s, stacctype, t)
 }
@@ -10308,7 +10643,7 @@ function memory_atomicops_ld_decode (size, V, A, R, Rs, o3, opc, Rn, Rt) = {
   s : int = UInt(Rs);
   datasize : int = shl_int(8, UInt(size));
   regsize : int = if datasize == 64 then 64 else 32;
-  ldacctype : AccType = if (A == 0b1) & (Rt != 0b11111) then AccType_ORDEREDRW else AccType_ATOMICRW;
+  ldacctype : AccType = if A == 0b1 & Rt != 0b11111 then AccType_ORDEREDRW else AccType_ATOMICRW;
   stacctype : AccType = if R == 0b1 then AccType_ORDEREDRW else AccType_ATOMICRW;
   op : MemAtomicOp = undefined;
   match opc {
@@ -10492,7 +10827,7 @@ function integer_insext_insert_movewide_decode (sf, opc, hw, imm16, Rd) = {
     0b11 => opcode = MoveWideOp_K,
     _ => UnallocatedEncoding()
   };
-  if (sf == 0b0) & ([hw[1]] == 0b1) then UnallocatedEncoding() else ();
+  if sf == 0b0 & [hw[1]] == 0b1 then UnallocatedEncoding() else ();
   pos = UInt(hw @ 0x0);
   aarch64_integer_insext_insert_movewide(d, datasize, imm, opcode, pos)
 }
@@ -10504,8 +10839,8 @@ function integer_crc_decode (sf, op, S, Rm, opcode2, C, sz, Rn, Rd) = {
   d : int = UInt(Rd);
   n : int = UInt(Rn);
   m : int = UInt(Rm);
-  if (sf == 0b1) & (sz != 0b11) then UnallocatedEncoding() else ();
-  if (sf == 0b0) & (sz == 0b11) then UnallocatedEncoding() else ();
+  if sf == 0b1 & sz != 0b11 then UnallocatedEncoding() else ();
+  if sf == 0b0 & sz == 0b11 then UnallocatedEncoding() else ();
   size : int = shl_int(8, UInt(sz));
   crc32c : bool = C == 0b1;
   aarch64_integer_crc(crc32c, d, m, n, size)
@@ -10607,12 +10942,12 @@ function float_convert_int_decode (sf, S, typ, rmode, opcode, Rn, Rd) = {
       op = FPConvOp_CVT_FtoI
     },
     0xC => {
-      if (fltsize != 16) & (fltsize != intsize) then UnallocatedEncoding() else ();
+      if fltsize != 16 & fltsize != intsize then UnallocatedEncoding() else ();
       op = if [opcode[0]] == 0b1 then FPConvOp_MOV_ItoF else FPConvOp_MOV_FtoI;
       part = 0
     },
     0xD => {
-      if (intsize : int != 64) | (fltsize != 128) then UnallocatedEncoding() else ();
+      if intsize : int != 64 | fltsize != 128 then UnallocatedEncoding() else ();
       op = if [opcode[0]] == 0b1 then FPConvOp_MOV_ItoF else FPConvOp_MOV_FtoI;
       part = 1;
       fltsize = 64
@@ -10675,7 +11010,7 @@ function float_convert_fix_decode (sf, S, typ, rmode, opcode, scale, Rn, Rd) = {
     0b11 => if HaveFP16Ext() then fltsize = 16
     else UnallocatedEncoding()
   };
-  if (sf == 0b0) & ([scale[5]] == 0b0) then UnallocatedEncoding() else ();
+  if sf == 0b0 & [scale[5]] == 0b0 then UnallocatedEncoding() else ();
   fracbits : int = 64 - UInt(scale);
   match slice(opcode, 1, 2) @ rmode {
     0x3 => {
@@ -10890,8 +11225,8 @@ function branch_unconditional_register_decode (Z, opc, op, op2, op3, A, M, Rn, R
   m : int = UInt(Rm);
   pac : bool = A == 0b1;
   use_key_a : bool = M == 0b0;
-  source_is_sp : bool = (Z == 0b1) & (m == 31);
-  if ~(pac) & (m != 0) then UnallocatedEncoding() else if pac & ~(HavePACExt()) then UnallocatedEncoding() else ();
+  source_is_sp : bool = Z == 0b1 & m == 31;
+  if ~(pac) & m != 0 then UnallocatedEncoding() else if pac & ~(HavePACExt()) then UnallocatedEncoding() else ();
   match op {
     0b00 => branch_type = BranchType_JMP,
     0b01 => branch_type = BranchType_CALL,
@@ -10899,7 +11234,7 @@ function branch_unconditional_register_decode (Z, opc, op, op2, op3, A, M, Rn, R
     _ => UnallocatedEncoding()
   };
   if pac then {
-    if (Z == 0b0) & (m != 31) then UnallocatedEncoding() else ();
+    if Z == 0b0 & m != 31 then UnallocatedEncoding() else ();
     if branch_type == BranchType_RET then {
       if n != 31 then UnallocatedEncoding() else ();
       n = 30;
@@ -10916,7 +11251,7 @@ function branch_unconditional_eret_decode (opc, op2, op3, A, M, Rn, op4) = {
   if PSTATE.EL == EL0 then UnallocatedEncoding() else ();
   pac : bool = A == 0b1;
   use_key_a : bool = M == 0b0;
-  if ~(pac) & (op4 != 0b00000) then UnallocatedEncoding() else if pac & (~(HavePACExt()) | (op4 != 0b11111)) then UnallocatedEncoding() else ();
+  if ~(pac) & op4 != 0b00000 then UnallocatedEncoding() else if pac & (~(HavePACExt()) | op4 != 0b11111) then UnallocatedEncoding() else ();
   if Rn != 0b11111 then UnallocatedEncoding() else ();
   aarch64_branch_unconditional_eret(pac, use_key_a)
 }
@@ -10925,7 +11260,7 @@ val branch_unconditional_dret_decode : (bits(4), bits(5), bits(6), bits(5), bits
 
 function branch_unconditional_dret_decode (opc, op2, op3, Rt, op4) = {
   __unconditional = true;
-  if ~(Halted()) | (PSTATE.EL == EL0) then UnallocatedEncoding() else ();
+  if ~(Halted()) | PSTATE.EL == EL0 then UnallocatedEncoding() else ();
   aarch64_branch_unconditional_dret()
 }
 
@@ -10936,9 +11271,9 @@ function AArch64_CheckSystemAccess (op0, op1, crn, crm, op2, rt, read) = {
   need_secure : bool = false;
   min_EL : bits(2) = undefined;
   rcs_el0_trap : bool = undefined;
-  if (((HaveEL(EL2) & ~(IsSecure())) & ([HCR_EL2[20]] == 0b1)) & ((op0 & 0b01) == 0b01)) & ((crn & 0xB) == 0xB) then {
+  if (((HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[20]] == 0b1) & (op0 & 0b01) == 0b01) & (crn & 0xB) == 0xB then {
     rcs_el0_trap = undefined;
-    if (PSTATE.EL == EL0) & rcs_el0_trap then AArch64_SystemRegisterTrap(EL2, op0, op2, op1, crn, rt, crm, read) else if PSTATE.EL == EL1 then AArch64_SystemRegisterTrap(EL2, op0, op2, op1, crn, rt, crm, read) else ()
+    if PSTATE.EL == EL0 & rcs_el0_trap then AArch64_SystemRegisterTrap(EL2, op0, op2, op1, crn, rt, crm, read) else if PSTATE.EL == EL1 then AArch64_SystemRegisterTrap(EL2, op0, op2, op1, crn, rt, crm, read) else ()
   } else ();
   match op1 {
     [bitzero] @ [bitzero] @ _ : bits(1) => min_EL = EL1,
@@ -10956,7 +11291,7 @@ function AArch64_CheckSystemAccess (op0, op1, crn, crm, op2, rt, read) = {
     }
   };
   if UInt(PSTATE.EL) < UInt(min_EL) then
-    if (((((PSTATE.EL == EL1) & (min_EL == EL2)) & HaveNVExt()) & ~(IsSecure())) & HaveEL(EL2)) & ([HCR_EL2[42]] == 0b1) then AArch64_SystemRegisterTrap(EL2, op0, op2, op1, crn, rt, crm, read) else UnallocatedEncoding()
+    if ((((PSTATE.EL == EL1 & min_EL == EL2) & HaveNVExt()) & ~(IsSecure())) & HaveEL(EL2)) & [HCR_EL2[42]] == 0b1 then AArch64_SystemRegisterTrap(EL2, op0, op2, op1, crn, rt, crm, read) else UnallocatedEncoding()
   else if need_secure & ~(IsSecure()) then UnallocatedEncoding() else if AArch64_CheckUnallocatedSystemAccess(op0, op1, crn, crm, op2, read) then UnallocatedEncoding() else ();
   target_el : bits(2) = undefined;
   take_trap : bool = undefined;
@@ -11017,7 +11352,7 @@ function system_register_cpsr_decode (L, op0, op1, CRn, CRm, op2, Rt) = {
     0b011111 => field = PSTATEField_DAIFClr,
     _ => UnallocatedEncoding()
   };
-  if ((op1 == 0b011) & (PSTATE.EL == EL0)) & (IsInHost() | ([SCTLR_EL1[9]] == 0b0)) then AArch64_SystemRegisterTrap(EL1, 0b00, op2, op1, 0x4, 0b11111, CRm, 0b0) else ();
+  if (op1 == 0b011 & PSTATE.EL == EL0) & (IsInHost() | [SCTLR_EL1[9]] == 0b0) then AArch64_SystemRegisterTrap(EL1, 0b00, op2, op1, 0x4, 0b11111, CRm, 0b0) else ();
   aarch64_system_register_cpsr(field, operand)
 }
 
@@ -11026,7 +11361,7 @@ val AArch64_CheckForSMCUndefOrTrap : bits(16) -> unit effect {escape, rreg, unde
 function AArch64_CheckForSMCUndefOrTrap imm = {
   if PSTATE.EL == EL0 then UnallocatedEncoding() else ();
   route_to_el2 : bool = undefined;
-  if ~(HaveEL(EL3)) then if (HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL1) then if (HaveNVExt() & ([HCR_EL2[42]] == 0b1)) & ([HCR_EL2[19]] == 0b1) then route_to_el2 = true else UnallocatedEncoding() else UnallocatedEncoding() else route_to_el2 = ((HaveEL(EL2) & ~(IsSecure())) & (PSTATE.EL == EL1)) & ([HCR_EL2[19]] == 0b1);
+  if ~(HaveEL(EL3)) then if (HaveEL(EL2) & ~(IsSecure())) & PSTATE.EL == EL1 then if (HaveNVExt() & [HCR_EL2[42]] == 0b1) & [HCR_EL2[19]] == 0b1 then route_to_el2 = true else UnallocatedEncoding() else UnallocatedEncoding() else route_to_el2 = ((HaveEL(EL2) & ~(IsSecure())) & PSTATE.EL == EL1) & [HCR_EL2[19]] == 0b1;
   exception : ExceptionRecord = undefined;
   vect_offset : int = undefined;
   if route_to_el2 then {
@@ -11104,7 +11439,7 @@ function memory_vector_multiple_postinc_aarch64_memory_vector_multiple_nowb__dec
     },
     _ => UnallocatedEncoding()
   };
-  if ((size @ Q) == 0b110) & (selem != 1) then ReservedValue() else ();
+  if (size @ Q) == 0b110 & selem != 1 then ReservedValue() else ();
   aarch64_memory_vector_multiple_nowb(datasize, elements, esize, m, memop, n, rpt, selem, t, wback)
 }
 
@@ -11153,7 +11488,7 @@ function memory_vector_multiple_nowb_aarch64_memory_vector_multiple_nowb__decode
     },
     _ => UnallocatedEncoding()
   };
-  if ((size @ Q) == 0b110) & (selem != 1) then ReservedValue() else ();
+  if (size @ Q) == 0b110 & selem != 1 then ReservedValue() else ();
   aarch64_memory_vector_multiple_nowb(datasize, elements, esize, m, memop, n, rpt, selem, t, wback)
 }
 
@@ -11185,7 +11520,7 @@ function integer_logical_shiftedreg_decode (sf, opc, shift, N, Rm, imm6, Rn, Rd)
       setflags = true
     }
   };
-  if (sf == 0b0) & ([imm6[5]] == 0b1) then ReservedValue() else ();
+  if sf == 0b0 & [imm6[5]] == 0b1 then ReservedValue() else ();
   shift_type : ShiftType = DecodeShift(shift);
   shift_amount : int = UInt(imm6);
   invert : bool = N == 0b1;
@@ -11202,7 +11537,7 @@ function integer_insext_extract_immediate_decode (sf, op21, N, o0, Rm, imms, Rn,
   let 'datasize : {|64, 32|} = if sf == 0b1 then 64 else 32;
   lsb : int = undefined;
   if N != sf then UnallocatedEncoding() else ();
-  if (sf == 0b0) & ([imms[5]] == 0b1) then ReservedValue() else ();
+  if sf == 0b0 & [imms[5]] == 0b1 then ReservedValue() else ();
   lsb = UInt(imms);
   aarch64_integer_insext_extract_immediate(d, datasize, lsb, m, n)
 }
@@ -11218,7 +11553,7 @@ function integer_arithmetic_addsub_shiftedreg_decode (sf, op, S, shift, Rm, imm6
   sub_op : bool = op == 0b1;
   setflags : bool = S == 0b1;
   if shift == 0b11 then ReservedValue() else ();
-  if (sf == 0b0) & ([imm6[5]] == 0b1) then ReservedValue() else ();
+  if sf == 0b0 & [imm6[5]] == 0b1 then ReservedValue() else ();
   shift_type : ShiftType = DecodeShift(shift);
   shift_amount : int = UInt(imm6);
   aarch64_integer_arithmetic_addsub_shiftedreg(d, datasize, m, n, setflags, shift_amount, shift_type, sub_op)
@@ -11274,28 +11609,28 @@ function DecodeBitMasks (immN, imms, immr, immediate) = {
   if len < 1 then ReservedValue() else ();
   assert('M >= shl_int(1, len), "(M >= (1 << len))");
   levels = ZeroExtend(Ones(len), 6);
-  if immediate & ((imms & levels) == levels) then ReservedValue() else ();
+  if immediate & (imms & levels) == levels then ReservedValue() else ();
   S : int = UInt(imms & levels);
   R : int = UInt(immr & levels);
   diff : int = S - R;
   tmask_and = __GetSlice_int(6, diff, 0) | ~(levels);
   tmask_or = __GetSlice_int(6, diff, 0) & levels;
   tmask = Ones(64);
-  tmask = (tmask & replicate_bits(replicate_bits([tmask_and[0]], 1) @ Ones(1), 32)) | replicate_bits(Zeros(1) @ replicate_bits([tmask_or[0]], 1), 32);
-  tmask = (tmask & replicate_bits(replicate_bits([tmask_and[1]], 2) @ Ones(2), 16)) | replicate_bits(Zeros(2) @ replicate_bits([tmask_or[1]], 2), 16);
-  tmask = (tmask & replicate_bits(replicate_bits([tmask_and[2]], 4) @ Ones(4), 8)) | replicate_bits(Zeros(4) @ replicate_bits([tmask_or[2]], 4), 8);
-  tmask = (tmask & replicate_bits(replicate_bits([tmask_and[3]], 8) @ Ones(8), 4)) | replicate_bits(Zeros(8) @ replicate_bits([tmask_or[3]], 8), 4);
-  tmask = (tmask & replicate_bits(replicate_bits([tmask_and[4]], 16) @ Ones(16), 2)) | replicate_bits(Zeros(16) @ replicate_bits([tmask_or[4]], 16), 2);
-  tmask = (tmask & replicate_bits(replicate_bits([tmask_and[5]], 32) @ Ones(32), 1)) | replicate_bits(Zeros(32) @ replicate_bits([tmask_or[5]], 32), 1);
+  tmask = tmask & replicate_bits(replicate_bits([tmask_and[0]], 1) @ Ones(1), 32) | replicate_bits(Zeros(1) @ replicate_bits([tmask_or[0]], 1), 32);
+  tmask = tmask & replicate_bits(replicate_bits([tmask_and[1]], 2) @ Ones(2), 16) | replicate_bits(Zeros(2) @ replicate_bits([tmask_or[1]], 2), 16);
+  tmask = tmask & replicate_bits(replicate_bits([tmask_and[2]], 4) @ Ones(4), 8) | replicate_bits(Zeros(4) @ replicate_bits([tmask_or[2]], 4), 8);
+  tmask = tmask & replicate_bits(replicate_bits([tmask_and[3]], 8) @ Ones(8), 4) | replicate_bits(Zeros(8) @ replicate_bits([tmask_or[3]], 8), 4);
+  tmask = tmask & replicate_bits(replicate_bits([tmask_and[4]], 16) @ Ones(16), 2) | replicate_bits(Zeros(16) @ replicate_bits([tmask_or[4]], 16), 2);
+  tmask = tmask & replicate_bits(replicate_bits([tmask_and[5]], 32) @ Ones(32), 1) | replicate_bits(Zeros(32) @ replicate_bits([tmask_or[5]], 32), 1);
   wmask_and = immr | ~(levels);
   wmask_or = immr & levels;
   wmask = Zeros(64);
-  wmask = (wmask & replicate_bits(Ones(1) @ replicate_bits([wmask_and[0]], 1), 32)) | replicate_bits(replicate_bits([wmask_or[0]], 1) @ Zeros(1), 32);
-  wmask = (wmask & replicate_bits(Ones(2) @ replicate_bits([wmask_and[1]], 2), 16)) | replicate_bits(replicate_bits([wmask_or[1]], 2) @ Zeros(2), 16);
-  wmask = (wmask & replicate_bits(Ones(4) @ replicate_bits([wmask_and[2]], 4), 8)) | replicate_bits(replicate_bits([wmask_or[2]], 4) @ Zeros(4), 8);
-  wmask = (wmask & replicate_bits(Ones(8) @ replicate_bits([wmask_and[3]], 8), 4)) | replicate_bits(replicate_bits([wmask_or[3]], 8) @ Zeros(8), 4);
-  wmask = (wmask & replicate_bits(Ones(16) @ replicate_bits([wmask_and[4]], 16), 2)) | replicate_bits(replicate_bits([wmask_or[4]], 16) @ Zeros(16), 2);
-  wmask = (wmask & replicate_bits(Ones(32) @ replicate_bits([wmask_and[5]], 32), 1)) | replicate_bits(replicate_bits([wmask_or[5]], 32) @ Zeros(32), 1);
+  wmask = wmask & replicate_bits(Ones(1) @ replicate_bits([wmask_and[0]], 1), 32) | replicate_bits(replicate_bits([wmask_or[0]], 1) @ Zeros(1), 32);
+  wmask = wmask & replicate_bits(Ones(2) @ replicate_bits([wmask_and[1]], 2), 16) | replicate_bits(replicate_bits([wmask_or[1]], 2) @ Zeros(2), 16);
+  wmask = wmask & replicate_bits(Ones(4) @ replicate_bits([wmask_and[2]], 4), 8) | replicate_bits(replicate_bits([wmask_or[2]], 4) @ Zeros(4), 8);
+  wmask = wmask & replicate_bits(Ones(8) @ replicate_bits([wmask_and[3]], 8), 4) | replicate_bits(replicate_bits([wmask_or[3]], 8) @ Zeros(8), 4);
+  wmask = wmask & replicate_bits(Ones(16) @ replicate_bits([wmask_and[4]], 16), 2) | replicate_bits(replicate_bits([wmask_or[4]], 16) @ Zeros(16), 2);
+  wmask = wmask & replicate_bits(Ones(32) @ replicate_bits([wmask_and[5]], 32), 1) | replicate_bits(replicate_bits([wmask_or[5]], 32) @ Zeros(32), 1);
   if __GetSlice_int(1, diff, 6) != 0b0 then wmask = wmask & tmask
   else wmask = wmask | tmask;
   return((slice(wmask, 0, 'M), slice(tmask, 0, 'M)))
@@ -11329,7 +11664,7 @@ function integer_logical_immediate_decode (sf, opc, N, immr, imms, Rn, Rd) = {
     }
   };
   imm : bits('datasize) = undefined;
-  if (sf == 0b0) & (N != 0b0) then ReservedValue() else ();
+  if sf == 0b0 & N != 0b0 then ReservedValue() else ();
   __anon1 : bits('datasize) = undefined;
   (imm, __anon1) = DecodeBitMasks(N, imms, immr, true) : (bits('datasize), bits('datasize));
   aarch64_integer_logical_immediate(d, datasize, imm, n, op, setflags)
@@ -11363,8 +11698,8 @@ function integer_bitfield_decode (sf, opc, N, immr, imms, Rn, Rd) = {
     },
     0b11 => UnallocatedEncoding()
   };
-  if (sf == 0b1) & (N != 0b1) then ReservedValue() else ();
-  if (sf == 0b0) & (((N != 0b0) | ([immr[5]] != 0b0)) | ([imms[5]] != 0b0)) then ReservedValue() else ();
+  if sf == 0b1 & N != 0b1 then ReservedValue() else ();
+  if sf == 0b0 & ((N != 0b0 | [immr[5]] != 0b0) | [imms[5]] != 0b0) then ReservedValue() else ();
   R = UInt(immr);
   S = UInt(imms);
   (wmask, tmask) = DecodeBitMasks(N, imms, immr, false) : (bits('datasize), bits('datasize));

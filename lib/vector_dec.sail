@@ -99,6 +99,9 @@ val set_slice_int = "set_slice_int" : forall 'w. (atom('w), int, int, bits('w)) 
 val set_slice_bits = "set_slice" : forall 'n 'm.
   (atom('n), atom('m), bits('n), int, bits('m)) -> bits('n)
 
+val slice = "slice" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm & 0 <= 'n.
+  (bits('m), atom('o), atom('n)) -> bits('n)
+
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
 val unsigned = {

@@ -258,6 +258,8 @@ let fixities =
       [
         (mk_id "^", (InfixR, 8));
         (mk_id "*", (InfixL, 7));
+        (mk_id "/", (InfixL, 7));
+        (mk_id "%", (InfixL, 7));
         (mk_id "+", (InfixL, 6));
         (mk_id "-", (InfixL, 6));
         (mk_id "!=", (Infix, 4));
@@ -265,6 +267,7 @@ let fixities =
         (mk_id "<", (Infix, 4));
         (mk_id ">=", (Infix, 4));
         (mk_id "<=", (Infix, 4));
+        (mk_id "==", (Infix, 4));
         (mk_id "&", (InfixR, 3));
         (mk_id "|", (InfixR, 2));
       ]
@@ -355,15 +358,14 @@ and doc_infix n (E_aux (e_aux, _) as exp) =
        try
          match Bindings.find op !fixities with
          | (Infix, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r]
-         | (Infix, m) when m < n -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
-         | (InfixL, m) when m >= n -> separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r]
-         | (InfixL, m) when m < n -> parens (separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r])
+         | (Infix, m) -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
+         | (InfixL, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r]
+         | (InfixL, m) -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
          | (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r]
-         | (InfixR, m) when m < n -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r])
-         | _ -> assert false
+         | (InfixR, m) -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r])
        with
        | Not_found ->
-          separate space [doc_atomic_exp l; doc_id op; doc_atomic_exp r]
+          parens (separate space [doc_atomic_exp l; doc_id op; doc_atomic_exp r])
      end
   | _ -> doc_atomic_exp exp
 and doc_atomic_exp (E_aux (e_aux, _) as exp) =

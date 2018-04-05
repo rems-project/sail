@@ -369,7 +369,8 @@ union exception = {
   Error_Undefined : unit,
   Error_See : string,
   Error_Implementation_Defined : string,
-  Error_ReservedEncoding : unit
+  Error_ReservedEncoding : unit,
+  Error_ExceptionTaken : unit
 }
 
 /*

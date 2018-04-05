@@ -1022,6 +1022,8 @@ atomic_exp:
     { mk_exp (E_vector_access ($1, $3)) $startpos $endpos }
   | atomic_exp Lsquare exp DotDot exp Rsquare
     { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
+  | atomic_exp Lsquare exp Comma exp Rsquare
+    { mk_exp (E_app (mk_id (Id "slice") $startpos($2) $endpos, [$1; $3; $5])) $startpos $endpos }
   | Struct Lcurly fexp_exp_list Rcurly
     { mk_exp (E_record $3) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
@@ -1081,13 +1083,13 @@ funcls2:
   | id funcl_patexp
     { [mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos] }
   | id funcl_patexp And funcls2
-    { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos :: $4 }
+    { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos($2) :: $4 }
 
 funcls:
   | id funcl_patexp_typ
     { let pexp, tannot = $2 in ([mk_funcl (FCL_Funcl ($1, pexp)) $startpos $endpos], tannot) }
   | id funcl_patexp And funcls2
-    { (mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos :: $4, mk_tannotn) }
+    { (mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos($2) :: $4, mk_tannotn) }
 
 funcl_typ:
   | Forall typquant Dot typ

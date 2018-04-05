@@ -27,8 +27,10 @@
     (,(regexp-opt sail2-kinds 'symbols) . font-lock-builtin-face)
     (,(regexp-opt sail2-types 'symbols) . font-lock-type-face)
     (,(regexp-opt sail2-special 'symbols) . font-lock-preprocessor-face)
-    ("\'[a-zA-z_]+" . font-lock-variable-name-face)
-    ("\\_<\\([0-9]+\\|0b[0-9]+\\|0x[0-9a-fA-F]+\\|true\\|false\\|bitone\\|bitzero\\)\\_>\\|()" . font-lock-constant-face)))
+    ("~" . font-lock-negation-char-face)
+    ("\'[a-zA-Z0-9_]+" . font-lock-variable-name-face)
+    ("\\([a-zA-Z0-9_]+\\)(" 1 font-lock-function-name-face)
+    ("\\_<\\([0-9]+\\|0b[0-9_]+\\|0x[0-9a-fA-F_]+\\|true\\|false\\|bitone\\|bitzero\\)\\_>\\|()" . font-lock-constant-face)))
 
 (defconst sail2-mode-syntax-table
   (let ((st (make-syntax-table)))

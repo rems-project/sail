@@ -55,12 +55,16 @@ val div_int = {
   c: "div_int"
 } : (int, int) -> int
 
+overload operator / = {div_int}
+
 val mod_int = {
   smt: "mod",
   ocaml: "modulus",
   lem: "integerMod",
   c: "mod_int"
 } : (int, int) -> int
+
+overload operator % = {mod_int}
 
 val abs_int = {
   smt : "abs",
