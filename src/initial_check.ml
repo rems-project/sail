@@ -282,7 +282,7 @@ and to_ast_order (k_env : kind Envmap.t) (def_ord : order) (o: Parse_ast.atyp) :
       | Parse_ast.ATyp_inc -> Ord_aux(Ord_inc,l)
       | Parse_ast.ATyp_dec -> Ord_aux(Ord_dec,l)
       | Parse_ast.ATyp_default_ord -> def_ord
-      | _ -> typ_error l "Requred an item of kind Order, encountered an illegal form for this kind" None None None
+      | _ -> typ_error l "Required an item of kind Order, encountered an illegal form for this kind" None None None
     )
 
 and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
@@ -852,7 +852,7 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
       | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_),_) ->
         let id = to_ast_id id in
         (match (def_in_progress id partial_defs) with
-	| None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None
+	| None -> typ_error l "Scattered function definition clause does not match any existing function definition headers" (Some id) None None
 	| Some(d,k) ->
 	 (* let _ = Printf.eprintf "SD_scattered_funcl processing\n" in
 	  let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s\n" v' (kind_to_string k)) k in
@@ -862,7 +862,7 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
             let (FCL_aux (funcl_aux, _)) = to_ast_funcl (names,Envmap.union k k_env,def_ord) funcl in
             d:= DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[FCL_aux (funcl_aux, (l, ()))]),fl)),false;
 	    (No_def,envs),partial_defs
-	  | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None None
+	  | _,true -> typ_error l "Scattered function definition clauses extends ended definition" (Some id) None None
 	  | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
     | Parse_ast.SD_scattered_variant(id,naming_scheme_opt,typquant) ->
       let id = to_ast_id id in
