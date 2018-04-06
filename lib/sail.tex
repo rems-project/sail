@@ -3,7 +3,9 @@
 \usepackage[svgnames]{xcolor}
 \usepackage{fullpage}
 \usepackage{listings}
-\usepackage[hidelinks]{hyperref}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true,linkcolor=DarkRed}
 
 \lstset{
   basicstyle=\ttfamily\small,
@@ -13,7 +15,7 @@
 }
 
 \lstdefinelanguage{sail}
-  { morekeywords={val,function,cast,type,forall,overload,operator,enum,union,undefined,exit,and,assert,sizeof
+  { morekeywords={val,function,cast,type,forall,overload,operator,enum,union,undefined,exit,and,assert,sizeof,
       scattered,register,inc,dec,if,then,else,effect,let,as,@,in,end,Type,Int,Order,match,clause,struct},
     keywordstyle={\bf\ttfamily\color{blue}},
     morestring=[b]",
@@ -29,6 +31,9 @@
   }
 
 \lstset{language=sail}
+
+\def\sail{\trivlist \item\relax}
+\def\endsail{\endtrivlist}
 
 \begin{document}
 

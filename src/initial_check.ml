@@ -555,7 +555,7 @@ and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l
       (match f with
       | Parse_ast.Id(id) ->
 	(match List.map (to_ast_exp k_env def_ord) args with
-	  | [] -> LEXP_memory(to_ast_id f',[])
+          | [E_aux(E_lit (L_aux (L_unit, _)), _)] -> LEXP_memory(to_ast_id f',[])
 	  | [E_aux(E_tuple exps,_)] -> LEXP_memory(to_ast_id f',exps)
 	  | args -> LEXP_memory(to_ast_id f', args))
       | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None)
