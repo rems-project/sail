@@ -1,7 +1,7 @@
 
 (defvar sail2-mode-hook nil)
 
-(add-to-list 'auto-mode-alist '("\\.sail\\'" . sail-mode))
+(add-to-list 'auto-mode-alist '("\\.sail\\'" . sail2-mode))
 
 (defconst sail2-keywords
   '("val" "function" "type" "struct" "union" "enum" "let" "var" "if" "then"
