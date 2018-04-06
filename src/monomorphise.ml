@@ -3877,13 +3877,23 @@ let replace_nexp_in_typ env typ orig new_nexp =
     | Typ_arg_order _ -> false, typ_arg
   in aux typ
 
-(* TODO: replace with more informative mangled name *)
-let fresh_top_kid =
-  let counter = ref 0 in
-  fun () ->
-    let n = !counter in
-    let () = counter := n+1 in
-    mk_kid ("mono#nexp#" ^ string_of_int n)
+let fresh_nexp_kid nexp =
+  let rec mangle_nexp (Nexp_aux (nexp, _)) =
+    match nexp with
+    | Nexp_id id -> string_of_id id
+    | Nexp_var kid -> string_of_id (id_of_kid kid)
+    | Nexp_constant i ->
+       (if Big_int.greater_equal i Big_int.zero then "p" else "m")
+       ^ Big_int.to_string (Big_int.abs i)
+    | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
+    | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
+    | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
+    | Nexp_exp n -> "exp_" ^ mangle_nexp n
+    | Nexp_neg n -> "neg_" ^ mangle_nexp n
+    | Nexp_app (id,args) -> string_of_id id ^ "_" ^
+       String.concat "_" (List.map mangle_nexp args)
+  in
+  mk_kid (mangle_nexp nexp ^ "#")
 
 let rewrite_toplevel_nexps (Defs defs) =
   let find_nexp env nexp_map nexp =
@@ -3921,7 +3931,7 @@ let rewrite_toplevel_nexps (Defs defs) =
             match find_nexp env nexp_map nexp with
             | (kid,_) -> nexp_map, kid
             | exception Not_found ->
-               let kid = fresh_top_kid () in
+               let kid = fresh_nexp_kid nexp in
                (kid, nexp)::nexp_map, kid
           in
           let new_nexp = nvar kid in
