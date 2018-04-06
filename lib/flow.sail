@@ -38,10 +38,10 @@ overload operator == = {eq_atom, eq_range, eq_int, eq_bool}
 overload operator | = {or_bool}
 overload operator & = {and_bool}
 
-overload operator <= = {lteq_atom, lteq_range_atom, lteq_atom_range}
-overload operator < = {lt_atom, lt_range_atom, lt_atom_range}
-overload operator >= = {gteq_atom, gteq_range_atom, gteq_atom_range}
-overload operator > = {gt_atom, gt_range_atom, gt_atom_range}
+overload operator <= = {lteq_atom, lteq_range_atom, lteq_atom_range, lteq_int}
+overload operator < = {lt_atom, lt_range_atom, lt_atom_range, lt_int}
+overload operator >= = {gteq_atom, gteq_range_atom, gteq_atom_range, gteq_int}
+overload operator > = {gt_atom, gt_range_atom, gt_atom_range, gt_int}
 
 $ifdef TEST
 
