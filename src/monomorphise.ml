@@ -3941,10 +3941,9 @@ let rewrite_toplevel_nexps (Defs defs) =
           else nexp_map, snd (replace_nexp_in_typ env typ' nexp new_nexp)
   in
   let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs,typ),ts_l),id,ext_opt,is_cast),ann)) =
-    match tqs, ext_opt "lem" with (* does it really matter if this is wrong? *)
-    | _, Some _
-    | TypQ_aux (TypQ_no_forall,_), _ -> None
-    | TypQ_aux (TypQ_tq qs, tq_l), None ->
+    match tqs with
+    | TypQ_aux (TypQ_no_forall,_) -> None
+    | TypQ_aux (TypQ_tq qs, tq_l) ->
        let env = env_of_annot ann in
        let env = add_typquant tqs env in
        let nexp_map, typ = rewrite_typ_in_spec env [] typ in
