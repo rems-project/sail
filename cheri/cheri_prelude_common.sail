@@ -355,7 +355,7 @@ function addrWrapper(addr, accessType, width) =
       StoreData    => if (~(cap.permit_store)) then (raise_c2_exception(CapEx_PermitStoreViolation, capno))
     };
     cursor = getCapCursor(cap);
-    vAddr  = cursor + unsigned(addr);
+    vAddr  = (cursor + unsigned(addr)) % pow2(64);
     size   = wordWidthBytes(width);
     base   = getCapBase(cap);
     top    = getCapTop(cap);
@@ -364,7 +364,7 @@ function addrWrapper(addr, accessType, width) =
     else if (vAddr < base) then
       (raise_c2_exception(CapEx_LengthViolation, capno))
     else
-      to_bits(64, vAddr); /* XXX vAddr not truncated because top <= 2^64 and size > 0 */
+      to_bits(64, vAddr);
   }
 
 $ifdef _MIPS_TLB_STUB

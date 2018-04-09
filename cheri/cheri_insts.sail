@@ -1159,7 +1159,7 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
     {
       let 'size   = wordWidthBytes(width);
       let cursor  = getCapCursor(cb_val);
-      let vAddr   = cursor + unsigned(rGPR(rt)) + (size*signed(offset));
+      let vAddr   = (cursor + unsigned(rGPR(rt)) + size*signed(offset)) % pow2(64);
       let vAddr64 = to_bits(64, vAddr);
       if ((vAddr + size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
@@ -1203,7 +1203,7 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
     {
       size   = wordWidthBytes(width);
       cursor = getCapCursor(cb_val);
-      vAddr  = cursor + unsigned(rGPR(rt)) + (size * signed(offset));
+      vAddr  = (cursor + unsigned(rGPR(rt)) + size * signed(offset)) % pow2(64);
       vAddr64= to_bits(64, vAddr);
       if ((vAddr + size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
@@ -1266,7 +1266,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
   else
     {
       cursor = getCapCursor(cb_val);
-      vAddr  = cursor + unsigned(rGPR(rt)) + (16 * signed(offset));
+      vAddr  = (cursor + unsigned(rGPR(rt)) + 16 * signed(offset)) % pow2(64);
       vAddr64= to_bits(64, vAddr);
       if ((vAddr + cap_size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
@@ -1313,7 +1313,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
   else
     {
       cursor = getCapCursor(cb_val);
-      vAddr  = cursor + unsigned(rGPR(rt)) + (16 * signed(offset));
+      vAddr  = (cursor + unsigned(rGPR(rt)) + 16 * signed(offset)) % pow2(64);
       vAddr64= to_bits(64, vAddr);
       if ((vAddr + cap_size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
