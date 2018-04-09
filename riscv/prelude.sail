@@ -332,13 +332,6 @@ val print_int = "print_int" : (string, int) -> unit
 val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 val print_string = "print_string" : (string, string) -> unit
 
-union exception = {
-  Error_not_implemented : string,
-  Error_misaligned_access : unit,
-  Error_EBREAK : unit,
-  Error_internal_error : unit
-}
-
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
@@ -385,8 +378,6 @@ function vector64 n = __raw_GetSlice_int(64, n, 0)
 val to_bits : forall 'l.(atom('l), int) -> bits('l)
 function to_bits (l, n) = __raw_GetSlice_int(l, n, 0)
 
-function break () : unit -> unit = ()
-
 val vector_update_subrange_dec = {ocaml: "update_subrange", lem: "update_subrange_vec_dec"} : forall 'n 'm 'o.
   (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
@@ -394,3 +385,13 @@ val vector_update_subrange_inc = {ocaml: "update_subrange", lem: "update_subrang
   (vector('n, inc, bit), atom('m), atom('o), vector('o - ('m - 1), inc, bit)) -> vector('n, inc, bit)
 
 overload vector_update_subrange = {vector_update_subrange_dec, vector_update_subrange_inc}
+
+/* Ideally these would be sail builtin */
+
+function shift_right_arith64 (v : bits(64), shift : bits(6)) -> bits(64) =
+    let v128 : bits(128) = EXTS(v) in
+    (v128 >> shift)[63..0]
+
+function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
+    let v64 : bits(64) = EXTS(v) in
+    (v64 >> shift)[31..0]

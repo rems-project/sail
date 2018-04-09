@@ -1,3 +1,10 @@
+union exception = {
+  Error_not_implemented : string,
+  Error_misaligned_access : unit,
+  Error_EBREAK : unit,
+  Error_internal_error : unit
+}
+
 val not_implemented : forall ('a : Type). string -> 'a effect {escape}
 
 function not_implemented message = throw(Error_not_implemented(message))
@@ -163,13 +170,3 @@ enum ropw = {RISCV_ADDW, RISCV_SUBW, RISCV_SLLW, RISCV_SRLW, RISCV_SRAW} /* reg-
 enum amoop = {AMOSWAP, AMOADD, AMOXOR, AMOAND, AMOOR, AMOMIN, AMOMAX, AMOMINU, AMOMAXU} /* AMO ops */
 enum csrop = {CSRRW, CSRRS, CSRRC}
 enum word_width = {BYTE, HALF, WORD, DOUBLE}
-
-/* Ideally these would be sail builtin */
-
-function shift_right_arith64 (v : xlenbits, shift : bits(6)) -> xlenbits =
-    let v128 : bits(128) = EXTS(v) in
-    (v128 >> shift)[63..0]
-
-function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
-    let v64 : xlenbits = EXTS(v) in
-    (v64 >> shift)[31..0]
