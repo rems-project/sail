@@ -811,8 +811,8 @@ let doc_exp_lem, doc_let_lem =
        anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-       let (start, len, order, etyp) =
-         if is_vector_typ t then vector_typ_args_of t
+       let start, (len, order, etyp) =
+         if is_vector_typ t then vector_start_index t, vector_typ_args_of t
          else raise (Reporting_basic.err_unreachable l
            "E_vector of non-vector type") in
        let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
@@ -1012,7 +1012,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
         | _ -> ftyp in
       let (start, is_inc) =
         try
-          let (start, _, ord, _) = vector_typ_args_of base_ftyp in
+          let start, (_, ord, _) = vector_start_index base_ftyp, vector_typ_args_of base_ftyp in
           match nexp_simp start with
           | Nexp_aux (Nexp_constant i, _) -> (i, is_order_inc ord)
           | _ ->
@@ -1296,7 +1296,7 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
        let env = env_of_annot annot in
        let rt = Env.base_typ_of env typ in
        if is_vector_typ rt then
-         let (start, size, order, etyp) = vector_typ_args_of rt in
+         let start, (size, order, etyp) = vector_start_index rt, vector_typ_args_of rt in
          if is_bit_typ etyp && is_nexp_constant start && is_nexp_constant size then
            let o = if is_order_inc order then "true" else "false" in
            (doc_op equals)

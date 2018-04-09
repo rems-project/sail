@@ -2710,7 +2710,7 @@ let deps_of_uvar l fn_id env arg_deps = function
   | U_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
 
 let mk_subrange_pattern vannot vstart vend =
-  let (_,len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
+  let (len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
   match ord with
   | Ord_aux (Ord_var _,_) -> None
   | Ord_aux (ord',_) ->
@@ -3020,7 +3020,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
             typ
        in
        if is_bitvector_typ typ then
-         let _,size,_,_ = vector_typ_args_of typ in
+         let size,_,_ = vector_typ_args_of typ in
          let Nexp_aux (size,_) as size_nexp = simplify_size_nexp env tenv size in
          let is_tyvar_parameter v =
            List.exists (fun k -> Kid.compare k v == 0) env.top_kids
@@ -3488,8 +3488,8 @@ let rewrite_app env typ (id,args) =
         when is_append append && is_subrange subrange1 && is_subrange subrange2 &&
           is_constant_vec_typ env (typ_of e1) &&
           not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
-       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
-       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in
        let midtyp = vector_typ midsize order bittyp in
        E_app (append,
@@ -3507,8 +3507,8 @@ let rewrite_app env typ (id,args) =
         when is_append append && is_slice slice1 && is_slice slice2 &&
           is_constant_vec_typ env (typ_of e1) &&
           not (is_constant length1 || is_constant length2) ->
-       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
-       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in
        let midtyp = vector_typ midsize order bittyp in
        E_app (append,
@@ -3548,8 +3548,8 @@ let rewrite_app env typ (id,args) =
         when is_append append1 && is_slice slice1 && is_zeros zeros1 &&
           is_constant_vec_typ env (typ_of e1) &&
           not (is_constant length1 || is_constant length2) ->
-       let (start,size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
-       let (_,size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in
        let midtyp = vector_typ midsize order bittyp in
        E_cast (typ,
@@ -3919,7 +3919,7 @@ let rewrite_toplevel_nexps (Defs defs) =
          | Some nexp -> Some nexp
          | None ->
             if is_bitvector_typ typ' then
-              let (_,size,_,_) = vector_typ_args_of typ' in
+              let (size,_,_) = vector_typ_args_of typ' in
               Some size
             else None
        in match nexp_opt with

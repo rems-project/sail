@@ -459,6 +459,9 @@ let id_loc = function
 let kid_loc = function
   | Kid_aux (_, l) -> l
 
+let typ_loc = function
+  | Typ_aux (_, l) -> l
+
 let pat_loc = function
   | P_aux (_, (l, _)) -> l
 
@@ -855,16 +858,18 @@ let typ_app_args_of = function
 
 let rec vector_typ_args_of typ = match typ_app_args_of typ with
   | ("vector", [Typ_arg_nexp len; Typ_arg_order ord; Typ_arg_typ etyp], l) ->
-     begin
-       match ord with
-       | Ord_aux (Ord_inc, _) -> (nint 0, nexp_simp len, ord, etyp)
-       | Ord_aux (Ord_dec, _) -> (nexp_simp (nminus len (nint 1)), nexp_simp len, ord, etyp) (* FIXME to return 3 arguments *)
-       | _ -> raise (Reporting_basic.err_typ l "Can't calculate start index without order")
-     end
+     (nexp_simp len, ord, etyp)
   | ("register", [Typ_arg_typ rtyp], _) -> vector_typ_args_of rtyp
   | (_, _, l) ->
      raise (Reporting_basic.err_typ l
        ("vector_typ_args_of called on non-vector type " ^ string_of_typ typ))
+
+let vector_start_index typ =
+  let (len, ord, etyp) = vector_typ_args_of typ in
+  match ord with
+  | Ord_aux (Ord_inc, _) -> nint 0
+  | Ord_aux (Ord_dec, _) -> nexp_simp (nminus len (nint 1))
+  | _ -> raise (Reporting_basic.err_typ (typ_loc typ) "Can't calculate start index without order")
 
 let is_order_inc = function
   | Ord_aux (Ord_inc, _) -> true
@@ -878,7 +883,7 @@ let is_bit_typ = function
 
 let is_bitvector_typ typ =
   if is_vector_typ typ then
-    let (_,_,_,etyp) = vector_typ_args_of typ in
+    let (_,_,etyp) = vector_typ_args_of typ in
     is_bit_typ etyp
   else false
 

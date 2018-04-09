@@ -157,7 +157,7 @@ let add_regval_conv id typ defs =
 
 let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
   | Typ_app _ when is_vector_typ typ && not (mwords && is_bitvector_typ typ) ->
-     let _, size, ord, etyp = vector_typ_args_of typ in
+     let size, ord, etyp = vector_typ_args_of typ in
      let size = string_of_nexp (nexp_simp size) in
      let is_inc = if is_order_inc ord then "true" else "false" in
      let etyp_of, of_etyp = regval_convs_lem mwords etyp in

@@ -178,7 +178,7 @@ val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
 (* Extract locations from identifiers *)
 val id_loc : id -> Parse_ast.l
 val kid_loc : kid -> Parse_ast.l
-
+val typ_loc : typ -> Parse_ast.l
 val pat_loc : 'a pat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
 val def_loc : 'a def -> Parse_ast.l
@@ -285,7 +285,8 @@ val is_bit_typ : typ -> bool
 val is_bitvector_typ : typ -> bool
 
 val typ_app_args_of : typ -> string * typ_arg_aux list * Ast.l
-val vector_typ_args_of : typ -> nexp * nexp * order * typ
+val vector_typ_args_of : typ -> nexp * order * typ
+val vector_start_index : typ -> nexp
 val destruct_range : typ -> (nexp * nexp) option
 
 val is_order_inc : order -> bool

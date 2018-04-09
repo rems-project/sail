@@ -361,7 +361,7 @@ let rewrite_sizeof (Defs defs) =
                       (try
                          (match Env.get_val_spec id_length (env_of_annot annot) with
                           | _ ->
-                             let (_,len,_,_) = vector_typ_args_of typ_aux in
+                             let (len,_,_) = vector_typ_args_of typ_aux in
                              let exp = E_app (id_length, [E_aux (E_id id, annot)]) in
                              [len, exp])
                        with
@@ -738,7 +738,7 @@ let remove_vector_concat_pat pat =
 
       (* FIXME *)
       let subv = fix_eff_exp (E_aux (E_vector_subrange (root, index_i, index_j), cannot)) in
-      (* let (_, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of root) (typ_of root)) in
+      (* let (_, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of root) (typ_of root)) in
       let subrange_id = if is_order_inc ord then "bitvector_subrange_inc" else "bitvector_subrange_dec" in
       let subv = fix_eff_exp (E_aux (E_app (mk_id subrange_id, [root; index_i; index_j]), cannot)) in *)
 
@@ -757,8 +757,8 @@ let remove_vector_concat_pat pat =
     let p_aux = function
       | ((P_as (P_aux (P_vector_concat pats,rannot'),rootid),decls),rannot) ->
          let rtyp = Env.base_typ_of (env_of_annot rannot') (typ_of_annot rannot') in
-         let (start,last_idx) = (match vector_typ_args_of rtyp with
-          | (Nexp_aux (Nexp_constant start,_), Nexp_aux (Nexp_constant length,_), ord, _) ->
+         let (start,last_idx) = (match vector_start_index rtyp, vector_typ_args_of rtyp with
+          | Nexp_aux (Nexp_constant start,_), (Nexp_aux (Nexp_constant length,_), ord, _) ->
              (start, if is_order_inc ord
                      then Big_int.sub (Big_int.add start length) (Big_int.of_int 1)
                      else Big_int.add (Big_int.sub start length) (Big_int.of_int 1))
@@ -767,7 +767,7 @@ let remove_vector_concat_pat pat =
               ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern"))) in
          let rec aux typ_opt (pos,pat_acc,decl_acc) (P_aux (p,cannot),is_last) =
            let ctyp = Env.base_typ_of (env_of_annot cannot) (typ_of_annot cannot) in
-           let (_,length,ord,_) = vector_typ_args_of ctyp in
+           let (length,ord,_) = vector_typ_args_of ctyp in
            let (pos',index_j) = match length with
              | Nexp_aux (Nexp_constant i,_) ->
                 if is_order_inc ord
@@ -886,7 +886,7 @@ let remove_vector_concat_pat pat =
         if is_vector_typ typ then
           match p, vector_typ_args_of typ with
           | P_vector ps,_ -> acc @ ps
-          | _, (_,Nexp_aux (Nexp_constant length,_),_,_) ->
+          | _, (Nexp_aux (Nexp_constant length,_),_,_) ->
              acc @ (List.map wild (range Big_int.zero (Big_int.sub length (Big_int.of_int 1))))
           | _, _ ->
             (*if is_last then*) acc @ [wild Big_int.zero]
@@ -898,7 +898,7 @@ let remove_vector_concat_pat pat =
       let has_length (P_aux (p,annot)) =
         let typ = Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) in
         match vector_typ_args_of typ with
-        | (_,Nexp_aux (Nexp_constant length,_),_,_) -> true
+        | (Nexp_aux (Nexp_constant length,_),_,_) -> true
         | _ -> false in
 
       let ps_tagged = tag_last ps in
@@ -1225,7 +1225,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     Some (check_eq_exp (strip_exp elem) (strip_exp exp)) in
 
   let test_subvec_exp rootid l typ i j lits =
-    let (start, length, ord, _) = vector_typ_args_of typ in
+    let start = vector_start_index typ in
+    let (length, ord, _) = vector_typ_args_of typ in
     let subvec_exp =
       match start, length with
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
@@ -1256,7 +1257,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   (* Collect guards and let bindings *)
   let guard_bitvector_pat =
     let collect_guards_decls ps rootid t =
-      let (start,_,ord,_) = vector_typ_args_of t in
+      let start = vector_start_index t in
+      let (_,ord,_) = vector_typ_args_of t in
       let start_idx = match start with
       | Nexp_aux (Nexp_constant s, _) -> s
       | _ ->
@@ -2280,11 +2282,12 @@ let rewrite_tuple_vector_assignments defs =
        let typ = Env.base_typ_of env (typ_of exp) in
        if is_vector_typ typ then
          (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
-         let (start, _, ord, etyp) = vector_typ_args_of typ in
+         let start = vector_start_index typ in
+         let (_, ord, etyp) = vector_typ_args_of typ in
          let len (LEXP_aux (le, lannot)) =
            let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
            if is_vector_typ ltyp then
-             let (_, len, _, _) = vector_typ_args_of ltyp in
+             let (len, _, _) = vector_typ_args_of ltyp in
              match nexp_simp len with
              | Nexp_aux (Nexp_constant len, _) -> len
              | _ -> (Big_int.of_int 1)
