@@ -1,19 +1,4 @@
-union exception = {
-  Error_not_implemented : string,
-  Error_misaligned_access : unit,
-  Error_EBREAK : unit,
-  Error_internal_error : unit
-}
-
-val not_implemented : forall ('a : Type). string -> 'a effect {escape}
-
-function not_implemented message = throw(Error_not_implemented(message))
-
-val internal_error : forall ('a : Type). string -> 'a effect {escape}
-function internal_error(s) = {
-    assert (false, s);
-    throw Error_internal_error()
-}
+/* basic types */
 
 let xlen = 64
 type xlenbits = bits(64)
@@ -32,6 +17,7 @@ val creg2reg_bits : cregbits -> regbits
 function creg2reg_bits(creg) = 0b01 @ creg
 
 /* some arch and ABI relevant registers */
+
 let zreg : regbits = 0b00000
 let ra : regbits = 0b00001  /* x1 */
 let sp : regbits = 0b00010  /* x2 */
@@ -39,6 +25,7 @@ let sp : regbits = 0b00010  /* x2 */
 register PC : xlenbits
 register nextPC : xlenbits
 
+/* register file and accessors */
 register Xs : vector(32, dec, xlenbits)
 
 /* Getters and setters for X registers (special case for zeros register, x0) */
@@ -56,6 +43,27 @@ function wX (r, v) =
   }
 
 overload X = {rX, wX}
+
+/* exceptions */
+
+union exception = {
+  Error_not_implemented : string,
+  Error_misaligned_access : unit,
+  Error_EBREAK : unit,
+  Error_internal_error : unit
+}
+
+val not_implemented : forall ('a : Type). string -> 'a effect {escape}
+
+function not_implemented message = throw(Error_not_implemented(message))
+
+val internal_error : forall ('a : Type). string -> 'a effect {escape}
+function internal_error(s) = {
+    assert (false, s);
+    throw Error_internal_error()
+}
+
+/* memory */
 
 function check_alignment (addr : xlenbits, width : atom('n)) -> forall 'n. unit =
   if unsigned(addr) % width != 0 then throw Error_misaligned_access() else ()
