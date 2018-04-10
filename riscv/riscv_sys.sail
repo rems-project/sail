@@ -1,69 +1,3 @@
-/* exception codes */
-
-enum Interrupts = {
-  UserSWIntr,
-  SupervisorSWIntr,
-  ReservedIntr0,
-  MachineSWIntr,
-
-  UserTimerIntr,
-  SupervisorTimerIntr,
-  ReservedIntr1,
-  MachineTimerIntr,
-
-  UserExternalIntr,
-  SupervisorExternalIntr,
-  ReservedIntr2,
-  MachineExternalIntr
-}
-
-enum ExceptionCode = {
-  Misaligned_Fetch,
-  Fetch_Access,
-  Illegal_Instr,
-  Breakpoint,
-  Misaligned_Load,
-
-  Load_Access,
-  Misaligned_Store,
-  Store_Access,
-
-  User_ECall,
-  Supervisor_ECall,
-  ReservedExc0,
-  Machine_ECall,
-
-  Fetch_PageFault,
-  Load_PageFault,
-  ReservedExc1,
-  Store_PageFault
-}
-
-val exc_to_bits : ExceptionCode -> bits(4)
-function exc_to_bits e =
-  match (e) {
-    Misaligned_Fetch => 0x0,
-    Fetch_Access => 0x1,
-    Illegal_Instr => 0x2,
-    Breakpoint => 0x3,
-    Misaligned_Load => 0x4,
-
-    Load_Access => 0x5,
-    Misaligned_Store => 0x6,
-    Store_Access => 0x7,
-
-    User_ECall => 0x8,
-    Supervisor_ECall => 0x9,
-    ReservedExc0 => 0xa,
-    Machine_ECall => 0xb,
-
-    Fetch_PageFault => 0xc,
-    Load_PageFault => 0xd,
-    ReservedExc1 => 0xe,
-    Store_PageFaul => 0xf
-  }
-
-
 /* machine mode registers */
 
 /* FIXME: currently we have only those used by riscv-tests. */
@@ -211,7 +145,7 @@ register mhartid : xlenbits
 /* instruction control flow */
 
 struct sync_exception = {
-  trap : ExceptionCode,
+  trap : ExceptionType,
   excinfo : option(xlenbits)
 }
 
@@ -226,112 +160,96 @@ union ctl_result = {
 
 /* privilege level */
 
-enum privilege = {
-  MACHINE,
-  USER
-}
-
-register cur_privilege : privilege
-
-function priv_to_bits(p : privilege) -> bits(2) =
-  match (p) {
-    USER    => 0b00,
-    MACHINE => 0b11
-  }
-function bits_to_priv(b : bits(2)) -> privilege =
-  match (b) {
-    0b00    => USER,
-    0b11    => MACHINE
-  }
+register cur_privilege : Privilege
 
 /* handle exceptional ctl flow by updating nextPC */
 
-function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
+function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
                               pc: xlenbits) -> xlenbits =
   /* TODO: check delegation */
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       mepc            = pc;
-      mcause          = EXTZ(exc_to_bits(e.trap));
+      mcause          = EXTZ(exceptionType_to_bits(e.trap));
 
       mstatus->MPIE() = mstatus.MIE();
       mstatus->MIE()  = false;
-      mstatus->MPP()  = priv_to_bits(cur_priv);
-      cur_privilege   = MACHINE;
+      mstatus->MPP()  = privLevel_to_bits(cur_priv);
+      cur_privilege   = Machine;
 
       match (e.trap) {
-        Misaligned_Fetch => {
+        E_Fetch_Addr_Align => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
+            None()  => throw Error_internal_error()
           }
         },
-        Fetch_Access => {
+        E_Fetch_Access_Fault => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
+            None()  => throw Error_internal_error()
           }
         },
-        Illegal_Instr => {
+        E_Illegal_Instr => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
-          }
-        },
-
-        Breakpoint => not_implemented("breakpoint"),
-
-        Misaligned_Load => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
-          }
-        },
-        Load_Access => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
-          }
-        },
-        Misaligned_Store => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
-          }
-        },
-        Store_Access => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
+            None()  => throw Error_internal_error()
           }
         },
 
-        User_ECall => {
+        E_Breakpoint => not_implemented("breakpoint"),
+
+        E_Load_Addr_Align => {
+          match (e.excinfo) {
+            Some(a) => mtval = a,
+            None()  => throw Error_internal_error()
+          }
+        },
+        E_Load_Access_Fault => {
+          match (e.excinfo) {
+            Some(a) => mtval = a,
+            None()  => throw Error_internal_error()
+          }
+        },
+        E_SAMO_Addr_Align => {
+          match (e.excinfo) {
+            Some(a) => mtval = a,
+            None()  => throw Error_internal_error()
+          }
+        },
+        E_SAMO_Access_Fault => {
+          match (e.excinfo) {
+            Some(a) => mtval = a,
+            None()  => throw Error_internal_error()
+          }
+        },
+
+        E_U_EnvCall => {
           mtval  = EXTZ(0b0)
         },
-        Supervisor_ECall => {
+        E_S_EnvCall => {
           mtval  = EXTZ(0b0)
         },
-        Machine_ECall => {
+        E_M_EnvCall => {
           mtval  = EXTZ(0b0)
         },
 
-        Fetch_PageFault => {
+        E_Fetch_Page_Fault => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
+            None()  => throw Error_internal_error()
           }
         },
-        Load_PageFault => {
+        E_Load_Page_Fault => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
+            None()  => throw Error_internal_error()
           }
         },
-        Store_PageFault => {
+        E_SAMO_Page_Fault => {
           match (e.excinfo) {
             Some(a) => mtval = a,
-	    None()  => throw Error_internal_error()
+            None()  => throw Error_internal_error()
           }
         },
         _ => throw Error_internal_error() /* Don't expect ReservedExc0 etc. here */
@@ -342,13 +260,13 @@ function handle_exception_ctl(cur_priv : privilege, ctl : ctl_result,
     (_, CTL_MRET()) => {
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = true;
-      cur_privilege   = bits_to_priv(mstatus.MPP());
-      mstatus->MPP()  = priv_to_bits(USER);
+      cur_privilege   = privLevel_of_bits(mstatus.MPP());
+      mstatus->MPP()  = privLevel_to_bits(User);
       mepc
     }
   }
 
 function init_sys () : unit -> unit = {
-  cur_privilege = MACHINE;
+  cur_privilege = Machine;
   misa->C() = true;
 }

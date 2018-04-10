@@ -23,7 +23,7 @@ function fetch_and_execute () =
     /* check whether a compressed instruction is legal. */
     if (misa.C() == 0b0 & (instr_sz == 2)) then {
       let t : sync_exception =
-      struct { trap = Illegal_Instr,
+      struct { trap = E_Illegal_Instr,
                excinfo = Some (EXTZ(instr)) } in
       nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
     } else {

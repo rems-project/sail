@@ -367,8 +367,9 @@ function clause decode 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = 
 function clause execute ECALL() =
   let t : sync_exception =
     struct { trap = match (cur_privilege) {
-                      USER => User_ECall,
-		      MACHINE => Machine_ECall
+                      User => E_U_EnvCall,
+                      Supervisor => E_S_EnvCall,
+                      Machine => E_M_EnvCall
 		    },
 	     excinfo = (None() : option(xlenbits)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
@@ -573,7 +574,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
   if ~ (isCSRImplemented(csr) & haveCSRPriv(csr, isWrite)) then {
     let instr : xlenbits = EXTZ(__RISCV_read(PC, 4));
     let t : sync_exception =
-    struct { trap = Illegal_Instr,
+    struct { trap = E_Illegal_Instr,
              excinfo = Some (instr) } in
     nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
   } else {
@@ -608,7 +609,7 @@ function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) 
 
 function clause execute ILLEGAL() = {
   let t : sync_exception =
-  struct { trap = Illegal_Instr,
+  struct { trap = E_Illegal_Instr,
            excinfo = Some (EXTZ(0b0)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 }

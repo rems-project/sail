@@ -67,6 +67,15 @@ function privLevel_to_bits (p) = {
   }
 }
 
+val cast privLevel_of_bits : priv_level -> Privilege
+function privLevel_of_bits (p) = {
+  match (p) {
+    0b00 => User,
+    0b01 => Supervisor,
+    0b11 => Machine
+  }
+}
+
 val cast privLevel_to_str : Privilege -> string
 function privLevel_to_str (p) = {
   match (p) {
@@ -97,6 +106,28 @@ enum ExceptionType = {
  E_Load_Page_Fault,
  E_Reserved_14,
  E_SAMO_Page_Fault
+}
+
+val cast exceptionType_to_bits : ExceptionType -> exc_code
+function exceptionType_to_bits(e) = {
+  match (e) {
+    E_Fetch_Addr_Align => 0x0,
+    E_Fetch_Access_Fault => 0x1,
+    E_Illegal_Instr => 0x2,
+    E_Breakpoint => 0x3,
+    E_Load_Addr_Align => 0x4,
+    E_Load_Access_Fault => 0x5,
+    E_SAMO_Addr_Align => 0x6,
+    E_SAMO_Access_Fault => 0x7,
+    E_U_EnvCall => 0x8,
+    E_S_EnvCall => 0x9,
+    E_Reserved_10 => 0xa,
+    E_M_EnvCall => 0xb,
+    E_Fetch_Page_Fault => 0xc,
+    E_Load_Page_Fault => 0xd,
+    E_Reserved_14 => 0xe,
+    E_SAMO_Page_Fault => 0xf
+  }
 }
 
 enum InterruptType = {
