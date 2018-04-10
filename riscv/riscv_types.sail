@@ -26,16 +26,14 @@ register PC : xlenbits
 register nextPC : xlenbits
 
 /* register file and accessors */
+
 register Xs : vector(32, dec, xlenbits)
 
-/* Getters and setters for X registers (special case for zeros register, x0) */
 val rX : forall 'n, 0 <= 'n < 32. regno('n) -> xlenbits effect {rreg}
-
 function rX 0 = 0x0000000000000000
 and rX (r if r > 0) = Xs[r]
 
 val wX : forall 'n, 0 <= 'n < 32. (regno('n), xlenbits) -> unit effect {wreg}
-
 function wX (r, v) =
   if (r != 0) then {
      Xs[r] = v;
@@ -44,7 +42,91 @@ function wX (r, v) =
 
 overload X = {rX, wX}
 
-/* exceptions */
+/* instruction fields */
+
+type opcode = bits(7)
+type imm12 = bits(12)
+type imm20 = bits(20)
+type amo = bits(1)
+
+/* base architecture definitions */
+enum Architecture = {RV32, RV64, RV128}
+
+/* privilege levels */
+
+type priv_level = bits(2)
+
+enum Privilege = {User, Supervisor, Machine}
+
+val cast privLevel_to_bits : Privilege -> priv_level
+function privLevel_to_bits (p) = {
+  match (p) {
+    User => 0b00,
+    Supervisor => 0b01,
+    Machine => 0b11
+  }
+}
+
+val cast privLevel_to_str : Privilege -> string
+function privLevel_to_str (p) = {
+  match (p) {
+    User => "U",
+    Supervisor => "S",
+    Machine => "M"
+  }
+}
+
+/* architectural exception and interrupt definitions */
+
+type exc_code = bits(4)
+
+enum ExceptionType = {
+ E_Fetch_Addr_Align,
+ E_Fetch_Access_Fault,
+ E_Illegal_Instr,
+ E_Breakpoint,
+ E_Load_Addr_Align,
+ E_Load_Access_Fault,
+ E_SAMO_Addr_Align,
+ E_SAMO_Access_Fault,
+ E_U_EnvCall,
+ E_S_EnvCall,
+ E_Reserved_10,
+ E_M_EnvCall,
+ E_Fetch_Page_Fault,
+ E_Load_Page_Fault,
+ E_Reserved_14,
+ E_SAMO_Page_Fault
+}
+
+enum InterruptType = {
+  I_U_Software,
+  I_S_Software,
+  I_M_Software,
+  I_U_Timer,
+  I_S_Timer,
+  I_M_Timer,
+  I_U_External,
+  I_S_External,
+  I_M_External
+}
+
+val cast interruptType_to_bits : InterruptType -> exc_code
+function interruptType_to_bits (i) = {
+  match (i) {
+    I_U_Software => 0x0,
+    I_S_Software => 0x1,
+    I_M_Software => 0x3,
+    I_U_Timer    => 0x4,
+    I_S_Timer    => 0x5,
+    I_M_Timer    => 0x7,
+    I_U_External => 0x8,
+    I_S_External => 0x9,
+    I_M_External => 0xb
+  }
+}
+
+/* other exceptions */
 
 union exception = {
   Error_not_implemented : string,
@@ -54,7 +136,6 @@ union exception = {
 }
 
 val not_implemented : forall ('a : Type). string -> 'a effect {escape}
-
 function not_implemented message = throw(Error_not_implemented(message))
 
 val internal_error : forall ('a : Type). string -> 'a effect {escape}
@@ -62,6 +143,18 @@ function internal_error(s) = {
     assert (false, s);
     throw Error_internal_error()
 }
+
+/* extension context status */
+
+type ext_status = bits(2)
+
+enum ExtStatus = {Off, Initial, Clean, Dirty}
+
+/* supervisor-level address translation modes */
+
+type satp_mode = bits(4)
+enum SATPMode = {Sbare, Sv32, Sv39}
+
 
 /* memory */
 
