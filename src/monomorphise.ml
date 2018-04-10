@@ -1836,14 +1836,15 @@ let split_defs all_errors splits defs =
          match p with
          | P_app (id,args) ->
             begin
-              let kid,kid_annot =
-                match args with
-                | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
-                | _ -> 
-                   raise (Reporting_basic.err_general l
-                            "Pattern match not currently supported by monomorphisation")
-              in match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
+              match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
               | (_,variants) ->
+                 let kid,kid_annot =
+                   match args with
+                   | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
+                   | _ -> 
+                      raise (Reporting_basic.err_general l
+                               "Pattern match not currently supported by monomorphisation")
+                 in
                  let map_inst (insts,id',_) =
                    let insts =
                      match insts with [(v,Some i)] -> [(kid,Nexp_aux (Nexp_constant i, Generated l))]
