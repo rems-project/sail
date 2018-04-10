@@ -41,9 +41,9 @@ function main () = {
     }
   };
   match word {
-    8 : range(0, 8) => x = 32,
-    16 : range(0, 16) => x = 64,
-    32 : range(0, 32) => x = 128
+    8  => x = 32,
+    16 => x = 64,
+    32 => x = 128
   };
   match 0b010101 {
     0b01 @ _ : vector(1, inc, bit) @ 0b101 => n = 42,

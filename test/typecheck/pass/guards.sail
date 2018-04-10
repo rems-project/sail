@@ -1,19 +1,6 @@
-infix 4 ==
-infixl 6 /
+default Order dec
 
-val add_int : (int, int) -> int
-
-overload operator + = {add_int}
-
-val eq : forall ('a : Type). ('a, 'a) -> bool
-
-val neq : forall ('a : Type). ('a, 'a) -> bool
-
-overload operator == = {eq}
-
-overload operator != = {neq}
-
-val quotient : (int, int) -> int
+$include <prelude.sail>
 
 overload operator / = {quotient}
 

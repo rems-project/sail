@@ -486,7 +486,7 @@ let def_loc = function
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v
-  | Id_aux (DeIid v, _) -> "(deinfix " ^ v ^ ")"
+  | Id_aux (DeIid v, _) -> "(operator " ^ v ^ ")"
 
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
@@ -528,7 +528,7 @@ let string_of_base_effect_aux = function
 
 let string_of_base_kind_aux = function
   | BK_type -> "Type"
-  | BK_nat -> "Nat"
+  | BK_nat -> "Int"
   | BK_order -> "Order"
 
 let string_of_base_kind (BK_aux (bk, _)) = string_of_base_kind_aux bk
@@ -567,11 +567,11 @@ and string_of_typ_aux = function
   | Typ_id id -> string_of_id id
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
-  | Typ_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_typ_arg args ^ ">"
+  | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_fn (typ_arg, typ_ret, eff) ->
      string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
   | Typ_exist (kids, nc, typ) ->
-     "exist " ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ
+     "{" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
   | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
 and string_of_typ_arg_aux = function
@@ -588,7 +588,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_and (nc1, nc2), _) ->
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
-     string_of_kid kid ^ " IN {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+     string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
@@ -599,7 +599,7 @@ let string_of_annot = function
 
 let string_of_quant_item_aux = function
   | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid
-  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> string_of_kind k ^ " " ^ string_of_kid kid
+  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> "(" ^ string_of_kid kid ^ " :: " ^ string_of_kind k ^ ")"
   | QI_const constr -> string_of_n_constraint constr
 
 let string_of_quant_item = function
@@ -641,7 +641,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_app_infix (x, op, y) -> "(" ^ string_of_exp x ^ " " ^ string_of_id op ^ " " ^ string_of_exp y ^ ")"
   | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"
   | E_case (exp, cases) ->
-     "switch " ^ string_of_exp exp ^ " { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
+     "match " ^ string_of_exp exp ^ " { " ^ string_of_list ", " string_of_pexp cases ^ " }"
   | E_try (exp, cases) ->
      "try " ^ string_of_exp exp ^ " catch { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
   | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp

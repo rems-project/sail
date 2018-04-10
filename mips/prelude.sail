@@ -202,14 +202,6 @@ infix 8 ^^
 val operator ^^ = {lem: "replicate_bits"} : forall 'n 'm . (bits('n), atom('m)) -> bits('n * 'm)
 function operator ^^ (bs, n) = replicate_bits (bs, n)
 
-val cast ex_nat : nat -> {'n, 'n >= 0. atom('n)}
-
-function ex_nat 'n = n
-
-val cast ex_int : int -> {'n, true. atom('n)}
-
-function ex_int 'n = n
-
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
 val print_int = "print_int" : (string, int) -> unit

@@ -1961,15 +1961,23 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
         no_effect funcls
       in
       let fun_typ = function_typ args_typ ret_typ eff in
+      let quant_new_tyvars qis =
+        let quant_tyvars = List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_quant_item qis) in
+        let typ_tyvars = tyvars_of_typ fun_typ in
+        let new_tyvars = KidSet.diff typ_tyvars quant_tyvars in
+        List.map (mk_qi_id BK_nat) (KidSet.elements new_tyvars)
+      in
       let typquant = match typquant with
         | TypQ_aux (TypQ_tq qis, l) ->
            let qis =
              List.filter
                (fun qi -> KidSet.subset (tyvars_of_quant_item qi) (tyvars_of_typ fun_typ))
                qis
+             @ quant_new_tyvars qis
            in
            TypQ_aux (TypQ_tq qis, l)
-        | _ -> typquant
+        | _ ->
+           TypQ_aux (TypQ_tq (List.map (mk_qi_id BK_nat) (KidSet.elements (tyvars_of_typ fun_typ))), l)
       in
       let val_spec =
         VS_aux (VS_val_spec
@@ -3216,6 +3224,7 @@ let rewrite_defs_ocaml = [
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("top_sort_defs", top_sort_defs);
   ("constraint", rewrite_constraint);

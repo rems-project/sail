@@ -103,10 +103,6 @@ val not_vec = {
 
 overload ~ = {not_bool, not_vec}
 
-val neq_int = {lem: "neq"} : (int, int) -> bool
-
-function neq_int (x, y) = not_bool(eq_int(x, y))
-
 val neq_vec = {lem: "neq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
@@ -115,7 +111,7 @@ val neq_anything = {lem: "neq"} : forall ('a : Type). ('a, 'a) -> bool
 
 function neq_anything (x, y) = not_bool(x == y)
 
-overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
+overload operator != = {neq_vec, neq_anything}
 
 val builtin_and_vec = {ocaml: "and_vec", c: "and_bits"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 

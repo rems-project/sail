@@ -168,7 +168,7 @@ and sc_op = SC_and | SC_or
 
 and apat =
   | AP_tup of apat list
-  | AP_id of id
+  | AP_id of id * typ
   | AP_global of id * typ
   | AP_app of id * apat
   | AP_cons of apat * apat
@@ -202,8 +202,8 @@ let rec frag_rename from_id to_id = function
 
 let rec apat_bindings = function
   | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
-  | AP_id id -> IdSet.singleton id
-  | AP_global (id, typ) -> IdSet.empty
+  | AP_id (id, _) -> IdSet.singleton id
+  | AP_global (id, _) -> IdSet.empty
   | AP_app (id, apat) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
   | AP_nil -> IdSet.empty
@@ -211,8 +211,8 @@ let rec apat_bindings = function
 
 let rec apat_rename from_id to_id = function
   | AP_tup apats -> AP_tup (List.map (apat_rename from_id to_id) apats)
-  | AP_id id when Id.compare id from_id = 0 -> AP_id to_id
-  | AP_id id -> AP_id id
+  | AP_id (id, typ) when Id.compare id from_id = 0 -> AP_id (to_id, typ)
+  | AP_id (id, typ) -> AP_id (id, typ)
   | AP_global (id, typ) -> AP_global (id, typ)
   | AP_app (ctor, apat) -> AP_app (ctor, apat_rename from_id to_id apat)
   | AP_cons (apat1, apat2) -> AP_cons (apat_rename from_id to_id apat1, apat_rename from_id to_id apat2)
@@ -430,7 +430,7 @@ let rec pp_aexp = function
 
 and pp_apat = function
   | AP_wild -> string "_"
-  | AP_id id -> pp_id id
+  | AP_id (id, typ) -> pp_annot typ (pp_id id)
   | AP_global (id, _) -> pp_id id
   | AP_tup apats -> parens (separate_map (comma ^^ space) pp_apat apats)
   | AP_app (id, apat) -> pp_id id ^^ parens (pp_apat apat)
@@ -484,7 +484,7 @@ let rec split_block = function
 let rec anf_pat ?global:(global=false) (P_aux (p_aux, (l, _)) as pat) =
   match p_aux with
   | P_id id when global -> AP_global (id, pat_typ_of pat)
-  | P_id id -> AP_id id
+  | P_id id -> AP_id (id, pat_typ_of pat)
   | P_wild -> AP_wild
   | P_tup pats -> AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats)
   | P_app (id, [pat]) -> AP_app (id, anf_pat ~global:global pat)
@@ -1544,8 +1544,9 @@ let compile_funcall ctx id args typ =
   (List.rev !setup, final_ctyp, call, !cleanup)
 
 let rec compile_match ctx apat cval case_label =
+  prerr_endline ("Compiling match " ^ Pretty_print_sail.to_string (pp_apat apat) ^ " cval " ^ Pretty_print_sail.to_string (pp_cval cval));
   match apat, cval with
-  | AP_id pid, (frag, ctyp) when Env.is_union_constructor pid ctx.tc_env ->
+  | AP_id (pid, _), (frag, ctyp) when Env.is_union_constructor pid ctx.tc_env ->
      [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind (string_of_id pid))), CT_bool) case_label],
      []
   | AP_global (pid, typ), (frag, ctyp) ->
@@ -1558,15 +1559,21 @@ let rec compile_match ctx apat cval case_label =
           [iconvert (CL_id pid) global_ctyp id ctyp], []
        | _ -> c_error "Cannot compile global letbinding"
        end
-  | AP_id pid, (frag, ctyp) when is_ct_enum ctyp ->
+  | AP_id (pid, _), (frag, ctyp) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
      | Unbound -> [idecl ctyp pid; icopy (CL_id pid) (frag, ctyp)], []
      | _ -> [ijump (F_op (F_id pid, "!=", frag), CT_bool) case_label], []
      end
-  | AP_id pid, _ ->
+  | AP_id (pid, typ), _ ->
      let ctyp = cval_ctyp cval in
-     let init, cleanup = if is_stack_ctyp ctyp then [], [] else [ialloc ctyp pid], [iclear ctyp pid] in
-     [idecl ctyp pid] @ init @ [icopy (CL_id pid) cval], cleanup
+     let id_ctyp = ctyp_of_typ ctx typ in
+     let init, cleanup = if is_stack_ctyp id_ctyp then [], [] else [ialloc id_ctyp pid], [iclear id_ctyp pid] in
+     if ctyp_equal id_ctyp ctyp then
+       [idecl ctyp pid] @ init @ [icopy (CL_id pid) cval], cleanup
+     else
+       let gs = gensym () in
+       let gs_init, gs_cleanup = if is_stack_ctyp ctyp then [], [] else [ialloc ctyp gs], [iclear ctyp gs] in
+       [idecl id_ctyp pid; idecl ctyp gs] @ init @ gs_init @ [icopy (CL_id gs) cval; iconvert (CL_id pid) id_ctyp gs ctyp] @ gs_cleanup, cleanup
   | AP_tup apats, (frag, ctyp) ->
      begin
        let get_tup n ctyp = (F_field (frag, "ztup" ^ string_of_int n), ctyp) in
@@ -2170,6 +2177,7 @@ let rec compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow (pat_ids pat) (anf exp))) in
+     prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp));
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let fundef_label = label "fundef_fail_" in
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
@@ -3333,7 +3341,7 @@ let codegen_def ctx def =
   let lists = List.map (fun ctyp -> codegen_list ctx (unlist ctyp)) lists in
   let vectors = List.filter is_ct_vector (cdef_ctyps ctx def) in
   let vectors = List.map (fun ctyp -> codegen_vector ctx (unvector ctyp)) vectors in
-  (* prerr_endline (Pretty_print_sail.to_string (pp_cdef def)); *)
+  prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
   concat tups
   ^^ concat lists
   ^^ concat vectors

@@ -75,7 +75,7 @@ do
 	red "compiling $file" "fail"
     fi;
     rm -f ${file%.sail}.c
-    rm -r ${file%.sail}.result
+    rm -f ${file%.sail}.result
 done
 
 finish_suite "C testing"

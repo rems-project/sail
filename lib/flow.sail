@@ -29,12 +29,22 @@ val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm 'o 'p. (
 val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : (int, int) -> bool
 val eq_bool = {ocaml: "eq_bool", lem: "eq", c: "eq_bool"} : (bool, bool) -> bool
 
+val neq_range = {lem: "neq"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
+function neq_range (x, y) = not_bool(neq_range(x, y))
+
+val neq_int = {lem: "neq"} : (int, int) -> bool
+function neq_int (x, y) = not_bool(eq_int(x, y))
+
+val neq_bool : (bool, bool) -> bool
+function neq_bool (x, y) = not_bool(eq_bool(x, y))
+
 val lteq_int = "lteq" : (int, int) -> bool
 val gteq_int = "gteq" : (int, int) -> bool
 val lt_int = "lt" : (int, int) -> bool
 val gt_int = "gt" : (int, int) -> bool
 
 overload operator == = {eq_atom, eq_range, eq_int, eq_bool}
+overload operator != = {neq_atom, neq_range, neq_int, neq_bool}
 overload operator | = {or_bool}
 overload operator & = {and_bool}
 
