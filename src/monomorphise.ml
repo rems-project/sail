@@ -2679,11 +2679,19 @@ let kids_bound_by_pat pat =
 
 (* Add bound variables from a pattern to the environment with the given dependency. *)
 
-let update_env env deps pat =
+let update_env env deps pat typ_env_pre typ_env_post =
   let bound = bindings_from_pat pat in
   let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
-  let kbound = kids_bound_by_pat pat in
-  let kid_deps = KidSet.fold (fun v ds -> KBindings.add v deps ds) kbound env.kid_deps in
+  (* Diff the type environment to find the new variables *)
+  let kbound =
+    KBindings.merge (fun k x y ->
+      match x,y with
+      | Some bk, None -> Some bk
+      | _ -> None)
+      (Env.get_typ_vars typ_env_post)
+      (Env.get_typ_vars typ_env_pre)
+  in
+  let kid_deps = KBindings.fold (fun v _ ds -> KBindings.add v deps ds) kbound env.kid_deps in
   { env with var_deps = var_deps; kid_deps = kid_deps }
 
 let assigned_vars_exps es =
@@ -2978,12 +2986,12 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let analyse_case (Pat_aux (pexp,_)) =
          match pexp with
          | Pat_exp (pat,e1) ->
-            let env = update_env env deps pat in
+            let env = update_env env deps pat (env_of_annot (l,annot)) (env_of e1) in
             let d,assigns,r = analyse_exp fn_id env assigns e1 in
             let assigns = add_dep_to_assigned deps assigns [e1] in
             (d,assigns,r)
          | Pat_when (pat,e1,e2) ->
-            let env = update_env env deps pat in
+            let env = update_env env deps pat (env_of_annot (l,annot)) (env_of e2) in
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             let assigns = add_dep_to_assigned deps assigns [e1;e2] in
@@ -2995,7 +3003,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
         List.fold_left merge r rs)
     | E_let (LB_aux (LB_val (pat,e1),_),e2) ->
        let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
-       let env = update_env env d1 pat in
+       let env = update_env env d1 pat (env_of_annot (l,annot)) (env_of e2) in
        let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
        (d2,assigns,merge r1 r2)
     | E_assign (lexp,e1) ->
@@ -3017,12 +3025,12 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let analyse_handler (Pat_aux (pexp,_)) =
          match pexp with
          | Pat_exp (pat,e1) ->
-            let env = update_env env (Unknown (l,"Exception")) pat in
+            let env = update_env env (Unknown (l,"Exception")) pat (env_of_annot (l,annot)) (env_of e1) in
             let d,assigns,r = analyse_exp fn_id env assigns e1 in
             let assigns = add_dep_to_assigned deps assigns [e1] in
             (d,assigns,r)
          | Pat_when (pat,e1,e2) ->
-            let env = update_env env (Unknown (l,"Exception")) pat in
+            let env = update_env env (Unknown (l,"Exception")) pat (env_of_annot (l,annot)) (env_of e2) in
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             let assigns = add_dep_to_assigned deps assigns [e1;e2] in
