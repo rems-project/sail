@@ -132,12 +132,16 @@ register mepc : xlenbits
 register mtval : xlenbits
 register mscratch : xlenbits
 
-/* other registers */
-
-register pmpaddr0 : xlenbits
-register pmpcfg0 : xlenbits
+/* informational registers */
+register mvendorid : xlenbits
+register mimpid : xlenbits
+register marchid : xlenbits
 /* TODO: this should be readonly, and always 0 for now */
 register mhartid : xlenbits
+
+/* physical memory protection configuration */
+register pmpaddr0 : xlenbits
+register pmpcfg0 : xlenbits
 
 /* instruction control flow */
 

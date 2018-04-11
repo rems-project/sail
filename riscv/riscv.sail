@@ -529,6 +529,10 @@ function isCSRImplemented csr : bits(12) -> bool =
 
 function readCSR csr: bits(12) -> xlenbits =
   match csr {
+    0xF11 => mvendorid,
+    0xF12 => marchid,
+    0xF13 => mimpid,
+    0xF14 => mhartid,
     0x300 => mstatus.bits(),
     0x302 => medeleg.bits(),
     0x303 => mideleg.bits(),
