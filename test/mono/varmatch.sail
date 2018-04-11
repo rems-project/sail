@@ -1,5 +1,8 @@
-val operator & = "and_bool" : (bool, bool) -> bool
-val operator == = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
+$include <flow.sail>
+
+val eq_all = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
+overload operator == = {eq_all}
+
 
 /* Check that when we case split on a variable that the constant propagation
    handles the default case correctly. */
