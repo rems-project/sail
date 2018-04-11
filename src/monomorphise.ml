@@ -2099,7 +2099,7 @@ let mapat_extra f is xs =
   let rec aux n = function
     | [] -> [], []
     | h::t when Util.IntSet.mem n is ->
-       let h',x = f h in
+       let h',x = f n h in
        let t',xs = aux (n+1) t in
        h'::t',x::xs
     | h::t ->
@@ -2143,10 +2143,18 @@ let sizes_of_annot = function
   | _,None -> KidSet.empty
   | _,Some (env,typ,_) -> sizes_of_typ (Env.base_typ_of env typ)
 
-let change_parameter_pat = function
-  | P_aux (P_id var, (l,Some (env,typ,_)))
-  | P_aux (P_typ (_,P_aux (P_id var, (l,Some (env,typ,_)))),_) ->
-     P_aux (P_id var, (l,None)), var
+let change_parameter_pat i = function
+  | P_aux (P_id var, (l,_))
+  | P_aux (P_typ (_,P_aux (P_id var, (l,_))),_) ->
+     P_aux (P_id var, (l,None)), ([var],[])
+  | P_aux (P_lit lit,(l,_)) ->
+     let var = mk_id ("p#" ^ string_of_int i) in
+     let annot = (Generated l, None) in
+     let test : tannot exp =
+       E_aux (E_app_infix (E_aux (E_app (mk_id "size_itself_int",[E_aux (E_id var,annot)]),annot),
+                           mk_id "==",
+                           E_aux (E_lit lit,annot)), annot) in
+     P_aux (P_id var, (l,None)), ([],[test])
   | P_aux (_,(l,_)) -> raise (Reporting_basic.err_unreachable l
                                 "Expected variable pattern")
 
@@ -2294,23 +2302,30 @@ let rewrite_size_parameters env (Defs defs) =
       (* Update pattern and add itself -> nat wrapper to body *)
       match Bindings.find id fn_sizes with
       | to_change,nexps ->
-         let pat, vars =
+         let pat, vars, new_guards =
            match pat with
              P_aux (P_tup pats,(l,_)) ->
-               let pats, vars = mapat_extra change_parameter_pat to_change pats in
-               P_aux (P_tup pats,(l,None)), vars
+               let pats, vars_guards = mapat_extra change_parameter_pat to_change pats in
+               let vars, new_guards = List.split vars_guards in
+               P_aux (P_tup pats,(l,None)), vars, new_guards
            | P_aux (_,(l,_)) ->
               begin
-                if IntSet.is_empty to_change then pat, []
+                if IntSet.is_empty to_change then pat, [], []
                 else
-                   let pat, var = change_parameter_pat pat in
-                   pat, [var]
+                   let pat, (var, newguard) = change_parameter_pat 0 pat in
+                   pat, [var], [newguard]
               end
          in
+         let vars, new_guards = List.concat vars, List.concat new_guards in
          let body = List.fold_left (add_var_rebind true) body vars in
-         let guard = match guard with
-           | None -> None
-           | Some exp -> Some (List.fold_left (add_var_rebind false) exp vars)
+         let merge_guards g1 g2 : tannot exp =
+           E_aux (E_app_infix (g1, mk_id "&", g2),(Generated Unknown,None)) in
+         let guard = match guard, new_guards with
+           | None, [] -> None
+           | None, (h::t) -> Some (List.fold_left merge_guards h t)
+           | Some exp, gs ->
+              let exp' = List.fold_left (add_var_rebind false) exp vars in
+              Some (List.fold_left merge_guards exp' gs)
          in
          pat,guard,body,nexps
       | exception Not_found -> pat,guard,body,NexpSet.empty
