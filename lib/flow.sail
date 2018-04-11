@@ -30,7 +30,7 @@ val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : (int, int) -> bool
 val eq_bool = {ocaml: "eq_bool", lem: "eq", c: "eq_bool"} : (bool, bool) -> bool
 
 val neq_range = {lem: "neq"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
-function neq_range (x, y) = not_bool(neq_range(x, y))
+function neq_range (x, y) = not_bool(eq_range(x, y))
 
 val neq_int = {lem: "neq"} : (int, int) -> bool
 function neq_int (x, y) = not_bool(eq_int(x, y))
