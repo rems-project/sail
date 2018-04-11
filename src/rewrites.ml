@@ -1426,27 +1426,26 @@ let rewrite_defs_remove_bitvector_pats (Defs defs) =
    Those numeral patterns are not handled very well by Lem (or Isabelle)
  *)
 let rewrite_defs_remove_numeral_pats =
-  let p_lit = function
+  let p_lit outer_env = function
     | L_aux (L_num n, l) ->
        let id = fresh_id "l__" Parse_ast.Unknown in
-       let annot_exp e_aux typ = E_aux (e_aux, simple_annot l typ) in
+       let typ = atom_typ (nconstant n) in
        let guard =
-         annot_exp (E_app_infix (
-           annot_exp (E_id id) (atom_typ (nconstant n)),
+         mk_exp (E_app_infix (
+           mk_exp (E_id id),
            mk_id "==",
-           simple_num l n
-         )) bool_typ in
-       (Some guard, P_id id)
+           mk_lit_exp (L_num n)
+         )) in
+       (* Check expression in reasonable approx of environment to resolve overriding *)
+       let env = Env.add_local id (Immutable, typ) outer_env in
+       let checked_guard = check_exp env guard bool_typ in
+       (Some checked_guard, P_id id)
     | lit -> (None, P_lit lit) in
-  let guard_pat =
-    fold_pat { (compute_pat_alg None compose_guard_opt) with p_lit = p_lit } in
+  let guard_pat outer_env =
+    fold_pat { (compute_pat_alg None compose_guard_opt) with p_lit = p_lit outer_env } in
   let pat_aux (pexp_aux, a) =
     let pat,guard,exp,a = destruct_pexp (Pat_aux (pexp_aux, a)) in
-    let guard',pat = match guard_pat pat with
-      | Some g, pat ->
-         let pat, env = bind_pat_no_guard (env_of exp) (strip_pat pat) (pat_typ_of pat) in
-         Some (check_exp env (strip_exp g) (typ_of g)), pat
-      | None, pat -> None, pat in
+    let guard',pat = guard_pat (pat_env_of pat) pat in
     match compose_guard_opt guard guard' with
     | Some g -> Pat_aux (Pat_when (pat, g, exp), a)
     | None -> Pat_aux (Pat_exp (pat, exp), a) in
