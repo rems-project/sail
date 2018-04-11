@@ -461,6 +461,18 @@ function SignalExceptionTLB(ex, badAddr) = {
 enum MemAccessType = {Instruction, LoadData, StoreData}
 enum AccessLevel = {User, Supervisor, Kernel} 
 
+val int_of_AccessLevel : AccessLevel -> int effect pure
+function int_of_AccessLevel level =
+  match level {
+    User        => 0,
+    Supervisor  => 1,
+    Kernel      => 2
+  }
+
+val grantsAccess : (AccessLevel, AccessLevel) -> bool
+function grantsAccess (currentLevel, requiredLevel) =
+  int_of_AccessLevel(currentLevel) >= int_of_AccessLevel(requiredLevel)
+
 function getAccessLevel() : unit -> AccessLevel=
   if ((CP0Status.EXL()) | (CP0Status.ERL())) then
     Kernel

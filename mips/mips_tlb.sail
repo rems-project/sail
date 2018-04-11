@@ -100,14 +100,6 @@ function TLBTranslate2 (vAddr, accessType) = {
   }
 }
 
-val cast_AccessLevel : AccessLevel -> int effect pure
-function cast_AccessLevel level =
-  match level {
-    User        => 0,
-    Supervisor  => 1,
-    Kernel      => 2
-  }
-
 /* perform TLB translation. bool is CHERI specific TLB bits noStoreCap/suppressTag */
 val TLBTranslateC : (bits(64), MemAccessType) -> (bits(64), bool) effect {escape, rreg, undef, wreg}
 function TLBTranslateC (vAddr, accessType) = 
@@ -126,7 +118,7 @@ function TLBTranslateC (vAddr, accessType) =
       0b01  => (Supervisor, None() : option(bits(64))),  /* xsseg - supervisor mapped */
       0b00  => (User, None() : option(bits(64)))         /* xuseg - user mapped */
     } in
-    if (cast_AccessLevel(currentAccessLevel) < cast_AccessLevel(requiredLevel)) then
+    if not(grantsAccess(currentAccessLevel, requiredLevel)) then
       SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr)
     else
       let (pa, c) : (bits(64), bool) = match addr {

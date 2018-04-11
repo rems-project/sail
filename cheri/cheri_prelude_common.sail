@@ -78,7 +78,16 @@ register C29 : CapReg /* aka kernel code capability, KCC */
 register C30 : CapReg /* aka kernel data capability, KDC */
 register C31 : CapReg /* aka exception program counter capability, EPCC */
 
-let IDC : regno = 0b11010 /* 26 */
+register CTLSU : CapReg /* User thread local storage capabiltiy */
+register CTLSP : CapReg /* Privileged thread local storage capabiltiy */
+
+let DDC  : regno = 0b00000 /* C0  */
+let IDC  : regno = 0b11010 /* C26 */
+let KR1C : regno = 0b11011 /* C27 */
+let KR2C : regno = 0b11100 /* C28 */
+let KCC  : regno = 0b11101 /* C29 */
+let KDC  : regno = 0b11110 /* C30 */
+let EPCC : regno = 0b11111 /* C31 */
 
 let CapRegs : vector(32, dec, register(CapReg)) =
   [

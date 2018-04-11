@@ -100,6 +100,9 @@ function clause decode (0b010010 @ 0b00000 @ rd : regno @ cb : regno @    0b0010
 function clause decode (0b010010 @ 0b00000 @ rd : regno @ cb : regno @    0b00110 @ 0b111111) = Some(CGetOffset(rd, cb))
 function clause decode (0b010010 @ 0b00000 @ cd : regno @ rs : regno @    0b00111 @ 0b111111) = Some(CGetPCCSetOffset(cd, rs))
 
+function clause decode (0b010010 @ 0b00000 @ cd : regno @ sel : regno @   0b01101 @ 0b111111) = Some(CReadHwr(cd, sel))
+function clause decode (0b010010 @ 0b00000 @ cb : regno @ sel : regno @   0b01110 @ 0b111111) = Some(CWriteHwr(cb, sel))
+
 /* Three operand */
 
 /* Capability Modification */
@@ -343,6 +346,84 @@ function clause execute (CSetCause(rt)) =
       CapCause->RegNum()  = rt_val[7..0];
     }
   /* END_CSetCause */
+}
+
+union clause ast = CReadHwr : (regno, regno)
+function clause execute (CReadHwr(cd, sel)) = 
+{
+  /* START_CReadHwr */
+  checkCP2usable();
+  let (needSup, needAccessSys) : (bool, bool) = match unsigned(sel) {
+    0  => (false, false), /* DDC   -- no access control */
+    1  => (false, false), /* CTLSU -- no access control */
+    8  => (false, true),  /* CTLSP -- privileged TLS */
+    22 => (true, false),  /* KR1C */
+    23 => (true, false),  /* KR2C */
+    29 => (true, true),   /* KCC */
+    30 => (true, true),   /* KDC */
+    31 => (true, true),   /* EPCC */
+    _  => SignalException(ResI)
+  };
+  if register_inaccessible(cd) then
+     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if needAccessSys & not(pcc_access_system_regs()) then
+     raise_c2_exception(CapEx_AccessSystemRegsViolation, sel)
+  else if needSup & not(grantsAccess(getAccessLevel(), Supervisor)) then
+     raise_c2_exception(CapEx_AccessSystemRegsViolation, sel)
+  else {
+    capVal : CapStruct = match unsigned(sel) {
+      0 => readCapReg(DDC),
+      1 => capRegToCapStruct(CTLSU),
+      8 => capRegToCapStruct(CTLSP),
+      22 => readCapReg(KR1C),
+      23 => readCapReg(KR2C),
+      29 => readCapReg(KCC),
+      30 => readCapReg(KDC),
+      31 => readCapReg(EPCC),
+      _  => {assert(false, "should be unreachable code"); undefined}
+    };
+    writeCapReg(cd, capVal);
+  };
+  /* END_CReadHwr */
+}
+
+union clause ast = CWriteHwr : (regno, regno)
+function clause execute (CWriteHwr(cb, sel)) = 
+{
+  /* START_CWriteHwr */
+  checkCP2usable();
+  let (needSup, needAccessSys) : (bool, bool) = match unsigned(sel) {
+    0  => (false, false), /* DDC   -- no access control */
+    1  => (false, false), /* CTLSU -- no access control */
+    8  => (false, true),  /* CTLSP -- privileged TLS */
+    22 => (true, false),  /* KR1C */
+    23 => (true, false),  /* KR2C */
+    29 => (true, true),   /* KCC */
+    30 => (true, true),   /* KDC */
+    31 => (true, true),   /* EPCC */
+    _  => SignalException(ResI)
+  };
+  if register_inaccessible(cb) then
+     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if needAccessSys & not(pcc_access_system_regs()) then
+     raise_c2_exception(CapEx_AccessSystemRegsViolation, sel)
+  else if needSup & not(grantsAccess(getAccessLevel(), Supervisor)) then
+     raise_c2_exception(CapEx_AccessSystemRegsViolation, sel)
+  else {
+    capVal = readCapReg(cb);
+    match unsigned(sel) {
+      0 => writeCapReg(DDC, capVal),
+      1 => CTLSU = capStructToCapReg(capVal),
+      8 => CTLSP = capStructToCapReg(capVal),
+      22 => writeCapReg(KR1C, capVal),
+      23 => writeCapReg(KR2C, capVal),
+      29 => writeCapReg(KCC, capVal),
+      30 => writeCapReg(KDC, capVal),
+      31 => writeCapReg(EPCC, capVal),
+      _  => assert(false, "should be unreachable code")
+    };
+  };
+  /* END_CWriteHwr */
 }
 
 union clause ast = CAndPerm : (regno, regno, regno)

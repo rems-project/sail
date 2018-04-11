@@ -107,4 +107,6 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CStore)
 	$(call EXTRACT_INST,CSC)
 	$(call EXTRACT_INST,CLC)
+	$(call EXTRACT_INST,CReadHwr)
+	$(call EXTRACT_INST,CWriteHwr)
 
