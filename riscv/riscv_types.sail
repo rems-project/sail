@@ -157,6 +157,18 @@ function interruptType_to_bits (i) = {
   }
 }
 
+type tv_mode = bits(2)
+enum TrapVectorMode = {TV_Direct, TV_Vector, TV_Reserved}
+
+val cast trapVectorMode_of_bits : tv_mode -> TrapVectorMode
+function trapVectorMode_of_bits (m) = {
+  match (m) {
+    0b00 => TV_Direct,
+    0b01 => TV_Vector,
+    _    => TV_Reserved
+  }
+}
+
 /* other exceptions */
 
 union exception = {
@@ -178,8 +190,27 @@ function internal_error(s) = {
 /* extension context status */
 
 type ext_status = bits(2)
-
 enum ExtStatus = {Off, Initial, Clean, Dirty}
+
+val cast extStatus_to_bits : ExtStatus -> ext_status
+function extStatus_to_bits(e) = {
+  match (e) {
+    Off => 0b00,
+    Initial => 0b01,
+    Clean => 0b10,
+    Dirty => 0b11
+  }
+}
+
+val cast extStatus_of_bits : ext_status -> ExtStatus
+function extStatus_of_bits(e) = {
+  match (e) {
+    0b00 => Off,
+    0b01 => Initial,
+    0b10 => Clean,
+    0b11 => Dirty
+  }
+}
 
 /* supervisor-level address translation modes */
 

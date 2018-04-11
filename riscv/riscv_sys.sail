@@ -63,76 +63,73 @@ bitfield Mstatus : bits(64) = {
 }
 register mstatus : Mstatus
 
-bitfield Mip : bits(64) = {
-  MEIP : 11,
-  SEIP : 9,
-  UEIP : 8,
+/* interrupt registers */
 
-  MTIP : 7,
-  STIP : 5,
-  UTIP : 4,
+bitfield Minterrupts : bits(64) = {
+  MEI : 11, /* external interrupts */
+  SEI : 9,
+  UEI : 8,
 
-  MSIP : 3,
-  SSIP : 1,
-  USIP : 0,
+  MTI : 7,  /* timers interrupts */
+  STI : 5,
+  UTI : 4,
 
-}
-register mip : Mip
-
-bitfield Mie : bits(64) = {
-  MEIE : 11,
-  SEIE : 9,
-  UEIE : 8,
-
-  MTIE : 7,
-  STIE : 5,
-  UTIE : 4,
-
-  MSIE : 3,
-  SSIE : 1,
-  USIE : 0,
+  MSI : 3,  /* software interrupts */
+  SSI : 1,
+  USI : 0,
 
 }
-register mie : Mie
-
-bitfield Mideleg : bits(64) = {
-  MEID : 6,
-  SEID : 5,
-  UEID : 4,
-
-  MTID : 6,
-  STID : 5,
-  UTID : 4,
-
-  MSID : 3,
-  SSID : 1,
-  USID : 0
-}
-register mideleg : Mideleg
-
-bitfield Medeleg : bits(64) = {
-  STORE_PAGE_FAULT  : 15,
-  LOAD_PAGE_FAULT   : 13,
-  FETCH_PAGE_FAULT  : 12,
-  MACHINE_ECALL     : 10,
-  SUPERVISOR_ECALL  : 9,
-  USER_ECALL        : 8,
-  STORE_ACCESS      : 7,
-  MISALIGNED_STORE  : 6,
-  LOAD_ACCESS       : 5,
-  MISALIGNED_LOAD   : 4,
-  BREAKPOINT        : 3,
-  ILLEGAL_INSTR     : 2,
-  FETCH_ACCESS      : 1,
-  MISALIGNED_FETCH  : 0
-}
-register medeleg : Medeleg
+register mip     : Minterrupts /* Pending */
+register mie     : Minterrupts /* Enabled */
+register mideleg : Minterrupts /* Delegation to S-mode */
 
 /* exception registers */
+
+bitfield Medeleg : bits(64) = {
+  SAMO_Page_Fault   : 15,
+  Load_Page_Fault   : 13,
+  Fetch_Page_Fault  : 12,
+  MEnvCall          : 10,
+  SEnvCall          : 9,
+  UEnvCall          : 8,
+  SAMO_Access_Fault : 7,
+  SAMO_Addr_Align   : 6,
+  Load_Access_Fault : 5,
+  Load_Addr_Align   : 4,
+  Breakpoint        : 3,
+  Illegal_Instr     : 2,
+  Fetch_Access_Fault: 1,
+  Fetch_Addr_Align  : 0
+}
+register medeleg : Medeleg  /* Delegation to S-mode */
+
+bitfield Mcause : bits(64) = {
+  IsInterrupt : 63,
+  Cause       : 62 .. 0
+}
+register mcause : Mcause
+
+bitfield Mtvec : bits(64) = {
+  Base : 63 .. 2,
+  Mode :  1 .. 0
+}
+register mtvec : Mtvec  /* Trap Vector */
+
+/* Interpreting the trap-vector address */
+function tvec_addr(m : Mtvec, c : Mcause) -> option(xlenbits) = {
+  let base : xlenbits = m.Base() @ 0b00;
+  match (trapVectorMode_of_bits(m.Mode())) {
+    TV_Direct => Some(base),
+    TV_Vector => if   mcause.IsInterrupt() == 0b1  /* FIXME: Why not already boolean? */
+                 then Some(base + (EXTZ(c.Cause()) << 0b10))
+                 else Some(base),
+    TV_Reserved => None()
+  }
+}
+
+/* auxiliary exception registers */
 register mepc : xlenbits
 register mtval : xlenbits
-register mtvec : xlenbits
-register mcause : xlenbits
 register mscratch : xlenbits
 
 /* other registers */
@@ -170,7 +167,9 @@ function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       mepc            = pc;
-      mcause          = EXTZ(exceptionType_to_bits(e.trap));
+
+      mcause->IsInterrupt() = false;
+      mcause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
 
       mstatus->MPIE() = mstatus.MIE();
       mstatus->MIE()  = false;
@@ -255,7 +254,10 @@ function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
         _ => throw Error_internal_error() /* Don't expect ReservedExc0 etc. here */
       };
       /* TODO: make register read explicit */
-      mtvec
+      match (tvec_addr(mtvec, mcause)) {
+        Some(addr) => addr,
+        None()     => throw Error_internal_error()
+      }
     },
     (_, CTL_MRET()) => {
       mstatus->MIE()  = mstatus.MPIE();
