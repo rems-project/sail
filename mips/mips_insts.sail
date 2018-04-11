@@ -1433,6 +1433,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
           (0b00010,0b000) => TLBEntryLo0.bits(), /* 2, TLB EntryLo0 */
           (0b00011,0b000) => TLBEntryLo1.bits(), /* 3, TLB EntryLo1 */
           (0b00100,0b000) => TLBContext.bits(),  /* 4, TLB Context */
+          (0b00100,0b010) => CP0UserLocal,
           (0b00101,0b000) => zero_extend(TLBPageMask @ 0x000), /* 5, TLB PageMask */
           (0b00110,0b000) => zero_extend(TLBWired),   /* 6, TLB Wired */
           (0b00111,0b000) => zero_extend(CP0HWREna),  /* 7, HWREna */
