@@ -340,6 +340,18 @@ let value_zero_extend = function
   | [v1; v2] -> mk_vector (Sail_lib.zero_extend (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value zero_extend"
 
+let value_zeros = function
+  | [v] -> mk_vector (Sail_lib.zeros (coerce_int v))
+  | _ -> failwith "value zeros"
+
+let value_shiftl = function
+  | [v1; v2] -> mk_vector (Sail_lib.shiftl (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value shiftl"
+
+let value_shiftr = function
+  | [v1; v2] -> mk_vector (Sail_lib.shiftr (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value shiftr"
+
 let eq_value v1 v2 = string_of_value v1 = string_of_value v2
 
 let value_eq_anything = function
@@ -425,6 +437,9 @@ let primops =
       ("hex_slice", value_hex_slice);
       ("zero_extend", value_zero_extend);
       ("sign_extend", value_sign_extend);
+      ("zeros", value_zeros);
+      ("shiftr", value_shiftr);
+      ("shiftl", value_shiftl);
       ("add_int", value_add_int);
       ("sub_int", value_sub_int);
       ("mult", value_mult);

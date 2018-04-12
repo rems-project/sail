@@ -86,7 +86,7 @@ let add_links str =
     let module StringSet = Set.Make(String) in
     let keywords = StringSet.of_list
       [ "function"; "forall"; "if"; "then"; "else"; "exit"; "return"; "match"; "vector";
-        "assert"; "constraint"; "let"; "in"; "atom"; "range"; "throw"; "sizeof" ]
+        "assert"; "constraint"; "let"; "in"; "atom"; "range"; "throw"; "sizeof"; "foreach" ]
     in
     let fn = Str.matched_group 1 s in
     let spacing = Str.matched_group 2 s in

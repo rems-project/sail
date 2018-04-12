@@ -220,7 +220,9 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
 			[Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
+                         Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
+              | Parse_ast.ATyp_app (Parse_ast.Id_aux (Parse_ast.Id "int", il), [n]) ->
+                 Typ_app(Id_aux(Id "atom", il), [Typ_arg_aux (Typ_arg_nexp (to_ast_nexp k_env n), Parse_ast.Unknown)])
               | Parse_ast.ATyp_app(pid,typs) ->
                   let id = to_ast_id pid in
                   let k = Envmap.apply k_env (id_to_string id) in
@@ -436,10 +438,12 @@ let rec to_ast_typ_pat (Parse_ast.ATyp_aux (typ_aux, l)) =
   match typ_aux with
   | Parse_ast.ATyp_wild -> TP_aux (TP_wild, l)
   | Parse_ast.ATyp_var kid -> TP_aux (TP_var (to_ast_var kid), l)
+  | Parse_ast.ATyp_app (Parse_ast.Id_aux (Parse_ast.Id "int", il), typs) ->
+     TP_aux (TP_app (Id_aux (Id "atom", il), List.map to_ast_typ_pat typs), l)
   | Parse_ast.ATyp_app (f, typs) ->
      TP_aux (TP_app (to_ast_id f, List.map to_ast_typ_pat typs), l)
   | _ -> typ_error l "Unexpected type in type pattern" None None None
-                                     
+
 let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pat,l) : Parse_ast.pat) : unit pat =
   P_aux(
     (match pat with

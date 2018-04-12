@@ -4,10 +4,10 @@
 (add-to-list 'auto-mode-alist '("\\.sail\\'" . sail2-mode))
 
 (defconst sail2-keywords
-  '("val" "function" "type" "struct" "union" "enum" "let" "var" "if" "then"
+  '("val" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
-    "overload" "cast" "sizeof" "constraint" "default" "assert" "newtype"
-    "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and"
+    "overload" "cast" "sizeof" "constraint" "default" "assert" "newtype" "from"
+    "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"))
 
 (defconst sail2-kinds
