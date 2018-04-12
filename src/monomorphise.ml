@@ -570,7 +570,9 @@ let nexp_subst_fns substs =
       | E_id _
       | E_ref _
       | E_lit _
-      | E_comment _ -> re e
+      | E_comment _
+      | E_internal_value _
+        -> re e
       | E_sizeof ne -> begin
          let ne' = subst_nexp substs ne in
          match ne' with
@@ -613,10 +615,6 @@ let nexp_subst_fns substs =
       | E_internal_return e -> re (E_internal_return (s_exp e))
       | E_throw e -> re (E_throw (s_exp e))
       | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
-    and s_opt_default (Def_val_aux (ed,(l,annot))) =
-      match ed with
-      | Def_val_empty -> Def_val_aux (Def_val_empty,(l,s_tannot annot))
-      | Def_val_dec e -> Def_val_aux (Def_val_dec (s_exp e),(l,s_tannot annot))
     and s_fexps (FES_aux (FES_Fexps (fes,flag), (l,annot))) =
       FES_aux (FES_Fexps (List.map s_fexp fes, flag), (l,s_tannot annot))
     and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
@@ -1442,6 +1440,7 @@ let split_defs all_errors splits defs =
     | E_var _
     | E_internal_plet _
     | E_internal_return _
+    | E_internal_value _
       -> raise (Reporting_basic.err_unreachable l
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
   and const_prop_fexps ref_vars substs assigns (FES_aux (FES_Fexps (fes,flag), annot)) =
@@ -1698,6 +1697,7 @@ let split_defs all_errors splits defs =
       | Unknown
       | Int _ -> []
       | Generated l -> [] (* Could do match_l l, but only want to split user-written patterns *)
+      | Documented (_,l) -> match_l l
       | Range (p,q) ->
          let matches =
            List.filter (fun ((filename,line),_,_) ->
@@ -1910,6 +1910,7 @@ let split_defs all_errors splits defs =
         | E_comment _
         | E_constraint _
         | E_ref _
+        | E_internal_value _
           -> ea
         | E_cast (t,e') -> re (E_cast (t, map_exp e'))
         | E_app (id,es) ->
@@ -1949,10 +1950,6 @@ let split_defs all_errors splits defs =
         | E_var (le,e1,e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
         | E_internal_plet (p,e1,e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
         | E_internal_return e -> re (E_internal_return (map_exp e))
-      and map_opt_default ((Def_val_aux (ed,annot)) as eda) =
-        match ed with
-        | Def_val_empty -> eda
-        | Def_val_dec e -> Def_val_aux (Def_val_dec (map_exp e),annot)
       and map_fexps (FES_aux (FES_Fexps (fes,flag), annot)) =
         FES_aux (FES_Fexps (List.map map_fexp fes, flag), annot)
       and map_fexp (FE_aux (FE_Fexp (id,e), annot)) =
@@ -2108,11 +2105,17 @@ let mapat_extra f is xs =
   in aux 0 xs
 
 let tyvars_bound_in_pat pat =
+  let rec tp_kids s (TP_aux (tp,_)) =
+    match tp with
+    | TP_wild -> s
+    | TP_var kid -> KidSet.add kid s
+    | TP_app (_,tps) -> List.fold_left tp_kids s tps
+  in
   let open Rewriter in
   fst (fold_pat
          { (compute_pat_alg KidSet.empty KidSet.union) with
-           p_var = (fun ((s,pat), (TP_aux (TP_var kid, _) as tpat)) ->
-                     KidSet.add kid s, P_var (pat, tpat)) }
+           p_var = (fun ((s,pat), tpat) ->
+                     tp_kids s tpat, P_var (pat, tpat)) }
          pat)
 let tyvars_bound_in_lb (LB_aux (LB_val (pat,_),_)) = tyvars_bound_in_pat pat
 
@@ -2517,6 +2520,7 @@ let rec simple_string_of_loc = function
   | Parse_ast.Int (s,Some l) -> "Int(" ^ s ^ ",Some("^simple_string_of_loc l^"))"
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
+  | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
 
 let string_of_extra_splits s =
   String.concat ", "
@@ -3051,6 +3055,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_comment_struc _
     | E_internal_plet _
     | E_internal_return _
+    | E_internal_value _
       -> raise (Reporting_basic.err_unreachable l
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
        
@@ -3104,7 +3109,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
   in (deps, assigns, r)
 
 
-and analyse_lexp fn_id env assigns deps (LEXP_aux (lexp,(l,_)) as lexp_full) =
+and analyse_lexp fn_id env assigns deps (LEXP_aux (lexp,(l,_))) =
  (* TODO: maybe subexps and sublexps should be non-det (and in const_prop_lexp, too?) *)
  match lexp with
   | LEXP_id id
@@ -3219,9 +3224,12 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
             Bindings.singleton id (Unknown (l, ("Unable to give location for " ^ string_of_id id))),
             KBindings.empty
          end
-      | P_var (pat, TP_aux (TP_var kid, _)) ->
+      | P_var (pat, tpat) ->
          let s,v,k = aux pat in
-         let kids = equal_kids (env_of_annot (l,annot)) kid in
+         let kids = kids_bound_by_typ_pat tpat in
+         let kids = KidSet.fold (fun kid s ->
+           KidSet.union s (equal_kids (env_of_annot (l,annot)) kid))
+           kids kids in
          s,v,KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty)) k) kids k
       | P_app (_,pats) -> of_list pats
       | P_record (fpats,_) -> of_list (List.map (fun (FP_aux (FP_Fpat (_,p),_)) -> p) fpats)
