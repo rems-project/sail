@@ -158,7 +158,8 @@ enum CapEx = {
   CapEx_PermitSealViolation,
   CapEx_AccessSystemRegsViolation,
   CapEx_PermitCCallViolation,
-  CapEx_AccessCCallIDCViolation
+  CapEx_AccessCCallIDCViolation,
+  CapEx_PermitUnsealViolation
 }
 
 function CapExCode(ex) : CapEx -> bits(8)=
@@ -184,7 +185,8 @@ function CapExCode(ex) : CapEx -> bits(8)=
     CapEx_PermitSealViolation           => 0x17,
     CapEx_AccessSystemRegsViolation     => 0x18,
     CapEx_PermitCCallViolation          => 0x19,
-    CapEx_AccessCCallIDCViolation       => 0x1a
+    CapEx_AccessCCallIDCViolation       => 0x1a,
+    CapEx_PermitUnsealViolation         => 0x1b
   }
 
 bitfield CapCauseReg : bits(16) = {

@@ -49,7 +49,7 @@ struct CapStruct = {
   uperms                  : bits(16),
   perm_reserved11_14      : bits(4) ,
   access_system_regs      : bool    ,
-  perm_reserved9          : bool    ,
+  permit_unseal           : bool    ,
   permit_ccall            : bool    ,
   permit_seal             : bool    ,
   permit_store_local_cap  : bool    ,
@@ -72,7 +72,7 @@ let null_cap : CapStruct = struct {
   uperms = zeros(),
   perm_reserved11_14 = zeros(),
   access_system_regs = false,
-  perm_reserved9 = false,
+  permit_unseal = false,
   permit_ccall = false,
   permit_seal = false,
   permit_store_local_cap = false,
@@ -95,7 +95,7 @@ let default_cap : CapStruct = struct {
   uperms = ones(),
   perm_reserved11_14 = ones(),
   access_system_regs = true,
-  perm_reserved9 = true,
+  permit_unseal = true,
   permit_ccall = true,
   permit_seal = true,
   permit_store_local_cap = true,
@@ -121,7 +121,7 @@ function capRegToCapStruct(capReg) : CapReg -> CapStruct =
     uperms                     = capReg[223..208],
     perm_reserved11_14         = capReg[207..204],
     access_system_regs         = capReg[203],
-    perm_reserved9             = capReg[202],
+    permit_unseal              = capReg[202],
     permit_ccall               = capReg[201],
     permit_seal                = capReg[200],
     permit_store_local_cap     = capReg[199],
@@ -142,7 +142,7 @@ function getCapPerms(cap) : CapStruct -> bits(31) =
     cap.uperms
       @ cap.perm_reserved11_14
       @ cap.access_system_regs
-      @ cap.perm_reserved9
+      @ cap.permit_unseal
       @ cap.permit_ccall
       @ cap.permit_seal
       @ cap.permit_store_local_cap
@@ -207,7 +207,7 @@ function setCapPerms(cap, perms) : (CapStruct, bits(31)) -> CapStruct =
       uperms                 = perms[30..15],
       perm_reserved11_14     = perms[14..11],
       access_system_regs     = perms[10],
-      perm_reserved9         = perms[9],
+      permit_unseal          = perms[9],
       permit_ccall           = perms[8],
       permit_seal            = perms[7],
       permit_store_local_cap = perms[6],

@@ -1044,8 +1044,8 @@ function clause execute (CUnseal(cd, cs, ct)) =
     raise_c2_exception(CapEx_SealViolation, ct)
   else if (ct_cursor != unsigned(cs_val.otype)) then
     raise_c2_exception(CapEx_TypeViolation, ct)
-  else if not (ct_val.permit_seal) then
-    raise_c2_exception(CapEx_PermitSealViolation, ct)
+  else if not (ct_val.permit_unseal) then
+    raise_c2_exception(CapEx_PermitUnsealViolation, ct)
   else if (ct_cursor <  getCapBase(ct_val)) then
     raise_c2_exception(CapEx_LengthViolation, ct)
   else if (ct_cursor >= getCapTop(ct_val)) then
