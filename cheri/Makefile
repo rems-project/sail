@@ -25,6 +25,9 @@ CHERI_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 cheri: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
 
+cheri_trace: $(CHERI_SAILS) $(CHERI_MAIN)
+	$(SAIL) -ocaml_trace -o $@ $^
+
 cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -memo_z3 -c $^ 1> $@
 
