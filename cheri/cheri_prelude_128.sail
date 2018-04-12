@@ -188,7 +188,7 @@ function memBitsToCapBits(tag, b) : (bool, bits(128)) -> bits(129) =
   memBitsToCapBits128(tag, b ^ null_cap_bits)
 
 function getCapPerms(cap) : CapStruct -> bits(31) = 
-    let perms : bits(15) = sign_extend(getCapHardPerms(cap)) in /* NB access_system copied into 14-11 */
+    let perms : bits(15) = zero_extend(getCapHardPerms(cap)) in
     (0x000 /* uperms 30-19 */
   @ cap.uperms
   @ perms)
