@@ -529,6 +529,7 @@ function isCSRImplemented csr : bits(12) -> bool =
 
 function readCSR csr: bits(12) -> xlenbits =
   match csr {
+    /* machine mode */
     0xF11 => mvendorid,
     0xF12 => marchid,
     0xF13 => mimpid,
@@ -543,13 +544,33 @@ function readCSR csr: bits(12) -> xlenbits =
     0x342 => mcause.bits(),
     0x343 => mtval,
     0x344 => mip.bits(),
+
+    /* supervisor mode */
+    0x100 => mstatus.bits(), /* FIXME: legalize view*/
+    0x102 => sedeleg.bits(),
+    0x103 => sideleg.bits(),
+    0x104 => mie.bits(),  /* FIXME: legalize view */
+    0x105 => stvec.bits(),
+    0x140 => sscratch,
+    0x141 => sepc,
+    0x142 => scause.bits(),
+    0x143 => stval,
+    0x144 => mip.bits(),  /* FIXME: legalize view */
+    0x180 => satp,
+
+    /* others */
+    0xC00 => mcycle,
+    0xC01 => mtime,
+    0xC02 => minstret,
+
     _     => { print_bits("unhandled read to CSR ", csr);
                0x0000_0000_0000_0000 }
   }
 
 function writeCSR (csr : bits(12), value : xlenbits) -> unit =
-  /* FIXME: need legalizers */
+  /* FIXME: need legalizers in many places */
   match csr {
+    /* machine mode */
     0x300 => mstatus->bits() = value,
     0x302 => medeleg->bits() = value,
     0x303 => mideleg->bits() = value,
@@ -560,6 +581,20 @@ function writeCSR (csr : bits(12), value : xlenbits) -> unit =
     0x342 => mcause->bits() = value,
     0x343 => mtval = value,
     0x344 => mip->bits() = value,
+
+    /* supervisor mode */
+    0x100 => mstatus->bits() = value,
+    0x102 => sedeleg->bits() = value,
+    0x103 => sideleg->bits() = value,
+    0x104 => mie->bits() = value,
+    0x105 => stvec->bits() = value,
+    0x140 => sscratch = value,
+    0x141 => sepc = value,
+    0x142 => scause->bits() = value,
+    0x143 => stval = value,
+    0x144 => mip->bits() = value,
+    0x180 => satp = value,
+
     _     => print_bits("unhandled write to CSR ", csr)
   }
 

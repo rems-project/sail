@@ -132,6 +132,11 @@ register mepc : xlenbits
 register mtval : xlenbits
 register mscratch : xlenbits
 
+/* time/cycles */
+register mcycle : xlenbits
+register mtime : xlenbits
+register minstret : xlenbits
+
 /* informational registers */
 register mvendorid : xlenbits
 register mimpid : xlenbits
@@ -142,6 +147,54 @@ register mhartid : xlenbits
 /* physical memory protection configuration */
 register pmpaddr0 : xlenbits
 register pmpcfg0 : xlenbits
+
+/* supervisor mode registers */
+
+bitfield Sstatus : bits(64) = {
+  SD   : 63,
+  UXL  : 33 .. 32,
+  MXR  : 19,
+  SUM  : 18,
+  XS   : 16 .. 15,
+  FS   : 14 .. 13,
+  SPP  : 8,
+  SPIE : 5,
+  UPIE : 4,
+  SIE  : 1,
+  UIE  : 0
+}
+/* This is a view, so there is no register defined. */
+
+bitfield Sedeleg : bits(64) = {
+  UEnvCall          : 8,
+  SAMO_Access_Fault : 7,
+  SAMO_Addr_Align   : 6,
+  Load_Access_Fault : 5,
+  Load_Addr_Align   : 4,
+  Breakpoint        : 3,
+  Illegal_Instr     : 2,
+  Fetch_Access_Fault: 1,
+  Fetch_Addr_Align  : 0
+}
+register sedeleg : Sedeleg
+
+/* TODO: handle views for interrupt delegation */
+register sideleg : Minterrupts
+register sip     : Minterrupts
+register sie     : Minterrupts
+
+bitfield satp64 : bits(64) = {
+  Mode : 63 .. 60,
+  Asid : 59 .. 44,
+  PPN  : 43 .. 0
+}
+
+register stvec : Mtvec
+register sscratch : xlenbits
+register sepc : xlenbits
+register scause : Mcause
+register stval : xlenbits
+register satp : xlenbits
 
 /* instruction control flow */
 
