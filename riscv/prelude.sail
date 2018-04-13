@@ -345,16 +345,19 @@ infix 4 <_s
 infix 4 >=_s
 infix 4 <_u
 infix 4 >=_u
+infix 4 <=_u
 
 val operator <_s  = {lem: "slt_vec"}   : forall 'n. (bits('n), bits('n)) -> bool
 val operator >=_s = {lem: "sgteq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 val operator <_u  = {lem: "ult_vec"}   : forall 'n. (bits('n), bits('n)) -> bool
 val operator >=_u = {lem: "ugteq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+val operator <=_u = {lem: "ulteq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 function operator <_s  (x, y) = signed(x) < signed(y)
 function operator >=_s (x, y) = signed(x) >= signed(y)
 function operator <_u  (x, y) = unsigned(x) < unsigned(y)
 function operator >=_u (x, y) = unsigned(x) >= unsigned(y)
+function operator <=_u (x, y) = unsigned(x) <= unsigned(y)
 
 val cast bool_to_bits : bool -> bits(1)
 function bool_to_bits x = if x then 0b1 else 0b0
