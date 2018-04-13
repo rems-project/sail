@@ -9,6 +9,7 @@ let xlen_min_signed = 0 - 2 ^ (xlen - 1)
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
 type cregbits = bits(3)
+type csreg = bits(12)
 
 val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
 function regbits_to_regno b = let 'r = unsigned(b) in r
@@ -55,7 +56,6 @@ enum Architecture = {RV32, RV64, RV128}
 /* privilege levels */
 
 type priv_level = bits(2)
-
 enum Privilege = {User, Supervisor, Machine}
 
 val cast privLevel_to_bits : Privilege -> priv_level
@@ -84,6 +84,10 @@ function privLevel_to_str (p) = {
     Machine => "M"
   }
 }
+
+/* access types */
+enum AccessType = {Read, Write, ReadWrite, Execute}
+enum ReadType   = {Instruction, Data}
 
 /* architectural exception and interrupt definitions */
 
@@ -323,6 +327,8 @@ val MEM_fence_r_r   = {ocaml: "skip", lem: "MEM_fence_r_r"}   : unit -> unit eff
 val MEM_fence_rw_w  = {ocaml: "skip", lem: "MEM_fence_rw_w"}  : unit -> unit effect {barr}
 val MEM_fence_w_w   = {ocaml: "skip", lem: "MEM_fence_w_w"}   : unit -> unit effect {barr}
 val MEM_fence_i     = {ocaml: "skip", lem: "MEM_fence_i"}     : unit -> unit effect {barr}
+/* CSR access control bits (from CSR addresses) */
+type csrRW = bits(2)  /* read/write */
 
 enum uop = {RISCV_LUI, RISCV_AUIPC} /* upper immediate ops */
 enum bop = {RISCV_BEQ, RISCV_BNE, RISCV_BLT, RISCV_BGE, RISCV_BLTU, RISCV_BGEU} /* branch ops */

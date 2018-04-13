@@ -196,6 +196,67 @@ register scause : Mcause
 register stval : xlenbits
 register satp : xlenbits
 
+/* csr access control */
+
+function csrAccess(csr : csreg) -> csrRW = csr[11..10]
+function csrPriv(csr : csreg) -> priv_level = csr[9..8]
+
+function is_CSR_defined (csr : bits(12), p : Privilege) -> bool =
+  match (csr) {
+    /* machine mode: informational */
+    0xf11 => p == Machine, // mvendorid
+    0xf12 => p == Machine, // marchdid
+    0xf13 => p == Machine, // mimpid
+    0xf14 => p == Machine, // mhartid
+    /* machine mode: trap setup */
+    0x300 => p == Machine, // mstatus
+    0x301 => p == Machine, // misa
+    0x302 => p == Machine, // medeleg
+    0x303 => p == Machine, // mideleg
+    0x304 => p == Machine, // mie
+    0x305 => p == Machine, // mtvec
+    0x306 => p == Machine, // mcounteren
+    /* machine mode: trap handling */
+    0x340 => p == Machine, // mscratch
+    0x341 => p == Machine, // mepc
+    0x342 => p == Machine, // mcause
+    0x343 => p == Machine, // mtval
+    0x344 => p == Machine, // mip
+
+    /* supervisor mode: trap setup */
+    0x100 => p == Machine | p == Supervisor, // sstatus
+    0x102 => p == Machine | p == Supervisor, // sedeleg
+    0x103 => p == Machine | p == Supervisor, // sideleg
+    0x104 => p == Machine | p == Supervisor, // sie
+    0x105 => p == Machine | p == Supervisor, // stvec
+    0x106 => p == Machine | p == Supervisor, // scounteren
+
+    /* supervisor mode: trap handling */
+    0x140 => p == Machine | p == Supervisor, // sscratch
+    0x141 => p == Machine | p == Supervisor, // sepc
+    0x142 => p == Machine | p == Supervisor, // scause
+    0x143 => p == Machine | p == Supervisor, // stval
+    0x144 => p == Machine | p == Supervisor, // sip
+
+    /* supervisor mode: address translation */
+    0x180 => p == Machine | p == Supervisor, // satp
+
+    _     => false
+  }
+
+val check_CSR_access : (csrRW, priv_level, Privilege, bool) -> bool
+function check_CSR_access(csrrw, csrpr, p, isWrite) =
+    (~ (isWrite == true & csrrw == 0b11))  /* read/write */
+  & (privLevel_to_bits(p) >=_u csrpr)      /* privilege */
+
+function check_TVM_SATP(csr : csreg, p : Privilege) -> bool =
+  ~ (csr == 0x180 & p == Supervisor & mstatus.TVM() == true)
+
+function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
+    is_CSR_defined(csr, p)
+  & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
+  & check_TVM_SATP(csr, p)
+
 /* instruction control flow */
 
 struct sync_exception = {

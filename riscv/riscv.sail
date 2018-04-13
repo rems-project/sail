@@ -502,30 +502,6 @@ function clause decode csr : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRS))
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRC))
 
-val isCSRImplemented : bits(12) -> bool
-function isCSRImplemented csr : bits(12) -> bool =
-  match csr {
-    0xf11 => true, // mvendorid
-    0xf12 => true, // marchdid
-    0xf13 => true, // mimpid
-    0xf14 => true, // mhartid
-    0x300 => true, // mstatus
-    0x301 => true, // misa
-    0x302 => true, // medeleg
-    0x303 => true, // mideleg
-    0x304 => true, // mie
-    0x305 => true, // mtvec
-    0x306 => true, // mcounteren
-    0x340 => true, // mscratch
-    0x341 => true, // mepc
-    0x342 => true, // mcause
-    0x343 => true, // mtval
-    0x344 => true, // mip
-
-    // for riscv-tests
-    0x180 => true, // satp
-    _     => false
-  }
 
 function readCSR csr: bits(12) -> xlenbits =
   match csr {
@@ -611,7 +587,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     CSRRW  => true,
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
-  if ~ (isCSRImplemented(csr) & haveCSRPriv(csr, isWrite)) then {
+  if ~ (check_CSR(csr, cur_privilege, isWrite)) then {
     let instr : xlenbits = EXTZ(__RISCV_read(PC, 4));
     let t : sync_exception =
     struct { trap = E_Illegal_Instr,
