@@ -552,7 +552,7 @@ function writeCSR (csr : bits(12), value : xlenbits) -> unit =
     0x304 => mie = legalize_mie(mie, value),
     0x305 => mtvec = legalize_tvec(mtvec, value),
     0x340 => mscratch = value,
-    0x341 => mepc = value,
+    0x341 => mepc = legalize_xepc(value),
     0x342 => mcause->bits() = value,
     0x343 => mtval = value,
     0x344 => mip = legalize_mip(mip, value),
@@ -565,7 +565,7 @@ function writeCSR (csr : bits(12), value : xlenbits) -> unit =
     0x104 => sie->bits() = value,
     0x105 => stvec = legalize_tvec(stvec, value),
     0x140 => sscratch = value,
-    0x141 => sepc = value, // FIXME: alignment check/RVC
+    0x141 => sepc = legalize_xepc(value),
     0x142 => scause->bits() = value,
     0x143 => stval = value,
     0x144 => mip->bits() = value,

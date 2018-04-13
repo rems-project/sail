@@ -1,5 +1,9 @@
 /* machine mode registers */
 
+/* privilege level */
+
+register cur_privilege : Privilege
+
 /* FIXME: currently we have only those used by riscv-tests. */
 
 bitfield Misa : bits(64) = {
@@ -81,6 +85,30 @@ function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   let m = update_UIE(m, false);
   m
 }
+
+/* machine state utilities */
+
+function cur_Architecture() -> Architecture = {
+  let a : arch_xlen =
+    match (cur_privilege) {
+      Machine => misa.MXL(),
+      Supervisor => mstatus.SXL(),
+      User => mstatus.UXL()
+    };
+  match architecture(a) {
+    Some(a) => a,
+    None()  => internal_error("Invalid current architecture")
+  }
+}
+
+function in32BitMode() -> bool = {
+  cur_Architecture() == RV32
+}
+
+function haveAtomics() -> bool = { misa.A() == true }
+function haveRVC()     -> bool = { misa.C() == true }
+function haveMulDiv()  -> bool = { misa.M() == true }
+function haveFP()      -> bool = { misa.F() == true | misa.D() == true }
 
 /* interrupt registers */
 
@@ -190,6 +218,11 @@ function tvec_addr(m : Mtvec, c : Mcause) -> option(xlenbits) = {
 
 /* auxiliary exception registers */
 register mepc : xlenbits
+
+function legalize_xepc(v : xlenbits) -> xlenbits = {
+  v & EXTS(if haveRVC() then 0b110 else 0b100)
+}
+
 register mtval : xlenbits
 register mscratch : xlenbits
 
@@ -371,10 +404,6 @@ union ctl_result = {
 */
   CTL_MRET : unit
 }
-
-/* privilege level */
-
-register cur_privilege : Privilege
 
 /* handle exceptional ctl flow by updating nextPC */
 

@@ -52,6 +52,15 @@ type amo = bits(1)
 
 /* base architecture definitions */
 enum Architecture = {RV32, RV64, RV128}
+type arch_xlen = bits(2)
+function architecture(a : arch_xlen) -> option(Architecture) = {
+  match (a) {
+    0b01 => Some(RV32),
+    0b10 => Some(RV64),
+    0b11 => Some(RV128),
+    _    => None()
+  }
+}
 
 /* privilege levels */
 
