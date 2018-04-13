@@ -3283,7 +3283,9 @@ let rewrite_check_annot =
     pat
   in
 
-  let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> check_annot (E_aux (exp, annot))) } in
+  let rewrite_exp = { id_exp_alg with
+    e_aux = (fun (exp, annot) -> check_annot (E_aux (exp, annot)));
+    pat_alg = { id_pat_alg with p_aux = (fun (pat, annot) -> check_pat (P_aux (pat, annot))) } } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
                                           rewrite_pat = (fun _ -> check_pat) }
 
