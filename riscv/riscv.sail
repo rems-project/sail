@@ -550,7 +550,7 @@ function writeCSR (csr : bits(12), value : xlenbits) -> unit =
     0x302 => medeleg = legalize_medeleg(medeleg, value),
     0x303 => mideleg = legalize_mideleg(mideleg, value),
     0x304 => mie = legalize_mie(mie, value),
-    0x305 => mtvec = legalize_mtvec(mtvec, value),
+    0x305 => mtvec = legalize_tvec(mtvec, value),
     0x340 => mscratch = value,
     0x341 => mepc = value,
     0x342 => mcause->bits() = value,
@@ -558,14 +558,14 @@ function writeCSR (csr : bits(12), value : xlenbits) -> unit =
     0x344 => mip = legalize_mip(mip, value),
 
     /* supervisor mode */
-    /* FIXME: need legalizers in many places */
-    0x100 => mstatus->bits() = value,
-    0x102 => sedeleg->bits() = value,
+    /* FIXME: need legalizers for interrupt regs and satp */
+    0x100 => mstatus = legalize_sstatus(mstatus, value),
+    0x102 => sedeleg = legalize_sedeleg(sedeleg, value),
     0x103 => sideleg->bits() = value,
-    0x104 => mie->bits() = value,
-    0x105 => stvec->bits() = value,
+    0x104 => sie->bits() = value,
+    0x105 => stvec = legalize_tvec(stvec, value),
     0x140 => sscratch = value,
-    0x141 => sepc = value,
+    0x141 => sepc = value, // FIXME: alignment check/RVC
     0x142 => scause->bits() = value,
     0x143 => stval = value,
     0x144 => mip->bits() = value,

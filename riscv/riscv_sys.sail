@@ -161,7 +161,7 @@ bitfield Mtvec : bits(64) = {
 }
 register mtvec : Mtvec  /* Trap Vector */
 
-function legalize_mtvec(o : Mtvec, v : xlenbits) -> Mtvec = {
+function legalize_tvec(o : Mtvec, v : xlenbits) -> Mtvec = {
  let v = Mk_Mtvec(v);
  match (trapVectorMode_of_bits(v.Mode())) {
    TV_Direct => v,
@@ -225,6 +225,40 @@ bitfield Sstatus : bits(64) = {
   UIE  : 0
 }
 /* This is a view, so there is no register defined. */
+function lower_mstatus(m : Mstatus) -> Sstatus = {
+  let s = Mk_Sstatus(EXTZ(0b0));
+  let s = update_SD(s, m.SD());
+  let s = update_UXL(s, m.UXL());
+  let s = update_MXR(s, m.MXR());
+  let s = update_SUM(s, m.SUM());
+  let s = update_XS(s, m.XS());
+  let s = update_FS(s, m.FS());
+  let s = update_SPP(s, m.SPP());
+  let s = update_SPIE(s, m.SPIE());
+  let s = update_UPIE(s, m.UPIE());
+  let s = update_SIE(s, m.SIE());
+  let s = update_UIE(s, m.UIE());
+  s
+}
+
+function lift_sstatus(m : Mstatus, s : Sstatus) -> Mstatus = {
+  let m = update_SD(m, s.SD());
+  let m = update_UXL(m, s.UXL());
+  let m = update_MXR(m, s.MXR());
+  let m = update_SUM(m, s.SUM());
+  let m = update_XS(m, s.XS());
+  let m = update_FS(m, s.FS());
+  let m = update_SPP(m, s.SPP());
+  let m = update_SPIE(m, s.SPIE());
+  let m = update_UPIE(m, s.UPIE());
+  let m = update_SIE(m, s.SIE());
+  let m = update_UIE(m, s.UIE());
+  m
+}
+
+function legalize_sstatus(m : Mstatus, v : xlenbits) -> Mstatus = {
+  lift_sstatus(m, Mk_Sstatus(v))
+}
 
 bitfield Sedeleg : bits(64) = {
   UEnvCall          : 8,
@@ -238,6 +272,10 @@ bitfield Sedeleg : bits(64) = {
   Fetch_Addr_Align  : 0
 }
 register sedeleg : Sedeleg
+
+function legalize_sedeleg(s : Sedeleg, v : xlenbits) -> Sedeleg = {
+  Mk_Sedeleg(EXTZ(v[8..0]))
+}
 
 /* TODO: handle views for interrupt delegation */
 register sideleg : Minterrupts
