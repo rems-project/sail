@@ -1,8 +1,13 @@
+/sail
 *~
 *.native
 *.byte
 src/_build/
 src/sail.docdir
+src/ast.lem
+src/ast.ml
+src/bytecode.lem
+src/bytecode.ml
 _sbuild/
 test/typecheck/rtpass*/
 language/*.pdf
