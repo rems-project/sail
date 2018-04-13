@@ -544,21 +544,21 @@ function readCSR csr: bits(12) -> xlenbits =
   }
 
 function writeCSR (csr : bits(12), value : xlenbits) -> unit =
-  /* FIXME: need legalizers in many places */
   match csr {
     /* machine mode */
-    0x300 => mstatus->bits() = value,
-    0x302 => medeleg->bits() = value,
-    0x303 => mideleg->bits() = value,
-    0x304 => mie->bits() = value,
-    0x305 => mtvec->bits() = value,
+    0x300 => mstatus = legalize_mstatus(mstatus, value),
+    0x302 => medeleg = legalize_medeleg(medeleg, value),
+    0x303 => mideleg = legalize_mideleg(mideleg, value),
+    0x304 => mie = legalize_mie(mie, value),
+    0x305 => mtvec = legalize_mtvec(mtvec, value),
     0x340 => mscratch = value,
     0x341 => mepc = value,
     0x342 => mcause->bits() = value,
     0x343 => mtval = value,
-    0x344 => mip->bits() = value,
+    0x344 => mip = legalize_mip(mip, value),
 
     /* supervisor mode */
+    /* FIXME: need legalizers in many places */
     0x100 => mstatus->bits() = value,
     0x102 => sedeleg->bits() = value,
     0x103 => sideleg->bits() = value,

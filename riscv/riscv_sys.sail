@@ -34,6 +34,10 @@ bitfield Misa : bits(64) = {
 }
 register misa : Misa
 
+function legalize_misa(m : Misa, v : xlenbits) -> Misa =
+  /* Ignore all writes for now. */
+  m
+
 bitfield Mstatus : bits(64) = {
   SD   : 63,
 
@@ -63,6 +67,21 @@ bitfield Mstatus : bits(64) = {
 }
 register mstatus : Mstatus
 
+function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
+  let m : Mstatus = Mk_Mstatus(v);
+  /* We don't have any extension context yet. */
+  let m = update_XS(m, extStatus_to_bits(Off));
+  let m = update_SD(m, extStatus_of_bits(m.FS()) == Dirty
+                     | extStatus_of_bits(m.XS()) == Dirty);
+  /* For now, we don't allow SXL and UXL to be changed, for Spike compatibility. */
+  let m = update_SXL(m, o.SXL());
+  let m = update_UXL(m, o.UXL());
+  /* Hardwired to zero in the absence of 'N'. */
+  let m = update_UPIE(m, false);
+  let m = update_UIE(m, false);
+  m
+}
+
 /* interrupt registers */
 
 bitfield Minterrupts : bits(64) = {
@@ -82,6 +101,32 @@ bitfield Minterrupts : bits(64) = {
 register mip     : Minterrupts /* Pending */
 register mie     : Minterrupts /* Enabled */
 register mideleg : Minterrupts /* Delegation to S-mode */
+
+function legalize_mip(o : Minterrupts, v : xlenbits) -> Minterrupts = {
+  /* The only writable bits are the S-mode bits, and with the 'N'
+   * extension, the U-mode bits. */
+  let v = Mk_Minterrupts(v);
+  let m = update_SEI(o, v.SEI());
+  let m = update_STI(m, v.STI());
+  let m = update_SSI(m, v.SSI());
+  m
+}
+
+function legalize_mie(o : Minterrupts, v : xlenbits) -> Minterrupts = {
+  let v = Mk_Minterrupts(v);
+  let m = update_MEI(o, v.MEI());
+  let m = update_MTI(m, v.MTI());
+  let m = update_MSI(m, v.MSI());
+  let m = update_SEI(m, v.SEI());
+  let m = update_STI(m, v.STI());
+  let m = update_SSI(m, v.SSI());
+  /* The U-mode bits will be modified if we have the 'N' extension. */
+  m
+}
+
+function legalize_mideleg(o : Minterrupts, v : xlenbits) -> Minterrupts = {
+  Mk_Minterrupts(v)
+}
 
 /* exception registers */
 
@@ -103,17 +148,33 @@ bitfield Medeleg : bits(64) = {
 }
 register medeleg : Medeleg  /* Delegation to S-mode */
 
-bitfield Mcause : bits(64) = {
-  IsInterrupt : 63,
-  Cause       : 62 .. 0
+function legalize_medeleg(o : Medeleg, v : xlenbits) -> Medeleg = {
+  let m = Mk_Medeleg(v);
+  /* M-EnvCalls delegation is not supported */
+  let m = update_MEnvCall(m, false);
+  m
 }
-register mcause : Mcause
 
 bitfield Mtvec : bits(64) = {
   Base : 63 .. 2,
   Mode :  1 .. 0
 }
 register mtvec : Mtvec  /* Trap Vector */
+
+function legalize_mtvec(o : Mtvec, v : xlenbits) -> Mtvec = {
+ let v = Mk_Mtvec(v);
+ match (trapVectorMode_of_bits(v.Mode())) {
+   TV_Direct => v,
+   TV_Vector => v,
+   _         => update_Mode(v, o.Mode())
+ }
+}
+
+bitfield Mcause : bits(64) = {
+  IsInterrupt : 63,
+  Cause       : 62 .. 0
+}
+register mcause : Mcause
 
 /* Interpreting the trap-vector address */
 function tvec_addr(m : Mtvec, c : Mcause) -> option(xlenbits) = {
