@@ -308,7 +308,7 @@ let specialize_id_valspec instantiations id ast =
        let kopts, constraints = quant_split typq in
        let kopts = List.filter (fun kopt -> not (is_typ_kopt kopt || is_order_kopt kopt)) kopts in
        let typq = mk_typquant (List.map (mk_qi_id BK_type) typ_frees
-                               @ List.map (mk_qi_id BK_nat) int_frees
+                               @ List.map (mk_qi_id BK_int) int_frees
                                @ List.map mk_qi_kopt kopts
                                @ List.map mk_qi_nc constraints) in
        let typschm = mk_typschm typq typ in
@@ -467,7 +467,7 @@ let kinded_id_arg kind_id =
   let typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown) in
   match kind_id with
   | KOpt_aux (KOpt_none kid, _) -> typ_arg (Typ_arg_nexp (nvar kid))
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), kid), _) -> typ_arg (Typ_arg_nexp (nvar kid))
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_int, _)], _), kid), _) -> typ_arg (Typ_arg_nexp (nvar kid))
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), kid), _) ->
      typ_arg (Typ_arg_order (Ord_aux (Ord_var kid, Parse_ast.Unknown)))
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), kid), _) ->

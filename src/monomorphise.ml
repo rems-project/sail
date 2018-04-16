@@ -734,7 +734,7 @@ let reduce_cast typ exp l annot =
   let typ' = Env.base_typ_of env typ in
   match exp, destruct_exist env typ' with
   | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nc_env = Env.add_typ_var kid BK_nat env in
+     let nc_env = Env.add_typ_var kid BK_int env in
      let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
@@ -3841,7 +3841,7 @@ let fill_in_type env typ =
     match Env.get_typ_var kid env with
     | BK_type
     | BK_order -> subst
-    | BK_nat ->
+    | BK_int ->
        match solve env (nvar kid) with
        | None -> subst
        | Some n -> KBindings.add kid (nconstant n) subst) tyvars KBindings.empty in

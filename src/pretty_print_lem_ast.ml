@@ -122,7 +122,7 @@ let pp_format_bkind_lem (BK_aux(k,l)) =
   "(BK_aux " ^
   (match k with
     | BK_type -> "BK_type"
-    | BK_nat -> "BK_nat"
+    | BK_int -> "BK_int"
     | BK_order -> "BK_order") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 

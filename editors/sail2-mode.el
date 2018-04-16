@@ -8,7 +8,8 @@
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
     "overload" "cast" "sizeof" "constraint" "default" "assert" "newtype" "from"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
-    "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"))
+    "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
+    "mapping"))
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "inc" "dec"
@@ -16,7 +17,7 @@
     "exmem" "undef" "unspec" "nondet" "escape"))
 
 (defconst sail2-types
-  '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits"
+  '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits" "option"
     "uint64_t" "int64_t" "bv_t" "mpz_t"))
 
 (defconst sail2-special
@@ -28,6 +29,7 @@
     (,(regexp-opt sail2-types 'symbols) . font-lock-type-face)
     (,(regexp-opt sail2-special 'symbols) . font-lock-preprocessor-face)
     ("~" . font-lock-negation-char-face)
+    ("<->" . font-lock-negation-char-face)
     ("\'[a-zA-Z0-9_]+" . font-lock-variable-name-face)
     ("\\([a-zA-Z0-9_]+\\)(" 1 font-lock-function-name-face)
     ("function \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)

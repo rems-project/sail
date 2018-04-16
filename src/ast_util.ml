@@ -122,7 +122,7 @@ let kopt_kid (KOpt_aux (kopt_aux, _)) =
   | KOpt_none kid | KOpt_kind (_, kid) -> kid
 
 let is_nat_kopt = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), _), _) -> true
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_int, _)], _), _), _) -> true
   | KOpt_aux (KOpt_none _, _) -> true
   | _ -> false
 
@@ -528,7 +528,7 @@ let string_of_base_effect_aux = function
 
 let string_of_base_kind_aux = function
   | BK_type -> "Type"
-  | BK_nat -> "Int"
+  | BK_int -> "Int"
   | BK_order -> "Order"
 
 let string_of_base_kind (BK_aux (bk, _)) = string_of_base_kind_aux bk

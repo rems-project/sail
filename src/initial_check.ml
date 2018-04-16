@@ -149,7 +149,7 @@ let to_ast_var (Parse_ast.Kid_aux(Parse_ast.Var v,l)) = Kid_aux(Var v,l)
 let to_ast_base_kind (Parse_ast.BK_aux(k,l')) =
   match k with
   | Parse_ast.BK_type -> BK_aux(BK_type,l'), { k = K_Typ}
-  | Parse_ast.BK_nat -> BK_aux(BK_nat,l'), { k = K_Nat }
+  | Parse_ast.BK_int -> BK_aux(BK_int,l'), { k = K_Nat }
   | Parse_ast.BK_order -> BK_aux(BK_order,l'), { k = K_Ord }
 
 let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),l)) : (Ast.kind * kind) =
@@ -1123,7 +1123,7 @@ let generate_enum_functions vs_ids (Defs defs) =
          if IdSet.mem name vs_ids then []
          else
            [ enum_val_spec name
-              [mk_qi_id BK_nat kid; mk_qi_nc (range_constraint kid)]
+              [mk_qi_id BK_int kid; mk_qi_nc (range_constraint kid)]
               (function_typ (atom_typ (nvar kid)) (mk_typ (Typ_id id)) no_effect);
              mk_fundef [funcl] ]
        in

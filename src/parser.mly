@@ -557,7 +557,7 @@ typ_list:
 
 base_kind:
   | Int
-    { BK_aux (BK_nat, loc $startpos $endpos) }
+    { BK_aux (BK_int, loc $startpos $endpos) }
   | TYPE
     { BK_aux (BK_type, loc $startpos $endpos) }
   | Order

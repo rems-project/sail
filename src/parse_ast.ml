@@ -72,7 +72,7 @@ type ix = text (* infix identifier *)
 type 
 base_kind_aux =  (* base kind *)
    BK_type (* kind of types *)
- | BK_nat (* kind of natural number size expressions *)
+ | BK_int (* kind of natural number size expressions *)
  | BK_order (* kind of vector order specifications *)
 
 

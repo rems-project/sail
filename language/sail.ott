@@ -177,21 +177,20 @@ kid :: '' ::=
 
 grammar
 
-base_kind :: 'BK_' ::=  
+base_kind :: 'BK_' ::=
   {{ com base kind}}
   {{ aux _ l }}
-  | Type                                      :: :: type    {{ com kind of types  }} 
-  | Nat                                       :: :: nat     {{ com kind of natural number size expressions  }} 
-  | Order                                     :: :: order  {{ com kind of vector order specifications  }} 
+  | Type  :: :: type  {{ com kind of types  }}
+  | Int   :: :: int   {{ com kind of natural number size expressions  }}
+  | Order :: :: order {{ com kind of vector order specifications  }}
 
-
-kind :: 'K_' ::=  
+kind :: 'K_' ::=
   {{ com kinds}}
   {{ aux _ l }}
-  | base_kind1 -> ... -> base_kindn            :: :: kind 
+  | base_kind1 -> ... -> base_kindn            :: :: kind
 % we'll never use  ...-> Nat , .. Order , .. or Effects
-    
-nexp :: 'Nexp_' ::=  
+
+nexp :: 'Nexp_' ::=
   {{ com numeric expression, of kind $[[Nat]]$ }}
   {{ aux _ l }}
   | id                                  :: :: id       {{ com abbreviation identifier }}
@@ -292,7 +291,7 @@ typ_arg :: 'Typ_arg_' ::=
   {{ aux _ l }} 
   | nexp       :: :: nexp
   | typ        :: :: typ
-  | order     :: :: order
+  | order      :: :: order
 
 % plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
 
@@ -344,7 +343,7 @@ quant_item :: 'QI_' ::=
   {{ com kinded identifier or $[[Nat]]$ constraint }}
   {{ aux _ l }}
   | kinded_id 	  	 	       	      :: :: id {{ com optionally kinded identifier }}
-  | n_constraint			              :: :: const {{ com $[[Nat]]$ constraint }}
+  | n_constraint			      :: :: const {{ com $[[Nat]]$ constraint }}
 
 typquant :: 'TypQ_' ::= 
   {{ com type quantifiers and constraints}}
