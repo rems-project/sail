@@ -315,10 +315,19 @@ register sideleg : Minterrupts
 register sip     : Minterrupts
 register sie     : Minterrupts
 
-bitfield satp64 : bits(64) = {
+bitfield Satp64 : bits(64) = {
   Mode : 63 .. 60,
   Asid : 59 .. 44,
   PPN  : 43 .. 0
+}
+register satp : xlenbits
+
+function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits = {
+  let s = Mk_Satp64(v);
+  match satpMode_of_bits(a, s.Mode()) {
+    None()  => o,
+    Some(_) => s.bits()
+  }
 }
 
 register stvec : Mtvec
@@ -326,7 +335,6 @@ register sscratch : xlenbits
 register sepc : xlenbits
 register scause : Mcause
 register stval : xlenbits
-register satp : xlenbits
 
 /* csr access control */
 

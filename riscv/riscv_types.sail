@@ -230,6 +230,15 @@ function extStatus_of_bits(e) = {
 type satp_mode = bits(4)
 enum SATPMode = {Sbare, Sv32, Sv39}
 
+function satpMode_of_bits(a : Architecture, m : satp_mode) -> option(SATPMode) = {
+  match (a, m) {
+    (_, 0x0)    => Some(Sbare),
+    (RV32, 0x1) => Some(Sv32),
+    (RV64, 0x8) => Some(Sv39),
+    (_, _)      => None()
+  }
+}
+
 /* CSR access control bits (from CSR addresses) */
 type csrRW = bits(2)  /* read/write */
 

@@ -569,7 +569,7 @@ function writeCSR (csr : bits(12), value : xlenbits) -> unit =
     0x142 => scause->bits() = value,
     0x143 => stval = value,
     0x144 => mip->bits() = value,
-    0x180 => satp = value,
+    0x180 => satp = legalize_satp(cur_Architecture(), satp, value),
 
     _     => print_bits("unhandled write to CSR ", csr)
   }
