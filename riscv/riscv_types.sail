@@ -143,6 +143,28 @@ function exceptionType_to_bits(e) = {
   }
 }
 
+val cast exceptionType_to_nat : ExceptionType -> range(0, 15)
+function exceptionType_to_nat(e) = {
+  match (e) {
+    E_Fetch_Addr_Align => 0,
+    E_Fetch_Access_Fault => 1,
+    E_Illegal_Instr => 2,
+    E_Breakpoint => 3,
+    E_Load_Addr_Align => 4,
+    E_Load_Access_Fault => 5,
+    E_SAMO_Addr_Align => 6,
+    E_SAMO_Access_Fault => 7,
+    E_U_EnvCall => 8,
+    E_S_EnvCall => 9,
+    E_Reserved_10 => 10,
+    E_M_EnvCall => 11,
+    E_Fetch_Page_Fault => 12,
+    E_Load_Page_Fault => 13,
+    E_Reserved_14 => 14,
+    E_SAMO_Page_Fault => 15
+  }
+}
+
 enum InterruptType = {
   I_U_Software,
   I_S_Software,

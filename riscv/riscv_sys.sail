@@ -455,6 +455,22 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
   & check_TVM_SATP(csr, p)
 
+/* exception delegation: given an exception and the privilege at which
+ * it occured, returns the privilege at which it should be handled.
+ */
+function exception_delegatee(e : ExceptionType, p : Privilege) ->
+  Privilege = {
+  let idx   = exceptionType_to_nat(e);
+  let super = medeleg.bits()[idx];
+  let user  = sedeleg.bits()[idx];
+  let deleg = if      misa.N() == true & user  then User
+              else if misa.S() == true & super then Supervisor
+              else Machine;
+  /* Ensure there is no transition to a less-privileged mode. */
+  if   privLevel_to_bits(deleg) <_u privLevel_to_bits(p)
+  then p else deleg
+}
+
 /* instruction control flow */
 
 struct sync_exception = {
