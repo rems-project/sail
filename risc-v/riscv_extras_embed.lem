@@ -86,9 +86,12 @@ let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
 let MEM_fence_r_w   () = barrier Barrier_RISCV_r_w
 let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
 
+val MEM_fence_tso : unit -> M unit
+let MEM_fence_tso () = barrier Barrier_RISCV_tso
 
-val MEM_fence_i     : unit -> M unit
-let MEM_fence_i     () = barrier Barrier_RISCV_i
+val MEM_fence_i : unit -> M unit
+let MEM_fence_i () = barrier Barrier_RISCV_i
+
 
 let duplicate (bit,len) =
   let bits = repeat [bit] len in

@@ -26,6 +26,8 @@ let translate_amoop = translate_enum [RISCVAMOSWAP; RISCVAMOADD; RISCVAMOXOR; RI
 
 let translate_width = translate_enum [RISCVBYTE; RISCVHALF; RISCVWORD; RISCVDOUBLE] 
 
+let translate_fm_mode = translate_enum [RISCV_FM_NORMAL; RISCV_FM_TSO]
+
 let translate_reg name value = 
     (name, Bvector (Some 5), bit_list_of_integer 5 (Nat_big_num.of_int (reg_to_int value)))
 

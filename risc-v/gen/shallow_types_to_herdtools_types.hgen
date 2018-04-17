@@ -70,6 +70,10 @@ let translate_out_wordWidth op = match op with
   | WORD   -> RISCVWORD  
   | DOUBLE -> RISCVDOUBLE
 
+let translate_out_fm_mode = function
+  | FM_NORMAL -> RISCV_FM_NORMAL
+  | FM_TSO    -> RISCV_FM_TSO
+
 let translate_out_bool = function
   | Sail_values.B1  -> true
   | Sail_values.B0 -> false

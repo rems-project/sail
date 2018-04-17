@@ -92,21 +92,25 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
      }
-     case (FENCE(pred, succ)) -> {
+     case (FENCE(mode, pred, succ)) -> {
             ik :=
-              switch(pred, succ) {
-                case (0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
-                case (0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
-                case (0b0001, 0b0011) -> IK_barrier (Barrier_RISCV_w_rw)
+              switch(mode, pred, succ) {
+                case (FM_NORMAL, 0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
+                case (FM_NORMAL, 0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
+                case (FM_NORMAL, 0b0001, 0b0011) -> IK_barrier (Barrier_RISCV_w_rw)
 
-                case (0b0011, 0b0010) -> IK_barrier (Barrier_RISCV_rw_r)
-                case (0b0010, 0b0010) -> IK_barrier (Barrier_RISCV_r_r)
-                case (0b0001, 0b0010) -> IK_barrier (Barrier_RISCV_w_r)
+                case (FM_NORMAL, 0b0011, 0b0010) -> IK_barrier (Barrier_RISCV_rw_r)
+                case (FM_NORMAL, 0b0010, 0b0010) -> IK_barrier (Barrier_RISCV_r_r)
+                case (FM_NORMAL, 0b0001, 0b0010) -> IK_barrier (Barrier_RISCV_w_r)
 
-                case (0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
-                case (0b0010, 0b0001) -> IK_barrier (Barrier_RISCV_r_w)
-                case (0b0001, 0b0001) -> IK_barrier (Barrier_RISCV_w_w)
-                case _ -> exit "not implemented"
+                case (FM_NORMAL, 0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
+                case (FM_NORMAL, 0b0010, 0b0001) -> IK_barrier (Barrier_RISCV_r_w)
+                case (FM_NORMAL, 0b0001, 0b0001) -> IK_barrier (Barrier_RISCV_w_w)
+
+                case (FM_NORMAL, _, _) -> exit "not implemented"
+
+                case (FM_TSO, 0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_tso)
+                case (FM_TSO, _, _) -> exit "not implemented"
               };
      }
      case (FENCEI) -> {

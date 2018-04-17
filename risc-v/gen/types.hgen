@@ -170,3 +170,8 @@ let pp_riscv_fence_option = function
   | 0b0010 -> "r"
   | 0b0001 -> "w"
   | _ -> failwith "unexpected fence option"
+
+type riscv_fence_mode =
+  | RISCV_FM_NORMAL
+  | RISCV_FM_TSO
+

@@ -1,4 +1,6 @@
-| EBREAK                      -> `RISCVStopFetching
+| StopFetching                -> `RISCVStopFetching
+| ThreadStart                 -> `RISCVThreadStart
+
 | UTYPE( imm, rd, op)         -> `RISCVUTYPE(translate_out_simm20 imm, translate_out_ireg rd, translate_out_uop op)
 | RISCV_JAL( imm, rd)         -> `RISCVJAL(translate_out_simm21 imm, translate_out_ireg  rd)
 | RISCV_JALR( imm, rs, rd)    -> `RISCVJALR(translate_out_simm12 imm, translate_out_ireg rs, translate_out_ireg rd)
@@ -13,7 +15,7 @@
 | ADDIW( imm, rs, rd)         -> `RISCVADDIW(translate_out_simm12 imm, translate_out_ireg rs, translate_out_ireg rd)
 | SHIFTW( imm, rs, rd, op)    -> `RISCVSHIFTW(translate_out_imm5 imm, translate_out_ireg rs, translate_out_ireg rd, translate_out_sop op)
 | RTYPEW( rs2, rs1, rd, op)   -> `RISCVRTYPEW(translate_out_ireg rs2, translate_out_ireg rs1, translate_out_ireg rd, translate_out_ropw op)
-| FENCE( pred, succ)          -> `RISCVFENCE(translate_out_imm4 pred, translate_out_imm4 succ)
+| FENCE( mode, pred, succ)    -> `RISCVFENCE(translate_out_fm_mode mode, translate_out_imm4 pred, translate_out_imm4 succ)
 | FENCEI                      -> `RISCVFENCEI
 | LOADRES( aq, rl, rs1, width, rd)
                               -> `RISCVLoadRes(translate_out_bool aq, translate_out_bool rl, translate_out_ireg rs1, translate_out_wordWidth width, translate_out_ireg rd)

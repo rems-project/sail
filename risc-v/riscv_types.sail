@@ -158,6 +158,8 @@ function forall Nat 'n. bool effect { wmv, escape } mem_cond_write_value( (bit[6
 
 val extern unit -> bool effect {exmem} speculate_conditional_success
 
+typedef fence_mode = enumerate {FM_NORMAL; FM_TSO}
+
 val extern unit -> unit effect { barr } MEM_fence_rw_rw
 val extern unit -> unit effect { barr } MEM_fence_r_rw
 val extern unit -> unit effect { barr } MEM_fence_w_rw
@@ -167,6 +169,8 @@ val extern unit -> unit effect { barr } MEM_fence_w_r
 val extern unit -> unit effect { barr } MEM_fence_rw_w
 val extern unit -> unit effect { barr } MEM_fence_r_w
 val extern unit -> unit effect { barr } MEM_fence_w_w
+
+val extern unit -> unit effect { barr } MEM_fence_tso
 
 val extern unit -> unit effect { barr } MEM_fence_i
 

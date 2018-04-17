@@ -1,4 +1,6 @@
-| `RISCVStopFetching       -> ("EBREAK", [], [])
+| `RISCVStopFetching -> ("StopFetching", [], [])
+| `RISCVThreadStart  -> ("ThreadStart", [], [])
+
 | `RISCVUTYPE(imm, rd, op) -> 
     ("UTYPE",
       [
@@ -107,9 +109,10 @@
       translate_ropw "op" op;
     ],
     [])
-| `RISCVFENCE(pred, succ) ->
+| `RISCVFENCE(mode, pred, succ) ->
   ("FENCE", 
   [
+     translate_fm_mode "mode" mode;
      translate_imm4 "pred" pred;
      translate_imm4 "succ" succ;
   ], 

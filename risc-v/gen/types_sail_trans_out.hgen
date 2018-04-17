@@ -96,3 +96,8 @@ let translate_out_amoop op = match translate_out_enum op with
 | 7 -> RISCVAMOMINU
 | 8 -> RISCVAMOMAXU
 | _ -> failwith "Unknown amoop in sail translate out"
+
+let translate_out_fm_mode mode = match translate_out_enum mode with
+| 0 -> RISCV_FM_NORMAL
+| 1    -> RISCV_FM_TSO
+| _ -> failwith "Unknown fm_mode in sail translate out"

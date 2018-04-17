@@ -19,37 +19,38 @@
 "ori",   ITYPE {op=RISCVORI};
 "andi",  ITYPE {op=RISCVANDI};
 
-"add",  RTYPE{op=RISCVADD};
-"sub",  RTYPE{op=RISCVSUB};
-"sll",  RTYPE{op=RISCVSLL};
-"slt",  RTYPE{op=RISCVSLT};
-"sltu", RTYPE{op=RISCVSLT};
-"xor",  RTYPE{op=RISCVXOR};
-"srl",  RTYPE{op=RISCVSRL};
-"sra",  RTYPE{op=RISCVSRA};
-"or",   RTYPE{op=RISCVOR};
-"and",  RTYPE{op=RISCVAND};
+"add",  RTYPE {op=RISCVADD};
+"sub",  RTYPE {op=RISCVSUB};
+"sll",  RTYPE {op=RISCVSLL};
+"slt",  RTYPE {op=RISCVSLT};
+"sltu", RTYPE {op=RISCVSLT};
+"xor",  RTYPE {op=RISCVXOR};
+"srl",  RTYPE {op=RISCVSRL};
+"sra",  RTYPE {op=RISCVSRA};
+"or",   RTYPE {op=RISCVOR};
+"and",  RTYPE {op=RISCVAND};
 
-"fence",   FENCE ();
-"fence.i", FENCEI ();
+"fence",     FENCE ();
+"fence.tso", FENCETSO ();
+"fence.i",   FENCEI ();
 
 (** RV64I (in addition to RV32I) ************************************)
 
 "addiw", ADDIW ();
 
-"addw", RTYPEW{op=RISCVADDW};
-"subw", RTYPEW{op=RISCVSUBW};
-"sllw", RTYPEW{op=RISCVSLLW};
-"srlw", RTYPEW{op=RISCVSRLW};
-"sraw", RTYPEW{op=RISCVSRAW};
+"addw", RTYPEW {op=RISCVADDW};
+"subw", RTYPEW {op=RISCVSUBW};
+"sllw", RTYPEW {op=RISCVSLLW};
+"srlw", RTYPEW {op=RISCVSRLW};
+"sraw", RTYPEW {op=RISCVSRAW};
 
-"slli", SHIFTIOP{op=RISCVSLLI};
-"srli", SHIFTIOP{op=RISCVSRLI};
-"srai", SHIFTIOP{op=RISCVSRAI};
+"slli", SHIFTIOP {op=RISCVSLLI};
+"srli", SHIFTIOP {op=RISCVSRLI};
+"srai", SHIFTIOP {op=RISCVSRAI};
 
-"slliw", SHIFTW{op=RISCVSLLI};
-"srliw", SHIFTW{op=RISCVSRLI};
-"sraiw", SHIFTW{op=RISCVSRAI};
+"slliw", SHIFTW {op=RISCVSLLI};
+"srliw", SHIFTW {op=RISCVSRLI};
+"sraiw", SHIFTW {op=RISCVSRAI};
 
 (** RV32A (and RV64A) ***********************************************)
 

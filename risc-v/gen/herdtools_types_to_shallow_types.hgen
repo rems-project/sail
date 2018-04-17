@@ -64,6 +64,11 @@ let translate_wordWidth op = match op with
   | RISCVWORD   -> WORD  
   | RISCVDOUBLE -> DOUBLE
 
+let translate_fence_mode mode = match mode with
+  | RISCV_FM_NORMAL -> FM_NORMAL
+  | RISCV_FM_TSO    -> FM_TSO
+
+
 let translate_bool name = function
   | true -> Sail_values.B1
   | false -> Sail_values.B0

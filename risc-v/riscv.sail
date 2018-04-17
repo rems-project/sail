@@ -1,5 +1,10 @@
 scattered typedef ast = const union
 
+(* these are special "instructions" used by rmem *)
+union ast member ThreadStart
+union ast member StopFetching
+
+
 val bit[32] -> option<ast> effect pure decode
 scattered function option<ast> decode
 
@@ -184,27 +189,32 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
     }
 
 (********************************************************************)
-union ast member (bit[4], bit[4]) FENCE
+union ast member (fence_mode, bit[4], bit[4]) FENCE
 
-function clause decode (0b0000 : (bit[4]) pred : (bit[4]) succ : 0b00000 : 0b000 : 0b00000 : 0b0001111) = Some(FENCE (pred, succ))
+function clause decode (0b0000 : (bit[4]) pred : (bit[4]) succ : 0b00000 : 0b000 : 0b00000 : 0b0001111) = Some(FENCE (FM_NORMAL, pred, succ))
+function clause decode (0b1000 : (bit[4]) pred : (bit[4]) succ : 0b00000 : 0b000 : 0b00000 : 0b0001111) = Some(FENCE (FM_TSO, pred, succ))
 
-function clause execute (FENCE(pred, succ)) = {
-  switch(pred, succ) {
-    case (0b0011, 0b0011) -> MEM_fence_rw_rw()
-    case (0b0010, 0b0011) -> MEM_fence_r_rw()
-    case (0b0001, 0b0011) -> MEM_fence_w_rw()
+function clause execute (FENCE(mode, pred, succ)) = {
+  switch(mode, pred, succ) {
+    case (FM_NORMAL, 0b0011, 0b0011) -> MEM_fence_rw_rw()
+    case (FM_NORMAL, 0b0010, 0b0011) -> MEM_fence_r_rw()
+    case (FM_NORMAL, 0b0001, 0b0011) -> MEM_fence_w_rw()
 
-    case (0b0011, 0b0010) -> MEM_fence_rw_r()
-    case (0b0010, 0b0010) -> MEM_fence_r_r()
-    case (0b0001, 0b0010) -> MEM_fence_w_r()
+    case (FM_NORMAL, 0b0011, 0b0010) -> MEM_fence_rw_r()
+    case (FM_NORMAL, 0b0010, 0b0010) -> MEM_fence_r_r()
+    case (FM_NORMAL, 0b0001, 0b0010) -> MEM_fence_w_r()
 
-    case (0b0011, 0b0001) -> MEM_fence_rw_w()
-    case (0b0010, 0b0001) -> MEM_fence_r_w()
-    case (0b0001, 0b0001) -> MEM_fence_w_w()
+    case (FM_NORMAL, 0b0011, 0b0001) -> MEM_fence_rw_w()
+    case (FM_NORMAL, 0b0010, 0b0001) -> MEM_fence_r_w()
+    case (FM_NORMAL, 0b0001, 0b0001) -> MEM_fence_w_w()
 
-    case _ -> not_implemented("unsupported fence")
+    case (FM_NORMAL, _, _) -> not_implemented("unsupported fence")
+
+    case (FM_TSO, 0b0011, 0b0011) -> MEM_fence_tso()
+    case (FM_TSO, _, _) -> not_implemented("unsupported predecessor/successor set of fence.tso")
   }
 }
+
 
 (********************************************************************)
 union ast member unit FENCEI

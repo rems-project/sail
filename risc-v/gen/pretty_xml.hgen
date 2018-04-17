@@ -98,9 +98,10 @@
         ("dest", pp_reg rd);
       ])
 
-| `RISCVFENCE(pred, succ) ->
+| `RISCVFENCE(mode, pred, succ) ->
     ("op_fence",
-      [ ("pred", pp_riscv_fence_option pred);
+      [ ("mode", match mode with RISCV_FM_NORMAL -> "normal" | RISCV_FM_TSO -> "tso");
+        ("pred", pp_riscv_fence_option pred);
         ("succ", pp_riscv_fence_option succ);
       ])
 

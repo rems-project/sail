@@ -1,4 +1,6 @@
-| `RISCVStopFetching -> EBREAK
+| `RISCVThreadStart  -> ThreadStart
+| `RISCVStopFetching -> StopFetching
+
 | `RISCVUTYPE(imm, rd, op) -> UTYPE(
       translate_imm20 "imm" imm,
       translate_reg "rd" rd,
@@ -59,7 +61,8 @@
       translate_reg "rs1" rs1,
       translate_reg "rd" rd,
       translate_ropw op)
-| `RISCVFENCE(pred, succ) -> FENCE(
+| `RISCVFENCE(mode, pred, succ) -> FENCE(
+      translate_fence_mode mode,
       translate_imm4 "pred" pred,
       translate_imm4 "succ" succ)
 | `RISCVFENCEI -> FENCEI

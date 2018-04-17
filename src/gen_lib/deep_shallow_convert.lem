@@ -494,8 +494,9 @@ let barrier_kindToInterpValue = function
   | Barrier_RISCV_rw_w  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w")  Unknown) (T_id "barrier_kind") (C_Enum 19) (toInterpValue ())
   | Barrier_RISCV_r_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_w")   Unknown) (T_id "barrier_kind") (C_Enum 20) (toInterpValue ())
   | Barrier_RISCV_w_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w")   Unknown) (T_id "barrier_kind") (C_Enum 21) (toInterpValue ())
-  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 22) (toInterpValue ())
-  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 23) (toInterpValue ())
+  | Barrier_RISCV_tso   -> V_ctor (Id_aux (Id "Barrier_RISCV_tso")   Unknown) (T_id "barrier_kind") (C_Enum 22) (toInterpValue ())
+  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 23) (toInterpValue ())
+  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 24) (toInterpValue ())
   end
 let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
@@ -520,6 +521,7 @@ let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") _) _ _ v  -> Barrier_RISCV_rw_w
   | V_ctor (Id_aux (Id "Barrier_RISCV_r_w") _) _ _ v   -> Barrier_RISCV_r_w
   | V_ctor (Id_aux (Id "Barrier_RISCV_w_w") _) _ _ v   -> Barrier_RISCV_w_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_tso") _) _ _ v   -> Barrier_RISCV_tso
   | V_ctor (Id_aux (Id "Barrier_RISCV_i") _) _ _ v -> Barrier_RISCV_i
   | V_ctor (Id_aux (Id "Barrier_x86_MFENCE") _) _ _ v -> Barrier_x86_MFENCE
   | V_tuple [v] -> barrier_kindFromInterpValue v
