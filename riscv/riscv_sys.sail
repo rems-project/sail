@@ -124,7 +124,6 @@ bitfield Minterrupts : bits(64) = {
   MSI : 3,  /* software interrupts */
   SSI : 1,
   USI : 0,
-
 }
 register mip     : Minterrupts /* Pending */
 register mie     : Minterrupts /* Enabled */
@@ -311,9 +310,68 @@ function legalize_sedeleg(s : Sedeleg, v : xlenbits) -> Sedeleg = {
 }
 
 /* TODO: handle views for interrupt delegation */
-register sideleg : Minterrupts
-register sip     : Minterrupts
-register sie     : Minterrupts
+bitfield Sinterrupts : bits(64) = {
+  SEI : 9,  /* external interrupts */
+  UEI : 8,
+
+  STI : 5,  /* timers interrupts */
+  UTI : 4,
+
+  SSI : 1,  /* software interrupts */
+  USI : 0
+}
+
+/* Provides the sip read view of mip as delegated by mideleg. */
+function lower_mip(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
+  let s : Sinterrupts = Mk_Sinterrupts(EXTZ(0b0));
+  /* M-mode interrupts delegated to S-mode should appear as S-mode interrupts */
+  let s = update_SEI(s, (m.SEI() & d.SEI()) | (m.MEI() & d.MEI()));
+  let s = update_STI(s, (m.STI() & d.STI()) | (m.MTI() & d.MTI()));
+  let s = update_SSI(s, (m.SSI() & d.SSI()) | (m.MSI() & d.MSI()));
+
+  let s = update_UEI(s, m.UEI() & d.UEI());
+  let s = update_UTI(s, m.UTI() & d.UTI());
+  let s = update_USI(s, m.USI() & d.USI());
+  s
+}
+/* Provides the sie read view of mie as delegated by mideleg. */
+function lower_mie(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
+  let s : Sinterrupts = Mk_Sinterrupts(EXTZ(0b0));
+  let s = update_SEI(s, m.SEI() & d.SEI());
+  let s = update_STI(s, m.STI() & d.STI());
+  let s = update_SSI(s, m.SSI() & d.SSI());
+  let s = update_UEI(s, m.UEI() & d.UEI());
+  let s = update_UTI(s, m.UTI() & d.UTI());
+  let s = update_USI(s, m.USI() & d.USI());
+  s
+}
+/* Provides the sip write view of mip as delegated by mideleg. */
+function lift_sip(o : Minterrupts, d : Minterrupts, s : Sinterrupts) -> Minterrupts = {
+  let m : Minterrupts = o;
+  let m = update_SSI(m, s.SSI() & d.SSI());
+  let m = update_UEI(m, m.UEI() & d.UEI());
+  let m = update_USI(m, m.USI() & d.USI());
+  m
+}
+function legalize_sip(m : Minterrupts, d : Minterrupts, v : xlenbits) -> Minterrupts = {
+  lift_sip(m, d, Mk_Sinterrupts(v))
+}
+/* Provides the sie write view of mie as delegated by mideleg. */
+function lift_sie(o : Minterrupts, d : Minterrupts, s : Sinterrupts) -> Minterrupts = {
+  let m : Minterrupts = o;
+  let m = if d.SEI() == true then update_SEI(m, s.SEI()) else m;
+  let m = if d.STI() == true then update_STI(m, s.STI()) else m;
+  let m = if d.SSI() == true then update_SSI(m, s.SSI()) else m;
+  let m = if d.UEI() == true then update_UEI(m, s.UEI()) else m;
+  let m = if d.UTI() == true then update_UTI(m, s.UTI()) else m;
+  let m = if d.USI() == true then update_USI(m, s.USI()) else m;
+  m
+}
+function legalize_sie(m : Minterrupts, d : Minterrupts, v : xlenbits) -> Minterrupts = {
+  lift_sie(m, d, Mk_Sinterrupts(v))
+}
+
+register sideleg : Sinterrupts
 
 bitfield Satp64 : bits(64) = {
   Mode : 63 .. 60,

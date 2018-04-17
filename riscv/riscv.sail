@@ -525,13 +525,13 @@ function readCSR csr: bits(12) -> xlenbits =
     0x100 => mstatus.bits(), /* FIXME: legalize view*/
     0x102 => sedeleg.bits(),
     0x103 => sideleg.bits(),
-    0x104 => mie.bits(),  /* FIXME: legalize view */
+    0x104 => lower_mie(mie, mideleg).bits(),
     0x105 => stvec.bits(),
     0x140 => sscratch,
     0x141 => sepc,
     0x142 => scause.bits(),
     0x143 => stval,
-    0x144 => mip.bits(),  /* FIXME: legalize view */
+    0x144 => lower_mip(mip, mideleg).bits(),
     0x180 => satp,
 
     /* others */
@@ -558,17 +558,16 @@ function writeCSR (csr : bits(12), value : xlenbits) -> unit =
     0x344 => mip = legalize_mip(mip, value),
 
     /* supervisor mode */
-    /* FIXME: need legalizers for interrupt regs and satp */
     0x100 => mstatus = legalize_sstatus(mstatus, value),
     0x102 => sedeleg = legalize_sedeleg(sedeleg, value),
-    0x103 => sideleg->bits() = value,
-    0x104 => sie->bits() = value,
+    0x103 => sideleg->bits() = value, /* TODO: does this need legalization? */
+    0x104 => mie = legalize_sie(mie, mideleg, value),
     0x105 => stvec = legalize_tvec(stvec, value),
     0x140 => sscratch = value,
     0x141 => sepc = legalize_xepc(value),
     0x142 => scause->bits() = value,
     0x143 => stval = value,
-    0x144 => mip->bits() = value,
+    0x144 => mip = legalize_sip(mip, mideleg, value),
     0x180 => satp = legalize_satp(cur_Architecture(), satp, value),
 
     _     => print_bits("unhandled write to CSR ", csr)
