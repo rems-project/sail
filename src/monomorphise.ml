@@ -779,14 +779,14 @@ let bits_of_lit = function
 let slice_lit (L_aux (lit,ll)) i len (Ord_aux (ord,_)) =
   let i = Big_int.to_int i in
   let len = Big_int.to_int len in
+  let bin = bits_of_lit lit in
   match match ord with
   | Ord_inc -> Some i
-  | Ord_dec -> Some (len - i)
+  | Ord_dec -> Some (String.length bin - i - len)
   | Ord_var _ -> None
   with
   | None -> None
   | Some i ->
-     let bin = bits_of_lit lit in
      Some (L_aux (L_bin (String.sub bin i len),Generated ll))
 
 let concat_vec lit1 lit2 =
