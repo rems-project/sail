@@ -458,13 +458,13 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
 /* exception delegation: given an exception and the privilege at which
  * it occured, returns the privilege at which it should be handled.
  */
-function exception_delegatee(e : ExceptionType, p : Privilege) ->
-  Privilege = {
+function exception_delegatee(e : ExceptionType, p : Privilege) -> Privilege = {
   let idx   = exceptionType_to_nat(e);
   let super = medeleg.bits()[idx];
   let user  = sedeleg.bits()[idx];
-  let deleg = if      misa.N() == true & user  then User
-              else if misa.S() == true & super then Supervisor
+  let deleg = /* if      misa.N() == true & user  then User
+                 else */
+              if misa.S() == true & super then Supervisor
               else Machine;
   /* Ensure there is no transition to a less-privileged mode. */
   if   privLevel_to_bits(deleg) <_u privLevel_to_bits(p)
@@ -478,6 +478,13 @@ struct sync_exception = {
   excinfo : option(xlenbits)
 }
 
+function tval(excinfo : option(xlenbits)) -> xlenbits = {
+  match (excinfo) {
+    Some(e) => e,
+    None()  => EXTZ(0b0)
+  }
+}
+
 union ctl_result = {
   CTL_TRAP : sync_exception,
 /* TODO:
@@ -488,6 +495,50 @@ union ctl_result = {
 }
 
 /* handle exceptional ctl flow by updating nextPC */
+
+function handle_trap(curp : Privilege, e : sync_exception,
+                     pc : xlenbits) -> xlenbits = {
+  let priv = exception_delegatee(e.trap, curp);
+  cur_privilege = priv;
+  match (priv) {
+    Machine => {
+       mcause->IsInterrupt() = false;
+       mcause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
+
+       mstatus->MPIE() = mstatus.MIE();
+       mstatus->MIE()  = false;
+       mstatus->MPP()  = privLevel_to_bits(curp);
+       mtval           = tval(e.excinfo);
+       mepc            = pc;
+
+       match tvec_addr(mtvec, mcause) {
+         Some(epc) => epc,
+         None()    => internal_error("Invalid mtvec mode")
+       }
+    },
+    Supervisor => {
+       scause->IsInterrupt() = false;
+       scause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
+
+       mstatus->SPIE() = mstatus.SIE();
+       mstatus->SIE()  = false;
+       mstatus->SPP()  = match (curp) {
+                           User => false,
+                           Supervisor => true,
+                           Machine => internal_error("invalid privilege for s-mode trap")
+                         };
+       stval           = tval(e.excinfo);
+       sepc            = pc;
+
+       match tvec_addr(stvec, scause) {
+         Some(epc) => epc,
+         None()    => internal_error("Invalid stvec mode")
+       }
+
+    },
+    User => internal_error("the N extension is currently unsupported")
+  }
+}
 
 function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
                               pc: xlenbits) -> xlenbits =
