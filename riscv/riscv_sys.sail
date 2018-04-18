@@ -461,7 +461,7 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
   & check_TVM_SATP(csr, p)
 
-/* exception delegation: given an exception and the privilege at which
+/* Exception delegation: given an exception and the privilege at which
  * it occured, returns the privilege at which it should be handled.
  */
 function exception_delegatee(e : ExceptionType, p : Privilege) -> Privilege = {
@@ -475,6 +475,48 @@ function exception_delegatee(e : ExceptionType, p : Privilege) -> Privilege = {
   /* Ensure there is no transition to a less-privileged mode. */
   if   privLevel_to_bits(deleg) <_u privLevel_to_bits(p)
   then p else deleg
+}
+
+/* Interrupts are prioritized in privilege order, and for each
+ * privilege, in the order: external, software, timers.
+ */
+function findPendingInterrupt(ip : xlenbits) -> option(InterruptType) = {
+  let ip = Mk_Minterrupts(ip);
+  if      ip.MEI() == true then Some(I_M_External)
+  else if ip.MSI() == true then Some(I_M_Software)
+  else if ip.MTI() == true then Some(I_M_Timer)
+  else if ip.SEI() == true then Some(I_S_External)
+  else if ip.SSI() == true then Some(I_S_Software)
+  else if ip.STI() == true then Some(I_S_Timer)
+  else if ip.UEI() == true then Some(I_U_External)
+  else if ip.USI() == true then Some(I_U_Software)
+  else if ip.UTI() == true then Some(I_U_Timer)
+  else None()
+}
+
+/* Examines current M-mode interrupt state and returns an interrupt to be
+ * handled, and the privilege it should be handled at.
+ * For now, it assumes 'S' and no 'N' extension, which is the common case.
+ */
+function curInterrupt(pend : Minterrupts, enbl : Minterrupts, delg : Minterrupts)
+                     -> option((InterruptType, Privilege)) = {
+  let en_mip : xlenbits = pend.bits() & enbl.bits();
+  if en_mip == EXTZ(0b0) then None() /* fast path */
+  else {
+    let eff_mip = en_mip & (~ (delg.bits())); /* retained at M-mode */
+    let eff_sip = en_mip & delg.bits();       /* delegated to S-mode */
+    if (mstatus.MIE() == true) & (eff_mip != EXTZ(0b0))
+    then match findPendingInterrupt(eff_mip) {
+           Some(i) => let r = (i, Machine) in Some(r),
+           None()  => None()
+         }
+    else if (mstatus.SIE() == true) & (eff_sip != EXTZ(0b0))
+    then match findPendingInterrupt(eff_sip) {
+           Some(i) => let r = (i, Supervisor) in Some(r),
+           None()  => None()
+         }
+    else None()
+  }
 }
 
 /* instruction control flow */
