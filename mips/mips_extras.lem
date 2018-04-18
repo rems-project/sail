@@ -80,17 +80,6 @@ let read_ram _ size _ addr = MEMr addr size
 let string_of_bits bs = string_of_bv (bits_of bs)
 let string_of_int = show
 
-val prerr_endline : string -> unit
-let prerr_endline _ = ()
-declare ocaml target_rep function prerr_endline = `prerr_endline`
-
-val print_int : string -> integer -> unit
-let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
-
-val putchar : integer -> unit
-let putchar _ = ()
-declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
-
 let _sign_extend bits len = maybe_failwith (of_bits (exts_bv len bits))
 let _zero_extend bits len = maybe_failwith (of_bits (extz_bv len bits))
 

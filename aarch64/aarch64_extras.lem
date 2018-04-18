@@ -15,17 +15,6 @@ type ty2048
 instance (Size ty2048) let size = 2048 end
 declare isabelle target_rep type ty2048 = `2048`
 
-val prerr_endline : string -> unit
-let prerr_endline _ = ()
-declare ocaml target_rep function prerr_endline = `prerr_endline`
-
-val print_int : string -> integer -> unit
-let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
-
-val putchar : integer -> unit
-let putchar _ = ()
-declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
-
 val slice : list bitU -> integer -> integer -> list bitU
 let slice v lo len =
   subrange_vec_dec v (lo + len - 1) lo

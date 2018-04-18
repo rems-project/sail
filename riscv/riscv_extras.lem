@@ -61,19 +61,8 @@ let shift_bits_right v m = shiftr v (uint m)
 val shift_bits_left : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
 let shift_bits_left v m = shiftl v (uint m)
 
-val prerr_endline : string -> unit
-let prerr_endline _ = ()
-declare ocaml target_rep function prerr_endline = `prerr_endline`
-
 val print_string : string -> string -> unit
 let print_string msg s = prerr_endline (msg ^ s)
 
-val print_int : string -> integer -> unit
-let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
-
 val print_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
 let print_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))
-
-val putchar : integer -> unit
-let putchar _ = ()
-declare ocaml target_rep function putchar i = (`print_char` (`char_of_int` (`Nat_big_num.to_int` i)))
