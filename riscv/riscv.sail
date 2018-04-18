@@ -383,6 +383,14 @@ function clause execute MRET() =
   nextPC = handle_exception_ctl(cur_privilege, CTL_MRET(), PC)
 
 /* ****************************************************************** */
+union clause ast = SRET : unit
+
+function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
+
+function clause execute SRET() =
+  nextPC = handle_exception_ctl(cur_privilege, CTL_SRET(), PC)
+
+/* ****************************************************************** */
 union clause ast = EBREAK : unit
 
 function clause decode 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(EBREAK())

@@ -487,10 +487,8 @@ function tval(excinfo : option(xlenbits)) -> xlenbits = {
 
 union ctl_result = {
   CTL_TRAP : sync_exception,
-/* TODO:
-  CTL_URET,
-  CTL_SRET,
-*/
+/* TODO: CTL_URET */
+  CTL_SRET : unit,
   CTL_MRET : unit
 }
 
@@ -550,6 +548,13 @@ function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
       mepc
+    },
+    (_, CTL_SRET())  => {
+      mstatus->SIE()  = mstatus.SPIE();
+      mstatus->SPIE() = true;
+      cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
+      mstatus->SPP()  = false;
+      sepc
     }
   }
 
