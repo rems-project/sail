@@ -210,7 +210,7 @@ using the typeclass.\<close> to implement library functions supporting either on
 representations.  For use in Sail specifications, wrappers are defined in the theories
 @{path Sail_operators_bitlists} and @{path Sail_operators_mwords}, respectively.  An import of the
 right theory is automatically added to the generated files, depending on which bitvector
-representation it uses.  Hence, bitvector operations can be referred to in the Sail source code
+representation is used.  Hence, bitvector operations can be referred to in the Sail source code
 using uniform names, e.g.~@{term add_vec}, @{term update_vec_dec}, or @{term subrange_vec_inc}.
 The theory @{theory Sail_operators_mwords_lemmas} sets up simplification rules that relate these
 operations to the native operations in Isabelle, e.g.
@@ -241,7 +241,7 @@ state.  The type @{typ "('regs, 'a, 'e) monadS"} is a synonym for
 Here, @{typ "'a"} and @{typ "'e"} are parameters for the return value type and the exception type,
 respectively.  The latter is instantiated in generated definitions with either the type
 @{term exception}, if the Sail source code defines that type, or with @{typ unit} otherwise.
-The result of a monadic expression can be either a value, a non-recoverable failure, or an
+A result of a monadic expression can be either a value, a non-recoverable failure, or an
 exception thrown (that may be caught using @{term try_catch}):
 @{datatype [display] ex}
 @{datatype [display, names_short] result}
@@ -352,7 +352,7 @@ register state record:
 Sail aims to generate Isabelle definitions that can be used with either the state or the free monad.
 To achieve this, the definitions are generated using the free monad, and a lifting to the state
 monad is provided together with simplification rules.  These include generic simplification rules
-(proved in the theory @{theory State}) such as
+(proved in the theory @{theory State_lemmas}) such as
 @{thm [display]
     liftState_return[where r = "(get_regval, set_regval)"]
     liftState_bind[where r = "(get_regval, set_regval)"]
@@ -384,7 +384,7 @@ giving weakest preconditions of the predefined primitives of the monad, collecte
 @{attribute PrePost_intro} and @{attribute PrePostE_intro}, respectively.
 
 The instruction we are considering is defined as
-@{thm [display] execute_ITYPE.simps}
+@{thm [display] execute_ITYPE.simps[of _ rs for rs]}
 
 We first declare two simplification rules and an abbreviation, for stating the lemma more
 conveniently: @{term "getXs r s"} reads general-purpose register @{term r} in state @{term s},
