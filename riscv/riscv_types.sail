@@ -61,6 +61,13 @@ function architecture(a : arch_xlen) -> option(Architecture) = {
     _    => None()
   }
 }
+function arch_to_bits(a : Architecture) -> arch_xlen = {
+  match (a) {
+    RV32  => 0b01,
+    RV64  => 0b10,
+    RV128 => 0b11
+  }
+}
 
 /* privilege levels */
 

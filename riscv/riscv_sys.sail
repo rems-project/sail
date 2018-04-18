@@ -649,5 +649,12 @@ function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
 
 function init_sys () : unit -> unit = {
   cur_privilege = Machine;
+  misa->MXL() = arch_to_bits(RV64);
   misa->C() = true;
+  misa->U() = true;
+  misa->S() = true;
+
+  mstatus->SXL() = misa.MXL();
+  mstatus->UXL() = misa.MXL();
+  mstatus->SD()  = false;
 }
