@@ -634,6 +634,10 @@ let doc_exp_lem, doc_let_lem =
                let loopvar, body = match body with
                  | E_aux (E_let (LB_aux (LB_val (
                      P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _), _), _), body), _) -> id, body
+                 | E_aux (E_let (LB_aux (LB_val (
+                     P_aux (P_var (P_aux (P_id id, _), _), _), _), _), body), _) -> id, body
+                 | E_aux (E_let (LB_aux (LB_val (
+                     P_aux (P_id id, _), _), _), body), _) -> id, body
                  | _ -> raise (Reporting_basic.err_unreachable l ("Unable to find loop variable in " ^ string_of_exp body)) in
                let step = match ord_exp with
                  | E_aux (E_lit (L_aux (L_false, _)), _) ->
