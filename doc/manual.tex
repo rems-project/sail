@@ -1,0 +1,87 @@
+\documentclass[a4paper]{article}
+
+\usepackage[nounderscore]{syntax}
+\usepackage{amsmath,amssymb}
+\usepackage[svgnames]{xcolor}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{fullpage}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true,linkcolor=DarkRed}
+
+\newcommand{\TODO}[1]{{\color{red}{TODO: #1}}}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+}
+
+\lstdefinelanguage{sail}
+  { morekeywords={val,function,cast,type,forall,overload,operator,enum,union,undefined,exit,and,assert,sizeof,
+      scattered,register,inc,dec,if,then,else,effect,let,as,@,in,end,Type,Int,Order,match,clause,struct,
+      foreach,from,to,by,infix,infixl,infixr,bitfield,default},
+    keywordstyle={\bf\ttfamily\color{blue}},
+    morestring=[b]",
+    stringstyle={\ttfamily\color{red}},
+    morecomment=[l][\itshape\color{DarkGreen}]{//},
+    morecomment=[s][\itshape\color{DarkGreen}]{/*}{*/},
+    deletestring=[bd]{'},
+    escapechar=\#,
+    emphstyle={\it},
+    literate=
+      {\{|}{{$\{|$}}1
+      {|\}}{{$|\}$}}1
+  }
+
+\lstset{language=sail}
+
+\def\sail{\trivlist \item\relax}
+\def\endsail{\endtrivlist}
+
+\renewcommand{\ll}[1]{\lstinline{#1}}
+
+\newcommand{\riscv}{RISC-V}
+
+%% \input{grammar}
+
+%% \renewcommand{\ottkw}[1]{\mbox{\ttfamily\bfseries{#1}}}
+%% \renewcommand{\ottsym}[1]{\mathop{\mbox{\ttfamily{#1}}}}
+%% %\renewcommand{\ottgrammartabular}[1]{\begin{center}\begin{tabular}{llcllllll}#1\end{tabular}\end{center}}
+%% \renewcommand{\ottgrammartabular}[1]{\medskip\par\begin{supertabular}{llcllllll}#1\end{supertabular}\medskip\par\noindent}
+%% \newcommand{\ottpartialrulehead}[3]{$#1$ & & $#2$ & $\ldots$ & & \multicolumn{2}{l}{#3}}
+%% \renewcommand{\ottrulehead}[3]{\multicolumn{9}{l}{$#1$\quad $#2$}}%
+%% \renewcommand{\ottprodline}[6]{\multicolumn{9}{l}{\quad$#1$\quad $#2$}}%
+
+\begin{document}
+
+\input{code_riscv}
+
+\title{The Sail instruction-set semantics specification language}
+
+\author{Kathryn E. Gray \and Peter Sewell \and Christopher Pulte \and
+  Shaked Flur \and Robert Norton-Wright \and Alasdair Armstrong}
+
+\maketitle
+
+\tableofcontents
+
+\include{introduction}
+
+\include{riscv}
+
+\include{usage}
+
+\include{tutorial}
+
+\include{types}
+
+\bibliographystyle{unsrt}
+\bibliography{manual}
+
+\end{document}

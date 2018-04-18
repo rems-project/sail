@@ -1,0 +1,558 @@
+\section{Sail Language}
+
+\subsection{Functions}
+\label{sec:functions}
+
+\input{code_myreplicatebits}
+
+In Sail, functions are declared in two parts. First we write the type
+signature for the function using the \ll{val} keyword, then define the
+body of the function via the \ll{function} keyword. In this
+Subsection, we will write our own version of the \ll{replicate_bits}
+function from the Sail library. This function takes a number $n$ and a
+bitvector, and copies that bitvector $n$ times.
+
+\mrbmyreplicatebits
+
+\noindent The general syntax for a function type in Sail is as follows:
+\begin{center}
+  \ll{val} \textit{name} \ll{:} \ll{forall} \textit{type variables} \ll{,} \textit{constraint} \ll{. (} \textit{type$_1$} \ll{,} $\ldots$ \ll{,} \textit{type$_2$} \ll{)} \ll{->} \textit{return type}
+\end{center}
+An implementation for the \ll{replicate_bits} function would be
+follows \mrbfnmyreplicatebits
+
+The general syntax for a function declaration is:
+\begin{center}
+  \ll{function} \textit{name} \ll{(} \textit{argument$_1$} \ll{,} $\ldots$ \ll{,} \textit{argument$_n$} \ll{)} \ll{=} \textit{expression}
+\end{center}
+
+Code for this example can be found in
+the Sail repository in \verb|doc/examples/my_replicate_bits.sail|. To
+test it, we can invoke Sail interactively using the \verb|-i| option,
+passing the above file on the command line. Typing
+\verb|replicate_bits(3, 0xA)| will step through the execution of the
+above function, and eventually return the result \verb|0xAAA|. Typing
+\verb|:run| in the interactive interpreter will cause the expression
+to be evaluated fully, rather than stepping through the execution.
+
+Sail allows type variables to be used directly within expressions, so
+the above could be re-written as \mrbfnmyreplicatebitstwo This
+notation can be succinct, but should be used with caution. What
+happens is that Sail will try to re-write the type variables using
+expressions of the appropriate size that are available within the
+surrounding scope, in this case \ll{n} and \ll{length(xs)}. If no
+suitable expressions are found to trivially rewrite these type
+variables, then additional function parameters will be automatically
+added to pass around this information at runtime. This feature is
+however very useful for implementing functions with implicit
+parameters, e.g. we can implement a zero extension function that
+implicitly picks up its result length from the calling context as
+follows:
+\mrbextzz
+\mrbfnextzz
+
+Notice that we annotated the \ll{val} declaration as a
+\ll{cast}---this means that the type checker is allowed to
+automatically insert it where needed in order to make our code type
+check. This is another feature that must be used carefully, because
+too many implicit casts can quickly result in unreadable code. Sail
+does not make any distinction between expressions and statements, so
+since there is only a single line of code within the foreach block, we
+can drop it and simply write: \mrbfnmyreplicatebitsthree
+
+\subsection{Numeric Types}
+
+Sail has three basic numeric types, \ll{int}, \ll{nat}, and
+\ll{range}. The type \ll{int} is an arbitrary precision mathematical
+integer, and likewise \ll{nat} is an arbitrary precision natural
+number. The type \ll{range('n,'m)} is an inclusive range between the
+\ll{Int}-kinded type variables \ll{'n} and \ll{'m}. The type
+\ll{int('o)} is an integer exactly equal to the \ll{Int}-kinded type
+variable \ll{'n}, i.e. \ll{int('o)} $=$ \ll{range('o,'o)}. These types
+can be used interchangably provided the rules summarised in the below
+diagram are satisfied (via constraint solving).
+
+\begin{center}
+\begin{tikzpicture}
+  [type/.style={rectangle},auto,>=stealth',semithick]
+  \node[type] (int) at (0, 3) {\ll{int}};
+  \node[type] (nat) at (3, 0) {\ll{nat}};
+  \node[type] (range) at (-3, 0) {\ll{range('n,'m)}};
+  \node[type] (atom) at (0, -3) {\ll{int('o)}};
+
+  \draw[->] (nat) -- (int);
+  \draw[->] (range) -- (int);
+  \draw[->] (atom) to [bend left=10] node {} (int);
+  \draw[->] (range) to node {\ll{'n} $\ge$ \ll{0}} (nat);
+  \draw[->] (atom) to node {\ll{'o} $\ge$ \ll{0}} (nat);
+  \draw[->] (atom) to [bend right=35] node {\ll{'n} $\le$ \ll{'o} $\le$ \ll{'m}} (range);
+  \draw[->] (range) to [bend right=35] node [swap] {\ll{'n} $=$ \ll{'m} $=$ \ll{'o}} (atom);
+\end{tikzpicture}
+\end{center}
+
+Note that \ll{bit} isn't a numeric type (i.e. it's not
+\ll{range(0,1)}. This is intentional, as otherwise it would be
+possible to write expressions like \ll{(1 : bit) + 5} which would end
+up being equal to \ll{6 : range(5, 6)}. This kind of implicit casting
+from bits to other numeric types would be highly undesirable.
+
+\subsection{Vector Type}
+
+Sail has the builtin type vector, which is a polymorphic type for
+fixed-length vectors. For example, we could define a vector \ll{v} of
+three integers as follows:
+\begin{lstlisting}
+let v : vector(3, dec, int) = [1, 2, 3]
+\end{lstlisting}
+The first argument of the vector type is a numeric expression
+representing the length of the vector, and the last is the type of the
+vector's elements. But what is the second argument? Sail allows two
+different types of vector orderings---increasing (\ll{inc}) and
+decreasing (\ll{dec}). These two orderings are shown for the bitvector
+0b10110000 below.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.7]
+  \draw (0,0) rectangle (1,1) node[pos=.5] {1};
+  \draw (1,0) rectangle (2,1) node[pos=.5] {0};
+  \draw (2,0) rectangle (3,1) node[pos=.5] {1};
+  \draw (3,0) rectangle (4,1) node[pos=.5] {1};
+  \draw (4,0) rectangle (5,1) node[pos=.5] {0};
+  \draw (5,0) rectangle (6,1) node[pos=.5] {0};
+  \draw (6,0) rectangle (7,1) node[pos=.5] {0};
+  \draw (7,0) rectangle (8,1) node[pos=.5] {0};
+
+  \node at (.5,1.5) {0};
+  \node at (7.5,1.5) {7};
+  \draw[->] (1.5,1.5) -- (6.5,1.5);
+  \node at (.5,-0.5) {MSB};
+  \node at (7.5,-0.5) {LSB};
+  \node at (4,2) {\ll{inc}};
+\end{tikzpicture}
+\qquad
+\begin{tikzpicture}[scale=0.7]
+  \draw (0,0) rectangle (1,1) node[pos=.5] {1};
+  \draw (1,0) rectangle (2,1) node[pos=.5] {0};
+  \draw (2,0) rectangle (3,1) node[pos=.5] {1};
+  \draw (3,0) rectangle (4,1) node[pos=.5] {1};
+  \draw (4,0) rectangle (5,1) node[pos=.5] {0};
+  \draw (5,0) rectangle (6,1) node[pos=.5] {0};
+  \draw (6,0) rectangle (7,1) node[pos=.5] {0};
+  \draw (7,0) rectangle (8,1) node[pos=.5] {0};
+
+  \node at (.5,1.5) {7};
+  \node at (7.5,1.5) {0};
+  \draw[->] (1.5,1.5) -- (6.5,1.5);
+  \node at (.5,-0.5) {MSB};
+  \node at (7.5,-0.5) {LSB};
+  \node at (4,2) {\ll{dec}};
+\end{tikzpicture}
+\end{center}
+
+For increasing (bit)vectors, the 0 index is the most significant bit
+and the indexing increases towards the least significant bit. Whereas
+for decreasing (bit)vectors the least significant bit is 0 indexed,
+and the indexing decreases from the most significant to the least
+significant bit. For this reason, increasing indexing is sometimes
+called `most significant bit is zero' or MSB0, while decreasing
+indexing is sometimes called `least significant bit is zero' or
+LSB0. While this vector ordering makes most sense for bitvectors (it
+is usually called bit-ordering), in Sail it applies to all
+vectors. A default ordering can be set using
+\begin{lstlisting}
+default Order dec
+\end{lstlisting}
+and this should usually be done right at the beginning of a
+specification. Most architectures stick to either convention or the
+other, but Sail also allows functions which are polymorphic over
+vector order, like so:
+\begin{lstlisting}
+val foo : forall ('a : Order). vector(8, 'a, bit) -> vector(8, 'a, bit)
+\end{lstlisting}
+
+\paragraph{Bitvector Literals}
+
+Bitvector literals in Sail are written as either
+\lstinline[mathescape]{0x$\textit{hex string}$} or
+\lstinline[mathescape]{0b$\textit{binary string}$}, for example
+\ll{0x12FE} or \ll{0b1010100}. The length of a hex literal is always
+four times the number of digits, and the length of binary string is
+always the exact number of digits, so \ll{0x12FE} has length 16, while
+\ll{0b1010100} has length 7.
+
+\paragraph{Accessing and Updating Vectors}
+
+A vector can be indexed by using the
+\lstinline[mathescape]{$\textit{vector}$[$\textit{index}$]}
+notation. So, in the following code:
+\begin{lstlisting}
+  let v : vector(4, dec, int) = [1, 2, 3, 4]
+  let a = v[0]
+  let b = v[3]
+\end{lstlisting}
+\ll{a} will be \ll{4}, and \ll{b} will be \ll{1} (not that \ll{v} is
+\ll{dec}). By default, Sail will statically check for out of bounds
+errors, and will raise a type error if it cannot prove that all such
+vector accesses are valid.
+
+Vectors can be sliced using the
+%
+\lstinline[mathescape]{$\textit{vector}$[$\textit{index}_{msb}$ .. $\textit{index}_{lsb}$]}
+%
+notation. The indexes are always supplied with the index closest to
+the MSB being given first, so we would take the bottom 32-bits of a
+decreasing bitvector \ll{v} as \ll{v[31 .. 0]}, and the upper 32-bits
+of an increasing bitvector as \ll{v[0 .. 31]}, i.e. the indexing order
+for decreasing vectors decreases, and the indexing order for
+increasing vectors increases.
+
+A vector index can be updated using
+\lstinline[mathescape]{[$\textit{vector}$ with $\textit{index}$ = $\textit{expression}$]}
+notation.
+%
+Similarly, a subrange of a vector can be updated using
+%
+\lstinline[mathescape]{[$\textit{vector}$ with $\textit{index}_{msb}$ .. $\textit{index}_{lsb}$ = $\textit{expression}$]},
+%
+where the order of the indexes is the same as described above for
+increasing and decreasing vectors.
+
+These expressions are actually just syntactic sugar for several
+builtin functions, namely \ll{vector_access}, \ll{vector_subrange},
+\ll{vector_update}, and \ll{vector_update_subrange}.
+
+\subsection{List Type}
+
+In addition to vectors, Sail also has \ll{list} as a builtin type. For
+example:
+\begin{lstlisting}
+let l : list(int) = [|1, 2, 3|]
+\end{lstlisting}
+The cons operator is \ll{::}, so we could equally write:
+\lstinputlisting{examples/list.sail}
+Pattern matching can be used to destructure lists, see Section~\ref{sec:pat}
+
+\subsection{Other Types}
+
+
+\subsection{Pattern Matching}
+\label{sec:pat}
+
+Like most functional languages, Sail supports pattern matching via the
+\ll{match} keyword. For example:
+\begin{lstlisting}
+let n : int = f();
+match n {
+  1 => print("1"),
+  2 => print("2"),
+  3 => print("3"),
+  _ => print("wildcard")
+}
+\end{lstlisting}
+The \ll{match} keyword takes an expression and then branches using a
+pattern based on its value. Each case in the match expression takes
+the form \lstinline[mathescape]{$\textit{pattern}$ => $\textit{expression}$},
+separated by commas. The cases are checked sequentially from top to
+bottom, and when the first pattern matches its expression will be
+evaluated.
+
+\ll{match} in Sail is not currently check for exhaustiveness---after
+all we could have arbitrary constraints on a numeric variable being
+matched upon, which would restrict the possible cases in ways that we
+could not determine with just a simple syntactic check. However, there
+is a simple exhaustiveness checker which runs and gives warnings (not
+errors) if it cannot tell that the pattern match is exhaustive, but
+this check can give false positives. It can be turned off with the
+\verb+-no_warn+ flag.
+
+When we match on numeric literals, the type of the variable we are
+matching on will be adjusted. In the above example in the
+\ll{print("1")} case, $n$ will have the type \ll{int('e)}, where
+\ll{'e} is some fresh type variable, and there will be a constraint
+that \ll{'e} is equal to one.
+
+We can also have guards on patterns, for example we could modify the
+above code to have an additional guarded case like so:
+\begin{lstlisting}
+let n : int = f();
+match n {
+  1 => print("1"),
+  2 => print("2"),
+  3 => print("3"),
+  m if m <= 10 => print("n is less than or equal to 10"),
+  _ => print("wildcard")
+}
+\end{lstlisting}
+The variable pattern m will match against anything, and the guard can
+refer to variables bound by the pattern.
+
+\paragraph{Matching on enums}
+
+Match can be used to match on possible values of an enum, like so:
+\begin{lstlisting}
+enum E = A | B | C
+
+match x {
+  A => print("A"),
+  B => print("B"),
+  C => print("C")
+}
+\end{lstlisting}
+Note that because Sail places no restrictions on the lexical structure
+of enumeration elements to differentiate them from ordinary
+identifiers, pattern matches on variables and enum elements can be
+somewhat ambiguous. This is the primary reason why we have the basic,
+but incomplete, pattern exhaustiveness check mentioned above---it can
+warn you if removing an enum constructor breaks a pattern match.
+
+\paragraph{Matching on unions}
+
+Match can also be used to destructure union constructors, for example
+using the option type from Section~\ref{sec:union}:
+\begin{lstlisting}
+match option {
+  Some(x) => foo(x),
+  None()  => print("matched None()")
+}
+\end{lstlisting}
+Note that like how calling a function with a unit argument can be done
+as \ll{f()} rather than \ll{f(())}, matching on a constructor \ll{C}
+with a unit type can be acheived by using \ll{C()} rather than
+\ll{C(())}.
+
+\paragraph{Matching on bit vectors}
+
+Sail allows numerous ways to match on bitvectors, for example:
+\begin{lstlisting}
+match v {
+  0xFF => print("hex match"),
+  0x0000_0001 => print("binary match"),
+  0xF @ v : bits(4) => print("vector concatentation pattern"),
+  0xF @ [bitone, _, b1, b0] => print("vector pattern"),
+  _ : bits(4) @ v : bits(4) => print("annotated wildcard pattern")
+}
+\end{lstlisting}
+We can match on bitvector literals in either hex or binary forms. We
+also have vector concatantion patterns, of the form
+\lstinline[mathescape]{$\mathit{pattern}$ @ $\ldots$ @ $\mathit{pattern}$}.
+We must be able to infer the length of all the subpatterns in a vector
+concatentation pattern, hence why in the example above all the
+wildcard and variable patterns beneath vector concatenation patterns
+have type annotations. In the context of a pattern the \ll{:} operator
+binds tighter than the \ll{@} operator (as it does elsewhere).
+
+We also have vector patterns, which for bitvectors match on individual
+bits. In the above example, \ll{b0} and \ll{b1} will have type
+\ll{bit}. The pattern \ll{bitone} is a bit literal, with \ll{bitzero}
+being the other bit literal pattern.
+
+Note that because vectors in sail are type-polymorphic, we can also
+use both vector concatentation patterns and vector patterns to match
+against non-bit vectors.
+
+\paragraph{Matching on lists}
+
+Sail allows lists to be destructured using patterns. There are two
+types of patterns for lists, cons patterns and list literal patterns.
+
+\begin{lstlisting}
+match ys {
+  x :: xs => print("cons pattern"),
+  [||]    => print("empty list")
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+match ys {
+  [|1, 2, 3|] => print("list pattern"),
+  _           => print("wildcard")
+}
+\end{lstlisting}
+
+\paragraph{As patterns}
+
+\subsection{Mutable and Immutable Variables}
+
+\subsection{Type declarations}
+
+\subsubsection{Enumerations}
+
+Enumerations can be defined in either a Haskell-like syntax
+(useful for smaller enums) or a more traditional C-like syntax, which
+is often more readable for enumerations with more members. There are
+no lexical constraints on the identifiers that can be part of an
+enumeration. There are also no restrictions on the name of a
+enumeration type, other than it must be a valid identifier. For
+example, the following shows two ways to define the enumeration
+\ll{Foo} with three members, \ll{Bar}, \ll{Baz}, and \ll{quux}:
+
+\lstinputlisting{examples/enum1.sail}
+\lstinputlisting{examples/enum2.sail}
+
+For every enumeration type $E$ sail generates a
+\lstinline[mathescape]{num_of_$E$} function and a
+\lstinline[mathescape]{$E$_of_num} function, which for \ll{Foo} above
+will have the following definitions\footnote{It will ensure that the
+  generated function name \ll{arg} does not clash with any enumeration
+  constructor.}:
+\begin{lstlisting}
+val Foo_of_num : forall 'e, 0 <= 'e <= 2. int('e) -> Foo
+function Foo_of_num(arg) = match arg {
+  0 => Bar,
+  1 => Baz,
+  _ => quux
+}
+
+val num_of_Foo : Foo -> {'e, 0 <= 'e <= 2. int('e)}
+function num_of_Foo(arg) = match arg {
+  Bar  => 0,
+  Baz  => 1,
+  quux => 2
+}
+\end{lstlisting}
+Note that these functions are not automatically made into implicit
+casts.
+
+\subsubsection{Structs}
+
+Structs are defined using the struct keyword like so:
+\lstinputlisting{examples/struct.sail}
+
+If we have a struct \ll{foo : Foo}, its fields can be accessed by
+\ll{foo.bar}, and set as \ll{foo.bar = 0xF}. It can also be updated in
+a purely functional fashion using the construct \ll{\{foo with bar =
+  0xF\}}. There is no lexical restriction on the name of a struct or
+the names of its fields.
+
+\subsubsection{Unions}
+\label{sec:union}
+
+As an example, the \ll{maybe} type \'{a} la Haskell could be defined
+in Sail as follows:
+\begin{lstlisting}
+union maybe ('a : Type) = {
+  Just : 'a,
+  None : unit
+}
+\end{lstlisting}
+Constructors, such as \ll{Just} are called like functions, as in
+\ll{Just(3) : maybe(int)}. The \ll{None} constructor is also called in
+this way, as \ll{None()}. Notice that unlike in other languages, every
+constructor must be associated with a type---there are no nullary
+constructors. As with structs there are no lexical restrictions on the
+names of either the constructors nor the type itself, other than they
+must be valid identifiers.
+
+\subsubsection{Bitfields}
+
+The following example creates a bitfield type called \ll{cr} and a
+register \ll{CR} of that type.
+
+\lstinputlisting{examples/bitfield.sail}
+
+A bitfield definition creates a wrapper around a bit vector type, and
+generates getters and setters for the fields. For the setters, it is
+assumed that they are being used to set registers with the bitfield
+type\footnote{This functionality was originally called \emph{register
+    types} for this reason, but this was confusing because types of
+  registers are not always register types.}. If the bitvector is
+decreasing then indexes for the fields must also be in decreasing
+order, and vice-versa for an increasing vector. For the above example,
+the bitfield wrapper type will be the following:
+
+\begin{lstlisting}
+union cr = { Mk_cr(vector(8, dec, bit)) }
+\end{lstlisting}
+
+The complete vector can be accessed as \ll{CR.bits()}, and a register
+of type \ll{cr} can be set like \ll{CR->bits() = 0xFF}. Getting and
+setting individual fields can be done similarly, as \ll{CR.CR0()} and
+\ll{CR->CR0() = 0xF}. Internally, the bitfield definition will
+generate a \lstinline[mathescape]{_get_$F$} and
+\lstinline[mathescape]{_set_$F$} function for each field
+\lstinline[mathescape]{$F$}, and then overload them as
+\lstinline[mathescape]{_mod_$F$} for the accessor syntax. The setter
+takes the bitfield as a reference to a register, hence why we use the
+\ll{->} notation. For pure updates of values of type \ll{cr} a
+function \lstinline[mathescape]{update_$F$} is also defined. For more
+details on getters and setters, see Section~\ref{sec:getset}. A
+singleton bit in a bitfield definition, such as \ll{LT : 7} will be
+defined as a bitvector of length one, and not as a value of type
+\ll{bit}, which mirrors the behavior of ARM's ASL language.
+
+\subsection{Operators}
+
+Valid operators in Sail are sequences of the following non
+alpha-numeric characters: \verb#!%&*+-./:<>=@^|#. Additionally, any
+such sequence may be suffixed by an underscore followed by any valid
+identifier, so \verb#<=_u# or even \verb#<=_unsigned# are valid
+operator names. Operators may be left, right, or non-associative, and
+there are 10 different precedence levels, ranging from 0 to 9, with 9
+binding the tightest. To declare the precedence of an operator, we use a fixity declaration like:
+\begin{lstlisting}
+infix <=_u 4
+\end{lstlisting}
+For left or right associative operators, we'd use the keywords
+\ll{infixl} or \ll{infixr} respectively. An operator can be used
+anywhere a normal identifier could be used via the \ll{operator}
+keyword. As such, the \verb#<=_u# operator can be defined as:
+\begin{lstlisting}
+val operator <=_u : forall 'n. (bits('n), bits('n)) -> bool
+function operator <=_u(x, y) = unsigned(x) <= unsigned(y)
+\end{lstlisting}
+
+\paragraph{Builtin precedences}
+The precedence of several common operators are built into Sail. These
+include all the operators that are used in type-level numeric
+expressions, as well as several common operations such as equality,
+division, and modulus. The precedences for these operators are
+summarised in Table~\ref{tbl:operators}.
+
+\begin{table}[hbt]
+  \center
+  \begin{tabular}{| c || l | l | l |}
+    \hline
+    Precedence & Left associative & Non-associative & Right associative\\
+    \hline
+    9 & & &\\
+    \hline
+    8 & & & \ll{^}\\
+    \hline
+    7 & \ll{*}, \ll{/}, \ll{\%} & &\\
+    \hline
+    6 & \ll{+}, \ll{-} & &\\
+    \hline
+    5 & & &\\
+    \hline
+    4 & & \ll{<}, \ll{<=}, \ll{>}, \ll{>=}, \ll{!=}, \ll{=}, \ll{==} &\\
+    \hline
+    3 & & & \ll{&}\\
+    \hline
+    2 & & & \ll{|}\\
+    \hline
+    1 & & &\\
+    \hline
+    0 & & &\\
+    \hline
+  \end{tabular}
+  \caption{Default Sail operator precedences}
+  \label{tbl:operators}
+\end{table}
+
+\paragraph{Type operators}
+Sail allows operators to be used at the type level. For example, we
+could define a synonym for the builtin \ll{range} type as:
+\lstinputlisting{examples/type_operator.sail} Note that we can't use
+\ll{..} as an operator name, because that is reserved syntax for
+vector slicing. Operators used in types always share precedence with
+identically named operators at the expression level.
+
+\subsection{Ad-hoc Overloading}
+
+\subsection{Getters and Setters}
+\label{sec:getset}
+
+\subsection{Sizeof and Constraint}
+
+\subsection{Preludes and Default Environment}
+\label{sec:prelude}

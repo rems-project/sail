@@ -120,6 +120,9 @@ let options = Arg.align ([
   ( "-lem_mwords",
     Arg.Set Pretty_print_lem.opt_mwords,
     " use native machine word library for Lem output");
+  ( "-latex_prefix",
+    Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
+    " set a custom prefix for generated latex command (default sail)");
   ( "-mono_split",
     Arg.String (fun s ->
       let l = Util.split_on_char ':' s in
@@ -317,10 +320,8 @@ let main() =
                  exit 1
                end
            with Sys_error(_) -> Unix.mkdir latex_dir 0o755;
-           Sys.chdir latex_dir;
-           let chan = open_out "commands.tex" in
-           Latex.latex_dir := latex_dir;
-           output_string chan (Pretty_print_sail.to_string (Latex.latex_defs ast));
+           let chan = open_out (Filename.concat latex_dir "commands.tex") in
+           output_string chan (Pretty_print_sail.to_string (Latex.latex_defs latex_dir ast));
            close_out chan
          end
        else ());

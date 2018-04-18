@@ -1,0 +1,165 @@
+\section{Using Sail}
+\label{sec:usage}
+
+In its most basic use-case Sail is a command-line tool, analogous to
+a compiler: one gives it a list of input Sail files; it type-checks
+them and provides translated output.
+
+To simply typecheck Sail files, one can pass them on the command line
+with no other options, so for our \riscv\ spec:
+\begin{verbatim}
+sail prelude.sail riscv_types.sail riscv_sys.sail riscv.sail
+\end{verbatim}
+The sail files passed on the command line are simply treated as if
+they are one large file concatentated together, although the parser
+will keep track of locations on a per-file basis for
+error-reporting. As can be seen, this specification is split into
+several logical components. \verb+prelude.sail+ defines the initial
+type environment and builtins, \verb+riscv_types.sail+ gives type
+definitions used in the rest of the specification and then
+\verb+riscv_sys.sail+ and \verb+riscv.sail+ implement most of the
+specification.
+
+For more complex projects, once can use \ll{$include} statments in
+Sail source, for example: \TODO{use \# like C}
+\begin{lstlisting}
+$include <library.sail>
+$include "file.sail"
+\end{lstlisting}
+
+Here, Sail will look for \verb+library.sail+ in the
+\verb+$SAIL_DIR/lib+, where \verb+$SAIL_DIR+ is usually the root of
+the sail repository. It will search for \verb+file.sail+ relative to
+the location of the file containing the \ll{$include}. The space after
+the include is mandatory. Sail also supports \ll{$define},
+\ll{$ifdef}, and \ll{$ifndef}. These are things that are understood by
+Sail itself, not a separate preprocessor, and are handled after the
+AST is parsed~\footnote{This can affect precedence declarations for custom user defined operators---the precedence must be redeclared in the file you are including the operator into.}.
+
+\subsection{OCaml compilation}
+
+To compile a sail specification into OCaml, one calls Sail as
+\begin{verbatim}
+sail -ocaml FILES
+\end{verbatim}
+This will produce a version of the specification translated into
+Ocaml, which is placed into a directory called \verb+_sbuild+, similar
+to ocamlbuild's \verb+_build+ directory. The generated OCaml is
+intended to be fairly close to the original Sail source, and currently
+we do not attempt to do much optimisation on this output.
+
+The contents of the \verb+_sbuild+ directory are set up as an
+ocamlbuild project, so one can simply switch into that directory and run
+\begin{verbatim}
+ocamlbuild -use-ocamlfind out.cmx
+\end{verbatim}
+to compile the generated model. Currently the OCaml compilation
+requires that lem, linksem, and zarith are available as ocamlfind
+findable libraries, and also that the environment variable
+\verb+$SAIL_DIR+ is set to the root of the Sail repository.
+
+If the Sail specification contains a \ll{main} function with type
+\ll{unit -> unit} that implements a fetch/decode/execute loop then the
+OCaml backend can produce a working executable, by running
+\begin{verbatim}
+sail -o out -ocaml FILES
+\end{verbatim}
+Then one can run
+\begin{verbatim}
+./out ELF_FILE
+\end{verbatim}
+to simulate an ELF file on the specification. One can do \ll{$include
+  <elf.sail>} to gain access to some useful functions for accessing
+information about the loaded ELF file from within the Sail
+specification. In particular \verb+elf.sail+ defines a function
+\ll{elf_entry : unit -> int} which can be used to set the PC to the
+correct location. ELF loading is done by the linksem
+library\footnote{\url{https://github.com/rems-project/linksem}}.
+
+There is also an \verb+-ocaml_trace+ option which instruments the
+generated OCaml code with tracing information this option implies \verb+-ocaml+.
+
+\subsection{C compilation}
+
+WIP but basically like OCaml
+
+\subsection{Lem embedding}
+
+\TODO{Document generating lem}
+
+\subsection{Interactive mode}
+
+Compiling sail with
+\begin{verbatim}
+make isail
+\end{verbatim}
+builds it with a GHCi-style interactive interpreter. This can be used
+by starting Sail with \verb+sail -i+. If sail is not compiled with
+interactive support the \verb+-i+ flag does nothing. Sail will still
+handle any other command line arguments as per usual, including
+compiling to OCaml or Lem. One can also pass a list of commands to the
+interpreter by using the \verb+-is+ flag, as
+\begin{verbatim}
+sail -is FILE
+\end{verbatim}
+where \verb+FILE+ contains a list of commands. Once inside the interactive
+mode, a list of commands can be accessed by typing \verb+:commands+,
+while \verb+:help+ can be used to provide some documentation for each
+command.
+
+\subsection{Other options}
+
+Here we summarize most of the other options available for
+Sail. Debugging options (usually for debugging Sail itself) are
+indicated by starting with the letter d.
+
+\begin{itemize}
+\item {\verb+-v+} Print the Sail version.
+
+\item {\verb+-help+} Print a list of options.
+
+\item {\verb+-no_warn+} Turn off warnings.
+
+\item {\verb+-enum_casts+} Allow elements of enumerations to be
+  automatically casted to numbers.
+
+\item \verb+-memo_z3+ Memoize calls to the Z3 solver. This can greatly
+  improve typechecking times if you are repeatedly typechecking the
+  same specification while developing it.
+
+\item \verb+-no_effects+ Turn off effect checking. May break some
+  backends that assume effects are properly checked.
+
+\item \verb+-undefined_gen+ Generate functions that create undefined
+  values of user-defined types. Every type \ll{T} will get a
+  \ll{undefined_T} function created for it. This flag is set
+  automatically by some backends that want to re-write \ll{undefined}.
+
+\item \verb+-just_check+ Force Sail to terminate immediately after
+  typechecking.
+
+\item \verb+-dno_cast+ Force Sail to never perform type coercions
+  under any circumstances.
+
+\item \verb+-dtc_verbose <verbosity>+ Make the typechecker print a
+  trace of typing judgements. If the verbosity level is 1, then this
+  should only include fairly readable judgements about checking and
+  inference rules. If verbosity is 2 then it will include a large
+  amount of debugging information. This option can be useful to
+  diagnose tricky type-errors, especially if the error message isn't
+  very good.
+
+\item \verb+-ddump_tc_ast+ Write the typechecked AST to stdout after
+  typechecking
+
+\item \verb+-ddump_rewrite_ast <prefix>+ Write the AST out after each
+  re-writing pass. The output from each pass is placed in a file
+  starting with \verb+prefix+.
+
+\item \verb+-dsanity+ Perform extra sanity checks on the AST.
+
+\item \verb+-dmagic_hash+ Allow the \# symbol in identifiers. It's
+  currently used as a magic symbol to separate generated identifiers
+  from those the user can write, so this option allows for the output
+  of the various other debugging options to be fed back into Sail.
+\end{itemize}
