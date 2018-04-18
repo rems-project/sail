@@ -67,6 +67,11 @@ let of_bits_oracle bits =
 val of_bits_fail : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
 let of_bits_fail bits = maybe_fail "of_bits" (of_bits bits)
 
+val mword_oracle : forall 'rv 'a 'e. Size 'a => unit -> monad 'rv (mword 'a) 'e
+let mword_oracle () =
+  bools_of_bits_oracle (repeat [BU] (integerFromNat size)) >>= (fun bs ->
+  return (wordFromBitlist bs))
+
 val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec whileM vars cond body =

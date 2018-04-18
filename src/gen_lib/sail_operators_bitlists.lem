@@ -129,39 +129,46 @@ let arith_op_double_bl op sign l r =
 val add_vec   : list bitU -> list bitU -> list bitU
 val adds_vec  : list bitU -> list bitU -> list bitU
 val sub_vec   : list bitU -> list bitU -> list bitU
+val subs_vec  : list bitU -> list bitU -> list bitU
 val mult_vec  : list bitU -> list bitU -> list bitU
 val mults_vec : list bitU -> list bitU -> list bitU
 let add_vec   = arith_op_bv integerAdd false
 let adds_vec  = arith_op_bv integerAdd true
 let sub_vec   = arith_op_bv integerMinus false
+let subs_vec  = arith_op_bv integerMinus true
 let mult_vec  = arith_op_double_bl integerMult false
 let mults_vec = arith_op_double_bl integerMult true
 
 val add_vec_int       : list bitU -> integer -> list bitU
 val adds_vec_int      : list bitU -> integer -> list bitU
 val sub_vec_int       : list bitU -> integer -> list bitU
+val subs_vec_int      : list bitU -> integer -> list bitU
 val mult_vec_int      : list bitU -> integer -> list bitU
 val mults_vec_int     : list bitU -> integer -> list bitU
 let add_vec_int   l r = arith_op_bv_int integerAdd false l r
 let adds_vec_int  l r = arith_op_bv_int integerAdd true l r
 let sub_vec_int   l r = arith_op_bv_int integerMinus false l r
+let subs_vec_int  l r = arith_op_bv_int integerMinus true l r
 let mult_vec_int  l r = arith_op_double_bl integerMult false l (of_int (length l) r)
 let mults_vec_int l r = arith_op_double_bl integerMult true l (of_int (length l) r)
 
 val add_int_vec       : integer -> list bitU -> list bitU
 val adds_int_vec      : integer -> list bitU -> list bitU
 val sub_int_vec       : integer -> list bitU -> list bitU
+val subs_int_vec      : integer -> list bitU -> list bitU
 val mult_int_vec      : integer -> list bitU -> list bitU
 val mults_int_vec     : integer -> list bitU -> list bitU
 let add_int_vec   l r = arith_op_int_bv integerAdd false l r
 let adds_int_vec  l r = arith_op_int_bv integerAdd true l r
 let sub_int_vec   l r = arith_op_int_bv integerMinus false l r
+let subs_int_vec  l r = arith_op_int_bv integerMinus true l r
 let mult_int_vec  l r = arith_op_double_bl integerMult false (of_int (length r) l) r
 let mults_int_vec l r = arith_op_double_bl integerMult true (of_int (length r) l) r
 
 val add_vec_bit      : list bitU -> bitU -> list bitU
 val adds_vec_bit     : list bitU -> bitU -> list bitU
 val sub_vec_bit      : list bitU -> bitU -> list bitU
+val subs_vec_bit     : list bitU -> bitU -> list bitU
 
 let add_vec_bool       l r = arith_op_bv_bool integerAdd false l r
 let add_vec_bit_maybe  l r = arith_op_bv_bit integerAdd false l r
@@ -180,6 +187,12 @@ let sub_vec_bit_maybe   l r = arith_op_bv_bit integerMinus false l r
 let sub_vec_bit_fail    l r = maybe_fail "sub_vec_bit" (sub_vec_bit_maybe l r)
 let sub_vec_bit_oracle  l r = bool_of_bitU_oracle r >>= (fun r -> return (sub_vec_bool l r))
 let sub_vec_bit         l r = fromMaybe (repeat [BU] (length l)) (sub_vec_bit_maybe l r)
+
+let subs_vec_bool       l r = arith_op_bv_bool integerMinus true l r
+let subs_vec_bit_maybe  l r = arith_op_bv_bit integerMinus true l r
+let subs_vec_bit_fail   l r = maybe_fail "sub_vec_bit" (subs_vec_bit_maybe l r)
+let subs_vec_bit_oracle l r = bool_of_bitU_oracle r >>= (fun r -> return (subs_vec_bool l r))
+let subs_vec_bit        l r = fromMaybe (repeat [BU] (length l)) (subs_vec_bit_maybe l r)
 
 (*val add_overflow_vec         : list bitU -> list bitU -> (list bitU * bitU * bitU)
 val add_overflow_vec_signed  : list bitU -> list bitU -> (list bitU * bitU * bitU)
@@ -214,17 +227,50 @@ let arith_shiftr = arith_shiftr_bv
 let rotl         = rotl_bv
 let rotr         = rotr_bv
 
-val mod_vec       : list bitU -> list bitU -> list bitU
-val quot_vec      : list bitU -> list bitU -> list bitU
-val quots_vec     : list bitU -> list bitU -> list bitU
-let mod_vec   l r = fromMaybe (repeat [BU] (length l)) (mod_bv l r)
-let quot_vec  l r = fromMaybe (repeat [BU] (length l)) (quot_bv l r)
-let quots_vec l r = fromMaybe (repeat [BU] (length l)) (quots_bv l r)
+val mod_vec        : list bitU -> list bitU -> list bitU
+val mod_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)
+val mod_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+val mod_vec_oracle : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+let mod_vec        l r = fromMaybe (repeat [BU] (length l)) (mod_bv l r)
+let mod_vec_maybe  l r = mod_bv l r
+let mod_vec_fail   l r = maybe_fail "mod_vec" (mod_bv l r)
+let mod_vec_oracle l r = of_bits_oracle (mod_vec l r)
 
-val mod_vec_int      : list bitU -> integer -> list bitU
-val quot_vec_int     : list bitU -> integer -> list bitU
-let mod_vec_int  l r = fromMaybe (repeat [BU] (length l)) (mod_bv_int l r)
-let quot_vec_int l r = fromMaybe (repeat [BU] (length l)) (quot_bv_int l r)
+val quot_vec        : list bitU -> list bitU -> list bitU
+val quot_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)
+val quot_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+val quot_vec_oracle : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+let quot_vec        l r = fromMaybe (repeat [BU] (length l)) (quot_bv l r)
+let quot_vec_maybe  l r = quot_bv l r
+let quot_vec_fail   l r = maybe_fail "quot_vec" (quot_bv l r)
+let quot_vec_oracle l r = of_bits_oracle (quot_vec l r)
+
+val quots_vec        : list bitU -> list bitU -> list bitU
+val quots_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)
+val quots_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+val quots_vec_oracle : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+let quots_vec        l r = fromMaybe (repeat [BU] (length l)) (quots_bv l r)
+let quots_vec_maybe  l r = quots_bv l r
+let quots_vec_fail   l r = maybe_fail "quots_vec" (quots_bv l r)
+let quots_vec_oracle l r = of_bits_oracle (quots_vec l r)
+
+val mod_vec_int        : list bitU -> integer -> list bitU
+val mod_vec_int_maybe  : list bitU -> integer -> maybe (list bitU)
+val mod_vec_int_fail   : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val mod_vec_int_oracle : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+let mod_vec_int        l r = fromMaybe (repeat [BU] (length l)) (mod_bv_int l r)
+let mod_vec_int_maybe  l r = mod_bv_int l r
+let mod_vec_int_fail   l r = maybe_fail "mod_vec_int" (mod_bv_int l r)
+let mod_vec_int_oracle l r = of_bits_oracle (mod_vec_int l r)
+
+val quot_vec_int        : list bitU -> integer -> list bitU
+val quot_vec_int_maybe  : list bitU -> integer -> maybe (list bitU)
+val quot_vec_int_fail   : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val quot_vec_int_oracle : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+let quot_vec_int        l r = fromMaybe (repeat [BU] (length l)) (quot_bv_int l r)
+let quot_vec_int_maybe  l r = quot_bv_int l r
+let quot_vec_int_fail   l r = maybe_fail "quot_vec_int" (quot_bv_int l r)
+let quot_vec_int_oracle l r = of_bits_oracle (quot_vec_int l r)
 
 val replicate_bits : list bitU -> integer -> list bitU
 let replicate_bits = replicate_bits_bv

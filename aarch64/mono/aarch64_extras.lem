@@ -35,10 +35,10 @@ let get_slice_int len n lo = of_bools (get_slice_int_bl len n lo)
 val set_slice_int :  forall 'a. Size 'a => integer -> integer -> integer -> mword 'a -> integer
 let set_slice_int len n lo v =
   let hi = lo + len - 1 in
-  let bs = bool_list_of_int n in
-  let len_n = max (hi + 1) (integerFromNat (List.length bs)) in
-  let ext_bs = exts_bools len_n bs in
-  signed_of_bools (update_subrange_list false ext_bs hi lo (bitlistFromWord v))
+  let bs = bools_of_int (hi + 1) n in
+  (*let len_n = max (hi + 1) (integerFromNat (List.length bs)) in
+  let ext_bs = exts_bools len_n bs in*)
+  signed_of_bools (update_subrange_list false bs hi lo (bitlistFromWord v))
 
 (*let ext_slice signed v i j =
   let len = length v in

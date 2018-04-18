@@ -23,6 +23,23 @@ lemma just_list_cases:
         | (Some) ys where "xs = map Some ys" and "y = Some ys"
   using assms by (cases y) auto
 
+lemma repeat_singleton_replicate[simp]:
+  "repeat [x] n = replicate (nat n) x"
+proof (induction n)
+  case (nonneg n)
+  have "nat (1 + int m) = Suc m" for m by auto
+  then show ?case by (induction n) auto
+next
+  case (neg n)
+  then show ?case by auto
+qed
+
+lemma bool_of_bitU_simps[simp]:
+  "bool_of_bitU B0 = Some False"
+  "bool_of_bitU B1 = Some True"
+  "bool_of_bitU BU = None"
+  by (auto simp: bool_of_bitU_def)
+
 lemma bitops_bitU_of_bool[simp]:
   "and_bit (bitU_of_bool x) (bitU_of_bool y) = bitU_of_bool (x \<and> y)"
   "or_bit (bitU_of_bool x) (bitU_of_bool y) = bitU_of_bool (x \<or> y)"
@@ -49,11 +66,28 @@ lemmas BC_mword_defs = instance_Sail_values_Bitvector_Machine_word_mword_dict_de
   subrange_list_def subrange_list_inc_def subrange_list_dec_def
   update_subrange_list_def update_subrange_list_inc_def update_subrange_list_dec_def
 
+declare size_itself_int_def[simp]
+declare size_itself_def[simp]
+declare word_size[simp]
+
+lemma int_of_mword_simps[simp]:
+  "int_of_mword False w = uint w"
+  "int_of_mword True w = sint w"
+  "int_of_bv BC_mword False w = Some (uint w)"
+  "int_of_bv BC_mword True w = Some (sint w)"
+  by (auto simp: int_of_mword_def int_of_bv_def BC_mword_defs)
+
 lemma BC_mword_simps[simp]:
   "unsigned_method BC_mword a = Some (uint a)"
   "signed_method BC_mword a = Some (sint a)"
   "length_method BC_mword (a :: ('a :: len) word) = int (LENGTH('a))"
-  by (auto simp: BC_mword_defs word_size)
+  by (auto simp: BC_mword_defs)
+
+lemma of_bits_mword_of_bl[simp]:
+  assumes "just_list (map bool_of_bitU bus) = Some bs"
+  shows "of_bits_method BC_mword bus = Some (of_bl bs)"
+    and "of_bits_failwith BC_mword bus = of_bl bs"
+  using assms by (auto simp: BC_mword_defs of_bits_failwith_def maybe_failwith_def)
 
 lemma nat_of_bits_aux_bl_to_bin_aux:
   "nat_of_bools_aux acc bs = nat (bl_to_bin_aux bs (int acc))"
@@ -97,12 +131,6 @@ lemma update_subrange_list_dec_drop_take:
 
 declare access_list_inc_def[simp]
 
-lemma access_list_dec_nth:
-  assumes "0 \<le> i"
-  shows "access_list_dec xs i = xs ! (length xs - nat (i + 1))"
-  using assms
-  by (auto simp: access_list_dec_def add.commute diff_diff_add nat_minus_as_int)
-
 lemma access_list_dec_rev_nth:
   assumes "0 \<le> i" and "nat i < length xs"
   shows "access_list_dec xs i = rev xs ! (nat i)"
@@ -114,14 +142,65 @@ lemma access_bv_dec_mword[simp]:
   assumes "0 \<le> n" and "nat n < LENGTH('a)"
   shows "access_bv_dec BC_mword w n = bitU_of_bool (w !! (nat n))"
   using assms unfolding access_bv_dec_def access_list_def
-  by (auto simp: access_list_dec_rev_nth BC_mword_defs rev_map test_bit_bl word_size)
+  by (auto simp: access_list_dec_rev_nth BC_mword_defs rev_map test_bit_bl)
+
+lemma access_list_dec_nth[simp]:
+  assumes "0 \<le> i"
+  shows "access_list_dec xs i = xs ! (length xs - nat (i + 1))"
+  using assms
+  by (auto simp: access_list_dec_def add.commute diff_diff_add nat_minus_as_int)
 
 lemma update_list_inc_update[simp]:
   "update_list_inc xs n x = xs[nat n := x]"
   by (auto simp: update_list_inc_def)
 
-lemma update_list_dec_update:
+lemma update_list_dec_update[simp]:
   "update_list_dec xs n x = xs[length xs - nat (n + 1) := x]"
   by (auto simp: update_list_dec_def add.commute diff_diff_add nat_minus_as_int)
+
+lemma bools_of_nat_aux_simps[simp]:
+  "\<And>len. len \<le> 0 \<Longrightarrow> bools_of_nat_aux len x acc = acc"
+  "\<And>len. bools_of_nat_aux (int (Suc len)) x acc =
+     bools_of_nat_aux (int len) (x div 2) ((if x mod 2 = 1 then True else False) # acc)"
+  by auto
+declare bools_of_nat_aux.simps[simp del]
+
+lemma bools_of_nat_aux_bin_to_bl_aux:
+  "bools_of_nat_aux len n acc = bin_to_bl_aux (nat len) (int n) acc"
+proof (cases len)
+  case (nonneg len')
+  show ?thesis unfolding nonneg
+  proof (induction len' arbitrary: n acc)
+    case (Suc len'' n acc)
+    then show ?case
+      using zmod_int[of n 2]
+      by (auto simp del: of_nat_simps simp add: bin_rest_def bin_last_def zdiv_int)
+  qed auto
+qed auto
+
+lemma bools_of_nat_bin_to_bl[simp]:
+  "bools_of_nat len n = bin_to_bl (nat len) (int n)"
+  by (auto simp: bools_of_nat_def bools_of_nat_aux_bin_to_bl_aux)
+
+lemma add_one_bool_ignore_overflow_aux_rbl_succ[simp]:
+  "add_one_bool_ignore_overflow_aux xs = rbl_succ xs"
+  by (induction xs) auto
+
+lemma add_one_bool_ignore_overflow_rbl_succ[simp]:
+  "add_one_bool_ignore_overflow xs = rev (rbl_succ (rev xs))"
+  unfolding add_one_bool_ignore_overflow_def by auto
+
+lemma map_Not_bin_to_bl:
+  "map Not (bin_to_bl_aux len n acc) = bin_to_bl_aux len (-n - 1) (map Not acc)"
+proof (induction len arbitrary: n acc)
+  case (Suc len n acc)
+  moreover have "(- (n div 2) - 1) = ((-n - 1) div 2)" by auto
+  moreover have "(n mod 2 = 0) = ((- n - 1) mod 2 = 1)" by presburger
+  ultimately show ?case by (auto simp: bin_rest_def bin_last_def)
+qed auto
+
+lemma bools_of_int_bin_to_bl[simp]:
+  "bools_of_int (int len) n = bin_to_bl len n"
+  by (auto simp: bools_of_int_def Let_def map_Not_bin_to_bl rbl_succ[unfolded bin_to_bl_def])
 
 end

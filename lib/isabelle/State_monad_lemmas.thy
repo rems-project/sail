@@ -32,6 +32,9 @@ lemma bindS_readS: "bindS (readS f) m = (\<lambda>s. m (f s) s)"
 lemma bindS_updateS: "bindS (updateS f) m = (\<lambda>s. m () (f s))"
   by (auto simp: bindS_def updateS_def returnS_def)
 
+lemma bindS_assertS_True[simp]: "bindS (assert_expS True msg) f = f ()"
+  by (auto simp: assert_expS_def)
+
 
 lemma result_cases:
   fixes r :: "('a, 'e) result"
@@ -125,6 +128,13 @@ lemma try_catchS_intros:
   "\<And>m h s msg s'. (Ex (Failure msg), s') \<in> m s \<Longrightarrow> (Ex (Failure msg), s') \<in> try_catchS m h s"
   "\<And>m h s e s'' r s'. (Ex (Throw e), s'') \<in> m s \<Longrightarrow> (r, s') \<in> h e s'' \<Longrightarrow> (r, s') \<in> try_catchS m h s"
   by (auto simp: try_catchS_def returnS_def intro: bexI[rotated])
+
+lemma no_Ex_basic_builtins[simp]:
+  "\<And>s e s' a. (Ex e, s') \<in> returnS a s \<longleftrightarrow> False"
+  "\<And>s e s' f. (Ex e, s') \<in> readS f s \<longleftrightarrow> False"
+  "\<And>s e s' f. (Ex e, s') \<in> updateS f s \<longleftrightarrow> False"
+  "\<And>s e s' xs. (Ex e, s') \<in> chooseS xs s \<longleftrightarrow> False"
+  by (auto simp: readS_def updateS_def returnS_def chooseS_def)
 
 fun ignore_throw_aux :: "(('a, 'e1) result \<times> 's) \<Rightarrow> (('a, 'e2) result \<times> 's) set" where
   "ignore_throw_aux (Value a, s') = {(Value a, s')}"

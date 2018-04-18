@@ -126,39 +126,46 @@ let not_vec = Machine_word.lNot
 val add_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val adds_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val sub_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+val subs_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
 val mult_vec  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b
 val mults_vec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b
 let add_vec   l r = arith_op_bv integerAdd   false l r
 let adds_vec  l r = arith_op_bv integerAdd   true  l r
-let sub_vec   l r = arith_op_bv integerMinus true  l r
+let sub_vec   l r = arith_op_bv integerMinus false l r
+let subs_vec  l r = arith_op_bv integerMinus true  l r
 let mult_vec  l r = arith_op_bv integerMult  false (zeroExtend l : mword 'b) (zeroExtend r : mword 'b)
 let mults_vec l r = arith_op_bv integerMult  true  (signExtend l : mword 'b) (signExtend r : mword 'b)
 
 val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val adds_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
+val subs_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 val mults_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 let add_vec_int   l r = arith_op_bv_int integerAdd   false l r
 let adds_vec_int  l r = arith_op_bv_int integerAdd   true  l r
-let sub_vec_int   l r = arith_op_bv_int integerMinus true  l r
+let sub_vec_int   l r = arith_op_bv_int integerMinus false l r
+let subs_vec_int  l r = arith_op_bv_int integerMinus true  l r
 let mult_vec_int  l r = arith_op_bv_int integerMult  false (zeroExtend l : mword 'b) r
 let mults_vec_int l r = arith_op_bv_int integerMult  true  (signExtend l : mword 'b) r
 
 val add_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
 val adds_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
 val sub_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
+val subs_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
 val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
 val mults_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
 let add_int_vec   l r = arith_op_int_bv integerAdd   false l r
 let adds_int_vec  l r = arith_op_int_bv integerAdd   true  l r
-let sub_int_vec   l r = arith_op_int_bv integerMinus true  l r
+let sub_int_vec   l r = arith_op_int_bv integerMinus false l r
+let subs_int_vec  l r = arith_op_int_bv integerMinus true  l r
 let mult_int_vec  l r = arith_op_int_bv integerMult  false l (zeroExtend r : mword 'b)
 let mults_int_vec l r = arith_op_int_bv integerMult  true  l (signExtend r : mword 'b)
 
 val add_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
 val adds_vec_bool : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
 val sub_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
+val subs_vec_bool : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
 
 let add_vec_bool        l r = arith_op_bv_bool integerAdd false l r
 let add_vec_bit_maybe   l r = Maybe.map (add_vec_bool l) (bool_of_bitU r)
@@ -172,11 +179,17 @@ let adds_vec_bit_fail   l r = bool_of_bitU_fail r >>= (fun r -> return (adds_vec
 let adds_vec_bit_oracle l r = bool_of_bitU_oracle r >>= (fun r -> return (adds_vec_bool l r))
 let adds_vec_bit        l r = maybe_failwith (adds_vec_bit_maybe l r)
 
-let sub_vec_bool        l r = arith_op_bv_bool integerMinus true  l r
+let sub_vec_bool        l r = arith_op_bv_bool integerMinus false l r
 let sub_vec_bit_maybe   l r = Maybe.map (sub_vec_bool l) (bool_of_bitU r)
 let sub_vec_bit_fail    l r = bool_of_bitU_fail r >>= (fun r -> return (sub_vec_bool l r))
 let sub_vec_bit_oracle  l r = bool_of_bitU_oracle r >>= (fun r -> return (sub_vec_bool l r))
 let sub_vec_bit         l r = maybe_failwith (sub_vec_bit_maybe  l r)
+
+let subs_vec_bool       l r = arith_op_bv_bool integerMinus true  l r
+let subs_vec_bit_maybe  l r = Maybe.map (subs_vec_bool l) (bool_of_bitU r)
+let subs_vec_bit_fail   l r = bool_of_bitU_fail r >>= (fun r -> return (subs_vec_bool l r))
+let subs_vec_bit_oracle l r = bool_of_bitU_oracle r >>= (fun r -> return (subs_vec_bool l r))
+let subs_vec_bit        l r = maybe_failwith (subs_vec_bit_maybe  l r)
 
 (* TODO
 val maybe_mword_of_bits_overflow : forall 'a. Size 'a => (list bitU * bitU * bitU) -> maybe (mword 'a * bitU * bitU)
@@ -216,17 +229,70 @@ let arith_shiftr = arith_shiftr_mword
 let rotl         = rotl_mword
 let rotr         = rotr_mword
 
-val mod_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val quot_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val quots_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-let mod_vec   = mod_mword
-let quot_vec  = quot_mword
-let quots_vec = quots_mword
+val mod_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+val mod_vec_maybe  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a)
+val mod_vec_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e
+val mod_vec_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e
+let mod_vec        l r = mod_mword l r
+let mod_vec_maybe  l r = mod_bv l r
+let mod_vec_fail   l r = maybe_fail "mod_vec" (mod_bv l r)
+let mod_vec_oracle l r =
+  match (mod_bv l r) with
+    | Just w -> return w
+    | Nothing -> mword_oracle ()
+  end
 
-val mod_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val quot_vec_int : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-let mod_vec_int  = mod_mword_int
-let quot_vec_int = quot_mword_int
+val quot_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+val quot_vec_maybe  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a)
+val quot_vec_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e
+val quot_vec_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e
+let quot_vec        l r = quot_mword l r
+let quot_vec_maybe  l r = quot_bv l r
+let quot_vec_fail   l r = maybe_fail "quot_vec" (quot_bv l r)
+let quot_vec_oracle l r =
+  match (quot_bv l r) with
+    | Just w -> return w
+    | Nothing -> mword_oracle ()
+  end
+
+val quots_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
+val quots_vec_maybe  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a)
+val quots_vec_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e
+val quots_vec_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e
+let quots_vec        l r = quots_mword l r
+let quots_vec_maybe  l r = quots_bv l r
+let quots_vec_fail   l r = maybe_fail "quots_vec" (quots_bv l r)
+let quots_vec_oracle l r =
+  match (quots_bv l r) with
+    | Just w -> return w
+    | Nothing -> mword_oracle ()
+  end
+
+val mod_vec_int        : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
+val mod_vec_int_maybe  : forall 'a. Size 'a => mword 'a -> integer -> maybe (mword 'a)
+val mod_vec_int_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e
+val mod_vec_int_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e
+let mod_vec_int        l r = mod_mword_int l r
+let mod_vec_int_maybe  l r = mod_bv_int l r
+let mod_vec_int_fail   l r = maybe_fail "mod_vec_int" (mod_bv_int l r)
+let mod_vec_int_oracle l r =
+  match (mod_bv_int l r) with
+    | Just w -> return w
+    | Nothing -> mword_oracle ()
+  end
+
+val quot_vec_int        : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
+val quot_vec_int_maybe  : forall 'a. Size 'a => mword 'a -> integer -> maybe (mword 'a)
+val quot_vec_int_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e
+val quot_vec_int_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e
+let quot_vec_int        l r = quot_mword_int l r
+let quot_vec_int_maybe  l r = quot_bv_int l r
+let quot_vec_int_fail   l r = maybe_fail "quot_vec_int" (quot_bv_int l r)
+let quot_vec_int_oracle l r =
+  match (quot_bv_int l r) with
+    | Just w -> return w
+    | Nothing -> mword_oracle ()
+  end
 
 val replicate_bits : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 let replicate_bits v count = wordFromBitlist (repeat (bitlistFromWord v) count)

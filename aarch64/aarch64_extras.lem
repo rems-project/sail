@@ -35,10 +35,8 @@ let get_slice_int len n lo = of_bools (get_slice_int_bl len n lo)
 val set_slice_int : integer -> integer -> integer -> list bitU -> integer
 let set_slice_int len n lo v =
   let hi = lo + len - 1 in
-  let bs = bit_list_of_int n in
-  let len_n = max (hi + 1) (integerFromNat (List.length bs)) in
-  let ext_bs = exts_bits len_n bs in
-  maybe_failwith (signed (update_subrange_list false ext_bs hi lo (bits_of v)))
+  let bs = bits_of_int (hi + 1) n in
+  maybe_failwith (signed_of_bits (update_subrange_list false bs hi lo v))
 
 (*let ext_slice signed v i j =
   let len = length v in
@@ -110,10 +108,14 @@ let undefined_range i j = return i
 let undefined_atom i = return i
 let undefined_nat () = return (0:ii)
 
+val write_ram : forall 'rv 'e.
+  integer -> integer -> list bitU -> list bitU -> list bitU -> monad 'rv unit 'e
 let write_ram addrsize size hexRAM address value =
   write_mem_ea Write_plain address size >>
   write_mem_val value >>= fun _ ->
   return ()
 
+val read_ram : forall 'rv 'e.
+  integer -> integer -> list bitU -> list bitU -> monad 'rv (list bitU) 'e
 let read_ram addrsize size hexRAM address =
   read_mem Read_plain address size

@@ -13,7 +13,7 @@ lemma All_bind_dom: "bind_dom (m, f)"
   by (induction m) (auto intro: bind.domintros)
 
 termination bind using All_bind_dom by auto
-lemmas bind_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Write_ea Barrier Write_reg Fail Error Exception] = bind.induct
+lemmas bind_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Write_ea Barrier Write_reg Fail Exception] = bind.induct
 
 lemma bind_return[simp]: "bind (return a) f = f a"
   by (auto simp: return_def)
@@ -21,10 +21,13 @@ lemma bind_return[simp]: "bind (return a) f = f a"
 lemma bind_assoc[simp]: "bind (bind m f) g = bind m (\<lambda>x. bind (f x) g)"
   by (induction m f arbitrary: g rule: bind.induct) auto
 
+lemma bind_assert_True[simp]: "bind (assert_exp True msg) f = f ()"
+  by (auto simp: assert_exp_def)
+
 lemma All_try_catch_dom: "try_catch_dom (m, h)"
   by (induction m) (auto intro: try_catch.domintros)
 termination try_catch using All_try_catch_dom by auto
-lemmas try_catch_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Write_ea Barrier Write_reg Fail Error Exception] = try_catch.induct
+lemmas try_catch_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Write_ea Barrier Write_reg Fail Exception] = try_catch.induct
 
 datatype 'regval event =
   (* Request to read memory *)

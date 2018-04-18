@@ -253,12 +253,13 @@ let inline (+.) x y = xor_bit x y
 
 (*** Bool lists ***)
 
-val bools_of_nat_aux : natural -> list bool
-let rec bools_of_nat_aux x =
-  if x = 0 then []
-  else (if x mod 2 = 1 then true else false) :: bools_of_nat_aux (x / 2)
+val bools_of_nat_aux : integer -> natural -> list bool -> list bool
+let rec bools_of_nat_aux len x acc =
+  if len <= 0 then acc
+  else bools_of_nat_aux (len - 1) (x / 2) ((if x mod 2 = 1 then true else false) :: acc)
+  (*else (if x mod 2 = 1 then true else false) :: bools_of_nat_aux (x / 2)*)
 declare {isabelle} termination_argument bools_of_nat_aux = automatic
-let bools_of_nat n = List.reverse (bools_of_nat_aux n)
+let bools_of_nat len n = bools_of_nat_aux len n [] (*List.reverse (bools_of_nat_aux n)*)
 
 val nat_of_bools_aux : natural -> list bool -> natural
 let rec nat_of_bools_aux acc bs = match bs with
@@ -310,18 +311,22 @@ declare {isabelle} termination_argument add_one_bool_ignore_overflow_aux = autom
 let add_one_bool_ignore_overflow bits =
   List.reverse (add_one_bool_ignore_overflow_aux (List.reverse bits))
 
-let bool_list_of_int n =
+(*let bool_list_of_int n =
   let bs_abs = false :: bools_of_nat (naturalFromInteger (abs n)) in
   if n >= (0 : integer) then bs_abs
   else add_one_bool_ignore_overflow (List.map not bs_abs)
-let bools_of_int len n = exts_bools len (bool_list_of_int n)
+let bools_of_int len n = exts_bools len (bool_list_of_int n)*)
+let bools_of_int len n =
+  let bs_abs = bools_of_nat len (naturalFromInteger (abs n)) in
+  if n >= (0 : integer) then bs_abs
+  else add_one_bool_ignore_overflow (List.map not bs_abs)
 
 (*** Bit lists ***)
 
 val has_undefined_bits : list bitU -> bool
 let has_undefined_bits bs = List.any (function BU -> true | _ -> false end) bs
 
-let bits_of_nat n = List.map bitU_of_bool (bools_of_nat n)
+let bits_of_nat len n = List.map bitU_of_bool (bools_of_nat len n)
 
 let nat_of_bits bits =
   match (just_list (List.map bool_of_bitU bits)) with
@@ -369,8 +374,9 @@ declare {isabelle} termination_argument add_one_bit_ignore_overflow_aux = automa
 let add_one_bit_ignore_overflow bits =
   List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
 
-let bit_list_of_int n = List.map bitU_of_bool (bool_list_of_int n)
-let bits_of_int len n = exts_bits len (bit_list_of_int n)
+(*let bit_list_of_int n = List.map bitU_of_bool (bool_list_of_int n)
+let bits_of_int len n = exts_bits len (bit_list_of_int n)*)
+let bits_of_int len n = List.map bitU_of_bool (bools_of_int len n)
 
 val arith_op_bits :
   (integer -> integer -> integer) -> bool -> list bitU -> list bitU -> list bitU
@@ -628,7 +634,7 @@ declare {isabelle} termination_argument byte_chunks = automatic
 val bytes_of_bits : forall 'a. Bitvector 'a => 'a -> maybe (list memory_byte)
 let bytes_of_bits bs = byte_chunks (bits_of bs)
 
-val bits_of_bytes : forall 'a. Bitvector 'a => list memory_byte -> list bitU
+val bits_of_bytes : list memory_byte -> list bitU
 let bits_of_bytes bs = List.concat (List.map bits_of bs)
 
 let mem_bytes_of_bits bs = Maybe.map List.reverse (bytes_of_bits bs)

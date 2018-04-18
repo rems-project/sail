@@ -34,10 +34,8 @@ type monad 'regval 'a 'e =
   | Print of string * monad 'regval 'a 'e
   (*Result of a failed assert with possible error message to report*)
   | Fail of string
-  | Error of string
   (* Exception of type 'e *)
   | Exception of 'e
-  (* TODO: Reading/writing tags *)
 
 val return : forall 'rv 'a 'e. 'a -> monad 'rv 'a 'e
 let return a = Done a
@@ -58,7 +56,6 @@ let rec bind m f = match m with
   | Write_reg r v k ->    Write_reg r v    (bind k f)
   | Print msg k ->        Print msg        (bind k f)
   | Fail descr ->         Fail descr
-  | Error descr ->        Error descr
   | Exception e ->        Exception e
 end
 
@@ -90,7 +87,6 @@ let rec try_catch m h = match m with
   | Write_reg r v k ->    Write_reg r v    (try_catch k h)
   | Print msg k ->        Print msg        (try_catch k h)
   | Fail descr ->         Fail descr
-  | Error descr ->        Error descr
   | Exception e ->        h e
 end
 
@@ -165,7 +161,7 @@ let read_reg reg =
   let k v =
     match reg.of_regval v with
       | Just v -> Done v
-      | Nothing -> Error "read_reg: unrecognised value"
+      | Nothing -> Fail "read_reg: unrecognised value"
     end
   in
   Read_reg reg.name k

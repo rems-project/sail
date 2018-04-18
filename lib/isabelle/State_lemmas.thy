@@ -19,6 +19,8 @@ lemma Value_liftState_Run:
       auto simp add: failS_def throwS_def returnS_def simp del: read_regvalS.simps;
       blast elim: Value_bindS_elim)
 
+lemmas liftState_if_distrib[simp] = if_distrib[where f = "liftState ra" for ra]
+
 lemma liftState_throw[simp]: "liftState r (throw e) = throwS e" by (auto simp: throw_def)
 lemma liftState_assert[simp]: "liftState r (assert_exp c msg) = assert_expS c msg" by (auto simp: assert_exp_def assert_expS_def)
 lemma liftState_exit[simp]: "liftState r (exit0 ()) = exitS ()" by (auto simp: exit0_def exitS_def)
