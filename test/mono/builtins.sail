@@ -1,4 +1,5 @@
 $include <smt.sail>
+$include <arith.sail>
 $include <flow.sail>
 $include <vector_dec.sail>
 
@@ -23,6 +24,13 @@ function launder(x) = {
   x
 }
 
+/* A function that constant propagation won't touch */
+val launder_int : int -> int effect {escape}
+function launder_int(x) = {
+  assert(true);
+  x
+}
+
 val test : bool -> unit effect {escape}
 
 function test(b) = {
@@ -30,10 +38,13 @@ function test(b) = {
     let x : bits('n) = match 'n { 8 => 0x12, 16 => 0x1234 };
     let x' : bits('n) = launder(x);
     let y : bits('n) = match 'n { 8 => 0x35, 16 => 0x5637 };
+    let z : bits(8) = slice(x,5,3) @ slice(x,0,5);
+    assert(slice(x,0,8) == z, "slice, concat, == by propagation");
     assert(x != y, "!= by propagation");
     assert(slice(x, 0, 4) == slice(x',0,4), "propagated slice == runtime slice");
     assert(0x3 == slice(y, 4, 4), "literal vs propagated middle slice");
     assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }), "UInt propagation vs literal");
+    assert(shl_int(5,2) == shl_int(launder_int(5),2), "shl_int");
 }
 
 val run : unit -> unit effect {escape}
