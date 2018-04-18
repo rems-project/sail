@@ -152,7 +152,13 @@ function legalize_mie(o : Minterrupts, v : xlenbits) -> Minterrupts = {
 }
 
 function legalize_mideleg(o : Minterrupts, v : xlenbits) -> Minterrupts = {
-  Mk_Minterrupts(v)
+  /* M-mode interrupt delegation bits "should" be hardwired to 0. */
+  /* FIXME: needs verification against eventual spec language. */
+  let m = Mk_Minterrupts(v);
+  let m = update_MEI(m, false);
+  let m = update_MTI(m, false);
+  let m = update_MSI(m, false);
+  m
 }
 
 /* exception registers */
@@ -325,9 +331,9 @@ bitfield Sinterrupts : bits(64) = {
 function lower_mip(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
   let s : Sinterrupts = Mk_Sinterrupts(EXTZ(0b0));
   /* M-mode interrupts delegated to S-mode should appear as S-mode interrupts */
-  let s = update_SEI(s, (m.SEI() & d.SEI()) | (m.MEI() & d.MEI()));
-  let s = update_STI(s, (m.STI() & d.STI()) | (m.MTI() & d.MTI()));
-  let s = update_SSI(s, (m.SSI() & d.SSI()) | (m.MSI() & d.MSI()));
+  let s = update_SEI(s, m.SEI() & d.SEI());
+  let s = update_STI(s, m.STI() & d.STI());
+  let s = update_SSI(s, m.SSI() & d.SSI());
 
   let s = update_UEI(s, m.UEI() & d.UEI());
   let s = update_UTI(s, m.UTI() & d.UTI());
