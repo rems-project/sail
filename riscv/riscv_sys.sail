@@ -459,7 +459,7 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
  * it occured, returns the privilege at which it should be handled.
  */
 function exception_delegatee(e : ExceptionType, p : Privilege) -> Privilege = {
-  let idx   = exceptionType_to_nat(e);
+  let idx   = num_of_ExceptionType(e);
   let super = medeleg.bits()[idx];
   let user  = sedeleg.bits()[idx];
   let deleg = /* if      misa.N() == true & user  then User
