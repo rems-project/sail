@@ -79,11 +79,11 @@ bytecode.lem: ../language/bytecode.ott ast.lem
 
 ast.ml: ast.lem
 	lem -ocaml ast.lem
-	sed -i .bak -f ast.sed ast.ml
+	sed -i.bak -f ast.sed ast.ml
 
 bytecode.ml: bytecode.lem
 	lem -ocaml bytecode.lem -lib . -lib gen_lib/
-	sed -i .bak -f ast.sed bytecode.ml
+	sed -i.bak -f ast.sed bytecode.ml
 
 lem_interp/interp_ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
@@ -283,8 +283,10 @@ clean:
 	-rm -f gen_lib/*.ml
 	-rm -f ast.ml
 	-rm -f ast.lem
+	-rm -f ast.ml.bak
 	-rm -f bytecode.ml
 	-rm -f bytecode.lem
+	-rm -f bytecode.ml.bak
 
 doc:
 	ocamlbuild -use-ocamlfind sail.docdir/index.html
