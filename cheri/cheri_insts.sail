@@ -929,7 +929,7 @@ function clause execute (CTestSubset(rd, cb, ct)) =
              0b0
         else if (ct_top > cb_top) then
              0b0
-        else if ((ct_perms & cb_perms) != cb_perms) then
+        else if ((ct_perms & cb_perms) != ct_perms) then
              0b0
         else
              0b1;
