@@ -1,7 +1,8 @@
 THYS = Sail_instr_kinds.thy Sail_values.thy Sail_operators.thy \
   Sail_operators_mwords.thy Sail_operators_bitlists.thy \
   State_monad.thy State.thy Prompt_monad.thy Prompt.thy
-EXTRA_THYS = State_monad_lemmas.thy State_lemmas.thy Prompt_monad_lemmas.thy
+EXTRA_THYS = State_monad_lemmas.thy State_lemmas.thy Prompt_monad_lemmas.thy \
+  Sail_operators_mwords_lemmas.thy Hoare.thy
 
 .PHONY: all heap-img clean
 
