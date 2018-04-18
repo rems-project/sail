@@ -242,6 +242,9 @@ let register_refs_lem mwords registers =
   in
   separate hardline [generic_convs; refs; getters_setters]
 
+(* TODO Generate well-typedness predicate for register states (and events),
+   asserting that all lists representing non-bit-vectors have the right length. *)
+
 let generate_isa_lemmas mwords (Defs defs : tannot defs) =
   let rec drop_while f = function
     | x :: xs when f x -> drop_while f xs

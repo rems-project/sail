@@ -1,0 +1,10 @@
+session "Riscv_duopod" in "../../../riscv" = "Sail" +
+  options [document = false]
+  theories
+    Riscv_duopod_lemmas
+
+session "Sail-Manual" = "Riscv_duopod" +
+  options [document = pdf, document_output = "output"]
+  theories
+    Manual
+  document_files "root.tex" "Sail_session_graph.pdf"

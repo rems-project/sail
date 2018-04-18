@@ -1,18 +1,12 @@
 session "Sail" = "LEM" +
-  options [document = false]
-  theories
+  options [browser_info, document = pdf, document_output = "output"]
+  sessions
+    "HOL-Eisbach"
+  theories [document = false]
     Sail_values_lemmas
     Prompt
     State_lemmas
-    Sail_operators_mwords
+    Sail_operators_mwords_lemmas
     Sail_operators_bitlists
-
-(*session "Sail" = "Sail_Base" +
-  options [document = false]
-  theories
-    Sail_operators
-
-session "Sail_Word" = "Sail_Base" +
-  options [document = false]
-  theories
-    Sail_operators_mwords*)
+    Hoare
+  document_files "root.tex"
