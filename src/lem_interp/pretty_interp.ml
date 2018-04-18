@@ -157,7 +157,7 @@ let doc_int i = string (to_string i)
 let doc_bkind (BK_aux(k,_)) =
   string (match k with
   | BK_type -> "Type"
-  | BK_nat -> "Nat"
+  | BK_int  -> "Int"
   | BK_order -> "Order")
 
 let doc_op symb a b = infix 2 1 symb a b
