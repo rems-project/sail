@@ -310,8 +310,16 @@ let main() =
       (if !(opt_print_latex)
        then
          begin
-           let out = match !opt_file_out with None -> "out.tex" | Some s -> s ^ ".tex" in
-           let chan = open_out out in
+           let latex_dir = match !opt_file_out with None -> "sail_latex" | Some s -> s in
+           try
+             if not (Sys.is_directory latex_dir) then begin
+                 prerr_endline ("Failure: latex output directory exists but is not a directory: " ^ latex_dir);
+                 exit 1
+               end
+           with Sys_error(_) -> Unix.mkdir latex_dir 0o755;
+           Sys.chdir latex_dir;
+           let chan = open_out "commands.tex" in
+           Latex.latex_dir := latex_dir;
            output_string chan (Pretty_print_sail.to_string (Latex.latex_defs ast));
            close_out chan
          end

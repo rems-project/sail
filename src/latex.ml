@@ -114,24 +114,16 @@ let latex_loc no_loc l =
 
   | _ -> docstring l ^^ no_loc
 
-let latex_code ?label:(label=None) no_loc ((l, _) as annot) =
-  let open_listing = match label with
-    | None -> "\\begin{lstlisting}"
-    | Some l -> Printf.sprintf "\\begin{lstlisting}[label={%s}]" l
-  in
-  docstring l
-  ^^ string open_listing ^^ hardline
-  ^^ latex_loc no_loc l
-  ^^ string "\\end{lstlisting}"
-
 module StringSet = Set.Make(String)
 
 let commands = ref StringSet.empty
 
+let latex_dir = ref ""
+
 let rec latex_command ?prefix:(prefix="") ?label:(label=None) cmd no_loc ((l, _) as annot) =
   let labelling = match label with
     | None -> ""
-    | Some l -> Printf.sprintf "\\phantomsection\\label{%s%s}" prefix l
+    | Some l -> Printf.sprintf "\\label{%s%s}" prefix l
   in
   let cmd = prefix ^ cmd in
   if StringSet.mem cmd !commands then
@@ -139,11 +131,10 @@ let rec latex_command ?prefix:(prefix="") ?label:(label=None) cmd no_loc ((l, _)
   else
     begin
       commands := StringSet.add cmd !commands;
-      docstring l
-      ^^ string (Printf.sprintf "\\newsavebox{\\box%s}\n\\begin{lrbox}{\\box%s}\n\\begin{lstlisting}" cmd cmd) ^^ hardline
-      ^^ latex_loc no_loc l
-      ^^ string "\\end{lstlisting}\n\\end{lrbox}" ^^ hardline
-      ^^ string (Printf.sprintf "\\newcommand{\\sail%s}{\\begin{sail}\\usebox{\\box%s}%s\\end{sail}}" cmd cmd labelling)
+      let oc = open_out (cmd ^ "_sail.tex") in 
+      output_string oc (Pretty_print_sail.to_string (latex_loc no_loc l));
+      close_out oc;
+      string (Printf.sprintf "\\newcommand{\\sail%s}{%s " cmd labelling) ^^ (docstring l) ^^ string (Printf.sprintf "\\lstinputlisting{%s/%s_sail.tex}}" !latex_dir cmd)
     end
 
 let latex_command_id ?prefix:(prefix="") id no_loc annot =
