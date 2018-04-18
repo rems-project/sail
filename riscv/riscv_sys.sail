@@ -124,7 +124,6 @@ bitfield Minterrupts : bits(64) = {
   MSI : 3,  /* software interrupts */
   SSI : 1,
   USI : 0,
-
 }
 register mip     : Minterrupts /* Pending */
 register mie     : Minterrupts /* Enabled */
@@ -311,14 +310,82 @@ function legalize_sedeleg(s : Sedeleg, v : xlenbits) -> Sedeleg = {
 }
 
 /* TODO: handle views for interrupt delegation */
-register sideleg : Minterrupts
-register sip     : Minterrupts
-register sie     : Minterrupts
+bitfield Sinterrupts : bits(64) = {
+  SEI : 9,  /* external interrupts */
+  UEI : 8,
 
-bitfield satp64 : bits(64) = {
+  STI : 5,  /* timers interrupts */
+  UTI : 4,
+
+  SSI : 1,  /* software interrupts */
+  USI : 0
+}
+
+/* Provides the sip read view of mip as delegated by mideleg. */
+function lower_mip(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
+  let s : Sinterrupts = Mk_Sinterrupts(EXTZ(0b0));
+  /* M-mode interrupts delegated to S-mode should appear as S-mode interrupts */
+  let s = update_SEI(s, (m.SEI() & d.SEI()) | (m.MEI() & d.MEI()));
+  let s = update_STI(s, (m.STI() & d.STI()) | (m.MTI() & d.MTI()));
+  let s = update_SSI(s, (m.SSI() & d.SSI()) | (m.MSI() & d.MSI()));
+
+  let s = update_UEI(s, m.UEI() & d.UEI());
+  let s = update_UTI(s, m.UTI() & d.UTI());
+  let s = update_USI(s, m.USI() & d.USI());
+  s
+}
+/* Provides the sie read view of mie as delegated by mideleg. */
+function lower_mie(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
+  let s : Sinterrupts = Mk_Sinterrupts(EXTZ(0b0));
+  let s = update_SEI(s, m.SEI() & d.SEI());
+  let s = update_STI(s, m.STI() & d.STI());
+  let s = update_SSI(s, m.SSI() & d.SSI());
+  let s = update_UEI(s, m.UEI() & d.UEI());
+  let s = update_UTI(s, m.UTI() & d.UTI());
+  let s = update_USI(s, m.USI() & d.USI());
+  s
+}
+/* Provides the sip write view of mip as delegated by mideleg. */
+function lift_sip(o : Minterrupts, d : Minterrupts, s : Sinterrupts) -> Minterrupts = {
+  let m : Minterrupts = o;
+  let m = update_SSI(m, s.SSI() & d.SSI());
+  let m = update_UEI(m, m.UEI() & d.UEI());
+  let m = update_USI(m, m.USI() & d.USI());
+  m
+}
+function legalize_sip(m : Minterrupts, d : Minterrupts, v : xlenbits) -> Minterrupts = {
+  lift_sip(m, d, Mk_Sinterrupts(v))
+}
+/* Provides the sie write view of mie as delegated by mideleg. */
+function lift_sie(o : Minterrupts, d : Minterrupts, s : Sinterrupts) -> Minterrupts = {
+  let m : Minterrupts = o;
+  let m = if d.SEI() == true then update_SEI(m, s.SEI()) else m;
+  let m = if d.STI() == true then update_STI(m, s.STI()) else m;
+  let m = if d.SSI() == true then update_SSI(m, s.SSI()) else m;
+  let m = if d.UEI() == true then update_UEI(m, s.UEI()) else m;
+  let m = if d.UTI() == true then update_UTI(m, s.UTI()) else m;
+  let m = if d.USI() == true then update_USI(m, s.USI()) else m;
+  m
+}
+function legalize_sie(m : Minterrupts, d : Minterrupts, v : xlenbits) -> Minterrupts = {
+  lift_sie(m, d, Mk_Sinterrupts(v))
+}
+
+register sideleg : Sinterrupts
+
+bitfield Satp64 : bits(64) = {
   Mode : 63 .. 60,
   Asid : 59 .. 44,
   PPN  : 43 .. 0
+}
+register satp : xlenbits
+
+function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits = {
+  let s = Mk_Satp64(v);
+  match satpMode_of_bits(a, s.Mode()) {
+    None()  => o,
+    Some(_) => s.bits()
+  }
 }
 
 register stvec : Mtvec
@@ -326,7 +393,6 @@ register sscratch : xlenbits
 register sepc : xlenbits
 register scause : Mcause
 register stval : xlenbits
-register satp : xlenbits
 
 /* csr access control */
 
@@ -389,6 +455,22 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
   & check_TVM_SATP(csr, p)
 
+/* exception delegation: given an exception and the privilege at which
+ * it occured, returns the privilege at which it should be handled.
+ */
+function exception_delegatee(e : ExceptionType, p : Privilege) -> Privilege = {
+  let idx   = exceptionType_to_nat(e);
+  let super = medeleg.bits()[idx];
+  let user  = sedeleg.bits()[idx];
+  let deleg = /* if      misa.N() == true & user  then User
+                 else */
+              if misa.S() == true & super then Supervisor
+              else Machine;
+  /* Ensure there is no transition to a less-privileged mode. */
+  if   privLevel_to_bits(deleg) <_u privLevel_to_bits(p)
+  then p else deleg
+}
+
 /* instruction control flow */
 
 struct sync_exception = {
@@ -396,125 +478,94 @@ struct sync_exception = {
   excinfo : option(xlenbits)
 }
 
+function tval(excinfo : option(xlenbits)) -> xlenbits = {
+  match (excinfo) {
+    Some(e) => e,
+    None()  => EXTZ(0b0)
+  }
+}
+
 union ctl_result = {
   CTL_TRAP : sync_exception,
-/* TODO:
-  CTL_URET,
-  CTL_SRET,
-*/
+/* TODO: CTL_URET */
+  CTL_SRET : unit,
   CTL_MRET : unit
 }
 
 /* handle exceptional ctl flow by updating nextPC */
 
+function handle_trap(curp : Privilege, e : sync_exception,
+                     pc : xlenbits) -> xlenbits = {
+  let priv = exception_delegatee(e.trap, curp);
+  cur_privilege = priv;
+  match (priv) {
+    Machine => {
+       mcause->IsInterrupt() = false;
+       mcause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
+
+       mstatus->MPIE() = mstatus.MIE();
+       mstatus->MIE()  = false;
+       mstatus->MPP()  = privLevel_to_bits(curp);
+       mtval           = tval(e.excinfo);
+       mepc            = pc;
+
+       match tvec_addr(mtvec, mcause) {
+         Some(epc) => epc,
+         None()    => internal_error("Invalid mtvec mode")
+       }
+    },
+    Supervisor => {
+       scause->IsInterrupt() = false;
+       scause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
+
+       mstatus->SPIE() = mstatus.SIE();
+       mstatus->SIE()  = false;
+       mstatus->SPP()  = match (curp) {
+                           User => false,
+                           Supervisor => true,
+                           Machine => internal_error("invalid privilege for s-mode trap")
+                         };
+       stval           = tval(e.excinfo);
+       sepc            = pc;
+
+       match tvec_addr(stvec, scause) {
+         Some(epc) => epc,
+         None()    => internal_error("Invalid stvec mode")
+       }
+
+    },
+    User => internal_error("the N extension is currently unsupported")
+  }
+}
+
 function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
                               pc: xlenbits) -> xlenbits =
-  /* TODO: check delegation */
   match (cur_priv, ctl) {
-    (_, CTL_TRAP(e)) => {
-      mepc            = pc;
-
-      mcause->IsInterrupt() = false;
-      mcause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
-
-      mstatus->MPIE() = mstatus.MIE();
-      mstatus->MIE()  = false;
-      mstatus->MPP()  = privLevel_to_bits(cur_priv);
-      cur_privilege   = Machine;
-
-      match (e.trap) {
-        E_Fetch_Addr_Align => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        E_Fetch_Access_Fault => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        E_Illegal_Instr => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-
-        E_Breakpoint => not_implemented("breakpoint"),
-
-        E_Load_Addr_Align => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        E_Load_Access_Fault => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        E_SAMO_Addr_Align => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        E_SAMO_Access_Fault => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-
-        E_U_EnvCall => {
-          mtval  = EXTZ(0b0)
-        },
-        E_S_EnvCall => {
-          mtval  = EXTZ(0b0)
-        },
-        E_M_EnvCall => {
-          mtval  = EXTZ(0b0)
-        },
-
-        E_Fetch_Page_Fault => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        E_Load_Page_Fault => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        E_SAMO_Page_Fault => {
-          match (e.excinfo) {
-            Some(a) => mtval = a,
-            None()  => throw Error_internal_error()
-          }
-        },
-        _ => throw Error_internal_error() /* Don't expect ReservedExc0 etc. here */
-      };
-      /* TODO: make register read explicit */
-      match (tvec_addr(mtvec, mcause)) {
-        Some(addr) => addr,
-        None()     => throw Error_internal_error()
-      }
-    },
-    (_, CTL_MRET()) => {
+    (_, CTL_TRAP(e)) => handle_trap(cur_priv, e, pc),
+    (_, CTL_MRET())  => {
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = true;
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
       mepc
+    },
+    (_, CTL_SRET())  => {
+      mstatus->SIE()  = mstatus.SPIE();
+      mstatus->SPIE() = true;
+      cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
+      mstatus->SPP()  = false;
+      sepc
     }
   }
 
 function init_sys () : unit -> unit = {
   cur_privilege = Machine;
+  misa->MXL() = arch_to_bits(RV64);
   misa->C() = true;
+  misa->U() = true;
+  misa->S() = true;
+
+  mstatus->SXL() = misa.MXL();
+  mstatus->UXL() = misa.MXL();
+  mstatus->SD()  = false;
 }

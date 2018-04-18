@@ -61,6 +61,13 @@ function architecture(a : arch_xlen) -> option(Architecture) = {
     _    => None()
   }
 }
+function arch_to_bits(a : Architecture) -> arch_xlen = {
+  match (a) {
+    RV32  => 0b01,
+    RV64  => 0b10,
+    RV128 => 0b11
+  }
+}
 
 /* privilege levels */
 
@@ -140,6 +147,28 @@ function exceptionType_to_bits(e) = {
     E_Load_Page_Fault => 0xd,
     E_Reserved_14 => 0xe,
     E_SAMO_Page_Fault => 0xf
+  }
+}
+
+val cast exceptionType_to_nat : ExceptionType -> range(0, 15)
+function exceptionType_to_nat(e) = {
+  match (e) {
+    E_Fetch_Addr_Align => 0,
+    E_Fetch_Access_Fault => 1,
+    E_Illegal_Instr => 2,
+    E_Breakpoint => 3,
+    E_Load_Addr_Align => 4,
+    E_Load_Access_Fault => 5,
+    E_SAMO_Addr_Align => 6,
+    E_SAMO_Access_Fault => 7,
+    E_U_EnvCall => 8,
+    E_S_EnvCall => 9,
+    E_Reserved_10 => 10,
+    E_M_EnvCall => 11,
+    E_Fetch_Page_Fault => 12,
+    E_Load_Page_Fault => 13,
+    E_Reserved_14 => 14,
+    E_SAMO_Page_Fault => 15
   }
 }
 
@@ -229,6 +258,15 @@ function extStatus_of_bits(e) = {
 
 type satp_mode = bits(4)
 enum SATPMode = {Sbare, Sv32, Sv39}
+
+function satpMode_of_bits(a : Architecture, m : satp_mode) -> option(SATPMode) = {
+  match (a, m) {
+    (_, 0x0)    => Some(Sbare),
+    (RV32, 0x1) => Some(Sv32),
+    (RV64, 0x8) => Some(Sv39),
+    (_, _)      => None()
+  }
+}
 
 /* CSR access control bits (from CSR addresses) */
 type csrRW = bits(2)  /* read/write */
