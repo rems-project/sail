@@ -79,11 +79,11 @@ bytecode.lem: ../language/bytecode.ott ast.lem
 
 ast.ml: ast.lem
 	lem -ocaml ast.lem
-	sed -i -f ast.sed ast.ml
+	sed -i .bak -f ast.sed ast.ml
 
 bytecode.ml: bytecode.lem
 	lem -ocaml bytecode.lem -lib . -lib gen_lib/
-	sed -i -f ast.sed bytecode.ml
+	sed -i .bak -f ast.sed bytecode.ml
 
 lem_interp/interp_ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
