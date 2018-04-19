@@ -21,8 +21,15 @@ This will allow you to start Isabelle with the Sail library pre-loaded using the
 For this purpose, run @{verbatim make} in the @{path "lib/isabelle"} subdirectory of Sail and
 follow the instructions.
 
-In order to generate theorem prover definitions, Sail specifications are first translated to Lem,
-which can generate definitions for  Isabelle/HOL as well as for HOL4 and Coq.
+In order to generate theorem prover definitions, Sail specifications
+are first translated to Lem, which then generates definitions for
+Isabelle/HOL.  Lem can also generate HOL4 definitions, though we have
+not yet tested that for our ISA specifications.  To produce Coq
+definitions, we envisage implementing a direct Sail-to-Coq backend, to
+preserve the Sail dependent types (it's possible that the Lem-to-Coq
+backend, which in general does not produce good Coq definitions, would
+actually produce usable Coq definitions for a monomorphised ISA
+specification, but we have not tested that).
 
 The translation to Lem is activated by passing the @{verbatim "-lem"} command line flag to Sail.
 For example, the following call in the @{path riscv} directory will generate Lem definitions
