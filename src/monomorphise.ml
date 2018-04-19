@@ -826,7 +826,7 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux (L_zero,_),_)] -> Some (E_aux (E_lit (L_aux (L_false,new_l)),(l,ann)))
     | [E_aux (E_lit L_aux (L_one ,_),_)] -> Some (E_aux (E_lit (L_aux (L_true ,new_l)),(l,ann)))
     | _ -> None
-  else if is_id "UInt" then
+  else if is_id "UInt" || is_id "unsigned" then
     match args with
     | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit,_), _)] ->
        Some (E_aux (E_lit (L_aux (L_num (int_of_str_lit lit),new_l)),(l,ann)))
@@ -3712,16 +3712,16 @@ let rewrite_app env typ (id,args) =
 
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "UInt") id then
+  else if is_id env (Id "UInt") id || is_id env (Id "unsigned") id then
     let is_slice = is_id env (Id "slice") in
     let is_subrange = is_id env (Id "vector_subrange") in
     match args with
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
         when is_slice slice1 && not (is_constant length1) ->
-       E_app (mk_id "UInt_slice", [vector1; start1; length1])
+       E_app (mk_id "unsigned_slice", [vector1; start1; length1])
     | [E_aux (E_app (subrange1, [vector1; start1; end1]),_)]
         when is_subrange subrange1 && not (is_constant_range (start1,end1)) ->
-       E_app (mk_id "UInt_subrange", [vector1; start1; end1])
+       E_app (mk_id "unsigned_subrange", [vector1; start1; end1])
 
     | _ -> E_app (id,args)
 

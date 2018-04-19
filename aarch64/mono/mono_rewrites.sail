@@ -122,20 +122,30 @@ function sext_slice(xs,i,l) = {
   extsv(xs)
 }
 
-val UInt_slice : forall 'n, 'n >= 0.
+/* This has different names in the aarch64 prelude (UInt) and the other
+   preludes (unsigned).  To avoid variable name clashes, we redeclare it
+   here with a suitably awkward name. */
+val _builtin_unsigned = {
+  ocaml: "uint",
+  lem: "uint",
+  interpreter: "uint",
+  c: "sail_uint"
+} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+
+val unsigned_slice : forall 'n, 'n >= 0.
   (bits('n), int, int) -> int effect pure
 
-function UInt_slice(xs,i,l) = {
+function unsigned_slice(xs,i,l) = {
   let xs = (xs & slice_mask(i,l)) >> i in
-  UInt(xs)
+  _builtin_unsigned(xs)
 }
 
-val UInt_subrange : forall 'n, 'n >= 0.
+val unsigned_subrange : forall 'n, 'n >= 0.
   (bits('n), int, int) -> int effect pure
 
-function UInt_subrange(xs,i,j) = {
+function unsigned_subrange(xs,i,j) = {
   let xs = (xs & slice_mask(j,i-j)) >> i in
-  UInt(xs)
+  _builtin_unsigned(xs)
 }
 
 
