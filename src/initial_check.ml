@@ -493,8 +493,7 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_app(f,args) ->
       (match List.map (to_ast_exp k_env def_ord) args with
 	| [] -> E_app(to_ast_id f, [])
-	| [E_aux(E_tuple(exps),_)] -> E_app(to_ast_id f, exps)
-	| exps -> E_app(to_ast_id f, exps))
+        | exps -> E_app(to_ast_id f, exps))
     | Parse_ast.E_app_infix(left,op,right) ->
       E_app_infix(to_ast_exp k_env def_ord left, to_ast_id op, to_ast_exp k_env def_ord right)
     | Parse_ast.E_tuple(exps) -> E_tuple(List.map (to_ast_exp k_env def_ord) exps)
