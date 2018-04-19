@@ -1168,6 +1168,8 @@ type_union:
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
   | id Colon typ MinusGt typ
     { (fun s e -> Tu_aux (Tu_ty_id (mk_typ (ATyp_fn ($3, $5, mk_typ (ATyp_set []) s e)) s e, $1), loc s e)) $startpos $endpos }
+  | id Colon Lcurly struct_fields Rcurly
+    { Tu_aux (Tu_ty_anon_rec ($4, $1), loc $startpos $endpos) }
 
 type_unions:
   | type_union

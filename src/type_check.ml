@@ -3675,6 +3675,7 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
      env
      |> Env.add_union_id v (typq, typ')
      |> Env.add_val_spec v (typq, typ')
+  | Tu_ty_anon_rec _ -> typ_error l "Unrewritten Tu_ty_anon_rec seen by typechecker"
 
 (* FIXME: This code is duplicated with general kind-checking code in environment, can they be merged? *)
 let mk_synonym typq typ =

@@ -51,6 +51,9 @@
 open Ast
 open Type_check
 
+(* Generate a fresh id with the given prefix *)
+val fresh_id : string -> l -> id
+
 (* Re-write undefined to functions created by -undefined_gen flag *)
 val rewrite_undefined : bool -> tannot defs -> tannot defs
 
