@@ -128,8 +128,7 @@ let rec realise_union_anon_rec_types (Parse_ast.TD_variant (union_id, name_scm_o
      | (Parse_ast.Tu_aux ((Parse_ast.Tu_ty_id _), _)) -> (None, arm) :: realise_union_anon_rec_types orig_union arms
      | (Parse_ast.Tu_aux ((Parse_ast.Tu_ty_anon_rec (fields, id)), l)) ->
         let open Parse_ast in
-        let ast_record_id = Rewrites.fresh_id ("__anon_rec_" ^ parseid_to_string union_id ^ "_") (Parse_ast.Generated l) in
-        let record_str = astid_to_string ast_record_id in
+        let record_str = "_" ^ parseid_to_string union_id ^ "_" ^ parseid_to_string id ^ "_record" in
         let record_id = Id_aux (Id record_str, Generated l) in
         let new_arm = Parse_ast.Tu_aux
                         ((Parse_ast.Tu_ty_id (
