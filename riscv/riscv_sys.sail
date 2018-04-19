@@ -330,7 +330,6 @@ bitfield Sinterrupts : bits(64) = {
 /* Provides the sip read view of mip as delegated by mideleg. */
 function lower_mip(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
   let s : Sinterrupts = Mk_Sinterrupts(EXTZ(0b0));
-  /* M-mode interrupts delegated to S-mode should appear as S-mode interrupts */
   let s = update_SEI(s, m.SEI() & d.SEI());
   let s = update_STI(s, m.STI() & d.STI());
   let s = update_SSI(s, m.SSI() & d.SSI());
