@@ -130,15 +130,8 @@ let rec realise_union_anon_rec_types (Parse_ast.TD_variant (union_id, name_scm_o
         let open Parse_ast in
         let record_str = "_" ^ parseid_to_string union_id ^ "_" ^ parseid_to_string id ^ "_record" in
         let record_id = Id_aux (Id record_str, Generated l) in
-        let new_arm = Parse_ast.Tu_aux
-                        ((Parse_ast.Tu_ty_id (
-                           (Parse_ast.ATyp_aux (ATyp_id record_id, Generated l)),
-                           id)
-                        ), Parse_ast.Generated l) in
-        let new_rec_def = Parse_ast.DEF_type (Parse_ast.TD_aux (
-                                                  Parse_ast.TD_record (record_id, name_scm_opt, typq, fields, flag),
-                                                  Generated l
-                                                )) in
+        let new_arm = Tu_aux ((Tu_ty_id ((ATyp_aux (ATyp_id record_id, Generated l)), id)), Generated l) in
+        let new_rec_def = DEF_type (TD_aux (TD_record (record_id, name_scm_opt, typq, fields, flag), Generated l)) in
         (Some new_rec_def, new_arm) :: (realise_union_anon_rec_types orig_union arms)
 
 let rec preprocess = function
