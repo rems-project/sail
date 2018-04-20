@@ -118,7 +118,7 @@ val sext_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (bits('n), int, int) -> bits('m) effect pure
 
 function sext_slice(xs,i,l) = {
-  let xs = (xs & slice_mask(i,l)) >> i in
+  let xs = arith_shiftright(((xs & slice_mask(i,l)) << ('n - i - l)), 'n - l) in
   extsv(xs)
 }
 
