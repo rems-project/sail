@@ -1,10 +1,8 @@
-/* machine mode registers */
-
 /* privilege level */
 
 register cur_privilege : Privilege
 
-/* FIXME: currently we have only those used by riscv-tests. */
+/* M-mode registers */
 
 bitfield Misa : bits(64) = {
   MXL  : 63 .. 62,
@@ -187,6 +185,8 @@ function legalize_medeleg(o : Medeleg, v : xlenbits) -> Medeleg = {
   let m = update_MEnvCall(m, false);
   m
 }
+
+/* registers for trap handling */
 
 bitfield Mtvec : bits(64) = {
   Base : 63 .. 2,
@@ -605,8 +605,9 @@ function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
     }
   }
 
-function init_sys () : unit -> unit = {
+function init_sys() -> unit = {
   cur_privilege = Machine;
+
   misa->MXL() = arch_to_bits(RV64);
   misa->C() = true;
   misa->U() = true;
@@ -615,4 +616,6 @@ function init_sys () : unit -> unit = {
   mstatus->SXL() = misa.MXL();
   mstatus->UXL() = misa.MXL();
   mstatus->SD()  = false;
+
+  mhartid = EXTZ(0b0);
 }

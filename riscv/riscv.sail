@@ -11,7 +11,6 @@ val execute : ast -> unit effect {escape, wreg, rreg, wmv, eamem, rmem, barr, ex
 scattered function execute
 
 /* ****************************************************************** */
-
 union clause ast = UTYPE : (bits(20), regbits, uop)
 
 function clause decode imm : bits(20) @ rd : regbits @ 0b0110111 = Some(UTYPE(imm, rd, RISCV_LUI))
@@ -26,7 +25,6 @@ function clause execute UTYPE(imm, rd, op) =
     X(rd) = ret
 
 /* ****************************************************************** */
-
 union clause ast = RISCV_JAL : (bits(21), regbits)
 
 function clause decode imm : bits(20) @ rd : regbits @ 0b1101111 = Some (RISCV_JAL(imm[19] @ imm[7..0] @ imm[8] @ imm[18..13] @ imm[12..9] @ 0b0, rd))
@@ -105,7 +103,7 @@ function clause decode 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b001 @ rd :
 function clause decode 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRLI))
 function clause decode 0b010000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRAI))
 
-function clause execute (SHIFTIOP(shamt, rs1, rd, op)) = 
+function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
     let rs1_val = X(rs1) in
     let result : xlenbits = match op {
       RISCV_SLLI => rs1_val << shamt,
@@ -128,7 +126,6 @@ function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : 
 function clause decode 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SRA))
 function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_OR))
 function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_AND))
-
 
 function clause execute (RTYPE(rs2, rs1, rd, op)) =
   let rs1_val = X(rs1) in
@@ -157,7 +154,6 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b011 @ rd : regbits @ 0
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  BYTE,   false, false))
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  HALF,   false, false))
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
-
 
 function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
     let addr : xlenbits = X(rs1) + EXTS(imm) in
@@ -201,7 +197,6 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
 	DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, false)
       }
     }
-
 
 /* ****************************************************************** */
 union clause ast = ADDIW : (bits(12), regbits, regbits)
@@ -250,7 +245,6 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
   X(rd) = EXTS(result)
 
 /* ****************************************************************** */
-
 union clause ast = MUL : (regbits, regbits, regbits, bool, bool, bool)
 
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd, false,  true, true))  /* MUL */
@@ -267,7 +261,6 @@ function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) =
   X(rd) = result
 
 /* ****************************************************************** */
-
 union clause ast = DIV : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0110011 = Some(DIV(rs2, rs1, rd,  true))  /* DIV */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011 = Some(DIV(rs2, rs1, rd, false))  /* DIVU */
@@ -280,7 +273,6 @@ function clause execute (DIV(rs2, rs1, rd, s)) =
   let q': int = if s & q > xlen_max_signed then xlen_min_signed else q in /* check for signed overflow */  X(rd) = to_bits(xlen, q')
 
 /* ****************************************************************** */
-
 union clause ast = REM : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011 = Some(REM(rs2, rs1, rd,  true))  /* REM */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011 = Some(REM(rs2, rs1, rd, false))  /* REMU */
@@ -294,7 +286,6 @@ function clause execute (REM(rs2, rs1, rd, s)) =
   X(rd) = to_bits(xlen, r)
 
 /* ****************************************************************** */
-
 union clause ast = MULW : (regbits, regbits, regbits)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011 = Some(MULW(rs2, rs1, rd)) /* MULW */
 function clause execute (MULW(rs2, rs1, rd)) =
@@ -307,7 +298,6 @@ function clause execute (MULW(rs2, rs1, rd)) =
   X(rd) = result
 
 /* ****************************************************************** */
-
 union clause ast = DIVW : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0111011 = Some(DIVW(rs2, rs1, rd,  true))  /* DIVW */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011 = Some(DIVW(rs2, rs1, rd, false))  /* DIVUW */
@@ -321,7 +311,6 @@ function clause execute (DIVW(rs2, rs1, rd, s)) =
   X(rd) = EXTS(to_bits(32, q'))
 
 /* ****************************************************************** */
-
 union clause ast = REMW : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0111011 = Some(REMW(rs2, rs1, rd,  true))  /* REMW */
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0111011 = Some(REMW(rs2, rs1, rd, false))  /* REMUW */
@@ -335,7 +324,6 @@ function clause execute (REMW(rs2, rs1, rd, s)) =
   X(rd) = EXTS(to_bits(32, r))
 
 /* ****************************************************************** */
-
 union clause ast = FENCE : (bits(4), bits(4))
 
 function clause decode 0b0000 @ pred : bits(4) @ succ : bits(4) @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111 = Some(FENCE(pred, succ))
@@ -501,6 +489,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   };
 }
 
+/* ****************************************************************** */
 union clause ast = CSR  : (bits(12), regbits, regbits, bool, csrop)
 
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, false, CSRRW))
@@ -509,7 +498,6 @@ function clause decode csr : bits(12) @ rs1 : regbits @ 0b011 @ rd : regbits @ 0
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRW))
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRS))
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRC))
-
 
 function readCSR csr: bits(12) -> xlenbits =
   match csr {
@@ -614,7 +602,6 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
   }
 
 /* ****************************************************************** */
-
 union clause ast = NOP : unit
 
 function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bits(5)) @ 0b01) : bits(16) = {
@@ -625,7 +612,6 @@ function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bit
 function clause execute NOP() = ()
 
 /* ****************************************************************** */
-
 union clause ast = ILLEGAL : unit
 
 function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(ILLEGAL())
@@ -638,7 +624,6 @@ function clause execute ILLEGAL() = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_ADDI4SPN : (cregbits, bits(8))
 
 function clause decodeCompressed (0b000 @ nz54 : bits(2) @ nz96 : bits(4) @ nz2 : bits(1) @ nz3 : bits(1) @ rd : cregbits @ 0b00) : bits(16) = {
@@ -654,7 +639,6 @@ function clause execute (C_ADDI4SPN(rdc, nzimm)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_LW : (bits(5), cregbits, cregbits)
 
 function clause decodeCompressed (0b010 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rd : cregbits @ 0b00) : bits(16) = {
@@ -670,7 +654,6 @@ function clause execute (C_LW(uimm, rsc, rdc)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_LD : (bits(5), cregbits, cregbits)
 
 function clause decodeCompressed (0b011 @ ui53 : bits(3) @ rs1 : cregbits @ ui76 : bits(2) @ rd : cregbits @ 0b00) : bits(16) = {
@@ -686,7 +669,6 @@ function clause execute (C_LD(uimm, rsc, rdc)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SW : (bits(5), cregbits, cregbits)
 
 function clause decodeCompressed (0b110 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rs2 : cregbits @ 0b00) : bits(16) = {
@@ -702,7 +684,6 @@ function clause execute (C_SW(uimm, rsc1, rsc2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SD : (bits(5), cregbits, cregbits)
 
 function clause decodeCompressed (0b111 @ ui53 : bits(3) @ rs1 : bits(3) @ ui76 : bits(2) @ rs2 : bits(3) @ 0b00): bits(16) = {
@@ -718,7 +699,6 @@ function clause execute (C_SD(uimm, rsc1, rsc2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_ADDI : (bits(6), regbits)
 
 function clause decodeCompressed (0b000 @ nzi5 : bits(1) @ rsd : regbits @ nzi40 : bits(5) @ 0b01) : bits(16) = {
@@ -733,7 +713,6 @@ function clause execute (C_ADDI(nzi, rsd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_JAL : (bits(11))
 union clause ast = C_ADDIW : (bits(6), regbits)
 
@@ -755,7 +734,6 @@ function clause execute (C_ADDIW(imm, rsd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_LI : (bits(6), regbits)
 
 function clause decodeCompressed (0b010 @ imm5 : bits(1) @ rd : regbits @ imm40 : bits(5) @ 0b01) = {
@@ -769,7 +747,6 @@ function clause execute (C_LI(imm, rd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_ADDI16SP : (bits(6))
 
 function clause decodeCompressed (0b011 @ nzi9 : bits(1) @ /* x2 */ 0b00010 @ nzi4 : bits(1) @ nzi6 : bits(1) @ nzi87 : bits(2) @ nzi5 : bits(1) @ 0b01) = {
@@ -784,7 +761,6 @@ function clause execute (C_ADDI16SP(imm)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_LUI : (bits(6), regbits)
 
 function clause decodeCompressed (0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01) = {
@@ -798,7 +774,6 @@ function clause execute (C_LUI(imm, rd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SRLI : (bits(6), cregbits)
 
 function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b00 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
@@ -814,7 +789,6 @@ function clause execute (C_SRLI(shamt, rsd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SRAI : (bits(6), cregbits)
 
 function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b01 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
@@ -830,7 +804,6 @@ function clause execute (C_SRAI(shamt, rsd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_ANDI : (bits(6), cregbits)
 
 function clause decodeCompressed (0b100 @ i5 : bits(1) @ 0b10 @ rsd : cregbits @ i40 : bits(5) @ 0b01) = Some(C_ANDI(i5 @ i40, rsd))
@@ -841,7 +814,6 @@ function clause execute (C_ANDI(imm, rsd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SUB : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01) = Some(C_SUB(rsd, rs2))
@@ -853,7 +825,6 @@ function clause execute (C_SUB(rsd, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_XOR : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_XOR(rsd, rs2))
@@ -865,7 +836,6 @@ function clause execute (C_XOR(rsd, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_OR : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b10 @ rs2 : cregbits @ 0b01) = Some(C_OR(rsd, rs2))
@@ -877,7 +847,6 @@ function clause execute (C_OR(rsd, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_AND : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b11 @ rs2 : cregbits @ 0b01) = Some(C_AND(rsd, rs2))
@@ -889,7 +858,6 @@ function clause execute (C_AND(rsd, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SUBW : (cregbits, cregbits)
 
 /* TODO: invalid on RV32 */
@@ -902,7 +870,6 @@ function clause execute (C_SUBW(rsd, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_ADDW : (cregbits, cregbits)
 
 /* TODO: invalid on RV32 */
@@ -915,7 +882,6 @@ function clause execute (C_ADDW(rsd, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_J : (bits(11))
 
 function clause decodeCompressed (0b101 @ i11 : bits(1) @ i4 : bits(1) @ i98 : bits(2) @ i10 : bits(1) @ i6 : bits(1) @ i7 : bits(1) @ i31 : bits(3) @ i5 : bits(1) @ 0b01) =
@@ -925,7 +891,6 @@ function clause execute (C_J(imm)) =
   execute(RISCV_JAL(EXTS(imm @ 0b0), zreg))
 
 /* ****************************************************************** */
-
 union clause ast = C_BEQZ : (bits(8), cregbits)
 
 function clause decodeCompressed (0b110 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01) =
@@ -935,7 +900,6 @@ function clause execute (C_BEQZ(imm, rs)) =
   execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BEQ))
 
 /* ****************************************************************** */
-
 union clause ast = C_BNEZ : (bits(8), cregbits)
 
 function clause decodeCompressed (0b111 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01) =
@@ -945,7 +909,6 @@ function clause execute (C_BNEZ(imm, rs)) =
   execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BNE))
 
 /* ****************************************************************** */
-
 union clause ast = C_SLLI : (bits(6), regbits)
 
 function clause decodeCompressed (0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui40 : bits(5) @ 0b10) = {
@@ -959,7 +922,6 @@ function clause execute (C_SLLI(shamt, rsd)) =
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SLLI))
 
 /* ****************************************************************** */
-
 union clause ast = C_LWSP : (bits(6), regbits)
 
 function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10) = {
@@ -975,7 +937,6 @@ function clause execute (C_LWSP(uimm, rd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_LDSP : (bits(6), regbits)
 
 function clause decodeCompressed (0b011 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) = {
@@ -991,7 +952,6 @@ function clause execute (C_LDSP(uimm, rd)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SWSP : (bits(6), regbits)
 
 function clause decodeCompressed (0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ rs2 : regbits @ 0b10) = {
@@ -1005,7 +965,6 @@ function clause execute (C_SWSP(uimm, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_SDSP : (bits(6), regbits)
 
 function clause decodeCompressed (0b111 @ ui53 : bits(3) @ ui86 : bits(3) @ rs2 : regbits @ 0b10) = {
@@ -1019,7 +978,6 @@ function clause execute (C_SDSP(uimm, rs2)) = {
 }
 
 /* ****************************************************************** */
-
 union clause ast = C_JR : (regbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10) = {
@@ -1032,7 +990,6 @@ function clause execute (C_JR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, zreg))
 
 /* ****************************************************************** */
-
 union clause ast = C_JALR : (regbits)
 
 function clause decodeCompressed (0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10) = {
@@ -1045,7 +1002,6 @@ function clause execute (C_JALR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, ra))
 
 /* ****************************************************************** */
-
 union clause ast = C_MV : (regbits, regbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0b10) = {
@@ -1058,7 +1014,6 @@ function clause execute (C_MV(rd, rs2)) =
   execute(RTYPE(rs2, zreg, rd, RISCV_ADD))
 
 /* ****************************************************************** */
-
 union clause ast = C_ADD : (regbits, regbits)
 
 function clause decodeCompressed (0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10) = {
