@@ -1861,10 +1861,12 @@ let is_nat_kid kid = function
 
 let is_order_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), kid'), _) -> Kid.compare kid kid' = 0
+  | KOpt_aux (KOpt_none kid', _) -> Kid.compare kid kid' = 0
   | _ -> false
 
 let is_typ_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), kid'), _) -> Kid.compare kid kid' = 0
+  | KOpt_aux (KOpt_none kid', _) -> Kid.compare kid kid' = 0
   | _ -> false
 
 let rec instantiate_quants quants kid uvar = match quants with
