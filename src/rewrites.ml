@@ -2768,28 +2768,14 @@ let rewrite_defs_internal_lets =
     ; rewrite_defs = rewrite_defs_base
     }
 
-let rewrite_defs_pat_lits =
+let rewrite_pexps_with_guards rewrite_pat =
   let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
     let guards = ref [] in
-    let counter = ref 0 in
-
-    let rewrite_pat = function
-      | P_lit lit, p_annot ->
-         let env = env_of_annot p_annot in
-         let typ = typ_of_annot p_annot in
-         let id = mk_id ("p" ^ string_of_int !counter ^ "#") in
-         let guard = mk_exp (E_app_infix (mk_exp (E_id id), mk_id "==", mk_exp (E_lit lit))) in
-         let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
-         guards := guard :: !guards;
-         incr counter;
-         P_aux (P_id id, p_annot)
-      | p_aux, p_annot -> P_aux (p_aux, p_annot)
-    in
 
     match pexp_aux with
     | Pat_exp (pat, exp) ->
        begin
-         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat } pat in
+         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
          match !guards with
          | [] -> pexp
          | (g :: gs) ->
@@ -2798,7 +2784,7 @@ let rewrite_defs_pat_lits =
        end
     | Pat_when (pat, guard, exp) ->
        begin
-         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat } pat in
+         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
          let guard_annot = (fst annot, Some (env_of exp, bool_typ, no_effect)) in
          Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) guard !guards, exp), annot)
        end
@@ -2807,6 +2793,22 @@ let rewrite_defs_pat_lits =
   let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
 
+
+let rewrite_defs_pat_lits =
+  let counter = ref 0 in
+  let rewrite_pat guards = function
+    | P_lit lit, p_annot ->
+       let env = env_of_annot p_annot in
+       let typ = typ_of_annot p_annot in
+       let id = mk_id ("p" ^ string_of_int !counter ^ "#") in
+       let guard = mk_exp (E_app_infix (mk_exp (E_id id), mk_id "==", mk_exp (E_lit lit))) in
+       let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
+       guards := guard :: !guards;
+       incr counter;
+       P_aux (P_id id, p_annot)
+    | p_aux, p_annot -> P_aux (p_aux, p_annot)
+  in
+  rewrite_pexps_with_guards rewrite_pat
 
 (* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
  * internal let-expressions, or internal plet-expressions ended by a term that does not
