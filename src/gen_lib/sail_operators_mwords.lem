@@ -73,6 +73,9 @@ let exts_vec _ w = Machine_word.signExtend w
 val zero_extend : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 let zero_extend w _ = Machine_word.zeroExtend w
 
+val sign_extend : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
+let sign_extend w _ = Machine_word.signExtend w
+
 val vector_truncate : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 let vector_truncate w _ = Machine_word.zeroExtend w
 

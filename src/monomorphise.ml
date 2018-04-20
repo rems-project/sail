@@ -3666,7 +3666,7 @@ let rewrite_app env typ (id,args) =
               [vector1; start1; end1])
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id then
+  else if is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id || is_id env (Id "zero_extend") id then
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
     let is_zeros = is_id env (Id "Zeros") in
@@ -3703,12 +3703,25 @@ let rewrite_app env typ (id,args) =
 
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "SignExtend") id then
+  else if is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id then
     let is_slice = is_id env (Id "slice") in
     match args with
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
         when is_slice slice1 && not (is_constant length1) ->
        E_app (mk_id "sext_slice", [vector1; start1; length1])
+
+      (* If the original had a length, keep it *)
+    | [E_aux (E_app (slice1, [vector1; start1; length1]),_);length2]
+        when is_slice slice1 && not (is_constant length1) ->
+       begin
+         match Type_check.destruct_atom_nexp (env_of length2) (typ_of length2) with
+         | None -> E_app (mk_id "sext_slice", [vector1; start1; length1])
+         | Some nlen ->
+            let (_,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+            E_cast (vector_typ nlen order bittyp,
+                    E_aux (E_app (mk_id "sext_slice", [vector1; start1; length1]),
+                           (Unknown,None)))
+       end
 
     | _ -> E_app (id,args)
 

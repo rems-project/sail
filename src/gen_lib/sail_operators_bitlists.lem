@@ -32,6 +32,9 @@ let exts_vec = exts_bv
 val zero_extend : list bitU -> integer -> list bitU
 let zero_extend bits len = extz_bits len bits
 
+val sign_extend : list bitU -> integer -> list bitU
+let sign_extend bits len = exts_bits len bits
+
 val vector_truncate : list bitU -> integer -> list bitU
 let vector_truncate bs len = extz_bv len bs
 
