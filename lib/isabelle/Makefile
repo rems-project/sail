@@ -8,16 +8,18 @@ RISCV_DIR = ../../riscv
 
 .PHONY: all heap-img clean
 
-all: heap-img
+all: thys
 
-heap-img: $(THYS) $(EXTRA_THYS) ROOT
+thys: $(THYS)
+
+heap-img: thys $(EXTRA_THYS) ROOT
 	@echo '*** To build a heap image with the Sail library, please'
 	@echo '*** add this directory to your ROOTS file'
 	@echo '*** (e.g. $$HOME/.isabelle/Isabelle<version>/ROOTS)'
 	@echo '*** and add the isabelle binary to your PATH.'
 	isabelle build -b Sail
 
-manual: heap-img manual/Manual.thy
+manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	cp output/document/session_graph.pdf manual/document/Sail_session_graph.pdf
 	make -C $(RISCV_DIR) Riscv_duopod.thy
 	isabelle build -d manual Sail-Manual

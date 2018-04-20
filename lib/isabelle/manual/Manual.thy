@@ -18,7 +18,7 @@ As an additional setup step for Isabelle generation, it is useful to build an Is
 of the Sail library.
 This will allow you to start Isabelle with the Sail library pre-loaded using the
 @{verbatim "-l Sail"} option.
-For this purpose, run @{verbatim make} in the @{path "lib/isabelle"} subdirectory of Sail and
+For this purpose, run @{verbatim "make heap-img"} in the @{path "lib/isabelle"} subdirectory of Sail and
 follow the instructions.
 
 In order to generate theorem prover definitions, Sail specifications
