@@ -8,7 +8,7 @@ val elf_tohost = {
 function fetch_and_execute () =
   let tohost = __GetSlice_int(64, elf_tohost(), 0) in
   while true do {
-    print_bits("PC: ", PC);
+    print_bits("\nPC: ", PC);
 
     /* for now, always fetch a 32-bit value.  this would need to
        change with privileged mode, since we could cross a page
@@ -20,6 +20,11 @@ function fetch_and_execute () =
          0b11 => (decode(instr), 4),
 	 _    => (decodeCompressed(instr[15 .. 0]), 2)
        };
+    match (instr_ast, instr_sz) {
+      (Some(ast), 4) => print(BitStr(instr)          ^ ":  " ^ ast),
+      (Some(ast), 2) => print(BitStr(instr[15 .. 0]) ^ ":  " ^ ast),
+      (_,         _) => print(BitStr(instr)          ^ ":  no-decode")
+    };
     /* check whether a compressed instruction is legal. */
     if (misa.C() == 0b0 & (instr_sz == 2)) then {
       let t : sync_exception =

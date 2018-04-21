@@ -169,7 +169,7 @@ val int_power = {ocaml: "int_power", lem: "pow"} : (int, int) -> int
 
 val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> real
 
-overload operator ^ = {xor_vec, int_power, real_power}
+overload operator ^ = {xor_vec, int_power, real_power, concat_str}
 
 val add_range = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)

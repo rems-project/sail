@@ -6,9 +6,11 @@ scattered function decode
 val decodeCompressed : bits(16) -> option(ast) effect pure
 scattered function decodeCompressed
 
-
 val execute : ast -> unit effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
 scattered function execute
+
+val cast print_insn : ast -> string
+scattered function print_insn
 
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
@@ -24,6 +26,12 @@ function clause execute UTYPE(imm, rd, op) =
     } in
     X(rd) = ret
 
+function clause print_insn UTYPE(imm, rd, op) =
+  match (op) {
+    RISCV_LUI   => "lui   " ^ rd ^ ", " ^ BitStr(imm),
+    RISCV_AUIPC => "auipc " ^ rd ^ ", " ^ BitStr(imm)
+  }
+
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
 
@@ -35,6 +43,9 @@ function clause execute (RISCV_JAL(imm, rd)) = {
     let offset : xlenbits = EXTS(imm);
     nextPC = pc + offset;
 }
+
+function clause print_insn (RISCV_JAL(imm, rd)) =
+  "jal   " ^ rd ^ ", " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
@@ -48,6 +59,9 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     let newPC : xlenbits = X(rs1) + EXTS(imm);
     nextPC = newPC[63..1] @ 0b0;
 }
+
+function clause print_insn (RISCV_JALR(imm, rs1, rd)) =
+  "jalr  " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = BTYPE : (bits(13), regbits, regbits, bop)
@@ -73,6 +87,18 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) =
   if taken then
     nextPC = PC + EXTS(imm)
 
+function clause print_insn (BTYPE(imm, rs2, rs1, op)) =
+  let insn : string =
+    match (op) {
+      RISCV_BEQ  => "beq   ",
+      RISCV_BNE  => "bne   ",
+      RISCV_BLT  => "blt   ",
+      RISCV_BGE  => "bge   ",
+      RISCV_BLTU => "bltu  ",
+      RISCV_BGEU => "bgeu  "
+    } in
+  insn ^ rs1 ^ ", " ^ rs2 ^ ", " ^ BitStr(imm)
+
 /* ****************************************************************** */
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 
@@ -96,6 +122,18 @@ function clause execute (ITYPE (imm, rs1, rd, op)) =
   } in
   X(rd) = result
 
+function clause print_insn (ITYPE(imm, rs1, rd, op)) =
+  let insn : string =
+    match (op) {
+      RISCV_ADDI  => "addi  ",
+      RISCV_SLTI  => "slti  ",
+      RISCV_SLTIU => "sltiu ",
+      RISCV_XORI  => "xori  ",
+      RISCV_ORI   => "ori   ",
+      RISCV_ANDI  => "andi  "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
+
 /* ****************************************************************** */
 union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
 
@@ -112,6 +150,15 @@ function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
     } in
     X(rd) = result
 
+
+function clause print_insn (SHIFTIOP(shamt, rs1, rd, op)) =
+  let insn : string =
+    match (op) {
+      RISCV_SLLI => "slli  ",
+      RISCV_SRLI => "srli  ",
+      RISCV_SRAI => "srai  "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPE : (regbits, regbits, regbits, rop)
@@ -144,6 +191,22 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
   } in
   X(rd) = result
 
+function clause print_insn (RTYPE(rs2, rs1, rd, op)) =
+  let insn : string =
+    match (op) {
+      RISCV_ADD  => "add   ",
+      RISCV_SUB  => "sub   ",
+      RISCV_SLL  => "sll   ",
+      RISCV_SLT  => "slt   ",
+      RISCV_SLTU => "sltu  ",
+      RISCV_XOR  => "xor   ",
+      RISCV_SRL  => "srl   ",
+      RISCV_SRA  => "sra   ",
+      RISCV_OR   => "or    ",
+      RISCV_AND  => "and   "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
+
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
 
@@ -173,6 +236,20 @@ function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
         } in
     X(rd) = result
 
+/* FIXME: aq/rl are getting dropped */
+function clause print_insn (LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
+  let insn : string =
+    match (width, is_unsigned) {
+      (BYTE,   false) => "lb    ",
+      (BYTE,   true)  => "lbu   ",
+      (HALF,   false) => "lh    ",
+      (HALF,   true)  => "lhu   ",
+      (WORD,   false) => "lw    ",
+      (WORD,   true)  => "lwu   ",
+      (_,      _)     => "ld.bad "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
+
 /* ****************************************************************** */
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
 
@@ -198,6 +275,17 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
       }
     }
 
+/* FIXME: aq/rl are getting dropped */
+function clause print_insn (STORE(imm, rs2, rs1, width, aq, rl)) =
+  let insn : string =
+    match (width) {
+      BYTE   => "sb    ",
+      HALF   => "sh    ",
+      WORD   => "sw    ",
+      DOUBLE => "sd    "
+    } in
+  insn ^ rs2 ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
+
 /* ****************************************************************** */
 union clause ast = ADDIW : (bits(12), regbits, regbits)
 
@@ -206,6 +294,9 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0
 function clause execute (ADDIW(imm, rs1, rd)) =
   let result : xlenbits = EXTS(imm) + X(rs1) in
   X(rd) = EXTS(result[31..0])
+
+function clause print_insn (ADDIW(imm, rs1, rd)) =
+  "addiw " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = SHIFTW : (bits(5), regbits, regbits, sop)
@@ -222,6 +313,15 @@ function clause execute (SHIFTW(shamt, rs1, rd, op)) =
       RISCV_SRAI => shift_right_arith32(rs1_val, shamt)
     } in
     X(rd) = EXTS(result)
+
+function clause print_insn (SHIFTW(shamt, rs1, rd, op)) =
+  let insn : string =
+    match (op) {
+      RISCV_SLLI => "slli  ",
+      RISCV_SRLI => "srli  ",
+      RISCV_SRAI => "srai  "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPEW : (regbits, regbits, regbits, ropw)
@@ -244,7 +344,19 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
   } in
   X(rd) = EXTS(result)
 
+function clause print_insn (RTYPEW(rs2, rs1, rd, op)) =
+  let insn : string =
+    match (op) {
+      RISCV_ADDW => "addw  ",
+      RISCV_SUBW => "subw  ",
+      RISCV_SLLW => "sllw  ",
+      RISCV_SRLW => "srlw  ",
+      RISCV_SRAW => "sraw  "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
+
 /* ****************************************************************** */
+/* FIXME: separate these out into separate ast variants */
 union clause ast = MUL : (regbits, regbits, regbits, bool, bool, bool)
 
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd, false,  true, true))  /* MUL */
@@ -260,6 +372,16 @@ function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) =
   let result = if high then result128[127..64] else result128[63..0] in
   X(rd) = result
 
+function clause print_insn (MUL(rs2, rs1, rd, high, signed1, signed2)) =
+  let insn : string =
+    match (high, signed1, signed2) {
+      (false, true, true)  => "mul   ",
+      (true,  true, true)  => "mulh  ",
+      (true,  true, false) => "mulhsu ",
+      (true, false, false) => "mulhu"
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
+
 /* ****************************************************************** */
 union clause ast = DIV : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0110011 = Some(DIV(rs2, rs1, rd,  true))  /* DIV */
@@ -271,6 +393,10 @@ function clause execute (DIV(rs2, rs1, rd, s)) =
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
   let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int) in
   let q': int = if s & q > xlen_max_signed then xlen_min_signed else q in /* check for signed overflow */  X(rd) = to_bits(xlen, q')
+
+function clause print_insn (DIV(rs2, rs1, rd, s)) =
+  let insn : string = if s then "div   " else "divu  " in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 /* ****************************************************************** */
 union clause ast = REM : (regbits, regbits, regbits, bool)
@@ -285,6 +411,10 @@ function clause execute (REM(rs2, rs1, rd, s)) =
   /* signed overflow case returns zero naturally as required due to -1 divisor */
   X(rd) = to_bits(xlen, r)
 
+function clause print_insn (REM(rs2, rs1, rd, s)) =
+  let insn : string = if s then "rem   " else "remu  " in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
+
 /* ****************************************************************** */
 union clause ast = MULW : (regbits, regbits, regbits)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011 = Some(MULW(rs2, rs1, rd)) /* MULW */
@@ -296,6 +426,9 @@ function clause execute (MULW(rs2, rs1, rd)) =
   let result32 = to_bits(64, rs1_int * rs2_int)[31..0] in /* XXX surprising behaviour of to_bits requires exapnsion to 64 bits followed by truncation... */
   let result : xlenbits = EXTS(result32) in
   X(rd) = result
+
+function clause print_insn (MULW(rs2, rs1, rd)) =
+  "mulw  " ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 /* ****************************************************************** */
 union clause ast = DIVW : (regbits, regbits, regbits, bool)
@@ -310,6 +443,10 @@ function clause execute (DIVW(rs2, rs1, rd, s)) =
   let q': int = if s & q > (2 ^ 31 - 1) then  (0 - 2^31) else q in /* check for signed overflow */
   X(rd) = EXTS(to_bits(32, q'))
 
+function clause print_insn (DIVW(rs2, rs1, rd, s)) =
+  let insn : string = if s then "divw  " else "divuw " in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
+
 /* ****************************************************************** */
 union clause ast = REMW : (regbits, regbits, regbits, bool)
 function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0111011 = Some(REMW(rs2, rs1, rd,  true))  /* REMW */
@@ -322,6 +459,10 @@ function clause execute (REMW(rs2, rs1, rd, s)) =
   let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in
   /* signed overflow case returns zero naturally as required due to -1 divisor */
   X(rd) = EXTS(to_bits(32, r))
+
+function clause print_insn (REMW(rs2, rs1, rd, s)) =
+  let insn : string = if s then "remw  " else "remuw " in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 /* ****************************************************************** */
 union clause ast = FENCE : (bits(4), bits(4))
@@ -340,12 +481,19 @@ function clause execute (FENCE(pred, succ)) = {
   }
 }
 
+/* FIXME */
+function clause print_insn (FENCE(pred, succ)) =
+  "fence"
+
 /* ****************************************************************** */
 union clause ast = FENCEI : unit
 
 function clause decode 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111 = Some(FENCEI())
 
 function clause execute FENCEI() = MEM_fence_i()
+
+function clause print_insn (FENCEI()) =
+  "fence.i"
 
 /* ****************************************************************** */
 union clause ast = ECALL : unit
@@ -362,6 +510,9 @@ function clause execute ECALL() =
 	     excinfo = (None() : option(xlenbits)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 
+function clause print_insn (ECALL()) =
+  "ecall"
+
 /* ****************************************************************** */
 union clause ast = MRET : unit
 
@@ -369,6 +520,9 @@ function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b11100
 
 function clause execute MRET() =
   nextPC = handle_exception_ctl(cur_privilege, CTL_MRET(), PC)
+
+function clause print_insn (MRET()) =
+  "mret"
 
 /* ****************************************************************** */
 union clause ast = SRET : unit
@@ -378,12 +532,18 @@ function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b11100
 function clause execute SRET() =
   nextPC = handle_exception_ctl(cur_privilege, CTL_SRET(), PC)
 
+function clause print_insn (SRET()) =
+  "sret"
+
 /* ****************************************************************** */
 union clause ast = EBREAK : unit
 
 function clause decode 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(EBREAK())
 
 function clause execute EBREAK() = { throw Error_EBREAK() }
+
+function clause print_insn (EBREAK()) =
+  "ebreak"
 
 /* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
@@ -400,6 +560,16 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
 	_      => internal_error("LOADRES expected WORD or DOUBLE")
       } in
   X(rd) = result
+
+/* FIXME */
+function clause print_insn (LOADRES(aq, rl, rs1, width, rd)) =
+  let insn : string =
+    match (width) {
+      WORD   => "lr.w  ",
+      DOUBLE => "lr.d  ",
+      _      => "lr.bad "
+    } in
+  insn ^ rd ^ ", " ^ rs1
 
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
@@ -426,6 +596,16 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
     };
   };
 }
+
+/* FIXME */
+function clause print_insn (STORECON(aq, rl, rs2, rs1, width, rd)) =
+  let insn : string =
+    match (width) {
+      WORD   => "sc.w  ",
+      DOUBLE => "sc.d  ",
+      _      => "sc.bad "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 /* ****************************************************************** */
 union clause ast = AMO : (amoop, bool, bool, regbits, regbits, word_width, regbits)
@@ -488,6 +668,31 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
     _      => internal_error("AMO expected WORD or DOUBLE")
   };
 }
+
+function clause print_insn (AMO(op, aq, rl, rs2, rs1, width, rd)) =
+  let insn : string =
+    match (op, width) {
+      (AMOSWAP, WORD) => "amoswap.w ",
+      (AMOADD , WORD) => "amoadd.w  ",
+      (AMOXOR , WORD) => "amoxor.w  ",
+      (AMOAND , WORD) => "amoand.w  ",
+      (AMOOR  , WORD) => "amoor.w   ",
+      (AMOMIN , WORD) => "amomin.w  ",
+      (AMOMAX , WORD) => "amomax.w  ",
+      (AMOMINU, WORD) => "amominu.w ",
+      (AMOMAXU, WORD) => "amomaxu.w ",
+      (AMOSWAP, DOUBLE) => "amoswap.d ",
+      (AMOADD , DOUBLE) => "amoadd.d  ",
+      (AMOXOR , DOUBLE) => "amoxor.d  ",
+      (AMOAND , DOUBLE) => "amoand.d  ",
+      (AMOOR  , DOUBLE) => "amoor.d   ",
+      (AMOMIN , DOUBLE) => "amomin.d  ",
+      (AMOMAX , DOUBLE) => "amomax.d  ",
+      (AMOMINU, DOUBLE) => "amominu.d ",
+      (AMOMAXU, DOUBLE) => "amomaxu.d ",
+      (_, _)            => "amo.bad "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 /* ****************************************************************** */
 union clause ast = CSR  : (bits(12), regbits, regbits, bool, csrop)
@@ -601,6 +806,18 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     X(rd) = csr_val
   }
 
+function clause print_insn (CSR(csr, rs1, rd, is_imm, op)) =
+  let insn : string =
+    match (op, is_imm) {
+      (CSRRW, true)  => "csrrwi ",
+      (CSRRW, false) => "csrrw  ",
+      (CSRRS, true)  => "csrrsi ",
+      (CSRRS, false) => "csrrs  ",
+      (CSRRC, true)  => "csrrci ",
+      (CSRRC, false) => "csrrc  "
+    } in
+  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ csr_name(csr)
+
 /* ****************************************************************** */
 union clause ast = NOP : unit
 
@@ -610,6 +827,9 @@ function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bit
 }
 
 function clause execute NOP() = ()
+
+function clause print_insn (NOP()) =
+  "nop"
 
 /* ****************************************************************** */
 union clause ast = ILLEGAL : unit
@@ -622,6 +842,9 @@ function clause execute ILLEGAL() = {
            excinfo = Some (EXTZ(0b0)) } in
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 }
+
+function clause print_insn (ILLEGAL()) =
+  "illegal"
 
 /* ****************************************************************** */
 union clause ast = C_ADDI4SPN : (cregbits, bits(8))
@@ -638,6 +861,9 @@ function clause execute (C_ADDI4SPN(rdc, nzimm)) = {
   execute(ITYPE(imm, sp, rd, RISCV_ADDI))
 }
 
+function clause print_insn (C_ADDI4SPN(rdc, nzimm)) =
+  "c.addi4spn " ^ creg2reg_bits(rdc) ^ ", " ^ BitStr(nzimm)
+
 /* ****************************************************************** */
 union clause ast = C_LW : (bits(5), cregbits, cregbits)
 
@@ -652,6 +878,9 @@ function clause execute (C_LW(uimm, rsc, rdc)) = {
   let rs = creg2reg_bits(rsc) in
   execute(LOAD(imm, rs, rd, false, WORD, false, false))
 }
+
+function clause print_insn (C_LW(uimm, rsc, rdc)) =
+  "c.lw   " ^ creg2reg_bits(rdc) ^ ", " ^ creg2reg_bits(rsc) ^ ", " ^ BitStr(uimm)
 
 /* ****************************************************************** */
 union clause ast = C_LD : (bits(5), cregbits, cregbits)
@@ -668,6 +897,9 @@ function clause execute (C_LD(uimm, rsc, rdc)) = {
   execute(LOAD(imm, rs, rd, false, DOUBLE, false, false))
 }
 
+function clause print_insn (C_LD(uimm, rsc, rdc)) =
+  "c.ld   " ^ creg2reg_bits(rdc) ^ ", " ^ creg2reg_bits(rsc) ^ ", " ^ BitStr(uimm)
+
 /* ****************************************************************** */
 union clause ast = C_SW : (bits(5), cregbits, cregbits)
 
@@ -682,6 +914,9 @@ function clause execute (C_SW(uimm, rsc1, rsc2)) = {
   let rs2 = creg2reg_bits(rsc2) in
   execute(STORE(imm, rs2, rs1, WORD, false, false))
 }
+
+function clause print_insn (C_SW(uimm, rsc1, rsc2)) =
+  "c.sw   " ^ creg2reg_bits(rsc1) ^ ", " ^ creg2reg_bits(rsc2) ^ ", " ^ BitStr(uimm)
 
 /* ****************************************************************** */
 union clause ast = C_SD : (bits(5), cregbits, cregbits)
@@ -698,6 +933,9 @@ function clause execute (C_SD(uimm, rsc1, rsc2)) = {
   execute(STORE(imm, rs2, rs1, DOUBLE, false, false))
 }
 
+function clause print_insn (C_SD(uimm, rsc1, rsc2)) =
+  "c.sd   " ^ creg2reg_bits(rsc1) ^ ", " ^ creg2reg_bits(rsc2) ^ ", " ^ BitStr(uimm)
+
 /* ****************************************************************** */
 union clause ast = C_ADDI : (bits(6), regbits)
 
@@ -711,6 +949,9 @@ function clause execute (C_ADDI(nzi, rsd)) = {
   let imm : bits(12) = EXTS(nzi) in
   execute(ITYPE(imm, rsd, rsd, RISCV_ADDI))
 }
+
+function clause print_insn (C_ADDI(nzi, rsd)) =
+  "c.addi   " ^ rsd ^ ", " ^ BitStr(nzi)
 
 /* ****************************************************************** */
 union clause ast = C_JAL : (bits(11))
@@ -733,6 +974,12 @@ function clause execute (C_ADDIW(imm, rsd)) = {
   X(rsd) = EXTS(res)
 }
 
+function clause print_insn (C_JAL(imm)) =
+  "c.jal   " ^ BitStr(imm)
+
+function clause print_insn (C_ADDIW(imm, rsd)) =
+  "c.addiw " ^ rsd ^ ", " ^ BitStr(imm)
+
 /* ****************************************************************** */
 union clause ast = C_LI : (bits(6), regbits)
 
@@ -745,6 +992,9 @@ function clause execute (C_LI(imm, rd)) = {
   let imm : bits(12) = EXTS(imm) in
   execute(ITYPE(imm, zreg, rd, RISCV_ADDI))
 }
+
+function clause print_insn (C_LI(imm, rd)) =
+  "c.li  " ^ rd ^ ", " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = C_ADDI16SP : (bits(6))
@@ -760,6 +1010,9 @@ function clause execute (C_ADDI16SP(imm)) = {
   execute(ITYPE(imm, sp, sp, RISCV_ADDI))
 }
 
+function clause print_insn (C_ADDI16SP(imm)) =
+  "c.addi16sp  " ^ BitStr(imm)
+
 /* ****************************************************************** */
 union clause ast = C_LUI : (bits(6), regbits)
 
@@ -772,6 +1025,9 @@ function clause execute (C_LUI(imm, rd)) = {
   let res : bits(20) = EXTS(imm) in
   execute(UTYPE(res, rd, RISCV_LUI))
 }
+
+function clause print_insn (C_LUI(imm, rd)) =
+  "c.lui  " ^ rd ^ ", " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = C_SRLI : (bits(6), cregbits)
@@ -788,6 +1044,9 @@ function clause execute (C_SRLI(shamt, rsd)) = {
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRLI))
 }
 
+function clause print_insn (C_SRLI(shamt, rsd)) =
+  "c.srli  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(shamt)
+
 /* ****************************************************************** */
 union clause ast = C_SRAI : (bits(6), cregbits)
 
@@ -803,6 +1062,9 @@ function clause execute (C_SRAI(shamt, rsd)) = {
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRAI))
 }
 
+function clause print_insn (C_SRAI(shamt, rsd)) =
+  "c.srai  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(shamt)
+
 /* ****************************************************************** */
 union clause ast = C_ANDI : (bits(6), cregbits)
 
@@ -812,6 +1074,9 @@ function clause execute (C_ANDI(imm, rsd)) = {
   let rsd = creg2reg_bits(rsd) in
   execute(ITYPE(EXTS(imm), rsd, rsd, RISCV_ANDI))
 }
+
+function clause print_insn (C_ANDI(imm, rsd)) =
+  "c.andi  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = C_SUB : (cregbits, cregbits)
@@ -824,6 +1089,9 @@ function clause execute (C_SUB(rsd, rs2)) = {
   execute(RTYPE(rs2, rsd, rsd, RISCV_SUB))
 }
 
+function clause print_insn (C_SUB(rsd, rs2)) =
+  "c.sub  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+
 /* ****************************************************************** */
 union clause ast = C_XOR : (cregbits, cregbits)
 
@@ -834,6 +1102,9 @@ function clause execute (C_XOR(rsd, rs2)) = {
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_XOR))
 }
+
+function clause print_insn (C_XOR(rsd, rs2)) =
+  "c.xor  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_OR : (cregbits, cregbits)
@@ -846,6 +1117,9 @@ function clause execute (C_OR(rsd, rs2)) = {
   execute(RTYPE(rs2, rsd, rsd, RISCV_OR))
 }
 
+function clause print_insn (C_OR(rsd, rs2)) =
+  "c.or   " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+
 /* ****************************************************************** */
 union clause ast = C_AND : (cregbits, cregbits)
 
@@ -856,6 +1130,9 @@ function clause execute (C_AND(rsd, rs2)) = {
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_AND))
 }
+
+function clause print_insn (C_AND(rsd, rs2)) =
+  "c.and  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_SUBW : (cregbits, cregbits)
@@ -869,6 +1146,9 @@ function clause execute (C_SUBW(rsd, rs2)) = {
   execute(RTYPEW(rs2, rsd, rsd, RISCV_SUBW))
 }
 
+function clause print_insn (C_SUBW(rsd, rs2)) =
+  "c.subw " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+
 /* ****************************************************************** */
 union clause ast = C_ADDW : (cregbits, cregbits)
 
@@ -881,6 +1161,9 @@ function clause execute (C_ADDW(rsd, rs2)) = {
   execute(RTYPEW(rs2, rsd, rsd, RISCV_ADDW))
 }
 
+function clause print_insn (C_ADDW(rsd, rs2)) =
+  "c.addw " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+
 /* ****************************************************************** */
 union clause ast = C_J : (bits(11))
 
@@ -889,6 +1172,9 @@ function clause decodeCompressed (0b101 @ i11 : bits(1) @ i4 : bits(1) @ i98 : b
 
 function clause execute (C_J(imm)) =
   execute(RISCV_JAL(EXTS(imm @ 0b0), zreg))
+
+function clause print_insn (C_J(imm)) =
+  "c.j    " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = C_BEQZ : (bits(8), cregbits)
@@ -899,6 +1185,9 @@ function clause decodeCompressed (0b110 @ i8 : bits(1) @ i43 : bits(2) @ rs : cr
 function clause execute (C_BEQZ(imm, rs)) =
   execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BEQ))
 
+function clause print_insn (C_BEQZ(imm, rs)) =
+  "c.beqz " ^ creg2reg_bits(rs) ^ ", " ^ BitStr(imm)
+
 /* ****************************************************************** */
 union clause ast = C_BNEZ : (bits(8), cregbits)
 
@@ -907,6 +1196,9 @@ function clause decodeCompressed (0b111 @ i8 : bits(1) @ i43 : bits(2) @ rs : cr
 
 function clause execute (C_BNEZ(imm, rs)) =
   execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BNE))
+
+function clause print_insn (C_BNEZ(imm, rs)) =
+  "c.bnez " ^ creg2reg_bits(rs) ^ ", " ^ BitStr(imm)
 
 /* ****************************************************************** */
 union clause ast = C_SLLI : (bits(6), regbits)
@@ -920,6 +1212,9 @@ function clause decodeCompressed (0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui
 
 function clause execute (C_SLLI(shamt, rsd)) =
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SLLI))
+
+function clause print_insn (C_SLLI(shamt, rsd)) =
+  "c.slli " ^ rsd ^ ", " ^ BitStr(shamt)
 
 /* ****************************************************************** */
 union clause ast = C_LWSP : (bits(6), regbits)
@@ -936,6 +1231,9 @@ function clause execute (C_LWSP(uimm, rd)) = {
   execute(LOAD(imm, sp, rd, false, WORD, false, false))
 }
 
+function clause print_insn (C_LWSP(uimm, rd)) =
+  "c.lwsp " ^ rd ^ ", " ^ BitStr(uimm)
+
 /* ****************************************************************** */
 union clause ast = C_LDSP : (bits(6), regbits)
 
@@ -951,6 +1249,9 @@ function clause execute (C_LDSP(uimm, rd)) = {
   execute(LOAD(imm, sp, rd, false, DOUBLE, false, false))
 }
 
+function clause print_insn (C_LDSP(uimm, rd)) =
+  "c.ldsp " ^ rd ^ ", " ^ BitStr(uimm)
+
 /* ****************************************************************** */
 union clause ast = C_SWSP : (bits(6), regbits)
 
@@ -963,6 +1264,9 @@ function clause execute (C_SWSP(uimm, rs2)) = {
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   execute(STORE(imm, rs2, sp, WORD, false, false))
 }
+
+function clause print_insn (C_SWSP(uimm, rd)) =
+  "c.swsp " ^ rd ^ ", " ^ BitStr(uimm)
 
 /* ****************************************************************** */
 union clause ast = C_SDSP : (bits(6), regbits)
@@ -977,6 +1281,9 @@ function clause execute (C_SDSP(uimm, rs2)) = {
   execute(STORE(imm, rs2, sp, DOUBLE, false, false))
 }
 
+function clause print_insn (C_SDSP(uimm, rd)) =
+  "c.sdsp " ^ rd ^ ", " ^ BitStr(uimm)
+
 /* ****************************************************************** */
 union clause ast = C_JR : (regbits)
 
@@ -988,6 +1295,9 @@ function clause decodeCompressed (0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10) 
 
 function clause execute (C_JR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, zreg))
+
+function clause print_insn (C_JR(rs1)) =
+  "c.jr  " ^ rs1
 
 /* ****************************************************************** */
 union clause ast = C_JALR : (regbits)
@@ -1001,6 +1311,9 @@ function clause decodeCompressed (0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10) 
 function clause execute (C_JALR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, ra))
 
+function clause print_insn (C_JALR(rs1)) =
+  "c.jalr  " ^ rs1
+
 /* ****************************************************************** */
 union clause ast = C_MV : (regbits, regbits)
 
@@ -1012,6 +1325,9 @@ function clause decodeCompressed (0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0
 
 function clause execute (C_MV(rd, rs2)) =
   execute(RTYPE(rs2, zreg, rd, RISCV_ADD))
+
+function clause print_insn (C_MV(rd, rs2)) =
+  "c.mv  " ^ rd ^ ", " ^ rs2
 
 /* ****************************************************************** */
 union clause ast = C_ADD : (regbits, regbits)
@@ -1025,6 +1341,9 @@ function clause decodeCompressed (0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 
 function clause execute (C_ADD(rsd, rs2)) =
   execute(RTYPE(rs2, rsd, rsd, RISCV_ADD))
 
+function clause print_insn (C_ADD(rsd, rs2)) =
+  "c.rsd  " ^ rsd ^ ", " ^ rs2
+
 /* ****************************************************************** */
 
 function clause decode _ = None()
@@ -1034,3 +1353,4 @@ end ast
 end decode
 end decodeCompressed
 end execute
+end print_insn
