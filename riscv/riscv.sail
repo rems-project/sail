@@ -1342,7 +1342,7 @@ function clause execute (C_ADD(rsd, rs2)) =
   execute(RTYPE(rs2, rsd, rsd, RISCV_ADD))
 
 function clause print_insn (C_ADD(rsd, rs2)) =
-  "c.rsd  " ^ rsd ^ ", " ^ rs2
+  "c.add  " ^ rsd ^ ", " ^ rs2
 
 /* ****************************************************************** */
 
