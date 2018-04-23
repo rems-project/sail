@@ -177,7 +177,7 @@ let rec desugar_rchain chain s e =
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
-%token <string> Colon ColonColon ExclEq
+%token <string> Colon ColonColon TildeTilde ExclEq
 %token <string> GtEq
 %token <string> LtEq
 
@@ -1046,6 +1046,8 @@ atomic_exp:
 fexp_exp:
   | atomic_exp Eq exp
     { mk_exp (E_app_infix ($1, mk_id (Id "=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | TildeTilde id
+    { mk_exp (E_app_infix (mk_exp (E_id $2) $startpos($2) $endpos($2), mk_id (Id "=") $startpos $endpos, mk_exp (E_id $2) $startpos($2) $endpos($2))) $startpos $endpos }
 
 fexp_exp_list:
   | fexp_exp

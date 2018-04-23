@@ -215,6 +215,7 @@ rule token = parse
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ (Caret(r"^")) }
   | "::"                                { ColonColon(r "::") }
+  | "~~"                                { TildeTilde(r "~~") }
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | ".."                                { DotDot }
