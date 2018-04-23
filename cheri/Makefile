@@ -37,6 +37,10 @@ latex: $(CHERI_SAILS)
 cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
 
+cheri128_trace: $(CHERI128_SAILS) $(CHERI_MAIN)
+	$(SAIL) -ocaml_trace -o $@ $^
+
+
 # TODO Using bit lists for now in Lem generation; for machine words,
 # monomorphisation is needed due to some variable length bitvectors, e.g. in
 # CLoad as of commit b34c3fb, in the TLB translation, and in compressed

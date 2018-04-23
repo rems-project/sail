@@ -814,7 +814,7 @@ function clause execute (CBuildCap(cd, cb, ct)) =
    else if ct_base > ct_top then /* check for length < 0 - possible because ct might be untagged */
     raise_c2_exception(CapEx_LengthViolation, ct)
    else if (ct_perms & cb_perms) != ct_perms then
-    raise_c2_exception(CapEx_UserDefViolation, ct)
+    raise_c2_exception(CapEx_UserDefViolation, cb)
   else
     let (exact, cd1) = setCapBounds(cb_val, to_bits(64, ct_base), to_bits(65, ct_top)) in 
     let (representable, cd2) = setCapOffset(cd1, to_bits(64, ct_offset)) in
