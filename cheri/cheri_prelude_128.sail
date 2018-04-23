@@ -329,7 +329,7 @@ function setCapBounds(cap, base, top) : (CapStruct, bits(64), bits(65)) -> (bool
     let e_mask : bits(65) = zero_extend(replicate_bits(0b1, e)) in
     let e_bits = top & e_mask in
     let T2 : bits(20) = T + (if unsigned(e_bits) == 0 then 0x00000 else 0x00001) in
-    let newCap  = {cap with E=to_bits(6, e), B=Bc, T=T2} in
+    let newCap  = {cap with address=base, E=to_bits(6, e), B=Bc, T=T2} in
     let newBase = getCapBase(newCap) in
     let newTop  = getCapTop(newCap) in
     let exact   = (unsigned(base) == newBase) & (unsigned(top) == newTop) in
