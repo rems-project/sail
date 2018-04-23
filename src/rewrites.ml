@@ -2786,13 +2786,13 @@ let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (annot: tannot anno
        | [] -> pexp
        | gs ->
           let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp gs |> fold_guards, strip_exp exp)) in
-          check_case (env_of_annot annot) (pat_typ_of pat) unchecked_pexp (typ_of_annot annot)
+          check_case (pat_env_of pat) (pat_typ_of pat) unchecked_pexp (typ_of exp)
      end
   | Pat_when (pat, guard, exp) ->
      begin
        let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
        let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp !guards |> fold_guards, strip_exp exp)) in
-       check_case (env_of_annot annot) (pat_typ_of pat) unchecked_pexp (typ_of_annot annot)
+       check_case (pat_env_of pat) (pat_typ_of pat) unchecked_pexp (typ_of exp)
      end
 
 
