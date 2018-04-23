@@ -203,6 +203,9 @@ val strip_exp : 'a exp -> unit exp
 (** Strip the type annotations from a pattern *)
 val strip_pat : 'a pat -> unit pat
 
+(** Strip the type annotations from a pattern-expression *)
+val strip_pexp : 'a pexp -> unit pexp
+
 (** Strip the type annotations from an l-expression *)
 val strip_lexp : 'a lexp -> unit lexp
 
@@ -217,6 +220,8 @@ val strip_lexp : 'a lexp -> unit lexp
 val check_exp : Env.t -> unit exp -> typ -> tannot exp
 
 val infer_exp : Env.t -> unit exp -> tannot exp
+
+val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
 val prove : Env.t -> n_constraint -> bool
 
@@ -244,6 +249,9 @@ val typ_of_annot : Ast.l * tannot -> typ
 
 val pat_typ_of : tannot pat -> typ
 val pat_env_of : tannot pat -> Env.t
+
+val typ_of_pexp : tannot pexp -> typ
+val env_of_pexp : tannot pexp -> Env.t
 
 val effect_of : tannot exp -> effect
 val effect_of_pat : tannot pat -> effect

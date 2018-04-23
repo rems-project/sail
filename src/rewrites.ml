@@ -2768,28 +2768,35 @@ let rewrite_defs_internal_lets =
     ; rewrite_defs = rewrite_defs_base
     }
 
-let rewrite_pexps_with_guards rewrite_pat =
-  let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
-    let guards = ref [] in
 
-    match pexp_aux with
-    | Pat_exp (pat, exp) ->
-       begin
-         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
-         match !guards with
-         | [] -> pexp
-         | (g :: gs) ->
-            let guard_annot = (fst annot, Some (env_of exp, bool_typ, no_effect)) in
-            Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) g gs, exp), annot)
-       end
-    | Pat_when (pat, guard, exp) ->
-       begin
-         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
-         let guard_annot = (fst annot, Some (env_of exp, bool_typ, no_effect)) in
-         Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) guard !guards, exp), annot)
-       end
-  in
+let fold_guards guards =
+  match guards with
+  | [] -> (mk_exp (E_lit (mk_lit L_true)))
+  | g :: gs -> List.fold_left (fun g g' -> mk_exp (E_app (mk_id "and_bool", [strip_exp g; strip_exp g']))) g gs
 
+
+let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (annot: tannot annot)) as pexp) =
+  let guards = ref [] in
+
+  match pexp_aux with
+  | Pat_exp (pat, exp) ->
+     begin
+       let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
+       match !guards with
+       | [] -> pexp
+       | gs ->
+          let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp gs |> fold_guards, strip_exp exp)) in
+          check_case (env_of_annot annot) (pat_typ_of pat) unchecked_pexp (typ_of_annot annot)
+     end
+  | Pat_when (pat, guard, exp) ->
+     begin
+       let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
+       let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp !guards |> fold_guards, strip_exp exp)) in
+       check_case (env_of_annot annot) (pat_typ_of pat) unchecked_pexp (typ_of_annot annot)
+     end
+
+
+let pexp_rewriters rewrite_pexp =
   let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
 
@@ -2808,7 +2815,7 @@ let rewrite_defs_pat_lits =
        P_aux (P_id id, p_annot)
     | p_aux, p_annot -> P_aux (p_aux, p_annot)
   in
-  rewrite_pexps_with_guards rewrite_pat
+  pexp_rewriters (rewrite_pexp_with_guards rewrite_pat)
 
 (* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
  * internal let-expressions, or internal plet-expressions ended by a term that does not

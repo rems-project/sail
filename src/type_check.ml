@@ -1906,6 +1906,10 @@ let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 let pat_env_of (P_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
+let typ_of_pexp (Pat_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
+
+let env_of_pexp (Pat_aux (_, (l, tannot))) = env_of_annot (l, tannot)
+
 (* Flow typing *)
 
 let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
