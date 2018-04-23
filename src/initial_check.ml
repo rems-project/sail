@@ -468,6 +468,7 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
     | Parse_ast.P_tup(pats) -> P_tup(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_list(pats) -> P_list(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_cons(pat1, pat2) -> P_cons (to_ast_pat k_env def_ord pat1, to_ast_pat k_env def_ord pat2)
+    | Parse_ast.P_string_append (pat1, pat2) -> P_string_append (to_ast_pat k_env def_ord pat1, to_ast_pat k_env def_ord pat2)
     ), (l,()))
 
 

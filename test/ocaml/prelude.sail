@@ -15,6 +15,9 @@ val eq_int = "eq_int" : (int, int) -> bool
 val eq_vec = "eq_list" : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = "eq_string" : (string, string) -> bool
+val string_startswith = "string_startswith" : (string, string) -> bool
+val string_drop = "string_drop" : (string, nat) -> string
+val string_length = "string_length" : string -> nat
 
 val eq_real = "eq_real" : (real, real) -> bool
 

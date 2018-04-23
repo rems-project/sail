@@ -68,6 +68,7 @@ type gpat =
   | GP_cons of gpat * gpat
   | GP_app of (gpat Bindings.t)
   | GP_record of (gpat Bindings.t)
+  | GP_string_append of gpat * gpat
 
 let rec string_of_gpat = function
   | GP_lit lit -> string_of_lit lit
@@ -80,12 +81,14 @@ let rec string_of_gpat = function
   | GP_app app ->
      Util.string_of_list "|" (fun (id, gpat) -> string_of_id id ^ string_of_gpat gpat) (Bindings.bindings app)
   | GP_record _ -> "GP RECORD"
+  | GP_string_append (gpat1, gpat2) -> string_of_gpat gpat1 ^ " ^^" ^ string_of_gpat gpat2
 
 let is_wild = function
   | GP_wild -> true
   | _ -> false
 
 let rec generalize ctx (P_aux (p_aux, _) as pat) =
+
   match p_aux with
   | P_lit lit -> GP_lit lit
   | P_wild -> GP_wild
@@ -116,6 +119,10 @@ let rec generalize ctx (P_aux (p_aux, _) as pat) =
      let ghd_pat = generalize ctx hd_pat in
      let gtl_pat = generalize ctx tl_pat in
      if is_wild ghd_pat && is_wild gtl_pat then GP_wild else GP_cons (ghd_pat, gtl_pat)
+  | P_string_append (pat1, pat2) ->
+     let gpat1 = generalize ctx pat1 in
+     let gpat2 = generalize ctx pat2 in
+     if is_wild gpat1 && is_wild gpat2 then GP_wild else GP_string_append (gpat1, gpat2)
   | P_app (f, pats) ->
      let gpats = List.map (generalize ctx) pats in
      if List.for_all is_wild gpats then

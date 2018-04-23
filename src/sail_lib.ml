@@ -461,6 +461,12 @@ let debug (str1, n, str2, v) = prerr_endline (str1 ^ Big_int.to_string n ^ str2 
 
 let eq_string (str1, str2) = String.compare str1 str2 == 0
 
+let string_startswith (str1, str2) = String.compare (String.sub str1 0 (String.length str2)) str2 == 0
+
+let string_drop (str, n) = let n = Big_int.to_int n in String.sub str n (String.length str - n)
+
+let string_length str = String.length str
+
 let lt_int (x, y) = Big_int.less x y
 
 let set_slice (out_len, slice_len, out, n, slice) =

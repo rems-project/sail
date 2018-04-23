@@ -554,12 +554,15 @@ pat :: 'P_' ::=
 
   | ( pat1 , .... , patn )                              :: :: tup
     {{ com tuple pattern }}
-  | [|| pat1 , .. , patn ||]	                        :: :: list
+  | [|| pat1 , .. , patn ||]                            :: :: list
     {{ com list pattern }}
   | ( pat )                                             :: S :: paren
     {{ ichlo [[pat]] }}
- | pat1 '::' pat2                                      :: :: cons
-   {{ com Cons patterns }}
+  | pat1 '::' pat2                                      :: :: cons
+    {{ com Cons patterns }}
+
+  | pat1 ^^ pat2                                        :: :: string_append
+    {{ com string append pattern, x ^^ y }}
 
 % XXX Is this still useful?
 fpat :: 'FP_' ::=

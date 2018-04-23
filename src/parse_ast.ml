@@ -251,6 +251,7 @@ pat_aux =  (* Pattern *)
  | P_tup of (pat) list (* tuple pattern *)
  | P_list of (pat) list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
+ | P_string_append of pat * pat (* string append pattern, x ^^ y *)
 
 and pat = 
    P_aux of pat_aux * l

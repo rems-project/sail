@@ -676,6 +676,7 @@ let remove_vector_concat_pat pat =
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_cons           = (fun (p,ps) -> P_cons (p false, ps false))
+    ; p_string_append  = (fun (p1,p2) -> P_string_append (p1 false, p2 false))
     ; p_aux =
         (fun (pat,((l,_) as annot)) contained_in_p_as ->
           match pat with
@@ -819,6 +820,7 @@ let remove_vector_concat_pat pat =
     ; p_list           = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_list ps,List.flatten decls))
     ; p_cons           = (fun ((p,decls),(p',decls')) -> (P_cons (p,p'), decls @ decls'))
+    ; p_string_append  = (fun ((p1,decls1),(p2,decls2)) -> (P_string_append (p1,p2), decls1 @ decls2))
     ; p_aux            = (fun ((pat,decls),annot) -> p_aux ((pat,decls),annot))
     ; fP_aux           = (fun ((fpat,decls),annot) -> (FP_aux (fpat,annot),decls))
     ; fP_Fpat          = (fun (id,(pat,decls)) -> (FP_Fpat (id,pat),decls))
@@ -1072,6 +1074,8 @@ let rec pat_to_exp (P_aux (pat,(l,annot))) =
   | P_tup pats -> rewrap (E_tuple (List.map pat_to_exp pats))
   | P_list pats -> rewrap (E_list (List.map pat_to_exp pats))
   | P_cons (p,ps) -> rewrap (E_cons (pat_to_exp p, pat_to_exp ps))
+  | P_string_append (p,ps) -> raise (Reporting_basic.err_unreachable l
+      "pat_to_exp not implemented for P_string_append")
 and fpat_to_fexp (FP_aux (FP_Fpat (id,pat),(l,annot))) =
   FE_aux (FE_Fexp (id, pat_to_exp pat),(l,annot))
 
@@ -1160,6 +1164,7 @@ let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_app (_,pats) | P_tup pats | P_list pats ->
     List.exists contains_bitvector_pat pats
 | P_cons (p,ps) -> contains_bitvector_pat p || contains_bitvector_pat ps
+| P_string_append (p1,p2) -> contains_bitvector_pat p1 || contains_bitvector_pat p2
 | P_record (fpats,_) ->
     List.exists (fun (FP_aux (FP_Fpat (_,pat),_)) -> contains_bitvector_pat pat) fpats
 
@@ -1188,6 +1193,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_cons           = (fun (p,ps) -> P_cons (p false, ps false))
+    ; p_string_append  = (fun (p1,p2) -> P_string_append (p1 false, p2 false))
     ; p_aux =
         (fun (pat,annot) contained_in_p_as ->
           let env = env_of_annot annot in
@@ -1342,6 +1348,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
                                     (P_list ps, flatten_guards_decls gdls))
     ; p_cons           = (fun ((p,gdls),(p',gdls')) ->
                           (P_cons (p,p'), flatten_guards_decls [gdls;gdls']))
+    ; p_string_append  = (fun ((p1,gdls1),(p2,gdls2)) ->
+                          (P_string_append (p1,p2), flatten_guards_decls [gdls1;gdls2]))
     ; p_aux            = (fun ((pat,gdls),annot) ->
                            let env = env_of_annot annot in
                            let t = Env.base_typ_of env (typ_of_annot annot) in
@@ -2801,6 +2809,103 @@ let pexp_rewriters rewrite_pexp =
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
 
 
+let stringappend_counter = ref 0
+
+let rec rewrite_defs_pat_string_append =
+  let rec rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
+
+    (* utils *)
+    let (pat, _, _, _) = destruct_pexp pexp in
+    let env = pat_env_of pat in
+    let assert_false = mk_exp (E_assert (mk_exp (E_lit (mk_lit L_false)), mk_exp (E_lit (mk_lit (L_string "unreachable"))))) in
+    let construct_single_match match_on pattern maybe_expr =
+      let (true_exp, false_exp) =
+        match maybe_expr with
+        | Some expr -> expr, assert_false
+        | None -> (mk_exp (E_lit (mk_lit L_true))), (mk_exp (E_lit (mk_lit L_false)))
+      in
+      mk_exp (E_case (match_on, [mk_pexp (Pat_exp (pattern, true_exp));
+                                 mk_pexp (Pat_exp (mk_pat P_wild, false_exp))]))
+    in
+
+    (* merge cases of Pat_exp and Pat_when *)
+    let (P_aux (p_aux, p_annot), guards, expr) =
+      match pexp_aux with
+      | Pat_exp (pat, expr) -> (pat, [], expr)
+      | Pat_when (pat, guard, expr) -> (pat, [guard], expr)
+    in
+
+    let (new_pat, new_guards, new_expr) =
+      match (p_aux, p_annot) with
+     (*
+        "lit" ^^ pat2 => expr ---> s# if startswith(s#, "lit")
+                                        && match str_drop(s#, strlen("lit")) {
+                                             pat2 => true, _ => false
+                                           }
+                                   => match str_drop(s#, strlen("lit")) {
+                                        pat2 => expr
+                                      }
+      *)
+      | P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _), pat2), p_annot ->
+
+         (* common things *)
+         let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+         stringappend_counter := !stringappend_counter + 1;
+         let env = Env.add_local id (Immutable, string_typ) env in
+
+         (* construct drop expression -- string_drop(s#, strlen("lit")) *)
+         let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id id); mk_exp (E_app (mk_id "string_length", [mk_exp (E_lit lit)]))])) in
+
+         (* construct the two new guards *)
+         let guard1 = mk_exp (E_app (mk_id "string_startswith", [mk_exp (E_id id); mk_exp (E_lit lit)])) in
+         let guard2 = construct_single_match drop_exp (strip_pat pat2) None in
+
+         (* recurse into pat2 *)
+         let new_pat2_pexp = mk_pexp (Pat_exp (strip_pat pat2, strip_exp expr)) in
+         let new_pat2_pexp = check_case env (pat_typ_of pat2) new_pat2_pexp (typ_of expr) in
+         let new_pat2_pexp = rewrite_pexp new_pat2_pexp in
+         let new_pat2_pexp = strip_pexp new_pat2_pexp in
+
+         (* construct new match expr *)
+         let new_expr = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
+
+         (* construct final result. TODO FIXME: *way* too much type-checking/stripping/rechecking *)
+         (mk_pat (P_id id)), guard1 :: guard2 :: (List.map strip_exp guards), new_expr
+
+     (*
+        (builtin x) ^^ pat2 => expr ---> s# if match maybe_atoi s# {
+                                                 Some (n#, len#) =>
+                                                   match string_drop(s#, len#) {
+                                                     pat2 => true, _ => false
+                                                   }
+                                                 None => false
+                                               }
+                                         => let (x, len#) = match maybe_atoi s# {
+                                                              Some (n#, len#) => (n#, len#)
+                                                            } in
+                                            match string_drop(s#, len#) {
+                                              pat2 => expr
+                                            }
+      *)
+      | P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _), pat2), p_annot ->
+         assert false
+      | P_string_append _, _ ->
+         failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat (P_aux (p_aux, p_annot)))
+
+      | _ -> strip_pat (P_aux (p_aux, p_annot)), (List.map strip_exp guards), (strip_exp expr)
+    in
+
+    (* un-merge Pat_exp and Pat_when cases *)
+    let new_pexp = match new_guards with
+    | [] -> mk_pexp (Pat_exp (new_pat, new_expr))
+    | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
+    in
+    check_case env string_typ new_pexp (typ_of expr)
+
+  in
+  pexp_rewriters rewrite_pexp
+
+
 let rewrite_defs_pat_lits =
   let counter = ref 0 in
   let rewrite_pat guards = function
@@ -3213,6 +3318,7 @@ let rewrite_defs_lem = [
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
+  ("pat_string_append", rewrite_defs_pat_string_append);
   ("guarded_pats", rewrite_defs_guarded_pats);
   ("bitvector_exps", rewrite_bitvector_exps);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
@@ -3241,6 +3347,7 @@ let rewrite_defs_lem = [
 let rewrite_defs_ocaml = [
     (* ("undefined", rewrite_undefined); *)
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
+  ("pat_string_append", rewrite_defs_pat_string_append);
   ("pat_lits", rewrite_defs_pat_lits);
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -3260,6 +3367,7 @@ let rewrite_defs_ocaml = [
 
 let rewrite_defs_c = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
+  ("pat_string_append", rewrite_defs_pat_string_append);
   ("pat_lits", rewrite_defs_pat_lits);
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -3277,6 +3385,7 @@ let rewrite_defs_c = [
 
 let rewrite_defs_interpreter = [
     ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
+    ("pat_string_append", rewrite_defs_pat_string_append);
     ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
     ("tuple_assignments", rewrite_tuple_assignments);
     ("simple_assignments", rewrite_simple_assignments);

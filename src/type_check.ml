@@ -2471,6 +2471,16 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           annot_pat (P_cons (hd_pat, tl_pat)) typ, env, hd_guards @ tl_guards
        | _ -> typ_error l "Cannot match cons pattern against non-list type"
      end
+  | P_string_append (pat1, pat2) ->
+     begin
+       let matcher = Env.expand_synonyms env typ in
+       match matcher with
+       | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 ->
+          let pat1, env, guards1 = bind_pat env pat1 typ in
+          let pat2, env, guards2 = bind_pat env pat2 typ in
+          annot_pat (P_string_append (pat1, pat2)) typ, env, guards1 @ guards2
+       | _ -> typ_error l "Cannot match string-append pattern against non-string type"
+     end
   | P_list pats ->
      begin
        match Env.expand_synonyms env typ with
@@ -2600,6 +2610,12 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      in
      let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
      annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
+  | P_string_append (pat1, pat2) ->
+     let typed_pat1, env, guards1 = infer_pat env pat1 in
+     let typed_pat2, env, guards2 = infer_pat env pat2 in
+     typ_equality l env (pat_typ_of typed_pat1) (string_typ);
+     typ_equality l env (pat_typ_of typed_pat2) (string_typ);
+     annot_pat (P_string_append (typed_pat1, typed_pat2)) string_typ, env, guards1 @ guards2
   | P_as (pat, id) ->
      let (typed_pat, env, guards) = infer_pat env pat in
      annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat),
@@ -3415,6 +3431,10 @@ and propagate_pat_effect_aux = function
      let p_pat1 = propagate_pat_effect pat1 in
      let p_pat2 = propagate_pat_effect pat2 in
      P_cons (p_pat1, p_pat2), union_effects (effect_of_pat p_pat1) (effect_of_pat p_pat2)
+  | P_string_append (pat1, pat2) ->
+     let p_pat1 = propagate_pat_effect pat1 in
+     let p_pat2 = propagate_pat_effect pat2 in
+     P_string_append (p_pat1, p_pat2), union_effects (effect_of_pat p_pat1) (effect_of_pat p_pat2)
   | P_as (pat, id) ->
      let p_pat = propagate_pat_effect pat in
      P_as (p_pat, id), effect_of_pat p_pat

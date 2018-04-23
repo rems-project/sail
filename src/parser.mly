@@ -177,7 +177,7 @@ let rec desugar_rchain chain s e =
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
-%token <string> Colon ColonColon TildeTilde ExclEq
+%token <string> Colon ColonColon CaretCaret TildeTilde ExclEq
 %token <string> GtEq
 %token <string> LtEq
 
@@ -651,6 +651,8 @@ pat1:
     { mk_pat (P_vector_concat ($1 :: $3)) $startpos $endpos }
   | atomic_pat ColonColon pat1
     { mk_pat (P_cons ($1, $3)) $startpos $endpos }
+  | atomic_pat CaretCaret pat1
+    { mk_pat (P_string_append ($1, $3)) $startpos $endpos }
 
 pat_concat:
   | atomic_pat
