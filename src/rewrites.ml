@@ -2835,6 +2835,10 @@ let rec rewrite_defs_pat_string_append =
       | Pat_when (pat, guard, expr) -> (pat, [guard], expr)
     in
 
+    let builtins = [
+        ("integer", ("maybe_atoi", int_typ));
+      ] in
+
     let (new_pat, new_guards, new_expr) =
       match (p_aux, p_annot) with
      (*
@@ -2887,8 +2891,56 @@ let rec rewrite_defs_pat_string_append =
                                               pat2 => expr
                                             }
       *)
-      | P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _), pat2), p_annot ->
-         assert false
+      | P_string_append (P_aux (P_app (Id_aux (Id builtin_id, _), [x] ) , _), pat2), p_annot
+           when List.mem_assoc builtin_id builtins ->
+
+         (* common things *)
+         let builtin_func, builtin_typ = List.assoc builtin_id builtins in
+         let s_id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+         stringappend_counter := !stringappend_counter + 1;
+         let n_id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+         stringappend_counter := !stringappend_counter + 1;
+         let len_id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+         stringappend_counter := !stringappend_counter + 1;
+         let env = Env.add_local s_id (Immutable, string_typ) env in
+         let env = Env.add_local n_id (Immutable, builtin_typ) env in
+         let env = Env.add_local len_id (Immutable, nat_typ) env in
+
+         (* construct drop expression -- string_drop(s#, len#) *)
+         let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id s_id); mk_exp (E_id len_id)])) in
+         (* construct func expression -- maybe_atoi s# *)
+         let func_exp = mk_exp (E_app (mk_id builtin_func, [mk_exp (E_id s_id)])) in
+         (* construct some pattern -- Some (n#, len#) *)
+         let some_exp = mk_pat (P_app (mk_id "Some", [mk_pat (P_id n_id); mk_pat (P_id len_id)])) in
+         (* construct None pattern *)
+         let none_exp = mk_pat (P_app (mk_id "None", [])) in
+
+         (* construct the new guard *)
+         let guard_inner_match = construct_single_match drop_exp (strip_pat pat2) None in
+         let new_guard = mk_exp (E_case (func_exp, [
+                                       mk_pexp (Pat_exp (some_exp, guard_inner_match));
+                                       mk_pexp (Pat_exp (none_exp, mk_exp (E_lit (mk_lit (L_false)))))
+                           ])) in
+
+         (* construct the new match *)
+         let new_match = mk_exp (E_case (drop_exp, [
+                                       mk_pexp (Pat_exp (strip_pat pat2, strip_exp expr))
+                           ])) in
+
+         (* construct the new let *)
+         let new_binding = mk_exp (E_case (func_exp, [
+                                         mk_pexp (Pat_exp (some_exp, mk_exp (E_tuple [
+                                                                                 mk_exp (E_id n_id);
+                                                                                 mk_exp (E_id len_id)
+                                           ])))
+                                       ])) in
+         let new_letbind = mk_letbind (mk_pat (P_tup [
+                                                   strip_pat x; mk_pat (P_id len_id)
+                             ])) new_binding in
+         let new_let = mk_exp (E_let (new_letbind, new_match)) in
+
+      (* construct final result *)
+         (mk_pat (P_id s_id)), new_guard :: (List.map strip_exp guards), new_let
       | P_string_append _, _ ->
          failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat (P_aux (p_aux, p_annot)))
 
@@ -2907,20 +2959,44 @@ let rec rewrite_defs_pat_string_append =
 
 
 let rewrite_defs_pat_lits =
-  let counter = ref 0 in
-  let rewrite_pat guards = function
-    | P_lit lit, p_annot ->
-       let env = env_of_annot p_annot in
-       let typ = typ_of_annot p_annot in
-       let id = mk_id ("p" ^ string_of_int !counter ^ "#") in
-       let guard = mk_exp (E_app_infix (mk_exp (E_id id), mk_id "==", mk_exp (E_lit lit))) in
-       let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
-       guards := guard :: !guards;
-       incr counter;
-       P_aux (P_id id, p_annot)
-    | p_aux, p_annot -> P_aux (p_aux, p_annot)
+  let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
+    let guards = ref [] in
+    let counter = ref 0 in
+
+    let rewrite_pat = function
+      | P_lit lit, p_annot ->
+         let env = env_of_annot p_annot in
+         let typ = typ_of_annot p_annot in
+         let id = mk_id ("p" ^ string_of_int !counter ^ "#") in
+         let guard = mk_exp (E_app_infix (mk_exp (E_id id), mk_id "==", mk_exp (E_lit lit))) in
+         let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
+         guards := guard :: !guards;
+         incr counter;
+         P_aux (P_id id, p_annot)
+      | p_aux, p_annot -> P_aux (p_aux, p_annot)
+    in
+
+    match pexp_aux with
+    | Pat_exp (pat, exp) ->
+       begin
+         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat } pat in
+         match !guards with
+         | [] -> pexp
+         | (g :: gs) ->
+            let guard_annot = (fst annot, Some (env_of exp, bool_typ, no_effect)) in
+            Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) g gs, exp), annot)
+       end
+    | Pat_when (pat, guard, exp) ->
+       begin
+         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat } pat in
+         let guard_annot = (fst annot, Some (env_of exp, bool_typ, no_effect)) in
+         Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) guard !guards, exp), annot)
+       end
   in
-  pexp_rewriters (rewrite_pexp_with_guards rewrite_pat)
+
+  let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
+
 
 (* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
  * internal let-expressions, or internal plet-expressions ended by a term that does not

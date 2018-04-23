@@ -465,7 +465,7 @@ let string_startswith (str1, str2) = String.compare (String.sub str1 0 (String.l
 
 let string_drop (str, n) = let n = Big_int.to_int n in String.sub str n (String.length str - n)
 
-let string_length str = String.length str
+let string_length str = Big_int.of_int (String.length str)
 
 let lt_int (x, y) = Big_int.less x y
 

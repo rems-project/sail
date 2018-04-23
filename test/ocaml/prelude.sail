@@ -152,6 +152,8 @@ and cast_unit_vec bitzero = 0b0
 
 val print = "print_endline" : string -> unit
 
+val string_of_int = "string_of_int" : int -> string
+
 val putchar = "putchar" : forall ('a : Type). 'a -> unit
 
 val concat_str = "concat_str" : (string, string) -> string

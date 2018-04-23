@@ -192,7 +192,7 @@ let value_string_drop = function
   | _ -> failwith "value string_drop"
 
 let value_string_length = function
-  | [v] -> V_int (coerce_string v |> Sail_lib.string_length |> Big_int.of_int)
+  | [v] -> V_int (coerce_string v |> Sail_lib.string_length)
   | _ -> failwith "value string_length"
 
 let value_length = function
