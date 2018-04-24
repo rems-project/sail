@@ -165,51 +165,51 @@ let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),
           | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
 
 let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp) : Ast.typ =
-(*  let _ = Printf.eprintf "to_ast_typ\n" in*)
+  (*  let _ = Printf.eprintf "to_ast_typ\n" in*)
   match t with
   | Parse_ast.ATyp_aux(t,l) ->
-    Typ_aux( (match t with
-              | Parse_ast.ATyp_id(id) -> Typ_id (to_ast_id id)
-              | Parse_ast.ATyp_var(v) ->
-                let v = to_ast_var v in
-                let mk = Envmap.apply k_env (var_to_string v) in
-                (match mk with
-                | Some(k) -> (match k.k with
-                              | K_Typ -> Typ_var v
-                              | K_infer -> k.k <- K_Typ; Typ_var v
-                              | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
-                | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
-              | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
-                                                           (to_ast_typ k_env def_ord ret),
-                                                           (to_ast_effects k_env efct))
-              | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
-	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_tb",il), [ b; r; ord ; ti]) ->
-		let make_r bot top =
-		  match bot,top with
-		    | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant b,_),Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,l) ->
-                      Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.add (Big_int.sub t b) (Big_int.of_int 1)),l)
-		    | bot,(Parse_ast.ATyp_aux(_,l) as top) ->
-		      Parse_ast.ATyp_aux((Parse_ast.ATyp_sum
-					    ((Parse_ast.ATyp_aux
-						(Parse_ast.ATyp_sum (top,
-                                                                     Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.of_int 1),Parse_ast.Unknown)),
-						 Parse_ast.Unknown)),
-					  (Parse_ast.ATyp_aux ((Parse_ast.ATyp_neg bot),Parse_ast.Unknown)))), l) in
-		let base = to_ast_nexp k_env b in
-		let rise = match def_ord with
-		  | Ord_aux(Ord_inc,dl) ->  to_ast_nexp k_env (make_r b r)
-		  | Ord_aux(Ord_dec,dl) ->  to_ast_nexp k_env (make_r r b)
-		  | _ -> raise (Reporting_basic.err_unreachable l "Default order not inc or dec") in
-		Typ_app(Id_aux(Id "vector",il),
-			[Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
-	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_r",il), [b;r;ord;ti]) ->
-		let make_sub_one t =
-		  match t with
+     Typ_aux( (match t with
+               | Parse_ast.ATyp_id(id) -> Typ_id (to_ast_id id)
+               | Parse_ast.ATyp_var(v) ->
+                  let v = to_ast_var v in
+                  let mk = Envmap.apply k_env (var_to_string v) in
+                  (match mk with
+                   | Some(k) -> (match k.k with
+                                 | K_Typ -> Typ_var v
+                                 | K_infer -> k.k <- K_Typ; Typ_var v
+                                 | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
+                   | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
+               | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
+                                                            (to_ast_typ k_env def_ord ret),
+                                                            (to_ast_effects k_env efct))
+               | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
+               | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_tb",il), [ b; r; ord ; ti]) ->
+                  let make_r bot top =
+                    match bot,top with
+                    | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant b,_),Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,l) ->
+                       Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.add (Big_int.sub t b) (Big_int.of_int 1)),l)
+                    | bot,(Parse_ast.ATyp_aux(_,l) as top) ->
+                       Parse_ast.ATyp_aux((Parse_ast.ATyp_sum
+                                             ((Parse_ast.ATyp_aux
+                                                 (Parse_ast.ATyp_sum (top,
+                                                                      Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.of_int 1),Parse_ast.Unknown)),
+                                                  Parse_ast.Unknown)),
+                                              (Parse_ast.ATyp_aux ((Parse_ast.ATyp_neg bot),Parse_ast.Unknown)))), l) in
+                  let base = to_ast_nexp k_env b in
+                  let rise = match def_ord with
+                    | Ord_aux(Ord_inc,dl) ->  to_ast_nexp k_env (make_r b r)
+                    | Ord_aux(Ord_dec,dl) ->  to_ast_nexp k_env (make_r r b)
+                    | _ -> raise (Reporting_basic.err_unreachable l "Default order not inc or dec") in
+                  Typ_app(Id_aux(Id "vector",il),
+                          [Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
+                           Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
+                           Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
+                           Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
+               | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_r",il), [b;r;ord;ti]) ->
+                  let make_sub_one t =
+                    match t with
                     | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,_) -> Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.sub t (Big_int.of_int 1)),l)
-		    | t -> (Parse_ast.ATyp_aux
+                    | t -> (Parse_ast.ATyp_aux
                               (Parse_ast.ATyp_sum (t, Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.negate (Big_int.of_int 1)),Parse_ast.Unknown)),
 			       Parse_ast.Unknown)) in
 		let (base,rise) = match def_ord with
@@ -227,20 +227,20 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
                   let id = to_ast_id pid in
                   let k = Envmap.apply k_env (id_to_string id) in
                   (match k with
-                  | Some({k = K_Lam(args,t)}) ->
-		    if ((List.length args) = (List.length typs))
-		      then
-		      Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env def_ord k a)) args typs))
-		    else typ_error l "Type constructor given incorrect number of arguments" (Some id) None None
-                  | None -> typ_error l "Required a type constructor, encountered an unbound identifier" (Some id) None None
-                  | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None None)
-              | Parse_ast.ATyp_exist (kids, nc, atyp) ->
-                 let kids = List.map to_ast_var kids in
-                 let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
-                 let exist_typ = to_ast_typ k_env def_ord atyp in
-                 Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
-              | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
-    ), l)
+                   | Some({k = K_Lam(args,t)}) ->
+                      if ((List.length args) = (List.length typs))
+                      then
+                        Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env def_ord k a)) args typs))
+                      else typ_error l "Type constructor given incorrect number of arguments" (Some id) None None
+                   | None -> typ_error l "Required a type constructor, encountered an unbound identifier" (Some id) None None
+                   | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None None)
+               | Parse_ast.ATyp_exist (kids, nc, atyp) ->
+                  let kids = List.map to_ast_var kids in
+                  let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
+                  let exist_typ = to_ast_typ k_env def_ord atyp in
+                  Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
+               | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
+              ), l)
 
 and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
   match n with
