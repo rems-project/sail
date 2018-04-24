@@ -128,6 +128,7 @@ let kw_table =
      ("forall",                  (fun _ -> Forall));
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
+     ("mapping",                 (fun _ -> Mapping));
      ("overload",                (fun _ -> Overload));
      ("throw",                   (fun _ -> Throw));
      ("try",                     (fun _ -> Try));

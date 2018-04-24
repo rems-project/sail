@@ -377,6 +377,7 @@ end = struct
       union_ids : (typquant * typ) Bindings.t;
       registers : typ Bindings.t;
       variants : (typquant * type_union list) Bindings.t;
+      mappings : (typquant * typ) Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
       num_defs : nexp Bindings.t;
@@ -403,6 +404,7 @@ end = struct
       union_ids = Bindings.empty;
       registers = Bindings.empty;
       variants = Bindings.empty;
+      mappings = Bindings.empty;
       typ_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
       num_defs = Bindings.empty;

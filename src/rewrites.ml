@@ -2836,7 +2836,8 @@ let rec rewrite_defs_pat_string_append =
     in
 
     let builtins = [
-        ("integer", ("maybe_atoi", int_typ));
+        ("int", ("maybe_int_of_prefix", int_typ));
+        ("nat", ("maybe_nat_of_prefix", nat_typ));
       ] in
 
     let (new_pat, new_guards, new_expr) =

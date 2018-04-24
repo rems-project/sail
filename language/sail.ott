@@ -251,6 +251,8 @@ typ :: 'Typ_' ::=
     {{ com type variable }}
   | typ1 -> typ2 effectkw effect                        :: :: fn
     {{ com Function (first-order only in user code) }}
+  | typ1 <-> typ2 effectkw effect                       :: :: mapping
+    {{ com Mapping }}
 % TODO: build first-order restriction into AST or just into type rules? neither - see note
 % TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
   | ( typ1 , .... , typn )                          :: :: tup
@@ -978,6 +980,21 @@ fundef :: 'FD_' ::=
 %  recursive functions - the tannot_opt scopes over all the funcli,
 %  which is ok for the typ_quant part but not for the typ part
 
+if_opt :: 'If_' ::=
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | if exp :: :: some {{ ocaml Some exp }}
+  |        :: :: none {{ ocaml None }}
+
+mapcl :: 'MCL_' ::=
+  {{ com mapping clause (bidirectional pattern-match) }}
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | ( pat1 if_opt1 ) <-> ( pat2 if_opt2 ) :: :: clause
+
+mapdef :: 'MD_' ::=
+  {{ com mapping definition (bidirectional pattern-match function) }}
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | mapping tannot_opt { mapcl1 , ... , mapcln } :: :: mapping {{ texlong }}
+
 letbind :: 'LB_' ::=
   {{ com let binding }}
   {{ aux _ annot }} {{ auxparam 'a }}
@@ -1078,6 +1095,8 @@ def :: 'DEF_' ::=
     {{ com type definition }}
   | fundef                                                   :: :: fundef
     {{ com function definition }}
+  | mapdef                                                   :: :: mapdef
+    {{ com mapping definition }}
   | letbind                                                   :: :: val
     {{ com value definition }}
   | val_spec                                                    :: :: spec

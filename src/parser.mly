@@ -1250,6 +1250,8 @@ scattered_clause:
 def:
   | fun_def
     { DEF_fundef $1 }
+  | map_def
+    { DEF_mapdef $1 }
   | Fixity
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
