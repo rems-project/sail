@@ -1,15 +1,15 @@
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv.sail
+SAIL_SRCS = prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv_vmem.sail riscv.sail
 SAIL_DIR ?= $(realpath ..)
 
 export SAIL_DIR
 
 all: riscv Riscv.thy
 
-check: $(SAIL_SRCS) main.sail
-	$(SAIL_DIR)/sail $^
+check: $(SAIL_SRCS) main.sail Makefile
+	$(SAIL_DIR)/sail $(SAIL_SRCS) main.sail
 
-riscv: $(SAIL_SRCS) main.sail
-	$(SAIL_DIR)/sail -ocaml -o riscv $^
+riscv: $(SAIL_SRCS) main.sail Makefile
+	$(SAIL_DIR)/sail -ocaml -o riscv $(SAIL_SRCS) main.sail
 
 riscv_duopod_ocaml: prelude.sail riscv_duopod.sail
 	$(SAIL_DIR)/sail -ocaml -o $@ $^
@@ -31,8 +31,8 @@ Riscv.thy: riscv.lem riscv_extras.lem
 		riscv.lem
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' Riscv_types.thy
 
-riscv.lem: $(SAIL_SRCS)
-	$(SAIL_DIR)/sail -lem -o riscv -lem_mwords -lem_lib Riscv_extras $^
+riscv.lem: $(SAIL_SRCS) Makefile
+	$(SAIL_DIR)/sail -lem -o riscv -lem_mwords -lem_lib Riscv_extras $(SAIL_SRCS)
 
 clean:
 	-rm -rf riscv _sbuild
