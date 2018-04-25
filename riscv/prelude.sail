@@ -295,8 +295,8 @@ val __TraceMemoryWrite : forall 'n 'm.
 val __ReadRAM = "read_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __RISCV_read : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-function __RISCV_read (addr, width) = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr)
+val __RISCV_read : forall 'n. (bits(64), atom('n)) -> option(bits(8 * 'n)) effect {rmem}
+function __RISCV_read (addr, width) = Some(__ReadRAM(64, width, 0x0000_0000_0000_0000, addr))
 
 val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
 

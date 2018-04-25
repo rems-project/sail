@@ -218,23 +218,34 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b100 @ rd : regbits @ 0
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  HALF,   false, false))
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
 
-function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
-    let addr : xlenbits = X(rs1) + EXTS(imm) in
-    let result : xlenbits = if is_unsigned then
-        match width {
-	  BYTE   => EXTZ(mem_read(addr, 1, aq, rl, false)),
-	  HALF   => EXTZ(mem_read(addr, 2, aq, rl, false)),
-	  WORD   => EXTZ(mem_read(addr, 4, aq, rl, false)),
-	  DOUBLE => mem_read(addr, 8, aq, rl, false)
+val extend_value : forall 'n, 0 < 'n <= 8. (bool, MemoryOpResult(bits(8 * 'n))) -> MemoryOpResult(xlenbits)
+function extend_value(is_unsigned, value) = match (value) {
+  MemValue(v)     => MemValue(if is_unsigned then EXTZ(v) else EXTS(v) : xlenbits),
+  MemException(e) => MemException(e)
+}
+
+val process_load : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> option(xlenbits) effect {escape, rreg, wreg}
+function process_load(rd, addr, value, is_unsigned) =
+  match (extend_value(is_unsigned, value)) {
+    MemValue(result) => { X(rd) = result;
+                          Some(result) },
+    MemException(e)  =>
+        { let t : sync_exception = struct { trap    = e,
+                                            excinfo = Some(addr) } in
+          nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC);
+          None()
         }
-      else
-        match width {
-	  BYTE   => EXTS(mem_read(addr, 1, aq, rl, false)),
-	  HALF   => EXTS(mem_read(addr, 2, aq, rl, false)),
-	  WORD   => EXTS(mem_read(addr, 4, aq, rl, false)),
-	  DOUBLE => mem_read(addr, 8, aq, rl, false)
-        } in
-    X(rd) = result
+  }
+
+function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
+    let addr  : xlenbits = X(rs1) + EXTS(imm) in
+    let _ : option(xlenbits) = match width {
+      BYTE   => process_load(rd, addr, mem_read(addr, 1, aq, rl, false), is_unsigned),
+      HALF   => process_load(rd, addr, mem_read(addr, 2, aq, rl, false), is_unsigned),
+      WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, false), is_unsigned),
+      DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, rl, false), is_unsigned)
+    } in
+    ()
 
 /* FIXME: aq/rl are getting dropped */
 function clause print_insn (LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
@@ -551,15 +562,16 @@ union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
 function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, WORD, rd))
 function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, DOUBLE, rd))
 
+val process_loadres : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> unit
+
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
   let addr : xlenbits = X(rs1) in
-  let result : xlenbits =
-      match width {
-	WORD   => EXTS(mem_read(addr, 4, aq, rl, true)),
-	DOUBLE => mem_read(addr, 8, aq, rl, true),
-	_      => internal_error("LOADRES expected WORD or DOUBLE")
-      } in
-  X(rd) = result
+  let _ : option(xlenbits) = match width {
+    WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, true), false),
+    DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, rl, true), false),
+    _      => internal_error("LOADRES expected WORD or DOUBLE")
+  } in
+  ()
 
 /* FIXME */
 function clause print_insn (LOADRES(aq, rl, rs1, width, rd)) =
@@ -638,35 +650,44 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
     _      => internal_error ("AMO expected WORD or DOUBLE")
   };
 
-  loaded : xlenbits =
+  /* FIXME: this is incorrect! It could update rd even if the
+     mem_write below fails.  This will be fixed once we support
+     mem_write actually failing, and then do the write before the
+     register update.
+   */
+  value : option(xlenbits) =
     match width {
-      WORD   => EXTS(mem_read(addr, 4, aq, aq & rl, true)),
-      DOUBLE => mem_read(addr, 8, aq, aq & rl, true),
+      WORD   => process_load(rd, addr, mem_read(addr, 4, aq, aq & rl, true), false),
+      DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, aq & rl, true), false),
       _      => internal_error ("AMO expected WORD or DOUBLE")
     };
-  X(rd) = loaded;
 
-  rs2_val : xlenbits = X(rs2);
-  result : xlenbits =
-    match op {
-      AMOSWAP => rs2_val,
-      AMOADD  => rs2_val + loaded,
-      AMOXOR  => rs2_val ^ loaded,
-      AMOAND  => rs2_val & loaded,
-      AMOOR   => rs2_val | loaded,
+  match (value) {
+    None() => (),
+    Some(loaded) => {
+      rs2_val : xlenbits = X(rs2);
+      result : xlenbits =
+        match op {
+          AMOSWAP => rs2_val,
+          AMOADD  => rs2_val + loaded,
+          AMOXOR  => rs2_val ^ loaded,
+          AMOAND  => rs2_val & loaded,
+          AMOOR   => rs2_val | loaded,
 
-      /* Have to convert number to vector here. Check this */
-      AMOMIN  => vector64(min(signed(rs2_val),   signed(loaded))),
-      AMOMAX  => vector64(max(signed(rs2_val),   signed(loaded))),
-      AMOMINU => vector64(min(unsigned(rs2_val), unsigned(loaded))),
-      AMOMAXU => vector64(max(unsigned(rs2_val), unsigned(loaded)))
-    };
+          /* Have to convert number to vector here. Check this */
+          AMOMIN  => vector64(min(signed(rs2_val),   signed(loaded))),
+          AMOMAX  => vector64(max(signed(rs2_val),   signed(loaded))),
+          AMOMINU => vector64(min(unsigned(rs2_val), unsigned(loaded))),
+          AMOMAXU => vector64(max(unsigned(rs2_val), unsigned(loaded)))
+        };
 
-  match width {
-    WORD   => mem_write_value(addr, 4, result[31..0], aq & rl, rl, true),
-    DOUBLE => mem_write_value(addr, 8, result,        aq & rl, rl, true),
-    _      => internal_error("AMO expected WORD or DOUBLE")
-  };
+        match width {
+          WORD   => mem_write_value(addr, 4, result[31..0], aq & rl, rl, true),
+          DOUBLE => mem_write_value(addr, 8, result,        aq & rl, rl, true),
+          _      => internal_error("AMO expected WORD or DOUBLE")
+        }
+    }
+  }
 }
 
 function clause print_insn (AMO(op, aq, rl, rs2, rs1, width, rd)) =
@@ -788,7 +809,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
   if ~ (check_CSR(csr, cur_privilege, isWrite)) then {
-    let instr : xlenbits = EXTZ(__RISCV_read(PC, 4));
+    let instr : xlenbits = cur_inst;
     let t : sync_exception =
     struct { trap = E_Illegal_Instr,
              excinfo = Some (instr) } in

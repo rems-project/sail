@@ -2,6 +2,10 @@
 
 register cur_privilege : Privilege
 
+/* current instruction bits, used for illegal instruction exceptions */
+
+register cur_inst : xlenbits
+
 /* M-mode registers */
 
 bitfield Misa : bits(64) = {

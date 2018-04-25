@@ -1,28 +1,44 @@
 /* memory */
 
+/* TODO: remove this when unused */
 function check_alignment (addr : xlenbits, width : atom('n)) -> forall 'n. unit =
   if unsigned(addr) % width != 0 then throw Error_misaligned_access() else ()
 
-val MEMr                         : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_acquire                 : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_strong_acquire          : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_reserved                : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_reserved_acquire        : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
-val MEMr_reserved_strong_acquire : forall 'n. (xlenbits, atom('n)) -> bits(8 * 'n) effect {rmem}
+union MemoryOpResult ('a : Type) = {
+  MemValue : 'a,
+  MemException: ExceptionType
+}
 
-function MEMr                         (addr, width) = __RISCV_read(addr, width)
-function MEMr_acquire                 (addr, width) = __RISCV_read(addr, width)
-function MEMr_strong_acquire          (addr, width) = __RISCV_read(addr, width)
-function MEMr_reserved                (addr, width) = __RISCV_read(addr, width)
-function MEMr_reserved_acquire        (addr, width) = __RISCV_read(addr, width)
-function MEMr_reserved_strong_acquire (addr, width) = __RISCV_read(addr, width)
+function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+  unsigned(addr) % width != 0
 
-val mem_read : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> bits(8 * 'n) effect {rmem, escape}
+function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+  match (t, __RISCV_read(addr, width)) {
+    (Instruction, None()) => MemException(E_Fetch_Access_Fault),
+    (Data, None())        => MemException(E_Load_Access_Fault),
+    (_, Some(v))          => MemValue(v)
+  }
+
+val MEMr                         : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
+val MEMr_acquire                 : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
+val MEMr_strong_acquire          : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
+val MEMr_reserved                : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
+val MEMr_reserved_acquire        : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
+val MEMr_reserved_strong_acquire : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
+
+function MEMr                         (addr, width) = checked_mem_read(Data, addr, width)
+function MEMr_acquire                 (addr, width) = checked_mem_read(Data, addr, width)
+function MEMr_strong_acquire          (addr, width) = checked_mem_read(Data, addr, width)
+function MEMr_reserved                (addr, width) = checked_mem_read(Data, addr, width)
+function MEMr_reserved_acquire        (addr, width) = checked_mem_read(Data, addr, width)
+function MEMr_reserved_strong_acquire (addr, width) = checked_mem_read(Data, addr, width)
+
+val mem_read : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n)) effect {rmem, escape}
 
 function mem_read (addr, width, aq, rl, res) = {
-  if aq | res then check_alignment(addr, width);
-
-  match (aq, rl, res) {
+  if (aq | res) & (~ (is_aligned_addr(addr, width)))
+  then MemException(E_Load_Addr_Align)
+  else match (aq, rl, res) {
     (false, false, false) => MEMr(addr, width),
     (true,  false, false) => MEMr_acquire(addr, width),
     (false, false, true)  => MEMr_reserved(addr, width),
