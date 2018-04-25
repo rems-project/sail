@@ -5,4 +5,4 @@ let _ = test([41m64[0m)
 Tried performing type coercion on 64
 Failed because
   atom(64) is not a subtype of atom('size)
-  in context 'size = 'ex6#, ('ex6# = 32 | 'ex6# = 64), ('ex5# = 32 | 'ex5# = 64)
+  in context 'size = 'ex8#, ('ex8# = 32 | 'ex8# = 64), ('ex7# = 32 | 'ex7# = 64)

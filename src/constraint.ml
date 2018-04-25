@@ -310,7 +310,8 @@ let conj (x : t) (y : t) : t =
 let disj (x : t) (y : t) : t =
   BFun (Or, x, y)
 
-let forall (vars : int list) (x : t) : t = Forall (vars, x)
+let forall (vars : int list) (x : t) : t =
+  if vars = [] then x else Forall (vars, x)
 
 let negate (x : t) : t = Not x
 

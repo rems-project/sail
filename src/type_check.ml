@@ -344,6 +344,7 @@ module Env : sig
   val lookup_id : id -> t -> lvar
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
+  val canonicalize : t -> typ -> typ
   val base_typ_of : t -> typ -> typ
   val add_smt_op : id -> string -> t -> t
   val get_smt_op : id -> t -> string
@@ -513,7 +514,7 @@ end = struct
     else typ_error (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
   let rec expand_synonyms env (Typ_aux (typ, l) as t) =
-    typ_debug ("Expanding synonyms for " ^ string_of_typ t);
+    (* typ_debug ("Expanding synonyms for " ^ string_of_typ t); *)
     match typ with
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
     | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
@@ -562,6 +563,65 @@ end = struct
     match typ_arg with
     | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (expand_synonyms env typ), l)
     | arg -> Typ_arg_aux (arg, l)
+
+  (** Map over all nexps in a type - excluding those in existential constraints **)
+  let rec map_nexps f (Typ_aux (typ_aux, l) as typ) =
+    match typ_aux with
+    | Typ_id _ | Typ_var _ -> typ
+    | Typ_fn (arg_typ, ret_typ, effect) -> Typ_aux (Typ_fn (map_nexps f arg_typ, map_nexps f ret_typ, effect), l)
+    | Typ_tup typs -> Typ_aux (Typ_tup (List.map (map_nexps f) typs), l)
+    | Typ_exist (kids, nc, typ) -> Typ_aux (Typ_exist (kids, nc, map_nexps f typ), l)
+    | Typ_app (id, args) -> Typ_aux (Typ_app (id, List.map (map_nexps_arg f) args), l)
+  and map_nexps_arg f (Typ_arg_aux (arg_aux, l) as arg) =
+    match arg_aux with
+    | Typ_arg_order _ | Typ_arg_typ _ -> arg
+    | Typ_arg_nexp n -> Typ_arg_aux (Typ_arg_nexp (f n), l)
+
+  let canonical env typ =
+    let typ = expand_synonyms env typ in
+    let counter = ref 0 in
+    let complex_nexps = ref KBindings.empty in
+    let simplify_nexp (Nexp_aux (nexp_aux, l) as nexp) =
+      match nexp_aux with
+      | Nexp_var _ | Nexp_constant _ -> nexp
+      | _ ->
+         let kid = Kid_aux (Var ("'c#" ^ string_of_int !counter), l) in
+         complex_nexps := KBindings.add kid nexp !complex_nexps;
+         incr counter;
+         Nexp_aux (Nexp_var kid, l)
+    in
+    let typ = map_nexps (fun nexp -> simplify_nexp (nexp_simp nexp)) typ in
+    let existentials = KBindings.bindings !complex_nexps |> List.map fst in
+    let constrs = List.fold_left (fun ncs (kid, nexp) -> nc_eq (nvar kid) nexp :: ncs) [] (KBindings.bindings !complex_nexps) in
+    existentials, constrs, typ
+
+  let is_canonical env typ =
+    let typ = expand_synonyms env typ in
+    let counter = ref 0 in
+    let simplify_nexp (Nexp_aux (nexp_aux, l) as nexp) =
+      match nexp_aux with
+      | Nexp_var _ | Nexp_constant _ -> nexp
+      | _ -> (incr counter; nexp)
+    in
+    let typ = map_nexps simplify_nexp typ in
+    not (!counter > 0)
+
+  let rec canonicalize env typ =
+    match typ with
+    | Typ_aux (Typ_fn (arg_typ, ret_typ, effects), l) when is_canonical env arg_typ ->
+       Typ_aux (Typ_fn (arg_typ, canonicalize env ret_typ, effects), l)
+    | Typ_aux (Typ_fn _, l) -> typ_error l ("Function type " ^ string_of_typ typ ^ " is not canonical")
+    | _ ->
+       let existentials, constrs, (Typ_aux (typ_aux, l) as typ) = canonical env typ in
+       if existentials = [] then
+         typ
+       else
+         let typ_aux = match typ_aux with
+           | Typ_tup _ | Typ_app _ -> Typ_exist (existentials, List.fold_left nc_and (List.hd constrs) (List.tl constrs), typ)
+           | Typ_exist (kids, nc, typ) -> Typ_exist (kids @ existentials, List.fold_left nc_and nc constrs, typ)
+           | Typ_fn _ | Typ_id _ | Typ_var _ -> assert false (* These must be simple *)
+         in
+         Typ_aux (typ_aux, l)
 
   (* Check if a type, order, n-expression or constraint is
      well-formed. Throws a type error if the type is badly formed. *)
@@ -1067,80 +1127,6 @@ and simp_typ_aux = function
      Typ_exist (kids1 @ kids2, nc_and nc1 nc2, typ)
   | typ_aux -> typ_aux
 
-let order_eq (Ord_aux (ord_aux1, _)) (Ord_aux (ord_aux2, _)) =
-  match ord_aux1, ord_aux2 with
-  | Ord_inc, Ord_inc -> true
-  | Ord_dec, Ord_dec -> true
-  | Ord_var kid1, Ord_var kid2 -> Kid.compare kid1 kid2 = 0
-  | _, _ -> false
-
-let rec props_subst sv subst props =
-  match props with
-  | [] -> []
-  | ((nexp1, nexp2) :: props) -> (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2) :: props_subst sv subst props
-
-type tnf =
-  | Tnf_wild
-  | Tnf_id of id
-  | Tnf_var of kid
-  | Tnf_tup of tnf list
-  | Tnf_index_sort of index_sort
-  | Tnf_app of id * tnf_arg list
-and tnf_arg =
-  | Tnf_arg_nexp of nexp
-  | Tnf_arg_typ of tnf
-  | Tnf_arg_order of order
-  | Tnf_arg_effect of effect
-
-let rec string_of_tnf = function
-  | Tnf_wild -> "_"
-  | Tnf_id id -> string_of_id id
-  | Tnf_var kid -> string_of_kid kid
-  | Tnf_tup tnfs -> "(" ^ string_of_list ", " string_of_tnf tnfs ^ ")"
-  | Tnf_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_tnf_arg args ^ ">"
-  | Tnf_index_sort IS_int -> "INT"
-  | Tnf_index_sort (IS_prop (kid, props)) ->
-     "{" ^ string_of_kid kid ^ " | " ^ string_of_list " & " (fun (n1, n2) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2) props ^ "}"
-and string_of_tnf_arg = function
-  | Tnf_arg_nexp n -> string_of_nexp n
-  | Tnf_arg_typ tnf -> string_of_tnf tnf
-  | Tnf_arg_order o -> string_of_order o
-  | Tnf_arg_effect eff -> string_of_effect eff
-
-let rec normalize_typ env (Typ_aux (typ, l)) =
-  match typ with
-  | Typ_id (Id_aux (Id "int", _)) -> Tnf_index_sort IS_int
-  | Typ_id (Id_aux (Id "nat", _)) ->
-     let kid = Env.fresh_kid env in Tnf_index_sort (IS_prop (kid, [(nint 0, nvar kid)]))
-  | Typ_id v ->
-     begin
-       try normalize_typ env (Env.get_typ_synonym v env env []) with
-       | Not_found -> Tnf_id v
-     end
-  | Typ_var kid -> Tnf_var kid
-  | Typ_tup typs -> Tnf_tup (List.map (normalize_typ env) typs)
-  | Typ_app (f, []) -> normalize_typ env (Typ_aux (Typ_id f, l))
-  | Typ_app (Id_aux (Id "atom", _), [Typ_arg_aux (Typ_arg_nexp n, _)]) ->
-     let kid = Env.fresh_kid env in
-     Tnf_index_sort (IS_prop (kid, [(n, nvar kid); (nvar kid, n)]))
-  | Typ_app (Id_aux (Id "range", _), [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)]) ->
-     let kid = Env.fresh_kid env in
-     Tnf_index_sort (IS_prop (kid, [(n1, nvar kid); (nvar kid, n2)]))
-  | Typ_app ((Id_aux (Id "vector", _) as vector), args) ->
-     Tnf_app (vector, List.map (normalize_typ_arg env) args)
-  | Typ_app (id, args) ->
-     begin
-       try normalize_typ env (Env.get_typ_synonym id env env args) with
-       | Not_found -> Tnf_app (id, List.map (normalize_typ_arg env) args)
-     end
-  | Typ_exist (kids, nc, typ) -> typ_error l "Cannot normalise existential type"
-  | Typ_fn _ -> typ_error l ("Cannot normalize function type " ^ string_of_typ (Typ_aux (typ, l)))
-and normalize_typ_arg env (Typ_arg_aux (typ_arg, _)) =
-  match typ_arg with
-  | Typ_arg_nexp n -> Tnf_arg_nexp n
-  | Typ_arg_typ typ -> Tnf_arg_typ (normalize_typ env typ)
-  | Typ_arg_order o -> Tnf_arg_order o
-
 (* Here's how the constraint generation works for subtyping
 
 X(b,c...) --> {a. Y(a,b,c...)} \subseteq {a. Z(a,b,c...)}
@@ -1252,64 +1238,6 @@ let prove env (NC_aux (nc_aux, _) as nc) =
   | NC_bounded_ge (nexp1, nexp2) when compare_const Big_int.greater_equal (nexp_simp nexp1) (nexp_simp nexp2) -> true
   | NC_true -> true
   | _ -> prove_z3 env nc
-
-let rec subtyp_tnf env tnf1 tnf2 =
-  typ_print ("Subset " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_tnf tnf1 ^ " " ^ string_of_tnf tnf2);
-  let module Bindings = Map.Make(Kid) in
-  let bindings = ref Bindings.empty  in
-  let fresh_var kid =
-    let n = Bindings.cardinal !bindings in
-    bindings := Bindings.add kid n !bindings;
-    n
-  in
-  let var_of kid =
-    try Bindings.find kid !bindings with
-    | Not_found -> fresh_var kid
-  in
-  let rec neg_props props =
-    match props with
-    | [] -> Constraint.literal false
-    | [(nexp1, nexp2)] -> Constraint.gt (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
-    | ((nexp1, nexp2) :: props) ->
-       Constraint.disj (Constraint.gt (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)) (neg_props props)
-  in
-  let rec pos_props props =
-    match props with
-    | [] -> Constraint.literal true
-    | [(nexp1, nexp2)] -> Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
-    | ((nexp1, nexp2) :: props) ->
-       Constraint.conj (Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)) (pos_props props)
-  in
-  match (tnf1, tnf2) with
-  | Tnf_wild, Tnf_wild -> true
-  | Tnf_id v1, Tnf_id v2 -> Id.compare v1 v2 = 0
-  | Tnf_var kid1, Tnf_var kid2 -> Kid.compare kid1 kid2 = 0
-  | Tnf_tup tnfs1, Tnf_tup tnfs2 ->
-     begin
-       try List.for_all2 (subtyp_tnf env) tnfs1 tnfs2 with
-       | Invalid_argument _ -> false
-     end
-  | Tnf_app (v1, args1), Tnf_app (v2, args2) -> Id.compare v1 v2 = 0 && List.for_all2 (tnf_args_eq env) args1 args2
-  | Tnf_index_sort IS_int, Tnf_index_sort IS_int -> true
-  | Tnf_index_sort (IS_prop _), Tnf_index_sort IS_int -> true
-  | Tnf_index_sort (IS_prop (kid1, prop1)), Tnf_index_sort (IS_prop (kid2, prop2)) ->
-     begin
-       let kid3 = Env.fresh_kid env in
-       let (prop1, prop2) = props_subst kid1 (Nexp_var kid3) prop1, props_subst kid2 (Nexp_var kid3) prop2 in
-       let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.conj (pos_props prop1) (neg_props prop2)) in
-       match Constraint.call_z3 constr with
-       | Constraint.Unsat -> typ_debug "unsat"; true
-       | Constraint.Sat -> typ_debug "sat"; false
-       | Constraint.Unknown -> typ_debug "unknown"; false
-     end
-  | _, _ -> false
-
-and tnf_args_eq env arg1 arg2 =
-  match arg1, arg2 with
-  | Tnf_arg_nexp n1, Tnf_arg_nexp n2 -> prove env (NC_aux (NC_equal (n1, n2), Parse_ast.Unknown))
-  | Tnf_arg_order ord1, Tnf_arg_order ord2 -> order_eq ord1 ord2
-  | Tnf_arg_typ tnf1, Tnf_arg_typ tnf2 -> subtyp_tnf env tnf1 tnf2 && subtyp_tnf env tnf2 tnf1
-  | _, _ -> assert false
 
 (**************************************************************************)
 (* 4. Unification                                                         *)
@@ -1759,58 +1687,61 @@ let rec alpha_equivalent env typ1 typ2 =
   then (typ_debug "alpha-equivalent"; true)
   else (typ_debug "Not alpha-equivalent"; false)
 
-let rec subtyp l env typ1 typ2 =
-  typ_print ("Subtype " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
-  match destruct_exist env typ1, destruct_exist env typ2 with
+let unwrap_exist env typ =
+  match destruct_exist env typ with
+  | Some (kids, nc, typ) -> (kids, nc, typ)
+  | None -> ([], nc_true, typ)
+
+let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as typ2) =
+  typ_print (("Subtype " |> Util.green |> Util.clear) ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
+  match typ_aux1, typ_aux2 with
+  | Typ_tup typs1, Typ_tup typs2 when List.length typs1 = List.length typs2 ->
+     List.iter2 (subtyp l env) typs1 typs2
+  | _, _ ->
+  match destruct_numeric env typ1, destruct_numeric env typ2 with
   (* Ensure alpha equivalent types are always subtypes of one another
      - this ensures that we can always re-check inferred types. *)
   | _, _ when alpha_equivalent env typ1 typ2 -> ()
-  (* Special case for two existentially quantified numeric (atom) types *)
-  | Some (kids1, nc1, typ1), Some (_ :: _ :: _ as kids2, nc2, typ2)
-       when is_some (destruct_atom_kid env typ1) && is_some (destruct_atom_kid env typ2) ->
-     let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_int env) env kids1 in
-     let env = Env.add_constraint nc1 env in
-
-     (* Guaranteed to succeed because of the guard *)
-     let destruct_some x = match x with Some y -> y | _ -> assert false in
-     let atom_kid1 = destruct_some (destruct_atom_kid env typ1) in
-     let atom_kid2 = destruct_some (destruct_atom_kid env typ2) in
-
-     let kids2 = List.filter (fun kid -> Kid.compare atom_kid2 kid <> 0) kids2 in
-     let env = Env.add_typ_var atom_kid2 BK_int env in
-     let env = Env.add_constraint (nc_eq (nvar atom_kid1) (nvar atom_kid2)) env in
+  (* Special cases for two numeric (atom) types *)
+  | Some (kids1, nc1, nexp1), Some ([], _, nexp2) ->
+     let env = add_existential kids1 nc1 env in
+     if prove env (nc_eq nexp1 nexp2) then () else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env))
+  | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
+     let env = add_existential kids1 nc1 env in
+     let env = add_typ_vars (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2))) env in
+     let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
+     let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
      let constr var_of =
-       Constraint.forall (List.map var_of kids2) (Constraint.negate (nc_constraint env var_of nc2))
+       Constraint.forall (List.map var_of kids2)
+         (nc_constraint env var_of (nc_negate nc2))
      in
      if prove_z3' env constr then ()
-     else typ_error l ("Existential atom subtyping failed")
+     else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env))
+  | _, _ ->
+  match destruct_exist env typ1, unwrap_exist env (Env.canonicalize env typ2) with
   | Some (kids, nc, typ1), _ ->
-     let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_int env) env kids in
-     let env = Env.add_constraint nc env in
-     subtyp l env typ1 typ2
-  | _, Some (kids, nc, typ2) ->
-     typ_debug "XXXXXXX";
-     let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_int env) env kids in
-     typ_debug "YYYYYYY";
+     let env = add_existential kids nc env in subtyp l env typ1 typ2
+  | None, (kids, nc, typ2) ->
+     let env = add_typ_vars kids env in
+     let kids' = KidSet.elements (KidSet.diff (KidSet.of_list kids) (typ_frees typ2)) in
      let unifiers, existential_kids, existential_nc =
        try unify l env typ2 typ1 with
        | Unification_error (_, m) -> typ_error l m
      in
-     typ_debug "ZZZZZZZ";
      let nc = List.fold_left (fun nc (kid, uvar) -> nc_subst_uvar kid uvar nc) nc (KBindings.bindings unifiers) in
+     let env = List.fold_left uv_nexp_constraint env (KBindings.bindings unifiers) in
      let env = match existential_kids, existential_nc with
        | [], None -> env
        | _, Some enc ->
           let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_int env) env existential_kids in
-          let env = List.fold_left uv_nexp_constraint env (KBindings.bindings unifiers) in
           Env.add_constraint enc env
        | _, None -> assert false (* Cannot have existential_kids without existential_nc *)
      in
-     if prove env nc then ()
-     else typ_error l ("Could not show " ^ string_of_typ typ1 ^ " is a subset of existential " ^ string_of_typ typ2)
-  | _, None ->
-     if subtyp_tnf env (normalize_typ env typ1) (normalize_typ env typ2)
-     then ()
+     let constr var_of =
+       Constraint.forall (List.map var_of kids')
+         (nc_constraint env var_of (nc_negate nc))
+     in
+     if prove_z3' env constr then ()
      else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env))
 
 let typ_equality l env typ1 typ2 =
