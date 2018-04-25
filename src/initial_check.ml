@@ -182,6 +182,8 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
                | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
                                                             (to_ast_typ k_env def_ord ret),
                                                             (to_ast_effects k_env efct))
+               | Parse_ast.ATyp_bidir (typ1, typ2) -> Typ_bidir ( (to_ast_typ k_env def_ord typ1),
+                                                                  (to_ast_typ k_env def_ord typ2))
                | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
                | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_tb",il), [ b; r; ord ; ti]) ->
                   let make_r bot top =
@@ -760,6 +762,43 @@ let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.funde
     let tannot_opt, k_env,_ = to_ast_tannot_opt k_env def_ord tannot_opt in
     FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, def_ord)) funcls), (l,())), (names,k_env,def_ord)
 
+let rec to_ast_mpat k_env def_ord (Parse_ast.MP_aux(mpat,l)) =
+  MP_aux(
+    (match mpat with
+    | Parse_ast.MP_lit(lit) -> MP_lit(to_ast_lit lit)
+    | Parse_ast.MP_id(id) -> MP_id(to_ast_id id)
+    | Parse_ast.MP_app(id,mpats) ->
+      if mpats = []
+      then MP_id (to_ast_id id)
+      else MP_app(to_ast_id id, List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_record(fpats,_) ->
+      MP_record(List.map
+                 (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) ->
+              FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env def_ord fp),(l,())))
+                 fpats, false)
+    | Parse_ast.MP_vector(mpats) -> MP_vector(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_tup(mpats) -> MP_tup(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_list(mpats) -> MP_list(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat k_env def_ord pat1, to_ast_mpat k_env def_ord pat2)
+    | Parse_ast.MP_string_append (pat1, pat2) -> MP_string_append (to_ast_mpat k_env def_ord pat1, to_ast_mpat k_env def_ord pat2)
+    ), (l,()))
+
+
+let to_ast_mpexp (names,k_env,def_ord) (Parse_ast.MPat_aux(mpexp, l)) =
+  match mpexp with
+  | Parse_ast.MPat_pat mpat -> MPat_aux (MPat_pat (to_ast_mpat k_env def_ord mpat), (l, ()))
+  | Parse_ast.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat k_env def_ord mpat, to_ast_exp k_env def_ord exp), (l, ()))
+
+let to_ast_mapcl (names,k_env,def_ord) (Parse_ast.MCL_aux(mapcl, l)) =
+  match mapcl with
+  | Parse_ast.MCL_mapcl (mpexp1, mpexp2) -> MCL_aux (MCL_mapcl (to_ast_mpexp (names,k_env,def_ord) mpexp1, to_ast_mpexp (names,k_env,def_ord) mpexp2), (l, ()))
+
+let to_ast_mapdef (names,k_env,def_ord) (Parse_ast.MD_aux(md,l):Parse_ast.mapdef) : (unit mapdef) envs_out =
+  match md with
+  | Parse_ast.MD_mapping(id, mapcls) ->
+     MD_aux(MD_mapping(to_ast_id id, List.map (to_ast_mapcl (names,k_env,def_ord)) mapcls), (l,())), (names,k_env,def_ord)
+
 type def_progress =
     No_def
   | Def_place_holder of id * Parse_ast.l
@@ -823,6 +862,9 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
   | Parse_ast.DEF_fundef(f_def) ->
     let fd,envs = to_ast_fundef envs f_def in
     ((Finished(DEF_fundef(fd))),envs),partial_defs
+  | Parse_ast.DEF_mapdef(m_def) ->
+    let md, envs = to_ast_mapdef envs m_def in
+    ((Finished(DEF_mapdef(md))),envs),partial_defs
   | Parse_ast.DEF_val(lbind) ->
     let lb = to_ast_letbind k_env def_ord lbind in
     ((Finished(DEF_val(lb))),envs),partial_defs
