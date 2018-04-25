@@ -72,12 +72,13 @@ let effect_of_fexps (FES_aux (FES_Fexps (fexps,_),_)) =
   List.fold_left union_effects no_effect (List.map effect_of_fexp fexps)
 let effect_of_opt_default (Def_val_aux (_,(_,a))) = effect_of_annot a
 (* The typechecker does not seem to annotate pexps themselves *)
-let effect_of_pexp (Pat_aux (pexp,(_,a))) = match a with
-  | Some (_, _, eff) -> eff
-  | None ->
-    (match pexp with
-    | Pat_exp (_, e) -> effect_of e
-    | Pat_when (_, g, e) -> union_effects (effect_of g) (effect_of e))
+let effect_of_pexp (Pat_aux (pexp,(_,a))) =
+  let eff = match pexp with
+    | Pat_exp (p, e) -> union_effects (effect_of_pat p) (effect_of e)
+    | Pat_when (p, g, e) ->
+       union_effects (effect_of_pat p) (union_effects (effect_of g) (effect_of e))
+  in
+  union_effects eff (effect_of_annot a)
 let effect_of_lb (LB_aux (_,(_,a))) = effect_of_annot a
 
 let simple_annot l typ = (gen_loc l, Some (initial_env, typ, no_effect))

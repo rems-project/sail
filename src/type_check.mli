@@ -246,6 +246,7 @@ val pat_typ_of : tannot pat -> typ
 val pat_env_of : tannot pat -> Env.t
 
 val effect_of : tannot exp -> effect
+val effect_of_pat : tannot pat -> effect
 val effect_of_annot : tannot -> effect
 val add_effect_annot : tannot -> effect -> tannot
 
