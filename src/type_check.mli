@@ -253,6 +253,12 @@ val pat_env_of : tannot pat -> Env.t
 val typ_of_pexp : tannot pexp -> typ
 val env_of_pexp : tannot pexp -> Env.t
 
+val typ_of_mpat : tannot mpat -> typ
+val env_of_mpat : tannot mpat -> Env.t
+
+val typ_of_mpexp : tannot mpexp -> typ
+val env_of_mpexp : tannot mpexp -> Env.t
+
 val effect_of : tannot exp -> effect
 val effect_of_pat : tannot pat -> effect
 val effect_of_annot : tannot -> effect

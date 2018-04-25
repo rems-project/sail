@@ -70,7 +70,9 @@ val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : unit exp_aux -> unit exp
 val mk_pat : unit pat_aux -> unit pat
+val mk_mpat : unit mpat_aux -> unit mpat
 val mk_pexp : unit pexp_aux -> unit pexp
+val mk_mpexp : unit mpexp_aux -> unit mpexp
 val mk_lexp : unit lexp_aux -> unit lexp
 val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> unit exp
@@ -211,6 +213,7 @@ val string_of_exp : 'a exp -> string
 val string_of_pexp : 'a pexp -> string
 val string_of_lexp : 'a lexp -> string
 val string_of_pat : 'a pat -> string
+val string_of_mpat : 'a mpat -> string
 val string_of_letbind : 'a letbind -> string
 val string_of_index_range : index_range -> string
 
@@ -308,6 +311,10 @@ val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
 
 val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
 val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp
+
+val destruct_mpexp : 'a mpexp -> 'a mpat * ('a exp) option * (Ast.l * 'a)
+val construct_mpexp : 'a mpat * ('a exp) option * (Ast.l * 'a) ->  'a mpexp
+
 
 val is_valspec : id -> 'a def -> bool
 

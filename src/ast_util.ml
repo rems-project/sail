@@ -85,6 +85,9 @@ let untyp_pat = function
 
 let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
 
+let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
+let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
+
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
@@ -733,6 +736,20 @@ and string_of_pat (P_aux (pat, l)) =
   | P_as (pat, id) -> string_of_pat pat ^ " as " ^ string_of_id id
   | P_string_append (pat1, pat2) -> string_of_pat pat1 ^ " ^^ " ^ string_of_pat pat2
   | _ -> "PAT"
+
+and string_of_mpat (MP_aux (pat, l)) =
+  match pat with
+  | MP_lit lit -> string_of_lit lit
+  | MP_id v -> string_of_id v
+  | MP_tup pats -> "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
+  | MP_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
+  | MP_cons (pat1, pat2) -> string_of_mpat pat1 ^ " :: " ^ string_of_mpat pat2
+  | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
+  | MP_vector_concat pats -> string_of_list " : " string_of_mpat pats
+  | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
+  | MP_string_append (pat1, pat2) -> string_of_mpat pat1 ^ " ^^ " ^ string_of_mpat pat2
+  | _ -> "PAT"
+
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
   | LEXP_id v -> string_of_id v
@@ -1012,6 +1029,17 @@ let construct_pexp (pat,guard,exp,ann) =
   match guard with
   | None -> Pat_aux (Pat_exp (pat,exp),ann)
   | Some guard -> Pat_aux (Pat_when (pat,guard,exp),ann)
+
+let destruct_mpexp (MPat_aux (mpexp,ann)) =
+  match mpexp with
+  | MPat_pat mpat -> mpat,None,ann
+  | MPat_when (mpat,guard) -> mpat,Some guard,ann
+
+let construct_mpexp (mpat,guard,ann) =
+  match guard with
+  | None -> MPat_aux (MPat_pat mpat,ann)
+  | Some guard -> MPat_aux (MPat_when (mpat,guard),ann)
+
 
 let is_valspec id = function
   | DEF_spec (VS_aux (VS_val_spec (_, id', _, _), _)) when Id.compare id id' = 0 -> true
