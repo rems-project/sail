@@ -174,6 +174,8 @@ val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
 val map_pexp_annot : ('a annot -> 'b annot) -> 'a pexp -> 'b pexp
 val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
 val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
+val map_mpat_annot : ('a annot -> 'b annot) -> 'a mpat -> 'b mpat
+val map_mpexp_annot : ('a annot -> 'b annot) -> 'a mpexp -> 'b mpexp
 
 (* Extract locations from identifiers *)
 val id_loc : id -> Parse_ast.l
