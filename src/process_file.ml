@@ -149,7 +149,12 @@ let rec preprocess = function
        let file = String.sub file 1 (len - 2) in
        let sail_dir =
          try Sys.getenv "SAIL_DIR" with
-         | Not_found -> (failwith ("Environment variable SAIL_DIR unset. Cannot $include " ^ file))
+         | Not_found ->
+            let lib_dir = Filename.concat Install_directory.d "lib" in
+            if Sys.is_directory lib_dir then
+              Install_directory.d
+            else
+              (failwith ("Library directory " ^ lib_dir ^ " does not exist. Make sure sail is installed or try setting environment variable SAIL_DIR so that I can find $include " ^ file))
        in
        let file = Filename.concat sail_dir ("lib/" ^ file) in
        let (Parse_ast.Defs include_defs) = parse_file file in

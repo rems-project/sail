@@ -685,7 +685,12 @@ let system_checked str =
 let ocaml_compile spec defs =
   let sail_dir =
     try Sys.getenv "SAIL_DIR" with
-    | Not_found -> failwith "Environment variable SAIL_DIR needs to be set"
+    | Not_found ->
+       let share_dir = Filename.concat Install_directory.d "share/sail" in
+       if Sys.is_directory share_dir  then
+         share_dir
+       else
+         failwith "Could not find sail share directory, " ^ share_dir ^ ". Make sail is installed or try setting environment variable SAIL_DIR."
   in
   if Sys.file_exists "_sbuild" then () else Unix.mkdir "_sbuild" 0o775;
   let cwd = Unix.getcwd () in

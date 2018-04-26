@@ -1,5 +1,7 @@
 .PHONY: all sail language clean archs isabelle-lib apply_header
 
+INSTALL_DIR ?= .
+
 all: sail
 
 sail:
@@ -9,6 +11,19 @@ sail:
 isail:
 	$(MAKE) -C src isail
 	ln -f -s src/isail.native sail
+
+install:
+	mkdir -p $(INSTALL_DIR)/bin
+	cp src/isail.native $(INSTALL_DIR)/bin/sail
+	mkdir -p $(INSTALL_DIR)/share/sail
+	cp -r lib $(INSTALL_DIR)/share/sail
+	mkdir -p $(INSTALL_DIR)/share/sail/src
+	cp src/elf_loader.ml $(INSTALL_DIR)/share/sail/src
+	cp src/sail_lib.ml $(INSTALL_DIR)/share/sail/src
+
+uninstall:
+	rm -f $(INSTALL_DIR)/bin/sail
+	rm -rf $(INSTALL_DIR)/share/sail
 
 language:
 	$(MAKE) -C language
