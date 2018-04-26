@@ -43,10 +43,10 @@ apply_header:
 	$(MAKE) clean
 	headache -c etc/headache_config -h etc/mips_header `ls mips/*.sail`
 	headache -c etc/headache_config -h etc/mips_header `ls cheri/*.sail`
-	headache -c etc/headache_config -h src/LICENCE `ls src/Makefile*`
-	headache -c etc/headache_config -h src/LICENCE `ls src/*.ml*`
-	headache -c etc/headache_config -h src/LICENCE `ls src/lem_interp/*.ml`
-	headache -c etc/headache_config -h src/LICENCE `ls src/lem_interp/*.lem`
+	headache -c etc/headache_config -h LICENCE `ls src/Makefile*`
+	headache -c etc/headache_config -h LICENCE `ls src/*.ml*`
+	headache -c etc/headache_config -h LICENCE `ls src/lem_interp/*.ml`
+	headache -c etc/headache_config -h LICENCE `ls src/lem_interp/*.lem`
 	$(MAKE) -C arm apply_header
 
 clean:
