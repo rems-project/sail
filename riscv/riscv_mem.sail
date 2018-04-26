@@ -6,7 +6,7 @@ union MemoryOpResult ('a : Type) = {
 }
 
 function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool =
-  unsigned(addr) % width != 0
+  unsigned(addr) % width == 0
 
 function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
   match (t, __RISCV_read(addr, width)) {
