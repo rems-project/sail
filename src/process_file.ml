@@ -150,11 +150,11 @@ let rec preprocess = function
        let sail_dir =
          try Sys.getenv "SAIL_DIR" with
          | Not_found ->
-            let lib_dir = Filename.concat Install_directory.d "lib" in
-            if Sys.is_directory lib_dir then
-              Install_directory.d
+            let share_dir = Share_directory.d in
+            if Sys.file_exists share_dir then
+              share_dir
             else
-              (failwith ("Library directory " ^ lib_dir ^ " does not exist. Make sure sail is installed or try setting environment variable SAIL_DIR so that I can find $include " ^ file))
+              (failwith ("Library directory " ^ share_dir ^ " does not exist. Make sure sail is installed or try setting environment variable SAIL_DIR so that I can find $include " ^ file))
        in
        let file = Filename.concat sail_dir ("lib/" ^ file) in
        let (Parse_ast.Defs include_defs) = parse_file file in

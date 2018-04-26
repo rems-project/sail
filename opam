@@ -1,0 +1,34 @@
+opam-version: "1.2"
+name: "sail"
+version: "0.1"
+maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
+authors: [
+  "Alasdair Armstrong"
+  "Thomas Bauereiss"
+  "Brian Campbell"
+  "Shaked Flur"
+  "Jonathan French"
+  "Kathy Gray"
+  "Robert Norton"
+  "Christopher Pulte"
+  "Peter Sewell"
+  "Mark Wassell"
+]
+homepage: "http://www.cl.cam.ac.uk/~pes20/sail/"
+bug-reports: "https://github.com/rems-project/sail/issues"
+license: "BSD3"
+dev-repo: "https://github.com/rems-project/sail"
+build: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail:share}%" "isail"]
+install: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail:share}%" "install"]
+remove: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail:share}%" "uninstall"]
+depends: [
+  "ocamlfind"
+  "ocamlbuild"
+  "zarith"
+  "menhir"
+  "linenoise"
+  "ott" {>= "0.28"}
+  "lem"
+  "linksem"
+]
+available: [ocaml-version >= "4.02.3"]

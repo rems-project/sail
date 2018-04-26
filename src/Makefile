@@ -67,7 +67,7 @@ endif
 # set to -p on command line to enable gprof profiling
 OCAML_OPTS?=
 
-INSTALL_DIR?=$(realpath ..)
+SHARE_DIR?=$(realpath ..)
 
 all: sail lib doc
 
@@ -90,14 +90,14 @@ bytecode.ml: bytecode.lem
 lem_interp/interp_ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
 
-install_directory.ml:
-	echo "(* Generated file -- do not edit. *)" > install_directory.ml
-	echo let d=\"$(INSTALL_DIR)\" >> install_directory.ml
+share_directory.ml:
+	echo "(* Generated file -- do not edit. *)" > share_directory.ml
+	echo let d=\"$(SHARE_DIR)\" >> share_directory.ml
 
-sail: ast.ml bytecode.ml install_directory.ml
+sail: ast.ml bytecode.ml share_directory.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
-isail: ast.ml bytecode.ml install_directory.ml
+isail: ast.ml bytecode.ml share_directory.ml
 	ocamlbuild -use-ocamlfind isail.native
 
 sail.native: sail
@@ -148,6 +148,7 @@ clean:
 	-rm -f bytecode.ml
 	-rm -f bytecode.lem
 	-rm -f bytecode.ml.bak
+	-rm -f share_directory.ml
 
 doc:
 	ocamlbuild -use-ocamlfind sail.docdir/index.html
