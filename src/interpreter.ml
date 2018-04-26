@@ -257,7 +257,10 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_loop (Until, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, orig_exp, exp_of_value V_unit), annot)])
 
   | E_assert (exp, msg) when is_true exp -> wrap unit_exp
-  | E_assert (exp, msg) when is_false exp -> assertion_failed "FIXME"
+  | E_assert (exp, msg) when is_false exp && is_value msg ->
+     failwith (coerce_string (value_of_exp msg))
+  | E_assert (exp, msg) when is_false exp ->
+     step msg >>= fun msg' -> wrap (E_assert (exp, msg'))
   | E_assert (exp, msg) ->
      step exp >>= fun exp' -> wrap (E_assert (exp', msg))
 
