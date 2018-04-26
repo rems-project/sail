@@ -259,6 +259,8 @@ val destruct_atom_nexp : Env.t -> typ -> nexp option
    existential to ensure that no name-clashes occur. *)
 val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
 
+val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
+
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
 type uvar =

@@ -2889,16 +2889,23 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          |> mk_var_exps_pats pl env
        in
        let exp4 = rewrite_var_updates (add_vars overwrite exp4 vars) in
-       let ord_exp, lower, upper = match destruct_range (typ_of exp1), destruct_range (typ_of exp2) with
-         | None, _ | _, None ->
-            raise (Reporting_basic.err_unreachable el "Could not determine loop bounds")
-         | Some (l1, u1), Some (l2, u2) ->
-            if is_order_inc order
-            then (annot_exp (E_lit (mk_lit L_true)) el env bool_typ, l1, u2)
-            else (annot_exp (E_lit (mk_lit L_false)) el env bool_typ, l2, u1) in
+       let ord_exp, kids, constr, lower, upper =
+         match destruct_range env (typ_of exp1), destruct_range env (typ_of exp2) with
+           | None, _ | _, None ->
+              raise (Reporting_basic.err_unreachable el "Could not determine loop bounds")
+           | Some (kids1, constr1, l1, u1), Some (kids2, constr2, l2, u2) ->
+              let kids = kids1 @ kids2 in
+              let constr = nc_and constr1 constr2 in
+              let ord_exp, lower, upper =
+                if is_order_inc order
+                then (annot_exp (E_lit (mk_lit L_true)) el env bool_typ, l1, u2)
+                else (annot_exp (E_lit (mk_lit L_false)) el env bool_typ, l2, u1)
+              in
+              ord_exp, kids, constr, lower, upper
+       in
        let lvar_kid = mk_kid ("loop_" ^ string_of_id id) in
-       let lvar_nc = nc_and (nc_lteq lower (nvar lvar_kid)) (nc_lteq (nvar lvar_kid) upper) in
-       let lvar_typ = mk_typ (Typ_exist ([lvar_kid], lvar_nc, atom_typ (nvar lvar_kid))) in
+       let lvar_nc = nc_and constr (nc_and (nc_lteq lower (nvar lvar_kid)) (nc_lteq (nvar lvar_kid) upper)) in
+       let lvar_typ = mk_typ (Typ_exist (lvar_kid :: kids, lvar_nc, atom_typ (nvar lvar_kid))) in
        let lvar_pat = unaux_pat (add_p_typ lvar_typ (annot_pat (P_var (
          annot_pat (P_id id) el env (atom_typ (nvar lvar_kid)),
          TP_aux (TP_var lvar_kid, gen_loc el))) el env lvar_typ)) in

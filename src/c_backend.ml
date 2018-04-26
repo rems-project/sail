@@ -801,9 +801,9 @@ let rec ctyp_of_typ ctx typ =
   | Typ_id id when string_of_id id = "nat" -> CT_mpz
   | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
      begin
-       match destruct_range typ with
+       match destruct_range Env.empty typ with
        | None -> assert false (* Checked if range type in guard *)
-       | Some (n, m) ->
+       | Some (kids, constr, n, m) ->
           match nexp_simp n, nexp_simp m with
           | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
                when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->

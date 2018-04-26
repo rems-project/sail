@@ -818,14 +818,6 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   | LEXP_memory (id, exps) -> rewrap (E_app (id, exps))
   | LEXP_deref exp -> rewrap (E_app (mk_id "reg_deref", [exp]))
 
-let destruct_range (Typ_aux (typ_aux, _)) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
-       when string_of_id f = "atom" -> Some (n, n)
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)])
-       when string_of_id f = "range" -> Some (n1, n2)
-  | _ -> None
-
 let is_unit_typ = function
   | Typ_aux (Typ_id u, _) -> string_of_id u = "unit"
   | _ -> false

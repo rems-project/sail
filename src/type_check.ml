@@ -1097,6 +1097,17 @@ let bind_existential typ env =
             | Some (kids, nc, typ) -> typ, add_existential kids nc env
             | None -> typ, env
 
+let destruct_range env typ =
+  let kids, constr, (Typ_aux (typ_aux, _)) =
+    Util.option_default ([], nc_true, typ) (destruct_exist env typ)
+  in
+  match typ_aux with
+    | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
+         when string_of_id f = "atom" -> Some (kids, constr, n, n)
+    | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)])
+         when string_of_id f = "range" -> Some (kids, constr, n1, n2)
+    | _ -> None
+
 let destruct_vector env typ =
   let destruct_vector' = function
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
