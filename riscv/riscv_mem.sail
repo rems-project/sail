@@ -1,9 +1,5 @@
 /* memory */
 
-/* TODO: remove this when unused */
-function check_alignment (addr : xlenbits, width : atom('n)) -> forall 'n. unit =
-  if unsigned(addr) % width != 0 then throw Error_misaligned_access() else ()
-
 union MemoryOpResult ('a : Type) = {
   MemValue : 'a,
   MemException: ExceptionType
@@ -63,43 +59,49 @@ val MEMea_conditional_release = {ocaml: "memea", lem: "MEMea_conditional_release
 val MEMea_conditional_strong_release = {ocaml: "memea", lem: "MEMea_conditional_strong_release"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
 
-val mem_write_ea : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> unit effect {eamem, escape}
+val mem_write_ea : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(unit) effect {eamem, escape}
 
 function mem_write_ea (addr, width, aq, rl, con) = {
-  if rl | con then check_alignment(addr, width);
-
-  match (aq, rl, con) {
-    (false, false, false) => MEMea(addr, width),
-    (false, true,  false) => MEMea_release(addr, width),
-    (false, false, true)  => MEMea_conditional(addr, width),
-    (false, true , true)  => MEMea_conditional_release(addr, width),
+  if (rl | con) & (~ (is_aligned_addr(addr, width)))
+  then MemException(E_SAMO_Addr_Align)
+  else match (aq, rl, con) {
+    (false, false, false) => MemValue(MEMea(addr, width)),
+    (false, true,  false) => MemValue(MEMea_release(addr, width)),
+    (false, false, true)  => MemValue(MEMea_conditional(addr, width)),
+    (false, true , true)  => MemValue(MEMea_conditional_release(addr, width)),
     (true,  false, false) => throw(Error_not_implemented("store.aq")),
-    (true,  true,  false) => MEMea_strong_release(addr, width),
+    (true,  true,  false) => MemValue(MEMea_strong_release(addr, width)),
     (true,  false, true)  => throw(Error_not_implemented("sc.aq")),
-    (true,  true , true)  => MEMea_conditional_strong_release(addr, width)
+    (true,  true , true)  => MemValue(MEMea_conditional_strong_release(addr, width))
   }
 }
 
-val MEMval                            : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_release                    : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_strong_release             : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_conditional                : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_conditional_release        : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
-val MEMval_conditional_strong_release : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wmv}
+function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(unit) =
+  if (__RISCV_write(addr, width, data))
+  then MemValue(())
+  else MemException(E_SAMO_Access_Fault)
 
-function MEMval                            (addr, width, data) = __RISCV_write(addr, width, data)
-function MEMval_release                    (addr, width, data) = __RISCV_write(addr, width, data)
-function MEMval_strong_release             (addr, width, data) = __RISCV_write(addr, width, data)
-function MEMval_conditional                (addr, width, data) = __RISCV_write(addr, width, data)
-function MEMval_conditional_release        (addr, width, data) = __RISCV_write(addr, width, data)
-function MEMval_conditional_strong_release (addr, width, data) = __RISCV_write(addr, width, data)
+val MEMval                            : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
+val MEMval_release                    : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
+val MEMval_strong_release             : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
+val MEMval_conditional                : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
+val MEMval_conditional_release        : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
+val MEMval_conditional_strong_release : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
 
-val mem_write_value : forall 'n. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> unit effect {wmv, escape}
+function MEMval                            (addr, width, data) = checked_mem_write(addr, width, data)
+function MEMval_release                    (addr, width, data) = checked_mem_write(addr, width, data)
+function MEMval_strong_release             (addr, width, data) = checked_mem_write(addr, width, data)
+function MEMval_conditional                (addr, width, data) = checked_mem_write(addr, width, data)
+function MEMval_conditional_release        (addr, width, data) = checked_mem_write(addr, width, data)
+function MEMval_conditional_strong_release (addr, width, data) = checked_mem_write(addr, width, data)
+
+
+val mem_write_value : forall 'n. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(unit) effect {wmv, escape}
 
 function mem_write_value (addr, width, value, aq, rl, con) = {
-  if rl | con then check_alignment(addr, width);
-
-  match (aq, rl, con) {
+  if (rl | con) & (~ (is_aligned_addr(addr, width)))
+  then MemException(E_SAMO_Addr_Align)
+  else match (aq, rl, con) {
     (false, false, false) => MEMval(addr, width, value),
     (false, true,  false) => MEMval_release(addr, width, value),
     (false, false, true)  => MEMval_conditional(addr, width, value),
