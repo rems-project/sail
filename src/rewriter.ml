@@ -92,19 +92,31 @@ let lookup_generated_kid env kid =
   in
   List.fold_left match_kid_nc kid (Env.get_constraints env)
 
+let generated_kids typ = KidSet.filter is_kid_generated (tyvars_of_typ typ)
+
+let resolve_generated_kids env typ =
+  let subst_kid kid typ = typ_subst_kid kid (lookup_generated_kid env kid) typ in
+  KidSet.fold subst_kid (generated_kids typ) typ
+
 let rec remove_p_typ = function
   | P_aux (P_typ (typ, pat), _) -> remove_p_typ pat
   | pat -> pat
 
 let add_p_typ typ (P_aux (paux, annot) as pat) =
-  let env = pat_env_of pat in
-  let generated_kids typ = KidSet.filter is_kid_generated (tyvars_of_typ typ) in
-  let subst_kid kid typ = typ_subst_kid kid (lookup_generated_kid env kid) typ in
-  let typ' = KidSet.fold subst_kid (generated_kids typ) typ in
+  let typ' = resolve_generated_kids (pat_env_of pat) typ in
   if KidSet.is_empty (generated_kids typ') then
     P_aux (P_typ (typ', remove_p_typ pat), annot)
   else pat
 
+let rec remove_e_cast = function
+  | E_aux (E_cast (_, exp), _) -> remove_e_cast exp
+  | exp -> exp
+
+let add_e_cast typ (E_aux (eaux, annot) as exp) =
+  let typ' = resolve_generated_kids (env_of exp) typ in
+  if KidSet.is_empty (generated_kids typ') then
+    E_aux (E_cast (typ', remove_e_cast exp), annot)
+  else exp
 
 let rec small (E_aux (exp,_)) = match exp with
   | E_id _

@@ -1814,7 +1814,7 @@ let rewrite_defs_early_return (Defs defs) =
       (* Add escape effect annotation, since we use the exception mechanism
          of the state monad to implement early return in the Lem backend *)
       let annot' = Some (env, typ, union_effects eff (mk_effect [BE_escape])) in
-      let exp' = annot_exp (E_cast (typ_of exp, exp)) l env (typ_of exp) in
+      let exp' = add_e_cast (typ_of exp) exp in
       E_aux (E_app (mk_id "early_return", [exp']), (l, annot'))
     | _ -> full_exp in
 
@@ -2532,7 +2532,7 @@ let rewrite_defs_letbind_effects =
     let exp =
       if newreturn then
         (* let typ = try typ_of exp with _ -> unit_typ in *)
-        let exp = annot_exp (E_cast (typ_of exp, exp)) l (env_of exp) (typ_of exp) in
+        let exp = add_e_cast (typ_of exp) exp in
         annot_exp (E_internal_return exp) l (env_of exp) (typ_of exp)
       else
         exp in
@@ -2738,7 +2738,7 @@ let rewrite_defs_internal_lets =
        let (lhs, rhs) = rewrite_lexp_to_rhs le in
        let (LEXP_aux (_, lannot)) = lhs in
        let ltyp = typ_of_annot lannot in
-       let rhs = annot_exp (E_cast (ltyp, rhs exp)) l (env_of_annot lannot) ltyp in
+       let rhs = add_e_cast ltyp (rhs exp) in
        E_let (LB_aux (LB_val (pat_of_local_lexp lhs, rhs), annot), body)
     | LB_aux (LB_val (pat,exp'),annot') ->
        if effectful exp'
@@ -3102,7 +3102,7 @@ let rewrite_defs_remove_superfluous_returns =
 
   let add_opt_cast typopt1 typopt2 annot exp =
     match typopt1, typopt2 with
-    | Some typ, _ | _, Some typ -> E_aux (E_cast (typ, exp), annot)
+    | Some typ, _ | _, Some typ -> add_e_cast typ exp
     | None, None -> exp
   in
 
