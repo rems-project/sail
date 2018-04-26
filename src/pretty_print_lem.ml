@@ -439,7 +439,13 @@ let rec typeclass_nexps (Typ_aux(t,_)) =
        let size_nexp = nexp_simp size_nexp in
        if is_nexp_constant size_nexp then NexpSet.empty else
        NexpSet.singleton (orig_nexp size_nexp)
-    | Typ_app _ -> NexpSet.empty
+    | Typ_app (id, args) ->
+       let add_arg_nexps nexps = function
+         | Typ_arg_aux (Typ_arg_typ typ, _) ->
+            NexpSet.union nexps (typeclass_nexps typ)
+         | _ -> nexps
+       in
+       List.fold_left add_arg_nexps NexpSet.empty args
     | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
   else NexpSet.empty
 
