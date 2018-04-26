@@ -66,10 +66,7 @@ let split ch s =
   go s
 
 (* paths relative to _build *)
-let lem_dir =
-  try Sys.getenv "LEM_DIR" (* LEM_DIR must contain an absolute path *)
-  with Not_found -> "../../../lem" ;;
-let lem = lem_dir / "lem" ;;
+let lem = "lem" ;;
 
 (* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
 let lem_opts = [A "-lib"; P "../gen_lib";
