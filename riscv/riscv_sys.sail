@@ -564,7 +564,11 @@ function findPendingInterrupt(ip : xlenbits) -> option(InterruptType) = {
 }
 
 /* Examines current M-mode interrupt state and returns an interrupt to be
- * handled, and the privilege it should be handled at.
+ * handled, and the privilege it should be handled at.  Interrupts are
+ * dispatched in order of decreasing privilege, while ensuring that the
+ * resulting privilege level is not reduced; i.e. delegated interrupts to
+ * lower privileges are effectively masked until control returns to them.
+ *
  * For now, it assumes 'S' and no 'N' extension, which is the common case.
  */
 function curInterrupt(pend : Minterrupts, enbl : Minterrupts, delg : Minterrupts)
@@ -580,6 +584,7 @@ function curInterrupt(pend : Minterrupts, enbl : Minterrupts, delg : Minterrupts
            None()  => None()
          }
     else if (mstatus.SIE() == true) & (eff_sip != EXTZ(0b0))
+            & (cur_privilege == Supervisor | cur_privilege == User)
     then match findPendingInterrupt(eff_sip) {
            Some(i) => let r = (i, Supervisor) in Some(r),
            None()  => None()
