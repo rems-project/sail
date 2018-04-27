@@ -771,11 +771,11 @@ let rec to_ast_mpat k_env def_ord (Parse_ast.MP_aux(mpat,l)) =
       if mpats = []
       then MP_id (to_ast_id id)
       else MP_app(to_ast_id id, List.map (to_ast_mpat k_env def_ord) mpats)
-    | Parse_ast.MP_record(fpats,_) ->
+    | Parse_ast.MP_record(mfpats,_) ->
       MP_record(List.map
-                 (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) ->
-              FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env def_ord fp),(l,())))
-                 fpats, false)
+                 (fun (Parse_ast.MFP_aux(Parse_ast.MFP_mpat(id,mfp),l)) ->
+              MFP_aux(MFP_mpat(to_ast_id id, to_ast_mpat k_env def_ord mfp),(l,())))
+                 mfpats, false)
     | Parse_ast.MP_vector(mpats) -> MP_vector(List.map (to_ast_mpat k_env def_ord) mpats)
     | Parse_ast.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat k_env def_ord) mpats)
     | Parse_ast.MP_tup(mpats) -> MP_tup(List.map (to_ast_mpat k_env def_ord) mpats)

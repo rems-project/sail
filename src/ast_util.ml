@@ -448,12 +448,15 @@ and map_mpexp_annot_aux f = function
   | MPat_pat mpat -> MPat_pat (map_mpat_annot f mpat)
   | MPat_when (mpat, guard) -> MPat_when (map_mpat_annot f mpat, map_exp_annot f guard)
 
+and map_mapcl_annot f (MCL_aux (MCL_mapcl (mpexp1, mpexp2), annot)) =
+  MCL_aux (MCL_mapcl (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), f annot)
+
 and map_mpat_annot f (MP_aux (mpat, annot)) = MP_aux (map_mpat_annot_aux f mpat, f annot)
 and map_mpat_annot_aux f = function
   | MP_lit lit -> MP_lit lit
   | MP_id id -> MP_id id
   | MP_app (id, mpats) -> MP_app (id, List.map (map_mpat_annot f) mpats)
-  | MP_record (fmpats, b) -> MP_record (List.map (map_fpat_annot f) fmpats, b)
+  | MP_record (fmpats, b) -> MP_record (List.map (map_mfpat_annot f) fmpats, b)
   | MP_tup mpats -> MP_tup (List.map (map_mpat_annot f) mpats)
   | MP_list mpats -> MP_list (List.map (map_mpat_annot f) mpats)
   | MP_vector_concat mpats -> MP_vector_concat (List.map (map_mpat_annot f) mpats)
@@ -462,6 +465,7 @@ and map_mpat_annot_aux f = function
   | MP_string_append (mpat1, mpat2) -> MP_string_append (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
 
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
+and map_mfpat_annot f (MFP_aux (MFP_mpat (id, mpat), annot)) = MFP_aux (MFP_mpat (id, map_mpat_annot f mpat), f annot)
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
   | LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
@@ -784,6 +788,9 @@ let rec pat_ids (P_aux (pat_aux, _)) =
      IdSet.union (pat_ids pat1) (pat_ids pat2)
   | P_record (fpats, _) ->
      List.fold_right IdSet.union (List.map fpat_ids fpats) IdSet.empty
+  | P_string_append (pat1, pat2) ->
+     IdSet.union (pat_ids pat1) (pat_ids pat2)
+
 and fpat_ids (FP_aux (FP_Fpat (_, pat), _)) = pat_ids pat
 
 let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =

@@ -3386,9 +3386,112 @@ let merge_funcls (Defs defs) =
     | d -> d
   in Defs (List.map merge_in_def defs)
 
+
+let rec exp_of_mpat (MP_aux (mpat, annot)) =
+  let empty_vec = E_aux (E_vector [], annot) in
+  let concat_vectors annot vec1 vec2 = (* TODO FIXME, this should be OK for typing but doesn't attach location information properly *)
+    E_aux (E_vector_append (vec1, vec2), annot)
+  in
+  match mpat with
+  | MP_lit lit                      -> E_aux (E_lit lit, annot)
+  | MP_id id                        -> E_aux (E_id id, annot)
+  | MP_app (id, args)               -> E_aux (E_app (id, (List.map exp_of_mpat args)), annot)
+  | MP_record (mfpats, flag)        -> E_aux (E_record (fexps_of_mfpats mfpats flag annot), annot)
+  | MP_vector mpats                 -> E_aux (E_vector (List.map exp_of_mpat mpats), annot)
+  | MP_vector_concat mpats          -> List.fold_right (concat_vectors annot) (List.map exp_of_mpat mpats) empty_vec
+  | MP_tup mpats                    -> E_aux (E_tuple (List.map exp_of_mpat mpats), annot)
+  | MP_list mpats                   -> E_aux (E_list (List.map exp_of_mpat mpats), annot)
+  | MP_cons (mpat1, mpat2)          -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), annot)
+  | MP_string_append (mpat1, mpat2) -> E_aux (E_app (mk_id "string_append", [exp_of_mpat mpat1; exp_of_mpat mpat2]), annot)
+
+and fexps_of_mfpats mfpats flag annot =
+  let fexp_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =
+    FE_aux (FE_Fexp (id, exp_of_mpat mpat), annot)
+  in
+  FES_aux (FES_Fexps (List.map fexp_of_mfpat mfpats, flag), annot)
+
+let rec pat_of_mpat (MP_aux (mpat, annot)) =
+  match mpat with
+  | MP_lit lit                      -> P_aux (P_lit lit, annot)
+  | MP_id id                        -> P_aux (P_id id, annot)
+  | MP_app (id, args)               -> P_aux (P_app (id, (List.map pat_of_mpat args)), annot)
+  | MP_record (mfpats, flag)        -> P_aux (P_record ((fpats_of_mfpats mfpats), flag), annot)
+  | MP_vector mpats                 -> P_aux (P_vector (List.map pat_of_mpat mpats), annot)
+  | MP_vector_concat mpats          -> P_aux (P_vector_concat (List.map pat_of_mpat mpats), annot)
+  | MP_tup mpats                    -> P_aux (P_tup (List.map pat_of_mpat mpats), annot)
+  | MP_list mpats                   -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
+  | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
+  | MP_string_append (mpat1, mpat2) -> P_aux ((P_string_append (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
+
+and fpats_of_mfpats mfpats =
+  let fpat_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =
+    FP_aux (FP_Fpat (id, pat_of_mpat mpat), annot)
+  in
+  List.map fpat_of_mfpat mfpats
+
+let rewrite_defs_realise_mappings (Defs defs) =
+  let realise_mpexps forwards mpexp1 mpexp2 =
+    let mpexp_pat, mpexp_exp =
+      if forwards then mpexp1, mpexp2
+      else mpexp2, mpexp1
+    in
+    let exp =
+      match mpexp_exp with
+      | MPat_aux ((MPat_pat mpat), _) -> exp_of_mpat mpat
+      | MPat_aux ((MPat_when (mpat, _), _)) -> exp_of_mpat mpat
+    in
+    match mpexp_pat with
+    | MPat_aux (MPat_pat mpat, annot) -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
+    | MPat_aux (MPat_when (mpat, guard), annot) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
+  in
+  let realise_mapcl forwards id (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, ()))) =
+    let pexp = realise_mpexps forwards mpexp1 mpexp2 in
+    FCL_aux (FCL_Funcl (id, pexp), (l, ()))
+  in
+  let realise_mapdef (MD_aux (MD_mapping (id, mapcls), ((l, (tannot:tannot)) as annot))) =
+    let forwards_id = mk_id (string_of_id id ^ "_forwards#") in
+    let backwards_id = mk_id (string_of_id id ^ "_backwards#") in
+    let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
+    let effect_pure = (Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown)) in
+    let env = match mapcls with
+      | MCL_aux (_, mapcl_annot) :: _ -> env_of_annot mapcl_annot
+      | _ -> Type_check.typ_error l "mapping with no clauses?"
+    in
+    let (typq, bidir_typ) = Env.get_val_spec id env in
+    let forwards_typ = match bidir_typ with
+      | Typ_aux (Typ_bidir (typ1, typ2), l) -> Typ_aux (Typ_fn (typ1, typ2, no_effect), l)
+      | _ -> Type_check.typ_error l "non-bidir type of mapping?"
+    in
+    let backwards_typ = match bidir_typ with
+      | Typ_aux (Typ_bidir (typ1, typ2), l) -> Typ_aux (Typ_fn (typ2, typ1, no_effect), l)
+      | _ -> Type_check.typ_error l "non-bidir type of mapping?"
+    in
+    (* let env = Env.update_val_spec forwards_id (typq, forwards_typ) env in
+     * let env = Env.update_val_spec backwards_id (typq, backwards_typ) env in *)
+    let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
+    let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
+    let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
+    let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
+    let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
+    let forwards_fun : unit fundef = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls)), (l, ()))) in
+    let backwards_fun : unit fundef = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl false backwards_id) mapcls)), (l, ()))) in
+    Printf.printf "%s\n%!" (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string);
+    Printf.printf "%s\n%!" (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string);
+    let forwards_fun, _ = Type_check.check_fundef env forwards_fun in
+    let backwards_fun, _ = Type_check.check_fundef env backwards_fun in
+    forwards_spec @ forwards_fun @ backwards_spec @ backwards_fun
+  in
+  let rewrite_def def =
+    match def with
+    | DEF_mapdef mdef -> realise_mapdef mdef
+    | d -> [d]
+  in
+  Defs (List.map rewrite_def defs |> List.flatten)
+
 let recheck_defs defs = fst (check initial_env defs)
 
 let rewrite_defs_lem = [
+  ("realise_mappings", rewrite_defs_realise_mappings);
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
@@ -3424,6 +3527,7 @@ let rewrite_defs_lem = [
 let rewrite_defs_ocaml = [
     (* ("undefined", rewrite_undefined); *)
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
+  ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("pat_lits", rewrite_defs_pat_lits);
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
@@ -3444,6 +3548,7 @@ let rewrite_defs_ocaml = [
 
 let rewrite_defs_c = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
+  ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("pat_lits", rewrite_defs_pat_lits);
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
@@ -3462,6 +3567,7 @@ let rewrite_defs_c = [
 
 let rewrite_defs_interpreter = [
     ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
+    ("realise_mappings", rewrite_defs_realise_mappings);
     ("pat_string_append", rewrite_defs_pat_string_append);
     ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
     ("tuple_assignments", rewrite_tuple_assignments);

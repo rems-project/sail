@@ -4,6 +4,9 @@ type bits ('n : Int) = vector('n, dec, bit)
 
 infix 4 ==
 
+val int : int <-> string
+overload int = string_of_int
+
 val eq_atom = "eq_int" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -18,6 +21,7 @@ val eq_string = "eq_string" : (string, string) -> bool
 val string_startswith = "string_startswith" : (string, string) -> bool
 val string_drop = "string_drop" : (string, nat) -> string
 val string_length = "string_length" : string -> nat
+val string_append = "string_append" : (string, string) -> string
 
 val eq_real = "eq_real" : (real, real) -> bool
 

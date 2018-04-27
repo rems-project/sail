@@ -209,6 +209,9 @@ val strip_pexp : 'a pexp -> unit pexp
 (** Strip the type annotations from an l-expression *)
 val strip_lexp : 'a lexp -> unit lexp
 
+val strip_mpexp : 'a mpexp -> unit mpexp
+val strip_mapcl : 'a mapcl -> unit mapcl
+
 (** {2 Checking expressions and patterns} *)
 
 (** Check an expression has some type. Returns a fully annotated
@@ -223,6 +226,10 @@ val infer_exp : Env.t -> unit exp -> tannot exp
 
 val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
+val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
+
+val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t  
+
 val prove : Env.t -> n_constraint -> bool
 
 val solve : Env.t -> nexp -> Big_int.num option
@@ -236,6 +243,8 @@ val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp lis
    on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
 
+val typ_error : Ast.l -> string -> 'a
+
 (** {2 Destructuring type annotations} Partial functions: The
    expressions and patterns passed to these functions must be
    guaranteed to have tannots of the form Some (env, typ) for these to
@@ -246,6 +255,7 @@ val env_of_annot : Ast.l * tannot -> Env.t
 
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
+
 
 val pat_typ_of : tannot pat -> typ
 val pat_env_of : tannot pat -> Env.t

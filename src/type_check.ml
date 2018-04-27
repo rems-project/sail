@@ -2156,6 +2156,7 @@ let strip_lexp : 'a lexp -> unit lexp = function lexp -> map_lexp_annot (fun (l,
 
 let strip_mpat : 'a mpat -> unit mpat = function mpat -> map_mpat_annot (fun (l, _) -> (l, ())) mpat
 let strip_mpexp : 'a mpexp -> unit mpexp = function mpexp -> map_mpexp_annot (fun (l, _) -> (l, ())) mpexp
+let strip_mapcl : 'a mapcl -> unit mapcl = function mapcl -> map_mapcl_annot (fun (l, _) -> (l, ())) mapcl
 
 let fresh_var =
   let counter = ref 0 in
@@ -2610,8 +2611,8 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           end
        | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f)
      end
-  | P_app (f, _) when not (Env.is_union_constructor f env) ->
-     typ_error l (string_of_id f ^ " is not a union constructor in pattern " ^ string_of_pat pat)
+  | P_app (f, _) when (not (Env.is_union_constructor f env) && not (Env.is_mapping f env)) ->
+     typ_error l (string_of_id f ^ " is not a union constructor or mapping in pattern " ^ string_of_pat pat)
   | P_as (pat, id) ->
      let (typed_pat, env, guards) = bind_pat env pat typ in
      annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), Env.add_local id (Immutable, pat_typ_of typed_pat) env, guards

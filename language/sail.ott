@@ -574,6 +574,11 @@ fpat :: 'FP_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
   | id = pat                                            :: :: Fpat
 
+mfpat  :: 'MFP_' ::=
+  {{ com Mapping field pattern, why does this have to exist }}
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | id = mpat                                           :: :: mpat
+
 parsing
 P_app <= P_app
 P_app <= P_as
@@ -985,17 +990,17 @@ fundef :: 'FD_' ::=
 mpat :: 'MP_' ::=
   {{ com Mapping pattern. Mostly the same as normal patterns but only constructible parts }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | lit                              ::   :: lit
-  | id                               ::   :: id
-  | id ( mpat1 , ... , mpatn )       ::   :: app
-  | { fpat1 ; ... ; fpatn semi_opt } ::   :: record
-  | [ mpat1 , ... , mpatn ]          ::   :: vector
-  | mpat1 : ... : mpatn              ::   :: vector_concat
-  | ( mpat1 , ... , mpatn )          ::   :: tup
-  | [|| mpat1 , ... , mpatn ||]      ::   :: list
-  | ( mpat )                         :: S :: paren {{ ichlo [[mpat]] }}
-  | mpat1 '::' mpat2                 ::   :: cons
-  | mpat1 ^^ mpat2                   ::   :: string_append
+  | lit                                ::   :: lit
+  | id                                 ::   :: id
+  | id ( mpat1 , ... , mpatn )         ::   :: app
+  | { mfpat1 ; ... ; mfpatn semi_opt } ::   :: record
+  | [ mpat1 , ... , mpatn ]            ::   :: vector
+  | mpat1 : ... : mpatn                ::   :: vector_concat
+  | ( mpat1 , ... , mpatn )            ::   :: tup
+  | [|| mpat1 , ... , mpatn ||]        ::   :: list
+  | ( mpat )                           :: S :: paren {{ ichlo [[mpat]] }}
+  | mpat1 '::' mpat2                   ::   :: cons
+  | mpat1 ^^ mpat2                     ::   :: string_append
 
 mpexp :: 'MPat_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
