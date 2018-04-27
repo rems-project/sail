@@ -923,8 +923,6 @@ function clause execute (CTestSubset(rd, cb, ct)) =
   else {
      result : bits(1) = if (cb_val.tag != ct_val.tag) then
              0b0
-        else if (cb_val.sealed != ct_val.sealed) then
-             0b0
         else if (ct_base < cb_base) then
              0b0
         else if (ct_top > cb_top) then
