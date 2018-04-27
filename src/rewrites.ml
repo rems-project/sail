@@ -3446,7 +3446,8 @@ let rewrite_defs_realise_mappings (Defs defs) =
   in
   let realise_mapcl forwards id (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, ()))) =
     let pexp = realise_mpexps forwards mpexp1 mpexp2 in
-    FCL_aux (FCL_Funcl (id, pexp), (l, ()))
+    pexp
+    (* FCL_aux (FCL_Funcl (id, pexp), (l, ())) *)
   in
   let realise_mapdef (MD_aux (MD_mapping (id, mapcls), ((l, (tannot:tannot)) as annot))) =
     let forwards_id = mk_id (string_of_id id ^ "_forwards#") in
@@ -3466,17 +3467,19 @@ let rewrite_defs_realise_mappings (Defs defs) =
       | Typ_aux (Typ_bidir (typ1, typ2), l) -> Typ_aux (Typ_fn (typ2, typ1, no_effect), l)
       | _ -> Type_check.typ_error l "non-bidir type of mapping?"
     in
-    (* let env = Env.update_val_spec forwards_id (typq, forwards_typ) env in
-     * let env = Env.update_val_spec backwards_id (typq, backwards_typ) env in *)
     let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
     let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
     let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
     let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
     let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
-    let forwards_fun : unit fundef = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls)), (l, ()))) in
-    let backwards_fun : unit fundef = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl false backwards_id) mapcls)), (l, ()))) in
-    Printf.printf "%s\n%!" (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string);
-    Printf.printf "%s\n%!" (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string);
+    let arg_exp = (mk_exp (E_id (mk_id "arg#"))) in
+    let arg_pat = mk_pat (P_id (mk_id "arg#")) in
+    let forwards_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls))) in
+    let backwards_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl false backwards_id) mapcls))) in
+    let forwards_fun : unit fundef = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl forwards_id arg_pat forwards_match]), (l, ()))) in
+    let backwards_fun : unit fundef = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl backwards_id arg_pat backwards_match]), (l, ()))) in
+    Printf.printf "forwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string);
+    Printf.printf "backwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string);
     let forwards_fun, _ = Type_check.check_fundef env forwards_fun in
     let backwards_fun, _ = Type_check.check_fundef env backwards_fun in
     forwards_spec @ forwards_fun @ backwards_spec @ backwards_fun
