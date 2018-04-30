@@ -2262,6 +2262,9 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | None -> typ_error l "Cannot use return outside a function"
      in
      annot_exp (E_return checked_exp) typ
+  | E_tuple exps, Typ_tup typs when List.length exps = List.length typs ->
+     let checked_exps = List.map2 (fun exp typ -> crule check_exp env exp typ) exps typs in
+     annot_exp (E_tuple checked_exps) typ
   | E_app (f, xs), _ ->
      let inferred_exp = infer_funapp l env f xs (Some typ) in
      type_coercion env inferred_exp typ
@@ -2455,9 +2458,9 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
                                    (Reporting_basic.loc_to_string l))
        else ();
        match Env.lookup_id v env with
-       | Local (Immutable, _) | Unbound -> annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env, []
-       | Local (Mutable, _) | Register _ ->
-          typ_error l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
+       | Local _ | Unbound -> annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env, []
+       | Register _ ->
+          typ_error l ("Cannot shadow register in pattern " ^ string_of_pat pat)
        | Enum enum -> subtyp l env enum typ; annot_pat (P_id v) typ, env, []
      end
   | P_var (pat, typ_pat) ->
