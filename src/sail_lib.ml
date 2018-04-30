@@ -467,6 +467,8 @@ let string_drop (str, n) = let n = Big_int.to_int n in String.sub str n (String.
 
 let string_length str = Big_int.of_int (String.length str)
 
+let string_append (s1, s2) = s1 ^ s2                      
+
 let lt_int (x, y) = Big_int.less x y
 
 let set_slice (out_len, slice_len, out, n, slice) =
