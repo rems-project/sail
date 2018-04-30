@@ -2840,7 +2840,7 @@ let rec rewrite_defs_pat_string_append =
         ("nat", ("maybe_nat_of_prefix", nat_typ));
       ] in
 
-    let (new_pat, new_guards, new_expr) =
+    let (new_pat, new_pat_typ, new_guards, new_expr) =
       match (p_aux, p_annot) with
      (*
         "lit" ^^ pat2 => expr ---> s# if startswith(s#, "lit")
@@ -2875,7 +2875,7 @@ let rec rewrite_defs_pat_string_append =
          let new_expr = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
 
          (* construct final result. TODO FIXME: *way* too much type-checking/stripping/rechecking *)
-         (mk_pat (P_id id)), guard1 :: guard2 :: (List.map strip_exp guards), new_expr
+         (mk_pat (P_id id)), string_typ, guard1 :: guard2 :: (List.map strip_exp guards), new_expr
 
      (*
         (builtin x) ^^ pat2 => expr ---> s# if match maybe_atoi s# {
@@ -2941,11 +2941,11 @@ let rec rewrite_defs_pat_string_append =
          let new_let = mk_exp (E_let (new_letbind, new_match)) in
 
       (* construct final result *)
-         (mk_pat (P_id s_id)), new_guard :: (List.map strip_exp guards), new_let
+         (mk_pat (P_id s_id)), string_typ, new_guard :: (List.map strip_exp guards), new_let
       | P_string_append _, _ ->
          failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat (P_aux (p_aux, p_annot)))
 
-      | _ -> strip_pat (P_aux (p_aux, p_annot)), (List.map strip_exp guards), (strip_exp expr)
+      | _ -> strip_pat (P_aux (p_aux, p_annot)), typ_of_annot p_annot, (List.map strip_exp guards), (strip_exp expr)
     in
 
     (* un-merge Pat_exp and Pat_when cases *)
@@ -2953,7 +2953,7 @@ let rec rewrite_defs_pat_string_append =
     | [] -> mk_pexp (Pat_exp (new_pat, new_expr))
     | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
     in
-    check_case env string_typ new_pexp (typ_of expr)
+    check_case env new_pat_typ new_pexp (typ_of expr)
 
   in
   pexp_rewriters rewrite_pexp
