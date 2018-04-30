@@ -17,11 +17,15 @@ val eq_int = "eq_int" : (int, int) -> bool
 
 val eq_vec = "eq_list" : forall 'n. (bits('n), bits('n)) -> bool
 
+union option ('a : Type) = {None : unit, Some : 'a}
+
 val eq_string = "eq_string" : (string, string) -> bool
 val string_startswith = "string_startswith" : (string, string) -> bool
 val string_drop = "string_drop" : (string, nat) -> string
 val string_length = "string_length" : string -> nat
 val string_append = "string_append" : (string, string) -> string
+val maybe_int_of_prefix = "maybe_int_of_prefix" : string -> option((int, nat))
+val maybe_nat_of_prefix = "maybe_nat_of_prefix" : string -> option((nat, nat))
 
 val eq_real = "eq_real" : (real, real) -> bool
 

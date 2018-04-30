@@ -2811,26 +2811,148 @@ let pexp_rewriters rewrite_pexp =
 
 let stringappend_counter = ref 0
 
+
 let rec rewrite_defs_pat_string_append =
+
+  let builtins = [
+      ("int", ("maybe_int_of_prefix", int_typ));
+      ("nat", ("maybe_nat_of_prefix", nat_typ));
+    ]
+  in
+
+  let fresh_stringappend_id () =
+    let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+    stringappend_counter := !stringappend_counter + 1;
+    id
+  in
+
+  let construct_bool_match match_on pexp =
+    let true_exp = (mk_exp (E_lit (mk_lit L_true))) in
+    let false_exp = (mk_exp (E_lit (mk_lit L_false))) in
+    let true_pexp =
+      match pexp with
+      | Pat_aux (Pat_exp (pat, exp), _) ->
+         mk_pexp (Pat_exp (pat, true_exp))
+      | Pat_aux (Pat_when (pat, guards, exp), _) ->
+         mk_pexp (Pat_when (pat, guards, true_exp))
+    in
+    let false_pexp = mk_pexp (Pat_exp (mk_pat P_wild, false_exp)) in
+    mk_exp (E_case (match_on, [true_pexp; false_pexp]))
+  in
+
+  let rec rewrite_pat (pat, guards, expr) =
+    match pat with
+    (* (pat1 ^^ pat2) ^^ pat3 => expr ---> pat1 ^^ (pat2 ^^ pat3) => expr and recurse *)
+    | P_aux (P_string_append (P_aux (P_string_append (pat1, pat2), _), pat3), _) ->
+       let new_pat = mk_pat (P_string_append (pat1, mk_pat (P_string_append (pat2, pat3)))) in
+       rewrite_pat (new_pat, guards, expr)
+    (*
+        "lit" ^^ pat2 => expr ---> s# if startswith(s#, "lit")
+                                        && match str_drop(s#, strlen("lit")) {
+                                             pat2 => true, _ => false
+                                           }
+                                   => match str_drop(s#, strlen("lit")) {
+                                        pat2 => expr
+                                      }
+     *)
+    | P_aux (P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _), pat2), _) ->
+
+       let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+       stringappend_counter := !stringappend_counter + 1;
+
+       (* construct drop expression -- string_drop(s#, strlen("lit")) *)
+       let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id id); mk_exp (E_app (mk_id "string_length", [mk_exp (E_lit lit)]))])) in
+
+       (* recurse into pat2 *)
+       let new_pat2_pexp =
+         match rewrite_pat (pat2, guards, expr) with
+         | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
+         | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
+       in
+
+       (* construct the two new guards *)
+       let guard1 = mk_exp (E_app (mk_id "string_startswith", [mk_exp (E_id id); mk_exp (E_lit lit)])) in
+       let guard2 = construct_bool_match drop_exp new_pat2_pexp in
+
+       (* construct new match expr *)
+       let new_expr = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
+
+       (* construct final result *)
+       mk_pat (P_id id), guard1 :: guard2 :: guards, new_expr
+
+    (*
+        (builtin x) ^^ pat2 => expr ---> s# if match maybe_atoi s# {
+                                                 Some (n#, len#) =>
+                                                   match string_drop(s#, len#) {
+                                                     pat2 => true, _ => false
+                                                   }
+                                                 None => false
+                                               }
+                                         => let (x, len#) = match maybe_int_of_prefix s# {
+                                                              Some (n#, len#) => (n#, len#)
+                                                            } in
+                                            match string_drop(s#, len#) {
+                                              pat2 => expr
+                                            }
+     *)
+    | P_aux (P_string_append (P_aux (P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _), pat2), _)
+         when List.mem_assoc builtin_id builtins ->
+
+       (* common things *)
+       let builtin_func, _ = List.assoc builtin_id builtins in
+       let s_id = fresh_stringappend_id () in
+       let n_id = fresh_stringappend_id () in
+       let len_id = fresh_stringappend_id () in
+
+       (* construct drop expression -- string_drop(s#, len#) *)
+       let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id s_id); mk_exp (E_id len_id)])) in
+       (* construct func expression -- maybe_atoi s# *)
+       let func_exp = mk_exp (E_app (mk_id builtin_func, [mk_exp (E_id s_id)])) in
+       (* construct some pattern -- Some (n#, len#) *)
+       let some_exp = mk_pat (P_app (mk_id "Some", [mk_pat (P_id n_id); mk_pat (P_id len_id)])) in
+       (* construct None pattern *)
+       let none_exp = mk_pat (P_app (mk_id "None", [mk_pat (P_lit (mk_lit L_unit))])) in
+
+       (* recurse into pat2 *)
+       let new_pat2_pexp =
+         match rewrite_pat (pat2, guards, expr) with
+         | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
+         | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
+       in
+
+       (* construct the new guard *)
+       let guard_inner_match = construct_bool_match drop_exp new_pat2_pexp in
+       let new_guard = mk_exp (E_case (func_exp, [
+                                     mk_pexp (Pat_exp (some_exp, guard_inner_match));
+                                     mk_pexp (Pat_exp (none_exp, mk_exp (E_lit (mk_lit (L_false)))))
+                         ])) in
+
+       (* construct the new match *)
+       let new_match = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
+
+       (* construct the new let *)
+       let new_binding = mk_exp (E_case (func_exp, [
+                                       mk_pexp (Pat_exp (some_exp, mk_exp (E_tuple [
+                                                                               mk_exp (E_id n_id);
+                                                                               mk_exp (E_id len_id)
+                                         ])))
+                           ])) in
+       let new_letbind = mk_letbind (mk_pat (P_tup [
+                                                 mk_pat (P_id (mk_id var_id)); mk_pat (P_id len_id)
+                           ])) new_binding in
+       let new_let = mk_exp (E_let (new_letbind, new_match)) in
+
+       (* construct final result *)
+       mk_pat (P_id s_id), new_guard :: guards, new_let
+    | P_aux (P_string_append _, _) ->
+       failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat pat)
+
+    | _ -> pat, guards, expr
+  in
+
   let rec rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
 
-    (* utils *)
     let (pat, _, _, _) = destruct_pexp pexp in
-    let env = pat_env_of pat in
-    let assert_false = mk_exp (E_assert (mk_exp (E_lit (mk_lit L_false)), mk_exp (E_lit (mk_lit (L_string "unreachable"))))) in
-    let construct_bool_match match_on pexp =
-      let true_exp = (mk_exp (E_lit (mk_lit L_true))) in
-      let false_exp = (mk_exp (E_lit (mk_lit L_false))) in
-      let true_pexp =
-        match pexp with
-        | Pat_aux (Pat_exp (pat, exp), _) ->
-           mk_pexp (Pat_exp (pat, true_exp))
-        | Pat_aux (Pat_when (pat, guards, exp), _) ->
-           mk_pexp (Pat_when (pat, guards, true_exp))
-      in
-      let false_pexp = mk_pexp (Pat_exp (mk_pat P_wild, false_exp)) in
-      mk_exp (E_case (match_on, [true_pexp; false_pexp]))
-    in
 
     (* merge cases of Pat_exp and Pat_when *)
     let (P_aux (p_aux, p_annot), guards, expr) =
@@ -2839,137 +2961,8 @@ let rec rewrite_defs_pat_string_append =
       | Pat_when (pat, guard, expr) -> (pat, [guard], expr)
     in
 
-    let builtins = [
-        ("int", ("maybe_int_of_prefix", int_typ));
-        ("nat", ("maybe_nat_of_prefix", nat_typ));
-      ] in
-
-    let (new_pat, new_pat_typ, new_guards, new_expr) =
-      match (p_aux, p_annot) with
-      (* (pat1 ^^ pat2) ^^ pat3 => expr ---> pat1 ^^ (pat2 ^^ pat3) => expr and recurse*)
-      | P_string_append (P_aux (P_string_append (pat1, pat2), _), pat3), annot ->
-         let new_pat = P_aux (P_string_append (pat1, P_aux (P_string_append (pat2, pat3), p_annot)), annot) in
-         let new_pexp = match guards with
-           | [] -> Pat_aux (Pat_exp (new_pat, expr), p_annot)
-           | [g] -> Pat_aux (Pat_when (new_pat, g, expr), p_annot)
-           | gs -> assert false
-         in
-         Printf.printf "PEXP BEFORE RECURSE IS %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
-         let rewritten = rewrite_pexp new_pexp in
-         Printf.printf "PEXP AFTER RECURSE IS %s\n%!" (Pretty_print_sail.doc_pexp rewritten |> Pretty_print_sail.to_string);
-         begin match rewritten with
-         | Pat_aux (Pat_exp (pat, exp), _) -> strip_pat pat, pat_typ_of pat, [], strip_exp exp
-         | Pat_aux (Pat_when (pat, guard, exp), _) -> strip_pat pat, pat_typ_of pat, [strip_exp guard], strip_exp exp
-         end
-     (*
-        "lit" ^^ pat2 => expr ---> s# if startswith(s#, "lit")
-                                        && match str_drop(s#, strlen("lit")) {
-                                             pat2 => true, _ => false
-                                           }
-                                   => match str_drop(s#, strlen("lit")) {
-                                        pat2 => expr
-                                      }
-      *)
-      | P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _), pat2), p_annot ->
-
-         (* common things *)
-         let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
-         stringappend_counter := !stringappend_counter + 1;
-         let env = Env.add_local id (Immutable, string_typ) env in
-
-         (* construct drop expression -- string_drop(s#, strlen("lit")) *)
-         let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id id); mk_exp (E_app (mk_id "string_length", [mk_exp (E_lit lit)]))])) in
-
-         (* recurse into pat2 *)
-         let new_pat2_pexp = mk_pexp (Pat_exp (strip_pat pat2, strip_exp expr)) in
-         let new_pat2_pexp = check_case env (pat_typ_of pat2) new_pat2_pexp (typ_of expr) in
-         let new_pat2_pexp = rewrite_pexp new_pat2_pexp in
-         let new_pat2_pexp = strip_pexp new_pat2_pexp in
-
-         (* construct the two new guards *)
-         let guard1 = mk_exp (E_app (mk_id "string_startswith", [mk_exp (E_id id); mk_exp (E_lit lit)])) in
-         let guard2 = construct_bool_match drop_exp new_pat2_pexp in
-
-         (* construct new match expr *)
-         let new_expr = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
-
-         (* construct final result. TODO FIXME: *way* too much type-checking/stripping/rechecking *)
-         (mk_pat (P_id id)), string_typ, guard1 :: guard2 :: (List.map strip_exp guards), new_expr
-
-     (*
-        (builtin x) ^^ pat2 => expr ---> s# if match maybe_atoi s# {
-                                                 Some (n#, len#) =>
-                                                   match string_drop(s#, len#) {
-                                                     pat2 => true, _ => false
-                                                   }
-                                                 None => false
-                                               }
-                                         => let (x, len#) = match maybe_atoi s# {
-                                                              Some (n#, len#) => (n#, len#)
-                                                            } in
-                                            match string_drop(s#, len#) {
-                                              pat2 => expr
-                                            }
-      *)
-      | P_string_append (P_aux (P_app (Id_aux (Id builtin_id, _), [x] ) , _), pat2), p_annot
-           when List.mem_assoc builtin_id builtins ->
-
-         (* common things *)
-         let builtin_func, builtin_typ = List.assoc builtin_id builtins in
-         let s_id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
-         stringappend_counter := !stringappend_counter + 1;
-         let n_id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
-         stringappend_counter := !stringappend_counter + 1;
-         let len_id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
-         stringappend_counter := !stringappend_counter + 1;
-         let env = Env.add_local s_id (Immutable, string_typ) env in
-         let env = Env.add_local n_id (Immutable, builtin_typ) env in
-         let env = Env.add_local len_id (Immutable, nat_typ) env in
-
-         (* construct drop expression -- string_drop(s#, len#) *)
-         let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id s_id); mk_exp (E_id len_id)])) in
-         (* construct func expression -- maybe_atoi s# *)
-         let func_exp = mk_exp (E_app (mk_id builtin_func, [mk_exp (E_id s_id)])) in
-         (* construct some pattern -- Some (n#, len#) *)
-         let some_exp = mk_pat (P_app (mk_id "Some", [mk_pat (P_id n_id); mk_pat (P_id len_id)])) in
-         (* construct None pattern *)
-         let none_exp = mk_pat (P_app (mk_id "None", [])) in
-
-         (* recurse into pat2 *)
-         let new_pat2_pexp = mk_pexp (Pat_exp (strip_pat pat2, strip_exp expr)) in
-         Printf.printf "PEXP BEFORE TYPECHECK IS %s\n%!" (Pretty_print_sail.doc_pexp new_pat2_pexp |> Pretty_print_sail.to_string);
-         let new_pat2_pexp = check_case env (pat_typ_of pat2) new_pat2_pexp (typ_of expr) in
-         let new_pat2_pexp = rewrite_pexp new_pat2_pexp in
-         let new_pat2_pexp = strip_pexp new_pat2_pexp in
-
-         (* construct the new guard *)
-         let guard_inner_match = construct_bool_match drop_exp new_pat2_pexp in
-         let new_guard = mk_exp (E_case (func_exp, [
-                                       mk_pexp (Pat_exp (some_exp, guard_inner_match));
-                                       mk_pexp (Pat_exp (none_exp, mk_exp (E_lit (mk_lit (L_false)))))
-                           ])) in
-
-         (* construct the new match *)
-         let new_match = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
-
-         (* construct the new let *)
-         let new_binding = mk_exp (E_case (func_exp, [
-                                         mk_pexp (Pat_exp (some_exp, mk_exp (E_tuple [
-                                                                                 mk_exp (E_id n_id);
-                                                                                 mk_exp (E_id len_id)
-                                           ])))
-                                       ])) in
-         let new_letbind = mk_letbind (mk_pat (P_tup [
-                                                   strip_pat x; mk_pat (P_id len_id)
-                             ])) new_binding in
-         let new_let = mk_exp (E_let (new_letbind, new_match)) in
-
-      (* construct final result *)
-         (mk_pat (P_id s_id)), string_typ, new_guard :: (List.map strip_exp guards), new_let
-      | P_string_append _, _ ->
-         failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat (P_aux (p_aux, p_annot)))
-
-      | _ -> strip_pat (P_aux (p_aux, p_annot)), typ_of_annot p_annot, (List.map strip_exp guards), (strip_exp expr)
+    let (new_pat, new_guards, new_expr) =
+      rewrite_pat (strip_pat pat, List.map strip_exp guards, strip_exp expr)
     in
 
     (* un-merge Pat_exp and Pat_when cases *)
@@ -2978,13 +2971,11 @@ let rec rewrite_defs_pat_string_append =
     | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
     in
     Printf.printf "PEXP BEFORE TYPECHECK IS %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
-    check_case env new_pat_typ new_pexp (typ_of expr)
+    check_case (pat_env_of pat) (pat_typ_of pat) new_pexp (typ_of expr)
 
   in
   pexp_rewriters rewrite_pexp
 
-(* let rewrite_defs_mapping_builtins =
- *   let rewrite_pexp *) 
 
 let rewrite_defs_pat_lits =
   let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =

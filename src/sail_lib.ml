@@ -469,6 +469,15 @@ let string_length str = Big_int.of_int (String.length str)
 
 let string_append (s1, s2) = s1 ^ s2                      
 
+(* highly inefficient recursive implementation *)
+let rec maybe_int_of_prefix = function
+  | "" -> None
+  | str ->
+     let len = String.length str in
+     match int_of_string_opt str with
+     | Some n -> Some (Big_int.of_int n, Big_int.of_int len)
+     | None -> maybe_int_of_prefix (String.sub str 0 (len - 1))
+
 let lt_int (x, y) = Big_int.less x y
 
 let set_slice (out_len, slice_len, out, n, slice) =
