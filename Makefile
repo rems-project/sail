@@ -1,7 +1,6 @@
 .PHONY: all sail language clean archs isabelle-lib apply_header
 
 INSTALL_DIR ?= .
-SHARE_DIR ?= $(INSTALL_DIR)
 
 all: sail
 
@@ -14,6 +13,7 @@ isail:
 	ln -f -s src/isail.native sail
 
 install:
+	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; fi
 	mkdir -p $(INSTALL_DIR)/bin
 	cp src/isail.native $(INSTALL_DIR)/bin/sail
 	mkdir -p $(SHARE_DIR)
@@ -21,10 +21,12 @@ install:
 	mkdir -p $(SHARE_DIR)/src
 	cp src/elf_loader.ml $(SHARE_DIR)/src
 	cp src/sail_lib.ml $(SHARE_DIR)/src
+	cp -r src/gen_lib $(SHARE_DIR)/src
+	cp -r src/lem_interp $(SHARE_DIR)/src
 
 uninstall:
+	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; else rm -rf $(SHARE_DIR); fi
 	rm -f $(INSTALL_DIR)/bin/sail
-	rm -rf $(SHARE_DIR)
 
 language:
 	$(MAKE) -C language
