@@ -857,10 +857,16 @@ end = struct
       { env with variants = Bindings.add id variant env.variants }
     end
 
-  let add_mapping id mapping env =
+  let add_mapping id (typq, typ1, typ2) env =
     begin
       typ_print ("Adding mapping " ^ string_of_id id);
-      { env with mappings = Bindings.add id mapping env.mappings }
+      let forwards_id = mk_id (string_of_id id ^ "_forwards#") in
+      let backwards_id = mk_id (string_of_id id ^ "_backwards#") in
+      let forwards_typ = Typ_aux (Typ_fn (typ1, typ2, no_effect), Parse_ast.Unknown) in
+      let backwards_typ = Typ_aux (Typ_fn (typ2, typ1, no_effect), Parse_ast.Unknown) in
+      { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
+      |> add_val_spec forwards_id (typq, forwards_typ)
+      |> add_val_spec backwards_id (typq, backwards_typ)
     end
 
   let add_union_id id bind env =
@@ -2284,7 +2290,21 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         print_endline ("Solved " ^ string_of_nexp nexp ^ " = " ^ Big_int.to_string n);
         annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      end
-  | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
+  | E_app (mapping, xs), _ when Env.is_mapping mapping env ->
+     let forwards_id = mk_id (string_of_id mapping ^ "_forwards#") in
+     let backwards_id = mk_id (string_of_id mapping ^ "_backwards#") in
+     typ_print ("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+     begin try crule check_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) typ with
+           | Type_error (_, err1) ->
+              typ_print ("Error in forwards direction: " ^ string_of_type_error err1);
+              typ_print ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+              begin try crule check_exp env (E_aux (E_app (backwards_id, xs), (l, ()))) typ with
+                    | Type_error (_, err2) ->
+                       typ_print ("Error in backwards direction: " ^ string_of_type_error err2);
+                       typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
+              end
+     end
+     | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
        | (errs, (f :: fs)) -> begin
