@@ -53,7 +53,7 @@ struct CapStruct = {
   permit_execute          : bool    ,
   global                  : bool    ,
   sealed                  : bool    ,
-  offset                  : bits(64),
+  address                 : bits(64),
   base                    : bits(64),
   length                  : bits(64),
 }
@@ -76,7 +76,7 @@ let null_cap : CapStruct = struct {
   permit_execute = false,
   global = false,
   sealed = false,
-  offset = zeros(),
+  address = zeros(),
   base = zeros(),
   length = 0xffffffffffffffff
 }
@@ -99,7 +99,7 @@ let default_cap : CapStruct = struct {
   permit_execute = true,
   global = true,
   sealed = false,
-  offset = zeros(),
+  address = zeros(),
   base = zeros(),
   length = 0xffffffffffffffff
 }
@@ -125,7 +125,7 @@ function capRegToCapStruct(capReg) : CapReg -> CapStruct =
     permit_execute             = capReg[194],
     global                     = capReg[193],
     sealed                     = capReg[192],
-    offset                     = capReg[191..128],
+    address                    = capReg[191..128],
     base                       = capReg[127..64],
     length                     = capReg[63..0]
   }
@@ -148,30 +148,18 @@ function getCapPerms(cap) : CapStruct -> bits(31) =
   )
 
 
-/* Function used to convert capabilities to in-memory format 
-   - this is the same as register format except for the offset,
-     field which is stored as an absolute cursor on CHERI
-     due to uarch optimisation */
+/* Function to convert capabilities to in-memory format. */
 function capStructToMemBits256(cap) : CapStruct -> bits(256) =
   (
         cap.padding
       @ cap.otype
       @ getCapPerms(cap)
       @ cap.sealed
-        /* NB in memory format stores cursor, not offset */
-      @ (cap.base + cap.offset) 
+      @ cap.address
       @ cap.base
       @ cap.length
   )
 
-
-/* Reverse of above used when reading from memory */
-function memBitsToCapBits256(tag, b) : (bool, bits(256)) -> bits(257)=
-  (tag
-   @ b[255..192]
-   @ (b[191..128] - b[127..64])
-   @ b[127..0]
-  )
 
 /* When saving/restoring capabilities xor them with bits of null_cap --
    this ensures that canonical null_cap is always all-zeros in memory
@@ -183,17 +171,9 @@ function capStructToMemBits(cap) : CapStruct -> bits(256)=
 
 function memBitsToCapBits(tag, b) : (bool, bits(256)) -> bits(257)  =
   let null_cap_bits : bits(256) = capStructToMemBits256(null_cap) in
-  memBitsToCapBits256(tag, b ^ null_cap_bits)
+  tag @ (b ^ null_cap_bits)
 
-function capStructToCapReg(cap) : CapStruct -> CapReg =
-      cap.tag
-      @ cap.padding
-      @ cap.otype
-      @ getCapPerms(cap)
-      @ cap.sealed
-      @ cap.offset
-      @ cap.base
-      @ cap.length
+function capStructToCapReg(cap) : CapStruct -> CapReg = cap.tag @ capStructToMemBits256(cap)
 
 function setCapPerms(cap, perms) : (CapStruct, bits(31)) -> CapStruct =
     { cap with
@@ -217,22 +197,21 @@ function sealCap(cap, otype) : (CapStruct, bits(24)) -> (bool, CapStruct) =
 
 function getCapBase(c)   : CapStruct -> uint64 = unsigned(c.base)
 function getCapTop(c)    : CapStruct -> CapLen = unsigned(c.base) + unsigned(c.length)
-function getCapOffset(c) : CapStruct -> uint64 = unsigned(c.offset)
+function getCapOffset(c) : CapStruct -> uint64 = (unsigned(c.address) - unsigned(c.base)) % (pow2(64))
 function getCapLength(c) : CapStruct -> CapLen = unsigned(c.length)
 
-function getCapCursor(cap) : CapStruct -> uint64 = 
-  (unsigned(cap.base) + unsigned(cap.offset)) % (pow2(64))
+function getCapCursor(c) : CapStruct -> uint64 = unsigned(c.address)
 
 function setCapOffset(c, offset) : (CapStruct, bits(64)) -> (bool, CapStruct) =
-    (true, {c with offset=offset})
+    (true, {c with address=c.base + offset})
 
 function incCapOffset(c, delta) : (CapStruct, bits(64)) -> (bool, CapStruct) =
-    let newOffset : bits(64) = c.offset + delta in
-    (true, {c with offset = newOffset})
+    let newAddr : bits(64) = c.address + delta in
+    (true, {c with address = newAddr})
 
 function setCapBounds(cap, base, top) : (CapStruct, bits(64), bits(65)) -> (bool, CapStruct) =
     let length : bits(65) = top - (0b0 @ base) in
-    (true, {cap with base = base, length = length[63..0], offset = zeros()})
+    (true, {cap with base = base, length = length[63..0], address = base})
 
-function int_to_cap (offset) : bits(64) -> CapStruct = 
-    {null_cap with offset = offset}
+function int_to_cap (address) : bits(64) -> CapStruct = 
+    {null_cap with address = address}
