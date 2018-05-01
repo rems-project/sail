@@ -103,6 +103,8 @@ function clause decode (0b010010 @ 0b00000 @ cd : regno @ rs : regno @    0b0011
 function clause decode (0b010010 @ 0b00000 @ cd : regno @ sel : regno @   0b01101 @ 0b111111) = Some(CReadHwr(cd, sel))
 function clause decode (0b010010 @ 0b00000 @ cb : regno @ sel : regno @   0b01110 @ 0b111111) = Some(CWriteHwr(cb, sel))
 
+function clause decode (0b010010 @ 0b00000 @ cb : regno @ sel : regno @   0b01111 @ 0b111111) = Some(CGetAddr(cb, sel))
+
 /* Three operand */
 
 /* Capability Modification */
@@ -197,6 +199,7 @@ union clause ast = CGetLen    : (regno, regno)
 union clause ast = CGetTag    : (regno, regno)
 union clause ast = CGetSealed : (regno, regno)
 union clause ast = CGetOffset : (regno, regno)
+union clause ast = CGetAddr   : (regno, regno)
 
 function clause execute (CGetPerm(rd, cb)) =
 {
@@ -283,6 +286,18 @@ function clause execute (CGetSealed(rd, cb)) =
     let capVal = readCapReg(cb) in
     wGPR(rd) = zero_extend(capVal.sealed);
   /* END_CGetSealed */
+}
+
+function clause execute (CGetAddr(rd, cb)) =
+{
+  /* START_CGetAddr */
+  checkCP2usable();
+  if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else
+    let capVal = readCapReg(cb) in
+    wGPR(rd) = to_bits(64, getCapCursor(capVal));
+  /* END_CGetAddr */
 }
 
 union clause ast = CGetPCC : regno

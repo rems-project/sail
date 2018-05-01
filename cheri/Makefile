@@ -78,6 +78,7 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CGetLen)
 	$(call EXTRACT_INST,CGetTag)
 	$(call EXTRACT_INST,CGetSealed)
+	$(call EXTRACT_INST,CGetAddr)
 	$(call EXTRACT_INST,CGetPCC)
 	$(call EXTRACT_INST,CGetPCCSetOffset)
 	$(call EXTRACT_INST,CGetCause)
