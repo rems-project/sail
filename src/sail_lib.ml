@@ -1,6 +1,7 @@
 module Big_int = Nat_big_num
 
 type 'a return = { return : 'b . 'a -> 'b }
+type 'za zoption = | ZNone of unit | ZSome of 'za;;
 
 let opt_trace = ref false
 
@@ -467,16 +468,21 @@ let string_drop (str, n) = let n = Big_int.to_int n in String.sub str n (String.
 
 let string_length str = Big_int.of_int (String.length str)
 
-let string_append (s1, s2) = s1 ^ s2                      
+let string_append (s1, s2) = s1 ^ s2
 
 (* highly inefficient recursive implementation *)
 let rec maybe_int_of_prefix = function
-  | "" -> None
+  | "" -> ZNone ()
   | str ->
      let len = String.length str in
      match int_of_string_opt str with
-     | Some n -> Some (Big_int.of_int n, Big_int.of_int len)
+     | Some n -> ZSome (Big_int.of_int n, Big_int.of_int len)
      | None -> maybe_int_of_prefix (String.sub str 0 (len - 1))
+
+let maybe_int_of_string str =
+  match int_of_string_opt str with
+  | None -> ZNone ()
+  | Some n -> ZSome (Big_int.of_int n)
 
 let lt_int (x, y) = Big_int.less x y
 

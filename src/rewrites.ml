@@ -2811,19 +2811,18 @@ let pexp_rewriters rewrite_pexp =
 
 let stringappend_counter = ref 0
 
+let fresh_stringappend_id () =
+  let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+  stringappend_counter := !stringappend_counter + 1;
+  id
+
 
 let rec rewrite_defs_pat_string_append =
 
   let builtins = [
-      ("int", ("maybe_int_of_prefix", int_typ));
-      ("nat", ("maybe_nat_of_prefix", nat_typ));
+      (* ("int", ("maybe_int_of_prefix", app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [int_typ; nat_typ]), Parse_ast.Unknown)] )); *)
+      ("int", ("maybe_int_of_prefix", tuple_typ [int_typ; nat_typ] ));
     ]
-  in
-
-  let fresh_stringappend_id () =
-    let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
-    stringappend_counter := !stringappend_counter + 1;
-    id
   in
 
   let construct_bool_match match_on pexp =
@@ -2899,7 +2898,7 @@ let rec rewrite_defs_pat_string_append =
          when List.mem_assoc builtin_id builtins ->
 
        (* common things *)
-       let builtin_func, _ = List.assoc builtin_id builtins in
+       let builtin_func, builtin_inner_typ = List.assoc builtin_id builtins in
        let s_id = fresh_stringappend_id () in
        let n_id = fresh_stringappend_id () in
        let len_id = fresh_stringappend_id () in
@@ -2931,12 +2930,12 @@ let rec rewrite_defs_pat_string_append =
        let new_match = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
 
        (* construct the new let *)
-       let new_binding = mk_exp (E_case (func_exp, [
+       let new_binding = mk_exp (E_cast (builtin_inner_typ, mk_exp (E_case (func_exp, [
                                        mk_pexp (Pat_exp (some_exp, mk_exp (E_tuple [
                                                                                mk_exp (E_id n_id);
                                                                                mk_exp (E_id len_id)
                                          ])))
-                           ])) in
+                           ])))) in
        let new_letbind = mk_letbind (mk_pat (P_tup [
                                                  mk_pat (P_id (mk_id var_id)); mk_pat (P_id len_id)
                            ])) new_binding in
@@ -2969,6 +2968,90 @@ let rec rewrite_defs_pat_string_append =
     let new_pexp = match new_guards with
     | [] -> mk_pexp (Pat_exp (new_pat, new_expr))
     | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
+    in
+    Printf.printf "PEXP BEFORE TYPECHECK IS %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
+    check_case (pat_env_of pat) (pat_typ_of pat) new_pexp (typ_of expr)
+
+  in
+  pexp_rewriters rewrite_pexp
+
+
+let mappingbuiltins_counter = ref 0
+
+let fresh_mappingbuiltins_id () =
+  let id = mk_id ("_mappingbuiltins_" ^ (string_of_int !mappingbuiltins_counter) ^ "#") in
+  mappingbuiltins_counter := !mappingbuiltins_counter + 1;
+  id
+
+
+let rewrite_defs_mapping_builtins =
+
+  let builtins = [
+      ("int", ("maybe_int_of_string", int_typ));
+      ("nat", ("maybe_nat_of_string", nat_typ));
+    ]
+  in
+
+  let rec rewrite_pat (P_aux (p_aux, _) as pat, guards, expr) =
+    let new_pat, new_guards, new_expr = match p_aux with
+      | P_as (pat2, id) ->
+         let new_pat2, new_guards, new_expr = rewrite_pat (pat2, guards, expr) in
+         mk_pat (P_as (new_pat2, id)), new_guards, new_expr
+      | P_typ (typ, pat2) ->
+         let new_pat2, new_guards, new_expr = rewrite_pat (pat2, guards, expr) in
+         mk_pat (P_typ (typ, pat2)), new_guards, new_expr
+      | P_var (pat2, typ_pat) ->
+         let new_pat2, new_guards, new_expr = rewrite_pat (pat2, guards, expr) in
+         mk_pat (P_var (pat2, typ_pat)), new_guards, new_expr
+      | P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)]) when List.mem_assoc builtin_id builtins ->
+      (*
+             builtin(x) => expr ---> s# if match builtin_fun(s#) {
+                                             Some x# => true
+                                                   _ => false
+                                           }
+                                      => let x = match builtin_fun(s#) { Some x# => x# } in
+                                          expr
+       *)
+         let builtin_func, builtin_typ = List.assoc builtin_id builtins in
+         let s_id = fresh_mappingbuiltins_id () in
+         let x_id = fresh_mappingbuiltins_id () in
+         let true_exp = mk_exp (E_lit (mk_lit (L_true))) in
+         let false_exp = mk_exp (E_lit (mk_lit (L_false))) in
+         let func_exp = mk_exp (E_app (mk_id builtin_func, [mk_exp (E_id s_id)])) in
+         let new_pat = mk_pat (P_id s_id) in
+         let new_guard = mk_exp (E_case (func_exp, [
+                                     mk_pexp (Pat_exp (mk_pat (P_app (mk_id "Some", [mk_pat (P_id x_id)])), true_exp));
+                                     mk_pexp (Pat_exp (mk_pat P_wild, false_exp))
+                           ])) in
+         let new_binding = mk_exp (E_cast (builtin_typ, mk_exp (E_case (func_exp, [
+                                         mk_pexp (Pat_exp (mk_pat (P_app (mk_id "Some", [mk_pat (P_id x_id)])), mk_exp (E_id x_id)))
+                             ])))) in
+         let new_letbind = mk_letbind (mk_pat (P_id (mk_id var_id))) new_binding in
+         let new_expr = mk_exp (E_let (new_letbind, expr)) in
+         new_pat, new_guard :: guards, new_expr
+      | _ -> pat, guards, expr
+    in
+    new_pat, new_guards, new_expr
+  in
+  let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
+
+    let (pat, _, _, _) = destruct_pexp pexp in
+
+    (* merge cases of Pat_exp and Pat_when *)
+    let (P_aux (p_aux, p_annot), guards, expr) =
+      match pexp_aux with
+      | Pat_exp (pat, expr) -> (pat, [], expr)
+      | Pat_when (pat, guard, expr) -> (pat, [guard], expr)
+    in
+
+    let (new_pat, new_guards, new_expr) =
+      rewrite_pat (strip_pat pat, List.map strip_exp guards, strip_exp expr)
+    in
+
+    (* un-merge Pat_exp and Pat_when cases *)
+    let new_pexp = match new_guards with
+      | [] -> mk_pexp (Pat_exp (new_pat, new_expr))
+      | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
     in
     Printf.printf "PEXP BEFORE TYPECHECK IS %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
     check_case (pat_env_of pat) (pat_typ_of pat) new_pexp (typ_of expr)
@@ -3520,6 +3603,7 @@ let rewrite_defs_lem = [
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("pat_string_append", rewrite_defs_pat_string_append);
+  ("mapping_builtins", rewrite_defs_mapping_builtins);
   ("guarded_pats", rewrite_defs_guarded_pats);
   ("bitvector_exps", rewrite_bitvector_exps);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
@@ -3550,6 +3634,7 @@ let rewrite_defs_ocaml = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
+  ("mapping_builtins", rewrite_defs_mapping_builtins);
   ("pat_lits", rewrite_defs_pat_lits);
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -3571,6 +3656,7 @@ let rewrite_defs_c = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
+  ("mapping_builtins", rewrite_defs_mapping_builtins);
   ("pat_lits", rewrite_defs_pat_lits);
   ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -3590,6 +3676,7 @@ let rewrite_defs_interpreter = [
     ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
     ("realise_mappings", rewrite_defs_realise_mappings);
     ("pat_string_append", rewrite_defs_pat_string_append);
+    ("mapping_builtins", rewrite_defs_mapping_builtins);
     ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
     ("tuple_assignments", rewrite_tuple_assignments);
     ("simple_assignments", rewrite_simple_assignments);
