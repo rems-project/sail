@@ -35,14 +35,6 @@
 /* 128 bit cap + tag */
 type CapReg = bits(129)
 
-/*
-val cast_bool_bit : cast extern bool -> bit effect pure
-val cast_boolvec_bitvec : cast extern forall 'n, 'm. vector<'n,'m,dec,bool> -> vector<'n,'m,dec,bit> effect pure
-val cast_range_bitvec : cast forall 'm. [|0:2**'m - 1|] -> vector<'m - 1,'m,dec,bit> effect pure
-function vector<'m - 1,'m,dec,bit> cast_range_bitvec (v) = to_vec (v)
-val not : extern bool -> bool effect pure
-*/
-
 struct CapStruct = {
   tag                    : bool    ,
   uperms                 : bits(4) ,
