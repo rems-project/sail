@@ -846,7 +846,7 @@ end = struct
         env
   and add_mapping id (typq, typ1, typ2) env =
     begin
-      typ_print ("Adding mapping " ^ string_of_id id);
+      typ_print (lazy ("Adding mapping " ^ string_of_id id));
       let forwards_id = mk_id (string_of_id id ^ "_forwards#") in
       let backwards_id = mk_id (string_of_id id ^ "_backwards#") in
       let forwards_typ = Typ_aux (Typ_fn (typ1, typ2, no_effect), Parse_ast.Unknown) in
@@ -2381,14 +2381,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_app (mapping, xs), _ when Env.is_mapping mapping env ->
      let forwards_id = mk_id (string_of_id mapping ^ "_forwards#") in
      let backwards_id = mk_id (string_of_id mapping ^ "_backwards#") in
-     typ_print ("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+     typ_print (lazy("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
      begin try crule check_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) typ with
            | Type_error (_, err1) ->
-              typ_print ("Error in forwards direction: " ^ string_of_type_error err1);
-              typ_print ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+              typ_print (lazy ("Error in forwards direction: " ^ string_of_type_error err1));
+              typ_print (lazy ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
               begin try crule check_exp env (E_aux (E_app (backwards_id, xs), (l, ()))) typ with
                     | Type_error (_, err2) ->
-                       typ_print ("Error in backwards direction: " ^ string_of_type_error err2);
+                       typ_print (lazy ("Error in backwards direction: " ^ string_of_type_error err2));
                        typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
               end
      end
@@ -2732,9 +2732,9 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        | Typ_aux (Typ_bidir (typ1, typ2), _) ->
           begin
             try
-              typ_debug ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ);
+              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env typ2 typ in
-              typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+              typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
               let arg_typ' = subst_unifiers unifiers typ1 in
               let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
@@ -2749,10 +2749,10 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             with
             | Unification_error (l, m) ->
                try
-                 typ_debug "Unifying mapping forwards failed, trying backwards.";
-                 typ_debug ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ);
+                 typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
+                 typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
                  let unifiers, _, _ (* FIXME! *) = unify l env typ1 typ in
-                 typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+                 typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
                  let arg_typ' = subst_unifiers unifiers typ2 in
                  let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
                  if (match quants' with [] -> false | _ -> true)
@@ -3174,14 +3174,14 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_app (mapping, xs) when Env.is_mapping mapping env ->
      let forwards_id = mk_id (string_of_id mapping ^ "_forwards#") in
      let backwards_id = mk_id (string_of_id mapping ^ "_backwards#") in
-     typ_print ("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+     typ_print (lazy ("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
      begin try irule infer_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) with
            | Type_error (_, err1) ->
-              typ_print ("Error in forwards direction: " ^ string_of_type_error err1);
-              typ_print ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+              typ_print (lazy ("Error in forwards direction: " ^ string_of_type_error err1));
+              typ_print (lazy ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
               begin try irule infer_exp env (E_aux (E_app (backwards_id, xs), (l, ()))) with
                     | Type_error (_, err2) ->
-                       typ_print ("Error in backwards direction: " ^ string_of_type_error err2);
+                       typ_print (lazy ("Error in backwards direction: " ^ string_of_type_error err2));
                        typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
               end
      end
@@ -3461,7 +3461,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
 
 and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as typ) =
   let (Typ_aux (typ_aux, _) as typ), env = bind_existential typ env in
-  typ_print ("Binding " ^ string_of_mpat mpat ^  " to " ^ string_of_typ typ);
+  typ_print (lazy ("Binding " ^ string_of_mpat mpat ^  " to " ^ string_of_typ typ));
   let annot_mpat mpat typ = MP_aux (mpat, (l, Some (env, typ, no_effect))) in
   let switch_typ mpat typ = match mpat with
     | MP_aux (pat_aux, (l, Some (env, _, eff))) -> MP_aux (pat_aux, (l, Some (env, typ, eff)))
@@ -3550,9 +3550,9 @@ and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as 
        | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
           begin
             try
-              typ_debug ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ);
+              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
-              typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+              typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
               let arg_typ' = subst_unifiers unifiers arg_typ in
               let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
@@ -3581,9 +3581,9 @@ and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as 
        | Typ_aux (Typ_bidir (typ1, typ2), _) ->
           begin
             try
-              typ_debug ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ);
+              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env typ2 typ in
-              typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+              typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
               let arg_typ' = subst_unifiers unifiers typ1 in
               let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
@@ -4165,13 +4165,13 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
 
 
 let check_mapdef env (MD_aux (MD_mapping (id, mapcls), (l, _)) as md_aux) =
-  typ_print ("\nChecking mapping " ^ string_of_id id);
+  typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
   let quant, typ = Env.get_val_spec id env in
   let vtyp1, vtyp2, vl = match typ with
     | Typ_aux (Typ_bidir (vtyp1, vtyp2), vl) -> vtyp1, vtyp2, vl
     | _ -> typ_error l "Mapping val spec was not a mapping type"
   in
-  typ_debug ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ));
+  typ_debug (lazy ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let mapcl_env = add_typquant quant env in
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
