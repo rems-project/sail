@@ -1241,6 +1241,9 @@ atomic_mpat:
     { mk_mpat (MP_list []) $startpos $endpos }
   | LsquareBar mpat_list RsquareBar
     { mk_mpat (MP_list $2) $startpos $endpos }
+  | atomic_mpat Colon typ
+    { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
+
 
 
 mpexp:

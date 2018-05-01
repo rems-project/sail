@@ -3504,6 +3504,7 @@ let rec exp_of_mpat (MP_aux (mpat, annot)) =
   | MP_list mpats                   -> E_aux (E_list (List.map exp_of_mpat mpats), annot)
   | MP_cons (mpat1, mpat2)          -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), annot)
   | MP_string_append (mpat1, mpat2) -> E_aux (E_app (mk_id "string_append", [exp_of_mpat mpat1; exp_of_mpat mpat2]), annot)
+  | MP_typ (mpat, typ)              -> E_aux (E_cast (typ, exp_of_mpat mpat), annot)
 
 and fexps_of_mfpats mfpats flag annot =
   let fexp_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =
@@ -3523,6 +3524,7 @@ let rec pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_list mpats                   -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
   | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
   | MP_string_append (mpat1, mpat2) -> P_aux ((P_string_append (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
+  | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
 
 and fpats_of_mfpats mfpats =
   let fpat_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =

@@ -995,12 +995,13 @@ mpat :: 'MP_' ::=
   | id ( mpat1 , ... , mpatn )         ::   :: app
   | { mfpat1 ; ... ; mfpatn semi_opt } ::   :: record
   | [ mpat1 , ... , mpatn ]            ::   :: vector
-  | mpat1 : ... : mpatn                ::   :: vector_concat
+  | mpat1 @ ... @ mpatn                ::   :: vector_concat
   | ( mpat1 , ... , mpatn )            ::   :: tup
   | [|| mpat1 , ... , mpatn ||]        ::   :: list
   | ( mpat )                           :: S :: paren {{ ichlo [[mpat]] }}
   | mpat1 '::' mpat2                   ::   :: cons
   | mpat1 ^^ mpat2                     ::   :: string_append
+  | mpat : typ                         ::   :: typ
 
 mpexp :: 'MPat_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}

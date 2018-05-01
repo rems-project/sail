@@ -782,6 +782,7 @@ let rec to_ast_mpat k_env def_ord (Parse_ast.MP_aux(mpat,l)) =
     | Parse_ast.MP_list(mpats) -> MP_list(List.map (to_ast_mpat k_env def_ord) mpats)
     | Parse_ast.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat k_env def_ord pat1, to_ast_mpat k_env def_ord pat2)
     | Parse_ast.MP_string_append (pat1, pat2) -> MP_string_append (to_ast_mpat k_env def_ord pat1, to_ast_mpat k_env def_ord pat2)
+    | Parse_ast.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat k_env def_ord mpat, to_ast_typ k_env def_ord typ)
     ), (l,()))
 
 

@@ -3632,6 +3632,10 @@ and infer_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) =
      end
   | MP_lit lit ->
      annot_mpat (MP_lit lit) (infer_lit env lit), env, []
+  | MP_typ (mpat, typ_annot) ->
+     Env.wf_typ env typ_annot;
+     let (typed_mpat, env, guards) = bind_mpat env mpat typ_annot in
+     annot_mpat (MP_typ (typed_mpat, typ_annot)) typ_annot, env, guards
   | MP_vector (mpat :: mpats) ->
      let fold_mpats (mpats, env, guards) mpat =
        let typed_mpat, env, guards' = bind_mpat env mpat bit_typ in
@@ -3965,6 +3969,9 @@ and propagate_mpat_effect_aux = function
   | MP_vector mpats ->
      let p_mpats = List.map propagate_mpat_effect mpats in
      MP_vector p_mpats, collect_effects_mpat p_mpats
+  | MP_typ (mpat, typ) ->
+     let p_mpat = propagate_mpat_effect mpat in
+     MP_typ (p_mpat, typ), effect_of_mpat mpat
   | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in mpat"
 
        

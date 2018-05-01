@@ -463,6 +463,7 @@ and map_mpat_annot_aux f = function
   | MP_vector mpats -> MP_vector (List.map (map_mpat_annot f) mpats)
   | MP_cons (mpat1, mpat2) -> MP_cons (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
   | MP_string_append (mpat1, mpat2) -> MP_string_append (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
+  | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
 
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
 and map_mfpat_annot f (MFP_aux (MFP_mpat (id, mpat), annot)) = MFP_aux (MFP_mpat (id, map_mpat_annot f mpat), f annot)
@@ -499,6 +500,7 @@ let def_loc = function
   | DEF_kind (KD_aux (_, (l, _)))
   | DEF_type (TD_aux (_, (l, _)))
   | DEF_fundef (FD_aux (_, (l, _)))
+  | DEF_mapdef (MD_aux (_, (l, _)))
   | DEF_val (LB_aux (_, (l, _)))
   | DEF_spec (VS_aux (_, (l, _)))
   | DEF_default (DT_aux (_, l))
@@ -752,7 +754,8 @@ and string_of_mpat (MP_aux (pat, l)) =
   | MP_vector_concat pats -> string_of_list " : " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
   | MP_string_append (pat1, pat2) -> string_of_mpat pat1 ^ " ^^ " ^ string_of_mpat pat2
-  | _ -> "PAT"
+  | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
+  | _ -> "MPAT"
 
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
@@ -976,6 +979,7 @@ let rec tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_bidir (t1, t2) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
        KidSet.empty ts
@@ -1020,7 +1024,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         initial_check.ml. i.e. the rewriter should only encounter this
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
-  | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
+  | Typ_bidir _ | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
 and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
