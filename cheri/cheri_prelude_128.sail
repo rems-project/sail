@@ -126,7 +126,7 @@ function capRegToCapStruct(c) : CapReg -> CapStruct =
     permit_execute         = c[114],
     global                 = c[113],
     reserved               = c[112..111],
-    E                      = c[110..105] ^ 0b110000,
+    E                      = c[110..105],
     sealed                 = s,
     B                      = Bc,
     T                      = Tc,
@@ -153,7 +153,7 @@ function capStructToMemBits128(cap) : CapStruct -> bits(128) =
     ( cap.uperms
     @ getCapHardPerms(cap)
     @ cap.reserved
-    @ cap.E ^ 0b110000
+    @ cap.E
     @ cap.sealed
     @ b
     @ t
