@@ -212,6 +212,19 @@ val strip_lexp : 'a lexp -> unit lexp
 val strip_mpexp : 'a mpexp -> unit mpexp
 val strip_mapcl : 'a mapcl -> unit mapcl
 
+(* Strip location information from types for comparison purposes *)
+val strip_typ : typ -> typ
+val strip_typq : typquant -> typquant
+val strip_id : id -> id
+val strip_kid : kid -> kid
+val strip_base_effect : base_effect -> base_effect
+val strip_effect : effect -> effect
+val strip_nexp_aux : nexp_aux -> nexp_aux
+val strip_nexp : nexp -> nexp
+val strip_n_constraint_aux : n_constraint_aux -> n_constraint_aux
+val strip_n_constraint : n_constraint -> n_constraint
+val strip_typ_aux : typ_aux -> typ_aux
+
 (** {2 Checking expressions and patterns} *)
 
 (** Check an expression has some type. Returns a fully annotated

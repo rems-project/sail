@@ -3,6 +3,8 @@ module Big_int = Nat_big_num
 type 'a return = { return : 'b . 'a -> 'b }
 type 'za zoption = | ZNone of unit | ZSome of 'za;;
 
+let zint_forwardsz3 _ = assert false
+
 let opt_trace = ref false
 
 let trace_depth = ref 0

@@ -176,6 +176,85 @@ let is_atom (Typ_aux (typ_aux, _)) =
   | Typ_app (f, [_]) when string_of_id f = "atom" -> true
   | _ -> false
 
+
+
+let rec strip_id = function
+  | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
+  | Id_aux (DeIid x, _) -> Id_aux (DeIid x, Parse_ast.Unknown)
+and strip_kid = function
+  | Kid_aux (Var x, _) -> Kid_aux (Var x, Parse_ast.Unknown)
+and strip_base_effect = function
+  | BE_aux (eff, _) -> BE_aux (eff, Parse_ast.Unknown)
+and strip_effect = function
+  | Effect_aux (Effect_set effects, _) -> Effect_aux (Effect_set (List.map strip_base_effect effects), Parse_ast.Unknown)
+and strip_nexp_aux = function
+  | Nexp_id id -> Nexp_id (strip_id id)
+  | Nexp_var kid -> Nexp_var (strip_kid kid)
+  | Nexp_constant n -> Nexp_constant n
+  | Nexp_app (id, nexps) -> Nexp_app (id, List.map strip_nexp nexps)
+  | Nexp_times (nexp1, nexp2) -> Nexp_times (strip_nexp nexp1, strip_nexp nexp2)
+  | Nexp_sum (nexp1, nexp2) -> Nexp_sum (strip_nexp nexp1, strip_nexp nexp2)
+  | Nexp_minus (nexp1, nexp2) -> Nexp_minus (strip_nexp nexp1, strip_nexp nexp2)
+  | Nexp_exp nexp -> Nexp_exp (strip_nexp nexp)
+  | Nexp_neg nexp -> Nexp_neg (strip_nexp nexp)
+and strip_nexp = function
+  | Nexp_aux (nexp_aux, _) -> Nexp_aux (strip_nexp_aux nexp_aux, Parse_ast.Unknown)
+and strip_n_constraint_aux = function
+  | NC_equal (nexp1, nexp2) -> NC_equal (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_bounded_ge (nexp1, nexp2) -> NC_bounded_ge (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_bounded_le (nexp1, nexp2) -> NC_bounded_le (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_not_equal (nexp1, nexp2) -> NC_not_equal (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_set (kid, nums) -> NC_set (strip_kid kid, nums)
+  | NC_or (nc1, nc2) -> NC_or (strip_n_constraint nc1, strip_n_constraint nc2)
+  | NC_and (nc1, nc2) -> NC_and (strip_n_constraint nc1, strip_n_constraint nc2)
+  | NC_true -> NC_true
+  | NC_false -> NC_false
+and strip_n_constraint = function
+  | NC_aux (nc_aux, _) -> NC_aux (strip_n_constraint_aux nc_aux, Parse_ast.Unknown)
+and strip_typ_arg = function
+  | Typ_arg_aux (typ_arg_aux, _) -> Typ_arg_aux (strip_typ_arg_aux typ_arg_aux, Parse_ast.Unknown)
+and strip_typ_arg_aux = function
+  | Typ_arg_nexp nexp -> Typ_arg_nexp (strip_nexp nexp)
+  | Typ_arg_typ typ -> Typ_arg_typ (strip_typ typ)
+  | Typ_arg_order ord -> Typ_arg_order (strip_order ord)
+and strip_order = function
+  | Ord_aux (ord_aux, _) -> Ord_aux (strip_order_aux ord_aux, Parse_ast.Unknown)
+and strip_order_aux = function
+  | Ord_var kid -> Ord_var (strip_kid kid)
+  | Ord_inc -> Ord_inc
+  | Ord_dec -> Ord_dec
+and strip_typ_aux : typ_aux -> typ_aux = function
+  | Typ_id id -> Typ_id (strip_id id)
+  | Typ_var kid -> Typ_var (strip_kid kid)
+  | Typ_fn (typ1, typ2, effect) -> Typ_fn (strip_typ typ1, strip_typ typ2, strip_effect effect)
+  | Typ_bidir (typ1, typ2) -> Typ_bidir (strip_typ typ1, strip_typ typ2)
+  | Typ_tup typs -> Typ_tup (List.map strip_typ typs)
+  | Typ_exist (kids, constr, typ) -> Typ_exist ((List.map strip_kid kids), strip_n_constraint constr, strip_typ typ)
+  | Typ_app (id, args) -> Typ_app (strip_id id, List.map strip_typ_arg args)
+and strip_typ : typ -> typ = function
+  | Typ_aux (typ_aux, _) -> Typ_aux (strip_typ_aux typ_aux, Parse_ast.Unknown)
+and strip_typq = function TypQ_aux (typq_aux, l) -> TypQ_aux (strip_typq_aux typq_aux, Parse_ast.Unknown)
+and strip_typq_aux = function
+  | TypQ_no_forall -> TypQ_no_forall
+  | TypQ_tq quants -> TypQ_tq (List.map strip_quant_item quants)
+and strip_quant_item = function
+  | QI_aux (qi_aux, _) -> QI_aux (strip_qi_aux qi_aux, Parse_ast.Unknown)
+and strip_qi_aux = function
+  | QI_id kinded_id -> QI_id (strip_kinded_id kinded_id)
+  | QI_const constr -> QI_const (strip_n_constraint constr)
+and strip_kinded_id = function
+  | KOpt_aux (kinded_id_aux, _) -> KOpt_aux (strip_kinded_id_aux kinded_id_aux, Parse_ast.Unknown)
+and strip_kinded_id_aux = function
+  | KOpt_none kid -> KOpt_none (strip_kid kid)
+  | KOpt_kind (kind, kid) -> KOpt_kind (strip_kind kind, strip_kid kid)
+and strip_kind = function
+  | K_aux (k_aux, _) -> K_aux (strip_kind_aux k_aux, Parse_ast.Unknown)
+and strip_kind_aux = function
+  | K_kind base_kinds -> K_kind (List.map strip_base_kind base_kinds)
+and strip_base_kind = function
+  | BK_aux (bk_aux, _) -> BK_aux (bk_aux, Parse_ast.Unknown)
+
+
 (**************************************************************************)
 (* 1. Substitutions                                                       *)
 (**************************************************************************)
@@ -744,17 +823,38 @@ end = struct
     with
     | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
 
-  let update_val_spec id (typq, typ) env =
+  let rec update_val_spec id (typq, typ) env =
     begin
       let typ = expand_synonyms env typ in
       typ_print (lazy ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind (typq, typ)));
+      let env = match typ with
+        | Typ_aux (Typ_bidir (typ1, typ2), _) -> add_mapping id (typq, typ1, typ2) env
+        | _ -> env
+      in
       { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
     end
-
-  let add_val_spec id bind env =
-    if Bindings.mem id env.top_val_specs
-    then typ_error (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound")
-    else update_val_spec id bind env
+  and add_val_spec id (bind_typq, bind_typ) env =
+    if not (Bindings.mem id env.top_val_specs)
+    then update_val_spec id (bind_typq, bind_typ) env
+    else
+      let (existing_typq, existing_typ) = Bindings.find id env.top_val_specs in
+      let existing_cmp = (strip_typq existing_typq, strip_typ existing_typ) in
+      let bind_cmp = (strip_typq bind_typq, strip_typ bind_typ) in
+      if existing_cmp <> bind_cmp then
+        typ_error (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound as " ^ string_of_bind (existing_typq, existing_typ) ^ ", cannot rebind as " ^ string_of_bind (bind_typq, bind_typ))
+      else
+        env
+  and add_mapping id (typq, typ1, typ2) env =
+    begin
+      typ_print ("Adding mapping " ^ string_of_id id);
+      let forwards_id = mk_id (string_of_id id ^ "_forwards#") in
+      let backwards_id = mk_id (string_of_id id ^ "_backwards#") in
+      let forwards_typ = Typ_aux (Typ_fn (typ1, typ2, no_effect), Parse_ast.Unknown) in
+      let backwards_typ = Typ_aux (Typ_fn (typ2, typ1, no_effect), Parse_ast.Unknown) in
+      { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
+      |> add_val_spec forwards_id (typq, forwards_typ)
+      |> add_val_spec backwards_id (typq, backwards_typ)
+    end
 
   let define_val_spec id env =
     if IdSet.mem id env.defined_val_specs
@@ -855,18 +955,6 @@ end = struct
     begin
       typ_print (lazy ("Adding variant " ^ string_of_id id));
       { env with variants = Bindings.add id variant env.variants }
-    end
-
-  let add_mapping id (typq, typ1, typ2) env =
-    begin
-      typ_print ("Adding mapping " ^ string_of_id id);
-      let forwards_id = mk_id (string_of_id id ^ "_forwards#") in
-      let backwards_id = mk_id (string_of_id id ^ "_backwards#") in
-      let forwards_typ = Typ_aux (Typ_fn (typ1, typ2, no_effect), Parse_ast.Unknown) in
-      let backwards_typ = Typ_aux (Typ_fn (typ2, typ1, no_effect), Parse_ast.Unknown) in
-      { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
-      |> add_val_spec forwards_id (typq, forwards_typ)
-      |> add_val_spec backwards_id (typq, backwards_typ)
     end
 
   let add_union_id id bind env =
@@ -2304,7 +2392,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
                        typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
               end
      end
-     | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
+  | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
        | (errs, (f :: fs)) -> begin
@@ -4275,7 +4363,8 @@ let initial_env =
 
   (* Internal functions for Monomorphise.AtomToItself *)
 
-  |> Env.add_mapping (mk_id "int") (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), int_typ, string_typ)
+  (* |> Env.add_val_spec (mk_id "int")
+   *      (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), Typ_aux (Typ_bidir (int_typ, string_typ), Parse_ast.Unknown)) *)
 
   |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
   |> Env.add_val_spec (mk_id "size_itself_int")
