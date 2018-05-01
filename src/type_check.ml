@@ -3083,6 +3083,20 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
   | E_app_infix (x, op, y) -> infer_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ())))
+  | E_app (mapping, xs) when Env.is_mapping mapping env ->
+     let forwards_id = mk_id (string_of_id mapping ^ "_forwards#") in
+     let backwards_id = mk_id (string_of_id mapping ^ "_backwards#") in
+     typ_print ("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+     begin try irule infer_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) with
+           | Type_error (_, err1) ->
+              typ_print ("Error in forwards direction: " ^ string_of_type_error err1);
+              typ_print ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+              begin try irule infer_exp env (E_aux (E_app (backwards_id, xs), (l, ()))) with
+                    | Type_error (_, err2) ->
+                       typ_print ("Error in backwards direction: " ^ string_of_type_error err2);
+                       typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
+              end
+     end
   | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
