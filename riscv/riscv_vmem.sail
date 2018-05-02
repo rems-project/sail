@@ -148,7 +148,7 @@ function walk39(vaddr, ac, priv, mxr, sum, ptb, level, global) -> PTW_Result = {
                 PTW_Success(append(ppn, va.PgOfs()), pte, pte_addr, level, is_global)
               }
             } else
-              PTW_Success(append(pa, va.PgOfs()), pte, pte_addr, level, is_global)
+              PTW_Success(append(pte.PPNi(), va.PgOfs()), pte, pte_addr, level, is_global)
           }
         }
       }
