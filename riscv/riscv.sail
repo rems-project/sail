@@ -847,7 +847,8 @@ function clause print_insn (CSR(csr, rs1, rd, is_imm, op)) =
       (CSRRC, true)  => "csrrci ",
       (CSRRC, false) => "csrrc  "
     } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ csr_name(csr)
+  let rs1_str : string = if is_imm then BitStr(rs1) else reg_name_abi(rs1) in
+  insn ^ rd ^ ", " ^ rs1_str ^ ", " ^ csr_name(csr)
 
 /* ****************************************************************** */
 union clause ast = NOP : unit
