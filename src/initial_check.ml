@@ -894,6 +894,27 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
           | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,unit,effects_opt,[]),(l,())))),false) in
                     (No_def,envs),((id,(partial_def,k_local))::partial_defs)
           | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
+      | Parse_ast.SD_scattered_mapping id ->
+         let id = to_ast_id id in
+         let _,_,k_local = to_ast_tannot_opt k_env def_ord (Parse_ast.Typ_annot_opt_aux (Parse_ast.Typ_annot_opt_none, Parse_ast.Unknown)) in
+         (match (def_in_progress id partial_defs) with
+          | None -> let partial_def = ref ((DEF_mapdef(MD_aux(MD_mapping(id, []), (l, ())))), false) in
+                    (No_def,envs),((id,(partial_def,k_local))::partial_defs)
+          | Some(d,k) -> typ_error l "Scattered mapping definition header name already in use by scattered definition" (Some id) None None)
+
+      | Parse_ast.SD_scattered_mapcl (id, mapcl) ->
+         let id = to_ast_id id in
+         (match (def_in_progress id partial_defs) with
+          | None -> typ_error l "Scattered mapping definition clause does not match any existing mapping definition headers" (Some id) None None
+          | Some (d, k) ->
+             (match !d with
+              | DEF_mapdef(MD_aux(MD_mapping(_,mcls),ml)),false ->
+                 let (MCL_aux (mapcl_aux, _)) = to_ast_mapcl (names,k_env,def_ord) mapcl in
+                 d := DEF_mapdef(MD_aux(MD_mapping(id, mcls @ [MCL_aux (mapcl_aux, (l, ()))]), ml)), false;
+                 (No_def,envs),partial_defs
+              | _, true -> typ_error l "Scattered mapping definition clause extends ended definition" (Some id) None None
+              | _ -> typ_error l "Scattered mapping definition doesn't match existing definition header" (Some id) None None))
+
       | Parse_ast.SD_scattered_funcl(funcl) ->
          (match funcl with
           | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_),_) ->
@@ -944,6 +965,9 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
                  (No_def,envs),partial_defs
               | (DEF_fundef(_) as def),false ->
                  d:= (def,true);
+                 ((Finished def), envs),partial_defs
+              | (DEF_mapdef(_) as def),false ->
+                 d := (def,true);
                  ((Finished def), envs),partial_defs
               | _, true ->
                  typ_error l "Scattered definition ended multiple times" (Some id) None None

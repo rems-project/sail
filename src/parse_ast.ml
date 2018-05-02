@@ -498,6 +498,8 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
  | SD_scattered_funcl of funcl (* scattered function definition clause *)
  | SD_scattered_variant of id * name_scm_opt * typquant (* scattered union definition header *)
  | SD_scattered_unioncl of id * type_union (* scattered union definition member *)
+ | SD_scattered_mapping of id
+ | SD_scattered_mapcl of id * mapcl
  | SD_scattered_end of id (* scattered definition end *)
 
 

@@ -2851,7 +2851,10 @@ let rec rewrite_defs_pat_string_append =
                                         pat2 => expr
                                       }
      *)
-    | P_aux (P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _) :: pats), psa_annot) ->
+    | P_aux (P_string_append (
+                 P_aux (P_lit (L_aux (L_string s, _) as lit), _)
+                 :: pats
+               ), psa_annot) ->
 
        let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
        stringappend_counter := !stringappend_counter + 1;
@@ -2891,7 +2894,10 @@ let rec rewrite_defs_pat_string_append =
                                               pat2 => expr
                                             }
      *)
-    | P_aux (P_string_append (P_aux (P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _) :: pats), psa_annot)
+    | P_aux (P_string_append (
+                 P_aux (P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _)
+                 :: pats
+               ), psa_annot)
          when List.mem_assoc builtin_id builtins ->
 
        (* common things *)
