@@ -252,7 +252,7 @@ pat_aux =  (* Pattern *)
  | P_tup of (pat) list (* tuple pattern *)
  | P_list of (pat) list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
- | P_string_append of pat * pat (* string append pattern, x ^^ y *)
+ | P_string_append of pat list (* string append pattern, x ^^ y *)
 
 and pat = 
    P_aux of pat_aux * l
@@ -430,7 +430,7 @@ type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only
  | MP_tup of ( mpat) list
  | MP_list of ( mpat) list
  | MP_cons of ( mpat) * ( mpat)
- | MP_string_append of ( mpat) * ( mpat)
+ | MP_string_append of mpat list
  | MP_typ of mpat * atyp
 
 and mpat =

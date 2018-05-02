@@ -2645,14 +2645,19 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           annot_pat (P_cons (hd_pat, tl_pat)) typ, env, hd_guards @ tl_guards
        | _ -> typ_error l "Cannot match cons pattern against non-list type"
      end
-  | P_string_append (pat1, pat2) ->
+  | P_string_append pats ->
      begin
-       let matcher = Env.expand_synonyms env typ in
-       match matcher with
+       match Env.expand_synonyms env typ with
        | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 ->
-          let pat1, env, guards1 = bind_pat env pat1 typ in
-          let pat2, env, guards2 = bind_pat env pat2 typ in
-          annot_pat (P_string_append (pat1, pat2)) typ, env, guards1 @ guards2
+          let rec process_pats env = function
+            | [] -> [], env, []
+            | pat :: pats ->
+               let pat', env, guards = bind_pat env pat typ in
+               let pats', env, guards' = process_pats env pats in
+               pat' :: pats', env, guards @ guards'
+          in
+          let pats, env, guards = process_pats env pats in
+          annot_pat (P_string_append pats) typ, env, guards
        | _ -> typ_error l "Cannot match string-append pattern against non-string type"
      end
   | P_list pats ->
@@ -2835,12 +2840,16 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      in
      let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
      annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
-  | P_string_append (pat1, pat2) ->
-     let typed_pat1, env, guards1 = infer_pat env pat1 in
-     let typed_pat2, env, guards2 = infer_pat env pat2 in
-     typ_equality l env (pat_typ_of typed_pat1) (string_typ);
-     typ_equality l env (pat_typ_of typed_pat2) (string_typ);
-     annot_pat (P_string_append (typed_pat1, typed_pat2)) string_typ, env, guards1 @ guards2
+  | P_string_append pats ->
+     let fold_pats (pats, env, guards) pat =
+       let inferred_pat, env, guards' = infer_pat env pat in
+       typ_equality l env (pat_typ_of inferred_pat) string_typ;
+       pats @ [inferred_pat], env, guards' @ guards
+     in
+     let typed_pats, env, guards =
+       List.fold_left fold_pats ([], env, []) pats
+     in
+     annot_pat (P_string_append typed_pats) string_typ, env, guards
   | P_as (pat, id) ->
      let (typed_pat, env, guards) = infer_pat env pat in
      annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat),
@@ -3495,15 +3504,20 @@ and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as 
           annot_mpat (MP_cons (hd_mpat, tl_mpat)) typ, env, hd_guards @ tl_guards
        | _ -> typ_error l "Cannot match cons mapping-pattern against non-list type"
      end
-  | MP_string_append (mpat1, mpat2) ->
+  | MP_string_append mpats ->
      begin
-       let matcher = Env.expand_synonyms env typ in
-       match matcher with
+       match Env.expand_synonyms env typ with
        | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 ->
-          let mpat1, env, guards1 = bind_mpat env mpat1 typ in
-          let mpat2, env, guards2 = bind_mpat env mpat2 typ in
-          annot_mpat (MP_string_append (mpat1, mpat2)) typ, env, guards1 @ guards2
-       | _ -> typ_error l "Cannot match string-append mapping-pattern against non-string type"
+          let rec process_mpats env = function
+            | [] -> [], env, []
+            | pat :: pats ->
+               let pat', env, guards = bind_mpat env pat typ in
+               let pats', env, guards' = process_mpats env pats in
+               pat' :: pats', env, guards @ guards'
+          in
+          let pats, env, guards = process_mpats env mpats in
+          annot_mpat (MP_string_append pats) typ, env, guards
+       | _ -> typ_error l "Cannot match string-append pattern against non-string type"
      end
   | MP_list mpats ->
      begin
@@ -3661,12 +3675,17 @@ and infer_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) =
      in
      let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_mpats)) in
      annot_mpat (MP_vector_concat inferred_mpats) (dvector_typ env len vtyp), env, guards
-  | MP_string_append (mpat1, mpat2) ->
-     let typed_mpat1, env, guards1 = infer_mpat env mpat1 in
-     let typed_mpat2, env, guards2 = infer_mpat env mpat2 in
-     typ_equality l env (typ_of_mpat typed_mpat1) (string_typ);
-     typ_equality l env (typ_of_mpat typed_mpat2) (string_typ);
-     annot_mpat (MP_string_append (typed_mpat1, typed_mpat2)) string_typ, env, guards1 @ guards2
+  | MP_string_append mpats ->
+     let fold_pats (pats, env, guards) pat =
+       let inferred_pat, env, guards' = infer_mpat env pat in
+       typ_equality l env (typ_of_mpat inferred_pat) string_typ;
+       pats @ [inferred_pat], env, guards' @ guards
+     in
+     let typed_mpats, env, guards =
+       List.fold_left fold_pats ([], env, []) mpats
+     in
+     annot_mpat (MP_string_append typed_mpats) string_typ, env, guards
+
   | _ -> typ_error l ("Couldn't infer type of mapping-pattern " ^ string_of_mpat mpat)
 
 (**************************************************************************)
@@ -3909,10 +3928,9 @@ and propagate_pat_effect_aux = function
      let p_pat1 = propagate_pat_effect pat1 in
      let p_pat2 = propagate_pat_effect pat2 in
      P_cons (p_pat1, p_pat2), union_effects (effect_of_pat p_pat1) (effect_of_pat p_pat2)
-  | P_string_append (pat1, pat2) ->
-     let p_pat1 = propagate_pat_effect pat1 in
-     let p_pat2 = propagate_pat_effect pat2 in
-     P_string_append (p_pat1, p_pat2), union_effects (effect_of_pat p_pat1) (effect_of_pat p_pat2)
+  | P_string_append pats ->
+     let p_pats = List.map propagate_pat_effect pats in
+     P_string_append p_pats, collect_effects_pat p_pats
   | P_as (pat, id) ->
      let p_pat = propagate_pat_effect pat in
      P_as (p_pat, id), effect_of_pat p_pat
@@ -3949,10 +3967,9 @@ and propagate_mpat_effect_aux = function
      let p_mpat1 = propagate_mpat_effect mpat1 in
      let p_mpat2 = propagate_mpat_effect mpat2 in
      MP_cons (p_mpat1, p_mpat2), union_effects (effect_of_mpat p_mpat1) (effect_of_mpat p_mpat2)
-  | MP_string_append (mpat1, mpat2) ->
-     let p_mpat1 = propagate_mpat_effect mpat1 in
-     let p_mpat2 = propagate_mpat_effect mpat2 in
-     MP_string_append (p_mpat1, p_mpat2), union_effects (effect_of_mpat p_mpat1) (effect_of_mpat p_mpat2)
+  | MP_string_append mpats ->
+     let p_mpats = List.map propagate_mpat_effect mpats in
+     MP_string_append p_mpats, collect_effects_mpat p_mpats
   | MP_id id -> MP_id id, no_effect
   | MP_app (id, mpats) ->
      let p_mpats = List.map propagate_mpat_effect mpats in

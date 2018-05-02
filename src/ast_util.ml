@@ -441,7 +441,7 @@ and map_pat_annot_aux f = function
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
-  | P_string_append (pat1, pat2) -> P_string_append (map_pat_annot f pat1, map_pat_annot f pat2)
+  | P_string_append pats -> P_string_append (List.map (map_pat_annot f) pats)
 
 and map_mpexp_annot f (MPat_aux (mpexp, annot)) = MPat_aux (map_mpexp_annot_aux f mpexp, f annot)
 and map_mpexp_annot_aux f = function
@@ -462,7 +462,7 @@ and map_mpat_annot_aux f = function
   | MP_vector_concat mpats -> MP_vector_concat (List.map (map_mpat_annot f) mpats)
   | MP_vector mpats -> MP_vector (List.map (map_mpat_annot f) mpats)
   | MP_cons (mpat1, mpat2) -> MP_cons (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
-  | MP_string_append (mpat1, mpat2) -> MP_string_append (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
+  | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
 
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
@@ -740,7 +740,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_vector_concat pats -> string_of_list " : " string_of_pat pats
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> string_of_pat pat ^ " as " ^ string_of_id id
-  | P_string_append (pat1, pat2) -> string_of_pat pat1 ^ " ^^ " ^ string_of_pat pat2
+  | P_string_append pats -> string_of_list " ^^ " string_of_pat pats
   | _ -> "PAT"
 
 and string_of_mpat (MP_aux (pat, l)) =
@@ -753,7 +753,7 @@ and string_of_mpat (MP_aux (pat, l)) =
   | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
   | MP_vector_concat pats -> string_of_list " : " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
-  | MP_string_append (pat1, pat2) -> string_of_mpat pat1 ^ " ^^ " ^ string_of_mpat pat2
+  | MP_string_append pats -> string_of_list " ^^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | _ -> "MPAT"
 
@@ -791,8 +791,8 @@ let rec pat_ids (P_aux (pat_aux, _)) =
      IdSet.union (pat_ids pat1) (pat_ids pat2)
   | P_record (fpats, _) ->
      List.fold_right IdSet.union (List.map fpat_ids fpats) IdSet.empty
-  | P_string_append (pat1, pat2) ->
-     IdSet.union (pat_ids pat1) (pat_ids pat2)
+  | P_string_append pats ->
+     List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
 
 and fpat_ids (FP_aux (FP_Fpat (_, pat), _)) = pat_ids pat
 

@@ -565,7 +565,7 @@ pat :: 'P_' ::=
   | pat1 '::' pat2                                      :: :: cons
     {{ com Cons patterns }}
 
-  | pat1 ^^ pat2                                        :: :: string_append
+  | pat1 ^^ ... ^^ patn                                 :: :: string_append
     {{ com string append pattern, x ^^ y }}
 
 % XXX Is this still useful?
@@ -1000,7 +1000,7 @@ mpat :: 'MP_' ::=
   | [|| mpat1 , ... , mpatn ||]        ::   :: list
   | ( mpat )                           :: S :: paren {{ ichlo [[mpat]] }}
   | mpat1 '::' mpat2                   ::   :: cons
-  | mpat1 ^^ mpat2                     ::   :: string_append
+  | mpat1 ^^ ... ^^ mpatn              ::   :: string_append
   | mpat : typ                         ::   :: typ
 
 mpexp :: 'MPat_' ::=

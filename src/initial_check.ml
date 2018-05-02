@@ -470,7 +470,7 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
     | Parse_ast.P_tup(pats) -> P_tup(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_list(pats) -> P_list(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_cons(pat1, pat2) -> P_cons (to_ast_pat k_env def_ord pat1, to_ast_pat k_env def_ord pat2)
-    | Parse_ast.P_string_append (pat1, pat2) -> P_string_append (to_ast_pat k_env def_ord pat1, to_ast_pat k_env def_ord pat2)
+    | Parse_ast.P_string_append pats -> P_string_append (List.map (to_ast_pat k_env def_ord) pats)
     ), (l,()))
 
 
@@ -781,7 +781,7 @@ let rec to_ast_mpat k_env def_ord (Parse_ast.MP_aux(mpat,l)) =
     | Parse_ast.MP_tup(mpats) -> MP_tup(List.map (to_ast_mpat k_env def_ord) mpats)
     | Parse_ast.MP_list(mpats) -> MP_list(List.map (to_ast_mpat k_env def_ord) mpats)
     | Parse_ast.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat k_env def_ord pat1, to_ast_mpat k_env def_ord pat2)
-    | Parse_ast.MP_string_append (pat1, pat2) -> MP_string_append (to_ast_mpat k_env def_ord pat1, to_ast_mpat k_env def_ord pat2)
+    | Parse_ast.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat k_env def_ord) pats)
     | Parse_ast.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat k_env def_ord mpat, to_ast_typ k_env def_ord typ)
     ), (l,()))
 

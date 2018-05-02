@@ -676,7 +676,7 @@ let remove_vector_concat_pat pat =
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_cons           = (fun (p,ps) -> P_cons (p false, ps false))
-    ; p_string_append  = (fun (p1,p2) -> P_string_append (p1 false, p2 false))
+    ; p_string_append  = (fun (ps) -> P_string_append (List.map (fun p -> p false) ps))
     ; p_aux =
         (fun (pat,((l,_) as annot)) contained_in_p_as ->
           match pat with
@@ -819,8 +819,9 @@ let remove_vector_concat_pat pat =
                                     (P_tup ps,List.flatten decls))
     ; p_list           = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_list ps,List.flatten decls))
+    ; p_string_append  = (fun ps -> let (ps,decls) = List.split ps in
+                                    (P_string_append ps,List.flatten decls))
     ; p_cons           = (fun ((p,decls),(p',decls')) -> (P_cons (p,p'), decls @ decls'))
-    ; p_string_append  = (fun ((p1,decls1),(p2,decls2)) -> (P_string_append (p1,p2), decls1 @ decls2))
     ; p_aux            = (fun ((pat,decls),annot) -> p_aux ((pat,decls),annot))
     ; fP_aux           = (fun ((fpat,decls),annot) -> (FP_aux (fpat,annot),decls))
     ; fP_Fpat          = (fun (id,(pat,decls)) -> (FP_Fpat (id,pat),decls))
@@ -1074,7 +1075,7 @@ let rec pat_to_exp (P_aux (pat,(l,annot))) =
   | P_tup pats -> rewrap (E_tuple (List.map pat_to_exp pats))
   | P_list pats -> rewrap (E_list (List.map pat_to_exp pats))
   | P_cons (p,ps) -> rewrap (E_cons (pat_to_exp p, pat_to_exp ps))
-  | P_string_append (p,ps) -> raise (Reporting_basic.err_unreachable l
+  | P_string_append (ps) -> raise (Reporting_basic.err_unreachable l
       "pat_to_exp not implemented for P_string_append")
 and fpat_to_fexp (FP_aux (FP_Fpat (id,pat),(l,annot))) =
   FE_aux (FE_Fexp (id, pat_to_exp pat),(l,annot))
@@ -1164,7 +1165,7 @@ let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_app (_,pats) | P_tup pats | P_list pats ->
     List.exists contains_bitvector_pat pats
 | P_cons (p,ps) -> contains_bitvector_pat p || contains_bitvector_pat ps
-| P_string_append (p1,p2) -> contains_bitvector_pat p1 || contains_bitvector_pat p2
+| P_string_append (ps) -> List.exists contains_bitvector_pat ps
 | P_record (fpats,_) ->
     List.exists (fun (FP_aux (FP_Fpat (_,pat),_)) -> contains_bitvector_pat pat) fpats
 
@@ -1190,10 +1191,10 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
+    ; p_string_append  = (fun ps -> P_string_append (List.map (fun p -> p false) ps))
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_cons           = (fun (p,ps) -> P_cons (p false, ps false))
-    ; p_string_append  = (fun (p1,p2) -> P_string_append (p1 false, p2 false))
     ; p_aux =
         (fun (pat,annot) contained_in_p_as ->
           let env = env_of_annot annot in
@@ -1342,14 +1343,14 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
                                     (P_vector ps, flatten_guards_decls gdls))
     ; p_vector_concat  = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_vector_concat ps, flatten_guards_decls gdls))
+    ; p_string_append  = (fun ps -> let (ps,gdls) = List.split ps in
+                                    (P_string_append ps, flatten_guards_decls gdls))
     ; p_tup            = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_tup ps, flatten_guards_decls gdls))
     ; p_list           = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_list ps, flatten_guards_decls gdls))
     ; p_cons           = (fun ((p,gdls),(p',gdls')) ->
                           (P_cons (p,p'), flatten_guards_decls [gdls;gdls']))
-    ; p_string_append  = (fun ((p1,gdls1),(p2,gdls2)) ->
-                          (P_string_append (p1,p2), flatten_guards_decls [gdls1;gdls2]))
     ; p_aux            = (fun ((pat,gdls),annot) ->
                            let env = env_of_annot annot in
                            let t = Env.base_typ_of env (typ_of_annot annot) in
@@ -2841,10 +2842,6 @@ let rec rewrite_defs_pat_string_append =
 
   let rec rewrite_pat (pat, guards, expr) =
     match pat with
-    (* (pat1 ^^ pat2) ^^ pat3 => expr ---> pat1 ^^ (pat2 ^^ pat3) => expr and recurse *)
-    | P_aux (P_string_append (P_aux (P_string_append (pat1, pat2), _), pat3), _) ->
-       let new_pat = mk_pat (P_string_append (pat1, mk_pat (P_string_append (pat2, pat3)))) in
-       rewrite_pat (new_pat, guards, expr)
     (*
         "lit" ^^ pat2 => expr ---> s# if startswith(s#, "lit")
                                         && match str_drop(s#, strlen("lit")) {
@@ -2854,7 +2851,7 @@ let rec rewrite_defs_pat_string_append =
                                         pat2 => expr
                                       }
      *)
-    | P_aux (P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _), pat2), _) ->
+    | P_aux (P_string_append (P_aux (P_lit (L_aux (L_string s, _) as lit), _) :: pats), psa_annot) ->
 
        let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
        stringappend_counter := !stringappend_counter + 1;
@@ -2864,7 +2861,7 @@ let rec rewrite_defs_pat_string_append =
 
        (* recurse into pat2 *)
        let new_pat2_pexp =
-         match rewrite_pat (pat2, guards, expr) with
+         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), guards, expr) with
          | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
          | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
        in
@@ -2894,7 +2891,7 @@ let rec rewrite_defs_pat_string_append =
                                               pat2 => expr
                                             }
      *)
-    | P_aux (P_string_append (P_aux (P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _), pat2), _)
+    | P_aux (P_string_append (P_aux (P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _) :: pats), psa_annot)
          when List.mem_assoc builtin_id builtins ->
 
        (* common things *)
@@ -2914,7 +2911,7 @@ let rec rewrite_defs_pat_string_append =
 
        (* recurse into pat2 *)
        let new_pat2_pexp =
-         match rewrite_pat (pat2, guards, expr) with
+         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), guards, expr) with
          | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
          | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
        in
@@ -2943,6 +2940,8 @@ let rec rewrite_defs_pat_string_append =
 
        (* construct final result *)
        mk_pat (P_id s_id), new_guard :: guards, new_let
+    | P_aux (P_string_append [], _) ->
+       mk_pat (P_lit (mk_lit (L_string ""))), guards, expr
     | P_aux (P_string_append _, _) ->
        failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat pat)
 
@@ -3493,6 +3492,10 @@ let rec exp_of_mpat (MP_aux (mpat, annot)) =
   let concat_vectors annot vec1 vec2 = (* TODO FIXME, this should be OK for typing but doesn't attach location information properly *)
     E_aux (E_vector_append (vec1, vec2), annot)
   in
+  let empty_string = E_aux (E_lit (L_aux (L_string "", Parse_ast.Unknown)), annot) in
+  let string_append annot str1 str2 =
+    E_aux (E_app (mk_id "string_append", [str1; str2]), annot)
+  in
   match mpat with
   | MP_lit lit                      -> E_aux (E_lit lit, annot)
   | MP_id id                        -> E_aux (E_id id, annot)
@@ -3503,7 +3506,7 @@ let rec exp_of_mpat (MP_aux (mpat, annot)) =
   | MP_tup mpats                    -> E_aux (E_tuple (List.map exp_of_mpat mpats), annot)
   | MP_list mpats                   -> E_aux (E_list (List.map exp_of_mpat mpats), annot)
   | MP_cons (mpat1, mpat2)          -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), annot)
-  | MP_string_append (mpat1, mpat2) -> E_aux (E_app (mk_id "string_append", [exp_of_mpat mpat1; exp_of_mpat mpat2]), annot)
+  | MP_string_append mpats          -> List.fold_right (string_append annot) (List.map exp_of_mpat mpats) empty_string
   | MP_typ (mpat, typ)              -> E_aux (E_cast (typ, exp_of_mpat mpat), annot)
 
 and fexps_of_mfpats mfpats flag annot =
@@ -3523,7 +3526,7 @@ let rec pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_tup mpats                    -> P_aux (P_tup (List.map pat_of_mpat mpats), annot)
   | MP_list mpats                   -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
   | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
-  | MP_string_append (mpat1, mpat2) -> P_aux ((P_string_append (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
+  | MP_string_append (mpats)        -> P_aux ((P_string_append (List.map pat_of_mpat mpats), annot))
   | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
 
 and fpats_of_mfpats mfpats =

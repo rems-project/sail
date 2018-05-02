@@ -653,6 +653,12 @@ typschm_eof:
   | typschm Eof
     { $1 }
 
+pat_string_append:
+  | atomic_pat
+    { [$1] }
+  | atomic_pat CaretCaret pat_string_append
+    { $1 :: $3 }
+
 pat1:
   | atomic_pat
     { $1 }
@@ -660,8 +666,8 @@ pat1:
     { mk_pat (P_vector_concat ($1 :: $3)) $startpos $endpos }
   | atomic_pat ColonColon pat1
     { mk_pat (P_cons ($1, $3)) $startpos $endpos }
-  | atomic_pat CaretCaret pat1
-    { mk_pat (P_string_append ($1, $3)) $startpos $endpos }
+  | atomic_pat CaretCaret pat_string_append
+    { mk_pat (P_string_append ($1 :: $3)) $startpos $endpos }
 
 pat_concat:
   | atomic_pat
@@ -1202,6 +1208,12 @@ fun_def_list:
   | fun_def fun_def_list
     { $1 :: $2 }
 
+mpat_string_append:
+  | atomic_mpat
+    { [$1] }
+  | atomic_mpat CaretCaret mpat_string_append
+    { $1 :: $3 }
+
 mpat:
   | atomic_mpat
     { $1 }
@@ -1209,8 +1221,8 @@ mpat:
     { mk_mpat (MP_vector_concat ($1 :: $3)) $startpos $endpos }
   | atomic_mpat ColonColon mpat
     { mk_mpat (MP_cons ($1, $3)) $startpos $endpos }
-  | atomic_mpat CaretCaret mpat
-    { mk_mpat (MP_string_append ($1, $3)) $startpos $endpos }
+  | atomic_mpat CaretCaret mpat_string_append
+    { mk_mpat (MP_string_append ($1 :: $3)) $startpos $endpos }
 
 mpat_concat:
   | atomic_mpat
