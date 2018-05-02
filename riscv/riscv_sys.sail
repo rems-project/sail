@@ -701,3 +701,7 @@ function init_sys() -> unit = {
 
   mhartid = EXTZ(0b0);
 }
+
+function tick_clock() -> unit = {
+  mcycle = mcycle + 1
+}

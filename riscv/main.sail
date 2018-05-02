@@ -8,6 +8,7 @@ val elf_tohost = {
 function fetch_and_execute () =
   let tohost = __GetSlice_int(64, elf_tohost(), 0) in
   while true do {
+    tick_clock();
     print_bits("\nPC: ", PC);
 
     /* for now, always fetch a 32-bit value.  this would need to
