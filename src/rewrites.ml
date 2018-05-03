@@ -127,7 +127,7 @@ let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
   | LEXP_memory _ | LEXP_deref _ -> false
   | LEXP_id id
   | LEXP_cast (_, id) -> id_is_local_var id env
-  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
+  | LEXP_tup lexps | LEXP_vector_concat lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
   | LEXP_vector (lexp,_)
   | LEXP_vector_range (lexp,_,_)
   | LEXP_field (lexp,_) -> lexp_is_local lexp env
@@ -136,7 +136,7 @@ let rec lexp_is_local_intro (LEXP_aux (lexp, _)) env = match lexp with
   | LEXP_memory _ | LEXP_deref _ -> false
   | LEXP_id id
   | LEXP_cast (_, id) -> id_is_unbound id env
-  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
+  | LEXP_tup lexps | LEXP_vector_concat lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
   | LEXP_vector (lexp,_)
   | LEXP_vector_range (lexp,_,_)
   | LEXP_field (lexp,_) -> lexp_is_local_intro lexp env
@@ -281,7 +281,7 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
        scope. *)
     | Some size when prove env (nc_eq (nsum size (nint 1)) nexp) ->
        let one_exp = infer_exp env (mk_lit_exp (L_num (Big_int.of_int 1))) in
-       Some (E_aux (E_app (mk_id "add_range", [var; one_exp]), (gen_loc l, Some (env, atom_typ (nsum size (nint 1)), no_effect))))
+       Some (E_aux (E_app (mk_id "add_atom", [var; one_exp]), (gen_loc l, Some (env, atom_typ (nsum size (nint 1)), no_effect))))
     | _ ->
        begin
          match destruct_vector env typ with
@@ -293,12 +293,12 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
   let rec split_nexp (Nexp_aux (nexp_aux, l) as nexp) =
     match nexp_aux with
     | Nexp_sum (n1, n2) ->
-       mk_exp (E_app (mk_id "add_range", [split_nexp n1; split_nexp n2]))
+       mk_exp (E_app (mk_id "add_atom", [split_nexp n1; split_nexp n2]))
     | Nexp_minus (n1, n2) ->
-       mk_exp (E_app (mk_id "sub_range", [split_nexp n1; split_nexp n2]))
+       mk_exp (E_app (mk_id "sub_atom", [split_nexp n1; split_nexp n2]))
     | Nexp_times (n1, n2) ->
-       mk_exp (E_app (mk_id "mult_range", [split_nexp n1; split_nexp n2]))
-    | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_range", [split_nexp nexp]))
+       mk_exp (E_app (mk_id "mult_atom", [split_nexp n1; split_nexp n2]))
+    | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_atom", [split_nexp nexp]))
     | _ -> mk_exp (E_sizeof nexp)
   in
   let rec rewrite_e_aux split_sizeof (E_aux (e_aux, (l, _)) as orig_exp) =
@@ -487,6 +487,7 @@ let rewrite_sizeof (Defs defs) =
     ; lEXP_tup = (fun tups -> let (tups,tups') = List.split tups in (LEXP_tup tups, LEXP_tup tups'))
     ; lEXP_vector = (fun ((lexp,lexp'),(e2,e2')) -> (LEXP_vector (lexp,e2), LEXP_vector (lexp',e2')))
     ; lEXP_vector_range = (fun ((lexp,lexp'),(e2,e2'),(e3,e3')) -> (LEXP_vector_range (lexp,e2,e3), LEXP_vector_range (lexp',e2',e3')))
+    ; lEXP_vector_concat = (fun lexps -> let (lexps,lexps') = List.split lexps in (LEXP_vector_concat lexps, LEXP_vector_concat lexps'))
     ; lEXP_field = (fun ((lexp,lexp'),id) -> (LEXP_field (lexp,id), LEXP_field (lexp',id)))
     ; lEXP_aux = (fun ((lexp,lexp'),annot) -> (LEXP_aux (lexp,annot), LEXP_aux (lexp',annot)))
     ; fE_Fexp = (fun (id,(e,e')) -> (FE_Fexp (id,e), FE_Fexp (id,e')))
@@ -2281,11 +2282,11 @@ let rewrite_simple_types (Defs defs) =
   let defs = Defs (List.map simple_def defs) in
   rewrite_defs_base simple_defs defs
 
-let rewrite_tuple_vector_assignments defs =
+let rewrite_vector_concat_assignments defs =
   let assign_tuple e_aux annot =
     let env = env_of_annot annot in
     match e_aux with
-    | E_assign (LEXP_aux (LEXP_tup lexps, lannot), exp) ->
+    | E_assign (LEXP_aux (LEXP_vector_concat lexps, lannot), exp) ->
        let typ = Env.base_typ_of env (typ_of exp) in
        if is_vector_typ typ then
          (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
@@ -2518,8 +2519,11 @@ let rewrite_defs_letbind_effects =
     | LEXP_vector_range (lexp,e1,e2) ->
        n_lexp lexp (fun lexp ->
        n_exp_name e1 (fun e1 ->
-    n_exp_name e2 (fun e2 ->
+       n_exp_name e2 (fun e2 ->
        k (fix_eff_lexp (LEXP_aux (LEXP_vector_range (lexp,e1,e2),annot))))))
+    | LEXP_vector_concat es ->
+       n_lexpL es (fun es ->
+       k (fix_eff_lexp (LEXP_aux (LEXP_vector_concat es,annot))))
     | LEXP_field (lexp,id) ->
        n_lexp lexp (fun lexp ->
        k (fix_eff_lexp (LEXP_aux (LEXP_field (lexp,id),annot))))
@@ -3198,7 +3202,7 @@ let merge_funcls (Defs defs) =
 let recheck_defs defs = fst (check initial_env defs)
 
 let rewrite_defs_lem = [
-  ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
+  ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
@@ -3233,7 +3237,7 @@ let rewrite_defs_ocaml = [
     (* ("undefined", rewrite_undefined); *)
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("pat_lits", rewrite_defs_pat_lits);
-  ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
+  ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
@@ -3252,7 +3256,7 @@ let rewrite_defs_ocaml = [
 let rewrite_defs_c = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("pat_lits", rewrite_defs_pat_lits);
-  ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
+  ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
@@ -3268,7 +3272,7 @@ let rewrite_defs_c = [
 
 let rewrite_defs_interpreter = [
     ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
-    ("tuple_vector_assignments", rewrite_tuple_vector_assignments);
+    ("vector_concat_assignments", rewrite_vector_concat_assignments);
     ("tuple_assignments", rewrite_tuple_assignments);
     ("simple_assignments", rewrite_simple_assignments);
     ("remove_vector_concat", rewrite_defs_remove_vector_concat);

@@ -10,6 +10,6 @@ function test nzcv = {
   Z = 0b0;
   C = 0b0;
   V = 0b0;
-  (N, Z, C, V) = nzcv;
+  (N @ Z @ C @ V) = nzcv;
   ()
 }

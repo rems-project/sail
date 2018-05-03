@@ -24,8 +24,6 @@ struct TestStruct = {
 
 register SREG : TestStruct
 
-union option ('a : Type) = {None : unit, Some : 'a}
-
 register OREG : option(byte)
 
 val main : unit -> unit effect {rreg, wreg}

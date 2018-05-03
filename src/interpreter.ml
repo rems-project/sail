@@ -505,6 +505,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      else
        puts (lstate, { gstate with boxes = StringMap.add name (value_of_exp exp) gstate.boxes }) >> wrap unit_exp
   | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> failwith "Tuple assignment"
+  | E_assign (LEXP_aux (LEXP_vector_concat lexps, annot), exp) -> failwith "Vector concat assignment"
      (*
      let values = coerce_tuple (value_of_exp exp) in
      wrap (E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), (Parse_ast.Unknown, None))) lexps values))
@@ -556,6 +557,9 @@ and exp_of_lexp (LEXP_aux (lexp_aux, _) as lexp) =
   | LEXP_tup lexps -> mk_exp (E_tuple (List.map exp_of_lexp lexps))
   | LEXP_vector (lexp, exp) -> mk_exp (E_vector_access (exp_of_lexp lexp, exp))
   | LEXP_vector_range (lexp, exp1, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, exp2))
+  | LEXP_vector_concat [] -> failwith "Empty LEXP_vector_concat node in exp_of_lexp"
+  | LEXP_vector_concat [lexp] -> exp_of_lexp lexp
+  | LEXP_vector_concat (lexp :: lexps) -> mk_exp (E_vector_append (exp_of_lexp lexp, exp_of_lexp (mk_lexp (LEXP_vector_concat lexps))))
   | LEXP_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
 
 and pattern_match env (P_aux (p_aux, _) as pat) value =

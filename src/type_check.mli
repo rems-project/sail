@@ -63,6 +63,10 @@ val opt_tc_debug : int ref
    re-writer passes, so it should only be used for debugging. *)
 val opt_no_effects : bool ref
 
+(** [opt_no_lexp_bounds_check] turns of the bounds checking in vector
+   assignments in l-expressions. *)
+val opt_no_lexp_bounds_check : bool ref
+
 (** {2 Type errors} *)
 
 type type_error =
@@ -148,8 +152,9 @@ module Env : sig
   (** Lookup id searchs for a specified id in the environment, and
      returns it's type and what kind of identifier it is, using the
      lvar type. Returns Unbound if the identifier is unbound, and
-     won't throw any exceptions. *)
-  val lookup_id : id -> t -> lvar
+     won't throw any exceptions. If the raw option is true, then look
+     up the type without any flow typing modifiers. *)
+  val lookup_id : ?raw:bool -> id -> t -> lvar
 
   val is_union_constructor : id -> t -> bool
 

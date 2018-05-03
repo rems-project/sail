@@ -539,35 +539,45 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     ), (l,()))
 
 and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : unit lexp =
-  LEXP_aux(
-    (match exp with
-     | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
-     | Parse_ast.E_deref(exp) -> LEXP_deref(to_ast_exp k_env def_ord exp)
-     | Parse_ast.E_cast(typ,Parse_ast.E_aux(Parse_ast.E_id(id),l')) ->
-       LEXP_cast(to_ast_typ k_env def_ord typ, to_ast_id id)
-     | Parse_ast.E_tuple(tups) ->
+  let lexp = match exp with
+    | Parse_ast.E_id id -> LEXP_id (to_ast_id id)
+    | Parse_ast.E_deref exp -> LEXP_deref (to_ast_exp k_env def_ord exp)
+    | Parse_ast.E_cast (typ, Parse_ast.E_aux (Parse_ast.E_id id, l')) ->
+       LEXP_cast (to_ast_typ k_env def_ord typ, to_ast_id id)
+    | Parse_ast.E_tuple tups ->
        let ltups = List.map (to_ast_lexp k_env def_ord) tups in
-       let is_ok_in_tup (LEXP_aux (le,(l,_))) =
+       let is_ok_in_tup (LEXP_aux (le, (l, _))) =
          match le with
-         | LEXP_id _ | LEXP_cast _ | LEXP_vector _ | LEXP_field _ | LEXP_vector_range _ | LEXP_tup _ -> ()
+         | LEXP_id _ | LEXP_cast _ | LEXP_vector _ | LEXP_vector_concat _ | LEXP_field _ | LEXP_vector_range _ | LEXP_tup _ -> ()
          | LEXP_memory _ | LEXP_deref _ ->
-           typ_error l "only identifiers, fields, and vectors may be set in a tuple" None None None in
+            typ_error l "only identifiers, fields, and vectors may be set in a tuple" None None None
+       in
        List.iter is_ok_in_tup ltups;
-       LEXP_tup(ltups)
-    | Parse_ast.E_app((Parse_ast.Id_aux(f,l') as f'),args) ->
-      (match f with
-      | Parse_ast.Id(id) ->
-	(match List.map (to_ast_exp k_env def_ord) args with
-          | [E_aux(E_lit (L_aux (L_unit, _)), _)] -> LEXP_memory(to_ast_id f',[])
-	  | [E_aux(E_tuple exps,_)] -> LEXP_memory(to_ast_id f',exps)
-	  | args -> LEXP_memory(to_ast_id f', args))
-      | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None)
-    | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env def_ord vexp, to_ast_exp k_env def_ord exp)
-    | Parse_ast.E_vector_subrange(vexp,exp1,exp2) ->
-      LEXP_vector_range(to_ast_lexp k_env def_ord vexp, to_ast_exp k_env def_ord exp1, to_ast_exp k_env def_ord exp2)
-    | Parse_ast.E_field(fexp,id) -> LEXP_field(to_ast_lexp k_env def_ord fexp, to_ast_id id)
-    | _ -> typ_error l "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None None)
-      , (l,()))
+       LEXP_tup ltups
+    | Parse_ast.E_app ((Parse_ast.Id_aux (f, l') as f'), args) ->
+       begin match f with
+       | Parse_ast.Id(id) ->
+          (match List.map (to_ast_exp k_env def_ord) args with
+           | [E_aux (E_lit (L_aux (L_unit, _)), _)] -> LEXP_memory (to_ast_id f', [])
+           | [E_aux (E_tuple exps,_)] -> LEXP_memory (to_ast_id f', exps)
+           | args -> LEXP_memory(to_ast_id f', args))
+       | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None
+       end
+    | Parse_ast.E_vector_append (exp1, exp2) ->
+       LEXP_vector_concat (to_ast_lexp k_env def_ord exp1 :: to_ast_lexp_vector_concat k_env def_ord exp2)
+    | Parse_ast.E_vector_access (vexp, exp) -> LEXP_vector (to_ast_lexp k_env def_ord vexp, to_ast_exp k_env def_ord exp)
+    | Parse_ast.E_vector_subrange (vexp, exp1, exp2) ->
+       LEXP_vector_range (to_ast_lexp k_env def_ord vexp, to_ast_exp k_env def_ord exp1, to_ast_exp k_env def_ord exp2)
+    | Parse_ast.E_field (fexp, id) -> LEXP_field (to_ast_lexp k_env def_ord fexp, to_ast_id id)
+    | _ -> typ_error l "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None None
+  in
+  LEXP_aux (lexp, (l, ()))
+
+and to_ast_lexp_vector_concat k_env def_ord (Parse_ast.E_aux (exp_aux, l) as exp) =
+  match exp_aux with
+  | Parse_ast.E_vector_append (exp1, exp2) ->
+     to_ast_lexp k_env def_ord exp1 :: to_ast_lexp_vector_concat k_env def_ord exp2
+  | _ -> [to_ast_lexp k_env def_ord exp]
 
 and to_ast_case (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.Pat_aux(pex,l) : Parse_ast.pexp) : unit pexp =
   match pex with

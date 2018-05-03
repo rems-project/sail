@@ -197,6 +197,8 @@ let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match snd annot with
     | LEXP_memory (_,es) -> union_eff_exps es
     | LEXP_tup les ->
       List.fold_left (fun eff le -> union_effects eff (effect_of_lexp le)) no_effect les
+    | LEXP_vector_concat les ->
+      List.fold_left (fun eff le -> union_effects eff (effect_of_lexp le)) no_effect les
     | LEXP_vector (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
     | LEXP_vector_range (lexp,e1,e2) ->
       union_effects (effect_of_lexp lexp)
@@ -384,6 +386,7 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
     rewrap (LEXP_vector_range (rewriters.rewrite_lexp rewriters lexp,
                                rewriters.rewrite_exp rewriters exp1,
                                rewriters.rewrite_exp rewriters exp2))
+  | LEXP_vector_concat lexps -> rewrap (LEXP_vector_concat (List.map (rewriters.rewrite_lexp rewriters) lexps))
   | LEXP_field (lexp,id) -> rewrap (LEXP_field (rewriters.rewrite_lexp rewriters lexp,id))
 
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
@@ -556,6 +559,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; lEXP_tup                 : 'lexp list -> 'lexp_aux
   ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
   ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
+  ; lEXP_vector_concat       : 'lexp list -> 'lexp_aux
   ; lEXP_field               : 'lexp * id -> 'lexp_aux
   ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
   ; fE_Fexp                  : id * 'exp -> 'fexp_aux
@@ -635,7 +639,8 @@ and fold_lexp_aux alg = function
   | LEXP_vector (lexp,e) -> alg.lEXP_vector (fold_lexp alg lexp, fold_exp alg e)
   | LEXP_vector_range (lexp,e1,e2) ->
      alg.lEXP_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
- | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
+  | LEXP_vector_concat les -> alg.lEXP_vector_concat (List.map (fold_lexp alg) les)
+  | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
 and fold_lexp alg (LEXP_aux (lexp_aux,annot)) =
   alg.lEXP_aux (fold_lexp_aux alg lexp_aux, annot)
 and fold_fexp_aux alg (FE_Fexp (id,e)) = alg.fE_Fexp (id, fold_exp alg e)
@@ -706,6 +711,7 @@ let id_exp_alg =
   ; lEXP_tup = (fun tups -> LEXP_tup tups)
   ; lEXP_vector = (fun (lexp,e2) -> LEXP_vector (lexp,e2))
   ; lEXP_vector_range = (fun (lexp,e2,e3) -> LEXP_vector_range (lexp,e2,e3))
+  ; lEXP_vector_concat = (fun lexps -> LEXP_vector_concat lexps)
   ; lEXP_field = (fun (lexp,id) -> LEXP_field (lexp,id))
   ; lEXP_aux = (fun (lexp,annot) -> LEXP_aux (lexp,annot))
   ; fE_Fexp = (fun (id,e) -> FE_Fexp (id,e))
@@ -813,6 +819,9 @@ let compute_exp_alg bot join =
   ; lEXP_vector = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, LEXP_vector (lexp,e2)))
   ; lEXP_vector_range = (fun ((vl,lexp),(v2,e2),(v3,e3)) ->
     (join_list [vl;v2;v3], LEXP_vector_range (lexp,e2,e3)))
+  ; lEXP_vector_concat = (fun ls ->
+    let (vs,ls) = List.split ls in
+    (join_list vs, LEXP_vector_concat ls))
   ; lEXP_field = (fun ((vl,lexp),id) -> (vl, LEXP_field (lexp,id)))
   ; lEXP_aux = (fun ((vl,lexp),annot) -> (vl, LEXP_aux (lexp,annot)))
   ; fE_Fexp = (fun (id,(v,e)) -> (v, FE_Fexp (id,e)))

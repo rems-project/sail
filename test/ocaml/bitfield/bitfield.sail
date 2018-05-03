@@ -11,13 +11,6 @@ bitfield cr : bits(8) = {
 
 register CR : cr
 
-bitfield dr : vector(4, inc, bit) = {
-  DR0 : 2 .. 3,
-  LT : 2
-}
-
-register DR : dr
-
 val main : unit -> unit effect {rreg, wreg}
 
 function main () = {

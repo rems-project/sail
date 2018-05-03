@@ -8,11 +8,6 @@ function get_size () = 32
 
 val only64 = { ocaml: "(fun _ -> ())" } : bits(64) -> unit
 
-val zeros : forall 'n. atom('n) -> vector('n, dec, bit)
-
-function zeros n =
-  if (n == 1 + 0) then 0b0 else 0b0 @ zeros('n - 1)
-
 val main : unit -> unit
 
 function main () = {

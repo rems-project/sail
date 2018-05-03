@@ -183,6 +183,10 @@ let value_eq_string = function
   | [v1; v2] -> V_bool (Sail_lib.eq_string (coerce_string v1, coerce_string v2))
   | _ -> failwith "value eq_string"
 
+let value_eq_bit = function
+  | [v1; v2] -> V_bool (Sail_lib.eq_bit (coerce_bit v1, coerce_bit v2))
+  | _ -> failwith "value eq_bit"
+
 let value_length = function
   | [v] -> V_int (coerce_gv v |> List.length |> Big_int.of_int)
   | _ -> failwith "value length"
@@ -417,6 +421,7 @@ let primops =
       ("eq_list", value_eq_list);
       ("eq_bool", value_eq_bool);
       ("eq_string", value_eq_string);
+      ("eq_bit", value_eq_bit);
       ("eq_anything", value_eq_anything);
       ("length", value_length);
       ("subrange", value_subrange);

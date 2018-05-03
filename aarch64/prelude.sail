@@ -1,7 +1,7 @@
 default Order dec
 
 $include <smt.sail>
-$include <flow.sail>
+$include <arith.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
@@ -202,11 +202,6 @@ val real_power = {ocaml: "real_power", lem: "realPowInteger", c: "real_power"} :
 
 overload operator ^ = {xor_vec, int_power, real_power}
 
-val add_range = {ocaml: "add_int", lem: "integerAdd", c: "add_int"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
-
-val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int"} : (int, int) -> int
-
 val add_vec = {
   ocaml: "add_vec",
   lem: "add_vec",
@@ -221,12 +216,7 @@ val add_vec_int = {
 
 val add_real = {ocaml: "add_real", lem: "realAdd", c: "add_real"} : (real, real) -> real
 
-overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
-
-val sub_range = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
-
-val sub_int = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int"} : (int, int) -> int
+overload operator + = {add_vec, add_vec_int, add_real}
 
 val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -238,24 +228,15 @@ val sub_vec_int = {
 
 val sub_real = {ocaml: "sub_real", lem: "realMinus", c: "sub_real"} : (real, real) -> real
 
-val negate_range = {ocaml: "negate", lem: "integerNegate", c: "neg_int"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
-
-val negate_int = {ocaml: "negate", lem: "integerNegate", c: "neg_int"} : int -> int
-
 val negate_real = {ocaml: "negate_real", lem: "realNegate", c: "neg_real"} : real -> real
 
-overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
+overload operator - = {sub_vec, sub_vec_int, sub_real}
 
-overload negate = {negate_range, negate_int, negate_real}
-
-val mult_range = {ocaml: "mult", lem: "integerMult", c: "mult_int"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
-
-val mult_int = {ocaml: "mult", lem: "integerMult", c: "mult_int"} : (int, int) -> int
+overload negate = {negate_real}
 
 val mult_real = {ocaml: "mult_real", lem: "realMult", c: "mult_real"} : (real, real) -> real
 
-overload operator * = {mult_range, mult_int, mult_real}
+overload operator * = {mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt", c: "sqrt_real"} : real -> real
 
@@ -279,11 +260,9 @@ val RoundDown = {ocaml: "round_down", lem: "realFloor", c: "round_down"} : real 
 
 val RoundUp = {ocaml: "round_up", lem: "realCeiling", c: "round_up"} : real -> int
 
-val abs_int = "abs_int" : int -> int
-
 val abs_real = "abs_real" : real -> real
 
-overload abs = {abs_atom, abs_int, abs_real}
+overload abs = {abs_atom, abs_real}
 
 val quotient_nat = {ocaml: "quotient", lem: "integerDiv", c: "div_int"} : (nat, nat) -> nat
 
@@ -298,10 +277,6 @@ val modulus = {ocaml: "modulus", lem: "hardware_mod", c: "mod_int"} : (int, int)
 overload operator % = {modulus}
 
 val Real = {ocaml: "to_real", lem: "realFromInteger", c: "to_real"} : int -> real
-
-val shl_int = "shl_int" : (int, int) -> int
-
-val shr_int = "shr_int" : (int, int) -> int
 
 val min_nat = {ocaml: "min_int", lem: "min", c: "max_int"} : (nat, nat) -> nat
 
@@ -355,7 +330,6 @@ val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
 
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
-val print_int = "print_int" : (string, int) -> unit
 val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 val break : unit -> unit
 

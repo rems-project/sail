@@ -10,12 +10,16 @@ val div = {
   c: "div_int"
 } : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = div('n, 'm). atom('o)}
 
+overload operator / = {div}
+
 val mod = {
   smt: "mod",
   ocaml: "modulus",
   lem: "integerMod",
   c: "mod_int"
 } : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = mod('n, 'm). atom('o)}
+
+overload operator % = {mod}
 
 val abs_atom = {
   smt : "abs",

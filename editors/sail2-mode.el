@@ -29,6 +29,7 @@
     (,(regexp-opt sail2-types 'symbols) . font-lock-type-face)
     (,(regexp-opt sail2-special 'symbols) . font-lock-preprocessor-face)
     ("~" . font-lock-negation-char-face)
+    ("@" . font-lock-preprocessor-face)
     ("<->" . font-lock-negation-char-face)
     ("\'[a-zA-Z0-9_]+" . font-lock-variable-name-face)
     ("\\([a-zA-Z0-9_]+\\)(" 1 font-lock-function-name-face)

@@ -517,6 +517,7 @@ lexp_aux =  (* lvalue expression, can't occur out of the parser *)
  | LEXP_mem of id * (exp) list
  | LEXP_vector of lexp * exp (* vector element *)
  | LEXP_vector_range of lexp * exp * exp (* subvector *)
+ | LEXP_vector_concat of lexp list
  | LEXP_field of lexp * id (* struct field *)
 
 and lexp = 

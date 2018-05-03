@@ -157,6 +157,9 @@ let options = Arg.align ([
   ( "-enum_casts",
     Arg.Set Initial_check.opt_enum_casts,
     " allow enumerations to be automatically casted to numeric range types");
+  ( "-no_lexp_bounds_check",
+    Arg.Set Type_check.opt_no_lexp_bounds_check,
+    " turn off bounds checking for vector assignments in l-expressions");
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " (experimental) turn off effect checking");
