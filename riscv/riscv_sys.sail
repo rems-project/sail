@@ -392,8 +392,9 @@ register satp : xlenbits
 function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits = {
   let s = Mk_Satp64(v);
   match satpMode_of_bits(a, s.Mode()) {
-    None()  => o,
-    Some(_) => s.bits()
+    None()     => o,
+    Some(Sv32) => o,  /* Sv32 is unsupported for now */
+    Some(_)    => s.bits()
   }
 }
 
