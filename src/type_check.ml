@@ -737,6 +737,8 @@ end = struct
     | Typ_var kid when KBindings.mem kid env.typ_vars -> ()
     | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
     | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
+    | Typ_bidir (typ1, typ2) when strip_typ typ1 = strip_typ typ2 ->
+       typ_error l "Bidirectional types cannot be the same on both sides"
     | Typ_bidir (typ1, typ2) -> wf_typ ~exs:exs env typ1; wf_typ ~exs:exs env typ2
     | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
     | Typ_app (id, args) when bound_typ_id env id ->
