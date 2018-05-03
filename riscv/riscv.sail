@@ -837,10 +837,6 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     None()  => print_bits("unhandled write to CSR ", csr)
   }
 
-function haveCSRPriv (csr : bits(12), isWrite : bool) -> bool =
-  let isRO = csr[11..10] == 0b11 in
-  ~ (isRO & isWrite) /* XXX TODO check priv */
-
 val signalIllegalInstruction : unit -> unit effect {escape}
 function signalIllegalInstruction () = not_implemented ("illegal instruction")
 

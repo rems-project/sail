@@ -218,7 +218,7 @@ function tvec_addr(m : Mtvec, c : Mcause) -> option(xlenbits) = {
   let base : xlenbits = m.Base() @ 0b00;
   match (trapVectorMode_of_bits(m.Mode())) {
     TV_Direct => Some(base),
-    TV_Vector => if   mcause.IsInterrupt() == 0b1  /* FIXME: Why not already boolean? */
+    TV_Vector => if   c.IsInterrupt() == true
                  then Some(base + (EXTZ(c.Cause()) << 0b10))
                  else Some(base),
     TV_Reserved => None()
@@ -610,7 +610,6 @@ function tval(excinfo : option(xlenbits)) -> xlenbits = {
 
 union ctl_result = {
   CTL_TRAP : sync_exception,
-  CTL_INTR : (InterruptType, Privilege),
   CTL_SRET : unit,
   CTL_MRET : unit
 /* TODO: CTL_URET */
@@ -662,14 +661,13 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 }
 
 function handle_exception(cur_priv : Privilege, ctl : ctl_result,
-                          pc: xlenbits) -> xlenbits =
+                          pc: xlenbits) -> xlenbits = {
+  print("handling exception ...");
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       let del_priv = exception_delegatee(e.trap, cur_priv);
       handle_trap(del_priv, false, e.trap, pc, e.excinfo)
     },
-    (_, CTL_INTR(intr, del_priv)) =>
-      handle_trap(del_priv, true, intr, pc, None()),
     (_, CTL_MRET())  => {
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = true;
@@ -685,6 +683,7 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       sepc
     }
   }
+}
 
 function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
   let t : sync_exception = struct { trap    = e,
@@ -699,7 +698,7 @@ function handle_decode_exception(instbits : xlenbits) -> unit = {
 }
 
 function handle_interrupt(i : InterruptType, del_priv : Privilege) -> unit =
-  nextPC = handle_trap(del_priv, false, i, PC, None())
+  nextPC = handle_trap(del_priv, true, i, PC, None())
 
 function init_sys() -> unit = {
   cur_privilege = Machine;

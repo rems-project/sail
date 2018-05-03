@@ -41,27 +41,34 @@ function fetch() -> FetchResult = {
   }
 }
 
-val step : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+/* returns whether an instruction was executed */
+val step : unit -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 function step() = {
   match curInterrupt(mip, mie, mideleg) {
     Some(intr, priv) => {
-      print_bits("\nHandling interrupt: ", intr);
-      handle_interrupt(intr, priv)
+      print_bits("Handling interrupt: ", intr);
+      handle_interrupt(intr, priv);
+      false
     },
     None() => {
-      print_bits("\nPC: ", PC);
+      print_bits("PC: ", PC);
       match fetch() {
-        F_Error(e, addr) => handle_mem_exception(addr, e),
+        F_Error(e, addr) => {
+          handle_mem_exception(addr, e);
+          false
+        },
         F_RVC(h) => {
           match decodeCompressed(h) {
             None() => {
               print(BitStr(h) ^ " :  <no-decode>");
-              handle_decode_exception(EXTZ(h))
+              handle_decode_exception(EXTZ(h));
+              false
             },
             Some(ast) => {
               print(BitStr(h) ^ " :  " ^ ast);
               nextPC = PC + 2;
-              execute(ast)
+              execute(ast);
+              true
             }
           }
         },
@@ -69,12 +76,14 @@ function step() = {
           match decode(w) {
             None() => {
               print(BitStr(w) ^ " :  <no-decode>");
-              handle_decode_exception(EXTZ(w))
+              handle_decode_exception(EXTZ(w));
+              false
             },
             Some(ast) => {
               print(BitStr(w) ^ " :  " ^ ast);
               nextPC = PC + 4;
-              execute(ast)
+              execute(ast);
+              true
             }
           }
         }

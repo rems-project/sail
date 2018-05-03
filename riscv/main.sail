@@ -8,10 +8,13 @@ val elf_tohost = {
 val loop : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 function loop () = {
   let tohost = __GetSlice_int(64, elf_tohost(), 0);
+  i : int = 0;
   while true do {
     tick_clock();
-    step();
+    print_int("\nstep: ", i);
+    let retired : bool = step();
     PC = nextPC;
+    if retired then i = i + 1;
 
     /* check htif exit */
     let tohost_val = __ReadRAM(64, 4, 0x0000_0000_0000_0000, tohost);
