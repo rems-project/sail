@@ -397,6 +397,22 @@ let doc_lit (L_aux(lit,l)) =
     parens (separate space (List.map string [
       "realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
 
+(* TODO: parens *)
+let rec doc_nc (NC_aux (nc,_)) =
+  match nc with
+  | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ne1) (doc_nexp ne2)
+  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ne1) (doc_nexp ne2)
+  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ne1) (doc_nexp ne2)
+  | NC_not_equal (ne1, ne2) -> doc_op (string "<>") (doc_nexp ne1) (doc_nexp ne2)
+  | NC_set (kid, is) -> (* TODO: is this a good translation? *)
+     separate space [string "In"; doc_var_lem kid;
+                     brackets (separate (string "; ")
+                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
+  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc nc1) (doc_nc nc2)
+  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc nc1) (doc_nc nc2)
+  | NC_true -> string "True"
+  | NC_false -> string "False"
+
 let doc_quant_item delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id (KOpt_aux (KOpt_none kid,_)) ->
@@ -408,7 +424,7 @@ let doc_quant_item delimit (QI_aux (qi,_)) =
     | BK_order -> None
   end
   | QI_id _ -> failwith "Quantifier with multiple kinds"
-  | QI_const nc -> None (* TODO *)
+  | QI_const nc -> Some (bquote ^^ braces (string "ArithFact" ^^ parens (doc_nc nc)))
 
 let doc_typquant_items delimit (TypQ_aux (tq,_)) =
   match tq with
