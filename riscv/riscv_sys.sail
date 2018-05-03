@@ -700,6 +700,12 @@ function handle_decode_exception(instbits : xlenbits) -> unit = {
 function handle_interrupt(i : InterruptType, del_priv : Privilege) -> unit =
   nextPC = handle_trap(del_priv, true, i, PC, None())
 
+function handle_illegal() -> unit = {
+  let t : sync_exception = struct { trap    = E_Illegal_Instr,
+                                    excinfo = None() };
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
+}
+
 function init_sys() -> unit = {
   cur_privilege = Machine;
 

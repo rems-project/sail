@@ -568,6 +568,24 @@ function clause print_insn (EBREAK()) =
   "ebreak"
 
 /* ****************************************************************** */
+union clause ast = WFI : unit
+
+function clause decode 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(WFI())
+
+function clause execute WFI() = {
+  match cur_privilege {
+    Machine    => (),
+    Supervisor => if mstatus.TW() == true
+                  then handle_illegal()
+                  else (),
+    User       => handle_illegal()
+  }
+}
+
+function clause print_insn (WFI()) =
+  "wfi"
+
+/* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
 
 function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, WORD, rd))
@@ -846,13 +864,9 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     CSRRW  => true,
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
-  if ~ (check_CSR(csr, cur_privilege, isWrite)) then {
-    let instr : xlenbits = cur_inst;
-    let t : sync_exception =
-    struct { trap = E_Illegal_Instr,
-             excinfo = Some (instr) } in
-    nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
-  } else {
+  if ~ (check_CSR(csr, cur_privilege, isWrite))
+  then handle_illegal()
+  else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
     if isWrite then {
       let new_val : xlenbits = match op {
@@ -896,12 +910,7 @@ union clause ast = ILLEGAL : unit
 
 function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(ILLEGAL())
 
-function clause execute ILLEGAL() = {
-  let t : sync_exception =
-  struct { trap = E_Illegal_Instr,
-           excinfo = Some (EXTZ(0b0)) } in
-  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
-}
+function clause execute ILLEGAL() = handle_illegal ()
 
 function clause print_insn (ILLEGAL()) =
   "illegal"
