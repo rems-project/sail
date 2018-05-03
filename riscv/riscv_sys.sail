@@ -687,6 +687,11 @@ function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
   nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
 }
 
+function handle_decode_exception(instbits : xlenbits) -> unit = {
+  let t : sync_exception = struct { trap = E_Illegal_Instr,
+                                    excinfo = Some(instbits) };
+  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+}
 
 function init_sys() -> unit = {
   cur_privilege = Machine;
