@@ -849,13 +849,31 @@ end = struct
   and add_mapping id (typq, typ1, typ2) env =
     begin
       typ_print (lazy ("Adding mapping " ^ string_of_id id));
-      let forwards_id = mk_id (string_of_id id ^ "_forwards#") in
-      let backwards_id = mk_id (string_of_id id ^ "_backwards#") in
+      let forwards_id = mk_id (string_of_id id ^ "_forwards") in
+      let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
+      let backwards_id = mk_id (string_of_id id ^ "_backwards") in
+      let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
       let forwards_typ = Typ_aux (Typ_fn (typ1, typ2, no_effect), Parse_ast.Unknown) in
+      let forwards_matches_typ = Typ_aux (Typ_fn (typ1, bool_typ, no_effect), Parse_ast.Unknown) in
       let backwards_typ = Typ_aux (Typ_fn (typ2, typ1, no_effect), Parse_ast.Unknown) in
-      { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
-      |> add_val_spec forwards_id (typq, forwards_typ)
-      |> add_val_spec backwards_id (typq, backwards_typ)
+      let backwards_matches_typ = Typ_aux (Typ_fn (typ2, bool_typ, no_effect), Parse_ast.Unknown) in
+      let env =
+        { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
+        |> add_val_spec forwards_id (typq, forwards_typ)
+        |> add_val_spec backwards_id (typq, backwards_typ)
+        |> add_val_spec forwards_matches_id (typq, forwards_matches_typ)
+        |> add_val_spec backwards_matches_id (typq, backwards_matches_typ)
+      in
+      let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
+      begin if strip_typ typ1 = string_typ then
+              let forwards_prefix_typ = Typ_aux (Typ_fn (typ1, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+              add_val_spec prefix_id (typq, forwards_prefix_typ) env
+            else if strip_typ typ2 = string_typ then
+              let backwards_prefix_typ = Typ_aux (Typ_fn (typ2, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+              add_val_spec prefix_id (typq, backwards_prefix_typ) env
+            else
+              env
+      end
     end
 
   let define_val_spec id env =
@@ -2381,8 +2399,8 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      end
   | E_app (mapping, xs), _ when Env.is_mapping mapping env ->
-     let forwards_id = mk_id (string_of_id mapping ^ "_forwards#") in
-     let backwards_id = mk_id (string_of_id mapping ^ "_backwards#") in
+     let forwards_id = mk_id (string_of_id mapping ^ "_forwards") in
+     let backwards_id = mk_id (string_of_id mapping ^ "_backwards") in
      typ_print (lazy("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
      begin try crule check_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) typ with
            | Type_error (_, err1) ->
@@ -3183,8 +3201,8 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      annot_exp (E_cast (typ, checked_exp)) typ
   | E_app_infix (x, op, y) -> infer_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ())))
   | E_app (mapping, xs) when Env.is_mapping mapping env ->
-     let forwards_id = mk_id (string_of_id mapping ^ "_forwards#") in
-     let backwards_id = mk_id (string_of_id mapping ^ "_backwards#") in
+     let forwards_id = mk_id (string_of_id mapping ^ "_forwards") in
+     let backwards_id = mk_id (string_of_id mapping ^ "_backwards") in
      typ_print (lazy ("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
      begin try irule infer_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) with
            | Type_error (_, err1) ->

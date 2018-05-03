@@ -2840,7 +2840,7 @@ let rec rewrite_defs_pat_string_append =
     mk_exp (E_case (match_on, [true_pexp; false_pexp]))
   in
 
-  let rec rewrite_pat (pat, guards, expr) =
+  let rec rewrite_pat (pat, env, guards, expr) =
     match pat with
     (*
         "lit" ^^ pat2 => expr ---> s# if startswith(s#, "lit")
@@ -2864,7 +2864,7 @@ let rec rewrite_defs_pat_string_append =
 
        (* recurse into pat2 *)
        let new_pat2_pexp =
-         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), guards, expr) with
+         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), env, guards, expr) with
          | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
          | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
        in
@@ -2917,7 +2917,7 @@ let rec rewrite_defs_pat_string_append =
 
        (* recurse into pat2 *)
        let new_pat2_pexp =
-         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), guards, expr) with
+         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), env, guards, expr) with
          | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
          | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
        in
@@ -2946,8 +2946,76 @@ let rec rewrite_defs_pat_string_append =
 
        (* construct final result *)
        mk_pat (P_id s_id), new_guard :: guards, new_let
+
+    | P_aux (P_string_append (
+                 P_aux (P_app (mapping_id, [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _)
+                 :: pats
+               ), psa_annot)
+         when Env.is_mapping mapping_id env ->
+
+       (* common things *)
+       let mapping_prefix_func =
+         match mapping_id with
+         | Id_aux (Id id, _)
+         | Id_aux (DeIid id, _) -> id ^ "_matches_prefix"
+       in
+       let mapping_inner_typ =
+         match Env.get_val_spec (mk_id mapping_prefix_func) env with
+         | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [Typ_arg_aux (Typ_arg_typ typ, _)]), _), _), _)) -> typ
+         | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
+       in
+
+       let s_id = fresh_stringappend_id () in
+       let n_id = fresh_stringappend_id () in
+       let len_id = fresh_stringappend_id () in
+
+       (* construct drop expression -- string_drop(s#, len#) *)
+       let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id s_id); mk_exp (E_id len_id)])) in
+       (* construct func expression -- maybe_atoi s# *)
+       let func_exp = mk_exp (E_app (mk_id mapping_prefix_func, [mk_exp (E_id s_id)])) in
+       (* construct some pattern -- Some (n#, len#) *)
+       let some_exp = mk_pat (P_app (mk_id "Some", [mk_pat (P_id n_id); mk_pat (P_id len_id)])) in
+       (* construct None pattern *)
+       let none_exp = mk_pat (P_app (mk_id "None", [mk_pat (P_lit (mk_lit L_unit))])) in
+
+       (* recurse into pat2 *)
+       let new_pat2_pexp =
+         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), env, guards, expr) with
+         | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
+         | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
+       in
+
+       (* construct the new guard *)
+       let guard_inner_match = construct_bool_match drop_exp new_pat2_pexp in
+       let new_guard = mk_exp (E_case (func_exp, [
+                                     mk_pexp (Pat_exp (some_exp, guard_inner_match));
+                                     mk_pexp (Pat_exp (none_exp, mk_exp (E_lit (mk_lit (L_false)))))
+                         ])) in
+
+       (* construct the new match *)
+       let new_match = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
+
+       (* construct the new let *)
+       let new_binding = mk_exp (E_cast (mapping_inner_typ, mk_exp (E_case (func_exp, [
+                                       mk_pexp (Pat_exp (some_exp, mk_exp (E_tuple [
+                                                                               mk_exp (E_id n_id);
+                                                                               mk_exp (E_id len_id)
+                                         ])))
+                           ])))) in
+       let new_letbind = mk_letbind (mk_pat (P_tup [
+                                                 mk_pat (P_id (mk_id var_id)); mk_pat (P_id len_id)
+                           ])) new_binding in
+       let new_let = mk_exp (E_let (new_letbind, new_match)) in
+
+       (* construct final result *)
+       mk_pat (P_id s_id), new_guard :: guards, new_let
+
+    | P_aux (P_string_append [pat], _) ->
+       pat, guards, expr
+
     | P_aux (P_string_append [], _) ->
        mk_pat (P_lit (mk_lit (L_string ""))), guards, expr
+
     | P_aux (P_string_append _, _) ->
        failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat pat)
 
@@ -2966,7 +3034,7 @@ let rec rewrite_defs_pat_string_append =
     in
 
     let (new_pat, new_guards, new_expr) =
-      rewrite_pat (strip_pat pat, List.map strip_exp guards, strip_exp expr)
+      rewrite_pat (strip_pat pat, env_of_annot p_annot, List.map strip_exp guards, strip_exp expr)
     in
 
     (* un-merge Pat_exp and Pat_when cases *)
@@ -2974,7 +3042,6 @@ let rec rewrite_defs_pat_string_append =
     | [] -> mk_pexp (Pat_exp (new_pat, new_expr))
     | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
     in
-    Printf.printf "PEXP BEFORE TYPECHECK IS %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
     check_case (pat_env_of pat) (pat_typ_of pat) new_pexp (typ_of expr)
 
   in
@@ -3058,7 +3125,6 @@ let rewrite_defs_mapping_builtins =
       | [] -> mk_pexp (Pat_exp (new_pat, new_expr))
       | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
     in
-    Printf.printf "PEXP BEFORE TYPECHECK IS %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
     check_case (pat_env_of pat) (pat_typ_of pat) new_pexp (typ_of expr)
 
   in
@@ -3576,8 +3642,12 @@ let rewrite_defs_realise_mappings (Defs defs) =
   in
   let realise_prefix_mapcl forwards id (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, ()))) =
     let mpexp = if forwards then mpexp1 else mpexp2 in
+    let other = if forwards then mpexp2 else mpexp1 in
     let strlen = (mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id placeholder_id)]))) in
-    realise_mpexps true (append_placeholder mpexp) (mk_mpexp (MPat_pat (mk_mpat (MP_app ((mk_id "Some"), [strlen])))))
+    match other with
+    | MPat_aux (MPat_pat mpat2, _)
+      | MPat_aux (MPat_when (mpat2, _), _)->
+       realise_mpexps true (append_placeholder mpexp) (mk_mpexp (MPat_pat (mk_mpat (MP_app ((mk_id "Some"), [ mk_mpat (MP_tup [mpat2; strlen]) ])))))
   in
   let realise_mapdef (MD_aux (MD_mapping (id, mapcls), ((l, (tannot:tannot)) as annot))) =
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
@@ -3639,7 +3709,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let prefix_wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_exp (E_lit (mk_lit L_unit))])))) in
     let string_defs =
       begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
-              let forwards_prefix_typ = Typ_aux (Typ_fn (typ1, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (nat_typ), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+              let forwards_prefix_typ = Typ_aux (Typ_fn (typ1, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
               let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
               let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) @ [prefix_wildcard])) in
@@ -3649,7 +3719,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
               forwards_prefix_spec @ forwards_prefix_fun
             else
               if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
-                let backwards_prefix_typ = Typ_aux (Typ_fn (typ2, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (nat_typ), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+                let backwards_prefix_typ = Typ_aux (Typ_fn (typ2, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
                 let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
                 let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) @ [prefix_wildcard])) in
