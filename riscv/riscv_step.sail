@@ -43,12 +43,13 @@ function fetch() -> FetchResult = {
 
 val step : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 function step() = {
-  tick_clock();
-
   match curInterrupt(mip, mie, mideleg) {
-    Some(intr, priv) =>
-      handle_interrupt(intr, priv),
+    Some(intr, priv) => {
+      print_bits("\nHandling interrupt: ", intr);
+      handle_interrupt(intr, priv)
+    },
     None() => {
+      print_bits("\nPC: ", PC);
       match fetch() {
         F_Error(e, addr) => handle_mem_exception(addr, e),
         F_RVC(h) => {
