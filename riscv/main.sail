@@ -35,7 +35,7 @@ function fetch_and_execute () =
         if (misa.C() == 0b0 & (instr_sz == 2)) then {
           let t : sync_exception = struct { trap = E_Illegal_Instr,
                                             excinfo = Some(cur_inst) } in
-          nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+          nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
         } else {
           nextPC = PC + instr_sz;
           match instr_ast {
@@ -47,7 +47,7 @@ function fetch_and_execute () =
       MemException(e) => {
         let t : sync_exception = struct { trap = e,
                                           excinfo = Some(PC) } in
-        nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+        nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
       }
     };
     let tohost_val = __ReadRAM(64, 4, 0x0000_0000_0000_0000, tohost);

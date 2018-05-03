@@ -46,9 +46,8 @@ function step() = {
   tick_clock();
 
   match curInterrupt(mip, mie, mideleg) {
-    Some(intr, priv) => {
-      ()
-    },
+    Some(intr, priv) =>
+      handle_interrupt(intr, priv),
     None() => {
       match fetch() {
         F_Error(e, addr) => handle_mem_exception(addr, e),

@@ -530,7 +530,7 @@ function clause execute ECALL() =
                       Machine => E_M_EnvCall
 		    },
 	     excinfo = (None() : option(xlenbits)) } in
-  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 
 function clause print_insn (ECALL()) =
   "ecall"
@@ -541,7 +541,7 @@ union clause ast = MRET : unit
 function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
 
 function clause execute MRET() =
-  nextPC = handle_exception_ctl(cur_privilege, CTL_MRET(), PC)
+  nextPC = handle_exception(cur_privilege, CTL_MRET(), PC)
 
 function clause print_insn (MRET()) =
   "mret"
@@ -552,7 +552,7 @@ union clause ast = SRET : unit
 function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
 
 function clause execute SRET() =
-  nextPC = handle_exception_ctl(cur_privilege, CTL_SRET(), PC)
+  nextPC = handle_exception(cur_privilege, CTL_SRET(), PC)
 
 function clause print_insn (SRET()) =
   "sret"
@@ -855,7 +855,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     let t : sync_exception =
     struct { trap = E_Illegal_Instr,
              excinfo = Some (instr) } in
-    nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+    nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
   } else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
     if isWrite then {
@@ -904,7 +904,7 @@ function clause execute ILLEGAL() = {
   let t : sync_exception =
   struct { trap = E_Illegal_Instr,
            excinfo = Some (EXTZ(0b0)) } in
-  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 }
 
 function clause print_insn (ILLEGAL()) =
