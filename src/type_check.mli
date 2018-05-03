@@ -88,8 +88,13 @@ module Env : sig
   (** Note: Most get_ functions assume the identifiers exist, and throw
      type errors if it doesn't. *)
 
-  (** get the quantifier and type for a function identifier. *)
+  (** Get the quantifier and type for a function identifier, freshening
+      type variables. *)
   val get_val_spec : id -> t -> typquant * typ
+
+  (** Like get_val_spec, except that the original type variables are used.
+      Useful when processing the body of the function. *)
+  val get_val_spec_orig : id -> t -> typquant * typ
 
   val update_val_spec : id -> typquant * typ -> t -> t
 

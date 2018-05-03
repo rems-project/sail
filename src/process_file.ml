@@ -57,6 +57,7 @@ let opt_lem_mwords = ref false
 type out_type =
   | Lem_ast_out
   | Lem_out of string list
+  | Coq_out of string list
 
 let get_lexbuf f =
   let in_chan = open_in f in
@@ -291,6 +292,28 @@ let output_lem filename libs defs =
   print ol isa_lemmas;
   close_output_with_check ext_ol
 
+let output_coq filename libs defs =
+  let generated_line = generated_line filename in
+  let types_module = (filename ^ "_types") in
+  let monad_modules = ["Prompt_monad"; "Prompt"; "State"] in
+  let operators_module = "Sail_operators_mwords" in
+  let base_imports = [
+      "Sail_instr_kinds";
+      "Sail_values";
+      operators_module
+    ] @ monad_modules
+  in
+  let ((ot,_, _) as ext_ot) =
+    open_output_with_check_unformatted (filename ^ "_types" ^ ".v") in
+  let ((o,_, _) as ext_o) =
+    open_output_with_check_unformatted (filename ^ ".v") in
+  (Pretty_print_coq.pp_defs_coq
+     (ot, base_imports)
+     (o, base_imports @ (types_module :: libs))
+     defs generated_line);
+  close_output_with_check ext_ot;
+  close_output_with_check ext_o
+
 let rec iterate (f : int -> unit) (n : int) : unit =
   if n = 0 then ()
   else (f n; iterate f (n - 1))
@@ -312,6 +335,8 @@ let output1 libpath out_arg filename defs  =
 	end
       | Lem_out libs ->
         output_lem f' libs defs
+      | Coq_out libs ->
+         output_coq f' libs defs
 
 let output libpath out_arg files =
   List.iter
@@ -342,6 +367,7 @@ let rewrite rewriters defs =
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !Pretty_print_lem.opt_mwords x)]
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
+let rewrite_ast_coq = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
 let rewrite_ast_c = rewrite Rewrites.rewrite_defs_c
 let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter

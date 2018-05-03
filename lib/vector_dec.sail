@@ -15,7 +15,7 @@ val eq_bits = {
 
 overload operator == = {eq_bit, eq_bits}
 
-val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
+val bitvector_length = {coq: "length_mword", _:"length"} : forall 'n. bits('n) -> atom('n)
 
 val vector_length = {
   ocaml: "length",
@@ -36,6 +36,7 @@ val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 val truncate = {
   ocaml: "vector_truncate",
   lem: "vector_truncate",
+  coq: "vector_truncate",
   c: "truncate"
 } : forall 'm 'n, 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 

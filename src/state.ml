@@ -306,6 +306,85 @@ let generate_isa_lemmas mwords (Defs defs : tannot defs) =
   hardline ^^ hardline ^^
   separate_map (hardline ^^ hardline) register_lemmas registers
 
+let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
+  | Typ_app _ when is_vector_typ typ && not (is_bitvector_typ typ) ->
+     let size, ord, etyp = vector_typ_args_of typ in
+     let size = string_of_nexp (nexp_simp size) in
+     let is_inc = if is_order_inc ord then "true" else "false" in
+     let etyp_of, of_etyp = regval_convs_coq etyp in
+     "(fun v => vector_of_regval " ^ etyp_of ^ " v)",
+     "(fun v => regval_of_vector " ^ of_etyp ^ " " ^ size ^ " " ^ is_inc ^ " v)"
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ etyp, _)])
+    when string_of_id id = "list" ->
+     let etyp_of, of_etyp = regval_convs_coq etyp in
+     "(fun v => list_of_regval " ^ etyp_of ^ " v)",
+     "(fun v => regval_of_list " ^ of_etyp ^ " v)"
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ etyp, _)])
+    when string_of_id id = "option" ->
+     let etyp_of, of_etyp = regval_convs_coq etyp in
+     "(fun v => option_of_regval " ^ etyp_of ^ " v)",
+     "(fun v => regval_of_option " ^ of_etyp ^ " v)"
+  | _ ->
+     let id = string_of_id (regval_constr_id true typ) in
+     "(fun v => " ^ id ^ "_of_regval v)", "(fun v => regval_of_" ^ id ^ " v)"
+
+let register_refs_coq registers =
+  let generic_convs =
+    separate_map hardline string [
+      "Definition vector_of_regval {a} (of_regval : register_value -> option a) (rv : register_value) : option (list a) := match rv with";
+      "  | Regval_vector (_, _, v) => just_list (List.map of_regval v)";
+      "  | _ => None";
+      "end.";
+      "";
+      "Definition regval_of_vector {a} (regval_of : a -> register_value) (size : Z) (is_inc : bool) (xs : list a) : register_value := Regval_vector (size, is_inc, List.map regval_of xs).";
+      "";
+      "Definition list_of_regval {a} (of_regval : register_value -> option a) (rv : register_value) : option (list a) := match rv with";
+      "  | Regval_list v => just_list (List.map of_regval v)";
+      "  | _ => None";
+      "end.";
+      "";
+      "Definition regval_of_list {a} (regval_of : a -> register_value) (xs : list a) : register_value := Regval_list (List.map regval_of xs).";
+      "";
+      "Definition option_of_regval {a} (of_regval : register_value -> option a) (rv : register_value) : option (option a) := match rv with";
+      "  | Regval_option v => option_map of_regval v";
+      "  | _ => None";
+      "end.";
+      "";
+      "Definition regval_of_option {a} (regval_of : a -> register_value) (v : option a) := Regval_option (option_map regval_of v).";
+      "";
+      ""
+    ]
+  in
+  let register_ref (typ, id) =
+    let idd = string (string_of_id id) in
+    (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
+    let of_regval, regval_of = regval_convs_coq typ in
+    concat [string "Definition "; idd; string "_ref := {|"; hardline;
+      string "  name := \""; idd; string "\";"; hardline;
+      string "  read_from := (fun s => s.("; idd; string "));"; hardline;
+      string "  write_to := (fun v s => ({[ s with "; idd; string " := v ]}));"; hardline;
+      string "  of_regval := "; string of_regval; string ";"; hardline;
+      string "  regval_of := "; string regval_of; string " |}."; hardline]
+  in
+  let refs = separate_map hardline register_ref registers in
+  let get_set_reg (_, id) =
+    let idd = string_of_id id in
+    string ("  if string_dec reg_name \"" ^ idd ^ "\" then Some (" ^ idd ^ "_ref.(regval_of) (" ^ idd ^ "_ref.(read_from) s)) else"),
+    string ("  if string_dec reg_name \"" ^ idd ^ "\" then option_map (fun v => " ^ idd ^ "_ref.(write_to) v s) (" ^ idd ^ "_ref.(of_regval) v) else")
+  in
+  let getters_setters =
+    let getters, setters = List.split (List.map get_set_reg registers) in
+    string "Local Open Scope string." ^^ hardline ^^
+    string "Definition get_regval (reg_name : string) (s : regstate) : option register_value :=" ^^ hardline ^^
+    separate hardline getters ^^ hardline ^^
+    string "  None." ^^ hardline ^^ hardline ^^
+    string "Definition set_regval (reg_name : string) (v : register_value) (s : regstate) : option regstate :=" ^^ hardline ^^
+    separate hardline setters ^^ hardline ^^
+    string "  None." ^^ hardline ^^ hardline ^^
+    string "Definition register_accessors := (get_regval, set_regval)." ^^ hardline ^^ hardline
+  in
+  separate hardline [generic_convs; refs; getters_setters]
+
 let generate_regstate_defs mwords defs =
   (* FIXME We currently don't want to generate undefined_type functions
      for register state and values.  For the Lem backend, this would require

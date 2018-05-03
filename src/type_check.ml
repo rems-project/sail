@@ -302,6 +302,7 @@ module Env : sig
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_val_spec : id -> t -> typquant * typ
+  val get_val_spec_orig : id -> t -> typquant * typ
   val is_union_constructor : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
@@ -716,6 +717,12 @@ end = struct
 
   let freshen_bind env bind =
     List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+
+  let get_val_spec_orig id env =
+    try
+      Bindings.find id env.top_val_specs
+    with
+    | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
 
   let get_val_spec id env =
     try

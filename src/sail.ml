@@ -62,9 +62,11 @@ let opt_print_lem = ref false
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
+let opt_print_coq = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
+let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_mono_split = ref ([]:((string * int) * string) list)
 let opt_process_elf : string option ref = ref None
@@ -120,6 +122,12 @@ let options = Arg.align ([
   ( "-lem_mwords",
     Arg.Set Pretty_print_lem.opt_mwords,
     " use native machine word library for Lem output");
+  ( "-coq",
+    Arg.Set opt_print_coq,
+    " output a Coq translated version of the input");
+  ( "-coq_lib",
+    Arg.String (fun l -> opt_libs_coq := l::!opt_libs_coq),
+    "<filename> provide additional library to open in Coq output");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
     " set a custom prefix for generated latex command (default sail)");
@@ -309,6 +317,12 @@ let main() =
          let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
          let ast_lem = rewrite_ast_lem ast_lem in
          output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
+       else ());
+      (if !(opt_print_coq)
+       then
+         let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
+         let ast_coq = rewrite_ast_coq ast_coq in
+         output "" (Coq_out (!opt_libs_coq)) [out_name,ast_coq]
        else ());
       (if !(opt_print_latex)
        then

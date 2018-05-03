@@ -61,9 +61,11 @@ let default_opt x = function
   | None -> x
   | Some y -> y
 
-let assoc_opt key assocs =
+let assoc_opt key (assocs, default) =
   try Some (List.assoc key assocs) with
-  | Not_found -> None
+  | Not_found -> default
+
+let cons_fst h (t,x) = (h::t,x)
 
 let string_of_id = function
   | Id_aux (Id str, _) -> str
@@ -1193,9 +1195,11 @@ let_def:
 
 externs:
   | id Colon String
-    { [(string_of_id $1, $3)] }
+    { ([(string_of_id $1, $3)], None) }
+  | Under Colon String
+    { ([], Some $3) }
   | id Colon String Comma externs
-    { (string_of_id $1, $3) :: $5 }
+    { cons_fst (string_of_id $1, $3) $5 }
 
 val_spec_def:
   | Doc val_spec_def
