@@ -232,12 +232,16 @@ function process_load(rd, addr, value, is_unsigned) =
   }
 
 function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
-    let addr  : xlenbits = X(rs1) + EXTS(imm) in
-    match width {
-      BYTE   => process_load(rd, addr, mem_read(addr, 1, aq, rl, false), is_unsigned),
-      HALF   => process_load(rd, addr, mem_read(addr, 2, aq, rl, false), is_unsigned),
-      WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, false), is_unsigned),
-      DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, rl, false), is_unsigned)
+    let vaddr : xlenbits = X(rs1) + EXTS(imm) in
+    match translateAddr(vaddr, Read, Data) {
+      TR_Address(addr) =>
+        match width {
+          BYTE   => process_load(rd, vaddr, mem_read(addr, 1, aq, rl, false), is_unsigned),
+          HALF   => process_load(rd, vaddr, mem_read(addr, 2, aq, rl, false), is_unsigned),
+          WORD   => process_load(rd, vaddr, mem_read(addr, 4, aq, rl, false), is_unsigned),
+          DOUBLE => process_load(rd, vaddr, mem_read(addr, 8, aq, rl, false), is_unsigned)
+        },
+      TR_Failure(e) => handle_mem_exception(vaddr, e)
     }
 
 /* FIXME: aq/rl are getting dropped */
