@@ -739,7 +739,7 @@ function clause decode csr : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRS))
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRC))
 
-function readCSR csr: bits(12) -> xlenbits =
+function readCSR csr : csreg -> xlenbits =
   match csr {
     /* machine mode */
     0xF11 => mvendorid,
@@ -779,34 +779,39 @@ function readCSR csr: bits(12) -> xlenbits =
                0x0000_0000_0000_0000 }
   }
 
-function writeCSR (csr : bits(12), value : xlenbits) -> unit =
+function writeCSR (csr : csreg, value : xlenbits) -> unit =
+  let res : option(xlenbits) =
   match csr {
     /* machine mode */
-    0x300 => mstatus = legalize_mstatus(mstatus, value),
-    0x302 => medeleg = legalize_medeleg(medeleg, value),
-    0x303 => mideleg = legalize_mideleg(mideleg, value),
-    0x304 => mie = legalize_mie(mie, value),
-    0x305 => mtvec = legalize_tvec(mtvec, value),
-    0x340 => mscratch = value,
-    0x341 => mepc = legalize_xepc(value),
-    0x342 => mcause->bits() = value,
-    0x343 => mtval = value,
-    0x344 => mip = legalize_mip(mip, value),
+    0x300 => { mstatus = legalize_mstatus(mstatus, value); Some(mstatus.bits()) },
+    0x302 => { medeleg = legalize_medeleg(medeleg, value); Some(medeleg.bits()) },
+    0x303 => { mideleg = legalize_mideleg(mideleg, value); Some(mideleg.bits()) },
+    0x304 => { mie = legalize_mie(mie, value); Some(mie.bits()) },
+    0x305 => { mtvec = legalize_tvec(mtvec, value); Some(mtvec.bits()) },
+    0x340 => { mscratch = value; Some(mscratch) },
+    0x341 => { mepc = legalize_xepc(value); Some(mepc) },
+    0x342 => { mcause->bits() = value; Some(mcause.bits()) },
+    0x343 => { mtval = value; Some(mtval) },
+    0x344 => { mip = legalize_mip(mip, value); Some(mip.bits()) },
 
     /* supervisor mode */
-    0x100 => mstatus = legalize_sstatus(mstatus, value),
-    0x102 => sedeleg = legalize_sedeleg(sedeleg, value),
-    0x103 => sideleg->bits() = value, /* TODO: does this need legalization? */
-    0x104 => mie = legalize_sie(mie, mideleg, value),
-    0x105 => stvec = legalize_tvec(stvec, value),
-    0x140 => sscratch = value,
-    0x141 => sepc = legalize_xepc(value),
-    0x142 => scause->bits() = value,
-    0x143 => stval = value,
-    0x144 => mip = legalize_sip(mip, mideleg, value),
-    0x180 => satp = legalize_satp(cur_Architecture(), satp, value),
+    0x100 => { mstatus = legalize_sstatus(mstatus, value); Some(mstatus.bits()) },
+    0x102 => { sedeleg = legalize_sedeleg(sedeleg, value); Some(sedeleg.bits()) },
+    0x103 => { sideleg->bits() = value; Some(sideleg.bits()) }, /* TODO: does this need legalization? */
+    0x104 => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) },
+    0x105 => { stvec = legalize_tvec(stvec, value); Some(stvec.bits()) },
+    0x140 => { sscratch = value; Some(sscratch) },
+    0x141 => { sepc = legalize_xepc(value); Some(sepc) },
+    0x142 => { scause->bits() = value; Some(scause.bits()) },
+    0x143 => { stval = value; Some(stval) },
+    0x144 => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) },
+    0x180 => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) },
 
-    _     => print_bits("unhandled write to CSR ", csr)
+    _     => None()
+  } in
+  match res {
+    Some(v) => print("CSR " ^ csr ^ " <- " ^ BitStr(v) ^ " (input: " ^ BitStr(value) ^ ")"),
+    None()  => print_bits("unhandled write to CSR ", csr)
   }
 
 function haveCSRPriv (csr : bits(12), isWrite : bool) -> bool =
