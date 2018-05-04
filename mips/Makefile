@@ -21,7 +21,7 @@ mips_no_tlb_types.lem: mips_no_tlb.lem
 
 # TODO: Use monomorphisation so that we can switch to machine words
 mips.lem: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS)
-	$(SAIL) -lem -o mips -lem_lib Mips_extras -undefined_gen -memo_z3 $^
+	$(SAIL) -lem -o mips -auto_mono -mono_rewrites -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 mips_types.lem: mips.lem
 
 M%.thy: m%.lem m%_types.lem mips_extras.lem
