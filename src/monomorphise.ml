@@ -3781,7 +3781,7 @@ let make_bitvector_cast_fns env src_typ target_typ =
     match src_t, tar_t with
     | Typ_tup typs, Typ_tup typs' ->
        let ps,es = List.split (List.map2 aux typs typs') in
-       P_aux (P_tup ps,(Generated src_l, src_ann)),
+       P_aux (P_typ (src_typ, P_aux (P_tup ps,(Generated src_l, src_ann))),(Generated src_l, src_ann)),
        E_aux (E_tuple es,(Generated tar_l, tar_ann))
     | Typ_app (Id_aux (Id "vector",_),
                [Typ_arg_aux (Typ_arg_nexp size,_); _;
