@@ -1914,6 +1914,16 @@ let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
          E_app_infix (e1, f, e2))) }
     exp)
 
+
+let pat_var (P_aux (paux, a)) =
+  let env = env_of_annot a in
+  let is_var id =
+    not (Env.is_union_constructor id env) &&
+      match Env.lookup_id id env with Enum _ -> false | _ -> true
+  in match paux with
+  | (P_as (_, id) | P_id id) when is_var id -> Some id
+  | _ -> None
+
 (* Split out function clauses for individual union constructor patterns
    (e.g. AST nodes) into auxiliary functions.  Used for the execute function. *)
 let rewrite_split_fun_constr_pats fun_name (Defs defs) =
@@ -1938,10 +1948,10 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
                     Bindings.add aux_fun_id (aux_clauses @ [aux_funcl]) aux_funs
                   with Not_found ->
                     let argpats, argexps = List.split (List.mapi
-                     (fun idx (P_aux (paux, a)) ->
-                        let id = match paux with
-                          | P_as (_, id) | P_id id -> id
-                          | _ -> mk_id ("arg" ^ string_of_int idx)
+                     (fun idx (P_aux (_,a) as pat) ->
+                        let id = match pat_var pat with
+                          | Some id -> id
+                          | None -> mk_id ("arg" ^ string_of_int idx)
                         in
                         P_aux (P_id id, a), E_aux (E_id id, a))
                      args)
