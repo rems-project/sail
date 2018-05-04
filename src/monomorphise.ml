@@ -636,6 +636,7 @@ let nexp_subst_fns substs =
       | LEXP_tup les -> re (LEXP_tup (List.map s_lexp les))
       | LEXP_vector (le,e) -> re (LEXP_vector (s_lexp le, s_exp e))
       | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (s_lexp le, s_exp e1, s_exp e2))
+      | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map s_lexp les))
       | LEXP_field (le,id) -> re (LEXP_field (s_lexp le, id))
       | LEXP_deref e -> re (LEXP_deref (s_exp e))
   in (s_pat,s_exp)
@@ -955,7 +956,9 @@ let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
   match le with
   | LEXP_id id
   | LEXP_cast (_,id) -> IdSet.singleton id
-  | LEXP_tup lexps -> List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
+  | LEXP_tup lexps
+  | LEXP_vector_concat lexps -> 
+     List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
   | LEXP_memory (_,es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
   | LEXP_vector (le,e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)
   | LEXP_vector_range (le,e1,e2) ->
@@ -1468,6 +1471,7 @@ let split_defs all_errors splits defs =
        re (LEXP_vector_range (fst (const_prop_lexp ref_vars substs assigns le),
                               fst (const_prop_exp ref_vars substs assigns e1),
                               fst (const_prop_exp ref_vars substs assigns e2)))
+    | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map (fun le -> fst (const_prop_lexp ref_vars substs assigns le)) les))
     | LEXP_field (le,id) -> re (LEXP_field (fst (const_prop_lexp ref_vars substs assigns le), id))
     | LEXP_deref e ->
        re (LEXP_deref (fst (const_prop_exp ref_vars substs assigns e)))
@@ -2014,6 +2018,7 @@ let split_defs all_errors splits defs =
         | LEXP_tup les -> re (LEXP_tup (List.map map_lexp les))
         | LEXP_vector (le,e) -> re (LEXP_vector (map_lexp le, map_exp e))
         | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (map_lexp le, map_exp e1, map_exp e2))
+        | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map map_lexp les))
         | LEXP_field (le,id) -> re (LEXP_field (map_lexp le, id))
         | LEXP_deref e -> re (LEXP_deref (map_exp e))
       in map_pexp, map_letbind
@@ -3120,7 +3125,8 @@ and analyse_lexp fn_id env assigns deps (LEXP_aux (lexp,(l,_))) =
   | LEXP_memory (id,es) ->
      let _, assigns, r = analyse_exp fn_id env assigns (E_aux (E_tuple es,(Unknown,None))) in
      assigns, r
-  | LEXP_tup lexps ->
+  | LEXP_tup lexps
+  | LEXP_vector_concat lexps ->
       List.fold_left (fun (assigns,r) lexp ->
        let assigns,r' = analyse_lexp fn_id env assigns deps lexp
        in assigns,merge r r') (assigns,empty) lexps
