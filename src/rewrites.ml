@@ -2581,6 +2581,14 @@ let rewrite_defs_letbind_effects =
     | E_cast (typ,exp') ->
        n_exp_name exp' (fun exp' ->
        k (rewrap (E_cast (typ,exp'))))
+    | E_app (op_bool, [l; r])
+      when string_of_id op_bool = "and_bool" || string_of_id op_bool = "or_bool" ->
+       (* Leave effectful operands of Boolean "and"/"or" in place to allow
+          short-circuiting. *)
+       let newreturn = effectful l || effectful r in
+       let l = n_exp_term newreturn l in
+       let r = n_exp_term newreturn r in
+       k (rewrap (E_app (op_bool, [l; r])))
     | E_app (id,exps) ->
        n_exp_nameL exps (fun exps ->
        k (rewrap (E_app (id,exps))))
@@ -2967,7 +2975,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          (* after rewrite_defs_letbind_effects c has no variable updates *)
          let env = env_of_annot annot in
          let typ = typ_of e1 in
-         let eff = union_eff_exps [e1;e2] in
+         let eff = union_eff_exps [c;e1;e2] in
          let v = E_aux (E_if (c,e1,e2), (gen_loc el, Some (env, typ, eff))) in
          Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
     | E_case (e1,ps) ->
