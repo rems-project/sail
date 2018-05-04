@@ -586,6 +586,30 @@ function clause print_insn (WFI()) =
   "wfi"
 
 /* ****************************************************************** */
+union clause ast = SFENCE_VMA : (regbits, regbits)
+
+function clause decode 0b0001001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ 0b00000 @ 0b1110011 = Some(SFENCE_VMA(rs1, rs2))
+
+function clause execute SFENCE_VMA(rs1, rs2) = {
+  /* FIXME: spec leaves unspecified what happens if this is executed in M-mode.
+     We assume it is the same as S-mode, which is definitely wrong.
+   */
+  if cur_privilege == User then handle_illegal()
+  else match (architecture(mstatus.SXL()), mstatus.TVM()) {
+    (Some(RV64), true)  => handle_illegal(),
+    (Some(RV64), false) => {
+      let addr : option(vaddr39) = if rs1 == 0 then None() else Some(X(rs1)[38 .. 0]);
+      let asid : option(asid64)  = if rs2 == 0 then None() else Some(X(rs2)[15 .. 0]);
+      flushTLB(asid, addr)
+    },
+    (_, _) => internal_error("unimplemented sfence architecture")
+  }
+}
+
+function clause print_insn (SFENCE_VMA(rs1, rs2)) =
+  "sfence.vma " ^ rs1 ^ ", " ^ rs2
+
+/* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
 
 function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, WORD, rd))
