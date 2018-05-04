@@ -60,6 +60,11 @@ open Pretty_print_sail
 
 let defs_of_string = ast_of_def_string Ast_util.inc_ord
 
+let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs (Defs defs))
+
+let has_default_order defs =
+  List.exists (function DEF_default (DT_aux (DT_order _, _)) -> true | _ -> false) defs
+
 let find_registers defs =
   List.fold_left
     (fun acc def ->
@@ -77,18 +82,100 @@ let generate_regstate = function
   | [] -> ["type regstate = unit"]
   | registers ->
      let reg (typ, id) = Printf.sprintf "%s : %s" (string_of_id id) (to_string (doc_typ typ)) in
-     let initreg (_, id) = Printf.sprintf "%s = undefined" (string_of_id id) in
-     let regstate =
-       "struct regstate = { " ^
-       (String.concat ", " (List.map reg registers)) ^
-       " }"
-     in
-     let initstate =
-       "let initial_regstate : regstate = struct { " ^
-       (String.concat ", " (List.map initreg registers)) ^
-       " }"
-     in
-     regstate :: (if !Initial_check.opt_undefined_gen then [initstate] else [])
+     ["struct regstate = { " ^ (String.concat ", " (List.map reg registers)) ^ " }"]
+
+let generate_initial_regstate defs =
+  let registers = find_registers defs in
+  if registers = [] then [] else
+  try
+    (* Recursively choose a default value for every type in the spec.
+       vals, constructed below, maps user-defined types to default values. *)
+    let rec lookup_init_val vals (Typ_aux (typ_aux, _) as typ) =
+      match typ_aux with
+      | Typ_id id ->
+         if string_of_id id = "bool" then "false" else
+         if string_of_id id = "bit" then "bitzero" else
+         if string_of_id id = "int" then "0" else
+         if string_of_id id = "nat" then "0" else
+         if string_of_id id = "real" then "0" else
+         if string_of_id id = "string" then "\"\"" else
+         if string_of_id id = "unit" then "()" else
+         Bindings.find id vals []
+      | Typ_app (id, _) when string_of_id id = "list" -> "[||]"
+      | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp, _)]) when string_of_id id = "atom" ->
+         string_of_nexp nexp
+      | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp, _); _]) when string_of_id id = "range" ->
+         string_of_nexp nexp
+      | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant len, _)), _); _ ;
+                      Typ_arg_aux (Typ_arg_typ etyp, _)])
+        when string_of_id id = "vector" ->
+         (* Output a list of initial values of the vector elements, or a
+            literal binary zero value if this is a bitvector and the
+            environment has a default indexing order (required by the
+            typechecker for binary and hex literals) *)
+         let literal_bitvec = is_bit_typ etyp && has_default_order defs in
+         let init_elem = if literal_bitvec then "0" else lookup_init_val vals etyp in
+         let rec elems len =
+           if (Nat_big_num.less_equal len Nat_big_num.zero) then [] else
+           init_elem :: elems (Nat_big_num.pred len)
+         in
+         if literal_bitvec then "0b" ^ (String.concat "" (elems len)) else
+         "[" ^ (String.concat ", " (elems len)) ^ "]"
+      | Typ_app (id, args) -> Bindings.find id vals args
+      | Typ_tup typs ->
+         "(" ^ (String.concat ", " (List.map (lookup_init_val vals) typs)) ^ ")"
+      | Typ_exist (_, _, typ) -> lookup_init_val vals typ
+      | _ -> raise Not_found
+    in
+    (* Helper functions to instantiate type arguments *)
+    let typ_subst_targ kid (Typ_arg_aux (arg, _)) typ = match arg with
+      | Typ_arg_nexp (Nexp_aux (nexp, _)) -> typ_subst_nexp kid nexp typ
+      | Typ_arg_typ (Typ_aux (typ', _)) -> typ_subst_typ kid typ' typ
+      | Typ_arg_order (Ord_aux (ord, _)) -> typ_subst_order kid ord typ
+    in
+    let typ_subst_quant_item typ (QI_aux (qi, _)) arg = match qi with
+      | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
+         typ_subst_targ kid arg typ
+      | _ -> typ
+    in
+    let typ_subst_typquant tq args typ =
+      List.fold_left2 typ_subst_quant_item typ (quant_items tq) args
+    in
+    let add_typ_init_val vals = function
+      | TD_enum (id, _, id1 :: _, _) ->
+         (* Choose the first value of an enumeration type as default *)
+         Bindings.add id (fun _ -> string_of_id id1) vals
+      | TD_variant (id, _, tq, (Tu_aux (Tu_ty_id (typ1, id1), _)) :: _, _) ->
+         (* Choose the first variant of a union type as default *)
+         let init_val args =
+           let typ1 = typ_subst_typquant tq args typ1 in
+           string_of_id id1 ^ " (" ^ lookup_init_val vals typ1 ^ ")"
+         in
+         Bindings.add id init_val vals
+      | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (tq, typ), _)) ->
+         let init_val args = lookup_init_val vals (typ_subst_typquant tq args typ) in
+         Bindings.add id init_val vals
+      | TD_record (id, _, tq, fields, _) ->
+         let init_val args =
+           let init_field (typ, id) =
+             let typ = typ_subst_typquant tq args typ in
+             string_of_id id ^ " = " ^ lookup_init_val vals typ
+           in
+           "struct { " ^ (String.concat ", " (List.map init_field fields)) ^ " }"
+         in
+         Bindings.add id init_val vals
+      | TD_bitfield (id, typ, _) ->
+         Bindings.add id (fun _ -> lookup_init_val vals typ) vals
+      | _ -> vals
+    in
+    let init_vals = List.fold_left (fun vals def -> match def with
+      | DEF_type (TD_aux (td, _)) -> add_typ_init_val vals td
+      | _ -> vals) Bindings.empty defs
+    in
+    let init_reg (typ, id) = string_of_id id ^ " = " ^ lookup_init_val init_vals typ in
+    ["let initial_regstate : regstate = struct { " ^ (String.concat ", " (List.map init_reg registers)) ^ " }"]
+  with
+  | _ -> [] (* Do not generate an initial register state if anything goes wrong *)
 
 let rec regval_constr_id mwords (Typ_aux (t, l) as typ) = match t with
   | Typ_id id -> id
@@ -135,9 +222,8 @@ let generate_regval_typ typs =
   (String.concat ", " (builtins :: List.map constr (Bindings.bindings typs))) ^
   " }"]
 
-let add_regval_conv id typ defs =
+let add_regval_conv id typ (Defs defs) =
   let id = string_of_id id in
-  let is_defined name = IdSet.mem (mk_id name) (ids_of_defs defs) in
   let typ_str = to_string (doc_typ typ) in
   (* Create a function that converts from regval to the target type. *)
   let from_name = id ^ "_of_regval" in
@@ -146,14 +232,14 @@ let add_regval_conv id typ defs =
     Printf.sprintf "function %s Regval_%s(v) = Some(v)" from_name id;
     Printf.sprintf "and %s _ = None()" from_name
     ] in
-  let from_defs = if is_defined from_name then [] else [from_val; from_function] in
+  let from_defs = if is_defined defs from_name then [] else [from_val; from_function] in
   (* Create a function that converts from target type to regval. *)
   let to_name = "regval_of_" ^ id in
   let to_val = Printf.sprintf "val %s : %s -> register_value" to_name typ_str in
   let to_function = Printf.sprintf "function %s v = Regval_%s(v)" to_name id in
-  let to_defs = if is_defined to_name then [] else [to_val; to_function] in
+  let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
   let cdefs = concat_ast (List.map defs_of_string (from_defs @ to_defs)) in
-  append_ast defs cdefs
+  append_ast (Defs defs) cdefs
 
 let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
   | Typ_app _ when is_vector_typ typ && not (mwords && is_bitvector_typ typ) ->
@@ -393,17 +479,16 @@ let generate_regstate_defs mwords defs =
   let gen_undef = !Initial_check.opt_undefined_gen in
   Initial_check.opt_undefined_gen := false;
   let registers = find_registers defs in
-  let def_ids = ids_of_defs (Defs defs) in
-  let has_def name = IdSet.mem (mk_id name) def_ids in
   let regtyps = register_base_types mwords (List.map fst registers) in
   let option_typ =
-    if has_def "option" then [] else
+    if is_defined defs "option" then [] else
       ["union option ('a : Type) = {None : unit, Some : 'a}"]
   in
-  let regval_typ = if has_def "register_value" then [] else generate_regval_typ regtyps in
-  let regstate_typ = if has_def "regstate" then [] else generate_regstate registers in
+  let regval_typ = if is_defined defs "register_value" then [] else generate_regval_typ regtyps in
+  let regstate_typ = if is_defined defs "regstate" then [] else generate_regstate registers in
+  let initregstate = if is_defined defs "initial_regstate" then [] else generate_initial_regstate defs in
   let defs =
-    option_typ @ regval_typ @ regstate_typ
+    option_typ @ regval_typ @ regstate_typ @ initregstate
     |> List.map defs_of_string
     |> concat_ast
     |> Bindings.fold add_regval_conv regtyps
