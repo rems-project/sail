@@ -203,6 +203,15 @@ val compute_exp_alg : 'b -> ('b -> 'b -> 'b) ->
   ('b * 'a letbind_aux),('b * 'a letbind),
   ('b * 'a pat),('b * 'a pat_aux),('b * 'a fpat),('b * 'a fpat_aux)) exp_alg
 
+val pure_pat_alg : 'b -> ('b -> 'b -> 'b) -> ('a,'b,'b,'b,'b) pat_alg
+
+val pure_exp_alg : 'b -> ('b -> 'b -> 'b) ->
+  ('a,'b,'b,'b,'b,'b,
+  'b,'b,'b,
+  'b,'b,'b,'b,
+  'b,'b,
+  'b,'b,'b,'b) exp_alg
+
 val simple_annot : Parse_ast.l -> typ -> Parse_ast.l * tannot
 
 val add_p_typ : typ -> tannot pat -> tannot pat
