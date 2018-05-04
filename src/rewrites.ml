@@ -241,8 +241,19 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
     | (l, None) -> (l, None)
   in
 
-  rewrite_defs_base {
-    rewriters_base with rewrite_exp = (fun _ -> map_exp_annot rewrite_annot)
+  let rewrite_def rewriters = function
+    | DEF_spec (VS_aux (VS_val_spec (typschm, id, exts, b), (l, Some (env, typ, eff)))) ->
+       let typschm = match typschm with
+         | TypSchm_aux (TypSchm_ts (tq, typ), l) ->
+            TypSchm_aux (TypSchm_ts (tq, rewrite_typ env typ), l)
+       in
+       let a = rewrite_annot (l, Some (env, typ, eff)) in
+       DEF_spec (VS_aux (VS_val_spec (typschm, id, exts, b), a))
+    | d -> Rewriter.rewrite_def rewriters d
+  in
+
+  rewrite_defs_base { rewriters_base with
+    rewrite_exp = (fun _ -> map_exp_annot rewrite_annot); rewrite_def = rewrite_def
     },
   rewrite_typ
 
