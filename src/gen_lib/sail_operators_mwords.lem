@@ -76,6 +76,9 @@ let zero_extend w _ = Machine_word.zeroExtend w
 val sign_extend : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 let sign_extend w _ = Machine_word.signExtend w
 
+val zeros : forall 'a. Size 'a => integer -> mword 'a
+let zeros _ = Machine_word.wordFromNatural 0
+
 val vector_truncate : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 let vector_truncate w _ = Machine_word.zeroExtend w
 
@@ -309,6 +312,20 @@ let duplicate        b n = maybe_failwith (duplicate_maybe b n)
 
 val reverse_endianness : forall 'a. Size 'a => mword 'a -> mword 'a
 let reverse_endianness v = wordFromBitlist (reverse_endianness_list (bitlistFromWord v))
+
+val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> mword 'a
+let get_slice_int = get_slice_int_bv
+
+val set_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> mword 'a -> integer
+let set_slice_int = set_slice_int_bv
+
+val slice : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
+let slice v lo len =
+  subrange_vec_dec v (lo + len - 1) lo
+
+val set_slice : forall 'a 'b. Size 'a, Size 'b => integer -> integer -> mword 'a -> integer -> mword 'b -> mword 'a
+let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
+  update_subrange_vec_dec out (n + slice_len - 1) n v
 
 val eq_vec    : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val neq_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool

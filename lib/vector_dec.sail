@@ -68,11 +68,13 @@ val vector_update = {
 
 val add_bits = {
   ocaml: "add_vec",
+  lem: "add_vec",
   c: "add_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val add_bits_int = {
   ocaml: "add_vec_int",
+  lem: "add_vec_int",
   c: "add_bits_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
