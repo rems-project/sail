@@ -619,7 +619,7 @@ union ctl_result = {
 
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
-  cur_privilege = del_priv;
+  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv);
   match (del_priv) {
     Machine => {
        mcause->IsInterrupt() = intr;
@@ -627,9 +627,11 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        mstatus->MPIE() = mstatus.MIE();
        mstatus->MIE()  = false;
-       mstatus->MPP()  = privLevel_to_bits(del_priv);
+       mstatus->MPP()  = privLevel_to_bits(cur_privilege);
        mtval           = tval(info);
        mepc            = pc;
+
+       cur_privilege   = del_priv;
 
        match tvec_addr(mtvec, mcause) {
          Some(epc) => epc,
@@ -642,13 +644,15 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        mstatus->SPIE() = mstatus.SIE();
        mstatus->SIE()  = false;
-       mstatus->SPP()  = match (del_priv) {
+       mstatus->SPP()  = match (cur_privilege) {
                            User => false,
                            Supervisor => true,
                            Machine => internal_error("invalid privilege for s-mode trap")
                          };
        stval           = tval(info);
        sepc            = pc;
+
+       cur_privilege   = del_priv;
 
        match tvec_addr(stvec, scause) {
          Some(epc) => epc,
@@ -657,29 +661,34 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
     },
     User => internal_error("the N extension is currently unsupported")
-  }
+  };
 }
 
 function handle_exception(cur_priv : Privilege, ctl : ctl_result,
                           pc: xlenbits) -> xlenbits = {
-  print("handling exception ...");
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       let del_priv = exception_delegatee(e.trap, cur_priv);
+      print("trapping from " ^ cur_priv ^ " to " ^ del_priv
+            ^ " to handle " ^ e.trap);
       handle_trap(del_priv, false, e.trap, pc, e.excinfo)
     },
     (_, CTL_MRET())  => {
+      let prev_priv = cur_privilege;
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = true;
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
+      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
       mepc
     },
     (_, CTL_SRET())  => {
+      let prev_priv = cur_privilege;
       mstatus->SIE()  = mstatus.SPIE();
       mstatus->SPIE() = true;
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
       mstatus->SPP()  = false;
+      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
       sepc
     }
   }

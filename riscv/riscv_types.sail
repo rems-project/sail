@@ -194,6 +194,28 @@ function exceptionType_to_bits(e) = {
   }
 }
 
+val cast exceptionType_to_str : ExceptionType -> string
+function exceptionType_to_str(e) = {
+  match (e) {
+    E_Fetch_Addr_Align => "fisaligned-fetch",
+    E_Fetch_Access_Fault => "fetch-access-fault",
+    E_Illegal_Instr => "illegal-instruction",
+    E_Breakpoint => "breakpoint",
+    E_Load_Addr_Align => "misaligned-load",
+    E_Load_Access_Fault => "load-access-fault",
+    E_SAMO_Addr_Align => "misaliged-store/amo",
+    E_SAMO_Access_Fault => "store/amo-access-fault",
+    E_U_EnvCall => "u-call",
+    E_S_EnvCall => "s-call",
+    E_Reserved_10 => "reserved-0",
+    E_M_EnvCall => "m-call",
+    E_Fetch_Page_Fault => "fetch-page-fault",
+    E_Load_Page_Fault => "load-page-fault",
+    E_Reserved_14 => "reserved-1",
+    E_SAMO_Page_Fault => "store/amo-page-fault"
+  }
+}
+
 enum InterruptType = {
   I_U_Software,
   I_S_Software,
