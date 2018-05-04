@@ -190,16 +190,18 @@ let lookup_equal_kids env =
   List.fold_left add_nc KBindings.empty (Env.get_constraints env)
 
 let lookup_constant_kid env kid =
-  try
-    let kids = KBindings.find kid (lookup_equal_kids env) in
-    let check_nc const nc = match const, nc with
-      | None, NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant i, _)), _)
-        when KidSet.mem kid kids ->
-         Some i
-      | _, _ -> const
-    in
-    List.fold_left check_nc None (Env.get_constraints env)
-  with Not_found -> None
+  let kids =
+    match KBindings.find kid (lookup_equal_kids env) with
+    | kids -> kids
+    | exception Not_found -> KidSet.singleton kid
+  in
+  let check_nc const nc = match const, nc with
+    | None, NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant i, _)), _)
+      when KidSet.mem kid kids ->
+       Some i
+    | _, _ -> const
+  in
+  List.fold_left check_nc None (Env.get_constraints env)
 
 let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
   | Nexp_id id -> rewrite_nexp_ids env (Env.get_num_def id env)
