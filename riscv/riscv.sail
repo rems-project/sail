@@ -254,7 +254,8 @@ function clause print_insn (LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
       (HALF,   true)  => "lhu   ",
       (WORD,   false) => "lw    ",
       (WORD,   true)  => "lwu   ",
-      (_,      _)     => "ld.bad "
+      (DOUBLE, false) => "ld    ",
+      (DOUBLE, true)  => "ldu   "
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
