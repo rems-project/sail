@@ -540,8 +540,12 @@ union clause ast = MRET : unit
 
 function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
 
-function clause execute MRET() =
-  nextPC = handle_exception(cur_privilege, CTL_MRET(), PC)
+function clause execute MRET() = {
+  if cur_privilege == Machine then
+    nextPC = handle_exception(cur_privilege, CTL_MRET(), PC)
+  else
+    handle_illegal()
+}
 
 function clause print_insn (MRET()) =
   "mret"
@@ -549,10 +553,16 @@ function clause print_insn (MRET()) =
 /* ****************************************************************** */
 union clause ast = SRET : unit
 
-function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
+function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(SRET())
 
 function clause execute SRET() =
-  nextPC = handle_exception(cur_privilege, CTL_SRET(), PC)
+  match cur_privilege {
+    User       => handle_illegal(),
+    Supervisor => if mstatus.TSR() == true
+                  then handle_illegal()
+                  else nextPC = handle_exception(cur_privilege, CTL_SRET(), PC),
+    Machine    => nextPC = handle_exception(cur_privilege, CTL_SRET(), PC)
+  }
 
 function clause print_insn (SRET()) =
   "sret"
