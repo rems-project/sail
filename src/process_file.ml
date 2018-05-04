@@ -51,9 +51,6 @@
 open PPrint
 open Pretty_print_common
 
-let opt_lem_sequential = ref false
-let opt_lem_mwords = ref false
-
 type out_type =
   | Lem_ast_out
   | Lem_out of string list
@@ -246,10 +243,10 @@ let output_lem filename libs defs =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let types_module = (filename ^ "_types") in
-  let monad_modules = ["Prompt_monad"; "Prompt"; "State"] in
-    (* if !Pretty_print_lem.opt_sequential
+  let monad_modules = (*["Prompt_monad"; "Prompt"; "State"] in*)
+    if !Pretty_print_lem.opt_sequential
     then ["State_monad"; "State"]
-    else ["Prompt_monad"; "Prompt"] in *)
+    else ["Prompt_monad"; "Prompt"] in
   let operators_module =
     if !Pretty_print_lem.opt_mwords
     then "Sail_operators_mwords"

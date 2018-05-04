@@ -1,32 +1,7 @@
 open import Pervasives_extra
-(*open import Sail_impl_base*)
 open import Sail_values
-open import Prompt_monad
-open import Prompt
 open import State_monad
 open import {isabelle} `State_monad_lemmas`
-
-(* State monad wrapper around prompt monad *)
-
-val liftState : forall 'regval 'regs 'a 'e. register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e
-let rec liftState ra s = match s with
-  | (Done a)             -> returnS a
-  | (Read_mem rk a sz k) -> bindS (read_mem_bytesS rk a sz) (fun v -> liftState ra (k v))
-  | (Read_tag t k)       -> bindS (read_tagS t)             (fun v -> liftState ra (k v))
-  | (Write_memv a k)     -> bindS (write_mem_bytesS a)      (fun v -> liftState ra (k v))
-  | (Write_tag a t k)    -> bindS (write_tagS a t)          (fun v -> liftState ra (k v))
-  | (Read_reg r k)       -> bindS (read_regvalS ra r)       (fun v -> liftState ra (k v))
-  | (Excl_res k)         -> bindS (excl_resultS ())         (fun v -> liftState ra (k v))
-  | (Undefined k)        -> bindS (undefined_boolS ())      (fun v -> liftState ra (k v))
-  | (Write_ea wk a sz k) -> seqS (write_mem_eaS wk a sz)    (liftState ra k)
-  | (Write_reg r v k)    -> seqS (write_regvalS ra r v)     (liftState ra k)
-  | (Footprint k)        -> liftState ra k
-  | (Barrier _ k)        -> liftState ra k
-  | (Print _ k)          -> liftState ra k (* TODO *)
-  | (Fail descr)         -> failS descr
-  | (Exception e)        -> throwS e
-end
-
 
 val iterS_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
 let rec iterS_aux i f xs = match xs with
@@ -52,6 +27,40 @@ let rec foreachS xs vars body = match xs with
 end
 
 declare {isabelle} termination_argument foreachS = automatic
+
+val bool_of_bitU_fail : forall 'rv 'e. bitU -> monadS 'rv bool 'e
+let bool_of_bitU_fail = function
+  | B0 -> returnS false
+  | B1 -> returnS true
+  | BU -> failS "bool_of_bitU"
+end
+
+val bool_of_bitU_oracleS : forall 'rv 'e. bitU -> monadS 'rv bool 'e
+let bool_of_bitU_oracleS = function
+  | B0 -> returnS false
+  | B1 -> returnS true
+  | BU -> undefined_boolS ()
+end
+
+val bools_of_bits_oracleS : forall 'rv 'e. list bitU -> monadS 'rv (list bool) 'e
+let bools_of_bits_oracleS bits =
+  foreachS bits []
+    (fun b bools ->
+      bool_of_bitU_oracleS b >>$= (fun b ->
+      returnS (bools ++ [b])))
+
+val of_bits_oracleS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e
+let of_bits_oracleS bits =
+  bools_of_bits_oracleS bits >>$= (fun bs ->
+  returnS (of_bools bs))
+
+val of_bits_failS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e
+let of_bits_failS bits = maybe_failS "of_bits" (of_bits bits)
+
+val mword_oracleS : forall 'rv 'a 'e. Size 'a => unit -> monadS 'rv (mword 'a) 'e
+let mword_oracleS () =
+  bools_of_bits_oracleS (repeat [BU] (integerFromNat size)) >>$= (fun bs ->
+  returnS (wordFromBitlist bs))
 
 
 val whileS : forall 'rv 'vars 'e. 'vars -> ('vars -> monadS 'rv bool 'e) ->

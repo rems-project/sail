@@ -94,12 +94,12 @@ let assert_expS exp msg = if exp then returnS () else failS msg
 (* For early return, we abuse exceptions by throwing and catching
    the return value. The exception type is "either 'r 'e", where "Right e"
    represents a proper exception and "Left r" an early return of value "r". *)
-type monadSR 'regs 'a 'r 'e = monadS 'regs 'a (either 'r 'e)
+type monadRS 'regs 'a 'r 'e = monadS 'regs 'a (either 'r 'e)
 
-val early_returnS : forall 'regs 'a 'r 'e. 'r -> monadSR 'regs 'a 'r 'e
+val early_returnS : forall 'regs 'a 'r 'e. 'r -> monadRS 'regs 'a 'r 'e
 let early_returnS r = throwS (Left r)
 
-val catch_early_returnS : forall 'regs 'a 'e. monadSR 'regs 'a 'a 'e -> monadS 'regs 'a 'e
+val catch_early_returnS : forall 'regs 'a 'e. monadRS 'regs 'a 'a 'e -> monadS 'regs 'a 'e
 let catch_early_returnS m =
   try_catchS m
     (function
@@ -108,12 +108,12 @@ let catch_early_returnS m =
      end)
 
 (* Lift to monad with early return by wrapping exceptions *)
-val liftSR : forall 'a 'r 'regs 'e. monadS 'regs 'a 'e -> monadSR 'regs 'a 'r 'e
-let liftSR m = try_catchS m (fun e -> throwS (Right e))
+val liftRS : forall 'a 'r 'regs 'e. monadS 'regs 'a 'e -> monadRS 'regs 'a 'r 'e
+let liftRS m = try_catchS m (fun e -> throwS (Right e))
 
 (* Catch exceptions in the presence of early returns *)
-val try_catchSR : forall 'regs 'a 'r 'e1 'e2. monadSR 'regs 'a 'r 'e1 -> ('e1 -> monadSR 'regs 'a 'r 'e2) ->  monadSR 'regs 'a 'r 'e2
-let try_catchSR m h =
+val try_catchRS : forall 'regs 'a 'r 'e1 'e2. monadRS 'regs 'a 'r 'e1 -> ('e1 -> monadRS 'regs 'a 'r 'e2) ->  monadRS 'regs 'a 'r 'e2
+let try_catchRS m h =
   try_catchS m
     (function
       | Left r -> throwS (Left r)

@@ -1,0 +1,27 @@
+open import Pervasives_extra
+open import Sail_values
+open import Prompt_monad
+open import Prompt
+open import State_monad
+open import {isabelle} `State_monad_lemmas`
+
+(* State monad wrapper around prompt monad *)
+
+val liftState : forall 'regval 'regs 'a 'e. register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e
+let rec liftState ra s = match s with
+  | (Done a)             -> returnS a
+  | (Read_mem rk a sz k) -> bindS (read_mem_bytesS rk a sz) (fun v -> liftState ra (k v))
+  | (Read_tag t k)       -> bindS (read_tagS t)             (fun v -> liftState ra (k v))
+  | (Write_memv a k)     -> bindS (write_mem_bytesS a)      (fun v -> liftState ra (k v))
+  | (Write_tag a t k)    -> bindS (write_tagS a t)          (fun v -> liftState ra (k v))
+  | (Read_reg r k)       -> bindS (read_regvalS ra r)       (fun v -> liftState ra (k v))
+  | (Excl_res k)         -> bindS (excl_resultS ())         (fun v -> liftState ra (k v))
+  | (Undefined k)        -> bindS (undefined_boolS ())      (fun v -> liftState ra (k v))
+  | (Write_ea wk a sz k) -> seqS (write_mem_eaS wk a sz)    (liftState ra k)
+  | (Write_reg r v k)    -> seqS (write_regvalS ra r v)     (liftState ra k)
+  | (Footprint k)        -> liftState ra k
+  | (Barrier _ k)        -> liftState ra k
+  | (Print _ k)          -> liftState ra k (* TODO *)
+  | (Fail descr)         -> failS descr
+  | (Exception e)        -> throwS e
+end

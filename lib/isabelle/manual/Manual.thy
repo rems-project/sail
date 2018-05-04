@@ -288,7 +288,7 @@ exception handler as arguments.
 The exception mechanism is also used to implement early returns by throwing and catching return
 values:  A function body with one or more early returns of type @{typ 'a} (and exception type
 @{typ 'e}) is lifted to a monadic expression with exception type @{typ "('a + 'e)"} using
-@{term liftSR}, such that an early return of the value @{term a} throws @{term "Inl a"}, and a
+@{term liftRS}, such that an early return of the value @{term a} throws @{term "Inl a"}, and a
 regular exception @{term e} is thrown as @{term "Inr e"}.  The function body is then wrapped in
 @{term catch_early_returnS} to lower it back to the default monad and exception type.  These
 liftings and lowerings are automatically inserted by Sail for functions with early returns.\<^footnote>\<open>To be
