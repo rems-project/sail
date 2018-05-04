@@ -2359,10 +2359,20 @@ let rewrite_size_parameters env (Defs defs) =
       | Some exp -> Some (fold_exp { id_exp_alg with e_app = rewrite_e_app } exp) in
     FCL_aux (FCL_Funcl (id,construct_pexp (pat,guard,body,(pl,None))),(l,None))
   in
+  let rewrite_letbind lb =
+    let rewrite_e_app (id,args) =
+      match Bindings.find id fn_sizes with
+      | to_change,_ ->
+         let args' = mapat (replace_with_the_value []) to_change args in
+         E_app (id,args')
+      | exception Not_found -> E_app (id,args)
+    in fold_letbind { id_exp_alg with e_app = rewrite_e_app } lb
+  in
   let rewrite_def = function
     | DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,funcls),(l,_))) ->
        (* TODO rewrite tannopt? *)
        DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,List.map rewrite_funcl funcls),(l,None)))
+    | DEF_val lb -> DEF_val (rewrite_letbind lb)
     | DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot))) as spec ->
        begin
          match Bindings.find id fn_sizes with
