@@ -57,7 +57,7 @@ cheri_types.lem: cheri.lem
 cheri_sequential.lem: $(CHERI_SAILS)
 	$(SAIL) -lem -o cheri_sequential -auto_mono -mono_rewrites -lem_mwords -lem_sequential -lem_lib Mips_extras_sequential -undefined_gen -memo_z3 $^
 cheri_sequential_types.lem: cheri_sequential.lem
-Cheri_sequential.thy: $(MIPS_SAIL_DIR)/mips_extras_sequential.lem
+Cheri_sequential.thy cheri_sequentialScript.sml: $(MIPS_SAIL_DIR)/mips_extras_sequential.lem
 
 cheri128_no_tlb.lem: $(CHERI128_NO_TLB_SAILS)
 	$(SAIL) -lem -o cheri128_no_tlb -lem_lib Mips_extras -undefined_gen -memo_z3 $^
@@ -70,6 +70,9 @@ cheri128_types.lem: cheri128.lem
 C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' C$*_types.thy
+
+%Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
+	lem -hol -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 clean:
 	rm -rf cheri cheri128 _sbuild inst_*.sail cheri.c

@@ -1,0 +1,32 @@
+open import Pervasives_extra
+open import Sail_instr_kinds
+open import Sail_values
+open import State_monad
+
+(* Fake interface of the prompt monad by redirecting to the state monad, since
+   the former is not currently supported by HOL4 *)
+
+type monad 'rv 'a 'e = monadS 'rv 'a 'e
+type monadR 'rv 'a 'e 'r = monadRS 'rv 'a 'e 'r
+
+let inline return = returnS
+let inline bind = bindS
+let inline (>>=) = (>>$=)
+let inline (>>) = (>>$)
+
+let inline throw = throwS
+let inline try_catch = try_catchS
+
+let inline catch_early_return = catch_early_returnS
+let inline early_return = early_returnS
+
+let inline maybe_fail = maybe_failS
+
+let inline read_reg = read_regS
+let inline reg_deref = read_regS
+let inline read_mem = read_memS
+let inline read_tag = read_tagS
+let inline write_tag = write_tagS
+let inline write_mem_ea wk addr sz = write_mem_eaS wk addr (nat_of_int sz)
+let inline write_mem_val = write_mem_valS
+let barrier _ = return ()
