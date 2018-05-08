@@ -3629,6 +3629,9 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let mpexp = if forwards then mpexp1 else mpexp2 in
     realise_mpexps true mpexp (mk_mpexp (MPat_pat (mk_mpat (MP_lit (mk_lit L_true)))))
   in
+  let arg_id = mk_id "arg#" in
+  let arg_exp = (mk_exp (E_id arg_id)) in
+  let arg_pat = mk_pat (P_id arg_id) in
   let placeholder_id = mk_id "s#" in
   let append_placeholder = function
     | MPat_aux (MPat_pat (MP_aux (MP_string_append mpats, p_annot)), aux_annot) ->
@@ -3643,7 +3646,14 @@ let rewrite_defs_realise_mappings (Defs defs) =
   let realise_prefix_mapcl forwards id (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, ()))) =
     let mpexp = if forwards then mpexp1 else mpexp2 in
     let other = if forwards then mpexp2 else mpexp1 in
-    let strlen = (mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id placeholder_id)]))) in
+    let strlen = (
+        mk_mpat (MP_app ( mk_id "sub_nat",
+                     [
+                       mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id arg_id        )]));
+                       mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id placeholder_id)]));
+                     ]
+          ))
+      ) in
     match other with
     | MPat_aux (MPat_pat mpat2, _)
       | MPat_aux (MPat_when (mpat2, _), _)->
@@ -3682,8 +3692,6 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let backwards_matches_spec, env = Type_check.check_val_spec env backwards_matches_spec in
 
     let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
-    let arg_exp = (mk_exp (E_id (mk_id "arg#"))) in
-    let arg_pat = mk_pat (P_id (mk_id "arg#")) in
     let forwards_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls))) in
     let backwards_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl false backwards_id) mapcls))) in
 

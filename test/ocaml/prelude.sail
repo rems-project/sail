@@ -199,6 +199,8 @@ val sub_range = "sub_int" : forall 'n 'm 'o 'p.
 
 val sub_int = "sub_int" : (int, int) -> int
 
+val sub_nat = "sub_int" : (nat, nat) -> nat
+
 val sub_vec : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val sub_vec_int = "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
