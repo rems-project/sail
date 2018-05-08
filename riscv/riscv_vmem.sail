@@ -255,7 +255,7 @@ union TR39_Result = {
   TR39_Failure : PTW_Error
 }
 
-let enable_dirty_update = true
+let enable_dirty_update = false
 
 val translate39 : (vaddr39, AccessType, Privilege, bool, bool, nat) -> TR39_Result effect {rreg, wreg, wmv, escape, rmem}
 function translate39(vAddr, ac, priv, mxr, sum, level) = {
