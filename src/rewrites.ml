@@ -2924,20 +2924,21 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          |> mk_var_exps_pats pl env
        in
        let exp4 = rewrite_var_updates (add_vars overwrite exp4 vars) in
-       let ord_exp, kids, constr, lower, upper =
-         match destruct_range env (typ_of exp1), destruct_range env (typ_of exp2) with
+       let ord_exp, kids, constr, lower, upper, lower_exp, upper_exp =
+         match destruct_numeric env (typ_of exp1), destruct_numeric env (typ_of exp2) with
            | None, _ | _, None ->
               raise (Reporting_basic.err_unreachable el "Could not determine loop bounds")
-           | Some (kids1, constr1, l1, u1), Some (kids2, constr2, l2, u2) ->
+           | Some (kids1, constr1, n1), Some (kids2, constr2, n2) ->
               let kids = kids1 @ kids2 in
               let constr = nc_and constr1 constr2 in
-              let ord_exp, lower, upper =
+              let ord_exp, lower, upper, lower_exp, upper_exp =
                 if is_order_inc order
-                then (annot_exp (E_lit (mk_lit L_true)) el env bool_typ, l1, u2)
-                else (annot_exp (E_lit (mk_lit L_false)) el env bool_typ, l2, u1)
+                then (annot_exp (E_lit (mk_lit L_true)) el env bool_typ, n1, n2, exp1, exp2)
+                else (annot_exp (E_lit (mk_lit L_false)) el env bool_typ, n2, n1, exp2, exp1)
               in
-              ord_exp, kids, constr, lower, upper
+              ord_exp, kids, constr, lower, upper, lower_exp, upper_exp
        in
+       (* Bind the loop variable in the body, annotated with constraints *)
        let lvar_kid = mk_kid ("loop_" ^ string_of_id id) in
        let lvar_nc = nc_and constr (nc_and (nc_lteq lower (nvar lvar_kid)) (nc_lteq (nvar lvar_kid) upper)) in
        let lvar_typ = mk_typ (Typ_exist (lvar_kid :: kids, lvar_nc, atom_typ (nvar lvar_kid))) in
@@ -2946,7 +2947,33 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          TP_aux (TP_var lvar_kid, gen_loc el))) el env lvar_typ)) in
        let lb = fix_eff_lb (annot_letbind (lvar_pat, exp1) el env lvar_typ) in
        let body = fix_eff_exp (annot_exp (E_let (lb, exp4)) el env (typ_of exp4)) in
-       let v = fix_eff_exp (annot_exp (E_app (mk_id "foreach", [exp1; exp2; exp3; ord_exp; tuple_exp vars; body])) el env (typ_of body)) in
+       (* If lower > upper, the loop body never gets executed, and the type
+          checker might not be able to prove that the initial value exp1
+          satisfies the constraints on the loop variable.
+
+          Make this explicit by guarding the loop body with lower <= upper.
+          (for type-checking; the guard is later removed again by the Lem
+          pretty-printer).  This could be implemented with an assertion, but
+          that would force the loop to be effectful, so we use an if-expression
+          instead.  This code assumes that the loop bounds have (possibly
+          existential) atom types, and the loop body has type unit. *)
+       let lower_kid = mk_kid ("loop_" ^ string_of_id id ^ "_lower") in
+       let lower_pat = P_var (annot_pat P_wild el env (typ_of lower_exp), mk_typ_pat (TP_app (mk_id "atom", [mk_typ_pat (TP_var lower_kid)]))) in
+       let lb_lower = annot_letbind (lower_pat, lower_exp) el env (typ_of lower_exp) in
+       let upper_kid = mk_kid ("loop_" ^ string_of_id id ^ "_upper") in
+       let upper_pat = P_var (annot_pat P_wild el env (typ_of upper_exp), mk_typ_pat (TP_app (mk_id "atom", [mk_typ_pat (TP_var upper_kid)]))) in
+       let lb_upper = annot_letbind (upper_pat, upper_exp) el env (typ_of upper_exp) in
+       let guard = annot_exp (E_constraint (nc_lteq (nvar lower_kid) (nvar upper_kid))) el env bool_typ in
+       let unit_exp = annot_exp (E_lit (mk_lit L_unit)) el env unit_typ in
+       let skip_val = tuple_exp (if overwrite then vars else unit_exp :: vars) in
+       let guarded_body =
+         fix_eff_exp (annot_exp (E_let (lb_lower,
+           fix_eff_exp (annot_exp (E_let (lb_upper,
+             fix_eff_exp (annot_exp (E_if (guard, body, skip_val))
+               el env (typ_of exp4))))
+             el env (typ_of exp4))))
+           el env (typ_of exp4)) in
+       let v = fix_eff_exp (annot_exp (E_app (mk_id "foreach", [exp1; exp2; exp3; ord_exp; tuple_exp vars; guarded_body])) el env (typ_of body)) in
        Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
      | E_loop(loop,cond,body) ->
         let vars, varpats =

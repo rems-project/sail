@@ -119,3 +119,7 @@ val read_ram : forall 'rv 'e.
   integer -> integer -> list bitU -> list bitU -> monad 'rv (list bitU) 'e
 let read_ram addrsize size hexRAM address =
   read_mem Read_plain address size
+
+val elf_entry : unit -> integer
+let elf_entry () = 0
+declare ocaml target_rep function elf_entry = `Elf_loader.elf_entry`
