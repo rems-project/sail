@@ -50,7 +50,7 @@ cheri_no_tlb.lem: $(CHERI_NO_TLB_SAILS)
 	$(SAIL) -lem -o cheri_no_tlb -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 cheri_no_tlb_types.lem: cheri_no_tlb.lem
 
-cheri.lem: $(CHERI_SAILS)
+cheri.lem: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -lem -o cheri -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 cheri_types.lem: cheri.lem
 

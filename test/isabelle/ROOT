@@ -1,0 +1,9 @@
+session "Sail-CHERI-Code" = "Sail-CHERI" +
+  options [document = false, quick_and_dirty]
+  theories
+    Cheri_code
+
+session "Sail-AArch64-Code" = "Sail-AArch64" +
+  options [document = false, quick_and_dirty]
+  theories
+    Aarch64_code

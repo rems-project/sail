@@ -4,6 +4,7 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR
 SAILDIR="$DIR/../.."
+AARCH64_TEST_DIR="$DIR/../arm"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -47,58 +48,43 @@ SAILLIBDIR="$DIR/../../lib/"
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
-cd $SAILDIR/aarch64
+printf "Compiling AArch64 specification (Sail->Isabelle->OCaml)...\n"
 
-printf "Compiling specification...\n"
-
-if $SAILDIR/sail -no_lexp_bounds_check -o aarch64_test -ocaml prelude.sail no_vector/spec.sail decode_start.sail no_vector/decode.sail decode_end.sail main.sail 1> /dev/null 2> /dev/null;
+if make "run_aarch64.native" 1> /dev/null 2> /dev/null;
 then
     green "compiled no_vector specification" "ok";
-    mv aarch64_test $DIR/;
-    cd $DIR;
 
-    for i in `ls *.elf`;
+    for i in `ls ${AARCH64_TEST_DIR}/*.elf`;
     do
-	$DIR/aarch64_test $i 2> /dev/null 1> ${i%.elf}.result
+	$DIR/run_aarch64.native $i 2> /dev/null 1> ${i%.elf}.result
 	if diff ${i%.elf}.result ${i%.elf}.expect;
 	then
-	    green "ran $i" "ok"
+	    green "ran $(basename $i)" "ok"
 	else
-	    red "failed $i" "fail"
+	    red "failed $(basename $i)" "fail"
 	fi;
-	rm -f *.result
+	rm -f ${i%.elf}.result
     done;
-
-    rm -f aarch64_test
 else
     red "compiling no_vector specification" "fail";
 
-    for i in `ls *.elf`;
+    for i in `ls ${AARCH64_TEST_DIR}/*.elf`;
     do
-	red "failed $i" "fail"
+	red "failed $(basename $i)" "fail"
     done
 fi
 
-printf "\nLoading specification into interpreter...\n"
+printf "Compiling CHERI specification (Sail->Isabelle->OCaml)...\n"
 
-cd $SAILDIR/aarch64
-
-if $SAILDIR/sail -no_lexp_bounds_check -is $DIR/test.isail prelude.sail no_vector/spec.sail decode_start.sail no_vector/decode.sail decode_end.sail main.sail 1> /dev/null 2> /dev/null;
+if make "run_cheri.native" 1> /dev/null 2> /dev/null;
 then
-    green "loaded no_vector specification" "ok";
-
-    if diff $DIR/test_O2.expect $DIR/iresult;
-    then
-	green "interpreter success" "ok"
-    else
-	red "interpreter failed" "fail"
-    fi;
-
-    rm -f $DIR/iresult
+    green "compiled CHERI-256 specification" "ok";
 else
-    red "loading no_vector specification" "fail"
+    red "compiling CHERI-256 specification" "fail";
 fi
 
-finish_suite "ARM generated spec tests"
+make clean 1> /dev/null 2> /dev/null
+
+finish_suite "Isabelle code generation tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml

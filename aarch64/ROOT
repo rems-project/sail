@@ -1,0 +1,4 @@
+session "Sail-AArch64" = "Sail" +
+  options [document = false]
+  theories
+    Aarch64_lemmas

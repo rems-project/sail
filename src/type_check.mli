@@ -271,6 +271,8 @@ val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
 
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
+val destruct_numeric : Env.t -> typ -> (kid list * n_constraint * nexp) option
+
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
 type uvar =
