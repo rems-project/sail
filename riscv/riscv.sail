@@ -852,6 +852,9 @@ function readCSR csr : csreg -> xlenbits =
     0xC01 => mtime,
     0xC02 => minstret,
 
+    /* trigger/debug */
+    0x7a0 => ~(tselect),    /* this indicates we don't have any trigger support */
+
     _     => { print_bits("unhandled read to CSR ", csr);
                0x0000_0000_0000_0000 }
   }
@@ -883,6 +886,9 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     0x143 => { stval = value; Some(stval) },
     0x144 => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) },
     0x180 => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) },
+
+    /* trigger/debug */
+    0x7a0 => { tselect = value; Some(tselect) },
 
     _     => None()
   } in
