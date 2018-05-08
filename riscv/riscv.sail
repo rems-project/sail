@@ -823,6 +823,7 @@ function readCSR csr : csreg -> xlenbits =
     0xF13 => mimpid,
     0xF14 => mhartid,
     0x300 => mstatus.bits(),
+    0x301 => misa.bits(),
     0x302 => medeleg.bits(),
     0x303 => mideleg.bits(),
     0x304 => mie.bits(),
