@@ -619,7 +619,7 @@ union ctl_result = {
 
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
-  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv);
+  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
   match (del_priv) {
     Machine => {
        mcause->IsInterrupt() = intr;
