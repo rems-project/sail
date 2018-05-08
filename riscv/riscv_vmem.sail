@@ -194,7 +194,8 @@ val make_TLB39_Entry : (asid64, bool, vaddr39, paddr39, SV39_PTE, nat, paddr39) 
 
 function make_TLB39_Entry(asid, global, vAddr, pAddr, pte, level, pteAddr) = {
   let shift : nat = PAGESIZE_BITS + (level * SV39_LEVEL_BITS);
-  let vAddrMask : vaddr39 = shiftl(EXTZ(0b1), shift) - 1;
+  /* fixme hack: use a better idiom for masks */
+  let vAddrMask : vaddr39 = shiftl(vAddr ^ vAddr ^ EXTZ(0b1), shift) - 1;
   let vMatchMask : vaddr39 = ~ (vAddrMask);
   struct {
     asid = asid,
