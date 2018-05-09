@@ -71,8 +71,8 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' C$*_types.thy
 
-%Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
-	lem -hol -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+%Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras_sequential.lem
+	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 clean:
 	rm -rf cheri cheri128 _sbuild inst_*.sail cheri.c
