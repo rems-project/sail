@@ -1241,6 +1241,8 @@ atomic_mpat:
     { mk_mpat (MP_lit $1) $startpos $endpos }
   | id
     { mk_mpat (MP_id $1) $startpos $endpos }
+  | id Unit
+    { mk_mpat (MP_app ($1, [mk_mpat (MP_lit (mk_lit L_unit $startpos($2) $endpos($2))) $startpos($2) $endpos($2)])) $startpos $endpos }
   | id Lparen mpat_list Rparen
     { mk_mpat (MP_app ($1, $3)) $startpos $endpos }
   | Lparen mpat Rparen
