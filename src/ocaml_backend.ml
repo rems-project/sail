@@ -248,8 +248,8 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
        (ocaml_atomic_exp ctx body ^^ semi)
        ^/^
        separate space [string "if"; ocaml_atomic_exp ctx cond;
-                       string "then loop ()";
-                       string "else ()"]
+                       string "then ()";
+                       string "else loop ()"]
      in
      (string "let rec loop () =" ^//^ loop_body)
      ^/^ string "in"

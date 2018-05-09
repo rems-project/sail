@@ -331,9 +331,9 @@ val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
 
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
-val print_int = "print_int" : (string, int) -> unit
-val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
-val print_string = "print_string" : (string, string) -> unit
+val print_int = "prerr_int" : (string, int) -> unit
+val print_bits = "prerr_bits" : forall 'n. (string, bits('n)) -> unit
+val print_string = "prerr_string" : (string, string) -> unit
 
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)

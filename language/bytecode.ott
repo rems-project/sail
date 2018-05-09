@@ -59,6 +59,7 @@ fragment :: 'F_' ::=
   | op fragment                            :: :: unary
   | string ( fragment0 , ... , fragmentn ) :: :: call
   | fragment . string                      :: :: field
+  | string                                 :: :: raw
 
 % init / clear -> create / kill
 

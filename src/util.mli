@@ -252,3 +252,5 @@ val warn : string -> unit
 
 val zencode_string : string -> string
 val zencode_upper_string : string -> string
+
+val log_line : string -> int -> string -> string

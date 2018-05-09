@@ -40,6 +40,8 @@ overload operator * = {mult_atom, mult_int}
 
 val "print_int" : (string, int) -> unit
 
+val "prerr_int" : (string, int) -> unit
+
 // ***** Integer shifts *****
 
 val shl_int = "shl_int" : (int, int) -> int

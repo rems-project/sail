@@ -29,6 +29,8 @@ val "zeros" : forall 'n. atom('n) -> bits('n)
 
 val "print_bits" : forall 'n. (string, bits('n)) -> unit
 
+val "prerr_bits" : forall 'n. (string, bits('n)) -> unit
+
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
 val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)

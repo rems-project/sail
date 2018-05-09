@@ -110,8 +110,8 @@ let print_program () =
   | Normal -> ()
   | Evaluation (Step (out, _, _, stack)) ->
      let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
-     List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
-     print_endline out
+     List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline (Lazy.force code); print_endline sep);
+     print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) ->
      print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
@@ -135,6 +135,7 @@ let rec run () =
      end
 
 let rec run_steps n =
+  print_endline ("step " ^ string_of_int n);
   match !current_mode with
   | _ when n <= 0 -> ()
   | Normal -> ()
@@ -320,7 +321,7 @@ let handle_input' input =
           (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
           let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord str) in
-          current_mode := Evaluation (eval_frame !interactive_ast (Step ("", !interactive_state, return exp, [])));
+          current_mode := Evaluation (eval_frame !interactive_ast (Step (lazy "", !interactive_state, return exp, [])));
           print_program ()
        | Empty -> ()
      end

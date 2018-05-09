@@ -16,6 +16,10 @@ unit undefined_unit(const unit u) {
   return UNIT;
 }
 
+bool eq_unit(const unit u1, const unit u2) {
+  return true;
+}
+
 typedef struct {
   mp_bitcnt_t len;
   mpz_t *bits;
@@ -23,30 +27,42 @@ typedef struct {
 
 typedef char *sail_string;
 
-// This function should be called whenever a pattern match failure
-// occurs. Pattern match failures are always fatal.
+/* This function should be called whenever a pattern match failure
+   occurs. Pattern match failures are always fatal. */
 void sail_match_failure(sail_string msg) {
   fprintf(stderr, "Pattern match failure in %s\n", msg);
   exit(EXIT_FAILURE);
 }
 
+/* sail_assert implements the assert construct in Sail. If any
+   assertion fails we immediately exit the model. */
 unit sail_assert(bool b, sail_string msg) {
   if (b) return UNIT;
   fprintf(stderr, "Assertion failed: %s\n", msg);
   exit(EXIT_FAILURE);
 }
 
+/* If the sail model calls the exit() function we print a message and
+   exit successfully. */
 unit sail_exit(const unit u) {
-  fprintf(stderr, "exit\n");
+  fprintf(stderr, "Sail model exit\n");
   exit(EXIT_SUCCESS);
 }
 
 void elf_entry(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, 0x400130ul);
+  mpz_set_ui(*rop, 0x9000000040000000);
 }
 
 void elf_tohost(mpz_t *rop, const unit u) {
   mpz_set_ui(*rop, 0x0ul);
+}
+
+/* ASL->Sail model has an EnterLowPowerState() function that calls a
+   sleep request builtin. If it gets called we print a message and
+   exit the model. */
+unit sleep_request(const unit u) {
+  fprintf(stderr, "Sail model going to sleep\n");
+  exit(EXIT_SUCCESS);
 }
 
 // Sail bits are mapped to uint64_t where bitzero = 0ul and bitone = 1ul
@@ -55,6 +71,10 @@ bool eq_bit(const uint64_t a, const uint64_t b) {
 }
 
 uint64_t undefined_bit(unit u) { return 0; }
+
+unit skip(const unit u) {
+  return UNIT;
+}
 
 // ***** Sail booleans *****
 
@@ -98,12 +118,32 @@ void set_sail_string(sail_string *str1, const sail_string str2) {
   *str1 = strcpy(*str1, str2);
 }
 
+void dec_str(sail_string *str, const mpz_t n) {
+  free(*str);
+  gmp_asprintf(str, "%Zd", n);
+}
+
+void hex_str(sail_string *str, const mpz_t n) {
+  free(*str);
+  gmp_asprintf(str, "0x%Zx", n);
+}
+
 void clear_sail_string(sail_string *str) {
   free(*str);
 }
 
 bool eq_string(const sail_string str1, const sail_string str2) {
   return strcmp(str1, str2) == 0;
+}
+
+void concat_str(sail_string *stro, const sail_string str1, const sail_string str2) {
+  *stro = realloc(*stro, strlen(str1) + strlen(str2) + 1);
+  (*stro)[0] = '\0';
+  strcat(*stro, str1);
+  strcat(*stro, str2);
+}
+
+void undefined_string(sail_string *str, const unit u) {
 }
 
 unit print_endline(const sail_string str) {
@@ -209,6 +249,10 @@ void shl_int(mpz_t *rop, const mpz_t op1, const mpz_t op2) {
   mpz_mul_2exp(*rop, op1, mpz_get_ui(op2));
 }
 
+void shr_int(mpz_t *rop, const mpz_t op1, const mpz_t op2) {
+  mpz_fdiv_q_2exp(*rop, op1, mpz_get_ui(op2));
+}
+
 void undefined_int(mpz_t *rop, const unit u) {
   mpz_set_ui(*rop, 0ul);
 }
@@ -274,7 +318,14 @@ void pow2(mpz_t *rop, mpz_t exp) {
   mpz_clear(base);
 }
 
+void get_time_ns(mpz_t *rop, const unit u) {
+  mpz_set_ui(*rop, 0ul);
+}
+
 // ***** Sail bitvectors *****
+
+void string_of_bits(sail_string *str, const bv_t op) {
+}
 
 unit print_bits(const sail_string str, const bv_t op)
 {
@@ -349,7 +400,7 @@ void append_64(bv_t *rop, const bv_t op, const uint64_t chunk) {
 void append(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len + op2.len;
   mpz_mul_2exp(*rop->bits, *op1.bits, op2.len);
-  mpz_add(*rop->bits, *rop->bits, *op2.bits);
+  mpz_ior(*rop->bits, *rop->bits, *op2.bits);
 }
 
 void replicate_bits(bv_t *rop, const bv_t op1, const mpz_t op2) {
@@ -400,7 +451,14 @@ void zero_extend(bv_t *rop, const bv_t op, const mpz_t len) {
 /* FIXME */
 void sign_extend(bv_t *rop, const bv_t op, const mpz_t len) {
   rop->len = mpz_get_ui(len);
-  mpz_set(*rop->bits, *op.bits);
+  if(mpz_tstbit(*op.bits, op.len - 1)) {
+    mpz_set(*rop->bits, *op.bits);
+    for(mp_bitcnt_t i = rop->len - 1; i >= op.len; i--) {
+      mpz_setbit(*rop->bits, i);
+    }
+  } else {
+    mpz_set(*rop->bits, *op.bits);
+  }
 }
 
 void clear_bv_t(bv_t *rop) {
@@ -441,7 +499,10 @@ void or_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
 
 void not_bits(bv_t *rop, const bv_t op) {
   rop->len = op.len;
-  mpz_com(*rop->bits, *op.bits);
+  mpz_set(*rop->bits, *op.bits);
+  for (mp_bitcnt_t i = 0; i < op.len; i++) {
+    mpz_combit(*rop->bits, i);
+  }
 }
 
 void xor_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
@@ -501,15 +562,72 @@ void add_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   mpz_add(*rop->bits, *op1.bits, *op2.bits);
 }
 
+void sub_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
+  rop->len = op1.len;
+  mpz_sub(*rop->bits, *op1.bits, *op2.bits);
+}
+
 void add_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
   rop->len = op1.len;
   mpz_add(*rop->bits, *op1.bits, op2);
 }
 
 void sub_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
-  printf("sub_bits_int\n");
   rop->len = op1.len;
   mpz_sub(*rop->bits, *op1.bits, op2);
+}
+
+void mults_vec(bv_t *rop, const bv_t op1, const bv_t op2) {
+  rop->len = op1.len * 2;
+  mpz_mul(*rop->bits, *op1.bits, *op2.bits);
+}
+
+void mult_vec(bv_t *rop, const bv_t op1, const bv_t op2) {
+  rop->len = op1.len * 2;
+  mpz_mul(*rop->bits, *op1.bits, *op2.bits);
+}
+
+/* FIXME */
+void shift_bits_left(bv_t *rop, const bv_t op1, const bv_t op2) {
+  rop->len = op1.len;
+  mpz_mul_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
+}
+
+void shift_bits_right(bv_t *rop, const bv_t op1, const bv_t op2) {
+  rop->len = op1.len;
+  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
+}
+
+void shift_bits_right_arith(bv_t *rop, const bv_t op1, const bv_t op2) {
+  fprintf(stderr, "Unimplemented sbra");
+  exit(2);
+  rop->len = op1.len;
+  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, -mpz_get_ui(*op2.bits));
+}
+
+void reverse_endianness(bv_t *rop, const bv_t op) {
+  rop->len = op.len;
+  if (rop->len == 64ul) {
+    uint64_t x = mpz_get_ui(*op.bits);
+    x = (x & 0xFFFFFFFF00000000) >> 32 | (x & 0x00000000FFFFFFFF) << 32;
+    x = (x & 0xFFFF0000FFFF0000) >> 16 | (x & 0x0000FFFF0000FFFF) << 16;
+    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
+    mpz_set_ui(*rop->bits, x);
+  } else if (rop->len == 32ul) {
+    uint64_t x = mpz_get_ui(*op.bits);
+    x = (x & 0xFFFF0000FFFF0000) >> 16 | (x & 0x0000FFFF0000FFFF) << 16;
+    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
+    mpz_set_ui(*rop->bits, x);
+  } else if (rop->len == 16ul) {
+    uint64_t x = mpz_get_ui(*op.bits);
+    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
+    mpz_set_ui(*rop->bits, x);
+  } else if (rop->len == 8ul) {
+    mpz_set(*rop->bits, *op.bits);
+  } else {
+    fprintf(stderr, "Cannot reverse endianess of vector\n");
+    exit(2);
+  }
 }
 
 // Takes a slice of the (two's complement) binary representation of
@@ -767,26 +885,18 @@ uint64_t MASK = 0xFFFFul;
 // are used in the second argument.
 void write_mem(uint64_t address, uint64_t byte)
 {
+  //printf("ADDR: %lu, BYTE: %lu\n", address, byte);
+
   uint64_t mask = address & ~MASK;
   uint64_t offset = address & MASK;
 
-  struct block *prev = NULL;
   struct block *current = sail_memory;
 
   while (current != NULL) {
     if (current->block_id == mask) {
       current->mem[offset] = (uint8_t) byte;
-
-      /* Move the accessed block to the front of the block list */
-      if (prev != NULL) {
-        prev->next = current->next;
-      }
-      current->next = sail_memory->next;
-      sail_memory = current;
-
       return;
     } else {
-      prev = current;
       current = current->next;
     }
   }
@@ -884,6 +994,18 @@ void read_ram(bv_t *data,
   }
 
   mpz_clear(byte);
+}
+
+unit load_raw(uint64_t addr, const sail_string file) {
+  FILE *fp = fopen(file, "r");
+
+  uint64_t byte;
+  while ((byte = (uint64_t)fgetc(fp)) != EOF) {
+    write_mem(addr, byte);
+    addr++;
+  }
+
+  return UNIT;
 }
 
 void load_image(char *file) {

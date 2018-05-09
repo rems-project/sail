@@ -45,12 +45,19 @@ let negate_real r = realNegate r
 let abs_real r = realAbs r
 let power_real b e = realPowInteger b e*)
 
+val print_endline : string -> unit
+let print_endline _ = ()
+declare ocaml target_rep function print_endline = `print_endline`
+
 val prerr_endline : string -> unit
 let prerr_endline _ = ()
 declare ocaml target_rep function prerr_endline = `prerr_endline`
 
 val print_int : string -> integer -> unit
-let print_int msg i = prerr_endline (msg ^ (stringFromInteger i))
+let print_int msg i = print_endline (msg ^ (stringFromInteger i))
+
+val prerr_int : string -> integer -> unit
+let prerr_int msg i = prerr_endline (msg ^ (stringFromInteger i))
 
 val putchar : integer -> unit
 let putchar _ = ()

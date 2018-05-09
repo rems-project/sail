@@ -593,7 +593,7 @@ end = struct
     let complex_nexps = ref KBindings.empty in
     let simplify_nexp (Nexp_aux (nexp_aux, l) as nexp) =
       match nexp_aux with
-      | Nexp_var _ | Nexp_constant _ -> nexp
+      | Nexp_constant _ -> nexp (* Check this ? *)
       | _ ->
          let kid = Kid_aux (Var ("'c#" ^ string_of_int !counter), l) in
          complex_nexps := KBindings.add kid nexp !complex_nexps;
