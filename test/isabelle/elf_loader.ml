@@ -65,9 +65,9 @@ let rec break n = function
   | (_ :: _ as xs) -> [Lem_list.take n xs] @ break n (Lem_list.drop n xs)
 
 let print_segment seg =
-  let (Byte_sequence.Sequence bs) = seg.Elf_interpreted_segment.elf64_segment_body in
+  let bs = seg.Elf_interpreted_segment.elf64_segment_body in
   prerr_endline "0011 2233 4455 6677 8899 aabb ccdd eeff 0123456789abcdef";
-  List.iter (fun bs -> prerr_endline (hex_line bs)) (break 16 bs)
+  List.iter (fun bs -> prerr_endline (hex_line bs)) (break 16 (Byte_sequence.char_list_of_byte_sequence bs))
 
 let read name =
   let info = Sail_interface.populate_and_obtain_global_symbol_init_info name in
@@ -109,19 +109,6 @@ let read name =
 let write_file chan paddr i byte =
   output_string chan (Nat_big_num.to_string (Nat_big_num.add paddr (Nat_big_num.of_int i)) ^ "\n");
   output_string chan (string_of_int byte ^ "\n")
-
-(*let load_segment ?writer:(writer=write_sail_lib) seg =
-  let open Elf_interpreted_segment in
-  let (Byte_sequence.Sequence bs) = seg.elf64_segment_body in
-  let paddr = seg.elf64_segment_paddr in
-  let base = seg.elf64_segment_base in
-  let offset = seg.elf64_segment_offset in
-  prerr_endline "\nLoading Segment";
-  prerr_endline ("Segment offset: " ^ Nat_big_num.to_string offset);
-  prerr_endline ("Segment base address: " ^ Nat_big_num.to_string base);
-  prerr_endline ("Segment physical address: " ^ Nat_big_num.to_string paddr);
-  print_segment seg;
-  List.iteri (writer paddr) (List.map int_of_char bs)*)
 
 let load_elf name =
   let segments, e_entry, symbol_map = read name in

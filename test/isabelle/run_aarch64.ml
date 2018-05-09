@@ -69,7 +69,7 @@ let liftS = Aarch64.liftState (Aarch64.get_regval, Aarch64.set_regval)
 let load_elf_segment seg =
   let open Elf_interpreted_segment in
   let open Aarch64_export in
-  let (Byte_sequence.Sequence bs) = seg.elf64_segment_body in
+  let bs = seg.elf64_segment_body in
   let paddr = Big_int.big_int_of_string (Nat_big_num.to_string seg.elf64_segment_paddr) in
   let base = Big_int.big_int_of_string (Nat_big_num.to_string seg.elf64_segment_base) in
   let offset = Big_int.big_int_of_string (Nat_big_num.to_string seg.elf64_segment_offset) in
@@ -79,7 +79,7 @@ let load_elf_segment seg =
   prerr_endline ("Segment base address: " ^ Big_int.string_of_big_int base);
   prerr_endline ("Segment physical address: " ^ Big_int.string_of_big_int paddr);
   print_segment seg;
-  Aarch64.iteriS writer bs
+  Aarch64.iteriS writer (Byte_sequence.char_list_of_byte_sequence bs)
 
 let _ =
   Random.self_init ();
