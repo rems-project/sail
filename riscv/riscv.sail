@@ -12,6 +12,9 @@ scattered function execute
 val cast print_insn : ast -> string
 scattered function print_insn
 
+val assembly : ast <-> string
+scattered mapping assembly
+
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
 
@@ -31,6 +34,7 @@ function clause print_insn UTYPE(imm, rd, op) =
     RISCV_LUI   => "lui   " ^ rd ^ ", " ^ BitStr(imm),
     RISCV_AUIPC => "auipc " ^ rd ^ ", " ^ BitStr(imm)
   }
+
 
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
@@ -133,6 +137,63 @@ function clause print_insn (ITYPE(imm, rs1, rd, op)) =
       RISCV_ANDI  => "andi  "
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
+
+
+
+
+
+val reg_name : bits(5) <-> string
+mapping reg_name = {
+    0b00000 <-> "zero",
+    0b00001 <-> "ra",
+    0b00010 <-> "sp",
+    0b00011 <-> "gp",
+    0b00100 <-> "tp",
+    0b00101 <-> "t0",
+    0b00110 <-> "t1",
+    0b00111 <-> "t2",
+    0b01000 <-> "fp",
+    0b01001 <-> "s1",
+    0b01010 <-> "a0",
+    0b01011 <-> "a1",
+    0b01100 <-> "a2",
+    0b01101 <-> "a3",
+    0b01110 <-> "a4",
+    0b01111 <-> "a5",
+    0b10000 <-> "a6",
+    0b10001 <-> "a7",
+    0b10010 <-> "s2",
+    0b10011 <-> "s3",
+    0b10100 <-> "s4",
+    0b10101 <-> "s5",
+    0b10110 <-> "s6",
+    0b10111 <-> "s7",
+    0b11000 <-> "s8",
+    0b11001 <-> "s9",
+    0b11010 <-> "s10",
+    0b11011 <-> "s11",
+    0b11100 <-> "t3",
+    0b11101 <-> "t4",
+    0b11110 <-> "t5",
+    0b11111 <-> "t6"
+}
+
+val operand_sep : unit <-> string
+mapping operand_sep = {
+  () <-> opt_spaces(0) ^^ "," ^^ opt_spaces(1)
+}
+
+val itype_operands : (bits(20), regbits, regbits) <-> string
+mapping itype_operands = {
+  (imm, rs1, rd) <-> spaces(1) ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits(20, imm)
+}
+
+mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ADDI)  <-> "addi"  ^^ itype_operands(imm, rs1, rd)
+mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_SLTI)  <-> "slti"  ^^ itype_operands(imm, rs1, rd)
+mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_SLTIU) <-> "sltiu" ^^ itype_operands(imm, rs1, rd)
+mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_XORI)  <-> "xori"  ^^ itype_operands(imm, rs1, rd)
+mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ORI)   <-> "ori"   ^^ itype_operands(imm, rs1, rd)
+mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ANDI)  <-> "andi"  ^^ itype_operands(imm, rs1, rd)
 
 /* ****************************************************************** */
 union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
@@ -1385,3 +1446,4 @@ end decode
 end decodeCompressed
 end execute
 end print_insn
+end assembly

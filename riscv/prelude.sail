@@ -3,6 +3,10 @@ default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
 
+val spaces : nat <-> string
+val opt_spaces : nat <-> string
+val hex_bits : forall 'n. (atom('n), bits('n)) <-> string
+
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
