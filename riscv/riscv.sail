@@ -897,9 +897,6 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     None()  => print_bits("unhandled write to CSR ", csr)
   }
 
-val signalIllegalInstruction : unit -> unit effect {escape}
-function signalIllegalInstruction () = not_implemented ("illegal instruction")
-
 function clause execute CSR(csr, rs1, rd, is_imm, op) =
   let rs1_val : xlenbits = if is_imm then EXTZ(rs1) else X(rs1) in
   let isWrite : bool = match op {
