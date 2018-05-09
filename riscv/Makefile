@@ -38,9 +38,6 @@ riscv.lem: $(SAIL_SRCS) Makefile
 LOC_FILES:=$(SAIL_SRCS) main.sail
 include ../etc/loc.mk
 
-cloc: $(LOC_FILES)
-	cloc --by-file --force-lang C,sail $^
-
 clean:
 	-rm -rf riscv _sbuild
 	-rm -f riscv.lem riscv_types.lem
