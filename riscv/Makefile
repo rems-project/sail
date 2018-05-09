@@ -34,6 +34,13 @@ Riscv.thy: riscv.lem riscv_extras.lem
 riscv.lem: $(SAIL_SRCS) Makefile
 	$(SAIL_DIR)/sail -lem -o riscv -lem_mwords -lem_lib Riscv_extras $(SAIL_SRCS)
 
+# we exclude prelude.sail here, most code there should move to sail lib
+LOC_FILES:=$(SAIL_SRCS) main.sail
+include ../etc/loc.mk
+
+cloc: $(LOC_FILES)
+	cloc --by-file --force-lang C,sail $^
+
 clean:
 	-rm -rf riscv _sbuild
 	-rm -f riscv.lem riscv_types.lem

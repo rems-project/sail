@@ -28,5 +28,11 @@ M%.thy: m%.lem m%_types.lem mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' M$*_types.thy
 
+LOC_FILES:=$(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
+include ../etc/loc.mk
+
+cloc: $(LOC_FILES)
+	cloc --by-file --force-lang C,sail $^
+
 clean:
 	rm -rf mips Mips.thy mips.lem _sbuild

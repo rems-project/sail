@@ -40,6 +40,8 @@ cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 cheri128_trace: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml_trace -o $@ $^
 
+LOC_FILES:=$(CHERI_SAILS) $(CHERI_MAIN)
+include ../etc/loc.mk
 
 # TODO Using bit lists for now in Lem generation; for machine words,
 # monomorphisation is needed due to some variable length bitvectors, e.g. in
