@@ -1,0 +1,256 @@
+\section{Type System}
+\label{sec:types}
+
+\newcommand{\tcheck}[3]{#1 \vdash #2 \Leftarrow #3}
+\newcommand{\tinfer}[3]{#1 \vdash #2 \Rightarrow #3}
+\newcommand{\msail}[1]{\text{\lstinline[mathescape]+#1+}}
+
+\subsection{Blocks}
+\label{subsec:blocks}
+
+\[
+\frac{\tcheck{\Gamma}{E_0}{\text{\lstinline+bool+}}
+      \qquad
+      \tcheck{\Gamma}{M}{\text{\lstinline+string+}}
+      \qquad
+      \tcheck{\mathrm{FlowThen}(\Gamma, E_0)}{\text{\lstinline[mathescape]+\{$E_1$; $\ldots$; $E_n$\}+}}{A}}
+     {\tcheck{\Gamma}{\text{\lstinline[mathescape]+\{assert($E_0$, $M$); $E_1$; $\ldots$; $E_n$ \}+}}{A}}
+\]
+
+\[
+\frac{\tcheck{\mathrm{BindAssignment}(\Gamma, L_0, E_0)}{\text{\lstinline[mathescape]+\{$E_1$; $\ldots$; $E_n$\}+}}{A}}
+     {\tcheck{\Gamma}{\text{\lstinline[mathescape]+\{$L_0$ = $E_0$; $E_1$; $\ldots$; $E_n$ \}+}}{A}}
+\]
+
+\[
+\frac{\tcheck{\Gamma}{E_0}{\text{\lstinline+unit+}}
+      \qquad
+      \tcheck{\Gamma}{\text{\lstinline[mathescape]+\{$E_1$; $\ldots$; $E_n$\}+}}{A}}
+     {\tcheck{\Gamma}{\text{\lstinline[mathescape]+\{$E_0$; $E_1$; $\ldots$; $E_n$ \}+}}{A}}
+\]
+
+\[
+\frac{\tcheck{\Gamma}{E}{A}}
+     {\tcheck{\Gamma}{\text{\lstinline[mathescape]+\{$E$\}+}}{A}}
+\]
+
+\subsection{Let bindings}
+
+Note that \lstinline[mathescape]+{let x = y; $E_0$; $\ldots$; $E_n$}+
+is equivalent to \lstinline[mathescape]+{let x = y in {$E_0$; $\ldots$; $E_n$}}+,
+which is why there are no special cases for let bindings in Subsection~\ref{subsec:blocks}.
+
+\[
+\frac{\tcheck{\Gamma}{E_0}{B}
+      \qquad
+      \tcheck{\mathrm{BindPattern}(\Gamma, P, B)}{E_1}{A}}
+     {\tcheck{\Gamma}{\msail{let $\;P\;$ : $\;B\;$ = $\;E_0\;$ in $\;E_1$}}{A}}
+\]
+
+\[
+\frac{\tinfer{\Gamma}{E_0}{B}
+      \qquad
+      \tcheck{\mathrm{BindPattern}(\Gamma, P, B)}{E_1}{A}}
+     {\tcheck{\Gamma}{\msail{let $\;P\;$ = $\;E_0\;$ in $\;E_1$}}{A}}
+\]
+
+\paragraph{Pattern bindings} The $\mathrm{BindPattern}$ and $\mathrm{BindPattern}'$ functions are used to bind patterns into an environment. The first few cases are simple, if we bind an identifier $x$ against a type $T$, where $x$ is either immutable or unbound, then $x : T$ is added to the environment. If we bind a type against a wildcard pattern, then the environment is returned unchanged. An \lstinline+as+ pattern binds its variable with the appropriate type then recursively binds the rest of the pattern. When binding patterns we always bind against the base type, and bring existentials into scope, which is why $\mathrm{BindPattern}$ does this and then calls the $\mathrm{BindPattern}'$ function which implements all the cases.
+\begin{align*}
+  \mathrm{BindPattern}(\Gamma, P, T) &= \mathrm{BindPattern}'(\Gamma \lhd T, P, \mathrm{Base}(T))\\
+  \mathrm{BindPattern}'(\Gamma, x, T) &= \Gamma \oplus x : T, \tag{$x$ is unbound or immutable}\\
+  \mathrm{BindPattern}'(\Gamma, \msail{_}, T) &= \Gamma,\\
+  \mathrm{BindPattern}'(\Gamma, \msail{$P\;$ as $\;x$}, T) &= \mathrm{BindPattern}(\Gamma \oplus x : T, P, T). \tag{$x$ is unbound or immutable}
+\end{align*}
+If we try to bind a numeric literal $n$ against a type
+\lstinline[mathescape]+int($N$)+ then we add a constraint to the
+environment that the nexp $N$ is equal to $n$.
+\begin{align*}
+\mathrm{BindPattern}'(\Gamma, n, \msail{int($N$)}) &= \Gamma \oplus (N = n).
+\end{align*}
+We also have some rules for typechecking lists, as well as user
+defined constructors in unions (omitted here)
+\begin{align*}
+  \mathrm{BindPattern}'(\Gamma, [], \msail{list($A$)}) &= \Gamma,\\
+  \mathrm{BindPattern}'(\Gamma, \msail{$P_{\mathit{hd}}\;$ :: $\;P_{\mathit{tl}}$}, \msail{list($A$)})
+  &= \mathrm{BindPattern}(\mathrm{BindPattern}(\Gamma,P_{\mathit{hd}},A),P_{\mathit{tl}},\msail{list($A$)}).
+\end{align*}
+
+The pattern binding code follows a similar structure to the
+bi-directional nature of the typechecking rules---the
+$\mathrm{BindPattern}$ function acts like a checking rule where we
+provide the type, and there is also an $\mathrm{InferPattern}$
+function which acts like bind pattern but infers the types from the
+patterns. There is therefore a final case
+$\mathrm{BindPattern}(\Gamma, P, T) = \Gamma'$ where
+$(\Gamma', T') = \mathrm{InferPattern}(\Gamma, P)$ and $T \subseteq T'$.
+
+The $\mathrm{InferPattern}$ function is defined by the following cases
+\begin{align*}
+  \mathrm{InferPattern}(\Gamma,x) &= (\Gamma, T_{\mathit{enum}}), \tag{$x$ is an element of enumeration $T_{\mathit{enum}}$}\\
+  \mathrm{InferPattern}(\Gamma,L) &= (\Gamma, \mathrm{InferLiteral}(L)), \tag{$L$ is a literal}\\
+  \mathrm{InferPattern}(\Gamma,\msail{$P\;$ : $\;T$}) &= (\mathrm{BindPattern}(\Gamma,P,T), T).
+\end{align*}
+
+\paragraph{Type patterns} There is one additional case for $\mathrm{BindPattern}'$ which we haven't discussed. \TODO{type patterns}
+
+\subsection{If statements}
+
+\[
+\frac{\tcheck{\Gamma}{E_{\mathit{if}}}{\msail{bool}}
+      \qquad
+      \tcheck{\mathrm{FlowThen}(\Gamma, E_{\mathit{if}})}{E_{\mathit{then}}}{A}
+      \qquad
+      \tcheck{\mathrm{FlowElse}(\Gamma, E_{\mathit{if}})}{E_{\mathit{else}}}{A}}
+     {\tcheck{\Gamma}{\msail{if $\;E_{\mathit{if}}\;$ then $\;E_{\mathit{then}}\;$ else $\;E_{\mathit{else}}\;$}}{A}}
+\]
+
+\subsection{Return}
+
+When checking the body of a function, the expected return type of the
+function is placed into the context $\Gamma$.
+
+\[
+\frac{\tcheck{\Gamma}{E}{\mathrm{Return}(\Gamma)}}
+     {\tcheck{\Gamma}{\msail{return($E$)}}{A}}
+\]
+
+\subsection{Functions}
+
+Depending on the context, functions can be either checked or
+inferred---although the only difference between the two cases is that
+in the checking case we can use the expected return type to resolve
+some of the function quantifiers, whereas in the inferring case we
+cannot.
+
+\begin{align*}
+  \frac{
+    f : \forall Q, C.(B_0,\ldots,B_n) \rightarrow R \in \Gamma
+    \quad \textsc{InferFun}(\Gamma,Q,C,(B_0,\ldots,B_n),R,(x_0,\ldots,x_n)) = R'
+  } {
+    \tinfer{\Gamma}{f(x_0, \ldots, x_n)}{R'}
+  }
+\end{align*}
+
+\begin{align*}
+  \frac{
+    f : \forall Q, C.(B_0,\ldots,B_n) \rightarrow R \in \Gamma
+    \quad \textsc{CheckFun}(\Gamma,Q,C,(B_0,\ldots,B_n),R,(x_0,\ldots,x_n),R')
+  } {
+    \tcheck{\Gamma}{f(x_0, \ldots, x_n)}{R'}
+  }
+\end{align*}
+
+The rules for checking or inferring functions are rather more
+complicated than the other typing rules and are hard to describe in
+purely logical terms, so they are instead presented as an algorithm in
+Figure~\ref{fig:funapp}. Roughly the inference algorithm works as
+follows:
+
+\begin{enumerate}
+\item \textsc{InferFun} takes as input the typing context $\Gamma$, the
+  list of quantifiers $Q$ (a list of type variable/kind pairs), a
+  constraint $C$, the function argument types $B_0\ldots B_n$, the
+  function return type $R$, and finally this list of argument
+  expressions the function is applied to $x_0\ldots x_n$.
+
+\item We create an empty list of unsolved typing goals
+  (expression/type pairs) called $\mathit{unsolved}$, a list of
+  constraints $\mathit{Constraints}$, and a set of existential
+  variables $\mathit{Existentials}$.
+
+\item We iterate over each argument expression and type $x_m$ and
+  $B_m$, if $x_m$ contains free type variables in $Q$ we infer the
+  type of $x_n$ and attempt to unify that inferred type with $B_m$. If
+  this unification step fails we add $(x_m, B_m)$ to the list of
+  unsolved goals. This unification step may generate new existential
+  variables and constraints which are added to $\mathit{Existentials}$
+  and $\mathit{Constraints}$ as needed. The results of this
+  unification step are used to resolve the univarsally-quantified type
+  variables in $Q$. If $x_m$ does not contain free type variables in
+  $Q$, then we simply check it against $B_m$.
+
+\item After this loop has finished we expect all the type variables in
+  $Q$ to have been resolved. If not, we throw a type error.
+
+\item We now try to prove the function's constraint $C$ using the
+  resolved type variables, and check any remaining function arguments
+  in $\mathit{unsolved}$.
+
+\item Finally, we add any new existentials and constraints to the
+  function's return type $R$, simplifying if at all possible (using
+  \textsc{SimplifyExist}), before returning this type as the inferred
+  type of the function.
+\end{enumerate}
+
+\noindent The \textsc{CheckFun} calls the \textsc{InferFun} function, but it
+takes an additional $X$ argument which the the required return type in
+the context where the function being checked is called. It
+additionally unifies the function's declared return type with the
+expected return type, and uses this to resolve any quantifiers in $Q$,
+provided that the return type is not existentially quantified. It may
+also be required to coerce $R$ into $X$.
+
+\begin{figure}[p]
+\begin{algorithmic}[1]
+  \Function{InferFun}{$\Gamma,Q, C, (B_0,\ldots,B_n), R, (x_0, \ldots, x_n)$}
+  \State $\mathit{unsolved}\gets []$;
+  $\mathit{Constraints}\gets []$;
+  $\mathit{Existentials}\gets \emptyset$
+  \ForAll{$m \in 0, \ldots, n$}
+    \If{$B_m$ contains type variables in $Q$}
+    \State $\Gamma \vdash x_m \Rightarrow E$
+    \Comment Infer the type of $x_m$ as $E$
+      \State $\mathit{unifiers}, \mathit{existentials}, \mathit{constraint} \gets$ \Call{CoerceAndUnify}{$\Gamma,E,B$}
+      \If{\textsc{CoerceAndUnify} failed with \textsc{UnificationError}}
+        \State $\mathit{unsolved}\gets (x_m,B_m) : \mathit{unsolved}$
+        \State \textbf{continue}
+        \Comment Skip to next iteration of loop
+      \ElsIf{$\mathit{existentials}$ is not empty}
+        \State Add type variables $\mathit{existentials}$ to $\Gamma$
+        \State Add constraint $\mathit{constraint}$ to $\Gamma$
+        \State $\mathit{Constraints}\gets \mathit{constraint} : \mathit{Constraints}$
+        \State $\mathit{Existentials}\gets \mathit{existentials} \cup \mathit{Existentials}$
+      \EndIf
+      \ForAll{$(\mathit{nvar}, \mathit{nexp}) \in \mathit{unifiers}$}
+        \State $B_0,...,B_n\gets B_0[\mathit{nvar} := \mathit{nexp}],\ldots,B_n[\mathit{nvar} := \mathit{nexp}]$
+        \State $R\gets R[\mathit{nvar} := \mathit{nexp}]$;
+        $C\gets C[\mathit{nvar} := \mathit{nexp}]$
+        \State Remove $\mathit{nvar}$ from $Q$
+      \EndFor
+    \ElsIf{$B_m$ does not contain type variables in $Q$}
+      \State $\tcheck{\Gamma}{x_m}{B_m}$
+      \Comment Check type of $x_m$ against $B_m$
+    \EndIf
+  \EndFor
+  \If{$Q$ is not empty}
+    \State \textbf{raise} \textsc{TypeError}
+    \Comment Unresolved universal quantifers
+  \EndIf
+  \State \Call{Prove}{$\Gamma, C$}
+  \ForAll{$(x_m,B_m) \in \mathit{unsolved}$}
+    $\tcheck{\Gamma}{x_m}{B_m}$
+  \EndFor
+  \State \Return \Call{SimplifyExist}{$\mathtt{exist}\ \mathit{Existentials}, \mathit{Constraints}.\ R$}
+  \EndFunction\\
+
+  \Function{CheckFun}{$\Gamma,Q,C,(B_0,\ldots,B_n),R,(x_0,\ldots,x_n),X$}
+  \If{$X$ and $R$ are not existentially quantified}
+    \State $\mathit{unifiers}, \_, \_ \gets$ \Call{Unify}{$\Gamma,R,X$}
+    \If{\textsc{Unify} failed with \textsc{UnificationError}}
+      \textbf{skip}
+    \Else
+      \ForAll{$(\mathit{nvar}, \mathit{nexp}) \in \mathit{unifiers}$}
+        \State $B_0,...,B_n\gets B_0[\mathit{nvar} := \mathit{nexp}],\ldots,B_n[\mathit{nvar} := \mathit{nexp}]$
+        \State $R\gets R[\mathit{nvar} := \mathit{nexp}]$;
+        $C\gets C[\mathit{nvar} := \mathit{nexp}]$
+        \State Remove $\mathit{nvar}$ from $Q$
+      \EndFor
+    \EndIf
+  \EndIf
+  \State $R'\gets$ \Call{InferFun}{$\Gamma,Q,C,(B_0,\ldots,B_n),R,(x_0,\ldots,x_n)$}
+  \State \Return \Call{Coerce}{$R',X$}
+  \EndFunction
+\end{algorithmic}
+\label{fig:funapp}
+\caption{Inference and checking algorithms for function calls}
+\end{figure}
