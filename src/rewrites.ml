@@ -2894,61 +2894,9 @@ let rec rewrite_defs_pat_string_append =
                                               pat2 => expr
                                             }
      *)
-    | P_aux (P_string_append (
-                 P_aux (P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _)
-                 :: pats
-               ), psa_annot)
-         when List.mem_assoc builtin_id builtins ->
-
-       (* common things *)
-       let builtin_func, builtin_inner_typ = List.assoc builtin_id builtins in
-       let s_id = fresh_stringappend_id () in
-       let n_id = fresh_stringappend_id () in
-       let len_id = fresh_stringappend_id () in
-
-       (* construct drop expression -- string_drop(s#, len#) *)
-       let drop_exp = mk_exp (E_app (mk_id "string_drop", [mk_exp (E_id s_id); mk_exp (E_id len_id)])) in
-       (* construct func expression -- maybe_atoi s# *)
-       let func_exp = mk_exp (E_app (mk_id builtin_func, [mk_exp (E_id s_id)])) in
-       (* construct some pattern -- Some (n#, len#) *)
-       let some_exp = mk_pat (P_app (mk_id "Some", [mk_pat (P_id n_id); mk_pat (P_id len_id)])) in
-       (* construct None pattern *)
-       let none_exp = mk_pat (P_app (mk_id "None", [mk_pat (P_lit (mk_lit L_unit))])) in
-
-       (* recurse into pat2 *)
-       let new_pat2_pexp =
-         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), env, guards, expr) with
-         | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
-         | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
-       in
-
-       (* construct the new guard *)
-       let guard_inner_match = construct_bool_match drop_exp new_pat2_pexp in
-       let new_guard = mk_exp (E_case (func_exp, [
-                                     mk_pexp (Pat_exp (some_exp, guard_inner_match));
-                                     mk_pexp (Pat_exp (none_exp, mk_exp (E_lit (mk_lit (L_false)))))
-                         ])) in
-
-       (* construct the new match *)
-       let new_match = mk_exp (E_case (drop_exp, [new_pat2_pexp])) in
-
-       (* construct the new let *)
-       let new_binding = mk_exp (E_cast (builtin_inner_typ, mk_exp (E_case (func_exp, [
-                                       mk_pexp (Pat_exp (some_exp, mk_exp (E_tuple [
-                                                                               mk_exp (E_id n_id);
-                                                                               mk_exp (E_id len_id)
-                                         ])))
-                           ])))) in
-       let new_letbind = mk_letbind (mk_pat (P_tup [
-                                                 mk_pat (P_id (mk_id var_id)); mk_pat (P_id len_id)
-                           ])) new_binding in
-       let new_let = mk_exp (E_let (new_letbind, new_match)) in
-
-       (* construct final result *)
-       mk_pat (P_id s_id), new_guard :: guards, new_let
 
     | P_aux (P_string_append (
-                 P_aux (P_app (mapping_id, [P_aux (P_id (Id_aux (Id var_id, _)), _)] ) , _)
+                 P_aux (P_app (mapping_id, arg_pats) , _)
                  :: pats
                ), psa_annot)
          when Env.is_mapping mapping_id env ->
@@ -3002,9 +2950,12 @@ let rec rewrite_defs_pat_string_append =
                                                                                mk_exp (E_id len_id)
                                          ])))
                            ])))) in
-       let new_letbind = mk_letbind (mk_pat (P_tup [
-                                                 mk_pat (P_id (mk_id var_id)); mk_pat (P_id len_id)
-                           ])) new_binding in
+       let new_letbind =
+         match arg_pats with
+         | [] -> assert false
+         | [arg_pat] -> mk_letbind (mk_pat (P_tup [arg_pat; mk_pat (P_id len_id)])) new_binding
+         | arg_pats -> mk_letbind (mk_pat (P_tup [mk_pat (P_tup arg_pats); mk_pat (P_id len_id)])) new_binding
+       in
        let new_let = mk_exp (E_let (new_letbind, new_match)) in
 
        (* construct final result *)
