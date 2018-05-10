@@ -3,9 +3,32 @@ default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
 
-val spaces : nat <-> string
-val opt_spaces : nat <-> string
+val spaces : unit <-> string
+val opt_spaces : unit <-> string
+val def_spaces : unit <-> string
 val hex_bits : forall 'n. (atom('n), bits('n)) <-> string
+
+val spaces_forwards : unit -> string
+function spaces_forwards () = " "
+val spaces_backwards : string -> unit
+function spaces_backwards s = ()
+
+val spaces_matches_prefix = "spaces_matches_prefix" : string -> option((unit, nat))
+
+val opt_spaces_forwards : unit -> string
+function opt_spaces_forwards () = ""
+val opt_spaces_backwards : string -> unit
+function opt_spaces_backwards s = ()
+
+val opt_spaces_matches_prefix = "opt_spaces_matches_prefix" : string -> option((unit, nat))
+
+val def_spaces_forwards : unit -> string
+function def_spaces_forwards () = " "
+val def_spaces_backwards : string -> unit
+function def_spaces_backwards s = ()
+
+val def_spaces_matches_prefix = "opt_spaces_matches_prefix" : string -> option((unit, nat))
+
 
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -20,6 +43,14 @@ val "eq_bit" : (bit, bit) -> bool
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
+val string_startswith = "string_startswith" : (string, string) -> bool
+val string_drop = "string_drop" : (string, nat) -> string
+val string_length = "string_length" : string -> nat
+val string_append = "string_append" : (string, string) -> string
+val maybe_int_of_prefix = "maybe_int_of_prefix" : string -> option((int, nat))
+val maybe_nat_of_prefix = "maybe_nat_of_prefix" : string -> option((nat, nat))
+val maybe_int_of_string = "maybe_int_of_string" : string -> option(int)
+
 
 val eq_real = {ocaml: "eq_real", lem: "eq"} : (real, real) -> bool
 
@@ -192,6 +223,7 @@ val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
 val sub_int = {ocaml: "sub_int", lem: "integerMinus"} : (int, int) -> int
+val sub_nat = {ocaml: "sub_int", lem: "integerMinus"} : (nat, nat) -> nat
 
 val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 

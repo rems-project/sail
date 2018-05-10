@@ -622,3 +622,25 @@ let speculate_conditional_success () = true
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
 
+let rec n_leading_spaces s =
+  match String.length s with
+  | 0 -> 0
+  | 1 -> begin match s with
+         | " " -> 1
+         | _ -> 0
+         end
+  | len -> begin match String.get s 0 with
+           | ' ' -> 1 + (n_leading_spaces (String.sub s 1 (len - 1)))
+           | _ -> 0
+           end
+
+
+let opt_spaces_matches_prefix s =
+  ZSome ((), n_leading_spaces s |> Big_int.of_int)
+
+let spaces_matches_prefix s =
+  let n = n_leading_spaces s in
+  match n with
+  | 0 -> ZNone ()
+  | n -> ZSome ((), Big_int.of_int n)
+
