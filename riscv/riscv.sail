@@ -185,7 +185,7 @@ mapping operand_sep = {
 
 val itype_operands : (bits(12), regbits, regbits) <-> string
 mapping itype_operands = {
-  (imm, rs1, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits(12, imm)
+  (imm, rs1, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
 }
 
 mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ADDI)  <-> "addi"  ^^ itype_operands(imm, rs1, rd)

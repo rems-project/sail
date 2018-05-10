@@ -6,7 +6,10 @@ union option ('a : Type) = {None : unit, Some : 'a}
 val spaces : unit <-> string
 val opt_spaces : unit <-> string
 val def_spaces : unit <-> string
-val hex_bits : forall 'n. (atom('n), bits('n)) <-> string
+val hex_bits_12 : bits(12) <-> string
+
+val hex_bits_12_forwards = "string_of_bits" : bits(12) -> string
+val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
 
 val spaces_forwards : unit -> string
 function spaces_forwards () = " "
@@ -37,7 +40,6 @@ val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-
 val "eq_bit" : (bit, bit) -> bool
 
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool

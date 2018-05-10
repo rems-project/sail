@@ -644,3 +644,13 @@ let spaces_matches_prefix s =
   | 0 -> ZNone ()
   | n -> ZSome ((), Big_int.of_int n)
 
+
+let hex_bits_12_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 4096 then
+       ZSome ((bits_of_int 2048 n, len))
+     else
+       ZNone ()
