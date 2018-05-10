@@ -224,6 +224,22 @@ function clause print_insn (RTYPE(rs2, rs1, rd, op)) =
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
+val rtype_operands : (regbits, regbits, regbits) <-> string
+mapping rtype_operands = {
+  (rs2, rs1, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+}
+
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_ADD)  <-> "add"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SUB)  <-> "sub"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SLL)  <-> "sll"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SLT)  <-> "slt"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SLTU) <-> "sltu" ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_XOR)  <-> "xor"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SRL)  <-> "srl"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SRA)  <-> "sra"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_OR)   <-> "or"   ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_AND)  <-> "and"  ^^ rtype_operands(rs2, rs1, rd)
+
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
 
