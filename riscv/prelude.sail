@@ -6,10 +6,15 @@ union option ('a : Type) = {None : unit, Some : 'a}
 val spaces : unit <-> string
 val opt_spaces : unit <-> string
 val def_spaces : unit <-> string
-val hex_bits_12 : bits(12) <-> string
 
+val hex_bits_12 : bits(12) <-> string
 val hex_bits_12_forwards = "string_of_bits" : bits(12) -> string
 val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
+
+val hex_bits_20 : bits(20) <-> string
+val hex_bits_20_forwards = "string_of_bits" : bits(20) -> string
+val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))
+
 
 val spaces_forwards : unit -> string
 function spaces_forwards () = " "

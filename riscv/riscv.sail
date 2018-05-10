@@ -35,6 +35,13 @@ function clause print_insn UTYPE(imm, rd, op) =
     RISCV_AUIPC => "auipc " ^ rd ^ ", " ^ BitStr(imm)
   }
 
+val utype_operands : (bits(20), regbits) <-> string
+mapping utype_operands = {
+  (imm, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_20(imm)
+}
+
+mapping clause assembly = UTYPE(imm, rd, RISCV_LUI)   <-> "lui"   ^^ utype_operands(imm, rd)
+mapping clause assembly = UTYPE(imm, rd, RISCV_AUIPC) <-> "auipc" ^^ utype_operands(imm, rd)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
@@ -291,6 +298,36 @@ function clause print_insn (LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
       (DOUBLE, true)  => "ldu   "
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
+
+/* TODO FIXME: is this the actual aq/rl syntax? */
+val maybe_aq : bool <-> string
+mapping maybe_aq = {
+  true  <-> ".aq",
+  false <-> ""
+}
+
+val maybe_rl : bool <-> string
+mapping maybe_rl = {
+  true  <-> ".rl",
+  false <-> ""
+}
+
+val maybe_u : bool <-> string
+mapping maybe_u = {
+  true  <-> "u",
+  false <-> ""
+}
+
+val load_operands : (bits(12), regbits, regbits, bool, bool, bool) <-> string
+mapping load_operands = {
+  (imm, rs1, rd, is_unsigned, aq, rl) <-> maybe_u(is_unsigned) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+}
+
+                       /* LOAD(imm, rs1, rd, is_unsigned,  width,    aq,    rl) */
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, DOUBLE,    aq,    rl) <-> "ld" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned,   WORD,    aq,    rl) <-> "lw" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned,   HALF,    aq,    rl) <-> "lh" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned,   BYTE,    aq,    rl) <-> "lb" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
 
 /* ****************************************************************** */
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
