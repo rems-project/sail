@@ -180,12 +180,12 @@ mapping reg_name = {
 
 val operand_sep : unit <-> string
 mapping operand_sep = {
-  () <-> opt_spaces(0) ^^ "," ^^ opt_spaces(1)
+  () <-> opt_spaces() ^^ "," ^^ def_spaces()
 }
 
-val itype_operands : (bits(20), regbits, regbits) <-> string
+val itype_operands : (bits(12), regbits, regbits) <-> string
 mapping itype_operands = {
-  (imm, rs1, rd) <-> spaces(1) ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits(20, imm)
+  (imm, rs1, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits(12, imm)
 }
 
 mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ADDI)  <-> "addi"  ^^ itype_operands(imm, rs1, rd)
