@@ -15,6 +15,10 @@ val hex_bits_20 : bits(20) <-> string
 val hex_bits_20_forwards = "string_of_bits" : bits(20) -> string
 val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))
 
+val hex_bits_21 : bits(21) <-> string
+val hex_bits_21_forwards = "string_of_bits" : bits(21) -> string
+val "hex_bits_21_matches_prefix" : string -> option((bits(21), nat))
+
 
 val spaces_forwards : unit -> string
 function spaces_forwards () = " "

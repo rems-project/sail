@@ -654,3 +654,23 @@ let hex_bits_12_matches_prefix s =
        ZSome ((bits_of_int 2048 n, len))
      else
        ZNone ()
+
+let hex_bits_20_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 1048576 then
+       ZSome ((bits_of_int 524288 n, len))
+     else
+       ZNone ()
+
+let hex_bits_21_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 2097152 then
+       ZSome ((bits_of_int 1048576 n, len))
+     else
+       ZNone ()

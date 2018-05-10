@@ -15,11 +15,17 @@ scattered function print_insn
 val assembly : ast <-> string
 scattered mapping assembly
 
+val encdec : ast <-> bits(32)
+scattered mapping encdec
+
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
 
 function clause decode imm : bits(20) @ rd : regbits @ 0b0110111 = Some(UTYPE(imm, rd, RISCV_LUI))
 function clause decode imm : bits(20) @ rd : regbits @ 0b0010111 = Some(UTYPE(imm, rd, RISCV_AUIPC))
+
+mapping clause encdec = UTYPE(imm, rd, RISCV_LUI)   <-> imm : bits(20) @ rd : regbits @ 0b0110111
+mapping clause encdec = UTYPE(imm, rd, RISCV_AUIPC) <-> imm : bits(20) @ rd : regbits @ 0b0010111
 
 function clause execute UTYPE(imm, rd, op) =
     let off : xlenbits = EXTS(imm @ 0x000) in
@@ -48,6 +54,11 @@ union clause ast = RISCV_JAL : (bits(21), regbits)
 
 function clause decode imm : bits(20) @ rd : regbits @ 0b1101111 = Some (RISCV_JAL(imm[19] @ imm[7..0] @ imm[8] @ imm[18..13] @ imm[12..9] @ 0b0, rd))
 
+/* TODO: handle 2-byte-alignment in mappings */
+
+mapping clause encdec = RISCV_JAL(imm_19 : bits(1) @ imm_7_0 : bits(8) @ imm_8 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ 0b0, rd)
+                    <-> imm_19 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ imm_8 : bits(1) @ imm_7_0 : bits(8) @ rd : regbits @ 0b1101111
+
 function clause execute (RISCV_JAL(imm, rd)) = {
     let pc : xlenbits = PC;
     X(rd) = nextPC;  /* compatible with JAL and C.JAL */
@@ -57,6 +68,8 @@ function clause execute (RISCV_JAL(imm, rd)) = {
 
 function clause print_insn (RISCV_JAL(imm, rd)) =
   "jal   " ^ rd ^ ", " ^ BitStr(imm)
+
+mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_21(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
@@ -378,6 +391,18 @@ function clause print_insn (STORE(imm, rs2, rs1, width, aq, rl)) =
       DOUBLE => "sd    "
     } in
   insn ^ rs2 ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
+
+val store_operands : (bits(12), regbits, regbits, bool, bool) <-> string
+mapping store_operands = {
+  (imm, rs1, rd, aq, rl) <-> maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+}
+
+                       /* STORE(imm, rs1, rd,  width,    aq,    rl) */
+mapping clause assembly = STORE(imm, rs1, rd, DOUBLE,    aq,    rl) <-> "sd" ^^ store_operands(imm, rs1, rd, aq, rl)
+mapping clause assembly = STORE(imm, rs1, rd,   WORD,    aq,    rl) <-> "sw" ^^ store_operands(imm, rs1, rd, aq, rl)
+mapping clause assembly = STORE(imm, rs1, rd,   HALF,    aq,    rl) <-> "sh" ^^ store_operands(imm, rs1, rd, aq, rl)
+mapping clause assembly = STORE(imm, rs1, rd,   BYTE,    aq,    rl) <-> "sb" ^^ store_operands(imm, rs1, rd, aq, rl)
+
 
 /* ****************************************************************** */
 union clause ast = ADDIW : (bits(12), regbits, regbits)
@@ -1533,3 +1558,4 @@ end decodeCompressed
 end execute
 end print_insn
 end assembly
+end encdec
