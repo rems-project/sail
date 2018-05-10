@@ -123,7 +123,7 @@ let commands = ref StringSet.empty
 let rec latex_command ?prefix:(prefix="") ?label:(label=None) dir cmd no_loc ((l, _) as annot) =
   let labelling = match label with
     | None -> ""
-    | Some l -> Printf.sprintf "\\label{%s%s}" prefix l
+    | Some l -> Printf.sprintf "\\label{%s}" l
   in
   let cmd = !opt_prefix_latex ^ prefix ^ cmd in
   if StringSet.mem cmd !commands then
