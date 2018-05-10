@@ -329,21 +329,5 @@ let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
 
 val eq_vec    : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val neq_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ult_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val slt_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ugt_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val sgt_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ulteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val slteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ugteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val sgteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 let inline eq_vec    = eq_mword
 let inline neq_vec   = neq_mword
-let inline ult_vec   = ucmp_mword (<)
-let inline slt_vec   = scmp_mword (<)
-let inline ugt_vec   = ucmp_mword (>)
-let inline sgt_vec   = scmp_mword (>)
-let inline ulteq_vec = ucmp_mword (<=)
-let inline slteq_vec = scmp_mword (<=)
-let inline ugteq_vec = ucmp_mword (>=)
-let inline sgteq_vec = scmp_mword (>=)

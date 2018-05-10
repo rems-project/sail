@@ -350,11 +350,11 @@ infix 4 <_u
 infix 4 >=_u
 infix 4 <=_u
 
-val operator <_s  = {lem: "slt_vec"}   : forall 'n. (bits('n), bits('n)) -> bool
-val operator >=_s = {lem: "sgteq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
-val operator <_u  = {lem: "ult_vec"}   : forall 'n. (bits('n), bits('n)) -> bool
-val operator >=_u = {lem: "ugteq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
-val operator <=_u = {lem: "ulteq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+val operator <_s  : forall 'n. (bits('n), bits('n)) -> bool
+val operator >=_s : forall 'n. (bits('n), bits('n)) -> bool
+val operator <_u  : forall 'n. (bits('n), bits('n)) -> bool
+val operator >=_u : forall 'n. (bits('n), bits('n)) -> bool
+val operator <=_u : forall 'n. (bits('n), bits('n)) -> bool
 
 function operator <_s  (x, y) = signed(x) < signed(y)
 function operator >=_s (x, y) = signed(x) >= signed(y)

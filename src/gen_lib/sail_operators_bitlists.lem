@@ -308,21 +308,5 @@ let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
 
 val eq_vec    : list bitU -> list bitU -> bool
 val neq_vec   : list bitU -> list bitU -> bool
-val ult_vec   : list bitU -> list bitU -> bool
-val slt_vec   : list bitU -> list bitU -> bool
-val ugt_vec   : list bitU -> list bitU -> bool
-val sgt_vec   : list bitU -> list bitU -> bool
-val ulteq_vec : list bitU -> list bitU -> bool
-val slteq_vec : list bitU -> list bitU -> bool
-val ugteq_vec : list bitU -> list bitU -> bool
-val sgteq_vec : list bitU -> list bitU -> bool
 let eq_vec    = eq_bv
 let neq_vec   = neq_bv
-let ult_vec   = ult_bv
-let slt_vec   = slt_bv
-let ugt_vec   = ugt_bv
-let sgt_vec   = sgt_bv
-let ulteq_vec = ulteq_bv
-let slteq_vec = slteq_bv
-let ugteq_vec = ugteq_bv
-let sgteq_vec = sgteq_bv
