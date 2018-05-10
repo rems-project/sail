@@ -1,6 +1,6 @@
 SCRIPTS = sail_instr_kindsScript.sml sail_valuesScript.sml sail_operatorsScript.sml \
   sail_operators_mwordsScript.sml sail_operators_bitlistsScript.sml \
-  state_monadScript.sml stateScript.sml
+  state_monadScript.sml stateScript.sml promptScript.sml prompt_monadScript.sml
 
 EXTRA_CLEANS = $(SCRIPTS)
 
