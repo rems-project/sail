@@ -293,12 +293,16 @@ function process_load(rd, addr, value, is_unsigned) =
   }
 
 function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
-    let addr  : xlenbits = X(rs1) + EXTS(imm) in
-    match width {
-      BYTE   => process_load(rd, addr, mem_read(addr, 1, aq, rl, false), is_unsigned),
-      HALF   => process_load(rd, addr, mem_read(addr, 2, aq, rl, false), is_unsigned),
-      WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, false), is_unsigned),
-      DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, rl, false), is_unsigned)
+    let vaddr : xlenbits = X(rs1) + EXTS(imm) in
+    match translateAddr(vaddr, Read, Data) {
+      TR_Failure(e) => handle_mem_exception(vaddr, e),
+      TR_Address(addr) =>
+        match width {
+          BYTE   => process_load(rd, vaddr, mem_read(addr, 1, aq, rl, false), is_unsigned),
+          HALF   => process_load(rd, vaddr, mem_read(addr, 2, aq, rl, false), is_unsigned),
+          WORD   => process_load(rd, vaddr, mem_read(addr, 4, aq, rl, false), is_unsigned),
+          DOUBLE => process_load(rd, vaddr, mem_read(addr, 8, aq, rl, false), is_unsigned)
+        }
     }
 
 /* FIXME: aq/rl are getting dropped */
@@ -311,7 +315,8 @@ function clause print_insn (LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
       (HALF,   true)  => "lhu   ",
       (WORD,   false) => "lw    ",
       (WORD,   true)  => "lwu   ",
-      (_,      _)     => "ld.bad "
+      (DOUBLE, false) => "ld    ",
+      (DOUBLE, true)  => "ldu   "
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
@@ -323,29 +328,35 @@ function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b001 @ 
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b010 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, WORD, false, false))
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b011 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, DOUBLE, false, false))
 
+/* NOTE: Currently, we only EA if address translation is successful.
+   This may need revisiting. */
 function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
-    let addr : xlenbits = X(rs1) + EXTS(imm) in
-    let eares : MemoryOpResult(unit) = match width {
-      BYTE   => mem_write_ea(addr, 1, aq, rl, false),
-      HALF   => mem_write_ea(addr, 2, aq, rl, false),
-      WORD   => mem_write_ea(addr, 4, aq, rl, false),
-      DOUBLE => mem_write_ea(addr, 8, aq, rl, false)
-    } in
-    match (eares) {
-      MemException(e) => handle_mem_exception(addr, e),
-      MemValue(_) => {
-        let rs2_val = X(rs2) in
-        let res : MemoryOpResult(unit) = match width {
-          BYTE   => mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false),
-          HALF   => mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false),
-          WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, false),
-          DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, false)
+    let vaddr : xlenbits = X(rs1) + EXTS(imm) in
+    match translateAddr(vaddr, Write, Data) {
+      TR_Failure(e) => handle_mem_exception(vaddr, e),
+      TR_Address(addr) =>
+        let eares : MemoryOpResult(unit) = match width {
+          BYTE   => mem_write_ea(addr, 1, aq, rl, false),
+          HALF   => mem_write_ea(addr, 2, aq, rl, false),
+          WORD   => mem_write_ea(addr, 4, aq, rl, false),
+          DOUBLE => mem_write_ea(addr, 8, aq, rl, false)
         } in
-        match (res) {
-          MemValue(_)     => (),
-          MemException(e) => handle_mem_exception(addr, e)
+        match (eares) {
+          MemException(e) => handle_mem_exception(addr, e),
+          MemValue(_) => {
+            let rs2_val = X(rs2) in
+            let res : MemoryOpResult(unit) = match width {
+              BYTE   => mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false),
+              HALF   => mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false),
+              WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, false),
+              DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, false)
+            } in
+            match (res) {
+              MemValue(_)     => (),
+              MemException(e) => handle_mem_exception(addr, e)
+            }
+          }
         }
-      }
     }
 
 /* FIXME: aq/rl are getting dropped */
@@ -581,7 +592,7 @@ function clause execute ECALL() =
                       Machine => E_M_EnvCall
 		    },
 	     excinfo = (None() : option(xlenbits)) } in
-  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 
 function clause print_insn (ECALL()) =
   "ecall"
@@ -591,8 +602,12 @@ union clause ast = MRET : unit
 
 function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
 
-function clause execute MRET() =
-  nextPC = handle_exception_ctl(cur_privilege, CTL_MRET(), PC)
+function clause execute MRET() = {
+  if cur_privilege == Machine then
+    nextPC = handle_exception(cur_privilege, CTL_MRET(), PC)
+  else
+    handle_illegal()
+}
 
 function clause print_insn (MRET()) =
   "mret"
@@ -600,10 +615,16 @@ function clause print_insn (MRET()) =
 /* ****************************************************************** */
 union clause ast = SRET : unit
 
-function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
+function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(SRET())
 
 function clause execute SRET() =
-  nextPC = handle_exception_ctl(cur_privilege, CTL_SRET(), PC)
+  match cur_privilege {
+    User       => handle_illegal(),
+    Supervisor => if mstatus.TSR() == true
+                  then handle_illegal()
+                  else nextPC = handle_exception(cur_privilege, CTL_SRET(), PC),
+    Machine    => nextPC = handle_exception(cur_privilege, CTL_SRET(), PC)
+  }
 
 function clause print_insn (SRET()) =
   "sret"
@@ -619,6 +640,48 @@ function clause print_insn (EBREAK()) =
   "ebreak"
 
 /* ****************************************************************** */
+union clause ast = WFI : unit
+
+function clause decode 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(WFI())
+
+function clause execute WFI() = {
+  match cur_privilege {
+    Machine    => (),
+    Supervisor => if mstatus.TW() == true
+                  then handle_illegal()
+                  else (),
+    User       => handle_illegal()
+  }
+}
+
+function clause print_insn (WFI()) =
+  "wfi"
+
+/* ****************************************************************** */
+union clause ast = SFENCE_VMA : (regbits, regbits)
+
+function clause decode 0b0001001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ 0b00000 @ 0b1110011 = Some(SFENCE_VMA(rs1, rs2))
+
+function clause execute SFENCE_VMA(rs1, rs2) = {
+  /* FIXME: spec leaves unspecified what happens if this is executed in M-mode.
+     We assume it is the same as S-mode, which is definitely wrong.
+   */
+  if cur_privilege == User then handle_illegal()
+  else match (architecture(mstatus.SXL()), mstatus.TVM()) {
+    (Some(RV64), true)  => handle_illegal(),
+    (Some(RV64), false) => {
+      let addr : option(vaddr39) = if rs1 == 0 then None() else Some(X(rs1)[38 .. 0]);
+      let asid : option(asid64)  = if rs2 == 0 then None() else Some(X(rs2)[15 .. 0]);
+      flushTLB(asid, addr)
+    },
+    (_, _) => internal_error("unimplemented sfence architecture")
+  }
+}
+
+function clause print_insn (SFENCE_VMA(rs1, rs2)) =
+  "sfence.vma " ^ rs1 ^ ", " ^ rs2
+
+/* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
 
 function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, WORD, rd))
@@ -627,11 +690,15 @@ function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b011 @
 val process_loadres : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> unit
 
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
-  let addr : xlenbits = X(rs1) in
-  match width {
-    WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, true), false),
-    DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, rl, true), false),
-    _      => internal_error("LOADRES expected WORD or DOUBLE")
+  let vaddr : xlenbits = X(rs1) in
+  match translateAddr(vaddr, Read, Data) {
+    TR_Failure(e) => handle_mem_exception(vaddr, e),
+    TR_Address(addr) =>
+      match width {
+        WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, true), false),
+        DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, rl, true), false),
+        _      => internal_error("LOADRES expected WORD or DOUBLE")
+      }
   }
 
 /* FIXME */
@@ -650,29 +717,36 @@ union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits
 function clause decode 0b00011 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(STORECON(aq, rl, rs2, rs1, WORD, rd))
 function clause decode 0b00011 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
 
+/* NOTE: Currently, we only EA if address translation is successful.
+   This may need revisiting. */
 function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   status : bits(1) = if speculate_conditional_success() then 0b0 else 0b1;
   X(rd) = EXTZ(status);
 
   if status == 0b1 then () else {
-    addr : xlenbits = X(rs1);
-    let eares : MemoryOpResult(unit) = match width {
-      WORD   => mem_write_ea(addr, 4, aq, rl, true),
-      DOUBLE => mem_write_ea(addr, 8, aq, rl, true),
-      _      => internal_error("STORECON expected word or double")
-    };
-    match (eares) {
-      MemException(e)  => handle_mem_exception(addr, e),
-      MemValue(_) => {
-        rs2_val = X(rs2);
-        let res : MemoryOpResult(unit) = match width {
-          WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true),
-          DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true),
+    vaddr : xlenbits = X(rs1);
+    match translateAddr(vaddr, Write, Data) {
+      TR_Failure(e) => handle_mem_exception(vaddr, e),
+      TR_Address(addr) => {
+        let eares : MemoryOpResult(unit) = match width {
+          WORD   => mem_write_ea(addr, 4, aq, rl, true),
+          DOUBLE => mem_write_ea(addr, 8, aq, rl, true),
           _      => internal_error("STORECON expected word or double")
-        } in
-        match (res) {
-          MemValue(_)     => (),
-          MemException(e) => handle_mem_exception(addr, e)
+        };
+        match (eares) {
+          MemException(e)  => handle_mem_exception(addr, e),
+          MemValue(_) => {
+            rs2_val = X(rs2);
+            let res : MemoryOpResult(unit) = match width {
+              WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true),
+              DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true),
+              _      => internal_error("STORECON expected word or double")
+            } in
+            match (res) {
+              MemValue(_)     => (),
+              MemException(e) => handle_mem_exception(addr, e)
+            }
+          }
         }
       }
     }
@@ -711,49 +785,55 @@ function clause decode 0b11000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0
 function clause decode 0b11100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, WORD,   rd))
 function clause decode 0b11100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, DOUBLE, rd))
 
+/* NOTE: Currently, we only EA if address translation is successful.
+   This may need revisiting. */
 function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
-  addr : xlenbits = X(rs1);
-
-  let eares : MemoryOpResult(unit) = match width {
-    WORD   => mem_write_ea(addr, 4, aq & rl, rl, true),
-    DOUBLE => mem_write_ea(addr, 8, aq & rl, rl, true),
-    _      => internal_error ("AMO expected WORD or DOUBLE")
-  };
-  match (eares) {
-    MemException(e) => handle_mem_exception(addr, e),
-    MemValue(_) => {
-      let rval : MemoryOpResult(xlenbits) = match width {
-        WORD   => extend_value(false, mem_read(addr, 4, aq, aq & rl, true)),
-        DOUBLE => extend_value(false, mem_read(addr, 8, aq, aq & rl, true)),
-      _        => internal_error ("AMO expected WORD or DOUBLE")
+  vaddr : xlenbits = X(rs1);
+  match translateAddr(vaddr, ReadWrite, Data) {
+    TR_Failure(e) => handle_mem_exception(vaddr, e),
+    TR_Address(addr) => {
+      let eares : MemoryOpResult(unit) = match width {
+        WORD   => mem_write_ea(addr, 4, aq & rl, rl, true),
+        DOUBLE => mem_write_ea(addr, 8, aq & rl, rl, true),
+        _      => internal_error ("AMO expected WORD or DOUBLE")
       };
-      match (rval) {
+      match (eares) {
         MemException(e) => handle_mem_exception(addr, e),
-        MemValue(loaded) => {
-          rs2_val : xlenbits = X(rs2);
-          result : xlenbits =
-            match op {
-              AMOSWAP => rs2_val,
-              AMOADD  => rs2_val + loaded,
-              AMOXOR  => rs2_val ^ loaded,
-              AMOAND  => rs2_val & loaded,
-              AMOOR   => rs2_val | loaded,
-
-              /* Have to convert number to vector here. Check this */
-              AMOMIN  => vector64(min(signed(rs2_val),   signed(loaded))),
-              AMOMAX  => vector64(max(signed(rs2_val),   signed(loaded))),
-              AMOMINU => vector64(min(unsigned(rs2_val), unsigned(loaded))),
-              AMOMAXU => vector64(max(unsigned(rs2_val), unsigned(loaded)))
-            };
-
-          let wval : MemoryOpResult(unit) = match width {
-            WORD   => mem_write_value(addr, 4, result[31..0], aq & rl, rl, true),
-            DOUBLE => mem_write_value(addr, 8, result,        aq & rl, rl, true),
-            _      => internal_error("AMO expected WORD or DOUBLE")
+        MemValue(_) => {
+          let rval : MemoryOpResult(xlenbits) = match width {
+            WORD   => extend_value(false, mem_read(addr, 4, aq, aq & rl, true)),
+            DOUBLE => extend_value(false, mem_read(addr, 8, aq, aq & rl, true)),
+          _        => internal_error ("AMO expected WORD or DOUBLE")
           };
-          match (wval) {
-            MemValue(_) => X(rd) = loaded,
-            MemException(e) => handle_mem_exception(addr, e)
+          match (rval) {
+            MemException(e) => handle_mem_exception(addr, e),
+            MemValue(loaded) => {
+              rs2_val : xlenbits = X(rs2);
+              result : xlenbits =
+                match op {
+                  AMOSWAP => rs2_val,
+                  AMOADD  => rs2_val + loaded,
+                  AMOXOR  => rs2_val ^ loaded,
+                  AMOAND  => rs2_val & loaded,
+                  AMOOR   => rs2_val | loaded,
+
+                  /* Have to convert number to vector here. Check this */
+                  AMOMIN  => vector64(min(signed(rs2_val),   signed(loaded))),
+                  AMOMAX  => vector64(max(signed(rs2_val),   signed(loaded))),
+                  AMOMINU => vector64(min(unsigned(rs2_val), unsigned(loaded))),
+                  AMOMAXU => vector64(max(unsigned(rs2_val), unsigned(loaded)))
+                };
+
+              let wval : MemoryOpResult(unit) = match width {
+                WORD   => mem_write_value(addr, 4, result[31..0], aq & rl, rl, true),
+                DOUBLE => mem_write_value(addr, 8, result,        aq & rl, rl, true),
+                _      => internal_error("AMO expected WORD or DOUBLE")
+              };
+              match (wval) {
+                MemValue(_) => X(rd) = loaded,
+                MemException(e) => handle_mem_exception(addr, e)
+              }
+            }
           }
         }
       }
@@ -796,7 +876,7 @@ function clause decode csr : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRS))
 function clause decode csr : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRC))
 
-function readCSR csr: bits(12) -> xlenbits =
+function readCSR csr : csreg -> xlenbits =
   match csr {
     /* machine mode */
     0xF11 => mvendorid,
@@ -804,6 +884,7 @@ function readCSR csr: bits(12) -> xlenbits =
     0xF13 => mimpid,
     0xF14 => mhartid,
     0x300 => mstatus.bits(),
+    0x301 => misa.bits(),
     0x302 => medeleg.bits(),
     0x303 => mideleg.bits(),
     0x304 => mie.bits(),
@@ -832,46 +913,50 @@ function readCSR csr: bits(12) -> xlenbits =
     0xC01 => mtime,
     0xC02 => minstret,
 
+    /* trigger/debug */
+    0x7a0 => ~(tselect),    /* this indicates we don't have any trigger support */
+
     _     => { print_bits("unhandled read to CSR ", csr);
                0x0000_0000_0000_0000 }
   }
 
-function writeCSR (csr : bits(12), value : xlenbits) -> unit =
+function writeCSR (csr : csreg, value : xlenbits) -> unit =
+  let res : option(xlenbits) =
   match csr {
     /* machine mode */
-    0x300 => mstatus = legalize_mstatus(mstatus, value),
-    0x302 => medeleg = legalize_medeleg(medeleg, value),
-    0x303 => mideleg = legalize_mideleg(mideleg, value),
-    0x304 => mie = legalize_mie(mie, value),
-    0x305 => mtvec = legalize_tvec(mtvec, value),
-    0x340 => mscratch = value,
-    0x341 => mepc = legalize_xepc(value),
-    0x342 => mcause->bits() = value,
-    0x343 => mtval = value,
-    0x344 => mip = legalize_mip(mip, value),
+    0x300 => { mstatus = legalize_mstatus(mstatus, value); Some(mstatus.bits()) },
+    0x302 => { medeleg = legalize_medeleg(medeleg, value); Some(medeleg.bits()) },
+    0x303 => { mideleg = legalize_mideleg(mideleg, value); Some(mideleg.bits()) },
+    0x304 => { mie = legalize_mie(mie, value); Some(mie.bits()) },
+    0x305 => { mtvec = legalize_tvec(mtvec, value); Some(mtvec.bits()) },
+    0x340 => { mscratch = value; Some(mscratch) },
+    0x341 => { mepc = legalize_xepc(value); Some(mepc) },
+    0x342 => { mcause->bits() = value; Some(mcause.bits()) },
+    0x343 => { mtval = value; Some(mtval) },
+    0x344 => { mip = legalize_mip(mip, value); Some(mip.bits()) },
 
     /* supervisor mode */
-    0x100 => mstatus = legalize_sstatus(mstatus, value),
-    0x102 => sedeleg = legalize_sedeleg(sedeleg, value),
-    0x103 => sideleg->bits() = value, /* TODO: does this need legalization? */
-    0x104 => mie = legalize_sie(mie, mideleg, value),
-    0x105 => stvec = legalize_tvec(stvec, value),
-    0x140 => sscratch = value,
-    0x141 => sepc = legalize_xepc(value),
-    0x142 => scause->bits() = value,
-    0x143 => stval = value,
-    0x144 => mip = legalize_sip(mip, mideleg, value),
-    0x180 => satp = legalize_satp(cur_Architecture(), satp, value),
+    0x100 => { mstatus = legalize_sstatus(mstatus, value); Some(mstatus.bits()) },
+    0x102 => { sedeleg = legalize_sedeleg(sedeleg, value); Some(sedeleg.bits()) },
+    0x103 => { sideleg->bits() = value; Some(sideleg.bits()) }, /* TODO: does this need legalization? */
+    0x104 => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) },
+    0x105 => { stvec = legalize_tvec(stvec, value); Some(stvec.bits()) },
+    0x140 => { sscratch = value; Some(sscratch) },
+    0x141 => { sepc = legalize_xepc(value); Some(sepc) },
+    0x142 => { scause->bits() = value; Some(scause.bits()) },
+    0x143 => { stval = value; Some(stval) },
+    0x144 => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) },
+    0x180 => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) },
 
-    _     => print_bits("unhandled write to CSR ", csr)
+    /* trigger/debug */
+    0x7a0 => { tselect = value; Some(tselect) },
+
+    _     => None()
+  } in
+  match res {
+    Some(v) => print("CSR " ^ csr ^ " <- " ^ BitStr(v) ^ " (input: " ^ BitStr(value) ^ ")"),
+    None()  => print_bits("unhandled write to CSR ", csr)
   }
-
-function haveCSRPriv (csr : bits(12), isWrite : bool) -> bool =
-  let isRO = csr[11..10] == 0b11 in
-  ~ (isRO & isWrite) /* XXX TODO check priv */
-
-val signalIllegalInstruction : unit -> unit effect {escape}
-function signalIllegalInstruction () = not_implemented ("illegal instruction")
 
 function clause execute CSR(csr, rs1, rd, is_imm, op) =
   let rs1_val : xlenbits = if is_imm then EXTZ(rs1) else X(rs1) in
@@ -879,13 +964,9 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     CSRRW  => true,
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
-  if ~ (check_CSR(csr, cur_privilege, isWrite)) then {
-    let instr : xlenbits = cur_inst;
-    let t : sync_exception =
-    struct { trap = E_Illegal_Instr,
-             excinfo = Some (instr) } in
-    nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
-  } else {
+  if ~ (check_CSR(csr, cur_privilege, isWrite))
+  then handle_illegal()
+  else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
     if isWrite then {
       let new_val : xlenbits = match op {
@@ -908,7 +989,8 @@ function clause print_insn (CSR(csr, rs1, rd, is_imm, op)) =
       (CSRRC, true)  => "csrrci ",
       (CSRRC, false) => "csrrc  "
     } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ csr_name(csr)
+  let rs1_str : string = if is_imm then BitStr(rs1) else reg_name_abi(rs1) in
+  insn ^ rd ^ ", " ^ rs1_str ^ ", " ^ csr_name(csr)
 
 /* ****************************************************************** */
 union clause ast = NOP : unit
@@ -928,12 +1010,7 @@ union clause ast = ILLEGAL : unit
 
 function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(ILLEGAL())
 
-function clause execute ILLEGAL() = {
-  let t : sync_exception =
-  struct { trap = E_Illegal_Instr,
-           excinfo = Some (EXTZ(0b0)) } in
-  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
-}
+function clause execute ILLEGAL() = handle_illegal ()
 
 function clause print_insn (ILLEGAL()) =
   "illegal"

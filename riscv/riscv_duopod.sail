@@ -5,6 +5,9 @@ type xlen_t = bits(64)
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
 
+val zeros : forall 'n. atom('n) -> bits('n)
+function zeros n = replicate_bits(0b0, n)
+
 val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
 function regbits_to_regno b = let r as atom(_) = unsigned(b) in r
 
@@ -33,7 +36,8 @@ overload X = {rX, wX}
 /* Accessors for memory */
 
 val MEMr : forall 'n. (xlen_t, atom('n)) -> bits(8 * 'n) effect {rmem}
-function MEMr (addr, width) = __RISCV_read(addr, width)
+function MEMr (addr, width) =
+  match __RISCV_read(addr, width) { Some(v) => v, None() => zeros(8 * width) }
 
 /* Instruction decode and execute */
 enum iop = {RISCV_ADDI, RISCV_SLTI, RISCV_SLTIU, RISCV_XORI, RISCV_ORI, RISCV_ANDI} /* immediate ops */

@@ -218,7 +218,7 @@ function tvec_addr(m : Mtvec, c : Mcause) -> option(xlenbits) = {
   let base : xlenbits = m.Base() @ 0b00;
   match (trapVectorMode_of_bits(m.Mode())) {
     TV_Direct => Some(base),
-    TV_Vector => if   mcause.IsInterrupt() == 0b1  /* FIXME: Why not already boolean? */
+    TV_Vector => if   c.IsInterrupt() == true
                  then Some(base + (EXTZ(c.Cause()) << 0b10))
                  else Some(base),
     TV_Reserved => None()
@@ -392,8 +392,9 @@ register satp : xlenbits
 function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits = {
   let s = Mk_Satp64(v);
   match satpMode_of_bits(a, s.Mode()) {
-    None()  => o,
-    Some(_) => s.bits()
+    None()     => o,
+    Some(Sv32) => o,  /* Sv32 is unsupported for now */
+    Some(_)    => s.bits()
   }
 }
 
@@ -402,6 +403,9 @@ register sscratch : xlenbits
 register sepc : xlenbits
 register scause : Mcause
 register stval : xlenbits
+
+/* disabled trigger/debug module */
+register tselect : xlenbits
 
 /* csr name printer */
 
@@ -465,6 +469,8 @@ function csr_name(csr) = {
     0xB80  => "mcycleh",
     0xB82  => "minstreth",
     /* TODO: other hpm counters and events */
+    /* trigger/debug */
+    0x7a0  => "tselect",
     _      => "UNKNOWN"
   }
 }
@@ -513,6 +519,9 @@ function is_CSR_defined (csr : bits(12), p : Privilege) -> bool =
 
     /* supervisor mode: address translation */
     0x180 => p == Machine | p == Supervisor, // satp
+
+    /* disabled trigger/debug module */
+    0x7a0 => p == Machine,
 
     _     => false
   }
@@ -609,27 +618,28 @@ function tval(excinfo : option(xlenbits)) -> xlenbits = {
 
 union ctl_result = {
   CTL_TRAP : sync_exception,
-/* TODO: CTL_URET */
   CTL_SRET : unit,
   CTL_MRET : unit
+/* TODO: CTL_URET */
 }
 
-/* handle exceptional ctl flow by updating nextPC */
+/* handle exceptional ctl flow by updating nextPC and operating privilege */
 
-function handle_trap(curp : Privilege, e : sync_exception,
-                     pc : xlenbits) -> xlenbits = {
-  let priv = exception_delegatee(e.trap, curp);
-  cur_privilege = priv;
-  match (priv) {
+function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
+                    -> xlenbits = {
+  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
+  match (del_priv) {
     Machine => {
-       mcause->IsInterrupt() = false;
-       mcause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
+       mcause->IsInterrupt() = intr;
+       mcause->Cause()       = EXTZ(c);
 
        mstatus->MPIE() = mstatus.MIE();
        mstatus->MIE()  = false;
-       mstatus->MPP()  = privLevel_to_bits(curp);
-       mtval           = tval(e.excinfo);
+       mstatus->MPP()  = privLevel_to_bits(cur_privilege);
+       mtval           = tval(info);
        mepc            = pc;
+
+       cur_privilege   = del_priv;
 
        match tvec_addr(mtvec, mcause) {
          Some(epc) => epc,
@@ -637,18 +647,20 @@ function handle_trap(curp : Privilege, e : sync_exception,
        }
     },
     Supervisor => {
-       scause->IsInterrupt() = false;
-       scause->Cause()       = EXTZ(exceptionType_to_bits(e.trap));
+       scause->IsInterrupt() = intr;
+       scause->Cause()       = EXTZ(c);
 
        mstatus->SPIE() = mstatus.SIE();
        mstatus->SIE()  = false;
-       mstatus->SPP()  = match (curp) {
+       mstatus->SPP()  = match (cur_privilege) {
                            User => false,
                            Supervisor => true,
                            Machine => internal_error("invalid privilege for s-mode trap")
                          };
-       stval           = tval(e.excinfo);
+       stval           = tval(info);
        sepc            = pc;
+
+       cur_privilege   = del_priv;
 
        match tvec_addr(stvec, scause) {
          Some(epc) => epc,
@@ -657,35 +669,59 @@ function handle_trap(curp : Privilege, e : sync_exception,
 
     },
     User => internal_error("the N extension is currently unsupported")
-  }
+  };
 }
 
-function handle_exception_ctl(cur_priv : Privilege, ctl : ctl_result,
-                              pc: xlenbits) -> xlenbits =
+function handle_exception(cur_priv : Privilege, ctl : ctl_result,
+                          pc: xlenbits) -> xlenbits = {
   match (cur_priv, ctl) {
-    (_, CTL_TRAP(e)) => handle_trap(cur_priv, e, pc),
+    (_, CTL_TRAP(e)) => {
+      let del_priv = exception_delegatee(e.trap, cur_priv);
+      print("trapping from " ^ cur_priv ^ " to " ^ del_priv
+            ^ " to handle " ^ e.trap);
+      handle_trap(del_priv, false, e.trap, pc, e.excinfo)
+    },
     (_, CTL_MRET())  => {
+      let prev_priv = cur_privilege;
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = true;
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
+      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
       mepc
     },
     (_, CTL_SRET())  => {
+      let prev_priv = cur_privilege;
       mstatus->SIE()  = mstatus.SPIE();
       mstatus->SPIE() = true;
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
       mstatus->SPP()  = false;
+      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
       sepc
     }
   }
+}
 
 function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
   let t : sync_exception = struct { trap    = e,
                                     excinfo = Some(addr) } in
-  nextPC = handle_exception_ctl(cur_privilege, CTL_TRAP(t), PC)
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 }
 
+function handle_decode_exception(instbits : xlenbits) -> unit = {
+  let t : sync_exception = struct { trap    = E_Illegal_Instr,
+                                    excinfo = Some(instbits) };
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
+}
+
+function handle_interrupt(i : InterruptType, del_priv : Privilege) -> unit =
+  nextPC = handle_trap(del_priv, true, i, PC, None())
+
+function handle_illegal() -> unit = {
+  let t : sync_exception = struct { trap    = E_Illegal_Instr,
+                                    excinfo = None() };
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
+}
 
 function init_sys() -> unit = {
   cur_privilege = Machine;
@@ -700,4 +736,8 @@ function init_sys() -> unit = {
   mstatus->SD()  = false;
 
   mhartid = EXTZ(0b0);
+}
+
+function tick_clock() -> unit = {
+  mcycle = mcycle + 1
 }

@@ -842,6 +842,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     | ( typ ) id					  :: :: cast
 {{ com cast }}
     | ( lexp0 , .. , lexpn )                              :: :: tup {{ com multiple (non-memory) assignment }}
+    | lexp1 @ ... @ lexpn                                 :: :: vector_concat {{ com vector concatenation L-exp }}
     | lexp [ exp ]  :: ::                                 vector  {{ com vector element }}
     | lexp [ exp1 '..' exp2 ]  :: ::                         vector_range {{ com subvector }}
     % maybe comma-sep such lists too

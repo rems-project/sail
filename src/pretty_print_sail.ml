@@ -420,6 +420,7 @@ and doc_atomic_lexp (LEXP_aux (l_aux, _) as lexp) =
   | LEXP_field (lexp, id) -> doc_atomic_lexp lexp ^^ dot ^^ doc_id id
   | LEXP_vector (lexp, exp) -> doc_atomic_lexp lexp ^^ brackets (doc_exp exp)
   | LEXP_vector_range (lexp, exp1, exp2) -> doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string ".."; doc_exp exp2])
+  | LEXP_vector_concat lexps -> parens (separate_map (string " @ ") doc_lexp lexps)
   | LEXP_memory (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
   | _ -> parens (doc_lexp lexp)
 and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_pexp pexps) rbrace

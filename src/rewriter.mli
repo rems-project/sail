@@ -156,6 +156,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; lEXP_tup                 : 'lexp list -> 'lexp_aux
  ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
  ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
+ ; lEXP_vector_concat       : 'lexp list -> 'lexp_aux
  ; lEXP_field               : 'lexp * id -> 'lexp_aux
  ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
  ; fE_Fexp                  : id * 'exp -> 'fexp_aux
@@ -168,7 +169,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
  ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
- ; lB_val          : 'pat * 'exp -> 'letbind_aux
+ ; lB_val                   : 'pat * 'exp -> 'letbind_aux
  ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
  }
@@ -180,6 +181,10 @@ val fold_pat : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg -> 'a pat -> 'pat
 val fold_exp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a exp -> 'exp
+
+val fold_letbind : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a letbind -> 'letbind
 
 val fold_pexp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
@@ -202,6 +207,15 @@ val compute_exp_alg : 'b -> ('b -> 'b -> 'b) ->
   ('b * 'a opt_default_aux),('b * 'a opt_default),('b * 'a pexp),('b * 'a pexp_aux),
   ('b * 'a letbind_aux),('b * 'a letbind),
   ('b * 'a pat),('b * 'a pat_aux),('b * 'a fpat),('b * 'a fpat_aux)) exp_alg
+
+val pure_pat_alg : 'b -> ('b -> 'b -> 'b) -> ('a,'b,'b,'b,'b) pat_alg
+
+val pure_exp_alg : 'b -> ('b -> 'b -> 'b) ->
+  ('a,'b,'b,'b,'b,'b,
+  'b,'b,'b,
+  'b,'b,'b,'b,
+  'b,'b,
+  'b,'b,'b,'b) exp_alg
 
 val simple_annot : Parse_ast.l -> typ -> Parse_ast.l * tannot
 

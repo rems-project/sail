@@ -1,6 +1,3 @@
-val zeros : forall ('n : Int), 'n >= 0. atom('n) -> bits('n)
-
-function zeros n = replicate_bits(0b0, 'n)
 
 val lslc : forall ('n : Int) ('shift : Int), 'n >= 1.
   (bits('n), atom('shift)) -> (bits('n), bit) effect {escape}

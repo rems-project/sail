@@ -5,7 +5,7 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm.
+val add_atom = {ocaml: "add_int", lem: "integerAdd", c: "add_int"} : forall 'n 'm.
   (atom('n), atom('m)) -> atom('n + 'm)
 
 val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int"} : (int, int) -> int

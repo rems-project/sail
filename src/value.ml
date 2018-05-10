@@ -194,6 +194,9 @@ let value_string_drop = function
 let value_string_length = function
   | [v] -> V_int (coerce_string v |> Sail_lib.string_length)
   | _ -> failwith "value string_length"
+let value_eq_bit = function
+  | [v1; v2] -> V_bool (Sail_lib.eq_bit (coerce_bit v1, coerce_bit v2))
+  | _ -> failwith "value eq_bit"
 
 let value_length = function
   | [v] -> V_int (coerce_gv v |> List.length |> Big_int.of_int)
@@ -432,6 +435,7 @@ let primops =
       ("string_startswith", value_string_startswith);
       ("string_drop", value_string_drop);
       ("string_length", value_string_length);
+      ("eq_bit", value_eq_bit);
       ("eq_anything", value_eq_anything);
       ("length", value_length);
       ("subrange", value_subrange);

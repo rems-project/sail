@@ -1027,9 +1027,9 @@ function WaitForInterrupt () = {
   ()
 }
 
-val EndOfInstruction : unit -> unit
+val EndOfInstruction : unit -> unit effect {escape}
 
-function EndOfInstruction () = ()
+function EndOfInstruction () = throw(Error_ExceptionTaken())
 
 register ESR_EL3 : bits(32)
 
@@ -1702,9 +1702,9 @@ function ExternalInvasiveDebugEnabled () = return(DBGEN == HIGH)
 
 val ConstrainUnpredictableInteger : (int, int, Unpredictable) -> (Constraint, int) effect {undef}
 
-function ConstrainUnpredictableInteger (low, high, which) = {
+function ConstrainUnpredictableInteger ('low, 'high, which) = {
   c : Constraint = ConstrainUnpredictable(which);
-  if c == Constraint_UNKNOWN then return((c, low)) else return((c, undefined : int))
+  if c == Constraint_UNKNOWN then return((c, low)) else return((c, undefined))
 }
 
 val ConstrainUnpredictableBool : Unpredictable -> bool effect {escape}
@@ -1803,7 +1803,7 @@ function LookUpRIndex ('n, mode) = {
   return(result)
 }
 
-val HighestSetBit : forall ('N : Int), 'N >= 2. bits('N) -> int
+val HighestSetBit : forall ('N : Int), 'N >= 0. bits('N) -> int
 
 function HighestSetBit x = {
   foreach (i from ('N - 1) to 0 by 1 in dec)
@@ -1813,18 +1813,19 @@ function HighestSetBit x = {
 
 val CountLeadingZeroBits : forall ('N : Int), 'N >= 2. bits('N) -> int
 
-function CountLeadingZeroBits x = return('N - 1 - HighestSetBit(x))
+function CountLeadingZeroBits x = return(('N - 1) - HighestSetBit(x))
 
 val CountLeadingSignBits : forall ('N : Int), 'N >= 3. bits('N) -> int
 
 function CountLeadingSignBits x = return(CountLeadingZeroBits((x >> 1) ^ (x & slice_mask(0,'N))))
 
-val BitReverse : forall ('N : Int), 'N >= 2. bits('N) -> bits('N) effect {undef}
+val BitReverse : forall ('N : Int), 'N >= 0 & 'N >= 0.
+  bits('N) -> bits('N) effect {undef}
 
 function BitReverse data = {
   result : bits('N) = undefined;
   foreach (i from 0 to ('N - 1) by 1 in inc)
-    result['N - i - 1 .. 'N - i - 1] = [data[i]];
+    result = __SetSlice_bits('N, 1, result, ('N - i) - 1, [data[i]]);
   return(result)
 }
 
@@ -1946,7 +1947,7 @@ val BigEndianReverse : forall ('width : Int), 'width >= 0 & 'width >= 0.
   bits('width) -> bits('width) effect {escape}
 
 function BigEndianReverse value_name = {
-  assert(('width == 8) | (('width == 16) | (('width == 32) | (('width == 64) | ('width == 128)))));
+  assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64 | 'width == 128);
   result : bits('width) = replicate_bits(0b0,'width);
   foreach (i from 0 to ('width - 1) by 8)
     result[i+7 .. i] = (value_name['width-i - 1 .. 'width-i - 8] : bits(8));
@@ -2062,10 +2063,8 @@ val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   bits('M) -> bits('N) effect {escape}
 
 function Replicate x = {
-  assert(('N % 'M) == 0, "((N MOD M) == 0)");
-  let 'p = ex_int('N / 'M);
-  assert(constraint('N = 'p * 'M));
-  return(replicate_bits(x, p))
+  assert('N % 'M == 0, "((N MOD M) == 0)");
+  return(replicate_bits(x, 'N / 'M))
 }
 
 val Zeros__0 : forall ('N : Int), 'N >= 0. atom('N) -> bits('N)
@@ -2094,7 +2093,7 @@ val ZeroExtend__1 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
 overload ZeroExtend = {ZeroExtend__0, ZeroExtend__1}
 
 function ZeroExtend__0 (x, N) = {
-  assert(true);
+  assert('N >= 'M);
   extzv(x)
 }
 
@@ -2151,7 +2150,7 @@ function aset_SP value_name = {
 val LSR_C : forall ('N : Int), 'N >= 0 & 'N >= 0 & 1 >= 0.
   (bits('N), int) -> (bits('N), bits(1)) effect {escape}
 
-function LSR_C (x, shift) = {
+function LSR_C (x, 'shift) = {
   assert(shift > 0, "(shift > 0)");
   result : bits('N) = x >> shift;
   carry_out : bits(1) = if shift > 'N then 0b0 else [x[shift - 1]];
@@ -2184,7 +2183,7 @@ function Poly32Mod2 (data__arg, poly) = {
 val LSL_C : forall ('N : Int), 'N >= 0 & 'N >= 0 & 1 >= 0.
   (bits('N), int) -> (bits('N), bits(1)) effect {escape}
 
-function LSL_C (x, shift) = {
+function LSL_C (x, 'shift) = {
   assert(shift > 0, "(shift > 0)");
   result : bits('N) = x << shift;
   carry_out : bits(1) = if shift > 'N then 0b0 else [x['N - shift]];
@@ -2232,8 +2231,8 @@ val AddWithCarry : forall ('N : Int), 'N >= 0 & 'N >= 0 & 1 >= 0 & 'N >= 0 & 4 >
   (bits('N), bits('N), bits(1)) -> (bits('N), bits(4))
 
 function AddWithCarry (x, y, carry_in) = {
-  unsigned_sum : int = UInt(x) + UInt(y) + UInt(carry_in);
-  signed_sum : int = SInt(x) + SInt(y) + UInt(carry_in);
+  unsigned_sum : int = (UInt(x) + UInt(y)) + UInt(carry_in);
+  signed_sum : int = (SInt(x) + SInt(y)) + UInt(carry_in);
   result : bits('N) = __GetSlice_int('N, unsigned_sum, 0);
   n : bits(1) = [result['N - 1]];
   z : bits(1) = if IsZero(result) then 0b1 else 0b0;
@@ -2282,7 +2281,7 @@ val FPZero : forall ('N : Int), 1 >= 0 & 'N >= 0.
 function FPZero sign = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
-  F : atom('N - 'E - 1) = 'N - E - 1;
+  F : atom('N - 'E - 1) = ('N - E) - 1;
   exp : bits('E) = Zeros(E);
   frac : bits('N - 1 - 'E) = Zeros(F);
   return(append(append(sign, exp), frac))
@@ -2305,7 +2304,7 @@ val ConstrainUnpredictableBits : forall ('width : Int), 'width >= 0.
 
 function ConstrainUnpredictableBits which = {
   c : Constraint = ConstrainUnpredictable(which);
-  if c == Constraint_UNKNOWN then return((c, Zeros('width))) else return((c, undefined : bits('width)))
+  if c == Constraint_UNKNOWN then return((c, Zeros('width))) else return((c, undefined))
 }
 
 val AArch64_SysInstrWithResult : (int, int, int, int, int) -> bits(64) effect {escape}
@@ -2338,7 +2337,7 @@ val VFPExpandImm : forall ('N : Int), 8 >= 0 & 'N >= 0.
 function VFPExpandImm imm8 = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
-  F : atom('N - 'E - 1) = 'N - E - 1;
+  F : atom('N - 'E - 1) = ('N - E) - 1;
   sign : bits(1) = [imm8[7]];
   exp : bits('E) = append(append(~([imm8[6]]), replicate_bits([imm8[6]], E - 3)), imm8[5 .. 4]);
   frac : bits('N - 1 - 'E) = append(imm8[3 .. 0], Zeros(F - 4));
@@ -2375,7 +2374,7 @@ function Extend__1 (x, unsigned) = return(Extend(x, 'N, unsigned))
 val ASR_C : forall ('N : Int), 'N >= 0 & 'N >= 0 & 1 >= 0.
   (bits('N), int) -> (bits('N), bits(1)) effect {escape}
 
-function ASR_C (x, shift) = {
+function ASR_C (x, 'shift) = {
   assert(shift > 0, "(shift > 0)");
   result : bits('N) = arith_shiftright(x, shift);
   carry_out : bits(1) = if shift > 'N then [x['N - 1]] else [x[shift - 1]];
@@ -2413,7 +2412,7 @@ val FPMaxNormal : forall ('N : Int), 1 >= 0 & 'N >= 0.
 function FPMaxNormal sign = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
-  F : atom('N - 'E - 1) = 'N - E - 1;
+  F : atom('N - 'E - 1) = ('N - E) - 1;
   exp : bits('E) = append(Ones(E - 1), 0b0);
   frac : bits('N - 1 - 'E) = Ones(F);
   return(append(append(sign, exp), frac))
@@ -2425,7 +2424,7 @@ val FPInfinity : forall ('N : Int), 1 >= 0 & 'N >= 0.
 function FPInfinity sign = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
-  F : atom('N - 'E - 1) = 'N - E - 1;
+  F : atom('N - 'E - 1) = ('N - E) - 1;
   exp : bits('E) = Ones(E);
   frac : bits('N - 1 - 'E) = Zeros(F);
   return(append(append(sign, exp), frac))
@@ -2436,7 +2435,7 @@ val FPDefaultNaN : forall ('N : Int), 'N >= 0. unit -> bits('N) effect {escape}
 function FPDefaultNaN () = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
-  F : atom('N - 'E - 1) = 'N - E - 1;
+  F : atom('N - 'E - 1) = ('N - E) - 1;
   sign : bits(1) = 0b0;
   exp : bits('E) = Ones(E);
   frac : bits('N - 1 - 'E) = append(0b1, Zeros(F - 1));
@@ -2546,7 +2545,7 @@ function PACInvSub Tinput = {
   return(Toutput)
 }
 
-val ComputePAC : (bits(64), bits(64), bits(64), bits(64)) -> bits(64) effect {rreg, undef, wreg, escape}
+val ComputePAC : (bits(64), bits(64), bits(64), bits(64)) -> bits(64) effect {escape, rreg, undef, wreg}
 
 function ComputePAC (data, modifier, key0, key1) = {
   workingval : bits(64) = undefined;
@@ -2609,7 +2608,7 @@ val Align__1 : forall ('N : Int), 'N >= 0 & 'N >= 0. (bits('N), int) -> bits('N)
 
 overload Align = {Align__0, Align__1}
 
-function Align__0 ('x, 'y) = return(y * x / y)
+function Align__0 ('x, 'y) = return(y * (x / y))
 
 function Align__1 (x, 'y) = return(__GetSlice_int('N, Align(UInt(x), y), 0))
 
@@ -2739,17 +2738,15 @@ function aarch64_integer_insext_extract_immediate ('d, 'datasize, 'lsb, 'm, 'n) 
   aset_X(d, result)
 }
 
-val aarch64_integer_arithmetic_rev : (int, int, int, int) -> unit effect {escape, wreg, undef, rreg}
+val aarch64_integer_arithmetic_rev : (int, int, int, int) -> unit effect {escape, rreg, undef, wreg}
 
-function aarch64_integer_arithmetic_rev ('container_size, 'd, 'datasize, 'n) = {
+function aarch64_integer_arithmetic_rev ('container_size, 'd, 'datasize, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint('container_size >= 0 + 1));
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
   operand : bits('datasize) = aget_X(n);
   result : bits('datasize) = undefined;
-  let 'containers : int = datasize / container_size;
-  assert(constraint('containers * 'container_size = 'datasize));
-  let 'elements_per_container : int = container_size / 8;
-  assert(constraint('elements_per_container * 8 = 'container_size));
+  containers : int = datasize / container_size;
+  elements_per_container : int = container_size / 8;
   index : int = 0;
   rev_index : int = undefined;
   foreach (c from 0 to (containers - 1) by 1 in inc) {
@@ -2771,7 +2768,7 @@ function aarch64_integer_arithmetic_rbit ('d, 'datasize, 'n) = let 'dbytes = ex_
   operand : bits('datasize) = aget_X(n);
   result : bits('datasize) = undefined;
   foreach (i from 0 to (datasize - 1) by 1 in inc)
-    result = __SetSlice_bits(datasize, 1, result, datasize - 1 - i, [operand[i]]);
+    result = __SetSlice_bits(datasize, 1, result, (datasize - 1) - i, [operand[i]]);
   aset_X(d, result)
 }
 
@@ -2926,7 +2923,7 @@ function aarch64_integer_arithmetic_addsub_carry ('d, 'datasize, 'm, 'n, setflag
   nzcv : bits(4) = undefined;
   if sub_op then operand2 = ~(operand2) else ();
   (result, nzcv) = AddWithCarry(operand1, operand2, PSTATE.C);
-  if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = nzcv else ();
+  if setflags then (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = nzcv else ();
   aset_X(d, result)
 }
 
@@ -3100,7 +3097,7 @@ function aarch64_integer_logical_shiftedreg ('d, 'datasize, invert, 'm, 'n, op, 
     LogicalOp_ORR => result = operand1 | operand2,
     LogicalOp_EOR => result = operand1 ^ operand2
   };
-  if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = ([result[datasize - 1]] @ IsZeroBit(result)) @ 0b00 else ();
+  if setflags then (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = ([result[datasize - 1]] @ IsZeroBit(result)) @ 0b00 else ();
   aset_X(d, result)
 }
 
@@ -3119,7 +3116,7 @@ function aarch64_integer_arithmetic_addsub_shiftedreg ('d, 'datasize, 'm, 'n, se
     carry_in = 0b1
   } else carry_in = 0b0;
   (result, nzcv) = AddWithCarry(operand1, operand2, carry_in);
-  if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = nzcv else ();
+  if setflags then (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = nzcv else ();
   aset_X(d, result)
 }
 
@@ -3252,7 +3249,7 @@ function aarch64_integer_logical_immediate ('d, datasize, imm, 'n, op, setflags)
     LogicalOp_ORR => result = operand1 | operand2,
     LogicalOp_EOR => result = operand1 ^ operand2
   };
-  if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = ([result[datasize - 1]] @ IsZeroBit(result)) @ 0b00 else ();
+  if setflags then (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = ([result[datasize - 1]] @ IsZeroBit(result)) @ 0b00 else ();
   if d == 31 & ~(setflags) then aset_SP(result) else aset_X(d, result)
 }
 
@@ -3272,7 +3269,7 @@ function aarch64_integer_arithmetic_addsub_immediate ('d, datasize, imm, 'n, set
     carry_in = 0b1
   } else carry_in = 0b0;
   (result, nzcv) = AddWithCarry(operand1, operand2, carry_in);
-  if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = nzcv else ();
+  if setflags then (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = nzcv else ();
   if d == 31 & ~(setflags) then aset_SP(result) else aset_X(d, result)
 }
 
@@ -3291,7 +3288,7 @@ function aarch64_integer_arithmetic_addsub_extendedreg ('d, 'datasize, extend_ty
     carry_in = 0b1
   } else carry_in = 0b0;
   (result, nzcv) = AddWithCarry(operand1, operand2, carry_in);
-  if setflags then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = nzcv else ();
+  if setflags then (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = nzcv else ();
   if d == 31 & ~(setflags) then aset_SP(result) else aset_X(d, result)
 }
 
@@ -3364,18 +3361,18 @@ function Auth (ptr, modifier, K, data, keynumber) = {
   assert(constraint('bottom_PAC_bit >= 0));
   extfield = replicate_bits([ptr[55]], 64);
   if tbi then
-    original_ptr = (ptr[63 .. 56] @ extfield[negate(bottom_PAC_bit) + 56 - 1 .. 0]) @ ptr[bottom_PAC_bit - 1 .. 0]
+    original_ptr = (ptr[63 .. 56] @ extfield[(negate(bottom_PAC_bit) + 56) - 1 .. 0]) @ ptr[bottom_PAC_bit - 1 .. 0]
   else
-    original_ptr = extfield[negate(bottom_PAC_bit) + 64 - 1 .. 0] @ ptr[bottom_PAC_bit - 1 .. 0];
+    original_ptr = extfield[(negate(bottom_PAC_bit) + 64) - 1 .. 0] @ ptr[bottom_PAC_bit - 1 .. 0];
   PAC = ComputePAC(original_ptr, modifier, K[127 .. 64], K[63 .. 0]);
   if tbi then
-    if PAC[negate(bottom_PAC_bit) + 55 - 1 + bottom_PAC_bit .. bottom_PAC_bit] == ptr[negate(bottom_PAC_bit) + 55 - 1 + bottom_PAC_bit .. bottom_PAC_bit] then
+    if PAC[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit] == ptr[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit] then
       result = original_ptr
     else {
       error_code = keynumber @ ~(keynumber);
       result = (original_ptr[63 .. 55] @ error_code) @ original_ptr[52 .. 0]
     }
-  else if PAC[negate(bottom_PAC_bit) + 55 - 1 + bottom_PAC_bit .. bottom_PAC_bit] == ptr[negate(bottom_PAC_bit) + 55 - 1 + bottom_PAC_bit .. bottom_PAC_bit] & PAC[63 .. 56] == ptr[63 .. 56] then
+  else if PAC[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit] == ptr[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit] & PAC[63 .. 56] == ptr[63 .. 56] then
     result = original_ptr
   else {
     error_code = keynumber @ ~(keynumber);
@@ -3530,8 +3527,8 @@ function FPRoundBase (op, fpcr, rounding) = {
     else FPSR = __SetSlice_bits(32, 1, FPSR, 3, 0b1);
     return(FPZero(sign))
   } else ();
-  biased_exp : int = max(exponent - minimum_exp + 1, 0);
-  if biased_exp == 0 then mantissa = mantissa / (2.0 ^ (minimum_exp - exponent))
+  biased_exp : int = max((exponent - minimum_exp) + 1, 0);
+  if biased_exp == 0 then mantissa = mantissa / 2.0 ^ (minimum_exp - exponent)
   else ();
   int_mant : int = RoundDown(mantissa * 2.0 ^ F);
   error : real = mantissa * 2.0 ^ F - Real(int_mant);
@@ -3578,13 +3575,13 @@ function FPRoundBase (op, fpcr, rounding) = {
       FPProcessException(FPExc_Overflow, fpcr);
       error = 1.0
     } else
-      result = (sign @ __GetSlice_int('N - F - 1, biased_exp, 0)) @ __GetSlice_int(F, int_mant, 0)
+      result = (sign @ __GetSlice_int(('N - F) - 1, biased_exp, 0)) @ __GetSlice_int(F, int_mant, 0)
   else if biased_exp >= pow2(E) then {
     result = sign @ Ones('N - 1);
     FPProcessException(FPExc_InvalidOp, fpcr);
     error = 0.0
   } else
-    result = (sign @ __GetSlice_int('N - F - 1, biased_exp, 0)) @ __GetSlice_int(F, int_mant, 0);
+    result = (sign @ __GetSlice_int(('N - F) - 1, biased_exp, 0)) @ __GetSlice_int(F, int_mant, 0);
   if error != 0.0 then FPProcessException(FPExc_Inexact, fpcr) else ();
   return(result)
 }
@@ -3624,7 +3621,7 @@ function FixedToFP (op, 'fbits, unsigned, fpcr, rounding) = {
   assert(fbits >= 0);
   assert(rounding != FPRounding_ODD);
   int_operand : int = asl_Int(op, unsigned);
-  real_operand : real = Real(int_operand) / (2.0 ^ fbits);
+  real_operand : real = Real(int_operand) / 2.0 ^ fbits;
   if real_operand == 0.0 then result = FPZero(0b0)
   else result = FPRound(real_operand, fpcr, rounding);
   return(result)
@@ -3970,7 +3967,7 @@ function FPToFixedJS (op, fpcr, Is64) = {
   } else ();
   if sign == 0b1 & value_name == 0.0 then Z = 0b0 else ();
   if typ == FPType_Infinity then result = 0 else ();
-  if Is64 then (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = (0b0 @ Z) @ 0b00 else FPSCR = __SetSlice_bits(32, 4, FPSCR, 28, (0b0 @ Z) @ 0b00);
+  if Is64 then (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = (0b0 @ Z) @ 0b00 else FPSCR = __SetSlice_bits(32, 4, FPSCR, 28, (0b0 @ Z) @ 0b00);
   return(__GetSlice_int(32, result, 0))
 }
 
@@ -4477,11 +4474,11 @@ function Halt reason = {
   else assert([EDSCR[16]] == 0b1, "((EDSCR).SDD == '1')");
   EDSCR[20 .. 20] = 0b0;
   if UsingAArch32() then {
-    (PSTATE.SS, PSTATE.A, PSTATE.I, PSTATE.F) = undefined : bits(4);
+    (PSTATE.SS @ PSTATE.A @ PSTATE.I @ PSTATE.F) = undefined : bits(4);
     PSTATE.IT = 0x00;
     PSTATE.T = 0b1
   } else
-    (PSTATE.SS, PSTATE.D, PSTATE.A, PSTATE.I, PSTATE.F) = undefined : bits(5);
+    (PSTATE.SS @ PSTATE.D @ PSTATE.A @ PSTATE.I @ PSTATE.F) = undefined : bits(5);
   PSTATE.IL = 0b0;
   StopInstructionPrefetchAndEnableITR();
   EDSCR[5 .. 0] = reason;
@@ -4913,7 +4910,7 @@ function aarch64_integer_conditional_compare_register (condition, 'datasize, fla
     } else ();
     (__anon1, flags) = AddWithCarry(operand1, operand2, carry_in)
   } else ();
-  (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = flags
+  (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = flags
 }
 
 val integer_conditional_compare_register_decode : (bits(1), bits(1), bits(1), bits(5), bits(4), bits(1), bits(5), bits(1), bits(4)) -> unit effect {escape, rreg, undef, wreg}
@@ -4947,7 +4944,7 @@ function aarch64_integer_conditional_compare_immediate (condition, datasize, fla
     } else ();
     (__anon1, flags) = AddWithCarry(operand1, operand2, carry_in)
   } else ();
-  (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = flags
+  (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = flags
 }
 
 val integer_conditional_compare_immediate_decode : (bits(1), bits(1), bits(1), bits(5), bits(4), bits(1), bits(5), bits(1), bits(4)) -> unit effect {escape, wreg, undef, rreg}
@@ -5183,17 +5180,17 @@ function AddPAC (ptr, modifier, K, data) = {
   assert(constraint('bottom_PAC_bit <= 55));
   extfield = replicate_bits(selbit, 64);
   if tbi then
-    ext_ptr = (ptr[63 .. 56] @ extfield[negate(bottom_PAC_bit) + 56 - 1 .. 0]) @ ptr[bottom_PAC_bit - 1 .. 0]
+    ext_ptr = (ptr[63 .. 56] @ extfield[(negate(bottom_PAC_bit) + 56) - 1 .. 0]) @ ptr[bottom_PAC_bit - 1 .. 0]
   else
-    ext_ptr = extfield[negate(bottom_PAC_bit) + 64 - 1 .. 0] @ ptr[bottom_PAC_bit - 1 .. 0];
+    ext_ptr = extfield[(negate(bottom_PAC_bit) + 64) - 1 .. 0] @ ptr[bottom_PAC_bit - 1 .. 0];
   PAC = ComputePAC(ext_ptr, modifier, K[127 .. 64], K[63 .. 0]);
-  if ~(IsZero(ptr[top_bit - bottom_PAC_bit + 1 - 1 + bottom_PAC_bit .. bottom_PAC_bit])) & ~(IsOnes(ptr[top_bit - bottom_PAC_bit + 1 - 1 + bottom_PAC_bit .. bottom_PAC_bit])) then
+  if ~(IsZero(ptr[(((top_bit - bottom_PAC_bit) + 1) - 1) + bottom_PAC_bit .. bottom_PAC_bit])) & ~(IsOnes(ptr[(((top_bit - bottom_PAC_bit) + 1) - 1) + bottom_PAC_bit .. bottom_PAC_bit])) then
     PAC[top_bit - 1 .. top_bit - 1] = ~([PAC[top_bit - 1]])
   else ();
   if tbi then
-    result = ((ptr[63 .. 56] @ selbit) @ PAC[negate(bottom_PAC_bit) + 55 - 1 + bottom_PAC_bit .. bottom_PAC_bit]) @ ptr[bottom_PAC_bit - 1 .. 0]
+    result = ((ptr[63 .. 56] @ selbit) @ PAC[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit]) @ ptr[bottom_PAC_bit - 1 .. 0]
   else
-    result = ((PAC[63 .. 56] @ selbit) @ PAC[negate(bottom_PAC_bit) + 55 - 1 + bottom_PAC_bit .. bottom_PAC_bit]) @ ptr[bottom_PAC_bit - 1 .. 0];
+    result = ((PAC[63 .. 56] @ selbit) @ PAC[((negate(bottom_PAC_bit) + 55) - 1) + bottom_PAC_bit .. bottom_PAC_bit]) @ ptr[bottom_PAC_bit - 1 .. 0];
   return(result)
 }
 
@@ -5246,12 +5243,12 @@ function AArch64_WatchpointByteMatch (n, vaddress) = let 'top : {'n, true. atom(
   let 'bottom2 : {'n, true. atom('n)} = ex_int(bottom);
   if mask > bottom then {
     assert(constraint('mask2 >= 'bottom2 + 1));
-    WVR_match = vaddress[top - mask2 + 1 - 1 + mask2 .. mask2] == DBGWVR_EL1[n][top - mask2 + 1 - 1 + mask2 .. mask2];
-    if WVR_match & ~(IsZero(DBGWVR_EL1[n][mask2 - bottom2 - 1 + bottom2 .. bottom2])) then
+    WVR_match = vaddress[(((top - mask2) + 1) - 1) + mask2 .. mask2] == DBGWVR_EL1[n][(((top - mask2) + 1) - 1) + mask2 .. mask2];
+    if WVR_match & ~(IsZero(DBGWVR_EL1[n][((mask2 - bottom2) - 1) + bottom2 .. bottom2])) then
       WVR_match = ConstrainUnpredictableBool(Unpredictable_WPMASKEDBITS)
     else ()
   } else
-    WVR_match = vaddress[top - bottom2 + 1 - 1 + bottom2 .. bottom2] == DBGWVR_EL1[n][top - bottom2 + 1 - 1 + bottom2 .. bottom2];
+    WVR_match = vaddress[(((top - bottom2) + 1) - 1) + bottom2 .. bottom2] == DBGWVR_EL1[n][(((top - bottom2) + 1) - 1) + bottom2 .. bottom2];
   return(WVR_match & byte_select_match)
 }
 
@@ -5339,7 +5336,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
         else ()
       } else ();
       ps = slice(TCR_EL3, 16, 3);
-      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
+      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
       disabled = false;
       baseregister = TTBR0_EL3;
       descaddr.memattrs = WalkAttrDecode(slice(TCR_EL3, 12, 2), slice(TCR_EL3, 10, 2), slice(TCR_EL3, 8, 2), secondstage);
@@ -5368,7 +5365,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL2[7]] == 0b1;
         baseregister = TTBR0_EL2;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 12, 2), slice(TCR_EL2, 10, 2), slice(TCR_EL2, 8, 2), secondstage);
@@ -5391,7 +5388,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, top - inputsize + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL2[23]] == 0b1;
         baseregister = TTBR1_EL2;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 28, 2), slice(TCR_EL2, 26, 2), slice(TCR_EL2, 24, 2), secondstage);
@@ -5422,7 +5419,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
         else ()
       } else ();
       ps = slice(TCR_EL2, 16, 3);
-      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
+      basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
       disabled = false;
       baseregister = TTBR0_EL2;
       descaddr.memattrs = WalkAttrDecode(slice(TCR_EL2, 12, 2), slice(TCR_EL2, 10, 2), slice(TCR_EL2, 8, 2), secondstage);
@@ -5451,7 +5448,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, top - inputsize + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsZero_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL1[7]] == 0b1;
         baseregister = TTBR0_EL1;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL1, 12, 2), slice(TCR_EL1, 10, 2), slice(TCR_EL1, 8, 2), secondstage);
@@ -5474,7 +5471,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
           if c == Constraint_FORCE then inputsize = inputsize_min
           else ()
         } else ();
-        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, top - inputsize + 1);
+        basefound = (inputsize >= inputsize_min & inputsize <= inputsize_max) & IsOnes_slice(inputaddr, inputsize, (top - inputsize) + 1);
         disabled = [TCR_EL1[23]] == 0b1;
         baseregister = TTBR1_EL1;
         descaddr.memattrs = WalkAttrDecode(slice(TCR_EL1, 28, 2), slice(TCR_EL1, 26, 2), slice(TCR_EL1, 24, 2), secondstage);
@@ -5592,7 +5589,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
     result.addrdesc = __tmp_20;
     return(result)
   } else ();
-  let 'baselowerbound = (3 + inputsize - ((3 - level) * stride + grainsize)) : int;
+  let 'baselowerbound = ((3 + inputsize) - ((3 - level) * stride + grainsize)) : int;
   assert(constraint(0 <= 'baselowerbound & 'baselowerbound <= 48));
   baseaddress : bits(52) = undefined;
   if outputsize == 52 then let 'z = (if baselowerbound < 6 then 6 else baselowerbound) : int in {
@@ -5614,7 +5611,7 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
   addrselectbottom : int = undefined;
   repeat {
     addrselectbottom = (3 - level) * stride + grainsize;
-    index : bits(52) = ZeroExtend_slice_append(inputaddr, addrselectbottom, addrselecttop - addrselectbottom + 1, 0b000);
+    index : bits(52) = ZeroExtend_slice_append(inputaddr, addrselectbottom, (addrselecttop - addrselectbottom) + 1, 0b000);
     __tmp_21 : FullAddress = descaddr.paddress;
     __tmp_21.physicaladdress = baseaddress | index;
     descaddr.paddress = __tmp_21;
@@ -5861,7 +5858,7 @@ function AArch64_TranslateAddressS1Off (vaddress, acctype, iswrite) = {
   secondstage : bool = undefined;
   ipaddress : bits(52) = undefined;
   level : int = undefined;
-  if ~(IsZero_slice2(vaddress, PAMax(), Top + 1 - PAMax())) then {
+  if ~(IsZero_slice2(vaddress, PAMax(), (Top + 1) - PAMax())) then {
     level = 0;
     ipaddress = undefined;
     secondstage = false;
@@ -6006,13 +6003,13 @@ function AArch64_TranslateAddressS1Off (vaddress, acctype, iswrite) = {
   return(result)
 }
 
-val AArch64_MaybeZeroRegisterUppers : unit -> unit effect {wreg, undef, rreg, escape}
+val AArch64_MaybeZeroRegisterUppers : unit -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_MaybeZeroRegisterUppers () = {
   assert(UsingAArch32(), "UsingAArch32()");
   include_R15_name : bool = undefined;
-  last : range(14, 30) = undefined;
-  first : atom(0) = 0;
+  last : int = undefined;
+  first : int = undefined;
   if PSTATE.EL == EL0 & ~(ELUsingAArch32(EL1)) then {
     first = 0;
     last = 14;
@@ -6027,9 +6024,9 @@ function AArch64_MaybeZeroRegisterUppers () = {
     include_R15_name = true
   };
   foreach (n from first to last by 1 in inc)
-    if (n : int != 15 : int | include_R15_name) & ConstrainUnpredictableBool(Unpredictable_ZEROUPPER) then {
+    if (n != 15 | include_R15_name) & ConstrainUnpredictableBool(Unpredictable_ZEROUPPER) then {
       __tmp_3 : bits(64) = _R[n];
-      __tmp_3[63 .. 32] = Zeros(32);
+      __tmp_3 = __SetSlice_bits(64, 32, __tmp_3, 32, Zeros());
       _R[n] = __tmp_3
     } else ();
   ()
@@ -6492,7 +6489,7 @@ function AArch64_TranslationTableWalk_SecondStage (ipaddress, vaddress, acctype,
     result.addrdesc = __tmp_20;
     return(result)
   } else ();
-  let 'baselowerbound = (3 + inputsize - ((3 - level) * stride + grainsize)) : int;
+  let 'baselowerbound = ((3 + inputsize) - ((3 - level) * stride + grainsize)) : int;
   assert(constraint(0 <= 'baselowerbound & 'baselowerbound <= 48));
   baseaddress : bits(52) = undefined;
   if outputsize == 52 then let 'z = (if baselowerbound < 6 then 6 else baselowerbound) : int in {
@@ -6514,7 +6511,7 @@ function AArch64_TranslationTableWalk_SecondStage (ipaddress, vaddress, acctype,
   addrselectbottom : int = undefined;
   repeat {
     addrselectbottom = (3 - level) * stride + grainsize;
-    index : bits(52) = ZeroExtend_slice_append(inputaddr, addrselectbottom, addrselecttop - addrselectbottom + 1, 0b000);
+    index : bits(52) = ZeroExtend_slice_append(inputaddr, addrselectbottom, (addrselecttop - addrselectbottom) + 1, 0b000);
     __tmp_21 : FullAddress = descaddr.paddress;
     __tmp_21.physicaladdress = baseaddress | index;
     descaddr.paddress = __tmp_21;
@@ -6802,9 +6799,21 @@ function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isb
   return((priv_match & security_state_match) & (~(linked) | linked_match))
 }
 
-val AArch64_WatchpointMatch : (int, bits(64), int, bool, bool) -> bool
+val AArch64_WatchpointMatch : (int, bits(64), int, bool, bool) -> bool effect {escape, rreg, undef}
 
-function AArch64_WatchpointMatch (n, vaddress, size, ispriv, iswrite) = false
+function AArch64_WatchpointMatch ('n, vaddress, 'size, ispriv, iswrite) = {
+  assert(~(ELUsingAArch32(S1TranslationRegime())), "!(ELUsingAArch32(S1TranslationRegime()))");
+  assert(n <= UInt(slice(ID_AA64DFR0_EL1, 20, 4)), "(n <= UInt((ID_AA64DFR0_EL1).WRPs))");
+  enabled : bool = [DBGWCR_EL1[n][0]] == 0b1;
+  linked : bool = [DBGWCR_EL1[n][20]] == 0b1;
+  isbreakpnt : bool = false;
+  state_match : bool = AArch64_StateMatch(slice(DBGWCR_EL1[n], 14, 2), [DBGWCR_EL1[n][13]], slice(DBGWCR_EL1[n], 1, 2), linked, slice(DBGWCR_EL1[n], 16, 4), isbreakpnt, ispriv);
+  ls_match : bool = [slice(DBGWCR_EL1[n], 3, 2)[if iswrite then 1 else 0]] == 0b1;
+  value_match_name : bool = false;
+  foreach (byte from 0 to (size - 1) by 1 in inc)
+    value_match_name = value_match_name | AArch64_WatchpointByteMatch(n, vaddress + byte);
+  return(((value_match_name & state_match) & ls_match) & enabled)
+}
 
 val AArch64_BreakpointMatch : (int, bits(64), int) -> bool effect {escape, rreg, undef}
 
@@ -6957,7 +6966,7 @@ function AArch64_TakeReset cold_reset = {
   else PSTATE.EL = EL1;
   AArch64_ResetControlRegisters(cold_reset);
   PSTATE.SP = 0b1;
-  (PSTATE.D, PSTATE.A, PSTATE.I, PSTATE.F) = 0xF;
+  (PSTATE.D @ PSTATE.A @ PSTATE.I @ PSTATE.F) = 0xF;
   PSTATE.SS = 0b0;
   PSTATE.IL = 0b0;
   AArch64_ResetGeneralRegisters();
@@ -6993,11 +7002,18 @@ function AArch64_TakeException (target_el, exception, preferred_exception_return
   if from_32 then AArch64_MaybeZeroRegisterUppers() else ();
   if UInt(target_el) > UInt(PSTATE.EL) then {
     lower_32 : bool = undefined;
-    if target_el == EL3 then if ~(IsSecure()) & HaveEL(EL2) then lower_32 = ELUsingAArch32(EL2) else lower_32 = ELUsingAArch32(EL1) else if (IsInHost() & PSTATE.EL == EL0) & target_el == EL2 then lower_32 = ELUsingAArch32(EL0) else lower_32 = ELUsingAArch32(target_el - 1);
+    if target_el == EL3 then
+      if ~(IsSecure()) & HaveEL(EL2) then lower_32 = ELUsingAArch32(EL2)
+      else lower_32 = ELUsingAArch32(EL1)
+    else if (IsInHost() & PSTATE.EL == EL0) & target_el == EL2 then
+      lower_32 = ELUsingAArch32(EL0)
+    else lower_32 = ELUsingAArch32(target_el - 1);
     vect_offset = vect_offset + (if lower_32 then 1536 else 1024)
-  } else if PSTATE.SP == 0b1 then vect_offset = vect_offset + 512 else ();
+  } else if PSTATE.SP == 0b1 then vect_offset = vect_offset + 512
+  else ();
   spsr : bits(32) = GetPSRFromPSTATE();
-  if HaveUAOExt() then PSTATE.UAO = 0b0 else ();
+  if HaveUAOExt() then PSTATE.UAO = 0b0
+  else ();
   if ~(exception.typ == Exception_IRQ | exception.typ == Exception_FIQ) then AArch64_ReportException(exception, target_el) else ();
   PSTATE.EL = target_el;
   PSTATE.nRW = 0b0;
@@ -7005,13 +7021,15 @@ function AArch64_TakeException (target_el, exception, preferred_exception_return
   aset_SPSR(spsr);
   aset_ELR(preferred_exception_return);
   PSTATE.SS = 0b0;
-  (PSTATE.D, PSTATE.A, PSTATE.I, PSTATE.F) = 0xF;
+  (PSTATE.D @ PSTATE.A @ PSTATE.I @ PSTATE.F) = 0xF;
   PSTATE.IL = 0b0;
   if from_32 then {
     PSTATE.IT = 0x00;
     PSTATE.T = 0b0
   } else ();
-  if (HavePANExt() & (PSTATE.EL == EL1 | PSTATE.EL == EL2 & ELIsInHost(EL0))) & [aget_SCTLR()[23]] == 0b0 then PSTATE.PAN = 0b1 else ();
+  if (HavePANExt() & (PSTATE.EL == EL1 | PSTATE.EL == EL2 & ELIsInHost(EL0))) & [aget_SCTLR()[23]] == 0b0 then
+    PSTATE.PAN = 0b1
+  else ();
   BranchTo(slice(aget_VBAR(), 11, 53) @ __GetSlice_int(11, vect_offset, 0), BranchType_EXCEPTION);
   iesb_req : bool = undefined;
   if HaveRASExt() & [aget_SCTLR()[21]] == 0b1 then {
@@ -7962,7 +7980,7 @@ function AArch32_EnterMode (target_mode, preferred_exception_return, 'lr_offset,
   aset_R(14, preferred_exception_return + lr_offset);
   PSTATE.T = [SCTLR[30]];
   PSTATE.SS = 0b0;
-  if target_mode == M32_FIQ then (PSTATE.A, PSTATE.I, PSTATE.F) = 0b111 else if target_mode == M32_Abort | target_mode == M32_IRQ then (PSTATE.A, PSTATE.I) = 0b11 else PSTATE.I = 0b1;
+  if target_mode == M32_FIQ then (PSTATE.A @ PSTATE.I @ PSTATE.F) = 0b111 else if target_mode == M32_Abort | target_mode == M32_IRQ then (PSTATE.A @ PSTATE.I) = 0b11 else PSTATE.I = 0b1;
   PSTATE.E = [SCTLR[25]];
   PSTATE.IL = 0b0;
   PSTATE.IT = 0x00;
@@ -8122,7 +8140,7 @@ function aarch64_float_compare_uncond (cmp_with_zero, 'datasize, 'm, 'n, signal_
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = if cmp_with_zero then FPZero(0b0) else aget_V(m);
-  (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = FPCompare(operand1, operand2, signal_all_nans, FPCR)
+  (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = FPCompare(operand1, operand2, signal_all_nans, FPCR)
 }
 
 val aarch64_float_compare_cond : (bits(4), int, bits(4), int, int, bool) -> unit effect {escape, rreg, undef, wreg}
@@ -8135,7 +8153,7 @@ function aarch64_float_compare_cond (condition, 'datasize, flags__arg, 'm, 'n, s
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
   if ConditionHolds(condition) then flags = FPCompare(operand1, operand2, signal_all_nans, FPCR) else ();
-  (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = flags
+  (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = flags
 }
 
 val aarch64_float_arithmetic_unary : (int, int, FPUnaryOp, int) -> unit effect {escape, rreg, undef, wreg}
@@ -8527,7 +8545,7 @@ function aarch64_memory_vector_single_nowb (datasize, esize, index, m, memop, n,
     element = aget_Mem(address + offs, ebytes, AccType_VEC);
     let 'v : {'n, true. atom('n)} = ex_int(datasize / esize) in {
       assert(constraint('esize * 'v = 'datasize));
-      aset_V(t, replicate_bits(element, 'v))
+      aset_V(t, replicate_bits(element, v))
     };
     offs = offs + ebytes;
     t = (t + 1) % 32
@@ -8587,11 +8605,11 @@ function aarch64_memory_vector_multiple_nowb (datasize, elements, esize, m, memo
   } else ()
 }
 
-val aarch64_memory_single_simdfp_register : forall ('datasize : Int).
-  (AccType, atom('datasize), ExtendType, int, MemOp, int, bool, int, int, bool) -> unit effect {escape, rmem, wmem, undef, wreg, rreg}
+val aarch64_memory_single_simdfp_register : (AccType, int, ExtendType, int, MemOp, int, bool, int, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_simdfp_register (acctype, datasize, extend_type, m, memop, n, postindex, shift, t, wback) = {
+function aarch64_memory_single_simdfp_register (acctype, 'datasize, extend_type, 'm, memop, 'n, postindex, 'shift, 't, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
   offset : bits(64) = ExtendReg(m, extend_type, shift);
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
@@ -8600,32 +8618,28 @@ function aarch64_memory_single_simdfp_register (acctype, datasize, extend_type, 
     CheckSPAlignment();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
-  let 'dq8 = ex_int(datasize / 8);
-  assert(constraint(8 * 'dq8 = 'datasize));
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
       data = aget_V(t);
-      aset_Mem(address, dq8, acctype, data)
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dq8, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       aset_V(t, data)
     }
   };
   if wback then {
-    if postindex then address = address + offset
-    else ();
+    if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
 
-val aarch64_memory_single_simdfp_immediate_signed_postidx : forall ('datasize : Int).
-  (AccType, atom('datasize), MemOp, int, bits(64), bool, int, bool) -> unit effect {escape, rmem, wmem, undef, wreg, rreg}
+val aarch64_memory_single_simdfp_immediate_signed_postidx : (AccType, int, MemOp, int, bits(64), bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_simdfp_immediate_signed_postidx (acctype, datasize, memop, n, offset, postindex, t, wback) = {
+function aarch64_memory_single_simdfp_immediate_signed_postidx (acctype, 'datasize, memop, 'n, offset, postindex, 't, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -8633,32 +8647,28 @@ function aarch64_memory_single_simdfp_immediate_signed_postidx (acctype, datasiz
     CheckSPAlignment();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
-  let 'dq8 = ex_int(datasize / 8);
-  assert(constraint('dq8 * 8 = 'datasize));
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
       data = aget_V(t);
-      aset_Mem(address, dq8, acctype, data)
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dq8, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       aset_V(t, data)
     }
   };
   if wback then {
-    if postindex then address = address + offset
-    else ();
+    if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
 
-val aarch64_memory_single_simdfp_immediate_signed_offset_normal : forall ('datasize : Int).
-  (AccType, atom('datasize), MemOp, int, bits(64), bool, int, bool) -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
+val aarch64_memory_single_simdfp_immediate_signed_offset_normal : (AccType, int, MemOp, int, bits(64), bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_simdfp_immediate_signed_offset_normal (acctype, datasize, memop, n, offset, postindex, t, wback) = {
+function aarch64_memory_single_simdfp_immediate_signed_offset_normal (acctype, 'datasize, memop, 'n, offset, postindex, 't, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -8666,23 +8676,19 @@ function aarch64_memory_single_simdfp_immediate_signed_offset_normal (acctype, d
     CheckSPAlignment();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
-  let 'dq8 = ex_int(datasize / 8);
-  assert(constraint(8 * 'dq8 = 'datasize));
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
       data = aget_V(t);
-      aset_Mem(address, dq8, acctype, data)
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dq8, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       aset_V(t, data)
     }
   };
   if wback then {
-    if postindex then address = address + offset
-    else ();
+    if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
@@ -8812,90 +8818,87 @@ function memory_literal_general_decode (opc, V, imm19, Rt) = {
   aarch64_memory_literal_general(memop, offset, signed, 8 * size, t)
 }
 
-val aarch64_memory_atomicops_swp : forall ('datasize : Int) ('regsize : Int).
-  (atom('datasize), AccType, int, atom('regsize), int, AccType, int) -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
+val aarch64_memory_atomicops_swp : (int, AccType, int, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_atomicops_swp (datasize, ldacctype, n, regsize, s, stacctype, t) = {
-  assert(constraint('datasize in {8, 16, 32, 64, 128} & 'regsize >= 0), "datasize constraint");
-  address : bits(64) = undefined;
-  data : bits('datasize) = undefined;
+function aarch64_memory_atomicops_swp ('datasize, ldacctype, 'n, 'regsize, 's, stacctype, 't) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
-  assert(constraint(8 * 'dbytes = 'datasize));
-  if n == 31 then {
-    CheckSPAlignment();
-    address = aget_SP()
-  } else address = aget_X(n);
-  data = aget_Mem(address, dbytes, ldacctype);
-  aset_Mem(address, dbytes, stacctype, aget_X(s));
-  aset_X(t, ZeroExtend(data, regsize))
-}
-
-val aarch64_memory_atomicops_st : forall ('datasize : Int).
-  (atom('datasize), AccType, int, MemAtomicOp, int, AccType) -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
-
-function aarch64_memory_atomicops_st (datasize, ldacctype, n, op, s, stacctype) = {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
-  value_name : bits('datasize) = undefined;
   data : bits('datasize) = undefined;
-  result : bits('datasize) = undefined;
-  value_name = aget_X(s);
-  let 'dbytes = ex_int(datasize / 8);
-  assert(constraint(8 * 'dbytes = 'datasize));
   if n == 31 then {
     CheckSPAlignment();
     address = aget_SP()
   } else address = aget_X(n);
-  data = aget_Mem(address, dbytes, ldacctype);
-  match op {
-    MemAtomicOp_ADD => result = data + value_name,
-    MemAtomicOp_BIC => result = data & ~(value_name),
-    MemAtomicOp_EOR => result = data ^ value_name,
-    MemAtomicOp_ORR => result = data | value_name,
-    MemAtomicOp_SMAX => result = if SInt(data) > SInt(value_name) then data else value_name,
-    MemAtomicOp_SMIN => result = if SInt(data) > SInt(value_name) then value_name else data,
-    MemAtomicOp_UMAX => result = if UInt(data) > UInt(value_name) then data else value_name,
-    MemAtomicOp_UMIN => result = if UInt(data) > UInt(value_name) then value_name else data
-  };
-  aset_Mem(address, dbytes, stacctype, result)
-}
-
-val aarch64_memory_atomicops_ld : forall ('datasize : Int) ('regsize : Int).
-  (atom('datasize), AccType, int, MemAtomicOp, atom('regsize), int, AccType, int) -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
-
-function aarch64_memory_atomicops_ld (datasize, ldacctype, n, op, regsize, s, stacctype, t) = {
-  assert(constraint('datasize in {8, 16, 32, 64, 128} & 'regsize >= 0), "datasize constraint");
-  address : bits(64) = undefined;
-  value_name : bits('datasize) = undefined;
-  data : bits('datasize) = undefined;
-  result : bits('datasize) = undefined;
-  value_name = aget_X(s);
-  let 'dbytes = ex_int(datasize / 8);
-  assert(constraint(8 * 'dbytes = 'datasize));
-  if n == 31 then {
-    CheckSPAlignment();
-    address = aget_SP()
-  } else address = aget_X(n);
-  data = aget_Mem(address, dbytes, ldacctype);
-  match op {
-    MemAtomicOp_ADD => result = data + value_name,
-    MemAtomicOp_BIC => result = data & ~(value_name),
-    MemAtomicOp_EOR => result = data ^ value_name,
-    MemAtomicOp_ORR => result = data | value_name,
-    MemAtomicOp_SMAX => result = if SInt(data) > SInt(value_name) then data else value_name,
-    MemAtomicOp_SMIN => result = if SInt(data) > SInt(value_name) then value_name else data,
-    MemAtomicOp_UMAX => result = if UInt(data) > UInt(value_name) then data else value_name,
-    MemAtomicOp_UMIN => result = if UInt(data) > UInt(value_name) then value_name else data
-  };
-  aset_Mem(address, dbytes, stacctype, result);
+  data = aget_Mem(address, datasize / 8, ldacctype);
+  aset_Mem(address, datasize / 8, stacctype, aget_X(s));
   aset_X(t, ZeroExtend(data, regsize))
 }
 
-val aarch64_memory_atomicops_cas_single : forall ('datasize : Int) ('regsize : Int).
-  (atom('datasize), AccType, int, atom('regsize), int, AccType, int) -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
+val aarch64_memory_atomicops_st : (int, AccType, int, MemAtomicOp, int, AccType) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_atomicops_cas_single (datasize, ldacctype, n, regsize, s, stacctype, t) = {
-  assert(constraint('regsize >= 0), "destsize constraint");
+function aarch64_memory_atomicops_st ('datasize, ldacctype, 'n, op, 's, stacctype) = let 'dbytes = ex_int(datasize / 8) in {
+  assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  address : bits(64) = undefined;
+  value_name : bits('datasize) = undefined;
+  data : bits('datasize) = undefined;
+  result : bits('datasize) = undefined;
+  value_name = aget_X(s);
+  if n == 31 then {
+    CheckSPAlignment();
+    address = aget_SP()
+  } else address = aget_X(n);
+  data = aget_Mem(address, datasize / 8, ldacctype);
+  match op {
+    MemAtomicOp_ADD => result = data + value_name,
+    MemAtomicOp_BIC => result = data & ~(value_name),
+    MemAtomicOp_EOR => result = data ^ value_name,
+    MemAtomicOp_ORR => result = data | value_name,
+    MemAtomicOp_SMAX => result = if SInt(data) > SInt(value_name) then data else value_name,
+    MemAtomicOp_SMIN => result = if SInt(data) > SInt(value_name) then value_name else data,
+    MemAtomicOp_UMAX => result = if UInt(data) > UInt(value_name) then data else value_name,
+    MemAtomicOp_UMIN => result = if UInt(data) > UInt(value_name) then value_name else data
+  };
+  aset_Mem(address, datasize / 8, stacctype, result)
+}
+
+val aarch64_memory_atomicops_ld : (int, AccType, int, MemAtomicOp, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+
+function aarch64_memory_atomicops_ld ('datasize, ldacctype, 'n, op, 'regsize, 's, stacctype, 't) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
+  let 'dbytes = ex_int(datasize / 8);
+  assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  address : bits(64) = undefined;
+  value_name : bits('datasize) = undefined;
+  data : bits('datasize) = undefined;
+  result : bits('datasize) = undefined;
+  value_name = aget_X(s);
+  if n == 31 then {
+    CheckSPAlignment();
+    address = aget_SP()
+  } else address = aget_X(n);
+  data = aget_Mem(address, datasize / 8, ldacctype);
+  match op {
+    MemAtomicOp_ADD => result = data + value_name,
+    MemAtomicOp_BIC => result = data & ~(value_name),
+    MemAtomicOp_EOR => result = data ^ value_name,
+    MemAtomicOp_ORR => result = data | value_name,
+    MemAtomicOp_SMAX => result = if SInt(data) > SInt(value_name) then data else value_name,
+    MemAtomicOp_SMIN => result = if SInt(data) > SInt(value_name) then value_name else data,
+    MemAtomicOp_UMAX => result = if UInt(data) > UInt(value_name) then data else value_name,
+    MemAtomicOp_UMIN => result = if UInt(data) > UInt(value_name) then value_name else data
+  };
+  aset_Mem(address, datasize / 8, stacctype, result);
+  aset_X(t, ZeroExtend(data, regsize))
+}
+
+val aarch64_memory_atomicops_cas_single : (int, AccType, int, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+
+function aarch64_memory_atomicops_cas_single ('datasize, ldacctype, 'n, 'regsize, 's, stacctype, 't) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
@@ -8909,19 +8912,18 @@ function aarch64_memory_atomicops_cas_single (datasize, ldacctype, n, regsize, s
     CheckSPAlignment();
     address = aget_SP()
   } else address = aget_X(n);
-  data = aget_Mem(address, dbytes, ldacctype);
-  if data == comparevalue then aset_Mem(address, dbytes, stacctype, newvalue) else ();
+  data = aget_Mem(address, datasize / 8, ldacctype);
+  if data == comparevalue then aset_Mem(address, datasize / 8, stacctype, newvalue) else ();
   aset_X(s, ZeroExtend(data, regsize))
 }
 
-val aarch64_memory_atomicops_cas_pair : forall ('datasize : Int) ('regsize : Int).
-  (atom('datasize), AccType, int, atom('regsize), int, AccType, int) -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
+val aarch64_memory_atomicops_cas_pair : (int, AccType, int, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_atomicops_cas_pair (datasize, ldacctype, n, regsize, s, stacctype, t) = {
-  assert(constraint('regsize >= 0), "destsize constraint");
-  let 'dbytes = ex_int((2 * datasize) / 8);
+function aarch64_memory_atomicops_cas_pair ('datasize, ldacctype, 'n, 'regsize, 's, stacctype, 't) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
+  let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(4 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   comparevalue : bits(2 * 'datasize) = undefined;
   newvalue : bits(2 * 'datasize) = undefined;
@@ -8936,8 +8938,8 @@ function aarch64_memory_atomicops_cas_pair (datasize, ldacctype, n, regsize, s, 
     CheckSPAlignment();
     address = aget_SP()
   } else address = aget_X(n);
-  data = aget_Mem(address, dbytes, ldacctype);
-  if data == comparevalue then aset_Mem(address, dbytes, stacctype, newvalue) else ();
+  data = aget_Mem(address, (2 * datasize) / 8, ldacctype);
+  if data == comparevalue then aset_Mem(address, (2 * datasize) / 8, stacctype, newvalue) else ();
   if BigEndian() then {
     aset_X(s, ZeroExtend(slice(data, datasize, datasize), regsize));
     aset_X(s + 1, ZeroExtend(slice(data, 0, datasize), regsize))
@@ -9056,15 +9058,15 @@ function SetPSTATEFromPSR spsr__arg = {
     }
   };
   if PSTATE.IL == 0b1 & PSTATE.nRW == 0b1 then if ConstrainUnpredictableBool(Unpredictable_ILZEROT) then spsr = __SetSlice_bits(32, 1, spsr, 5, 0b0) else () else ();
-  (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V) = slice(spsr, 28, 4);
+  (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V) = slice(spsr, 28, 4);
   if PSTATE.nRW == 0b1 then {
     PSTATE.Q = [spsr[27]];
     PSTATE.IT = RestoredITBits(spsr);
     PSTATE.GE = slice(spsr, 16, 4);
     PSTATE.E = [spsr[9]];
-    (PSTATE.A, PSTATE.I, PSTATE.F) = slice(spsr, 6, 3);
+    (PSTATE.A @ PSTATE.I @ PSTATE.F) = slice(spsr, 6, 3);
     PSTATE.T = [spsr[5]]
-  } else (PSTATE.D, PSTATE.A, PSTATE.I, PSTATE.F) = slice(spsr, 6, 4);
+  } else (PSTATE.D @ PSTATE.A @ PSTATE.I @ PSTATE.F) = slice(spsr, 6, 4);
   if HavePANExt() then PSTATE.PAN = [spsr[22]] else ();
   if HaveUAOExt() then PSTATE.UAO = [spsr[23]] else ();
   ()
@@ -9077,13 +9079,13 @@ function DRPSInstruction () = {
   if (HaveRASExt() & [aget_SCTLR()[21]] == 0b1) & ConstrainUnpredictableBool(Unpredictable_IESBinDebug) then ErrorSynchronizationBarrier(MBReqDomain_FullSystem, MBReqTypes_All) else ();
   SetPSTATEFromPSR(aget_SPSR());
   if UsingAArch32() then {
-    (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V, PSTATE.Q, PSTATE.GE, PSTATE.SS, PSTATE.A, PSTATE.I, PSTATE.F) = undefined : bits(13);
+    (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V @ PSTATE.Q @ PSTATE.GE @ PSTATE.SS @ PSTATE.A @ PSTATE.I @ PSTATE.F) = undefined : bits(13);
     PSTATE.IT = 0x00;
     PSTATE.T = 0b1;
     DLR = undefined : bits(32);
     DSPSR = undefined : bits(32)
   } else {
-    (PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V, PSTATE.SS, PSTATE.D, PSTATE.A, PSTATE.I, PSTATE.F) = undefined : bits(9);
+    (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V @ PSTATE.SS @ PSTATE.D @ PSTATE.A @ PSTATE.I @ PSTATE.F) = undefined : bits(9);
     DLR_EL0 = undefined : bits(64);
     DSPSR_EL0 = undefined : bits(32)
   };
@@ -9196,11 +9198,10 @@ function system_exceptions_runtime_hvc_decode (opc, imm16, op2, LL) = {
   aarch64_system_exceptions_runtime_hvc(imm)
 }
 
-val aarch64_memory_single_general_register : forall ('datasize : Int) ('regsize : Int).
-  (AccType, atom('datasize), ExtendType, int, MemOp, int, bool, atom('regsize), int, bool, int, bool) -> unit effect {escape, undef, rreg, wreg, rmem, wmem}
+val aarch64_memory_single_general_register : (AccType, int, ExtendType, int, MemOp, int, bool, int, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_register (acctype, datasize, extend_type, m, memop, n, postindex, regsize, shift, signed, t, wback__arg) = {
-  assert(constraint('regsize >= 0), "destsize constraint");
+function aarch64_memory_single_general_register (acctype, 'datasize, extend_type, 'm, memop, 'n, postindex, 'regsize, 'shift, signed, 't, wback__arg) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
@@ -9235,33 +9236,28 @@ function aarch64_memory_single_general_register (acctype, datasize, extend_type,
     if memop != MemOp_PREFETCH then CheckSPAlignment() else ();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
-      if rt_unknown then data = undefined
-      else data = aget_X(t);
-      aset_Mem(address, dbytes, acctype, data)
+      if rt_unknown then data = undefined else data = aget_X(t);
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dbytes, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       if signed then aset_X(t, SignExtend(data, regsize)) else aset_X(t, ZeroExtend(data, regsize))
     },
     MemOp_PREFETCH => Prefetch(address, __GetSlice_int(5, t, 0))
   };
   if wback then {
-    if wb_unknown then address = undefined
-    else if postindex then address = address + offset
-    else ();
+    if wb_unknown then address = undefined else if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_unsigned : forall ('datasize : Int) ('regsize : Int).
-  (AccType, atom('datasize), MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, undef, rreg, wreg, wmem, rmem}
+val aarch64_memory_single_general_immediate_unsigned : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_unsigned (acctype, datasize, memop, n, offset, postindex, regsize, signed, t, wback__arg) = {
-  assert(constraint('regsize >= 0), "destsize constraint");
+function aarch64_memory_single_general_immediate_unsigned (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
@@ -9295,33 +9291,28 @@ function aarch64_memory_single_general_immediate_unsigned (acctype, datasize, me
     if memop != MemOp_PREFETCH then CheckSPAlignment() else ();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
-      if rt_unknown then data = undefined
-      else data = aget_X(t);
-      aset_Mem(address, dbytes, acctype, data)
+      if rt_unknown then data = undefined else data = aget_X(t);
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dbytes, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       if signed then aset_X(t, SignExtend(data, regsize)) else aset_X(t, ZeroExtend(data, regsize))
     },
     MemOp_PREFETCH => Prefetch(address, __GetSlice_int(5, t, 0))
   };
   if wback then {
-    if wb_unknown then address = undefined
-    else if postindex then address = address + offset
-    else ();
+    if wb_unknown then address = undefined else if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_signed_postidx : forall ('datasize : Int) ('regsize : Int).
-  (AccType, atom('datasize), MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, undef, rreg, wreg, wmem, rmem}
+val aarch64_memory_single_general_immediate_signed_postidx : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_signed_postidx (acctype, datasize, memop, n, offset, postindex, regsize, signed, t, wback__arg) = {
-  assert(constraint('regsize >= 0), "destsize constraint");
+function aarch64_memory_single_general_immediate_signed_postidx (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
@@ -9355,24 +9346,20 @@ function aarch64_memory_single_general_immediate_signed_postidx (acctype, datasi
     if memop != MemOp_PREFETCH then CheckSPAlignment() else ();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
-      if rt_unknown then data = undefined
-      else data = aget_X(t);
-      aset_Mem(address, dbytes, acctype, data)
+      if rt_unknown then data = undefined else data = aget_X(t);
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dbytes, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       if signed then aset_X(t, SignExtend(data, regsize)) else aset_X(t, ZeroExtend(data, regsize))
     },
     MemOp_PREFETCH => Prefetch(address, __GetSlice_int(5, t, 0))
   };
   if wback then {
-    if wb_unknown then address = undefined
-    else if postindex then address = address + offset
-    else ();
+    if wb_unknown then address = undefined else if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
@@ -9409,11 +9396,10 @@ function aarch64_memory_single_general_immediate_signed_pac ('n, offset, 't, use
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_signed_offset_unpriv : forall ('datasize : Int) ('regsize : Int).
-  (AccType, atom('datasize), MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, undef, rreg, wreg, rmem, wmem}
+val aarch64_memory_single_general_immediate_signed_offset_unpriv : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, datasize, memop, n, offset, postindex, regsize, signed, t, wback__arg) = {
-  assert(constraint('regsize >= 0), "destsize constraint");
+function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
@@ -9447,33 +9433,28 @@ function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 
     if memop != MemOp_PREFETCH then CheckSPAlignment() else ();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
-      if rt_unknown then data = undefined
-      else data = aget_X(t);
-      aset_Mem(address, dbytes, acctype, data)
+      if rt_unknown then data = undefined else data = aget_X(t);
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dbytes, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       if signed then aset_X(t, SignExtend(data, regsize)) else aset_X(t, ZeroExtend(data, regsize))
     },
     MemOp_PREFETCH => Prefetch(address, __GetSlice_int(5, t, 0))
   };
   if wback then {
-    if wb_unknown then address = undefined
-    else if postindex then address = address + offset
-    else ();
+    if wb_unknown then address = undefined else if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_signed_offset_normal : forall ('datasize : Int) ('regsize : Int).
-  (AccType, atom('datasize), MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, undef, rreg, wreg, rmem, wmem}
+val aarch64_memory_single_general_immediate_signed_offset_normal : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, datasize, memop, n, offset, postindex, regsize, signed, t, wback__arg) = {
-  assert(constraint('regsize >= 0), "destsize constraint");
+function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+  assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
@@ -9507,24 +9488,20 @@ function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 
     if memop != MemOp_PREFETCH then CheckSPAlignment() else ();
     address = aget_SP()
   } else address = aget_X(n);
-  if ~(postindex) then address = address + offset
-  else ();
+  if ~(postindex) then address = address + offset else ();
   match memop {
     MemOp_STORE => {
-      if rt_unknown then data = undefined
-      else data = aget_X(t);
-      aset_Mem(address, dbytes, acctype, data)
+      if rt_unknown then data = undefined else data = aget_X(t);
+      aset_Mem(address, datasize / 8, acctype, data)
     },
     MemOp_LOAD => {
-      data = aget_Mem(address, dbytes, acctype);
+      data = aget_Mem(address, datasize / 8, acctype);
       if signed then aset_X(t, SignExtend(data, regsize)) else aset_X(t, ZeroExtend(data, regsize))
     },
     MemOp_PREFETCH => Prefetch(address, __GetSlice_int(5, t, 0))
   };
   if wback then {
-    if wb_unknown then address = undefined
-    else if postindex then address = address + offset
-    else ();
+    if wb_unknown then address = undefined else if postindex then address = address + offset else ();
     if n == 31 then aset_SP(address) else aset_X(n, address)
   } else ()
 }
@@ -9944,10 +9921,10 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
     },
     MemOp_LOAD => {
       AArch64_SetExclusiveMonitors(address, dbytes);
-      if pair then {
-        assert(constraint(- 'elsize + 'datasize > 0 & 'elsize >= 0), "datasize constraint");
+      if pair then
         if rt_unknown then aset_X(t, undefined : bits(32)) else if elsize == 32 then {
-          data = aget_Mem(address, dbytes, acctype);
+         assert(constraint(- 'elsize + 'datasize > 0 & 'elsize >= 0), "datasize constraint");
+         data = aget_Mem(address, dbytes, acctype);
           if BigEndian() then {
             aset_X(t, slice(data, elsize, negate(elsize) + datasize));
             aset_X(t2, slice(data, 0, elsize))
@@ -9964,7 +9941,7 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
           aset_X(t, aget_Mem(address + 0, 8, acctype));
           aset_X(t2, aget_Mem(address + 8, 8, acctype))
         }
-      } else {
+      else {
         data = aget_Mem(address, dbytes, acctype);
         aset_X(t, ZeroExtend(data, regsize))
       }

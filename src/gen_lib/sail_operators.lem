@@ -223,3 +223,15 @@ let inline ucmp_mword cmp l r = cmp (unsignedIntegerFromWord l) (unsignedInteger
 
 val scmp_mword : forall 'a. Size 'a => (integer -> integer -> bool) -> mword 'a -> mword 'a -> bool
 let inline scmp_mword cmp l r = cmp (signedIntegerFromWord l) (signedIntegerFromWord r)
+
+val get_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a
+let get_slice_int_bv len n lo =
+  let hi = lo + len - 1 in
+  let bs = bools_of_int (hi + 1) n in
+  of_bools (subrange_list false bs hi lo)
+
+val set_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a -> integer
+let set_slice_int_bv len n lo v =
+  let hi = lo + len - 1 in
+  let bs = bits_of_int (hi + 1) n in
+  maybe_failwith (signed_of_bits (update_subrange_list false bs hi lo (bits_of v)))

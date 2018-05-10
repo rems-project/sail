@@ -6,6 +6,9 @@ let xlen_max_unsigned = 2 ^ xlen - 1
 let xlen_max_signed = 2 ^ (xlen - 1) - 1
 let xlen_min_signed = 0 - 2 ^ (xlen - 1)
 
+type half = bits(16)
+type word = bits(32)
+
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
 type cregbits = bits(3)
@@ -191,6 +194,28 @@ function exceptionType_to_bits(e) = {
   }
 }
 
+val cast exceptionType_to_str : ExceptionType -> string
+function exceptionType_to_str(e) = {
+  match (e) {
+    E_Fetch_Addr_Align => "fisaligned-fetch",
+    E_Fetch_Access_Fault => "fetch-access-fault",
+    E_Illegal_Instr => "illegal-instruction",
+    E_Breakpoint => "breakpoint",
+    E_Load_Addr_Align => "misaligned-load",
+    E_Load_Access_Fault => "load-access-fault",
+    E_SAMO_Addr_Align => "misaliged-store/amo",
+    E_SAMO_Access_Fault => "store/amo-access-fault",
+    E_U_EnvCall => "u-call",
+    E_S_EnvCall => "s-call",
+    E_Reserved_10 => "reserved-0",
+    E_M_EnvCall => "m-call",
+    E_Fetch_Page_Fault => "fetch-page-fault",
+    E_Load_Page_Fault => "load-page-fault",
+    E_Reserved_14 => "reserved-1",
+    E_SAMO_Page_Fault => "store/amo-page-fault"
+  }
+}
+
 enum InterruptType = {
   I_U_Software,
   I_S_Software,
@@ -234,7 +259,6 @@ function trapVectorMode_of_bits (m) = {
 
 union exception = {
   Error_not_implemented : string,
-  Error_misaligned_access : unit,
   Error_EBREAK : unit,
   Error_internal_error : unit
 }

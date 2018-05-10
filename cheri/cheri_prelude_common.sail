@@ -128,7 +128,11 @@ let CapRegs : vector(32, dec, register(CapReg)) =
 let max_otype = MAX(24) /*0xffffff*/
 let have_cp2 = true
 
-function readCapReg(n) : regno -> CapStruct =
+/*!
+This function reads a given capability register and returns its contents converted to a CapStruct.
+*/
+val readCapReg : regno -> CapStruct effect {rreg}
+function readCapReg(n) =
   let 'i = unsigned(n) in
   capRegToCapStruct(reg_deref(CapRegs[i]))
 
@@ -259,19 +263,12 @@ function pcc_access_system_regs () =
 
 val register_inaccessible : regno -> bool effect {rreg}
 function register_inaccessible(r) =
-  if (r == IDC) & inCCallDelay then true else
-  let is_sys_reg : bool = match r {
-    0b11011  => true,
-    0b11100  => true,
-    0b11101  => true,
-    0b11110  => true,
-    0b11111  => true,
-    _        => false
-  } in
-  if is_sys_reg then
-    not (pcc_access_system_regs ())
-  else
-    false
+  ((r == IDC) & inCCallDelay) |
+  ((r == KR1C |
+    r == KR2C |
+    r == KDC  |
+    r == KCC  |
+    r == EPCC) & not (pcc_access_system_regs ()))
 
 val MEMr_tag = "read_tag_bool"  : bits(64) -> bool effect { rmemt }
 val MEMw_tag = "write_tag_bool" : (bits(64) , bool) -> unit effect { wmvt }
@@ -399,13 +396,20 @@ function TranslatePC (vAddr) = {
   else
     TLBTranslate(to_bits(64, absPC), Instruction) /* XXX assert absPC never gets truncated due to above check and top <= 2^64 for valid caps */
 }
+
+/*!  
+All capability instrucitons must first check that the capability
+co-processor is enabled using the following function that raises a
+co-processor unusable exception if a CP0Status.CU2 is not set. This
+allows the operating system to only save and restore the full
+capability context for processes that use capabilities.
+*/
 val checkCP2usable : unit -> unit effect {rreg, wreg, escape}
 function checkCP2usable ()  =
-  if not ((CP0Status.CU())[2]) then
-    {
-      (CP0Cause->CE()) = 0b10;
-      (SignalException(CpU));
-    }
+  if not (CP0Status.CU()[2]) then {
+    CP0Cause->CE() = 0b10;
+    SignalException(CpU);
+  }
 
 function init_cp2_state () = {
   let defaultBits = capStructToCapReg(default_cap);

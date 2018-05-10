@@ -477,6 +477,7 @@ and map_lexp_annot_aux f = function
   | LEXP_memory (id, exps) -> LEXP_memory (id, List.map (map_exp_annot f) exps)
   | LEXP_cast (typ, id) -> LEXP_cast (typ, id)
   | LEXP_tup lexps -> LEXP_tup (List.map (map_lexp_annot f) lexps)
+  | LEXP_vector_concat lexps -> LEXP_vector_concat (List.map (map_lexp_annot f) lexps)
   | LEXP_vector (lexp, exp) -> LEXP_vector (map_lexp_annot f lexp, map_exp_annot f exp)
   | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | LEXP_field (lexp, id) -> LEXP_field (map_lexp_annot f lexp, id)
@@ -675,8 +676,8 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_try (exp, cases) ->
      "try " ^ string_of_exp exp ^ " catch { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
   | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
-  | E_assign (lexp, bind) -> string_of_lexp lexp ^ " := " ^ string_of_exp bind
-  | E_cast (typ, exp) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_exp exp
+  | E_assign (lexp, bind) -> string_of_lexp lexp ^ " = " ^ string_of_exp bind
+  | E_cast (typ, exp) -> string_of_exp exp ^ " : " ^ string_of_typ typ
   | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
   | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"
   | E_vector_update (v, n, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " = " ^ string_of_exp exp ^ "]"
@@ -732,7 +733,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_wild -> "_"
   | P_id v -> string_of_id v
   | P_var (pat, tpat) -> string_of_pat pat ^ " as " ^ string_of_typ_pat tpat
-  | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
+  | P_typ (typ, pat) -> string_of_pat pat ^ " : " ^ string_of_typ typ
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_cons (pat1, pat2) -> string_of_pat pat1 ^ " :: " ^ string_of_pat pat2
@@ -765,7 +766,9 @@ and string_of_lexp (LEXP_aux (lexp, _)) =
   | LEXP_tup lexps -> "(" ^ string_of_list ", " string_of_lexp lexps ^ ")"
   | LEXP_vector (lexp, exp) -> string_of_lexp lexp ^ "[" ^ string_of_exp exp ^ "]"
   | LEXP_vector_range (lexp, exp1, exp2) ->
-     string_of_lexp lexp ^ "[" ^ string_of_exp exp1 ^ ".." ^ string_of_exp exp2 ^ "]"
+     string_of_lexp lexp ^ "[" ^ string_of_exp exp1 ^ " .. " ^ string_of_exp exp2 ^ "]"
+  | LEXP_vector_concat lexps ->
+     string_of_list " @ " string_of_lexp lexps
   | LEXP_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
   | LEXP_memory (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
 and string_of_letbind (LB_aux (lb, l)) =

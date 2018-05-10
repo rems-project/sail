@@ -35,6 +35,9 @@ let zero_extend bits len = extz_bits len bits
 val sign_extend : list bitU -> integer -> list bitU
 let sign_extend bits len = exts_bits len bits
 
+val zeros : integer -> list bitU
+let zeros len = repeat [B0] len
+
 val vector_truncate : list bitU -> integer -> list bitU
 let vector_truncate bs len = extz_bv len bs
 
@@ -288,6 +291,20 @@ let duplicate_oracle b n =
 
 val reverse_endianness : list bitU -> list bitU
 let reverse_endianness v = reverse_endianness_list v
+
+val get_slice_int : integer -> integer -> integer -> list bitU
+let get_slice_int = get_slice_int_bv
+
+val set_slice_int : integer -> integer -> integer -> list bitU -> integer
+let set_slice_int = set_slice_int_bv
+
+val slice : list bitU -> integer -> integer -> list bitU
+let slice v lo len =
+  subrange_vec_dec v (lo + len - 1) lo
+
+val set_slice : integer -> integer -> list bitU -> integer -> list bitU -> list bitU
+let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
+  update_subrange_vec_dec out (n + slice_len - 1) n v
 
 val eq_vec    : list bitU -> list bitU -> bool
 val neq_vec   : list bitU -> list bitU -> bool

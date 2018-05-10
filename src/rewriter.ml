@@ -197,6 +197,8 @@ let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match snd annot with
     | LEXP_memory (_,es) -> union_eff_exps es
     | LEXP_tup les ->
       List.fold_left (fun eff le -> union_effects eff (effect_of_lexp le)) no_effect les
+    | LEXP_vector_concat les ->
+      List.fold_left (fun eff le -> union_effects eff (effect_of_lexp le)) no_effect les
     | LEXP_vector (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
     | LEXP_vector_range (lexp,e1,e2) ->
       union_effects (effect_of_lexp lexp)
@@ -385,6 +387,7 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
     rewrap (LEXP_vector_range (rewriters.rewrite_lexp rewriters lexp,
                                rewriters.rewrite_exp rewriters exp1,
                                rewriters.rewrite_exp rewriters exp2))
+  | LEXP_vector_concat lexps -> rewrap (LEXP_vector_concat (List.map (rewriters.rewrite_lexp rewriters) lexps))
   | LEXP_field (lexp,id) -> rewrap (LEXP_field (rewriters.rewrite_lexp rewriters lexp,id))
 
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
@@ -560,6 +563,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; lEXP_tup                 : 'lexp list -> 'lexp_aux
   ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
   ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
+  ; lEXP_vector_concat       : 'lexp list -> 'lexp_aux
   ; lEXP_field               : 'lexp * id -> 'lexp_aux
   ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
   ; fE_Fexp                  : id * 'exp -> 'fexp_aux
@@ -639,7 +643,8 @@ and fold_lexp_aux alg = function
   | LEXP_vector (lexp,e) -> alg.lEXP_vector (fold_lexp alg lexp, fold_exp alg e)
   | LEXP_vector_range (lexp,e1,e2) ->
      alg.lEXP_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
- | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
+  | LEXP_vector_concat les -> alg.lEXP_vector_concat (List.map (fold_lexp alg) les)
+  | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
 and fold_lexp alg (LEXP_aux (lexp_aux,annot)) =
   alg.lEXP_aux (fold_lexp_aux alg lexp_aux, annot)
 and fold_fexp_aux alg (FE_Fexp (id,e)) = alg.fE_Fexp (id, fold_exp alg e)
@@ -710,6 +715,7 @@ let id_exp_alg =
   ; lEXP_tup = (fun tups -> LEXP_tup tups)
   ; lEXP_vector = (fun (lexp,e2) -> LEXP_vector (lexp,e2))
   ; lEXP_vector_range = (fun (lexp,e2,e3) -> LEXP_vector_range (lexp,e2,e3))
+  ; lEXP_vector_concat = (fun lexps -> LEXP_vector_concat lexps)
   ; lEXP_field = (fun (lexp,id) -> LEXP_field (lexp,id))
   ; lEXP_aux = (fun (lexp,annot) -> LEXP_aux (lexp,annot))
   ; fE_Fexp = (fun (id,e) -> FE_Fexp (id,e))
@@ -818,6 +824,9 @@ let compute_exp_alg bot join =
   ; lEXP_vector = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, LEXP_vector (lexp,e2)))
   ; lEXP_vector_range = (fun ((vl,lexp),(v2,e2),(v3,e3)) ->
     (join_list [vl;v2;v3], LEXP_vector_range (lexp,e2,e3)))
+  ; lEXP_vector_concat = (fun ls ->
+    let (vs,ls) = List.split ls in
+    (join_list vs, LEXP_vector_concat ls))
   ; lEXP_field = (fun ((vl,lexp),id) -> (vl, LEXP_field (lexp,id)))
   ; lEXP_aux = (fun ((vl,lexp),annot) -> (vl, LEXP_aux (lexp,annot)))
   ; fE_Fexp = (fun (id,(v,e)) -> (v, FE_Fexp (id,e)))
@@ -835,4 +844,95 @@ let compute_exp_alg bot join =
   ; lB_val = (fun ((vp,pat),(v,e)) -> (join vp v, LB_val (pat,e)))
   ; lB_aux = (fun ((vl,lb),annot) -> (vl,LB_aux (lb,annot)))
   ; pat_alg = compute_pat_alg bot join
+  }
+
+let pure_pat_alg bot join =
+  let join_list vs = List.fold_left join bot vs in
+  { p_lit            = (fun lit -> bot)
+  ; p_wild           = bot
+  ; p_as             = (fun (v,id) -> v)
+  ; p_typ            = (fun (typ,v) -> v)
+  ; p_id             = (fun id -> bot)
+  ; p_var            = (fun (v,kid) -> v)
+  ; p_app            = (fun (id,ps) -> join_list ps)
+  ; p_record         = (fun (ps,b) -> join_list ps)
+  ; p_vector         = join_list
+  ; p_vector_concat  = join_list
+  ; p_tup            = join_list
+  ; p_list           = join_list
+  ; p_string_append  = join_list
+  ; p_cons           = (fun (vh,vt) -> join vh vt)
+  ; p_aux            = (fun (v,annot) -> v)
+  ; fP_aux           = (fun (v,annot) -> v)
+  ; fP_Fpat          = (fun (id,v) -> v)
+  }
+
+let pure_exp_alg bot join =
+  let join_list vs = List.fold_left join bot vs in
+  { e_block = join_list
+  ; e_nondet = join_list
+  ; e_id = (fun id -> bot)
+  ; e_ref = (fun id -> bot)
+  ; e_lit = (fun lit -> bot)
+  ; e_cast = (fun (typ,v) -> v)
+  ; e_app = (fun (id,es) -> join_list es)
+  ; e_app_infix = (fun (v1,id,v2) -> join v1 v2)
+  ; e_tuple = join_list
+  ; e_if = (fun (v1,v2,v3) -> join_list [v1;v2;v3])
+  ; e_for = (fun (id,v1,v2,v3,order,v4) -> join_list [v1;v2;v3;v4])
+  ; e_loop = (fun (lt, v1, v2) -> join v1 v2)
+  ; e_vector = join_list
+  ; e_vector_access = (fun (v1,v2) -> join v1 v2)
+  ; e_vector_subrange =  (fun (v1,v2,v3) -> join_list [v1;v2;v3])
+  ; e_vector_update = (fun (v1,v2,v3) -> join_list [v1;v2;v3])
+  ; e_vector_update_subrange =  (fun (v1,v2,v3,v4) -> join_list [v1;v2;v3;v4])
+  ; e_vector_append = (fun (v1,v2) -> join v1 v2)
+  ; e_list = join_list
+  ; e_cons = (fun (v1,v2) -> join v1 v2)
+  ; e_record = (fun vs -> vs)
+  ; e_record_update = (fun (v1,vf) -> join v1 vf)
+  ; e_field = (fun (v1,id) -> v1)
+  ; e_case = (fun (v1,vps) -> join_list (v1::vps))
+  ; e_try = (fun (v1,vps) -> join_list (v1::vps))
+  ; e_let = (fun (vl,v2) -> join vl v2)
+  ; e_assign = (fun (vl,v2) -> join vl v2)
+  ; e_sizeof = (fun nexp -> bot)
+  ; e_constraint = (fun nc -> bot)
+  ; e_exit = (fun v1 -> v1)
+  ; e_throw = (fun v1 -> v1)
+  ; e_return = (fun v1 -> v1)
+  ; e_assert = (fun (v1,v2) -> join v1 v2)
+  ; e_internal_cast = (fun (a,v1) -> v1)
+  ; e_internal_exp = (fun a -> bot)
+  ; e_internal_exp_user = (fun (a1,a2) -> bot)
+  ; e_comment = (fun c -> bot)
+  ; e_comment_struc = (fun v -> bot)
+  ; e_internal_let = (fun (vl, v2, v3) -> join_list [vl;v2;v3])
+  ; e_internal_plet = (fun (vp, v1, v2) -> join_list [vp;v1;v2])
+  ; e_internal_return = (fun v -> v)
+  ; e_internal_value = (fun v -> bot)
+  ; e_aux = (fun (v,annot) -> v)
+  ; lEXP_id = (fun id -> bot)
+  ; lEXP_deref = (fun v -> v)
+  ; lEXP_memory = (fun (id,es) -> join_list es)
+  ; lEXP_cast = (fun (typ,id) -> bot)
+  ; lEXP_tup = join_list
+  ; lEXP_vector = (fun (vl,v2) -> join vl v2)
+  ; lEXP_vector_range = (fun (vl,v2,v3) -> join_list [vl;v2;v3])
+  ; lEXP_vector_concat = join_list
+  ; lEXP_field = (fun (vl,id) -> vl)
+  ; lEXP_aux = (fun (vl,annot) -> vl)
+  ; fE_Fexp = (fun (id,v) -> v)
+  ; fE_aux = (fun (vf,annot) -> vf)
+  ; fES_Fexps = (fun (vs,b) -> join_list vs)
+  ; fES_aux = (fun (vf,annot) -> vf)
+  ; def_val_empty = bot
+  ; def_val_dec = (fun v -> v)
+  ; def_val_aux = (fun (v,aux) -> v)
+  ; pat_exp = (fun (vp,v) -> join vp v)
+  ; pat_when = (fun (vp,v,v') -> join_list [vp;v;v'])
+  ; pat_aux = (fun (v,a) -> v)
+  ; lB_val = (fun (vp,v) -> join vp v)
+  ; lB_aux = (fun (vl,annot) -> vl)
+  ; pat_alg = pure_pat_alg bot join
   }

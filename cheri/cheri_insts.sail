@@ -203,19 +203,16 @@ union clause ast = CGetAddr   : (regno, regno)
 
 function clause execute (CGetPerm(rd, cb)) =
 {
-  /* START_CGetPerms */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
     wGPR(rd) = zero_extend(getCapPerms(capVal));
-  /* END_CGetPerms */
 }
 
 function clause execute (CGetType(rd, cb)) =
 {
-  /* START_CGetType */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
@@ -224,36 +221,30 @@ function clause execute (CGetType(rd, cb)) =
     wGPR(rd) = if (capVal.sealed)
       then zero_extend(capVal.otype)
       else (bitone ^^ 64)
-  /* END_CGetType */
 }
 
 function clause execute (CGetBase(rd, cb)) =
 {
-  /* START_CGetBase */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
     wGPR(rd) = to_bits(64, getCapBase(capVal));
-  /* END_CGetBase */
 }
 
 function clause execute (CGetOffset(rd, cb)) =
 {
-  /* START_CGetOffset */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
     wGPR(rd) = to_bits(64, getCapOffset(capVal));
-  /* END_CGetOffset */
 }
 
 function clause execute (CGetLen(rd, cb)) =
 {
-  /* START_CGetLen */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
@@ -261,49 +252,41 @@ function clause execute (CGetLen(rd, cb)) =
     let capVal = readCapReg(cb) in
     let len65  = getCapLength(capVal) in
     wGPR(rd) = to_bits(64, if len65 > MAX_U64 then MAX_U64 else len65);
-  /* END_CGetLen */
 }
 
 function clause execute (CGetTag(rd, cb)) =
 {
-  /* START_CGetTag */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
     wGPR(rd) = zero_extend(capVal.tag);
-  /* END_CGetTag */
 }
 
 function clause execute (CGetSealed(rd, cb)) =
 {
-  /* START_CGetSealed */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
     wGPR(rd) = zero_extend(capVal.sealed);
-  /* END_CGetSealed */
 }
 
 function clause execute (CGetAddr(rd, cb)) =
 {
-  /* START_CGetAddr */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
     wGPR(rd) = to_bits(64, getCapCursor(capVal));
-  /* END_CGetAddr */
 }
 
 union clause ast = CGetPCC : regno
 function clause execute (CGetPCC(cd)) =
 {
-  /* START_CGetPCC */
   checkCP2usable();
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
@@ -312,14 +295,12 @@ function clause execute (CGetPCC(cd)) =
     let (success, pcc2) = setCapOffset(pcc, PC) in
     {assert (success, ""); /* guaranteed to be in-bounds */
     writeCapReg(cd, pcc2)};
-  /* END_CGetPCC */
 }
 
 
 union clause ast = CGetPCCSetOffset : (regno, regno)
 function clause execute (CGetPCCSetOffset(cd, rs)) =
 {
-  /* START_CGetPCCSetOffset */
   checkCP2usable();
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
@@ -331,26 +312,22 @@ function clause execute (CGetPCCSetOffset(cd, rs)) =
         writeCapReg(cd, newPCC)
     else
         writeCapReg(cd, int_to_cap(rs_val));
-  /* END_CGetPCCSetOffset */
 }
 /* Get and Set CP2 cause register */
 
 union clause ast = CGetCause : regno
 function clause execute (CGetCause(rd)) = 
 {
-  /* START_CGetCause */
   checkCP2usable();
   if not (pcc_access_system_regs ()) then
     raise_c2_exception_noreg(CapEx_AccessSystemRegsViolation)
   else
     wGPR(rd) = zero_extend(CapCause.bits())
-  /* END_CGetCause */
 }
 
 union clause ast = CSetCause : regno
 function clause execute (CSetCause(rt)) = 
 {
-  /* START_CSetCause */
   checkCP2usable();
   if not (pcc_access_system_regs ()) then
     raise_c2_exception_noreg(CapEx_AccessSystemRegsViolation)
@@ -360,13 +337,11 @@ function clause execute (CSetCause(rt)) =
       CapCause->ExcCode() = rt_val[15..8];
       CapCause->RegNum()  = rt_val[7..0];
     }
-  /* END_CSetCause */
 }
 
 union clause ast = CReadHwr : (regno, regno)
 function clause execute (CReadHwr(cd, sel)) = 
 {
-  /* START_CReadHwr */
   checkCP2usable();
   let (needSup, needAccessSys) : (bool, bool) = match unsigned(sel) {
     0  => (false, false), /* DDC   -- no access control */
@@ -399,13 +374,11 @@ function clause execute (CReadHwr(cd, sel)) =
     };
     writeCapReg(cd, capVal);
   };
-  /* END_CReadHwr */
 }
 
 union clause ast = CWriteHwr : (regno, regno)
 function clause execute (CWriteHwr(cb, sel)) = 
 {
-  /* START_CWriteHwr */
   checkCP2usable();
   let (needSup, needAccessSys) : (bool, bool) = match unsigned(sel) {
     0  => (false, false), /* DDC   -- no access control */
@@ -438,13 +411,11 @@ function clause execute (CWriteHwr(cb, sel)) =
       _  => assert(false, "should be unreachable code")
     };
   };
-  /* END_CWriteHwr */
 }
 
 union clause ast = CAndPerm : (regno, regno, regno)
 function clause execute(CAndPerm(cd, cb, rt)) = 
 {
-  /* START_CAndPerm */
   checkCP2usable();
   let cb_val = readCapReg(cb);
   let rt_val = rGPR(rt);
@@ -460,7 +431,6 @@ function clause execute(CAndPerm(cd, cb, rt)) =
     let perms   = getCapPerms(cb_val) in
     let newCap  = setCapPerms(cb_val, (perms & rt_val[30..0])) in
     writeCapReg(cd, newCap);
-  /* END_CAndPerm */
 }
 
 
@@ -468,7 +438,6 @@ function clause execute(CAndPerm(cd, cb, rt)) =
 union clause ast = CToPtr : (regno, regno, regno)
 function clause execute(CToPtr(rd, cb, ct)) = 
 {
-  /* START_CToPtr */
   checkCP2usable();
   let ct_val = readCapReg(ct);
   let cb_val = readCapReg(cb);
@@ -493,7 +462,6 @@ function clause execute(CToPtr(rd, cb, ct)) =
         else
           to_bits(64, getCapCursor(cb_val) - ctBase)
     }
-  /* END_CToPtr */
 }
 
 
@@ -501,7 +469,6 @@ function clause execute(CToPtr(rd, cb, ct)) =
 union clause ast = CSub : (regno, regno, regno)
 function clause execute(CSub(rd, cb, ct)) = 
 {
-  /* START_CSub */
   checkCP2usable();
   let ct_val = readCapReg(ct);
   let cb_val = readCapReg(cb);
@@ -513,13 +480,11 @@ function clause execute(CSub(rd, cb, ct)) =
     {
       wGPR(rd) = to_bits(64, getCapCursor(cb_val) - getCapCursor(ct_val))
     }
-  /* END_CSub */
 }
 
 union clause ast = CPtrCmp : (regno, regno, regno, CPtrCmpOp)
 function clause execute(CPtrCmp(rd, cb, ct, op)) = 
 {
-  /* START_CPtrCmp */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
@@ -560,13 +525,11 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
       };
       wGPR(rd) = zero_extend (cmp)
     }
-  /* END_CPtrCmp */
 }
 
 union clause ast = CIncOffset : (regno, regno, regno)
 function clause execute (CIncOffset(cd, cb, rt)) =
 {
-  /* START_CIncOffset */
   checkCP2usable();
   cb_val = readCapReg(cb);
   rt_val = rGPR(rt);
@@ -582,13 +545,11 @@ function clause execute (CIncOffset(cd, cb, rt)) =
         writeCapReg(cd, newCap)
     else
         writeCapReg(cd, int_to_cap(to_bits(64, getCapBase(cb_val)) + rt_val))
-  /* END_CIncOffset */
 }
 
 union clause ast = CIncOffsetImmediate : (regno, regno, bits(11))
 function clause execute (CIncOffsetImmediate(cd, cb, imm)) =
 {
-  /* START_CIncOffsetImmediate */
   checkCP2usable();
   let cb_val = readCapReg(cb);
   let imm64 : bits(64) = sign_extend(imm) in
@@ -604,13 +565,11 @@ function clause execute (CIncOffsetImmediate(cd, cb, imm)) =
         writeCapReg(cd, newCap)
     else
         writeCapReg(cd, int_to_cap(to_bits(64, getCapBase(cb_val)) + imm64))
-  /* END_CIncOffsetImmediate */
 }
 
 union clause ast = CSetOffset : (regno, regno, regno)
 function clause execute (CSetOffset(cd, cb, rt)) =
 {
-  /* START_CSetOffset */
   checkCP2usable();
   let cb_val = readCapReg(cb);
   let rt_val = rGPR(rt);
@@ -626,13 +585,11 @@ function clause execute (CSetOffset(cd, cb, rt)) =
         writeCapReg(cd, newCap)
     else
         writeCapReg(cd, int_to_cap(to_bits(64, getCapBase(cb_val)) + rt_val))
-  /* END_CSetOffset */
 }
 
 union clause ast = CSetBounds : (regno, regno, regno)
 function clause execute (CSetBounds(cd, cb, rt)) =
 {
-  /* START_CSetBounds */
   checkCP2usable();
   let cb_val = readCapReg(cb);
   let rt_val = unsigned(rGPR(rt));
@@ -655,13 +612,11 @@ function clause execute (CSetBounds(cd, cb, rt)) =
   else
     let (_, newCap) = setCapBounds(cb_val, to_bits(64, cursor), to_bits(65, newTop)) in
     writeCapReg(cd, newCap) /* ignore exact */
-  /* END_CSetBounds */
 }
 
 union clause ast = CSetBoundsImmediate : (regno, regno, bits(11))
 function clause execute (CSetBoundsImmediate(cd, cb, imm)) =
 {
-  /* START_CSetBoundsImmediate */
   checkCP2usable();
   cb_val = readCapReg(cb);
   immU   = unsigned(imm);
@@ -684,13 +639,11 @@ function clause execute (CSetBoundsImmediate(cd, cb, imm)) =
   else
     let (_, newCap) = setCapBounds(cb_val, to_bits(64, cursor), to_bits(65, newTop)) in
     writeCapReg(cd, newCap) /* ignore exact */
-  /* END_CSetBoundsImmediate */
 }
 
 union clause ast = CSetBoundsExact : (regno, regno, regno)
 function clause execute (CSetBoundsExact(cd, cb, rt)) =
 {
-  /* START_CSetBoundsExact */
   checkCP2usable();
   cb_val = readCapReg(cb);
   rt_val = unsigned(rGPR(rt));
@@ -716,13 +669,11 @@ function clause execute (CSetBoundsExact(cd, cb, rt)) =
         raise_c2_exception(CapEx_InexactBounds, cb)
     else
         writeCapReg(cd, newCap)
-  /* END_CSetBoundsExact */
 }
 
 union clause ast = CClearTag : (regno, regno)
 function clause execute (CClearTag(cd, cb)) =
 {
-  /* START_CClearTag */
   checkCP2usable();
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
@@ -733,13 +684,11 @@ function clause execute (CClearTag(cd, cb)) =
       cb_val = readCapReg(cb);
       writeCapReg(cd, {cb_val with tag=false});
     }
-  /* END_CClearTag */
 }
 
 union clause ast = CMOVX : (regno,regno,regno,bool)
 function clause execute (CMOVX(cd, cb, rt, ismovn)) =
 {
-  /* START_CMOVX */
   checkCP2usable();
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
@@ -747,13 +696,11 @@ function clause execute (CMOVX(cd, cb, rt, ismovn)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else if ((rGPR(rt) == zeros()) ^ ismovn) then
     writeCapReg(cd) = readCapReg(cb);
-  /* END_CMOVX */
 }
 
 union clause ast = ClearRegs : (ClearRegSet, bits(16))
 function clause execute (ClearRegs(regset, m)) =
 {
-  /* START_ClearRegs */
   if ((regset == CLo) | (regset == CHi)) then
     checkCP2usable();
   if (regset == CHi) then
@@ -769,13 +716,11 @@ function clause execute (ClearRegs(regset, m)) =
         CLo   => writeCapReg(to_bits(5, i)) = null_cap,
         CHi   => writeCapReg(to_bits(5, i+16)) = null_cap
       }
-  /* END_ClearRegs */
 }
 
 union clause ast = CFromPtr : (regno, regno, regno)
 function clause execute (CFromPtr(cd, cb, rt)) =
 {
-  /* START_CFromPtr */
   checkCP2usable();
   cb_val = readCapReg(cb);
   rt_val = rGPR(rt);
@@ -795,13 +740,11 @@ function clause execute (CFromPtr(cd, cb, rt)) =
         writeCapReg(cd, newCap)
     else
         writeCapReg(cd, int_to_cap(to_bits(64, getCapBase(cb_val)) + rt_val))
-  /* END_CFromPtr */
 }
 
 union clause ast = CBuildCap : (regno, regno, regno)
 function clause execute (CBuildCap(cd, cb, ct)) =
 {
-  /* START_CBuildCap */
   checkCP2usable();
   cb_val = readCapReg(cb);
   ct_val = readCapReg(ct);
@@ -839,14 +782,12 @@ function clause execute (CBuildCap(cd, cb, ct)) =
       assert(representable, ""); /* similarly offset should be representable XXX except for fastRepCheck */
       writeCapReg(cd, cd3);
     }
-  /* END_CBuildCap */
 }
 
 union clause ast = CCopyType : (regno, regno, regno)
 function clause execute (CCopyType(cd, cb, ct)) =
 {
-  /* START_CCopyType */
-    checkCP2usable();
+  checkCP2usable();
   cb_val = readCapReg(cb);
   ct_val = readCapReg(ct);
   cb_base = getCapBase(cb_val);
@@ -874,13 +815,11 @@ function clause execute (CCopyType(cd, cb, ct)) =
       }
   } else
     writeCapReg(cd, int_to_cap(bitone ^^ 64))
-  /* END_CCopyType */
 }
 
 union clause ast = CCheckPerm : (regno, regno)
 function clause execute (CCheckPerm(cs, rt)) =
 {
-  /* START_CCheckPerm */
   checkCP2usable();
   cs_val = readCapReg(cs);
   cs_perms : bits(64) = zero_extend(getCapPerms(cs_val));
@@ -891,13 +830,11 @@ function clause execute (CCheckPerm(cs, rt)) =
     raise_c2_exception(CapEx_TagViolation, cs)
   else if ((cs_perms & rt_perms) != rt_perms) then
     raise_c2_exception(CapEx_UserDefViolation, cs)
-  /* END_CCheckPerm */
 }
 
 union clause ast = CCheckType : (regno, regno)
 function clause execute (CCheckType(cs, cb)) =
 {
-  /* START_CCheckType */
   checkCP2usable();
   cs_val = readCapReg(cs);
   cb_val = readCapReg(cb);
@@ -915,13 +852,11 @@ function clause execute (CCheckType(cs, cb)) =
     raise_c2_exception(CapEx_SealViolation, cb)
   else if ((cs_val.otype) != (cb_val.otype)) then
     raise_c2_exception(CapEx_TypeViolation, cs)
-  /* END_CCheckType */
 }
 
 union clause ast = CTestSubset : (regno, regno, regno)
 function clause execute (CTestSubset(rd, cb, ct)) =
 {
-  /* START_CTestSubset */
   checkCP2usable();
   cb_val = readCapReg(cb);
   ct_val = readCapReg(ct);
@@ -948,13 +883,11 @@ function clause execute (CTestSubset(rd, cb, ct)) =
              0b1;
      wGPR(rd) = zero_extend(result);
   }
-  /* END_CTestSubset */
 }
 
 union clause ast = CSeal : (regno, regno, regno)
 function clause execute (CSeal(cd, cs, ct)) =
 {
-  /* START_CSeal */
   checkCP2usable();
   cs_val = readCapReg(cs);
   ct_val = readCapReg(ct);
@@ -989,13 +922,11 @@ function clause execute (CSeal(cd, cs, ct)) =
         raise_c2_exception(CapEx_InexactBounds, cs)
     else
         writeCapReg(cd, newCap)
-  /* END_CSeal */
 }
 
 union clause ast = CCSeal : (regno, regno, regno)
 function clause execute (CCSeal(cd, cs, ct)) =
 {
-  /* START_CCSeal */
   checkCP2usable();
   cs_val = readCapReg(cs);
   ct_val = readCapReg(ct);
@@ -1030,13 +961,11 @@ function clause execute (CCSeal(cd, cs, ct)) =
         raise_c2_exception(CapEx_InexactBounds, cs)
     else
         writeCapReg(cd, newCap)
-  /* END_CCSeal */
 }
 
 union clause ast = CUnseal : (regno, regno, regno)
 function clause execute (CUnseal(cd, cs, ct)) =
 {
-  /* START_CUnseal */
   checkCP2usable();
   cs_val = readCapReg(cs);
   ct_val = readCapReg(ct);
@@ -1069,14 +998,12 @@ function clause execute (CUnseal(cd, cs, ct)) =
       otype=zeros(),
       global=(cs_val.global & ct_val.global)
     })
-  /* END_CUnseal */
 }
 
 union clause ast = CCall : (regno, regno, bits(11))
 function clause execute (CCall(cs, cb, 0b00000000000)) = /* selector=0 */
 {
   /* Partial implementation of CCall with checks in hardware, but raising a trap to perform trusted stack manipulation */
-  /* START_CCall */
   checkCP2usable();
   cs_val = readCapReg(cs);
   cb_val = readCapReg(cb);
@@ -1105,13 +1032,11 @@ function clause execute (CCall(cs, cb, 0b00000000000)) = /* selector=0 */
     raise_c2_exception(CapEx_LengthViolation, cs)
   else
     raise_c2_exception(CapEx_CallTrap, cs);
-  /* END_CCall */
 }
 
 function clause execute (CCall(cs, cb, 0b00000000001)) = /* selector=1 */
 {
   /* Jump-like implementation of CCall that unseals arguments */
-  /* START_CCall2 */
   checkCP2usable();
   cs_val = readCapReg(cs);
   cb_val = readCapReg(cb);
@@ -1154,22 +1079,18 @@ function clause execute (CCall(cs, cb, 0b00000000001)) = /* selector=1 */
         otype=zeros()
       });
     }
-  /* END_CCall2 */
 }
 
 union clause ast = CReturn : unit
 function clause execute (CReturn()) =
 {
-  /* START_CReturn */
   checkCP2usable();
   raise_c2_exception_noreg(CapEx_ReturnTrap)
-  /* END_CReturn */
 }
 
 union clause ast = CBX : (regno, bits(16), bool)
 function clause execute (CBX(cb, imm, notset)) =
 {
-  /* START_CBtag */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
@@ -1178,13 +1099,11 @@ function clause execute (CBX(cb, imm, notset)) =
       let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
       execute_branch(PC + offset);
     }
-  /* END_CBtag */
 }
 
 union clause ast = CBZ : (regno, bits(16), bool)
 function clause execute (CBZ(cb, imm, notzero)) =
 {
-  /* START_CBz */
   checkCP2usable();
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
@@ -1193,13 +1112,11 @@ function clause execute (CBZ(cb, imm, notzero)) =
       let offset : bits(64) = (sign_extend(imm @ 0b00) + 4) in
       execute_branch(PC + offset);
     }
-  /* END_CBz */
 }
 
 union clause ast = CJALR : (regno, regno, bool)
 function clause execute(CJALR(cd, cb, link)) = 
 {
-  /* START_CJALR */
   checkCP2usable();
   cb_val = readCapReg(cb);
   cb_ptr = getCapCursor(cb_val);
@@ -1232,13 +1149,11 @@ function clause execute(CJALR(cd, cb, link)) =
             assert(false, "");
       execute_branch_pcc(cb_val);
     }
-  /* END_CJALR */
 }
 
 union clause ast = CLoad : (regno, regno, regno, bits(8), bool, WordType, bool)
 function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
 {
-  /* START_CLoad */
   checkCP2usable();
   cb_val = readCapReg(cb);
   if (register_inaccessible(cb)) then
@@ -1275,14 +1190,12 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
           wGPR(rd) = memResult;
         }
     }
-  /* END_CLoad */
 }
 
 union clause ast = CStore : (regno, regno, regno, regno, bits(8), WordType, bool)
 
 function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
 {
-  /* START_CStore */
   checkCP2usable();
   cb_val = readCapReg(cb);
   if (register_inaccessible(cb)) then
@@ -1333,13 +1246,11 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
             }
         }
     }
-  /* END_CStore */
 }
 
 union clause ast = CSC : (regno, regno, regno, regno, bits(11), bool)
 function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
 {
-  /* START_CSC */
   checkCP2usable();
   cs_val = readCapReg(cs);
   cb_val = readCapReg(cb);
@@ -1385,13 +1296,11 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
             MEMw_tagged(pAddr, cs_val.tag, capStructToMemBits(cs_val));
         }
     }
-  /* END_CSC */
 }
 
 union clause ast = CLC : (regno, regno, regno, bits(11), bool)
 function clause execute (CLC(cd, cb, rt, offset, linked)) =  
 {
-  /* START_CLC */
   checkCP2usable();
   cb_val = readCapReg(cb);
   if (register_inaccessible(cd)) then
@@ -1433,7 +1342,6 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
             }
         }
     }
-  /* END_CLC */
 }
 
 union clause ast = C2Dump : regno

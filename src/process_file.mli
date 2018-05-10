@@ -56,6 +56,7 @@ val monomorphise_ast : ((string * int) * string) list -> Type_check.Env.t -> Typ
 val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_undefined: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_coq : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_c : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_interpreter : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
@@ -81,6 +82,7 @@ val opt_dall_split_errors : bool ref
 type out_type =
   | Lem_ast_out
   | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
+  | Coq_out of string list (* If present, the strings are files to open in the coq backend*)
 
 val output :
   string ->                           (* The path to the library *)

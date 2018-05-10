@@ -38,6 +38,7 @@ function fetch_and_execute () = {
 
 val elf_entry = {
   ocaml: "Elf_loader.elf_entry",
+  lem: "elf_entry",
   c: "elf_entry"
 } : unit -> int
 

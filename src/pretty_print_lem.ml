@@ -551,10 +551,11 @@ let doc_exp_lem, doc_let_lem =
     let expY = top_exp ctxt true in
     let expN = top_exp ctxt false in
     let expV = top_exp ctxt in
+    let wrap_parens doc = if aexp_needed then parens (doc) else doc in
     let liftR doc =
       if ctxt.early_ret && effectful (effect_of full_exp)
-      then separate space [string "liftR"; parens (doc)]
-      else doc in
+      then wrap_parens (separate space [string "liftR"; parens (doc)])
+      else wrap_parens doc in
     match e with
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
@@ -619,31 +620,34 @@ let doc_exp_lem, doc_let_lem =
       raise (Reporting_basic.err_unreachable l
         "E_vector_append should have been rewritten before pretty-printing")
     | E_cons(le,re) -> doc_op (group (colon^^colon)) (expY le) (expY re)
-    | E_if(c,t,e) ->
-       let epp = if_exp ctxt false c t e in
-       if aexp_needed then parens (align epp) else epp
+    | E_if(c,t,e) -> wrap_parens (align (if_exp ctxt false c t e))
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        raise (report l "E_for should have been rewritten before pretty-printing")
     | E_loop _ ->
        raise (report l "E_loop should have been rewritten before pretty-printing")
     | E_let(leb,e) ->
-       let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
-       if aexp_needed then parens epp else epp
+       wrap_parens (let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ expN e)
     | E_app(f,args) ->
        begin match f with
-       (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
+       | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
+         when effectful (effect_of full_exp) ->
+          let call = doc_id_lem (append_id f "M") in
+          wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
+       (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "foreach", _) ->
           begin
             match args with
             | [exp1; exp2; exp3; ord_exp; vartuple; body] ->
                let loopvar, body = match body with
-                 | E_aux (E_let (LB_aux (LB_val (
-                     P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _), _), _), body), _) -> id, body
-                 | E_aux (E_let (LB_aux (LB_val (
-                     P_aux (P_var (P_aux (P_id id, _), _), _), _), _), body), _) -> id, body
-                 | E_aux (E_let (LB_aux (LB_val (
-                     P_aux (P_id id, _), _), _), body), _) -> id, body
+                 | E_aux (E_let (LB_aux (LB_val (_, _), _),
+                   E_aux (E_let (LB_aux (LB_val (_, _), _),
+                   E_aux (E_if (_,
+                   E_aux (E_let (LB_aux (LB_val (
+                     ((P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _))
+                     | (P_aux (P_var (P_aux (P_id id, _), _), _))
+                     | (P_aux (P_id id, _))), _), _),
+                     body), _), _), _)), _)), _) -> id, body
                  | _ -> raise (Reporting_basic.err_unreachable l ("Unable to find loop variable in " ^ string_of_exp body)) in
                let step = match ord_exp with
                  | E_aux (E_lit (L_aux (L_false, _)), _) ->
@@ -743,7 +747,7 @@ let doc_exp_lem, doc_let_lem =
                | _ ->
                   doc_id_lem_ctor f ^^ space ^^ 
                     parens (separate_map comma (expV false) args) in
-             if aexp_needed then parens (align epp) else epp
+             wrap_parens (align epp)
           | _ ->
              let call, is_extern = match annot with
                | Some (env, _, _) when Env.is_extern f env "lem" ->
@@ -796,8 +800,7 @@ let doc_exp_lem, doc_let_lem =
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
     | E_lit lit -> doc_lit_lem lit
-    | E_cast(typ,e) ->
-       expV aexp_needed e
+    | E_cast(typ,e) -> expV aexp_needed e
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -807,10 +810,9 @@ let doc_exp_lem, doc_let_lem =
            (* when Env.is_record tid env -> *)
            tid
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
-       let epp = anglebars (space ^^ (align (separate_map
-                                          (semi_sp ^^ break 1)
-                                          (doc_fexp ctxt recordtyp) fexps)) ^^ space) in
-       if aexp_needed then parens epp else epp
+       wrap_parens (anglebars (space ^^ (align (separate_map
+                                        (semi_sp ^^ break 1)
+                                        (doc_fexp ctxt recordtyp) fexps)) ^^ space))
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
        let recordtyp = match annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
@@ -829,7 +831,7 @@ let doc_exp_lem, doc_let_lem =
        let start = match nexp_simp start with
          | Nexp_aux (Nexp_constant i, _) -> Big_int.to_string i
          | _ -> if dir then "0" else string_of_int (List.length exps) in
-       let expspp =
+       (* let expspp =
          match exps with
          | [] -> empty
          | e :: es ->
@@ -840,7 +842,8 @@ let doc_exp_lem, doc_let_lem =
                      expN e),
                   if count = 20 then 0 else count + 1)
                 (expN e,0) es in
-            align (group expspp) in
+            align (group expspp) in *)
+       let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
        let epp = brackets expspp in
        let (epp,aexp_needed) =
          if is_bit_typ etyp && !opt_mwords then
@@ -858,28 +861,24 @@ let doc_exp_lem, doc_let_lem =
        brackets (separate_map semi (expN) exps)
     | E_case(e,pexps) ->
        let only_integers e = expY e in
-       let epp =
-         group ((separate space [string "match"; only_integers e; string "with"]) ^/^
-                  (separate_map (break 1) (doc_case ctxt) pexps) ^/^
-                    (string "end")) in
-       if aexp_needed then parens (align epp) else align epp
+       wrap_parens
+         (group ((separate space [string "match"; only_integers e; string "with"]) ^/^
+                 (separate_map (break 1) (doc_case ctxt) pexps) ^/^
+                 (string "end")))
     | E_try (e, pexps) ->
        if effectful (effect_of e) then
          let try_catch = if ctxt.early_ret then "try_catchR" else "try_catch" in
-         let epp =
-           group ((separate space [string try_catch; expY e; string "(function "]) ^/^
-                    (separate_map (break 1) (doc_case ctxt) pexps) ^/^
-                      (string "end)")) in
-         if aexp_needed then parens (align epp) else align epp
+         wrap_parens
+           (group ((separate space [string try_catch; expY e; string "(function "]) ^/^
+                   (separate_map (break 1) (doc_case ctxt) pexps) ^/^
+                   (string "end)")))
        else
          raise (Reporting_basic.err_todo l "Warning: try-block around pure expression")
     | E_throw e ->
-       let epp = liftR (separate space [string "throw"; expY e]) in
-       if aexp_needed then parens (align epp) else align epp
+       align (liftR (separate space [string "throw"; expY e]))
     | E_exit e -> liftR (separate space [string "exit"; expY e])
     | E_assert (e1,e2) ->
-       let epp = liftR (separate space [string "assert_exp"; expY e1; expY e2]) in
-       if aexp_needed then parens (align epp) else align epp
+       align (liftR (separate space [string "assert_exp"; expY e1; expY e2]))
     | E_app_infix (e1,id,e2) ->
        raise (Reporting_basic.err_unreachable l
          "E_app_infix should have been rewritten before pretty-printing")
@@ -905,9 +904,9 @@ let doc_exp_lem, doc_let_lem =
          in
          infix 0 1 middle (expV b e1) (expN e2)
        in
-       if aexp_needed then parens (align epp) else epp
+       wrap_parens (align epp)
     | E_internal_return (e1) ->
-       separate space [string "return"; expY e1]
+       wrap_parens (align (separate space [string "return"; expY e1]))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem (L_aux (L_num i, l))

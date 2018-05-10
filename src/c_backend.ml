@@ -1927,7 +1927,7 @@ and compile_block ctx = function
      let setup, _, call, cleanup = compile_aexp ctx exp in
      let rest = compile_block ctx exps in
      let gs = gensym () in
-     setup @ [idecl CT_unit gs; call (CL_id gs)] @ cleanup @ rest
+     iblock (setup @ [idecl CT_unit gs; call (CL_id gs)] @ cleanup) :: rest
 
 (** Compile a sail type definition into a IR one. Most of the
    actual work of translating the typedefs into C is done by the code

@@ -87,8 +87,14 @@ function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
 overload operator | = {or_bool, or_vec}
 
+/*!
+The \function{unsigned} function converts a bit vector to an integer assuming an unsigned representation:
+*/
 val unsigned = {ocaml: "uint", lem: "uint"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
+/*!
+The \function{signed} function converts a bit vector to an integer assuming a signed twos-complement representation:
+*/
 val signed = {ocaml: "sint", lem: "sint"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 val "get_slice_int" : forall 'w. (atom('w), int, int) -> bits('w)
@@ -277,6 +283,9 @@ val operator *_s = "mults_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n
 infix 7 *_u
 val operator *_u = "mult_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
 
+/*!
+\function{to\_bits} converts an integer to a bit vector of given length. If the integer is negative a twos-complement representation is used. If the integer is too large (or too negative) to fit in the requested length then it is truncated to the least significant bits.
+*/
 val to_bits : forall 'l.(atom('l), int) -> bits('l)
 function to_bits (l, n) = get_slice_int(l, n, 0)
 

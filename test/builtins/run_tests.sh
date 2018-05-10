@@ -5,6 +5,7 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR
 SAILDIR="$DIR/../.."
+LEMBUILDDIR="$DIR/_lembuild"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -81,7 +82,54 @@ do
 	red "compiling $(basename $file) (OCaml)" "fail"
     fi;
 
+    mkdir -p "$LEMBUILDDIR"
+
+    if "$SAILDIR/sail" -no_warn -lem -lem_mwords -lem_lib Test_extras -undefined_gen -o out "$file" 1> /dev/null 2> /dev/null;
+    then
+        mv out.lem out_types.lem "$LEMBUILDDIR"
+        if lem -ocaml -lib "$SAILDIR/src/lem_interp" \
+               -outdir "$LEMBUILDDIR" \
+               "$SAILDIR/src/gen_lib/sail_values.lem" \
+               "$SAILDIR/src/gen_lib/sail_operators.lem" \
+               "$SAILDIR/src/gen_lib/sail_operators_mwords.lem" \
+               "$SAILDIR/src/lem_interp/sail_instr_kinds.lem" \
+               "$SAILDIR/src/gen_lib/prompt.lem" \
+               "$SAILDIR/src/gen_lib/state_monad.lem" \
+               "$SAILDIR/src/gen_lib/state.lem" \
+               "$SAILDIR/src/gen_lib/prompt_monad.lem" \
+               "test_extras.lem" "$LEMBUILDDIR/out_types.lem" "$LEMBUILDDIR/out.lem" 1> /dev/null 2> /dev/null;
+        then
+            cd "$LEMBUILDDIR"
+            if ocamlfind ocamlc -linkpkg -package zarith -package lem \
+                         sail_values.ml sail_operators.ml \
+                         sail_instr_kinds.ml prompt_monad.ml prompt.ml \
+                         sail_operators_mwords.ml state_monad.ml state.ml \
+                         test_extras.ml out_types.ml out.ml ../test.ml \
+                         -o test 1> /dev/null 2> /dev/null
+            then
+                green "compiling $(basename $file) (Lem)" "ok"
+                if ./test 1> /dev/null 2> /dev/null
+                then
+	            green "tested $(basename ${file%.sail}) (Lem)" "ok"
+                else
+	            red "tested $(basename ${file%.sail}) (Lem)" "fail"
+                fi
+            else
+                red "compiling $(basename $file) (Sail->Lem->Ocaml->Bytecode)" "fail"
+            fi
+            cd "$DIR"
+        else
+            red "compiling $(basename $file) (Sail->Lem->Ocaml)" "fail"
+        fi
+    else
+        red "compiling $(basename $file) (Sail->Lem)" "fail"
+    fi;
+
     rm -rf $DIR/_sbuild/;
+    rm -rf "$LEMBUILDDIR";
+    rm -f Out_lemmas.thy;
+    rm -f out_types.lem;
+    rm -f out.lem;
     rm -f ${file%.sail}.c;
     rm -f a.out;
     rm -f out

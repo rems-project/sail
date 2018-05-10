@@ -38,6 +38,12 @@ end
 
 declare {isabelle} termination_argument foreachM = automatic
 
+val and_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e
+let and_boolM l r = l >>= (fun l -> if l then r else return false)
+
+val or_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e
+let or_boolM l r = l >>= (fun l -> if l then return true else r)
+
 val bool_of_bitU_fail : forall 'rv 'e. bitU -> monad 'rv bool 'e
 let bool_of_bitU_fail = function
   | B0 -> return false

@@ -1,33 +1,33 @@
 $ifndef _FLOW
 $define _FLOW
 
-val not_bool = "not" : bool -> bool
-val and_bool = "and_bool" : (bool, bool) -> bool
-val or_bool = "or_bool" : (bool, bool) -> bool
+val not_bool = {coq: "negb", _: "not"} : bool -> bool
+val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
+val or_bool = {coq: "orb", _: "or_bool"} : (bool, bool) -> bool
 
-val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 function neq_atom (x, y) = not_bool(eq_atom(x, y))
 
-val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lt_atom = "lt"     : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gt_atom = "gt"     : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lteq_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lt_atom = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gt_atom = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val lt_range_atom = "lt"     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val lteq_range_atom = "lteq" : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val gt_range_atom = "gt"     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val gteq_range_atom = "gteq" : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val lt_atom_range = "lt"     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val lteq_atom_range = "lteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val gt_atom_range = "gt"     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val gteq_atom_range = "gteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val lt_range_atom = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val lteq_range_atom = {coq: "Z.lte", _: "lteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val gt_range_atom = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val gteq_range_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val lt_atom_range = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val lteq_atom_range = {coq: "Z.leb", _: "lteq"} : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val gt_atom_range = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val gteq_atom_range = {coq: "Z.geb", _: "gteq"} : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 
-val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
-val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : (int, int) -> bool
-val eq_bool = {ocaml: "eq_bool", lem: "eq", c: "eq_bool"} : (bool, bool) -> bool
+val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
+val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : (int, int) -> bool
+val eq_bool = {ocaml: "eq_bool", lem: "eq", c: "eq_bool", coq: "Bool.eqb"} : (bool, bool) -> bool
 
 val neq_range = {lem: "neq"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
 function neq_range (x, y) = not_bool(eq_range(x, y))

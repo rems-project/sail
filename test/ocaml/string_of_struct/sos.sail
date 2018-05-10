@@ -2,11 +2,6 @@
 struct would cause the ocaml backend to generate a bad string_of
 function for the struct */
 
-union option ('a : Type) = {
-  None : unit,
-  Some : 'a
-}
-
 struct test = {
   test1 : int,
   test2 : option(int)

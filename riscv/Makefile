@@ -1,4 +1,4 @@
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv_vmem.sail riscv.sail
+SAIL_SRCS = prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv_vmem.sail riscv.sail riscv_step.sail
 SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
 
@@ -34,6 +34,10 @@ Riscv.thy: riscv.lem riscv_extras.lem
 
 riscv.lem: $(SAIL_SRCS) Makefile
 	$(SAIL) $(SAIL_FLAGS) -lem -o riscv -lem_mwords -lem_lib Riscv_extras $(SAIL_SRCS)
+
+# we exclude prelude.sail here, most code there should move to sail lib
+LOC_FILES:=$(SAIL_SRCS) main.sail
+include ../etc/loc.mk
 
 clean:
 	-rm -rf riscv _sbuild

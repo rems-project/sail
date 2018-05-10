@@ -63,6 +63,10 @@ val opt_tc_debug : int ref
    re-writer passes, so it should only be used for debugging. *)
 val opt_no_effects : bool ref
 
+(** [opt_no_lexp_bounds_check] turns of the bounds checking in vector
+   assignments in l-expressions. *)
+val opt_no_lexp_bounds_check : bool ref
+
 (** {2 Type errors} *)
 
 type type_error =
@@ -88,8 +92,13 @@ module Env : sig
   (** Note: Most get_ functions assume the identifiers exist, and throw
      type errors if it doesn't. *)
 
-  (** get the quantifier and type for a function identifier. *)
+  (** Get the quantifier and type for a function identifier, freshening
+      type variables. *)
   val get_val_spec : id -> t -> typquant * typ
+
+  (** Like get_val_spec, except that the original type variables are used.
+      Useful when processing the body of the function. *)
+  val get_val_spec_orig : id -> t -> typquant * typ
 
   val update_val_spec : id -> typquant * typ -> t -> t
 
@@ -143,8 +152,9 @@ module Env : sig
   (** Lookup id searchs for a specified id in the environment, and
      returns it's type and what kind of identifier it is, using the
      lvar type. Returns Unbound if the identifier is unbound, and
-     won't throw any exceptions. *)
-  val lookup_id : id -> t -> lvar
+     won't throw any exceptions. If the raw option is true, then look
+     up the type without any flow typing modifiers. *)
+  val lookup_id : ?raw:bool -> id -> t -> lvar
 
   val is_union_constructor : id -> t -> bool
 
@@ -300,6 +310,8 @@ val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
 
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
+val destruct_numeric : Env.t -> typ -> (kid list * n_constraint * nexp) option
+
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
 type uvar =
@@ -312,6 +324,9 @@ val string_of_uvar : uvar -> string
 
 val subst_unifiers : uvar KBindings.t -> typ -> typ
 
+val typ_subst_nexp : kid -> nexp_aux -> typ -> typ
+val typ_subst_typ : kid -> typ_aux -> typ -> typ
+val typ_subst_order : kid -> order_aux -> typ -> typ
 val typ_subst_kid : kid -> kid -> typ -> typ
 
 val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option

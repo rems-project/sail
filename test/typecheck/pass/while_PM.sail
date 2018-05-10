@@ -22,10 +22,12 @@ val vector_update = {ocaml: "update", lem: "update_vec_dec"} : forall 'n.
 
 register GPR00 : vector(64, dec, bit)
 
+/* FIXME: Currently this doesn't work in lem
 function test b : bit -> unit = {
-  i : int = 0;
+  i : range(0, 64) = 0;
   while i < 64 do {
     GPR00[i] = b;
-    i = i + 1
+    i = i + 1;
   }
 }
+*/
