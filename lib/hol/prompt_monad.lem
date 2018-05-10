@@ -30,3 +30,6 @@ let inline write_tag = write_tagS
 let inline write_mem_ea wk addr sz = write_mem_eaS wk addr (nat_of_int sz)
 let inline write_mem_val = write_mem_valS
 let barrier _ = return ()
+
+let inline excl_result = excl_resultS
+let inline assert_exp = assert_expS
