@@ -128,3 +128,7 @@ val read_ram : forall 'rv 'a 'b 'c 'e. Size 'b, Size 'c =>
 let read_ram addrsize size hexRAM address =
   (*let _ = prerr_endline ("Reading " ^ (stringFromInteger size) ^ " bytes from address " ^ (stringFromInteger (unsigned address))) in*)
   read_mem Read_plain address size
+
+val elf_entry : unit -> integer
+let elf_entry () = 0
+declare ocaml target_rep function elf_entry = `Elf_loader.elf_entry`
