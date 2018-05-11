@@ -60,6 +60,31 @@ does not make any distinction between expressions and statements, so
 since there is only a single line of code within the foreach block, we
 can drop it and simply write: \mrbfnmyreplicatebitsthree
 
+\subsection{External Bindings}
+
+Rather than defining functions within Sail itself, they can be mapped
+onto functions definition within the various backend targets supported
+by Sail. This is primarily used to setup the primitive functions
+defined in the Sail library. These declarations work like much FFI
+bindings in many programming languages---in Sail we provide the
+\ll{val} declaration, except rather than giving a function body we
+supply a string used to identify the external operator in each
+backend. For example, we could link the \ll{>>} operator with the
+\verb|shiftl| primitive as \mrbzeightoperatorzzerozIzIznine If the
+external function has the same name as the sail function, such as
+\ll{shiftl = "shiftl"}, then we can use the shorthand syntax
+\mrbshiftl
+
+We can map onto differently-named operations for different targets by
+using a JSON-like \ll{key: "value"} notation, for example:
+\mrbzeightoperatorzzerozKzKznine We can also omit backends---in which
+case those targets will expect a definition written in Sail. Note that
+no checking is done to ensure that the definition in the target
+matches the type of the Sail function. Finally, the \ll{_} key used
+above is a wildcard that will be used for any backend not otherwise
+included. If we use the wildcard key, then we cannot omit specific
+backends to force them to use a definition in Sail.
+
 \subsection{Numeric Types}
 \label{sec:numeric}
 
@@ -95,7 +120,9 @@ Note that \ll{bit} isn't a numeric type (i.e. it's not
 \ll{range(0,1)}. This is intentional, as otherwise it would be
 possible to write expressions like \ll{(1 : bit) + 5} which would end
 up being equal to \ll{6 : range(5, 6)}. This kind of implicit casting
-from bits to other numeric types would be highly undesirable.
+from bits to other numeric types would be highly undesirable. The
+\ll{bit} type itself is a two-element type with members \ll{bitzero} and
+\ll{bitone}.
 
 \subsection{Vector Type}
 \label{sec:vec}
@@ -236,6 +263,12 @@ Pattern matching can be used to destructure lists, see Section~\ref{sec:pat}
 
 \subsection{Other Types}
 
+Sail also has a \ll{string} type, and a \ll{real} type. The \ll{real}
+type is used to model arbitrary real numbers, so floating point
+instructions could be specified by saying that they are equivalent to
+mapping the floating point inputs to real numbers, performing the
+arithmetic operation on the real numbers, and then mapping back to a
+floating point value of the appropriate precision.
 
 \subsection{Pattern Matching}
 \label{sec:pat}
@@ -306,6 +339,17 @@ identifiers, pattern matches on variables and enum elements can be
 somewhat ambiguous. This is the primary reason why we have the basic,
 but incomplete, pattern exhaustiveness check mentioned above---it can
 warn you if removing an enum constructor breaks a pattern match.
+
+\paragraph{Matching on tuples}
+
+We use match to destructure tuple types, for example:
+\begin{lstlisting}
+let x : (int, int) = (2, 3) in
+match x {
+  (y, z) => print("y = 2 and z = 3")
+}
+
+\end{lstlisting}
 
 \paragraph{Matching on unions}
 
@@ -443,10 +487,10 @@ assignment operator within a block.
 }
 \end{lstlisting}
 The assignment operator is the equality symbol, as in C and other
-programming languages. Sail supports a rich language of
-\emph{l-expression} forms, which can appear on the left of an
-assignment. These will be described in Subsection~\ref{sec:lexp}. Note
-that we could have written
+programming languages. Sail supports a rich language of \emph{l-value}
+forms, which can appear on the left of an assignment. These will be
+described in Subsection~\ref{sec:lexp}. Note that we could have
+written
 \begin{lstlisting}
 {
   x = 3;
@@ -473,23 +517,130 @@ the variable \ll{x}, so
 would allow \ll{x} to be either 2 or 3, but not any other value. The
 \lstinline+{|2, 3|}+ syntax is equivalent to \lstinline+{'n, 'n in {2, 3}. int('n)}+.
 
-\subsubsection{l-expressions}
+\subsubsection{Assignment and l-values}
 \label{sec:lexp}
 
-Sail allows for setter functions to be declared in a very simple way:
-\ll{f(x) = y} is sugar for \ll{f(x, y)}. This feature is commonly used
-when setting
+It is common in ISA specifications to assign to complex l-values,
+e.g.~to a subvector or named field of a bitvector register, or to an
+l-value computed with some auxiliary function, e.g.~to select the
+appropriate register for the current execution model.
 
-\fbox{TODO}
+We have l-values that allow us to write to individual elements of a
+vector:
+\begin{lstlisting}
+{
+  v : bits(8) = 0xFF;
+  v[0] = bitzero;
+  assert(v == 0xFE)
+}
+\end{lstlisting}
+as well as sub ranges of a vector:
+\begin{lstlisting}
+{
+  v : bits(8) = 0xFF;
+  v[4 .. 0] = 0x0; // assume default Order dec
+  assert(v == 0xF0)
+}
+\end{lstlisting}
+We also have vector concatenation l-values, which work much like
+vector concatenation patterns
+\begin{lstlisting}
+{
+  v1 : bits(4) = 0xF;
+  v2 : bits(4) = 0xF;
+  v1 @ v2 = 0xAB;
+  assert(v1 == 0xA & v2 == 0xB)
+}
+\end{lstlisting}
+For structs we can write to an individual struct field as
+\begin{lstlisting}
+{
+  s : S = struct { field = 0xFF }
+  s.field = 0x00
+}
+\end{lstlisting}
+assume we have a struct type \ll{S}, with a field simply called
+\ll{field}. We can do multiple assignment using tuples, e.g.
+\begin{lstlisting}
+{
+  (x, y) = (2, 3);
+  assert(x == 2 & x == 3)
+}
+\end{lstlisting}
+
+Finally, we allow functions to appear in l-values. This is a very
+simple way to declare `setter' functions that look like custom
+l-values, for example:
+\begin{lstlisting}
+{
+  memory(addr) = 0x0F
+}
+\end{lstlisting}
+This works because \ll{f(x) = y} is sugar for \ll{f(x, y)}. This
+feature is commonly used when setting registers or memory that has
+additional semantics for when they are read or written. We commonly
+use the overloading feature to declare what appear to be getter/setter
+pairs, so the above example we could implement a \ll{read_memory}
+function and a \ll{write_memory} function and overload them both as
+\ll{memory} to allow us to write memory using \ll{memory(addr) = data}
+and read memory as \ll{data = memory(addr)}, as so:
+\begin{lstlisting}
+val read_memory : bits(64) -> bits(8)
+val write_memory : (bits(64), bits(8)) -> unit
+
+overload memory = {read_memory, write_memory}
+\end{lstlisting}
+For more details on operator and function overloading see
+Section~\ref{sec:overload}.
+
+\subsection{Registers}
+
+Registers can be declared with a top level
+\begin{center}
+  \ll{register} \textit{name} \ll{:} \textit{type}
+\end{center}
+declaration. Registers are essentially top-level global variables and
+can be set with the previously discussed l-expression forms. There is
+currently no restriction on the type of a register in
+Sail.\footnote{We may at some point want to enforce that they can be
+  mapped to bitvectors.}
+
+Registers differ from ordinary mutable variables as we can pass around
+references to them by name. A reference to a register \ll{R} is
+created as \ll{ref R}. If the register \ll{R} has the type \ll{A},
+then the type of \ll{ref R} will be \ll{register(A)}. There is a
+dereferencing l-value operator \ll{*} for assigning to a register
+reference. One use for register references is to create a list of
+general purpose registers, so they can be indexed using numeric
+variables. For example:
+\lstinputlisting{examples/regref.sail}
+
+We can dereference register references using the \ll{"reg_deref"}
+builtin (see Section~\ref{sec:prelude}), which is set up like so:
+\begin{lstlisting}
+val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+\end{lstlisting}
+Currently there is no built-in syntactic sugar for dereferencing
+registers in expressions.
+
+Unlike previous versions of Sail, referencing and de-referencing
+registers is done explicitly, although we can use an automatic cast to
+implictly dereference registers if that semantics is desired for a
+specific specification that makes heavy use of register references,
+like so:
+\begin{lstlisting}
+val cast auto_reg_deref = "reg_deref" : forall ('a : Type). register('a) -> a effect {rreg}
+\end{lstlisting}
+
 
 \subsection{Type declarations}
 
 \subsubsection{Enumerations}
 
-Enumerations can be defined in either a Haskell-like syntax
-(useful for smaller enums) or a more traditional C-like syntax, which
-is often more readable for enumerations with more members. There are
-no lexical constraints on the identifiers that can be part of an
+Enumerations can be defined in either a Haskell-like syntax (useful
+for smaller enums) or a more traditional C-like syntax, which is often
+more readable for enumerations with more members. There are no lexical
+constraints on the identifiers that can be part of an
 enumeration. There are also no restrictions on the name of a
 enumeration type, other than it must be a valid identifier. For
 example, the following shows two ways to define the enumeration
@@ -658,6 +809,7 @@ vector slicing. Operators used in types always share precedence with
 identically named operators at the expression level.
 
 \subsection{Ad-hoc Overloading}
+\label{sec:overload}
 
 Sail has a flexible overloading mechanism using the \ll{overload}
 keyword
@@ -736,14 +888,14 @@ so we can use this to define functions with optional arguments, e.g.
 \ll{sizeof}, see Section~\ref{sec:sizeof}) or we can provide it
 ourselves as an explicit argument.
 
-\subsection{Getters and Setters}
-\label{sec:getset}
+%% \subsection{Getters and Setters}
+%% \label{sec:getset}
 
-We have already seen some examples of getters and setters in
-Subsection~\ref{sec:bitfield}, but they can be used in many other
-contexts.
+%% We have already seen some examples of getters and setters in
+%% Subsection~\ref{sec:bitfield}, but they can be used in many other
+%% contexts.
 
-\fbox{TODO}
+%% \fbox{TODO}
 
 \subsection{Sizeof and Constraint}
 \label{sec:sizeof}
@@ -793,8 +945,73 @@ otherwise not accessible at runtime, and so can be used to implement
 implicit arguments, as was seen for \ll{replicate_bits} in
 Section~\ref{sec:functions}.
 
+\subsection{Scattered Definitions}
+\label{sec:scattered}
+In a Sail specification, sometimes it is desirable to collect together
+the definitions relating to each machine instruction (or group
+thereof), e.g.~grouping the clauses of an AST type with the associated
+clauses of decode and execute functions, as in
+Section~\ref{sec:riscv}. Sail permits this with syntactic sugar for
+`scattered' definitions. Either functions or union types can be
+scattered.
+
+One begins a scattered definition by declaring the name and kind
+(either function or union) of the scattered definition, e.g.
+\begin{lstlisting}
+scattered function foo
+
+scattered union bar
+\end{lstlisting}
+This is then followed by a list of clauses for either the union or the
+function, which can be freely interleaved with other definitions (such
+as \ll{E} in the below code)
+\begin{lstlisting}[mathescape]
+union clause bar : Baz(int, int)
+
+function clause foo(Baz(x, y)) = $\ldots$
+
+enum E = A | B | C
+
+union clause bar : Quux(string)
+
+function clause foo(Quux(str)) = print(str)
+\end{lstlisting}
+Finally the scattered definition is ended with the \ll{end} keyword, like so:
+\begin{lstlisting}
+end foo
+
+end bar
+\end{lstlisting}
+
+Semantically, scattered definitions of union types appear at the start
+of their definition, and scattered definitions of functions appear at
+the end. A scattered function definition can be recursive, but
+mutually recursive scattered function definitions should be avoided.
+
+\subsection{Exceptions}
+\label{sec:exn}
+
+Perhaps suprisingly for a specification language, Sail has exception
+support. This is because exceptions as a language feature do sometimes
+appear in vendor ISA pseudocode, and such code would be very difficult
+to translate into Sail if Sail did not itself support exceptions. We
+already translate Sail to monadic theorem prover code, so working with
+a monad that supports exceptions there is fairly natural.
+
+For exceptions we have two language features: \ll{throw} statements
+and \ll{try}-\ll{catch} blocks. The throw keyword takes a value of
+type \ll{exception} as an argument, which can be any user defined type
+with that name. There is no builtin exception type, so to use
+exceptions one must be set up on a per-project basis. Usually the
+exception type will be a union, often a scattered union, which allows
+for the exceptions to be declared throughout the specification as they
+would be in OCaml, for example: \lstinputlisting{examples/exn.sail}
+Note how the use of the scattered type allows additional exceptions to
+be declared even after they are used.
+
 \subsection{Preludes and Default Environment}
 \label{sec:prelude}
+
 By default Sail has almost no built-in types or functions, except for
 the primitive types described in this Chapter. This is because
 different vendor-pseudocode's have varying naming conventions and
@@ -834,4 +1051,7 @@ operations. These are listed below:
     the default order (which must be set before including this file).
   \item[smt.sail] Defines operators allowing div, mod, and abs
     to be used in types by exposing them to the Z3 SMT solver.
+  \item[exception\_basic.sail] Defines a trivial exception type, for
+    situations where you don't want to declare your own (see
+    Section~\ref{sec:exn}).
 \end{description}
