@@ -1,5 +1,5 @@
-Sail ISA specification language
-===============================
+The Sail ISA specification language
+===================================
 
 Overview
 ========
@@ -29,7 +29,7 @@ some Sail specifications and related tools.
 * Generated Isabelle snapshots of the above ISAs in [snapshots/isabelle](snapshots/isabelle)
 
 * Documentation for generating Isabelle and working with the ISA specs
-  in Isabelle in [snapshots/isabelle/manual.pdf](snapshots/isabelle/manual.pdf)
+  in Isabelle in [snapshots/isabelle/Manual.pdf](snapshots/isabelle/Manual.pdf)
 
 * A simple emacs mode with syntax highlighting (in [editors/](editors/))
 
@@ -49,7 +49,7 @@ with all the required dependencies.
 OPAM Installation
 =================
 
-See the Sail [wiki
+See the following Sail [wiki
 page](https://github.com/rems-project/sail/wiki/OPAMInstall) for how
 to get pre-built binaries of Sail using OPAM.
 
@@ -70,8 +70,9 @@ other supporting files in lib/ and language/, is distributed under the
 with the exception of the library src/pprint, which is distributed
 under the CeCILL-C free software licence in src/pprint/LICENSE.
 
-The ASL-derived ARMv8.3 model in aarch64/ is copyright ARM Ltd. See
-https://github.com/meriac/archex
+The generated parts of the ASL-derived ARMv8.3 model in aarch64/ are
+copyright ARM Ltd. See https://github.com/meriac/archex, and the
+[README file](aarch64/README) in that directory.
 
 The hand-written ARMv8 model, in arm/, is distributed under the
 2-clause BSD licence in the headers of those files.

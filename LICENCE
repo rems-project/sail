@@ -1,11 +1,15 @@
    Sail
 
 Sail and the Sail architecture models here, comprising all files and
-directories except the PPrint library, are subject to the BSD
-two-clause licence below.
+directories except the PPrint library, and ASL-derived Sail code in
+the aarch64 directory, are subject to the BSD two-clause licence
+below.
 
 The PPrint library, in src/pprint, is subject to the CeCILL-C free
 software licence agreement therein.
+
+The ASL derived parts of the ARMv8.3 specification in
+aarch64/no_vector and aarch64/full are copyright ARM Ltd.
 
 Copyright (c) 2013-2018
   Kathyrn Gray
