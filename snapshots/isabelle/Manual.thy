@@ -4,7 +4,7 @@ theory Manual
     Sail.State_lemmas
     Sail.Sail_operators_mwords_lemmas
     Sail.Hoare
-    Riscv_duopod.Riscv_duopod_lemmas
+    "riscv/Riscv_duopod_lemmas"
 begin
 
 declare [[show_question_marks = false]]

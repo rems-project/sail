@@ -1,0 +1,7 @@
+session LEM = "HOL-Word" +
+  description {*
+    HOL + LEM specific theories
+  *}
+  theories Lem_pervasives Lem_pervasives_extra
+
+
