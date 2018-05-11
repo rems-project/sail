@@ -38,7 +38,7 @@ AST is parsed~\footnote{This can affect precedence declarations for custom user 
 
 \subsection{OCaml compilation}
 
-To compile a sail specification into OCaml, one calls Sail as
+To compile a Sail specification into OCaml, one calls Sail as
 \begin{verbatim}
 sail -ocaml FILES
 \end{verbatim}
@@ -76,25 +76,46 @@ specification. In particular \verb+elf.sail+ defines a function
 correct location. ELF loading is done by the linksem
 library\footnote{\url{https://github.com/rems-project/linksem}}.
 
-There is also an \verb+-ocaml_trace+ option which instruments the
-generated OCaml code with tracing information this option implies \verb+-ocaml+.
+There is also an \verb+-ocaml_trace+ option which is the same as
+\verb+-ocaml+ except it instruments the generated OCaml code with
+tracing information.
 
-\subsection{C compilation}
+%% \subsection{C compilation}
 
-WIP but basically like OCaml
+%% WIP but basically like OCaml
 
-\subsection{Lem embedding}
+\subsection{Lem and Isabelle}
 
-\TODO{Document generating lem}
+We have a separate document detailing how to generate Isabelle
+theories from Sail models, and how to work with those models in
+Isabelle, see:
+\begin{center}
+\url{https://github.com/rems-project/sail/raw/sail2/snapshots/isabelle/Manual.pdf}
+\end{center}
+Currently there are generated Isabelle snapshots for some of our
+models in \verb+snapshots/isabelle+ in the Sail repository. These
+snapshots are provided for convenience, and are not guaranteed to be
+up-to-date.
+
+In order to open a theory of one of the specifications in Isabelle,
+use the -l Sail command-line flag to load the session containing the
+Sail library. Snapshots of the Sail and Lem libraries are in the
+\verb+lib/sail+ and \verb+lib/lem+ directories, respectively. You can
+tell Isabelle where to find them using the -d flag, as in
+\begin{verbatim}
+isabelle jedit -l Sail -d lib/lem -d lib/sail riscv/Riscv.thy
+\end{verbatim}
+When run from the \verb+snapshots/isabelle+ directory this will open
+the RISC-V specification.
 
 \subsection{Interactive mode}
 
-Compiling sail with
+Compiling Sail with
 \begin{verbatim}
 make isail
 \end{verbatim}
 builds it with a GHCi-style interactive interpreter. This can be used
-by starting Sail with \verb+sail -i+. If sail is not compiled with
+by starting Sail with \verb+sail -i+. If Sail is not compiled with
 interactive support the \verb+-i+ flag does nothing. Sail will still
 handle any other command line arguments as per usual, including
 compiling to OCaml or Lem. One can also pass a list of commands to the
@@ -126,6 +147,9 @@ indicated by starting with the letter d.
 \item \verb+-memo_z3+ Memoize calls to the Z3 solver. This can greatly
   improve typechecking times if you are repeatedly typechecking the
   same specification while developing it.
+
+\item \verb+-no_lexp_bounds_check+ Turn off bounds checking in the left
+  hand side of assignments.
 
 \item \verb+-no_effects+ Turn off effect checking. May break some
   backends that assume effects are properly checked.
