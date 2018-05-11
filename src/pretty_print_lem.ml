@@ -629,7 +629,8 @@ let doc_exp_lem, doc_let_lem =
        | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
-          let call = doc_id_lem (append_id f "M") in
+          let suffix = if !opt_sequential then "S" else "M" in
+          let call = doc_id_lem (append_id f suffix) in
           wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
        (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "foreach", _) ->
@@ -869,7 +870,7 @@ let doc_exp_lem, doc_let_lem =
                  (string "end")))
     | E_try (e, pexps) ->
        if effectful (effect_of e) then
-         let try_catch = if ctxt.early_ret then "try_catchR" else "try_catch" in
+         let try_catch = if ctxt.early_ret then appendS "try_catchR" else "try_catch" in
          wrap_parens
            (group ((separate space [string try_catch; expY e; string "(function "]) ^/^
                    (separate_map (break 1) (doc_case ctxt) pexps) ^/^
