@@ -43,6 +43,8 @@ function main () = {
   print(assembly(assembly("ldu.aq zero, zero, 0x0")));
   print_bits("assembled lui zero, 0x0: ", encdec(assembly("lui zero, 0x0")));
   print_bits("assembled jal zero, 0x123456 : ", encdec(assembly("jal zero, 0x123456")));
+  print(assembly(assembly("beq zero, zero, 0x124")));
+  print_bits("assembled beq zero, zero, 0x124 : ", encdec(assembly("beq zero, zero, 0x124")));
   /*PC = __GetSlice_int(64, elf_entry(), 0);
   try {
     init_sys ();

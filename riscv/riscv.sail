@@ -149,7 +149,7 @@ mapping btype_mnemonic = {
   RISCV_BGEU <-> "bgeu"
 }
 
-mapping clause assembly = BTYPE(imm, rs2, rs1, op)  <-> btype_mnemonic(op) ^^ spaces() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2) ^^ operand_sep() ^^ hex_bits_13(imm)
+mapping clause assembly = BTYPE(imm, rs2, rs1, op) <-> btype_mnemonic(op) ^^ spaces() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2) ^^ operand_sep() ^^ hex_bits_13(imm)
 
 
 /* ****************************************************************** */
