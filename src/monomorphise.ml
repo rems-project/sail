@@ -856,7 +856,7 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.shift_left i (Big_int.to_int j)),new_l)),(l,ann)))
     | _ -> None
-  else if is_id "mult_int" || is_id "mult_range" then
+  else if is_id "mult_atom" || is_id "mult_int" || is_id "mult_range" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.mul i j),new_l)),(l,ann)))
@@ -866,7 +866,7 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.div i j),new_l)),(l,ann)))
     | _ -> None
-  else if is_id "add_range" then
+  else if is_id "add_atom" || is_id "add_int" || is_id "add_range" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.add i j),new_l)),(l,ann)))
