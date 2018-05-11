@@ -2818,7 +2818,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
                  in
                  annot_pat (P_app (f, List.rev tpats)) typ, env, guards
                with
-               | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
+               | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against mapping constructor: " ^ m)
           end
        | _ -> typ_error l ("Mal-formed mapping " ^ string_of_id f)
      end
@@ -3615,34 +3615,51 @@ and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as 
      end
   | MP_app (other, mpats) when Env.is_mapping other env ->
      begin
-       let (typq, ctor_typ) = Env.get_val_spec other env in
+       let (typq, mapping_typ) = Env.get_val_spec other env in
        let quants = quant_items typq in
        let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
          | Typ_tup typs -> typs
          | _ -> [typ]
        in
-       match Env.expand_synonyms env ctor_typ with
+       match Env.expand_synonyms env mapping_typ with
        | Typ_aux (Typ_bidir (typ1, typ2), _) ->
           begin
             try
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
+              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env typ2 typ in
               typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
               let arg_typ' = subst_unifiers unifiers typ1 in
               let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
-              then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
+              then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_mpat mpat)
               else ();
               let ret_typ' = subst_unifiers unifiers typ2 in
               let tpats, env, guards =
                 try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ') with
-                | Invalid_argument _ -> typ_error l "Union constructor mapping-pattern arguments have incorrect length"
+                | Invalid_argument _ -> typ_error l "Mapping pattern arguments have incorrect length"
               in
               annot_mpat (MP_app (other, List.rev tpats)) typ, env, guards
             with
-            | Unification_error (l, m) -> typ_error l ("Unification error when mapping-pattern matching against union constructor: " ^ m)
+            | Unification_error (l, m) ->
+               try
+                 typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
+                 typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
+                 let unifiers, _, _ (* FIXME! *) = unify l env typ1 typ in
+                 typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
+                 let arg_typ' = subst_unifiers unifiers typ2 in
+                 let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
+                 if (match quants' with [] -> false | _ -> true)
+                 then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_mpat mpat)
+                 else ();
+                 let ret_typ' = subst_unifiers unifiers typ1 in
+                 let tpats, env, guards =
+                   try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ') with
+                   | Invalid_argument _ -> typ_error l "Mapping pattern arguments have incorrect length"
+                 in
+                 annot_mpat (MP_app (other, List.rev tpats)) typ, env, guards
+               with
+               | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against mapping constructor: " ^ m)
           end
-       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id other)
      end
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env)->
      typ_error l (string_of_id f ^ " is not a union constructor or mapping in mapping-pattern " ^ string_of_mpat mpat)

@@ -249,6 +249,8 @@ val check_exp : Env.t -> unit exp -> typ -> tannot exp
 
 val infer_exp : Env.t -> unit exp -> tannot exp
 
+val infer_pat : Env.t -> unit pat -> tannot pat * Env.t * unit exp list
+
 val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
 val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t

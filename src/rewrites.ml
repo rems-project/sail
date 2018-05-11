@@ -715,6 +715,7 @@ let remove_vector_concat_pat pat =
         | P_as (p,id) -> P_aux (P_as (p,id),a)
         | P_typ (typ, pat) -> P_aux (P_typ (typ, aux pat),a)
         | P_wild -> P_aux (P_wild,a)
+        | P_app (id, pats) when Env.is_mapping id (env_of_annot a) -> P_aux (P_app (id, List.map aux pats), a)
         | _ ->
            raise
              (Reporting_basic.err_unreachable
@@ -805,6 +806,9 @@ let remove_vector_concat_pat pat =
                let (lb,decl,info) = letbind_vec typ_opt (rootid,rannot) (cname,cannot) (pos,index_j) in
                (pos', pat_acc @ [P_aux (P_id cname,cannot)], decl_acc @ [((lb,decl),info)])
             | P_typ (typ, pat) -> aux (Some typ) (pos,pat_acc,decl_acc) (pat, is_last)
+            (* | P_app (cname, pats) if Env.is_mapping cname (en) ->
+             *    let (lb,decl,info) = letbind_vec typ_opt (rootid,rannot) (cname,cannot) (pos,index_j) in
+             *    (pos', pat_acc @ [P_aux (P_app (cname,pats),cannot)], decl_acc @ [((lb,decl),info)]) *)
             (* normal vector patterns are fine *)
             | _ -> (pos', pat_acc @ [P_aux (p,cannot)],decl_acc)) in
           let pats_tagged = tag_last pats in
@@ -2818,6 +2822,11 @@ let fold_guards guards =
   | [] -> (mk_exp (E_lit (mk_lit L_true)))
   | g :: gs -> List.fold_left (fun g g' -> mk_exp (E_app (mk_id "and_bool", [strip_exp g; strip_exp g']))) g gs
 
+let fold_typed_guards env guards =
+  match guards with
+  | [] -> annot_exp (E_lit (mk_lit L_true)) Parse_ast.Unknown env bool_typ
+  | g :: gs -> List.fold_left (fun g g' -> annot_exp (E_app (mk_id "and_bool", [g; g'])) Parse_ast.Unknown env bool_typ) g gs
+
 
 let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (annot: tannot annot)) as pexp) =
   let guards = ref [] in
@@ -2852,16 +2861,7 @@ let fresh_stringappend_id () =
   stringappend_counter := !stringappend_counter + 1;
   id
 
-
-let rec rewrite_defs_pat_string_append =
-
-  let builtins = [
-      (* ("int", ("maybe_int_of_prefix", app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [int_typ; nat_typ]), Parse_ast.Unknown)] )); *)
-      ("int", ("maybe_int_of_prefix", tuple_typ [int_typ; nat_typ] ));
-    ]
-  in
-
-  let construct_bool_match match_on pexp =
+let construct_bool_match match_on pexp =
     let true_exp = (mk_exp (E_lit (mk_lit L_true))) in
     let false_exp = (mk_exp (E_lit (mk_lit L_false))) in
     let true_pexp =
@@ -2873,9 +2873,18 @@ let rec rewrite_defs_pat_string_append =
     in
     let false_pexp = mk_pexp (Pat_exp (mk_pat P_wild, false_exp)) in
     mk_exp (E_case (match_on, [true_pexp; false_pexp]))
-  in
 
-  let rec rewrite_pat (pat, env, guards, expr) =
+
+let rec rewrite_defs_pat_string_append =
+  let rec rewrite_pat env (pat, guards, expr) =
+    let guards_ref = ref guards in
+    let expr_ref = ref expr in
+    let folder p =
+      let p, g, e = rewrite_pat env (p, !guards_ref, !expr_ref) in
+      guards_ref := g;
+      expr_ref := e;
+      p
+    in
     match pat with
     (*
         "lit" ^^ pat2 => expr ---> s# if startswith(s#, "lit")
@@ -2899,7 +2908,7 @@ let rec rewrite_defs_pat_string_append =
 
        (* recurse into pat2 *)
        let new_pat2_pexp =
-         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), env, guards, expr) with
+         match rewrite_pat env (P_aux (P_string_append (pats), psa_annot), guards, expr) with
          | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
          | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
        in
@@ -2963,7 +2972,7 @@ let rec rewrite_defs_pat_string_append =
 
        (* recurse into pat2 *)
        let new_pat2_pexp =
-         match rewrite_pat (P_aux (P_string_append (pats), psa_annot), env, guards, expr) with
+         match rewrite_pat env (P_aux (P_string_append (pats), psa_annot), guards, expr) with
          | pat, [], expr -> mk_pexp (Pat_exp (pat, expr))
          | pat, gs, expr -> mk_pexp (Pat_when (pat, fold_guards gs, expr))
        in
@@ -3005,7 +3014,39 @@ let rec rewrite_defs_pat_string_append =
     | P_aux (P_string_append _, _) ->
        failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat pat)
 
-    | _ -> pat, guards, expr
+    | P_aux (P_as (inner_pat, inner_id), p_annot) ->
+       let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
+       P_aux (P_as (inner_pat, inner_id), p_annot), guards, expr
+    | P_aux (P_typ (inner_typ, inner_pat), p_annot) ->
+       let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
+       P_aux (P_typ (inner_typ, inner_pat), p_annot), guards, expr
+    | P_aux (P_var (inner_pat, typ_pat), p_annot) ->
+       let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
+       P_aux (P_var (inner_pat, typ_pat), p_annot), guards, expr
+    | P_aux (P_record _, p_annot) ->
+       failwith "record patterns not yet implemented"
+    | P_aux (P_vector pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_vector pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_vector_concat pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_vector_concat pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_tup pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_tup pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_list pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_list pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_app (f, pats), p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_app (f, pats), p_annot), !guards_ref, !expr_ref
+    | P_aux (P_cons (pat1, pat2), p_annot) ->
+       let pat1, guards, expr = rewrite_pat env (pat1, guards, expr) in
+       let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
+       P_aux (P_cons (pat1, pat2), p_annot), guards, expr
+    | P_aux (P_id _, _)
+    | P_aux (P_lit _, _)
+    | P_aux (P_wild, _) -> pat, guards, expr
   in
 
   let rec rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
@@ -3020,7 +3061,7 @@ let rec rewrite_defs_pat_string_append =
     in
 
     let (new_pat, new_guards, new_expr) =
-      rewrite_pat (strip_pat pat, env_of_annot p_annot, List.map strip_exp guards, strip_exp expr)
+      rewrite_pat (env_of_annot p_annot) (strip_pat pat, List.map strip_exp guards, strip_exp expr)
     in
 
     (* un-merge Pat_exp and Pat_when cases *)
@@ -3034,84 +3075,129 @@ let rec rewrite_defs_pat_string_append =
   pexp_rewriters rewrite_pexp
 
 
-let mappingbuiltins_counter = ref 0
+let mappingpatterns_counter = ref 0
 
-let fresh_mappingbuiltins_id () =
-  let id = mk_id ("_mappingbuiltins_" ^ (string_of_int !mappingbuiltins_counter) ^ "#") in
-  mappingbuiltins_counter := !mappingbuiltins_counter + 1;
+let fresh_mappingpatterns_id () =
+  let id = mk_id ("_mappingpatterns_" ^ (string_of_int !mappingpatterns_counter) ^ "#") in
+  mappingpatterns_counter := !mappingpatterns_counter + 1;
   id
 
-
-let rewrite_defs_mapping_builtins =
-
-  let builtins = [
-      ("int", ("maybe_int_of_string", int_typ));
-      ("nat", ("maybe_nat_of_string", nat_typ));
-    ]
-  in
-
-  let rec rewrite_pat (P_aux (p_aux, _) as pat, guards, expr) =
-    let new_pat, new_guards, new_expr = match p_aux with
-      | P_as (pat2, id) ->
-         let new_pat2, new_guards, new_expr = rewrite_pat (pat2, guards, expr) in
-         mk_pat (P_as (new_pat2, id)), new_guards, new_expr
-      | P_typ (typ, pat2) ->
-         let new_pat2, new_guards, new_expr = rewrite_pat (pat2, guards, expr) in
-         mk_pat (P_typ (typ, pat2)), new_guards, new_expr
-      | P_var (pat2, typ_pat) ->
-         let new_pat2, new_guards, new_expr = rewrite_pat (pat2, guards, expr) in
-         mk_pat (P_var (pat2, typ_pat)), new_guards, new_expr
-      | P_app (Id_aux (Id builtin_id, _), [P_aux (P_id (Id_aux (Id var_id, _)), _)]) when List.mem_assoc builtin_id builtins ->
-      (*
-             builtin(x) => expr ---> s# if match builtin_fun(s#) {
-                                             Some x# => true
-                                                   _ => false
-                                           }
-                                      => let x = match builtin_fun(s#) { Some x# => x# } in
-                                          expr
-       *)
-         let builtin_func, builtin_typ = List.assoc builtin_id builtins in
-         let s_id = fresh_mappingbuiltins_id () in
-         let x_id = fresh_mappingbuiltins_id () in
-         let true_exp = mk_exp (E_lit (mk_lit (L_true))) in
-         let false_exp = mk_exp (E_lit (mk_lit (L_false))) in
-         let func_exp = mk_exp (E_app (mk_id builtin_func, [mk_exp (E_id s_id)])) in
-         let new_pat = mk_pat (P_id s_id) in
-         let new_guard = mk_exp (E_case (func_exp, [
-                                     mk_pexp (Pat_exp (mk_pat (P_app (mk_id "Some", [mk_pat (P_id x_id)])), true_exp));
-                                     mk_pexp (Pat_exp (mk_pat P_wild, false_exp))
-                           ])) in
-         let new_binding = mk_exp (E_cast (builtin_typ, mk_exp (E_case (func_exp, [
-                                         mk_pexp (Pat_exp (mk_pat (P_app (mk_id "Some", [mk_pat (P_id x_id)])), mk_exp (E_id x_id)))
-                             ])))) in
-         let new_letbind = mk_letbind (mk_pat (P_id (mk_id var_id))) new_binding in
-         let new_expr = mk_exp (E_let (new_letbind, expr)) in
-         new_pat, new_guard :: guards, new_expr
-      | _ -> pat, guards, expr
+let rewrite_defs_mapping_patterns =
+  let rec rewrite_pat env (pat, guards, expr) =
+    let guards_ref = ref guards in
+    let expr_ref = ref expr in
+    let folder p =
+      let p, g, e = rewrite_pat env (p, !guards_ref, !expr_ref) in
+      guards_ref := g;
+      expr_ref := e;
+      p
     in
-    new_pat, new_guards, new_expr
-  in
-  let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
+    let env = pat_env_of pat in
+    match pat with
+      (*
+          mapping(args) => expr ----> s# if mapping_matches(s#) => let args = mapping(s#) in expr
 
-    let (pat, _, _, _) = destruct_pexp pexp in
+          (plus 'infer the mapping type' shenanigans)
+       *)
+    | P_aux (P_app (mapping_id, arg_pats), p_annot) when Env.is_mapping mapping_id env ->
+       
+       let mapping_in_typ = typ_of_annot p_annot in
+
+       let x = Env.get_val_spec mapping_id env in
+       let (_, Typ_aux(Typ_bidir(typ1, typ2), _)) = x in
+
+       let mapping_direction =
+         if mapping_in_typ = typ1 then
+           "forwards"
+         else
+           "backwards"
+       in
+
+       let mapping_name =
+         match mapping_id with
+         | Id_aux (Id id, _)
+         | Id_aux (DeIid id, _) -> id
+       in
+
+       let mapping_matches_id = mk_id (mapping_name ^ "_" ^ mapping_direction ^ "_matches") in
+       let mapping_perform_id = mk_id (mapping_name ^ "_" ^ mapping_direction) in
+       let s_id = fresh_mappingpatterns_id () in
+
+       let s_exp = annot_exp (E_id s_id) Parse_ast.Unknown env mapping_in_typ in
+       let new_guard = annot_exp (E_app (mapping_matches_id, [s_exp])) Parse_ast.Unknown env bool_typ in
+       let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) Parse_ast.Unknown env typ2 in
+       let new_letbind = match arg_pats with
+         | [] -> assert false
+         | [arg_pat] -> LB_aux (LB_val (arg_pat, new_binding), (Parse_ast.Unknown, None))
+         | arg_pats ->
+            let (checked_tup, new_env, []) = infer_pat env (mk_pat (P_tup (List.map strip_pat arg_pats))) in
+            LB_aux (LB_val (checked_tup, new_binding), (Parse_ast.Unknown, None))
+       in
+
+       let new_let = annot_exp (E_let (new_letbind, expr)) Parse_ast.Unknown env (typ_of expr) in
+
+       annot_pat (P_id s_id) Parse_ast.Unknown env mapping_in_typ, new_guard :: guards, new_let
+         
+    | P_aux (P_as (inner_pat, inner_id), p_annot) ->
+       let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
+       P_aux (P_as (inner_pat, inner_id), p_annot), guards, expr
+    | P_aux (P_typ (inner_typ, inner_pat), p_annot) ->
+       let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
+       P_aux (P_typ (inner_typ, inner_pat), p_annot), guards, expr
+    | P_aux (P_var (inner_pat, typ_pat), p_annot) ->
+       let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
+       P_aux (P_var (inner_pat, typ_pat), p_annot), guards, expr
+    | P_aux (P_record _, p_annot) ->
+       failwith "record patterns not yet implemented"
+    | P_aux (P_vector pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_vector pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_vector_concat pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_vector_concat pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_tup pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_tup pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_list pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_list pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_app (f, pats), p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_app (f, pats), p_annot), !guards_ref, !expr_ref
+    | P_aux (P_string_append pats, p_annot) ->
+       let pats = List.map folder pats in
+       P_aux (P_string_append pats, p_annot), !guards_ref, !expr_ref
+    | P_aux (P_cons (pat1, pat2), p_annot) ->
+       let pat1, guards, expr = rewrite_pat env (pat1, guards, expr) in
+       let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
+       P_aux (P_cons (pat1, pat2), p_annot), guards, expr
+    | P_aux (P_id _, _)
+    | P_aux (P_lit _, _)
+    | P_aux (P_wild, _) -> pat, guards, expr
+  in
+
+  let rec rewrite_pexp (Pat_aux (pexp_aux, pexp_annot) as pexp) =
 
     (* merge cases of Pat_exp and Pat_when *)
-    let (P_aux (p_aux, p_annot), guards, expr) =
+    let (P_aux (p_aux, p_annot) as pat, guards, expr) =
       match pexp_aux with
       | Pat_exp (pat, expr) -> (pat, [], expr)
       | Pat_when (pat, guard, expr) -> (pat, [guard], expr)
     in
 
+    let env = env_of_annot p_annot in
+
     let (new_pat, new_guards, new_expr) =
-      rewrite_pat (strip_pat pat, List.map strip_exp guards, strip_exp expr)
+      rewrite_pat env (pat, guards, expr)
     in
 
     (* un-merge Pat_exp and Pat_when cases *)
     let new_pexp = match new_guards with
-      | [] -> mk_pexp (Pat_exp (new_pat, new_expr))
-      | gs -> mk_pexp (Pat_when (new_pat, fold_guards gs, new_expr))
+    | [] -> Pat_aux (Pat_exp (new_pat, new_expr), pexp_annot)
+    | gs -> Pat_aux (Pat_when (new_pat, fold_typed_guards env gs, new_expr), pexp_annot)
     in
-    check_case (pat_env_of pat) (pat_typ_of pat) new_pexp (typ_of expr)
+    Printf.printf "rewritten pexp: %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
+    new_pexp
 
   in
   pexp_rewriters rewrite_pexp
@@ -3781,7 +3867,7 @@ let rewrite_defs_lem = [
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("pat_string_append", rewrite_defs_pat_string_append);
-  ("mapping_builtins", rewrite_defs_mapping_builtins);
+  ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("guarded_pats", rewrite_defs_guarded_pats);
   ("bitvector_exps", rewrite_bitvector_exps);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
@@ -3812,7 +3898,7 @@ let rewrite_defs_ocaml = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
-  ("mapping_builtins", rewrite_defs_mapping_builtins);
+  ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("pat_lits", rewrite_defs_pat_lits);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -3834,7 +3920,7 @@ let rewrite_defs_c = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
-  ("mapping_builtins", rewrite_defs_mapping_builtins);
+  ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("pat_lits", rewrite_defs_pat_lits);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -3854,7 +3940,7 @@ let rewrite_defs_interpreter = [
     ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
     ("realise_mappings", rewrite_defs_realise_mappings);
     ("pat_string_append", rewrite_defs_pat_string_append);
-    ("mapping_builtins", rewrite_defs_mapping_builtins);
+    ("mapping_builtins", rewrite_defs_mapping_patterns);
     ("vector_concat_assignments", rewrite_vector_concat_assignments);
     ("tuple_assignments", rewrite_tuple_assignments);
     ("simple_assignments", rewrite_simple_assignments);
