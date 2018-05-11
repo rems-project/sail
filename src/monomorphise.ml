@@ -2245,6 +2245,10 @@ let rewrite_size_parameters env (Defs defs) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
     let env = env_of_annot (l,ann) in
     let _, typ = Env.get_val_spec_orig id env in
+    let typ = match typ with
+      | Typ_aux (Typ_fn (arg_typ,_,_),_) -> arg_typ
+      | _ -> typ (* TODO: error *)
+    in
     let types =
       match pat, Env.expand_synonyms env typ with
       | P_aux (P_tup ps,_), Typ_aux (Typ_tup ts,_) -> ts
@@ -2269,6 +2273,7 @@ let rewrite_size_parameters env (Defs defs) =
     let nexp_list = NexpMap.bindings nexp_map in
 (* let () =
  print_endline ("Type of pattern for " ^ string_of_id id ^": " ^string_of_typ (pat_typ_of pat));
+ print_endline ("Types : " ^ String.concat ", " (List.map string_of_typ types));
  print_endline ("Nexp map for " ^ string_of_id id);
  List.iter (fun (nexp, i) -> print_endline ("  " ^ string_of_nexp nexp ^ " -> " ^ string_of_int i)) nexp_list
 in *)
