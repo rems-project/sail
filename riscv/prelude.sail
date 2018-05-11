@@ -11,6 +11,10 @@ val hex_bits_12 : bits(12) <-> string
 val hex_bits_12_forwards = "string_of_bits" : bits(12) -> string
 val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
 
+val hex_bits_13 : bits(13) <-> string
+val hex_bits_13_forwards = "string_of_bits" : bits(13) -> string
+val "hex_bits_13_matches_prefix" : string -> option((bits(13), nat))
+
 val hex_bits_20 : bits(20) <-> string
 val hex_bits_20_forwards = "string_of_bits" : bits(20) -> string
 val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))

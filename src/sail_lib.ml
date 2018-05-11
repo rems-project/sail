@@ -655,6 +655,16 @@ let hex_bits_12_matches_prefix s =
      else
        ZNone ()
 
+let hex_bits_13_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 8192 then
+       ZSome ((bits_of_int 4096 n, len))
+     else
+       ZNone ()
+
 let hex_bits_20_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()

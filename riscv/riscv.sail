@@ -54,8 +54,6 @@ union clause ast = RISCV_JAL : (bits(21), regbits)
 
 function clause decode imm : bits(20) @ rd : regbits @ 0b1101111 = Some (RISCV_JAL(imm[19] @ imm[7..0] @ imm[8] @ imm[18..13] @ imm[12..9] @ 0b0, rd))
 
-/* TODO: handle 2-byte-alignment in mappings */
-
 mapping clause encdec = RISCV_JAL(imm_19 : bits(1) @ imm_7_0 : bits(8) @ imm_8 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ 0b0, rd)
                     <-> imm_19 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ imm_8 : bits(1) @ imm_7_0 : bits(8) @ rd : regbits @ 0b1101111
 
@@ -69,6 +67,8 @@ function clause execute (RISCV_JAL(imm, rd)) = {
 function clause print_insn (RISCV_JAL(imm, rd)) =
   "jal   " ^ rd ^ ", " ^ BitStr(imm)
 
+/* TODO: handle 2-byte-alignment in mappings */
+
 mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_21(imm)
 
 /* ****************************************************************** */
@@ -76,6 +76,8 @@ union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
 
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b1100111 =
     Some(RISCV_JALR(imm, rs1, rd))
+
+mapping clause encdec = RISCV_JALR(imm, rs1, rd) <-> imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b1100111
 
 function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     /* write rd before anything else to prevent unintended strength */
@@ -87,6 +89,8 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
 function clause print_insn (RISCV_JALR(imm, rs1, rd)) =
   "jalr  " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
+mapping clause assembly = RISCV_JALR(imm, rs1, rd) <-> "jalr" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+
 /* ****************************************************************** */
 union clause ast = BTYPE : (bits(13), regbits, regbits, bop)
 
@@ -96,6 +100,18 @@ function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b100 @ 
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b101 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BGE))
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b110 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BLTU))
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b111 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BGEU))
+
+val encdec_bop : bop <-> bits(3)
+mapping encdec_bop = {
+  RISCV_BEQ <-> 0b000,
+  RISCV_BNE <-> 0b001,
+  RISCV_BLT <-> 0b100,
+  RISCV_BGE <-> 0b101,
+  RISCV_BLTU <-> 0b110,
+  RISCV_BGEU <-> 0b111
+}
+
+mapping clause encdec = BTYPE(imm7_6 : bits(1) @ imm5_0 : bits(1) @ imm7_5_0 : bits(6) @ imm5_4_1 : bits(4) @ 0b0, rs2, rs1, op) <-> imm7_6 : bits(1) @ imm7_5_0 : bits(6) @ rs2 : regbits @ rs1 : regbits @ encdec_bop(op) : bits(3) @ imm5_4_1 : bits(4) @ imm5_0 : bits(1) @ 0b1100011
 
 function clause execute (BTYPE(imm, rs2, rs1, op)) =
   let rs1_val = X(rs1) in
@@ -122,6 +138,19 @@ function clause print_insn (BTYPE(imm, rs2, rs1, op)) =
       RISCV_BGEU => "bgeu  "
     } in
   insn ^ rs1 ^ ", " ^ rs2 ^ ", " ^ BitStr(imm)
+
+val btype_mnemonic : bop <-> string
+mapping btype_mnemonic = {
+  RISCV_BEQ  <-> "beq",
+  RISCV_BNE  <-> "bne",
+  RISCV_BLT  <-> "blt",
+  RISCV_BGE  <-> "bge",
+  RISCV_BLTU <-> "bltu",
+  RISCV_BGEU <-> "bgeu"
+}
+
+mapping clause assembly = BTYPE(imm, rs2, rs1, op)  <-> btype_mnemonic(op) ^^ spaces() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2) ^^ operand_sep() ^^ hex_bits_13(imm)
+
 
 /* ****************************************************************** */
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
