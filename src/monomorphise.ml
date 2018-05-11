@@ -2241,13 +2241,16 @@ let rewrite_size_parameters env (Defs defs) =
   let open Rewriter in
   let open Util in
 
-  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
+  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,ann))) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
-    let parameters = match pat with
-      | P_aux (P_tup ps,_) -> ps
-      | _ -> [pat]
+    let env = env_of_annot (l,ann) in
+    let _, typ = Env.get_val_spec_orig id env in
+    let types =
+      match pat, Env.expand_synonyms env typ with
+      | P_aux (P_tup ps,_), Typ_aux (Typ_tup ts,_) -> ts
+      | _, _ -> [typ]
     in
-    let add_parameter (i,nmap) (P_aux (_,(_,Some (env,typ,_)))) =
+    let add_parameter (i,nmap) typ =
       let nmap =
         match Env.base_typ_of env typ with
           Typ_aux (Typ_app(Id_aux (Id "range",_),
@@ -2262,8 +2265,13 @@ let rewrite_size_parameters env (Defs defs) =
         | _ -> nmap
       in (i+1,nmap)
     in
-    let (_,nexp_map) = List.fold_left add_parameter (0,NexpMap.empty) parameters in
+    let (_,nexp_map) = List.fold_left add_parameter (0,NexpMap.empty) types in
     let nexp_list = NexpMap.bindings nexp_map in
+(* let () =
+ print_endline ("Type of pattern for " ^ string_of_id id ^": " ^string_of_typ (pat_typ_of pat));
+ print_endline ("Nexp map for " ^ string_of_id id);
+ List.iter (fun (nexp, i) -> print_endline ("  " ^ string_of_nexp nexp ^ " -> " ^ string_of_int i)) nexp_list
+in *)
     let parameters_for = function
       | Some (env,typ,_) ->
          begin match Env.base_typ_of env typ with
