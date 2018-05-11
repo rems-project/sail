@@ -126,11 +126,12 @@ let rec latex_command ?prefix:(prefix="") ?label:(label=None) dir cmd no_loc ((l
     | Some l -> Printf.sprintf "\\label{%s}" l
   in
   let cmd = !opt_prefix_latex ^ prefix ^ cmd in
-  if StringSet.mem cmd !commands then
+  let lcmd = String.lowercase cmd in  (* lowercase to avoid file names differing only by case *)
+  if StringSet.mem lcmd !commands then
     latex_command ~label:label dir (cmd ^ "v") no_loc annot
   else
     begin
-      commands := StringSet.add cmd !commands;
+      commands := StringSet.add lcmd !commands;
       let oc = open_out (Filename.concat dir (cmd ^ "_sail.tex")) in
       output_string oc (Pretty_print_sail.to_string (latex_loc no_loc l));
       close_out oc;
