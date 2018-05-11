@@ -2704,12 +2704,10 @@ let kids_bound_by_pat pat =
       | ((s,p),ann) -> s, P_aux (p,ann))
     }) pat)
 
-(* Add bound variables from a pattern to the environment with the given dependency. *)
+(* Diff the type environment to find new type variables and record that they
+   depend on deps *)
 
-let update_env env deps pat typ_env_pre typ_env_post =
-  let bound = bindings_from_pat pat in
-  let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
-  (* Diff the type environment to find the new variables *)
+let update_env_new_kids env deps typ_env_pre typ_env_post =
   let kbound =
     KBindings.merge (fun k x y ->
       match x,y with
@@ -2719,7 +2717,15 @@ let update_env env deps pat typ_env_pre typ_env_post =
       (Env.get_typ_vars typ_env_pre)
   in
   let kid_deps = KBindings.fold (fun v _ ds -> KBindings.add v deps ds) kbound env.kid_deps in
-  { env with var_deps = var_deps; kid_deps = kid_deps }
+  { env with kid_deps = kid_deps }
+
+(* Add bound variables from a pattern to the environment with the given dependency,
+   plus any new type variables. *)
+
+let update_env env deps pat typ_env_pre typ_env_post =
+  let bound = bindings_from_pat pat in
+  let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
+  update_env_new_kids { env with var_deps = var_deps } deps typ_env_pre typ_env_post
 
 let assigned_vars_exps es =
   List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
@@ -2894,6 +2900,30 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     let deps, _, rs = split3 (List.map (analyse_exp fn_id env assigns) es) in
     (deps, assigns, List.fold_left merge empty rs)
   in
+  (* We allow for arguments to functions being executed non-deterministically, but
+     follow the type checker in processing them in-order to detect the automatic
+     unpacking of existentials.  When we spot a new type variable (using
+     update_env_new_kids) we set them to depend on the previous argument. *)
+  let non_det_args es =
+    let assigns = remove_assigns es " assigned in non-deterministic expressions" in
+    let rec aux prev_typ_env prev_deps env = function
+      | [] -> [], empty
+      | h::t ->
+         let typ_env = env_of h in
+         let env = update_env_new_kids env prev_deps prev_typ_env typ_env in
+         let new_deps, _, new_r = analyse_exp fn_id env assigns h in
+         let t_deps, t_r = aux typ_env new_deps env t in
+         new_deps::t_deps, merge new_r t_r
+    in
+    let deps, r = match es with
+      | [] -> [], empty
+      | h::t ->
+         let new_deps, _, new_r = analyse_exp fn_id env assigns h in
+         let t_deps, t_r = aux (env_of h) new_deps env t in
+         new_deps::t_deps, merge new_r t_r
+    in
+    (deps, assigns, r)
+  in
   let merge_deps deps = List.fold_left dmerge dempty deps in
   let deps, assigns, r =
     match e with
@@ -2930,7 +2960,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_lit _ -> (dempty,assigns,empty)
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
-       let deps, assigns, r = non_det args in
+       let deps, assigns, r = non_det_args args in
        let typ_env = env_of_annot (l,annot) in
        let (_,fn_typ) = Env.get_val_spec id typ_env in
        let fn_effect = match fn_typ with
