@@ -8818,9 +8818,9 @@ function memory_literal_general_decode (opc, V, imm19, Rt) = {
   aarch64_memory_literal_general(memop, offset, signed, 8 * size, t)
 }
 
-val aarch64_memory_atomicops_swp : (int, AccType, int, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_atomicops_swp : forall 'regsize. (int, AccType, int, atom('regsize), int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_atomicops_swp ('datasize, ldacctype, 'n, 'regsize, 's, stacctype, 't) = {
+function aarch64_memory_atomicops_swp ('datasize, ldacctype, 'n, regsize, 's, stacctype, 't) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -8864,9 +8864,9 @@ function aarch64_memory_atomicops_st ('datasize, ldacctype, 'n, op, 's, stacctyp
   aset_Mem(address, datasize / 8, stacctype, result)
 }
 
-val aarch64_memory_atomicops_ld : (int, AccType, int, MemAtomicOp, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_atomicops_ld : forall 'regsize. (int, AccType, int, MemAtomicOp, atom('regsize), int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_atomicops_ld ('datasize, ldacctype, 'n, op, 'regsize, 's, stacctype, 't) = {
+function aarch64_memory_atomicops_ld ('datasize, ldacctype, 'n, op, regsize, 's, stacctype, 't) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -8895,9 +8895,9 @@ function aarch64_memory_atomicops_ld ('datasize, ldacctype, 'n, op, 'regsize, 's
   aset_X(t, ZeroExtend(data, regsize))
 }
 
-val aarch64_memory_atomicops_cas_single : (int, AccType, int, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_atomicops_cas_single : forall 'regsize. (int, AccType, int, atom('regsize), int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_atomicops_cas_single ('datasize, ldacctype, 'n, 'regsize, 's, stacctype, 't) = {
+function aarch64_memory_atomicops_cas_single ('datasize, ldacctype, 'n, regsize, 's, stacctype, 't) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -8917,9 +8917,9 @@ function aarch64_memory_atomicops_cas_single ('datasize, ldacctype, 'n, 'regsize
   aset_X(s, ZeroExtend(data, regsize))
 }
 
-val aarch64_memory_atomicops_cas_pair : (int, AccType, int, int, int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_atomicops_cas_pair : forall 'regsize. (int, AccType, int, atom('regsize), int, AccType, int) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_atomicops_cas_pair ('datasize, ldacctype, 'n, 'regsize, 's, stacctype, 't) = {
+function aarch64_memory_atomicops_cas_pair ('datasize, ldacctype, 'n, regsize, 's, stacctype, 't) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -9198,9 +9198,9 @@ function system_exceptions_runtime_hvc_decode (opc, imm16, op2, LL) = {
   aarch64_system_exceptions_runtime_hvc(imm)
 }
 
-val aarch64_memory_single_general_register : (AccType, int, ExtendType, int, MemOp, int, bool, int, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_single_general_register : forall 'regsize. (AccType, int, ExtendType, int, MemOp, int, bool, atom('regsize), int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_register (acctype, 'datasize, extend_type, 'm, memop, 'n, postindex, 'regsize, 'shift, signed, 't, wback__arg) = {
+function aarch64_memory_single_general_register (acctype, 'datasize, extend_type, 'm, memop, 'n, postindex, regsize, 'shift, signed, 't, wback__arg) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -9254,9 +9254,9 @@ function aarch64_memory_single_general_register (acctype, 'datasize, extend_type
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_unsigned : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_single_general_immediate_unsigned : forall 'regsize. (AccType, int, MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_unsigned (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+function aarch64_memory_single_general_immediate_unsigned (acctype, 'datasize, memop, 'n, offset, postindex, regsize, signed, 't, wback__arg) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -9309,9 +9309,9 @@ function aarch64_memory_single_general_immediate_unsigned (acctype, 'datasize, m
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_signed_postidx : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_single_general_immediate_signed_postidx : forall 'regsize. (AccType, int, MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_signed_postidx (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+function aarch64_memory_single_general_immediate_signed_postidx (acctype, 'datasize, memop, 'n, offset, postindex, regsize, signed, 't, wback__arg) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -9396,9 +9396,9 @@ function aarch64_memory_single_general_immediate_signed_pac ('n, offset, 't, use
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_signed_offset_unpriv : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_single_general_immediate_signed_offset_unpriv : forall 'regsize. (AccType, int, MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 'datasize, memop, 'n, offset, postindex, regsize, signed, 't, wback__arg) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -9451,9 +9451,9 @@ function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 
   } else ()
 }
 
-val aarch64_memory_single_general_immediate_signed_offset_normal : (AccType, int, MemOp, int, bits(64), bool, int, bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aarch64_memory_single_general_immediate_signed_offset_normal : forall 'regsize. (AccType, int, MemOp, int, bits(64), bool, atom('regsize), bool, int, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
-function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 'datasize, memop, 'n, offset, postindex, 'regsize, signed, 't, wback__arg) = {
+function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 'datasize, memop, 'n, offset, postindex, regsize, signed, 't, wback__arg) = {
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
@@ -9921,9 +9921,9 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
     },
     MemOp_LOAD => {
       AArch64_SetExclusiveMonitors(address, dbytes);
-      if pair then
+      if pair then {
+        assert(constraint(- 'elsize + 'datasize > 0 & 'elsize >= 0), "datasize constraint");
         if rt_unknown then aset_X(t, undefined : bits(32)) else if elsize == 32 then {
-         assert(constraint(- 'elsize + 'datasize > 0 & 'elsize >= 0), "datasize constraint");
          data = aget_Mem(address, dbytes, acctype);
           if BigEndian() then {
             aset_X(t, slice(data, elsize, negate(elsize) + datasize));
@@ -9941,7 +9941,7 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
           aset_X(t, aget_Mem(address + 0, 8, acctype));
           aset_X(t2, aget_Mem(address + 8, 8, acctype))
         }
-      else {
+      } else {
         data = aget_Mem(address, dbytes, acctype);
         aset_X(t, ZeroExtend(data, regsize))
       }
