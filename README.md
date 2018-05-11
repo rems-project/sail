@@ -15,7 +15,7 @@ for several papers, available from http://www.cl.cam.ac.uk/~pes20/sail/
 This repository contains the implementation of Sail, together with
 some Sail specifications and related tools.
 
-* A manual, [manual.pdf] with source (in [doc/](doc/))
+* A manual, [manual.pdf](manual.pdf) with source (in [doc/](doc/))
 
 * The Sail source code (in [src/](src/))
 
@@ -56,10 +56,10 @@ to get pre-built binaries of Sail using OPAM.
 Emacs Mode
 ==========
 
-[editors/sail2-mode.el](editors/sail2-mode.el) contains an Emacs mode for the most recent
-version of Sail which provides some basic syntax
-highlighting. [editors/sail-mode.el] Contains an emacs mode for
-previous versions of the language.
+[editors/sail2-mode.el](editors/sail2-mode.el) contains an Emacs mode
+for the most recent version of Sail which provides some basic syntax
+highlighting. [editors/sail-mode.el](editors/sail-mode.el) contains an
+emacs mode for previous versions of the language.
 
 Licensing
 =========
