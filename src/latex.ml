@@ -132,10 +132,10 @@ let rec latex_command ?prefix:(prefix="") ?label:(label=None) dir cmd no_loc ((l
   else
     begin
       commands := StringSet.add lcmd !commands;
-      let oc = open_out (Filename.concat dir (cmd ^ "_sail.tex")) in
+      let oc = open_out (Filename.concat dir (cmd ^ ".tex")) in
       output_string oc (Pretty_print_sail.to_string (latex_loc no_loc l));
       close_out oc;
-      string (Printf.sprintf "\\newcommand{\\%s}{%s " cmd labelling) ^^ (docstring l) ^^ string (Printf.sprintf "\\lstinputlisting[language=sail]{%s/%s_sail.tex}}" dir cmd)
+      string (Printf.sprintf "\\newcommand{\\%s}{%s " cmd labelling) ^^ (docstring l) ^^ string (Printf.sprintf "\\lstinputlisting[language=sail]{%s/%s.tex}}" dir cmd)
     end
 
 let latex_command_id ?prefix:(prefix="") dir id no_loc annot =
