@@ -114,3 +114,13 @@ let undefined_atom i = returnS i
 let undefined_nat () = returnS (0:ii)
 
 let skip () = returnS ()
+
+val elf_entry : unit -> integer
+let elf_entry () = 0
+declare ocaml target_rep function elf_entry = `Elf_loader.elf_entry`
+
+let print_bits msg bs = prerr_endline (msg ^ (string_of_bits bs))
+
+val get_time_ns : unit -> integer
+let get_time_ns () = 0
+declare ocaml target_rep function get_time_ns = `(fun () -> Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ())))`

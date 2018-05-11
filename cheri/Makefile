@@ -63,7 +63,7 @@ cheri.lem: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -lem -o cheri -auto_mono -mono_rewrites -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 cheri_types.lem: cheri.lem
 
-cheri_sequential.lem: $(CHERI_SAILS)
+cheri_sequential.lem: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -lem -o cheri_sequential -auto_mono -mono_rewrites -lem_mwords -lem_sequential -lem_lib Mips_extras_sequential -undefined_gen -memo_z3 $^
 cheri_sequential_types.lem: cheri_sequential.lem
 Cheri_sequential.thy cheri_sequentialScript.sml: $(MIPS_SAIL_DIR)/mips_extras_sequential.lem
