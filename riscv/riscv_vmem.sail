@@ -128,7 +128,7 @@ union PTW_Result = {
 val walk39 : (vaddr39, AccessType, Privilege, bool, bool, paddr39, nat, bool) -> PTW_Result effect {rmem, escape}
 function walk39(vaddr, ac, priv, mxr, sum, ptb, level, global) -> PTW_Result = {
   let va = Mk_SV39_Vaddr(vaddr);
-  let pt_ofs : paddr39 = shiftl(EXTZ(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[SV39_LEVEL_BITS .. 0]),
+  let pt_ofs : paddr39 = shiftl(EXTZ(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[(SV39_LEVEL_BITS - 1) .. 0]),
                                 PTE39_LOG_SIZE);
   let pte_addr = ptb + pt_ofs;
   match (checked_mem_read(Data, EXTZ(pte_addr), 8)) {
@@ -142,22 +142,32 @@ function walk39(vaddr, ac, priv, mxr, sum, ptb, level, global) -> PTW_Result = {
         PTW_Failure(PTW_Invalid_PTE)
       } else {
         if isPTEPtr(pbits) then {
-          if level == 0 then PTW_Failure(PTW_Invalid_PTE)
-          else walk39(vaddr, ac, priv, mxr, sum, EXTZ(pte.PPNi()), level - 1, is_global)
+          if level == 0 then {
+            /* last-level PTE contains a pointer instead of a leaf */
+            PTW_Failure(PTW_Invalid_PTE)
+          } else {
+            /* walk down the pointer to the next level */
+            walk39(vaddr, ac, priv, mxr, sum, EXTZ(shiftl(pte.PPNi(), PAGESIZE_BITS)), level - 1, is_global)
+          }
         } else { /* leaf PTE */
-          if ~ (checkPTEPermission(ac, priv, mxr, sum, pattr)) then
+          if ~ (checkPTEPermission(ac, priv, mxr, sum, pattr)) then {
             PTW_Failure(PTW_No_Permission)
-          else {
+          } else {
             if level > 0 then { /* superpage */
-              let masked = pte.PPNi() & EXTZ(shiftl(0b1, level * SV39_LEVEL_BITS) - 1);
-              if masked != EXTZ(0b0) then
+              /* fixme hack: to get a mask of appropriate size */
+              let mask = shiftl(pte.PPNi() ^ pte.PPNi() ^ EXTZ(0b1), level * SV39_LEVEL_BITS) - 1;
+              if (pte.PPNi() & mask) != EXTZ(0b0) then {
+                /* misaligned superpage mapping */
                 PTW_Failure(PTW_Misaligned)
-              else {
-                let ppn = pte.PPNi() | (EXTZ(va.VPNi()) & EXTZ(shiftl(0b1, level * SV39_LEVEL_BITS) - 1));
+              } else {
+                /* add the appropriate bits of the VPN to the superpage PPN */
+                let ppn = pte.PPNi() | (EXTZ(va.VPNi()) & mask);
                 PTW_Success(append(ppn, va.PgOfs()), pte, pte_addr, level, is_global)
               }
-            } else
+            } else {
+              /* normal leaf PTE */
               PTW_Success(append(pte.PPNi(), va.PgOfs()), pte, pte_addr, level, is_global)
+            }
           }
         }
       }
@@ -184,7 +194,8 @@ val make_TLB39_Entry : (asid64, bool, vaddr39, paddr39, SV39_PTE, nat, paddr39) 
 
 function make_TLB39_Entry(asid, global, vAddr, pAddr, pte, level, pteAddr) = {
   let shift : nat = PAGESIZE_BITS + (level * SV39_LEVEL_BITS);
-  let vAddrMask : vaddr39 = shiftl(EXTZ(0b1), shift) - 1;
+  /* fixme hack: use a better idiom for masks */
+  let vAddrMask : vaddr39 = shiftl(vAddr ^ vAddr ^ EXTZ(0b1), shift) - 1;
   let vMatchMask : vaddr39 = ~ (vAddrMask);
   struct {
     asid = asid,
@@ -245,7 +256,7 @@ union TR39_Result = {
   TR39_Failure : PTW_Error
 }
 
-let enable_dirty_update = true
+let enable_dirty_update = false
 
 val translate39 : (vaddr39, AccessType, Privilege, bool, bool, nat) -> TR39_Result effect {rreg, wreg, wmv, escape, rmem}
 function translate39(vAddr, ac, priv, mxr, sum, level) = {
@@ -260,8 +271,10 @@ function translate39(vAddr, ac, priv, mxr, sum, level) = {
           None() => TR39_Address(ent.pAddr | EXTZ(vAddr & ent.vAddrMask)),
           Some(pbits) => {
             if ~ (enable_dirty_update)
-            then TR39_Failure(PTW_PTE_Update)
-            else {
+            then {
+              /* pte needs dirty/accessed update but that is not enabled */
+              TR39_Failure(PTW_PTE_Update)
+            } else {
               /* update PTE entry and TLB */
               n_ent : TLB39_Entry = ent;
               n_ent.pte = update_BITS(ent.pte, pbits.bits());
@@ -288,15 +301,20 @@ function translate39(vAddr, ac, priv, mxr, sum, level) = {
             },
             Some(pbits) =>
               if ~ (enable_dirty_update)
-              then TR39_Failure(PTW_PTE_Update)
-              else {
+              then {
+                /* pte needs dirty/accessed update but that is not enabled */
+                TR39_Failure(PTW_PTE_Update)
+              } else {
                 w_pte : SV39_PTE = update_BITS(pte, pbits.bits());
                 match checked_mem_write(EXTZ(pteAddr), 8, w_pte.bits()) {
                   MemValue(_) => {
                     addToTLB39(asid, vAddr, pAddr, w_pte, pteAddr, level, global);
                     TR39_Address(pAddr)
                   },
-                  MemException(e) => TR39_Failure(PTW_Access)
+                  MemException(e) => {
+                    /* pte is not in valid memory */
+                    TR39_Failure(PTW_Access)
+                  }
                 }
               }
           }

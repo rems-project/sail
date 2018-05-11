@@ -35,6 +35,9 @@ let zero_extend bits len = extz_bits len bits
 val sign_extend : list bitU -> integer -> list bitU
 let sign_extend bits len = exts_bits len bits
 
+val zeros : integer -> list bitU
+let zeros len = repeat [B0] len
+
 val vector_truncate : list bitU -> integer -> list bitU
 let vector_truncate bs len = extz_bv len bs
 
@@ -289,23 +292,21 @@ let duplicate_oracle b n =
 val reverse_endianness : list bitU -> list bitU
 let reverse_endianness v = reverse_endianness_list v
 
+val get_slice_int : integer -> integer -> integer -> list bitU
+let get_slice_int = get_slice_int_bv
+
+val set_slice_int : integer -> integer -> integer -> list bitU -> integer
+let set_slice_int = set_slice_int_bv
+
+val slice : list bitU -> integer -> integer -> list bitU
+let slice v lo len =
+  subrange_vec_dec v (lo + len - 1) lo
+
+val set_slice : integer -> integer -> list bitU -> integer -> list bitU -> list bitU
+let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
+  update_subrange_vec_dec out (n + slice_len - 1) n v
+
 val eq_vec    : list bitU -> list bitU -> bool
 val neq_vec   : list bitU -> list bitU -> bool
-val ult_vec   : list bitU -> list bitU -> bool
-val slt_vec   : list bitU -> list bitU -> bool
-val ugt_vec   : list bitU -> list bitU -> bool
-val sgt_vec   : list bitU -> list bitU -> bool
-val ulteq_vec : list bitU -> list bitU -> bool
-val slteq_vec : list bitU -> list bitU -> bool
-val ugteq_vec : list bitU -> list bitU -> bool
-val sgteq_vec : list bitU -> list bitU -> bool
 let eq_vec    = eq_bv
 let neq_vec   = neq_bv
-let ult_vec   = ult_bv
-let slt_vec   = slt_bv
-let ugt_vec   = ugt_bv
-let sgt_vec   = sgt_bv
-let ulteq_vec = ulteq_bv
-let slteq_vec = slteq_bv
-let ugteq_vec = ugteq_bv
-let sgteq_vec = sgteq_bv

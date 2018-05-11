@@ -469,11 +469,18 @@ function int_of_AccessLevel level =
     Kernel      => 2
   }
 
+/*!
+Returns whether the first AccessLevel is sufficient to grant access at the second, required, access level.
+ */
 val grantsAccess : (AccessLevel, AccessLevel) -> bool
 function grantsAccess (currentLevel, requiredLevel) =
   int_of_AccessLevel(currentLevel) >= int_of_AccessLevel(requiredLevel)
 
-function getAccessLevel() : unit -> AccessLevel=
+/*!
+Returns the current effective access level determined by accessing the relevant parts of the MIPS status register.
+ */
+val getAccessLevel : unit -> AccessLevel effect {rreg}
+function getAccessLevel() =
   if ((CP0Status.EXL()) | (CP0Status.ERL())) then
     Kernel
   else match CP0Status.KSU()

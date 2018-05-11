@@ -43,6 +43,10 @@ riscv_sequentialScript.sml : riscv_sequential.lem riscv_extras_sequential.lem
 		riscv_sequential_types.lem \
 		riscv_sequential.lem
 
+# we exclude prelude.sail here, most code there should move to sail lib
+LOC_FILES:=$(SAIL_SRCS) main.sail
+include ../etc/loc.mk
+
 clean:
 	-rm -rf riscv _sbuild
 	-rm -f riscv.lem riscv_types.lem

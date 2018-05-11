@@ -404,6 +404,9 @@ register sepc : xlenbits
 register scause : Mcause
 register stval : xlenbits
 
+/* disabled trigger/debug module */
+register tselect : xlenbits
+
 /* csr name printer */
 
 val cast csr_name : csreg -> string
@@ -466,6 +469,8 @@ function csr_name(csr) = {
     0xB80  => "mcycleh",
     0xB82  => "minstreth",
     /* TODO: other hpm counters and events */
+    /* trigger/debug */
+    0x7a0  => "tselect",
     _      => "UNKNOWN"
   }
 }
@@ -514,6 +519,9 @@ function is_CSR_defined (csr : bits(12), p : Privilege) -> bool =
 
     /* supervisor mode: address translation */
     0x180 => p == Machine | p == Supervisor, // satp
+
+    /* disabled trigger/debug module */
+    0x7a0 => p == Machine,
 
     _     => false
   }
@@ -619,7 +627,7 @@ union ctl_result = {
 
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
-  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv);
+  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
   match (del_priv) {
     Machine => {
        mcause->IsInterrupt() = intr;

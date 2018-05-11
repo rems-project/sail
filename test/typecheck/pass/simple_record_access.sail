@@ -1,4 +1,5 @@
 $include <flow.sail>
+$include <vector_inc.sail>
 
 enum signal = {LOW, HIGH}
 

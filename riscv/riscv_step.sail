@@ -51,7 +51,6 @@ function step() = {
       false
     },
     None() => {
-      print_bits("PC: ", PC);
       match fetch() {
         F_Error(e, addr) => {
           handle_mem_exception(addr, e);
@@ -60,12 +59,12 @@ function step() = {
         F_RVC(h) => {
           match decodeCompressed(h) {
             None() => {
-              print(BitStr(h) ^ " :  <no-decode>");
+              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(h) ^ " :  <no-decode>");
               handle_decode_exception(EXTZ(h));
               false
             },
             Some(ast) => {
-              print(BitStr(h) ^ " :  " ^ ast);
+              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(h) ^ " :  " ^ ast);
               nextPC = PC + 2;
               execute(ast);
               true
@@ -75,12 +74,12 @@ function step() = {
         F_Base(w) => {
           match decode(w) {
             None() => {
-              print(BitStr(w) ^ " :  <no-decode>");
+              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(w) ^ " :  <no-decode>");
               handle_decode_exception(EXTZ(w));
               false
             },
             Some(ast) => {
-              print(BitStr(w) ^ " :  " ^ ast);
+              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(w) ^ " :  " ^ ast);
               nextPC = PC + 4;
               execute(ast);
               true

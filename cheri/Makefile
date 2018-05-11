@@ -31,8 +31,15 @@ cheri_trace: $(CHERI_SAILS) $(CHERI_MAIN)
 cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -memo_z3 -c $^ 1> $@
 
-latex: $(CHERI_SAILS)
+latex_128: $(MIPS_SAIL_DIR)/prelude.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_128.sail
+	rm -rf sail_latexcc
+	$(SAIL) -latex -latex_prefix sailcc -o sail_latexcc $^
+
+latex_256: $(CHERI_SAILS)
+	rm -rf sail_latex
 	$(SAIL) -latex $^
+
+latex: latex_128 latex_256
 
 cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
@@ -40,6 +47,8 @@ cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 cheri128_trace: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml_trace -o $@ $^
 
+LOC_FILES:=$(CHERI_SAILS) $(CHERI_MAIN)
+include ../etc/loc.mk
 
 # TODO Using bit lists for now in Lem generation; for machine words,
 # monomorphisation is needed due to some variable length bitvectors, e.g. in
@@ -50,7 +59,7 @@ cheri_no_tlb.lem: $(CHERI_NO_TLB_SAILS)
 	$(SAIL) -lem -o cheri_no_tlb -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 cheri_no_tlb_types.lem: cheri_no_tlb.lem
 
-cheri.lem: $(CHERI_SAILS)
+cheri.lem: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -lem -o cheri -auto_mono -mono_rewrites -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 cheri_types.lem: cheri.lem
 
@@ -75,54 +84,4 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 clean:
-	rm -rf cheri cheri128 _sbuild inst_*.sail cheri.c
-
-EXTRACT_INST=sed -n "/START_${1}\b/,/END_${1}\b/p" cheri_insts.sail | sed 's/^  //;1d;$$d' > inst_$1.sail
-extract: cheri_insts.sail
-	$(call EXTRACT_INST,CGetPerms)
-	$(call EXTRACT_INST,CGetType)
-	$(call EXTRACT_INST,CGetBase)
-	$(call EXTRACT_INST,CGetOffset)
-	$(call EXTRACT_INST,CGetLen)
-	$(call EXTRACT_INST,CGetTag)
-	$(call EXTRACT_INST,CGetSealed)
-	$(call EXTRACT_INST,CGetAddr)
-	$(call EXTRACT_INST,CGetPCC)
-	$(call EXTRACT_INST,CGetPCCSetOffset)
-	$(call EXTRACT_INST,CGetCause)
-	$(call EXTRACT_INST,CSetCause)
-	$(call EXTRACT_INST,CAndPerm)
-	$(call EXTRACT_INST,CToPtr)
-	$(call EXTRACT_INST,CSub)
-	$(call EXTRACT_INST,CPtrCmp)
-	$(call EXTRACT_INST,CIncOffset)
-	$(call EXTRACT_INST,CIncOffsetImmediate)
-	$(call EXTRACT_INST,CSetOffset)
-	$(call EXTRACT_INST,CSetBounds)
-	$(call EXTRACT_INST,CSetBoundsImmediate)
-	$(call EXTRACT_INST,CSetBoundsExact)
-	$(call EXTRACT_INST,CClearTag)
-	$(call EXTRACT_INST,CMOVX)
-	$(call EXTRACT_INST,ClearRegs)
-	$(call EXTRACT_INST,CFromPtr)
-	$(call EXTRACT_INST,CBuildCap)
-	$(call EXTRACT_INST,CCopyType)
-	$(call EXTRACT_INST,CCheckPerm)
-	$(call EXTRACT_INST,CCheckType)
-	$(call EXTRACT_INST,CTestSubset)
-	$(call EXTRACT_INST,CSeal)
-	$(call EXTRACT_INST,CCSeal)
-	$(call EXTRACT_INST,CUnseal)
-	$(call EXTRACT_INST,CCall)
-	$(call EXTRACT_INST,CCall2)
-	$(call EXTRACT_INST,CReturn)
-	$(call EXTRACT_INST,CBtag)
-	$(call EXTRACT_INST,CBz)
-	$(call EXTRACT_INST,CJALR)
-	$(call EXTRACT_INST,CLoad)
-	$(call EXTRACT_INST,CStore)
-	$(call EXTRACT_INST,CSC)
-	$(call EXTRACT_INST,CLC)
-	$(call EXTRACT_INST,CReadHwr)
-	$(call EXTRACT_INST,CWriteHwr)
-
+	rm -rf cheri cheri_trace cheri128 cheri128_trace _sbuild inst_*.sail cheri.c sail_latex sail_latexcc

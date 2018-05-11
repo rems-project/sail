@@ -196,20 +196,32 @@ function sealCap(cap, otype) : (CapStruct, bits(24)) -> (bool, CapStruct) =
     (true, {cap with sealed=true, otype=otype})
 
 function getCapBase(c)   : CapStruct -> uint64 = unsigned(c.base)
-function getCapTop(c)    : CapStruct -> CapLen = unsigned(c.base) + unsigned(c.length)
+function getCapTop(c)    : CapStruct -> CapLen = unsigned(c.base) + unsigned(c.length) /* XXX bug here? -- should be mod 2^64 */
 function getCapOffset(c) : CapStruct -> uint64 = (unsigned(c.address) - unsigned(c.base)) % (pow2(64))
 function getCapLength(c) : CapStruct -> CapLen = unsigned(c.length)
 
 function getCapCursor(c) : CapStruct -> uint64 = unsigned(c.address)
 
-function setCapOffset(c, offset) : (CapStruct, bits(64)) -> (bool, CapStruct) =
+/*!
+Set the offset capability of the a capability to given value and return the result, along with a boolean indicating true if the operation preserved the existing bounds of the capability.  When using compressed capabilities, setting the offset far outside the capability bounds can cause the result to become unrepresentable (XXX mention guarantees). Additionally in some implementations a fast representablity check may be used that could cause the operation to return failure even though the capability would be representable (XXX provide details). 
+ */
+val setCapOffset : (CapStruct, bits(64)) -> (bool, CapStruct)
+function setCapOffset(c, offset) =
     (true, {c with address=c.base + offset})
 
-function incCapOffset(c, delta) : (CapStruct, bits(64)) -> (bool, CapStruct) =
+/*!
+\function{incCapOffset} is the same as \function{setCapOffset} except that the 64-bit value is added to the current capability offset modulo $2^{64}$ (i.e. signed twos-complement arithemtic).
+ */
+val incCapOffset : (CapStruct, bits(64)) -> (bool, CapStruct)
+function incCapOffset(c, delta) =
     let newAddr : bits(64) = c.address + delta in
     (true, {c with address = newAddr})
 
-function setCapBounds(cap, base, top) : (CapStruct, bits(64), bits(65)) -> (bool, CapStruct) =
+/*!
+Returns a capability derived from the given capability by setting the base and top to values provided.  The offset of the resulting capability is zero.  In case the requested bounds are not exactly representable the returned boolean is false and the returned capability has bounds at least including the region bounded by base and top but rounded to representable values.
+ */
+val setCapBounds : (CapStruct, bits(64), bits(65)) -> (bool, CapStruct)
+function setCapBounds(cap, base, top) =
     let length : bits(65) = top - (0b0 @ base) in
     (true, {cap with base = base, length = length[63..0], address = base})
 

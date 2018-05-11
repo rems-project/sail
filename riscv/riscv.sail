@@ -254,7 +254,8 @@ function clause print_insn (LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
       (HALF,   true)  => "lhu   ",
       (WORD,   false) => "lw    ",
       (WORD,   true)  => "lwu   ",
-      (_,      _)     => "ld.bad "
+      (DOUBLE, false) => "ld    ",
+      (DOUBLE, true)  => "ldu   "
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
@@ -822,6 +823,7 @@ function readCSR csr : csreg -> xlenbits =
     0xF13 => mimpid,
     0xF14 => mhartid,
     0x300 => mstatus.bits(),
+    0x301 => misa.bits(),
     0x302 => medeleg.bits(),
     0x303 => mideleg.bits(),
     0x304 => mie.bits(),
@@ -849,6 +851,9 @@ function readCSR csr : csreg -> xlenbits =
     0xC00 => mcycle,
     0xC01 => mtime,
     0xC02 => minstret,
+
+    /* trigger/debug */
+    0x7a0 => ~(tselect),    /* this indicates we don't have any trigger support */
 
     _     => { print_bits("unhandled read to CSR ", csr);
                0x0000_0000_0000_0000 }
@@ -882,15 +887,15 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     0x144 => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) },
     0x180 => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) },
 
+    /* trigger/debug */
+    0x7a0 => { tselect = value; Some(tselect) },
+
     _     => None()
   } in
   match res {
     Some(v) => print("CSR " ^ csr ^ " <- " ^ BitStr(v) ^ " (input: " ^ BitStr(value) ^ ")"),
     None()  => print_bits("unhandled write to CSR ", csr)
   }
-
-val signalIllegalInstruction : unit -> unit effect {escape}
-function signalIllegalInstruction () = not_implemented ("illegal instruction")
 
 function clause execute CSR(csr, rs1, rd, is_imm, op) =
   let rs1_val : xlenbits = if is_imm then EXTZ(rs1) else X(rs1) in

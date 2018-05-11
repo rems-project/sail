@@ -271,6 +271,8 @@ val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
 
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
+val destruct_numeric : Env.t -> typ -> (kid list * n_constraint * nexp) option
+
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
 type uvar =
@@ -283,6 +285,9 @@ val string_of_uvar : uvar -> string
 
 val subst_unifiers : uvar KBindings.t -> typ -> typ
 
+val typ_subst_nexp : kid -> nexp_aux -> typ -> typ
+val typ_subst_typ : kid -> typ_aux -> typ -> typ
+val typ_subst_order : kid -> order_aux -> typ -> typ
 val typ_subst_kid : kid -> kid -> typ -> typ
 
 val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option

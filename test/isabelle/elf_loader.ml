@@ -41,11 +41,11 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-module Big_int = Nat_big_num
+(*module Big_int = Nat_big_num*)
 
 let opt_elf_threads = ref 1
-let opt_elf_entry = ref Big_int.zero
-let opt_elf_tohost = ref Big_int.zero
+let opt_elf_entry = ref Nat_big_num.zero
+let opt_elf_tohost = ref Nat_big_num.zero
 
 type word8 = int
 
@@ -103,36 +103,24 @@ let read name =
   in
   (segments, e_entry, symbol_map)
 
-let write_sail_lib paddr i byte =
-  Sail_lib.wram (Big_int.add paddr (Big_int.of_int i)) byte
+(*let write_sail_lib paddr i byte =
+  Sail_lib.wram (Nat_big_num.add paddr (Nat_big_num.of_int i)) byte*)
 
 let write_file chan paddr i byte =
-  output_string chan (Big_int.to_string (Big_int.add paddr (Big_int.of_int i)) ^ "\n");
+  output_string chan (Nat_big_num.to_string (Nat_big_num.add paddr (Nat_big_num.of_int i)) ^ "\n");
   output_string chan (string_of_int byte ^ "\n")
 
-let load_segment ?writer:(writer=write_sail_lib) seg =
-  let open Elf_interpreted_segment in
-  let bs = seg.elf64_segment_body in
-  let paddr = seg.elf64_segment_paddr in
-  let base = seg.elf64_segment_base in
-  let offset = seg.elf64_segment_offset in
-  prerr_endline "\nLoading Segment";
-  prerr_endline ("Segment offset: " ^ Big_int.to_string offset);
-  prerr_endline ("Segment base address: " ^ Big_int.to_string base);
-  prerr_endline ("Segment physical address: " ^ Big_int.to_string paddr);
-  print_segment seg;
-  List.iteri (writer paddr) (List.map int_of_char (Byte_sequence.char_list_of_byte_sequence bs))
-
-let load_elf ?writer:(writer=write_sail_lib) name =
+let load_elf name =
   let segments, e_entry, symbol_map = read name in
   opt_elf_entry := e_entry;
   (if List.mem_assoc "tohost" symbol_map then
      let (_, _, tohost_addr, _, _) = List.assoc "tohost" symbol_map in
      opt_elf_tohost := tohost_addr);
-  List.iter (load_segment ~writer:writer) segments
+  (*List.iter (load_segment ~writer:writer) segments*)
+  segments
 
-(* The sail model can access this by externing a unit -> int function
+(* The sail model can access this by externing a unit -> Big_int.t function
    as Elf_loader.elf_entry. *)
-let elf_entry () = !opt_elf_entry
+let elf_entry () = Big_int.big_int_of_string (Nat_big_num.to_string !opt_elf_entry)
 (* Used by RISCV sail model test harness for exiting test *)
-let elf_tohost () = !opt_elf_tohost
+let elf_tohost () = Big_int.big_int_of_string (Nat_big_num.to_string !opt_elf_tohost)

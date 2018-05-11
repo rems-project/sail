@@ -265,3 +265,16 @@ let update_reg_field_bit regfield i reg_val bit =
   let new_field_value = set_bit (regfield.field_is_inc) current_field_value i (to_bitU bit) in
   regfield.set_field reg_val new_field_value
 let write_reg_field_bit reg regfield i = update_reg reg (update_reg_field_bit regfield i)*)
+
+(* TODO Add Show typeclass for value and exception type *)
+val show_result : forall 'a 'e. result 'a 'e -> string
+let show_result = function
+  | Value _ -> "Value ()"
+  | Ex (Failure msg) -> "Failure " ^ msg
+  | Ex (Throw _) -> "Throw"
+end
+
+val prerr_results : forall 'a 'e 's. SetType 's => set (result 'a 'e * 's) -> unit
+let prerr_results rs =
+  let _ = Set.map (fun (r, _) -> let _ = prerr_endline (show_result r) in ()) rs in
+  ()

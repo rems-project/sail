@@ -43,7 +43,7 @@ expressions of the appropriate size that are available within the
 surrounding scope, in this case \ll{n} and \ll{length(xs)}. If no
 suitable expressions are found to trivially rewrite these type
 variables, then additional function parameters will be automatically
-added to pass around this information at runtime. This feature is
+added to pass around this information at run-time. This feature is
 however very useful for implementing functions with implicit
 parameters, e.g. we can implement a zero extension function that
 implicitly picks up its result length from the calling context as
@@ -61,6 +61,7 @@ since there is only a single line of code within the foreach block, we
 can drop it and simply write: \mrbfnmyreplicatebitsthree
 
 \subsection{Numeric Types}
+\label{sec:numeric}
 
 Sail has three basic numeric types, \ll{int}, \ll{nat}, and
 \ll{range}. The type \ll{int} is an arbitrary precision mathematical
@@ -69,7 +70,7 @@ number. The type \ll{range('n,'m)} is an inclusive range between the
 \ll{Int}-kinded type variables \ll{'n} and \ll{'m}. The type
 \ll{int('o)} is an integer exactly equal to the \ll{Int}-kinded type
 variable \ll{'n}, i.e. \ll{int('o)} $=$ \ll{range('o,'o)}. These types
-can be used interchangably provided the rules summarised in the below
+can be used interchangeably provided the rules summarised in the below
 diagram are satisfied (via constraint solving).
 
 \begin{center}
@@ -97,8 +98,9 @@ up being equal to \ll{6 : range(5, 6)}. This kind of implicit casting
 from bits to other numeric types would be highly undesirable.
 
 \subsection{Vector Type}
+\label{sec:vec}
 
-Sail has the builtin type vector, which is a polymorphic type for
+Sail has the built-in type vector, which is a polymorphic type for
 fixed-length vectors. For example, we could define a vector \ll{v} of
 three integers as follows:
 \begin{lstlisting}
@@ -210,7 +212,7 @@ A vector index can be updated using
 \lstinline[mathescape]{[$\textit{vector}$ with $\textit{index}$ = $\textit{expression}$]}
 notation.
 %
-Similarly, a subrange of a vector can be updated using
+Similarly, a sub-range of a vector can be updated using
 %
 \lstinline[mathescape]{[$\textit{vector}$ with $\textit{index}_{msb}$ .. $\textit{index}_{lsb}$ = $\textit{expression}$]},
 %
@@ -218,12 +220,12 @@ where the order of the indexes is the same as described above for
 increasing and decreasing vectors.
 
 These expressions are actually just syntactic sugar for several
-builtin functions, namely \ll{vector_access}, \ll{vector_subrange},
+built-in functions, namely \ll{vector_access}, \ll{vector_subrange},
 \ll{vector_update}, and \ll{vector_update_subrange}.
 
 \subsection{List Type}
 
-In addition to vectors, Sail also has \ll{list} as a builtin type. For
+In addition to vectors, Sail also has \ll{list} as a built-in type. For
 example:
 \begin{lstlisting}
 let l : list(int) = [|1, 2, 3|]
@@ -317,7 +319,7 @@ match option {
 \end{lstlisting}
 Note that like how calling a function with a unit argument can be done
 as \ll{f()} rather than \ll{f(())}, matching on a constructor \ll{C}
-with a unit type can be acheived by using \ll{C()} rather than
+with a unit type can be achieved by using \ll{C()} rather than
 \ll{C(())}.
 
 \paragraph{Matching on bit vectors}
@@ -327,16 +329,16 @@ Sail allows numerous ways to match on bitvectors, for example:
 match v {
   0xFF => print("hex match"),
   0x0000_0001 => print("binary match"),
-  0xF @ v : bits(4) => print("vector concatentation pattern"),
+  0xF @ v : bits(4) => print("vector concatenation pattern"),
   0xF @ [bitone, _, b1, b0] => print("vector pattern"),
   _ : bits(4) @ v : bits(4) => print("annotated wildcard pattern")
 }
 \end{lstlisting}
 We can match on bitvector literals in either hex or binary forms. We
-also have vector concatantion patterns, of the form
+also have vector concatenation patterns, of the form
 \lstinline[mathescape]{$\mathit{pattern}$ @ $\ldots$ @ $\mathit{pattern}$}.
-We must be able to infer the length of all the subpatterns in a vector
-concatentation pattern, hence why in the example above all the
+We must be able to infer the length of all the sub-patterns in a vector
+concatenation pattern, hence why in the example above all the
 wildcard and variable patterns beneath vector concatenation patterns
 have type annotations. In the context of a pattern the \ll{:} operator
 binds tighter than the \ll{@} operator (as it does elsewhere).
@@ -347,7 +349,7 @@ bits. In the above example, \ll{b0} and \ll{b1} will have type
 being the other bit literal pattern.
 
 Note that because vectors in sail are type-polymorphic, we can also
-use both vector concatentation patterns and vector patterns to match
+use both vector concatenation patterns and vector patterns to match
 against non-bit vectors.
 
 \paragraph{Matching on lists}
@@ -371,7 +373,114 @@ match ys {
 
 \paragraph{As patterns}
 
+Like OCaml, Sail also supports naming parts of patterns using the
+\ll{as} keyword. For example, in the above list pattern we could bind
+the entire list as ys as follows:
+\begin{lstlisting}
+match ys {
+  x :: xs as zs => print("cons with as pattern"),
+  [||]          => print("empty list")
+}
+\end{lstlisting}
+The as pattern has lower precedence than any other keyword or operator
+in a pattern, so in this example zs will refer to \ll{x :: xs}.
+
 \subsection{Mutable and Immutable Variables}
+
+Local immutable bindings can be introduced via the \ll{let} keyword,
+which has the following form
+\begin{center}
+  \ll{let} \textit{pattern} \ll{=} \textit{expression} \ll{in} \textit{expression}
+\end{center}
+The pattern is matched against the first expression, binding any
+identifiers in that pattern. The pattern can have any form, as in the
+branches of a match statement, but it should be complete (i.e. it
+should not fail to match)\footnote{although this is not checked right
+  now}.
+
+When used in a block, we allow a variant of the let statement, where
+it can be terminated by a semicolon rather than the in keyword.
+\begin{lstlisting}[mathescape]
+{
+  let $\textit{pattern}$ = $\textit{expression}_0$;
+  $\textit{expression}_1$;
+  $\vdots$
+  $\textit{expression}_n$
+}
+\end{lstlisting}
+This is equivalent to the following
+\begin{lstlisting}[mathescape]
+{
+  let $\textit{pattern}$ = $\textit{expression}_0$ in {
+    $\textit{expression}_1$;
+    $\vdots$
+    $\textit{expression}_n$
+  }
+}
+\end{lstlisting}
+If we were to write
+\begin{lstlisting}[mathescape]
+{
+  let $\textit{pattern}$ = $\textit{expression}_0$ in
+  $\textit{expression}_1$;
+  $\vdots$
+  $\textit{expression}_n$ // pattern not visible
+}
+\end{lstlisting}
+instead, then \textit{pattern} would only be bound within
+$\textit{expression}_1$ and not any further expressions. In general
+the block-form of let statements terminated with a semicolon should be
+preferred within blocks.
+
+Variables bound within function arguments, match statement, and
+let-bindings are always immutable, but Sail also allows mutable
+variables. Mutable variables are bound implicitly by using the
+assignment operator within a block.
+\begin{lstlisting}
+{
+  x : int = 3 // Create a new mutable variable x initialised to 3
+  x = 2       // Rebind it to the value 2
+}
+\end{lstlisting}
+The assignment operator is the equality symbol, as in C and other
+programming languages. Sail supports a rich language of
+\emph{l-expression} forms, which can appear on the left of an
+assignment. These will be described in Subsection~\ref{sec:lexp}. Note
+that we could have written
+\begin{lstlisting}
+{
+  x = 3;
+  x = 2
+}
+\end{lstlisting}
+but it would not have type-checked. The reason for this is if a
+mutable variable is declared without a type, Sail will try to infer
+the most specific type from the left hand side of the
+expression. However, in this case Sail will infer the type as
+\ll{int(3)} and will therefore complain when we try to reassign it to
+\ll{2}, as the type \ll{int(2)} is not a subtype of \ll{int(3)}. We
+therefore declare it as an \ll{int} which as mentioned in
+Section~\ref{sec:numeric} is a supertype of all numeric types. Sail
+will not allow us to change the type of a variable once it has been
+created with a specific type. We could have a more specific type for
+the variable \ll{x}, so
+\begin{lstlisting}
+{
+  x : {|2, 3|} = 3;
+  x = 2
+}
+\end{lstlisting}
+would allow \ll{x} to be either 2 or 3, but not any other value. The
+\lstinline+{|2, 3|}+ syntax is equivalent to \lstinline+{'n, 'n in {2, 3}. int('n)}+.
+
+\subsubsection{l-expressions}
+\label{sec:lexp}
+
+Sail allows for setter functions to be declared in a very simple way:
+\ll{f(x) = y} is sugar for \ll{f(x, y)}. This feature is commonly used
+when setting
+
+\fbox{TODO}
 
 \subsection{Type declarations}
 
@@ -444,6 +553,7 @@ names of either the constructors nor the type itself, other than they
 must be valid identifiers.
 
 \subsubsection{Bitfields}
+\label{sec:bitfield}
 
 The following example creates a bitfield type called \ll{cr} and a
 register \ll{CR} of that type.
@@ -478,7 +588,7 @@ function \lstinline[mathescape]{update_$F$} is also defined. For more
 details on getters and setters, see Section~\ref{sec:getset}. A
 singleton bit in a bitfield definition, such as \ll{LT : 7} will be
 defined as a bitvector of length one, and not as a value of type
-\ll{bit}, which mirrors the behavior of ARM's ASL language.
+\ll{bit}, which mirrors the behaviour of ARM's ASL language.
 
 \subsection{Operators}
 
@@ -541,7 +651,7 @@ summarised in Table~\ref{tbl:operators}.
 
 \paragraph{Type operators}
 Sail allows operators to be used at the type level. For example, we
-could define a synonym for the builtin \ll{range} type as:
+could define a synonym for the built-in \ll{range} type as:
 \lstinputlisting{examples/type_operator.sail} Note that we can't use
 \ll{..} as an operator name, because that is reserved syntax for
 vector slicing. Operators used in types always share precedence with
@@ -549,10 +659,179 @@ identically named operators at the expression level.
 
 \subsection{Ad-hoc Overloading}
 
+Sail has a flexible overloading mechanism using the \ll{overload}
+keyword
+\begin{center}
+  \ll{overload} \textit{name} \ll{=} \lstinline+{+ \textit{name}$_1$ \ll{,} \ldots \ll{,} \textit{name}$_n$ \lstinline+}+
+\end{center}
+This takes an identifier name, and a list of other identifier names to
+overload that name with. When the overloaded name is seen in a Sail
+definition, the type-checker will try each of the overloads in order
+from left to right (i.e. from $\textit{name}_1$ to $\textit{name}_n$).
+until it finds one that causes the resulting expression to type-check
+correctly.
+
+Multiple \ll{overload} declarations are permitted for the same
+identifier, with each overload declaration after the first adding it's
+list of identifier names to the right of the overload list (so earlier
+overload declarations take precedence over later ones). As such, we
+could split every identifier from above syntax example into it's own
+line like so:
+\begin{center}
+  \ll{overload} \textit{name} \ll{=} \lstinline+{+ \textit{name}$_1$ \lstinline+}+\\
+  $\vdots$\\
+  \ll{overload} \textit{name} \ll{=} \lstinline+{+ \textit{name}$_n$ \lstinline+}+
+\end{center}
+
+As an example for how overloaded functions can be used, consider the
+following example, where we define a function \ll{print_int} and a
+function \ll{print_string} for printing integers and strings
+respectively. We overload \ll{print} as either \ll{print_int} or
+\ll{print_string}, so we can print either number such as 4, or strings
+like \ll{"Hello, World!"} in the following \ll{main} function
+definition.
+
+\lstinputlisting{examples/overload.sail}
+
+We can see that the overloading has had the desired effect by dumping
+the type-checked AST to stdout using the following command
+\verb+sail -ddump_tc_ast examples/overload.sail+. This will print the
+following, which shows how the overloading has been resolved
+\begin{lstlisting}
+function main () : unit = {
+  print_string("Hello, World!");
+  print_int(4)
+}
+\end{lstlisting}
+This option can be quite useful for testing how overloading has been
+resolved. Since the overloadings are done in the order they are listed
+in the source file, it can be important to ensure that this order is
+correct. A common idiom in the standard library is to have versions of
+functions that guarantee more constraints about there output be
+overloaded with functions that accept more inputs but guarantee less
+about their results. For example, we might have two division functions:
+\begin{lstlisting}
+val div1 : forall 'm, 'n >= 0 & 'm > 0. (int('n), int('m)) -> {'o, 'o >= 0. int('o)}
+
+val div2 : (int, int) -> option(int)
+\end{lstlisting}
+The first guarantees that if the first argument is greater than or
+equal to zero, and the second argument is greater than zero, then the
+result will be greater than or not equal to zero. If we overload these
+definitions as
+\begin{lstlisting}
+overload operator / = {div1, div2}
+\end{lstlisting}
+Then the first will be applied when the constraints on it's inputs can
+be resolved, and therefore the guarantees on it's output can be
+guaranteed, but the second will be used when this is not the case, and
+indeed, we will need to manually check for the division by zero case
+due to the option type. Note that the return type can be very
+different between different cases in the overloaded.
+
+The amount of arguments overloaded functions can have can also vary,
+so we can use this to define functions with optional arguments, e.g.
+\lstinputlisting{examples/zeros.sail} In this example, we can call
+\ll{zero_extend} and the return length is implicit (likely using
+\ll{sizeof}, see Section~\ref{sec:sizeof}) or we can provide it
+ourselves as an explicit argument.
+
 \subsection{Getters and Setters}
 \label{sec:getset}
 
+We have already seen some examples of getters and setters in
+Subsection~\ref{sec:bitfield}, but they can be used in many other
+contexts.
+
+\fbox{TODO}
+
 \subsection{Sizeof and Constraint}
+\label{sec:sizeof}
+
+As already mention in Section~\ref{sec:functions}, Sail allows for
+arbitrary type variables to be included within expressions. However,
+we can go slightly further than this, and include both arbitrary
+(type-level) numeric expressions in code, as well as type
+constraints. For example, if we have a function that takes two
+bitvectors as arguments, then there are several ways we could compute
+the sum of their lengths.
+\begin{lstlisting}
+val f : forall 'n 'm. (bits('n), bits('m)) -> unit
+
+function f(xs, ys) = {
+  let len = length(xs) + length(ys);
+  let len = 'n + 'm;
+  let len = sizeof('n + 'm);
+  ()
+}
+\end{lstlisting}
+Note that the second line is equivalent to
+\begin{lstlisting}
+  let len = sizeof('n) + sizeof('n)
+\end{lstlisting}
+
+There is also the \ll{constraint} keyword, which takes a type-level constraint and allows it to be used as a boolean expression, so we could write:
+\begin{lstlisting}
+function f(xs, ys) = {
+  if constraint('n <= 'm) {
+    // Do something
+  }
+}
+\end{lstlisting}
+Rather than the equivlent test \ll{length(xs) <= length(ys)}. This way
+of writing expressions can be succint, and can also make it very
+explicit what constraints will be generated during flow
+typing. However, all the constraint and sizeof definitions must be
+re-written to produce executable code, which can result in the
+generated theorem prover output diverging (in appearance) somewhat
+from the source input. In general, it is probably best to use
+\ll{sizeof} and \ll{constraint} sparingly.
+
+However, as previously mentioned both \ll{sizeof} and \ll{constraint}
+can refer to type variables that only appear in the output or are
+otherwise not accessible at runtime, and so can be used to implement
+implicit arguments, as was seen for \ll{replicate_bits} in
+Section~\ref{sec:functions}.
 
 \subsection{Preludes and Default Environment}
 \label{sec:prelude}
+By default Sail has almost no built-in types or functions, except for
+the primitive types described in this Chapter. This is because
+different vendor-pseudocode's have varying naming conventions and
+styles for even the most basic operators, so we aim to provide
+flexibility and avoid committing to any particular naming convention or
+set of built-ins. However, each Sail backend typically implements
+specific external names, so for a PowerPC ISA description one might
+have:
+\begin{lstlisting}[mathescape]
+val EXTZ = "zero_extend" : $\ldots$
+\end{lstlisting}
+while for ARM, one would have
+\begin{lstlisting}[mathescape]
+val ZeroExtend = "zero_extend" : $\ldots$
+\end{lstlisting}
+where each backend knows about the \ll{"zero_extend"} external name,
+but the actual Sail functions are named appropriately for each
+vendor's pseudocode. As such each Sail ISA spec tends to have it's own
+prelude.
+
+However, the \verb+lib+ directory in the Sail repository contains some
+files that can be included into any ISA specification for some basic
+operations. These are listed below:
+\begin{description}
+  \item[flow.sail] Contains basic definitions required for flow
+    typing to work correctly.
+  \item[arith.sail] Contains simple arithmetic operations for
+    integers.
+  \item[vector\_dec.sail] Contains operations on decreasing
+    (\ll{dec}) indexed vectors, see Section~\ref{sec:vec}.
+  \item[vector\_inc.sail] Like \verb+vector_dec.sail+, except
+    for increasing (\ll{inc}) indexed vectors.
+  \item[option.sail] Contains the definition of the option
+    type, and some related utility functions.
+  \item[prelude.sail] Contains all the above files, and chooses
+    between \verb+vector_dec.sail+ and \verb+vector_inc.sail+ based on
+    the default order (which must be set before including this file).
+  \item[smt.sail] Defines operators allowing div, mod, and abs
+    to be used in types by exposing them to the Z3 SMT solver.
+\end{description}
