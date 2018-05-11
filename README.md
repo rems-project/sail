@@ -15,25 +15,25 @@ for several papers, available from http://www.cl.cam.ac.uk/~pes20/sail/
 This repository contains the implementation of Sail, together with
 some Sail specifications and related tools.
 
-* A manual, [manual.pdf] with source (in [doc/])
+* A manual, [manual.pdf] with source (in [doc/](doc/))
 
-* The Sail source code (in [src/])
+* The Sail source code (in [src/](src/))
 
-* A Sail specification of a MIPS ISA (in [mips/])
+* A Sail specification of a MIPS ISA (in [mips/](mips/))
 
-* A Sail specification of the CHERI MIPS ISA (in [cheri/])
+* A Sail specification of the CHERI MIPS ISA (in [cheri/](cheri/))
 
 * A Sail specification of ARMv8.3 generated from ARM's publically
-  released ASL specification (in [aarch64/])
+  released ASL specification (in [aarch64/](aarch64/))
 
-* Generated Isabelle snapshots of the above ISAs in [snapshots/isabelle]
+* Generated Isabelle snapshots of the above ISAs in [snapshots/isabelle](snapshots/isabelle)
 
 * Documentation for generating Isabelle and working with the ISA specs
-  in Isabelle in [snapshots/isabelle/manual.pdf]
+  in Isabelle in [snapshots/isabelle/manual.pdf](snapshots/isabelle/manual.pdf)
 
-* A simple emacs mode with syntax highlighting (in [editors/])
+* A simple emacs mode with syntax highlighting (in [editors/](editors/))
 
-* A test suite for Sail (in [test/])
+* A test suite for Sail (in [test/](test/))
 
 We also have versions of IBM POWER, a fragment of x86, and a
 hand-written fragment of ARM, but these are currently not up-to-date
@@ -43,7 +43,7 @@ on Github.
 Building
 ========
 
-See [INSTALL.md] for full details of how to build Sail from source
+See [INSTALL.md](INSTALL.md) for full details of how to build Sail from source
 with all the required dependencies.
 
 OPAM Installation
@@ -56,7 +56,7 @@ to get pre-built binaries of Sail using OPAM.
 Emacs Mode
 ==========
 
-[editors/sail2-mode.el] contains an Emacs mode for the most recent
+[editors/sail2-mode.el](editors/sail2-mode.el) contains an Emacs mode for the most recent
 version of Sail which provides some basic syntax
 highlighting. [editors/sail-mode.el] Contains an emacs mode for
 previous versions of the language.
