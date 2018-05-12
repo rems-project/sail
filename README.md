@@ -23,7 +23,7 @@ some Sail specifications and related tools.
 
 * A Sail specification of the CHERI MIPS ISA (in [cheri/](cheri/))
 
-* A Sail specification of ARMv8.3 generated from ARM's publically
+* A Sail specification of ARMv8.3-A generated from ARM's publically
   released ASL specification (in [aarch64/](aarch64/))
 
 * Generated Isabelle snapshots of the above ISAs in [snapshots/isabelle](snapshots/isabelle)
@@ -36,15 +36,9 @@ some Sail specifications and related tools.
 * A test suite for Sail (in [test/](test/))
 
 We also have versions of IBM POWER, a fragment of x86, and a
-hand-written fragment of ARM, but these are currently not up-to-date
+hand-written fragment of ARMv8-A, but these are currently not up-to-date
 with the latest version of Sail, which is the (default) sail2 branch
 on Github.
-
-Building
-========
-
-See [INSTALL.md](INSTALL.md) for full details of how to build Sail from source
-with all the required dependencies.
 
 OPAM Installation
 =================
@@ -52,6 +46,12 @@ OPAM Installation
 See the following Sail [wiki
 page](https://github.com/rems-project/sail/wiki/OPAMInstall) for how
 to get pre-built binaries of Sail using OPAM.
+
+Building
+========
+
+See [INSTALL.md](INSTALL.md) for full details of how to build Sail from source
+with all the required dependencies.
 
 Emacs Mode
 ==========
