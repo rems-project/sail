@@ -636,7 +636,10 @@ definition regval_of_list  :: "('a \<Rightarrow> register_value)\<Rightarrow> 'a
 (*val option_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (maybe 'a)*)
 definition option_of_regval  :: "(register_value \<Rightarrow> 'a option)\<Rightarrow> register_value \<Rightarrow>('a option)option "  where 
      " option_of_regval of_regval1 = ( \<lambda>x .  
-  (case  x of   Regval_option v => map_option of_regval1 v | _ => None ) )"
+  (case  x of
+        Regval_option v => Some (Option.bind v of_regval1)
+    | _ => None
+  ) )"
 
 
 (*val regval_of_option : forall 'a. ('a -> register_value) -> maybe 'a -> register_value*)

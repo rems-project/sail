@@ -67,6 +67,19 @@ proof -
   then show ?thesis by (auto simp: vector_of_regval_def regval_of_vector_def)
 qed
 
+lemma option_of_rv_rv_of_option[simp]:
+  assumes "\<And>v. of_rv (rv_of v) = Some v"
+  shows "option_of_regval of_rv (regval_of_option rv_of v) = Some v"
+  using assms by (cases v) (auto simp: option_of_regval_def regval_of_option_def)
+
+lemma list_of_rv_rv_of_list[simp]:
+  assumes "\<And>v. of_rv (rv_of v) = Some v"
+  shows "list_of_regval of_rv (regval_of_list rv_of v) = Some v"
+proof -
+  from assms have "of_rv \<circ> rv_of = Some" by auto
+  with assms show ?thesis by (induction v) (auto simp: list_of_regval_def regval_of_list_def)
+qed
+
 lemma liftS_read_reg_tlb39[simp]:
   "liftS (read_reg tlb39_ref) = readS (tlb39 \<circ> regstate)"
   by (auto simp: liftState_read_reg_readS register_defs)
