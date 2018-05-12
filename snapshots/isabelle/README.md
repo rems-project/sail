@@ -19,9 +19,9 @@ isabelle jedit -l Sail -d lib/lem -d lib/sail riscv/Riscv.thy
 This will open the RISC-V specification.
 
 The file [Manual.thy](Manual.thy) (and its PDF rendering in
-[Manual.pdf](Manual.pdf)) contains an
-introduction on how to use the Sail specifications in Isabelle.
+[Manual.pdf](Manual.pdf)) contains an introduction on how to use the Sail
+specifications in Isabelle.
 
 The Lem library files in `lib/lem` have been generated from the
 [Lem](https://github.com/rems-project/lem) sources.  The Lem license can be
-found in `lib/lem/LICENSE`.
+found in [lib/lem/LICENSE](lib/lem/LICENSE).
