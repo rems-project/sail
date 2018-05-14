@@ -3196,7 +3196,7 @@ let rewrite_defs_mapping_patterns =
     | [] -> Pat_aux (Pat_exp (new_pat, new_expr), pexp_annot)
     | gs -> Pat_aux (Pat_when (new_pat, fold_typed_guards env gs, new_expr), pexp_annot)
     in
-    Printf.printf "rewritten pexp: %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string);
+    typ_debug (lazy (Printf.sprintf "rewritten pexp: %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string)));
     new_pexp
 
   in
@@ -3803,10 +3803,10 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let forwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl forwards_matches_id arg_pat forwards_matches_match]), (l, ()))) in
     let backwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl backwards_matches_id arg_pat backwards_matches_match]), (l, ()))) in
 
-    Printf.printf "forwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string);
-    Printf.printf "backwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string);
-    Printf.printf "forwards matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_matches_fun |> Pretty_print_sail.to_string);
-    Printf.printf "backwards matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_matches_fun |> Pretty_print_sail.to_string);
+    typ_debug (lazy (Printf.sprintf "forwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string)));
+    typ_debug (lazy (Printf.sprintf "backwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string)));
+    typ_debug (lazy (Printf.sprintf "forwards matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_matches_fun |> Pretty_print_sail.to_string)));
+    typ_debug (lazy (Printf.sprintf "backwards matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_matches_fun |> Pretty_print_sail.to_string)));
     let forwards_fun, _ = Type_check.check_fundef env forwards_fun in
     let backwards_fun, _ = Type_check.check_fundef env backwards_fun in
     let forwards_matches_fun, _ = Type_check.check_fundef env forwards_matches_fun in
@@ -3821,7 +3821,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
               let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) @ [prefix_wildcard])) in
               let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
-              Printf.printf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string);
+              typ_debug (lazy (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)));
               let forwards_prefix_fun, _ = Type_check.check_fundef env forwards_prefix_fun in
               forwards_prefix_spec @ forwards_prefix_fun
             else
@@ -3831,7 +3831,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
                 let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) @ [prefix_wildcard])) in
                 let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
-                Printf.printf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string);
+                typ_debug (lazy (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)));
                 let backwards_prefix_fun, _ = Type_check.check_fundef env backwards_prefix_fun in
                 backwards_prefix_spec @ backwards_prefix_fun
               else

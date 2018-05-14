@@ -81,6 +81,9 @@ exception Type_error of l * type_error;;
 
 val string_of_type_error : type_error -> string
 
+val typ_debug : string Lazy.t -> unit
+val typ_print : string Lazy.t -> unit
+
 (** {2 Environments} *)
 
 (** The env module defines the internal type checking environment, and
