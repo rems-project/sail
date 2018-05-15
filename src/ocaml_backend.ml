@@ -177,9 +177,9 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   | P_id id ->
      begin
        match Env.lookup_id id (pat_env_of pat) with
-       | Local (Immutable, _) | Unbound -> zencode ctx id
+       | Local (_, _) | Unbound -> zencode ctx id
        | Enum _ -> zencode_upper ctx id
-       | _ -> failwith ("Ocaml: Cannot pattern match on mutable variable or register:" ^ string_of_pat pat)
+       | _ -> failwith ("Ocaml: Cannot pattern match on register: " ^ string_of_pat pat)
      end
   | P_lit lit -> ocaml_lit lit
   | P_typ (_, pat) -> ocaml_pat ctx pat

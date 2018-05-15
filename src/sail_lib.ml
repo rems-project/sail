@@ -49,7 +49,7 @@ let trace_call str =
 type bit = B0 | B1
 
 let eq_bit (a, b) = a = b
-                  
+
 let and_bit = function
   | B1, B1 -> B1
   | _, _ -> B0
@@ -629,3 +629,15 @@ let speculate_conditional_success () = true
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
 
+let string_of_bool = function
+  | true -> "true"
+  | false -> "false"
+
+let dec_str x = Big_int.to_string x
+
+let hex_str x = Big_int.to_string x
+
+let trace_memory_write (_, _, _) = ()
+let trace_memory_read (_, _, _) = ()
+
+let sleep_request () = ()
