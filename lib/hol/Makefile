@@ -14,12 +14,12 @@ SCRIPTS = sail_instr_kindsScript.sml sail_valuesScript.sml sail_operatorsScript.
   state_monadScript.sml stateScript.sml \
   prompt_monadScript.sml promptScript.sml
 
-all: sail-heap
+THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))
+
+all: sail-heap $(THYS)
 
 $(SCRIPTS): $(LEMSRC)
 	lem -hol -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $(LEMSRC)
-
-THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))
 
 $(THYS) sail-heap: $(SCRIPTS)
 	Holmake
