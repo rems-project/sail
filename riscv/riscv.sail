@@ -573,7 +573,8 @@ union clause ast = EBREAK : unit
 
 function clause decode 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(EBREAK())
 
-function clause execute EBREAK() = { throw Error_EBREAK() }
+function clause execute EBREAK() =
+  handle_mem_exception(PC, E_Breakpoint)
 
 function clause print_insn (EBREAK()) =
   "ebreak"
