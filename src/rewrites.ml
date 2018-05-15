@@ -1501,7 +1501,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
     | Pat_aux (Pat_exp (pat, body), annot) ->
       (pat, None, rewrite_rec body, annot)
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
-      (pat, Some guard, rewrite_rec body, annot) in
+      (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
     let clauses = rewrite_guarded_clauses l (List.map clause ps) in
     if (effectful e) then
       let e = rewrite_rec e in
