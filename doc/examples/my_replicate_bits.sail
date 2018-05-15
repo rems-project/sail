@@ -11,7 +11,8 @@ val "shiftl" : forall 'm. (bits('m), int) -> bits('m)
 val operator >> = {
   ocaml: "shiftr_ocaml",
   c: "shiftr_c",
-  lem: "shiftr_lem"
+  lem: "shiftr_lem",
+  _: "shiftr"
 } : forall 'm. (bits('m), int) -> bits('m)
 
 val "or_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)

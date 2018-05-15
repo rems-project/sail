@@ -247,6 +247,13 @@ and nexp_simp_aux = function
          when Big_int.equal c1 (Big_int.negate c2) -> n
        | _, _ -> Nexp_minus (n1, n2)
      end
+  | Nexp_neg n ->
+     begin
+       let (Nexp_aux (n_simp, _) as n) = nexp_simp n in
+       match n_simp with
+       | Nexp_constant c -> Nexp_constant (Big_int.negate c)
+       | _ -> Nexp_neg n
+     end
   | Nexp_app (Id_aux (Id "div",_) as id,[n1;n2]) ->
      begin
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in

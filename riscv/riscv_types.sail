@@ -259,7 +259,6 @@ function trapVectorMode_of_bits (m) = {
 
 union exception = {
   Error_not_implemented : string,
-  Error_EBREAK : unit,
   Error_internal_error : unit
 }
 

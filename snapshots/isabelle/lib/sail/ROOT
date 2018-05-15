@@ -1,0 +1,11 @@
+session "Sail" = "LEM" +
+  options [document = false]
+  sessions
+    "HOL-Eisbach"
+  theories
+    Sail_values_lemmas
+    Prompt
+    State_lemmas
+    Sail_operators_mwords_lemmas
+    Sail_operators_bitlists
+    Hoare

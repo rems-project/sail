@@ -123,18 +123,19 @@ let commands = ref StringSet.empty
 let rec latex_command ?prefix:(prefix="") ?label:(label=None) dir cmd no_loc ((l, _) as annot) =
   let labelling = match label with
     | None -> ""
-    | Some l -> Printf.sprintf "\\label{%s%s}" prefix l
+    | Some l -> Printf.sprintf "\\label{%s}" l
   in
   let cmd = !opt_prefix_latex ^ prefix ^ cmd in
-  if StringSet.mem cmd !commands then
+  let lcmd = String.lowercase cmd in  (* lowercase to avoid file names differing only by case *)
+  if StringSet.mem lcmd !commands then
     latex_command ~label:label dir (cmd ^ "v") no_loc annot
   else
     begin
-      commands := StringSet.add cmd !commands;
-      let oc = open_out (Filename.concat dir (cmd ^ "_sail.tex")) in
+      commands := StringSet.add lcmd !commands;
+      let oc = open_out (Filename.concat dir (cmd ^ ".tex")) in
       output_string oc (Pretty_print_sail.to_string (latex_loc no_loc l));
       close_out oc;
-      string (Printf.sprintf "\\newcommand{\\%s}{%s " cmd labelling) ^^ (docstring l) ^^ string (Printf.sprintf "\\lstinputlisting[language=sail]{%s/%s_sail.tex}}" dir cmd)
+      string (Printf.sprintf "\\newcommand{\\%s}{%s " cmd labelling) ^^ (docstring l) ^^ string (Printf.sprintf "\\lstinputlisting[language=sail]{%s/%s.tex}}" dir cmd)
     end
 
 let latex_command_id ?prefix:(prefix="") dir id no_loc annot =

@@ -63,14 +63,13 @@ register Xs : vector(32, dec, xlen_t)
 \sailX
 
 We also give a function \ll{MEMr} for reading memory, this function
-just points at a builtin we have defined elsewhere \TODO{Section where
-  we talk about preludes, built-in type environment etc}. Note that functions in sail are
-annotated with effects. This effect system is quite basic, but
-indicates whether or not functions read or write registers (rreg and
-wreg), read and write memory (rmem and wmem), as well as a host of
-other concurrency model related effects. They also indicate whether a
-function throws exceptions or has other non-local control flow (the
-escape effect).
+just points at a builtin we have defined elsewhere. Note that
+functions in sail are annotated with effects. This effect system is
+quite basic, but indicates whether or not functions read or write
+registers (rreg and wreg), read and write memory (rmem and wmem), as
+well as a host of other concurrency model related effects. They also
+indicate whether a function throws exceptions or has other non-local
+control flow (the escape effect).
 
 \sailMEMr
 \sailfnMEMr

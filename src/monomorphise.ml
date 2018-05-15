@@ -856,7 +856,7 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.shift_left i (Big_int.to_int j)),new_l)),(l,ann)))
     | _ -> None
-  else if is_id "mult_int" || is_id "mult_range" then
+  else if is_id "mult_atom" || is_id "mult_int" || is_id "mult_range" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.mul i j),new_l)),(l,ann)))
@@ -866,7 +866,7 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.div i j),new_l)),(l,ann)))
     | _ -> None
-  else if is_id "add_range" then
+  else if is_id "add_atom" || is_id "add_int" || is_id "add_range" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.add i j),new_l)),(l,ann)))
@@ -2241,13 +2241,20 @@ let rewrite_size_parameters env (Defs defs) =
   let open Rewriter in
   let open Util in
 
-  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
+  let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,ann))) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
-    let parameters = match pat with
-      | P_aux (P_tup ps,_) -> ps
-      | _ -> [pat]
+    let env = env_of_annot (l,ann) in
+    let _, typ = Env.get_val_spec_orig id env in
+    let typ = match typ with
+      | Typ_aux (Typ_fn (arg_typ,_,_),_) -> arg_typ
+      | _ -> typ (* TODO: error *)
     in
-    let add_parameter (i,nmap) (P_aux (_,(_,Some (env,typ,_)))) =
+    let types =
+      match pat, Env.expand_synonyms env typ with
+      | P_aux (P_tup ps,_), Typ_aux (Typ_tup ts,_) -> ts
+      | _, _ -> [typ]
+    in
+    let add_parameter (i,nmap) typ =
       let nmap =
         match Env.base_typ_of env typ with
           Typ_aux (Typ_app(Id_aux (Id "range",_),
@@ -2262,8 +2269,14 @@ let rewrite_size_parameters env (Defs defs) =
         | _ -> nmap
       in (i+1,nmap)
     in
-    let (_,nexp_map) = List.fold_left add_parameter (0,NexpMap.empty) parameters in
+    let (_,nexp_map) = List.fold_left add_parameter (0,NexpMap.empty) types in
     let nexp_list = NexpMap.bindings nexp_map in
+(* let () =
+ print_endline ("Type of pattern for " ^ string_of_id id ^": " ^string_of_typ (pat_typ_of pat));
+ print_endline ("Types : " ^ String.concat ", " (List.map string_of_typ types));
+ print_endline ("Nexp map for " ^ string_of_id id);
+ List.iter (fun (nexp, i) -> print_endline ("  " ^ string_of_nexp nexp ^ " -> " ^ string_of_int i)) nexp_list
+in *)
     let parameters_for = function
       | Some (env,typ,_) ->
          begin match Env.base_typ_of env typ with
@@ -2696,12 +2709,10 @@ let kids_bound_by_pat pat =
       | ((s,p),ann) -> s, P_aux (p,ann))
     }) pat)
 
-(* Add bound variables from a pattern to the environment with the given dependency. *)
+(* Diff the type environment to find new type variables and record that they
+   depend on deps *)
 
-let update_env env deps pat typ_env_pre typ_env_post =
-  let bound = bindings_from_pat pat in
-  let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
-  (* Diff the type environment to find the new variables *)
+let update_env_new_kids env deps typ_env_pre typ_env_post =
   let kbound =
     KBindings.merge (fun k x y ->
       match x,y with
@@ -2711,7 +2722,15 @@ let update_env env deps pat typ_env_pre typ_env_post =
       (Env.get_typ_vars typ_env_pre)
   in
   let kid_deps = KBindings.fold (fun v _ ds -> KBindings.add v deps ds) kbound env.kid_deps in
-  { env with var_deps = var_deps; kid_deps = kid_deps }
+  { env with kid_deps = kid_deps }
+
+(* Add bound variables from a pattern to the environment with the given dependency,
+   plus any new type variables. *)
+
+let update_env env deps pat typ_env_pre typ_env_post =
+  let bound = bindings_from_pat pat in
+  let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
+  update_env_new_kids { env with var_deps = var_deps } deps typ_env_pre typ_env_post
 
 let assigned_vars_exps es =
   List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
@@ -2886,6 +2905,30 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     let deps, _, rs = split3 (List.map (analyse_exp fn_id env assigns) es) in
     (deps, assigns, List.fold_left merge empty rs)
   in
+  (* We allow for arguments to functions being executed non-deterministically, but
+     follow the type checker in processing them in-order to detect the automatic
+     unpacking of existentials.  When we spot a new type variable (using
+     update_env_new_kids) we set them to depend on the previous argument. *)
+  let non_det_args es =
+    let assigns = remove_assigns es " assigned in non-deterministic expressions" in
+    let rec aux prev_typ_env prev_deps env = function
+      | [] -> [], empty
+      | h::t ->
+         let typ_env = env_of h in
+         let env = update_env_new_kids env prev_deps prev_typ_env typ_env in
+         let new_deps, _, new_r = analyse_exp fn_id env assigns h in
+         let t_deps, t_r = aux typ_env new_deps env t in
+         new_deps::t_deps, merge new_r t_r
+    in
+    let deps, r = match es with
+      | [] -> [], empty
+      | h::t ->
+         let new_deps, _, new_r = analyse_exp fn_id env assigns h in
+         let t_deps, t_r = aux (env_of h) new_deps env t in
+         new_deps::t_deps, merge new_r t_r
+    in
+    (deps, assigns, r)
+  in
   let merge_deps deps = List.fold_left dmerge dempty deps in
   let deps, assigns, r =
     match e with
@@ -2922,7 +2965,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_lit _ -> (dempty,assigns,empty)
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
-       let deps, assigns, r = non_det args in
+       let deps, assigns, r = non_det_args args in
        let typ_env = env_of_annot (l,annot) in
        let (_,fn_typ) = Env.get_val_spec id typ_env in
        let fn_effect = match fn_typ with
@@ -3772,10 +3815,21 @@ end
 module BitvectorSizeCasts =
 struct
 
+let simplify_size_nexp env quant_kids (Nexp_aux (_,l) as nexp) =
+  match solve env nexp with
+  | Some n -> Some (nconstant n)
+  | None ->
+     let is_equal kid =
+       prove env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+     in
+     match List.find is_equal quant_kids with
+     | kid -> Some (Nexp_aux (Nexp_var kid,Generated l))
+     | exception Not_found -> None
+
 (* These functions add cast functions across case splits, so that when a
    bitvector size becomes known in sail, the generated Lem code contains a
    function call to change mword 'n to (say) mword ty16, and vice versa. *)
-let make_bitvector_cast_fns env src_typ target_typ =
+let make_bitvector_cast_fns env quant_kids src_typ target_typ =
   let genunk = Generated Unknown in
   let fresh =
     let counter = ref 0 in
@@ -3784,7 +3838,7 @@ let make_bitvector_cast_fns env src_typ target_typ =
       let () = counter := n+1 in
       mk_id ("cast#" ^ string_of_int n)
   in
-  let required = ref false in
+  let at_least_one = ref None in
   let rec aux (Typ_aux (src_t,src_l) as src_typ) (Typ_aux (tar_t,tar_l) as tar_typ) =
     let src_ann = Some (env,src_typ,no_effect) in
     let tar_ann = Some (env,tar_typ,no_effect) in
@@ -3796,18 +3850,26 @@ let make_bitvector_cast_fns env src_typ target_typ =
     | Typ_app (Id_aux (Id "vector",_),
                [Typ_arg_aux (Typ_arg_nexp size,_); _;
                 Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]),
-      Typ_app (Id_aux (Id "vector",_),
-               [Typ_arg_aux (Typ_arg_nexp size',_); _;
-                Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
-        when Nexp.compare size size' <> 0 ->
-       let () = required := true in
-       let var = fresh () in
-       P_aux (P_id var,(Generated src_l,src_ann)),
-       E_aux
-         (E_cast (tar_typ,
-                  E_aux (E_app (Id_aux (Id "bitvector_cast", genunk),
-                                [E_aux (E_id var, (genunk, src_ann))]), (genunk, tar_ann))),
-          (genunk, tar_ann))
+      Typ_app (Id_aux (Id "vector",_) as t_id,
+               [Typ_arg_aux (Typ_arg_nexp size',l_size'); t_ord;
+                Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_) as t_bit]) -> begin
+       match simplify_size_nexp env quant_kids size, simplify_size_nexp env quant_kids size' with
+       | Some size, Some size' when Nexp.compare size size' <> 0 ->
+          let var = fresh () in
+          let tar_typ' = Typ_aux (Typ_app (t_id, [Typ_arg_aux (Typ_arg_nexp size',l_size');t_ord;t_bit]),
+                                  tar_l) in
+          let () = at_least_one := Some tar_typ' in
+          P_aux (P_id var,(Generated src_l,src_ann)),
+          E_aux
+            (E_cast (tar_typ',
+                     E_aux (E_app (Id_aux (Id "bitvector_cast", genunk),
+                                   [E_aux (E_id var, (genunk, src_ann))]), (genunk, tar_ann))),
+             (genunk, tar_ann))
+       | _ -> 
+          let var = fresh () in
+          P_aux (P_id var,(Generated src_l,src_ann)),
+          E_aux (E_id var,(Generated src_l,tar_ann))
+      end
     | _ ->
        let var = fresh () in
        P_aux (P_id var,(Generated src_l,src_ann)),
@@ -3816,8 +3878,8 @@ let make_bitvector_cast_fns env src_typ target_typ =
   let src_typ' = Env.base_typ_of env src_typ in
   let target_typ' = Env.base_typ_of env target_typ in
   let pat, e' = aux src_typ' target_typ' in
-  if !required
-  then
+  match !at_least_one with
+  | Some one_target_typ -> begin
     let src_ann = Some (env,src_typ,no_effect) in
     let tar_ann = Some (env,target_typ,no_effect) in
     match src_typ' with
@@ -3825,12 +3887,12 @@ let make_bitvector_cast_fns env src_typ target_typ =
     | Typ_aux (Typ_app _,_) ->
        (fun var exp ->
          let exp_ann = Some (env,typ_of exp,effect_of exp) in
-         E_aux (E_let (LB_aux (LB_val (P_aux (P_typ (target_typ, P_aux (P_id var,(genunk,tar_ann))),(genunk,tar_ann)),
+         E_aux (E_let (LB_aux (LB_val (P_aux (P_typ (one_target_typ, P_aux (P_id var,(genunk,tar_ann))),(genunk,tar_ann)),
                                        E_aux (E_app (Id_aux (Id "bitvector_cast",genunk),
                                                      [E_aux (E_id var,(genunk,src_ann))]),(genunk,tar_ann))),(genunk,tar_ann)),
                        exp),(genunk,exp_ann))),
       (fun (E_aux (_,(exp_l,exp_ann)) as exp) ->
-        E_aux (E_cast (target_typ,
+        E_aux (E_cast (one_target_typ,
                        E_aux (E_app (Id_aux (Id "bitvector_cast", genunk), [exp]), (Generated exp_l,tar_ann))),
                (Generated exp_l,tar_ann)))
     | _ ->
@@ -3841,16 +3903,17 @@ let make_bitvector_cast_fns env src_typ target_typ =
                                      exp),(genunk,exp_ann))),(genunk,exp_ann))),
       (fun (E_aux (_,(exp_l,exp_ann)) as exp) ->
         E_aux (E_let (LB_aux (LB_val (pat, exp),(Generated exp_l,exp_ann)), e'),(Generated exp_l,tar_ann)))
-  else (fun _ e -> e),(fun e -> e)
+  end
+  | None -> (fun _ e -> e),(fun e -> e)
 
 (* TODO: bound vars *)
-let make_bitvector_env_casts env (kid,i) exp =
-  let mk_cast var typ exp = (fst (make_bitvector_cast_fns env typ (subst_src_typ (KBindings.singleton kid (nconstant i)) typ))) var exp in
+let make_bitvector_env_casts env quant_kids (kid,i) exp =
+  let mk_cast var typ exp = (fst (make_bitvector_cast_fns env quant_kids typ (subst_src_typ (KBindings.singleton kid (nconstant i)) typ))) var exp in
   let locals = Env.get_locals env in
   Bindings.fold (fun var (mut,typ) exp ->
     if mut = Immutable then mk_cast var typ exp else exp) locals exp
 
-let make_bitvector_cast_exp typ target_typ exp = (snd (make_bitvector_cast_fns (env_of exp) typ target_typ)) exp
+let make_bitvector_cast_exp env quant_kids typ target_typ exp = (snd (make_bitvector_cast_fns env quant_kids typ target_typ)) exp
 
 let rec extract_value_from_guard var (E_aux (e,_)) =
   match e with
@@ -3871,14 +3934,14 @@ let fill_in_type env typ =
     | BK_type
     | BK_order -> subst
     | BK_int ->
-       match solve env (nvar kid) with
+       (match solve env (nvar kid) with
        | None -> subst
-       | Some n -> KBindings.add kid (nconstant n) subst) tyvars KBindings.empty in
+       | Some n -> KBindings.add kid (nconstant n) subst)) tyvars KBindings.empty in
   subst_src_typ subst typ
 
 (* TODO: top-level patterns *)
 let add_bitvector_casts (Defs defs) =
-  let rewrite_body ret_typ exp =
+  let rewrite_body id quant_kids top_env ret_typ exp =
     let rewrite_aux (e,ann) =
       match e with
       | E_case (E_aux (e',ann') as exp',cases) -> begin
@@ -3893,16 +3956,17 @@ let add_bitvector_casts (Defs defs) =
              let body = match pat, guard with
                | P_aux (P_lit (L_aux (L_num i,_)),_), _ ->
                   let src_typ = subst_src_typ (KBindings.singleton kid (nconstant i)) result_typ in
-                  make_bitvector_cast_exp src_typ result_typ
-                    (make_bitvector_env_casts env (kid,i) body)
+                  make_bitvector_cast_exp env quant_kids src_typ result_typ
+                    (make_bitvector_env_casts env quant_kids (kid,i) body)
                | P_aux (P_id var,_), Some guard ->
                   (match extract_value_from_guard var guard with
                   | Some i ->
                      let src_typ = subst_src_typ (KBindings.singleton kid (nconstant i)) result_typ in
-                     make_bitvector_cast_exp src_typ result_typ
-                       (make_bitvector_env_casts env (kid,i) body)
+                     make_bitvector_cast_exp env quant_kids src_typ result_typ
+                       (make_bitvector_env_casts env quant_kids (kid,i) body)
                   | None -> body)
-               | _ -> body
+               | _ ->
+                  body
              in
              construct_pexp (pat, guard, body, ann)
            in
@@ -3910,10 +3974,10 @@ let add_bitvector_casts (Defs defs) =
         | _ -> E_aux (e,ann)
       end
       | E_return e' ->
-         E_aux (E_return (make_bitvector_cast_exp (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
+         E_aux (E_return (make_bitvector_cast_exp top_env quant_kids (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
       | E_assign (LEXP_aux (lexp,lexp_annot),e') ->
          E_aux (E_assign (LEXP_aux (lexp,lexp_annot),
-                          make_bitvector_cast_exp (fill_in_type (env_of e') (typ_of e'))
+                          make_bitvector_cast_exp (env_of_annot ann) quant_kids (fill_in_type (env_of e') (typ_of e'))
                             (typ_of_annot lexp_annot) e'),ann)
       | _ -> E_aux (e,ann)
     in
@@ -3923,8 +3987,10 @@ let add_bitvector_casts (Defs defs) =
         e_aux = rewrite_aux } exp
   in
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann)) =
+    let (tq,typ) = Env.get_val_spec_orig id (env_of_annot fcl_ann) in
+    let quant_kids = List.map kopt_kid (quant_kopts tq) in
     let ret_typ =
-      match typ_of_annot fcl_ann with
+      match typ with
       | Typ_aux (Typ_fn (_,ret,_),_) -> ret
       | Typ_aux (_,l) as typ ->
          raise (Reporting_basic.err_unreachable l
@@ -3932,10 +3998,11 @@ let add_bitvector_casts (Defs defs) =
                       " is not a function type"))
     in
     let pat,guard,body,annot = destruct_pexp pexp in
-    let body = rewrite_body ret_typ body in
+    let env = env_of body in
+    let body = rewrite_body id quant_kids env ret_typ body in
     (* Also add a cast around the entire function clause body, if necessary *)
     let body =
-      make_bitvector_cast_exp (fill_in_type (env_of body) (typ_of body)) ret_typ body
+      make_bitvector_cast_exp env quant_kids (fill_in_type (env_of body) (typ_of body)) ret_typ body
     in
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)

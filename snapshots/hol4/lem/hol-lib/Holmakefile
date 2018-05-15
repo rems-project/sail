@@ -1,0 +1,14 @@
+ifdef POLY
+HOLHEAP_NAME = lemheap
+EXTRA_CLEANS = $(HOLHEAP_NAME) $(HOLHEAP_NAME).o 
+
+BARE_DEPS = lemLib lemTheory lem_pervasivesTheory lem_pervasives_extraTheory lem_stringTheory lem_wordTheory
+DEPS = $(patsubst %,%.uo,$(BARE_DEPS))
+
+.PHONY: all
+all: $(HOLHEAP_NAME) 
+
+$(HOLHEAP_NAME): $(DEPS)
+	rm -f $(HOLHEAP_NAME)
+	$(protect $(HOLDIR)/bin/buildheap) -o $@ $(BARE_DEPS)
+endif

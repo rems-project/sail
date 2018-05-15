@@ -1,0 +1,4 @@
+session "Sail-CHERI" = "Sail" +
+  options [document = false]
+  theories
+    Cheri_lemmas

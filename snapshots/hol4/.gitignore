@@ -1,0 +1,9 @@
+*.uo
+*.ui
+*.dat
+*Theory.sml
+*Theory.sig
+.HOLMK
+.hollogs
+lem/hol-lib/lemheap
+sail/lib/hol/sail-heap

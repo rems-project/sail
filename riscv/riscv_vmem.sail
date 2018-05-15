@@ -27,16 +27,16 @@ function isInvalidPTE(p : pteAttribs) -> bool = {
   a.V() == false | (a.W() == true & a.R() == false)
 }
 
-function checkPTEPermission(ac : AccessType, priv : Privilege, mxr : bool, sum : bool, p : PTE_Bits) -> bool = {
+function checkPTEPermission(ac : AccessType, priv : Privilege, mxr : bool, do_sum : bool, p : PTE_Bits) -> bool = {
   match (ac, priv) {
     (Read, User)      => p.U() == true & (p.R() == true | (p.X() == true & mxr)),
     (Write, User)     => p.U() == true & p.W() == true,
     (ReadWrite, User) => p.U() == true & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
     (Execute, User)   => p.U() == true & p.X() == true,
 
-    (Read, Supervisor)      => (p.U() == false | sum) & (p.R() == true | (p.X() == true & mxr)),
-    (Write, Supervisor)     => (p.U() == false | sum) & p.W() == true,
-    (ReadWrite, Supervisor) => (p.U() == false | sum) & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
+    (Read, Supervisor)      => (p.U() == false | do_sum) & (p.R() == true | (p.X() == true & mxr)),
+    (Write, Supervisor)     => (p.U() == false | do_sum) & p.W() == true,
+    (ReadWrite, Supervisor) => (p.U() == false | do_sum) & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
     (Execute, Supervisor)   => p.U() == false & p.X() == true,
 
     (_, Machine)      => internal_error("m-mode mem perm check")
@@ -126,7 +126,7 @@ union PTW_Result = {
 }
 
 val walk39 : (vaddr39, AccessType, Privilege, bool, bool, paddr39, nat, bool) -> PTW_Result effect {rmem, escape}
-function walk39(vaddr, ac, priv, mxr, sum, ptb, level, global) -> PTW_Result = {
+function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result = {
   let va = Mk_SV39_Vaddr(vaddr);
   let pt_ofs : paddr39 = shiftl(EXTZ(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[(SV39_LEVEL_BITS - 1) .. 0]),
                                 PTE39_LOG_SIZE);
@@ -147,10 +147,10 @@ function walk39(vaddr, ac, priv, mxr, sum, ptb, level, global) -> PTW_Result = {
             PTW_Failure(PTW_Invalid_PTE)
           } else {
             /* walk down the pointer to the next level */
-            walk39(vaddr, ac, priv, mxr, sum, EXTZ(shiftl(pte.PPNi(), PAGESIZE_BITS)), level - 1, is_global)
+            walk39(vaddr, ac, priv, mxr, do_sum, EXTZ(shiftl(pte.PPNi(), PAGESIZE_BITS)), level - 1, is_global)
           }
         } else { /* leaf PTE */
-          if ~ (checkPTEPermission(ac, priv, mxr, sum, pattr)) then {
+          if ~ (checkPTEPermission(ac, priv, mxr, do_sum, pattr)) then {
             PTW_Failure(PTW_No_Permission)
           } else {
             if level > 0 then { /* superpage */
@@ -259,12 +259,12 @@ union TR39_Result = {
 let enable_dirty_update = false
 
 val translate39 : (vaddr39, AccessType, Privilege, bool, bool, nat) -> TR39_Result effect {rreg, wreg, wmv, escape, rmem}
-function translate39(vAddr, ac, priv, mxr, sum, level) = {
+function translate39(vAddr, ac, priv, mxr, do_sum, level) = {
   let asid = curAsid64();
   match lookupTLB39(asid, vAddr) {
     Some(idx, ent) => {
       let pteBits = Mk_PTE_Bits(ent.pte.BITS());
-      if ~ (checkPTEPermission(ac, priv, mxr, sum, pteBits))
+      if ~ (checkPTEPermission(ac, priv, mxr, do_sum, pteBits))
       then TR39_Failure(PTW_No_Permission)
       else {
         match update_PTE_Bits(pteBits, ac) {
@@ -291,7 +291,7 @@ function translate39(vAddr, ac, priv, mxr, sum, level) = {
       }
     },
     None() => {
-      match walk39(vAddr, ac, priv, mxr, sum, curPTB39(), level, false) {
+      match walk39(vAddr, ac, priv, mxr, do_sum, curPTB39(), level, false) {
         PTW_Failure(f) => TR39_Failure(f),
         PTW_Success(pAddr, pte, pteAddr, level, global) => {
           match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac) {
@@ -360,11 +360,11 @@ function translateAddr(vAddr, ac, rt) = {
             else cur_privilege
   };
   let mxr : bool = mstatus.MXR() == true;
-  let sum : bool = mstatus.SUM() == true;
+  let do_sum : bool = mstatus.SUM() == true;
   let mode : SATPMode = translationMode(effPriv);
   match mode {
     Sbare => TR_Address(vAddr),
-    SV39  => match translate39(vAddr[38 .. 0], ac, effPriv, mxr, sum, SV39_LEVELS - 1) {
+    SV39  => match translate39(vAddr[38 .. 0], ac, effPriv, mxr, do_sum, SV39_LEVELS - 1) {
                TR39_Address(pa) => TR_Address(EXTZ(pa)),
                TR39_Failure(f)  => TR_Failure(translationException(ac, f))
              },

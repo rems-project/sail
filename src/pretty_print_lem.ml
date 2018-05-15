@@ -111,10 +111,7 @@ let rec fix_id remove_tick name = match name with
 let doc_id_lem (Id_aux(i,_)) =
   match i with
   | Id i -> string (fix_id false i)
-  | DeIid x ->
-     (* add an extra space through empty to avoid a closing-comment
-      * token in case of x ending with star. *)
-     parens (separate space [colon; string x; empty])
+  | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_lem_type (Id_aux(i,_)) =
   match i with
@@ -122,10 +119,7 @@ let doc_id_lem_type (Id_aux(i,_)) =
   | Id("nat") -> string "ii"
   | Id("option") -> string "maybe"
   | Id i -> string (fix_id false i)
-  | DeIid x ->
-     (* add an extra space through empty to avoid a closing-comment
-      * token in case of x ending with star. *)
-     parens (separate space [colon; string x; empty])
+  | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_lem_ctor (Id_aux(i,_)) =
   match i with
@@ -135,10 +129,11 @@ let doc_id_lem_ctor (Id_aux(i,_)) =
   | Id("Some") -> string "Just"
   | Id("None") -> string "Nothing"
   | Id i -> string (fix_id false (String.capitalize i))
-  | DeIid x ->
-     (* add an extra space through empty to avoid a closing-comment
-      * token in case of x ending with star. *)
-     separate space [colon; string (String.capitalize x); empty]
+  | DeIid x -> string (Util.zencode_string ("op " ^ x))
+
+let deinfix = function
+  | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
+  | Id_aux (DeIid v, l) -> Id_aux (DeIid v, l)
 
 let doc_var_lem kid = string (fix_id true (string_of_kid kid))
 
@@ -880,8 +875,7 @@ let doc_exp_lem, doc_let_lem =
     | E_assert (e1,e2) ->
        align (liftR (separate space [string "assert_exp"; expY e1; expY e2]))
     | E_app_infix (e1,id,e2) ->
-       raise (Reporting_basic.err_unreachable l
-         "E_app_infix should have been rewritten before pretty-printing")
+       expV aexp_needed (E_aux (E_app (deinfix id, [e1; e2]), (l, annot)))
     | E_var(lexp, eq_exp, in_exp) ->
        raise (report l "E_vars should have been removed before pretty-printing")
     | E_internal_plet (pat,e1,e2) ->

@@ -261,6 +261,9 @@ function pcc_access_system_regs () =
       let pcc = capRegToCapStruct(PCC) in
       (pcc.access_system_regs)
 
+/*!
+The following function should be called before reading or writing any capability register to check whether it is one of the protected system capabilities. Although it is usually a general purpose capabilty the invoked data capabiltiy (IDC) is restricted in the branch delay slot of the CCall (selector one) instruction to protect the confidentiality and integrity of the invoked sandbox.
+ */
 val register_inaccessible : regno -> bool effect {rreg}
 function register_inaccessible(r) =
   ((r == IDC) & inCCallDelay) |

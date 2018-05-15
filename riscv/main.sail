@@ -51,7 +51,6 @@ function main () = {
     loop ()
   } catch {
     Error_not_implemented(s) => print_string("Error: Not implemented: ", s),
-    Error_EBREAK() => print("EBREAK"),
     Error_internal_error() => print("Error: internal error")
   }*/
 }
