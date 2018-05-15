@@ -3858,16 +3858,27 @@ let rewrite_defs_realise_mappings (Defs defs) =
 
 let recheck_defs defs = fst (check initial_env defs)
 
+let remove_mapping_valspecs (Defs defs) =
+  let allowed_def def =
+    match def with
+    | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (_, Typ_aux (Typ_bidir _, _)), _), _, _, _), _)) -> false
+    | _ -> true
+  in
+  Defs (List.filter allowed_def defs)
+
+
 let rewrite_defs_lem = [
   ("realise_mappings", rewrite_defs_realise_mappings);
+  ("remove_mapping_valspecs", remove_mapping_valspecs);
+  ("pat_string_append", rewrite_defs_pat_string_append);
+  ("mapping_builtins", rewrite_defs_mapping_patterns);
+  ("pat_lits", rewrite_defs_pat_lits);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
-  ("pat_string_append", rewrite_defs_pat_string_append);
-  ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("guarded_pats", rewrite_defs_guarded_pats);
   ("bitvector_exps", rewrite_bitvector_exps);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
