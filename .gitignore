@@ -23,6 +23,7 @@ language/*.dvi
 language/*.ps
 # HOL4
 .HOLMK
+.hollogs
 *Script.sml
 *Theory.dat
 *Theory.sig
