@@ -85,7 +85,7 @@ let rec replace bs (n : integer) b' = match bs with
      if n = 0 then b' :: bs
               else b :: replace bs (n - 1) b'
   end
-declare {isabelle} termination_argument replace = automatic
+declare {isabelle; hol} termination_argument replace = automatic
 
 let upper n = n
 
@@ -128,7 +128,7 @@ let rec just_list l = match l with
       | (_, _) -> Nothing
     end
   end
-declare {isabelle} termination_argument just_list = automatic
+declare {isabelle; hol} termination_argument just_list = automatic
 
 lemma just_list_spec:
   ((forall xs. (just_list xs = Nothing) <-> List.elem Nothing xs) &&
@@ -267,7 +267,7 @@ let rec nat_of_bools_aux acc bs = match bs with
   | true :: bs -> nat_of_bools_aux ((2 * acc) + 1) bs
   | false :: bs -> nat_of_bools_aux (2 * acc) bs
 end
-declare {isabelle} termination_argument nat_of_bools_aux = automatic
+declare {isabelle; hol} termination_argument nat_of_bools_aux = automatic
 let nat_of_bools bs = nat_of_bools_aux 0 bs
 
 val unsigned_of_bools : list bool -> integer
@@ -306,7 +306,7 @@ let rec add_one_bool_ignore_overflow_aux bits = match bits with
   | false :: bits -> true :: bits
   | true :: bits -> false :: add_one_bool_ignore_overflow_aux bits
 end
-declare {isabelle} termination_argument add_one_bool_ignore_overflow_aux = automatic
+declare {isabelle; hol} termination_argument add_one_bool_ignore_overflow_aux = automatic
 
 let add_one_bool_ignore_overflow bits =
   List.reverse (add_one_bool_ignore_overflow_aux (List.reverse bits))
@@ -369,7 +369,7 @@ let rec add_one_bit_ignore_overflow_aux bits = match bits with
   | B1 :: bits -> B0 :: add_one_bit_ignore_overflow_aux bits
   | BU :: bits -> BU :: List.map (fun _ -> BU) bits
 end
-declare {isabelle} termination_argument add_one_bit_ignore_overflow_aux = automatic
+declare {isabelle; hol} termination_argument add_one_bit_ignore_overflow_aux = automatic
 
 let add_one_bit_ignore_overflow bits =
   List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
@@ -417,7 +417,7 @@ let rec hexstring_of_bits bs = match bs with
   | [] -> Just []
   | _ -> Nothing
   end
-declare {isabelle} termination_argument hexstring_of_bits = automatic
+declare {isabelle; hol} termination_argument hexstring_of_bits = automatic
 
 let show_bitlist bs =
   match hexstring_of_bits bs with
@@ -630,7 +630,7 @@ let rec byte_chunks bs = match bs with
      Maybe.bind (byte_chunks rest) (fun rest -> Just ([a;b;c;d;e;f;g;h] :: rest))
   | _ -> Nothing
 end
-declare {isabelle} termination_argument byte_chunks = automatic
+declare {isabelle; hol} termination_argument byte_chunks = automatic
 
 val bytes_of_bits : forall 'a. Bitvector 'a => 'a -> maybe (list memory_byte)
 let bytes_of_bits bs = byte_chunks (bits_of bs)
@@ -854,7 +854,7 @@ let rec foreach l vars body =
     | (x :: xs) -> foreach xs (body x vars) body
   end
 
-declare {isabelle} termination_argument foreach = automatic
+declare {isabelle; hol} termination_argument foreach = automatic
 
 val index_list : integer -> integer -> integer -> list integer
 let rec index_list from to step =
