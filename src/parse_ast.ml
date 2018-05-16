@@ -344,6 +344,14 @@ tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of typquant * atyp
 
+type
+typschm_opt_aux =
+  TypSchm_opt_none
+| TypSchm_opt_some of typschm
+
+type
+typschm_opt =
+  TypSchm_opt_aux of typschm_opt_aux * l
 
 type 
 effect_opt_aux =  (* Optional effect annotation for functions *)
@@ -456,7 +464,7 @@ type mapcl =
  | MCL_aux of ( mapcl_aux) * l
 
 type mapdef_aux =  (* mapping definition (bidirectional pattern-match function) *)
- | MD_mapping of id * ( mapcl) list
+ | MD_mapping of id * typschm_opt * ( mapcl) list
 
 type mapdef =
  | MD_aux of ( mapdef_aux) * l
@@ -498,7 +506,7 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
  | SD_scattered_funcl of funcl (* scattered function definition clause *)
  | SD_scattered_variant of id * name_scm_opt * typquant (* scattered union definition header *)
  | SD_scattered_unioncl of id * type_union (* scattered union definition member *)
- | SD_scattered_mapping of id
+ | SD_scattered_mapping of id * tannot_opt
  | SD_scattered_mapcl of id * mapcl
  | SD_scattered_end of id (* scattered definition end *)
 

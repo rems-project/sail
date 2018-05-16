@@ -93,6 +93,16 @@ let mk_exp e n m = E_aux (e, loc n m)
 let mk_lit l n m = L_aux (l, loc n m)
 let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
+
+let mk_typschm_opt ts n m = TypSchm_opt_aux (
+                                  TypSchm_opt_some (
+                                      ts
+                                    ),
+                                  loc n m
+                                )
+
+let mk_typschm_opt_none = TypSchm_opt_aux (TypSchm_opt_none, Unknown)
+
 let mk_nc nc n m = NC_aux (nc, loc n m)
 let mk_sd s n m = SD_aux (s, loc n m)
 let mk_sd_doc s str n m = SD_aux (s, Documented (str, loc n m))
@@ -108,7 +118,7 @@ let mk_default d n m = DT_aux (d, loc n m)
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
 let mk_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_mapcl (mpexp1, mpexp2), loc n m)
-let mk_map id mapcls n m = MD_aux (MD_mapping (id, mapcls), loc n m)
+let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n m)
 
 let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
 
@@ -1280,9 +1290,9 @@ mapcl_list:
 
 map_def:
   | Mapping id Eq Lcurly mapcl_list Rcurly
-    { mk_map $2 $5 $startpos $endpos }
-  (* | Mapping id Colon typschm Eq Lcurly mapcl_list Rcurly
-   *   { mk_map $2 $4 $7 $startpos $endpos } *)
+    { mk_map $2 mk_typschm_opt_none $5 $startpos $endpos }
+  | Mapping id Colon typschm Eq Lcurly mapcl_list Rcurly
+    { mk_map $2 (mk_typschm_opt $4 $startpos($4) $endpos($4)) $7 $startpos $endpos }
 
 let_def:
   | Let_ letbind
@@ -1334,7 +1344,9 @@ scattered_def:
   | Function_ id
     { mk_sd (SD_scattered_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
   | Mapping id
-    { mk_sd (SD_scattered_mapping $2) $startpos $endpos }  
+    { mk_sd (SD_scattered_mapping ($2, mk_tannotn)) $startpos $endpos }
+  | Mapping id Colon funcl_typ
+    { mk_sd (SD_scattered_mapping ($2, $4)) $startpos $endpos }
 
 scattered_clause:
   | Doc Function_ Clause funcl

@@ -1017,7 +1017,7 @@ mapcl :: 'MCL_' ::=
 mapdef :: 'MD_' ::=
   {{ com mapping definition (bidirectional pattern-match function) }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | mapping id = { mapcl1 , ... , mapcln } :: :: mapping {{ texlong }}
+  | mapping id tannot_opt = { mapcl1 , ... , mapcln } :: :: mapping {{ texlong }}
 
 letbind :: 'LB_' ::=
   {{ com let binding }}

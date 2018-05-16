@@ -476,7 +476,7 @@ let doc_mapcl (MCL_aux (MCL_mapcl (mpexp1, mpexp2), _)) =
   let right = doc_mpexp mpexp2 in
   left ^^ space ^^ string "<->" ^^ space ^^ right
 
-let doc_mapdef (MD_aux (MD_mapping (id, mapcls), _)) =
+let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
   match mapcls with
   | [] -> failwith "Empty mapping"
   | _ ->

@@ -3758,7 +3758,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
       | MPat_aux (MPat_when (mpat2, _), _)->
        realise_mpexps true (append_placeholder mpexp) (mk_mpexp (MPat_pat (mk_mpat (MP_app ((mk_id "Some"), [ mk_mpat (MP_tup [mpat2; strlen]) ])))))
   in
-  let realise_mapdef (MD_aux (MD_mapping (id, mapcls), ((l, (tannot:tannot)) as annot))) =
+  let realise_mapdef (MD_aux (MD_mapping (id, _, mapcls), ((l, (tannot:tannot)) as annot))) =
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
     let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
     let backwards_id = mk_id (string_of_id id ^ "_backwards") in

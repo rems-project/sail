@@ -674,6 +674,7 @@ end = struct
     match typ_aux with
     | Typ_id _ | Typ_var _ -> typ
     | Typ_fn (arg_typ, ret_typ, effect) -> Typ_aux (Typ_fn (map_nexps f arg_typ, map_nexps f ret_typ, effect), l)
+    | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (map_nexps f typ1, map_nexps f typ2), l)
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (map_nexps f) typs), l)
     | Typ_exist (kids, nc, typ) -> Typ_aux (Typ_exist (kids, nc, map_nexps f typ), l)
     | Typ_app (id, args) -> Typ_aux (Typ_app (id, List.map (map_nexps_arg f) args), l)
@@ -1507,6 +1508,13 @@ let typ_identical env typ1 typ2 =
     match typ1, typ2 with
     | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
     | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
+    | Typ_fn (arg_typ1, ret_typ1, eff1), Typ_fn (arg_typ2, ret_typ2, eff2) ->
+       typ_identical' arg_typ1 arg_typ2
+       && typ_identical' ret_typ1 ret_typ2
+       && strip_effect eff1 = strip_effect eff2
+    | Typ_bidir (typ1, typ2), Typ_bidir (typ3, typ4) ->
+       typ_identical' typ1 typ3
+       && typ_identical' typ2 typ4
     | Typ_tup typs1, Typ_tup typs2 ->
        begin
          try List.for_all2 typ_identical' typs1 typs2 with
@@ -4231,21 +4239,42 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   else typ_error l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")
 
 
-let check_mapdef env (MD_aux (MD_mapping (id, mapcls), (l, _)) as md_aux) =
+let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md_aux) =
   typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
-  let quant, typ = Env.get_val_spec id env in
+  let have_val_spec, (quant, typ), env =
+    try true, Env.get_val_spec id env, env with
+    | Type_error (l, _) as err ->
+       match tannot_opt with
+       | Typ_annot_opt_aux (Typ_annot_opt_some (quant, typ), _) ->
+          false, (quant, typ), env
+       | Typ_annot_opt_aux (Typ_annot_opt_none, _) ->
+          raise err
+  in
   let vtyp1, vtyp2, vl = match typ with
     | Typ_aux (Typ_bidir (vtyp1, vtyp2), vl) -> vtyp1, vtyp2, vl
     | _ -> typ_error l "Mapping val spec was not a mapping type"
   in
+  begin match tannot_opt with
+  | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
+  | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_typ), l) ->
+     if typ_identical env typ annot_typ then ()
+     else typ_error l (string_of_bind (quant, typ) ^ " and " ^ string_of_bind (annot_typq, annot_typ) ^ " do not match between mapping and val spec")
+  end;
   typ_debug (lazy ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
+  let vs_def, env =
+    if not have_val_spec then
+      [mk_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env
+    else
+      [], env
+  in
   let mapcl_env = add_typquant quant env in
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
+  let env = Env.define_val_spec id env in
   if equal_effects eff no_effect then
-    [DEF_mapdef (MD_aux (MD_mapping (id, mapcls), (l, None)))], env
+    vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, None)))], env
   else
-    typ_error l ("Mapping not pure:" ^ string_of_effect eff ^ " found")
+    typ_error l ("Mapping not pure: " ^ string_of_effect eff ^ " found")
 
 
 (* Checking a val spec simply adds the type as a binding in the

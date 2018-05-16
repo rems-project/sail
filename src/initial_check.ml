@@ -754,6 +754,15 @@ let to_ast_tannot_opt (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.Typ_annot
     let typq,k_env,k_local = to_ast_typquant k_env tq in
     Typ_annot_opt_aux(Typ_annot_opt_some(typq,to_ast_typ k_env def_ord typ),l),k_env,k_local
 
+let to_ast_typschm_opt (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.TypSchm_opt_aux(aux,l)) : tannot_opt * kind Envmap.t * kind Envmap.t =
+  match aux with
+  | Parse_ast.TypSchm_opt_none ->
+     Typ_annot_opt_aux (Typ_annot_opt_none, l), k_env, Envmap.empty
+  | Parse_ast.TypSchm_opt_some (Parse_ast.TypSchm_aux (Parse_ast.TypSchm_ts (tq, typ), l)) ->
+     let typq, k_env, k_local = to_ast_typquant k_env tq in
+     Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ k_env def_ord typ), l), k_env, k_local
+
+
 let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) : effect_opt =
   match e with
   | Parse_ast.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,l)
@@ -807,8 +816,9 @@ let to_ast_mapcl (names,k_env,def_ord) (Parse_ast.MCL_aux(mapcl, l)) =
 
 let to_ast_mapdef (names,k_env,def_ord) (Parse_ast.MD_aux(md,l):Parse_ast.mapdef) : (unit mapdef) envs_out =
   match md with
-  | Parse_ast.MD_mapping(id, mapcls) ->
-     MD_aux(MD_mapping(to_ast_id id, List.map (to_ast_mapcl (names,k_env,def_ord)) mapcls), (l,())), (names,k_env,def_ord)
+  | Parse_ast.MD_mapping(id, typschm_opt, mapcls) ->
+     let tannot_opt, k_env, _ = to_ast_typschm_opt k_env def_ord typschm_opt in
+     MD_aux(MD_mapping(to_ast_id id, tannot_opt, List.map (to_ast_mapcl (names,k_env,def_ord)) mapcls), (l,())), (names,k_env,def_ord)
 
 type def_progress =
     No_def
@@ -904,11 +914,11 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
           | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,unit,effects_opt,[]),(l,())))),false) in
                     (No_def,envs),((id,(partial_def,k_local))::partial_defs)
           | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
-      | Parse_ast.SD_scattered_mapping id ->
+      | Parse_ast.SD_scattered_mapping (id, tannot_opt) ->
          let id = to_ast_id id in
-         let _,_,k_local = to_ast_tannot_opt k_env def_ord (Parse_ast.Typ_annot_opt_aux (Parse_ast.Typ_annot_opt_none, Parse_ast.Unknown)) in
+         let unit, k_env ,k_local = to_ast_tannot_opt k_env def_ord tannot_opt in
          (match (def_in_progress id partial_defs) with
-          | None -> let partial_def = ref ((DEF_mapdef(MD_aux(MD_mapping(id, []), (l, ())))), false) in
+          | None -> let partial_def = ref ((DEF_mapdef(MD_aux(MD_mapping(id, unit, []), (l, ())))), false) in
                     (No_def,envs),((id,(partial_def,k_local))::partial_defs)
           | Some(d,k) -> typ_error l "Scattered mapping definition header name already in use by scattered definition" (Some id) None None)
 
@@ -918,9 +928,9 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
           | None -> typ_error l "Scattered mapping definition clause does not match any existing mapping definition headers" (Some id) None None
           | Some (d, k) ->
              (match !d with
-              | DEF_mapdef(MD_aux(MD_mapping(_,mcls),ml)),false ->
+              | DEF_mapdef(MD_aux(MD_mapping(_,tannot_opt, mcls),ml)),false ->
                  let (MCL_aux (mapcl_aux, _)) = to_ast_mapcl (names,k_env,def_ord) mapcl in
-                 d := DEF_mapdef(MD_aux(MD_mapping(id, mcls @ [MCL_aux (mapcl_aux, (l, ()))]), ml)), false;
+                 d := DEF_mapdef(MD_aux(MD_mapping(id, tannot_opt, mcls @ [MCL_aux (mapcl_aux, (l, ()))]), ml)), false;
                  (No_def,envs),partial_defs
               | _, true -> typ_error l "Scattered mapping definition clause extends ended definition" (Some id) None None
               | _ -> typ_error l "Scattered mapping definition doesn't match existing definition header" (Some id) None None))
