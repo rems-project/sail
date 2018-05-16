@@ -725,7 +725,7 @@ end = struct
          let typ_aux = match typ_aux with
            | Typ_tup _ | Typ_app _ -> Typ_exist (existentials, List.fold_left nc_and (List.hd constrs) (List.tl constrs), typ)
            | Typ_exist (kids, nc, typ) -> Typ_exist (kids @ existentials, List.fold_left nc_and nc constrs, typ)
-           | Typ_fn _ | Typ_id _ | Typ_var _ -> assert false (* These must be simple *)
+           | Typ_fn _ | Typ_bidir _ | Typ_id _ | Typ_var _ -> assert false (* These must be simple *)
          in
          Typ_aux (typ_aux, l)
 
@@ -3668,6 +3668,8 @@ and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as 
                with
                | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against mapping constructor: " ^ m)
           end
+       | Typ_aux (typ, _) ->
+          typ_error l ("unifying mapping type, expanded synonyms to non-mapping type??")
      end
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env)->
      typ_error l (string_of_id f ^ " is not a union constructor or mapping in mapping-pattern " ^ string_of_mpat mpat)
