@@ -64,7 +64,7 @@ register Xs : vector(32, dec, xlen_t)
 
 We also give a function \ll{MEMr} for reading memory, this function
 just points at a builtin we have defined elsewhere. Note that
-functions in sail are annotated with effects. This effect system is
+functions in Sail are annotated with effects. This effect system is
 quite basic, but indicates whether or not functions read or write
 registers (rreg and wreg), read and write memory (rmem and wmem), as
 well as a host of other concurrency model related effects. They also
@@ -74,13 +74,13 @@ control flow (the escape effect).
 \sailMEMr
 \sailfnMEMr
 
-It's common when defining architecture specications to break
+It's common when defining architecture specifications to break
 instruction semantics down into separate functions that handle
 decoding (possibly even in several stages) into custom intermediate
 datatypes and executing the decoded instructions. However it's often
 desirable to group the relevant parts of these functions and datatypes
 together in one place, as they would usually be found in an
-architecture reference manual. To support this sail supports
+architecture reference manual. To support this Sail supports
 \emph{scattered} definitions. First we give types for the execute and
 decode functions, and declare them as scattered functions, as well as
 the \ll{ast} union.
@@ -97,13 +97,14 @@ val execute : ast -> unit effect {rmem, rreg, wreg}
 scattered function execute
 \end{lstlisting}
 
-Now we provide the clauses for the add immediate \ll{ast} type, as
-well as it's execute and decode clauses. We can define the decode
+Now we provide the clauses for the add-immediate \ll{ast} type, as
+well as its execute and decode clauses. We can define the decode
 function by directly pattern matching on the bitvector representing
-the instruction. Sail supports vector concatentation patterns (\ll{@}
+the instruction. Sail supports vector concatenation patterns (\ll{@}
 is the vector concatenation operator), and uses the types provided
 (e.g. \ll{bits(12)} and \ll{regbits}) to destructure the vector in the
-correct way.
+correct way. We use the \ll{EXTS} library function that sign-extends
+its argument.
 
 \begin{lstlisting}
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
@@ -112,7 +113,7 @@ union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 \sailfndecodeSomeITYPE
 \sailfnexecuteITYPE
 
-\noindent Now we do the same thing for the load duble instruction:
+\noindent Now we do the same thing for the load-double instruction:
 
 \begin{lstlisting}
 union clause ast = LOAD : (bits(12), regbits, regbits)
@@ -123,7 +124,7 @@ union clause ast = LOAD : (bits(12), regbits, regbits)
 
 Finally we define the fallthrough case for the decode function, and
 end all our scattered definitions. Note that the clauses in a
-scattered function will be executed in the order they appear in the
+scattered function will be matched in the order they appear in the
 file.
 
 \sailfndecodeNone
