@@ -24,7 +24,6 @@ language/*.ps
 # HOL4
 .HOLMK
 .hollogs
-*Script.sml
 *Theory.dat
 *Theory.sig
 *Theory.sml
