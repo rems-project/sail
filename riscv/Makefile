@@ -43,6 +43,9 @@ riscvScript.sml : riscv.lem riscv_extras.lem
 		riscv_types.lem \
 		riscv.lem
 
+riscvTheory.uo riscvTheory.ui: riscvScript.sml
+	Holmake riscvTheory.uo
+
 # we exclude prelude.sail here, most code there should move to sail lib
 LOC_FILES:=$(SAIL_SRCS) main.sail
 include ../etc/loc.mk
@@ -53,3 +56,5 @@ clean:
 	-rm -f Riscv.thy Riscv_types.thy \
 		Riscv_extras.thy
 	-rm -f Riscv_duopod.thy Riscv_duopod_types.thy riscv_duopod.lem riscv_duopod_types.lem
+	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
+	-Holmake cleanAll
