@@ -523,13 +523,13 @@ let real_of_string str =
 let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt (Num.float_of_num x))) *)
 
 let print_int (str, x) =
-  print_endline (str ^ Big_int.to_string x)
+  prerr_endline (str ^ Big_int.to_string x)
 
 let print_bits (str, xs) =
-  print_endline (str ^ string_of_bits xs)
+  prerr_endline (str ^ string_of_bits xs)
 
 let print_string(str, msg) =
-  print_endline (str ^ msg)
+  prerr_endline (str ^ msg)
 
 let reg_deref r = !r
 

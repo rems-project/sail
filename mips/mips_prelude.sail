@@ -614,22 +614,20 @@ function rec forall Nat 'W, 'W >= 1. bits(8 * 'W) reverse_endianness ((bits(8 * 
     reverse_endianness'(sizeof 'W, value)
 }*/
 
-val MEMr_wrapper : forall 'n, 1 <= 'n <=8 . (bits(64), atom('n)) -> bits(8*'n) effect {rmem}
-function MEMr_wrapper (addr, size) = reverse_endianness(MEMr (addr, size))
-/* TODO
+val MEMr_wrapper : forall 'n, 1 <= 'n <=8 . (bits(64), atom('n)) -> bits(8*'n) effect {rmem, rreg, wreg}
+function MEMr_wrapper (addr, size) = 
     if (addr == 0x000000007f000000) then
       {
         let rvalid = UART_RVALID in
-	let rdata = (bits(8 * 'n)) (mask(0x00000000 : UART_RDATA : rvalid : 0b0000000 : 0x0000)) in
         {
           UART_RVALID = [bitzero];
-          rdata
+          mask(0x00000000 @ UART_RDATA @ rvalid @ 0b0000000 @ 0x0000)
         }
       }
     else if (addr == 0x000000007f000004) then
       mask(0x000000000004ffff) /* Always plenty of write space available and jtag activity */
     else
-      reverse_endianness(MEMr(addr, size)) /* MEMr assumes little endian */ */
+      reverse_endianness(MEMr(addr, size)) /* MEMr assumes little endian */
 
 val MEMr_reserve_wrapper : forall 'n, 1 <= 'n <= 8 . ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
 function MEMr_reserve_wrapper (addr , size) =

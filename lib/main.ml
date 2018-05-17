@@ -52,8 +52,19 @@
 open Elf_loader;;
 
 let opt_file_arguments = ref ([] : string list)
-
-let options = Arg.align []
+let opt_raw_fname = ref ""
+let opt_raw_addr = ref Nat_big_num.zero
+let options = Arg.align [
+    ( "-raw",
+      Arg.String (fun s ->
+      let l = String.split_on_char '@' s in
+      match l with
+      | [fname;addr] -> begin
+          opt_raw_fname := fname;
+          opt_raw_addr := Nat_big_num.of_string addr;
+        end
+      | _ -> raise (Arg.Bad (s ^ " not of form <filename>@:<addr>"))),
+    "<file@0xADDR> load a raw binary in memory at given address.")]
 
 let usage_msg = "Sail OCaml RTS options:"
 
@@ -67,4 +78,15 @@ let () =
     | f :: _ -> load_elf f
     | _ -> ()
   end;
+  if !opt_raw_fname != "" then
+    begin
+      let ic = open_in_bin !opt_raw_fname in
+      try
+        while true do
+          let b = input_byte ic in
+          Sail_lib.wram !opt_raw_addr b;
+          opt_raw_addr := Nat_big_num.succ !opt_raw_addr;
+        done
+      with End_of_file -> ();
+    end;
   (* ocaml_backend.ml will append from here *)

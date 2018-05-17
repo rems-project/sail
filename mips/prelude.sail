@@ -27,6 +27,7 @@ val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 overload operator == = {eq_bit}
 
 $include <flow.sail>
+$include <arith.sail>
 
 overload operator == = {eq_vec, eq_string, eq_anything}
 
@@ -135,8 +136,6 @@ val add_atom = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm.
 val add_range = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val add_int = {ocaml: "add_int", lem: "integerAdd"} : (int, int) -> int
-
 val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val add_vec_int = "add_vec_int" : forall 'n. (bits('n), int) -> bits('n)
@@ -149,15 +148,11 @@ val sub_atom = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int"} : forall 'n
 val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
-val sub_int = {ocaml: "sub_int", lem: "integerMinus"} : (int, int) -> int
-
 val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 val negate_range = {ocaml: "minus_big_int", lem: "integerNegate"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
-
-val negate_int = {ocaml: "minus_big_int", lem: "integerNegate"} : int -> int
 
 overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int}
 
@@ -165,8 +160,6 @@ overload negate = {negate_range, negate_int}
 
 val mult_range = {ocaml: "mult", lem: "integerMult"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
-
-val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
 
 overload operator * = {mult_range, mult_int}
 
@@ -219,7 +212,6 @@ function operator ^^ (bs, n) = replicate_bits (bs, n)
 
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
-val print_int = "print_int" : (string, int) -> unit
 val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 val print_string = "print_string" : (string, string) -> unit
 

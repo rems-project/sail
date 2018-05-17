@@ -30,6 +30,10 @@ function fetch_and_execute () = {
        just continue from nextPC, which should have been set to the appropriate
        exception vector (along with clearing branchPending etc.) . */
   };
+  if UART_WRITTEN then {
+    putchar(unsigned(UART_WDATA));
+    UART_WRITTEN = 0b0;
+  }
 }
 
 val elf_entry = {
