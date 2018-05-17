@@ -37,11 +37,11 @@ riscv.lem: $(SAIL_SRCS) Makefile
 riscv_sequential.lem: $(SAIL_SRCS) Makefile
 	$(SAIL_DIR)/sail -lem -lem_sequential -o riscv_sequential -lem_mwords -lem_lib Riscv_extras_sequential $(SAIL_SRCS)
 
-riscv_sequentialScript.sml : riscv_sequential.lem riscv_extras_sequential.lem
+riscvScript.sml : riscv.lem riscv_extras.lem
 	lem -hol -outdir . -lib ../lib/hol -lib ../src/lem_interp -lib ../src/gen_lib \
-		riscv_extras_sequential.lem \
-		riscv_sequential_types.lem \
-		riscv_sequential.lem
+		riscv_extras.lem \
+		riscv_types.lem \
+		riscv.lem
 
 # we exclude prelude.sail here, most code there should move to sail lib
 LOC_FILES:=$(SAIL_SRCS) main.sail

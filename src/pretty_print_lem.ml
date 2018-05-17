@@ -1455,8 +1455,8 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
           ]
         else
           concat [
-            string ("type MR 'a 'r = monadR register_value 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = monad register_value 'a " ^ exc_typ); hardline
+            string ("type MR 'a 'r = base_monadR register_value regstate 'a 'r " ^ exc_typ); hardline;
+            string ("type M 'a = base_monad register_value regstate 'a " ^ exc_typ); hardline
           ]
         ]);
   (print defs_file)
