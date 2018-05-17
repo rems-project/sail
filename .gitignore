@@ -21,3 +21,12 @@ language/*.aux
 language/*.log
 language/*.dvi
 language/*.ps
+# HOL4
+.HOLMK
+.hollogs
+*Theory.dat
+*Theory.sig
+*Theory.sml
+*Theory.ui
+*Theory.uo
+lib/hol/sail-heap

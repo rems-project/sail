@@ -1,5 +1,5 @@
 theory State_lemmas
-  imports State
+  imports State State_lifting
 begin
 
 lemma All_liftState_dom: "liftState_dom (r, m)"
@@ -44,12 +44,12 @@ lemma liftState_catch_early_return[simp]:
   by (auto simp: catch_early_return_def catch_early_returnS_def sum.case_distrib cong: sum.case_cong)
 
 lemma liftState_liftR[simp]:
-  "liftState r (liftR m) = liftSR (liftState r m)"
-  by (auto simp: liftR_def liftSR_def)
+  "liftState r (liftR m) = liftRS (liftState r m)"
+  by (auto simp: liftR_def liftRS_def)
 
 lemma liftState_try_catchR[simp]:
-  "liftState r (try_catchR m h) = try_catchSR (liftState r m) (liftState r \<circ> h)"
-  by (auto simp: try_catchR_def try_catchSR_def sum.case_distrib cong: sum.case_cong)
+  "liftState r (try_catchR m h) = try_catchRS (liftState r m) (liftState r \<circ> h)"
+  by (auto simp: try_catchR_def try_catchRS_def sum.case_distrib cong: sum.case_cong)
 
 lemma liftState_read_mem_BC:
   assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"

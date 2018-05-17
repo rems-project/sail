@@ -17,6 +17,7 @@ CHERI128_PRE:=$(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude
 CHERI_INSTS:=$(CHERI_SAIL_DIR)/cheri_insts.sail
 
 CHERI_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_PRE) $(MIPS_TLB) $(CHERI_PRE) $(MIPS_INSTS) $(CHERI_INSTS) $(MIPS_EPILOGUE)
+CHERI_MONO_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_PRE) $(SAIL_LIB_DIR)/mono_rewrites.sail $(MIPS_TLB) $(CHERI_PRE) $(MIPS_INSTS) $(CHERI_INSTS) $(MIPS_EPILOGUE)
 CHERI_NO_TLB_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_PRE) $(MIPS_TLB_STUB) $(CHERI_PRE) $(MIPS_INSTS) $(CHERI_INSTS) $(MIPS_EPILOGUE)
 CHERI128_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_PRE) $(MIPS_TLB) $(CHERI128_PRE) $(MIPS_INSTS) $(CHERI_INSTS) $(MIPS_EPILOGUE)
 CHERI128_NO_TLB_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_PRE) $(MIPS_TLB_STUB) $(CHERI128_PRE) $(MIPS_INSTS) $(CHERI_INSTS) $(MIPS_EPILOGUE)
@@ -59,8 +60,8 @@ cheri_no_tlb.lem: $(CHERI_NO_TLB_SAILS)
 	$(SAIL) -lem -o cheri_no_tlb -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 cheri_no_tlb_types.lem: cheri_no_tlb.lem
 
-cheri.lem: $(CHERI_SAILS) $(CHERI_MAIN)
-	$(SAIL) -lem -o cheri -lem_lib Mips_extras -undefined_gen -memo_z3 $^
+cheri.lem: $(CHERI_MONO_SAILS) $(CHERI_MAIN)
+	$(SAIL) -lem -o cheri -auto_mono -mono_rewrites -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 cheri_types.lem: cheri.lem
 
 cheri128_no_tlb.lem: $(CHERI128_NO_TLB_SAILS)
@@ -75,5 +76,13 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' C$*_types.thy
 
+%Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
+	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+
+%Theory.uo: %Script.sml
+	Holmake $@
+
 clean:
 	rm -rf cheri cheri_trace cheri128 cheri128_trace _sbuild inst_*.sail cheri.c sail_latex sail_latexcc
+	rm -f cheriScript.sml cheri_typesScript.sml mips_extrasScript.sml
+	-Holmake cleanAll

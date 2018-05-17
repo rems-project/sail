@@ -34,6 +34,18 @@ Riscv.thy: riscv.lem riscv_extras.lem
 riscv.lem: $(SAIL_SRCS) Makefile
 	$(SAIL_DIR)/sail -lem -o riscv -lem_mwords -lem_lib Riscv_extras $(SAIL_SRCS)
 
+riscv_sequential.lem: $(SAIL_SRCS) Makefile
+	$(SAIL_DIR)/sail -lem -lem_sequential -o riscv_sequential -lem_mwords -lem_lib Riscv_extras_sequential $(SAIL_SRCS)
+
+riscvScript.sml : riscv.lem riscv_extras.lem
+	lem -hol -outdir . -lib ../lib/hol -lib ../src/lem_interp -lib ../src/gen_lib \
+		riscv_extras.lem \
+		riscv_types.lem \
+		riscv.lem
+
+riscvTheory.uo riscvTheory.ui: riscvScript.sml
+	Holmake riscvTheory.uo
+
 # we exclude prelude.sail here, most code there should move to sail lib
 LOC_FILES:=$(SAIL_SRCS) main.sail
 include ../etc/loc.mk
@@ -44,3 +56,5 @@ clean:
 	-rm -f Riscv.thy Riscv_types.thy \
 		Riscv_extras.thy
 	-rm -f Riscv_duopod.thy Riscv_duopod_types.thy riscv_duopod.lem riscv_duopod_types.lem
+	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
+	-Holmake cleanAll

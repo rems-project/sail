@@ -1,7 +1,10 @@
+$include <smt.sail>
+
 default Order dec
 
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
+
 
 val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anything", c: "eq_bit"} : (bit, bit) -> bool
 
@@ -126,6 +129,9 @@ val int_power = {ocaml: "int_power", lem: "pow"} : (int, int) -> int
 
 overload operator ^ = {xor_vec, int_power}
 
+val add_atom = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n + 'm)
+
 val add_range = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
@@ -136,6 +142,9 @@ val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 val add_vec_int = "add_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 overload operator + = {add_range, add_int, add_vec, add_vec_int}
+
+val sub_atom = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n - 'm)
 
 val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)

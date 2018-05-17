@@ -212,3 +212,10 @@ let barrier bk = Barrier bk (Done ())
 
 val footprint : forall 'rv 'e. unit -> monad 'rv unit 'e
 let footprint _ = Footprint (Done ())
+
+(* Define a type synonym that also takes the register state as a type parameter,
+   in order to make switching to the state monad without changing generated
+   definitions easier, see also lib/hol/prompt_monad.lem. *)
+
+type base_monad 'regval 'regstate 'a 'e = monad 'regval 'a 'e
+type base_monadR 'regval 'regstate 'a 'r 'e = monadR 'regval 'a 'r 'e
