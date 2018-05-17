@@ -9,6 +9,13 @@ function fetch_and_execute () = {
   nextPC = if inBranchDelay then delayedPC else PC + 4;
   cp2_next_pc();
   instCount = instCount + 1;
+  if UART_WRITTEN then {
+    putchar(unsigned(UART_WDATA));
+    UART_WRITTEN = 0b0;
+  };
+  /* the following skips are required on mips to fake the tag effects otherwise type checker complains  */
+  skip_rmemt();
+  skip_wmvt();
   print_bits("PC: ", PC);
   try {
     let pc_pa = TranslatePC(PC);
@@ -30,10 +37,6 @@ function fetch_and_execute () = {
        just continue from nextPC, which should have been set to the appropriate
        exception vector (along with clearing branchPending etc.) . */
   };
-  if UART_WRITTEN then {
-    putchar(unsigned(UART_WDATA));
-    UART_WRITTEN = 0b0;
-  }
 }
 
 val elf_entry = {
