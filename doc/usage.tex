@@ -8,19 +8,20 @@ them and provides translated output.
 To simply typecheck Sail files, one can pass them on the command line
 with no other options, so for our \riscv\ spec:
 \begin{verbatim}
-sail prelude.sail riscv_types.sail riscv_sys.sail riscv.sail
+sail prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv_vmem.sail riscv.sail
 \end{verbatim}
 The sail files passed on the command line are simply treated as if
-they are one large file concatentated together, although the parser
+they are one large file concatenated together, although the parser
 will keep track of locations on a per-file basis for
 error-reporting. As can be seen, this specification is split into
 several logical components. \verb+prelude.sail+ defines the initial
 type environment and builtins, \verb+riscv_types.sail+ gives type
-definitions used in the rest of the specification and then
-\verb+riscv_sys.sail+ and \verb+riscv.sail+ implement most of the
-specification.
+definitions used in the rest of the specification, \verb+riscv_mem.sail+
+and \verb+riscv_vmem.sail+ describe the physical and virtual memory
+interaction, and then \verb+riscv_sys.sail+ and \verb+riscv.sail+
+implement most of the specification.
 
-For more complex projects, once can use \ll{$include} statments in
+For more complex projects, once can use \ll{$include} statements in
 Sail source, for example:
 \begin{lstlisting}
 $include <library.sail>
@@ -31,7 +32,7 @@ Here, Sail will look for \verb+library.sail+ in the
 \verb+$SAIL_DIR/lib+, where \verb+$SAIL_DIR+ is usually the root of
 the sail repository. It will search for \verb+file.sail+ relative to
 the location of the file containing the \ll{$include}. The space after
-the include is mandatory. Sail also supports \ll{$define},
+the \ll{$include} is mandatory. Sail also supports \ll{$define},
 \ll{$ifdef}, and \ll{$ifndef}. These are things that are understood by
 Sail itself, not a separate preprocessor, and are handled after the
 AST is parsed~\footnote{This can affect precedence declarations for custom user defined operators---the precedence must be redeclared in the file you are including the operator into.}.
@@ -43,7 +44,7 @@ To compile a Sail specification into OCaml, one calls Sail as
 sail -ocaml FILES
 \end{verbatim}
 This will produce a version of the specification translated into
-Ocaml, which is placed into a directory called \verb+_sbuild+, similar
+OCaml, which is placed into a directory called \verb+_sbuild+, similar
 to ocamlbuild's \verb+_build+ directory. The generated OCaml is
 intended to be fairly close to the original Sail source, and currently
 we do not attempt to do much optimisation on this output.
@@ -98,10 +99,10 @@ snapshots are provided for convenience, and are not guaranteed to be
 up-to-date.
 
 In order to open a theory of one of the specifications in Isabelle,
-use the -l Sail command-line flag to load the session containing the
+use the \verb+-l Sail+ command-line flag to load the session containing the
 Sail library. Snapshots of the Sail and Lem libraries are in the
 \verb+lib/sail+ and \verb+lib/lem+ directories, respectively. You can
-tell Isabelle where to find them using the -d flag, as in
+tell Isabelle where to find them using the \verb+-d+ flag, as in
 \begin{verbatim}
 isabelle jedit -l Sail -d lib/lem -d lib/sail riscv/Riscv.thy
 \end{verbatim}
@@ -132,7 +133,7 @@ command.
 
 Here we summarize most of the other options available for
 Sail. Debugging options (usually for debugging Sail itself) are
-indicated by starting with the letter d.
+indicated by starting with the letter \verb+d+.
 
 \begin{itemize}
 \item {\verb+-v+} Print the Sail version.
@@ -142,7 +143,7 @@ indicated by starting with the letter d.
 \item {\verb+-no_warn+} Turn off warnings.
 
 \item {\verb+-enum_casts+} Allow elements of enumerations to be
-  automatically casted to numbers.
+  automatically cast to numbers.
 
 \item \verb+-memo_z3+ Memoize calls to the Z3 solver. This can greatly
   improve typechecking times if you are repeatedly typechecking the

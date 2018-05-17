@@ -63,9 +63,9 @@ can drop it and simply write: \mrbfnmyreplicatebitsthree
 \subsection{External Bindings}
 
 Rather than defining functions within Sail itself, they can be mapped
-onto functions definition within the various backend targets supported
+onto function definitions within the various backend targets supported
 by Sail. This is primarily used to setup the primitive functions
-defined in the Sail library. These declarations work like much FFI
+defined in the Sail library. These declarations work much like FFI
 bindings in many programming languages---in Sail we provide the
 \ll{val} declaration, except rather than giving a function body we
 supply a string used to identify the external operator in each
@@ -127,7 +127,7 @@ from bits to other numeric types would be highly undesirable. The
 \subsection{Vector Type}
 \label{sec:vec}
 
-Sail has the built-in type vector, which is a polymorphic type for
+Sail has the built-in type \ll{vector}, which is a polymorphic type for
 fixed-length vectors. For example, we could define a vector \ll{v} of
 three integers as follows:
 \begin{lstlisting}
@@ -219,7 +219,7 @@ notation. So, in the following code:
   let a = v[0]
   let b = v[3]
 \end{lstlisting}
-\ll{a} will be \ll{4}, and \ll{b} will be \ll{1} (not that \ll{v} is
+\ll{a} will be \ll{4}, and \ll{b} will be \ll{1} (note that \ll{v} is
 \ll{dec}). By default, Sail will statically check for out of bounds
 errors, and will raise a type error if it cannot prove that all such
 vector accesses are valid.
@@ -259,7 +259,7 @@ let l : list(int) = [|1, 2, 3|]
 \end{lstlisting}
 The cons operator is \ll{::}, so we could equally write:
 \lstinputlisting{examples/list.sail}
-Pattern matching can be used to destructure lists, see Section~\ref{sec:pat}
+Pattern matching can be used to destructure lists, see Section~\ref{sec:pat}.
 
 \subsection{Other Types}
 
@@ -291,7 +291,7 @@ separated by commas. The cases are checked sequentially from top to
 bottom, and when the first pattern matches its expression will be
 evaluated.
 
-\ll{match} in Sail is not currently check for exhaustiveness---after
+\ll{match} in Sail is not currently checked for exhaustiveness---after
 all we could have arbitrary constraints on a numeric variable being
 matched upon, which would restrict the possible cases in ways that we
 could not determine with just a simple syntactic check. However, there
@@ -392,7 +392,7 @@ bits. In the above example, \ll{b0} and \ll{b1} will have type
 \ll{bit}. The pattern \ll{bitone} is a bit literal, with \ll{bitzero}
 being the other bit literal pattern.
 
-Note that because vectors in sail are type-polymorphic, we can also
+Note that because vectors in Sail are type-polymorphic, we can also
 use both vector concatenation patterns and vector patterns to match
 against non-bit vectors.
 
@@ -538,7 +538,7 @@ as well as sub ranges of a vector:
 \begin{lstlisting}
 {
   v : bits(8) = 0xFF;
-  v[4 .. 0] = 0x0; // assume default Order dec
+  v[3 .. 0] = 0x0; // assume default Order dec
   assert(v == 0xF0)
 }
 \end{lstlisting}
@@ -625,7 +625,7 @@ registers in expressions.
 
 Unlike previous versions of Sail, referencing and de-referencing
 registers is done explicitly, although we can use an automatic cast to
-implictly dereference registers if that semantics is desired for a
+implicitly dereference registers if that semantics is desired for a
 specific specification that makes heavy use of register references,
 like so:
 \begin{lstlisting}
@@ -736,7 +736,7 @@ generate a \lstinline[mathescape]{_get_$F$} and
 takes the bitfield as a reference to a register, hence why we use the
 \ll{->} notation. For pure updates of values of type \ll{cr} a
 function \lstinline[mathescape]{update_$F$} is also defined. For more
-details on getters and setters, see Section~\ref{sec:getset}. A
+details on getters and setters, see Section~\ref{sec:lexp}. A
 singleton bit in a bitfield definition, such as \ll{LT : 7} will be
 defined as a bitvector of length one, and not as a value of type
 \ll{bit}, which mirrors the behaviour of ARM's ASL language.
@@ -824,7 +824,7 @@ until it finds one that causes the resulting expression to type-check
 correctly.
 
 Multiple \ll{overload} declarations are permitted for the same
-identifier, with each overload declaration after the first adding it's
+identifier, with each overload declaration after the first adding its
 list of identifier names to the right of the overload list (so earlier
 overload declarations take precedence over later ones). As such, we
 could split every identifier from above syntax example into it's own
@@ -859,7 +859,7 @@ This option can be quite useful for testing how overloading has been
 resolved. Since the overloadings are done in the order they are listed
 in the source file, it can be important to ensure that this order is
 correct. A common idiom in the standard library is to have versions of
-functions that guarantee more constraints about there output be
+functions that guarantee more constraints about their output be
 overloaded with functions that accept more inputs but guarantee less
 about their results. For example, we might have two division functions:
 \begin{lstlisting}
@@ -874,12 +874,12 @@ definitions as
 \begin{lstlisting}
 overload operator / = {div1, div2}
 \end{lstlisting}
-Then the first will be applied when the constraints on it's inputs can
-be resolved, and therefore the guarantees on it's output can be
+Then the first will be applied when the constraints on its inputs can
+be resolved, and therefore the guarantees on its output can be
 guaranteed, but the second will be used when this is not the case, and
 indeed, we will need to manually check for the division by zero case
 due to the option type. Note that the return type can be very
-different between different cases in the overloaded.
+different between different cases in the overload.
 
 The amount of arguments overloaded functions can have can also vary,
 so we can use this to define functions with optional arguments, e.g.
@@ -900,7 +900,7 @@ ourselves as an explicit argument.
 \subsection{Sizeof and Constraint}
 \label{sec:sizeof}
 
-As already mention in Section~\ref{sec:functions}, Sail allows for
+As already mentioned in Section~\ref{sec:functions}, Sail allows for
 arbitrary type variables to be included within expressions. However,
 we can go slightly further than this, and include both arbitrary
 (type-level) numeric expressions in code, as well as type
@@ -930,8 +930,8 @@ function f(xs, ys) = {
   }
 }
 \end{lstlisting}
-Rather than the equivlent test \ll{length(xs) <= length(ys)}. This way
-of writing expressions can be succint, and can also make it very
+rather than the equivalent test \ll{length(xs) <= length(ys)}. This way
+of writing expressions can be succinct, and can also make it very
 explicit what constraints will be generated during flow
 typing. However, all the constraint and sizeof definitions must be
 re-written to produce executable code, which can result in the
@@ -991,7 +991,7 @@ mutually recursive scattered function definitions should be avoided.
 \subsection{Exceptions}
 \label{sec:exn}
 
-Perhaps suprisingly for a specification language, Sail has exception
+Perhaps surprisingly for a specification language, Sail has exception
 support. This is because exceptions as a language feature do sometimes
 appear in vendor ISA pseudocode, and such code would be very difficult
 to translate into Sail if Sail did not itself support exceptions. We
@@ -1014,7 +1014,7 @@ be declared even after they are used.
 
 By default Sail has almost no built-in types or functions, except for
 the primitive types described in this Chapter. This is because
-different vendor-pseudocode's have varying naming conventions and
+different vendor-pseudocodes have varying naming conventions and
 styles for even the most basic operators, so we aim to provide
 flexibility and avoid committing to any particular naming convention or
 set of built-ins. However, each Sail backend typically implements
@@ -1029,7 +1029,7 @@ val ZeroExtend = "zero_extend" : $\ldots$
 \end{lstlisting}
 where each backend knows about the \ll{"zero_extend"} external name,
 but the actual Sail functions are named appropriately for each
-vendor's pseudocode. As such each Sail ISA spec tends to have it's own
+vendor's pseudocode. As such each Sail ISA spec tends to have its own
 prelude.
 
 However, the \verb+lib+ directory in the Sail repository contains some
