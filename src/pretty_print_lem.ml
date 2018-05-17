@@ -62,8 +62,6 @@ open Pretty_print_common
 let opt_sequential = ref false
 let opt_mwords = ref false
 
-let appendS str = if !opt_sequential then str ^ "S" else str
-
 type context = {
   early_ret : bool;
   bound_nexps : NexpSet.t;
@@ -551,7 +549,7 @@ let doc_exp_lem, doc_let_lem =
     let wrap_parens doc = if aexp_needed then parens (doc) else doc in
     let liftR doc =
       if ctxt.early_ret && effectful (effect_of full_exp)
-      then wrap_parens (separate space [string (appendS "liftR"); parens (doc)])
+      then wrap_parens (separate space [string "liftR"; parens (doc)])
       else wrap_parens doc in
     match e with
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
@@ -569,13 +567,13 @@ let doc_exp_lem, doc_let_lem =
                    underscore ^^
                    doc_id_lem id in
                  liftR ((prefix 2 1)
-                   (string (appendS "write_reg_field_range"))
+                   (string "write_reg_field_range")
                    (align (doc_lexp_deref_lem ctxt le ^/^
                       field_ref ^/^ expY e2 ^/^ expY e3 ^/^ expY e)))
             | _ ->
                let deref = doc_lexp_deref_lem ctxt le in
                liftR ((prefix 2 1)
-                 (string (appendS "write_reg_range"))
+                 (string "write_reg_range")
                  (align (deref ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
         | LEXP_vector (le,e2) ->
            (match le with
@@ -606,13 +604,13 @@ let doc_exp_lem, doc_let_lem =
             dot ^^
             string "set_field"*) in
            liftR ((prefix 2 1)
-             (string (appendS "write_reg_field"))
+             (string "write_reg_field")
              (doc_lexp_deref_lem ctxt le ^^ space ^^
                 field_ref ^/^ expY e))
         | LEXP_deref re ->
-           liftR ((prefix 2 1) (string (appendS "write_reg")) (expY re ^/^ expY e))
+           liftR ((prefix 2 1) (string "write_reg") (expY re ^/^ expY e))
         | _ ->
-           liftR ((prefix 2 1) (string (appendS "write_reg")) (doc_lexp_deref_lem ctxt le ^/^ expY e)))
+           liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref_lem ctxt le ^/^ expY e)))
     | E_vector_append(le,re) ->
       raise (Reporting_basic.err_unreachable l
         "E_vector_append should have been rewritten before pretty-printing")
@@ -629,8 +627,7 @@ let doc_exp_lem, doc_let_lem =
        | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
-          let suffix = if !opt_sequential then "S" else "M" in
-          let call = doc_id_lem (append_id f suffix) in
+          let call = doc_id_lem (append_id f "M") in
           wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
        (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "foreach", _) ->
@@ -652,11 +649,7 @@ let doc_exp_lem, doc_let_lem =
                     parens (separate space [string "integerNegate"; expY exp3])
                  | _ -> expY exp3
                in
-               let combinator =
-                 if effectful (effect_of body)
-                 then if !opt_sequential then "foreachS" else "foreachM"
-                 else "foreach"
-               in
+               let combinator = if effectful (effect_of body) then "foreachM" else "foreach" in
                let indices_pp = parens (separate space [string "index_list"; expY exp1; expY exp2; step]) in
                let used_vars_body = find_e_ids body in
                let body_lambda =
@@ -689,13 +682,12 @@ let doc_exp_lem, doc_let_lem =
             match args with
             | [cond; varstuple; body] ->
                let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
-               let monad_suffix = if !opt_sequential then "S" else "M" in
                let csuffix, cond, body =
                  match effectful (effect_of cond), effectful (effect_of body) with
                    | false, false -> "", cond, body
-                   | false, true  -> monad_suffix, return cond, body
-                   | true,  false -> monad_suffix, cond, return body
-                   | true,  true  -> monad_suffix, cond, body
+                   | false, true  -> "M", return cond, body
+                   | true,  false -> "M", cond, return body
+                   | true,  true  -> "M", cond, body
                in
                let used_vars_body = find_e_ids body in
                let lambda =
@@ -726,7 +718,7 @@ let doc_exp_lem, doc_let_lem =
           begin
             match args with
             | [exp] ->
-               let epp = separate space [string (appendS "early_return"); expY exp] in
+               let epp = separate space [string "early_return"; expY exp] in
                let aexp_needed, tepp =
                  if contains_t_pp_var ctxt (typ_of exp) ||
                     contains_t_pp_var ctxt (typ_of full_exp) then
@@ -795,7 +787,7 @@ let doc_exp_lem, doc_let_lem =
        let eff = effect_of full_exp in
        let base_typ = Env.base_typ_of env typ in
        if has_effect eff BE_rreg then
-         let epp = separate space [string (appendS "read_reg");doc_id_lem (append_id id "_ref")] in
+         let epp = separate space [string "read_reg";doc_id_lem (append_id id "_ref")] in
          if is_bitvector_typ base_typ
          then liftR (parens (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env true base_typ)))))
          else liftR epp
@@ -870,7 +862,7 @@ let doc_exp_lem, doc_let_lem =
                  (string "end")))
     | E_try (e, pexps) ->
        if effectful (effect_of e) then
-         let try_catch = if ctxt.early_ret then appendS "try_catchR" else "try_catch" in
+         let try_catch = if ctxt.early_ret then "try_catchR" else "try_catch" in
          wrap_parens
            (group ((separate space [string try_catch; expY e; string "(function "]) ^/^
                    (separate_map (break 1) (doc_case ctxt) pexps) ^/^
@@ -878,10 +870,10 @@ let doc_exp_lem, doc_let_lem =
        else
          raise (Reporting_basic.err_todo l "Warning: try-block around pure expression")
     | E_throw e ->
-       align (liftR (separate space [string (appendS "throw"); expY e]))
-    | E_exit e -> liftR (separate space [string (appendS "exit"); expY e])
+       align (liftR (separate space [string "throw"; expY e]))
+    | E_exit e -> liftR (separate space [string "exit"; expY e])
     | E_assert (e1,e2) ->
-       align (liftR (separate space [string (appendS "assert_exp"); expY e1; expY e2]))
+       align (liftR (separate space [string "assert_exp"; expY e1; expY e2]))
     | E_app_infix (e1,id,e2) ->
        expV aexp_needed (E_aux (E_app (deinfix id, [e1; e2]), (l, annot)))
     | E_var(lexp, eq_exp, in_exp) ->
@@ -889,28 +881,26 @@ let doc_exp_lem, doc_let_lem =
     | E_internal_plet (pat,e1,e2) ->
        let epp =
          let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
-         let bind_pp = string (if !opt_sequential then ">>$=" else ">>=") in
-         let seq_pp = string (if !opt_sequential then ">>$" else ">>") in
          let middle =
            match fst (untyp_pat pat) with
-           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) -> seq_pp
+           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) -> string ">>"
            | P_aux (P_tup _, _)
              when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
               (* Work around indentation issues in Lem when translating
                  tuple patterns to Isabelle *)
               separate space
-                [bind_pp; string "fun varstup -> let";
+                [string ">>= fun varstup -> let";
                  doc_pat_lem ctxt true pat;
                  string "= varstup in"]
            | _ ->
-              separate space [bind_pp; string "fun";
+              separate space [string ">>= fun";
                               doc_pat_lem ctxt true pat; arrow]
          in
          infix 0 1 middle (expV b e1) (expN e2)
        in
        wrap_parens (align epp)
     | E_internal_return (e1) ->
-       wrap_parens (align (separate space [string (appendS "return"); expY e1]))
+       wrap_parens (align (separate space [string "return"; expY e1]))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem (L_aux (L_num i, l))
@@ -918,7 +908,6 @@ let doc_exp_lem, doc_let_lem =
           raise (Reporting_basic.err_unreachable l
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
-      (* let ret_monad = if !opt_sequential then " : MR regstate" else " : MR" in *)
       let ta =
         if contains_t_pp_var ctxt (typ_of full_exp) || contains_t_pp_var ctxt (typ_of r)
         then empty
@@ -926,7 +915,7 @@ let doc_exp_lem, doc_let_lem =
           [string ": MR";
           parens (doc_typ_lem (typ_of full_exp));
           parens (doc_typ_lem (typ_of r))] in
-      align (parens (string (appendS "early_return") ^//^ expV true r ^//^ ta))
+      align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ -> string "true"
     | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _
@@ -1253,7 +1242,7 @@ let doc_tannot_opt_lem (Typ_annot_opt_aux(t,_)) = match t with
 let doc_fun_body_lem ctxt exp =
   let doc_exp = doc_exp_lem ctxt false exp in
   if ctxt.early_ret
-  then align (string (appendS "catch_early_return") ^//^ parens (doc_exp))
+  then align (string "catch_early_return" ^//^ parens (doc_exp))
   else doc_exp
 
 let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
@@ -1448,17 +1437,11 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
         separate empty (List.map doc_def_lem statedefs); hardline;
         hardline;
         register_refs; hardline;
-        if !opt_sequential then
-          concat [
-            string ("type MR 'a 'r = monadRS regstate 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = monadS regstate 'a " ^ exc_typ); hardline;
-          ]
-        else
-          concat [
-            string ("type MR 'a 'r = base_monadR register_value regstate 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = base_monad register_value regstate 'a " ^ exc_typ); hardline
-          ]
-        ]);
+        concat [
+          string ("type MR 'a 'r = base_monadR register_value regstate 'a 'r " ^ exc_typ); hardline;
+          string ("type M 'a = base_monad register_value regstate 'a " ^ exc_typ); hardline
+        ]
+       ]);
   (print defs_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
