@@ -3,11 +3,6 @@ session "Sail-CHERI-Code" = "Sail-CHERI" +
   theories
     Cheri_code
 
-session "Sail-CHERI-Sequential-Code" = "Sail-CHERI-Sequential" +
-  options [document = false, quick_and_dirty]
-  theories
-    Cheri_sequential_code
-
 session "Sail-AArch64-Code" = "Sail-AArch64" +
   options [document = false, quick_and_dirty]
   theories
