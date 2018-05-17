@@ -2911,7 +2911,8 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
     | E_for(id,exp1,exp2,exp3,order,exp4) ->
        (* Translate for loops into calls to one of the foreach combinators.
           The loop body becomes a function of the loop variable and any
-          mutable local variables that are updated inside the loop.
+          mutable local variables that are updated inside the loop and
+          are used after or within the loop.
           Since the foreach* combinators are higher-order functions,
           they cannot be represented faithfully in the AST. The following
           code abuses the parameters of an E_app node, embedding the loop body
@@ -2920,7 +2921,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           function and passed to foreach*. *)
        let vars, varpats =
          find_updated_vars exp4
-         |> IdSet.inter used_vars
+         |> IdSet.inter (IdSet.union used_vars (find_used_vars full_exp))
          |> mk_var_exps_pats pl env
        in
        let exp4 = rewrite_var_updates (add_vars overwrite exp4 vars) in
@@ -2976,9 +2977,11 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let v = fix_eff_exp (annot_exp (E_app (mk_id "foreach", [exp1; exp2; exp3; ord_exp; tuple_exp vars; guarded_body])) el env (typ_of body)) in
        Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
      | E_loop(loop,cond,body) ->
+        (* Find variables that might be updated in the loop body and are used
+           either after or within the loop. *)
         let vars, varpats =
           find_updated_vars body
-          |> IdSet.inter used_vars
+          |> IdSet.inter (IdSet.union used_vars (find_used_vars full_exp))
           |> mk_var_exps_pats pl env
         in
         let body = rewrite_var_updates (add_vars overwrite body vars) in
