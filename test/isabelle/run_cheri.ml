@@ -64,7 +64,7 @@ let () =
   Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg
 
 let (>>) = State_monad.bindS
-let liftS = State.liftState (Cheri_types.get_regval, Cheri_types.set_regval)
+let liftS = State_lifting.liftState (Cheri_types.get_regval, Cheri_types.set_regval)
 
 let load_elf_segment seg =
   let open Elf_interpreted_segment in
