@@ -310,5 +310,3 @@ val mask : forall 'm 'n , 'm >= 'n > 0 . bits('m) -> bits('n)
 function mask bs = bs['n - 1 .. 0]
 
 val "get_time_ns" : unit -> int
-
-$include <mono_rewrites.sail>

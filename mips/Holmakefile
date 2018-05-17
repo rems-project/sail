@@ -1,0 +1,11 @@
+LEMDIR=../../lem/hol-lib
+
+INCLUDES = $(LEMDIR) ../lib/hol
+
+all: mipsTheory.uo
+.PHONY: all
+
+ifdef POLY
+BASE_HEAP = ../lib/hol/sail-heap
+
+endif
