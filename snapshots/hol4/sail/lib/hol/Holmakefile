@@ -25,7 +25,7 @@ EXTRA_CLEANS = $(HOLHEAP) $(HOLHEAP).o
 
 BASE_HEAP = $(LEMDIR)/lemheap
 
-$(HOLHEAP):
+$(HOLHEAP): $(BASE_HEAP)
 	$(protect $(HOLDIR)/bin/buildheap) -o $(HOLHEAP) -b $(BASE_HEAP)
 
 all: $(HOLHEAP)
