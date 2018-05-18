@@ -24,8 +24,12 @@ union clause ast = UTYPE : (bits(20), regbits, uop)
 function clause decode imm : bits(20) @ rd : regbits @ 0b0110111 = Some(UTYPE(imm, rd, RISCV_LUI))
 function clause decode imm : bits(20) @ rd : regbits @ 0b0010111 = Some(UTYPE(imm, rd, RISCV_AUIPC))
 
-mapping clause encdec = UTYPE(imm, rd, RISCV_LUI)   <-> imm : bits(20) @ rd : regbits @ 0b0110111
-mapping clause encdec = UTYPE(imm, rd, RISCV_AUIPC) <-> imm : bits(20) @ rd : regbits @ 0b0010111
+mapping encdec_uop : uop <-> bits(7) = {
+  RISCV_LUI   <-> 0b0110111,
+  RISCV_AUIPC <-> 0b0010111
+}
+
+mapping clause encdec = UTYPE(imm, rd, op) <-> imm : bits(20) @ rd : regbits @ encdec_uop(op) : bits(7)
 
 function clause execute UTYPE(imm, rd, op) =
     let off : xlenbits = EXTS(imm @ 0x000) in
@@ -41,13 +45,12 @@ function clause print_insn UTYPE(imm, rd, op) =
     RISCV_AUIPC => "auipc " ^ rd ^ ", " ^ BitStr(imm)
   }
 
-val utype_operands : (bits(20), regbits) <-> string
-mapping utype_operands = {
-  (imm, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_20(imm)
+mapping utype_mnemonic : uop <-> string = {
+  RISCV_LUI   <-> "lui",
+  RISCV_AUIPC <-> "auipc"
 }
 
-mapping clause assembly = UTYPE(imm, rd, RISCV_LUI)   <-> "lui"   ^^ utype_operands(imm, rd)
-mapping clause assembly = UTYPE(imm, rd, RISCV_AUIPC) <-> "auipc" ^^ utype_operands(imm, rd)
+mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_20(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
@@ -101,8 +104,7 @@ function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b101 @ 
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b110 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BLTU))
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b111 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BGEU))
 
-val encdec_bop : bop <-> bits(3)
-mapping encdec_bop = {
+mapping encdec_bop : bop <-> bits(3) = {
   RISCV_BEQ <-> 0b000,
   RISCV_BNE <-> 0b001,
   RISCV_BLT <-> 0b100,
@@ -111,7 +113,8 @@ mapping encdec_bop = {
   RISCV_BGEU <-> 0b111
 }
 
-mapping clause encdec = BTYPE(imm7_6 : bits(1) @ imm5_0 : bits(1) @ imm7_5_0 : bits(6) @ imm5_4_1 : bits(4) @ 0b0, rs2, rs1, op) <-> imm7_6 : bits(1) @ imm7_5_0 : bits(6) @ rs2 : regbits @ rs1 : regbits @ encdec_bop(op) : bits(3) @ imm5_4_1 : bits(4) @ imm5_0 : bits(1) @ 0b1100011
+mapping clause encdec = BTYPE(imm7_6 : bits(1) @ imm5_0 : bits(1) @ imm7_5_0 : bits(6) @ imm5_4_1 : bits(4) @ 0b0, rs2, rs1, op)
+                    <-> imm7_6 : bits(1) @ imm7_5_0 : bits(6) @ rs2 : regbits @ rs1 : regbits @ encdec_bop(op) : bits(3) @ imm5_4_1 : bits(4) @ imm5_0 : bits(1) @ 0b1100011
 
 function clause execute (BTYPE(imm, rs2, rs1, op)) =
   let rs1_val = X(rs1) in
@@ -139,8 +142,7 @@ function clause print_insn (BTYPE(imm, rs2, rs1, op)) =
     } in
   insn ^ rs1 ^ ", " ^ rs2 ^ ", " ^ BitStr(imm)
 
-val btype_mnemonic : bop <-> string
-mapping btype_mnemonic = {
+mapping btype_mnemonic : bop <-> string = {
   RISCV_BEQ  <-> "beq",
   RISCV_BNE  <-> "bne",
   RISCV_BLT  <-> "blt",
@@ -161,6 +163,17 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b011 @ rd : regbits @ 0
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_XORI))
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_ORI))
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_ANDI))
+
+mapping encdec_iop : iop <-> bits(3) = {
+  RISCV_ADDI  <-> 0b000,
+  RISCV_SLTI  <-> 0b010,
+  RISCV_SLTIU <-> 0b011,
+  RISCV_XORI  <-> 0b100,
+  RISCV_ORI   <-> 0b110,
+  RISCV_ANDI  <-> 0b111
+}
+
+mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm : bits(12) @ rs1 : regbits @ encdec_iop(op) : bits(3) @ rd : regbits @ 0b0010011
 
 function clause execute (ITYPE (imm, rs1, rd, op)) =
   let rs1_val = X(rs1) in
@@ -187,18 +200,16 @@ function clause print_insn (ITYPE(imm, rs1, rd, op)) =
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-
-val itype_operands : (bits(12), regbits, regbits) <-> string
-mapping itype_operands = {
-  (imm, rs1, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+mapping itype_mnemonic : iop <-> string = {
+  RISCV_ADDI  <-> "addi",
+  RISCV_SLTI  <-> "slti",
+  RISCV_SLTIU <-> "sltiu",
+  RISCV_XORI  <-> "xori",
+  RISCV_ORI   <-> "ori",
+  RISCV_ANDI  <-> "andi"
 }
 
-mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ADDI)  <-> "addi"  ^^ itype_operands(imm, rs1, rd)
-mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_SLTI)  <-> "slti"  ^^ itype_operands(imm, rs1, rd)
-mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_SLTIU) <-> "sltiu" ^^ itype_operands(imm, rs1, rd)
-mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_XORI)  <-> "xori"  ^^ itype_operands(imm, rs1, rd)
-mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ORI)   <-> "ori"   ^^ itype_operands(imm, rs1, rd)
-mapping clause assembly = ITYPE(imm, rs1, rd, RISCV_ANDI)  <-> "andi"  ^^ itype_operands(imm, rs1, rd)
+mapping clause assembly = ITYPE(imm, rs1, rd, op) <-> itype_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
@@ -206,6 +217,14 @@ union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
 function clause decode 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SLLI))
 function clause decode 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRLI))
 function clause decode 0b010000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRAI))
+
+mapping encdec_sop : sop <-> bits(3) = {
+  RISCV_SLLI <-> 0b001,
+  RISCV_SRLI <-> 0b101,
+  RISCV_SRAI <-> 0b101
+}
+
+mapping clause encdec = SHIFTIOP(shamt, rs1, rd, op) <-> 0b010000 @ shamt : bits(6) @ rs1 : regbits @ encdec_sop(op) : bits(3) @ rd : regbits @ 0b0010011
 
 function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
     let rs1_val = X(rs1) in
@@ -226,6 +245,14 @@ function clause print_insn (SHIFTIOP(shamt, rs1, rd, op)) =
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(shamt)
 
+mapping shiftiop_mnemonic : sop <-> string = {
+  RISCV_SLLI <-> "slli",
+  RISCV_SRLI <-> "srli",
+  RISCV_SRAI <-> "srai"
+}
+
+mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op) <-> shiftiop_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ hex_bits_6(shamt)
+
 /* ****************************************************************** */
 union clause ast = RTYPE : (regbits, regbits, regbits, rop)
 
@@ -239,6 +266,17 @@ function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : 
 function clause decode 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SRA))
 function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_OR))
 function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_AND))
+
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_ADD)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SUB)  <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLL)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLT)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLTU) <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_XOR)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SRL)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SRA)  <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_OR)   <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_AND)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011
 
 function clause execute (RTYPE(rs2, rs1, rd, op)) =
   let rs1_val = X(rs1) in
@@ -273,21 +311,20 @@ function clause print_insn (RTYPE(rs2, rs1, rd, op)) =
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-val rtype_operands : (regbits, regbits, regbits) <-> string
-mapping rtype_operands = {
-  (rs2, rs1, rd) <-> spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping rtype_mnemonic : rop <-> string = {
+  RISCV_ADD  <-> "add",
+  RISCV_SUB  <-> "sub",
+  RISCV_SLL  <-> "sll",
+  RISCV_SLT  <-> "slt",
+  RISCV_SLTU <-> "sltu",
+  RISCV_XOR  <-> "xor",
+  RISCV_SRL  <-> "srl",
+  RISCV_SRA  <-> "sra",
+  RISCV_OR   <-> "or",
+  RISCV_AND  <-> "and"
 }
 
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_ADD)  <-> "add"  ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SUB)  <-> "sub"  ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SLL)  <-> "sll"  ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SLT)  <-> "slt"  ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SLTU) <-> "sltu" ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_XOR)  <-> "xor"  ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SRL)  <-> "srl"  ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_SRA)  <-> "sra"  ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_OR)   <-> "or"   ^^ rtype_operands(rs2, rs1, rd)
-mapping clause assembly = RTYPE(rs2, rs1, rd, RISCV_AND)  <-> "and"  ^^ rtype_operands(rs2, rs1, rd)
+mapping clause assembly = RTYPE(rs2, rs1, rd, op) <-> rtype_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)

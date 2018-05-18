@@ -1,0 +1,129 @@
+open import Pervasives
+open import List
+open import List_extra
+open import String
+open import String_extra
+
+open import Sail_operators_mwords
+open import Sail_values
+
+val string_sub : string -> ii -> ii -> string
+let string_sub str start len =
+  toString (take (natFromInteger len) (drop (natFromInteger start) (toCharList str)))
+
+val string_startswith : string -> string -> bool
+let string_startswith str1 str2 =
+  let prefix = string_sub str1 0 (integerFromNat (stringLength str2)) in
+  (prefix = str2)
+
+val string_drop : string -> ii -> string
+let string_drop str n =
+  toString (drop (natFromInteger n) (toCharList str))
+
+val string_length : string -> ii
+let string_length s = integerFromNat (stringLength s)
+
+let string_append = stringAppend
+
+(***********************************************
+ * Begin stuff that should be in Lem Num_extra *
+ ***********************************************)
+
+val maybeIntegerOfString : string -> maybe integer
+
+declare ocaml target_rep function maybeIntegerOfString = `(fun s -> match int_of_string_opt s with None -> None | Some i -> Nat_big_num.of_int i)`
+declare isabelle target_rep function maybeIntegerOfString = `maybeIntegerOfString` (* TODO FIXME *)
+declare hol target_rep function maybeIntegerOfString = `maybeIntegerOfString` (* TODO FIXME *)
+
+(***********************************************
+ * end stuff that should be in Lem Num_extra   *
+ ***********************************************)
+
+let rec maybe_int_of_prefix s =
+  match s with
+  | "" -> Nothing
+  | str ->
+     let len = string_length str in
+     match maybeIntegerOfString str with
+     | Just n -> Just (n, len)
+     | Nothing -> maybe_int_of_prefix (string_sub str 0 (len - 1))
+     end
+  end
+
+let maybe_int_of_string = maybeIntegerOfString
+
+val n_leading_spaces : string -> ii
+let rec n_leading_spaces s =
+  match string_length s with
+  | 0 -> 0
+  | 1 -> match s with
+         | " " -> 1
+         | _ -> 0
+         end
+  | len -> match nth s 0 with
+           | #' ' -> 1 + (n_leading_spaces (string_sub s 1 (len - 1)))
+           | _ -> 0
+           end
+  end
+
+let opt_spaces_matches_prefix s =
+  Just ((), n_leading_spaces s)
+
+let spaces_matches_prefix s =
+  let n = n_leading_spaces s in
+  match n with
+  | 0 -> Nothing
+  | n -> Just ((), n)
+  end
+
+let hex_bits_6_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 64 then
+       Just ((of_int 6 n, len))
+     else
+       Nothing
+  end
+
+let hex_bits_12_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 4096 then
+       Just ((of_int 12 n, len))
+     else
+       Nothing
+  end
+
+let hex_bits_13_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 8192 then
+       Just ((of_int 13 n, len))
+     else
+       Nothing
+  end
+
+let hex_bits_20_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 1048576 then
+       Just ((of_int 20 n, len))
+     else
+       Nothing
+  end
+
+let hex_bits_21_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 2097152 then
+       Just ((of_int 21 n, len))
+     else
+       Nothing
+  end
+
+let string_of_bits = string_of_vec

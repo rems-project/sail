@@ -711,6 +711,7 @@ let remove_vector_concat_pat pat =
     let p_vector_concat pats =
       let rec aux ((P_aux (p,((l,_) as a))) as pat) = match p with
         | P_vector _ -> P_aux (P_as (pat,fresh_id_v l),a)
+        | P_lit _ -> P_aux (P_as (pat, fresh_id_v l), a)
         | P_id id -> P_aux (P_id id,a)
         | P_as (p,id) -> P_aux (P_as (p,id),a)
         | P_typ (typ, pat) -> P_aux (P_typ (typ, aux pat),a)
@@ -3900,7 +3901,7 @@ let rewrite_defs_lem = [
   ("remove_mapping_valspecs", remove_mapping_valspecs);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
-  (* ("pat_lits", rewrite_defs_pat_lits); *)
+  ("pat_lits", rewrite_defs_pat_lits);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);

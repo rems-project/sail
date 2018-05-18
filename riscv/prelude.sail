@@ -7,6 +7,12 @@ val spaces : unit <-> string
 val opt_spaces : unit <-> string
 val def_spaces : unit <-> string
 
+val hex_bits : forall 'n . (atom('n), bits('n)) <-> string
+
+val hex_bits_6 : bits(6) <-> string
+val hex_bits_6_forwards = "string_of_bits" : bits(6) -> string
+val "hex_bits_6_matches_prefix" : string -> option((bits(6), nat))
+
 val hex_bits_12 : bits(12) <-> string
 val hex_bits_12_forwards = "string_of_bits" : bits(12) -> string
 val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
@@ -53,7 +59,7 @@ val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-val "eq_bit" : (bit, bit) -> bool
+val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit"} : (bit, bit) -> bool
 
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -238,7 +244,9 @@ val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
 val sub_int = {ocaml: "sub_int", lem: "integerMinus"} : (int, int) -> int
-val sub_nat = {ocaml: "sub_int", lem: "integerMinus"} : (nat, nat) -> nat
+val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
+               lem: "integerMinus"}
+            : (nat, nat) -> nat
 
 val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 

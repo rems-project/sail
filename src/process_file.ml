@@ -295,6 +295,7 @@ let output_lem filename libs defs =
       "Pervasives_extra";
       "Sail_instr_kinds";
       "Sail_values";
+      "Sail_string";
       operators_module
     ] @ monad_modules
   in
