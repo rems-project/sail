@@ -183,10 +183,11 @@ function clause decode (0b010010 @ 0b10000 @ rs : regno @ cb : regno @ rd : regn
 function clause decode (0b010010 @ 0b10000 @ rs : regno @ cb : regno @ rd : regno @ 0b0000 @ 0b11) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, D, true)) /* CSCD */
 
 function clause decode (0b111110 @ cs : regno @ cb : regno@ rt : regno @ offset : bits(11)) = Some(CSC(cs, cb, rt, 0b00000, offset, false))
-function clause decode (0b010010 @ 0b10000 @ cs : regno @ cb : regno@ rd : regno @ 0b00 @ 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))
+function clause decode (0b010010 @ 0b10000 @ cs : regno @ cb : regno@ rd : regno @ 0b00 @ 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))     /* CSCC */
 
-function clause decode (0b110110 @ cd : regno @ cb : regno@ rt : regno @ offset : bits(11)) = Some(CLC(cd, cb, rt, offset, false))
-function clause decode (0b010010 @ 0b10000 @ cd : regno @ cb : regno@ 0b0000000 @ 0b1111) = Some(CLC(cd, cb, 0b00000, 0b00000000000, true))
+function clause decode (0b110110 @ cd : regno @ cb : regno @ rt : regno @ offset : bits(11)) = Some(CLC(cd, cb, rt, sign_extend(offset), false))            /* CLC */
+function clause decode (0b010010 @ 0b10000 @ cd : regno @ cb : regno@ 0b0000000 @ 0b1111) = Some(CLC(cd, cb, 0b00000, 0x0000, true))                        /* CLLC */
+function clause decode (0b011101 @ cd : regno @ cb : regno @ offset : bits(16)) = Some(CLC(cd, cb, 0b00000, offset, false))                                 /* CLCBI */
 
 function clause decode (0b010010 @ 0b00100 @ rt : regno @ 0x0006) = Some(C2Dump(rt))
 
@@ -1298,7 +1299,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
     }
 }
 
-union clause ast = CLC : (regno, regno, regno, bits(11), bool)
+union clause ast = CLC : (regno, regno, regno, bits(16), bool)
 function clause execute (CLC(cd, cb, rt, offset, linked)) =  
 {
   checkCP2usable();
