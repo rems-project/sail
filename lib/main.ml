@@ -78,7 +78,7 @@ let () =
     | f :: _ -> load_elf f
     | _ -> ()
   end;
-  if !opt_raw_fname != "" then
+  if !opt_raw_fname <> "" then
     begin
       let ic = open_in_bin !opt_raw_fname in
       try
