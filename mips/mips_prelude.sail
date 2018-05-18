@@ -267,6 +267,7 @@ register CP0BadVAddr : bits(64)
 register CP0Count : bits(32)
 register CP0HWREna : bits(32)
 register CP0UserLocal : bits(64)
+register CP0ConfigK0 : bits(3)
 
 bitfield StatusReg : bits(32) = {
   CU : 31.. 28,  /* co-processor enable bits */
