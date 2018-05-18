@@ -365,3 +365,22 @@ val operand_sep : unit <-> string
 mapping operand_sep = {
   () <-> opt_spaces() ^^ "," ^^ def_spaces()
 }
+
+mapping bool_bits : bool <-> bits(1) = {
+  true <-> 0b1,
+  false <-> 0b0
+}
+
+mapping size_bits : word_width <-> bits(2) = {
+  BYTE <-> 0b00,
+  HALF <-> 0b01,
+  WORD <-> 0b10,
+  DOUBLE <-> 0b11
+}
+
+mapping size_mnemonic : word_width <-> string = {
+  BYTE <-> "b",
+  HALF <-> "h",
+  WORD <-> "w",
+  DOUBLE <-> "d"
+}

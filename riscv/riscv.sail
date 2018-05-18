@@ -337,6 +337,10 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b100 @ rd : regbits @ 0
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  HALF,   false, false))
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
 
+/* I am assuming that load unsigned double wasn't meant to be missing here? */
+/* TODO: aq/rl */
+mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false) <-> imm : bits(12) @ rs1 : regbits @ bool_bits(is_unsigned) : bits(1) @ size_bits(size) : bits(2) @ rd : regbits @ 0b0000011
+
 val extend_value : forall 'n, 0 < 'n <= 8. (bool, MemoryOpResult(bits(8 * 'n))) -> MemoryOpResult(xlenbits)
 function extend_value(is_unsigned, value) = match (value) {
   MemValue(v)     => MemValue(if is_unsigned then EXTZ(v) else EXTS(v) : xlenbits),
@@ -397,16 +401,8 @@ mapping maybe_u = {
   false <-> ""
 }
 
-val load_operands : (bits(12), regbits, regbits, bool, bool, bool) <-> string
-mapping load_operands = {
-  (imm, rs1, rd, is_unsigned, aq, rl) <-> maybe_u(is_unsigned) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
-}
 
-                       /* LOAD(imm, rs1, rd, is_unsigned,  width,    aq,    rl) */
-mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, DOUBLE,    aq,    rl) <-> "ld" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
-mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned,   WORD,    aq,    rl) <-> "lw" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
-mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned,   HALF,    aq,    rl) <-> "lh" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
-mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned,   BYTE,    aq,    rl) <-> "lb" ^^ load_operands(imm, rs1, rd, is_unsigned, aq, rl)
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl) <-> "l" ^^ size_mnemonic(size) ^^ maybe_u(is_unsigned) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
@@ -415,6 +411,9 @@ function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b000 @ 
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b001 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, HALF, false, false))
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b010 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, WORD, false, false))
 function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b011 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, DOUBLE, false, false))
+
+/* TODO: aq/rl */
+mapping clause encdec = STORE(imm7 : bits(7) @ imm5 : bits(5), rs2, rs1, size, false, false) <-> imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ imm5 : bits(5) @ 0b0100011
 
 /* NOTE: Currently, we only EA if address translation is successful.
    This may need revisiting. */
@@ -458,22 +457,15 @@ function clause print_insn (STORE(imm, rs2, rs1, width, aq, rl)) =
     } in
   insn ^ rs2 ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-val store_operands : (bits(12), regbits, regbits, bool, bool) <-> string
-mapping store_operands = {
-  (imm, rs1, rd, aq, rl) <-> maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
-}
-
-                       /* STORE(imm, rs1, rd,  width,    aq,    rl) */
-mapping clause assembly = STORE(imm, rs1, rd, DOUBLE,    aq,    rl) <-> "sd" ^^ store_operands(imm, rs1, rd, aq, rl)
-mapping clause assembly = STORE(imm, rs1, rd,   WORD,    aq,    rl) <-> "sw" ^^ store_operands(imm, rs1, rd, aq, rl)
-mapping clause assembly = STORE(imm, rs1, rd,   HALF,    aq,    rl) <-> "sh" ^^ store_operands(imm, rs1, rd, aq, rl)
-mapping clause assembly = STORE(imm, rs1, rd,   BYTE,    aq,    rl) <-> "sb" ^^ store_operands(imm, rs1, rd, aq, rl)
+mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^^ size_mnemonic(size) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
 
 
 /* ****************************************************************** */
 union clause ast = ADDIW : (bits(12), regbits, regbits)
 
 function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011 = Some(ADDIW(imm, rs1, rd))
+
+mapping clause encdec = ADDIW(imm, rs1, rd) <-> imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011
 
 function clause execute (ADDIW(imm, rs1, rd)) =
   let result : xlenbits = EXTS(imm) + X(rs1) in
@@ -482,12 +474,18 @@ function clause execute (ADDIW(imm, rs1, rd)) =
 function clause print_insn (ADDIW(imm, rs1, rd)) =
   "addiw " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
+mapping clause assembly = ADDIW(imm, rs1, rd) <-> "addiw" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+
 /* ****************************************************************** */
 union clause ast = SHIFTW : (bits(5), regbits, regbits, sop)
 
 function clause decode 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0011011 = Some(SHIFTW(shamt, rs1, rd, RISCV_SLLI))
 function clause decode 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011 = Some(SHIFTW(shamt, rs1, rd, RISCV_SRLI))
 function clause decode 0b0100000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011 = Some(SHIFTW(shamt, rs1, rd, RISCV_SRAI))
+
+mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SLLI) <-> 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0011011
+mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRLI) <-> 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011
+mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRAI) <-> 0b0100000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011
 
 function clause execute (SHIFTW(shamt, rs1, rd, op)) =
     let rs1_val = (X(rs1))[31..0] in
@@ -506,6 +504,14 @@ function clause print_insn (SHIFTW(shamt, rs1, rd, op)) =
       RISCV_SRAI => "srai  "
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(shamt)
+
+mapping shiftw_mnemonic : sop <-> string = {
+  RISCV_SLLI <-> "slli",
+  RISCV_SRLI <-> "srli",
+  RISCV_SRAI <-> "srai"
+}
+
+/*mapping clause assembly = SHIFTW(shamt, rs1, rd, op) <-> shiftw_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_5(shamt)*/
 
 /* ****************************************************************** */
 union clause ast = RTYPEW : (regbits, regbits, regbits, ropw)
