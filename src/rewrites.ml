@@ -3238,6 +3238,8 @@ let rewrite_defs_pat_lits =
     let counter = ref 0 in
 
     let rewrite_pat = function
+      (* HACK: ignore strings for now *)
+      | P_lit (L_aux (L_string _, _)) as p_aux, p_annot -> P_aux (p_aux, p_annot)
       | P_lit lit, p_annot ->
          let env = env_of_annot p_annot in
          let typ = typ_of_annot p_annot in
