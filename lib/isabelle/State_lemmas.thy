@@ -6,11 +6,13 @@ lemma All_liftState_dom: "liftState_dom (r, m)"
   by (induction m) (auto intro: liftState.domintros)
 termination liftState using All_liftState_dom by auto
 
-lemma liftState_bind[simp]:
+named_theorems liftState_simp
+
+lemma liftState_bind[liftState_simp]:
   "liftState r (bind m f) = bindS (liftState r m) (liftState r \<circ> f)"
   by (induction m f rule: bind.induct) auto
 
-lemma liftState_return[simp]: "liftState r (return a) = returnS a" by (auto simp: return_def)
+lemma liftState_return[liftState_simp]: "liftState r (return a) = returnS a" by (auto simp: return_def)
 
 lemma Value_liftState_Run:
   assumes "(Value a, s') \<in> liftState r m s"
@@ -19,51 +21,58 @@ lemma Value_liftState_Run:
       auto simp add: failS_def throwS_def returnS_def simp del: read_regvalS.simps;
       blast elim: Value_bindS_elim)
 
-lemmas liftState_if_distrib[simp] = if_distrib[where f = "liftState ra" for ra]
+lemmas liftState_if_distrib[liftState_simp] = if_distrib[where f = "liftState ra" for ra]
 
-lemma liftState_throw[simp]: "liftState r (throw e) = throwS e" by (auto simp: throw_def)
-lemma liftState_assert[simp]: "liftState r (assert_exp c msg) = assert_expS c msg" by (auto simp: assert_exp_def assert_expS_def)
-lemma liftState_exit[simp]: "liftState r (exit0 ()) = exitS ()" by (auto simp: exit0_def exitS_def)
-lemma liftState_exclResult[simp]: "liftState r (excl_result ()) = excl_resultS ()" by (auto simp: excl_result_def)
-lemma liftState_barrier[simp]: "liftState r (barrier bk) = returnS ()" by (auto simp: barrier_def)
-lemma liftState_footprint[simp]: "liftState r (footprint ()) = returnS ()" by (auto simp: footprint_def)
-lemma liftState_undefined[simp]: "liftState r (undefined_bool ()) = undefined_boolS ()" by (auto simp: undefined_bool_def)
-lemma liftState_maybe_fail[simp]: "liftState r (maybe_fail msg x) = maybe_failS msg x"
-  by (auto simp: maybe_fail_def maybe_failS_def split: option.splits)
-lemma liftState_and_boolM[simp]:
+lemma liftState_throw[liftState_simp]: "liftState r (throw e) = throwS e"
+  by (auto simp: throw_def)
+lemma liftState_assert[liftState_simp]: "liftState r (assert_exp c msg) = assert_expS c msg"
+  by (auto simp: assert_exp_def assert_expS_def)
+lemma liftState_exit[liftState_simp]: "liftState r (exit0 ()) = exitS ()"
+  by (auto simp: exit0_def exitS_def)
+lemma liftState_exclResult[liftState_simp]: "liftState r (excl_result ()) = excl_resultS ()"
+  by (auto simp: excl_result_def liftState_simp)
+lemma liftState_barrier[liftState_simp]: "liftState r (barrier bk) = returnS ()"
+  by (auto simp: barrier_def)
+lemma liftState_footprint[liftState_simp]: "liftState r (footprint ()) = returnS ()"
+  by (auto simp: footprint_def)
+lemma liftState_undefined[liftState_simp]: "liftState r (undefined_bool ()) = undefined_boolS ()"
+  by (auto simp: undefined_bool_def liftState_simp)
+lemma liftState_maybe_fail[liftState_simp]: "liftState r (maybe_fail msg x) = maybe_failS msg x"
+  by (auto simp: maybe_fail_def maybe_failS_def liftState_simp split: option.splits)
+lemma liftState_and_boolM[liftState_simp]:
   "liftState r (and_boolM x y) = and_boolS (liftState r x) (liftState r y)"
-  by (auto simp: and_boolM_def and_boolS_def cong: bindS_cong if_cong)
-lemma liftState_or_boolM[simp]:
+  by (auto simp: and_boolM_def and_boolS_def liftState_simp cong: bindS_cong if_cong)
+lemma liftState_or_boolM[liftState_simp]:
   "liftState r (or_boolM x y) = or_boolS (liftState r x) (liftState r y)"
-  by (auto simp: or_boolM_def or_boolS_def cong: bindS_cong if_cong)
+  by (auto simp: or_boolM_def or_boolS_def liftState_simp cong: bindS_cong if_cong)
 
-lemma liftState_try_catch[simp]:
+lemma liftState_try_catch[liftState_simp]:
   "liftState r (try_catch m h) = try_catchS (liftState r m) (liftState r \<circ> h)"
   by (induction m h rule: try_catch_induct) (auto simp: try_catchS_bindS_no_throw)
 
-lemma liftState_early_return[simp]:
+lemma liftState_early_return[liftState_simp]:
   "liftState r (early_return r) = early_returnS r"
-  by (auto simp: early_return_def early_returnS_def)
+  by (auto simp: early_return_def early_returnS_def liftState_simp)
 
-lemma liftState_catch_early_return[simp]:
+lemma liftState_catch_early_return[liftState_simp]:
   "liftState r (catch_early_return m) = catch_early_returnS (liftState r m)"
-  by (auto simp: catch_early_return_def catch_early_returnS_def sum.case_distrib cong: sum.case_cong)
+  by (auto simp: catch_early_return_def catch_early_returnS_def sum.case_distrib liftState_simp cong: sum.case_cong)
 
-lemma liftState_liftR[simp]:
+lemma liftState_liftR[liftState_simp]:
   "liftState r (liftR m) = liftRS (liftState r m)"
-  by (auto simp: liftR_def liftRS_def)
+  by (auto simp: liftR_def liftRS_def liftState_simp)
 
-lemma liftState_try_catchR[simp]:
+lemma liftState_try_catchR[liftState_simp]:
   "liftState r (try_catchR m h) = try_catchRS (liftState r m) (liftState r \<circ> h)"
-  by (auto simp: try_catchR_def try_catchRS_def sum.case_distrib cong: sum.case_cong)
+  by (auto simp: try_catchR_def try_catchRS_def sum.case_distrib liftState_simp cong: sum.case_cong)
 
 lemma liftState_read_mem_BC:
   assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
   shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
   using assms
-  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def split: option.splits)
+  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def liftState_simp split: option.splits)
 
-lemma liftState_read_mem[simp]:
+lemma liftState_read_mem[liftState_simp]:
   "\<And>a. liftState r (read_mem BC_mword BC_mword rk a sz) = read_memS BC_mword BC_mword rk a sz"
   "\<And>a. liftState r (read_mem BC_bitU_list BC_bitU_list rk a sz) = read_memS BC_bitU_list BC_bitU_list rk a sz"
   by (auto simp: liftState_read_mem_BC)
@@ -73,14 +82,14 @@ lemma liftState_write_mem_ea_BC:
   shows "liftState r (write_mem_ea BCa rk a sz) = write_mem_eaS BCa rk a (nat sz)"
   using assms by (auto simp: write_mem_ea_def write_mem_eaS_def)
 
-lemma liftState_write_mem_ea[simp]:
+lemma liftState_write_mem_ea[liftState_simp]:
   "\<And>a. liftState r (write_mem_ea BC_mword rk a sz) = write_mem_eaS BC_mword rk a (nat sz)"
   "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = write_mem_eaS BC_bitU_list rk a (nat sz)"
   by (auto simp: liftState_write_mem_ea_BC)
 
 lemma liftState_write_mem_val:
   "liftState r (write_mem_val BC v) = write_mem_valS BC v"
-  by (auto simp: write_mem_val_def write_mem_valS_def split: option.splits)
+  by (auto simp: write_mem_val_def write_mem_valS_def liftState_simp split: option.splits)
 
 lemma liftState_read_reg_readS:
   assumes "\<And>s. Option.bind (get_regval' (name reg) s) (of_regval reg) = Some (read_from reg s)"
@@ -99,22 +108,23 @@ lemma liftState_write_reg_updateS:
   shows "liftState (get_regval', set_regval') (write_reg reg v) = updateS (regstate_update (write_to reg v))"
   using assms by (auto simp: write_reg_def updateS_def returnS_def bindS_readS)
 
-lemma liftState_iter_aux[simp]:
+lemma liftState_iter_aux[liftState_simp]:
   shows "liftState r (iter_aux i f xs) = iterS_aux i (\<lambda>i x. liftState r (f i x)) xs"
-  by (induction i "\<lambda>i x. liftState r (f i x)" xs rule: iterS_aux.induct) (auto cong: bindS_cong)
+  by (induction i "\<lambda>i x. liftState r (f i x)" xs rule: iterS_aux.induct)
+     (auto simp: liftState_simp cong: bindS_cong)
 
-lemma liftState_iteri[simp]:
+lemma liftState_iteri[liftState_simp]:
   "liftState r (iteri f xs) = iteriS (\<lambda>i x. liftState r (f i x)) xs"
-  by (auto simp: iteri_def iteriS_def)
+  by (auto simp: iteri_def iteriS_def liftState_simp)
 
-lemma liftState_iter[simp]:
+lemma liftState_iter[liftState_simp]:
   "liftState r (iter f xs) = iterS (liftState r \<circ> f) xs"
-  by (auto simp: iter_def iterS_def)
+  by (auto simp: iter_def iterS_def liftState_simp)
 
-lemma liftState_foreachM[simp]:
+lemma liftState_foreachM[liftState_simp]:
   "liftState r (foreachM xs vars body) = foreachS xs vars (\<lambda>x vars. liftState r (body x vars))"
   by (induction xs vars "\<lambda>x vars. liftState r (body x vars)" rule: foreachS.induct)
-     (auto cong: bindS_cong)
+     (auto simp: liftState_simp cong: bindS_cong)
 
 lemma whileS_dom_step:
   assumes "whileS_dom (vars, cond, body, s)"
@@ -162,7 +172,7 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
       qed
       then show ?case using while while' that IH by auto
     qed auto
-    then show ?case by auto
+    then show ?case by (auto simp: liftState_simp)
   qed auto
 qed
 
@@ -200,7 +210,7 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
         show "\<exists>t. Run (body vars) t vars'" using k by (auto elim: Value_liftState_Run)
         show "\<exists>t'. Run (cond vars') t' False" using until that by (auto elim: Value_liftState_Run)
       qed
-      then show ?case using k until IH by (auto simp: comp_def)
+      then show ?case using k until IH by (auto simp: comp_def liftState_simp)
     qed auto
   qed auto
 qed

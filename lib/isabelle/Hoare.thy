@@ -42,19 +42,20 @@ lemma PrePost_weaken_post:
   shows "PrePost A f C"
   using assms by (blast intro: PrePost_consequence)
 
-named_theorems PrePost_intro
+named_theorems PrePost_compositeI
+named_theorems PrePost_atomI
 
-lemma PrePost_True_post[PrePost_intro, intro, simp]:
+lemma PrePost_True_post[PrePost_atomI, intro, simp]:
   "PrePost P m (\<lambda>_ _. True)"
   unfolding PrePost_def by auto
 
 lemma PrePost_any: "PrePost (\<lambda>s. \<forall>(r, s') \<in> m s. Q r s') m Q"
   unfolding PrePost_def by auto
 
-lemma PrePost_returnS[intro, PrePost_intro]: "PrePost (P (Value x)) (returnS x) P"
+lemma PrePost_returnS[intro, PrePost_atomI]: "PrePost (P (Value x)) (returnS x) P"
   unfolding PrePost_def returnS_def by auto
 
-lemma PrePost_bindS[intro, PrePost_intro]:
+lemma PrePost_bindS[intro, PrePost_compositeI]:
   assumes f: "\<And>s a s'. (Value a, s') \<in> m s \<Longrightarrow> PrePost (R a) (f a) Q"
     and m: "PrePost P m (\<lambda>r. case r of Value a \<Rightarrow> R a | Ex e \<Rightarrow> Q (Ex e))"
   shows "PrePost P (bindS m f) Q"
@@ -89,10 +90,10 @@ lemma PrePost_bindS_unit:
   shows "PrePost P (bindS m f) Q"
   using assms by auto
 
-lemma PrePost_readS[intro, PrePost_intro]: "PrePost (\<lambda>s. P (Value (f s)) s) (readS f) P"
+lemma PrePost_readS[intro, PrePost_atomI]: "PrePost (\<lambda>s. P (Value (f s)) s) (readS f) P"
   unfolding PrePost_def readS_def returnS_def by auto
 
-lemma PrePost_updateS[intro, PrePost_intro]: "PrePost (\<lambda>s. P (Value ()) (f s)) (updateS f) P"
+lemma PrePost_updateS[intro, PrePost_atomI]: "PrePost (\<lambda>s. P (Value ()) (f s)) (updateS f) P"
   unfolding PrePost_def updateS_def returnS_def by auto
 
 lemma PrePost_if:
@@ -100,7 +101,7 @@ lemma PrePost_if:
   shows "PrePost P (if b then f else g) Q"
   using assms by auto
 
-lemma PrePost_if_branch[PrePost_intro]:
+lemma PrePost_if_branch[PrePost_compositeI]:
   assumes "b \<Longrightarrow> PrePost Pf f Q" and "\<not>b \<Longrightarrow> PrePost Pg g Q"
   shows "PrePost (if b then Pf else Pg) (if b then f else g) Q"
   using assms by auto
@@ -115,22 +116,22 @@ lemma PrePost_if_else:
   shows "PrePost P (if b then f else g) Q"
   using assms by auto
 
-lemma PrePost_prod_cases[PrePost_intro]:
+lemma PrePost_prod_cases[PrePost_compositeI]:
   assumes "PrePost P (f (fst x) (snd x)) Q"
   shows "PrePost P (case x of (a, b) \<Rightarrow> f a b) Q"
   using assms by (auto split: prod.splits)
 
-lemma PrePost_option_cases[PrePost_intro]:
+lemma PrePost_option_cases[PrePost_compositeI]:
   assumes "\<And>a. PrePost (PS a) (s a) Q" and "PrePost PN n Q"
   shows "PrePost (case x of Some a \<Rightarrow> PS a | None \<Rightarrow> PN) (case x of Some a \<Rightarrow> s a | None \<Rightarrow> n) Q"
   using assms by (auto split: option.splits)
 
-lemma PrePost_let[intro, PrePost_intro]:
+lemma PrePost_let[intro, PrePost_compositeI]:
   assumes "PrePost P (m y) Q"
   shows "PrePost P (let x = y in m x) Q"
   using assms by auto
 
-lemma PrePost_and_boolS[PrePost_intro]:
+lemma PrePost_and_boolS[PrePost_compositeI]:
   assumes r: "PrePost R r Q"
     and l: "PrePost P l (\<lambda>r. case r of Value True \<Rightarrow> R | _ \<Rightarrow> Q r)"
   shows "PrePost P (and_boolS l r) Q"
@@ -145,7 +146,7 @@ next
     using l by (elim PrePost_weaken_post) (auto split: result.splits)
 qed
 
-lemma PrePost_or_boolS[PrePost_intro]:
+lemma PrePost_or_boolS[PrePost_compositeI]:
   assumes r: "PrePost R r Q"
     and l: "PrePost P l (\<lambda>r. case r of Value False \<Rightarrow> R | _ \<Rightarrow> Q r)"
   shows "PrePost P (or_boolS l r) Q"
@@ -160,20 +161,20 @@ next
     using l by (elim PrePost_weaken_post) (auto split: result.splits)
 qed
 
-lemma PrePost_assert_expS[intro, PrePost_intro]: "PrePost (if c then P (Value ()) else P (Ex (Failure m))) (assert_expS c m) P"
+lemma PrePost_assert_expS[intro, PrePost_atomI]: "PrePost (if c then P (Value ()) else P (Ex (Failure m))) (assert_expS c m) P"
   unfolding PrePost_def assert_expS_def by (auto simp: returnS_def failS_def)
 
-lemma PrePost_chooseS[intro, PrePost_intro]: "PrePost (\<lambda>s. \<forall>x \<in> xs. Q (Value x) s) (chooseS xs) Q"
+lemma PrePost_chooseS[intro, PrePost_atomI]: "PrePost (\<lambda>s. \<forall>x \<in> xs. Q (Value x) s) (chooseS xs) Q"
   by (auto simp: PrePost_def chooseS_def)
 
-lemma PrePost_failS[intro, PrePost_intro]: "PrePost (Q (Ex (Failure msg))) (failS msg) Q"
+lemma PrePost_failS[intro, PrePost_atomI]: "PrePost (Q (Ex (Failure msg))) (failS msg) Q"
   by (auto simp: PrePost_def failS_def)
 
 lemma case_result_combine[simp]:
   "(case r of Value a \<Rightarrow> Q (Value a) | Ex e \<Rightarrow> Q (Ex e)) = Q r"
   by (auto split: result.splits)
 
-lemma PrePost_foreachS_Nil[intro, simp, PrePost_intro]:
+lemma PrePost_foreachS_Nil[intro, simp, PrePost_atomI]:
   "PrePost (Q (Value vars)) (foreachS [] vars body) Q"
   by auto
 
@@ -249,20 +250,21 @@ lemma PrePostE_weaken_post:
   shows "PrePostE A f C E"
   using assms by (blast intro: PrePostE_consequence)
 
-named_theorems PrePostE_intro
+named_theorems PrePostE_compositeI
+named_theorems PrePostE_atomI
 
-lemma PrePostE_True_post[PrePost_intro, intro, simp]:
+lemma PrePostE_True_post[PrePostE_atomI, intro, simp]:
   "PrePostE P m (\<lambda>_ _. True) (\<lambda>_ _. True)"
   unfolding PrePost_defs by (auto split: result.splits)
 
 lemma PrePostE_any: "PrePostE (\<lambda>s. \<forall>(r, s') \<in> m s. case r of Value a \<Rightarrow> Q a s' | Ex e \<Rightarrow> E e s') m Q E"
   by (intro PrePostE_I) auto
 
-lemma PrePostE_returnS[PrePostE_intro, intro, simp]:
+lemma PrePostE_returnS[PrePostE_atomI, intro, simp]:
   "PrePostE (P x) (returnS x) P Q"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
-lemma PrePostE_bindS[intro, PrePostE_intro]:
+lemma PrePostE_bindS[intro, PrePostE_compositeI]:
   assumes f: "\<And>s a s'. (Value a, s') \<in> m s \<Longrightarrow> PrePostE (R a) (f a) Q E"
     and m: "PrePostE P m R E"
   shows "PrePostE P (bindS m f) Q E"
@@ -282,13 +284,13 @@ lemma PrePostE_bindS_unit:
   shows "PrePostE P (bindS m f) Q E"
   using assms by auto
 
-lemma PrePostE_readS[PrePostE_intro, intro]: "PrePostE (\<lambda>s. Q (f s) s) (readS f) Q E"
+lemma PrePostE_readS[PrePostE_atomI, intro]: "PrePostE (\<lambda>s. Q (f s) s) (readS f) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
-lemma PrePostE_updateS[PrePostE_intro, intro]: "PrePostE (\<lambda>s. Q () (f s)) (updateS f) Q E"
+lemma PrePostE_updateS[PrePostE_atomI, intro]: "PrePostE (\<lambda>s. Q () (f s)) (updateS f) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
-lemma PrePostE_if_branch[PrePostE_intro]:
+lemma PrePostE_if_branch[PrePostE_compositeI]:
   assumes "b \<Longrightarrow> PrePostE Pf f Q E" and "\<not>b \<Longrightarrow> PrePostE Pg g Q E"
   shows "PrePostE (if b then Pf else Pg) (if b then f else g) Q E"
   using assms by (auto)
@@ -308,44 +310,44 @@ lemma PrePostE_if_else:
   shows "PrePostE P (if b then f else g) Q E"
   using assms by auto
 
-lemma PrePostE_prod_cases[PrePostE_intro]:
+lemma PrePostE_prod_cases[PrePostE_compositeI]:
   assumes "PrePostE P (f (fst x) (snd x)) Q E"
   shows "PrePostE P (case x of (a, b) \<Rightarrow> f a b) Q E"
   using assms by (auto split: prod.splits)
 
-lemma PrePostE_option_cases[PrePostE_intro]:
+lemma PrePostE_option_cases[PrePostE_compositeI]:
   assumes "\<And>a. PrePostE (PS a) (s a) Q E" and "PrePostE PN n Q E"
   shows "PrePostE (case x of Some a \<Rightarrow> PS a | None \<Rightarrow> PN) (case x of Some a \<Rightarrow> s a | None \<Rightarrow> n) Q E"
   using assms by (auto split: option.splits)
 
-lemma PrePostE_let[PrePostE_intro]:
+lemma PrePostE_let[PrePostE_compositeI]:
   assumes "PrePostE P (m y) Q E"
   shows "PrePostE P (let x = y in m x) Q E"
   using assms by auto
 
-lemma PrePostE_and_boolS[PrePostE_intro]:
+lemma PrePostE_and_boolS[PrePostE_compositeI]:
   assumes r: "PrePostE R r Q E"
     and l: "PrePostE P l (\<lambda>r. if r then R else Q False) E"
   shows "PrePostE P (and_boolS l r) Q E"
   using assms unfolding PrePostE_def
   by (intro PrePost_and_boolS) (auto elim: PrePost_weaken_post split: if_splits result.splits)
 
-lemma PrePostE_or_boolS[PrePostE_intro]:
+lemma PrePostE_or_boolS[PrePostE_compositeI]:
   assumes r: "PrePostE R r Q E"
     and l: "PrePostE P l (\<lambda>r. if r then Q True else R) E"
   shows "PrePostE P (or_boolS l r) Q E"
   using assms unfolding PrePostE_def
   by (intro PrePost_or_boolS) (auto elim: PrePost_weaken_post split: if_splits result.splits)
 
-lemma PrePostE_assert_expS[PrePostE_intro, intro]:
+lemma PrePostE_assert_expS[PrePostE_atomI, intro]:
   "PrePostE (if c then P () else Q (Failure m)) (assert_expS c m) P Q"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
-lemma PrePostE_failS[PrePost_intro, intro]:
+lemma PrePostE_failS[PrePostE_atomI, intro]:
   "PrePostE (E (Failure msg)) (failS msg) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
-lemma PrePostE_chooseS[intro, PrePostE_intro]:
+lemma PrePostE_chooseS[intro, PrePostE_atomI]:
   "PrePostE (\<lambda>s. \<forall>x \<in> xs. Q x s) (chooseS xs) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
