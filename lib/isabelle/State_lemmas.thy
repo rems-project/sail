@@ -30,6 +30,12 @@ lemma liftState_footprint[simp]: "liftState r (footprint ()) = returnS ()" by (a
 lemma liftState_undefined[simp]: "liftState r (undefined_bool ()) = undefined_boolS ()" by (auto simp: undefined_bool_def)
 lemma liftState_maybe_fail[simp]: "liftState r (maybe_fail msg x) = maybe_failS msg x"
   by (auto simp: maybe_fail_def maybe_failS_def split: option.splits)
+lemma liftState_and_boolM[simp]:
+  "liftState r (and_boolM x y) = and_boolS (liftState r x) (liftState r y)"
+  by (auto simp: and_boolM_def and_boolS_def cong: bindS_cong if_cong)
+lemma liftState_or_boolM[simp]:
+  "liftState r (or_boolM x y) = or_boolS (liftState r x) (liftState r y)"
+  by (auto simp: or_boolM_def or_boolS_def cong: bindS_cong if_cong)
 
 lemma liftState_try_catch[simp]:
   "liftState r (try_catch m h) = try_catchS (liftState r m) (liftState r \<circ> h)"
@@ -198,5 +204,47 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
     qed auto
   qed auto
 qed
+
+(* Simplification rules for monadic Boolean connectives *)
+
+lemma if_return_return[simp]: "(if a then return True else return False) = return a" by auto
+
+lemma and_boolM_simps[simp]:
+  "and_boolM (return b) y = (if b then y else return False)"
+  "and_boolM x (return True) = x"
+  "and_boolM x (return False) = x \<bind> (\<lambda>_. return False)"
+  "\<And>x y z. and_boolM (x \<bind> y) z = (x \<bind> (\<lambda>r. and_boolM (y r) z))"
+  by (auto simp: and_boolM_def)
+
+lemmas and_boolM_if_distrib[simp] = if_distrib[where f = "\<lambda>x. and_boolM x y" for y]
+
+lemma or_boolM_simps[simp]:
+  "or_boolM (return b) y = (if b then return True else y)"
+  "or_boolM x (return True) = x \<bind> (\<lambda>_. return True)"
+  "or_boolM x (return False) = x"
+  "\<And>x y z. or_boolM (x \<bind> y) z = (x \<bind> (\<lambda>r. or_boolM (y r) z))"
+  by (auto simp: or_boolM_def)
+
+lemmas or_boolM_if_distrib[simp] = if_distrib[where f = "\<lambda>x. or_boolM x y" for y]
+
+lemma if_returnS_returnS[simp]: "(if a then returnS True else returnS False) = returnS a" by auto
+
+lemma and_boolS_simps[simp]:
+  "and_boolS (returnS b) y = (if b then y else returnS False)"
+  "and_boolS x (returnS True) = x"
+  "and_boolS x (returnS False) = bindS x (\<lambda>_. returnS False)"
+  "\<And>x y z. and_boolS (bindS x y) z = (bindS x (\<lambda>r. and_boolS (y r) z))"
+  by (auto simp: and_boolS_def)
+
+lemmas and_boolS_if_distrib[simp] = if_distrib[where f = "\<lambda>x. and_boolS x y" for y]
+
+lemma or_boolS_simps[simp]:
+  "or_boolS (returnS b) y = (if b then returnS True else y)"
+  "or_boolS x (returnS True) = bindS x (\<lambda>_. returnS True)"
+  "or_boolS x (returnS False) = x"
+  "\<And>x y z. or_boolS (bindS x y) z = (bindS x (\<lambda>r. or_boolS (y r) z))"
+  by (auto simp: or_boolS_def)
+
+lemmas or_boolS_if_distrib[simp] = if_distrib[where f = "\<lambda>x. or_boolS x y" for y]
 
 end

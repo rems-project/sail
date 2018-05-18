@@ -130,6 +130,36 @@ lemma PrePost_let[intro, PrePost_intro]:
   shows "PrePost P (let x = y in m x) Q"
   using assms by auto
 
+lemma PrePost_and_boolS[PrePost_intro]:
+  assumes r: "PrePost R r Q"
+    and l: "PrePost P l (\<lambda>r. case r of Value True \<Rightarrow> R | _ \<Rightarrow> Q r)"
+  shows "PrePost P (and_boolS l r) Q"
+  unfolding and_boolS_def
+proof (rule PrePost_bindS)
+  fix s a s'
+  assume "(Value a, s') \<in> l s"
+  show "PrePost (if a then R else Q (Value False)) (if a then r else returnS False) Q"
+    using r by auto
+next
+  show "PrePost P l (\<lambda>r. case r of Value a \<Rightarrow> if a then R else Q (Value False) | Ex e \<Rightarrow> Q (Ex e))"
+    using l by (elim PrePost_weaken_post) (auto split: result.splits)
+qed
+
+lemma PrePost_or_boolS[PrePost_intro]:
+  assumes r: "PrePost R r Q"
+    and l: "PrePost P l (\<lambda>r. case r of Value False \<Rightarrow> R | _ \<Rightarrow> Q r)"
+  shows "PrePost P (or_boolS l r) Q"
+  unfolding or_boolS_def
+proof (rule PrePost_bindS)
+  fix s a s'
+  assume "(Value a, s') \<in> l s"
+  show "PrePost (if a then Q (Value True) else R) (if a then returnS True else r) Q"
+    using r by auto
+next
+  show "PrePost P l (\<lambda>r. case r of Value a \<Rightarrow> if a then Q (Value True) else R | Ex e \<Rightarrow> Q (Ex e))"
+    using l by (elim PrePost_weaken_post) (auto split: result.splits)
+qed
+
 lemma PrePost_assert_expS[intro, PrePost_intro]: "PrePost (if c then P (Value ()) else P (Ex (Failure m))) (assert_expS c m) P"
   unfolding PrePost_def assert_expS_def by (auto simp: returnS_def failS_def)
 
@@ -292,6 +322,20 @@ lemma PrePostE_let[PrePostE_intro]:
   assumes "PrePostE P (m y) Q E"
   shows "PrePostE P (let x = y in m x) Q E"
   using assms by auto
+
+lemma PrePostE_and_boolS[PrePostE_intro]:
+  assumes r: "PrePostE R r Q E"
+    and l: "PrePostE P l (\<lambda>r. if r then R else Q False) E"
+  shows "PrePostE P (and_boolS l r) Q E"
+  using assms unfolding PrePostE_def
+  by (intro PrePost_and_boolS) (auto elim: PrePost_weaken_post split: if_splits result.splits)
+
+lemma PrePostE_or_boolS[PrePostE_intro]:
+  assumes r: "PrePostE R r Q E"
+    and l: "PrePostE P l (\<lambda>r. if r then Q True else R) E"
+  shows "PrePostE P (or_boolS l r) Q E"
+  using assms unfolding PrePostE_def
+  by (intro PrePost_or_boolS) (auto elim: PrePost_weaken_post split: if_splits result.splits)
 
 lemma PrePostE_assert_expS[PrePostE_intro, intro]:
   "PrePostE (if c then P () else Q (Failure m)) (assert_expS c m) P Q"
