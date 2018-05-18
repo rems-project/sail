@@ -25,6 +25,7 @@ val (shr_int_rw, shr_int_ind_rw) =
   )
 val shr_int_rw = save_thm ("shr_int_rw", shr_int_rw);
 val shr_int_ind_rw = save_thm ("shr_int_ind_rw", shr_int_ind_rw);
+val () = computeLib.add_persistent_funs["shr_int_rw"];
 
 
 (* val gst = Defn.tgoal_no_defn (shl_int_def, shl_int_ind) *)
@@ -34,6 +35,7 @@ val (shl_int_rw, shl_int_ind_rw) =
   )
 val shl_int_rw = save_thm ("shl_int_rw", shl_int_rw);
 val shl_int_ind_rw = save_thm ("shl_int_ind_rw", shl_int_ind_rw);
+val () = computeLib.add_persistent_funs["shl_int_rw"];
 
 
 (* val gst = Defn.tgoal_no_defn (repeat_def, repeat_ind) *)
@@ -43,6 +45,7 @@ val (repeat_rw, repeat_ind_rw) =
   )
 val repeat_rw = save_thm ("repeat_rw", repeat_rw);
 val repeat_ind_rw = save_thm ("repeat_ind_rw", repeat_ind_rw);
+val () = computeLib.add_persistent_funs["repeat_rw"];
 
 
 (* val gst = Defn.tgoal_no_defn (bools_of_nat_aux_def, bools_of_nat_aux_ind) *)
@@ -52,6 +55,7 @@ val (bools_of_nat_aux_rw, bools_of_nat_aux_ind_rw) =
   )
 val bools_of_nat_aux_rw = save_thm ("bools_of_nat_aux_rw", bools_of_nat_aux_rw);
 val bools_of_nat_aux_ind_rw = save_thm ("bools_of_nat_aux_ind_rw", bools_of_nat_aux_ind_rw);
+val () = computeLib.add_persistent_funs["bools_of_nat_aux_rw"];
 
 
 (* val gst = Defn.tgoal_no_defn (pad_list_def, pad_list_ind) *)
@@ -61,6 +65,7 @@ val (pad_list_rw, pad_list_ind_rw) =
   )
 val pad_list_rw = save_thm ("pad_list_rw", pad_list_rw);
 val pad_list_ind_rw = save_thm ("pad_list_ind_rw", pad_list_ind_rw);
+val () = computeLib.add_persistent_funs["pad_list_rw"];
 
 
 (* val gst = Defn.tgoal_no_defn (reverse_endianness_list_def, reverse_endianness_list_ind) *)
@@ -70,6 +75,7 @@ val (reverse_endianness_list_rw, reverse_endianness_list_ind_rw) =
   )
 val reverse_endianness_list_rw = save_thm ("reverse_endianness_list_rw", reverse_endianness_list_rw);
 val reverse_endianness_list_ind_rw = save_thm ("reverse_endianness_list_ind_rw", reverse_endianness_list_ind_rw);
+val () = computeLib.add_persistent_funs["reverse_endianness_list_rw"];
 
 
 (* val gst = Defn.tgoal_no_defn (index_list_def, index_list_ind) *)
@@ -81,6 +87,7 @@ val (index_list_rw, index_list_ind_rw) =
   )
 val index_list_rw = save_thm ("index_list_rw", index_list_rw);
 val index_list_ind_rw = save_thm ("index_list_ind_rw", index_list_ind_rw);
+val () = computeLib.add_persistent_funs["index_list_rw"];
 
 
 (*
