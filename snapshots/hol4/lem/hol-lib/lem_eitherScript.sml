@@ -27,8 +27,8 @@ val _ = new_theory "lem_either"
 (*val eitherEqualBy : forall 'a 'b. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> (either 'a 'b) -> (either 'a 'b) -> bool*)
 
 val _ = Define `
- ((eitherEqualBy:('a -> 'a -> bool) ->('b -> 'b -> bool) ->('a,'b)sum ->('a,'b)sum -> bool) eql eqr (left: ('a, 'b) sum) (right: ('a, 'b) sum)=  
- ((case (left, right) of
+ ((eitherEqualBy:('a -> 'a -> bool) ->('b -> 'b -> bool) ->('a,'b)sum ->('a,'b)sum -> bool) eql eqr (left: ('a, 'b) sum) (right: ('a, 'b) sum)=
+   ((case (left, right) of
       (INL l, INL l') => eql l l'
     | (INR r, INR r') => eqr r r'
     | _ => F
@@ -37,10 +37,10 @@ val _ = Define `
 (*let eitherEqual=  eitherEqualBy (=) (=)*)
 
 val _ = Define `
- ((either_setElemCompare:('d -> 'b -> lem_basic_classes$ordering) ->('c -> 'a -> lem_basic_classes$ordering) ->('d,'c)sum ->('b,'a)sum -> lem_basic_classes$ordering) cmpa cmpb (INL x') (INL y')=  (cmpa x' y'))
-/\ ((either_setElemCompare:('d -> 'b -> lem_basic_classes$ordering) ->('c -> 'a -> lem_basic_classes$ordering) ->('d,'c)sum ->('b,'a)sum -> lem_basic_classes$ordering) cmpa cmpb (INR x') (INR y')=  (cmpb x' y'))
-/\ ((either_setElemCompare:('d -> 'b -> lem_basic_classes$ordering) ->('c -> 'a -> lem_basic_classes$ordering) ->('d,'c)sum ->('b,'a)sum -> lem_basic_classes$ordering) cmpa cmpb (INL _) (INR _)=  LT)
-/\ ((either_setElemCompare:('d -> 'b -> lem_basic_classes$ordering) ->('c -> 'a -> lem_basic_classes$ordering) ->('d,'c)sum ->('b,'a)sum -> lem_basic_classes$ordering) cmpa cmpb (INR _) (INL _)=  GT)`;
+ ((either_setElemCompare:('d -> 'b -> ordering) ->('c -> 'a -> ordering) ->('d,'c)sum ->('b,'a)sum -> ordering) cmpa cmpb (INL x') (INL y')=  (cmpa x' y'))
+/\ ((either_setElemCompare:('d -> 'b -> ordering) ->('c -> 'a -> ordering) ->('d,'c)sum ->('b,'a)sum -> ordering) cmpa cmpb (INR x') (INR y')=  (cmpb x' y'))
+/\ ((either_setElemCompare:('d -> 'b -> ordering) ->('c -> 'a -> ordering) ->('d,'c)sum ->('b,'a)sum -> ordering) cmpa cmpb (INL _) (INR _)=  LESS)
+/\ ((either_setElemCompare:('d -> 'b -> ordering) ->('c -> 'a -> ordering) ->('d,'c)sum ->('b,'a)sum -> ordering) cmpa cmpb (INR _) (INL _)=  GREATER)`;
 
                            
 

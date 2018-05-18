@@ -43,8 +43,8 @@ val _ = new_theory "lem_list"
 (* ----------------------- *)
 
 (*val length : forall 'a. list 'a -> nat*)
-(*let rec length l= 
-  match l with
+(*let rec length l=
+   match l with
     | [] -> 0
     | x :: xs -> (Instance_Num_NumAdd_nat.+) (length xs) 1
   end*)
@@ -68,18 +68,18 @@ val _ = new_theory "lem_list"
 (* compare                 *)
 (* ----------------------- *)
 
-(*val lexicographicCompare : forall 'a. Ord 'a => list 'a -> list 'a -> Basic_classes.ordering*)
-(*val lexicographicCompareBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> list 'a -> list 'a -> Basic_classes.ordering*)
+(*val lexicographicCompare : forall 'a. Ord 'a => list 'a -> list 'a -> ordering*)
+(*val lexicographicCompareBy : forall 'a. ('a -> 'a -> ordering) -> list 'a -> list 'a -> ordering*)
 
  val _ = Define `
- ((lexicographic_compare:('a -> 'a -> lem_basic_classes$ordering) -> 'a list -> 'a list -> lem_basic_classes$ordering) cmp ([]) ([])=  EQ)
-/\ ((lexicographic_compare:('a -> 'a -> lem_basic_classes$ordering) -> 'a list -> 'a list -> lem_basic_classes$ordering) cmp ([]) (_::_)=  LT)
-/\ ((lexicographic_compare:('a -> 'a -> lem_basic_classes$ordering) -> 'a list -> 'a list -> lem_basic_classes$ordering) cmp (_::_) ([])=  GT)
-/\ ((lexicographic_compare:('a -> 'a -> lem_basic_classes$ordering) -> 'a list -> 'a list -> lem_basic_classes$ordering) cmp (x::xs) (y::ys)=  ((
+ ((lexicographic_compare:('a -> 'a -> ordering) -> 'a list -> 'a list -> ordering) cmp ([]) ([])=  EQUAL)
+/\ ((lexicographic_compare:('a -> 'a -> ordering) -> 'a list -> 'a list -> ordering) cmp ([]) (_::_)=  LESS)
+/\ ((lexicographic_compare:('a -> 'a -> ordering) -> 'a list -> 'a list -> ordering) cmp (_::_) ([])=  GREATER)
+/\ ((lexicographic_compare:('a -> 'a -> ordering) -> 'a list -> 'a list -> ordering) cmp (x::xs) (y::ys)=  ((
       (case cmp x y of 
-          LT => LT
-        | GT => GT
-        | EQ => lexicographic_compare cmp xs ys
+          LESS => LESS
+        | GREATER => GREATER
+        | EQUAL => lexicographic_compare cmp xs ys
       )
     )))`;
 
@@ -104,7 +104,7 @@ val _ = new_theory "lem_list"
 
 
 val _ = Define `
-((instance_Basic_classes_Ord_list_dict:'a lem_basic_classes$Ord_class ->('a list)lem_basic_classes$Ord_class)dict_Basic_classes_Ord_a= (<|
+((instance_Basic_classes_Ord_list_dict:'a Ord_class ->('a list)Ord_class)dict_Basic_classes_Ord_a= (<|
 
   compare_method := (lexicographic_compare  
   dict_Basic_classes_Ord_a.compare_method);
@@ -256,7 +256,7 @@ end*)
 
 (* get the initial part and the last element of the list in a safe way *)
 
-(*val dest_init : forall 'a. list 'a -> Maybe.maybe (list 'a * 'a)*) 
+(*val dest_init : forall 'a. list 'a -> maybe (list 'a * 'a)*) 
 
  val _ = Define `
  ((dest_init_aux:'a list -> 'a -> 'a list -> 'a list#'a) rev_init last_elem_seen ([])=  (REVERSE rev_init, last_elem_seen))
@@ -277,7 +277,7 @@ val _ = Define `
 (* index / nth with maybe   *)
 (* ------------------------- *)
 
-(*val index : forall 'a. list 'a -> nat -> Maybe.maybe 'a*)
+(*val index : forall 'a. list 'a -> nat -> maybe 'a*)
 
  val _ = Define `
  ((list_index:'a list -> num -> 'a option) ([]) n=  NONE)
@@ -307,7 +307,7 @@ val _ = Define `
 (* ------------------------- *)
 
 (* findIndex returns the first index of a list that satisfies a given predicate. *)
-(*val findIndex : forall 'a. ('a -> bool) -> list 'a -> Maybe.maybe nat*)
+(*val findIndex : forall 'a. ('a -> bool) -> list 'a -> maybe nat*)
 val _ = Define `
  ((find_index:('a -> bool) -> 'a list ->(num)option) P l=  ((case find_indices P l of
     [] => NONE
@@ -325,7 +325,7 @@ val _ = Define `
 (* elemIndex                 *)
 (* ------------------------- *)
 
-(*val elemIndex : forall 'a. Eq 'a => 'a -> list 'a -> Maybe.maybe nat*)
+(*val elemIndex : forall 'a. Eq 'a => 'a -> list 'a -> maybe nat*)
 
 
 (* ========================================================================== *)
@@ -340,8 +340,8 @@ val _ = Define `
 (*val genlist : forall 'a. (nat -> 'a) -> nat -> list 'a*)
 
 
-(*let rec genlist f n= 
-  match n with
+(*let rec genlist f n=
+   match n with
     | 0 -> []
     | n' + 1 -> snoc (f n') (genlist f n')
   end*)
@@ -352,8 +352,8 @@ val _ = Define `
 (* ------------------------- *)
 
 (*val replicate : forall 'a. nat -> 'a -> list 'a*)
-(*let rec replicate n x= 
-  match n with
+(*let rec replicate n x=
+   match n with
     | 0 -> []
     | n' + 1 -> x :: replicate n' x
   end*)
@@ -372,8 +372,8 @@ val _ = Define `
    in [xs], the original list and the empty one are returned. *)
 (*val splitAtAcc : forall 'a. list 'a -> nat -> list 'a -> (list 'a * list 'a)*)
  val splitAtAcc_defn = Hol_defn "splitAtAcc" `
- ((splitAtAcc:'a list -> num -> 'a list -> 'a list#'a list) revAcc n l=  
-  ((case l of
+ ((splitAtAcc:'a list -> num -> 'a list -> 'a list#'a list) revAcc n l= 
+   ((case l of
       []    => (REVERSE revAcc, [])
     | x::xs => if n <=( 0 : num) then (REVERSE revAcc, l) else splitAtAcc (x::revAcc) (n -( 1 : num)) xs
   )))`;
@@ -381,8 +381,8 @@ val _ = Define `
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn splitAtAcc_defn;
 
 (*val splitAt : forall 'a. nat -> list 'a -> (list 'a * list 'a)*)
-(*let rec splitAt n l=  
-   splitAtAcc [] n l*)
+(*let rec splitAt n l= 
+    splitAtAcc [] n l*)
 
 
 (* ------------------------- *)
@@ -407,10 +407,10 @@ val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn
 
 (*val splitWhile_tr : forall 'a. ('a -> bool) -> list 'a -> list 'a -> (list 'a * list 'a)*)
  val _ = Define `
- ((splitWhile_tr:('a -> bool) -> 'a list -> 'a list -> 'a list#'a list) p ([]) acc= 
-    (REVERSE acc, []))
-/\ ((splitWhile_tr:('a -> bool) -> 'a list -> 'a list -> 'a list#'a list) p (x::xs) acc=    
- (if p x then
+ ((splitWhile_tr:('a -> bool) -> 'a list -> 'a list -> 'a list#'a list) p ([]) acc=
+     (REVERSE acc, []))
+/\ ((splitWhile_tr:('a -> bool) -> 'a list -> 'a list -> 'a list#'a list) p (x::xs) acc=
+     (if p x then
       splitWhile_tr p xs (x::acc)
     else
       (REVERSE acc, (x::xs))))`;
@@ -448,8 +448,8 @@ end*)
 (* update                    *)
 (* ------------------------- *)
 (*val update : forall 'a. list 'a -> nat -> 'a -> list 'a*)
-(*let rec update l n e=  
-  match l with
+(*let rec update l n e= 
+   match l with
     | []      -> []
     | x :: xs -> if (Instance_Basic_classes_Eq_nat.=) n 0 then e :: xs else x :: (update xs ((Instance_Num_NumMinus_nat.-) n 1) e)
 end*)
@@ -492,7 +492,7 @@ val _ = Define `
 (* ------------------------- *)
 (* Find                      *)
 (* ------------------------- *)
-(*val find : forall 'a. ('a -> bool) -> list 'a -> Maybe.maybe 'a*) (* previously not of maybe type *)
+(*val find : forall 'a. ('a -> bool) -> list 'a -> maybe 'a*) (* previously not of maybe type *)
  val _ = Define `
  ((list_find_opt:('a -> bool) -> 'a list -> 'a option) P ([])=  NONE)
 /\ ((list_find_opt:('a -> bool) -> 'a list -> 'a option) P (x :: xs)=  (if P x then SOME x else list_find_opt P xs))`;
@@ -502,8 +502,8 @@ val _ = Define `
 (* ----------------------------- *)
 (* Lookup in an associative list *)
 (* ----------------------------- *)
-(*val lookup   : forall 'a 'b. Eq 'a              => 'a -> list ('a * 'b) -> Maybe.maybe 'b*)
-(*val lookupBy : forall 'a 'b. ('a -> 'a -> bool) -> 'a -> list ('a * 'b) -> Maybe.maybe 'b*)
+(*val lookup   : forall 'a 'b. Eq 'a              => 'a -> list ('a * 'b) -> maybe 'b*)
+(*val lookupBy : forall 'a 'b. ('a -> 'a -> bool) -> 'a -> list ('a * 'b) -> maybe 'b*)
 
 (* DPM: eta-expansion for Coq backend type-inference. *)
 val _ = Define `
@@ -536,7 +536,7 @@ val _ = Define `
 (* with certain property     *)
 (* ------------------------- *)
 
-(*val deleteFirst : forall 'a. ('a -> bool) -> list 'a -> Maybe.maybe (list 'a)*) 
+(*val deleteFirst : forall 'a. ('a -> bool) -> list 'a -> maybe (list 'a)*) 
  val _ = Define `
  ((list_delete_first:('a -> bool) -> 'a list ->('a list)option) P ([])=  NONE)
 /\ ((list_delete_first:('a -> bool) -> 'a list ->('a list)option) P (x :: xs)=  (if (P x) then SOME xs else OPTION_MAP (\ xs' .  x :: xs') (list_delete_first P xs)))`;
@@ -583,18 +583,18 @@ end*)
 (* ------------------------- *)
 
 (*val allDistinct : forall 'a. Eq 'a => list 'a -> bool*)
-(*let rec allDistinct l=  
-  match l with
+(*let rec allDistinct l= 
+   match l with
     | [] -> true
     | (x::l') -> not (elem x l') && allDistinct l'
   end*)
 
 (* some more useful functions *)
-(*val mapMaybe : forall 'a 'b. ('a -> Maybe.maybe 'b) -> list 'a -> list 'b*)
+(*val mapMaybe : forall 'a 'b. ('a -> maybe 'b) -> list 'a -> list 'b*)
  val mapMaybe_defn = Defn.Hol_multi_defns `
  ((mapMaybe:('a -> 'b option) -> 'a list -> 'b list) f ([])=  ([]))
-/\ ((mapMaybe:('a -> 'b option) -> 'a list -> 'b list) f (x::xs)=      
- ((case f x of
+/\ ((mapMaybe:('a -> 'b option) -> 'a list -> 'b list) f (x::xs)=
+       ((case f x of
         NONE => mapMaybe f xs
       | SOME y => y :: (mapMaybe f xs)
       )))`;
@@ -613,8 +613,8 @@ val _ = Define `
 
 (*val deletes: forall 'a. Eq 'a => list 'a -> list 'a -> list 'a*)
 val _ = Define `
- ((deletes:'a list -> 'a list -> 'a list) xs ys=  
- (FOLDL (combin$C (list_delete (=))) xs ys))`;
+ ((deletes:'a list -> 'a list -> 'a list) xs ys=
+   (FOLDL (combin$C (list_delete (=))) xs ys))`;
 
 
 (* ========================================================================== *)
@@ -762,14 +762,14 @@ val intersect : forall 'a. list 'a -> list 'a -> list 'a
 
 *)
 
-(*val     catMaybes : forall 'a. list (Maybe.maybe 'a) -> list 'a*)
+(*val     catMaybes : forall 'a. list (maybe 'a) -> list 'a*)
  val catMaybes_defn = Defn.Hol_multi_defns `
- ((catMaybes:('a option)list -> 'a list) ([])=        
- ([]))
-/\ ((catMaybes:('a option)list -> 'a list) (NONE :: xs')=        
- (catMaybes xs'))
-/\ ((catMaybes:('a option)list -> 'a list) (SOME x :: xs')=        
- (x :: catMaybes xs'))`;
+ ((catMaybes:('a option)list -> 'a list) ([])=
+         ([]))
+/\ ((catMaybes:('a option)list -> 'a list) (NONE :: xs')=
+         (catMaybes xs'))
+/\ ((catMaybes:('a option)list -> 'a list) (SOME x :: xs')=
+         (x :: catMaybes xs'))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) (List.map Defn.save_defn) catMaybes_defn;
 val _ = export_theory()

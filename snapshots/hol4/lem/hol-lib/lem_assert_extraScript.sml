@@ -35,8 +35,8 @@ val _ = Define `
 
 (*val ensure : bool -> string -> unit*)
 val _ = Define `
- ((ensure:bool -> string -> unit) test msg=  
- (if test then
+ ((ensure:bool -> string -> unit) test msg=
+   (if test then
     () 
   else
     failwith msg))`;

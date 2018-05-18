@@ -26,7 +26,7 @@ val _ = Define `
   show_method := (\ s.  STRCAT"\""  (STRCAT s "\""))|>))`;
 
 
-(*val stringFromMaybe : forall 'a. ('a -> string) -> Maybe.maybe 'a -> string*)
+(*val stringFromMaybe : forall 'a. ('a -> string) -> maybe 'a -> string*)
 val _ = Define `
  ((stringFromMaybe:('a -> string) -> 'a option -> string) showX (SOME x)=   (STRCAT"Just ("  (STRCAT(showX x) ")")))
 /\ ((stringFromMaybe:('a -> string) -> 'a option -> string) showX NONE=  "Nothing")`;
@@ -42,8 +42,8 @@ val _ = Define `
 (*val stringFromListAux : forall 'a. ('a -> string) -> list 'a -> string*)
  val stringFromListAux_defn = Defn.Hol_multi_defns `
  ((stringFromListAux:('a -> string) -> 'a list -> string) showX ([])=  "")
-/\ ((stringFromListAux:('a -> string) -> 'a list -> string) showX (x::xs')=      
- ((case xs' of
+/\ ((stringFromListAux:('a -> string) -> 'a list -> string) showX (x::xs')=
+       ((case xs' of
         [] => showX x
       | _ =>  STRCAT(showX x)  (STRCAT"; " (stringFromListAux showX xs'))
       )))`;
@@ -52,8 +52,8 @@ val _ = Lib.with_flag (computeLib.auto_import_definitions, false) (List.map Defn
 
 (*val stringFromList : forall 'a. ('a -> string) -> list 'a -> string*)
 val _ = Define `
- ((stringFromList:('a -> string) -> 'a list -> string) showX xs=   
- (STRCAT"["  (STRCAT(stringFromListAux showX xs) "]")))`;
+ ((stringFromList:('a -> string) -> 'a list -> string) showX xs= 
+   (STRCAT"["  (STRCAT(stringFromListAux showX xs) "]")))`;
 
 
 val _ = Define `
@@ -65,8 +65,8 @@ val _ = Define `
 
 (*val stringFromPair : forall 'a 'b. ('a -> string) -> ('b -> string) -> ('a * 'b) -> string*)
 val _ = Define `
- ((stringFromPair:('a -> string) ->('b -> string) -> 'a#'b -> string) showX showY (x,y)=   
- (STRCAT"("  (STRCAT(showX x)  (STRCAT", "  (STRCAT(showY y) ")")))))`;
+ ((stringFromPair:('a -> string) ->('b -> string) -> 'a#'b -> string) showX showY (x,y)= 
+   (STRCAT"("  (STRCAT(showX x)  (STRCAT", "  (STRCAT(showY y) ")")))))`;
 
 
 val _ = Define `

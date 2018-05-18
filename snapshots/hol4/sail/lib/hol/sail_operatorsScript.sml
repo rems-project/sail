@@ -14,30 +14,30 @@ val _ = new_theory "sail_operators"
 
 (*** Bit vector operations *)
 
-(*val concat_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b => 'a -> 'b -> list Sail_values.bitU*)
+(*val concat_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b => 'a -> 'b -> list bitU*)
 val _ = Define `
- ((concat_bv:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class -> 'a -> 'b ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b l r=  (
+ ((concat_bv:'a Bitvector_class -> 'b Bitvector_class -> 'a -> 'b ->(bitU)list)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b l r=  (
   dict_Sail_values_Bitvector_a.bits_of_method l ++ dict_Sail_values_Bitvector_b.bits_of_method r))`;
 
 
-(*val cons_bv : forall 'a. Bitvector 'a => Sail_values.bitU -> 'a -> list Sail_values.bitU*)
+(*val cons_bv : forall 'a. Bitvector 'a => bitU -> 'a -> list bitU*)
 val _ = Define `
- ((cons_bv:'a sail_values$Bitvector_class -> sail_values$bitU -> 'a ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a b v=  (b :: 
+ ((cons_bv:'a Bitvector_class -> bitU -> 'a ->(bitU)list)dict_Sail_values_Bitvector_a b v=  (b :: 
   dict_Sail_values_Bitvector_a.bits_of_method v))`;
 
 
-(*val cast_unit_bv : Sail_values.bitU -> list Sail_values.bitU*)
+(*val cast_unit_bv : bitU -> list bitU*)
 val _ = Define `
- ((cast_unit_bv:sail_values$bitU ->(sail_values$bitU)list) b=  ([b]))`;
+ ((cast_unit_bv:bitU ->(bitU)list) b=  ([b]))`;
 
 
-(*val bv_of_bit : Num.integer -> Sail_values.bitU -> list Sail_values.bitU*)
+(*val bv_of_bit : integer -> bitU -> list bitU*)
 val _ = Define `
- ((bv_of_bit:int -> sail_values$bitU ->(sail_values$bitU)list) len b=  (extz_bits len [b]))`;
+ ((bv_of_bit:int -> bitU ->(bitU)list) len b=  (extz_bits len [b]))`;
 
 
 val _ = Define `
- ((most_significant:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU)dict_Sail_values_Bitvector_a v=  ((case  
+ ((most_significant:'a Bitvector_class -> 'a -> bitU)dict_Sail_values_Bitvector_a v=  ((case  
   dict_Sail_values_Bitvector_a.bits_of_method v of
     b :: _ => b
   | _ => B0 (* Treat empty bitvector as all zeros *)
@@ -45,8 +45,8 @@ val _ = Define `
 
 
 val _ = Define `
- ((get_max_representable_in:bool -> int -> int) sign (n : int) : int=  
- (if (n =( 64 : int)) then (case sign of   T => max_64 | F => max_64u )
+ ((get_max_representable_in:bool -> int -> int) sign (n : int) : int=
+   (if (n =( 64 : int)) then (case sign of   T => max_64 | F => max_64u )
   else if (n=( 32 : int)) then (case sign of   T => max_32 | F => max_32u )
   else if (n=( 8 : int)) then max_8
   else if (n=( 5 : int)) then max_5
@@ -56,8 +56,8 @@ val _ = Define `
 
 
 val _ = Define `
- ((get_min_representable_in:'a -> int -> int) _ (n : int) : int=  
- (if n =( 64 : int) then min_64
+ ((get_min_representable_in:'a -> int -> int) _ (n : int) : int=
+   (if n =( 64 : int) then min_64
   else if n =( 32 : int) then min_32
   else if n =( 8 : int) then min_8
   else if n =( 5 : int) then min_5
@@ -65,25 +65,25 @@ val _ = Define `
 
 
 (*val arith_op_bv_int : forall 'a 'b. Bitvector 'a =>
-  (Num.integer -> Num.integer -> Num.integer) -> bool -> 'a -> Num.integer -> 'a*)
+  (integer -> integer -> integer) -> bool -> 'a -> integer -> 'a*)
 val _ = Define `
- ((arith_op_bv_int:'a sail_values$Bitvector_class ->(int -> int -> int) -> bool -> 'a -> int -> 'a)dict_Sail_values_Bitvector_a op sign l r=  
- (let r' = (dict_Sail_values_Bitvector_a.of_int_method (dict_Sail_values_Bitvector_a.length_method l) r) in  dict_Sail_values_Bitvector_a.arith_op_bv_method op sign l r'))`;
+ ((arith_op_bv_int:'a Bitvector_class ->(int -> int -> int) -> bool -> 'a -> int -> 'a)dict_Sail_values_Bitvector_a op sign l r=
+   (let r' = (dict_Sail_values_Bitvector_a.of_int_method (dict_Sail_values_Bitvector_a.length_method l) r) in  dict_Sail_values_Bitvector_a.arith_op_bv_method op sign l r'))`;
 
 
 (*val arith_op_int_bv : forall 'a 'b. Bitvector 'a =>
-  (Num.integer -> Num.integer -> Num.integer) -> bool -> Num.integer -> 'a -> 'a*)
+  (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a*)
 val _ = Define `
- ((arith_op_int_bv:'a sail_values$Bitvector_class ->(int -> int -> int) -> bool -> int -> 'a -> 'a)dict_Sail_values_Bitvector_a op sign l r=  
- (let l' = (dict_Sail_values_Bitvector_a.of_int_method (dict_Sail_values_Bitvector_a.length_method r) l) in  dict_Sail_values_Bitvector_a.arith_op_bv_method op sign l' r))`;
+ ((arith_op_int_bv:'a Bitvector_class ->(int -> int -> int) -> bool -> int -> 'a -> 'a)dict_Sail_values_Bitvector_a op sign l r=
+   (let l' = (dict_Sail_values_Bitvector_a.of_int_method (dict_Sail_values_Bitvector_a.length_method r) l) in  dict_Sail_values_Bitvector_a.arith_op_bv_method op sign l' r))`;
 
 
 val _ = Define `
- ((arith_op_bv_bool:'a sail_values$Bitvector_class ->(int -> int -> int) -> bool -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a op sign l r=  (arith_op_bv_int 
+ ((arith_op_bv_bool:'a Bitvector_class ->(int -> int -> int) -> bool -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a op sign l r=  (arith_op_bv_int 
   dict_Sail_values_Bitvector_a op sign l (if r then( 1 : int) else( 0 : int))))`;
 
 val _ = Define `
- ((arith_op_bv_bit:'a sail_values$Bitvector_class ->(int -> int -> int) -> bool -> 'a -> sail_values$bitU -> 'a option)dict_Sail_values_Bitvector_a op sign l r=  (OPTION_MAP (arith_op_bv_bool 
+ ((arith_op_bv_bit:'a Bitvector_class ->(int -> int -> int) -> bool -> 'a -> bitU -> 'a option)dict_Sail_values_Bitvector_a op sign l r=  (OPTION_MAP (arith_op_bv_bool 
   dict_Sail_values_Bitvector_a op sign l) (bool_of_bitU r)))`;
 
 
@@ -161,10 +161,10 @@ val _ = Define `
          )))`;
 
 
-(*val shift_op_bv : forall 'a. Bitvector 'a => shift -> 'a -> Num.integer -> list Sail_values.bitU*)
+(*val shift_op_bv : forall 'a. Bitvector 'a => shift -> 'a -> integer -> list bitU*)
 val _ = Define `
- ((shift_op_bv:'a sail_values$Bitvector_class -> shift -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a op v n=  
- (let v = (dict_Sail_values_Bitvector_a.bits_of_method v) in
+ ((shift_op_bv:'a Bitvector_class -> shift -> 'a -> int ->(bitU)list)dict_Sail_values_Bitvector_a op v n=
+   (let v = (dict_Sail_values_Bitvector_a.bits_of_method v) in
   if n =( 0 : int) then v else
   let (op, n) = (if n >( 0 : int) then (op, n) else (invert_shift op, ~ n)) in
   (case op of
@@ -184,23 +184,23 @@ val _ = Define `
 
 
 val _ = Define `
- ((shiftl_bv:'a sail_values$Bitvector_class -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
+ ((shiftl_bv:'a Bitvector_class -> 'a -> int ->(bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
   dict_Sail_values_Bitvector_a LL_shift))`;
  (*"<<"*)
 val _ = Define `
- ((shiftr_bv:'a sail_values$Bitvector_class -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
+ ((shiftr_bv:'a Bitvector_class -> 'a -> int ->(bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
   dict_Sail_values_Bitvector_a RR_shift))`;
  (*">>"*)
 val _ = Define `
- ((arith_shiftr_bv:'a sail_values$Bitvector_class -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
+ ((arith_shiftr_bv:'a Bitvector_class -> 'a -> int ->(bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
   dict_Sail_values_Bitvector_a RR_shift_arith))`;
 
 val _ = Define `
- ((rotl_bv:'a sail_values$Bitvector_class -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
+ ((rotl_bv:'a Bitvector_class -> 'a -> int ->(bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
   dict_Sail_values_Bitvector_a LL_rot))`;
  (*"<<<"*)
 val _ = Define `
- ((rotr_bv:'a sail_values$Bitvector_class -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
+ ((rotr_bv:'a Bitvector_class -> 'a -> int ->(bitU)list)dict_Sail_values_Bitvector_a=  (shift_op_bv 
   dict_Sail_values_Bitvector_a LL_rot))`;
  (*">>>"*)
 
@@ -221,17 +221,17 @@ val _ = Define `
 
 
  val _ = Define `
- ((arith_op_no0:(int -> int -> int) -> int -> int ->(int)option) (op : int -> int -> int) l r=  
- (if r =( 0 : int)
+ ((arith_op_no0:(int -> int -> int) -> int -> int ->(int)option) (op : int -> int -> int) l r=
+   (if r =( 0 : int)
   then NONE
   else SOME (op l r)))`;
 
 
 (*val arith_op_bv_no0 : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
-  (Num.integer -> Num.integer -> Num.integer) -> bool -> Num.integer -> 'a -> 'a -> Maybe.maybe 'b*)
+  (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a -> maybe 'b*)
 val _ = Define `
- ((arith_op_bv_no0:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class ->(int -> int -> int) -> bool -> int -> 'a -> 'a -> 'b option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b op sign size1 l r=  
- (OPTION_BIND (int_of_bv 
+ ((arith_op_bv_no0:'a Bitvector_class -> 'b Bitvector_class ->(int -> int -> int) -> bool -> int -> 'a -> 'a -> 'b option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b op sign size1 l r=
+   (OPTION_BIND (int_of_bv 
   dict_Sail_values_Bitvector_a sign l) (\ l' . 
   OPTION_BIND (int_of_bv 
   dict_Sail_values_Bitvector_a sign r) (\ r' . 
@@ -240,15 +240,15 @@ val _ = Define `
 
 
 val _ = Define `
- ((mod_bv:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class -> 'b -> 'b -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_no0 
+ ((mod_bv:'a Bitvector_class -> 'b Bitvector_class -> 'b -> 'b -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_no0 
   dict_Sail_values_Bitvector_b dict_Sail_values_Bitvector_a hardware_mod F(( 1 : int))))`;
 
 val _ = Define `
- ((quot_bv:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class -> 'b -> 'b -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_no0 
+ ((quot_bv:'a Bitvector_class -> 'b Bitvector_class -> 'b -> 'b -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_no0 
   dict_Sail_values_Bitvector_b dict_Sail_values_Bitvector_a hardware_quot F(( 1 : int))))`;
 
 val _ = Define `
- ((quots_bv:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class -> 'b -> 'b -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_no0 
+ ((quots_bv:'a Bitvector_class -> 'b Bitvector_class -> 'b -> 'b -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_no0 
   dict_Sail_values_Bitvector_b dict_Sail_values_Bitvector_a hardware_quot T(( 1 : int))))`;
 
 
@@ -263,16 +263,16 @@ val _ = Define `
 
 
 val _ = Define `
- ((arith_op_bv_int_no0:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class ->(int -> int -> int) -> bool -> int -> 'a -> int -> 'b option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b op sign size1 l r=  
- (arith_op_bv_no0 dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b op sign size1 l (dict_Sail_values_Bitvector_a.of_int_method (dict_Sail_values_Bitvector_a.length_method l) r)))`;
+ ((arith_op_bv_int_no0:'a Bitvector_class -> 'b Bitvector_class ->(int -> int -> int) -> bool -> int -> 'a -> int -> 'b option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b op sign size1 l r=
+   (arith_op_bv_no0 dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b op sign size1 l (dict_Sail_values_Bitvector_a.of_int_method (dict_Sail_values_Bitvector_a.length_method l) r)))`;
 
 
 val _ = Define `
- ((quot_bv_int:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class -> 'b -> int -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_int_no0 
+ ((quot_bv_int:'a Bitvector_class -> 'b Bitvector_class -> 'b -> int -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_int_no0 
   dict_Sail_values_Bitvector_b dict_Sail_values_Bitvector_a hardware_quot F(( 1 : int))))`;
 
 val _ = Define `
- ((mod_bv_int:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class -> 'b -> int -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_int_no0 
+ ((mod_bv_int:'a Bitvector_class -> 'b Bitvector_class -> 'b -> int -> 'a option)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b=  (arith_op_bv_int_no0 
   dict_Sail_values_Bitvector_b dict_Sail_values_Bitvector_a hardware_mod F(( 1 : int))))`;
 
 
@@ -287,81 +287,41 @@ val _ = Define `
 
 
 val _ = Define `
- ((replicate_bits_bv:'a sail_values$Bitvector_class -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a v count1=  (repeat (
+ ((replicate_bits_bv:'a Bitvector_class -> 'a -> int ->(bitU)list)dict_Sail_values_Bitvector_a v count1=  (repeat (
   dict_Sail_values_Bitvector_a.bits_of_method v) count1))`;
 
 val _ = Define `
- ((duplicate_bit_bv:'a sail_values$BitU_class -> 'a -> int ->(sail_values$bitU)list)dict_Sail_values_BitU_a bit len=  (replicate_bits_bv 
+ ((duplicate_bit_bv:'a BitU_class -> 'a -> int ->(bitU)list)dict_Sail_values_BitU_a bit len=  (replicate_bits_bv 
   (instance_Sail_values_Bitvector_list_dict dict_Sail_values_BitU_a) [bit] len))`;
 
 
 (*val eq_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool*)
 val _ = Define `
- ((eq_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  (
+ ((eq_bv:'a Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  (
   dict_Sail_values_Bitvector_a.bits_of_method l = dict_Sail_values_Bitvector_a.bits_of_method r))`;
 
 
 (*val neq_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool*)
 val _ = Define `
- ((neq_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  (~ (eq_bv 
+ ((neq_bv:'a Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  (~ (eq_bv 
   dict_Sail_values_Bitvector_a l r)))`;
 
 
-(*val ult_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool*)
+(*val get_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a*)
 val _ = Define `
- ((ult_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  (lexicographic_less (\  l r. (compare_bitU l r) = LT) (\ l r. (compare_bitU l r) <> GT) (REVERSE (
-  dict_Sail_values_Bitvector_a.bits_of_method l)) (REVERSE (dict_Sail_values_Bitvector_a.bits_of_method r))))`;
+ ((get_slice_int_bv:'a Bitvector_class -> int -> int -> int -> 'a)dict_Sail_values_Bitvector_a len n lo=
+   (let hi = ((lo + len) -( 1 : int)) in
+  let bs = (bools_of_int (hi +( 1 : int)) n) in  
+  dict_Sail_values_Bitvector_a.of_bools_method (subrange_list F bs hi lo)))`;
 
+
+(*val set_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a -> integer*)
 val _ = Define `
- ((ulteq_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  ((eq_bv 
-  dict_Sail_values_Bitvector_a l r) \/ (ult_bv dict_Sail_values_Bitvector_a l r)))`;
+ ((set_slice_int_bv:'a Bitvector_class -> int -> int -> int -> 'a -> int)dict_Sail_values_Bitvector_a len n lo v=
+   (let hi = ((lo + len) -( 1 : int)) in
+  let bs = (bits_of_int (hi +( 1 : int)) n) in
+  maybe_failwith (signed_of_bits (update_subrange_list F bs hi lo (
+  dict_Sail_values_Bitvector_a.bits_of_method v)))))`;
 
-val _ = Define `
- ((ugt_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  (~ (ulteq_bv 
-  dict_Sail_values_Bitvector_a l r)))`;
-
-val _ = Define `
- ((ugteq_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  ((eq_bv 
-  dict_Sail_values_Bitvector_a l r) \/ (ugt_bv dict_Sail_values_Bitvector_a l r)))`;
-
-
-(*val slt_bv : forall 'a. Bitvector 'a => 'a -> 'a -> bool*)
-val _ = Define `
- ((slt_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  
- ((case (most_significant 
-  dict_Sail_values_Bitvector_a l, most_significant dict_Sail_values_Bitvector_a r) of
-      (B0, B0) => ult_bv 
-  dict_Sail_values_Bitvector_a l r
-    | (B0, B1) => F
-    | (B1, B0) => T
-    | (B1, B1) =>
-       let l' = (add_one_bit_ignore_overflow (
-  dict_Sail_values_Bitvector_a.bits_of_method l)) in
-       let r' = (add_one_bit_ignore_overflow (
-  dict_Sail_values_Bitvector_a.bits_of_method r)) in
-       ugt_bv (instance_Sail_values_Bitvector_list_dict
-   instance_Sail_values_BitU_Sail_values_bitU_dict) l' r'
-    | (BU, BU) => ult_bv 
-  dict_Sail_values_Bitvector_a l r
-    | (BU, _) => T
-    | (_, BU) => F
-  )))`;
-
-val _ = Define `
- ((slteq_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  ((eq_bv 
-  dict_Sail_values_Bitvector_a l r) \/ (slt_bv dict_Sail_values_Bitvector_a l r)))`;
-
-val _ = Define `
- ((sgt_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  (~ (slteq_bv 
-  dict_Sail_values_Bitvector_a l r)))`;
-
-val _ = Define `
- ((sgteq_bv:'a sail_values$Bitvector_class -> 'a -> 'a -> bool)dict_Sail_values_Bitvector_a l r=  ((eq_bv 
-  dict_Sail_values_Bitvector_a l r) \/ (sgt_bv dict_Sail_values_Bitvector_a l r)))`;
-
-
-(*val ucmp_mword : forall 'a. Size 'a => (Num.integer -> Num.integer -> bool) -> Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-
-(*val scmp_mword : forall 'a. Size 'a => (Num.integer -> Num.integer -> bool) -> Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
 val _ = export_theory()
 

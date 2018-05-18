@@ -90,15 +90,15 @@ val _ = Define `
 
 (*val sort: forall 'a. Ord 'a => list 'a -> list 'a*)
 (*val sortBy: forall 'a. ('a -> 'a -> bool) -> list 'a -> list 'a*)
-(*val sortByOrd: forall 'a. ('a -> 'a -> Basic_classes.ordering) -> list 'a -> list 'a*)
+(*val sortByOrd: forall 'a. ('a -> 'a -> ordering) -> list 'a -> list 'a*)
 
-(*val predicate_of_ord : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> 'a -> 'a -> bool*)
+(*val predicate_of_ord : forall 'a. ('a -> 'a -> ordering) -> 'a -> 'a -> bool*)
 val _ = Define `
- ((predicate_of_ord:('a -> 'a -> lem_basic_classes$ordering) -> 'a -> 'a -> bool) f x y=  
- ((case f x y of
-      LT => T
-    | EQ => T
-    | GT => F
+ ((predicate_of_ord:('a -> 'a -> ordering) -> 'a -> 'a -> bool) f x y=
+   ((case f x y of
+      LESS => T
+    | EQUAL => T
+    | GREATER => F
   )))`;
 
 

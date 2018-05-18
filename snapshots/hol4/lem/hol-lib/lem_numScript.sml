@@ -179,10 +179,10 @@ val _ = Hol_datatype `
 (*val natGreater : nat -> nat -> bool*)
 (*val natGreaterEqual : nat -> nat -> bool*)
 
-(*val natCompare : nat -> nat -> Basic_classes.ordering*)
+(*val natCompare : nat -> nat -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_nat_dict:(num)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_nat_dict:(num)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -259,8 +259,8 @@ val _ = Define `
 
 (*val gen_pow_aux : forall 'a. ('a -> 'a -> 'a) -> 'a -> 'a -> nat -> 'a*)
  val _ = Define `
- ((gen_pow_aux:('a -> 'a -> 'a) -> 'a -> 'a -> num -> 'a) (mul : 'a -> 'a -> 'a) (a : 'a) (b : 'a) (e : num)=   
- ((case e of
+ ((gen_pow_aux:('a -> 'a -> 'a) -> 'a -> 'a -> num -> 'a) (mul : 'a -> 'a -> 'a) (a : 'a) (b : 'a) (e : num)=
+    ((case e of
        0 => a (* cannot happen, call discipline guarentees e >= 1 *)
      | (SUC 0) => mul a b
      | (  (SUC(SUC e'))) => let e'' = (e DIV( 2 : num)) in
@@ -270,8 +270,8 @@ val _ = Define `
 
        
 val _ = Define `
- ((gen_pow:'a ->('a -> 'a -> 'a) -> 'a -> num -> 'a) (one1 : 'a) (mul : 'a -> 'a -> 'a) (b : 'a) (e : num) : 'a=  
-  (if e <( 0 : num) then one1 else 
+ ((gen_pow:'a ->('a -> 'a -> 'a) -> 'a -> num -> 'a) (one1 : 'a) (mul : 'a -> 'a -> 'a) (b : 'a) (e : num) : 'a= 
+   (if e <( 0 : num) then one1 else 
   if (e =( 0 : num)) then one1 else gen_pow_aux mul one1 b e))`;
 
 
@@ -288,7 +288,7 @@ val _ = Define `
 (*val natMax : nat -> nat -> nat*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_nat_dict:(num)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_nat_dict:(num)OrdMaxMin_class)= (<|
 
   max_method := MAX;
 
@@ -309,10 +309,10 @@ val _ = Define `
 (*val naturalGreater : natural -> natural -> bool*)
 (*val naturalGreaterEqual : natural -> natural -> bool*)
 
-(*val naturalCompare : natural -> natural -> Basic_classes.ordering*)
+(*val naturalCompare : natural -> natural -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_Num_natural_dict:(num)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Num_natural_dict:(num)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -400,7 +400,7 @@ val _ = Define `
 (*val naturalMax : natural -> natural -> natural*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Num_natural_dict:(num)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Num_natural_dict:(num)OrdMaxMin_class)= (<|
 
   max_method := MAX;
 
@@ -421,10 +421,10 @@ val _ = Define `
 (*val intGreater : int -> int -> bool*)
 (*val intGreaterEqual : int -> int -> bool*)
 
-(*val intCompare : int -> int -> Basic_classes.ordering*)
+(*val intCompare : int -> int -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_Num_int_dict:(int)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Num_int_dict:(int)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -527,7 +527,7 @@ val _ = Define `
 (*val intMax : int -> int -> int*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Num_int_dict:(int)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Num_int_dict:(int)OrdMaxMin_class)= (<|
 
   max_method := int_max;
 
@@ -546,10 +546,10 @@ val _ = Define `
 (*val int32Greater : int32 -> int32 -> bool*)
 (*val int32GreaterEqual : int32 -> int32 -> bool*)
 
-(*val int32Compare : int32 -> int32 -> Basic_classes.ordering*)
+(*val int32Compare : int32 -> int32 -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_Num_int32_dict:(word32)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Num_int32_dict:(word32)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -660,7 +660,7 @@ val _ = Define `
 (*val int32Max : int32 -> int32 -> int32*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Num_int32_dict:(word32)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Num_int32_dict:(word32)OrdMaxMin_class)= (<|
 
   max_method := word_smax;
 
@@ -681,10 +681,10 @@ val _ = Define `
 (*val int64Greater : int64 -> int64 -> bool*)
 (*val int64GreaterEqual : int64 -> int64 -> bool*)
 
-(*val int64Compare : int64 -> int64 -> Basic_classes.ordering*)
+(*val int64Compare : int64 -> int64 -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_Num_int64_dict:(word64)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Num_int64_dict:(word64)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -795,7 +795,7 @@ val _ = Define `
 (*val int64Max : int64 -> int64 -> int64*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Num_int64_dict:(word64)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Num_int64_dict:(word64)OrdMaxMin_class)= (<|
 
   max_method := word_smax;
 
@@ -818,10 +818,10 @@ val _ = Define `
 (*val integerGreater : integer -> integer -> bool*)
 (*val integerGreaterEqual : integer -> integer -> bool*)
 
-(*val integerCompare : integer -> integer -> Basic_classes.ordering*)
+(*val integerCompare : integer -> integer -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_Num_integer_dict:(int)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Num_integer_dict:(int)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -924,7 +924,7 @@ val _ = Define `
 (*val integerMax : integer -> integer -> integer*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Num_integer_dict:(int)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Num_integer_dict:(int)OrdMaxMin_class)= (<|
 
   max_method := int_max;
 
@@ -948,10 +948,10 @@ val _ = Define `
 (*val rationalGreater : rational -> rational -> bool*)
 (*val rationalGreaterEqual : rational -> rational -> bool*)
 
-(*val rationalCompare : rational -> rational -> Basic_classes.ordering*)
+(*val rationalCompare : rational -> rational -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_Num_rational_dict:(rat)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Num_rational_dict:(rat)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -1031,8 +1031,8 @@ val _ = Define `
 
 (*val rationalPowInteger : rational -> integer -> rational*)
  val rationalPowInteger_defn = Hol_defn "rationalPowInteger" `
- ((rationalPowInteger:rat -> int -> rat) b e=  
- (if e =( 0 : int) then( 1 : rat) else
+ ((rationalPowInteger:rat -> int -> rat) b e=
+   (if e =( 0 : int) then( 1 : rat) else
   if e >( 0 : int) then rationalPowInteger b (e -( 1 : int)) * b else
   rationalPowInteger b (e +( 1 : int)) / b))`;
 
@@ -1054,7 +1054,7 @@ val _ = Define `
 (*val rationalMax : rational -> rational -> rational*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Num_rational_dict:(rat)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Num_rational_dict:(rat)OrdMaxMin_class)= (<|
 
   max_method := (maxByLessEqual (<=));
 
@@ -1078,10 +1078,10 @@ val _ = Define `
 (*val realGreater : real -> real -> bool*)
 (*val realGreaterEqual : real -> real -> bool*)
 
-(*val realCompare : real -> real -> Basic_classes.ordering*)
+(*val realCompare : real -> real -> ordering*)
 
 val _ = Define `
-((instance_Basic_classes_Ord_Num_real_dict:(real)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Num_real_dict:(real)Ord_class)= (<|
 
   compare_method := (genericCompare (<) (=));
 
@@ -1163,8 +1163,8 @@ val _ = Define `
 
 (*val realPowInteger : real -> integer -> real*)
  val realPowInteger_defn = Hol_defn "realPowInteger" `
- ((realPowInteger:real -> int -> real) b e=  
- (if e =( 0 : int) then(real_of_num 1) else
+ ((realPowInteger:real -> int -> real) b e=
+   (if e =( 0 : int) then(real_of_num 1) else
   if e >( 0 : int) then realPowInteger b (e -( 1 : int)) * b else
   realPowInteger b (e +( 1 : int)) / b))`;
 
@@ -1186,7 +1186,7 @@ val _ = Define `
 (*val realMax : real -> real -> real*)
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Num_real_dict:(real)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Num_real_dict:(real)OrdMaxMin_class)= (<|
 
   max_method := max;
 

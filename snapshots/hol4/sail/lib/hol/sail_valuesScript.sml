@@ -16,12 +16,12 @@ val _ = new_theory "sail_values"
 val _ = type_abbrev( "ii" , ``: int``);
 val _ = type_abbrev( "nn" , ``: num``);
 
-(*val nat_of_int : Num.integer -> nat*)
+(*val nat_of_int : integer -> nat*)
 val _ = Define `
  ((nat_of_int:int -> num) i=  (if i <( 0 : int) then( 0 : num) else Num (ABS (I i))))`;
 
 
-(*val pow : Num.integer -> Num.integer -> Num.integer*)
+(*val pow : integer -> integer -> integer*)
 val _ = Define `
  ((pow0:int -> int -> int) m n=  (m ** (nat_of_int n)))`;
 
@@ -59,12 +59,12 @@ val _ = Define `
  ((prerr_endline:string -> unit) _=  () )`;
 
 
-(*val print_int : string -> Num.integer -> unit*)
+(*val print_int : string -> integer -> unit*)
 val _ = Define `
  ((print_int:string -> int -> unit) msg i=  (prerr_endline ( STRCAT msg (stringFromInteger i))))`;
 
 
-(*val putchar : Num.integer -> unit*)
+(*val putchar : integer -> unit*)
 val _ = Define `
  ((putchar:int -> unit) _=  () )`;
 
@@ -75,7 +75,7 @@ val _ = Define `
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn shr_int_defn;
 
-(*val shl_int : Num.integer -> Num.integer -> Num.integer*)
+(*val shl_int : integer -> integer -> integer*)
  val shl_int_defn = Hol_defn "shl_int" `
  ((shl_int:int -> int -> int) i shift=  (if shift >( 0 : int) then( 2 : int) * shl_int i (shift -( 1 : int)) else i))`;
 
@@ -87,10 +87,10 @@ val _ = Define `
  ((drop_list:int -> 'a list -> 'a list) n xs=  (DROP (nat_of_int n) xs))`;
 
 
-(*val repeat : forall 'a. list 'a -> Num.integer -> list 'a*)
+(*val repeat : forall 'a. list 'a -> integer -> list 'a*)
  val repeat_defn = Hol_defn "repeat" `
- ((repeat:'a list -> int -> 'a list) xs n=  
- (if n <=( 0 : int) then []
+ ((repeat:'a list -> int -> 'a list) xs n=
+   (if n <=( 0 : int) then []
   else xs ++ repeat xs (n -( 1 : int))))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn repeat_defn;
@@ -99,7 +99,7 @@ val _ = Define `
  ((duplicate_to_list:'a -> int -> 'a list) bit length=  (repeat [bit] length))`;
 
 
- val replace_defn = Hol_defn "replace" `
+ val _ = Define `
  ((replace:'a list -> int -> 'a -> 'a list) bs (n : int) b'=  ((case bs of
     [] => []
   | b :: bs =>
@@ -107,7 +107,6 @@ val _ = Define `
               else b :: replace bs (n -( 1 : int)) b'
   )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn replace_defn;
 
 val _ = Define `
  ((upper:'a -> 'a) n=  n)`;
@@ -116,8 +115,8 @@ val _ = Define `
 (* Modulus operation corresponding to quot below -- result
    has sign of dividend. *)
 val _ = Define `
- ((hardware_mod:int -> int -> int) (a: int) (b:int) : int=  
- (let m = ((ABS a) % (ABS b)) in
+ ((hardware_mod:int -> int -> int) (a: int) (b:int) : int=
+   (let m = ((ABS a) % (ABS b)) in
   if a <( 0 : int) then ~ m else m))`;
 
 
@@ -126,8 +125,8 @@ rounding behaviour on negative operands. Positive operands always
 round down so derive the one we want (trucation towards zero) from
 that *)
 val _ = Define `
- ((hardware_quot:int -> int -> int) (a:int) (b:int) : int=  
- (let q = ((ABS a) / (ABS b)) in
+ ((hardware_quot:int -> int -> int) (a:int) (b:int) : int=
+   (let q = ((ABS a) / (ABS b)) in
   if ((a<( 0 : int)) <=> (b<( 0 : int))) then
     q  (* same sign -- result positive *)
   else
@@ -167,8 +166,8 @@ val _ = Define `
 
 (* just_list takes a list of maybes and returns Just xs if all elements have
    a value, and Nothing if one of the elements is Nothing. *)
-(*val just_list : forall 'a. list (Maybe.maybe 'a) -> Maybe.maybe (list 'a)*)
- val just_list_defn = Hol_defn "just_list" `
+(*val just_list : forall 'a. list (maybe 'a) -> maybe (list 'a)*)
+ val _ = Define `
  ((just_list:('a option)list ->('a list)option) l=  ((case l of
     [] => SOME []
   | (x :: xs) =>
@@ -178,9 +177,8 @@ val _ = Define `
     )
   )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn just_list_defn;
 
-(*val maybe_failwith : forall 'a. Maybe.maybe 'a -> 'a*)
+(*val maybe_failwith : forall 'a. maybe 'a -> 'a*)
 val _ = Define `
  ((maybe_failwith:'a option -> 'a)= 
   (\x .  (case x of   SOME a => a | NONE => failwith "maybe_failwith" )))`;
@@ -202,36 +200,36 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Show_Show_Sail_values_bitU_dict:(bitU)lem_show$Show_class)= (<|
+((instance_Show_Show_Sail_values_bitU_dict:(bitU)Show_class)= (<|
 
   show_method := showBitU|>))`;
 
 
-(*val compare_bitU : bitU -> bitU -> Basic_classes.ordering*)
+(*val compare_bitU : bitU -> bitU -> ordering*)
 val _ = Define `
- ((compare_bitU:bitU -> bitU -> lem_basic_classes$ordering) l r=  ((case (l, r) of
-    (BU, BU) => EQ
-  | (B0, B0) => EQ
-  | (B1, B1) => EQ
-  | (BU, _)  => LT
-  | (_, BU)  => GT
-  | (B0, _)  => LT
-  | (_, _)   => GT
+ ((compare_bitU:bitU -> bitU -> ordering) l r=  ((case (l, r) of
+    (BU, BU) => EQUAL
+  | (B0, B0) => EQUAL
+  | (B1, B1) => EQUAL
+  | (BU, _)  => LESS
+  | (_, BU)  => GREATER
+  | (B0, _)  => LESS
+  | (_, _)   => GREATER
 )))`;
 
 
 val _ = Define `
-((instance_Basic_classes_Ord_Sail_values_bitU_dict:(bitU)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Sail_values_bitU_dict:(bitU)Ord_class)= (<|
 
   compare_method := compare_bitU;
 
-  isLess_method := (\  l r. (compare_bitU l r) = LT);
+  isLess_method := (\  l r. (compare_bitU l r) = LESS);
 
-  isLessEqual_method := (\ l r. (compare_bitU l r) <> GT);
+  isLessEqual_method := (\ l r. (compare_bitU l r) <> GREATER);
 
-  isGreater_method := (\  l r. (compare_bitU l r) = GT);
+  isGreater_method := (\  l r. (compare_bitU l r) = GREATER);
 
-  isGreaterEqual_method := (\ l r. (compare_bitU l r) <> LT)|>))`;
+  isGreaterEqual_method := (\ l r. (compare_bitU l r) <> LESS)|>))`;
 
 
 val _ = Hol_datatype `
@@ -272,16 +270,16 @@ val _ = Define `
   (\x .  (case x of   B1 => B0 | B0 => B1 | BU => BU )))`;
 
 
-(*val is_one : Num.integer -> bitU*)
+(*val is_one : integer -> bitU*)
 val _ = Define `
- ((is_one:int -> bitU) i=  
- (if i =( 1 : int) then B1 else B0))`;
+ ((is_one:int -> bitU) i=
+   (if i =( 1 : int) then B1 else B0))`;
 
 
 (*val and_bit : bitU -> bitU -> bitU*)
 val _ = Define `
- ((and_bit:bitU -> bitU -> bitU) x y=  
- ((case (x, y) of
+ ((and_bit:bitU -> bitU -> bitU) x y=
+   ((case (x, y) of
       (B0, _) => B0
     | (_, B0) => B0
     | (B1, B1) => B1
@@ -291,8 +289,8 @@ val _ = Define `
 
 (*val or_bit : bitU -> bitU -> bitU*)
 val _ = Define `
- ((or_bit:bitU -> bitU -> bitU) x y=  
- ((case (x, y) of
+ ((or_bit:bitU -> bitU -> bitU) x y=
+   ((case (x, y) of
       (B1, _) => B1
     | (_, B1) => B1
     | (B0, B0) => B0
@@ -302,8 +300,8 @@ val _ = Define `
 
 (*val xor_bit : bitU -> bitU -> bitU*)
 val _ = Define `
- ((xor_bit:bitU -> bitU -> bitU) x y=  
-((case (x, y) of
+ ((xor_bit:bitU -> bitU -> bitU) x y=
+  ((case (x, y) of
       (B0, B0) => B0
     | (B0, B1) => B1
     | (B1, B0) => B1
@@ -321,10 +319,10 @@ val _ = Define `
 
 (*** Bool lists ***)
 
-(*val bools_of_nat_aux : Num.integer -> Num.natural -> list bool -> list bool*)
+(*val bools_of_nat_aux : integer -> natural -> list bool -> list bool*)
  val bools_of_nat_aux_defn = Hol_defn "bools_of_nat_aux" `
- ((bools_of_nat_aux:int -> num ->(bool)list ->(bool)list) len x acc=  
- (if len <=( 0 : int) then acc
+ ((bools_of_nat_aux:int -> num ->(bool)list ->(bool)list) len x acc=
+   (if len <=( 0 : int) then acc
   else bools_of_nat_aux (len -( 1 : int)) (x DIV( 2:num)) ((if (x MOD( 2:num)) =( 1:num) then T else F) :: acc)))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn bools_of_nat_aux_defn;
@@ -332,49 +330,48 @@ val _ = Define `
  ((bools_of_nat:int -> num ->(bool)list) len n=  (bools_of_nat_aux len n []))`;
  (*List.reverse (bools_of_nat_aux n)*)
 
-(*val nat_of_bools_aux : Num.natural -> list bool -> Num.natural*)
- val nat_of_bools_aux_defn = Hol_defn "nat_of_bools_aux" `
+(*val nat_of_bools_aux : natural -> list bool -> natural*)
+ val _ = Define `
  ((nat_of_bools_aux:num ->(bool)list -> num) acc bs=  ((case bs of
     [] => acc
   | T :: bs => nat_of_bools_aux ((( 2:num) * acc) +( 1:num)) bs
   | F :: bs => nat_of_bools_aux (( 2:num) * acc) bs
 )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn nat_of_bools_aux_defn;
 val _ = Define `
  ((nat_of_bools:(bool)list -> num) bs=  (nat_of_bools_aux(( 0:num)) bs))`;
 
 
-(*val unsigned_of_bools : list bool -> Num.integer*)
+(*val unsigned_of_bools : list bool -> integer*)
 val _ = Define `
  ((unsigned_of_bools:(bool)list -> int) bs=  (int_of_num (nat_of_bools bs)))`;
 
 
-(*val signed_of_bools : list bool -> Num.integer*)
+(*val signed_of_bools : list bool -> integer*)
 val _ = Define `
- ((signed_of_bools:(bool)list -> int) bs=  
- ((case bs of
+ ((signed_of_bools:(bool)list -> int) bs=
+   ((case bs of
       T :: _  =>( 0 : int) - (( 1 : int) + (unsigned_of_bools (MAP (\ x. ~ x) bs)))
     | F :: _ => unsigned_of_bools bs
     | [] =>( 0 : int) (* Treat empty list as all zeros *)
   )))`;
 
 
-(*val int_of_bools : bool -> list bool -> Num.integer*)
+(*val int_of_bools : bool -> list bool -> integer*)
 val _ = Define `
  ((int_of_bools:bool ->(bool)list -> int) sign bs=  (if sign then signed_of_bools bs else unsigned_of_bools bs))`;
 
 
-(*val pad_list : forall 'a. 'a -> list 'a -> Num.integer -> list 'a*)
+(*val pad_list : forall 'a. 'a -> list 'a -> integer -> list 'a*)
  val pad_list_defn = Hol_defn "pad_list" `
- ((pad_list:'a -> 'a list -> int -> 'a list) x xs n=  
- (if n <=( 0 : int) then xs else pad_list x (x :: xs) (n -( 1 : int))))`;
+ ((pad_list:'a -> 'a list -> int -> 'a list) x xs n=
+   (if n <=( 0 : int) then xs else pad_list x (x :: xs) (n -( 1 : int))))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn pad_list_defn;
 
 val _ = Define `
- ((ext_list:'a -> int -> 'a list -> 'a list) pad len xs=  
- (let longer = (len - (int_of_num (LENGTH xs))) in
+ ((ext_list:'a -> int -> 'a list -> 'a list) pad len xs=
+   (let longer = (len - (int_of_num (LENGTH xs))) in
   if longer <( 0 : int) then DROP (nat_of_int (ABS (longer))) xs
   else pad_list pad xs longer))`;
 
@@ -383,25 +380,24 @@ val _ = Define `
  ((extz_bools:int ->(bool)list ->(bool)list) len bs=  (ext_list F len bs))`;
 
 val _ = Define `
- ((exts_bools:int ->(bool)list ->(bool)list) len bs=  
- ((case bs of
+ ((exts_bools:int ->(bool)list ->(bool)list) len bs=
+   ((case bs of
       T :: _ => ext_list T len bs
     | _ => ext_list F len bs
   )))`;
 
 
- val add_one_bool_ignore_overflow_aux_defn = Hol_defn "add_one_bool_ignore_overflow_aux" `
+ val _ = Define `
  ((add_one_bool_ignore_overflow_aux:(bool)list ->(bool)list) bits=  ((case bits of
     [] => []
   | F :: bits => T :: bits
   | T :: bits => F :: add_one_bool_ignore_overflow_aux bits
 )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn add_one_bool_ignore_overflow_aux_defn;
 
 val _ = Define `
- ((add_one_bool_ignore_overflow:(bool)list ->(bool)list) bits=  
- (REVERSE (add_one_bool_ignore_overflow_aux (REVERSE bits))))`;
+ ((add_one_bool_ignore_overflow:(bool)list ->(bool)list) bits=
+   (REVERSE (add_one_bool_ignore_overflow_aux (REVERSE bits))))`;
 
 
 (*let bool_list_of_int n =
@@ -410,8 +406,8 @@ val _ = Define `
   else add_one_bool_ignore_overflow (List.map not bs_abs)
 let bools_of_int len n = exts_bools len (bool_list_of_int n)*)
 val _ = Define `
- ((bools_of_int:int -> int ->(bool)list) len n=  
- (let bs_abs = (bools_of_nat len (Num (ABS (ABS n)))) in
+ ((bools_of_int:int -> int ->(bool)list) len n=
+   (let bs_abs = (bools_of_nat len (Num (ABS (ABS n)))) in
   if n >= (( 0 : int) : int) then bs_abs
   else add_one_bool_ignore_overflow (MAP (\ x. ~ x) bs_abs)))`;
 
@@ -429,8 +425,8 @@ val _ = Define `
 
 
 val _ = Define `
- ((nat_of_bits:(bitU)list ->(num)option) bits=  
- ((case (just_list (MAP bool_of_bitU bits)) of
+ ((nat_of_bits:(bitU)list ->(num)option) bits=
+   ((case (just_list (MAP bool_of_bitU bits)) of
       SOME bs => SOME (nat_of_bools bs)
     | NONE => NONE
   )))`;
@@ -442,27 +438,27 @@ val _ = Define `
 
 (*val binop_list : forall 'a. ('a -> 'a -> 'a) -> list 'a -> list 'a -> list 'a*)
 val _ = Define `
- ((binop_list:('a -> 'a -> 'a) -> 'a list -> 'a list -> 'a list) op xs ys=  
- (FOLDR (\ (x, y) acc .  op x y :: acc) [] (list_combine xs ys)))`;
+ ((binop_list:('a -> 'a -> 'a) -> 'a list -> 'a list -> 'a list) op xs ys=
+   (FOLDR (\ (x, y) acc .  op x y :: acc) [] (list_combine xs ys)))`;
 
 
 val _ = Define `
- ((unsigned_of_bits:(bitU)list ->(int)option) bits=  
- ((case (just_list (MAP bool_of_bitU bits)) of
+ ((unsigned_of_bits:(bitU)list ->(int)option) bits=
+   ((case (just_list (MAP bool_of_bitU bits)) of
       SOME bs => SOME (unsigned_of_bools bs)
     | NONE => NONE
   )))`;
 
 
 val _ = Define `
- ((signed_of_bits:(bitU)list ->(int)option) bits=  
- ((case (just_list (MAP bool_of_bitU bits)) of
+ ((signed_of_bits:(bitU)list ->(int)option) bits=
+   ((case (just_list (MAP bool_of_bitU bits)) of
       SOME bs => SOME (signed_of_bools bs)
     | NONE => NONE
   )))`;
 
 
-(*val int_of_bits : bool -> list bitU -> Maybe.maybe Num.integer*)
+(*val int_of_bits : bool -> list bitU -> maybe integer*)
 val _ = Define `
  ((int_of_bits:bool ->(bitU)list ->(int)option) sign bs=  (if sign then signed_of_bits bs else unsigned_of_bits bs))`;
 
@@ -471,15 +467,15 @@ val _ = Define `
  ((extz_bits:int ->(bitU)list ->(bitU)list) len bits=  (ext_list B0 len bits))`;
 
 val _ = Define `
- ((exts_bits:int ->(bitU)list ->(bitU)list) len bits=  
- ((case bits of
+ ((exts_bits:int ->(bitU)list ->(bitU)list) len bits=
+   ((case bits of
     BU :: _ => ext_list BU len bits
   | B1 :: _ => ext_list B1 len bits
   | _ => ext_list B0 len bits
   )))`;
 
 
- val add_one_bit_ignore_overflow_aux_defn = Hol_defn "add_one_bit_ignore_overflow_aux" `
+ val _ = Define `
  ((add_one_bit_ignore_overflow_aux:(bitU)list ->(bitU)list) bits=  ((case bits of
     [] => []
   | B0 :: bits => B1 :: bits
@@ -488,11 +484,10 @@ val _ = Define `
   (case (b ) of ( _ ) => BU )) bits
 )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn add_one_bit_ignore_overflow_aux_defn;
 
 val _ = Define `
- ((add_one_bit_ignore_overflow:(bitU)list ->(bitU)list) bits=  
- (REVERSE (add_one_bit_ignore_overflow_aux (REVERSE bits))))`;
+ ((add_one_bit_ignore_overflow:(bitU)list ->(bitU)list) bits=
+   (REVERSE (add_one_bit_ignore_overflow_aux (REVERSE bits))))`;
 
 
 (*let bit_list_of_int n = List.map bitU_of_bool (bool_list_of_int n)
@@ -502,10 +497,10 @@ val _ = Define `
 
 
 (*val arith_op_bits :
-  (Num.integer -> Num.integer -> Num.integer) -> bool -> list bitU -> list bitU -> list bitU*)
+  (integer -> integer -> integer) -> bool -> list bitU -> list bitU -> list bitU*)
 val _ = Define `
- ((arith_op_bits:(int -> int -> int) -> bool ->(bitU)list ->(bitU)list ->(bitU)list) op sign l r=  
- ((case (int_of_bits sign l, int_of_bits sign r) of
+ ((arith_op_bits:(int -> int -> int) -> bool ->(bitU)list ->(bitU)list ->(bitU)list) op sign l r=
+   ((case (int_of_bits sign l, int_of_bits sign r) of
       (SOME li, SOME ri) => bits_of_int (int_of_num (LENGTH l)) (op li ri)
     | (_, _) => repeat [BU] (int_of_num (LENGTH l))
   )))`;
@@ -534,7 +529,7 @@ val _ = Define `
          )))`;
 
 
- val hexstring_of_bits_defn = Hol_defn "hexstring_of_bits" `
+ val _ = Define `
  ((hexstring_of_bits:(bitU)list ->((char)list)option) bs=  ((case bs of
     b1 :: b2 :: b3 :: b4 :: bs =>
      let n = (char_of_nibble (b1, b2, b3, b4)) in
@@ -543,94 +538,94 @@ val _ = Define `
        (SOME n, SOME s) => SOME (n :: s)
      | _ => NONE
      )
+  | [] => SOME []
   | _ => NONE
   )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn hexstring_of_bits_defn;
 
 val _ = Define `
- ((show_bitlist:(bitU)list -> string) bs=  
- ((case hexstring_of_bits bs of
+ ((show_bitlist:(bitU)list -> string) bs=
+   ((case hexstring_of_bits bs of
     SOME s => IMPLODE (#"0" :: (#"x" :: s))
   | NONE => IMPLODE (#"0" :: (#"b" :: MAP bitU_char bs))
   )))`;
 
 
-(*val subrange_list_inc : forall 'a. list 'a -> Num.integer -> Num.integer -> list 'a*)
+(*val subrange_list_inc : forall 'a. list 'a -> integer -> integer -> list 'a*)
 val _ = Define `
- ((subrange_list_inc:'a list -> int -> int -> 'a list) xs i j=  
- (let (toJ,suffix0) = (TAKE (nat_of_int (j +( 1 : int))) xs, DROP (nat_of_int (j +( 1 : int))) xs) in
+ ((subrange_list_inc:'a list -> int -> int -> 'a list) xs i j=
+   (let (toJ,suffix0) = (TAKE (nat_of_int (j +( 1 : int))) xs, DROP (nat_of_int (j +( 1 : int))) xs) in
   let (prefix0,fromItoJ) = (TAKE (nat_of_int i) toJ, DROP (nat_of_int i) toJ) in
   fromItoJ))`;
 
 
-(*val subrange_list_dec : forall 'a. list 'a -> Num.integer -> Num.integer -> list 'a*)
+(*val subrange_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a*)
 val _ = Define `
- ((subrange_list_dec:'a list -> int -> int -> 'a list) xs i j=  
- (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
+ ((subrange_list_dec:'a list -> int -> int -> 'a list) xs i j=
+   (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
   subrange_list_inc xs (top - i) (top - j)))`;
 
 
-(*val subrange_list : forall 'a. bool -> list 'a -> Num.integer -> Num.integer -> list 'a*)
+(*val subrange_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a*)
 val _ = Define `
  ((subrange_list:bool -> 'a list -> int -> int -> 'a list) is_inc xs i j=  (if is_inc then subrange_list_inc xs i j else subrange_list_dec xs i j))`;
 
 
-(*val update_subrange_list_inc : forall 'a. list 'a -> Num.integer -> Num.integer -> list 'a -> list 'a*)
+(*val update_subrange_list_inc : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a*)
 val _ = Define `
- ((update_subrange_list_inc:'a list -> int -> int -> 'a list -> 'a list) xs i j xs'=  
- (let (toJ,suffix) = (TAKE (nat_of_int (j +( 1 : int))) xs, DROP (nat_of_int (j +( 1 : int))) xs) in
-  let (prefix,fromItoJ0) = (TAKE (nat_of_int i) toJ, DROP (nat_of_int i) toJ) in  
-(prefix ++ xs') ++ suffix))`;
+ ((update_subrange_list_inc:'a list -> int -> int -> 'a list -> 'a list) xs i j xs'=
+   (let (toJ,suffix) = (TAKE (nat_of_int (j +( 1 : int))) xs, DROP (nat_of_int (j +( 1 : int))) xs) in
+  let (prefix,fromItoJ0) = (TAKE (nat_of_int i) toJ, DROP (nat_of_int i) toJ) in
+  (prefix ++ xs') ++ suffix))`;
 
 
-(*val update_subrange_list_dec : forall 'a. list 'a -> Num.integer -> Num.integer -> list 'a -> list 'a*)
+(*val update_subrange_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a*)
 val _ = Define `
- ((update_subrange_list_dec:'a list -> int -> int -> 'a list -> 'a list) xs i j xs'=  
- (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
+ ((update_subrange_list_dec:'a list -> int -> int -> 'a list -> 'a list) xs i j xs'=
+   (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
   update_subrange_list_inc xs (top - i) (top - j) xs'))`;
 
 
-(*val update_subrange_list : forall 'a. bool -> list 'a -> Num.integer -> Num.integer -> list 'a -> list 'a*)
+(*val update_subrange_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a -> list 'a*)
 val _ = Define `
- ((update_subrange_list:bool -> 'a list -> int -> int -> 'a list -> 'a list) is_inc xs i j xs'=  
- (if is_inc then update_subrange_list_inc xs i j xs' else update_subrange_list_dec xs i j xs'))`;
+ ((update_subrange_list:bool -> 'a list -> int -> int -> 'a list -> 'a list) is_inc xs i j xs'=
+   (if is_inc then update_subrange_list_inc xs i j xs' else update_subrange_list_dec xs i j xs'))`;
 
 
-(*val access_list_inc : forall 'a. list 'a -> Num.integer -> 'a*)
+(*val access_list_inc : forall 'a. list 'a -> integer -> 'a*)
 val _ = Define `
  ((access_list_inc:'a list -> int -> 'a) xs n=  (EL (nat_of_int n) xs))`;
 
 
-(*val access_list_dec : forall 'a. list 'a -> Num.integer -> 'a*)
+(*val access_list_dec : forall 'a. list 'a -> integer -> 'a*)
 val _ = Define `
- ((access_list_dec:'a list -> int -> 'a) xs n=  
- (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
+ ((access_list_dec:'a list -> int -> 'a) xs n=
+   (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
   access_list_inc xs (top - n)))`;
 
 
-(*val access_list : forall 'a. bool -> list 'a -> Num.integer -> 'a*)
+(*val access_list : forall 'a. bool -> list 'a -> integer -> 'a*)
 val _ = Define `
- ((access_list:bool -> 'a list -> int -> 'a) is_inc xs n=  
- (if is_inc then access_list_inc xs n else access_list_dec xs n))`;
+ ((access_list:bool -> 'a list -> int -> 'a) is_inc xs n=
+   (if is_inc then access_list_inc xs n else access_list_dec xs n))`;
 
 
-(*val update_list_inc : forall 'a. list 'a -> Num.integer -> 'a -> list 'a*)
+(*val update_list_inc : forall 'a. list 'a -> integer -> 'a -> list 'a*)
 val _ = Define `
  ((update_list_inc:'a list -> int -> 'a -> 'a list) xs n x=  (LUPDATE x (nat_of_int n) xs))`;
 
 
-(*val update_list_dec : forall 'a. list 'a -> Num.integer -> 'a -> list 'a*)
+(*val update_list_dec : forall 'a. list 'a -> integer -> 'a -> list 'a*)
 val _ = Define `
- ((update_list_dec:'a list -> int -> 'a -> 'a list) xs n x=  
- (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
+ ((update_list_dec:'a list -> int -> 'a -> 'a list) xs n x=
+   (let top = ((int_of_num (LENGTH xs)) -( 1 : int)) in
   update_list_inc xs (top - n) x))`;
 
 
-(*val update_list : forall 'a. bool -> list 'a -> Num.integer -> 'a -> list 'a*)
+(*val update_list : forall 'a. bool -> list 'a -> integer -> 'a -> list 'a*)
 val _ = Define `
- ((update_list:bool -> 'a list -> int -> 'a -> 'a list) is_inc xs n x=  
- (if is_inc then update_list_inc xs n x else update_list_dec xs n x))`;
+ ((update_list:bool -> 'a list -> int -> 'a -> 'a list) is_inc xs n x=
+   (if is_inc then update_list_inc xs n x else update_list_dec xs n x))`;
 
 
 val _ = Define `
@@ -640,62 +635,62 @@ val _ = Define `
 
 (*** Machine words *)
 
-(*val length_mword : forall 'a. Machine_word.mword 'a -> Num.integer*)
+(*val length_mword : forall 'a. mword 'a -> integer*)
 
-(*val slice_mword_dec : forall 'a 'b. Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b*)
+(*val slice_mword_dec : forall 'a 'b. mword 'a -> integer -> integer -> mword 'b*)
 val _ = Define `
  ((slice_mword_dec:'a words$word -> int -> int -> 'b words$word) w i j=  (words$word_extract (nat_of_int j) (nat_of_int i) w))`;
 
 
-(*val slice_mword_inc : forall 'a 'b. Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b*)
+(*val slice_mword_inc : forall 'a 'b. mword 'a -> integer -> integer -> mword 'b*)
 val _ = Define `
- ((slice_mword_inc:'a words$word -> int -> int -> 'b words$word) w i j=  
- (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
+ ((slice_mword_inc:'a words$word -> int -> int -> 'b words$word) w i j=
+   (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
   slice_mword_dec w (top - i) (top - j)))`;
 
 
-(*val slice_mword : forall 'a 'b. bool -> Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b*)
+(*val slice_mword : forall 'a 'b. bool -> mword 'a -> integer -> integer -> mword 'b*)
 val _ = Define `
  ((slice_mword:bool -> 'a words$word -> int -> int -> 'b words$word) is_inc w i j=  (if is_inc then slice_mword_inc w i j else slice_mword_dec w i j))`;
 
 
-(*val update_slice_mword_dec : forall 'a 'b. Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b -> Machine_word.mword 'a*)
+(*val update_slice_mword_dec : forall 'a 'b. mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
 val _ = Define `
  ((update_slice_mword_dec:'a words$word -> int -> int -> 'b words$word -> 'a words$word) w i j w'=  (words$bit_field_insert (nat_of_int j) (nat_of_int i) w' w))`;
 
 
-(*val update_slice_mword_inc : forall 'a 'b. Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b -> Machine_word.mword 'a*)
+(*val update_slice_mword_inc : forall 'a 'b. mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
 val _ = Define `
- ((update_slice_mword_inc:'a words$word -> int -> int -> 'b words$word -> 'a words$word) w i j w'=  
- (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
+ ((update_slice_mword_inc:'a words$word -> int -> int -> 'b words$word -> 'a words$word) w i j w'=
+   (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
   update_slice_mword_dec w (top - i) (top - j) w'))`;
 
 
-(*val update_slice_mword : forall 'a 'b. bool -> Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b -> Machine_word.mword 'a*)
+(*val update_slice_mword : forall 'a 'b. bool -> mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
 val _ = Define `
- ((update_slice_mword:bool -> 'a words$word -> int -> int -> 'b words$word -> 'a words$word) is_inc w i j w'=  
- (if is_inc then update_slice_mword_inc w i j w' else update_slice_mword_dec w i j w'))`;
+ ((update_slice_mword:bool -> 'a words$word -> int -> int -> 'b words$word -> 'a words$word) is_inc w i j w'=
+   (if is_inc then update_slice_mword_inc w i j w' else update_slice_mword_dec w i j w'))`;
 
 
-(*val access_mword_dec : forall 'a. Machine_word.mword 'a -> Num.integer -> bitU*)
+(*val access_mword_dec : forall 'a. mword 'a -> integer -> bitU*)
 val _ = Define `
  ((access_mword_dec:'a words$word -> int -> bitU) w n=  (bitU_of_bool (words$word_bit (nat_of_int n) w)))`;
 
 
-(*val access_mword_inc : forall 'a. Machine_word.mword 'a -> Num.integer -> bitU*)
+(*val access_mword_inc : forall 'a. mword 'a -> integer -> bitU*)
 val _ = Define `
- ((access_mword_inc:'a words$word -> int -> bitU) w n=  
- (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
+ ((access_mword_inc:'a words$word -> int -> bitU) w n=
+   (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
   access_mword_dec w (top - n)))`;
 
 
-(*val access_mword : forall 'a. bool -> Machine_word.mword 'a -> Num.integer -> bitU*)
+(*val access_mword : forall 'a. bool -> mword 'a -> integer -> bitU*)
 val _ = Define `
- ((access_mword:bool -> 'a words$word -> int -> bitU) is_inc w n=  
- (if is_inc then access_mword_inc w n else access_mword_dec w n))`;
+ ((access_mword:bool -> 'a words$word -> int -> bitU) is_inc w n=
+   (if is_inc then access_mword_inc w n else access_mword_dec w n))`;
 
 
-(*val update_mword_bool_dec : forall 'a. Machine_word.mword 'a -> Num.integer -> bool -> Machine_word.mword 'a*)
+(*val update_mword_bool_dec : forall 'a. mword 'a -> integer -> bool -> mword 'a*)
 val _ = Define `
  ((update_mword_bool_dec:'a words$word -> int -> bool -> 'a words$word) w n b=  ($:+ (nat_of_int n) b w))`;
 
@@ -703,20 +698,20 @@ val _ = Define `
  ((update_mword_dec:'a words$word -> int -> bitU ->('a words$word)option) w n b=  (OPTION_MAP (update_mword_bool_dec w n) (bool_of_bitU b)))`;
 
 
-(*val update_mword_bool_inc : forall 'a. Machine_word.mword 'a -> Num.integer -> bool -> Machine_word.mword 'a*)
+(*val update_mword_bool_inc : forall 'a. mword 'a -> integer -> bool -> mword 'a*)
 val _ = Define `
- ((update_mword_bool_inc:'a words$word -> int -> bool -> 'a words$word) w n b=  
- (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
+ ((update_mword_bool_inc:'a words$word -> int -> bool -> 'a words$word) w n b=
+   (let top = ((int_of_num (words$word_len w)) -( 1 : int)) in
   update_mword_bool_dec w (top - n) b))`;
 
 val _ = Define `
  ((update_mword_inc:'a words$word -> int -> bitU ->('a words$word)option) w n b=  (OPTION_MAP (update_mword_bool_inc w n) (bool_of_bitU b)))`;
 
 
-(*val int_of_mword : forall 'a. bool -> Machine_word.mword 'a -> Num.integer*)
+(*val int_of_mword : forall 'a. bool -> mword 'a -> integer*)
 val _ = Define `
- ((int_of_mword:bool -> 'a words$word -> int) sign w=  
- (if sign then integer_word$w2i w else lem$w2ui w))`;
+ ((int_of_mword:bool -> 'a words$word -> int) sign w=
+   (if sign then integer_word$w2i w else lem$w2ui w))`;
 
 
 (* Translating between a type level number (itself 'n) and an integer *)
@@ -728,7 +723,7 @@ val _ = Define `
 (* NB: the corresponding sail type is forall 'n. atom('n) -> itself('n),
    the actual integer is ignored. *)
 
-(*val make_the_value : forall 'n. Num.integer -> Machine_word.itself 'n*)
+(*val make_the_value : forall 'n. integer -> itself 'n*)
 val _ = Define `
  ((make_the_value:int -> 'n itself) _=  the_value)`;
 
@@ -850,13 +845,13 @@ val _ = Define `
   dict_Sail_values_Bitvector_b.bits_of_method v) i j (dict_Sail_values_Bitvector_a.bits_of_method v')))`;
 
 
-(*val extz_bv : forall 'a. Bitvector 'a => Num.integer -> 'a -> list bitU*)
+(*val extz_bv : forall 'a. Bitvector 'a => integer -> 'a -> list bitU*)
 val _ = Define `
  ((extz_bv:'a Bitvector_class -> int -> 'a ->(bitU)list)dict_Sail_values_Bitvector_a n v=  (extz_bits n (
   dict_Sail_values_Bitvector_a.bits_of_method v)))`;
 
 
-(*val exts_bv : forall 'a. Bitvector 'a => Num.integer -> 'a -> list bitU*)
+(*val exts_bv : forall 'a. Bitvector 'a => integer -> 'a -> list bitU*)
 val _ = Define `
  ((exts_bv:'a Bitvector_class -> int -> 'a ->(bitU)list)dict_Sail_values_Bitvector_a n v=  (exts_bits n (
   dict_Sail_values_Bitvector_a.bits_of_method v)))`;
@@ -872,8 +867,8 @@ val _ = Define `
 
 val _ = type_abbrev( "memory_byte" , ``: bitU list``);
 
-(*val byte_chunks : forall 'a. list 'a -> Maybe.maybe (list (list 'a))*)
- val byte_chunks_defn = Hol_defn "byte_chunks" `
+(*val byte_chunks : forall 'a. list 'a -> maybe (list (list 'a))*)
+ val _ = Define `
  ((byte_chunks:'a list ->(('a list)list)option) bs=  ((case bs of
     [] => SOME []
   | a::b::c::d::e::f::g::h::rest =>
@@ -881,9 +876,8 @@ val _ = type_abbrev( "memory_byte" , ``: bitU list``);
   | _ => NONE
 )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn byte_chunks_defn;
 
-(*val bytes_of_bits : forall 'a. Bitvector 'a => 'a -> Maybe.maybe (list memory_byte)*)
+(*val bytes_of_bits : forall 'a. Bitvector 'a => 'a -> maybe (list memory_byte)*)
 val _ = Define `
  ((bytes_of_bits:'a Bitvector_class -> 'a ->((memory_byte)list)option)dict_Sail_values_Bitvector_a bs=  (byte_chunks (
   dict_Sail_values_Bitvector_a.bits_of_method bs)))`;
@@ -946,8 +940,8 @@ let address_of_bitv v =
   address_of_byte_list bytes*)
 
  val reverse_endianness_list_defn = Hol_defn "reverse_endianness_list" `
- ((reverse_endianness_list:'a list -> 'a list) bits=  
- (if LENGTH bits <=( 8 : num) then bits else
+ ((reverse_endianness_list:'a list -> 'a list) bits=
+   (if LENGTH bits <=( 8 : num) then bits else
     reverse_endianness_list (drop_list(( 8 : int)) bits) ++ take_list(( 8 : int)) bits))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn reverse_endianness_list_defn;
@@ -1116,19 +1110,18 @@ let internal_mem_value bytes =
 
 (*val foreach : forall 'a 'vars.
   (list 'a) -> 'vars -> ('a -> 'vars -> 'vars) -> 'vars*)
- val foreach_defn = Hol_defn "foreach" `
- ((foreach:'a list -> 'vars ->('a -> 'vars -> 'vars) -> 'vars) l vars body=  
- ((case l of
+ val _ = Define `
+ ((foreach:'a list -> 'vars ->('a -> 'vars -> 'vars) -> 'vars) l vars body=
+   ((case l of
       [] => vars
     | (x :: xs) => foreach xs (body x vars) body
   )))`;
 
-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn foreach_defn;
 
-(*val index_list : Num.integer -> Num.integer -> Num.integer -> list Num.integer*)
+(*val index_list : integer -> integer -> integer -> list integer*)
  val index_list_defn = Hol_defn "index_list" `
- ((index_list:int -> int -> int ->(int)list) from to step=  
- (if ((step >( 0 : int)) /\ (from <= to)) \/ ((step <( 0 : int)) /\ (to <= from)) then
+ ((index_list:int -> int -> int ->(int)list) from to step=
+   (if ((step >( 0 : int)) /\ (from <= to)) \/ ((step <( 0 : int)) /\ (to <= from)) then
     from :: index_list (from + step) to step
   else []))`;
 
@@ -1136,15 +1129,15 @@ val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn
 
 (*val while : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars*)
  val while_defn = Hol_defn "while" `
- ((while:'vars ->('vars -> bool) ->('vars -> 'vars) -> 'vars) vars cond body=  
- (if cond vars then while (body vars) cond body else vars))`;
+ ((while:'vars ->('vars -> bool) ->('vars -> 'vars) -> 'vars) vars cond body=
+   (if cond vars then while (body vars) cond body else vars))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn while_defn;
 
 (*val until : forall 'vars. 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars*)
  val until_defn = Hol_defn "until" `
- ((until:'vars ->('vars -> bool) ->('vars -> 'vars) -> 'vars) vars cond body=  
- (let vars = (body vars) in
+ ((until:'vars ->('vars -> bool) ->('vars -> 'vars) -> 'vars) vars cond body=
+   (let vars = (body vars) in
   if cond vars then vars else until (body vars) cond body))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn until_defn;
@@ -1178,8 +1171,8 @@ val _ = Define `
 
 
 val _ = Define `
- ((toNaturalFiveTup:'a ToNatural_class -> 'b ToNatural_class -> 'c ToNatural_class -> 'd ToNatural_class -> 'e ToNatural_class -> 'd#'c#'b#'a#'e -> num#num#num#num#num)dict_Sail_values_ToNatural_a dict_Sail_values_ToNatural_b dict_Sail_values_ToNatural_c dict_Sail_values_ToNatural_d dict_Sail_values_ToNatural_e (n1,n2,n3,n4,n5)= 
-  (dict_Sail_values_ToNatural_d.toNatural_method n1, dict_Sail_values_ToNatural_c.toNatural_method n2, dict_Sail_values_ToNatural_b.toNatural_method n3, dict_Sail_values_ToNatural_a.toNatural_method n4, dict_Sail_values_ToNatural_e.toNatural_method n5))`;
+ ((toNaturalFiveTup:'a ToNatural_class -> 'b ToNatural_class -> 'c ToNatural_class -> 'd ToNatural_class -> 'e ToNatural_class -> 'd#'c#'b#'a#'e -> num#num#num#num#num)dict_Sail_values_ToNatural_a dict_Sail_values_ToNatural_b dict_Sail_values_ToNatural_c dict_Sail_values_ToNatural_d dict_Sail_values_ToNatural_e (n1,n2,n3,n4,n5)=
+   (dict_Sail_values_ToNatural_d.toNatural_method n1, dict_Sail_values_ToNatural_c.toNatural_method n2, dict_Sail_values_ToNatural_b.toNatural_method n3, dict_Sail_values_ToNatural_a.toNatural_method n4, dict_Sail_values_ToNatural_e.toNatural_method n5))`;
 
 
 (* Let the following types be generated by Sail per spec, using either bitlists

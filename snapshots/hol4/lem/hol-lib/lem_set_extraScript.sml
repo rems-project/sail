@@ -44,10 +44,10 @@ val _ = new_theory "lem_set_extra"
  * search criterion, and we avoid baking in the tree representation (although that
  * is the obvious choice).
  *)
-(*val chooseAndSplit : forall 'a. SetType 'a, Ord 'a => set 'a -> Maybe.maybe (set 'a * 'a * set 'a)*)
+(*val chooseAndSplit : forall 'a. SetType 'a, Ord 'a => set 'a -> maybe (set 'a * 'a * set 'a)*)
 val _ = Define `
- ((chooseAndSplit:'a lem_basic_classes$Ord_class -> 'a set ->('a set#'a#'a set)option)dict_Basic_classes_Ord_a s=  
- (if s = EMPTY then
+ ((chooseAndSplit:'a Ord_class -> 'a set ->('a set#'a#'a set)option)dict_Basic_classes_Ord_a s=
+   (if s = EMPTY then
     NONE
   else
     let element1  = (CHOICE s) in
@@ -87,17 +87,17 @@ val _ = Define `
 (* compare                 *)
 (* ----------------------- *)
 
-(*val setCompareBy: forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a -> set 'a -> Basic_classes.ordering*)
+(*val setCompareBy: forall 'a. ('a -> 'a -> ordering) -> set 'a -> set 'a -> ordering*)
 val _ = Define `
- ((setCompareBy:('a -> 'a -> lem_basic_classes$ordering) -> 'a set -> 'a set -> lem_basic_classes$ordering) cmp ss ts=  
- (let ss' = (ARB (\ x y .  cmp x y = LT) ss) in
-  let ts' = (ARB (\ x y .  cmp x y = LT) ts) in
+ ((setCompareBy:('a -> 'a -> ordering) -> 'a set -> 'a set -> ordering) cmp ss ts=
+   (let ss' = (ARB (\ x y .  cmp x y = LESS) ss) in
+  let ts' = (ARB (\ x y .  cmp x y = LESS) ts) in
     lexicographic_compare cmp ss' ts'))`;
 
 
-(*val setCompare : forall 'a. SetType 'a, Ord 'a => set 'a -> set 'a -> Basic_classes.ordering*)
+(*val setCompare : forall 'a. SetType 'a, Ord 'a => set 'a -> set 'a -> ordering*)
 val _ = Define `
- ((setCompare:'a lem_basic_classes$Ord_class -> 'a set -> 'a set -> lem_basic_classes$ordering)dict_Basic_classes_Ord_a=  (setCompareBy  
+ ((setCompare:'a Ord_class -> 'a set -> 'a set -> ordering)dict_Basic_classes_Ord_a=  (setCompareBy  
   dict_Basic_classes_Ord_a.compare_method))`;
 
 
@@ -108,8 +108,8 @@ val _ = Define `
 (* Is NOT supported by the coq backend! *)
 (*val leastFixedPointUnbounded : forall 'a. SetType 'a => (set 'a -> set 'a) -> set 'a -> set 'a*)
  val leastFixedPointUnbounded_defn = Hol_defn "leastFixedPointUnbounded" `
- ((leastFixedPointUnbounded:('a set -> 'a set) -> 'a set -> 'a set) f x=   
- (let fx = (f x) in
+ ((leastFixedPointUnbounded:('a set -> 'a set) -> 'a set -> 'a set) f x=
+    (let fx = (f x) in
    if fx SUBSET x then x
    else leastFixedPointUnbounded f (fx UNION x)))`;
 

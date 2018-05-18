@@ -16,7 +16,7 @@ val _ = new_theory "lem_maybe_extra"
 (* fromJust                *)
 (* ----------------------- *)
 
-(*val fromJust : forall 'a. Maybe.maybe 'a -> 'a*)
+(*val fromJust : forall 'a. maybe 'a -> 'a*)
 (*let fromJust op=  match op with | Just v -> v | Nothing -> failwith "fromJust of Nothing" end*)
 
 val _ = export_theory()

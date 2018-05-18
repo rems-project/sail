@@ -393,7 +393,7 @@ val _ = Define `
 
 (*val transitiveClosure : forall 'a. SetType 'a, Eq 'a => rel 'a 'a -> rel 'a 'a*)
 (*val transitiveClosureByEq  : forall 'a. ('a -> 'a -> bool) -> rel 'a 'a -> rel 'a 'a*)
-(*val transitiveClosureByCmp : forall 'a. ('a * 'a -> 'a * 'a -> Basic_classes.ordering) -> rel 'a 'a -> rel 'a 'a*)
+(*val transitiveClosureByCmp : forall 'a. ('a * 'a -> 'a * 'a -> ordering) -> rel 'a 'a -> rel 'a 'a*)
 
 
 (* ----------------------- *)
@@ -403,8 +403,8 @@ val _ = Define `
 (*val transitiveClosureAdd : forall 'a. SetType 'a, Eq 'a => 'a -> 'a -> rel 'a 'a -> rel 'a 'a*)
 
 val _ = Define `
- ((tc_insert:'a -> 'a ->('a#'a)set ->('a#'a)set) x y r=  
-  ((((((x,y) INSERT (r)))) UNION ((((({(x, z) | z | 
+ ((tc_insert:'a -> 'a ->('a#'a)set ->('a#'a)set) x y r= 
+   ((((((x,y) INSERT (r)))) UNION ((((({(x, z) | z | 
   (z IN range r) /\ ((y, z) IN r)})) UNION (({(z, y) | z | 
   (z IN domain r) /\ ((z, x) IN r)}))))))))`;
 
@@ -437,8 +437,8 @@ val _ = Define `
 
 (*val withoutTransitiveEdges: forall 'a. SetType 'a, Eq 'a => rel 'a 'a -> rel 'a 'a*)
 val _ = Define `
- ((withoutTransitiveEdges:('a#'a)set ->('a#'a)set) r=  
- (let tc1 = (tc r) in
+ ((withoutTransitiveEdges:('a#'a)set ->('a#'a)set) r=
+   (let tc1 = (tc r) in
   {(a, c) | a, c 
   | ((a, c) IN r) /\
    (! (b :: range r).

@@ -33,188 +33,193 @@ val _ = Define `
  ((sint_oracle:'a words$word -> 'b state_monad$sequential_state ->(((int),'c)state_monad$result#'b state_monad$sequential_state)set) v=  (state_monad$returnS (integer_word$w2i v)))`;
 
 
-(*val vec_of_bits_maybe    : forall 'a. Size 'a => list Sail_values.bitU -> Maybe.maybe (Machine_word.mword 'a)*)
-(*val vec_of_bits_fail     : forall 'rv 'a 'e. Size 'a => list Sail_values.bitU -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
-(*val vec_of_bits_oracle   : forall 'rv 'a 'e. Size 'a => list Sail_values.bitU -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
-(*val vec_of_bits_failwith : forall 'a. Size 'a => list Sail_values.bitU -> Machine_word.mword 'a*)
-(*val vec_of_bits          : forall 'a. Size 'a => list Sail_values.bitU -> Machine_word.mword 'a*)
+(*val vec_of_bits_maybe    : forall 'a. Size 'a => list bitU -> maybe (mword 'a)*)
+(*val vec_of_bits_fail     : forall 'rv 'a 'e. Size 'a => list bitU -> monad 'rv (mword 'a) 'e*)
+(*val vec_of_bits_oracle   : forall 'rv 'a 'e. Size 'a => list bitU -> monad 'rv (mword 'a) 'e*)
+(*val vec_of_bits_failwith : forall 'a. Size 'a => list bitU -> mword 'a*)
+(*val vec_of_bits          : forall 'a. Size 'a => list bitU -> mword 'a*)
 val _ = Define `
- ((vec_of_bits_maybe:(sail_values$bitU)list ->('a words$word)option) bits=  (OPTION_MAP bitstring$v2w (just_list (MAP bool_of_bitU bits))))`;
+ ((vec_of_bits_maybe:(bitU)list ->('a words$word)option) bits=  (OPTION_MAP bitstring$v2w (just_list (MAP bool_of_bitU bits))))`;
 
 val _ = Define `
- ((vec_of_bits_fail:(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) bits=  (state$of_bits_failS 
+ ((vec_of_bits_fail:(bitU)list -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) bits=  (state$of_bits_failS 
   instance_Sail_values_Bitvector_Machine_word_mword_dict bits))`;
 
 val _ = Define `
- ((vec_of_bits_oracle:(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) bits=  (state$of_bits_oracleS 
+ ((vec_of_bits_oracle:(bitU)list -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) bits=  (state$of_bits_oracleS 
   instance_Sail_values_Bitvector_Machine_word_mword_dict bits))`;
 
 val _ = Define `
- ((vec_of_bits_failwith:(sail_values$bitU)list -> 'a words$word) bits=  (of_bits_failwith 
+ ((vec_of_bits_failwith:(bitU)list -> 'a words$word) bits=  (of_bits_failwith 
   instance_Sail_values_Bitvector_Machine_word_mword_dict bits))`;
 
 val _ = Define `
- ((vec_of_bits:(sail_values$bitU)list -> 'a words$word) bits=  (of_bits_failwith 
+ ((vec_of_bits:(bitU)list -> 'a words$word) bits=  (of_bits_failwith 
   instance_Sail_values_Bitvector_Machine_word_mword_dict bits))`;
 
 
-(*val access_vec_inc : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Sail_values.bitU*)
+(*val access_vec_inc : forall 'a. Size 'a => mword 'a -> integer -> bitU*)
 val _ = Define `
- ((access_vec_inc:'a words$word -> int -> sail_values$bitU)= 
+ ((access_vec_inc:'a words$word -> int -> bitU)= 
   (access_bv_inc instance_Sail_values_Bitvector_Machine_word_mword_dict))`;
 
 
-(*val access_vec_dec : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Sail_values.bitU*)
+(*val access_vec_dec : forall 'a. Size 'a => mword 'a -> integer -> bitU*)
 val _ = Define `
- ((access_vec_dec:'a words$word -> int -> sail_values$bitU)= 
+ ((access_vec_dec:'a words$word -> int -> bitU)= 
   (access_bv_dec instance_Sail_values_Bitvector_Machine_word_mword_dict))`;
 
 
 val _ = Define `
- ((update_vec_dec_maybe:'a words$word -> int -> sail_values$bitU ->('a words$word)option) w i b=  (update_mword_dec w i b))`;
+ ((update_vec_dec_maybe:'a words$word -> int -> bitU ->('a words$word)option) w i b=  (update_mword_dec w i b))`;
 
 val _ = Define `
- ((update_vec_dec_fail:'a words$word -> int -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS  
-(state$bool_of_bitU_fail b) (\ b . 
+ ((update_vec_dec_fail:'a words$word -> int -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS
+  (state$bool_of_bitU_fail b) (\ b . 
   state_monad$returnS (update_mword_bool_dec w i b))))`;
 
 val _ = Define `
- ((update_vec_dec_oracle:'a words$word -> int -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS  
-(state$bool_of_bitU_oracleS b) (\ b . 
+ ((update_vec_dec_oracle:'a words$word -> int -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS
+  (state$bool_of_bitU_oracleS b) (\ b . 
   state_monad$returnS (update_mword_bool_dec w i b))))`;
 
 val _ = Define `
- ((update_vec_dec:'a words$word -> int -> sail_values$bitU -> 'a words$word) w i b=  (maybe_failwith (update_vec_dec_maybe w i b)))`;
+ ((update_vec_dec:'a words$word -> int -> bitU -> 'a words$word) w i b=  (maybe_failwith (update_vec_dec_maybe w i b)))`;
 
 
 val _ = Define `
- ((update_vec_inc_maybe:'a words$word -> int -> sail_values$bitU ->('a words$word)option) w i b=  (update_mword_inc w i b))`;
+ ((update_vec_inc_maybe:'a words$word -> int -> bitU ->('a words$word)option) w i b=  (update_mword_inc w i b))`;
 
 val _ = Define `
- ((update_vec_inc_fail:'a words$word -> int -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS  
-(state$bool_of_bitU_fail b) (\ b . 
+ ((update_vec_inc_fail:'a words$word -> int -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS
+  (state$bool_of_bitU_fail b) (\ b . 
   state_monad$returnS (update_mword_bool_inc w i b))))`;
 
 val _ = Define `
- ((update_vec_inc_oracle:'a words$word -> int -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS  
-(state$bool_of_bitU_oracleS b) (\ b . 
+ ((update_vec_inc_oracle:'a words$word -> int -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) w i b=  (state_monad$bindS
+  (state$bool_of_bitU_oracleS b) (\ b . 
   state_monad$returnS (update_mword_bool_inc w i b))))`;
 
 val _ = Define `
- ((update_vec_inc:'a words$word -> int -> sail_values$bitU -> 'a words$word) w i b=  (maybe_failwith (update_vec_inc_maybe w i b)))`;
+ ((update_vec_inc:'a words$word -> int -> bitU -> 'a words$word) w i b=  (maybe_failwith (update_vec_inc_maybe w i b)))`;
 
 
-(*val subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b*)
+(*val subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b*)
 val _ = Define `
  ((subrange_vec_dec:'a words$word -> int -> int -> 'b words$word) w i j=  (words$word_extract (nat_of_int i) (nat_of_int j) w))`;
 
 
-(*val subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b*)
+(*val subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b*)
 val _ = Define `
  ((subrange_vec_inc:'a words$word -> int -> int -> 'b words$word) w i j=  (subrange_vec_dec w ((int_of_num (words$word_len w) -( 1 : int)) - i) ((int_of_num (words$word_len w) -( 1 : int)) - j)))`;
 
 
-(*val update_subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b -> Machine_word.mword 'a*)
+(*val update_subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
 val _ = Define `
  ((update_subrange_vec_dec:'a words$word -> int -> int -> 'b words$word -> 'a words$word) w i j w'=  (words$bit_field_insert (nat_of_int i) (nat_of_int j) w' w))`;
 
 
-(*val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Num.integer -> Machine_word.mword 'b -> Machine_word.mword 'a*)
+(*val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
 val _ = Define `
  ((update_subrange_vec_inc:'a words$word -> int -> int -> 'b words$word -> 'a words$word) w i j w'=  (update_subrange_vec_dec w ((int_of_num (words$word_len w) -( 1 : int)) - i) ((int_of_num (words$word_len w) -( 1 : int)) - j) w'))`;
 
 
-(*val extz_vec : forall 'a 'b. Size 'a, Size 'b => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'b*)
+(*val extz_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 val _ = Define `
  ((extz_vec:int -> 'a words$word -> 'b words$word) _ w=  (words$w2w w))`;
 
 
-(*val exts_vec : forall 'a 'b. Size 'a, Size 'b => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'b*)
+(*val exts_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 val _ = Define `
  ((exts_vec:int -> 'a words$word -> 'b words$word) _ w=  (words$sw2sw w))`;
 
 
-(*val zero_extend : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'b*)
+(*val zero_extend : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 val _ = Define `
  ((zero_extend:'a words$word -> int -> 'b words$word) w _=  (words$w2w w))`;
 
 
-(*val sign_extend : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'b*)
+(*val sign_extend : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 val _ = Define `
  ((sign_extend:'a words$word -> int -> 'b words$word) w _=  (words$sw2sw w))`;
 
 
-(*val vector_truncate : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'b*)
+(*val zeros : forall 'a. Size 'a => integer -> mword 'a*)
+val _ = Define `
+ ((zeros:int -> 'a words$word) _=  (words$n2w(( 0:num))))`;
+
+
+(*val vector_truncate : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 val _ = Define `
  ((vector_truncate:'a words$word -> int -> 'b words$word) w _=  (words$w2w w))`;
 
 
-(*val concat_vec : forall 'a 'b 'c. Size 'a, Size 'b, Size 'c => Machine_word.mword 'a -> Machine_word.mword 'b -> Machine_word.mword 'c*)
+(*val concat_vec : forall 'a 'b 'c. Size 'a, Size 'b, Size 'c => mword 'a -> mword 'b -> mword 'c*)
 val _ = Define `
  ((concat_vec:'a words$word -> 'b words$word -> 'c words$word)=  words$word_concat)`;
 
 
-(*val cons_vec_bool : forall 'a 'b 'c. Size 'a, Size 'b => bool -> Machine_word.mword 'a -> Machine_word.mword 'b*)
+(*val cons_vec_bool : forall 'a 'b 'c. Size 'a, Size 'b => bool -> mword 'a -> mword 'b*)
 val _ = Define `
  ((cons_vec_bool:bool -> 'a words$word -> 'b words$word) b w=  (bitstring$v2w (b :: bitstring$w2v w)))`;
 
 val _ = Define `
- ((cons_vec_maybe:sail_values$bitU -> 'c words$word ->('b words$word)option) b w=  (OPTION_MAP (\ b .  cons_vec_bool b w) (bool_of_bitU b)))`;
+ ((cons_vec_maybe:bitU -> 'c words$word ->('b words$word)option) b w=  (OPTION_MAP (\ b .  cons_vec_bool b w) (bool_of_bitU b)))`;
 
 val _ = Define `
- ((cons_vec_fail:sail_values$bitU -> 'c words$word -> 'd state_monad$sequential_state ->((('b words$word),'e)state_monad$result#'d state_monad$sequential_state)set) b w=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (cons_vec_bool b w))))`;
+ ((cons_vec_fail:bitU -> 'c words$word -> 'd state_monad$sequential_state ->((('b words$word),'e)state_monad$result#'d state_monad$sequential_state)set) b w=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (cons_vec_bool b w))))`;
 
 val _ = Define `
- ((cons_vec_oracle:sail_values$bitU -> 'c words$word -> 'd state_monad$sequential_state ->((('b words$word),'e)state_monad$result#'d state_monad$sequential_state)set) b w=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (cons_vec_bool b w))))`;
+ ((cons_vec_oracle:bitU -> 'c words$word -> 'd state_monad$sequential_state ->((('b words$word),'e)state_monad$result#'d state_monad$sequential_state)set) b w=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (cons_vec_bool b w))))`;
 
 val _ = Define `
- ((cons_vec:sail_values$bitU -> 'a words$word -> 'b words$word) b w=  (maybe_failwith (cons_vec_maybe b w)))`;
+ ((cons_vec:bitU -> 'a words$word -> 'b words$word) b w=  (maybe_failwith (cons_vec_maybe b w)))`;
 
 
-(*val vec_of_bool : forall 'a. Size 'a => Num.integer -> bool -> Machine_word.mword 'a*)
+(*val vec_of_bool : forall 'a. Size 'a => integer -> bool -> mword 'a*)
 val _ = Define `
  ((vec_of_bool:int -> bool -> 'a words$word) _ b=  (bitstring$v2w [b]))`;
 
 val _ = Define `
- ((vec_of_bit_maybe:int -> sail_values$bitU ->('a words$word)option) len b=  (OPTION_MAP (vec_of_bool len) (bool_of_bitU b)))`;
+ ((vec_of_bit_maybe:int -> bitU ->('a words$word)option) len b=  (OPTION_MAP (vec_of_bool len) (bool_of_bitU b)))`;
 
 val _ = Define `
- ((vec_of_bit_fail:int -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) len b=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (vec_of_bool len b))))`;
+ ((vec_of_bit_fail:int -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) len b=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (vec_of_bool len b))))`;
 
 val _ = Define `
- ((vec_of_bit_oracle:int -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) len b=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (vec_of_bool len b))))`;
+ ((vec_of_bit_oracle:int -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) len b=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (vec_of_bool len b))))`;
 
 val _ = Define `
- ((vec_of_bit:int -> sail_values$bitU -> 'a words$word) len b=  (maybe_failwith (vec_of_bit_maybe len b)))`;
+ ((vec_of_bit:int -> bitU -> 'a words$word) len b=  (maybe_failwith (vec_of_bit_maybe len b)))`;
 
 
-(*val cast_bool_vec : bool -> Machine_word.mword Machine_word.ty1*)
+(*val cast_bool_vec : bool -> mword ty1*)
 val _ = Define `
  ((cast_bool_vec:bool ->(1)words$word) b=  (vec_of_bool(( 1 : int)) b))`;
 
 val _ = Define `
- ((cast_unit_vec_maybe:sail_values$bitU ->('a words$word)option) b=  (vec_of_bit_maybe(( 1 : int)) b))`;
+ ((cast_unit_vec_maybe:bitU ->('a words$word)option) b=  (vec_of_bit_maybe(( 1 : int)) b))`;
 
 val _ = Define `
- ((cast_unit_vec_fail:sail_values$bitU -> 'a state_monad$sequential_state ->((((1)words$word),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (cast_bool_vec b))))`;
+ ((cast_unit_vec_fail:bitU -> 'a state_monad$sequential_state ->((((1)words$word),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (cast_bool_vec b))))`;
 
 val _ = Define `
- ((cast_unit_vec_oracle:sail_values$bitU -> 'a state_monad$sequential_state ->((((1)words$word),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (cast_bool_vec b))))`;
+ ((cast_unit_vec_oracle:bitU -> 'a state_monad$sequential_state ->((((1)words$word),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (cast_bool_vec b))))`;
 
 val _ = Define `
- ((cast_unit_vec:sail_values$bitU -> 'a words$word) b=  (maybe_failwith (cast_unit_vec_maybe b)))`;
+ ((cast_unit_vec:bitU -> 'a words$word) b=  (maybe_failwith (cast_unit_vec_maybe b)))`;
 
 
-(*val msb : forall 'a. Size 'a => Machine_word.mword 'a -> Sail_values.bitU*)
+(*val msb : forall 'a. Size 'a => mword 'a -> bitU*)
 val _ = Define `
- ((msb:'a words$word -> sail_values$bitU)= 
+ ((msb:'a words$word -> bitU)= 
   (most_significant instance_Sail_values_Bitvector_Machine_word_mword_dict))`;
 
 
-(*val int_of_vec : forall 'a. Size 'a => bool -> Machine_word.mword 'a -> Num.integer*)
+(*val int_of_vec : forall 'a. Size 'a => bool -> mword 'a -> integer*)
 val _ = Define `
- ((int_of_vec:bool -> 'a words$word -> int) sign w=  
- (if sign
+ ((int_of_vec:bool -> 'a words$word -> int) sign w=
+   (if sign
   then integer_word$w2i w
   else lem$w2ui w))`;
 
@@ -225,16 +230,16 @@ val _ = Define `
  ((int_of_vec_fail:bool -> 'a words$word -> 'b state_monad$sequential_state ->(((int),'c)state_monad$result#'b state_monad$sequential_state)set) sign w=  (state_monad$returnS (int_of_vec sign w)))`;
 
 
-(*val string_of_vec : forall 'a. Size 'a => Machine_word.mword 'a -> string*)
+(*val string_of_vec : forall 'a. Size 'a => mword 'a -> string*)
 val _ = Define `
  ((string_of_vec:'a words$word -> string)= 
   (string_of_bv instance_Sail_values_Bitvector_Machine_word_mword_dict))`;
 
 
-(*val and_vec : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val or_vec  : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val xor_vec : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val not_vec : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a*)
+(*val and_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val or_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val xor_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val not_vec : forall 'a. Size 'a => mword 'a -> mword 'a*)
 val _ = Define `
  ((and_vec:'a words$word -> 'a words$word -> 'a words$word)=  words$word_and)`;
 
@@ -248,12 +253,12 @@ val _ = Define `
  ((not_vec:'a words$word -> 'a words$word)=  words$word_1comp)`;
 
 
-(*val add_vec   : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val adds_vec  : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val sub_vec   : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val subs_vec  : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val mult_vec  : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'b*)
-(*val mults_vec : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'b*)
+(*val add_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val adds_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val sub_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val subs_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val mult_vec  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b*)
+(*val mults_vec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b*)
 val _ = Define `
  ((add_vec:'a words$word -> 'a words$word -> 'a words$word)   l r=  (integer_word$i2w ((int_of_mword F l) + (int_of_mword F r))))`;
 
@@ -273,12 +278,12 @@ val _ = Define `
  ((mults_vec:'a words$word -> 'a words$word -> 'b words$word) l r=  (integer_word$i2w ((int_of_mword T (words$sw2sw l :  'b words$word)) * (int_of_mword T (words$sw2sw r :  'b words$word)))))`;
 
 
-(*val add_vec_int   : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val adds_vec_int  : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val sub_vec_int   : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val subs_vec_int  : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'b*)
-(*val mults_vec_int : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'b*)
+(*val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val adds_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val subs_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
+(*val mults_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 val _ = Define `
  ((add_vec_int:'a words$word -> int -> 'a words$word)   l r=  (arith_op_bv_int 
   instance_Sail_values_Bitvector_Machine_word_mword_dict (+)   F l r))`;
@@ -304,12 +309,12 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict ( * )  T  (words$sw2sw l :  'b words$word) r))`;
 
 
-(*val add_int_vec   : forall 'a. Size 'a => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val adds_int_vec  : forall 'a. Size 'a => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val sub_int_vec   : forall 'a. Size 'a => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val subs_int_vec  : forall 'a. Size 'a => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'b*)
-(*val mults_int_vec : forall 'a 'b. Size 'a, Size 'b => Num.integer -> Machine_word.mword 'a -> Machine_word.mword 'b*)
+(*val add_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val adds_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val sub_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val subs_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
+(*val mults_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 val _ = Define `
  ((add_int_vec:int -> 'a words$word -> 'a words$word)   l r=  (arith_op_int_bv 
   instance_Sail_values_Bitvector_Machine_word_mword_dict (+)   F l r))`;
@@ -335,26 +340,26 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict ( * )  T  l (words$sw2sw r :  'b words$word)))`;
 
 
-(*val add_vec_bool  : forall 'a. Size 'a => Machine_word.mword 'a -> bool -> Machine_word.mword 'a*)
-(*val adds_vec_bool : forall 'a. Size 'a => Machine_word.mword 'a -> bool -> Machine_word.mword 'a*)
-(*val sub_vec_bool  : forall 'a. Size 'a => Machine_word.mword 'a -> bool -> Machine_word.mword 'a*)
-(*val subs_vec_bool : forall 'a. Size 'a => Machine_word.mword 'a -> bool -> Machine_word.mword 'a*)
+(*val add_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a*)
+(*val adds_vec_bool : forall 'a. Size 'a => mword 'a -> bool -> mword 'a*)
+(*val sub_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a*)
+(*val subs_vec_bool : forall 'a. Size 'a => mword 'a -> bool -> mword 'a*)
 
 val _ = Define `
  ((add_vec_bool:'a words$word -> bool -> 'a words$word)        l r=  (arith_op_bv_bool 
   instance_Sail_values_Bitvector_Machine_word_mword_dict (+) F l r))`;
 
 val _ = Define `
- ((add_vec_bit_maybe:'a words$word -> sail_values$bitU ->('a words$word)option)   l r=  (OPTION_MAP (add_vec_bool l) (bool_of_bitU r)))`;
+ ((add_vec_bit_maybe:'a words$word -> bitU ->('a words$word)option)   l r=  (OPTION_MAP (add_vec_bool l) (bool_of_bitU r)))`;
 
 val _ = Define `
- ((add_vec_bit_fail:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)    l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (add_vec_bool l r))))`;
+ ((add_vec_bit_fail:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)    l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (add_vec_bool l r))))`;
 
 val _ = Define `
- ((add_vec_bit_oracle:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)  l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (add_vec_bool l r))))`;
+ ((add_vec_bit_oracle:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)  l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (add_vec_bool l r))))`;
 
 val _ = Define `
- ((add_vec_bit:'a words$word -> sail_values$bitU -> 'a words$word)         l r=  (maybe_failwith (add_vec_bit_maybe  l r)))`;
+ ((add_vec_bit:'a words$word -> bitU -> 'a words$word)         l r=  (maybe_failwith (add_vec_bit_maybe  l r)))`;
 
 
 val _ = Define `
@@ -362,16 +367,16 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict (+) T  l r))`;
 
 val _ = Define `
- ((adds_vec_bit_maybe:'a words$word -> sail_values$bitU ->('a words$word)option)  l r=  (OPTION_MAP (adds_vec_bool l) (bool_of_bitU r)))`;
+ ((adds_vec_bit_maybe:'a words$word -> bitU ->('a words$word)option)  l r=  (OPTION_MAP (adds_vec_bool l) (bool_of_bitU r)))`;
 
 val _ = Define `
- ((adds_vec_bit_fail:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)   l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (adds_vec_bool l r))))`;
+ ((adds_vec_bit_fail:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)   l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (adds_vec_bool l r))))`;
 
 val _ = Define `
- ((adds_vec_bit_oracle:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (adds_vec_bool l r))))`;
+ ((adds_vec_bit_oracle:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (adds_vec_bool l r))))`;
 
 val _ = Define `
- ((adds_vec_bit:'a words$word -> sail_values$bitU -> 'a words$word)        l r=  (maybe_failwith (adds_vec_bit_maybe l r)))`;
+ ((adds_vec_bit:'a words$word -> bitU -> 'a words$word)        l r=  (maybe_failwith (adds_vec_bit_maybe l r)))`;
 
 
 val _ = Define `
@@ -379,16 +384,16 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict (-) F l r))`;
 
 val _ = Define `
- ((sub_vec_bit_maybe:'a words$word -> sail_values$bitU ->('a words$word)option)   l r=  (OPTION_MAP (sub_vec_bool l) (bool_of_bitU r)))`;
+ ((sub_vec_bit_maybe:'a words$word -> bitU ->('a words$word)option)   l r=  (OPTION_MAP (sub_vec_bool l) (bool_of_bitU r)))`;
 
 val _ = Define `
- ((sub_vec_bit_fail:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)    l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (sub_vec_bool l r))))`;
+ ((sub_vec_bit_fail:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)    l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (sub_vec_bool l r))))`;
 
 val _ = Define `
- ((sub_vec_bit_oracle:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)  l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (sub_vec_bool l r))))`;
+ ((sub_vec_bit_oracle:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)  l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (sub_vec_bool l r))))`;
 
 val _ = Define `
- ((sub_vec_bit:'a words$word -> sail_values$bitU -> 'a words$word)         l r=  (maybe_failwith (sub_vec_bit_maybe  l r)))`;
+ ((sub_vec_bit:'a words$word -> bitU -> 'a words$word)         l r=  (maybe_failwith (sub_vec_bit_maybe  l r)))`;
 
 
 val _ = Define `
@@ -396,16 +401,16 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict (-) T  l r))`;
 
 val _ = Define `
- ((subs_vec_bit_maybe:'a words$word -> sail_values$bitU ->('a words$word)option)  l r=  (OPTION_MAP (subs_vec_bool l) (bool_of_bitU r)))`;
+ ((subs_vec_bit_maybe:'a words$word -> bitU ->('a words$word)option)  l r=  (OPTION_MAP (subs_vec_bool l) (bool_of_bitU r)))`;
 
 val _ = Define `
- ((subs_vec_bit_fail:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)   l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (subs_vec_bool l r))))`;
+ ((subs_vec_bit_fail:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)   l r=  (state_monad$bindS (state$bool_of_bitU_fail r) (\ r .  state_monad$returnS (subs_vec_bool l r))))`;
 
 val _ = Define `
- ((subs_vec_bit_oracle:'a words$word -> sail_values$bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (subs_vec_bool l r))))`;
+ ((subs_vec_bit_oracle:'a words$word -> bitU -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (subs_vec_bool l r))))`;
 
 val _ = Define `
- ((subs_vec_bit:'a words$word -> sail_values$bitU -> 'a words$word)        l r=  (maybe_failwith (subs_vec_bit_maybe  l r)))`;
+ ((subs_vec_bit:'a words$word -> bitU -> 'a words$word)        l r=  (maybe_failwith (subs_vec_bit_maybe  l r)))`;
 
 
 (* TODO
@@ -435,11 +440,11 @@ let add_overflow_vec_bit_signed  = add_overflow_bv_bit_signed
 let sub_overflow_vec_bit         = sub_overflow_bv_bit
 let sub_overflow_vec_bit_signed  = sub_overflow_bv_bit_signed*)
 
-(*val shiftl       : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val shiftr       : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val arith_shiftr : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val rotl         : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val rotr         : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
+(*val shiftl       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val shiftr       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val arith_shiftr : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val rotl         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val rotr         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
 val _ = Define `
  ((shiftl:'a words$word -> int -> 'a words$word)=        shiftl_mword)`;
 
@@ -456,10 +461,10 @@ val _ = Define `
  ((rotr:'a words$word -> int -> 'a words$word)=          rotr_mword)`;
 
 
-(*val mod_vec        : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val mod_vec_maybe  : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Maybe.maybe (Machine_word.mword 'a)*)
-(*val mod_vec_fail   : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
-(*val mod_vec_oracle : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
+(*val mod_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val mod_vec_maybe  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a)*)
+(*val mod_vec_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e*)
+(*val mod_vec_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e*)
 val _ = Define `
  ((mod_vec:'a words$word -> 'a words$word -> 'a words$word)        l r=  (mod_mword l r))`;
 
@@ -472,17 +477,17 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r)))`;
 
 val _ = Define `
- ((mod_vec_oracle:'a words$word -> 'a words$word -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  
- ((case (mod_bv instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
+ ((mod_vec_oracle:'a words$word -> 'a words$word -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=
+   ((case (mod_bv instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
       SOME w => state_monad$returnS w
     | NONE => state$mword_oracleS () 
   )))`;
 
 
-(*val quot_vec        : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val quot_vec_maybe  : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Maybe.maybe (Machine_word.mword 'a)*)
-(*val quot_vec_fail   : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
-(*val quot_vec_oracle : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
+(*val quot_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val quot_vec_maybe  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a)*)
+(*val quot_vec_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e*)
+(*val quot_vec_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e*)
 val _ = Define `
  ((quot_vec:'a words$word -> 'a words$word -> 'a words$word)        l r=  (quot_mword l r))`;
 
@@ -495,17 +500,17 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r)))`;
 
 val _ = Define `
- ((quot_vec_oracle:'a words$word -> 'a words$word -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  
- ((case (quot_bv instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
+ ((quot_vec_oracle:'a words$word -> 'a words$word -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=
+   ((case (quot_bv instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
       SOME w => state_monad$returnS w
     | NONE => state$mword_oracleS () 
   )))`;
 
 
-(*val quots_vec        : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Machine_word.mword 'a*)
-(*val quots_vec_maybe  : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Maybe.maybe (Machine_word.mword 'a)*)
-(*val quots_vec_fail   : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
-(*val quots_vec_oracle : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
+(*val quots_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a*)
+(*val quots_vec_maybe  : forall 'a. Size 'a => mword 'a -> mword 'a -> maybe (mword 'a)*)
+(*val quots_vec_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e*)
+(*val quots_vec_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> mword 'a -> monad 'rv (mword 'a) 'e*)
 val _ = Define `
  ((quots_vec:'a words$word -> 'a words$word -> 'a words$word)        l r=  (quots_mword l r))`;
 
@@ -518,17 +523,17 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r)))`;
 
 val _ = Define `
- ((quots_vec_oracle:'a words$word -> 'a words$word -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  
- ((case (quots_bv instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
+ ((quots_vec_oracle:'a words$word -> 'a words$word -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=
+   ((case (quots_bv instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
       SOME w => state_monad$returnS w
     | NONE => state$mword_oracleS () 
   )))`;
 
 
-(*val mod_vec_int        : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val mod_vec_int_maybe  : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Maybe.maybe (Machine_word.mword 'a)*)
-(*val mod_vec_int_fail   : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Num.integer -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
-(*val mod_vec_int_oracle : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Num.integer -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
+(*val mod_vec_int        : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val mod_vec_int_maybe  : forall 'a. Size 'a => mword 'a -> integer -> maybe (mword 'a)*)
+(*val mod_vec_int_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e*)
+(*val mod_vec_int_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e*)
 val _ = Define `
  ((mod_vec_int:'a words$word -> int -> 'a words$word)        l r=  (mod_mword_int l r))`;
 
@@ -541,17 +546,18 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r)))`;
 
 val _ = Define `
- ((mod_vec_int_oracle:'a words$word -> int -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  
- ((case (mod_bv_int instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
+ ((mod_vec_int_oracle:'a words$word -> int -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=
+   ((case (mod_bv_int 
+  instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
       SOME w => state_monad$returnS w
     | NONE => state$mword_oracleS () 
   )))`;
 
 
-(*val quot_vec_int        : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'a*)
-(*val quot_vec_int_maybe  : forall 'a. Size 'a => Machine_word.mword 'a -> Num.integer -> Maybe.maybe (Machine_word.mword 'a)*)
-(*val quot_vec_int_fail   : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Num.integer -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
-(*val quot_vec_int_oracle : forall 'rv 'a 'e. Size 'a => Machine_word.mword 'a -> Num.integer -> Prompt_monad.monad 'rv (Machine_word.mword 'a) 'e*)
+(*val quot_vec_int        : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val quot_vec_int_maybe  : forall 'a. Size 'a => mword 'a -> integer -> maybe (mword 'a)*)
+(*val quot_vec_int_fail   : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e*)
+(*val quot_vec_int_oracle : forall 'rv 'a 'e. Size 'a => mword 'a -> integer -> monad 'rv (mword 'a) 'e*)
 val _ = Define `
  ((quot_vec_int:'a words$word -> int -> 'a words$word)        l r=  (quot_mword_int l r))`;
 
@@ -564,49 +570,66 @@ val _ = Define `
   instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r)))`;
 
 val _ = Define `
- ((quot_vec_int_oracle:'a words$word -> int -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  
- ((case (quot_bv_int instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
+ ((quot_vec_int_oracle:'a words$word -> int -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=
+   ((case (quot_bv_int 
+  instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict l r) of
       SOME w => state_monad$returnS w
     | NONE => state$mword_oracleS () 
   )))`;
 
 
-(*val replicate_bits : forall 'a 'b. Size 'a, Size 'b => Machine_word.mword 'a -> Num.integer -> Machine_word.mword 'b*)
+(*val replicate_bits : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 val _ = Define `
  ((replicate_bits:'a words$word -> int -> 'b words$word) v count1=  (bitstring$v2w (repeat (bitstring$w2v v) count1)))`;
 
 
-(*val duplicate_bool : forall 'a. Size 'a => bool -> Num.integer -> Machine_word.mword 'a*)
+(*val duplicate_bool : forall 'a. Size 'a => bool -> integer -> mword 'a*)
 val _ = Define `
  ((duplicate_bool:bool -> int -> 'a words$word)   b n=  (bitstring$v2w (repeat [b] n)))`;
 
 val _ = Define `
- ((duplicate_maybe:sail_values$bitU -> int ->('a words$word)option)  b n=  (OPTION_MAP (\ b .  duplicate_bool b n) (bool_of_bitU b)))`;
+ ((duplicate_maybe:bitU -> int ->('a words$word)option)  b n=  (OPTION_MAP (\ b .  duplicate_bool b n) (bool_of_bitU b)))`;
 
 val _ = Define `
- ((duplicate_fail:sail_values$bitU -> int -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)   b n=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (duplicate_bool b n))))`;
+ ((duplicate_fail:bitU -> int -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set)   b n=  (state_monad$bindS (state$bool_of_bitU_fail b) (\ b .  state_monad$returnS (duplicate_bool b n))))`;
 
 val _ = Define `
- ((duplicate_oracle:sail_values$bitU -> int -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) b n=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (duplicate_bool b n))))`;
+ ((duplicate_oracle:bitU -> int -> 'b state_monad$sequential_state ->((('a words$word),'c)state_monad$result#'b state_monad$sequential_state)set) b n=  (state_monad$bindS (state$bool_of_bitU_oracleS b) (\ b .  state_monad$returnS (duplicate_bool b n))))`;
 
 val _ = Define `
- ((duplicate:sail_values$bitU -> int -> 'a words$word)        b n=  (maybe_failwith (duplicate_maybe b n)))`;
+ ((duplicate:bitU -> int -> 'a words$word)        b n=  (maybe_failwith (duplicate_maybe b n)))`;
 
 
-(*val reverse_endianness : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a*)
+(*val reverse_endianness : forall 'a. Size 'a => mword 'a -> mword 'a*)
 val _ = Define `
  ((reverse_endianness:'a words$word -> 'a words$word) v=  (bitstring$v2w (reverse_endianness_list (bitstring$w2v v))))`;
 
 
-(*val eq_vec    : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val neq_vec   : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val ult_vec   : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val slt_vec   : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val ugt_vec   : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val sgt_vec   : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val ulteq_vec : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val slteq_vec : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val ugteq_vec : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
-(*val sgteq_vec : forall 'a. Size 'a => Machine_word.mword 'a -> Machine_word.mword 'a -> bool*)
+(*val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> mword 'a*)
+val _ = Define `
+ ((get_slice_int:int -> int -> int -> 'a words$word)= 
+  (get_slice_int_bv instance_Sail_values_Bitvector_Machine_word_mword_dict))`;
+
+
+(*val set_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> mword 'a -> integer*)
+val _ = Define `
+ ((set_slice_int:int -> int -> int -> 'a words$word -> int)= 
+  (set_slice_int_bv instance_Sail_values_Bitvector_Machine_word_mword_dict))`;
+
+
+(*val slice : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b*)
+val _ = Define `
+ ((slice:'a words$word -> int -> int -> 'b words$word) v lo len=
+   (subrange_vec_dec v ((lo + len) -( 1 : int)) lo))`;
+
+
+(*val set_slice : forall 'a 'b. Size 'a, Size 'b => integer -> integer -> mword 'a -> integer -> mword 'b -> mword 'a*)
+val _ = Define `
+ ((set_slice:int -> int -> 'a words$word -> int -> 'b words$word -> 'a words$word) (out_len:ii) (slice_len:ii) out (n:ii) v=
+   (update_subrange_vec_dec out ((n + slice_len) -( 1 : int)) n v))`;
+
+
+(*val eq_vec    : forall 'a. Size 'a => mword 'a -> mword 'a -> bool*)
+(*val neq_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool*)
 val _ = export_theory()
 

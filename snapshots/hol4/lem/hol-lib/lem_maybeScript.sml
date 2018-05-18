@@ -33,29 +33,29 @@ val _ = Define `
 
 
 val _ = Define `
- ((maybeCompare:('b -> 'a -> lem_basic_classes$ordering) -> 'b option -> 'a option -> lem_basic_classes$ordering) cmp NONE NONE=  EQ)
-/\ ((maybeCompare:('b -> 'a -> lem_basic_classes$ordering) -> 'b option -> 'a option -> lem_basic_classes$ordering) cmp NONE (SOME _)=  LT)
-/\ ((maybeCompare:('b -> 'a -> lem_basic_classes$ordering) -> 'b option -> 'a option -> lem_basic_classes$ordering) cmp (SOME _) NONE=  GT)
-/\ ((maybeCompare:('b -> 'a -> lem_basic_classes$ordering) -> 'b option -> 'a option -> lem_basic_classes$ordering) cmp (SOME x') (SOME y')=  (cmp x' y'))`;
+ ((maybeCompare:('b -> 'a -> ordering) -> 'b option -> 'a option -> ordering) cmp NONE NONE=  EQUAL)
+/\ ((maybeCompare:('b -> 'a -> ordering) -> 'b option -> 'a option -> ordering) cmp NONE (SOME _)=  LESS)
+/\ ((maybeCompare:('b -> 'a -> ordering) -> 'b option -> 'a option -> ordering) cmp (SOME _) NONE=  GREATER)
+/\ ((maybeCompare:('b -> 'a -> ordering) -> 'b option -> 'a option -> ordering) cmp (SOME x') (SOME y')=  (cmp x' y'))`;
 
 
 val _ = Define `
-((instance_Basic_classes_Ord_Maybe_maybe_dict:'a lem_basic_classes$Ord_class ->('a option)lem_basic_classes$Ord_class)dict_Basic_classes_Ord_a= (<|
+((instance_Basic_classes_Ord_Maybe_maybe_dict:'a Ord_class ->('a option)Ord_class)dict_Basic_classes_Ord_a= (<|
 
   compare_method := (maybeCompare  
   dict_Basic_classes_Ord_a.compare_method);
 
   isLess_method := (\ m1 .  (\ m2 .  maybeCompare  
-  dict_Basic_classes_Ord_a.compare_method m1 m2 = LT));
+  dict_Basic_classes_Ord_a.compare_method m1 m2 = LESS));
 
   isLessEqual_method := (\ m1 .  (\ m2 .  (let r = (maybeCompare  
-  dict_Basic_classes_Ord_a.compare_method m1 m2) in (r = LT) \/ (r = EQ))));
+  dict_Basic_classes_Ord_a.compare_method m1 m2) in (r = LESS) \/ (r = EQUAL))));
 
   isGreater_method := (\ m1 .  (\ m2 .  maybeCompare  
-  dict_Basic_classes_Ord_a.compare_method m1 m2 = GT));
+  dict_Basic_classes_Ord_a.compare_method m1 m2 = GREATER));
 
   isGreaterEqual_method := (\ m1 .  (\ m2 .  (let r = (maybeCompare  
-  dict_Basic_classes_Ord_a.compare_method m1 m2) in (r = GT) \/ (r = EQ))))|>))`;
+  dict_Basic_classes_Ord_a.compare_method m1 m2) in (r = GREATER) \/ (r = EQUAL))))|>))`;
 
 
 (* ----------------------- *)
