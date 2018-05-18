@@ -697,6 +697,7 @@ let ocaml_compile spec defs =
   Unix.chdir "_sbuild";
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/elf_loader.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/sail_lib.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/util.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/_tags .") in
   let out_chan = open_out (spec ^ ".ml") in
   ocaml_pp_defs out_chan defs;

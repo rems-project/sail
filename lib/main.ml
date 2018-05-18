@@ -57,7 +57,7 @@ let opt_raw_addr = ref Nat_big_num.zero
 let options = Arg.align [
     ( "-raw",
       Arg.String (fun s ->
-      let l = String.split_on_char '@' s in
+      let l = Util.split_on_char '@' s in
       match l with
       | [fname;addr] -> begin
           opt_raw_fname := fname;
