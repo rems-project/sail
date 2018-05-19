@@ -741,3 +741,10 @@ function init_sys() -> unit = {
 function tick_clock() -> unit = {
   mcycle = mcycle + 1
 }
+
+/* memory access exceptions, defined here for use by the platform model. */
+
+union MemoryOpResult ('a : Type) = {
+  MemValue : 'a,
+  MemException: ExceptionType
+}

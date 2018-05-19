@@ -1,4 +1,4 @@
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv_vmem.sail riscv.sail riscv_step.sail
+SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail
 SAIL_DIR ?= $(realpath ..)
 
 export SAIL_DIR

@@ -1,10 +1,5 @@
 /* memory */
 
-union MemoryOpResult ('a : Type) = {
-  MemValue : 'a,
-  MemException: ExceptionType
-}
-
 function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool =
   unsigned(addr) % width == 0
 
