@@ -8,6 +8,7 @@ src/ast.lem
 src/ast.ml
 src/bytecode.lem
 src/bytecode.ml
+src/share_directory.ml
 _sbuild/
 test/typecheck/rtpass*/
 language/*.pdf
