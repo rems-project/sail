@@ -90,3 +90,27 @@ function step() = {
     }
   }
 }
+
+val loop : int -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+function loop (tohost_addr) = {
+  let tohost = __GetSlice_int(64, tohost_addr, 0);
+  i : int = 0;
+  while true do {
+    tick_clock();
+    print_int("\nstep: ", i);
+    let retired : bool = step();
+    PC = nextPC;
+    if retired then i = i + 1;
+
+    /* check htif exit */
+    let tohost_val = __ReadRAM(64, 4, 0x0000_0000_0000_0000, tohost);
+    if unsigned(tohost_val) != 0 then {
+      let exit_val = unsigned(tohost_val >> 0b1) in
+      if exit_val == 0 then
+        print("SUCCESS")
+      else
+        print_int("FAILURE: ", exit_val);
+      exit(());
+    }
+  }
+}
