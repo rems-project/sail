@@ -60,6 +60,7 @@ let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
+let opt_ocaml_nobuild = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
@@ -88,6 +89,9 @@ let options = Arg.align ([
   ( "-ocaml",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
+  ( "-ocaml-nobuild",
+    Arg.Set Ocaml_backend.opt_ocaml_nobuild,
+    " do not build generated ocaml");
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");

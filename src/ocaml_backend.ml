@@ -58,6 +58,8 @@ module Big_int = Nat_big_num
 
 (* Option to turn tracing features on or off *)
 let opt_trace_ocaml = ref false
+(* Option to not build generated ocaml by default *)
+let opt_ocaml_nobuild = ref false
 
 type ctx =
   { register_inits : tannot exp list;
@@ -709,10 +711,12 @@ let ocaml_compile spec defs =
       let out_chan = open_out "main.ml" in
       output_string out_chan (ocaml_main spec sail_dir);
       close_out out_chan;
-      system_checked "ocamlbuild -use-ocamlfind main.native";
-      let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
-      ()
+      if not !opt_ocaml_nobuild then (
+        system_checked "ocamlbuild -use-ocamlfind main.native";
+        ignore (Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec))
+      )
     end
-  else
-    system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo");
+  else (if not !opt_ocaml_nobuild then
+          system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo")
+       );
   Unix.chdir cwd
