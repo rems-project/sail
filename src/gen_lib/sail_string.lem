@@ -76,6 +76,16 @@ let spaces_matches_prefix s =
   | n -> Just ((), n)
   end
 
+let hex_bits_5_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 32 then
+       Just ((of_int 5 n, len))
+     else
+       Nothing
+  end
+
 let hex_bits_6_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing

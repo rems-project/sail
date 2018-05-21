@@ -371,6 +371,12 @@ mapping bool_bits : bool <-> bits(1) = {
   false <-> 0b0
 }
 
+mapping bool_not_bits : bool <-> bits(1) = {
+  true <-> 0b0,
+  false <-> 0b1
+}
+
+
 mapping size_bits : word_width <-> bits(2) = {
   BYTE <-> 0b00,
   HALF <-> 0b01,

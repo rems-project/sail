@@ -9,6 +9,14 @@ val def_spaces : unit <-> string
 
 val hex_bits : forall 'n . (atom('n), bits('n)) <-> string
 
+val hex_bits_4 : bits(4) <-> string
+val hex_bits_4_forwards = "string_of_bits" : bits(4) -> string
+val "hex_bits_4_matches_prefix" : string -> option((bits(4), nat))
+
+val hex_bits_5 : bits(5) <-> string
+val hex_bits_5_forwards = "string_of_bits" : bits(5) -> string
+val "hex_bits_5_matches_prefix" : string -> option((bits(5), nat))
+
 val hex_bits_6 : bits(6) <-> string
 val hex_bits_6_forwards = "string_of_bits" : bits(6) -> string
 val "hex_bits_6_matches_prefix" : string -> option((bits(6), nat))
