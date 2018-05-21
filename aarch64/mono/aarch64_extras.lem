@@ -8,12 +8,15 @@ open import Prompt
 type ty512
 instance (Size ty512) let size = 512 end
 declare isabelle target_rep type ty512 = `512`
+declare hol target_rep type ty512 = `512`
 type ty1024
 instance (Size ty1024) let size = 1024 end
 declare isabelle target_rep type ty1024 = `1024`
+declare hol target_rep type ty1024 = `1024`
 type ty2048
 instance (Size ty2048) let size = 2048 end
 declare isabelle target_rep type ty2048 = `2048`
+declare hol target_rep type ty2048 = `2048`
 
 let hexchar_to_bool_list c =
   if c = #'0' then      Just ([false;false;false;false])
@@ -50,13 +53,10 @@ let hexstring_to_bools s =
 
 val hex_slice : forall 'rv 'n 'e. Size 'n => string -> integer -> integer -> monad 'rv (mword 'n) 'e
 let hex_slice v len lo =
-  match hexstring_to_bools v with
-    | Just bs ->
-       let hi = len + lo - 1 in
-       let bs = ext_list false (len + lo) bs in
-       return (of_bools (subrange_list false bs hi lo))
-    | Nothing -> Fail "hex_slice"
-  end
+  maybe_fail "hex_slice" (hexstring_to_bools v) >>= fun bs ->
+   let hi = len + lo - 1 in
+   let bs = ext_list false (len + lo) bs in
+   return (of_bools (subrange_list false bs hi lo))
 
 let internal_pick vs = return (head vs)
 
