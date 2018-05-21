@@ -729,7 +729,7 @@ function clause execute (CFromPtr(cd, cb, rt)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
-  else if (rt == 0b00000) then
+  else if (rt_val == 0x0000000000000000) then
     writeCapReg(cd, null_cap)
   else if not (cb_val.tag) then
     raise_c2_exception(CapEx_TagViolation, cb)
