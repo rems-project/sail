@@ -1,15 +1,21 @@
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail
+SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail
 SAIL_DIR ?= $(realpath ..)
 
 export SAIL_DIR
 
-all: riscv Riscv.thy
+all: riscv.ml platform # Riscv.thy
 
 check: $(SAIL_SRCS) main.sail Makefile
 	$(SAIL_DIR)/sail $(SAIL_SRCS) main.sail
 
-riscv: $(SAIL_SRCS) main.sail Makefile
-	$(SAIL_DIR)/sail -ocaml -o riscv $(SAIL_SRCS) main.sail
+riscv.ml: $(SAIL_SRCS) Makefile main.sail
+	$(SAIL_DIR)/sail -ocaml -ocaml-nobuild -o riscv $(SAIL_SRCS)
+
+platform_main.native: riscv.ml platform.ml platform_main.ml Makefile _tags
+	ocamlbuild -use-ocamlfind $@
+
+platform: platform_main.native
+	rm -f $@ && ln -s $^ $@
 
 riscv_duopod_ocaml: prelude.sail riscv_duopod.sail
 	$(SAIL_DIR)/sail -ocaml -o $@ $^
@@ -58,3 +64,4 @@ clean:
 	-rm -f Riscv_duopod.thy Riscv_duopod_types.thy riscv_duopod.lem riscv_duopod_types.lem
 	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
 	-Holmake cleanAll
+	ocamlbuild -clean

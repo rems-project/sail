@@ -401,3 +401,7 @@ function shift_right_arith64 (v : bits(64), shift : bits(6)) -> bits(64) =
 function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
     let v64 : bits(64) = EXTS(v) in
     (v64 >> shift)[31..0]
+
+/* Copied from arith.sail. */
+val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n * 'm)
