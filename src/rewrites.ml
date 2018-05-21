@@ -3129,7 +3129,7 @@ let rewrite_defs_mapping_patterns =
           (plus 'infer the mapping type' shenanigans)
        *)
     | P_aux (P_app (mapping_id, arg_pats), p_annot) when Env.is_mapping mapping_id env ->
-       
+
        let mapping_in_typ = typ_of_annot p_annot in
 
        let x = Env.get_val_spec mapping_id env in
@@ -3142,6 +3142,13 @@ let rewrite_defs_mapping_patterns =
            "backwards"
        in
 
+       let mapping_out_typ =
+         if mapping_in_typ = typ2 then
+           typ2
+         else
+           typ1
+       in
+
        let mapping_name =
          match mapping_id with
          | Id_aux (Id id, _)
@@ -3152,21 +3159,21 @@ let rewrite_defs_mapping_patterns =
        let mapping_perform_id = mk_id (mapping_name ^ "_" ^ mapping_direction) in
        let s_id = fresh_mappingpatterns_id () in
 
-       let s_exp = annot_exp (E_id s_id) Parse_ast.Unknown env mapping_in_typ in
-       let new_guard = annot_exp (E_app (mapping_matches_id, [s_exp])) Parse_ast.Unknown env bool_typ in
-       let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) Parse_ast.Unknown env typ2 in
+       let s_exp = annot_exp (E_id s_id) unk env mapping_in_typ in
+       let new_guard = annot_exp (E_app (mapping_matches_id, [s_exp])) unk env bool_typ in
+       let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) unk env typ2 in
        let new_letbind = match arg_pats with
          | [] -> assert false
-         | [arg_pat] -> LB_aux (LB_val (arg_pat, new_binding), (Parse_ast.Unknown, None))
+         | [arg_pat] -> LB_aux (LB_val (arg_pat, new_binding), unkt)
          | arg_pats ->
-            let (checked_tup, new_env, []) = infer_pat env (mk_pat (P_tup (List.map strip_pat arg_pats))) in
-            LB_aux (LB_val (checked_tup, new_binding), (Parse_ast.Unknown, None))
+            let checked_tup = annot_pat (P_tup arg_pats) unk env mapping_out_typ in
+            LB_aux (LB_val (checked_tup, new_binding), unkt)
        in
 
-       let new_let = annot_exp (E_let (new_letbind, expr)) Parse_ast.Unknown env (typ_of expr) in
+       let new_let = annot_exp (E_let (new_letbind, expr)) unk env (typ_of expr) in
 
-       annot_pat (P_id s_id) Parse_ast.Unknown env mapping_in_typ, new_guard :: guards, new_let
-         
+       annot_pat (P_id s_id) unk env mapping_in_typ, new_guard :: guards, new_let
+
     | P_aux (P_as (inner_pat, inner_id), p_annot) ->
        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
        P_aux (P_as (inner_pat, inner_id), p_annot), guards, expr
