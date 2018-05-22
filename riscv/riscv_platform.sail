@@ -21,7 +21,7 @@ val plat_clint_size = {ocaml: "Platform.clint_size"} : unit -> xlenbits
 val phys_mem_segments : unit -> (xlenbits, xlenbits)
 function phys_mem_segments() =
 // FIXME
-// (plat_rom_base (), plat_rom_base ()) ::
+// (plat_rom_base (), plat_rom_size ()) ::
   (plat_ram_base (), plat_ram_size ())
 // :: [||]
 

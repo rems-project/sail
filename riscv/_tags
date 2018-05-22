@@ -1,0 +1,4 @@
+<**/*.ml>: bin_annot, annot
+"_sbuild": include
+<*.m{l,li}>: package(lem), package(linksem), package(zarith)
+<platform_main.native>: package(lem), package(linksem), package(zarith)
