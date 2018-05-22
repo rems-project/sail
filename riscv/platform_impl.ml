@@ -27,7 +27,7 @@ let uint64_to_bytes u = let open Int64 in
 let reset_vec_size = 8l;;
 
 let reset_vec_int start_pc = [
-  0x267l;                                                 (* auipc  t0, 0x0      *)
+  0x297l;                                                 (* auipc  t0, 0x0      *)
   (let open Int32 in
    add 0x28593l (shift_left (mul reset_vec_size 4l) 20)); (* addi   a1, t0, ofs(dtb) *)
   0xf1402573l;                                            (* csrr   a0, mhartid  *)

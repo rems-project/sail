@@ -50,7 +50,7 @@
 
 open Elf_loader
 open Sail_lib
-open Riscv;;
+open Riscv
 
 (* OCaml driver for generated RISC-V model. *)
 
@@ -61,8 +61,7 @@ let options = Arg.align []
 let usage_msg = "RISC-V platform options:"
 
 let elf_arg =
-  Arg.parse options (fun s ->
-                     opt_file_arguments := !opt_file_arguments @ [s])
+  Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s])
             usage_msg;
   ( match !opt_file_arguments with
       | f :: _ -> print_endline ("Loading ELF file " ^ f); f
@@ -72,20 +71,17 @@ let elf_arg =
 let () =
   Random.self_init ();
 
-  zPC := Platform.init elf_arg;
+  let pc = Platform.init elf_arg in
 
   sail_call
     (fun r ->
-     begin
-       zPC := (z__GetSlice_int ((Big_int.of_string "64"), (Elf_loader.elf_entry ()), (Big_int.of_string "0")));
-       begin
-         try ( zinit_sys ();
-               zloop (Elf_loader.elf_tohost ())
-             )
-         with
-           | ZError_not_implemented (zs) ->
-                 print_string ("Error: Not implemented: ", zs)
-           | ZError_internal_error (_) ->
-                 prerr_endline "Error: internal error"
-       end
-     end)
+      try ( zinit_sys ();
+            zPC := pc;
+            zloop (Elf_loader.elf_tohost ())
+          )
+      with
+        | ZError_not_implemented (zs) ->
+              print_string ("Error: Not implemented: ", zs)
+        | ZError_internal_error (_) ->
+              prerr_endline "Error: internal error"
+    )
