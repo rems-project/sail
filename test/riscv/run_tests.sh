@@ -51,7 +51,7 @@ cd $SAILDIR/riscv
 
 printf "Building RISCV specification...\n"
 
-if make -C $SAILDIR/riscv riscv ;
+if make -C $SAILDIR/riscv platform ;
 then
     green "Building RISCV specification" "ok"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 for test in $DIR/tests/*.elf; do
-    if $SAILDIR/riscv/riscv "$test" >"${test/.elf/.out}" 2>&1 && grep -q SUCCESS "${test/.elf/.out}"
+    if $SAILDIR/riscv/platform "$test" >"${test/.elf/.out}" 2>&1 && grep -q SUCCESS "${test/.elf/.out}"
     then
        green "$(basename $test)" "ok"
     else

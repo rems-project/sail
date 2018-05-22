@@ -3,7 +3,7 @@ SAIL_DIR ?= $(realpath ..)
 
 export SAIL_DIR
 
-all: riscv.ml platform # Riscv.thy
+all: riscv.ml platform Riscv.thy
 
 check: $(SAIL_SRCS) main.sail Makefile
 	$(SAIL_DIR)/sail $(SAIL_SRCS) main.sail
@@ -63,5 +63,6 @@ clean:
 		Riscv_extras.thy
 	-rm -f Riscv_duopod.thy Riscv_duopod_types.thy riscv_duopod.lem riscv_duopod_types.lem
 	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
+	-rm -f platform_main.native platform
 	-Holmake cleanAll
 	ocamlbuild -clean
