@@ -3975,6 +3975,9 @@ let add_bitvector_casts (Defs defs) =
       end
       | E_return e' ->
          E_aux (E_return (make_bitvector_cast_exp top_env quant_kids (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
+      (* TODO: (env_of_annot ann) isn't suitable, because it contains
+         constraints revealing the case splits involved; needs a more
+         subtle approach *)
       | E_assign (LEXP_aux (lexp,lexp_annot),e') ->
          E_aux (E_assign (LEXP_aux (lexp,lexp_annot),
                           make_bitvector_cast_exp (env_of_annot ann) quant_kids (fill_in_type (env_of e') (typ_of e'))
@@ -3987,7 +3990,8 @@ let add_bitvector_casts (Defs defs) =
         e_aux = rewrite_aux } exp
   in
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann)) =
-    let (tq,typ) = Env.get_val_spec_orig id (env_of_annot fcl_ann) in
+    let fcl_env = env_of_annot fcl_ann in
+    let (tq,typ) = Env.get_val_spec_orig id fcl_env in
     let quant_kids = List.map kopt_kid (quant_kopts tq) in
     let ret_typ =
       match typ with
@@ -3998,11 +4002,11 @@ let add_bitvector_casts (Defs defs) =
                       " is not a function type"))
     in
     let pat,guard,body,annot = destruct_pexp pexp in
-    let env = env_of body in
-    let body = rewrite_body id quant_kids env ret_typ body in
+    let body_env = env_of body in
+    let body = rewrite_body id quant_kids body_env ret_typ body in
     (* Also add a cast around the entire function clause body, if necessary *)
     let body =
-      make_bitvector_cast_exp env quant_kids (fill_in_type (env_of body) (typ_of body)) ret_typ body
+      make_bitvector_cast_exp fcl_env quant_kids (fill_in_type body_env (typ_of body)) ret_typ body
     in
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)

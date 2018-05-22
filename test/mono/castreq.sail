@@ -51,6 +51,8 @@ function ret(x) =
     64 => let z = y@y@y@y in { dfsf = 4; return z; undefined }
   }
 
+/* TODO: Assignments need more plumbing
+
 val assign : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. bits('m) -> bits('n) effect {undef}
 
 function assign(x) = {
@@ -62,6 +64,7 @@ function assign(x) = {
   };
   r
 }
+*/
 
 /* Adding casts for top-level pattern matches */
 
@@ -102,10 +105,10 @@ function run () = {
     assert((ret(0x34) : bits(64)) == 0x0034003400340034);
     assert((ret(0x3456) : bits(32)) == 0x34563456);
     assert((ret(0x3456) : bits(64)) == 0x3456345634563456);
-    assert((assign(0x12) : bits(32)) == 0x00120012);
+/*    assert((assign(0x12) : bits(32)) == 0x00120012);
     assert((assign(0x1234) : bits(32)) == 0x12341234);
     assert((assign(0x12) : bits(64)) == 0x0012001200120012);
-    assert((assign(0x1234) : bits(64)) == 0x1234123412341234);
+    assert((assign(0x1234) : bits(64)) == 0x1234123412341234);*/
     assert(foo2(32,0x12) == 0x00120012);
     assert(foo2(64,0x12) == 0x0012001200120012);
     assert(foo3(4,0x12) == 0x00120012);
