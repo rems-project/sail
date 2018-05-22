@@ -7,16 +7,16 @@
 */
 
 /* Main memory */
-val plat_ram_base = {ocaml: "Platform.dram_base"} : unit -> xlenbits
-val plat_ram_size = {ocaml: "Platform.dram_size"} : unit -> xlenbits
+val plat_ram_base = {ocaml: "Platform.dram_base", lem: "plat_ram_base"} : unit -> xlenbits
+val plat_ram_size = {ocaml: "Platform.dram_size", lem: "plat_ram_size"} : unit -> xlenbits
 
 /* ROM holding reset vector and device-tree DTB */
-val plat_rom_base = {ocaml: "Platform.rom_base"} : unit -> xlenbits
-val plat_rom_size = {ocaml: "Platform.rom_size"} : unit -> xlenbits
+val plat_rom_base = {ocaml: "Platform.rom_base", lem: "plat_rom_base"} : unit -> xlenbits
+val plat_rom_size = {ocaml: "Platform.rom_size", lem: "plat_rom_size"} : unit -> xlenbits
 
 /* Location of clock-interface, which should match with the spec in the DTB */
-val plat_clint_base = {ocaml: "Platform.clint_base"} : unit -> xlenbits
-val plat_clint_size = {ocaml: "Platform.clint_size"} : unit -> xlenbits
+val plat_clint_base = {ocaml: "Platform.clint_base", lem: "plat_clint_base"} : unit -> xlenbits
+val plat_clint_size = {ocaml: "Platform.clint_size", lem: "plat_clint_size"} : unit -> xlenbits
 
 val phys_mem_segments : unit -> (xlenbits, xlenbits)
 function phys_mem_segments() =
