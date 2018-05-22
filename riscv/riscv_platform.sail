@@ -18,12 +18,11 @@ val plat_rom_size = {ocaml: "Platform.rom_size", lem: "plat_rom_size"} : unit ->
 val plat_clint_base = {ocaml: "Platform.clint_base", lem: "plat_clint_base"} : unit -> xlenbits
 val plat_clint_size = {ocaml: "Platform.clint_size", lem: "plat_clint_size"} : unit -> xlenbits
 
-val phys_mem_segments : unit -> (xlenbits, xlenbits)
+val phys_mem_segments : unit -> list((xlenbits, xlenbits))
 function phys_mem_segments() =
-// FIXME
-// (plat_rom_base (), plat_rom_size ()) ::
-  (plat_ram_base (), plat_ram_size ())
-// :: [||]
+  (plat_rom_base (), plat_rom_size ()) ::
+  (plat_ram_base (), plat_ram_size ()) ::
+  [||]
 
 val plat_insns_per_tick = {ocaml: "Platform.insns_per_tick"} : unit -> int
 

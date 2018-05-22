@@ -287,6 +287,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      (string ("let rec loop " ^ zencode_string (string_of_id id) ^ " =") ^//^ loop_body)
      ^/^ string "in"
      ^/^ (string "loop" ^^ space ^^ ocaml_atomic_exp ctx exp_from)
+  | E_cons (x, xs) -> ocaml_exp ctx x ^^ string " :: " ^^ ocaml_exp ctx xs
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
   match lb_aux with
