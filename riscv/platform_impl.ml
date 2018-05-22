@@ -124,7 +124,7 @@ let make_dtb dts = (* Call the dtc compiler, assumed to be at /usr/bin/dtc *)
       (* simple and stupid for now *)
       let rec accum_bytes cin acc =
         match (
-          try  Some (input_byte cfrom)
+          try  Some (input_byte cin)
           with End_of_file -> None
         ) with
           | Some b -> accum_bytes cin (b :: acc)
