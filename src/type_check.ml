@@ -3633,13 +3633,13 @@ and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as 
        | Typ_aux (Typ_bidir (typ1, typ2), _) ->
           begin
             try
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
+              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env typ2 typ in
               typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
               let arg_typ' = subst_unifiers unifiers typ1 in
               let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
-              then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_mpat mpat)
+              then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
               else ();
               let ret_typ' = subst_unifiers unifiers typ2 in
               let tpats, env, guards =
@@ -3651,13 +3651,13 @@ and bind_mpat env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as 
             | Unification_error (l, m) ->
                try
                  typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
-                 typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
+                 typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
                  let unifiers, _, _ (* FIXME! *) = unify l env typ1 typ in
                  typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
                  let arg_typ' = subst_unifiers unifiers typ2 in
                  let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
                  if (match quants' with [] -> false | _ -> true)
-                 then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_mpat mpat)
+                 then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
                  else ();
                  let ret_typ' = subst_unifiers unifiers typ1 in
                  let tpats, env, guards =
