@@ -37,9 +37,9 @@ val truncate = {
   ocaml: "vector_truncate",
   lem: "vector_truncate",
   c: "truncate"
-} : forall 'm 'n, 'm <= 'n. (vector('n, inc, bit), atom('m)) -> vector('m, inc, bit)
+} : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, inc, bit), atom('m)) -> vector('m, inc, bit)
 
-val mask : forall 'len 'v, 'v >= 0. (atom('len), vector('v, inc, bit)) -> vector('len, inc, bit)
+val mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, inc, bit)) -> vector('len, inc, bit)
 
 function mask(len, v) = if len <= length(v) then truncate(v, len) else zero_extend(v, len)
 

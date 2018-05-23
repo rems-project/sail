@@ -38,9 +38,9 @@ val truncate = {
   lem: "vector_truncate",
   coq: "vector_truncate",
   c: "truncate"
-} : forall 'm 'n, 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
+} : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 
-val mask : forall 'len 'v, 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)
+val mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)
 
 function mask(len, v) = if len <= length(v) then truncate(v, len) else zero_extend(v, len)
 
