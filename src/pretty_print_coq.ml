@@ -92,12 +92,14 @@ module StringSet = Set.Make(String)
 
 type context = {
   early_ret : bool;
-  kid_renames : kid KBindings.t;
+  kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames *)
+  kid_id_renames : id KBindings.t; (* tyvar -> argument renames *)
   bound_nexps : NexpSet.t;
 }
 let empty_ctxt = {
   early_ret = false;
   kid_renames = KBindings.empty;
+  kid_id_renames = KBindings.empty;
   bound_nexps = NexpSet.empty
 }
 
@@ -170,7 +172,11 @@ let doc_id_ctor (Id_aux(i,_)) =
       * token in case of x ending with star. *)
      separate space [colon; string x; empty]
 
-let doc_var_lem ctx kid = string (fix_id true (string_of_kid (try KBindings.find kid ctx.kid_renames with Not_found -> kid)))
+let doc_var_lem ctx kid =
+  match KBindings.find kid ctx.kid_id_renames with
+  | id -> doc_id id
+  | exception Not_found ->
+     string (fix_id true (string_of_kid (try KBindings.find kid ctx.kid_renames with Not_found -> kid)))
 
 let doc_docstring_lem (l, _) = match l with
   | Parse_ast.Documented (str, _) -> string ("(*" ^ str ^ "*)") ^^ hardline
@@ -423,27 +429,44 @@ let rec doc_nc ctx (NC_aux (nc,_)) =
   | NC_true -> string "True"
   | NC_false -> string "False"
 
-let doc_quant_item ctx delimit (QI_aux (qi,_)) =
+let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id (KOpt_aux (KOpt_none kid,_)) ->
+     if KBindings.mem kid ctx.kid_id_renames then None else
      Some (delimit (separate space [doc_var_lem ctx kid; colon; string "Z"]))
   | QI_id (KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (kind,_)],_),kid),_)) -> begin
+    if KBindings.mem kid ctx.kid_id_renames then None else
     match kind with
     | BK_type -> Some (delimit (separate space [doc_var_lem ctx kid; colon; string "Type"]))
     | BK_int -> Some (delimit (separate space [doc_var_lem ctx kid; colon; string "Z"]))
     | BK_order -> None
   end
   | QI_id _ -> failwith "Quantifier with multiple kinds"
+  | QI_const nc -> None
+
+let doc_quant_item_constr ctx delimit (QI_aux (qi,_)) =
+  match qi with
+  | QI_id  _ -> None
   | QI_const nc -> Some (bquote ^^ braces (string "ArithFact" ^^ parens (doc_nc ctx nc)))
 
 let doc_typquant_items ctx delimit (TypQ_aux (tq,_)) =
   match tq with
-  | TypQ_tq qis -> separate_opt space (doc_quant_item ctx delimit) qis
+  | TypQ_tq qis ->
+     separate_opt space (doc_quant_item_id ctx delimit) qis ^^
+     separate_opt space (doc_quant_item_constr ctx delimit) qis
   | TypQ_no_forall -> empty
+
+let doc_typquant_items_separate ctx delimit (TypQ_aux (tq,_)) =
+  match tq with
+  | TypQ_tq qis ->
+     separate_opt space (doc_quant_item_id ctx delimit) qis,
+     separate_opt space (doc_quant_item_constr ctx delimit) qis
+  | TypQ_no_forall -> empty, empty
 
 let doc_typquant ctx (TypQ_aux(tq,_)) typ = match tq with
 | TypQ_tq ((_ :: _) as qs) ->
-  string "forall " ^^ separate_opt space (doc_quant_item ctx parens) qs ^^ string ". " ^^ typ
+   string "forall " ^^ separate_opt space (doc_quant_item_id ctx parens) qs ^^
+     separate_opt space (doc_quant_item_constr ctx parens) qs ^^ string ". " ^^ typ
 | _ -> typ
 
 (* Produce Size type constraints for bitvector sizes when using
@@ -1202,6 +1225,26 @@ let mk_kid_renames ids_to_avoid kids =
     in check kid
   in snd (KidSet.fold check_kid kids (kids, KBindings.empty))
 
+let merge_kids_atoms pats =
+  let try_eliminate (gone,map,seen) = function
+    | P_aux (P_id id, ann), typ -> begin
+      match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
+      | Some (Nexp_aux (Nexp_var kid,l)) ->
+         if KidSet.mem kid seen then
+           let () = 
+             Reporting_basic.print_err false true l "merge_kids_atoms"
+               ("want to merge tyvar and argument for " ^ string_of_kid kid ^
+                   " but rearranging arguments isn't supported yet") in
+           gone,map,seen
+         else
+           KidSet.add kid gone, KBindings.add kid id map, KidSet.add kid seen
+      | _ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
+    end
+    | _, typ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
+  in
+  let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
+  gone,map
+
 let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let (tq,typ) = Env.get_val_spec_orig id (env_of_annot annot) in
   let (arg_typ, ret_typ, eff) = match typ with
@@ -1211,13 +1254,18 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let ids_to_avoid = all_ids pexp in
   let kids_used = tyvars_of_typquant tq in
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
+  let pats, bind = untuple_args_pat arg_typ pat in
+  let pats, binds = List.split (Util.list_mapi demote_as_pattern pats) in
+  let eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
+  let kids_used = KidSet.diff kids_used eliminated_kids in
   let ctxt =
     { early_ret = contains_early_return exp;
       kid_renames = mk_kid_renames ids_to_avoid kids_used;
+      kid_id_renames = kid_to_arg_rename;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ) } in
-  let quantspp = doc_typquant_items ctxt braces tq in
-  let pats, bind = untuple_args_pat arg_typ pat in
-  let pats, binds = List.split (Util.list_mapi demote_as_pattern pats) in
+  (* Put the constraints after pattern matching so that any type variable that's
+     been replaced by one of the term-level arguments is bound. *)
+  let quantspp, constrspp = doc_typquant_items_separate ctxt braces tq in
   let exp = List.fold_left (fun body f -> f body) (bind exp) binds in
   let patspp = separate_map space (fun (pat,typ) ->
     squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt typ])) pats in
@@ -1233,7 +1281,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        raise (Reporting_basic.err_unreachable l
                 "guarded pattern expression should have been rewritten before pretty-printing") in
   group (prefix 3 1
-    (separate space [doc_id id; quantspp; patspp; atom_constr_pp; colon; retpp; coloneq])
+    (separate space [doc_id id; quantspp; patspp; constrspp; atom_constr_pp; colon; retpp; coloneq])
     (doc_fun_body ctxt exp ^^ dot))
 
 let get_id = function
