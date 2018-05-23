@@ -3,9 +3,9 @@ default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
 
-val spaces : unit <-> string
-val opt_spaces : unit <-> string
-val def_spaces : unit <-> string
+val spc : unit <-> string
+val opt_spc : unit <-> string
+val def_spc : unit <-> string
 
 val hex_bits : forall 'n . (atom('n), bits('n)) <-> string
 
@@ -37,27 +37,31 @@ val hex_bits_21 : bits(21) <-> string
 val hex_bits_21_forwards = "string_of_bits" : bits(21) -> string
 val "hex_bits_21_matches_prefix" : string -> option((bits(21), nat))
 
+val hex_bits_32 : bits(32) <-> string
+val hex_bits_32_forwards = "string_of_bits" : bits(32) -> string
+val "hex_bits_32_matches_prefix" : string -> option((bits(32), nat))
 
-val spaces_forwards : unit -> string
-function spaces_forwards () = " "
-val spaces_backwards : string -> unit
-function spaces_backwards s = ()
 
-val spaces_matches_prefix = "spaces_matches_prefix" : string -> option((unit, nat))
+val spc_forwards : unit -> string
+function spc_forwards () = " "
+val spc_backwards : string -> unit
+function spc_backwards s = ()
 
-val opt_spaces_forwards : unit -> string
-function opt_spaces_forwards () = ""
-val opt_spaces_backwards : string -> unit
-function opt_spaces_backwards s = ()
+val spc_matches_prefix = "spc_matches_prefix" : string -> option((unit, nat))
 
-val opt_spaces_matches_prefix = "opt_spaces_matches_prefix" : string -> option((unit, nat))
+val opt_spc_forwards : unit -> string
+function opt_spc_forwards () = ""
+val opt_spc_backwards : string -> unit
+function opt_spc_backwards s = ()
 
-val def_spaces_forwards : unit -> string
-function def_spaces_forwards () = " "
-val def_spaces_backwards : string -> unit
-function def_spaces_backwards s = ()
+val opt_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
 
-val def_spaces_matches_prefix = "opt_spaces_matches_prefix" : string -> option((unit, nat))
+val def_spc_forwards : unit -> string
+function def_spc_forwards () = " "
+val def_spc_backwards : string -> unit
+function def_spc_backwards s = ()
+
+val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
 
 
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool

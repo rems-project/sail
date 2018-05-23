@@ -66,10 +66,10 @@ let rec n_leading_spaces s =
            end
   end
 
-let opt_spaces_matches_prefix s =
+let opt_spc_matches_prefix s =
   Just ((), n_leading_spaces s)
 
-let spaces_matches_prefix s =
+let spc_matches_prefix s =
   let n = n_leading_spaces s in
   match n with
   | 0 -> Nothing
@@ -135,5 +135,16 @@ let hex_bits_21_matches_prefix s =
      else
        Nothing
   end
+
+let hex_bits_32_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 4294967296 then
+       Just ((of_int 2147483648 n, len))
+     else
+       Nothing
+  end
+
 
 let string_of_bits = string_of_vec

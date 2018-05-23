@@ -361,9 +361,9 @@ mapping reg_name = {
     0b11111 <-> "t6"
 }
 
-val operand_sep : unit <-> string
-mapping operand_sep = {
-  () <-> opt_spaces() ^^ "," ^^ def_spaces()
+val sep : unit <-> string
+mapping sep = {
+  () <-> opt_spc() ^^ "," ^^ def_spc()
 }
 
 mapping bool_bits : bool <-> bits(1) = {

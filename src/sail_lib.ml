@@ -635,10 +635,10 @@ let rec n_leading_spaces s =
            end
 
 
-let opt_spaces_matches_prefix s =
+let opt_spc_matches_prefix s =
   ZSome ((), n_leading_spaces s |> Big_int.of_int)
 
-let spaces_matches_prefix s =
+let spc_matches_prefix s =
   let n = n_leading_spaces s in
   match n with
   | 0 -> ZNone ()
@@ -701,5 +701,15 @@ let hex_bits_21_matches_prefix s =
      let n = Big_int.to_int n in
      if 0 <= n && n < 2097152 then
        ZSome ((bits_of_int 1048576 n, len))
+     else
+       ZNone ()
+
+let hex_bits_32_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 4294967296 then
+       ZSome ((bits_of_int 2147483648 n, len))
      else
        ZNone ()

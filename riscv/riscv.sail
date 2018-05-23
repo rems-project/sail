@@ -1,7 +1,6 @@
 scattered union ast
 
 val decode : bits(32) -> option(ast) effect pure
-scattered function decode
 
 val decodeCompressed : bits(16) -> option(ast) effect pure
 scattered function decodeCompressed
@@ -20,9 +19,6 @@ scattered mapping encdec
 
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
-
-function clause decode imm : bits(20) @ rd : regbits @ 0b0110111 = Some(UTYPE(imm, rd, RISCV_LUI))
-function clause decode imm : bits(20) @ rd : regbits @ 0b0010111 = Some(UTYPE(imm, rd, RISCV_AUIPC))
 
 mapping encdec_uop : uop <-> bits(7) = {
   RISCV_LUI   <-> 0b0110111,
@@ -50,12 +46,10 @@ mapping utype_mnemonic : uop <-> string = {
   RISCV_AUIPC <-> "auipc"
 }
 
-mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_20(imm)
+mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ hex_bits_20(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
-
-function clause decode imm : bits(20) @ rd : regbits @ 0b1101111 = Some (RISCV_JAL(imm[19] @ imm[7..0] @ imm[8] @ imm[18..13] @ imm[12..9] @ 0b0, rd))
 
 mapping clause encdec = RISCV_JAL(imm_19 : bits(1) @ imm_7_0 : bits(8) @ imm_8 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ 0b0, rd)
                     <-> imm_19 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ imm_8 : bits(1) @ imm_7_0 : bits(8) @ rd : regbits @ 0b1101111
@@ -72,13 +66,10 @@ function clause print_insn (RISCV_JAL(imm, rd)) =
 
 /* TODO: handle 2-byte-alignment in mappings */
 
-mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_21(imm)
+mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ hex_bits_21(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
-
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b1100111 =
-    Some(RISCV_JALR(imm, rs1, rd))
 
 mapping clause encdec = RISCV_JALR(imm, rs1, rd) <-> imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b1100111
 
@@ -92,17 +83,10 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
 function clause print_insn (RISCV_JALR(imm, rs1, rd)) =
   "jalr  " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-mapping clause assembly = RISCV_JALR(imm, rs1, rd) <-> "jalr" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+mapping clause assembly = RISCV_JALR(imm, rs1, rd) <-> "jalr" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = BTYPE : (bits(13), regbits, regbits, bop)
-
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b000 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BEQ))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b001 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BNE))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b100 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BLT))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b101 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BGE))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b110 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BLTU))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b111 @ imm5 : bits(5) @ 0b1100011 = Some(BTYPE(imm7[6] @ imm5[0] @ imm7[5..0] @ imm5[4..1] @ 0b0, rs2, rs1, RISCV_BGEU))
 
 mapping encdec_bop : bop <-> bits(3) = {
   RISCV_BEQ <-> 0b000,
@@ -151,18 +135,11 @@ mapping btype_mnemonic : bop <-> string = {
   RISCV_BGEU <-> "bgeu"
 }
 
-mapping clause assembly = BTYPE(imm, rs2, rs1, op) <-> btype_mnemonic(op) ^^ spaces() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2) ^^ operand_sep() ^^ hex_bits_13(imm)
+mapping clause assembly = BTYPE(imm, rs2, rs1, op) <-> btype_mnemonic(op) ^^ spc() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2) ^^ sep() ^^ hex_bits_13(imm)
 
 
 /* ****************************************************************** */
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
-
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_ADDI))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_SLTI))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_SLTIU))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_XORI))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_ORI))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0010011 = Some(ITYPE(imm, rs1, rd, RISCV_ANDI))
 
 mapping encdec_iop : iop <-> bits(3) = {
   RISCV_ADDI  <-> 0b000,
@@ -209,14 +186,10 @@ mapping itype_mnemonic : iop <-> string = {
   RISCV_ANDI  <-> "andi"
 }
 
-mapping clause assembly = ITYPE(imm, rs1, rd, op) <-> itype_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+mapping clause assembly = ITYPE(imm, rs1, rd, op) <-> itype_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
-
-function clause decode 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SLLI))
-function clause decode 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRLI))
-function clause decode 0b010000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011 = Some(SHIFTIOP(shamt, rs1, rd, RISCV_SRAI))
 
 mapping encdec_sop : sop <-> bits(3) = {
   RISCV_SLLI <-> 0b001,
@@ -224,7 +197,9 @@ mapping encdec_sop : sop <-> bits(3) = {
   RISCV_SRAI <-> 0b101
 }
 
-mapping clause encdec = SHIFTIOP(shamt, rs1, rd, op) <-> 0b010000 @ shamt : bits(6) @ rs1 : regbits @ encdec_sop(op) : bits(3) @ rd : regbits @ 0b0010011
+mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SLLI) <-> 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0010011
+mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRLI) <-> 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011
+mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRAI) <-> 0b010000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011
 
 function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
     let rs1_val = X(rs1) in
@@ -251,21 +226,10 @@ mapping shiftiop_mnemonic : sop <-> string = {
   RISCV_SRAI <-> "srai"
 }
 
-mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op) <-> shiftiop_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ hex_bits_6(shamt)
+mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op) <-> shiftiop_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ hex_bits_6(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPE : (regbits, regbits, regbits, rop)
-
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_ADD))
-function clause decode 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SUB))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SLL))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SLT))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SLTU))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_XOR))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SRL))
-function clause decode 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_SRA))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_OR))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011 = Some(RTYPE(rs2, rs1, rd, RISCV_AND))
 
 mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_ADD)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011
 mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SUB)  <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011
@@ -324,18 +288,10 @@ mapping rtype_mnemonic : rop <-> string = {
   RISCV_AND  <-> "and"
 }
 
-mapping clause assembly = RTYPE(rs2, rs1, rd, op) <-> rtype_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = RTYPE(rs2, rs1, rd, op) <-> rtype_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
-
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, false, BYTE,   false, false))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, false, HALF,   false, false))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, false, WORD,   false, false))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, false, DOUBLE, false, false))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  BYTE,   false, false))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  HALF,   false, false))
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0000011 = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
 
 /* I am assuming that load unsigned double wasn't meant to be missing here? */
 /* TODO: aq/rl */
@@ -402,15 +358,10 @@ mapping maybe_u = {
 }
 
 
-mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl) <-> "l" ^^ size_mnemonic(size) ^^ maybe_u(is_unsigned) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl) <-> "l" ^^ size_mnemonic(size) ^^ maybe_u(is_unsigned) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
-
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b000 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, BYTE, false, false))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b001 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, HALF, false, false))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b010 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, WORD, false, false))
-function clause decode imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b011 @ imm5 : bits(5) @ 0b0100011 = Some(STORE(imm7 @ imm5, rs2, rs1, DOUBLE, false, false))
 
 /* TODO: aq/rl */
 mapping clause encdec = STORE(imm7 : bits(7) @ imm5 : bits(5), rs2, rs1, size, false, false) <-> imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ imm5 : bits(5) @ 0b0100011
@@ -457,13 +408,11 @@ function clause print_insn (STORE(imm, rs2, rs1, width, aq, rl)) =
     } in
   insn ^ rs2 ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^^ size_mnemonic(size) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^^ size_mnemonic(size) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
 
 
 /* ****************************************************************** */
 union clause ast = ADDIW : (bits(12), regbits, regbits)
-
-function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011 = Some(ADDIW(imm, rs1, rd))
 
 mapping clause encdec = ADDIW(imm, rs1, rd) <-> imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011
 
@@ -474,14 +423,10 @@ function clause execute (ADDIW(imm, rs1, rd)) =
 function clause print_insn (ADDIW(imm, rs1, rd)) =
   "addiw " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-mapping clause assembly = ADDIW(imm, rs1, rd) <-> "addiw" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_12(imm)
+mapping clause assembly = ADDIW(imm, rs1, rd) <-> "addiw" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = SHIFTW : (bits(5), regbits, regbits, sop)
-
-function clause decode 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0011011 = Some(SHIFTW(shamt, rs1, rd, RISCV_SLLI))
-function clause decode 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011 = Some(SHIFTW(shamt, rs1, rd, RISCV_SRLI))
-function clause decode 0b0100000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011 = Some(SHIFTW(shamt, rs1, rd, RISCV_SRAI))
 
 mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SLLI) <-> 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0011011
 mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRLI) <-> 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011
@@ -511,16 +456,10 @@ mapping shiftw_mnemonic : sop <-> string = {
   RISCV_SRAI <-> "srai"
 }
 
-mapping clause assembly = SHIFTW(shamt, rs1, rd, op) <-> shiftw_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ hex_bits_5(shamt)
+mapping clause assembly = SHIFTW(shamt, rs1, rd, op) <-> shiftw_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_5(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPEW : (regbits, regbits, regbits, ropw)
-
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011 = Some(RTYPEW(rs2, rs1, rd, RISCV_ADDW))
-function clause decode 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011 = Some(RTYPEW(rs2, rs1, rd, RISCV_SUBW))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0111011 = Some(RTYPEW(rs2, rs1, rd, RISCV_SLLW))
-function clause decode 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011 = Some(RTYPEW(rs2, rs1, rd, RISCV_SRLW))
-function clause decode 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011 = Some(RTYPEW(rs2, rs1, rd, RISCV_SRAW))
 
 mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_ADDW) <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011
 mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SUBW) <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011
@@ -559,16 +498,11 @@ mapping rtypew_mnemonic : ropw <-> string = {
   RISCV_SRAW <-> "sraw"
 }
 
-mapping clause assembly = RTYPEW(rs2, rs1, rd, op) <-> rtypew_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = RTYPEW(rs2, rs1, rd, op) <-> rtypew_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 /* FIXME: separate these out into separate ast variants */
 union clause ast = MUL : (regbits, regbits, regbits, bool, bool, bool)
-
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd, false,  true, true))  /* MUL */
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd,  true,  true, true))  /* MULH */
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd,  true,  true, false)) /* MULHSU */
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0110011 = Some(MUL(rs2, rs1, rd,  true, false, false)) /* MULHU */
 
 mapping encdec_mul_op : (bool, bool, bool) <-> bits(3) = {
   (false, true, true)  <-> 0b000,
@@ -605,13 +539,10 @@ mapping mul_mnemonic : (bool, bool, bool) <-> string = {
   (true, false, false) <-> "mulhu"
 }
 
-mapping clause assembly = MUL(rs2, rs1, rd, high, signed1, signed2) <-> mul_mnemonic(high, signed1, signed2) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = MUL(rs2, rs1, rd, high, signed1, signed2) <-> mul_mnemonic(high, signed1, signed2) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = DIV : (regbits, regbits, regbits, bool)
-
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0110011 = Some(DIV(rs2, rs1, rd,  true))  /* DIV */
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011 = Some(DIV(rs2, rs1, rd, false))  /* DIVU */
 
 mapping clause encdec = DIV(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b10 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0110011
 
@@ -632,13 +563,10 @@ mapping maybe_not_u : bool <-> string = {
   true <-> ""
 }
 
-mapping clause assembly = DIV(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = DIV(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = REM : (regbits, regbits, regbits, bool)
-
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011 = Some(REM(rs2, rs1, rd,  true))  /* REM */
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011 = Some(REM(rs2, rs1, rd, false))  /* REMU */
 
 mapping clause encdec = REM(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b11 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0110011
 
@@ -655,12 +583,10 @@ function clause print_insn (REM(rs2, rs1, rd, s)) =
   let insn : string = if s then "rem   " else "remu  " in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = REM(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = REM(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = MULW : (regbits, regbits, regbits)
-
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011 = Some(MULW(rs2, rs1, rd)) /* MULW */
 
 mapping clause encdec = MULW(rs2, rs1, rd) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011
 
@@ -676,13 +602,10 @@ function clause execute (MULW(rs2, rs1, rd)) =
 function clause print_insn (MULW(rs2, rs1, rd)) =
   "mulw  " ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = MULW(rs2, rs1, rd) <->  "mulw" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = MULW(rs2, rs1, rd) <->  "mulw" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = DIVW : (regbits, regbits, regbits, bool)
-
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0111011 = Some(DIVW(rs2, rs1, rd,  true))  /* DIVW */
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011 = Some(DIVW(rs2, rs1, rd, false))  /* DIVUW */
 
 mapping clause encdec = DIVW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b10 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0111011
 
@@ -699,13 +622,10 @@ function clause print_insn (DIVW(rs2, rs1, rd, s)) =
   let insn : string = if s then "divw  " else "divuw " in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = DIVW(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ "w" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = DIVW(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ "w" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = REMW : (regbits, regbits, regbits, bool)
-
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0111011 = Some(REMW(rs2, rs1, rd,  true))  /* REMW */
-function clause decode 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0111011 = Some(REMW(rs2, rs1, rd, false))  /* REMUW */
 
 mapping clause encdec = REMW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b11 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0111011
 
@@ -722,12 +642,10 @@ function clause print_insn (REMW(rs2, rs1, rd, s)) =
   let insn : string = if s then "remw  " else "remuw " in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = REMW(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ "w" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = REMW(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ "w" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = FENCE : (bits(4), bits(4))
-
-function clause decode 0b0000 @ pred : bits(4) @ succ : bits(4) @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111 = Some(FENCE(pred, succ))
 
 mapping clause encdec = FENCE(pred, succ) <-> 0b0000 @ pred : bits(4) @ succ : bits(4) @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111
 
@@ -771,12 +689,10 @@ mapping fence_bits : bits(4) <-> string = {
   r : bits(1) @ w : bits(1) @ i : bits(1) @ o : bits(1) <-> bit_maybe_r(r) ^^ bit_maybe_w(w) ^^ bit_maybe_i(i) ^^ bit_maybe_o(o)
 }
 
-mapping clause assembly = FENCE(pred, succ) <-> "fence" ^^ spaces() ^^ fence_bits(pred) ^^ operand_sep() ^^ fence_bits(succ)
+mapping clause assembly = FENCE(pred, succ) <-> "fence" ^^ spc() ^^ fence_bits(pred) ^^ sep() ^^ fence_bits(succ)
 
 /* ****************************************************************** */
 union clause ast = FENCEI : unit
-
-function clause decode 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111 = Some(FENCEI())
 
 mapping clause encdec = FENCEI() <-> 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111
 
@@ -789,8 +705,6 @@ mapping clause assembly = FENCEI() <-> "fence.i"
 
 /* ****************************************************************** */
 union clause ast = ECALL : unit
-
-function clause decode 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(ECALL())
 
 mapping clause encdec = ECALL() <-> 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
@@ -812,8 +726,6 @@ mapping clause assembly = ECALL() <-> "ecall"
 /* ****************************************************************** */
 union clause ast = MRET : unit
 
-function clause decode 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(MRET())
-
 mapping clause encdec = MRET() <-> 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute MRET() = {
@@ -830,8 +742,6 @@ mapping clause assembly = MRET() <-> "mret"
 
 /* ****************************************************************** */
 union clause ast = SRET : unit
-
-function clause decode 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(SRET())
 
 mapping clause encdec = SRET() <-> 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
@@ -852,8 +762,6 @@ mapping clause assembly = SRET() <-> "sret"
 /* ****************************************************************** */
 union clause ast = EBREAK : unit
 
-function clause decode 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(EBREAK())
-
 mapping clause encdec = EBREAK() <-> 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute EBREAK() =
@@ -866,8 +774,6 @@ mapping clause assembly = EBREAK() <-> "ebreak"
 
 /* ****************************************************************** */
 union clause ast = WFI : unit
-
-function clause decode 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011 = Some(WFI())
 
 mapping clause encdec = WFI() <-> 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
@@ -888,8 +794,6 @@ mapping clause assembly = WFI() <-> "wfi"
 
 /* ****************************************************************** */
 union clause ast = SFENCE_VMA : (regbits, regbits)
-
-function clause decode 0b0001001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ 0b00000 @ 0b1110011 = Some(SFENCE_VMA(rs1, rs2))
 
 mapping clause encdec = SFENCE_VMA(rs1, rs2) <-> 0b0001001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ 0b00000 @ 0b1110011
 
@@ -912,13 +816,10 @@ function clause execute SFENCE_VMA(rs1, rs2) = {
 function clause print_insn (SFENCE_VMA(rs1, rs2)) =
   "sfence.vma " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^^ spaces() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^^ spc() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
-
-function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, WORD, rd))
-function clause decode 0b00010 @ [aq] @ [rl] @ 0b00000 @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(LOADRES(aq, rl, rs1, DOUBLE, rd))
 
 mapping clause encdec = LOADRES(aq, rl, rs1, size, rd) <-> 0b00010 @ bool_bits(aq) : bits(1) @ bool_bits(rl) : bits(1) @ 0b00000 @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ rd : regbits @ 0b0101111
 
@@ -946,13 +847,10 @@ function clause print_insn (LOADRES(aq, rl, rs1, width, rd)) =
     } in
   insn ^ rd ^ ", " ^ rs1
 
-mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ size_mnemonic(size) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1)
+mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ size_mnemonic(size) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1)
 
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
-
-function clause decode 0b00011 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(STORECON(aq, rl, rs2, rs1, WORD, rd))
-function clause decode 0b00011 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
 
 mapping clause encdec = STORECON(aq, rl, rs2, rs1, size, rd) <-> 0b00011 @ bool_bits(aq) : bits(1) @ bool_bits(rl) : bits(1) @ rs2 : regbits @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ rd : regbits @ 0b0101111
 
@@ -1002,29 +900,10 @@ function clause print_insn (STORECON(aq, rl, rs2, rs1, width, rd)) =
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ size_mnemonic(size) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ size_mnemonic(size) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = AMO : (amoop, bool, bool, regbits, regbits, word_width, regbits)
-
-function clause decode 0b00001 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOSWAP, aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b00001 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOSWAP, aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b00000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOADD , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b00000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOADD , aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b00100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOXOR , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b00100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOXOR , aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b01100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOAND , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b01100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOAND , aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b01000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOOR  , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b01000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOOR  , aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b10000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMIN , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b10000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMIN , aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b10100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMAX , aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b10100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMAX , aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b11000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMINU, aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b11000 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMINU, aq, rl, rs2, rs1, DOUBLE, rd))
-function clause decode 0b11100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, WORD,   rd))
-function clause decode 0b11100 @ [aq] @ [rl] @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0101111 = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, DOUBLE, rd))
 
 mapping encdec_amoop : amoop <-> bits(5) = {
   AMOSWAP <-> 0b00001,
@@ -1133,17 +1012,10 @@ mapping amo_mnemonic : amoop <-> string = {
   AMOMAXU <-> "amomaxu"
 }
 
-mapping clause assembly = AMO(op, aq, rl, rs2, rs1, width, rd) <-> amo_mnemonic(op) ^^ "." ^^ size_mnemonic(width) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ reg_name(rs2)
+mapping clause assembly = AMO(op, aq, rl, rs2, rs1, width, rd) <-> amo_mnemonic(op) ^^ "." ^^ size_mnemonic(width) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = CSR  : (bits(12), regbits, regbits, bool, csrop)
-
-function clause decode csr : bits(12) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, false, CSRRW))
-function clause decode csr : bits(12) @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, false, CSRRS))
-function clause decode csr : bits(12) @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, false, CSRRC))
-function clause decode csr : bits(12) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRW))
-function clause decode csr : bits(12) @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRS))
-function clause decode csr : bits(12) @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b1110011 = Some(CSR (csr, rs1, rd, true,  CSRRC))
 
 mapping encdec_csrop : csrop <-> bits(2) = {
   CSRRW <-> 0b01,
@@ -1280,8 +1152,8 @@ mapping csr_mnemonic : csrop <-> string = {
   CSRRC <-> "csrrc"
 }
 
-mapping clause assembly = CSR(csr, rs1, rd, true, op) <-> csr_mnemonic(op) ^^ "i" ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ hex_bits_5(rs1) ^^ operand_sep() ^^ csr_name_map(csr)
-mapping clause assembly = CSR(csr, rs1, rd, false, op) <-> csr_mnemonic(op) ^^ spaces() ^^ reg_name(rd) ^^ operand_sep() ^^ reg_name(rs1) ^^ operand_sep() ^^ csr_name_map(csr)
+mapping clause assembly = CSR(csr, rs1, rd, true, op) <-> csr_mnemonic(op) ^^ "i" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ hex_bits_5(rs1) ^^ sep() ^^ csr_name_map(csr)
+mapping clause assembly = CSR(csr, rs1, rd, false, op) <-> csr_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ csr_name_map(csr)
 
 /* ****************************************************************** */
 union clause ast = NOP : unit
@@ -1297,16 +1169,7 @@ function clause print_insn (NOP()) =
   "nop"
 
 /* ****************************************************************** */
-union clause ast = ILLEGAL : unit
 
-function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(ILLEGAL())
-
-function clause execute ILLEGAL() = handle_illegal ()
-
-function clause print_insn (ILLEGAL()) =
-  "illegal"
-
-/* ****************************************************************** */
 union clause ast = C_ADDI4SPN : (cregbits, bits(8))
 
 function clause decodeCompressed (0b000 @ nz54 : bits(2) @ nz96 : bits(4) @ nz2 : bits(1) @ nz3 : bits(1) @ rd : cregbits @ 0b00) : bits(16) = {
@@ -1806,13 +1669,39 @@ function clause print_insn (C_ADD(rsd, rs2)) =
 
 /* ****************************************************************** */
 
-function clause decode _ = None()
+union clause ast = ILLEGAL : word
+
+mapping clause encdec = ILLEGAL(s) <-> s
+
+function clause execute (ILLEGAL(s)) = handle_illegal ()
+
+function clause print_insn (ILLEGAL(s)) = "illegal " ^ hex_bits_32(s)
+
+mapping clause assembly = ILLEGAL(s) <-> "illegal" ^^ spc() ^^ hex_bits_32(s)
+
+
+
+/* ****************************************************************** */
+
+union clause ast = C_ILLEGAL : unit
+
+function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(C_ILLEGAL())
+
+function clause execute C_ILLEGAL() = handle_illegal ()
+
+function clause print_insn (C_ILLEGAL()) =
+  "c.illegal"
+
+/* ****************************************************************** */
+
+
 function clause decodeCompressed _ = None()
 
 end ast
-end decode
 end decodeCompressed
 end execute
 end print_insn
 end assembly
 end encdec
+
+function decode bv = Some(encdec(bv))
