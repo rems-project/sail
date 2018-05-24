@@ -957,7 +957,7 @@ let doc_exp_lem, doc_let_lem =
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
     in
     (prefix 2 1
-      (soft_surround 2 1 if_pp (top_exp ctxt true c) (string "then"))
+      (soft_surround 2 1 if_pp (string "sumbool_of_bool" ^^ space ^^ parens (top_exp ctxt true c)) (string "then"))
       (top_exp ctxt false t)) ^^
     break 1 ^^
     else_pp
@@ -1452,7 +1452,7 @@ string "Require Import String."; hardline;
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) defs_modules;hardline;
-string "Require Import List. Import ListNotations.";
+string "Require Import List. Import ListNotations. Require Import Sumbool.";
         hardline;
         separate empty (List.map doc_def defs);
         hardline]);
