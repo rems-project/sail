@@ -645,8 +645,14 @@ end = struct
        then typ_error l ("Type constructor " ^ string_of_id id ^ " expected " ^ string_of_typquant typq)
        else ()
     | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
-    | Typ_var kid when KBindings.mem kid env.typ_vars -> ()
-    | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
+    | Typ_var kid -> begin
+      match KBindings.find kid env.typ_vars with
+      | BK_type -> ()
+      | k -> typ_error l ("Kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ ^
+                             " is " ^ string_of_base_kind_aux k ^ " rather than Type")
+      | exception Not_found ->
+         typ_error l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
+    end
     | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
     | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
     | Typ_app (id, args) when bound_typ_id env id ->
