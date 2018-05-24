@@ -503,6 +503,8 @@ let is_ctor env id = match Env.lookup_id id env with
   be removed prior to pp. The latter two have never yet been seen
 *)
 let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot))) = match p with
+    (* Special case translation of the None constructor to remove the unit arg *)
+  | P_app(id, _) when string_of_id id = "None" -> string "None"
   | P_app(id, ((_ :: _) as pats)) ->
     let ppp = doc_unop (doc_id_ctor id)
                        (parens (separate_map comma (doc_pat ctxt true) pats)) in
