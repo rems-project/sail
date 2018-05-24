@@ -648,17 +648,22 @@ Ltac unbool_comparisons :=
   | H:context [Z.geb _ _ = true] |- _ => rewrite Z.geb_le in H
   | H:context [Z.gtb _ _ = true] |- _ => rewrite Z.gtb_lt in H
   | H:context [Z.eqb _ _ = true] |- _ => rewrite Z.eqb_eq in H
+  | H:context [Z.leb _ _ = false] |- _ => rewrite Z.leb_gt in H
+  | H:context [Z.ltb _ _ = false] |- _ => rewrite Z.ltb_ge in H
+  | H:context [Z.eqb _ _ = false] |- _ => rewrite Z.eqb_neq in H
   | H:context [orb _ _ = true] |- _ => rewrite Bool.orb_true_iff in H
   end.
 Ltac solve_arithfact :=
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
+ autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
- autounfold with sail; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  solve [apply ArithFact_mword; assumption
        | constructor; omega
        | constructor; auto with zbool zarith sail].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
+
+Hint Unfold length_mword : sail.
 
 Lemma ReasonableSize_witness (a : Z) (w : mword a) : ReasonableSize a.
 constructor.
