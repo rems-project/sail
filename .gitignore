@@ -31,3 +31,7 @@ language/*.ps
 *Theory.ui
 *Theory.uo
 lib/hol/sail-heap
+# Coq
+*.vo
+*.glob
+.*.aux

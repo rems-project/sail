@@ -4,6 +4,7 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAILDIR="$DIR/../.."
 TESTSDIR="$DIR/../typecheck/pass"
+BBVDIR="$DIR/../../../bbv"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -52,7 +53,7 @@ for i in `ls $TESTSDIR/ | grep sail | grep -vf "$DIR/skip"`;
 do
     if $SAILDIR/sail -coq -o out $TESTSDIR/$i &>/dev/null;
     then
-	if coqc -R ~/bbv bbv -R ../../../sail-private/coq-duopods/precise/lib Sail out_types.v out.v &>/dev/null;
+	if coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out_types.v out.v &>/dev/null;
 	then
 	    green "tested $i expecting pass" "pass"
 	else
