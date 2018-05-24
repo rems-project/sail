@@ -6,7 +6,7 @@ COQ_LIBS = -R . Sail -R "$(BBV_DIR)" bbv
 
 TARGETS=$(SRC:.v=.vo)
 
-.PHONY: all clean
+.PHONY: all clean *.ide
 
 all: $(TARGETS)
 clean:
@@ -14,6 +14,9 @@ clean:
 
 %.vo: %.v
 	coqc $(COQ_LIBS) $<
+
+%.ide: %.v
+	coqide $(COQ_LIBS) $<
 
 deps: $(SRC)
 	coqdep $(COQ_LIBS) $(SRC) > deps
