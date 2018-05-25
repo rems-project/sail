@@ -400,42 +400,74 @@ let byte_of_int n = bits_of_int 128 n
 module BigIntHash =
   struct
     type t = Big_int.num
-    let equal i j = Big_int.equal i j
-    let hash i = Hashtbl.hash i
+    let equal = Big_int.equal
+    let hash = Hashtbl.hash
   end
 
 module RAM = Hashtbl.Make(BigIntHash)
 
-let ram : int RAM.t = RAM.create 256
+let mem_pages : Bytes.t RAM.t = RAM.create 256
 
-let write_ram' (addr_size, data_size, hex_ram, addr, data) =
-  let data = List.map (fun byte -> Big_int.to_int (uint byte)) (break 8 data) in
-  let rec write_byte i byte =
-    trace (Printf.sprintf "Store: %s 0x%02X" (Big_int.to_string (Big_int.add addr (Big_int.of_int i))) byte);
-    RAM.add ram (Big_int.add addr (Big_int.of_int i)) byte
-  in
-  List.iteri write_byte (List.rev data)
+let page_shift_bits = 20 (* 1M page *)
+let page_size_bytes = 1 lsl page_shift_bits;; 
+
+let page_no_of_addr a = Big_int.shift_right a page_shift_bits
+let bottom_addr_of_page p = Big_int.shift_left p page_shift_bits
+let top_addr_of_page p = Big_int.shift_left (Big_int.succ p) page_shift_bits
+let get_mem_page p =
+  try
+    RAM.find mem_pages p
+  with Not_found -> 
+    let new_page = Bytes.create page_size_bytes in
+    RAM.add mem_pages p new_page;
+    new_page
+
+let rec add_mem_bytes addr buf off len =
+  let page_no = page_no_of_addr addr in
+  let page_bot = bottom_addr_of_page page_no in
+  let page_top = top_addr_of_page page_no in
+  let page_off = Big_int.to_int (Big_int.sub addr page_bot) in
+  let page = get_mem_page page_no in
+  let bytes_left_in_page = Big_int.sub page_top addr in
+  let to_copy = min (Big_int.to_int bytes_left_in_page) len in
+  Bytes.blit buf off page page_off to_copy;
+  if (to_copy < len) then
+    add_mem_bytes page_top buf (off + to_copy) (len - to_copy)
+
+let rec read_mem_bytes addr len = 
+  let page_no = page_no_of_addr addr in
+  let page_bot = bottom_addr_of_page page_no in
+  let page_top = top_addr_of_page page_no in
+  let page_off = Big_int.to_int (Big_int.sub addr page_bot) in
+  let page = get_mem_page page_no in
+  let bytes_left_in_page = Big_int.sub page_top addr in
+  let to_get = min (Big_int.to_int bytes_left_in_page) len in
+  let bytes = Bytes.sub page page_off to_get in
+  if to_get >= len then
+    bytes
+  else
+    Bytes.cat bytes (read_mem_bytes page_top (len - to_get))
+
+let write_ram' (data_size, addr, data) =
+  let len   = Big_int.to_int data_size in
+  let bytes = Bytes.create len in begin
+    List.iteri (fun i byte -> Bytes.set bytes (len - i - 1) (char_of_int (Big_int.to_int (uint byte)))) (break 8 data);
+    add_mem_bytes addr bytes 0 len
+  end
 
 let write_ram (addr_size, data_size, hex_ram, addr, data) =
-  write_ram' (addr_size, data_size, hex_ram, uint addr, data)
+  write_ram' (data_size, uint addr, data)
 
 let wram addr byte =
-  RAM.add ram addr byte
+  let bytes = Bytes.make 1 (char_of_int byte) in
+  add_mem_bytes addr bytes 0 1
 
 let read_ram (addr_size, data_size, hex_ram, addr) =
   let addr = uint addr in
-  let rec read_byte i =
-    if Big_int.equal i Big_int.zero
-    then []
-    else
-      begin
-        let loc = Big_int.sub (Big_int.add addr i) (Big_int.of_int 1) in
-        let byte = try RAM.find ram loc with Not_found -> 0 in
-        trace (Printf.sprintf "Load: %s 0x%02X" (Big_int.to_string loc) byte);
-        byte_of_int byte @ read_byte (Big_int.sub i (Big_int.of_int 1))
-      end
-  in
-  read_byte data_size
+  let bytes = read_mem_bytes addr (Big_int.to_int data_size) in
+  let vector = ref [] in
+  Bytes.iter (fun byte -> vector := (byte_of_int (int_of_char byte)) @ !vector) bytes;
+  !vector
 
 let tag_ram : bool RAM.t = RAM.create 256
 
