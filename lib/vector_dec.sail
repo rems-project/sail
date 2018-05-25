@@ -57,12 +57,14 @@ val "append_64" : forall 'n. (bits('n), bits(64)) -> bits('n + 64)
 val vector_access = {
   ocaml: "access",
   lem: "access_list_dec",
+  coq: "access_list_dec",
   c: "vector_access"
 } : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), atom('m)) -> 'a
 
 val vector_update = {
   ocaml: "update",
   lem: "update_list_dec",
+  coq: "update_list_dec",
   c: "vector_update"
 } : forall 'n ('a : Type). (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
 

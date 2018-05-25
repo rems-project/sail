@@ -10,6 +10,16 @@ Import ListNotations.
 
 Open Scope Z.
 
+(* Constraint solving basics.  A HintDb which unfolding hints and lemmata
+   can be added to, and a typeclass to wrap constraint arguments in to
+   trigger automatic solving. *)
+Create HintDb sail.
+Class ArithFact (P : Prop) := { fact : P }.
+Lemma use_ArithFact {P} `(ArithFact P) : P.
+apply fact.
+Defined.
+
+
 Definition ii := Z.
 Definition nn := nat.
 
@@ -49,6 +59,9 @@ Definition div_real l r := realDiv l r
 Definition negate_real r := realNegate r
 Definition abs_real r := realAbs r
 Definition power_real b e := realPowInteger b e*)
+
+Definition print_int (_ : string) (_ : Z) : unit := tt.
+
 (*
 Definition or_bool l r := (l || r)
 Definition and_bool l r := (l && r)
@@ -374,17 +387,77 @@ Definition update_subrange_list_dec {A} (xs : list A) i j xs' :=
 Definition update_subrange_list {A} (is_inc : bool) (xs : list A) i j xs' :=
   if is_inc then update_subrange_list_inc xs i j xs' else update_subrange_list_dec xs i j xs'.
 
+Open Scope nat.
+Fixpoint nth_in_range {A} (n:nat) (l:list A) : n < length l -> A.
+refine 
+  (match n, l with
+  | O, h::_ => fun _ => h
+  | S m, _::t => fun H => nth_in_range A m t _
+  | _,_ => fun H => _
+  end).
+exfalso. inversion H.
+exfalso. inversion H.
+simpl in H. omega.
+Defined.
+
+Lemma nth_in_range_is_nth : forall A n (l : list A) d (H : n < length l),
+  nth_in_range n l H = nth n l d.
+intros until d. revert n.
+induction l; intros n H.
+* inversion H.
+* destruct n.
+  + reflexivity.
+  + apply IHl.
+Qed.
+
+Lemma nth_Z_nat {A} {n} {xs : list A} :
+  (0 <= n)%Z -> (n < length_list xs)%Z -> Z.to_nat n < length xs.
+unfold length_list.
+intros nonneg bounded.
+rewrite Z2Nat.inj_lt in bounded; auto using Zle_0_nat.
+rewrite Nat2Z.id in bounded.
+assumption.
+Qed.
+
+(*
+Lemma nth_top_aux {A} {n} {xs : list A} : Z.to_nat n < length xs -> let top := ((length_list xs) - 1)%Z in Z.to_nat (top - n)%Z < length xs.
+unfold length_list.
+generalize (length xs).
+intro n0.
+rewrite <- (Nat2Z.id n0).
+intro H.
+apply Z2Nat.inj_lt.
+* omega. 
+*)
+
+Close Scope nat.
+
 (*val access_list_inc : forall a. list a -> Z -> a*)
-Definition access_list_inc {A} (xs : list A) n := nth_error xs (Z.to_nat n).
+Definition access_list_inc {A} (xs : list A) n `{ArithFact (0 <= n)} `{ArithFact (n < length_list xs)} := nth_in_range (Z.to_nat n) xs (nth_Z_nat (use_ArithFact _) (use_ArithFact _)).
 
 (*val access_list_dec : forall a. list a -> Z -> a*)
-Definition access_list_dec {A} (xs : list A) n :=
+Definition access_list_dec {A} (xs : list A) n `{ArithFact (0 <= n)} `{ArithFact (n < length_list xs)} : A.
+refine (
   let top := (length_list xs) - 1 in
-  access_list_inc xs (top - n).
+  @access_list_inc A xs (top - n) _ _).
+constructor. apply use_ArithFact in H. apply use_ArithFact in H0. omega.
+constructor. apply use_ArithFact in H. apply use_ArithFact in H0. omega.
+Defined.
 
 (*val access_list : forall a. bool -> list a -> Z -> a*)
-Definition access_list {A} (is_inc : bool) (xs : list A) n :=
+Definition access_list {A} (is_inc : bool) (xs : list A) n `{ArithFact (0 <= n)} `{ArithFact (n < length_list xs)} :=
   if is_inc then access_list_inc xs n else access_list_dec xs n.
+
+Definition access_list_opt_inc {A} (xs : list A) n := nth_error xs (Z.to_nat n).
+
+(*val access_list_dec : forall a. list a -> Z -> a*)
+Definition access_list_opt_dec {A} (xs : list A) n :=
+  let top := (length_list xs) - 1 in
+  access_list_opt_inc xs (top - n).
+
+(*val access_list : forall a. bool -> list a -> Z -> a*)
+Definition access_list_opt {A} (is_inc : bool) (xs : list A) n :=
+  if is_inc then access_list_opt_inc xs n else access_list_opt_dec xs n.
 
 Definition list_update {A} (xs : list A) n x := firstn n xs ++ x :: skipn (S n) xs.
 
@@ -613,7 +686,7 @@ Instance bitlist_Bitvector {a : Type} `{BitU a} : (Bitvector (list a)) := {
   length := length_list;
   unsigned v := unsigned_of_bits (List.map to_bitU v);
   signed v := signed_of_bits (List.map to_bitU v);
-  get_bit is_inc v n := opt_bitU (access_list is_inc v n);
+  get_bit is_inc v n := opt_bitU (access_list_opt is_inc v n);
   set_bit is_inc v n b := update_list is_inc v n (of_bitU b);
   get_bits is_inc v i j := List.map to_bitU (subrange_list is_inc v i j);
   set_bits is_inc v i j v' := update_subrange_list is_inc v i j (List.map of_bitU v')
@@ -626,12 +699,6 @@ Class ReasonableSize (a : Z) : Prop := {
 Hint Resolve -> Z.gtb_lt Z.geb_le Z.ltb_lt Z.leb_le : zbool.
 Hint Resolve <- Z.ge_le_iff Z.gt_lt_iff : zbool.
 
-Create HintDb sail.
-
-Class ArithFact (P : Prop) := { fact : P }.
-Lemma use_ArithFact {P} `(ArithFact P) : P.
-apply fact.
-Defined.
 Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >= 0).
 constructor.
 destruct a.
