@@ -206,19 +206,35 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | _ -> false
 
 let doc_nexp ctx nexp =
-  let (Nexp_aux (nexp, l) as full_nexp) = nexp_simp nexp in
-  match nexp with
-  | Nexp_constant i -> string (Big_int.to_string i)
-  | Nexp_var v -> doc_var_lem ctx v
-  | Nexp_id id -> doc_id id
-  | Nexp_times (n1, n2) -> separate space [doc_nexp n1; star; doc_nexp n2]
-  | Nexp_sum (n1, n2) -> separate space [doc_nexp n1; plus; doc_nexp n2]
-  | Nexp_minus (n1, n2) -> separate space [doc_nexp n1; minus; doc_nexp n2]
-  | Nexp_exp n -> separate space [string "2"; caret; doc_nexp n]
-  | Nexp_neg n -> separate space [minus; doc_nexp n]
-  | _ ->
-     raise (Reporting_basic.err_unreachable l
-              ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\"")) 
+  (* Print according to Coq's precedence rules *)
+  let rec plussub (Nexp_aux (n,l) as nexp) =
+    match n with
+    | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; muldiv n2]
+    | Nexp_minus (n1, n2) -> separate space [plussub n1; minus; muldiv n2]
+    | _ -> muldiv nexp
+  and muldiv (Nexp_aux (n,l) as nexp) =
+    match n with
+    | Nexp_times (n1, n2) -> separate space [muldiv n1; star; uneg n2]
+    | _ -> uneg nexp
+  and uneg (Nexp_aux (n,l) as nexp) =
+    match n with
+    | Nexp_neg n -> separate space [minus; uneg n]
+    | _ -> exp nexp
+  and exp (Nexp_aux (n,l) as nexp) =
+    match n with
+    | Nexp_exp n -> separate space [string "2"; caret; exp n]
+    | _ -> atomic nexp
+  and atomic (Nexp_aux (n,l) as nexp) =
+    match n with
+    | Nexp_constant i -> string (Big_int.to_string i)
+    | Nexp_var v -> doc_var_lem ctx v
+    | Nexp_id id -> doc_id id
+    | Nexp_sum _ | Nexp_minus _ | Nexp_times _ | Nexp_neg _ | Nexp_exp _
+        -> parens (plussub nexp)
+    | _ ->
+       raise (Reporting_basic.err_unreachable l
+                ("cannot pretty-print nexp \"" ^ string_of_nexp nexp ^ "\""))
+  in atomic (nexp_simp nexp)
 
 (* Rewrite mangled names of type variables to the original names *)
 let rec orig_nexp (Nexp_aux (nexp, l)) =
