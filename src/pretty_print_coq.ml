@@ -134,7 +134,7 @@ let rec fix_id remove_tick name = match name with
   | "LT"
   | "GT"
   | "EQ"
-  | "integer"
+  | "Z"
     -> name ^ "'"
   | _ ->
      if String.contains name '#' then
@@ -982,6 +982,16 @@ let doc_exp_lem, doc_let_lem =
     break 1 ^^
     else_pp
   and let_exp ctxt (LB_aux(lb,_)) = match lb with
+    (* Prefer simple lets over patterns, because I've found Coq can struggle to
+       work out return types otherwise *)
+    | LB_val(P_aux (P_id id,_),e) ->
+       prefix 2 1
+              (separate space [string "let"; doc_id id; coloneq])
+              (top_exp ctxt false e)
+    | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e) ->
+       prefix 2 1
+              (separate space [string "let"; doc_id id; colon; doc_typ ctxt typ; coloneq])
+              (top_exp ctxt false e)
     | LB_val(pat,e) ->
        prefix 2 1
               (separate space [string "let"; squote ^^ doc_pat ctxt true pat; coloneq])
@@ -1265,6 +1275,13 @@ let merge_kids_atoms pats =
   let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
   gone,map
 
+let doc_binder ctxt (P_aux (p,_) as pat, typ) =
+  match p with
+  | P_id id
+  | P_typ (_,P_aux (P_id id,_)) ->
+     parens (separate space [doc_id id; colon; doc_typ ctxt typ])
+  | _ -> squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt typ])
+
 let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let (tq,typ) = Env.get_val_spec_orig id (env_of_annot annot) in
   let (arg_typ, ret_typ, eff) = match typ with
@@ -1287,8 +1304,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
      been replaced by one of the term-level arguments is bound. *)
   let quantspp, constrspp = doc_typquant_items_separate ctxt braces tq in
   let exp = List.fold_left (fun body f -> f body) (bind exp) binds in
-  let patspp = separate_map space (fun (pat,typ) ->
-    squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt typ])) pats in
+  let patspp = separate_map space (doc_binder ctxt) pats in
   let atom_constr_pp = separate_opt space (atom_constraint ctxt) pats in
   let retpp =
     if effectful eff
