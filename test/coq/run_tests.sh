@@ -51,7 +51,7 @@ cd $DIR
 
 for i in `ls $TESTSDIR/ | grep sail | grep -vf "$DIR/skip"`;
 do
-    if $SAILDIR/sail -coq -o out $TESTSDIR/$i &>/dev/null;
+    if $SAILDIR/sail -coq -dcoq_undef_axioms -o out $TESTSDIR/$i &>/dev/null;
     then
 	if coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out_types.v out.v &>/dev/null;
 	then

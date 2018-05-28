@@ -132,6 +132,9 @@ let options = Arg.align ([
   ( "-coq_lib",
     Arg.String (fun l -> opt_libs_coq := l::!opt_libs_coq),
     "<filename> provide additional library to open in Coq output");
+  ( "-dcoq_undef_axioms",
+    Arg.Set Pretty_print_coq.opt_undef_axioms,
+    "Generate axioms for functions that are declared but not defined");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
     " set a custom prefix for generated latex command (default sail)");

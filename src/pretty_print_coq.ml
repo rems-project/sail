@@ -86,6 +86,8 @@ open Pretty_print_common
 
 module StringSet = Set.Make(String)
 
+let opt_undef_axioms = ref false
+
 (****************************************************************************
  * PPrint-based sail-to-coq pprinter
 ****************************************************************************)
@@ -481,8 +483,8 @@ let doc_typquant_items_separate ctx delimit (TypQ_aux (tq,_)) =
 
 let doc_typquant ctx (TypQ_aux(tq,_)) typ = match tq with
 | TypQ_tq ((_ :: _) as qs) ->
-   string "forall " ^^ separate_opt space (doc_quant_item_id ctx parens) qs ^^
-     separate_opt space (doc_quant_item_constr ctx parens) qs ^^ string ". " ^^ typ
+   string "forall " ^^ separate_opt space (doc_quant_item_id ctx braces) qs ^/^
+     separate_opt space (doc_quant_item_constr ctx parens) qs ^^ string ", " ^^ typ
 | _ -> typ
 
 (* Produce Size type constraints for bitvector sizes when using
@@ -1396,10 +1398,16 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let rec doc_def def =
+let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),_)) =
+  if !opt_undef_axioms && IdSet.mem id unimplemented then
+    group (separate space
+             [string "Axiom"; doc_id id; colon; doc_typschm empty_ctxt true tys] ^^ dot) ^/^ hardline
+  else empty (* Type signatures appear in definitions *)
+
+let rec doc_def unimplemented def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
-  | DEF_spec v_spec -> empty (* Types appear in definitions *)
+  | DEF_spec v_spec -> doc_val_spec unimplemented v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def -> group (doc_typdef t_def) ^/^ hardline
@@ -1421,7 +1429,7 @@ let rec doc_def def =
   | DEF_kind _ -> empty
 
   | DEF_comm (DC_comm s) -> comment (string s)
-  | DEF_comm (DC_comm_struct d) -> comment (doc_def d)
+  | DEF_comm (DC_comm_struct d) -> comment (doc_def unimplemented d)
 
 
 let find_exc_typ defs =
@@ -1429,6 +1437,23 @@ let find_exc_typ defs =
     | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
+
+let find_unimplemented defs =
+  let adjust_def unimplemented = function
+    | DEF_spec (VS_aux (VS_val_spec (_,id,ext,_),_)) -> begin
+      match ext "coq" with
+      | Some _ -> unimplemented
+      | None -> IdSet.add id unimplemented
+    end
+    | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) -> begin
+      match funcls with
+      | [] -> unimplemented
+      | (FCL_aux (FCL_Funcl (id,_),_))::_ ->
+         IdSet.remove id unimplemented
+    end
+    | _ -> unimplemented
+  in
+  List.fold_left adjust_def IdSet.empty defs
 
 let pp_defs_coq (types_file,types_modules) (defs_file,defs_modules) (Defs defs) top_line =
   (* let regtypes = find_regtypes d in *)
@@ -1449,15 +1474,21 @@ let pp_defs_coq (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
   let typdefs, defs = List.partition is_typ_def defs in
   let statedefs, defs = List.partition is_state_def defs in
   let register_refs = State.register_refs_coq (State.find_registers defs) in
+  let unimplemented = find_unimplemented defs in
+  let () = if !opt_undef_axioms || IdSet.is_empty unimplemented then () else
+      Reporting_basic.print_err false false Parse_ast.Unknown "Warning"
+        ("The following functions were declared but are undefined:\n" ^
+            String.concat "\n" (List.map string_of_id (IdSet.elements unimplemented)))
+  in
   (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) types_modules;hardline;
 string "Require Import String."; hardline;
-        separate empty (List.map doc_def typdefs); hardline;
+        separate empty (List.map (doc_def unimplemented) typdefs); hardline;
         hardline;
-        separate empty (List.map doc_def statedefs); hardline;
+        separate empty (List.map (doc_def unimplemented) statedefs); hardline;
         hardline;
         register_refs; hardline;
         concat [
@@ -1472,5 +1503,5 @@ string "Require Import String."; hardline;
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) defs_modules;hardline;
 string "Require Import List. Import ListNotations. Require Import Sumbool.";
         hardline;
-        separate empty (List.map doc_def defs);
+        separate empty (List.map (doc_def unimplemented) defs);
         hardline]);
