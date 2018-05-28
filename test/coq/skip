@@ -1,12 +1,2 @@
-XXXXX tests with undefined functions
-bind_typ_var.sail
-bitwise_not.*
-bv_simple_index_bit.sail
-ex_cast.sail
-exint.sail
-exist1.sail
-exist2.sail
-exist_subrange.sail
-exist_tlb.sail
 XXXXX tests with full generic equality
 decode_patterns.sail
