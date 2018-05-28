@@ -1414,10 +1414,42 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),_)) =
+(* Remove some type variables in a similar fashion to merge_kids_atoms *)
+let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
+  match typ with
+  | Typ_aux (Typ_fn (args_ty, ret_ty, eff),l') ->
+     let check_typ (args,used) typ =
+       match Type_check.destruct_atom_nexp typ_env typ with
+       | Some (Nexp_aux (Nexp_var kid,_)) ->
+          if KidSet.mem kid used then args,used else
+            KidSet.add kid args, used
+       | Some _ -> args, used
+       | _ -> args, KidSet.union used (tyvars_of_typ typ)
+     in
+     let typs = match args_ty with Typ_aux (Typ_tup typs,_) -> typs | _ -> [args_ty] in
+     let args, used = List.fold_left check_typ (KidSet.empty, KidSet.empty) typs in
+     let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
+     let tqs = match tqs with
+       | TypQ_aux (TypQ_tq qs,l) -> TypQ_aux (TypQ_tq (List.filter (function
+         | QI_aux (QI_id kopt,_) when is_nat_kopt kopt -> KidSet.mem (kopt_kid kopt) used
+         | _ -> true) qs),l)
+       | _ -> tqs
+     in
+     let doc_typ' typ =
+       match Type_check.destruct_atom_nexp typ_env typ with
+       | Some (Nexp_aux (Nexp_var kid,_)) when KidSet.mem kid args ->
+          parens (doc_var_lem empty_ctxt kid ^^ string " : Z")
+       | _ -> parens (underscore ^^ string " : " ^^ doc_typ empty_ctxt typ)
+     in
+     let typs_pp = separate space (List.map doc_typ' typs) ^/^ comma ^/^ doc_typ empty_ctxt ret_ty in
+     string "forall" ^/^ doc_typquant_items empty_ctxt braces tqs ^/^ typs_pp
+  | _ -> doc_typschm empty_ctxt true ts
+
+let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),ann)) =
   if !opt_undef_axioms && IdSet.mem id unimplemented then
+    let typ_env = env_of_annot ann in
     group (separate space
-             [string "Axiom"; doc_id id; colon; doc_typschm empty_ctxt true tys] ^^ dot) ^/^ hardline
+             [string "Axiom"; doc_id id; colon; doc_axiom_typschm typ_env tys] ^^ dot) ^/^ hardline
   else empty (* Type signatures appear in definitions *)
 
 let rec doc_def unimplemented def =
