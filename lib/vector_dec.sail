@@ -10,7 +10,8 @@ val "eq_bit" : (bit, bit) -> bool
 val eq_bits = {
   ocaml: "eq_list",
   lem: "eq_vec",
-  c: "eq_bits"
+  c: "eq_bits",
+  coq: "eq_vec"
 } : forall 'n. (vector('n, dec, bit), vector('n, dec, bit)) -> bool
 
 overload operator == = {eq_bit, eq_bits}
@@ -20,7 +21,8 @@ val bitvector_length = {coq: "length_mword", _:"length"} : forall 'n. bits('n) -
 val vector_length = {
   ocaml: "length",
   lem: "length_list",
-  c: "length"
+  c: "length",
+  coq: "length_list"
 } : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
 
 overload length = {bitvector_length, vector_length}
@@ -48,7 +50,7 @@ function sail_mask(len, v) = if len <= length(v) then truncate(v, len) else sail
 
 overload operator ^ = {sail_mask}
 
-val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append"} : forall ('n : Int) ('m : Int).
+val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append", coq: "concat_vec"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
 
 overload append = {bitvector_concat}
@@ -73,13 +75,15 @@ val vector_update = {
 val add_bits = {
   ocaml: "add_vec",
   lem: "add_vec",
-  c: "add_bits"
+  c: "add_bits",
+  coq: "add_vec"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val add_bits_int = {
   ocaml: "add_vec_int",
   lem: "add_vec_int",
-  c: "add_bits_int"
+  c: "add_bits_int",
+  coq: "add_vec_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
 overload operator + = {add_bits, add_bits_int}
@@ -87,14 +91,16 @@ overload operator + = {add_bits, add_bits_int}
 val vector_subrange = {
   ocaml: "subrange",
   lem: "subrange_vec_dec",
-  c: "vector_subrange"
+  c: "vector_subrange",
+  coq: "subrange_vec_dec"
 } : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
 val vector_update_subrange = {
   ocaml: "update_subrange",
   lem: "update_subrange_vec_dec",
-  c: "vector_update_subrange"
+  c: "vector_update_subrange",
+  coq: "update_subrange_vec_dec"
 } : forall 'n 'm 'o. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
 // Some ARM specific builtins
@@ -115,7 +121,8 @@ val unsigned = {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",
-  c: "sail_uint"
+  c: "sail_uint",
+  coq: "uint"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 val signed = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)

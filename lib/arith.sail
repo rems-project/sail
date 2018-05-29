@@ -5,36 +5,36 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = {ocaml: "add_int", lem: "integerAdd", c: "add_int"} : forall 'n 'm.
+val add_atom = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
   (atom('n), atom('m)) -> atom('n + 'm)
 
-val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int"} : (int, int) -> int
+val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int"} : forall 'n 'm.
+val sub_atom = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
   (atom('n), atom('m)) -> atom('n - 'm)
 
-val sub_int = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int"} : (int, int) -> int
+val sub_int = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
 // ***** Negation *****
 
-val negate_atom = {ocaml: "negate", lem: "integerNegate", c: "neg_int"} : forall 'n. atom('n) -> atom(- 'n)
+val negate_atom = {ocaml: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. atom('n) -> atom(- 'n)
 
-val negate_int = {ocaml: "negate", lem: "integerNegate", c: "neg_int"} : int -> int
+val negate_int = {ocaml: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : int -> int
 
 overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
 
-val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int"} : forall 'n 'm.
+val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
   (atom('n), atom('m)) -> atom('n * 'm)
 
-val mult_int = {ocaml: "mult", lem: "integerMult", c: "mult_int"} : (int, int) -> int
+val mult_int = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : (int, int) -> int
 
 overload operator * = {mult_atom, mult_int}
 
@@ -54,7 +54,8 @@ val div_int = {
   smt: "div",
   ocaml: "quotient",
   lem: "integerDiv",
-  c: "div_int"
+  c: "div_int",
+  coq: "Z.quot"
 } : (int, int) -> int
 
 overload operator / = {div_int}
@@ -63,7 +64,8 @@ val mod_int = {
   smt: "mod",
   ocaml: "modulus",
   lem: "integerMod",
-  c: "mod_int"
+  c: "mod_int",
+  coq: "Z.rem"
 } : (int, int) -> int
 
 overload operator % = {mod_int}
@@ -71,7 +73,8 @@ overload operator % = {mod_int}
 val abs_int = {
   smt : "abs",
   ocaml: "abs_int",
-  lem: "abs_int"
+  lem: "abs_int",
+  coq: "Z.abs"
 } : (int, int) -> int
 
 $endif
