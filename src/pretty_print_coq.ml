@@ -57,7 +57,7 @@
   fix_id
   doc_quant_item on constraints
   type quantifiers in records, unions
-  update notation for records
+  multiple update notation for records
   register_refs?
   should I control the nexps somewhat?
   L_real
@@ -109,6 +109,7 @@ let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
 let enclose_record = enclose (string "{| ") (string " |}")
+let enclose_record_update = enclose (string "{[ ") (string " ]}")
 let bigarrow = string "=>"
 
 let separate_opt s f l = separate s (Util.map_filter f l)
@@ -859,7 +860,7 @@ let doc_exp_lem, doc_let_lem =
            when Env.is_record tid env ->
            tid
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
-       anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
+       enclose_record_update (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let start, (len, order, etyp) =
