@@ -1,2 +1,5 @@
 XXXXX tests with full generic equality
 decode_patterns.sail
+XXXXX tests with deliberate redundant pattern match clause
+option_tuple.sail
+pat_completeness.sail
