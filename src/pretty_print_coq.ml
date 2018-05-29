@@ -1113,13 +1113,18 @@ let doc_typdef (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux ((Id "option"),_) -> empty
       | _ ->
-         let typ_nm = separate space [doc_id_type id; doc_typquant_items empty_ctxt parens typq] in
-         let ar_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_type_union empty_ctxt typ_nm) ar) in
+         let id_pp = doc_id_type id in
+         let typ_nm = separate space [id_pp; doc_typquant_items empty_ctxt braces typq] in
+         let ar_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_type_union empty_ctxt id_pp) ar) in
          let typ_pp =
            (doc_op coloneq)
              (concat [string "Inductive"; space; typ_nm])
              ((*doc_typquant_lem typq*) ar_doc) in
-         typ_pp ^^ dot ^^ hardline ^^ hardline)
+         (* We declared the type parameters as implicit so that they're implicit
+            in the constructors.  Currently Coq also makes them implicit in the
+            type, so undo that here. *)
+         let resetimplicit = separate space [string "Arguments"; id_pp; colon; string "clear implicits."] in
+         typ_pp ^^ dot ^^ hardline ^^ resetimplicit ^^ hardline ^^ hardline)
   | TD_enum(id,nm,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
