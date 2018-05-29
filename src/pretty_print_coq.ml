@@ -681,12 +681,14 @@ let doc_exp_lem, doc_let_lem =
             match args with
             | [exp1; exp2; exp3; ord_exp; vartuple; body] ->
                let loopvar, body = match body with
-                 | E_aux (E_let (LB_aux (LB_val (
-                     P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _), _), _), body), _) -> id, body
-                 | E_aux (E_let (LB_aux (LB_val (
-                     P_aux (P_var (P_aux (P_id id, _), _), _), _), _), body), _) -> id, body
-                 | E_aux (E_let (LB_aux (LB_val (
-                     P_aux (P_id id, _), _), _), body), _) -> id, body
+                 | E_aux (E_let (LB_aux (LB_val (_, _), _),
+                   E_aux (E_let (LB_aux (LB_val (_, _), _),
+                   E_aux (E_if (_,
+                   E_aux (E_let (LB_aux (LB_val (
+                     ((P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _))
+                     | (P_aux (P_var (P_aux (P_id id, _), _), _))
+                     | (P_aux (P_id id, _))), _), _),
+                     body), _), _), _)), _)), _) -> id, body
                  | _ -> raise (Reporting_basic.err_unreachable l ("Unable to find loop variable in " ^ string_of_exp body)) in
                let step = match ord_exp with
                  | E_aux (E_lit (L_aux (L_false, _)), _) ->
@@ -818,7 +820,7 @@ let doc_exp_lem, doc_let_lem =
              if prefix_recordtype && string_of_id tid <> "regstate"
              then (string (string_of_id tid ^ "_")) ^^ doc_id id
              else doc_id id in
-           expY fexp ^^ dot ^^ fname
+           expY fexp ^^ dot ^^ parens fname
         | _ ->
            raise (report l "E_field expression with no register or record type"))
     | E_block [] -> string "tt"
