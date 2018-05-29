@@ -412,7 +412,7 @@ let doc_lit (L_aux(lit,l)) =
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
-     utf8string "(return (failwith \"undefined value of unsupported type\"))"
+     utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ s ^ "\"")
   | L_real s ->
     (* Lem does not support decimal syntax, so we translate a string
