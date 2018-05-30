@@ -51,7 +51,7 @@ cd ..
 Lem
 ---
 
-If you are using OCaml 4.06, you'll need to run `opam install num` before building lem.cd 
+If you are using OCaml 4.06, you'll need to run `opam install num` before building lem.
 
 ```
 git clone git@github.com:rems-project/lem.git
