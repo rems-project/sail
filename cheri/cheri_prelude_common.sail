@@ -457,4 +457,15 @@ function dump_cp2_state () = {
   foreach(i from 0 to 31) {
     print(concat_str("DEBUG CAP REG ", concat_str(string_of_int(i), capToString(readCapReg(to_bits(5, i))))))
   }
+  print(concat_str("DEBUG CAP HWREG 00", capToString(capRegToCapStruct(C00))));
+  print(concat_str("DEBUG CAP HWREG 01", capToString(capRegToCapStruct(CTLSU))));
+  print(concat_str("DEBUG CAP HWREG 08", capToString(capRegToCapStruct(CTLSP))));
+  /* TODO: these two should not be mirrored to match the FPGA */
+  print(concat_str("DEBUG CAP HWREG 22", capToString(capRegToCapStruct(C27))));
+  print(concat_str("DEBUG CAP HWREG 23", capToString(capRegToCapStruct(C28))));
+  /* KCC, KDC, EPCC */
+  print(concat_str("DEBUG CAP HWREG 29", capToString(capRegToCapStruct(C29))));
+  print(concat_str("DEBUG CAP HWREG 30", capToString(capRegToCapStruct(C30))));
+  print(concat_str("DEBUG CAP HWREG 31", capToString(capRegToCapStruct(C31))));
+
 }
