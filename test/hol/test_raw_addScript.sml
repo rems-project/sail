@@ -1,11 +1,12 @@
 open HolKernel boolLib bossLib Parse
 open intLib bitLib wordsLib
-open sail_valuesAuxiliaryTheory state_monad_lemmasTheory
+open state_monadTheory state_monad_lemmasTheory
+open sail_valuesAuxiliaryTheory stateAuxiliaryTheory
 open cheriTheory hoareTheory
 
 val _ = new_theory "test_raw_add";
 
-val _ = Globals.max_print_depth := 20;
+val _ = Globals.max_print_depth := 50;
 
 (* MIPS register names
    ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/MIPS-N32-ABI-Handbook.pdf
@@ -24,6 +25,64 @@ val gpr_names_def = Define`
     "sp";
     "s8";
     "ra"]`;
+
+val PrePost_write_regS = Q.store_thm("PrePost_write_regS",
+  `PrePost (λs. P (Value ()) (s with regstate := reg.write_to v s.regstate)) (write_regS reg v) P`,
+  rw[write_regS_def,PrePost_updateS]);
+
+val PrePost_assert_expS_T = Q.store_thm("PrePost_assert_expS_T",
+  `exp ⇒ PrePost (P (Value ())) (assert_expS exp msg) P`,
+  rw[assert_expS_def,PrePost_returnS]);
+
+val PrePost_maybe_failS_SOME = Q.store_thm("PrePost_maybe_failS_SOME",
+  `PrePost (P (Value x)) (maybe_failS msg (SOME x)) P`,
+  rw[maybe_failS_def,PrePost_returnS]);
+
+(*
+val PrePost_MEMw_wrapper = Q.store_thm("PrePost_MEMw_wrapper",
+  `PrePost P (MEMw_wrapper addr size data) Q`,
+  MEMw_wrapper_def
+  |> SIMP_RULE(srw_ss()++boolSimps.LET_ss)[]
+  |> CONV_RULE(STRIP_QUANT_CONV(RAND_CONV(RATOR_CONV(RATOR_CONV(RAND_CONV(RAND_CONV(EVAL)))))))
+*)
+
+val PrePost_init_cp0_state = Q.store_thm("PrePost_init_cp0_state",
+  `PrePost (λs. P (Value ())
+    (s with regstate :=
+        s.regstate with CP0Status :=
+            Mk_StatusReg (update_subrange_vec_dec (get_StatusReg s.regstate.CP0Status) 22 22 (cast_unit_vec0 B1))))
+    (init_cp0_state())
+    P`,
+  EVAL_TAC \\ rw[]);
+
+(*
+val PrePost_init_cp2_state = Q.store_thm("PrePost_init_cp2_state",
+  `PrePost P (init_cp2_state ()) Q`,
+  rw[init_cp2_state_def]
+  PrePost_def
+  f"foreach"
+  hyp stateTheory.foreachS_def
+  \\ match_mp_tac PrePost_seqS
+  \\ qexists_tac`P1`
+  \\ conj_tac
+  >- (
+    match_mp_tac PrePost_seqS
+    \\ qexists_tac`P2`
+    \\ conj_tac
+    >- (
+      match_mp_tac PrePost_seqS
+      \\ qexists_tac`P3`
+      \\ conj_tac
+      PrePost_strengthen_pre
+      PrePost_write_regS
+
+
+``init_cp2_state () s`` |> EVAL
+init_cp2_state_def
+|> SIMP_RULE (srw_ss()++boolSimps.LET_ss) []
+f"init_cp2_state"
+|>
+*)
 
 val install_code_def = Define`
   install_code initialPC (code:word32 list) =
@@ -168,16 +227,24 @@ val decoded_insts = TRANS decoded_insts1 (SYM ls2)
   |> ONCE_REWRITE_RULE[GSYM test_raw_add_insts_def, GSYM test_raw_add_asts_def]
 *)
 
+(*
+This is currently a non-starter, but something like it should be possible and
+better than a manual PrePost proof! Perhaps with the right curated compset?
+
+EVAL ``install_code 0x9000000040000000w test_raw_add_insts s``
+*)
+
 val test_raw_add_thm = Q.store_thm("test_raw_add_thm",
   `PrePost
       (λ_. T)
       (install_and_run test_raw_add_insts 100000)
       (λ_ s.  test_raw_add_post s)`,
-(*
+  (*
   rw[install_and_run_def]
   \\ match_mp_tac PrePost_seqS
   \\ simp[]
   \\ qmatch_goalsub_abbrev_tac`install_code initPC`
+
   \\ qexists_tac`λs. code_installed initPC test_raw_add_insts s ∧
                      init_registers_post s`
   \\ conj_tac
@@ -188,7 +255,7 @@ val test_raw_add_thm = Q.store_thm("test_raw_add_thm",
     >- cheat
     \\ cheat )
   fetch_and_execute_def
-*)
+  *)
 cheat);
 
 (*
