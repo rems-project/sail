@@ -5,7 +5,7 @@ LEM_SCRIPTS = sail_instr_kindsScript.sml sail_valuesScript.sml sail_operatorsScr
 LEM_CLEANS = $(LEM_SCRIPTS)
 
 SCRIPTS = $(LEM_SCRIPTS) \
-  sail_valuesAuxiliaryScript.sml
+  sail_valuesAuxiliaryScript.sml stateAuxiliaryScript.sml
 
 THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))
 
