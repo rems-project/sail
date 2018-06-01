@@ -1439,7 +1439,9 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
      let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
      let tqs = match tqs with
        | TypQ_aux (TypQ_tq qs,l) -> TypQ_aux (TypQ_tq (List.filter (function
-         | QI_aux (QI_id kopt,_) when is_nat_kopt kopt -> KidSet.mem (kopt_kid kopt) used
+         | QI_aux (QI_id kopt,_) when is_nat_kopt kopt ->
+            let kid = kopt_kid kopt in
+            KidSet.mem kid used && not (KidSet.mem kid args)
          | _ -> true) qs),l)
        | _ -> tqs
      in
@@ -1449,8 +1451,10 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
           parens (doc_var_lem empty_ctxt kid ^^ string " : Z")
        | _ -> parens (underscore ^^ string " : " ^^ doc_typ empty_ctxt typ)
      in
-     let typs_pp = separate space (List.map doc_typ' typs) ^/^ comma ^/^ doc_typ empty_ctxt ret_ty in
-     string "forall" ^/^ doc_typquant_items empty_ctxt braces tqs ^/^ typs_pp
+     let arg_typs_pp = separate space (List.map doc_typ' typs) in
+     let ret_typ_pp = doc_typ empty_ctxt ret_ty in
+     let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt braces tqs in
+     string "forall" ^/^ tyvars_pp ^/^ arg_typs_pp ^/^ constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt true ts
 
 let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),ann)) =
