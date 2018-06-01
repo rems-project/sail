@@ -19,6 +19,9 @@ Lemma use_ArithFact {P} `(ArithFact P) : P.
 apply fact.
 Defined.
 
+Definition build_ex (n:Z) {P:Z -> Prop} `{H:ArithFact (P n)} : {x : Z & ArithFact (P x)} :=
+  existT _ n H.
+
 
 Definition ii := Z.
 Definition nn := nat.

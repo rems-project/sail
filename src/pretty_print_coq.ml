@@ -290,6 +290,48 @@ let lem_tyvars_of_typ typ =
   NexpSet.fold (fun nexp ks -> KidSet.union ks (tyvars_of_nexp nexp))
     (lem_nexps_of_typ typ) KidSet.empty
 
+(* In existential types we don't want term-level versions of the
+   type variables to stick around *)
+let drop_duplicate_atoms kids ty =
+  let kids = KidSet.of_list kids in
+  let rec aux_typ (Typ_aux (typ,l) as full_typ) =
+    match typ with
+    | Typ_id _
+    | Typ_var _ -> Some full_typ
+    | Typ_fn (arg,res,eff) -> failwith "Function type nested inside existential"
+    | Typ_tup typs ->
+       (match Util.map_filter aux_typ typs with
+       | [] -> None
+       | typs' -> Some (Typ_aux (Typ_tup typs',l)))
+    | Typ_exist _ -> failwith "Nested existential type"
+       (* This is an AST type, don't need to check for equivalent nexps *)
+    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)])
+        when KidSet.mem kid kids ->
+       None
+    (* Don't recurse into type arguments, removing stuff there
+       would be weird (and difficult) *)
+    | Typ_app _ -> Some full_typ
+  in aux_typ ty
+
+(* TODO: parens *)
+let rec doc_nc ctx (NC_aux (nc,_)) =
+  match nc with
+  | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_not_equal (ne1, ne2) -> doc_op (string "<>") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_set (kid, is) -> (* TODO: is this a good translation? *)
+     separate space [string "In"; doc_var_lem ctx kid;
+                     brackets (separate (string "; ")
+                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
+  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc ctx nc1) (doc_nc ctx nc2)
+  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc ctx nc1) (doc_nc ctx nc2)
+  | NC_true -> string "True"
+  | NC_false -> string "False"
+
+let doc_arithfact ctxt nc =
+  string "ArithFact" ^^ space ^^ parens (doc_nc ctxt nc)
+
 (* When making changes here, check whether they affect lem_tyvars_of_typ *)
 let doc_typ, doc_atomic_typ =
   let fns ctx =
@@ -350,11 +392,22 @@ let doc_typ, doc_atomic_typ =
           * if we add a new Typ constructor *)
          let tpp = typ ty in
          if atyp_needed then parens tpp else tpp
-      | Typ_exist (kids,_,ty) ->
-         let tpp = typ ty in
-tpp (*         List.fold_left
-           (fun tpp kid -> braces (separate space [doc_var_lem kid; colon; string "Z"; ampersand; tpp]))
-           tpp kids*)
+      | Typ_exist (kids,nc,ty) -> begin
+        let add_tyvar tpp kid =
+          braces (separate space [doc_var_lem ctx kid; colon; string "Z"; ampersand; tpp])
+        in
+        match drop_duplicate_atoms kids ty with
+        | Some ty ->
+           let tpp = typ ty in
+           let tpp = match nc with NC_aux (NC_true,_) -> tpp | _ -> 
+             braces (separate space [underscore; colon; parens (doc_arithfact ctx nc); ampersand; tpp])
+           in
+           List.fold_left add_tyvar tpp kids
+        | None ->
+           match nc with
+           | NC_aux (NC_true,_) -> List.fold_left add_tyvar (string "Z") (List.tl kids)
+           | _ -> List.fold_left add_tyvar (doc_arithfact ctx nc) kids
+      end
     and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
       | Typ_arg_typ t -> app_typ true t
       | Typ_arg_nexp n -> doc_nexp ctx n
@@ -432,22 +485,6 @@ let doc_lit (L_aux(lit,l)) =
     parens (separate space (List.map string [
       "realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
 
-(* TODO: parens *)
-let rec doc_nc ctx (NC_aux (nc,_)) =
-  match nc with
-  | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_not_equal (ne1, ne2) -> doc_op (string "<>") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_set (kid, is) -> (* TODO: is this a good translation? *)
-     separate space [string "In"; doc_var_lem ctx kid;
-                     brackets (separate (string "; ")
-                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc ctx nc1) (doc_nc ctx nc2)
-  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc ctx nc1) (doc_nc ctx nc2)
-  | NC_true -> string "True"
-  | NC_false -> string "False"
-
 let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id (KOpt_aux (KOpt_none kid,_)) ->
@@ -466,7 +503,7 @@ let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
 let doc_quant_item_constr ctx delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id  _ -> None
-  | QI_const nc -> Some (bquote ^^ braces (string "ArithFact" ^^ parens (doc_nc ctx nc)))
+  | QI_const nc -> Some (bquote ^^ braces (doc_arithfact ctx nc))
 
 let doc_typquant_items ctx delimit (TypQ_aux (tq,_)) =
   match tq with
@@ -595,6 +632,13 @@ let doc_exp_lem, doc_let_lem =
     let expY = top_exp ctxt true in
     let expN = top_exp ctxt false in
     let expV = top_exp ctxt in
+    let maybe_add_exist epp =
+      match destruct_exist (env_of full_exp) (typ_of full_exp) with
+      | None -> epp
+      | Some _ ->
+         let epp = string "build_ex" ^/^ epp in
+         if aexp_needed then parens epp else epp
+    in
     let liftR doc =
       if ctxt.early_ret && effectful (effect_of full_exp)
       then separate space [string "liftR"; parens (doc)]
@@ -838,8 +882,8 @@ let doc_exp_lem, doc_let_lem =
          else liftR epp
        else if Env.is_register id env then doc_id (append_id id "_ref")
        else if is_ctor env id then doc_id_ctor id
-       else doc_id id
-    | E_lit lit -> doc_lit lit
+       else maybe_add_exist (doc_id id)
+    | E_lit lit -> maybe_add_exist (doc_lit lit)
     | E_cast(typ,e) ->
        expV aexp_needed e
     | E_tuple exps ->
