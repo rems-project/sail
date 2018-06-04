@@ -610,7 +610,7 @@ end = struct
     let counter = ref 0 in
     let simplify_nexp (Nexp_aux (nexp_aux, l) as nexp) =
       match nexp_aux with
-      | Nexp_var _ | Nexp_constant _ -> nexp
+      | Nexp_constant _ -> nexp
       | _ -> (incr counter; nexp)
     in
     let typ = map_nexps simplify_nexp typ in
@@ -1968,18 +1968,25 @@ exception Not_a_constraint;;
 
 let rec assert_nexp env exp = destruct_atom_nexp env (typ_of exp)
 
-let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
+let rec combine_constraint b f x y = match b, x, y with
+  | true,  Some x, Some y -> Some (f x y)
+  | true,  Some x, None   -> Some x
+  | true,  None,   Some y -> Some y
+  | false, Some x, Some y -> Some (f x y)
+  | _, _, _ -> None
+
+let rec assert_constraint env b (E_aux (exp_aux, _) as exp) =
   match exp_aux with
   | E_constraint nc ->
      Some nc
   | E_lit (L_aux (L_true, _)) -> Some nc_true
   | E_lit (L_aux (L_false, _)) -> Some nc_false
   | E_let (_,e) ->
-     assert_constraint env e (* TODO: beware of fresh type vars *)
+     assert_constraint env b e (* TODO: beware of fresh type vars *)
   | E_app (op, [x; y]) when string_of_id op = "or_bool" ->
-     option_binop nc_or (assert_constraint env x) (assert_constraint env y)
+     combine_constraint (not b) nc_or (assert_constraint env b x) (assert_constraint env b y)
   | E_app (op, [x; y]) when string_of_id op = "and_bool" ->
-     option_binop nc_and (assert_constraint env x) (assert_constraint env y)
+     combine_constraint b nc_and (assert_constraint env b x) (assert_constraint env b y)
   | E_app (op, [x; y]) when string_of_id op = "gteq_atom" ->
      option_binop nc_gteq (assert_nexp env x) (assert_nexp env y)
   | E_app (op, [x; y]) when string_of_id op = "lteq_atom" ->
@@ -1995,83 +2002,10 @@ let rec assert_constraint env (E_aux (exp_aux, _) as exp) =
   | _ ->
      None
 
-type flow_constraint =
-  | Flow_lteq of Big_int.num * nexp
-  | Flow_gteq of Big_int.num * nexp
-
-let restrict_range_upper c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp nexp2, _)])
-     when string_of_id f = "range" ->
-     begin
-       match big_int_of_nexp nexp2 with
-       | Some c2 ->
-          let upper = if (Big_int.less c1 c2) then nexp1 else nexp2 in
-          range_typ nexp upper
-       | _ -> typ
-     end
-  | _ -> typ
-
-let restrict_range_lower c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp2, _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
-     when string_of_id f = "range" ->
-     begin
-       match big_int_of_nexp nexp2 with
-       | Some c2 ->
-          let lower = if (Big_int.greater c1 c2) then nexp1 else nexp2 in
-          range_typ lower nexp
-       | _ -> typ
-     end
-  | _ -> typ
-
-let apply_flow_constraint = function
-  | Flow_lteq (c, nexp) ->
-     (restrict_range_upper c nexp,
-      restrict_range_lower (Big_int.succ c) (nexp_simp (nsum nexp (nint 1))))
-  | Flow_gteq (c, nexp) ->
-     (restrict_range_lower c nexp,
-      restrict_range_upper (Big_int.pred c) (nexp_simp (nminus nexp (nint 1))))
-
-let rec infer_flow env (E_aux (exp_aux, (l, _)) as exp) =
-  match exp_aux with
-  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
-     let kid = Env.fresh_kid env in
-     begin
-       match destruct_atom (typ_of y) with
-       | Some (c, nexp) ->
-          [(v, Flow_lteq (Big_int.pred c, nexp_simp (nminus nexp (nint 1))))], []
-       | _ -> [], []
-     end
-  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
-     let kid = Env.fresh_kid env in
-     begin
-       match destruct_atom (typ_of y) with
-       | Some (c, nexp) -> [(v, Flow_lteq (c, nexp))], []
-       | _ -> [], []
-     end
-  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gt_range_atom" ->
-     let kid = Env.fresh_kid env in
-     begin
-       match destruct_atom (typ_of y) with
-       | Some (c, nexp) ->
-          [(v, Flow_gteq (Big_int.succ c, nexp_simp (nsum nexp (nint 1))))], []
-       | _ -> [], []
-     end
-  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
-     let kid = Env.fresh_kid env in
-     begin
-       match destruct_atom (typ_of y) with
-       | Some (c, nexp) -> [(v, Flow_gteq (c, nexp))], []
-       | _ -> [], []
-     end
-  | _ -> [], option_these [assert_constraint env exp]
-
-let rec add_flows b flows env =
-  match flows with
-  | [] -> env
-  | (id, flow) :: flows when b -> add_flows true flows (Env.add_flow id (fst (apply_flow_constraint flow)) env)
-  | (id, flow) :: flows -> add_flows false flows (Env.add_flow id (snd (apply_flow_constraint flow)) env)
+let rec add_opt_constraint constr env =
+  match constr with
+  | None -> env
+  | Some constr -> Env.add_constraint constr env
 
 let rec add_constraints constrs env =
   List.fold_left (fun env constr -> Env.add_constraint constr env) env constrs
@@ -2169,7 +2103,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          | ((E_aux (E_assert (constr_exp, assert_msg), _) as exp) :: exps) ->
             let constr_exp = crule check_exp env constr_exp bool_typ in
             let checked_msg = crule check_exp env assert_msg string_typ in
-            let env = match assert_constraint env constr_exp with
+            let env = match assert_constraint env true constr_exp with
               | Some nc ->
                  typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));
                  Env.add_constraint nc env
@@ -2293,9 +2227,8 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      type_coercion env inferred_exp typ
   | E_if (cond, then_branch, else_branch), _ ->
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let flows, constrs = infer_flow env cond' in
-     let then_branch' = crule check_exp (add_constraints constrs (add_flows true flows env)) then_branch typ in
-     let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch typ in
+     let then_branch' = crule check_exp (add_opt_constraint (assert_constraint env true cond') env) then_branch typ in
+     let else_branch' = crule check_exp (add_opt_constraint (option_map nc_negate (assert_constraint env false cond')) env) else_branch typ in
      annot_exp (E_if (cond', then_branch', else_branch')) typ
   | E_exit exp, _ ->
      let checked_exp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
@@ -2327,7 +2260,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let env = match bind_exp with
        | E_aux (E_assert (constr_exp, _), _) ->
           begin
-            match assert_constraint env constr_exp with
+            match assert_constraint env true constr_exp with
             | Some nc ->
                typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));
                Env.add_constraint nc env
@@ -2367,8 +2300,7 @@ and check_case env pat_typ pexp typ =
        | None -> None, env
        | Some guard ->
           let checked_guard = check_exp env guard bool_typ in
-          let flows, constrs = infer_flow env checked_guard in
-          Some checked_guard, add_constraints constrs (add_flows true flows env)
+          Some checked_guard, add_opt_constraint (assert_constraint env true checked_guard) env
      in
      let checked_case = crule check_exp env' case typ in
      construct_pexp (tpat, checked_guard, checked_case, (l, None))
@@ -2954,8 +2886,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_app (f, xs) -> infer_funapp l env f xs None
   | E_loop (loop_type, cond, body) ->
      let checked_cond = crule check_exp env cond bool_typ in
-     let flows, constrs = infer_flow env checked_cond in
-     let checked_body = crule check_exp (add_flows true flows env) body unit_typ in
+     let checked_body = crule check_exp (add_opt_constraint (assert_constraint env true checked_cond) env) body unit_typ in
      annot_exp (E_loop (loop_type, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
@@ -2982,9 +2913,8 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      end
   | E_if (cond, then_branch, else_branch) ->
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let flows, constrs = infer_flow env cond' in
-     let then_branch' = irule infer_exp (add_constraints constrs (add_flows true flows env)) then_branch in
-     let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch (typ_of then_branch') in
+     let then_branch' = irule infer_exp (add_opt_constraint (assert_constraint env true cond') env) then_branch in
+     let else_branch' = crule check_exp (add_opt_constraint (option_map nc_negate (assert_constraint env false cond')) env) else_branch (typ_of then_branch') in
      annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
   | E_vector_access (v, n) -> infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ())))
   | E_vector_update (v, n, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, ())))
@@ -3018,7 +2948,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let env = match bind_exp with
        | E_aux (E_assert (constr_exp, _), _) ->
           begin
-            match assert_constraint env constr_exp with
+            match assert_constraint env true constr_exp with
             | Some nc ->
                typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));
                Env.add_constraint nc env

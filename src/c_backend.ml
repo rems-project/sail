@@ -62,9 +62,7 @@ let opt_ddump_flow_graphs = ref false
 (* Optimization flags *)
 let optimize_primops = ref false
 let optimize_hoist_allocations = ref false
-let optimize_struct_undefined = ref false
 let optimize_struct_updates = ref false
-let optimize_enum_undefined = ref false
 
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline (Lazy.force str) else ()
@@ -1005,7 +1003,7 @@ let analyze_primop' ctx id args typ =
 
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] ->
      let len = F_op (f, "-", F_op (t, "-", v_one)) in
-     AE_val (AV_C_fragment (F_op (F_op (F_raw "UINT64_MAX", ">>", F_op (v_int 64, "-", len)), "&", F_op (vec, ">>", t)), typ))
+     AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", t)), typ))
 
   | "vector_access", [AV_C_fragment (vec, _); AV_C_fragment (n, _)] ->
      AE_val (AV_C_fragment (F_op (v_one, "&", F_op (vec, ">>", n)), typ))
@@ -1014,7 +1012,7 @@ let analyze_primop' ctx id args typ =
      AE_val (AV_C_fragment (F_op (a, "==", b), typ))
 
   | "slice", [AV_C_fragment (vec, _); AV_C_fragment (start, _); AV_C_fragment (len, _)] ->
-     AE_val (AV_C_fragment (F_op (F_op (F_raw "UINT64_MAX", ">>", F_op (v_int 64, "-", len)), "&", F_op (vec, ">>", start)), typ))
+     AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", start)), typ))
 
   | "undefined_bit", _ ->
      AE_val (AV_C_fragment (F_lit (V_bit Sail_values.B0), typ))
@@ -3410,18 +3408,6 @@ let codegen_def' ctx = function
           string "void" ^^ space ^^ codegen_id id
           ^^ parens (string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
           ^^ hardline
-     in
-     let instrs =
-       if !optimize_struct_undefined && is_ct_struct ret_ctyp && Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0 then
-         []
-       else
-         instrs
-     in
-     let instrs =
-       if !optimize_enum_undefined && is_ct_enum ret_ctyp && Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0 then
-         []
-       else
-         instrs
      in
      function_header
      (* ^^ string (Printf.sprintf "{ fprintf(stderr, \"%s \"); " (string_of_id id)) *)

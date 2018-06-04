@@ -51,8 +51,19 @@
 open Ast
 open Ast_util
 
-(* Generate undefined_T functions for every type T *)
+(* Generate undefined_T functions for every type T. False by
+   default. *)
 val opt_undefined_gen : bool ref
+
+(* Generate faster undefined_T functions. Rather than generating
+   functions that allow for the undefined values of enums and variants
+   to be picked at runtime using a RNG or similar, this creates
+   undefined_T functions for those types that simply return a specific
+   member of the type chosen at compile time, which is much
+   faster. These functions don't have the right effects, so the
+   -no_effects flag may be needed if this is true. False by
+   default. *)
+val opt_fast_undefined : bool ref
 
 (* Allow # in identifiers when set, like the GHC option of the same name *)
 val opt_magic_hash : bool ref
