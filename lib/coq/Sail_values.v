@@ -723,14 +723,27 @@ Ltac unbool_comparisons :=
   | H:context [Z.eqb _ _ = false] |- _ => rewrite Z.eqb_neq in H
   | H:context [orb _ _ = true] |- _ => rewrite Bool.orb_true_iff in H
   end.
+(* Split up dependent pairs to get at proofs of properties *)
+(* TODO: simpl is probably too strong here *)
+Ltac extract_properties :=
+  repeat match goal with H := (projT1 ?X) |- _ => destruct X in *; simpl in H; unfold H in * end;
+  repeat match goal with |- context [projT1 ?X] => destruct X in *; simpl end.
+Ltac reduce_list_lengths :=
+  repeat match goal with |- context [length_list ?X] => 
+    let r := (eval cbn in (length_list X)) in
+    change (length_list X) with r
+  end.
 Ltac solve_arithfact :=
+ extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
+ reduce_list_lengths;
  solve [apply ArithFact_mword; assumption
        | constructor; omega
-       | constructor; auto with zbool zarith sail].
+         (* The datatypes hints give us some list handling, esp In *)
+       | constructor; auto with datatypes zbool zarith sail].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
 
 Hint Unfold length_mword : sail.

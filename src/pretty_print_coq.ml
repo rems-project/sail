@@ -590,19 +590,6 @@ let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot))) = match p with
   | P_cons (p,p') -> doc_op (string "::") (doc_pat ctxt true p) (doc_pat ctxt true p')
   | P_record (_,_) -> empty (* TODO *)
 
-let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
-  | Typ_tup ts -> List.exists typ_needs_printed ts
-  | Typ_app (Id_aux (Id "itself",_),_) -> true
-  | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists typ_needs_printed_arg targs
-  | Typ_fn (t1,t2,_) -> typ_needs_printed t1 || typ_needs_printed t2
-  | Typ_exist (kids,_,t) ->
-     let visible_kids = KidSet.inter (KidSet.of_list kids) (lem_tyvars_of_typ t) in
-     typ_needs_printed t && KidSet.is_empty visible_kids
-  | _ -> false
-and typ_needs_printed_arg (Typ_arg_aux (targ, _)) = match targ with
-  | Typ_arg_typ t -> typ_needs_printed t
-  | _ -> false
-
 let contains_early_return exp =
   let e_app (f, args) =
     let rets, args = List.split args in
@@ -823,31 +810,40 @@ let doc_exp_lem, doc_let_lem =
                "Unexpected number of arguments for early_return builtin")
           end
        | _ ->
-          begin match annot with
-          | Some (env, _, _) when Env.is_union_constructor f env ->
-             let epp =
-               match args with
-               | [] -> doc_id_ctor f
-               | [arg] -> doc_id_ctor f ^^ space ^^ expV true arg
-               | _ ->
-                  doc_id_ctor f ^^ space ^^ 
-                    parens (separate_map comma (expV false) args) in
-             if aexp_needed then parens (align epp) else epp
-          | _ ->
-             let call, is_extern = match annot with
-               | Some (env, _, _) when Env.is_extern f env "coq" ->
-                 string (Env.get_extern f env "coq"), true
-               | _ -> doc_id f, false in
-             let epp = hang 2 (flow (break 1) (call :: List.map expY args)) in
-             let (taepp,aexp_needed) =
-               let env = env_of full_exp in
-               let t = Env.expand_synonyms env (typ_of full_exp) in
-               let eff = effect_of full_exp in
-               if typ_needs_printed t
-               then (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env (effectful eff) t))), true)
-               else (epp, aexp_needed) in
-             liftR (if aexp_needed then parens (align taepp) else taepp)
-          end
+          let env = env_of_annot (l,annot) in
+          if Env.is_union_constructor f env then
+            let epp =
+              match args with
+              | [] -> doc_id_ctor f
+              | [arg] -> doc_id_ctor f ^^ space ^^ expV true arg
+              | _ ->
+                 doc_id_ctor f ^^ space ^^ 
+                   parens (separate_map comma (expV false) args) in
+            if aexp_needed then parens (align epp) else epp
+          else
+            let call, is_extern =
+              if Env.is_extern f env "coq"
+              then string (Env.get_extern f env "coq"), true
+              else doc_id f, false in
+            let (tqs,fn_ty) = Env.get_val_spec_orig f env in
+            let arg_typs = match fn_ty with
+              | Typ_aux (Typ_fn (arg_typ,_,_),_) ->
+                 (match arg_typ with
+                 | Typ_aux (Typ_tup typs,_) -> typs
+                 | _ -> [arg_typ])
+              | _ -> failwith "Function not a function type"
+            in
+            (* Insert existential unpacking where necessary *)
+            let doc_arg arg typ_from_fn =
+              let arg_pp = expY arg in
+              (* TODO: more sophisticated check *)
+              match destruct_exist env (typ_of arg), destruct_exist env typ_from_fn with
+              | Some _, None -> parens (string "projT1 " ^^ arg_pp)
+              | _, _ -> arg_pp
+            in
+            (* TODO: automatically build existentials *)
+            let epp = hang 2 (flow (break 1) (call :: List.map2 doc_arg args arg_typs)) in
+            liftR (if aexp_needed then parens (align epp) else epp)
        end
     | E_vector_access (v,e) ->
       raise (Reporting_basic.err_unreachable l
@@ -1468,6 +1464,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
 
 (* Remove some type variables in a similar fashion to merge_kids_atoms *)
 let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
+  let typ_env = add_typquant tqs typ_env in
   match typ with
   | Typ_aux (Typ_fn (args_ty, ret_ty, eff),l') ->
      let check_typ (args,used) typ =
@@ -1508,6 +1505,37 @@ let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),ann)) =
              [string "Axiom"; doc_id id; colon; doc_axiom_typschm typ_env tys] ^^ dot) ^/^ hardline
   else empty (* Type signatures appear in definitions *)
 
+(* If a top-level value is an existential type, we define the dependent pair of
+   the value and the proof, then just the value with Let so that it appears in
+   the local context when constraint solving and the ltac can find the proof. *)
+let doc_val pat exp =
+  let (id,typpp) = match pat with
+    | P_aux (P_typ (typ, P_aux (P_id id,_)),_) -> id, space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
+    | P_aux (P_id id, _) -> id, empty
+    | _ -> failwith "Top-level value definition with complex pattern not supported for Coq yet"
+  in
+  let id, opt_unpack =
+    match destruct_exist (env_of exp) (typ_of exp) with
+    | None -> id, None
+    | Some (kids,nc,typ) ->
+       match drop_duplicate_atoms kids typ, nc with
+       | None, NC_aux (NC_true,_) -> id, None
+       | _ ->
+          (* TODO: name collisions *)
+          mk_id (string_of_id id ^ "_spec"),
+          Some (id, string_of_id id ^ "_prop")
+  in
+  let idpp = doc_id id in
+  let basepp =
+    group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^^
+             space ^^ doc_exp_lem empty_ctxt false exp ^^ dot) ^^ hardline
+  in
+  match opt_unpack with
+  | None -> basepp ^^ hardline
+  | Some (orig_id, hyp_id) ->
+     basepp ^^
+       group (separate space [string "Let"; doc_id orig_id; coloneq; string "projT1"; idpp; dot]) ^^ hardline ^^ hardline
+
 let rec doc_def unimplemented def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
@@ -1520,14 +1548,7 @@ let rec doc_def unimplemented def =
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec_lem fundefs ^/^ hardline
-  | DEF_val (LB_aux (LB_val (pat, exp), _)) ->
-     let (id,typpp) = match pat with
-       | P_aux (P_typ (typ, P_aux (P_id id,_)),_) -> id, space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
-       | P_aux (P_id id, _) -> id, empty
-       | _ -> failwith "Top-level value definition with complex pattern not supported for Coq yet"
-     in
-     group (string "Definition" ^^ space ^^ doc_id id ^^ typpp ^^ space ^^ coloneq ^^
-              doc_exp_lem empty_ctxt false exp ^^ dot) ^/^ hardline
+  | DEF_val (LB_aux (LB_val (pat, exp), _)) -> doc_val pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
 
   | DEF_kind _ -> empty
@@ -1607,5 +1628,12 @@ string "Require Import String."; hardline;
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) defs_modules;hardline;
 string "Require Import List. Import ListNotations. Require Import Sumbool.";
         hardline;
+        (* Put the body into a Section so that we can define some values with
+           Let to put them into the local context, where tactics can see them *)
+        string "Section Content.";
+        hardline;
+        hardline;
         separate empty (List.map (doc_def unimplemented) defs);
+        hardline;
+        string "End Content.";
         hardline]);
