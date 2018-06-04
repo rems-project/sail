@@ -50,6 +50,8 @@
 
 open Process_file
 
+module Big_int = Nat_big_num
+
 let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
 let opt_interactive = ref false
@@ -282,6 +284,8 @@ let main() =
          let open Elf_loader in
          let chan = open_out out in
          load_elf ~writer:(write_file chan) elf;
+         output_string chan "elf_entry\n";
+         output_string chan (Big_int.to_string !opt_elf_entry ^ "\n");
          close_out chan;
          exit 0
        end

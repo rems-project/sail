@@ -1564,8 +1564,13 @@ let compile_funcall ctx id args typ =
       setup := ifuncall (CL_id gs) id sargs ret_ctyp :: !setup;
       cleanup := iclear ret_ctyp gs :: !cleanup;
       fun ret -> iconvert ret final_ctyp gs ret_ctyp
+    else if is_stack_ctyp ret_ctyp && not (is_stack_ctyp final_ctyp) then
+      let gs = gensym () in
+      setup := idecl ret_ctyp gs :: !setup;
+      setup := ifuncall (CL_id gs) id sargs ret_ctyp :: !setup;
+      fun ret -> iconvert ret final_ctyp gs ret_ctyp
     else
-      assert false
+      c_error (Printf.sprintf "Funcall call type mismatch between %s and %s" (string_of_ctyp ret_ctyp) (string_of_ctyp final_ctyp))
   in
 
   (List.rev !setup, final_ctyp, call, !cleanup)
