@@ -540,16 +540,8 @@ let rec pow x = function
   | 0 -> 1
   | n -> x * pow x (n - 1)
 
-(* FIXME: Copy split_on_char from util.ml until we upgrade Jenkins to OCaml 4.05 *)
-let rec split_on_char sep str =
-  try
-    let sep_pos = String.index str sep in
-    String.sub str 0 sep_pos :: split_on_char sep (String.sub str (sep_pos + 1) (String.length str - (sep_pos + 1)))
-  with
-  | Not_found -> [str]
-
 let real_of_string str =
-  match split_on_char '.' str with
+  match Util.split_on_char '.' str with
   | [whole; frac] ->
      let whole = Rational.of_int (int_of_string whole) in
      let frac = Rational.div (Rational.of_int (int_of_string frac)) (Rational.of_int (pow 10 (String.length frac)))  in
