@@ -456,7 +456,7 @@ function dump_cp2_state () = {
   print(concat_str("DEBUG CAP PCC", capToString(capRegToCapStruct(PCC))));
   foreach(i from 0 to 31) {
     print(concat_str("DEBUG CAP REG ", concat_str(string_of_int(i), capToString(readCapReg(to_bits(5, i))))))
-  }
+  };
   print(concat_str("DEBUG CAP HWREG 00", capToString(capRegToCapStruct(C00))));
   print(concat_str("DEBUG CAP HWREG 01", capToString(capRegToCapStruct(CTLSU))));
   print(concat_str("DEBUG CAP HWREG 08", capToString(capRegToCapStruct(CTLSP))));
