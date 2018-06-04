@@ -1,5 +1,6 @@
 open HolKernel boolLib bossLib Parse
-open intLib bitLib wordsLib
+open intLib bitLib wordsLib integer_wordLib
+open optionLib combinLib finite_mapLib bitstringLib
 open state_monadTheory state_monad_lemmasTheory
 open sail_valuesAuxiliaryTheory stateAuxiliaryTheory
 open cheriTheory hoareTheory
@@ -213,6 +214,38 @@ val test_raw_add_post_def = Define`
     = {(Value (),s)})`;
 
 (*
+EVAL ``(LENGTH s.regstate.GPR = 32) ⇒
+       (bindS (rGPR 19w) (λs3. assert_expS (s3 = 1w) "fail") s = {(Value (),s)})``
+|> SIMP_RULE (srw_ss())[]
+*)
+
+(* not true - m could produce lots of values that f collapses
+val bindS_eq_sing_Value = Q.store_thm("bindS_eq_sing_Value",
+  `(bindS m f s = {(Value x,s')}) ⇔
+   ∃y s''. (m s = {(Value y,s'')}) ∧ (f y s'' = {(Value x,s')})`,
+  rw[bindS_def] \\ reverse EQ_TAC >- ( rw[] \\ rw[] )
+  \\ rw[]
+  \\ Cases_on `m s` \\ fs[]
+  \\ Cases_on`t` \\ fs[]
+  >- ( BasicProvers.EVERY_CASE_TAC \\ fs[] )
+
+  \\ CONV_TAC(LAND_CONV(REWR_CONV pred_setTheory.EXTENSION))
+  \\ rw[pairTheory.pair_case_eq, pairTheory.FORALL_PROD,
+        state_monadTheory.result_case_eq,PULL_EXISTS]
+  \\ metis_tac[pairTheory.PAIR_EQ]
+*)
+
+(*
+annoying because it depends on LENGTH s.regstate.GPR
+
+EVAL ``rGPR 19w s``
+
+val test_raw_add_post_eq =
+  ``test_raw_add_post s``
+  |> SIMP_CONV (srw_ss()) [test_raw_add_post_def]
+*)
+
+(*
 
 val decoded_insts1 =
   listLib.MAP_CONV EVAL ``MAP decode ^(rhs(concl test_raw_add_insts_def))``
@@ -230,55 +263,256 @@ val decoded_insts = TRANS decoded_insts1 (SYM ls2)
 (*
 This is currently a non-starter, but something like it should be possible and
 better than a manual PrePost proof! Perhaps with the right curated compset?
+update: now it works! see compset below
 
 EVAL ``install_code 0x9000000040000000w test_raw_add_insts s``
 *)
 
+val instance_Sail_values_Bitvector_Machine_word_mword_dict_thms =
+  let
+    val def = sail_valuesTheory.instance_Sail_values_Bitvector_Machine_word_mword_dict_def
+    val tm = lhs(concl def)
+    val rty = type_of tm
+    val tyop = #1 (dest_type rty)
+    val fields = TypeBase.fields_of rty
+    fun mktm (fieldname,_) =
+      Term[QUOTE(tyop^"_"^fieldname^" "), ANTIQUOTE tm]
+    val thms = map (SIMP_CONV (srw_ss()) [def] o mktm) fields
+  in LIST_CONJ thms end
+
+val cap_addr_mask_thm =
+  CONV_RULE(RAND_CONV EVAL)
+    cheriTheory.cap_addr_mask_def
+
+val seqS_returnS = Q.store_thm("seqS_returnS",
+  `seqS (returnS x) f = f`,
+  rw[FUN_EQ_THM] \\ EVAL_TAC \\ rw[IN_DEF]);
+
+val seqS_returnS_s = Q.store_thm("seqS_returnS_s",
+  `seqS (λs. returnS x (f s)) g = (λs. g (f s))`,
+  rw[FUN_EQ_THM] \\ EVAL_TAC \\ rw[IN_DEF]);
+
+val bindS_returnS_s = Q.store_thm("bindS_returnS_s",
+  `bindS (λs. returnS v (f s)) g = (λs. g v (f s))`,
+  rw[FUN_EQ_THM] \\ EVAL_TAC \\ rw[IN_DEF]);
+
+val bindS_returnS_1 = Q.store_thm("bindS_returnS_1",
+  `bindS (returnS v) f = f v`,
+  rw[FUN_EQ_THM] \\ EVAL_TAC \\ rw[IN_DEF]);
+
+val bindS_readS = Q.store_thm("bindS_readS",
+  `bindS (readS f) m = (λs. m (f s) s)`,
+  rw[FUN_EQ_THM] \\ EVAL_TAC \\ rw[IN_DEF]);
+
+(*
+val cstest = wordsLib.words_compset();
+val () = computeLib.extend_compset [
+  computeLib.Convs [
+    (``bindS``, 2, HO_REWR_CONV bindS_returnS_s)
+  ],
+  computeLib.Defs [
+    state_monadTheory.readS_def
+  ]
+] cstest;
+
+computeLib.CBV_CONV cstest ``bindS (λs. returnS x s) g``
+*)
+
+val cs = wordsLib.words_compset();
+val eval = computeLib.CBV_CONV cs;
+val () = computeLib.extend_compset [
+  computeLib.Extenders [
+    optionLib.OPTION_rws,
+    pairLib.add_pair_compset,
+    combinLib.add_combin_compset,
+    listLib.list_rws,
+    pred_setLib.add_pred_set_compset,
+    finite_mapLib.add_finite_map_compset,
+    intReduce.add_int_compset,
+    integer_wordLib.add_integer_word_compset,
+    bitstringLib.add_bitstring_compset
+  ],
+  (* sail stuff *)
+  (*
+  computeLib.Defs (map #2 (ThmSetData.theory_data {settype = "compute", thy = "sail_values"})),
+  *)
+  computeLib.Defs [
+    lemTheory.w2ui_def,
+    lem_listTheory.list_combine_def,
+    lem_machine_wordTheory.size_itself_def,
+    sail_valuesTheory.make_the_value_def,
+    sail_valuesTheory.nat_of_int_def,
+    sail_valuesTheory.bool_of_bitU_def,
+    sail_valuesTheory.bitU_of_bool_def,
+    sail_valuesTheory.of_bits_failwith_def,
+    sail_valuesTheory.size_itself_int_def,
+    sail_valuesTheory.subrange_list_def,
+    sail_valuesTheory.subrange_list_dec_def,
+    sail_valuesTheory.subrange_list_inc_def,
+    sail_valuesTheory.bools_of_int_def,
+    sail_valuesTheory.bools_of_nat_def,
+    sail_valuesTheory.take_list_def,
+    sail_valuesTheory.drop_list_def,
+    sail_valuesTheory.mem_bytes_of_bits_def,
+    sail_valuesTheory.bytes_of_bits_def,
+    sail_valuesTheory.byte_chunks_def,
+    sail_valuesAuxiliaryTheory.bools_of_nat_aux_rw,
+    sail_valuesAuxiliaryTheory.reverse_endianness_list_rw,
+    sail_valuesAuxiliaryTheory.index_list_rw,
+    (* sail_valuesTheory.instance_Sail_values_Bitvector_Machine_word_mword_dict_def, *)
+    instance_Sail_values_Bitvector_Machine_word_mword_dict_thms,
+    sail_valuesTheory.just_list_def,
+    sail_valuesTheory.maybe_failwith_def,
+    sail_valuesTheory.int_of_mword_def,
+    sail_operators_mwordsTheory.and_vec_def,
+    sail_operators_mwordsTheory.add_vec_def,
+    sail_operators_mwordsTheory.subrange_vec_dec_def,
+    sail_operators_mwordsTheory.vec_of_bits_def,
+    sail_operators_mwordsTheory.reverse_endianness_def
+  ],
+  computeLib.Tys [
+    ``:bitU``,
+    ``:'a bits Bitvector_class``,
+    ``:'a sequential_state``,
+    ``:('a,'b) result``
+  ],
+  (* state monad *)
+  computeLib.Defs [
+    stateTheory.iteriS_def,
+    stateAuxiliaryTheory.iterS_aux_rw,
+    state_monadTheory.assert_expS_def,
+    state_monadTheory.write_mem_eaS_def,
+    state_monadTheory.write_mem_valS_def,
+    state_monadTheory.write_tagS_def,
+    state_monadTheory.write_mem_bytesS_def,
+    state_monadTheory.updateS_def,
+    state_monadTheory.maybe_failS_def,
+    (*
+    seqS_returnS,
+    bindS_returnS_1,
+    bindS_readS,
+    *)
+    bindS_def, returnS_def, seqS_def, readS_def
+  ],
+  (*
+  computeLib.Convs [
+    (``bindS``, 2, RAND_CONV eval THENC (RATOR_CONV(RAND_CONV eval)) THENC
+                   HO_REWR_CONV bindS_returnS_s),
+    (``seqS``, 2, RAND_CONV eval THENC (RATOR_CONV(RAND_CONV eval)) THENC HO_REWR_CONV seqS_returnS_s)
+  ],
+  *)
+  (* cheri/mips model *)
+  computeLib.Defs [
+    decode_def,
+    MEMw_wrapper_def,
+    cap_addr_mask_thm,
+    mips_extrasTheory.MEMea_def,
+    mips_extrasTheory.MEMval_def,
+    mips_extrasTheory.get_slice_int0_def,
+    mips_extrasTheory.get_slice_int_bl_def,
+    mips_extrasTheory.write_tag_bool_def,
+    to_bits_def
+  ],
+  (* test_raw_add *)
+  computeLib.Defs [
+    test_raw_add_insts_def,
+    install_code_def
+  ]
+]  cs;
+
+(*
+
+(computeLib.CBV_CONV cs (*THENC
+ SIMP_CONV (srw_ss())
+   [seqS_returnS_s,
+    bindS_returnS_s]*))
+  ``MEMw_wrapper (0x9000000040000000w + 4w * i2w 1) 4 (0x24140002w:word32) s``
+
+computeLib.CBV_CONV cs
+  `` OPTION_MAP v2w
+             (just_list
+                [SOME F; SOME F; SOME F; SOME F; SOME F; SOME F; SOME F;
+                 SOME F; SOME F; SOME F; SOME F; SOME F; SOME F; SOME F;
+                 SOME F; SOME F; SOME F; SOME F; SOME F; SOME F; SOME F;
+                 SOME F; SOME F; SOME F; SOME F; SOME F; SOME F; SOME F;
+                 SOME F; SOME F; SOME F; SOME F; SOME F; SOME T; SOME T;
+                 SOME T; SOME T; SOME T; SOME T; SOME T; SOME F ])``
+*)
+
+val install_code_result =
+  computeLib.CBV_CONV cs
+    ``install_code 0x9000000040000000w test_raw_add_insts s``
+
+(*
+install_code_result
+|> concl |> rhs |> rator |> rand
+|> pairSyntax.dest_pair |> #2
+|> dest_comb
+*)
+
+(*
+maybe better to say something about looking up the code, and ignore the other effects..?
+
+val code_installed_def = Define`
+  code_installed initPC code s s' =
+    let addrs = index_list (w2i initPC) (w2i initPC + 4 * (&LENGTH code)) 1 in
+    s' = s with
+      <| memstate :=
+         s.memstate |++
+           list_combine
+             addrs (FLAT (MAP (REVERSE o THE o byte_chunks o MAP bitU_of_bool o w2v o reverse_endianness) code))
+       ; tagstate := s.tagstate |++ MAP (λaddr. (w2i(cap_addr_mask && i2w addr), B0)) addrs
+       ; write_ea := SOME (Write_plain, w2i initPC + 4 * (&LENGTH code) - 4, 4i)
+       |>`;
+*)
+
+(* this is better, but not quite right yet...
+val code_installed_def = Define`
+  code_installed initPC code s =
+    ∀k i. (k = w2i initPC + 4 * &i) ∧ i < LENGTH code ⇒
+      case byte_chunks (MAP bitU_of_bool (w2v (reverse_endianness (EL i code)))) of
+      | SOME chunks =>
+        (FLOOKUP s.memstate (k+0) = SOME (EL 0 (REVERSE chunks))) ∧
+        (FLOOKUP s.memstate (k+1) = SOME (EL 1 (REVERSE chunks))) ∧
+        (FLOOKUP s.memstate (k+2) = SOME (EL 2 (REVERSE chunks))) ∧
+        (FLOOKUP s.memstate (k+3) = SOME (EL 3 (REVERSE chunks)))
+      | NONE => F`;
+*)
+
 val test_raw_add_thm = Q.store_thm("test_raw_add_thm",
   `PrePost
-      (λ_. T)
+      (λs. 20 ≤ LENGTH s.regstate.GPR)
       (install_and_run test_raw_add_insts 100000)
       (λ_ s.  test_raw_add_post s)`,
-  (*
   rw[install_and_run_def]
   \\ match_mp_tac PrePost_seqS
   \\ simp[]
   \\ qmatch_goalsub_abbrev_tac`install_code initPC`
-
   \\ qexists_tac`λs. code_installed initPC test_raw_add_insts s ∧
                      init_registers_post s`
+  (*
   \\ conj_tac
   >- (
     match_mp_tac PrePost_seqS \\ simp[]
     \\ qexists_tac`code_installed initPC test_raw_add_insts`
     \\ conj_tac
-    >- cheat
+    >- (
+      rw[PrePost_def,Abbr`initPC`]
+      \\ fs[install_code_result]
+      \\ BasicProvers.VAR_EQ_TAC
+      \\ rw[code_installed_def]
+      \\ pop_assum mp_tac
+      \\ CONV_TAC(LAND_CONV(computeLib.CBV_CONV cs))
+      \\ CONV_TAC(LAND_CONV(SIMP_CONV(srw_ss())[wordsTheory.NUMERAL_LESS_THM]))
+      \\ strip_tac \\ BasicProvers.VAR_EQ_TAC
+      \\ CONV_TAC(computeLib.CBV_CONV cs)
+
+    )
     \\ cheat )
-  fetch_and_execute_def
   *)
-cheat);
+  \\ cheat);
 
 (*
-val cs = wordsLib.words_compset();
-val () = computeLib.extend_compset [
-  computeLib.Extenders [
-    intReduce.add_int_compset
-  ],
-  (* sail stuff *)
-  computeLib.Defs [
-    sail_valuesTheory.nat_of_int_def,
-    sail_operators_mwordsTheory.subrange_vec_dec_def
-  ],
-  (* cheri/mips model *)
-  computeLib.Defs [
-    decode_def
-  ],
-  (* addition test *)
-  computeLib.Defs [
-    test_raw_add_insts_def
-  ]
-]  cs;
-
 computeLib.CBV_CONV cs ``decode (EL 1 test_raw_add_insts)``
 
 val th1 = EVAL ``THE (decode (EL 1 test_raw_add_insts))``
