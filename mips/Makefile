@@ -15,6 +15,9 @@ MIPS_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
 	$(SAIL) -ocaml -o mips -memo_z3 $^
 
+mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
+	$(SAIL) -memo_z3 -c $^ 1> $@
+
 mips_no_tlb.lem: $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS)
 	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 mips_no_tlb_types.lem: mips_no_tlb.lem
