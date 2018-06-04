@@ -27,6 +27,16 @@ typedef struct {
 
 typedef char *sail_string;
 
+/* Wrapper around >> operator to avoid UB when shift amount is greater
+   than or equal to 64. */
+uint64_t safe_rshift(const uint64_t x, const uint64_t n) {
+  if (n >= 64) {
+    return 0ul;
+  } else {
+    return x >> n;
+  }
+}
+
 /* This function should be called whenever a pattern match failure
    occurs. Pattern match failures are always fatal. */
 void sail_match_failure(sail_string msg) {
@@ -49,8 +59,10 @@ unit sail_exit(const unit u) {
   exit(EXIT_SUCCESS);
 }
 
+uint64_t g_elf_entry;
+
 void elf_entry(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, 0x9000000040000000);
+  mpz_set_ui(*rop, g_elf_entry);
 }
 
 void elf_tohost(mpz_t *rop, const unit u) {
@@ -414,8 +426,8 @@ void replicate_bits(bv_t *rop, const bv_t op1, const mpz_t op2) {
 }
 
 uint64_t fast_replicate_bits(const uint64_t shift, const uint64_t v, const int64_t times) {
-  uint64_t r = 0;
-  for (int i = 0; i < times; ++i) {
+  uint64_t r = v;
+  for (int i = 1; i < times; ++i) {
     r |= v << shift;
   }
   return r;
@@ -523,12 +535,16 @@ bool eq_bits(const bv_t op1, const bv_t op2)
 // These aren't very efficient, but they work. Question is how best to
 // do these given GMP uses a sign bit representation?
 void sail_uint(mpz_t *rop, const bv_t op) {
-  mpz_set_ui(*rop, 0ul);
-  for (mp_bitcnt_t i = 0; i < op.len; ++i) {
-    if (mpz_tstbit(*op.bits, i)) {
-      mpz_setbit(*rop, i);
-    } else {
-      mpz_clrbit(*rop, i);
+  if (mpz_cmp_ui(*op.bits, 0ul) >= 0) {
+    mpz_set(*rop, *op.bits);
+  } else {
+    mpz_set_ui(*rop, 0ul);
+    for (mp_bitcnt_t i = 0; i < op.len; ++i) {
+      if (mpz_tstbit(*op.bits, i)) {
+	mpz_setbit(*rop, i);
+      } else {
+	mpz_clrbit(*rop, i);
+      }
     }
   }
 }
@@ -1026,7 +1042,12 @@ void load_image(char *file) {
     ssize_t data_len = getline(&data, &len, fp);
     if (data_len == -1) break;
 
-    write_mem((uint64_t) atoll(addr), (uint64_t) atoll(data));
+    if (!strcmp(addr, "elf_entry\n")) {
+      g_elf_entry = (uint64_t) atoll(data);
+      printf("Elf entry point: %" PRIx64 "\n", g_elf_entry);
+    } else {
+      write_mem((uint64_t) atoll(addr), (uint64_t) atoll(data));
+    }
   }
 
   free(addr);
