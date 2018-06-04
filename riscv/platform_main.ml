@@ -75,7 +75,8 @@ let () =
 
   sail_call
     (fun r ->
-      try ( zinit_sys ();
+      try ( zinit_platform (); (* devices *)
+            zinit_sys ();      (* processor *)
             zPC := pc;
             zloop (Elf_loader.elf_tohost ())
           )

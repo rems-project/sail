@@ -78,24 +78,27 @@ bitfield htif_cmd : bits(64) = {
   payload : 47 .. 0
 }
 
+register htif_done : bool
+register htif_exit_code : xlenbits
+
 // no support yet for terminal input
-val htif_load : forall 'n, 'n > 0. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n))
+val htif_load : forall 'n, 0 < 'n <= 64. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n))
 function htif_load(addr, width) = MemValue(EXTZ(0b0))
 
-val htif_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit)
+/* FIXME: The wreg effect is an artifact of using 'register' to implement device state. */
+val htif_store: forall 'n, 0 < 'n <= 8. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wreg}
 function htif_store(addr, width, data) = {
   // since htif is only available at a single address, we'll assume here that physical memory
   // model has correctly dispatched the address.
-  let cbits : xlenbits = /* if 'n == 4 then EXTZ(data) else data */ EXTZ(0b0);
+  let cbits : xlenbits = EXTZ(data);
   let cmd = Mk_htif_cmd(cbits);
   match cmd.device() {
     0x00 => { /* syscall-proxy */
       if cmd.payload()[0] == 0b1
-      then /* TODO: exit command
-            * for e.g. set a flag that's checked by the top-level loop.
-            * but that might appear to be a register write effect triggered by a memory write.
-            */
-           ()
+      then {
+           htif_done = true;
+           htif_exit_code = (zero_extend(cmd.payload(), xlen) >> 0b01) : xlenbits
+      }
       else ()
     },
     0x01 => { /* terminal */
@@ -108,4 +111,9 @@ function htif_store(addr, width, data) = {
     d => print("Unknown htif device:" ^ BitStr(d))
   };
   MemValue(())
+}
+
+function init_platform() -> unit = {
+  htif_done = false;
+  htif_exit_code = EXTZ(0b0);
 }
