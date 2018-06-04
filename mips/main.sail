@@ -16,7 +16,7 @@ function fetch_and_execute () = {
   /* the following skips are required on mips to fake the tag effects otherwise type checker complains  */
   skip_rmemt();
   skip_wmvt();
-  print_bits("PC: ", PC);
+  prerr_bits("PC: ", PC);
   try {
     let pc_pa = TranslatePC(PC);
     /*print_bits("pa: ", pc_pa);*/
