@@ -397,16 +397,14 @@ let rec bits_of_int bit n =
 
 let byte_of_int n = bits_of_int 128 n
 
-module BigIntHash =
-  struct
-    type t = Big_int.num
-    let equal = Big_int.equal
-    let hash = Hashtbl.hash
-  end
+module Mem = struct
+  include Map.Make(struct
+      type t = Big_int.num
+      let compare = Big_int.compare
+    end)
+end
 
-module RAM = Hashtbl.Make(BigIntHash)
-
-let mem_pages : Bytes.t RAM.t = RAM.create 256
+let mem_pages = (ref Mem.empty : (Bytes.t Mem.t) ref);;
 
 let page_shift_bits = 20 (* 1M page *)
 let page_size_bytes = 1 lsl page_shift_bits;; 
@@ -416,10 +414,10 @@ let bottom_addr_of_page p = Big_int.shift_left p page_shift_bits
 let top_addr_of_page p = Big_int.shift_left (Big_int.succ p) page_shift_bits
 let get_mem_page p =
   try
-    RAM.find mem_pages p
+    Mem.find p !mem_pages
   with Not_found -> 
     let new_page = Bytes.create page_size_bytes in
-    RAM.add mem_pages p new_page;
+    mem_pages := Mem.add p new_page !mem_pages;
     new_page
 
 let rec add_mem_bytes addr buf off len =
@@ -469,15 +467,15 @@ let read_ram (addr_size, data_size, hex_ram, addr) =
   Bytes.iter (fun byte -> vector := (byte_of_int (int_of_char byte)) @ !vector) bytes;
   !vector
 
-let tag_ram : bool RAM.t = RAM.create 256
-
+let tag_ram = (ref Mem.empty : (bool Mem.t) ref);;
+  
 let write_tag_bool (addr, tag) =
   let addri = uint addr in
-  RAM.add tag_ram addri tag
+  tag_ram := Mem.add addri tag !tag_ram
 
 let read_tag_bool addr =
   let addri = uint addr in
-  try RAM.find tag_ram addri with Not_found -> false
+  try Mem.find addri !tag_ram with Not_found -> false
 
 let rec reverse_endianness bits =
   if List.length bits <= 8 then bits else
