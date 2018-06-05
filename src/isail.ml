@@ -364,7 +364,7 @@ let handle_input' input =
 let handle_input input =
   try handle_input' input with
   | Type_check.Type_error (l, err) ->
-     print_endline (Type_check.string_of_type_error err)
+     print_endline (Type_error.string_of_type_error err)
   | Reporting_basic.Fatal_error err ->
      Reporting_basic.print_error err
   | exn ->

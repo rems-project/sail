@@ -70,16 +70,14 @@ val opt_no_lexp_bounds_check : bool ref
 (** {2 Type errors} *)
 
 type type_error =
-  | Err_no_casts of unit exp * type_error * type_error list
+  | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list
-  | Err_subtype of typ * typ * n_constraint list
+  | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
 
 exception Type_error of l * type_error;;
-
-val string_of_type_error : type_error -> string
 
 (** {2 Environments} *)
 
@@ -126,7 +124,9 @@ module Env : sig
 
   val get_typ_vars : t -> base_kind_aux KBindings.t
 
-  val add_typ_var : kid -> base_kind_aux -> t -> t
+  val get_typ_var_locs : t -> Ast.l KBindings.t
+
+  val add_typ_var : Ast.l -> kid -> base_kind_aux -> t -> t
 
   val is_record : id -> t -> bool
 
@@ -186,7 +186,7 @@ end
 
 (** Push all the type variables and constraints from a typquant into
    an environment *)
-val add_typquant : typquant -> Env.t -> Env.t
+val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
 
 (** When the typechecker creates new type variables it gives them
    fresh names of the form 'fvXXX#name, where XXX is a number (not
@@ -322,12 +322,12 @@ Some invariants that will hold of a fully checked AST are:
 
  - Toplevel expressions such as typedefs and some subexpressions such
    as letbinds may have None as their tannots if it doesn't make sense
-   for them to have type annotations. *)
-val check : Env.t -> 'a defs -> tannot defs * Env.t
+   for them to have type annotations.
 
-(** Like check but throws type_errors rather than Sail generic errors
-   from Reporting_basic. *)
-val check' : Env.t -> 'a defs -> tannot defs * Env.t
+   check throws type_errors rather than Sail generic errors from
+   Reporting_basic. For a function that uses generic errors, use
+   Type_error.check *)
+val check : Env.t -> 'a defs -> tannot defs * Env.t
 
 (** The initial type checking environment *)
 val initial_env : Env.t

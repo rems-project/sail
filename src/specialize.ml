@@ -429,11 +429,11 @@ let reorder_typedefs (Defs defs) =
 let specialize_ids ids ast =
   let ast = List.fold_left (fun ast id -> specialize_id id ast) ast (IdSet.elements ids) in
   let ast = reorder_typedefs ast in
-  let ast, _ = Type_check.check Type_check.initial_env ast in
+  let ast, _ = Type_error.check Type_check.initial_env ast in
   let ast =
     List.fold_left (fun ast id -> rewrite_polymorphic_calls id ast) ast (IdSet.elements ids)
   in
-  let ast, env = Type_check.check Type_check.initial_env ast in
+  let ast, env = Type_error.check Type_check.initial_env ast in
   let ast = remove_unused_valspecs env ast in
   ast, env
 
@@ -527,7 +527,7 @@ let specialize_variants ((Defs defs) as ast) env =
 
   let ast = Defs (specialize_variants' defs) in
   let ast = List.fold_left (fun ast id -> rewrite_polymorphic_constructors id ast) ast !ctors in
-  Type_check.check Type_check.initial_env ast
+  Type_error.check Type_check.initial_env ast
 
 let rec specialize ast env =
   prerr_endline (Util.log_line __MODULE__ __LINE__ "Performing specialisation pass");

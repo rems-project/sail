@@ -510,5 +510,5 @@ let generate_regstate_defs mwords defs =
   defs
 
 let add_regstate_defs mwords env (Defs defs) =
-  let reg_defs, env = check env (generate_regstate_defs mwords defs) in
+  let reg_defs, env = Type_error.check env (generate_regstate_defs mwords defs) in
   env, append_ast (Defs defs) reg_defs

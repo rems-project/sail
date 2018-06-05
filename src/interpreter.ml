@@ -676,4 +676,4 @@ let rec eval_frame' ast = function
 let eval_frame ast frame =
   try eval_frame' ast frame with
   | Type_check.Type_error (l, err) ->
-     raise (Reporting_basic.err_typ l (Type_check.string_of_type_error err))
+     raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))

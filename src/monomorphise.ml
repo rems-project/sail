@@ -735,7 +735,7 @@ let reduce_cast typ exp l annot =
   let typ' = Env.base_typ_of env typ in
   match exp, destruct_exist env typ' with
   | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nc_env = Env.add_typ_var kid BK_int env in
+     let nc_env = Env.add_typ_var l kid BK_int env in
      let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
@@ -4117,7 +4117,7 @@ let rewrite_toplevel_nexps (Defs defs) =
     | TypQ_aux (TypQ_no_forall,_) -> None
     | TypQ_aux (TypQ_tq qs, tq_l) ->
        let env = env_of_annot ann in
-       let env = add_typquant tqs env in
+       let env = add_typquant tq_l tqs env in
        let nexp_map, typ = rewrite_typ_in_spec env [] typ in
        match nexp_map with
        | [] -> None
@@ -4202,7 +4202,7 @@ type options = {
 let recheck defs =
   let w = !Util.opt_warnings in
   let () = Util.opt_warnings := false in
-  let r = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
+  let r = Type_error.check (Type_check.Env.no_casts Type_check.initial_env) defs in
   let () = Util.opt_warnings := w in
   r
 

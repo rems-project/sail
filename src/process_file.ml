@@ -182,7 +182,7 @@ let load_file_no_check order f = convert_ast order (preprocess_ast (parse_file f
 
 let load_file order env f =
   let ast = convert_ast order (preprocess_ast (parse_file f)) in
-  Type_check.check env ast
+  Type_error.check env ast
 
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
@@ -191,7 +191,7 @@ let opt_dno_cast = ref false
 
 let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
-  let ast, env = Type_check.check env defs in
+  let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
@@ -356,7 +356,7 @@ let rewrite_step defs (name,rewriter) =
 let rewrite rewriters defs =
   try List.fold_left rewrite_step defs rewriters with
   | Type_check.Type_error (l, err) ->
-     raise (Reporting_basic.err_typ l (Type_check.string_of_type_error err))
+     raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !Pretty_print_lem.opt_mwords x)]
