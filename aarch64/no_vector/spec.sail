@@ -2069,7 +2069,7 @@ function Replicate x = {
   return(replicate_bits(x, 'N / 'M))
 }
 
-val Zeros__0 : forall ('N : Int), 'N >= 0. atom('N) -> bits('N)
+val Zeros__0  = {c: "zeros"} : forall ('N : Int), 'N >= 0. atom('N) -> bits('N)
 
 val Zeros__1 : forall ('N : Int), 'N >= 0. unit -> bits('N)
 
@@ -2086,7 +2086,7 @@ function __ResetMemoryState () = {
   __ExclusiveLocal = false
 }
 
-val ZeroExtend__0 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
+val ZeroExtend__0 = {c: "zero_extend"} : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   (bits('M), atom('N)) -> bits('N) effect {escape}
 
 val ZeroExtend__1 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
@@ -2608,7 +2608,7 @@ function ComputePAC (data, modifier, key0, key1) = {
 
 val Align__0 : (int, int) -> int
 
-val Align__1 : forall ('N : Int), 'N >= 0 & 'N >= 0. (bits('N), int) -> bits('N)
+val Align__1 = {c: "arm_align"} : forall ('N : Int), 'N >= 0 & 'N >= 0. (bits('N), int) -> bits('N)
 
 overload Align = {Align__0, Align__1}
 

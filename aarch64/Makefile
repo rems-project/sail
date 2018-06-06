@@ -5,7 +5,7 @@ SAIL_LIB_DIR:=$(SAIL_DIR)/lib
 SAIL:=$(SAIL_DIR)/sail
 
 aarch64.c: no_vector.sail
-	$(SAIL) $^ -c -O -Oz3 -undefined_gen -no_lexp_bounds_check -memo_z3 1> aarch64.c
+	$(SAIL) $^ -c -O -undefined_gen -no_lexp_bounds_check -memo_z3 1> aarch64.c
 
 aarch64: no_vector.sail
 	$(SAIL) $^ -o aarch64 -ocaml -undefined_gen -no_lexp_bounds_check -memo_z3

@@ -105,6 +105,7 @@ clexp :: 'CL_' ::=
   | id                :: :: id
   | id . string       :: :: field
   | * id              :: :: addr
+  | id -> string      :: :: addr_field
   | current_exception :: :: current_exception
   | have_exception    :: :: have_exception
 

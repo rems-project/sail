@@ -275,7 +275,7 @@ let handle_input' input =
             let byte_ast = bytecode_ast ctx (fun cdefs -> List.concat (List.map (flatten_instrs ctx) cdefs)) ast in
             let chan = open_out arg in
             Util.opt_colors := false;
-            Pretty_print_sail.pretty_sail chan (separate_map hardline pp_cdef byte_ast);
+            Pretty_print_sail.pretty_sail chan (separate_map hardline Bytecode_util.pp_cdef byte_ast);
             Util.opt_colors := true;
             close_out chan
          | ":ast" ->
