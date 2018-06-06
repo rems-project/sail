@@ -188,6 +188,10 @@ end
    an environment *)
 val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
 
+val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
+
+val add_existential : Ast.l -> kid list -> n_constraint -> Env.t -> Env.t
+
 (** When the typechecker creates new type variables it gives them
    fresh names of the form 'fvXXX#name, where XXX is a number (not
    necessarily three digits), and name is the original name when the

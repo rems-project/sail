@@ -107,12 +107,15 @@ let options = Arg.align ([
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an elf file so that it can be executed by compiled C code");
   ( "-O",
-    Arg.Tuple [(* Arg.Set C_backend.optimize_primops; *)
+    Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
                Arg.Set Initial_check.opt_fast_undefined;
                Arg.Set Type_check.opt_no_effects;
                Arg.Set C_backend.optimize_struct_updates ],
     " turn on optimizations for C compilation");
+  ( "-Oz3",
+    Arg.Set C_backend.optimize_z3,
+    " use z3 analysis for optimization (slow)");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
     " output a Lem AST representation of the input");
