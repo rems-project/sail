@@ -74,6 +74,12 @@ let rom_size () = bits_of_int   !rom_size_ref
 let dram_base () = bits_of_int64 P.dram_base
 let dram_size () = bits_of_int64 P.dram_size
 
+let htif_tohost () =
+  bits_of_int64 (Big_int.to_int64 (Elf.elf_tohost ()))
+
+let clint_base () = bits_of_int64 P.clint_base
+let clint_size () = bits_of_int64 P.clint_size
+
 (* terminal I/O *)
 let term_write char_bits =
   let big_char = Big_int.bitwise_and (uint char_bits) (Big_int.of_int 255) in

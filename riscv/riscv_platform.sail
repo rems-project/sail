@@ -18,15 +18,42 @@ val plat_rom_size = {ocaml: "Platform.rom_size", lem: "plat_rom_size"} : unit ->
 val plat_clint_base = {ocaml: "Platform.clint_base", lem: "plat_clint_base"} : unit -> xlenbits
 val plat_clint_size = {ocaml: "Platform.clint_size", lem: "plat_clint_size"} : unit -> xlenbits
 
+/* Location of HTIF ports */
+val plat_htif_tohost = {ocaml: "Platform.htif_tohost", lem: "plat_htif_tohost"} : unit -> xlenbits
+// todo: fromhost
+
 val phys_mem_segments : unit -> list((xlenbits, xlenbits))
 function phys_mem_segments() =
   (plat_rom_base (), plat_rom_size ()) ::
   (plat_ram_base (), plat_ram_size ()) ::
   [||]
 
-val plat_insns_per_tick = {ocaml: "Platform.insns_per_tick"} : unit -> int
+/* Physical memory map predicates */
+
+function within_phys_mem(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+  /* todo: iterate over segment list */
+  if (  plat_ram_base() <=_u addr
+      & (addr + sizeof('n)) <=_u (plat_ram_base() + plat_ram_size ()))
+       then true
+  else if (  plat_rom_base() <=_u addr
+           & (addr + sizeof('n)) <=_u (plat_rom_base() + plat_rom_size()))
+       then true
+  else false
+
+function within_clint(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+    plat_clint_base() <=_u addr
+  & (addr + sizeof('n)) <=_u (plat_clint_base() + plat_clint_size())
+
+function within_htif_writable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+    plat_htif_tohost() == addr
+
+/* TODO */
+function within_htif_readable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+    false
 
 /* CLINT (Core Local Interruptor), based on Spike. */
+
+val plat_insns_per_tick = {ocaml: "Platform.insns_per_tick"} : unit -> int
 
 // assumes a single hart, since this typically is a vector of per-hart registers.
 register mtimecmp : xlenbits  // memory-mapped internal clint register.
@@ -47,7 +74,7 @@ let MTIME_BASE    : xlenbits = 0x000000000000bff8
  * bffc mtime hi
  */
 
-val clint_load : forall 'n, 'n > 0. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rreg}
+val clint_load : forall 'n. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rreg}
 function clint_load(addr, width) = {
   /* FIXME: For now, only allow exact aligned access. */
   if addr == MSIP_BASE & ('n == 8 | 'n == 4)
@@ -86,7 +113,7 @@ bitfield htif_cmd : bits(64) = {
 register htif_done : bool
 register htif_exit_code : xlenbits
 
-val htif_load : forall 'n, 0 < 'n <= 64. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n))
+val htif_load : forall 'n, 'n > 0. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n))
 function htif_load(addr, width) = MemValue(EXTZ(0b0))
 
 /* FIXME: The wreg effect is an artifact of using 'register' to implement device state. */
