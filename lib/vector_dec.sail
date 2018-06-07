@@ -122,7 +122,7 @@ val unsigned = {
   lem: "uint",
   interpreter: "uint",
   c: "sail_uint",
-  coq: "uint"
+  coq: "unsigned"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 val signed = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)

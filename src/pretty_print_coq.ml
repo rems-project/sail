@@ -555,40 +555,80 @@ let is_ctor env id = match Env.lookup_id id env with
 | Enum _ -> true
 | _ -> false
 
+let is_auto_decomposed_exist env typ =
+  match destruct_exist env typ with
+  | Some (kids, nc, (Typ_aux (Typ_app (id, _),_) as typ')) when string_of_id id = "atom" -> Some typ'
+  | _ -> None
+
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
-let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot))) = match p with
-    (* Special case translation of the None constructor to remove the unit arg *)
-  | P_app(id, _) when string_of_id id = "None" -> string "None"
-  | P_app(id, ((_ :: _) as pats)) ->
-    let ppp = doc_unop (doc_id_ctor id)
-                       (parens (separate_map comma (doc_pat ctxt true) pats)) in
-    if apat_needed then parens ppp else ppp
-  | P_app(id, []) -> doc_id_ctor id
-  | P_lit lit  -> doc_lit lit
-  | P_wild -> underscore
-  | P_id id -> doc_id id
-  | P_var(p,_) -> doc_pat ctxt true p
-  | P_as(p,id) -> parens (separate space [doc_pat ctxt true p; string "as"; doc_id id])
-  | P_typ(typ,p) ->
-    let doc_p = doc_pat ctxt true p in
-    doc_p
-    (* Type annotations aren't allowed everywhere in patterns in Coq *)
-    (*parens (doc_op colon doc_p (doc_typ typ))*)
-  | P_vector pats ->
-     let ppp = brackets (separate_map semi (doc_pat ctxt true) pats) in
-     if apat_needed then parens ppp else ppp
-  | P_vector_concat pats ->
-     raise (Reporting_basic.err_unreachable l
-       "vector concatenation patterns should have been removed before pretty-printing")
-  | P_tup pats  ->
-     (match pats with
-      | [p] -> doc_pat ctxt apat_needed p
-      | _ -> parens (separate_map comma_sp (doc_pat ctxt false) pats))
-  | P_list pats -> brackets (separate_map semi (doc_pat ctxt false) pats)
-  | P_cons (p,p') -> doc_op (string "::") (doc_pat ctxt true p) (doc_pat ctxt true p')
-  | P_record (_,_) -> empty (* TODO *)
+let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot)) as pat, typ) =
+  let env = env_of_annot (l,annot) in
+  let typ = Env.expand_synonyms env typ in
+  match is_auto_decomposed_exist env typ with
+  | Some typ' ->
+     let pat_pp = doc_pat ctxt true (pat, typ') in
+     let pat_pp = separate space [string "existT"; underscore; pat_pp; underscore] in
+     if apat_needed then parens pat_pp else pat_pp
+  | None ->
+     match p with
+     (* Special case translation of the None constructor to remove the unit arg *)
+     | P_app(id, _) when string_of_id id = "None" -> string "None"
+     | P_app(id, ((_ :: _) as pats)) ->
+        let ppp = doc_unop (doc_id_ctor id)
+          (* TODO: we shouldn't use pat_typ_of here,
+             we should either get the type checker to put the full type in the
+             annotation (including all existentials), or provide some other way to
+             retrieve the full types for the args from typ. *)
+          (parens (separate_map comma (fun p -> doc_pat ctxt true (p, pat_typ_of p)) pats)) in
+        if apat_needed then parens ppp else ppp
+     | P_app(id, []) -> doc_id_ctor id
+     | P_lit lit  -> doc_lit lit
+     | P_wild -> underscore
+     | P_id id -> doc_id id
+     | P_var(p,_) -> doc_pat ctxt true (p, typ)
+     | P_as(p,id) -> parens (separate space [doc_pat ctxt true (p, typ); string "as"; doc_id id])
+     | P_typ(ptyp,p) ->
+        let doc_p = doc_pat ctxt true (p, ptyp) in
+        doc_p
+     (* Type annotations aren't allowed everywhere in patterns in Coq *)
+     (*parens (doc_op colon doc_p (doc_typ typ))*)
+     | P_vector pats ->
+        let el_typ =
+          match destruct_vector env typ with
+          | Some (_,_,t) -> t
+          | None -> failwith "vector pattern doesn't have vector type"
+        in
+        let ppp = brackets (separate_map semi (fun p -> doc_pat ctxt true (p,el_typ)) pats) in
+        if apat_needed then parens ppp else ppp
+     | P_vector_concat pats ->
+        raise (Reporting_basic.err_unreachable l
+                 "vector concatenation patterns should have been removed before pretty-printing")
+     | P_tup pats  ->
+        let typs = match typ with
+          | Typ_aux (Typ_tup typs, _) -> typs
+          | _ -> failwith "tuple pattern doesn't have tuple type"
+        in
+        (match pats, typs with
+        | [p], [typ'] -> doc_pat ctxt apat_needed (p, typ')
+        | [_], _ -> failwith "tuple pattern length does not match tuple type length"
+        | _ -> parens (separate_map comma_sp (doc_pat ctxt false) (List.combine pats typs)))
+     | P_list pats ->
+        let el_typ = match typ with
+          | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ el_typ,_)]),_)
+              when Id.compare f (mk_id "list") = 0 -> el_typ
+          | _ -> failwith "list pattern not a list"
+        in
+        brackets (separate_map semi (fun p -> doc_pat ctxt false (p, el_typ)) pats)
+     | P_cons (p,p') ->
+        let el_typ = match typ with
+          | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ el_typ,_)]),_)
+              when Id.compare f (mk_id "list") = 0 -> el_typ
+          | _ -> failwith "list pattern not a list"
+        in
+        doc_op (string "::") (doc_pat ctxt true (p, el_typ)) (doc_pat ctxt true (p', typ))
+     | P_record (_,_) -> empty (* TODO *)
 
 let contains_early_return exp =
   let e_app (f, args) =
@@ -941,7 +981,7 @@ let doc_exp_lem, doc_let_lem =
        let only_integers e = expY e in
        let epp =
          group ((separate space [string "match"; only_integers e; string "with"]) ^/^
-                  (separate_map (break 1) (doc_case ctxt) pexps) ^/^
+                  (separate_map (break 1) (doc_case ctxt (typ_of e)) pexps) ^/^
                     (string "end")) in
        if aexp_needed then parens (align epp) else align epp
     | E_try (e, pexps) ->
@@ -949,7 +989,7 @@ let doc_exp_lem, doc_let_lem =
          let try_catch = if ctxt.early_ret then "try_catchR" else "try_catch" in
          let epp =
            group ((separate space [string try_catch; expY e; string "(function "]) ^/^
-                    (separate_map (break 1) (doc_case ctxt) pexps) ^/^
+                    (separate_map (break 1) (doc_case ctxt exc_typ) pexps) ^/^
                       (string "end)")) in
          if aexp_needed then parens (align epp) else align epp
        else
@@ -979,10 +1019,10 @@ let doc_exp_lem, doc_let_lem =
                  tuple patterns to Isabelle *)
               separate space
                 [string ">>= fun varstup => let";
-                 doc_pat ctxt true pat;
+                 doc_pat ctxt true (pat, typ_of e1);
                  string "= varstup in"]
            | _ ->
-              separate space [string ">>= fun"; doc_pat ctxt true pat; bigarrow]
+              separate space [string ">>= fun"; doc_pat ctxt true (pat, typ_of e1); bigarrow]
          in
          infix 0 1 middle (expV b e1) (expN e2)
        in
@@ -1037,7 +1077,7 @@ let doc_exp_lem, doc_let_lem =
               (top_exp ctxt false e)
     | LB_val(pat,e) ->
        prefix 2 1
-              (separate space [string "let"; squote ^^ doc_pat ctxt true pat; coloneq])
+              (separate space [string "let"; squote ^^ doc_pat ctxt true (pat, typ_of e); coloneq])
               (top_exp ctxt false e)
 
   and doc_fexp ctxt recordtyp (FE_aux(FE_Fexp(id,e),_)) =
@@ -1047,9 +1087,9 @@ let doc_exp_lem, doc_let_lem =
       else doc_id id in
     group (doc_op coloneq fname (top_exp ctxt true e))
 
-  and doc_case ctxt = function
+  and doc_case ctxt typ = function
   | Pat_aux(Pat_exp(pat,e),_) ->
-    group (prefix 3 1 (separate space [pipe; doc_pat ctxt false pat;bigarrow])
+    group (prefix 3 1 (separate space [pipe; doc_pat ctxt false (pat,typ);bigarrow])
                   (group (top_exp ctxt false e)))
   | Pat_aux(Pat_when(_,_,_),(l,_)) ->
     raise (Reporting_basic.err_unreachable l
@@ -1323,12 +1363,14 @@ let merge_kids_atoms pats =
   let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
   gone,map
 
-let doc_binder ctxt (P_aux (p,_) as pat, typ) =
+let doc_binder ctxt (P_aux (p,ann) as pat, typ) =
+  let env = env_of_annot ann in
+  let exp_typ = Env.expand_synonyms env typ in
   match p with
   | P_id id
-  | P_typ (_,P_aux (P_id id,_)) ->
+  | P_typ (_,P_aux (P_id id,_)) when Util.is_none (is_auto_decomposed_exist env exp_typ) ->
      parens (separate space [doc_id id; colon; doc_typ ctxt typ])
-  | _ -> squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt typ])
+  | _ -> squote ^^ parens (separate space [doc_pat ctxt true (pat, exp_typ); colon; doc_typ ctxt typ])
 
 let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let (tq,typ) = Env.get_val_spec_orig id (env_of_annot annot) in

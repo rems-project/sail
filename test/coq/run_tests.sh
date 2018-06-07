@@ -3,7 +3,8 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAILDIR="$DIR/../.."
-TESTSDIR="$DIR/../typecheck/pass"
+TYPECHECKTESTSDIR="$DIR/../typecheck/pass"
+EXTRATESTSDIR="$DIR/pass"
 BBVDIR="$DIR/../../../bbv"
 
 RED='\033[0;31m'
@@ -49,20 +50,26 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 
 cd $DIR
 
-for i in `ls $TESTSDIR/ | grep sail | grep -vf "$DIR/skip"`;
-do
-    if $SAILDIR/sail -coq -dcoq_undef_axioms -o out $TESTSDIR/$i &>/dev/null;
-    then
-	if coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out_types.v out.v &>/dev/null;
-	then
-	    green "tested $i expecting pass" "pass"
-	else
-	    yellow "tested $i expecting pass" "failed to typecheck generated Coq"
-	fi
-    else
-	red "tested $i expecting pass" "failed to generate Coq"
-    fi
-done
+function check_tests_dir {
+    TESTSDIR="$1"
+    for i in `ls $TESTSDIR/ | grep sail | grep -vf "$DIR/skip"`;
+    do
+        if $SAILDIR/sail -coq -dcoq_undef_axioms -o out $TESTSDIR/$i &>/dev/null;
+        then
+    	if coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out_types.v out.v &>/dev/null;
+    	then
+    	    green "tested $i expecting pass" "pass"
+    	else
+    	    yellow "tested $i expecting pass" "failed to typecheck generated Coq"
+    	fi
+        else
+    	red "tested $i expecting pass" "failed to generate Coq"
+        fi
+    done
+}
+
+check_tests_dir "$TYPECHECKTESTSDIR"
+check_tests_dir "$EXTRATESTSDIR"
 
 finish_suite "Coq tests"
 
