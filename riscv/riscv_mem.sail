@@ -11,21 +11,12 @@ function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> foral
     (_, Some(v))          => MemValue(v)
   }
 
-function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) = {
-  /* Consult physical memory map to dispatch MMIO and (TODO) handle PMP/PMA. */
-  if within_phys_mem(addr, width)
+function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+  if   within_phys_mem(addr, width)
   then phys_mem_read(t, addr, width)
-  /* treat MMIO regions as not executable for now.
-     TODO: this should actually come from PMP/PMA. */
-  else if t == Data then {
-    if within_clint(addr, width)
-    then clint_load(addr, width)
-    else if within_htif_readable(addr, width) & (1 <= 'n)
-    then htif_load(addr, width)
-    else MemException(E_Load_Access_Fault)
-  }
+  else if t == Data /* treat MMIO regions as not executable for now. TODO: this should actually come from PMP/PMA. */
+  then mmio_load(addr, width)
   else MemException(E_Load_Access_Fault)
-}
 
 /* FIXME: We assume atomic accesses are only done to memory-backed regions.  MMIO is not modeled. */
 
@@ -93,19 +84,14 @@ function mem_write_ea (addr, width, aq, rl, con) = {
 
 // only used for actual memory regions, to avoid MMIO effects
 function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(unit) =
-  if (__RISCV_write(addr, width, data))
+  if   __RISCV_write(addr, width, data)
   then MemValue(())
   else MemException(E_SAMO_Access_Fault)
 
 function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(unit) =
-  /* Consult physical memory map to dispatch MMIO and (TODO) handle PMP/PMA. */
-  if within_phys_mem(addr, width)
+  if   within_phys_mem(addr, width)
   then phys_mem_write(addr, width, data)
-  else if within_clint(addr, width)
-  then clint_store(addr, width, data)
-  else if within_htif_writable(addr, width) & 'n <= 8
-  then htif_store(addr, width, data)
-  else MemException(E_SAMO_Access_Fault)
+  else mmio_write(addr, width, data)
 
 /* FIXME: We assume atomic accesses are only done to memory-backed regions.  MMIO is not modeled. */
 

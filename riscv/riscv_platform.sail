@@ -144,6 +144,24 @@ function htif_store(addr, width, data) = {
   MemValue(())
 }
 
+/* Top-level MMIO dispatch */
+
+function mmio_load(addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+  if   within_clint(addr, width)
+  then clint_load(addr, width)
+  else if within_htif_readable(addr, width) & (1 <= 'n)
+  then htif_load(addr, width)
+  else MemException(E_Load_Access_Fault)
+
+function mmio_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(unit) =
+  if   within_clint(addr, width)
+  then clint_store(addr, width, data)
+  else if within_htif_writable(addr, width) & 'n <= 8
+  then htif_store(addr, width, data)
+  else MemException(E_SAMO_Access_Fault)
+
+/* Platform initialization */
+
 function init_platform() -> unit = {
   htif_done = false;
   htif_exit_code = EXTZ(0b0);
