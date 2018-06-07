@@ -143,6 +143,17 @@ let make_dtb dts = (* Call the dtc compiler, assumed to be at /usr/bin/dtc *)
     (Printf.printf "%s\n" ("Error executing dtc: " ^ fn ^ ": " ^ Unix.error_message e);
      exit 1)
 
+(* Terminal I/O *)
+
+let term_write char =
+  ignore (Unix.write_substring Unix.stdout (String.make 1 char) 0 1)
+
+let rec term_read () =
+  let buf = Bytes.make 1 '\000' in
+  let nbytes = Unix.read Unix.stdin buf 0 1 in
+  (* todo: handle nbytes == 0 *)
+  buf.[0]
+
 (*
 let save_string_to_file s fname =
   let out = open_out fname in

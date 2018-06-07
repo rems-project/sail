@@ -74,6 +74,15 @@ let rom_size () = bits_of_int   !rom_size_ref
 let dram_base () = bits_of_int64 P.dram_base
 let dram_size () = bits_of_int64 P.dram_size
 
+(* terminal I/O *)
+let term_write char_bits =
+  let big_char = Big_int.bitwise_and (uint char_bits) (Big_int.of_int 255) in
+  P.term_write (char_of_int (Big_int.to_int big_char))
+
+let term_read () =
+  let c = P.term_read () in
+  bits_of_int (int_of_char c)
+
 (* returns starting value for PC, i.e. start of reset vector *)
 let init elf_file =
   Elf.load_elf elf_file;

@@ -68,6 +68,14 @@ val plat_clint_size : forall 'a. Size 'a => unit -> bitvector 'a
 let plat_clint_size () = wordFromInteger 0
 declare ocaml target_rep function plat_clint_size = `Platform.clint_size`
 
+val plat_term_write : forall 'a. Size 'a => bitvector 'a -> unit
+let plat_term_write _ = ()
+declare ocaml target_rep function plat_term_write = `Platform.term_write`
+
+val plat_term_read : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_term_read () = wordFromInteger 0
+declare ocaml target_rep function plat_term_read = `Platform.term_read`
+
 val shift_bits_right : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
 let shift_bits_right v m = shiftr v (uint m)
 val shift_bits_left : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a

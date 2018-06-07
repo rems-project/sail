@@ -70,7 +70,12 @@ function clint_store(addr, width, data) = {
   } else MemException(E_SAMO_Access_Fault)
 }
 
-/* Spike's HTIF device interface. */
+/* Basic terminal character I/O. */
+
+val plat_term_write = {ocaml: "Platform.term_write", lem: "plat_term_write"} : bits(8) -> unit
+val plat_term_read  = {ocaml: "Platform.term_read",  lem: "plat_term_read"}  : unit -> bits(8)
+
+/* Spike's HTIF device interface, which multiplexes the above MMIO devices. */
 
 bitfield htif_cmd : bits(64) = {
   device  : 63 .. 56,
@@ -81,7 +86,6 @@ bitfield htif_cmd : bits(64) = {
 register htif_done : bool
 register htif_exit_code : xlenbits
 
-// no support yet for terminal input
 val htif_load : forall 'n, 0 < 'n <= 64. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n))
 function htif_load(addr, width) = MemValue(EXTZ(0b0))
 
@@ -103,8 +107,8 @@ function htif_store(addr, width, data) = {
     },
     0x01 => { /* terminal */
       match cmd.cmd() {
-        0x00 => /* input */ (),
-        0x01 => /* TODO: output data */ (),
+        0x00 => /* TODO: terminal input handling */ (),
+        0x01 => plat_term_write(cmd.payload()[7..0]),
         c    => print("Unknown term cmd: " ^ BitStr(c))
       }
     },
