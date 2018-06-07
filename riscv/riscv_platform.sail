@@ -53,9 +53,9 @@ function clint_load(addr, width) = {
   if addr == MSIP_BASE & ('n == 8 | 'n == 4)
   then MemValue(zero_extend(mip.MSI(), sizeof(8 * 'n)))
   else if addr == MTIMECMP_BASE & ('n == 8)
-  then MemValue(mtimecmp)
+  then MemValue(zero_extend(mtimecmp, 64)) /* FIXME: Redundant zero_extend currently required by Lem backend */
   else if addr == MTIME_BASE & ('n == 8)
-  then MemValue(mtime)
+  then MemValue(zero_extend(mtime, 64))
   else MemException(E_Load_Access_Fault)
 }
 
@@ -65,7 +65,7 @@ function clint_store(addr, width, data) = {
     mip->MSI() = data[0] == 0b1;
     MemValue(())
   } else if addr == MTIMECMP_BASE & 'n == 8 then {
-    mtimecmp = data;
+    mtimecmp = zero_extend(data, 64); /* FIXME: Redundant zero_extend currently required by Lem backend */
     MemValue(())
   } else MemException(E_SAMO_Access_Fault)
 }

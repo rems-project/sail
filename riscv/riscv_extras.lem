@@ -76,5 +76,5 @@ let shift_bits_left v m = shiftl v (uint m)
 val print_string : string -> string -> unit
 let print_string msg s = prerr_endline (msg ^ s)
 
-val print_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
-let print_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))
+val prerr_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
+let prerr_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))
