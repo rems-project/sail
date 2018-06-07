@@ -25,15 +25,15 @@ val vector_length = {
 
 overload length = {bitvector_length, vector_length}
 
-val "zeros" : forall 'n. atom('n) -> bits('n)
+val sail_zeros = "zeros" : forall 'n. atom('n) -> bits('n)
 
 val "print_bits" : forall 'n. (string, bits('n)) -> unit
 
 val "prerr_bits" : forall 'n. (string, bits('n)) -> unit
 
-val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val sail_sign_extend = "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
-val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val sail_zero_extend = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
 val truncate = {
   ocaml: "vector_truncate",
@@ -42,11 +42,11 @@ val truncate = {
   c: "truncate"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 
-val mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)
+val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)
 
-function mask(len, v) = if len <= length(v) then truncate(v, len) else zero_extend(v, len)
+function sail_mask(len, v) = if len <= length(v) then truncate(v, len) else sail_zero_extend(v, len)
 
-overload operator ^ = {mask}
+overload operator ^ = {sail_mask}
 
 val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
