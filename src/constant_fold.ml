@@ -155,6 +155,6 @@ let rewrite_constant_function_calls' ast =
 
 let rewrite_constant_function_calls ast =
   if !optimize_constant_fold then
-    rewrite_constant_function calls' ast
+    rewrite_constant_function_calls' ast
   else
     ast
