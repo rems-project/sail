@@ -7,6 +7,7 @@
 #include<stdbool.h>
 #include<string.h>
 #include<gmp.h>
+#include<time.h>
 
 typedef int unit;
 
@@ -26,6 +27,10 @@ typedef struct {
 } bv_t;
 
 typedef char *sail_string;
+
+/* Temporary mpzs for use in functions below. To avoid conflicts, only
+ * use in functions that do not call other functions in this file. */
+static mpz_t sail_lib_tmp1, sail_lib_tmp2;
 
 /* Wrapper around >> operator to avoid UB when shift amount is greater
    than or equal to 64. */
@@ -188,6 +193,7 @@ unit print_int64(const sail_string str, const int64_t op) {
 unit sail_putchar(const mpz_t op) {
   char c = (char) mpz_get_ui(op);
   putchar(c);
+  return UNIT;
 }
 
 // ***** Arbitrary precision integers *****
@@ -331,20 +337,33 @@ void pow2(mpz_t *rop, mpz_t exp) {
 }
 
 void get_time_ns(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, 0ul);
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
+  mpz_set_si(*rop, t.tv_sec);
+  mpz_mul_ui(*rop, *rop, 1000000000);
+  mpz_add_ui(*rop, *rop, t.tv_nsec);
 }
 
 // ***** Sail bitvectors *****
 
-void string_of_bits(sail_string *str, const bv_t op) {
+void string_of_int(sail_string *str, mpz_t i) {
+  gmp_asprintf(str, "%Zd", i);
 }
 
-unit print_bits(const sail_string str, const bv_t op)
+void string_of_bits(sail_string *str, const bv_t op) {
+  if ((op.len % 4) == 0) {
+    gmp_asprintf(str, "0x%*0Zx", op.len / 4, *op.bits);
+  } else {
+    gmp_asprintf(str, "0b%*0Zb", op.len, *op.bits);
+  }
+}
+
+unit fprint_bits(const sail_string str, const bv_t op, FILE *stream)
 {
-  fputs(str, stdout);
+  fputs(str, stream);
 
   if (op.len % 4 == 0) {
-    fputs("0x", stdout);
+    fputs("0x", stream);
     mpz_t buf;
     mpz_init_set(buf, *op.bits);
 
@@ -357,19 +376,30 @@ unit print_bits(const sail_string str, const bv_t op)
     }
 
     for (int i = op.len / 4; i > 0; --i) {
-      fputc(hex[i - 1], stdout);
+      fputc(hex[i - 1], stream);
     }
 
     free(hex);
     mpz_clear(buf);
   } else {
-    fputs("0b", stdout);
+    fputs("0b", stream);
     for (int i = op.len; i > 0; --i) {
-      fputc(mpz_tstbit(*op.bits, i - 1) + 0x30, stdout);
+      fputc(mpz_tstbit(*op.bits, i - 1) + 0x30, stream);
     }
   }
 
-  fputs("\n", stdout);
+  fputs("\n", stream);
+  return UNIT;
+}
+
+unit print_bits(const sail_string str, const bv_t op)
+{
+  return fprint_bits(str, op, stdout);
+}
+
+unit prerr_bits(const sail_string str, const bv_t op)
+{
+  return fprint_bits(str, op, stderr);
 }
 
 void length_bv_t(mpz_t *rop, const bv_t op) {
@@ -385,6 +415,14 @@ void init_bv_t(bv_t *rop) {
 void reinit_bv_t(bv_t *rop) {
   rop->len = 0;
   mpz_set_ui(*rop->bits, 0);
+}
+
+void normalise_bv_t(bv_t *rop) {
+  /* TODO optimisation: keep a set of masks of various sizes handy */
+  mpz_set_ui(sail_lib_tmp1, 1);
+  mpz_mul_2exp(sail_lib_tmp1, sail_lib_tmp1, rop->len);
+  mpz_sub_ui(sail_lib_tmp1, sail_lib_tmp1, 1);
+  mpz_and(*rop->bits, *rop->bits, sail_lib_tmp1);
 }
 
 void init_bv_t_of_uint64_t(bv_t *rop, const uint64_t op, const uint64_t len, const bool direction) {
@@ -460,7 +498,6 @@ void zero_extend(bv_t *rop, const bv_t op, const mpz_t len) {
   mpz_set(*rop->bits, *op.bits);
 }
 
-/* FIXME */
 void sign_extend(bv_t *rop, const bv_t op, const mpz_t len) {
   rop->len = mpz_get_ui(len);
   if(mpz_tstbit(*op.bits, op.len - 1)) {
@@ -522,8 +559,6 @@ void xor_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   mpz_xor(*rop->bits, *op1.bits, *op2.bits);
 }
 
-mpz_t eq_bits_test;
-
 bool eq_bits(const bv_t op1, const bv_t op2)
 {
   for (mp_bitcnt_t i = 0; i < op1.len; i++) {
@@ -532,43 +567,25 @@ bool eq_bits(const bv_t op1, const bv_t op2)
   return true;
 }
 
-// These aren't very efficient, but they work. Question is how best to
-// do these given GMP uses a sign bit representation?
 void sail_uint(mpz_t *rop, const bv_t op) {
-  if (mpz_cmp_ui(*op.bits, 0ul) >= 0) {
-    mpz_set(*rop, *op.bits);
-  } else {
-    mpz_set_ui(*rop, 0ul);
-    for (mp_bitcnt_t i = 0; i < op.len; ++i) {
-      if (mpz_tstbit(*op.bits, i)) {
-	mpz_setbit(*rop, i);
-      } else {
-	mpz_clrbit(*rop, i);
-      }
-    }
-  }
+  /* Normal form of bv_t is always positive so just return the bits. */
+  mpz_set(*rop, *op.bits);
 }
 
 void sint(mpz_t *rop, const bv_t op)
 {
-  mpz_set_ui(*rop, 0ul);
-  if (mpz_tstbit(*op.bits, op.len - 1)) {
-    for (mp_bitcnt_t i = 0; i < op.len; ++i) {
-      if (mpz_tstbit(*op.bits, i)) {
-	mpz_clrbit(*rop, i);
-      } else {
-	mpz_setbit(*rop, i);
-      }
-    };
-    mpz_add_ui(*rop, *rop, 1ul);
-    mpz_neg(*rop, *rop);
+  if (op.len == 0) {
+    mpz_set_ui(*rop, 0);
   } else {
-    for (mp_bitcnt_t i = 0; i < op.len; ++i) {
-      if (mpz_tstbit(*op.bits, i)) {
-	mpz_setbit(*rop, i);
-      } else {
-	mpz_clrbit(*rop, i);
-      }
+    mp_bitcnt_t sign_bit = op.len - 1;
+    mpz_set(*rop, *op.bits);
+    if (mpz_tstbit(*op.bits, sign_bit) != 0) {
+      /* If sign bit is unset then we are done,
+         otherwise clear sign_bit and subtract 2**sign_bit */
+      mpz_set_ui(sail_lib_tmp1, 1);
+      mpz_mul_2exp(sail_lib_tmp1, sail_lib_tmp1, sign_bit); /* 2**sign_bit */
+      mpz_combit(*rop, sign_bit); /* clear sign_bit */
+      mpz_sub(*rop, *rop, sail_lib_tmp1);
     }
   }
 }
@@ -576,16 +593,19 @@ void sint(mpz_t *rop, const bv_t op)
 void add_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len;
   mpz_add(*rop->bits, *op1.bits, *op2.bits);
+  normalise_bv_t(rop);
 }
 
 void sub_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len;
   mpz_sub(*rop->bits, *op1.bits, *op2.bits);
+  normalise_bv_t(rop);
 }
 
 void add_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
   rop->len = op1.len;
   mpz_add(*rop->bits, *op1.bits, op2);
+  normalise_bv_t(rop);
 }
 
 void sub_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
@@ -594,31 +614,47 @@ void sub_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
 }
 
 void mults_vec(bv_t *rop, const bv_t op1, const bv_t op2) {
+  mpz_t op1_int, op2_int;
+  mpz_init(op1_int);
+  mpz_init(op2_int);
+  sint(&op1_int, op1);
+  sint(&op2_int, op2);
   rop->len = op1.len * 2;
-  mpz_mul(*rop->bits, *op1.bits, *op2.bits);
+  mpz_mul(*rop->bits, op1_int, op2_int);
+  normalise_bv_t(rop);
+  mpz_clear(op1_int);
+  mpz_clear(op2_int);
 }
 
 void mult_vec(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len * 2;
   mpz_mul(*rop->bits, *op1.bits, *op2.bits);
+  normalise_bv_t(rop); /* necessary? */
 }
 
-/* FIXME */
 void shift_bits_left(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len;
   mpz_mul_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
+  normalise_bv_t(rop);
 }
 
 void shift_bits_right(bv_t *rop, const bv_t op1, const bv_t op2) {
   rop->len = op1.len;
-  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
+  mpz_tdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
 }
 
+/* FIXME */
 void shift_bits_right_arith(bv_t *rop, const bv_t op1, const bv_t op2) {
-  fprintf(stderr, "Unimplemented sbra");
-  exit(2);
   rop->len = op1.len;
-  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, -mpz_get_ui(*op2.bits));
+  mp_bitcnt_t shift_amt = mpz_get_ui(*op2.bits);
+  mp_bitcnt_t sign_bit = op1.len - 1;
+  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, shift_amt);
+  if(mpz_tstbit(*op1.bits, sign_bit) != 0) {
+    /* */
+    for(; shift_amt > 0; shift_amt--) {
+      mpz_setbit(*rop->bits, sign_bit - shift_amt + 1);
+    }
+  }
 }
 
 void reverse_endianness(bv_t *rop, const bv_t op) {
@@ -641,8 +677,16 @@ void reverse_endianness(bv_t *rop, const bv_t op) {
   } else if (rop->len == 8ul) {
     mpz_set(*rop->bits, *op.bits);
   } else {
-    fprintf(stderr, "Cannot reverse endianess of vector\n");
-    exit(2);
+    /* For other numbers of bytes we reverse the bytes.
+     * XXX could use mpz_import/export for this. */
+    mpz_set_ui(sail_lib_tmp1, 0xff); // byte mask
+    mpz_set_ui(*rop->bits, 0); // reset accumulator for result
+    for(mp_bitcnt_t byte = 0; byte < op.len; byte+=8) {
+      mpz_tdiv_q_2exp(sail_lib_tmp2, *op.bits, byte); // shift byte to bottom
+      mpz_and(sail_lib_tmp2, sail_lib_tmp2, sail_lib_tmp1); // and with mask
+      mpz_mul_2exp(*rop->bits, *rop->bits, 8); // shift result left 8
+      mpz_ior(*rop->bits, *rop->bits, sail_lib_tmp2); // or byte into result
+    }
   }
 }
 
@@ -1043,7 +1087,10 @@ void load_image(char *file) {
     if (data_len == -1) break;
 
     if (!strcmp(addr, "elf_entry\n")) {
-      g_elf_entry = (uint64_t) atoll(data);
+      if (sscanf(data, "%" PRIu64 "\n", &g_elf_entry) != 1) {
+        fprintf(stderr, "Failed to parse elf_entry\n");
+        exit(EXIT_FAILURE);
+      };
       printf("Elf entry point: %" PRIx64 "\n", g_elf_entry);
     } else {
       write_mem((uint64_t) atoll(addr), (uint64_t) atoll(data));
@@ -1066,10 +1113,12 @@ void load_instr(uint64_t addr, uint32_t instr) {
 
 void setup_library(void) {
   mpf_set_default_prec(FLOAT_PRECISION);
-  mpz_init(eq_bits_test);
+  mpz_init(sail_lib_tmp1);
+  mpz_init(sail_lib_tmp2);
 }
 
 void cleanup_library(void) {
-  mpz_clear(eq_bits_test);
+  mpz_clear(sail_lib_tmp1);
+  mpz_clear(sail_lib_tmp2);
   kill_mem();
 }
