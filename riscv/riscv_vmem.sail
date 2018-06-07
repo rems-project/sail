@@ -131,7 +131,8 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
   let pt_ofs : paddr39 = shiftl(EXTZ(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[(SV39_LEVEL_BITS - 1) .. 0]),
                                 PTE39_LOG_SIZE);
   let pte_addr = ptb + pt_ofs;
-  match (checked_mem_read(Data, EXTZ(pte_addr), 8)) {
+  /* FIXME: we assume here that walks only access memory-backed addresses. */
+  match (phys_mem_read(Data, EXTZ(pte_addr), 8)) {
     MemException(_) => PTW_Failure(PTW_Access),
     MemValue(v) => {
       let pte = Mk_SV39_PTE(v);
