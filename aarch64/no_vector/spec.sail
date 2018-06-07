@@ -2608,7 +2608,7 @@ function ComputePAC (data, modifier, key0, key1) = {
 
 val Align__0 : (int, int) -> int
 
-val Align__1 = {c: "arm_align"} : forall ('N : Int), 'N >= 0 & 'N >= 0. (bits('N), int) -> bits('N)
+val Align__1 : forall ('N : Int), 'N >= 0 & 'N >= 0. (bits('N), int) -> bits('N)
 
 overload Align = {Align__0, Align__1}
 

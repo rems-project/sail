@@ -363,6 +363,10 @@ let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefin
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_coq = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
-let rewrite_ast_c = rewrite Rewrites.rewrite_defs_c
+let rewrite_ast_c ast =
+  ast
+  |> rewrite Rewrites.rewrite_defs_c
+  |> Constant_fold.rewrite_constant_function_calls
+
 let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
 let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check

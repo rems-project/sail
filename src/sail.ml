@@ -115,7 +115,10 @@ let options = Arg.align ([
     " turn on optimizations for C compilation");
   ( "-Oz3",
     Arg.Set C_backend.optimize_z3,
-    " use z3 analysis for optimization (slow)");
+    " use z3 analysis for optimization (experimental)");
+  ( "-Oconstant_fold",
+    Arg.Set Constant_fold.optimize_constant_fold,
+    " Apply constant folding optimizations");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
     " output a Lem AST representation of the input");

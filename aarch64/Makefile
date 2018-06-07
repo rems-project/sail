@@ -7,6 +7,9 @@ SAIL:=$(SAIL_DIR)/sail
 aarch64.c: no_vector.sail
 	$(SAIL) $^ -c -O -undefined_gen -no_lexp_bounds_check -memo_z3 1> aarch64.c
 
+aarch64_c: aarch64.c
+	gcc -O2 $^ -o aarch64_c -lgmp -L $(SAIL_DIR)/lib
+
 aarch64: no_vector.sail
 	$(SAIL) $^ -o aarch64 -ocaml -undefined_gen -no_lexp_bounds_check -memo_z3
 
