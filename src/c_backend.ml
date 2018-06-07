@@ -977,13 +977,9 @@ let analyze_primop' ctx env l id args typ =
   | "eq_int", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "==", v2), typ))
 
-            (*
-  | "add_int", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
-     AE_val (AV_C_fragment (F_op (v1, "+", v2), typ))
-             *)
-
+  (*
   | "add_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
-     AE_val (AV_C_fragment (F_op (v1, "+", v2), typ))
+     AE_val (AV_C_fragment (F_op (v1, "+", v2), typ)) *)
 
   | "xor_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "^", v2), typ))

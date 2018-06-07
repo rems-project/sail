@@ -466,7 +466,7 @@ void replicate_bits(bv_t *rop, const bv_t op1, const mpz_t op2) {
 uint64_t fast_replicate_bits(const uint64_t shift, const uint64_t v, const int64_t times) {
   uint64_t r = v;
   for (int i = 1; i < times; ++i) {
-    r |= v << shift;
+    r |= (r << shift);
   }
   return r;
 }
