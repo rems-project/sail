@@ -3729,6 +3729,7 @@ let rewrite_app env typ (id,args) =
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
     let is_zeros = is_id env (Id "Zeros") in
+    let is_ones = is_id env (Id "Ones") in
     match args with
     | (E_aux (E_app (append1,
                      [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
@@ -3757,7 +3758,8 @@ let rewrite_app env typ (id,args) =
        E_app (mk_id "zext_slice", [vector1; start1; length1])
 
     | [E_aux (E_app (ones, [len1]),_);
-       _ (* unnecessary ZeroExtend length *)] ->
+       _ (* unnecessary ZeroExtend length *)]
+        when is_ones ones ->
        E_app (mk_id "zext_ones", [len1])
 
     | _ -> E_app (id,args)
