@@ -20,10 +20,8 @@ function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> fo
   else if t == Data then {
     if within_clint(addr, width)
     then clint_load(addr, width)
-    /* todo: handle constraint on 'n
-    else if within_htif_readable(addr, width)
+    else if within_htif_readable(addr, width) & (1 <= 'n)
     then htif_load(addr, width)
-    */
     else MemException(E_Load_Access_Fault)
   }
   else MemException(E_Load_Access_Fault)
@@ -105,7 +103,7 @@ function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)
   then phys_mem_write(addr, width, data)
   else if within_clint(addr, width)
   then clint_store(addr, width, data)
-  else if within_htif_writable(addr, width) & sizeof('n) <= 8 // FIXME
+  else if within_htif_writable(addr, width) & 'n <= 8
   then htif_store(addr, width, data)
   else MemException(E_SAMO_Access_Fault)
 
