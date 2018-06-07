@@ -15,8 +15,11 @@ MIPS_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
 	$(SAIL) -ocaml -o mips -memo_z3 $^
 
-mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
-	$(SAIL) -memo_z3 -c $^ 1> $@
+mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile
+	$(SAIL) -O -memo_z3 -c $(filter %.sail, $^) 1> $@
+
+mips_c: mips.c ../lib/sail.h Makefile
+	gcc -O2 -g -I ../lib $< -l gmp -o $@
 
 mips_no_tlb.lem: $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS)
 	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
@@ -40,6 +43,6 @@ LOC_FILES:=$(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
 include ../etc/loc.mk
 
 clean:
-	rm -rf mips Mips.thy mips.lem mips_types.lem _sbuild
+	rm -rf mips Mips.thy mips.lem mips_types.lem _sbuild mips.c mips_c
 	rm -f mipsScript.sml mips_typesScript.sml mips_extrasScript.sml
 	-Holmake cleanAll
