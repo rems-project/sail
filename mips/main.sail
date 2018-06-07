@@ -17,6 +17,7 @@ function fetch_and_execute () = {
   skip_rmemt();
   skip_wmvt();
   prerr_bits("PC: ", PC);
+  loop_again = true;
   try {
     let pc_pa = TranslatePC(PC);
     /*print_bits("pa: ", pc_pa);*/
@@ -26,17 +27,18 @@ function fetch_and_execute () = {
     match instr_ast {
       Some(HCF()) => {
                      print("simulation stopped due to halt instruction.");
-                     false
+                     loop_again = false
                    },
-      Some(ast) => { execute(ast); true },
-      None()    => { print("Decode failed"); exit (()) } /* Never expect this -- unknown instruction should actually result in reserved instruction ISA-level exception (see mips_ri.sail). */
+      Some(ast) => execute(ast),
+      None()    => { print("Decode failed"); loop_again=false } /* Never expect this -- unknown instruction should actually result in reserved instruction ISA-level exception (see mips_ri.sail). */
     }
   } catch {
-    ISAException() => { print("EXCEPTION"); true }
+    ISAException() => prerr_endline("EXCEPTION")
     /* ISA-level exception occurrred either during TranslatePC or execute --
        just continue from nextPC, which should have been set to the appropriate
        exception vector (along with clearing branchPending etc.) . */
   };
+  loop_again;
 }
 
 val elf_entry = {
