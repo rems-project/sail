@@ -273,6 +273,7 @@ let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
+let unknown_typ = mk_typ Typ_internal_unknown
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
@@ -601,6 +602,7 @@ and string_of_nexp_aux = function
 let rec string_of_typ = function
   | Typ_aux (typ, l) -> string_of_typ_aux typ
 and string_of_typ_aux = function
+  | Typ_internal_unknown -> "<UNKNOWN TYPE>"
   | Typ_id id -> string_of_id id
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
@@ -986,6 +988,7 @@ let rec tyvars_of_nc (NC_aux (nc, _)) =
 
 let rec tyvars_of_typ (Typ_aux (t,_)) =
   match t with
+  | Typ_internal_unknown -> KidSet.empty
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
@@ -1034,7 +1037,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         initial_check.ml. i.e. the rewriter should only encounter this
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
-  | Typ_bidir _ | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
+  | Typ_internal_unknown | Typ_bidir _ | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
 and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]

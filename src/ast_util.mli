@@ -113,6 +113,7 @@ val mk_typ_arg : typ_arg_aux -> typ_arg
 val mk_id_typ : id -> typ
 
 (* Sail builtin types. *)
+val unknown_typ : typ
 val int_typ : typ
 val nat_typ : typ
 val atom_typ : nexp -> typ

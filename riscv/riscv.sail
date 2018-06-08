@@ -51,7 +51,7 @@ mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^^ spc() ^^ 
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
 
-mapping clause encdec = RISCV_JAL(imm_19 : bits(1) @ imm_7_0 : bits(8) @ imm_8 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ 0b0, rd)
+mapping clause encdec = RISCV_JAL(imm_19 @ imm_7_0 @ imm_8 @ imm_18_13 @ imm_12_9 @ 0b0, rd)
                     <-> imm_19 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ imm_8 : bits(1) @ imm_7_0 : bits(8) @ rd : regbits @ 0b1101111
 
 function clause execute (RISCV_JAL(imm, rd)) = {
@@ -414,7 +414,7 @@ mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^^ size_mnem
 /* ****************************************************************** */
 union clause ast = ADDIW : (bits(12), regbits, regbits)
 
-mapping clause encdec = ADDIW(imm, rs1, rd) <-> imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011
+mapping clause encdec = ADDIW(imm, rs1, rd) <-> imm @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011
 
 function clause execute (ADDIW(imm, rs1, rd)) =
   let result : xlenbits = EXTS(imm) + X(rs1) in
