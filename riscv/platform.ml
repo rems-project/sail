@@ -92,6 +92,10 @@ let term_read () =
 (* returns starting value for PC, i.e. start of reset vector *)
 let init elf_file =
   Elf.load_elf elf_file;
+
+  Printf.printf "\nRegistered htif_tohost at 0x%Lx.\n" (Big_int.to_int64 (Elf.elf_tohost ()));
+  Printf.printf "Registered clint at 0x%Lx (size 0x%Lx).\n%!" P.clint_base P.clint_size;
+
   let start_pc = Elf.Big_int.to_int64 (Elf.elf_entry ()) in
   let rom = make_rom start_pc in
   let rom_base = Big_int.of_int64 P.rom_base in
