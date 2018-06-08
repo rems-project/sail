@@ -727,9 +727,12 @@ function init_sys() -> unit = {
   cur_privilege = Machine;
 
   misa->MXL() = arch_to_bits(RV64);
-  misa->C() = true;
-  misa->U() = true;
-  misa->S() = true;
+  misa->A() = true; /* atomics */
+  misa->C() = true; /* RVC */
+  misa->I() = true; /* base integer ISA */
+  misa->M() = true; /* integer multiply/divide */
+  misa->U() = true; /* user-mode */
+  misa->S() = true; /* supervisor-mode */
 
   mstatus->SXL() = misa.MXL();
   mstatus->UXL() = misa.MXL();
