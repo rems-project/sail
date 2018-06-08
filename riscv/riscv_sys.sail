@@ -235,7 +235,34 @@ function legalize_xepc(v : xlenbits) -> xlenbits = {
 register mtval : xlenbits
 register mscratch : xlenbits
 
-/* time/cycles */
+/* counters */
+
+bitfield Counteren : bits(32) = {
+  HPM  : 31 .. 3,
+  IR   : 2,
+  TM   : 1,
+  CY   : 0
+}
+
+register mcounteren : Counteren
+register scounteren : Counteren
+
+function legalize_mcounteren(c : Counteren, v : xlenbits) -> Counteren = {
+  /* no HPM counters yet */
+  let c = update_IR(c, v[2]);
+  let c = update_TM(c, v[1]);
+  let c = update_CY(c, v[0]);
+  c
+}
+
+function legalize_scounteren(c : Counteren, v : xlenbits) -> Counteren = {
+  /* no HPM counters yet */
+  let c = update_IR(c, v[2]);
+  let c = update_TM(c, v[1]);
+  let c = update_CY(c, v[0]);
+  c
+}
+
 register mcycle : xlenbits
 register mtime : xlenbits
 register minstret : xlenbits
@@ -534,10 +561,24 @@ function check_CSR_access(csrrw, csrpr, p, isWrite) =
 function check_TVM_SATP(csr : csreg, p : Privilege) -> bool =
   ~ (csr == 0x180 & p == Supervisor & mstatus.TVM() == true)
 
+function check_Counteren(csr : csreg, p : Privilege) -> bool =
+  match(csr, p) {
+    (0xC00, Supervisor) => mcounteren.CY() == true,
+    (0xC01, Supervisor) => mcounteren.TM() == true,
+    (0xC02, Supervisor) => mcounteren.IR() == true,
+
+    (0xC00, User) => scounteren.CY() == true,
+    (0xC01, User) => scounteren.TM() == true,
+    (0xC02, User) => scounteren.IR() == true,
+
+    (_, _) => true
+  }
+
 function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
     is_CSR_defined(csr, p)
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
   & check_TVM_SATP(csr, p)
+  & check_Counteren(csr, p)
 
 /* Exception delegation: given an exception and the privilege at which
  * it occured, returns the privilege at which it should be handled.
@@ -739,6 +780,9 @@ function init_sys() -> unit = {
   mstatus->SD()  = false;
 
   mhartid = EXTZ(0b0);
+
+  mcounteren->bits() = EXTZ(0b0);
+  scounteren->bits() = EXTZ(0b0);
 }
 
 function tick_clock() -> unit = {
