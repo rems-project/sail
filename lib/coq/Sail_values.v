@@ -26,12 +26,11 @@ Definition build_ex (n:Z) {P:Z -> Prop} `{H:ArithFact (P n)} : {x : Z & ArithFac
 Definition ii := Z.
 Definition nn := nat.
 
+(*val pow : Z -> Z -> Z*)
+Definition pow m n := m ^ n.
+
+Definition pow2 n := pow 2 n.
 (*
-val pow : Z -> Z -> Z
-Definition pow m n := m ** (Z.to_nat n)
-
-Definition pow2 n := pow 2 n
-
 Definition inline lt := (<)
 Definition inline gt := (>)
 Definition inline lteq := (<=)
@@ -228,6 +227,83 @@ Definition inline (|.) x y := or_bit x y
 val (+.) : bitU -> bitU -> bitU
 Definition inline (+.) x y := xor_bit x y
 *)
+
+(*** Bool lists ***)
+
+(*val bools_of_nat_aux : integer -> natural -> list bool -> list bool*)
+Fixpoint bools_of_nat_aux len (x : nat) (acc : list bool) : list bool :=
+  match len with
+  | O => acc
+  | S len' => bools_of_nat_aux len' (x / 2) ((if x mod 2 =? 1 then true else false) :: acc)
+  end %nat.
+  (*else (if x mod 2 = 1 then true else false) :: bools_of_nat_aux (x / 2)*)
+(*declare {isabelle} termination_argument bools_of_nat_aux = automatic*)
+Definition bools_of_nat len n := bools_of_nat_aux (Z.to_nat len) n [] (*List.reverse (bools_of_nat_aux n)*).
+
+(*val nat_of_bools_aux : natural -> list bool -> natural*)
+Fixpoint nat_of_bools_aux (acc : nat) (bs : list bool) : nat :=
+  match bs with
+  | [] => acc
+  | true :: bs => nat_of_bools_aux ((2 * acc) + 1) bs
+  | false :: bs => nat_of_bools_aux (2 * acc) bs
+end.
+(*declare {isabelle; hol} termination_argument nat_of_bools_aux = automatic*)
+Definition nat_of_bools bs := nat_of_bools_aux 0 bs.
+
+(*val unsigned_of_bools : list bool -> integer*)
+Definition unsigned_of_bools bs := Z.of_nat (nat_of_bools bs).
+
+(*val signed_of_bools : list bool -> integer*)
+Definition signed_of_bools bs :=
+  match bs with
+    | true :: _  => 0 - (1 + (unsigned_of_bools (List.map negb bs)))
+    | false :: _ => unsigned_of_bools bs
+    | [] => 0 (* Treat empty list as all zeros *)
+  end.
+
+(*val int_of_bools : bool -> list bool -> integer*)
+Definition int_of_bools (sign : bool) bs := if sign then signed_of_bools bs else unsigned_of_bools bs.
+
+(*val pad_list : forall 'a. 'a -> list 'a -> integer -> list 'a*)
+Fixpoint pad_list_nat {a} (x : a) (xs : list a) n :=
+  match n with
+  | O => xs
+  | S n' => pad_list_nat x (x :: xs) n'
+  end.
+(*declare {isabelle} termination_argument pad_list = automatic*)
+Definition pad_list {a} x xs n := @pad_list_nat a x xs (Z.to_nat n).
+
+Definition ext_list {a} pad len (xs : list a) :=
+  let longer := len - (Z.of_nat (List.length xs)) in
+  if longer <? 0 then skipn (Z.abs_nat (longer)) xs
+  else pad_list pad xs longer.
+
+(*let extz_bools len bs = ext_list false len bs*)
+Definition exts_bools len bs :=
+  match bs with
+    | true :: _ => ext_list true len bs
+    | _ => ext_list false len bs
+  end.
+
+Fixpoint add_one_bool_ignore_overflow_aux bits := match bits with
+  | [] => []
+  | false :: bits => true :: bits
+  | true :: bits => false :: add_one_bool_ignore_overflow_aux bits
+end.
+(*declare {isabelle; hol} termination_argument add_one_bool_ignore_overflow_aux = automatic*)
+
+Definition add_one_bool_ignore_overflow bits :=
+  List.rev (add_one_bool_ignore_overflow_aux (List.rev bits)).
+
+(*let bool_list_of_int n =
+  let bs_abs = false :: bools_of_nat (naturalFromInteger (abs n)) in
+  if n >= (0 : integer) then bs_abs
+  else add_one_bool_ignore_overflow (List.map not bs_abs)
+let bools_of_int len n = exts_bools len (bool_list_of_int n)*)
+Definition bools_of_int len n :=
+  let bs_abs := bools_of_nat len (Z.abs_nat n) in
+  if n >=? 0 then bs_abs
+  else add_one_bool_ignore_overflow (List.map negb bs_abs).
 
 (*** Bit lists ***)
 
@@ -663,6 +739,7 @@ Local Close Scope nat.
 Class Bitvector (a:Type) : Type := {
   bits_of : a -> list bitU;
   of_bits : list bitU -> a;
+  of_bools : list bool -> a;
   (* The first parameter specifies the desired length of the bitvector *)
   of_int : Z -> Z -> a;
   length : a -> Z;
@@ -685,6 +762,7 @@ end.
 Instance bitlist_Bitvector {a : Type} `{BitU a} : (Bitvector (list a)) := {
   bits_of v := List.map to_bitU v;
   of_bits v := List.map of_bitU v;
+  of_bools v := List.map of_bitU (List.map bitU_of_bool v);
   of_int len n := List.map of_bitU (bits_of_int len n);
   length := length_list;
   unsigned v := unsigned_of_bits (List.map to_bitU v);
@@ -767,6 +845,7 @@ Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply Reasonable
 Instance mword_Bitvector {a : Z} `{ReasonableSize a} : (Bitvector (mword a)) := {
   bits_of v := List.map to_bitU (bitlistFromWord (get_word v));
   of_bits v := to_word isPositive (fit_bbv_word (wordFromBitlist (List.map of_bitU v)));
+  of_bools v := to_word isPositive (fit_bbv_word (wordFromBitlist v));
   of_int len z := @mword_of_int a isPositive z; (* cheat a little *)
   length v := a;
   unsigned v := Z.of_N (wordToN (get_word v));

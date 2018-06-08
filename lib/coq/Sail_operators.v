@@ -242,4 +242,16 @@ Definition ugteq_bv := ucmp_bv (>=)
 Definition sgteq_bv := scmp_bv (>=)
 *)
 
+(*val get_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a*)
+Definition get_slice_int_bv {a} `{Bitvector a} len n lo : a :=
+  let hi := lo + len - 1 in
+  let bs := bools_of_int (hi + 1) n in
+  of_bools (subrange_list false bs hi lo).
+
+(*val set_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a -> integer
+Definition set_slice_int_bv {a} `{Bitvector a} len n lo (v : a) :=
+  let hi := lo + len - 1 in
+  let bs := bits_of_int (hi + 1) n in
+  maybe_failwith (signed_of_bits (update_subrange_list false bs hi lo (bits_of v))).*)
+
 End Bitvectors.

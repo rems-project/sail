@@ -199,10 +199,12 @@ val shiftl       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val shiftr       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val arith_shiftr : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val rotl         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val rotr         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-Definition shiftl       := shiftl_bv
-Definition shiftr       := shiftr_bv
-Definition arith_shiftr := arith_shiftr_bv
+val rotr         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(* TODO: check/redefine behaviour on out-of-range n *)
+Definition shiftl       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wlshift w (Z.to_nat n)) v.
+Definition shiftr       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshift w (Z.to_nat n)) v.
+Definition arith_shiftr {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshifta w (Z.to_nat n)) v.
+(*
 Definition rotl         := rotl_bv
 Definition rotr         := rotr_bv
 
@@ -246,3 +248,5 @@ Definition ugteq_vec := ugteq_bv.
 Definition sgteq_vec := sgteq_bv.
 
 *)
+
+Definition get_slice_int {a} `{ArithFact (a >= 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
