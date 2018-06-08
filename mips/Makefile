@@ -12,10 +12,10 @@ MIPS_TLB_STUB:=$(MIPS_SAIL_DIR)/mips_tlb_stub.sail
 MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 MIPS_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 
-mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
-	$(SAIL) -ocaml -o mips -memo_z3 $^
+mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) ../sail
+	$(SAIL) -ocaml -o mips -memo_z3 $(filter %.sail, $^)
 
-mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile
+mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile ../sail
 	$(SAIL) -O -memo_z3 -c $(filter %.sail, $^) 1> $@
 
 mips_c: mips.c ../lib/sail.h Makefile
