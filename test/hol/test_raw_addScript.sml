@@ -7,7 +7,7 @@ open cheriTheory hoareTheory
 
 val _ = new_theory "test_raw_add";
 
-val _ = Globals.max_print_depth := 50;
+val _ = Globals.max_print_depth := 10;
 
 (* MIPS register names
    ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/MIPS-N32-ABI-Handbook.pdf
@@ -103,8 +103,31 @@ val clocked_whileS_def = Define`
 val install_and_run_def = Define`
   install_and_run code clock =
     seqS
-      (seqS (install_code 0x9000000040000000w code) (init_registers 0x9000000040000000w))
+      (seqS (install_code 0x40000000w code) (init_registers 0x9000000040000000w))
       (clocked_whileS clock () (λunit_var. fetch_and_execute ()) (λunit_var. returnS ()))`;
+
+val PrePost_clocked_whileS_unit_T = Q.store_thm("PrePost_clocked_whileS_unit_T",
+  `0 < k ∧
+   PrePostE P (cond ()) (λb s. b ∧ R s) (K (K F)) ∧
+   PrePost R (seqS (body ()) (clocked_whileS (k-1) () cond body)) Q
+   ⇒ PrePost P (clocked_whileS k () cond body) Q`,
+  rw[PrePost_def,PrePostE_def]
+  \\ fs[Once clocked_whileS_def]
+  \\ rfs[]
+  \\ fs[bindS_def]
+  \\ last_x_assum(qspec_then`s`mp_tac)
+  \\ simp[]
+  \\ disch_then(qspec_then`x`mp_tac)
+  \\ simp[]
+  \\ CASE_TAC \\ simp[]
+  \\ BasicProvers.FULL_CASE_TAC \\ fs[]
+  \\ strip_tac
+  \\ rpt BasicProvers.VAR_EQ_TAC \\ fs[]
+  \\ first_x_assum drule
+  \\ simp[seqS_def, bindS_def,PULL_EXISTS]
+  \\ disch_then match_mp_tac
+  \\ BasicProvers.VAR_EQ_TAC
+  \\ metis_tac[]);
 
 (* obtained from
      objdump -d test_raw_add.elf
@@ -268,10 +291,9 @@ update: now it works! see compset below
 EVAL ``install_code 0x9000000040000000w test_raw_add_insts s``
 *)
 
-val instance_Sail_values_Bitvector_Machine_word_mword_dict_thms =
+fun mk_record_thms def =
   let
-    val def = sail_valuesTheory.instance_Sail_values_Bitvector_Machine_word_mword_dict_def
-    val tm = lhs(concl def)
+    val tm = lhs(concl (SPEC_ALL def))
     val rty = type_of tm
     val tyop = #1 (dest_type rty)
     val fields = TypeBase.fields_of rty
@@ -280,9 +302,104 @@ val instance_Sail_values_Bitvector_Machine_word_mword_dict_thms =
     val thms = map (SIMP_CONV (srw_ss()) [def] o mktm) fields
   in LIST_CONJ thms end
 
+val capRegToCapStruct_thms =
+  mk_record_thms cheriTheory.capRegToCapStruct_def
+
+val instance_Sail_values_Bitvector_Machine_word_mword_dict_thms =
+  mk_record_thms sail_valuesTheory.instance_Sail_values_Bitvector_Machine_word_mword_dict_def
+
+val default_cap_thms =
+  mk_record_thms cheriTheory.default_cap_def
+
+val nextPC_ref_thms =
+  mk_record_thms cheri_typesTheory.nextPC_ref_def
+
+val delayedPCC_ref_thms =
+  mk_record_thms cheri_typesTheory.delayedPCC_ref_def
+
+val delayedPC_ref_thms =
+  mk_record_thms cheri_typesTheory.delayedPC_ref_def
+
+val PCC_ref_thms =
+  mk_record_thms cheri_typesTheory.PCC_ref_def
+
+val PC_ref_thms =
+  mk_record_thms cheri_typesTheory.PC_ref_def
+
+val GPR_ref_thms =
+  mk_record_thms cheri_typesTheory.GPR_ref_def
+
+val nextPCC_ref_thms =
+  mk_record_thms cheri_typesTheory.nextPCC_ref_def
+
+val C_ref_thms =
+  let
+    fun get_def n = fetch"cheri_types"("C"^(StringCvt.padLeft#"0" 2(Int.toString n))^"_ref_def")
+  in
+    List.tabulate(32, mk_record_thms o get_def)
+  end
+
+val TLBEntry_ref_thms =
+  let
+    fun get_def n = fetch"cheri_types"("TLBEntry"^(StringCvt.padLeft#"0" 2(Int.toString n))^"_ref_def")
+  in
+    List.tabulate(64, mk_record_thms o get_def)
+  end
+
+val CP0Count_ref_thms =
+  mk_record_thms cheri_typesTheory.CP0Count_ref_def
+
+val CP0Compare_ref_thms =
+  mk_record_thms cheri_typesTheory.CP0Compare_ref_def
+
+val CP0Status_ref_thms =
+  mk_record_thms cheri_typesTheory.CP0Status_ref_def
+
+val CP0BadVAddr_ref_thms =
+  mk_record_thms cheri_typesTheory.CP0BadVAddr_ref_def
+
+val CP0EPC_ref_thms =
+  mk_record_thms cheri_typesTheory.CP0EPC_ref_def
+
+val CP0Cause_ref_thms =
+  mk_record_thms cheri_typesTheory.CP0Cause_ref_def
+
+val UART_WRITTEN_ref_thms =
+  mk_record_thms cheri_typesTheory.UART_WRITTEN_ref_def
+
+val UART_WDATA_ref_thms =
+  mk_record_thms cheri_typesTheory.UART_WDATA_ref_def
+
+val inCCallDelay_ref_thms =
+  mk_record_thms cheri_typesTheory.inCCallDelay_ref_def
+
+val TLBRandom_ref_thms =
+  mk_record_thms cheri_typesTheory.TLBRandom_ref_def
+
+val TLBWired_ref_thms =
+  mk_record_thms cheri_typesTheory.TLBWired_ref_def
+
+val TLBContext_ref_thms =
+  mk_record_thms cheri_typesTheory.TLBContext_ref_def
+
+val TLBXContext_ref_thms =
+  mk_record_thms cheri_typesTheory.TLBXContext_ref_def
+
+val TLBEntryHi_ref_thms =
+  mk_record_thms cheri_typesTheory.TLBEntryHi_ref_def
+
 val cap_addr_mask_thm =
   CONV_RULE(RAND_CONV EVAL)
     cheriTheory.cap_addr_mask_def
+
+val branchPending_ref_thms =
+  mk_record_thms cheri_typesTheory.branchPending_ref_def
+
+val inBranchDelay_ref_thms =
+  mk_record_thms cheri_typesTheory.inBranchDelay_ref_def
+
+val instCount_ref_thms =
+  mk_record_thms cheri_typesTheory.instCount_ref_def
 
 val seqS_returnS = Q.store_thm("seqS_returnS",
   `seqS (returnS x) f = f`,
@@ -318,6 +435,35 @@ val () = computeLib.extend_compset [
 computeLib.CBV_CONV cstest ``bindS (λs. returnS x s) g``
 *)
 
+val LENGTH_CapRegs = save_thm("LENGTH_CapRegs",
+  EVAL ``LENGTH CapRegs``);
+
+val LENGTH_TLBEntries = save_thm("LENGTH_TLBEntries",
+  EVAL ``LENGTH TLBEntries``);
+
+val cs0 = listLib.list_compset();
+val () = computeLib.extend_compset [ computeLib.Defs [ CapRegs_def, TLBEntries_def ] ] cs0;
+
+val EL_CapRegs = save_thm("EL_CapRegs",
+  let
+    fun f n = computeLib.CBV_CONV cs0 ``EL ^(numSyntax.term_of_int n) CapRegs``
+  in
+    LIST_CONJ (
+      List.tabulate(LENGTH_CapRegs |> concl |> rhs |> numSyntax.int_of_term, f)
+    )
+  end);
+val HD_CapRegs = computeLib.CBV_CONV cs0 ``HD CapRegs``;
+
+val EL_TLBEntries = save_thm("EL_TLBEntries",
+  let
+    fun f n = computeLib.CBV_CONV cs0 ``EL ^(numSyntax.term_of_int n) TLBEntries``
+  in
+    LIST_CONJ (
+      List.tabulate(LENGTH_TLBEntries |> concl |> rhs |> numSyntax.int_of_term, f)
+    )
+  end);
+val HD_TLBEntries = computeLib.CBV_CONV cs0 ``HD TLBEntries``;
+
 val cs = wordsLib.words_compset();
 val eval = computeLib.CBV_CONV cs;
 val () = computeLib.extend_compset [
@@ -326,6 +472,7 @@ val () = computeLib.extend_compset [
     pairLib.add_pair_compset,
     combinLib.add_combin_compset,
     listLib.list_rws,
+    listLib.add_rich_list_compset,
     pred_setLib.add_pred_set_compset,
     finite_mapLib.add_finite_map_compset,
     intReduce.add_int_compset,
@@ -337,9 +484,16 @@ val () = computeLib.extend_compset [
   computeLib.Defs (map #2 (ThmSetData.theory_data {settype = "compute", thy = "sail_values"})),
   *)
   computeLib.Defs [
+    listTheory.EL_LUPDATE,
+    pred_setTheory.UNION_EMPTY,
     lemTheory.w2ui_def,
     lem_listTheory.list_combine_def,
     lem_machine_wordTheory.size_itself_def,
+    sail_instr_kindsTheory.read_is_exclusive_def |> SIMP_RULE std_ss [FUN_EQ_THM],
+    sail_valuesTheory.update_list_dec_def,
+    sail_valuesTheory.update_list_inc_def,
+    sail_valuesTheory.pow2_def,
+    sail_valuesTheory.pow0_def,
     sail_valuesTheory.make_the_value_def,
     sail_valuesTheory.nat_of_int_def,
     sail_valuesTheory.bool_of_bitU_def,
@@ -355,17 +509,36 @@ val () = computeLib.extend_compset [
     sail_valuesTheory.drop_list_def,
     sail_valuesTheory.mem_bytes_of_bits_def,
     sail_valuesTheory.bytes_of_bits_def,
+    sail_valuesTheory.bits_of_mem_bytes_def,
+    sail_valuesTheory.bits_of_bytes_def,
     sail_valuesTheory.byte_chunks_def,
+    sail_valuesTheory.access_bv_dec_def,
+    sail_valuesTheory.access_list_def,
+    sail_valuesTheory.access_list_inc_def,
     sail_valuesAuxiliaryTheory.bools_of_nat_aux_rw,
     sail_valuesAuxiliaryTheory.reverse_endianness_list_rw,
     sail_valuesAuxiliaryTheory.index_list_rw,
+    sail_valuesAuxiliaryTheory.repeat_rw,
+    sail_valuesAuxiliaryTheory.pad_list_rw,
     (* sail_valuesTheory.instance_Sail_values_Bitvector_Machine_word_mword_dict_def, *)
     instance_Sail_values_Bitvector_Machine_word_mword_dict_thms,
     sail_valuesTheory.just_list_def,
     sail_valuesTheory.maybe_failwith_def,
     sail_valuesTheory.int_of_mword_def,
+    sail_valuesTheory.make_the_value_def,
+    sail_valuesTheory.access_list_dec_def,
+    sail_valuesTheory.access_list_inc_def,
+    sail_valuesTheory.exts_bv_def,
+    sail_valuesTheory.exts_bits_def,
+    sail_valuesTheory.ext_list_def,
+    sail_operatorsTheory.arith_op_bv_int_def,
+    sail_operators_mwordsTheory.concat_vec_def,
+    sail_operators_mwordsTheory.access_vec_dec_def,
+    sail_operators_mwordsTheory.replicate_bits_def,
     sail_operators_mwordsTheory.and_vec_def,
     sail_operators_mwordsTheory.add_vec_def,
+    sail_operators_mwordsTheory.add_vec_int_def,
+    sail_operators_mwordsTheory.update_subrange_vec_dec_def,
     sail_operators_mwordsTheory.subrange_vec_dec_def,
     sail_operators_mwordsTheory.vec_of_bits_def,
     sail_operators_mwordsTheory.reverse_endianness_def
@@ -374,12 +547,35 @@ val () = computeLib.extend_compset [
     ``:bitU``,
     ``:'a bits Bitvector_class``,
     ``:'a sequential_state``,
+    ``:regstate``,
+    ``:CapStruct``,
+    ``:AccessLevel``,
+    ``:MemAccessType``,
+    ``:Exception``,
+    ``:CauseReg``,
+    ``:StatusReg``,
+    ``:exception``,
+    ``:read_kind``,
+    ``:ast``,
+    ``:'a ex``,
+    ``:('a,'b,'c) register_ref``,
     ``:('a,'b) result``
+  ],
+  (* these should come out of regstate but seem not to... *)
+  computeLib.Defs [
+    cheri_typesTheory.regstate_brss__1_accfupds,
+    cheri_typesTheory.regstate_brss__2_accfupds,
+    cheri_typesTheory.regstate_brss__3_accfupds,
+    cheri_typesTheory.regstate_brss__4_accfupds,
+    cheri_typesTheory.regstate_brss__5_accfupds,
+    cheri_typesTheory.regstate_brss__6_accfupds
   ],
   (* state monad *)
   computeLib.Defs [
     stateTheory.iteriS_def,
+    stateTheory.or_boolS_def,
     stateAuxiliaryTheory.iterS_aux_rw,
+    stateAuxiliaryTheory.foreachS_rw,
     state_monadTheory.assert_expS_def,
     state_monadTheory.write_mem_eaS_def,
     state_monadTheory.write_mem_valS_def,
@@ -387,12 +583,20 @@ val () = computeLib.extend_compset [
     state_monadTheory.write_mem_bytesS_def,
     state_monadTheory.updateS_def,
     state_monadTheory.maybe_failS_def,
+    state_monadTheory.read_regS_def,
+    state_monadTheory.write_regS_def,
+    (*
+    state_monadTheory.read_memS_def,
+    state_monadTheory.read_mem_bytesS_def,
+    *)
     (*
     seqS_returnS,
     bindS_returnS_1,
     bindS_readS,
     *)
-    bindS_def, returnS_def, seqS_def, readS_def
+    liftRS_def,
+    early_returnS_def, catch_early_returnS_def, throwS_def,
+    bindS_def, returnS_def, seqS_def, readS_def, try_catchS_def
   ],
   (*
   computeLib.Convs [
@@ -405,20 +609,125 @@ val () = computeLib.extend_compset [
   computeLib.Defs [
     decode_def,
     MEMw_wrapper_def,
+    MEMr_wrapper_def,
+    (*
+    sign_extend1_def,
+    *)
+    mips_extrasTheory.sign_extend0_def,
     cap_addr_mask_thm,
+    init_registers_def,
+    init_cp0_state_def,
+    init_cp2_state_def,
+    cp2_next_pc_def,
+    writeCapReg_def,
+    LENGTH_TLBEntries,
+    EL_TLBEntries, HD_TLBEntries,
+    LENGTH_CapRegs,
+    EL_CapRegs, HD_CapRegs,
+    default_cap_thms,
+    nextPC_ref_thms,
+    delayedPCC_ref_thms,
+    delayedPC_ref_thms,
+    nextPCC_ref_thms,
+    PCC_ref_thms,
+    PC_ref_thms,
+    GPR_ref_thms,
+    branchPending_ref_thms,
+    inBranchDelay_ref_thms,
+    instCount_ref_thms,
+    CP0Count_ref_thms,
+    CP0Compare_ref_thms,
+    CP0Status_ref_thms,
+    CP0BadVAddr_ref_thms,
+    CP0EPC_ref_thms,
+    CP0Cause_ref_thms,
+    LIST_CONJ TLBEntry_ref_thms,
+    LIST_CONJ C_ref_thms,
+    UART_WRITTEN_ref_thms,
+    UART_WDATA_ref_thms,
+    inCCallDelay_ref_thms,
+    TLBRandom_ref_thms,
+    TLBWired_ref_thms,
+    TLBContext_ref_thms,
+    TLBXContext_ref_thms,
+    TLBEntryHi_ref_thms,
+    capStructToCapReg_def,
+    capRegToCapStruct_thms,
+    capStructToMemBits256_def,
+    get_TLBEntry_valid_def,
+    get_StatusReg_def,
+    get_StatusReg_EXL_def,
+    get_StatusReg_ERL_def,
+    get_StatusReg_KSU_def,
+    get_StatusReg_IE_def,
+    get_CauseReg_IP_def,
+    get_CauseReg_def,
+    grantsAccess_def,
+    int_of_AccessLevel_def,
+    getCapBase_def,
+    getCapTop_def,
+    getCapPerms_def,
+    cast_unit_vec0_def,
+    set_StatusReg_BEV_def,
+    set_StatusReg_EXL_def,
+    fetch_and_execute_def,
+    execute_def,
+    execute_ADDIU_def,
+    TranslatePC_def,
+    TLBTranslate_def,
+    TLBTranslate2_def,
+    tlbSearch_def,
+    tlbEntryMatch_def,
+    SignalExceptionTLB_def,
+    SignalException_def,
+    SignalExceptionMIPS_def,
+    ExceptionCode_def,
+    (*
+    TLBTranslateC_def,
+    *)
+    setCapOffset_def,
+    set_CauseReg_BD_def,
+    set_CauseReg_ExcCode_def,
+    set_ContextReg_BadVPN2_def,
+    set_XContextReg_XBadVPN2_def,
+    set_XContextReg_XR_def,
+    get_TLBEntryHiReg_def,
+    set_TLBEntryHiReg_R_def,
+    set_TLBEntryHiReg_VPN2_def,
+    getAccessLevel_def,
+    incrementCP0Count_def,
+    mips_extrasTheory.skip_def,
     mips_extrasTheory.MEMea_def,
     mips_extrasTheory.MEMval_def,
     mips_extrasTheory.get_slice_int0_def,
     mips_extrasTheory.get_slice_int_bl_def,
     mips_extrasTheory.write_tag_bool_def,
-    to_bits_def
+    mips_extrasTheory.MEMr_def,
+    zeros0_def,
+    ones_def,
+    bool_to_bits_def,
+    bits_to_bool_def,
+    bit_to_bool_def,
+    to_bits_def,
+    NotWordVal_def,
+    MAX_PA_def,
+    MAX_VA_def,
+    MAX0_def,
+    rGPR_def,
+    wGPR_def
   ],
   (* test_raw_add *)
   computeLib.Defs [
     test_raw_add_insts_def,
-    install_code_def
+    install_code_def,
+    install_and_run_def,
+    clocked_whileS_def
   ]
 ]  cs;
+
+val init_registers_result =
+  ``init_registers initPC s``
+  |> computeLib.CBV_CONV cs
 
 (*
 
@@ -441,7 +750,7 @@ computeLib.CBV_CONV cs
 
 val install_code_result =
   computeLib.CBV_CONV cs
-    ``install_code 0x9000000040000000w test_raw_add_insts s``
+    ``install_code 0x40000000w test_raw_add_insts s``
 
 (*
 install_code_result
@@ -466,10 +775,9 @@ val code_installed_def = Define`
        |>`;
 *)
 
-(* this is better, but not quite right yet...
 val code_installed_def = Define`
   code_installed initPC code s =
-    ∀k i. (k = w2i initPC + 4 * &i) ∧ i < LENGTH code ⇒
+    ∀k i. (k = w2ui initPC + 4 * &i) ∧ i < LENGTH code ⇒
       case byte_chunks (MAP bitU_of_bool (w2v (reverse_endianness (EL i code)))) of
       | SOME chunks =>
         (FLOOKUP s.memstate (k+0) = SOME (EL 0 (REVERSE chunks))) ∧
@@ -477,24 +785,147 @@ val code_installed_def = Define`
         (FLOOKUP s.memstate (k+2) = SOME (EL 2 (REVERSE chunks))) ∧
         (FLOOKUP s.memstate (k+3) = SOME (EL 3 (REVERSE chunks)))
       | NONE => F`;
+
+val registers_inited_def = Define`
+  registers_inited initPC s =
+    (s.regstate.nextPC = initPC)
+    ∧ (s.regstate.CP0Status = Mk_StatusReg 0x400000w)
+    ∧ (s.regstate.nextPCC = capStructToCapReg default_cap)
+    (* ∧ a bunch of stuff about s.CX *)`;
+
+(*
+val cycle_result =
+  computeLib.CBV_CONV cs ``fetch_and_execute () s``
+  |> SIMP_RULE(srw_ss())[]
+
+too slow / blows up:
+val result =
+  ``install_and_run test_raw_add_insts 1``
+  |> computeLib.CBV_CONV cs
 *)
+
+(*
+val updates =
+install_code_result
+|> concl |> rhs
+|> rator |> rand
+|> rand |> rator
+|> rand |> rand
+|> finite_mapSyntax.strip_fupdate
+|> #2
+*)
+
+val TLBEntries_zero_def = Define`
+  TLBEntries_zero rs ⇔
+    (rs.TLBEntry00 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry01 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry02 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry03 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry04 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry05 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry06 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry07 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry08 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry09 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry10 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry11 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry12 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry13 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry14 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry15 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry16 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry17 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry18 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry19 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry20 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry21 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry22 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry23 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry24 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry25 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry26 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry27 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry28 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry29 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry30 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry31 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry32 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry33 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry34 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry35 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry36 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry37 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry38 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry39 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry40 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry41 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry42 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry43 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry44 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry45 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry46 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry47 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry48 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry49 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry50 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry51 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry52 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry53 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry54 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry55 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry56 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry57 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry58 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry59 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry60 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry61 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry62 = Mk_TLBEntry 0w) ∧
+    (rs.TLBEntry63 = Mk_TLBEntry 0w)`;
 
 val test_raw_add_thm = Q.store_thm("test_raw_add_thm",
   `PrePost
-      (λs. 20 ≤ LENGTH s.regstate.GPR)
+      (λs.
+        ((s.regstate.GPR = REPLICATE 64 0w) ∧
+         (s.regstate.branchPending = 0w) ∧
+         (s.regstate.UART_WRITTEN = 0w) ∧
+         (s.regstate.TLBRandom = 0w) ∧
+         (s.regstate.TLBWired = 0w) ∧
+         (TLBEntries_zero s.regstate) ∧
+         (s.regstate.nextPCC = 0w) ∧
+         (s.regstate.CP0Count = 0w) ∧
+         (s.regstate.CP0Status = Mk_StatusReg 0w) ∧
+         (s.regstate.CP0Compare = 0w)))
       (install_and_run test_raw_add_insts 100000)
       (λ_ s.  test_raw_add_post s)`,
   rw[install_and_run_def]
   \\ match_mp_tac PrePost_seqS
   \\ simp[]
   \\ qmatch_goalsub_abbrev_tac`install_code initPC`
+  \\ qmatch_goalsub_abbrev_tac`init_registers vinitPC`
   \\ qexists_tac`λs. code_installed initPC test_raw_add_insts s ∧
-                     init_registers_post s`
-  (*
+                     registers_inited vinitPC s ∧
+                     ((s.regstate.branchPending = 0w) ∧
+                      (s.regstate.GPR = REPLICATE 64 0w) ∧
+                      (s.regstate.UART_WRITTEN = 0w) ∧
+                      (s.regstate.TLBRandom = 0w) ∧
+                      (s.regstate.TLBWired = 0w) ∧
+                      (TLBEntries_zero s.regstate) ∧
+                      (s.regstate.CP0Count = 0w) ∧
+                      (s.regstate.CP0Compare = 0w))`
   \\ conj_tac
   >- (
     match_mp_tac PrePost_seqS \\ simp[]
-    \\ qexists_tac`code_installed initPC test_raw_add_insts`
+    \\ qexists_tac`λs. code_installed initPC test_raw_add_insts s ∧
+                       ((s.regstate.branchPending = 0w) ∧
+                        (s.regstate.GPR = REPLICATE 64 0w) ∧
+                        (s.regstate.UART_WRITTEN = 0w) ∧
+                        (s.regstate.TLBRandom = 0w) ∧
+                        (s.regstate.TLBWired = 0w) ∧
+                        (TLBEntries_zero s.regstate) ∧
+                        (s.regstate.nextPCC = 0w) ∧
+                        (s.regstate.CP0Count = 0w) ∧
+                        (s.regstate.CP0Status = Mk_StatusReg 0w) ∧
+                        (s.regstate.CP0Compare = 0w))`
     \\ conj_tac
     >- (
       rw[PrePost_def,Abbr`initPC`]
@@ -504,12 +935,135 @@ val test_raw_add_thm = Q.store_thm("test_raw_add_thm",
       \\ pop_assum mp_tac
       \\ CONV_TAC(LAND_CONV(computeLib.CBV_CONV cs))
       \\ CONV_TAC(LAND_CONV(SIMP_CONV(srw_ss())[wordsTheory.NUMERAL_LESS_THM]))
-      \\ strip_tac \\ BasicProvers.VAR_EQ_TAC
-      \\ CONV_TAC(computeLib.CBV_CONV cs)
+      \\ strip_tac \\ BasicProvers.VAR_EQ_TAC \\ CONV_TAC(computeLib.CBV_CONV cs))
+    \\ rw[PrePost_def,Abbr`initPC`]
+    \\ pop_assum(assume_tac o REWRITE_RULE [init_registers_result,pred_setTheory.IN_INSERT,pred_setTheory.NOT_IN_EMPTY])
+    \\ BasicProvers.VAR_EQ_TAC
+    \\ qmatch_goalsub_abbrev_tac`v2w l1`
+    \\ simp[registers_inited_def]
+    \\ fs[code_installed_def,Abbr`l1`,TLBEntries_zero_def]
+    \\ CONV_TAC (computeLib.CBV_CONV cs))
+  \\ match_mp_tac (GEN_ALL PrePost_clocked_whileS_unit_T)
+  \\ simp[seqS_returnS]
+  \\ qmatch_goalsub_abbrev_tac`PrePostE CI` (* need to remove GPR assumption from CI *)
+  \\ qexists_tac`λs. CI s ∧ (EL (64-1-19) s.regstate.GPR = 1w)`
+  \\ fs[]
+(*
+  \\ conj_tac
+  >- (
+    rw[PrePostE_def]
+    \\ rw[fetch_and_execute_def]
+    \\ simp[PrePost_def]
+    \\ gen_tac \\ strip_tac \\ gen_tac
+    \\ `s.regstate.nextPC = vinitPC` by fs[Abbr`CI`,registers_inited_def]
+    \\ `(s.regstate.branchPending = 0w) ∧
+        (s.regstate.GPR = REPLICATE 64 0w) ∧
+        (s.regstate.UART_WRITTEN = 0w) ∧
+        (s.regstate.TLBRandom = 0w) ∧
+        (s.regstate.TLBWired = 0w) ∧
+        (TLBEntries_zero s.regstate) ∧
+        (s.regstate.nextPCC = capStructToCapReg default_cap) ∧
+        (s.regstate.CP0Count = 0w) ∧
+        (s.regstate.CP0Status = Mk_StatusReg 0x400000w) ∧
+        (s.regstate.CP0Compare = 0w)` by fs[Abbr`CI`, registers_inited_def]
+    \\ ntac 11 (pop_assum mp_tac)
+    \\ PURE_REWRITE_TAC[AND_IMP_INTRO]
+    \\ PURE_REWRITE_TAC[TLBEntries_zero_def]
+    \\ CONV_TAC(LAND_CONV (computeLib.CBV_CONV cs))
+    \\ PURE_REWRITE_TAC[GSYM AND_IMP_INTRO]
+    \\ qunabbrev_tac`vinitPC`
+    \\ ntac (10+64) strip_tac \\ ASM_REWRITE_TAC[]
+    \\ rpt(CHANGED_TAC(CONV_TAC(LAND_CONV (computeLib.CBV_CONV cs)) \\ ASM_REWRITE_TAC []))
+    \\ ASM_REWRITE_TAC[TLBTranslateC_def]
+    \\ rpt(CHANGED_TAC(CONV_TAC(LAND_CONV (computeLib.CBV_CONV cs)) \\ ASM_REWRITE_TAC []))
+    \\ ASM_REWRITE_TAC[read_memS_def, read_mem_bytesS_def]
+    \\ ASM_SIMP_TAC (bool_ss ++ boolSimps.LET_ss) [bindS_returnS_1, bindS_readS]
+    \\ qmatch_goalsub_abbrev_tac`bindS (bindS m1 m2) m3 ss`
+    \\ qunabbrev_tac`m1`
+    \\ `ss.memstate = s.memstate` by simp[Abbr`ss`]
+    \\ CHANGED_TAC(CONV_TAC(LAND_CONV (computeLib.CBV_CONV cs)) \\ ASM_REWRITE_TAC [])
+    \\ qunabbrev_tac`m2`
+    \\ CONV_TAC(DEPTH_CONV BETA_CONV)
+    \\ qmatch_goalsub_abbrev_tac`just_list ls`
+    \\ qmatch_goalsub_abbrev_tac`f ls`
+    \\ qunabbrev_tac`ls`
+    \\ CHANGED_TAC(CONV_TAC(LAND_CONV (computeLib.CBV_CONV cs)) \\ ASM_REWRITE_TAC [])
+    \\ `code_installed initPC test_raw_add_insts s` by fs[Abbr`CI`]
+    \\ pop_assum(mp_tac o SIMP_RULE(srw_ss())[code_installed_def])
+    \\ disch_then(qspec_then`0`mp_tac)
+    \\ impl_tac >- EVAL_TAC
+    \\ disch_then(mp_tac o CONV_RULE(RATOR_CONV(computeLib.CBV_CONV cs)))
+    \\ qunabbrev_tac`initPC`
+    \\ disch_then(mp_tac o CONV_RULE(computeLib.CBV_CONV cs))
+    \\ strip_tac
+    \\ map_every qunabbrev_tac[`f`,`m3`]
+    \\ CHANGED_TAC(ASM_REWRITE_TAC[sign_extend1_def])
+    \\ CHANGED_TAC(CONV_TAC(LAND_CONV (computeLib.CBV_CONV cs)) \\ ASM_REWRITE_TAC [])
+    \\ qunabbrev_tac`ss`
+    \\ CHANGED_TAC(CONV_TAC(LAND_CONV (computeLib.CBV_CONV cs)) \\ ASM_REWRITE_TAC [])
+    \\ simp[]
+    \\ strip_tac \\ BasicProvers.VAR_EQ_TAC
 
-    )
-    \\ cheat )
-  *)
+    \\ CHANGED_TAC(CONV_TAC(computeLib.CBV_CONV cs) \\ ASM_REWRITE_TAC [])
+
+    top_goal() |> #2 |> rand |> rator |> rand |> rand |> rator |> rator |> rand |> rand
+    |> listSyntax.dest_list |> #1 |> length
+    top_goal() |> #2 |> dest_imp |> #1 |> funpow 5 rand
+    |> rator |> rand |> rand
+    |> rator |> rand |> rator
+
+``SignalException XTLBRefillL s``
+|> SIMP_CONV(srw_ss())[SignalException_def]
+|> concl |> rhs |> rator |> rand
+|> dest_abs |> #2 |> rator
+
+``
+(capRegToCapStruct
+                    (v2w
+                       [T; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; T; T; T;
+                        T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T;
+                        T; T; T; T; T; T; T; T; T; T; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F; F;
+                        F; F; F; F; F; F; F; F; F; F; F; F; F; T; T; T; T; T;
+                        T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T;
+                        T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T;
+                        T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T; T;
+                        T; T; T; T; T])).CapStruct_access_system_regs
+``
+(*
+set_trace"simplifier"0
+SIMP_CONV (srw_ss()) []
+``
+regstate_brss__6_TLBRandom
+(regstate_brss__6_nextPC_fupd (K 0x9000000040000004w)
+(regstate_brss__6_PC_fupd (K 0x9000000040000000w)
+                  (regstate_brss__sf6 s.regstate)))``
+
+    top_goal() |> #2 |> dest_imp |> #1 |> dest_exists |> #2 |> strip_conj |> last
+    |> dest_exists |> #2 |> strip_conj |> last |> rand
+    |> rator |> funpow 13 rand
+
+    top_goal() |> #2 |> dest_imp |> #1 |> funpow 5 rand
+    |> rator |> rator |> rator
+    |> rand |> rand |> rator |> rand |> rator |> rand |> rand |> rand
+    |> rator
+
+    top_goal() |> #1 |> el 9 |> lhs
+    |> computeLib.CBV_CONV cs |> concl |> rhs |> rator
+
+    |> rator |> funpow 13 rand
+
+    top_goal() |> #1 |> el 2 |> rand |> rhs |> rator
+    \\ pop_assum(SUBST_ALL_TAC)
+*)
+*)
+
   \\ cheat);
 
 (*
