@@ -8,14 +8,16 @@ function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> foral
   match (t, __RISCV_read(addr, width)) {
     (Instruction, None()) => MemException(E_Fetch_Access_Fault),
     (Data, None())        => MemException(E_Load_Access_Fault),
-    (_, Some(v))          => MemValue(v)
+    (_, Some(v))          => { print("mem[" ^ t ^ "," ^ BitStr(addr) ^ "] -> " ^ BitStr(v));
+                               MemValue(v) }
   }
 
 function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
-  if   within_phys_mem(addr, width)
+  /* treat MMIO regions as not executable for now. TODO: this should actually come from PMP/PMA. */
+  if   t == Data & within_mmio_readable(addr, width)
+  then mmio_read(addr, width)
+  else if within_phys_mem(addr, width)
   then phys_mem_read(t, addr, width)
-  else if t == Data /* treat MMIO regions as not executable for now. TODO: this should actually come from PMP/PMA. */
-  then mmio_load(addr, width)
   else MemException(E_Load_Access_Fault)
 
 /* FIXME: We assume atomic accesses are only done to memory-backed regions.  MMIO is not modeled. */
@@ -83,15 +85,19 @@ function mem_write_ea (addr, width, aq, rl, con) = {
 }
 
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(unit) =
+function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(unit) = {
+  print("mem[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
   if   __RISCV_write(addr, width, data)
   then MemValue(())
   else MemException(E_SAMO_Access_Fault)
+}
 
 function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(unit) =
-  if   within_phys_mem(addr, width)
+  if   within_mmio_writable(addr, width)
+  then mmio_write(addr, width, data)
+  else if within_phys_mem(addr, width)
   then phys_mem_write(addr, width, data)
-  else mmio_write(addr, width, data)
+  else MemException(E_SAMO_Access_Fault)
 
 /* FIXME: We assume atomic accesses are only done to memory-backed regions.  MMIO is not modeled. */
 

@@ -97,21 +97,20 @@ type amo = bits(1)
 /* base architecture definitions */
 enum Architecture = {RV32, RV64, RV128}
 type arch_xlen = bits(2)
-function architecture(a : arch_xlen) -> option(Architecture) = {
+function architecture(a : arch_xlen) -> option(Architecture) =
   match (a) {
     0b01 => Some(RV32),
     0b10 => Some(RV64),
     0b11 => Some(RV128),
     _    => None()
   }
-}
-function arch_to_bits(a : Architecture) -> arch_xlen = {
+
+function arch_to_bits(a : Architecture) -> arch_xlen =
   match (a) {
     RV32  => 0b01,
     RV64  => 0b10,
     RV128 => 0b11
   }
-}
 
 /* privilege levels */
 
@@ -119,35 +118,48 @@ type priv_level = bits(2)
 enum Privilege = {User, Supervisor, Machine}
 
 val cast privLevel_to_bits : Privilege -> priv_level
-function privLevel_to_bits (p) = {
+function privLevel_to_bits (p) =
   match (p) {
     User => 0b00,
     Supervisor => 0b01,
     Machine => 0b11
   }
-}
 
 val cast privLevel_of_bits : priv_level -> Privilege
-function privLevel_of_bits (p) = {
+function privLevel_of_bits (p) =
   match (p) {
     0b00 => User,
     0b01 => Supervisor,
     0b11 => Machine
   }
-}
 
 val cast privLevel_to_str : Privilege -> string
-function privLevel_to_str (p) = {
+function privLevel_to_str (p) =
   match (p) {
     User => "U",
     Supervisor => "S",
     Machine => "M"
   }
-}
 
 /* access types */
+
 enum AccessType = {Read, Write, ReadWrite, Execute}
+val cast accessType_to_str : AccessType -> string
+function accessType_to_str (a) =
+  match (a) {
+    Read => "R",
+    Write => "W",
+    ReadWrite => "RW",
+    Execute => "X"
+  }
+
 enum ReadType   = {Instruction, Data}
+val cast readType_to_str : ReadType -> string
+function readType_to_str (r) =
+  match (r) {
+    Instruction => "I",
+    Data => "D"
+  }
 
 /* architectural exception and interrupt definitions */
 
@@ -173,7 +185,7 @@ enum ExceptionType = {
 }
 
 val cast exceptionType_to_bits : ExceptionType -> exc_code
-function exceptionType_to_bits(e) = {
+function exceptionType_to_bits(e) =
   match (e) {
     E_Fetch_Addr_Align => 0x0,
     E_Fetch_Access_Fault => 0x1,
@@ -192,10 +204,9 @@ function exceptionType_to_bits(e) = {
     E_Reserved_14 => 0xe,
     E_SAMO_Page_Fault => 0xf
   }
-}
 
 val cast exceptionType_to_str : ExceptionType -> string
-function exceptionType_to_str(e) = {
+function exceptionType_to_str(e) =
   match (e) {
     E_Fetch_Addr_Align => "fisaligned-fetch",
     E_Fetch_Access_Fault => "fetch-access-fault",
@@ -214,7 +225,6 @@ function exceptionType_to_str(e) = {
     E_Reserved_14 => "reserved-1",
     E_SAMO_Page_Fault => "store/amo-page-fault"
   }
-}
 
 enum InterruptType = {
   I_U_Software,
@@ -229,7 +239,7 @@ enum InterruptType = {
 }
 
 val cast interruptType_to_bits : InterruptType -> exc_code
-function interruptType_to_bits (i) = {
+function interruptType_to_bits (i) =
   match (i) {
     I_U_Software => 0x0,
     I_S_Software => 0x1,
@@ -241,19 +251,17 @@ function interruptType_to_bits (i) = {
     I_S_External => 0x9,
     I_M_External => 0xb
   }
-}
 
 type tv_mode = bits(2)
 enum TrapVectorMode = {TV_Direct, TV_Vector, TV_Reserved}
 
 val cast trapVectorMode_of_bits : tv_mode -> TrapVectorMode
-function trapVectorMode_of_bits (m) = {
+function trapVectorMode_of_bits (m) =
   match (m) {
     0b00 => TV_Direct,
     0b01 => TV_Vector,
     _    => TV_Reserved
   }
-}
 
 /* other exceptions */
 
@@ -277,38 +285,35 @@ type ext_status = bits(2)
 enum ExtStatus = {Off, Initial, Clean, Dirty}
 
 val cast extStatus_to_bits : ExtStatus -> ext_status
-function extStatus_to_bits(e) = {
+function extStatus_to_bits(e) =
   match (e) {
     Off => 0b00,
     Initial => 0b01,
     Clean => 0b10,
     Dirty => 0b11
   }
-}
 
 val cast extStatus_of_bits : ext_status -> ExtStatus
-function extStatus_of_bits(e) = {
+function extStatus_of_bits(e) =
   match (e) {
     0b00 => Off,
     0b01 => Initial,
     0b10 => Clean,
     0b11 => Dirty
   }
-}
 
 /* supervisor-level address translation modes */
 
 type satp_mode = bits(4)
 enum SATPMode = {Sbare, Sv32, Sv39}
 
-function satpMode_of_bits(a : Architecture, m : satp_mode) -> option(SATPMode) = {
+function satpMode_of_bits(a : Architecture, m : satp_mode) -> option(SATPMode) =
   match (a, m) {
     (_, 0x0)    => Some(Sbare),
     (RV32, 0x1) => Some(Sv32),
     (RV64, 0x8) => Some(Sv39),
     (_, _)      => None()
   }
-}
 
 /* CSR access control bits (from CSR addresses) */
 type csrRW = bits(2)  /* read/write */

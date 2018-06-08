@@ -78,16 +78,26 @@ val clint_load : forall 'n. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) 
 function clint_load(addr, width) = {
   /* FIXME: For now, only allow exact aligned access. */
   if addr == MSIP_BASE & ('n == 8 | 'n == 4)
-  then MemValue(zero_extend(mip.MSI(), sizeof(8 * 'n)))
+  then {
+    print("clint[" ^ BitStr(addr) ^ "] -> " ^ BitStr(mip.MSI()));
+    MemValue(zero_extend(mip.MSI(), sizeof(8 * 'n)))
+  }
   else if addr == MTIMECMP_BASE & ('n == 8)
-  then MemValue(zero_extend(mtimecmp, 64)) /* FIXME: Redundant zero_extend currently required by Lem backend */
+  then {
+    print("clint[" ^ BitStr(addr) ^ "] -> " ^ BitStr(mtimecmp));
+    MemValue(zero_extend(mtimecmp, 64)) /* FIXME: Redundant zero_extend currently required by Lem backend */
+  }
   else if addr == MTIME_BASE & ('n == 8)
-  then MemValue(zero_extend(mtime, 64))
+  then {
+    print("clint[" ^ BitStr(addr) ^ "] -> " ^ BitStr(mtime));
+    MemValue(zero_extend(mtime, 64))
+  }
   else MemException(E_Load_Access_Fault)
 }
 
 val clint_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wreg}
 function clint_store(addr, width, data) = {
+  print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
   if addr == MSIP_BASE & ('n == 8 | 'n == 4) then {
     mip->MSI() = data[0] == 0b1;
     MemValue(())
@@ -125,6 +135,7 @@ function htif_store(addr, width, data) = {
   let cmd = Mk_htif_cmd(cbits);
   match cmd.device() {
     0x00 => { /* syscall-proxy */
+      print("htif-syscall-proxy[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
       if cmd.payload()[0] == 0b1
       then {
            htif_done = true;
@@ -133,20 +144,27 @@ function htif_store(addr, width, data) = {
       else ()
     },
     0x01 => { /* terminal */
+      print("htif-term[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
       match cmd.cmd() {
         0x00 => /* TODO: terminal input handling */ (),
         0x01 => plat_term_write(cmd.payload()[7..0]),
         c    => print("Unknown term cmd: " ^ BitStr(c))
       }
     },
-    d => print("Unknown htif device:" ^ BitStr(d))
+    d => print("htif-????[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data))
   };
   MemValue(())
 }
 
 /* Top-level MMIO dispatch */
 
-function mmio_load(addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+function within_mmio_readable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+  within_clint(addr, width) | (within_htif_readable(addr, width) & 1 <= 'n)
+
+function within_mmio_writable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+  within_clint(addr, width) | (within_htif_writable(addr, width) & 'n <= 8)
+
+function mmio_read(addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
   if   within_clint(addr, width)
   then clint_load(addr, width)
   else if within_htif_readable(addr, width) & (1 <= 'n)
