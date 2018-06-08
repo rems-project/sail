@@ -60,9 +60,11 @@ let hex_line bs =
   in
   String.concat "" (List.mapi hex_char bs) ^ " " ^ String.concat "" (List.map (fun c -> Printf.sprintf "%c" (escape_char c)) bs)
 
-let rec break n = function
-  | [] -> []
-  | (_ :: _ as xs) -> [Lem_list.take n xs] @ break n (Lem_list.drop n xs)
+let break n xs =
+  let rec helper acc =function
+    | [] -> List.rev acc
+    | (_ :: _ as xs) -> helper ([Lem_list.take n xs] @ acc) (Lem_list.drop n xs)
+  in helper [] xs
 
 let print_segment seg =
   let bs = seg.Elf_interpreted_segment.elf64_segment_body in
@@ -121,7 +123,7 @@ let load_segment ?writer:(writer=write_sail_lib) seg =
   prerr_endline ("Segment base address: " ^ Big_int.to_string base);
   prerr_endline ("Segment physical address: " ^ Big_int.to_string paddr);
   print_segment seg;
-  List.iteri (writer paddr) (List.map int_of_char (Byte_sequence.char_list_of_byte_sequence bs))
+  List.iteri (writer paddr) (List.rev_map int_of_char (List.rev (Byte_sequence.char_list_of_byte_sequence bs)))
 
 let load_elf ?writer:(writer=write_sail_lib) name =
   let segments, e_entry, symbol_map = read name in
