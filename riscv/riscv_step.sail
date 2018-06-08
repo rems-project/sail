@@ -42,8 +42,8 @@ function fetch() -> FetchResult = {
 }
 
 /* returns whether an instruction was executed */
-val step : unit -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
-function step() = {
+val step : int -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+function step(step_no) = {
   match curInterrupt(mip, mie, mideleg) {
     Some(intr, priv) => {
       print_bits("Handling interrupt: ", intr);
@@ -59,12 +59,12 @@ function step() = {
         F_RVC(h) => {
           match decodeCompressed(h) {
             None() => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(h) ^ " :  <no-decode>");
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") <no-decode>");
               handle_decode_exception(EXTZ(h));
               false
             },
             Some(ast) => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(h) ^ " :  " ^ ast);
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") " ^ ast);
               nextPC = PC + 2;
               execute(ast);
               true
@@ -74,12 +74,12 @@ function step() = {
         F_Base(w) => {
           match decode(w) {
             None() => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(w) ^ " :  <no-decode>");
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") <no-decode>");
               handle_decode_exception(EXTZ(w));
               false
             },
             Some(ast) => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(w) ^ " :  " ^ ast);
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ ast);
               nextPC = PC + 4;
               execute(ast);
               true
@@ -97,8 +97,7 @@ function loop (tohost_addr) = {
   i : int = 0;
   while true do {
     tick_clock();
-    print_int("\nstep: ", i);
-    let retired : bool = step();
+    let retired : bool = step(i);
     PC = nextPC;
     if retired then i = i + 1;
 
