@@ -866,14 +866,14 @@ let doc_exp_lem, doc_let_lem =
               then string (Env.get_extern f env "coq"), true
               else doc_id f, false in
             let (tqs,fn_ty) = Env.get_val_spec_orig f env in
-            let arg_typs = match fn_ty with
-              | Typ_aux (Typ_fn (arg_typ,_,_),_) ->
+            let arg_typs, ret_typ = match fn_ty with
+              | Typ_aux (Typ_fn (arg_typ,ret_typ,_),_) ->
                  (match arg_typ with
-                 | Typ_aux (Typ_tup typs,_) -> typs
-                 | _ -> [arg_typ])
+                 | Typ_aux (Typ_tup typs,_) -> typs, ret_typ
+                 | _ -> [arg_typ], ret_typ)
               | _ -> failwith "Function not a function type"
             in
-            (* Insert existential unpacking where necessary *)
+            (* Insert existential unpacking of arguments where necessary *)
             let doc_arg arg typ_from_fn =
               let arg_pp = expY arg in
               (* TODO: more sophisticated check *)
@@ -881,8 +881,20 @@ let doc_exp_lem, doc_let_lem =
               | Some _, None -> parens (string "projT1 " ^^ arg_pp)
               | _, _ -> arg_pp
             in
-            (* TODO: automatically build existentials *)
             let epp = hang 2 (flow (break 1) (call :: List.map2 doc_arg args arg_typs)) in
+            (* Unpack existential result *)
+            let ret_typ_inst = subst_unifiers (instantiation_of full_exp) ret_typ in
+            let unpack,build_ex =
+              let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
+              match ret_typ_inst, ann_typ with
+              | Typ_aux (Typ_exist _,_), Typ_aux (Typ_exist _,_) ->
+                 if alpha_equivalent env ret_typ_inst ann_typ then false,false else true,true
+              | Typ_aux (Typ_exist _,_), _ -> true,false
+              | _, Typ_aux (Typ_exist _,_) -> false,true
+              | _, _ -> false,false
+            in
+            let epp = if unpack then string "projT1" ^^ space ^^ parens epp else epp in
+            let epp = if build_ex then string "build_ex" ^^ space ^^ parens epp else epp in
             liftR (if aexp_needed then parens (align epp) else epp)
        end
     | E_vector_access (v,e) ->
