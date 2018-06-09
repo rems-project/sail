@@ -1586,7 +1586,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        in
        [iblock case_instrs; ilabel try_label]
      in
-     assert (ctyp_equal ctyp (ctyp_of_typ typ));
+     assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [icomment "begin try catch";
       idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id try_return_id)] @ aexp_cleanup);

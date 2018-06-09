@@ -89,6 +89,10 @@ SAIL_OPTS="-O"
 CC_OPTS="-O2"
 run_c_tests
 
+SAIL_OPTS="-O"
+CC_OPTS="-O2 -fsanitize=undefined"
+run_c_tests
+
 finish_suite "C testing"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
