@@ -1586,15 +1586,18 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        in
        [iblock case_instrs; ilabel try_label]
      in
+     assert (ctyp_equal ctyp (ctyp_of_typ typ));
      [icomment "begin try catch";
-      idecl ctyp try_return_id],
-     ctyp,
-     (fun clexp -> itry_block (aexp_setup @ [aexp_call clexp] @ aexp_cleanup)),
-     [ijump (F_unary ("!", F_have_exception), CT_bool) handled_exception_label]
+      idecl ctyp try_return_id;
+      itry_block (aexp_setup @ [aexp_call (CL_id try_return_id)] @ aexp_cleanup);
+      ijump (F_unary ("!", F_have_exception), CT_bool) handled_exception_label]
      @ List.concat (List.map compile_case cases)
-     @ [imatch_failure ()]
-     @ [ilabel handled_exception_label]
-     @ [icopy CL_have_exception (F_lit (V_bool false), CT_bool)]
+     @ [imatch_failure ();
+        ilabel handled_exception_label;
+        icopy CL_have_exception (F_lit (V_bool false), CT_bool)],
+     ctyp,
+     (fun clexp -> icopy clexp (F_id try_return_id, ctyp)),
+     []
 
   | AE_if (aval, then_aexp, else_aexp, if_typ) ->
      let if_ctyp = ctyp_of_typ ctx if_typ in

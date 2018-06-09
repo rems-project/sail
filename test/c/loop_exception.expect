@@ -1,0 +1,23 @@
+i = 1
+i = 2
+i = 3
+i = 3
+i = 2
+i = 1
+j = 1
+j = 2
+j = 3
+k = 0x01
+k = 0x02
+k = 0x03
+Caught
+Looping
+Caught inner exception
+Caught outer exception
+Outer handler
+Outer handler
+Once
+Once
+ok
+ok
+R = 3
