@@ -76,6 +76,7 @@ let MTIME_BASE    : xlenbits = 0x000000000000bff8
 
 val clint_load : forall 'n. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rreg}
 function clint_load(addr, width) = {
+  let addr = addr - plat_clint_base ();
   /* FIXME: For now, only allow exact aligned access. */
   if addr == MSIP_BASE & ('n == 8 | 'n == 4)
   then {
@@ -92,11 +93,15 @@ function clint_load(addr, width) = {
     print("clint[" ^ BitStr(addr) ^ "] -> " ^ BitStr(mtime));
     MemValue(zero_extend(mtime, 64))
   }
-  else MemException(E_Load_Access_Fault)
+  else {
+    print("clint[" ^ BitStr(addr) ^ "] -> <not-mapped>");
+    MemException(E_Load_Access_Fault)
+  }
 }
 
 val clint_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wreg}
 function clint_store(addr, width, data) = {
+  let addr = addr - plat_clint_base ();
   print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
   if addr == MSIP_BASE & ('n == 8 | 'n == 4) then {
     mip->MSI() = data[0] == 0b1;
