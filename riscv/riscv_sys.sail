@@ -571,7 +571,10 @@ function check_Counteren(csr : csreg, p : Privilege) -> bool =
     (0xC01, User) => scounteren.TM() == true,
     (0xC02, User) => scounteren.IR() == true,
 
-    (_, _) => true
+    (_, _) => /* no HPM counters for now */
+              if   0xC03 <=_u csr & csr <=_u 0xC1F
+              then false
+              else true
   }
 
 function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
@@ -782,7 +785,6 @@ function init_sys() -> unit = {
   mhartid = EXTZ(0b0);
 
   mcounteren->bits() = EXTZ(0b0);
-  scounteren->bits() = EXTZ(0b0);
 }
 
 function tick_clock() -> unit = {
