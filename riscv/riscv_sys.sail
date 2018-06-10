@@ -265,7 +265,24 @@ function legalize_scounteren(c : Counteren, v : xlenbits) -> Counteren = {
 
 register mcycle : xlenbits
 register mtime : xlenbits
+
+/* minstret is an architectural register, and can be written to.  The
+   spec says that minstret increments on instruction retires need to
+   occur before any explicit writes to instret.  However, in our
+   simulation loop, we need to execute an instruction to find out
+   whether it retired, and hence can only increment instret after
+   execution.  To avoid doing this in the case minstret was explicitly
+   written to, we track writes to it in a separate model-internal
+   register.
+*/
 register minstret : xlenbits
+register minstret_written : bool
+
+function retire_instruction() -> unit = {
+  if   minstret_written == true
+  then minstret_written = false
+  else minstret = minstret + 1
+}
 
 /* informational registers */
 register mvendorid : xlenbits
@@ -785,6 +802,8 @@ function init_sys() -> unit = {
   mhartid = EXTZ(0b0);
 
   mcounteren->bits() = EXTZ(0b0);
+  minstret = EXTZ(0b0);
+  minstret_written = false;
 }
 
 function tick_clock() -> unit = {

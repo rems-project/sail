@@ -66,8 +66,7 @@ function step(step_no) = {
             Some(ast) => {
               print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") " ^ ast);
               nextPC = PC + 2;
-              execute(ast);
-              true
+              execute(ast)
             }
           }
         },
@@ -81,8 +80,7 @@ function step(step_no) = {
             Some(ast) => {
               print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ ast);
               nextPC = PC + 4;
-              execute(ast);
-              true
+              execute(ast)
             }
           }
         }
@@ -97,9 +95,13 @@ function loop (tohost_addr) = {
   i : int = 0;
   while true do {
     tick_clock();
-    let retired : bool = step(i);
+    minstret_written = false;     /* see note for minstret */
+    let retired = step(i);
     PC = nextPC;
-    if retired then i = i + 1;
+    if retired then {
+      i = i + 1;
+      retire_instruction()
+    };
 
     /* check htif exit */
     if htif_done then {
