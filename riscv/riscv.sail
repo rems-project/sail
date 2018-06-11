@@ -828,17 +828,14 @@ union clause ast = WFI : unit
 
 mapping clause encdec = WFI() <-> 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
-function clause execute WFI() = {
+function clause execute WFI() =
   match cur_privilege {
-    Machine    => (),
+    Machine    => true,
     Supervisor => if mstatus.TW() == true
-                  then handle_illegal()
-                  else (),
-    User       => handle_illegal()
-  };
-  /* NOTE: since WFI is always interrupted, it should never retire.  TODO: Confirm this. */
-  false
-}
+                  then { handle_illegal(); false }
+                  else true,
+    User       => { handle_illegal(); false }
+  }
 
 function clause print_insn (WFI()) =
   "wfi"
