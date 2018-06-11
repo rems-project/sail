@@ -791,10 +791,10 @@ Ltac unwrap_ArithFacts :=
   repeat match goal with H:(ArithFact _) |- _ => apply use_ArithFact in H end.
 Ltac unbool_comparisons :=
   repeat match goal with
+  | H:context [Z.geb _ _] |- _ => rewrite Z.geb_leb in H
+  | H:context [Z.gtb _ _] |- _ => rewrite Z.gtb_ltb in H
   | H:context [Z.leb _ _ = true] |- _ => rewrite Z.leb_le in H
   | H:context [Z.ltb _ _ = true] |- _ => rewrite Z.ltb_lt in H
-  | H:context [Z.geb _ _ = true] |- _ => rewrite Z.geb_le in H
-  | H:context [Z.gtb _ _ = true] |- _ => rewrite Z.gtb_lt in H
   | H:context [Z.eqb _ _ = true] |- _ => rewrite Z.eqb_eq in H
   | H:context [Z.leb _ _ = false] |- _ => rewrite Z.leb_gt in H
   | H:context [Z.ltb _ _ = false] |- _ => rewrite Z.ltb_ge in H
@@ -806,10 +806,21 @@ Ltac unbool_comparisons :=
 Ltac extract_properties :=
   repeat match goal with H := (projT1 ?X) |- _ => destruct X in *; simpl in H; unfold H in * end;
   repeat match goal with |- context [projT1 ?X] => destruct X in *; simpl end.
+(* TODO: hyps, too? *)
 Ltac reduce_list_lengths :=
   repeat match goal with |- context [length_list ?X] => 
     let r := (eval cbn in (length_list X)) in
     change (length_list X) with r
+  end.
+(* TODO: can we restrict this to concrete terms? *)
+Ltac reduce_pow :=
+  repeat match goal with H:context [Z.pow ?X ?Y] |- _ => 
+    let r := (eval cbn in (Z.pow X Y)) in
+    change (Z.pow X Y) with r in H
+  end;
+  repeat match goal with |- context [Z.pow ?X ?Y] => 
+    let r := (eval cbn in (Z.pow X Y)) in
+    change (Z.pow X Y) with r
   end.
 Ltac solve_arithfact :=
  extract_properties;
@@ -818,6 +829,7 @@ Ltac solve_arithfact :=
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
  reduce_list_lengths;
+ reduce_pow;
  solve [apply ArithFact_mword; assumption
        | constructor; omega
          (* The datatypes hints give us some list handling, esp In *)

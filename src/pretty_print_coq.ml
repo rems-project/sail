@@ -329,6 +329,19 @@ let rec doc_nc ctx (NC_aux (nc,_)) =
   | NC_true -> string "True"
   | NC_false -> string "False"
 
+let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
+  match typ with
+  | Typ_app(Id_aux (Id "range", _), [Typ_arg_aux(Typ_arg_nexp low,_);
+                                     Typ_arg_aux(Typ_arg_nexp high,_)]) ->
+         (* TODO: avoid name clashes *)
+     let kid = mk_kid "rangevar" in
+     let var = nvar kid in
+     let nc = nc_and (nc_lteq low var) (nc_lteq var high) in
+     Some (Typ_aux (Typ_exist ([kid], nc, atom_typ var),Parse_ast.Generated l))
+  | _ -> None
+
+let expand_range_type typ = Util.option_default typ (maybe_expand_range_type typ)
+
 let doc_arithfact ctxt nc =
   string "ArithFact" ^^ space ^^ parens (doc_nc ctxt nc)
 
@@ -369,8 +382,10 @@ let doc_typ, doc_atomic_typ =
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
          if atyp_needed then parens tpp else tpp
-      | Typ_app(Id_aux (Id "range", _),_) ->
-         (string "Z")
+      | Typ_app(Id_aux (Id "range", _), _) ->
+         (match maybe_expand_range_type ty with
+         | Some typ -> atomic_typ atyp_needed typ
+         | None -> failwith "Bad range type")
       | Typ_app(Id_aux (Id "implicit", _),_) ->
          (string "Z")
       | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
@@ -556,6 +571,7 @@ let is_ctor env id = match Env.lookup_id id env with
 | _ -> false
 
 let is_auto_decomposed_exist env typ =
+  let typ = expand_range_type typ in
   match destruct_exist env typ with
   | Some (kids, nc, (Typ_aux (Typ_app (id, _),_) as typ')) when string_of_id id = "atom" -> Some typ'
   | _ -> None
@@ -575,14 +591,27 @@ let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot)) as pat, typ) =
      match p with
      (* Special case translation of the None constructor to remove the unit arg *)
      | P_app(id, _) when string_of_id id = "None" -> string "None"
-     | P_app(id, ((_ :: _) as pats)) ->
-        let ppp = doc_unop (doc_id_ctor id)
-          (* TODO: we shouldn't use pat_typ_of here,
-             we should either get the type checker to put the full type in the
-             annotation (including all existentials), or provide some other way to
-             retrieve the full types for the args from typ. *)
-          (parens (separate_map comma (fun p -> doc_pat ctxt true (p, pat_typ_of p)) pats)) in
-        if apat_needed then parens ppp else ppp
+     | P_app(id, ((_ :: _) as pats)) -> begin
+        (* Following the type checker to get the subpattern types, TODO perhaps ought
+           to persuade the type checker to output these somehow. *)
+       let (typq, ctor_typ) = Env.get_val_spec id env in
+       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
+         | Typ_tup typs -> typs
+         | _ -> [typ]
+       in
+       let arg_typs =
+         match Env.expand_synonyms env ctor_typ with
+         | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
+            (* The FIXME comes from the typechecker code, not sure what it's about... *)
+            let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
+            let arg_typ' = subst_unifiers unifiers arg_typ in
+            untuple arg_typ'
+         | _ -> assert false
+       in
+       let ppp = doc_unop (doc_id_ctor id)
+         (parens (separate_map comma (doc_pat ctxt true) (List.combine pats arg_typs))) in
+       if apat_needed then parens ppp else ppp
+     end
      | P_app(id, []) -> doc_id_ctor id
      | P_lit lit  -> doc_lit lit
      | P_wild -> underscore
@@ -590,7 +619,7 @@ let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot)) as pat, typ) =
      | P_var(p,_) -> doc_pat ctxt true (p, typ)
      | P_as(p,id) -> parens (separate space [doc_pat ctxt true (p, typ); string "as"; doc_id id])
      | P_typ(ptyp,p) ->
-        let doc_p = doc_pat ctxt true (p, ptyp) in
+        let doc_p = doc_pat ctxt true (p, typ) in
         doc_p
      (* Type annotations aren't allowed everywhere in patterns in Coq *)
      (*parens (doc_op colon doc_p (doc_typ typ))*)
@@ -660,7 +689,10 @@ let doc_exp_lem, doc_let_lem =
     let expN = top_exp ctxt false in
     let expV = top_exp ctxt in
     let maybe_add_exist epp =
-      match destruct_exist (env_of full_exp) (typ_of full_exp) with
+      let env = env_of full_exp in
+      let typ = Env.expand_synonyms env (typ_of full_exp) in
+      let typ = expand_range_type typ in
+      match destruct_exist env typ with
       | None -> epp
       | Some _ ->
          let epp = string "build_ex" ^/^ epp in
@@ -876,8 +908,10 @@ let doc_exp_lem, doc_let_lem =
             (* Insert existential unpacking of arguments where necessary *)
             let doc_arg arg typ_from_fn =
               let arg_pp = expY arg in
+              let arg_ty = expand_range_type (Env.expand_synonyms (env_of arg) (typ_of arg)) in
+              let typ_from_fn = expand_range_type (Env.expand_synonyms (env_of arg) typ_from_fn) in
               (* TODO: more sophisticated check *)
-              match destruct_exist env (typ_of arg), destruct_exist env typ_from_fn with
+              match destruct_exist env arg_ty, destruct_exist env typ_from_fn with
               | Some _, None -> parens (string "projT1 " ^^ arg_pp)
               | _, _ -> arg_pp
             in
@@ -886,6 +920,8 @@ let doc_exp_lem, doc_let_lem =
             let ret_typ_inst = subst_unifiers (instantiation_of full_exp) ret_typ in
             let unpack,build_ex =
               let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
+              let ann_typ = expand_range_type ann_typ in
+              let ret_typ_inst = expand_range_type (Env.expand_synonyms env ret_typ_inst) in
               match ret_typ_inst, ann_typ with
               | Typ_aux (Typ_exist _,_), Typ_aux (Typ_exist _,_) ->
                  if alpha_equivalent env ret_typ_inst ann_typ then false,false else true,true
@@ -933,7 +969,23 @@ let doc_exp_lem, doc_let_lem =
        else maybe_add_exist (doc_id id)
     | E_lit lit -> maybe_add_exist (doc_lit lit)
     | E_cast(typ,e) ->
-       expV aexp_needed e
+       let epp = expV true e in
+       let epp = epp ^/^ doc_tannot_lem ctxt (env_of e) (effectful (effect_of e)) typ in
+       let env = env_of_annot (l,annot) in
+       let unpack,build_ex =
+         let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
+         let ann_typ = expand_range_type ann_typ in
+         let cast_typ = expand_range_type (Env.expand_synonyms env typ) in
+         match cast_typ, ann_typ with
+         | Typ_aux (Typ_exist _,_), Typ_aux (Typ_exist _,_) ->
+            if alpha_equivalent env cast_typ ann_typ then false,false else true,true
+         | Typ_aux (Typ_exist _,_), _ -> true,false
+         | _, Typ_aux (Typ_exist _,_) -> false,true
+         | _, _ -> false,false
+       in
+       let epp = if unpack then string "projT1" ^^ space ^^ parens epp else epp in
+       let epp = if build_ex then string "build_ex" ^^ space ^^ parens epp else epp in
+       if aexp_needed then parens epp else epp
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -1083,10 +1135,15 @@ let doc_exp_lem, doc_let_lem =
        prefix 2 1
               (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
-    | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e) ->
+    | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e)
+      when Util.is_none (is_auto_decomposed_exist (env_of e) typ) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; colon; doc_typ ctxt typ; coloneq])
               (top_exp ctxt false e)
+    | LB_val(P_aux (P_typ (typ,pat),_),(E_aux (_,e_ann) as e)) ->
+       prefix 2 1
+              (separate space [string "let"; squote ^^ doc_pat ctxt true (pat, typ); coloneq])
+              (top_exp ctxt false (E_aux (E_cast (typ,e),e_ann)))
     | LB_val(pat,e) ->
        prefix 2 1
               (separate space [string "let"; squote ^^ doc_pat ctxt true (pat, typ_of e); coloneq])
@@ -1357,7 +1414,8 @@ let mk_kid_renames ids_to_avoid kids =
 
 let merge_kids_atoms pats =
   let try_eliminate (gone,map,seen) = function
-    | P_aux (P_id id, ann), typ -> begin
+    | P_aux (P_id id, ann), typ
+    | P_aux (P_typ (_,P_aux (P_id id, ann)),_), typ -> begin
       match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
       | Some (Nexp_aux (Nexp_var kid,l)) ->
          if KidSet.mem kid seen then
@@ -1419,7 +1477,8 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        raise (Reporting_basic.err_unreachable l
                 "guarded pattern expression should have been rewritten before pretty-printing") in
   group (prefix 3 1
-    (separate space [doc_id id; quantspp; patspp; constrspp; atom_constr_pp; colon; retpp; coloneq])
+    (separate space [doc_id id; quantspp; patspp; constrspp; atom_constr_pp] ^/^
+       colon ^^ space ^^ retpp ^^ coloneq)
     (doc_fun_body ctxt exp ^^ dot))
 
 let get_id = function
@@ -1568,8 +1627,10 @@ let doc_val pat exp =
     | P_aux (P_id id, _) -> id, empty
     | _ -> failwith "Top-level value definition with complex pattern not supported for Coq yet"
   in
+  let env = env_of exp in
+  let typ = expand_range_type (Env.expand_synonyms env (typ_of exp)) in
   let id, opt_unpack =
-    match destruct_exist (env_of exp) (typ_of exp) with
+    match destruct_exist env typ with
     | None -> id, None
     | Some (kids,nc,typ) ->
        match drop_duplicate_atoms kids typ, nc with
@@ -1581,8 +1642,8 @@ let doc_val pat exp =
   in
   let idpp = doc_id id in
   let basepp =
-    group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^^
-             space ^^ doc_exp_lem empty_ctxt false exp ^^ dot) ^^ hardline
+    group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^
+             doc_exp_lem empty_ctxt false exp ^^ dot) ^^ hardline
   in
   match opt_unpack with
   | None -> basepp ^^ hardline
