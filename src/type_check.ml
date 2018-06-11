@@ -2889,6 +2889,28 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
           typ_error l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
        | Enum enum -> annot_pat (P_id v) enum, env, []
      end
+  | P_app (f, mpats) when Env.is_union_constructor f env ->
+     begin
+       let (typq, ctor_typ) = Env.get_val_spec f env in
+       match Env.expand_synonyms env ctor_typ with
+       | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
+          bind_pat env pat ret_typ
+       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f)
+     end
+  | P_app (f, mpats) when Env.is_mapping f env ->
+     begin
+       let (typq, mapping_typ) = Env.get_val_spec f env in
+       match Env.expand_synonyms env mapping_typ with
+       | Typ_aux (Typ_bidir (typ1, typ2), _) ->
+          begin
+            try
+              bind_pat env pat typ2
+            with
+            | Type_error _ ->
+               bind_pat env pat typ1
+          end
+       | _ -> typ_error l ("Malformed mapping type " ^ string_of_id f)
+     end
   | P_typ (typ_annot, pat) ->
      Env.wf_typ env typ_annot;
      let (typed_pat, env, guards) = bind_pat env pat typ_annot in
@@ -3730,6 +3752,28 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) 
        | Local (Mutable, _) | Register _ ->
           typ_error l ("Cannot shadow mutable local or register in mapping-pattern " ^ string_of_mpat mpat)
        | Enum enum -> annot_mpat (MP_id v) enum, env, []
+     end
+  | MP_app (f, mpats) when Env.is_union_constructor f env ->
+     begin
+       let (typq, ctor_typ) = Env.get_val_spec f env in
+       match Env.expand_synonyms env ctor_typ with
+       | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
+          bind_mpat allow_unknown other_env env mpat ret_typ
+       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f)
+     end
+  | MP_app (f, mpats) when Env.is_mapping f env ->
+     begin
+       let (typq, mapping_typ) = Env.get_val_spec f env in
+       match Env.expand_synonyms env mapping_typ with
+       | Typ_aux (Typ_bidir (typ1, typ2), _) ->
+          begin
+            try
+              bind_mpat allow_unknown other_env env mpat typ2
+            with
+            | Type_error _ ->
+               bind_mpat allow_unknown other_env env mpat typ1
+          end
+       | _ -> typ_error l ("Malformed mapping type " ^ string_of_id f)
      end
   | MP_lit lit ->
      annot_mpat (MP_lit lit) (infer_lit env lit), env, []
