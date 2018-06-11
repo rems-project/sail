@@ -5,7 +5,7 @@ $include <flow.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
-val "eq_bit" : (bit, bit) -> bool
+val eq_bit = { lem : "eq", _ : "eq_bit" } : (bit, bit) -> bool
 
 val eq_bits = {
   ocaml: "eq_list",

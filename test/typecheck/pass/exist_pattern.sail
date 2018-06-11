@@ -1,4 +1,4 @@
-default Order inc
+default Order dec
 
 $include <prelude.sail>
 
@@ -36,7 +36,7 @@ function main () = {
     32 => x = 128
   };
   match 0b010101 {
-    0b01 @ _ : vector(1, inc, bit) @ 0b101 => n = 42,
+    0b01 @ _ : vector(1, dec, bit) @ 0b101 => n = 42,
     _ => n = 0
   };
   n = 3;
