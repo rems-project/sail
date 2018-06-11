@@ -95,6 +95,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
   ; p_cons           : 'pat * 'pat -> 'pat_aux
+  ; p_string_append  : 'pat list -> 'pat_aux
   ; p_aux            : 'pat_aux * 'a annot -> 'pat
   ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
   ; fP_Fpat          : id * 'pat -> 'fpat_aux

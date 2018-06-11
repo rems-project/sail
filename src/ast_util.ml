@@ -85,6 +85,9 @@ let untyp_pat = function
 
 let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
 
+let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
+let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
+
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
@@ -270,6 +273,7 @@ let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
+let unknown_typ = mk_typ Typ_internal_unknown
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
@@ -445,7 +449,32 @@ and map_pat_annot_aux f = function
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
+  | P_string_append pats -> P_string_append (List.map (map_pat_annot f) pats)
+
+and map_mpexp_annot f (MPat_aux (mpexp, annot)) = MPat_aux (map_mpexp_annot_aux f mpexp, f annot)
+and map_mpexp_annot_aux f = function
+  | MPat_pat mpat -> MPat_pat (map_mpat_annot f mpat)
+  | MPat_when (mpat, guard) -> MPat_when (map_mpat_annot f mpat, map_exp_annot f guard)
+
+and map_mapcl_annot f (MCL_aux (MCL_mapcl (mpexp1, mpexp2), annot)) =
+  MCL_aux (MCL_mapcl (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), f annot)
+
+and map_mpat_annot f (MP_aux (mpat, annot)) = MP_aux (map_mpat_annot_aux f mpat, f annot)
+and map_mpat_annot_aux f = function
+  | MP_lit lit -> MP_lit lit
+  | MP_id id -> MP_id id
+  | MP_app (id, mpats) -> MP_app (id, List.map (map_mpat_annot f) mpats)
+  | MP_record (fmpats, b) -> MP_record (List.map (map_mfpat_annot f) fmpats, b)
+  | MP_tup mpats -> MP_tup (List.map (map_mpat_annot f) mpats)
+  | MP_list mpats -> MP_list (List.map (map_mpat_annot f) mpats)
+  | MP_vector_concat mpats -> MP_vector_concat (List.map (map_mpat_annot f) mpats)
+  | MP_vector mpats -> MP_vector (List.map (map_mpat_annot f) mpats)
+  | MP_cons (mpat1, mpat2) -> MP_cons (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
+  | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
+  | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
+
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
+and map_mfpat_annot f (MFP_aux (MFP_mpat (id, mpat), annot)) = MFP_aux (MFP_mpat (id, map_mpat_annot f mpat), f annot)
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
   | LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
@@ -480,6 +509,7 @@ let def_loc = function
   | DEF_kind (KD_aux (_, (l, _)))
   | DEF_type (TD_aux (_, (l, _)))
   | DEF_fundef (FD_aux (_, (l, _)))
+  | DEF_mapdef (MD_aux (_, (l, _)))
   | DEF_val (LB_aux (_, (l, _)))
   | DEF_spec (VS_aux (_, (l, _)))
   | DEF_default (DT_aux (_, l))
@@ -572,12 +602,14 @@ and string_of_nexp_aux = function
 let rec string_of_typ = function
   | Typ_aux (typ, l) -> string_of_typ_aux typ
 and string_of_typ_aux = function
+  | Typ_internal_unknown -> "<UNKNOWN TYPE>"
   | Typ_id id -> string_of_id id
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
   | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_fn (typ_arg, typ_ret, eff) ->
      string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
+  | Typ_bidir (typ1, typ2) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
@@ -718,7 +750,23 @@ and string_of_pat (P_aux (pat, l)) =
   | P_vector_concat pats -> string_of_list " : " string_of_pat pats
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> string_of_pat pat ^ " as " ^ string_of_id id
+  | P_string_append pats -> string_of_list " ^^ " string_of_pat pats
   | _ -> "PAT"
+
+and string_of_mpat (MP_aux (pat, l)) =
+  match pat with
+  | MP_lit lit -> string_of_lit lit
+  | MP_id v -> string_of_id v
+  | MP_tup pats -> "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
+  | MP_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
+  | MP_cons (pat1, pat2) -> string_of_mpat pat1 ^ " :: " ^ string_of_mpat pat2
+  | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
+  | MP_vector_concat pats -> string_of_list " : " string_of_mpat pats
+  | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
+  | MP_string_append pats -> string_of_list " ^^ " string_of_mpat pats
+  | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
+  | _ -> "MPAT"
+
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
   | LEXP_id v -> string_of_id v
@@ -755,6 +803,9 @@ let rec pat_ids (P_aux (pat_aux, _)) =
      IdSet.union (pat_ids pat1) (pat_ids pat2)
   | P_record (fpats, _) ->
      List.fold_right IdSet.union (List.map fpat_ids fpats) IdSet.empty
+  | P_string_append pats ->
+     List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
+
 and fpat_ids (FP_aux (FP_Fpat (_, pat), _)) = pat_ids pat
 
 let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
@@ -937,9 +988,11 @@ let rec tyvars_of_nc (NC_aux (nc, _)) =
 
 let rec tyvars_of_typ (Typ_aux (t,_)) =
   match t with
+  | Typ_internal_unknown -> KidSet.empty
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_bidir (t1, t2) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
        KidSet.empty ts
@@ -984,7 +1037,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         initial_check.ml. i.e. the rewriter should only encounter this
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
-  | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
+  | Typ_internal_unknown | Typ_bidir _ | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
 and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
@@ -1000,6 +1053,17 @@ let construct_pexp (pat,guard,exp,ann) =
   match guard with
   | None -> Pat_aux (Pat_exp (pat,exp),ann)
   | Some guard -> Pat_aux (Pat_when (pat,guard,exp),ann)
+
+let destruct_mpexp (MPat_aux (mpexp,ann)) =
+  match mpexp with
+  | MPat_pat mpat -> mpat,None,ann
+  | MPat_when (mpat,guard) -> mpat,Some guard,ann
+
+let construct_mpexp (mpat,guard,ann) =
+  match guard with
+  | None -> MPat_aux (MPat_pat mpat,ann)
+  | Some guard -> MPat_aux (MPat_when (mpat,guard),ann)
+
 
 let is_valspec id = function
   | DEF_spec (VS_aux (VS_val_spec (_, id', _, _), _)) when Id.compare id id' = 0 -> true

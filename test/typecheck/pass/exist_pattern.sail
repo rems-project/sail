@@ -1,22 +1,12 @@
-default Order inc
+default Order dec
 
-infix 4 ==
+$include <prelude.sail>
 
 register n : nat
 
 register x : nat
 
 register y : nat
-
-val eq_int = {lem: "eq", coq: "Z.eqb"} : (int, int) -> bool
-val eq_vec = {lem: "eq_vec", coq: "eq_vec"} : forall ('n : Int). (vector('n, inc, bit), vector('n, inc, bit)) -> bool
-
-overload operator == = {eq_int, eq_vec}
-
-val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
-
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_inc", coq: "subrange_vec_inc"} : forall ('n : Int) ('m : Int) ('o : Int), 'm <= 'o <= 'n.
-  (vector('n, inc, bit), atom('m), atom('o)) -> vector('o - ('m - 1), inc, bit)
 
 type wordsize = {'n, 'n in {8, 16, 32}. range(0, 'n)}
 
@@ -46,7 +36,7 @@ function main () = {
     32 => x = 128
   };
   match 0b010101 {
-    0b01 @ _ : vector(1, inc, bit) @ 0b101 => n = 42,
+    0b01 @ _ : vector(1, dec, bit) @ 0b101 => n = 42,
     _ => n = 0
   };
   n = 3;

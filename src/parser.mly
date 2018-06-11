@@ -93,6 +93,16 @@ let mk_exp e n m = E_aux (e, loc n m)
 let mk_lit l n m = L_aux (l, loc n m)
 let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
+
+let mk_typschm_opt ts n m = TypSchm_opt_aux (
+                                  TypSchm_opt_some (
+                                      ts
+                                    ),
+                                  loc n m
+                                )
+
+let mk_typschm_opt_none = TypSchm_opt_aux (TypSchm_opt_none, Unknown)
+
 let mk_nc nc n m = NC_aux (nc, loc n m)
 let mk_sd s n m = SD_aux (s, loc n m)
 let mk_sd_doc s str n m = SD_aux (s, Documented (str, loc n m))
@@ -104,6 +114,11 @@ let mk_td t n m = TD_aux (t, loc n m)
 let mk_vs v n m = VS_aux (v, loc n m)
 let mk_reg_dec d n m = DEC_aux (d, loc n m)
 let mk_default d n m = DT_aux (d, loc n m)
+
+let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
+let mk_mpat mpat n m = MP_aux (mpat, loc n m)
+let mk_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_mapcl (mpexp1, mpexp2), loc n m)
+let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n m)
 
 let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
 
@@ -159,7 +174,7 @@ let rec desugar_rchain chain s e =
 /*Terminals with no content*/
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
-%token Enum Else False Forall Foreach Overload Function_ If_ In Inc Let_ Int Order Cast
+%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
@@ -170,7 +185,7 @@ let rec desugar_rchain chain s e =
 
 %token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
-%token MinusGt
+%token MinusGt Bidir
 
 /*Terminals with content*/
 
@@ -179,7 +194,7 @@ let rec desugar_rchain chain s e =
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
-%token <string> Colon ColonColon ExclEq
+%token <string> Colon ColonColon (* CaretCaret *) TildeTilde ExclEq
 %token <string> GtEq
 %token <string> LtEq
 
@@ -641,10 +656,20 @@ typschm:
     { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ MinusGt typ Effect effect_set
     { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
+  | typ Bidir typ
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3)) s e) s e) $startpos $endpos }
+  | Forall typquant Dot typ Bidir typ
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6)) s e) s e) $startpos $endpos }
 
 typschm_eof:
   | typschm Eof
     { $1 }
+
+pat_string_append:
+  | atomic_pat
+    { [$1] }
+  | atomic_pat Caret pat_string_append
+    { $1 :: $3 }
 
 pat1:
   | atomic_pat
@@ -653,6 +678,8 @@ pat1:
     { mk_pat (P_vector_concat ($1 :: $3)) $startpos $endpos }
   | atomic_pat ColonColon pat1
     { mk_pat (P_cons ($1, $3)) $startpos $endpos }
+  | atomic_pat Caret pat_string_append
+    { mk_pat (P_string_append ($1 :: $3)) $startpos $endpos }
 
 pat_concat:
   | atomic_pat
@@ -1048,6 +1075,8 @@ atomic_exp:
 fexp_exp:
   | atomic_exp Eq exp
     { mk_exp (E_app_infix ($1, mk_id (Id "=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | TildeTilde id
+    { mk_exp (E_app_infix (mk_exp (E_id $2) $startpos($2) $endpos($2), mk_id (Id "=") $startpos $endpos, mk_exp (E_id $2) $startpos($2) $endpos($2))) $startpos $endpos }
 
 fexp_exp_list:
   | fexp_exp
@@ -1170,6 +1199,8 @@ type_union:
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
   | id Colon typ MinusGt typ
     { (fun s e -> Tu_aux (Tu_ty_id (mk_typ (ATyp_fn ($3, $5, mk_typ (ATyp_set []) s e)) s e, $1), loc s e)) $startpos $endpos }
+  | id Colon Lcurly struct_fields Rcurly
+    { Tu_aux (Tu_ty_anon_rec ($4, $1), loc $startpos $endpos) }
 
 type_unions:
   | type_union
@@ -1188,6 +1219,80 @@ fun_def_list:
     { [$1] }
   | fun_def fun_def_list
     { $1 :: $2 }
+
+mpat_string_append:
+  | atomic_mpat
+    { [$1] }
+  | atomic_mpat Caret mpat_string_append
+    { $1 :: $3 }
+
+mpat:
+  | atomic_mpat
+    { $1 }
+  | atomic_mpat At mpat_concat
+    { mk_mpat (MP_vector_concat ($1 :: $3)) $startpos $endpos }
+  | atomic_mpat ColonColon mpat
+    { mk_mpat (MP_cons ($1, $3)) $startpos $endpos }
+  | atomic_mpat Caret mpat_string_append
+    { mk_mpat (MP_string_append ($1 :: $3)) $startpos $endpos }
+
+mpat_concat:
+  | atomic_mpat
+    { [$1] }
+  | atomic_mpat At mpat_concat
+    { $1 :: $3 }
+
+mpat_list:
+  | mpat
+    { [$1] }
+  | mpat Comma mpat_list
+    { $1 :: $3 }
+
+atomic_mpat:
+  | lit
+    { mk_mpat (MP_lit $1) $startpos $endpos }
+  | id
+    { mk_mpat (MP_id $1) $startpos $endpos }
+  | id Unit
+    { mk_mpat (MP_app ($1, [mk_mpat (MP_lit (mk_lit L_unit $startpos($2) $endpos($2))) $startpos($2) $endpos($2)])) $startpos $endpos }
+  | id Lparen mpat_list Rparen
+    { mk_mpat (MP_app ($1, $3)) $startpos $endpos }
+  | Lparen mpat Rparen
+    { $2 }
+  | Lparen mpat Comma mpat_list Rparen
+    { mk_mpat (MP_tup ($2 :: $4)) $startpos $endpos }
+  | Lsquare mpat_list Rsquare
+    { mk_mpat (MP_vector $2) $startpos $endpos }
+  | LsquareBar RsquareBar
+    { mk_mpat (MP_list []) $startpos $endpos }
+  | LsquareBar mpat_list RsquareBar
+    { mk_mpat (MP_list $2) $startpos $endpos }
+  | atomic_mpat Colon typ
+    { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
+
+
+
+mpexp:
+  | mpat
+    { mk_mpexp (MPat_pat $1) $startpos $endpos }
+  | mpat If_ exp
+    { mk_mpexp (MPat_when ($1, $3)) $startpos $endpos }
+
+mapcl:
+  | mpexp Bidir mpexp
+    { mk_mapcl $1 $3 $startpos $endpos }
+
+mapcl_list:
+  | mapcl
+    { [$1] }
+  | mapcl Comma mapcl_list
+    { $1 :: $3 }
+
+map_def:
+  | Mapping id Eq Lcurly mapcl_list Rcurly
+    { mk_map $2 mk_typschm_opt_none $5 $startpos $endpos }
+  | Mapping id Colon typschm Eq Lcurly mapcl_list Rcurly
+    { mk_map $2 (mk_typschm_opt $4 $startpos($4) $endpos($4)) $7 $startpos $endpos }
 
 let_def:
   | Let_ letbind
@@ -1238,6 +1343,10 @@ scattered_def:
     { mk_sd (SD_scattered_variant($2, mk_namesectn, mk_typqn)) $startpos $endpos }
   | Function_ id
     { mk_sd (SD_scattered_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
+  | Mapping id
+    { mk_sd (SD_scattered_mapping ($2, mk_tannotn)) $startpos $endpos }
+  | Mapping id Colon funcl_typ
+    { mk_sd (SD_scattered_mapping ($2, $4)) $startpos $endpos }
 
 scattered_clause:
   | Doc Function_ Clause funcl
@@ -1245,9 +1354,12 @@ scattered_clause:
   | Function_ Clause funcl
     { mk_sd (SD_scattered_funcl $3) $startpos $endpos }
 
+
 def:
   | fun_def
     { DEF_fundef $1 }
+  | map_def
+    { DEF_mapdef $1 }
   | Fixity
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
@@ -1268,6 +1380,8 @@ def:
     { DEF_scattered $1 }
   | Union Clause id Eq type_union
     { DEF_scattered (mk_sd (SD_scattered_unioncl ($3, $5)) $startpos $endpos) }
+  | Mapping Clause id Eq mapcl
+    { DEF_scattered (mk_sd (SD_scattered_mapcl ($3, $5)) $startpos $endpos) }
   | End id
     { DEF_scattered (mk_sd (SD_scattered_end $2) $startpos $endpos) }
   | default_def

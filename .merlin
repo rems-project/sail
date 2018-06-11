@@ -1,3 +1,6 @@
+FLG -w -26
+FLG -w -32
+
 S src
 S src/contrib/**
 S src/gen_lib/**

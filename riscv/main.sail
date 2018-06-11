@@ -11,6 +11,7 @@ val elf_entry = {
 val main : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 
 function main () = {
+
   PC = __GetSlice_int(64, elf_entry(), 0);
   try {
     init_sys ();

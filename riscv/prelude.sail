@@ -3,6 +3,67 @@ default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
 
+val spc : unit <-> string
+val opt_spc : unit <-> string
+val def_spc : unit <-> string
+
+val hex_bits : forall 'n . (atom('n), bits('n)) <-> string
+
+val hex_bits_4 : bits(4) <-> string
+val hex_bits_4_forwards = "string_of_bits" : bits(4) -> string
+val "hex_bits_4_matches_prefix" : string -> option((bits(4), nat))
+
+val hex_bits_5 : bits(5) <-> string
+val hex_bits_5_forwards = "string_of_bits" : bits(5) -> string
+val "hex_bits_5_matches_prefix" : string -> option((bits(5), nat))
+
+val hex_bits_6 : bits(6) <-> string
+val hex_bits_6_forwards = "string_of_bits" : bits(6) -> string
+val "hex_bits_6_matches_prefix" : string -> option((bits(6), nat))
+
+val hex_bits_12 : bits(12) <-> string
+val hex_bits_12_forwards = "string_of_bits" : bits(12) -> string
+val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
+
+val hex_bits_13 : bits(13) <-> string
+val hex_bits_13_forwards = "string_of_bits" : bits(13) -> string
+val "hex_bits_13_matches_prefix" : string -> option((bits(13), nat))
+
+val hex_bits_20 : bits(20) <-> string
+val hex_bits_20_forwards = "string_of_bits" : bits(20) -> string
+val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))
+
+val hex_bits_21 : bits(21) <-> string
+val hex_bits_21_forwards = "string_of_bits" : bits(21) -> string
+val "hex_bits_21_matches_prefix" : string -> option((bits(21), nat))
+
+val hex_bits_32 : bits(32) <-> string
+val hex_bits_32_forwards = "string_of_bits" : bits(32) -> string
+val "hex_bits_32_matches_prefix" : string -> option((bits(32), nat))
+
+
+val spc_forwards : unit -> string
+function spc_forwards () = " "
+val spc_backwards : string -> unit
+function spc_backwards s = ()
+
+val spc_matches_prefix = "spc_matches_prefix" : string -> option((unit, nat))
+
+val opt_spc_forwards : unit -> string
+function opt_spc_forwards () = ""
+val opt_spc_backwards : string -> unit
+function opt_spc_backwards s = ()
+
+val opt_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
+
+val def_spc_forwards : unit -> string
+function def_spc_forwards () = " "
+val def_spc_backwards : string -> unit
+function def_spc_backwards s = ()
+
+val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
+
+
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -10,12 +71,19 @@ val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-
-val "eq_bit" : (bit, bit) -> bool
+val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit"} : (bit, bit) -> bool
 
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
+val string_startswith = "string_startswith" : (string, string) -> bool
+val string_drop = "string_drop" : (string, nat) -> string
+val string_length = "string_length" : string -> nat
+val string_append = "string_append" : (string, string) -> string
+val maybe_int_of_prefix = "maybe_int_of_prefix" : string -> option((int, nat))
+val maybe_nat_of_prefix = "maybe_nat_of_prefix" : string -> option((nat, nat))
+val maybe_int_of_string = "maybe_int_of_string" : string -> option(int)
+
 
 val eq_real = {ocaml: "eq_real", lem: "eq"} : (real, real) -> bool
 
@@ -188,6 +256,9 @@ val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
 val sub_int = {ocaml: "sub_int", lem: "integerMinus"} : (int, int) -> int
+val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
+               lem: "integerMinus"}
+            : (nat, nat) -> nat
 
 val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 

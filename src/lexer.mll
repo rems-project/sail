@@ -128,6 +128,7 @@ let kw_table =
      ("forall",                  (fun _ -> Forall));
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
+     ("mapping",                 (fun _ -> Mapping));
      ("overload",                (fun _ -> Overload));
      ("throw",                   (fun _ -> Throw));
      ("try",                     (fun _ -> Try));
@@ -215,6 +216,8 @@ rule token = parse
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ (Caret(r"^")) }
   | "::"                                { ColonColon(r "::") }
+  (* | "^^"                                { CaretCaret(r "^^") } *)
+  | "~~"                                { TildeTilde(r "~~") }
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | ".."                                { DotDot }
@@ -245,6 +248,7 @@ rule token = parse
   | "!="				{ (ExclEq(r"!=")) }
   | ">="				{ (GtEq(r">=")) }
   | "->"                                { MinusGt }
+  | "<->"                               { Bidir }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
   | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf) }

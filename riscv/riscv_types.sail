@@ -327,3 +327,71 @@ enum ropw = {RISCV_ADDW, RISCV_SUBW, RISCV_SLLW, RISCV_SRLW, RISCV_SRAW} /* reg-
 enum amoop = {AMOSWAP, AMOADD, AMOXOR, AMOAND, AMOOR, AMOMIN, AMOMAX, AMOMINU, AMOMAXU} /* AMO ops */
 enum csrop = {CSRRW, CSRRS, CSRRC}
 enum word_width = {BYTE, HALF, WORD, DOUBLE}
+
+/* mappings for assembly */
+
+val reg_name : bits(5) <-> string
+mapping reg_name = {
+    0b00000 <-> "zero",
+    0b00001 <-> "ra",
+    0b00010 <-> "sp",
+    0b00011 <-> "gp",
+    0b00100 <-> "tp",
+    0b00101 <-> "t0",
+    0b00110 <-> "t1",
+    0b00111 <-> "t2",
+    0b01000 <-> "fp",
+    0b01001 <-> "s1",
+    0b01010 <-> "a0",
+    0b01011 <-> "a1",
+    0b01100 <-> "a2",
+    0b01101 <-> "a3",
+    0b01110 <-> "a4",
+    0b01111 <-> "a5",
+    0b10000 <-> "a6",
+    0b10001 <-> "a7",
+    0b10010 <-> "s2",
+    0b10011 <-> "s3",
+    0b10100 <-> "s4",
+    0b10101 <-> "s5",
+    0b10110 <-> "s6",
+    0b10111 <-> "s7",
+    0b11000 <-> "s8",
+    0b11001 <-> "s9",
+    0b11010 <-> "s10",
+    0b11011 <-> "s11",
+    0b11100 <-> "t3",
+    0b11101 <-> "t4",
+    0b11110 <-> "t5",
+    0b11111 <-> "t6"
+}
+
+val sep : unit <-> string
+mapping sep = {
+  () <-> opt_spc() ^ "," ^ def_spc()
+}
+
+mapping bool_bits : bool <-> bits(1) = {
+  true <-> 0b1,
+  false <-> 0b0
+}
+
+mapping bool_not_bits : bool <-> bits(1) = {
+  true <-> 0b0,
+  false <-> 0b1
+}
+
+
+mapping size_bits : word_width <-> bits(2) = {
+  BYTE <-> 0b00,
+  HALF <-> 0b01,
+  WORD <-> 0b10,
+  DOUBLE <-> 0b11
+}
+
+mapping size_mnemonic : word_width <-> string = {
+  BYTE <-> "b",
+  HALF <-> "h",
+  WORD <-> "w",
+  DOUBLE <-> "d"
+}

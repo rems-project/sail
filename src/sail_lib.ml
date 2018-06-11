@@ -1,6 +1,9 @@
 module Big_int = Nat_big_num
 
 type 'a return = { return : 'b . 'a -> 'b }
+type 'za zoption = | ZNone of unit | ZSome of 'za;;
+
+let zint_forwards i = string_of_int (Big_int.to_int i)
 
 let opt_trace = ref false
 
@@ -491,6 +494,28 @@ let debug (str1, n, str2, v) = prerr_endline (str1 ^ Big_int.to_string n ^ str2 
 
 let eq_string (str1, str2) = String.compare str1 str2 == 0
 
+let string_startswith (str1, str2) = String.compare (String.sub str1 0 (String.length str2)) str2 == 0
+
+let string_drop (str, n) = let n = Big_int.to_int n in String.sub str n (String.length str - n)
+
+let string_length str = Big_int.of_int (String.length str)
+
+let string_append (s1, s2) = s1 ^ s2
+
+(* highly inefficient recursive implementation *)
+let rec maybe_int_of_prefix = function
+  | "" -> ZNone ()
+  | str ->
+     let len = String.length str in
+     match int_of_string_opt str with
+     | Some n -> ZSome (Big_int.of_int n, Big_int.of_int len)
+     | None -> maybe_int_of_prefix (String.sub str 0 (len - 1))
+
+let maybe_int_of_string str =
+  match int_of_string_opt str with
+  | None -> ZNone ()
+  | Some n -> ZSome (Big_int.of_int n)
+
 let lt_int (x, y) = Big_int.less x y
 
 let set_slice (out_len, slice_len, out, n, slice) =
@@ -634,6 +659,98 @@ let speculate_conditional_success () = true
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
 
+let rec n_leading_spaces s =
+  match String.length s with
+  | 0 -> 0
+  | 1 -> begin match s with
+         | " " -> 1
+         | _ -> 0
+         end
+  | len -> begin match String.get s 0 with
+           | ' ' -> 1 + (n_leading_spaces (String.sub s 1 (len - 1)))
+           | _ -> 0
+           end
+
+
+let opt_spc_matches_prefix s =
+  ZSome ((), n_leading_spaces s |> Big_int.of_int)
+
+let spc_matches_prefix s =
+  let n = n_leading_spaces s in
+  match n with
+  | 0 -> ZNone ()
+  | n -> ZSome ((), Big_int.of_int n)
+
+let hex_bits_5_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 32 then
+       ZSome ((bits_of_int 16 n, len))
+     else
+       ZNone ()
+
+let hex_bits_6_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 64 then
+       ZSome ((bits_of_int 32 n, len))
+     else
+       ZNone ()
+
+let hex_bits_12_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 4096 then
+       ZSome ((bits_of_int 2048 n, len))
+     else
+       ZNone ()
+
+let hex_bits_13_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 8192 then
+       ZSome ((bits_of_int 4096 n, len))
+     else
+       ZNone ()
+
+let hex_bits_20_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 1048576 then
+       ZSome ((bits_of_int 524288 n, len))
+     else
+       ZNone ()
+
+let hex_bits_21_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 2097152 then
+       ZSome ((bits_of_int 1048576 n, len))
+     else
+       ZNone ()
+
+let hex_bits_32_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     let n = Big_int.to_int n in
+     if 0 <= n && n < 4294967296 then
+       ZSome ((bits_of_int 2147483648 n, len))
+     else
+       ZNone ()
+
 let string_of_bool = function
   | true -> "true"
   | false -> "false"
@@ -659,3 +776,4 @@ let load_raw (paddr, file) =
     done
   with
   | End_of_file -> ()
+

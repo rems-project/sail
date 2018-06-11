@@ -151,6 +151,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_default_ord (* default order for increasing or decreasing signficant bits *)
  | ATyp_set of (base_effect) list (* effect set *)
  | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
+ | ATyp_bidir of atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
  | ATyp_wild
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
@@ -251,6 +252,7 @@ pat_aux =  (* Pattern *)
  | P_tup of (pat) list (* tuple pattern *)
  | P_list of (pat) list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
+ | P_string_append of pat list (* string append pattern, x ^^ y *)
 
 and pat = 
    P_aux of pat_aux * l
@@ -342,6 +344,14 @@ tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of typquant * atyp
 
+type
+typschm_opt_aux =
+  TypSchm_opt_none
+| TypSchm_opt_some of typschm
+
+type
+typschm_opt =
+  TypSchm_opt_aux of typschm_opt_aux * l
 
 type 
 effect_opt_aux =  (* Optional effect annotation for functions *)
@@ -363,6 +373,7 @@ funcl_aux =  (* Function clause *)
 type 
 type_union_aux =  (* Type union constructors *)
    Tu_ty_id of atyp * id
+ | Tu_ty_anon_rec of (atyp * id) list * id
 
 
 type 
@@ -390,7 +401,6 @@ type
 funcl = 
    FCL_aux of funcl_aux * l
 
-
 type 
 type_union = 
    Tu_aux of type_union_aux * l
@@ -416,6 +426,48 @@ default_typing_spec_aux =  (* Default kinding or typing assumption, and default 
    DT_kind of base_kind * kid
  | DT_order of base_kind * atyp
  | DT_typ of typschm * id
+
+
+type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only constructible parts *)
+ | MP_lit of lit
+ | MP_id of id
+ | MP_app of id * ( mpat) list
+ | MP_record of ( mfpat) list * bool
+ | MP_vector of ( mpat) list
+ | MP_vector_concat of ( mpat) list
+ | MP_tup of ( mpat) list
+ | MP_list of ( mpat) list
+ | MP_cons of ( mpat) * ( mpat)
+ | MP_string_append of mpat list
+ | MP_typ of mpat * atyp
+
+and mpat =
+ | MP_aux of ( mpat_aux) * l
+
+and mfpat_aux =  (* Mapping field pattern, why does this have to exist *)
+ | MFP_mpat of id * mpat
+
+and mfpat =
+ | MFP_aux of mfpat_aux * l
+
+type mpexp_aux =
+ | MPat_pat of ( mpat)
+ | MPat_when of ( mpat) * ( exp)
+
+type mpexp =
+  | MPat_aux of ( mpexp_aux) * l
+
+type mapcl_aux =  (* mapping clause (bidirectional pattern-match) *)
+ | MCL_mapcl of ( mpexp) * ( mpexp)
+
+type mapcl =
+ | MCL_aux of ( mapcl_aux) * l
+
+type mapdef_aux =  (* mapping definition (bidirectional pattern-match function) *)
+ | MD_mapping of id * typschm_opt * ( mapcl) list
+
+type mapdef =
+ | MD_aux of ( mapdef_aux) * l
 
 
 type 
@@ -454,6 +506,8 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
  | SD_scattered_funcl of funcl (* scattered function definition clause *)
  | SD_scattered_variant of id * name_scm_opt * typquant (* scattered union definition header *)
  | SD_scattered_unioncl of id * type_union (* scattered union definition member *)
+ | SD_scattered_mapping of id * tannot_opt
+ | SD_scattered_mapcl of id * mapcl
  | SD_scattered_end of id (* scattered definition end *)
 
 
@@ -500,6 +554,7 @@ def =  (* Top-level definition *)
    DEF_kind of kind_def (* definition of named kind identifiers *)
  | DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
+ | DEF_mapdef of mapdef (* mapping definition *)
  | DEF_val of letbind (* value definition *)
  | DEF_overload of id * id list (* operator overload specifications *)
  | DEF_fixity of prec * Big_int.num * id (* fixity declaration *)

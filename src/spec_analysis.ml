@@ -88,7 +88,9 @@ let rec free_type_names_t consider_var (Typ_aux (t, _)) = match t with
   | Typ_var name -> if consider_var then Nameset.add (string_of_kid name) mt else mt
   | Typ_id name -> Nameset.add (string_of_id name) mt
   | Typ_fn (t1,t2,_) -> Nameset.union (free_type_names_t consider_var t1)
-                                     (free_type_names_t consider_var t2)
+                          (free_type_names_t consider_var t2)
+  | Typ_bidir (t1, t2) -> Nameset.union (free_type_names_t consider_var t1)
+                                        (free_type_names_t consider_var t2)
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kids,_,t') -> List.fold_left (fun s kid -> Nameset.remove (string_of_kid kid) s) (free_type_names_t consider_var t') kids
@@ -116,6 +118,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
     else used
   | Typ_id id -> conditional_add_typ bound used id
   | Typ_fn(arg,ret,_) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used arg) ret
+  | Typ_bidir(t1, t2) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used t1) t2 (* TODO FIXME? *)
   | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
@@ -451,6 +454,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_kind kdef -> fv_of_kind_def consider_var kdef
   | DEF_type tdef -> fv_of_type_def consider_var tdef
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
+  | DEF_mapdef mdef -> mt,mt (* fv_of_map consider_var mdef *)
   | DEF_val lebind -> ((fun (b,u,_) -> (b,u)) (fv_of_let consider_var mt mt mt lebind))
   | DEF_spec vspec -> fv_of_vspec consider_var vspec
   | DEF_fixity _ -> mt,mt

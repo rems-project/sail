@@ -1,16 +1,17 @@
 SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail
 PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
+SAIL ?= $(SAIL_DIR)/sail
 
 export SAIL_DIR
 
 all: platform Riscv.thy
 
 check: $(SAIL_SRCS) main.sail Makefile
-	$(SAIL_DIR)/sail $(SAIL_SRCS) main.sail
+	$(SAIL) $(SAIL_FLAGS) $(SAIL_SRCS) main.sail
 
 _sbuild/riscv.ml: $(SAIL_SRCS) Makefile main.sail
-	$(SAIL_DIR)/sail -ocaml -ocaml-nobuild -o riscv $(SAIL_SRCS)
+	$(SAIL) $(SAIL_FLAGS) -ocaml -ocaml-nobuild -o riscv $(SAIL_SRCS)
 
 _sbuild/platform_main.native: _sbuild/riscv.ml _tags $(PLATFORM_OCAML_SRCS) Makefile
 	cp _tags $(PLATFORM_OCAML_SRCS) _sbuild
@@ -20,10 +21,10 @@ platform: _sbuild/platform_main.native
 	rm -f $@ && ln -s $^ $@
 
 riscv_duopod_ocaml: prelude.sail riscv_duopod.sail
-	$(SAIL_DIR)/sail -ocaml -o $@ $^
+	$(SAIL) $(SAIL_FLAGS) -ocaml -o $@ $^
 
 riscv_duopod.lem: prelude.sail riscv_duopod.sail
-	$(SAIL_DIR)/sail -lem -lem_mwords -lem_lib Riscv_extras -o riscv_duopod $^
+	$(SAIL) $(SAIL_FLAGS) -lem -lem_mwords -lem_lib Riscv_extras -o riscv_duopod $^
 Riscv_duopod.thy: riscv_duopod.lem riscv_extras.lem
 	lem -isa -outdir . -lib ../src/lem_interp -lib ../src/gen_lib \
 		riscv_extras.lem \
@@ -40,7 +41,7 @@ Riscv.thy: riscv.lem riscv_extras.lem
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' Riscv_types.thy
 
 riscv.lem: $(SAIL_SRCS) Makefile
-	$(SAIL_DIR)/sail -lem -o riscv -lem_mwords -lem_lib Riscv_extras $(SAIL_SRCS)
+	$(SAIL) $(SAIL_FLAGS) -lem -o riscv -lem_mwords -lem_lib Riscv_extras $(SAIL_SRCS)
 
 riscv_sequential.lem: $(SAIL_SRCS) Makefile
 	$(SAIL_DIR)/sail -lem -lem_sequential -o riscv_sequential -lem_mwords -lem_lib Riscv_extras_sequential $(SAIL_SRCS)

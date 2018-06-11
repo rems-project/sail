@@ -166,51 +166,53 @@ let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),
           | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
 
 let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp) : Ast.typ =
-(*  let _ = Printf.eprintf "to_ast_typ\n" in*)
+  (*  let _ = Printf.eprintf "to_ast_typ\n" in*)
   match t with
   | Parse_ast.ATyp_aux(t,l) ->
-    Typ_aux( (match t with
-              | Parse_ast.ATyp_id(id) -> Typ_id (to_ast_id id)
-              | Parse_ast.ATyp_var(v) ->
-                let v = to_ast_var v in
-                let mk = Envmap.apply k_env (var_to_string v) in
-                (match mk with
-                | Some(k) -> (match k.k with
-                              | K_Typ -> Typ_var v
-                              | K_infer -> k.k <- K_Typ; Typ_var v
-                              | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
-                | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
-              | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
-                                                           (to_ast_typ k_env def_ord ret),
-                                                           (to_ast_effects k_env efct))
-              | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
-	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_tb",il), [ b; r; ord ; ti]) ->
-		let make_r bot top =
-		  match bot,top with
-		    | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant b,_),Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,l) ->
-                      Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.add (Big_int.sub t b) (Big_int.of_int 1)),l)
-		    | bot,(Parse_ast.ATyp_aux(_,l) as top) ->
-		      Parse_ast.ATyp_aux((Parse_ast.ATyp_sum
-					    ((Parse_ast.ATyp_aux
-						(Parse_ast.ATyp_sum (top,
-                                                                     Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.of_int 1),Parse_ast.Unknown)),
-						 Parse_ast.Unknown)),
-					  (Parse_ast.ATyp_aux ((Parse_ast.ATyp_neg bot),Parse_ast.Unknown)))), l) in
-		let base = to_ast_nexp k_env b in
-		let rise = match def_ord with
-		  | Ord_aux(Ord_inc,dl) ->  to_ast_nexp k_env (make_r b r)
-		  | Ord_aux(Ord_dec,dl) ->  to_ast_nexp k_env (make_r r b)
-		  | _ -> raise (Reporting_basic.err_unreachable l "Default order not inc or dec") in
-		Typ_app(Id_aux(Id "vector",il),
-			[Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
-	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_r",il), [b;r;ord;ti]) ->
-		let make_sub_one t =
-		  match t with
+     Typ_aux( (match t with
+               | Parse_ast.ATyp_id(id) -> Typ_id (to_ast_id id)
+               | Parse_ast.ATyp_var(v) ->
+                  let v = to_ast_var v in
+                  let mk = Envmap.apply k_env (var_to_string v) in
+                  (match mk with
+                   | Some(k) -> (match k.k with
+                                 | K_Typ -> Typ_var v
+                                 | K_infer -> k.k <- K_Typ; Typ_var v
+                                 | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
+                   | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
+               | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
+                                                            (to_ast_typ k_env def_ord ret),
+                                                            (to_ast_effects k_env efct))
+               | Parse_ast.ATyp_bidir (typ1, typ2) -> Typ_bidir ( (to_ast_typ k_env def_ord typ1),
+                                                                  (to_ast_typ k_env def_ord typ2))
+               | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
+               | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_tb",il), [ b; r; ord ; ti]) ->
+                  let make_r bot top =
+                    match bot,top with
+                    | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant b,_),Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,l) ->
+                       Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.add (Big_int.sub t b) (Big_int.of_int 1)),l)
+                    | bot,(Parse_ast.ATyp_aux(_,l) as top) ->
+                       Parse_ast.ATyp_aux((Parse_ast.ATyp_sum
+                                             ((Parse_ast.ATyp_aux
+                                                 (Parse_ast.ATyp_sum (top,
+                                                                      Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.of_int 1),Parse_ast.Unknown)),
+                                                  Parse_ast.Unknown)),
+                                              (Parse_ast.ATyp_aux ((Parse_ast.ATyp_neg bot),Parse_ast.Unknown)))), l) in
+                  let base = to_ast_nexp k_env b in
+                  let rise = match def_ord with
+                    | Ord_aux(Ord_inc,dl) ->  to_ast_nexp k_env (make_r b r)
+                    | Ord_aux(Ord_dec,dl) ->  to_ast_nexp k_env (make_r r b)
+                    | _ -> raise (Reporting_basic.err_unreachable l "Default order not inc or dec") in
+                  Typ_app(Id_aux(Id "vector",il),
+                          [Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
+                           Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
+                           Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
+                           Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
+               | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_r",il), [b;r;ord;ti]) ->
+                  let make_sub_one t =
+                    match t with
                     | Parse_ast.ATyp_aux(Parse_ast.ATyp_constant t,_) -> Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.sub t (Big_int.of_int 1)),l)
-		    | t -> (Parse_ast.ATyp_aux
+                    | t -> (Parse_ast.ATyp_aux
                               (Parse_ast.ATyp_sum (t, Parse_ast.ATyp_aux(Parse_ast.ATyp_constant (Big_int.negate (Big_int.of_int 1)),Parse_ast.Unknown)),
 			       Parse_ast.Unknown)) in
 		let (base,rise) = match def_ord with
@@ -228,20 +230,20 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
                   let id = to_ast_id pid in
                   let k = Envmap.apply k_env (id_to_string id) in
                   (match k with
-                  | Some({k = K_Lam(args,t)}) ->
-		    if ((List.length args) = (List.length typs))
-		      then
-		      Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env def_ord k a)) args typs))
-		    else typ_error l "Type constructor given incorrect number of arguments" (Some id) None None
-                  | None -> typ_error l "Required a type constructor, encountered an unbound identifier" (Some id) None None
-                  | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None None)
-              | Parse_ast.ATyp_exist (kids, nc, atyp) ->
-                 let kids = List.map to_ast_var kids in
-                 let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
-                 let exist_typ = to_ast_typ k_env def_ord atyp in
-                 Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
-              | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
-    ), l)
+                   | Some({k = K_Lam(args,t)}) ->
+                      if ((List.length args) = (List.length typs))
+                      then
+                        Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env def_ord k a)) args typs))
+                      else typ_error l "Type constructor given incorrect number of arguments" (Some id) None None
+                   | None -> typ_error l "Required a type constructor, encountered an unbound identifier" (Some id) None None
+                   | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None None)
+               | Parse_ast.ATyp_exist (kids, nc, atyp) ->
+                  let kids = List.map to_ast_var kids in
+                  let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
+                  let exist_typ = to_ast_typ k_env def_ord atyp in
+                  Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
+               | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
+              ), l)
 
 and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
   match n with
@@ -469,6 +471,7 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
     | Parse_ast.P_tup(pats) -> P_tup(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_list(pats) -> P_list(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_cons(pat1, pat2) -> P_cons (to_ast_pat k_env def_ord pat1, to_ast_pat k_env def_ord pat2)
+    | Parse_ast.P_string_append pats -> P_string_append (List.map (to_ast_pat k_env def_ord) pats)
     ), (l,()))
 
 
@@ -752,6 +755,15 @@ let to_ast_tannot_opt (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.Typ_annot
     let typq,k_env,k_local = to_ast_typquant k_env tq in
     Typ_annot_opt_aux(Typ_annot_opt_some(typq,to_ast_typ k_env def_ord typ),l),k_env,k_local
 
+let to_ast_typschm_opt (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.TypSchm_opt_aux(aux,l)) : tannot_opt * kind Envmap.t * kind Envmap.t =
+  match aux with
+  | Parse_ast.TypSchm_opt_none ->
+     Typ_annot_opt_aux (Typ_annot_opt_none, l), k_env, Envmap.empty
+  | Parse_ast.TypSchm_opt_some (Parse_ast.TypSchm_aux (Parse_ast.TypSchm_ts (tq, typ), l)) ->
+     let typq, k_env, k_local = to_ast_typquant k_env tq in
+     Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ k_env def_ord typ), l), k_env, k_local
+
+
 let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) : effect_opt =
   match e with
   | Parse_ast.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,l)
@@ -769,6 +781,45 @@ let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.funde
     (*let _ = Printf.eprintf "to_ast_fundef\n" in*)
     let tannot_opt, k_env,_ = to_ast_tannot_opt k_env def_ord tannot_opt in
     FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, def_ord)) funcls), (l,())), (names,k_env,def_ord)
+
+let rec to_ast_mpat k_env def_ord (Parse_ast.MP_aux(mpat,l)) =
+  MP_aux(
+    (match mpat with
+    | Parse_ast.MP_lit(lit) -> MP_lit(to_ast_lit lit)
+    | Parse_ast.MP_id(id) -> MP_id(to_ast_id id)
+    | Parse_ast.MP_app(id,mpats) ->
+      if mpats = []
+      then MP_id (to_ast_id id)
+      else MP_app(to_ast_id id, List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_record(mfpats,_) ->
+      MP_record(List.map
+                 (fun (Parse_ast.MFP_aux(Parse_ast.MFP_mpat(id,mfp),l)) ->
+              MFP_aux(MFP_mpat(to_ast_id id, to_ast_mpat k_env def_ord mfp),(l,())))
+                 mfpats, false)
+    | Parse_ast.MP_vector(mpats) -> MP_vector(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_tup(mpats) -> MP_tup(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_list(mpats) -> MP_list(List.map (to_ast_mpat k_env def_ord) mpats)
+    | Parse_ast.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat k_env def_ord pat1, to_ast_mpat k_env def_ord pat2)
+    | Parse_ast.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat k_env def_ord) pats)
+    | Parse_ast.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat k_env def_ord mpat, to_ast_typ k_env def_ord typ)
+    ), (l,()))
+
+
+let to_ast_mpexp (names,k_env,def_ord) (Parse_ast.MPat_aux(mpexp, l)) =
+  match mpexp with
+  | Parse_ast.MPat_pat mpat -> MPat_aux (MPat_pat (to_ast_mpat k_env def_ord mpat), (l, ()))
+  | Parse_ast.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat k_env def_ord mpat, to_ast_exp k_env def_ord exp), (l, ()))
+
+let to_ast_mapcl (names,k_env,def_ord) (Parse_ast.MCL_aux(mapcl, l)) =
+  match mapcl with
+  | Parse_ast.MCL_mapcl (mpexp1, mpexp2) -> MCL_aux (MCL_mapcl (to_ast_mpexp (names,k_env,def_ord) mpexp1, to_ast_mpexp (names,k_env,def_ord) mpexp2), (l, ()))
+
+let to_ast_mapdef (names,k_env,def_ord) (Parse_ast.MD_aux(md,l):Parse_ast.mapdef) : (unit mapdef) envs_out =
+  match md with
+  | Parse_ast.MD_mapping(id, typschm_opt, mapcls) ->
+     let tannot_opt, k_env, _ = to_ast_typschm_opt k_env def_ord typschm_opt in
+     MD_aux(MD_mapping(to_ast_id id, tannot_opt, List.map (to_ast_mapcl (names,k_env,def_ord)) mapcls), (l,())), (names,k_env,def_ord)
 
 type def_progress =
     No_def
@@ -825,96 +876,123 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
   | Parse_ast.DEF_fixity (prec, n, op) ->
      ((Finished(DEF_fixity (to_ast_prec prec, n, to_ast_id op)),envs),partial_defs)
   | Parse_ast.DEF_kind(k_def) ->
-    let kd,envs = to_ast_kdef envs k_def in
-    ((Finished(DEF_kind(kd))),envs),partial_defs
+     let kd,envs = to_ast_kdef envs k_def in
+     ((Finished(DEF_kind(kd))),envs),partial_defs
   | Parse_ast.DEF_type(t_def) ->
-    let td,envs = to_ast_typedef envs t_def in
-    ((Finished(DEF_type(td))),envs),partial_defs
+     let td,envs = to_ast_typedef envs t_def in
+     ((Finished(DEF_type(td))),envs),partial_defs
   | Parse_ast.DEF_fundef(f_def) ->
-    let fd,envs = to_ast_fundef envs f_def in
-    ((Finished(DEF_fundef(fd))),envs),partial_defs
+     let fd,envs = to_ast_fundef envs f_def in
+     ((Finished(DEF_fundef(fd))),envs),partial_defs
+  | Parse_ast.DEF_mapdef(m_def) ->
+     let md, envs = to_ast_mapdef envs m_def in
+     ((Finished(DEF_mapdef(md))),envs),partial_defs
   | Parse_ast.DEF_val(lbind) ->
-    let lb = to_ast_letbind k_env def_ord lbind in
-    ((Finished(DEF_val(lb))),envs),partial_defs
+     let lb = to_ast_letbind k_env def_ord lbind in
+     ((Finished(DEF_val(lb))),envs),partial_defs
   | Parse_ast.DEF_spec(val_spec) ->
-    let vs,envs = to_ast_spec envs val_spec in
-    ((Finished(DEF_spec(vs))),envs),partial_defs
+     let vs,envs = to_ast_spec envs val_spec in
+     ((Finished(DEF_spec(vs))),envs),partial_defs
   | Parse_ast.DEF_default(typ_spec) ->
-    let default,envs = to_ast_default envs typ_spec in
-    ((Finished(DEF_default(default))),envs),partial_defs
+     let default,envs = to_ast_default envs typ_spec in
+     ((Finished(DEF_default(default))),envs),partial_defs
   | Parse_ast.DEF_reg_dec(dec) ->
-    let d = to_ast_dec envs dec in
-    ((Finished(DEF_reg_dec(d))),envs),partial_defs
+     let d = to_ast_dec envs dec in
+     ((Finished(DEF_reg_dec(d))),envs),partial_defs
   | Parse_ast.DEF_pragma (_, _, l) ->
      typ_error l "Encountered preprocessor directive in initial check" None None None
   | Parse_ast.DEF_internal_mutrec _ ->
      (* Should never occur because of remove_mutrec *)
      typ_error Parse_ast.Unknown "Internal mutual block found when processing scattered defs" None None None
   | Parse_ast.DEF_scattered(Parse_ast.SD_aux(sd,l)) ->
-    (match sd with
-    | Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
-      let rec_opt = to_ast_rec rec_opt in
-      let unit,k_env',k_local = to_ast_tannot_opt k_env def_ord tannot_opt in
-      let effects_opt = to_ast_effects_opt k_env' effects_opt in
-      let id = to_ast_id id in
-      (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,unit,effects_opt,[]),(l,())))),false) in
-                (No_def,envs),((id,(partial_def,k_local))::partial_defs)
-      | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
-    | Parse_ast.SD_scattered_funcl(funcl) ->
-      (match funcl with
-      | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_),_) ->
-        let id = to_ast_id id in
-        (match (def_in_progress id partial_defs) with
-	| None -> typ_error l "Scattered function definition clause does not match any existing function definition headers" (Some id) None None
-	| Some(d,k) ->
-	 (* let _ = Printf.eprintf "SD_scattered_funcl processing\n" in
-	  let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s\n" v' (kind_to_string k)) k in
-	  let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s\n" v' (kind_to_string k) ) (Envmap.union k k_env) in *)
-	  (match !d with
-	  | DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),false ->
-            let (FCL_aux (funcl_aux, _)) = to_ast_funcl (names,Envmap.union k k_env,def_ord) funcl in
-            d:= DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[FCL_aux (funcl_aux, (l, ()))]),fl)),false;
-	    (No_def,envs),partial_defs
-	  | _,true -> typ_error l "Scattered function definition clauses extends ended definition" (Some id) None None
-	  | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
-    | Parse_ast.SD_scattered_variant(id,naming_scheme_opt,typquant) ->
-      let id = to_ast_id id in
-      let name = to_ast_namescm naming_scheme_opt in
-      let typq, k_env',_ = to_ast_typquant k_env typquant in
-      let kind = (match (typquant_to_quantkinds k_env' typq) with
-        | [ ] -> {k = K_Typ}
-        | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
-      (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,())))),false) in
-                (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),kind),def_ord)),(id,(partial_def,k_env'))::partial_defs
-      | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
-    | Parse_ast.SD_scattered_unioncl(id,tu) ->
-      let id = to_ast_id id in
-      (match (def_in_progress id partial_defs) with
-      | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None None
-      | Some(d,k) ->
-        (match !d with
-	| DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)), false ->
-	  d:= DEF_type(TD_aux(TD_variant(id,name,typq,arms@[to_ast_type_union k def_ord tu],false),tl)),false;
-	  (No_def,envs),partial_defs
-	| _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None None
-	| _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None None))
-    | Parse_ast.SD_scattered_end(id) ->
-      let id = to_ast_id id in
-      (match (def_in_progress id partial_defs) with
-      | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None None
-      | Some(d,k) ->
-        (match !d with
-	| (DEF_type(_) as def),false ->
-	  d:= (def,true);
-	  (No_def,envs),partial_defs
-	| (DEF_fundef(_) as def),false ->
-	  d:= (def,true);
-	  ((Finished def), envs),partial_defs
-	| _, true ->
-	  typ_error l "Scattered definition ended multiple times" (Some id) None None
-        | _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type"))))
+     (match sd with
+      | Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
+         let rec_opt = to_ast_rec rec_opt in
+         let unit,k_env',k_local = to_ast_tannot_opt k_env def_ord tannot_opt in
+         let effects_opt = to_ast_effects_opt k_env' effects_opt in
+         let id = to_ast_id id in
+         (match (def_in_progress id partial_defs) with
+          | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,unit,effects_opt,[]),(l,())))),false) in
+                    (No_def,envs),((id,(partial_def,k_local))::partial_defs)
+          | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
+      | Parse_ast.SD_scattered_mapping (id, tannot_opt) ->
+         let id = to_ast_id id in
+         let unit, k_env ,k_local = to_ast_tannot_opt k_env def_ord tannot_opt in
+         (match (def_in_progress id partial_defs) with
+          | None -> let partial_def = ref ((DEF_mapdef(MD_aux(MD_mapping(id, unit, []), (l, ())))), false) in
+                    (No_def,envs),((id,(partial_def,k_local))::partial_defs)
+          | Some(d,k) -> typ_error l "Scattered mapping definition header name already in use by scattered definition" (Some id) None None)
+
+      | Parse_ast.SD_scattered_mapcl (id, mapcl) ->
+         let id = to_ast_id id in
+         (match (def_in_progress id partial_defs) with
+          | None -> typ_error l "Scattered mapping definition clause does not match any existing mapping definition headers" (Some id) None None
+          | Some (d, k) ->
+             (match !d with
+              | DEF_mapdef(MD_aux(MD_mapping(_,tannot_opt, mcls),ml)),false ->
+                 let (MCL_aux (mapcl_aux, _)) = to_ast_mapcl (names,k_env,def_ord) mapcl in
+                 d := DEF_mapdef(MD_aux(MD_mapping(id, tannot_opt, mcls @ [MCL_aux (mapcl_aux, (l, ()))]), ml)), false;
+                 (No_def,envs),partial_defs
+              | _, true -> typ_error l "Scattered mapping definition clause extends ended definition" (Some id) None None
+              | _ -> typ_error l "Scattered mapping definition doesn't match existing definition header" (Some id) None None))
+
+      | Parse_ast.SD_scattered_funcl(funcl) ->
+         (match funcl with
+          | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_),_) ->
+             let id = to_ast_id id in
+             (match (def_in_progress id partial_defs) with
+              | None -> typ_error l "Scattered function definition clause does not match any existing function definition headers" (Some id) None None
+              | Some(d,k) ->
+                 (* let _ = Printf.eprintf "SD_scattered_funcl processing\n" in
+      let _ = Envmap.iter (fun v' k -> P   rintf.eprintf "%s -> %s\n" v' (kind_to_string k)) k in
+      let _ = Envmap.iter (fun v' k -> Prin              tf.eprintf "%s -> %s\n" v' (kind_to_string k) ) (Envmap.union k k_env) in *)
+                 (match !d with
+                  | DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),false ->
+                     let (FCL_aux (funcl_aux, _)) = to_ast_funcl (names,Envmap.union k k_env,def_ord) funcl in
+                     d:= DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[FCL_aux (funcl_aux, (l, ()))]),fl)),false;
+                     (No_def,envs),partial_defs
+                  | _,true -> typ_error l "Scattered function definition clauses extends ended definition" (Some id) None None
+                  | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
+      | Parse_ast.SD_scattered_variant(id,naming_scheme_opt,typquant) ->
+         let id = to_ast_id id in
+         let name = to_ast_namescm naming_scheme_opt in
+         let typq, k_env',_ = to_ast_typquant k_env typquant in
+         let kind = (match (typquant_to_quantkinds k_env' typq) with
+                     | [ ] -> {k = K_Typ}
+                     | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
+         (match (def_in_progress id partial_defs) with
+          | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,())))),false) in
+                    (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),kind),def_ord)),(id,(partial_def,k_env'))::partial_defs
+          | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
+      | Parse_ast.SD_scattered_unioncl(id,tu) ->
+         let id = to_ast_id id in
+         (match (def_in_progress id partial_defs) with
+          | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None None
+          | Some(d,k) ->
+             (match !d with
+              | DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)), false ->
+                 d:= DEF_type(TD_aux(TD_variant(id,name,typq,arms@[to_ast_type_union k def_ord tu],false),tl)),false;
+                 (No_def,envs),partial_defs
+              | _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None None
+              | _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None None))
+      | Parse_ast.SD_scattered_end(id) ->
+         let id = to_ast_id id in
+         (match (def_in_progress id partial_defs) with
+          | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None None
+          | Some(d,k) ->
+             (match !d with
+              | (DEF_type(_) as def),false ->
+                 d:= (def,true);
+                 (No_def,envs),partial_defs
+              | (DEF_fundef(_) as def),false ->
+                 d:= (def,true);
+                 ((Finished def), envs),partial_defs
+              | (DEF_mapdef(_) as def),false ->
+                 d := (def,true);
+                 ((Finished def), envs),partial_defs
+              | _, true ->
+                 typ_error l "Scattered definition ended multiple times" (Some id) None None
+              | _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type"))))
 
 let rec to_ast_defs_helper envs partial_defs = function
   | [] -> ([],envs,partial_defs)

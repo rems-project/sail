@@ -70,7 +70,9 @@ val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : unit exp_aux -> unit exp
 val mk_pat : unit pat_aux -> unit pat
+val mk_mpat : unit mpat_aux -> unit mpat
 val mk_pexp : unit pexp_aux -> unit pexp
+val mk_mpexp : unit mpexp_aux -> unit mpexp
 val mk_lexp : unit lexp_aux -> unit lexp
 val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> unit exp
@@ -111,6 +113,7 @@ val mk_typ_arg : typ_arg_aux -> typ_arg
 val mk_id_typ : id -> typ
 
 (* Sail builtin types. *)
+val unknown_typ : typ
 val int_typ : typ
 val nat_typ : typ
 val atom_typ : nexp -> typ
@@ -174,6 +177,10 @@ val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
 val map_pexp_annot : ('a annot -> 'b annot) -> 'a pexp -> 'b pexp
 val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
 val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
+val map_mpat_annot : ('a annot -> 'b annot) -> 'a mpat -> 'b mpat
+val map_mfpat_annot : ('a annot -> 'b annot) -> 'a mfpat -> 'b mfpat
+val map_mpexp_annot : ('a annot -> 'b annot) -> 'a mpexp -> 'b mpexp
+val map_mapcl_annot : ('a annot -> 'b annot) -> 'a mapcl -> 'b mapcl
 
 (* Extract locations from identifiers *)
 val id_loc : id -> Parse_ast.l
@@ -209,6 +216,7 @@ val string_of_exp : 'a exp -> string
 val string_of_pexp : 'a pexp -> string
 val string_of_lexp : 'a lexp -> string
 val string_of_pat : 'a pat -> string
+val string_of_mpat : 'a mpat -> string
 val string_of_letbind : 'a letbind -> string
 val string_of_index_range : index_range -> string
 
@@ -306,6 +314,10 @@ val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
 
 val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
 val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp
+
+val destruct_mpexp : 'a mpexp -> 'a mpat * ('a exp) option * (Ast.l * 'a)
+val construct_mpexp : 'a mpat * ('a exp) option * (Ast.l * 'a) ->  'a mpexp
+
 
 val is_valspec : id -> 'a def -> bool
 

@@ -79,6 +79,9 @@ type type_error =
 
 exception Type_error of l * type_error;;
 
+val typ_debug : string Lazy.t -> unit
+val typ_print : string Lazy.t -> unit
+
 (** {2 Environments} *)
 
 (** The env module defines the internal type checking environment, and
@@ -158,6 +161,8 @@ module Env : sig
 
   val is_union_constructor : id -> t -> bool
 
+  val is_mapping : id -> t -> bool
+
   val is_register : id -> t -> bool
 
   (** Return a fresh kind identifier that doesn't exist in the
@@ -217,8 +222,27 @@ val strip_exp : 'a exp -> unit exp
 (** Strip the type annotations from a pattern *)
 val strip_pat : 'a pat -> unit pat
 
+(** Strip the type annotations from a pattern-expression *)
+val strip_pexp : 'a pexp -> unit pexp
+
 (** Strip the type annotations from an l-expression *)
 val strip_lexp : 'a lexp -> unit lexp
+
+val strip_mpexp : 'a mpexp -> unit mpexp
+val strip_mapcl : 'a mapcl -> unit mapcl
+
+(* Strip location information from types for comparison purposes *)
+val strip_typ : typ -> typ
+val strip_typq : typquant -> typquant
+val strip_id : id -> id
+val strip_kid : kid -> kid
+val strip_base_effect : base_effect -> base_effect
+val strip_effect : effect -> effect
+val strip_nexp_aux : nexp_aux -> nexp_aux
+val strip_nexp : nexp -> nexp
+val strip_n_constraint_aux : n_constraint_aux -> n_constraint_aux
+val strip_n_constraint : n_constraint -> n_constraint
+val strip_typ_aux : typ_aux -> typ_aux
 
 (** {2 Checking expressions and patterns} *)
 
@@ -231,6 +255,14 @@ val strip_lexp : 'a lexp -> unit lexp
 val check_exp : Env.t -> unit exp -> typ -> tannot exp
 
 val infer_exp : Env.t -> unit exp -> tannot exp
+
+val infer_pat : Env.t -> unit pat -> tannot pat * Env.t * unit exp list
+
+val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
+
+val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
+
+val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t  
 
 val prove : Env.t -> n_constraint -> bool
 
@@ -245,6 +277,8 @@ val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp lis
    on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
 
+val typ_error : Ast.l -> string -> 'a
+
 (** {2 Destructuring type annotations} Partial functions: The
    expressions and patterns passed to these functions must be
    guaranteed to have tannots of the form Some (env, typ) for these to
@@ -256,8 +290,18 @@ val env_of_annot : Ast.l * tannot -> Env.t
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 
+
 val pat_typ_of : tannot pat -> typ
 val pat_env_of : tannot pat -> Env.t
+
+val typ_of_pexp : tannot pexp -> typ
+val env_of_pexp : tannot pexp -> Env.t
+
+val typ_of_mpat : tannot mpat -> typ
+val env_of_mpat : tannot mpat -> Env.t
+
+val typ_of_mpexp : tannot mpexp -> typ
+val env_of_mpexp : tannot mpexp -> Env.t
 
 val effect_of : tannot exp -> effect
 val effect_of_pat : tannot pat -> effect

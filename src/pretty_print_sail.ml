@@ -159,6 +159,8 @@ let rec doc_typ (Typ_aux (typ_aux, _)) =
   | Typ_fn (typ1, typ2, Effect_aux (Effect_set effs, _)) ->
      let ocaml_eff = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs)) in
      separate space [doc_typ typ1; string "->"; doc_typ typ2; string "effect"; ocaml_eff]
+  | Typ_bidir (typ1, typ2) ->
+     separate space [doc_typ typ1; string "<->"; doc_typ typ2]
 and doc_typ_arg (Typ_arg_aux (ta_aux, _)) =
   match ta_aux with
   | Typ_arg_typ typ -> doc_typ typ
@@ -452,6 +454,36 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), _)) =
      let clauses = separate_map sep doc_funcl funcls in
      string "function" ^^ space ^^ clauses
 
+let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
+  match mp_aux with
+  | MP_id id -> doc_id id
+  | MP_tup pats -> lparen ^^ separate_map (comma ^^ space) doc_mpat pats ^^ rparen
+  | MP_lit lit -> doc_lit lit
+  | MP_vector pats -> brackets (separate_map (comma ^^ space) doc_mpat pats)
+  | MP_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_mpat pats
+  | MP_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_mpat pats)
+  | MP_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_mpat pats ^^ string "|]"
+  | _ -> string (string_of_mpat mpat)
+
+
+let doc_mpexp (MPat_aux (mpexp, _)) =
+  match mpexp with
+  | MPat_pat mpat -> doc_mpat mpat
+  | MPat_when (mpat, guard) -> doc_mpat mpat ^^ space ^^ string "if" ^^ space ^^ doc_exp guard
+
+let doc_mapcl (MCL_aux (MCL_mapcl (mpexp1, mpexp2), _)) =
+  let left = doc_mpexp mpexp1 in
+  let right = doc_mpexp mpexp2 in
+  left ^^ space ^^ string "<->" ^^ space ^^ right
+
+let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
+  match mapcls with
+  | [] -> failwith "Empty mapping"
+  | _ ->
+     let sep = string "," ^^ hardline in
+     let clauses = separate_map sep doc_mapcl mapcls in
+     string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ (surround 2 0 lbrace clauses rbrace)
+
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
   | DEC_reg (typ, id) -> separate space [string "register"; doc_id id; colon; doc_typ typ]
@@ -528,6 +560,7 @@ let rec doc_def def = group (match def with
   | DEF_type t_def -> doc_typdef t_def
   | DEF_kind k_def -> doc_kind_def k_def
   | DEF_fundef f_def -> doc_fundef f_def
+  | DEF_mapdef m_def -> doc_mapdef m_def
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
   | DEF_internal_mutrec fundefs ->
      (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs)

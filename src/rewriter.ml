@@ -306,6 +306,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
   | P_tup pats -> rewrap (P_tup (List.map rewrite pats))
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
   | P_cons (pat1, pat2) -> rewrap (P_cons (rewrite pat1, rewrite pat2))
+  | P_string_append pats -> rewrap (P_string_append (List.map rewrite pats))
 
 let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   let rewrap e = E_aux (e,(l,annot)) in
@@ -395,7 +396,7 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_def rewriters d = match d with
-  | DEF_type _ | DEF_kind _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_comm _ | DEF_overload _ | DEF_fixity _ -> d
+  | DEF_type _ | DEF_mapdef _ | DEF_kind _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_comm _ | DEF_overload _ | DEF_fixity _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
@@ -455,6 +456,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
   ; p_cons           : 'pat * 'pat -> 'pat_aux
+  ; p_string_append  : 'pat list -> 'pat_aux
   ; p_aux            : 'pat_aux * 'a annot -> 'pat
   ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
   ; fP_Fpat          : id * 'pat -> 'fpat_aux
@@ -475,6 +477,7 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_tup ps            -> alg.p_tup (List.map (fold_pat alg) ps)
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
+  | P_string_append ps  -> alg.p_string_append (List.map (fold_pat alg) ps)
 
 and fold_pat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat -> 'pat =
   function
@@ -501,6 +504,7 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_tup            = (fun ps -> P_tup ps)
   ; p_list           = (fun ps -> P_list ps)
   ; p_cons           = (fun (ph,pt) -> P_cons (ph,pt))
+  ; p_string_append  = (fun (ps) -> P_string_append (ps))
   ; p_aux            = (fun (pat,annot) -> P_aux (pat,annot))
   ; fP_aux           = (fun (fpat,annot) -> FP_aux (fpat,annot))
   ; fP_Fpat          = (fun (id,pat) -> FP_Fpat (id,pat))
@@ -750,6 +754,7 @@ let compute_pat_alg bot join =
   ; p_tup            = split_join (fun ps -> P_tup ps)
   ; p_list           = split_join (fun ps -> P_list ps)
   ; p_cons           = (fun ((vh,ph),(vt,pt)) -> (join vh vt, P_cons (ph,pt)))
+  ; p_string_append  = split_join (fun ps -> P_string_append ps)
   ; p_aux            = (fun ((v,pat),annot) -> (v, P_aux (pat,annot)))
   ; fP_aux           = (fun ((v,fpat),annot) -> (v, FP_aux (fpat,annot)))
   ; fP_Fpat          = (fun (id,(v,pat)) -> (v, FP_Fpat (id,pat)))
@@ -855,6 +860,7 @@ let pure_pat_alg bot join =
   ; p_vector_concat  = join_list
   ; p_tup            = join_list
   ; p_list           = join_list
+  ; p_string_append  = join_list
   ; p_cons           = (fun (vh,vt) -> join vh vt)
   ; p_aux            = (fun (v,annot) -> v)
   ; fP_aux           = (fun (v,annot) -> v)
