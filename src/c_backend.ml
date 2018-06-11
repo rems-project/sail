@@ -990,6 +990,9 @@ let analyze_primop' ctx env l id args typ =
   | "and_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "&", v2), typ))
 
+  | "not_bits", [AV_C_fragment (v, _)] ->
+     AE_val (AV_C_fragment (F_unary ("~", v), typ))
+
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] ->
      let len = F_op (f, "-", F_op (t, "-", v_one)) in
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", t)), typ))
@@ -1700,7 +1703,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
         be different. *)
      let pointer_assign ctyp1 ctyp2 =
        match ctyp1 with
-       | CT_ref ctyp1 -> ctyp_equal ctyp1 ctyp2
+       | CT_ref ctyp1 when ctyp_equal ctyp1 ctyp2 -> true
+       | CT_ref ctyp1 -> c_error ~loc:l "Incompatible type in pointer assignment"
        | _ -> false
      in
      let assign_ctyp = ctyp_of_typ ctx assign_typ in
@@ -2546,7 +2550,7 @@ let sgen_clexp = function
 let sgen_clexp_pure = function
   | CL_id id -> sgen_id id
   | CL_field (id, field) -> sgen_id id ^ "." ^ Util.zencode_string field
-  | CL_addr id -> sgen_id id
+  | CL_addr id -> "*" ^ sgen_id id
   | CL_addr_field (id, field) -> sgen_id id ^ "->" ^ Util.zencode_string field
   | CL_have_exception -> "have_exception"
   | CL_current_exception -> "current_exception"

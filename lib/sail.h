@@ -740,6 +740,17 @@ void set_slice_int(mpz_t *rop,
   }
 }
 
+// This is a bit of a hack to let us optimize away the Align__1
+// function in aarch64.
+void arm_align(bv_t *rop, const bv_t x_bv, const mpz_t y_mpz) {
+  uint64_t x = mpz_get_ui(*x_bv.bits);
+  uint64_t y = mpz_get_ui(y_mpz);
+  uint64_t z = y * (x / y);
+  mp_bitcnt_t n = x_bv.len;
+  mpz_set_ui(*rop->bits, safe_rshift(UINT64_MAX, 64l - (n - 1)) & z);
+  rop->len = n;
+}
+
 void vector_update_subrange_bv_t(bv_t *rop,
 				 const bv_t op,
 				 const mpz_t n_mpz,
@@ -765,16 +776,20 @@ void vector_subrange_bv_t(bv_t *rop, const bv_t op, const mpz_t n_mpz, const mpz
   uint64_t n = mpz_get_ui(n_mpz);
   uint64_t m = mpz_get_ui(m_mpz);
 
-  mpz_set_ui(*rop->bits, 0ul);
   rop->len = n - (m - 1ul);
+  mpz_fdiv_q_2exp(*rop->bits, *op.bits, m);
+  normalise_bv_t(rop);
 
-  for (uint64_t i = 0; i < rop->len; i++) {
-    if (mpz_tstbit(*op.bits, i + m)) {
-      mpz_setbit(*rop->bits, i);
-    } else {
-      mpz_clrbit(*rop->bits, i);
-    }
-  }
+  /* mpz_set_ui(*rop->bits, 0ul); */
+  /* rop->len = n - (m - 1ul); */
+
+  /* for (uint64_t i = 0; i < rop->len; i++) { */
+  /*   if (mpz_tstbit(*op.bits, i + m)) { */
+  /*     mpz_setbit(*rop->bits, i); */
+  /*   } else { */
+  /*     mpz_clrbit(*rop->bits, i); */
+  /*   } */
+  /* } */
 }
 
 int bitvector_access(const bv_t op, const mpz_t n_mpz) {

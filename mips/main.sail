@@ -16,7 +16,7 @@ function fetch_and_execute () = {
   /* the following skips are required on mips to fake the tag effects otherwise type checker complains  */
   skip_rmemt();
   skip_wmvt();
-  prerr_bits("PC: ", PC);
+  /* prerr_bits("PC: ", PC); */
   loop_again = true;
   try {
     let pc_pa = TranslatePC(PC);
@@ -62,9 +62,12 @@ function dump_mips_state () : unit -> unit = {
   }
 }
 
+val "load_raw" : (bits(64), string) -> unit
+
 val main : unit -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg, rmemt, wmvt}
 
 function main () = {
+  load_raw(0x0000000000100000, "/home/aa2019/mips_freebsd/kernel");
   init_registers(to_bits(64, elf_entry()));
   startTime = get_time_ns();
   while (fetch_and_execute()) do ();
