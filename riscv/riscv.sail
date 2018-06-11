@@ -25,7 +25,7 @@ mapping encdec_uop : uop <-> bits(7) = {
   RISCV_AUIPC <-> 0b0010111
 }
 
-mapping clause encdec = UTYPE(imm, rd, op) <-> imm : bits(20) @ rd : regbits @ encdec_uop(op) : bits(7)
+mapping clause encdec = UTYPE(imm, rd, op) <-> imm @ rd @ encdec_uop(op)
 
 function clause execute UTYPE(imm, rd, op) =
     let off : xlenbits = EXTS(imm @ 0x000) in
@@ -52,7 +52,19 @@ mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^^ spc() ^^ 
 union clause ast = RISCV_JAL : (bits(21), regbits)
 
 mapping clause encdec = RISCV_JAL(imm_19 @ imm_7_0 @ imm_8 @ imm_18_13 @ imm_12_9 @ 0b0, rd)
-                    <-> imm_19 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ imm_8 : bits(1) @ imm_7_0 : bits(8) @ rd : regbits @ 0b1101111
+                    <-> imm_19 : bits(1) @ imm_18_13 : bits(6) @ imm_12_9 : bits(4) @ imm_8 : bits(1) @ imm_7_0 : bits(8) @ rd @ 0b1101111
+
+/*
+ideally we want some syntax like
+
+mapping clause encdec = RISCV_JAL(imm @ 0b0, rd) <-> imm[19] @ imm[9..0] @ imm[10] @ imm[18..11] @ rd @ 0b1101111
+
+match bv {
+  imm[19] @ imm[9..0] @ imm[10] @ imm[18..11] -> imm @ 0b0
+}
+
+but this is difficult
+*/
 
 function clause execute (RISCV_JAL(imm, rd)) = {
     let pc : xlenbits = PC;
@@ -71,7 +83,7 @@ mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^^ spc() ^^ reg_name(rd) 
 /* ****************************************************************** */
 union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
 
-mapping clause encdec = RISCV_JALR(imm, rs1, rd) <-> imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b1100111
+mapping clause encdec = RISCV_JALR(imm, rs1, rd) <-> imm @ rs1 @ 0b000 @ rd @ 0b1100111
 
 function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     /* write rd before anything else to prevent unintended strength */
@@ -97,8 +109,8 @@ mapping encdec_bop : bop <-> bits(3) = {
   RISCV_BGEU <-> 0b111
 }
 
-mapping clause encdec = BTYPE(imm7_6 : bits(1) @ imm5_0 : bits(1) @ imm7_5_0 : bits(6) @ imm5_4_1 : bits(4) @ 0b0, rs2, rs1, op)
-                    <-> imm7_6 : bits(1) @ imm7_5_0 : bits(6) @ rs2 : regbits @ rs1 : regbits @ encdec_bop(op) : bits(3) @ imm5_4_1 : bits(4) @ imm5_0 : bits(1) @ 0b1100011
+mapping clause encdec = BTYPE(imm7_6 @ imm5_0 @ imm7_5_0 @ imm5_4_1 @ 0b0, rs2, rs1, op)
+                    <-> imm7_6 : bits(1) @ imm7_5_0 : bits(6) @ rs2 @ rs1 @ encdec_bop(op) @ imm5_4_1 : bits(4) @ imm5_0 : bits(1) @ 0b1100011
 
 function clause execute (BTYPE(imm, rs2, rs1, op)) =
   let rs1_val = X(rs1) in
@@ -150,7 +162,7 @@ mapping encdec_iop : iop <-> bits(3) = {
   RISCV_ANDI  <-> 0b111
 }
 
-mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm : bits(12) @ rs1 : regbits @ encdec_iop(op) : bits(3) @ rd : regbits @ 0b0010011
+mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ rs1 @ encdec_iop(op) @ rd @ 0b0010011
 
 function clause execute (ITYPE (imm, rs1, rd, op)) =
   let rs1_val = X(rs1) in
@@ -197,9 +209,9 @@ mapping encdec_sop : sop <-> bits(3) = {
   RISCV_SRAI <-> 0b101
 }
 
-mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SLLI) <-> 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0010011
-mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRLI) <-> 0b000000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011
-mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRAI) <-> 0b010000 @ shamt : bits(6) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0010011
+mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SLLI) <-> 0b000000 @ shamt @ rs1 @ 0b001 @ rd @ 0b0010011
+mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRLI) <-> 0b000000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0010011
+mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRAI) <-> 0b010000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0010011
 
 function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
     let rs1_val = X(rs1) in
@@ -231,16 +243,16 @@ mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op) <-> shiftiop_mnemonic(op)
 /* ****************************************************************** */
 union clause ast = RTYPE : (regbits, regbits, regbits, rop)
 
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_ADD)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SUB)  <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLL)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLT)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b010 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLTU) <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b011 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_XOR)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b100 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SRL)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SRA)  <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_OR)   <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b110 @ rd : regbits @ 0b0110011
-mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_AND)  <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b111 @ rd : regbits @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_ADD)  <-> 0b0000000 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SUB)  <-> 0b0100000 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLL)  <-> 0b0000000 @ rs2 @ rs1 @ 0b001 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLT)  <-> 0b0000000 @ rs2 @ rs1 @ 0b010 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SLTU) <-> 0b0000000 @ rs2 @ rs1 @ 0b011 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_XOR)  <-> 0b0000000 @ rs2 @ rs1 @ 0b100 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SRL)  <-> 0b0000000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SRA)  <-> 0b0100000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_OR)   <-> 0b0000000 @ rs2 @ rs1 @ 0b110 @ rd @ 0b0110011
+mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_AND)  <-> 0b0000000 @ rs2 @ rs1 @ 0b111 @ rd @ 0b0110011
 
 function clause execute (RTYPE(rs2, rs1, rd, op)) =
   let rs1_val = X(rs1) in
@@ -295,7 +307,7 @@ union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, b
 
 /* I am assuming that load unsigned double wasn't meant to be missing here? */
 /* TODO: aq/rl */
-mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false) <-> imm : bits(12) @ rs1 : regbits @ bool_bits(is_unsigned) : bits(1) @ size_bits(size) : bits(2) @ rd : regbits @ 0b0000011
+mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false) <-> imm @ rs1 @ bool_bits(is_unsigned) @ size_bits(size) @ rd @ 0b0000011
 
 val extend_value : forall 'n, 0 < 'n <= 8. (bool, MemoryOpResult(bits(8 * 'n))) -> MemoryOpResult(xlenbits)
 function extend_value(is_unsigned, value) = match (value) {
@@ -364,7 +376,7 @@ mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl) <-> "l" 
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
 
 /* TODO: aq/rl */
-mapping clause encdec = STORE(imm7 : bits(7) @ imm5 : bits(5), rs2, rs1, size, false, false) <-> imm7 : bits(7) @ rs2 : regbits @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ imm5 : bits(5) @ 0b0100011
+mapping clause encdec = STORE(imm7 @ imm5, rs2, rs1, size, false, false) <-> imm7 : bits(7) @ rs2 @ rs1 @ 0b0 @ size_bits(size) @ imm5 : bits(5) @ 0b0100011
 
 /* NOTE: Currently, we only EA if address translation is successful.
    This may need revisiting. */
@@ -414,7 +426,7 @@ mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^^ size_mnem
 /* ****************************************************************** */
 union clause ast = ADDIW : (bits(12), regbits, regbits)
 
-mapping clause encdec = ADDIW(imm, rs1, rd) <-> imm @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0011011
+mapping clause encdec = ADDIW(imm, rs1, rd) <-> imm @ rs1 @ 0b000 @ rd @ 0b0011011
 
 function clause execute (ADDIW(imm, rs1, rd)) =
   let result : xlenbits = EXTS(imm) + X(rs1) in
@@ -428,9 +440,9 @@ mapping clause assembly = ADDIW(imm, rs1, rd) <-> "addiw" ^^ spc() ^^ reg_name(r
 /* ****************************************************************** */
 union clause ast = SHIFTW : (bits(5), regbits, regbits, sop)
 
-mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SLLI) <-> 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0011011
-mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRLI) <-> 0b0000000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011
-mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRAI) <-> 0b0100000 @ shamt : bits(5) @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0011011
+mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SLLI) <-> 0b0000000 @ shamt @ rs1 @ 0b001 @ rd @ 0b0011011
+mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRLI) <-> 0b0000000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
+mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRAI) <-> 0b0100000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
 
 function clause execute (SHIFTW(shamt, rs1, rd, op)) =
     let rs1_val = (X(rs1))[31..0] in
@@ -461,11 +473,11 @@ mapping clause assembly = SHIFTW(shamt, rs1, rd, op) <-> shiftw_mnemonic(op) ^^ 
 /* ****************************************************************** */
 union clause ast = RTYPEW : (regbits, regbits, regbits, ropw)
 
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_ADDW) <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SUBW) <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SLLW) <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b001 @ rd : regbits @ 0b0111011
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRLW) <-> 0b0000000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRAW) <-> 0b0100000 @ rs2 : regbits @ rs1 : regbits @ 0b101 @ rd : regbits @ 0b0111011
+mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_ADDW) <-> 0b0000000 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0111011
+mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SUBW) <-> 0b0100000 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0111011
+mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SLLW) <-> 0b0000000 @ rs2 @ rs1 @ 0b001 @ rd @ 0b0111011
+mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRLW) <-> 0b0000000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0111011
+mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRAW) <-> 0b0100000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0111011
 
 function clause execute (RTYPEW(rs2, rs1, rd, op)) =
   let rs1_val = (X(rs1))[31..0] in
@@ -511,7 +523,8 @@ mapping encdec_mul_op : (bool, bool, bool) <-> bits(3) = {
   (true, false, false) <-> 0b011
 }
 
-mapping clause encdec = MUL(rs2, rs1, rd, high, signed1, signed2) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ encdec_mul_op(high:bool, signed1:bool, signed2:bool) : bits(3) @ rd : regbits @ 0b0110011
+/* for some reason the : bits(3) here is still necessary - BUG */
+mapping clause encdec = MUL(rs2, rs1, rd, high, signed1, signed2) <-> 0b0000001 @ rs2 @ rs1 @ encdec_mul_op(high, signed1, signed2) : bits(3) @ rd @ 0b0110011
 
 function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) =
   let rs1_val = X(rs1) in
@@ -544,7 +557,7 @@ mapping clause assembly = MUL(rs2, rs1, rd, high, signed1, signed2) <-> mul_mnem
 /* ****************************************************************** */
 union clause ast = DIV : (regbits, regbits, regbits, bool)
 
-mapping clause encdec = DIV(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b10 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0110011
+mapping clause encdec = DIV(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b10 @ bool_not_bits(s) @ rd @ 0b0110011
 
 function clause execute (DIV(rs2, rs1, rd, s)) =
   let rs1_val = X(rs1) in
@@ -568,7 +581,7 @@ mapping clause assembly = DIV(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ sp
 /* ****************************************************************** */
 union clause ast = REM : (regbits, regbits, regbits, bool)
 
-mapping clause encdec = REM(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b11 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0110011
+mapping clause encdec = REM(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b11 @ bool_not_bits(s) @ rd @ 0b0110011
 
 function clause execute (REM(rs2, rs1, rd, s)) =
   let rs1_val = X(rs1) in
@@ -588,7 +601,7 @@ mapping clause assembly = REM(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ sp
 /* ****************************************************************** */
 union clause ast = MULW : (regbits, regbits, regbits)
 
-mapping clause encdec = MULW(rs2, rs1, rd) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ rd : regbits @ 0b0111011
+mapping clause encdec = MULW(rs2, rs1, rd) <-> 0b0000001 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0111011
 
 function clause execute (MULW(rs2, rs1, rd)) =
   let rs1_val = X(rs1)[31..0] in
@@ -607,7 +620,7 @@ mapping clause assembly = MULW(rs2, rs1, rd) <->  "mulw" ^^ spc() ^^ reg_name(rd
 /* ****************************************************************** */
 union clause ast = DIVW : (regbits, regbits, regbits, bool)
 
-mapping clause encdec = DIVW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b10 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0111011
+mapping clause encdec = DIVW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b10 @ bool_not_bits(s) @ rd @ 0b0111011
 
 function clause execute (DIVW(rs2, rs1, rd, s)) =
   let rs1_val = X(rs1)[31..0] in
@@ -627,7 +640,7 @@ mapping clause assembly = DIVW(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ "
 /* ****************************************************************** */
 union clause ast = REMW : (regbits, regbits, regbits, bool)
 
-mapping clause encdec = REMW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 : regbits @ rs1 : regbits @ 0b11 @ bool_not_bits(s) : bits(1) @ rd : regbits @ 0b0111011
+mapping clause encdec = REMW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b11 @ bool_not_bits(s) @ rd @ 0b0111011
 
 function clause execute (REMW(rs2, rs1, rd, s)) =
   let rs1_val = X(rs1)[31..0] in
@@ -647,7 +660,7 @@ mapping clause assembly = REMW(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ "
 /* ****************************************************************** */
 union clause ast = FENCE : (bits(4), bits(4))
 
-mapping clause encdec = FENCE(pred, succ) <-> 0b0000 @ pred : bits(4) @ succ : bits(4) @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111
+mapping clause encdec = FENCE(pred, succ) <-> 0b0000 @ pred @ succ @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111
 
 function clause execute (FENCE(pred, succ)) = {
   match (pred, succ) {
@@ -795,7 +808,7 @@ mapping clause assembly = WFI() <-> "wfi"
 /* ****************************************************************** */
 union clause ast = SFENCE_VMA : (regbits, regbits)
 
-mapping clause encdec = SFENCE_VMA(rs1, rs2) <-> 0b0001001 @ rs2 : regbits @ rs1 : regbits @ 0b000 @ 0b00000 @ 0b1110011
+mapping clause encdec = SFENCE_VMA(rs1, rs2) <-> 0b0001001 @ rs2 @ rs1 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute SFENCE_VMA(rs1, rs2) = {
   /* FIXME: spec leaves unspecified what happens if this is executed in M-mode.
@@ -821,7 +834,7 @@ mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^^ spc() ^^ reg_
 /* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
 
-mapping clause encdec = LOADRES(aq, rl, rs1, size, rd) <-> 0b00010 @ bool_bits(aq) : bits(1) @ bool_bits(rl) : bits(1) @ 0b00000 @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ rd : regbits @ 0b0101111
+mapping clause encdec = LOADRES(aq, rl, rs1, size, rd) <-> 0b00010 @ bool_bits(aq) @ bool_bits(rl) @ 0b00000 @ rs1 @ 0b0 @ size_bits(size) @ rd @ 0b0101111
 
 val process_loadres : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> unit
 
@@ -852,7 +865,7 @@ mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^^ maybe_aq(a
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
 
-mapping clause encdec = STORECON(aq, rl, rs2, rs1, size, rd) <-> 0b00011 @ bool_bits(aq) : bits(1) @ bool_bits(rl) : bits(1) @ rs2 : regbits @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ rd : regbits @ 0b0101111
+mapping clause encdec = STORECON(aq, rl, rs2, rs1, size, rd) <-> 0b00011 @ bool_bits(aq) @ bool_bits(rl) @ rs2 @ rs1 @ 0b0 @ size_bits(size) @ rd @ 0b0101111
 
 /* NOTE: Currently, we only EA if address translation is successful.
    This may need revisiting. */
@@ -917,7 +930,7 @@ mapping encdec_amoop : amoop <-> bits(5) = {
   AMOMAXU <-> 0b11100
 }
 
-mapping clause encdec = AMO(op, aq, rl, rs2, rs1, size, rd) <-> encdec_amoop(op) : bits(5) @ bool_bits(aq) : bits(1) @ bool_bits(rl) : bits(1) @ rs2 : regbits @ rs1 : regbits @ 0b0 @ size_bits(size) : bits(2) @ rd : regbits @ 0b0101111
+mapping clause encdec = AMO(op, aq, rl, rs2, rs1, size, rd) <-> encdec_amoop(op) @ bool_bits(aq) @ bool_bits(rl) @ rs2 @ rs1 @ 0b0 @ size_bits(size) @ rd @ 0b0101111
 
 /* NOTE: Currently, we only EA if address translation is successful.
    This may need revisiting. */
@@ -1023,7 +1036,7 @@ mapping encdec_csrop : csrop <-> bits(2) = {
   CSRRC <-> 0b11
 }
 
-mapping clause encdec = CSR(csr, rs1, rd, is_imm, op) <-> csr : bits(12) @ rs1 : regbits @ bool_bits(is_imm) : bits(1) @ encdec_csrop(op) : bits(2) @ rd : regbits @ 0b1110011
+mapping clause encdec = CSR(csr, rs1, rd, is_imm, op) <-> csr @ rs1 @ bool_bits(is_imm) @ encdec_csrop(op) @ rd @ 0b1110011
 
 function readCSR csr : csreg -> xlenbits =
   match csr {
