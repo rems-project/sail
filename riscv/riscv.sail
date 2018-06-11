@@ -46,7 +46,7 @@ mapping utype_mnemonic : uop <-> string = {
   RISCV_AUIPC <-> "auipc"
 }
 
-mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ hex_bits_20(imm)
+mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_20(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
@@ -78,7 +78,7 @@ function clause print_insn (RISCV_JAL(imm, rd)) =
 
 /* TODO: handle 2-byte-alignment in mappings */
 
-mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ hex_bits_21(imm)
+mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_21(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
@@ -95,7 +95,7 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
 function clause print_insn (RISCV_JALR(imm, rs1, rd)) =
   "jalr  " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-mapping clause assembly = RISCV_JALR(imm, rs1, rd) <-> "jalr" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
+mapping clause assembly = RISCV_JALR(imm, rs1, rd) <-> "jalr" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = BTYPE : (bits(13), regbits, regbits, bop)
@@ -147,7 +147,7 @@ mapping btype_mnemonic : bop <-> string = {
   RISCV_BGEU <-> "bgeu"
 }
 
-mapping clause assembly = BTYPE(imm, rs2, rs1, op) <-> btype_mnemonic(op) ^^ spc() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2) ^^ sep() ^^ hex_bits_13(imm)
+mapping clause assembly = BTYPE(imm, rs2, rs1, op) <-> btype_mnemonic(op) ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2) ^ sep() ^ hex_bits_13(imm)
 
 
 /* ****************************************************************** */
@@ -198,7 +198,7 @@ mapping itype_mnemonic : iop <-> string = {
   RISCV_ANDI  <-> "andi"
 }
 
-mapping clause assembly = ITYPE(imm, rs1, rd, op) <-> itype_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
+mapping clause assembly = ITYPE(imm, rs1, rd, op) <-> itype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
@@ -238,7 +238,7 @@ mapping shiftiop_mnemonic : sop <-> string = {
   RISCV_SRAI <-> "srai"
 }
 
-mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op) <-> shiftiop_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ hex_bits_6(shamt)
+mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op) <-> shiftiop_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ hex_bits_6(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPE : (regbits, regbits, regbits, rop)
@@ -300,7 +300,7 @@ mapping rtype_mnemonic : rop <-> string = {
   RISCV_AND  <-> "and"
 }
 
-mapping clause assembly = RTYPE(rs2, rs1, rd, op) <-> rtype_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = RTYPE(rs2, rs1, rd, op) <-> rtype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
@@ -370,7 +370,7 @@ mapping maybe_u = {
 }
 
 
-mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl) <-> "l" ^^ size_mnemonic(size) ^^ maybe_u(is_unsigned) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl) <-> "l" ^ size_mnemonic(size) ^ maybe_u(is_unsigned) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
@@ -420,7 +420,7 @@ function clause print_insn (STORE(imm, rs2, rs1, width, aq, rl)) =
     } in
   insn ^ rs2 ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^^ size_mnemonic(size) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
+mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 
 /* ****************************************************************** */
@@ -435,7 +435,7 @@ function clause execute (ADDIW(imm, rs1, rd)) =
 function clause print_insn (ADDIW(imm, rs1, rd)) =
   "addiw " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
-mapping clause assembly = ADDIW(imm, rs1, rd) <-> "addiw" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_12(imm)
+mapping clause assembly = ADDIW(imm, rs1, rd) <-> "addiw" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = SHIFTW : (bits(5), regbits, regbits, sop)
@@ -468,7 +468,7 @@ mapping shiftw_mnemonic : sop <-> string = {
   RISCV_SRAI <-> "srai"
 }
 
-mapping clause assembly = SHIFTW(shamt, rs1, rd, op) <-> shiftw_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ hex_bits_5(shamt)
+mapping clause assembly = SHIFTW(shamt, rs1, rd, op) <-> shiftw_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_5(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPEW : (regbits, regbits, regbits, ropw)
@@ -510,7 +510,7 @@ mapping rtypew_mnemonic : ropw <-> string = {
   RISCV_SRAW <-> "sraw"
 }
 
-mapping clause assembly = RTYPEW(rs2, rs1, rd, op) <-> rtypew_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = RTYPEW(rs2, rs1, rd, op) <-> rtypew_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 /* FIXME: separate these out into separate ast variants */
@@ -552,7 +552,7 @@ mapping mul_mnemonic : (bool, bool, bool) <-> string = {
   (true, false, false) <-> "mulhu"
 }
 
-mapping clause assembly = MUL(rs2, rs1, rd, high, signed1, signed2) <-> mul_mnemonic(high, signed1, signed2) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = MUL(rs2, rs1, rd, high, signed1, signed2) <-> mul_mnemonic(high, signed1, signed2) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = DIV : (regbits, regbits, regbits, bool)
@@ -576,7 +576,7 @@ mapping maybe_not_u : bool <-> string = {
   true <-> ""
 }
 
-mapping clause assembly = DIV(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = DIV(rs2, rs1, rd, s) <-> "div" ^ maybe_not_u(s) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = REM : (regbits, regbits, regbits, bool)
@@ -596,7 +596,7 @@ function clause print_insn (REM(rs2, rs1, rd, s)) =
   let insn : string = if s then "rem   " else "remu  " in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = REM(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = REM(rs2, rs1, rd, s) <-> "rem" ^ maybe_not_u(s) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = MULW : (regbits, regbits, regbits)
@@ -615,7 +615,7 @@ function clause execute (MULW(rs2, rs1, rd)) =
 function clause print_insn (MULW(rs2, rs1, rd)) =
   "mulw  " ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = MULW(rs2, rs1, rd) <->  "mulw" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = MULW(rs2, rs1, rd) <->  "mulw" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = DIVW : (regbits, regbits, regbits, bool)
@@ -635,7 +635,7 @@ function clause print_insn (DIVW(rs2, rs1, rd, s)) =
   let insn : string = if s then "divw  " else "divuw " in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = DIVW(rs2, rs1, rd, s) <-> "div" ^^ maybe_not_u(s) ^^ "w" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = DIVW(rs2, rs1, rd, s) <-> "div" ^ maybe_not_u(s) ^ "w" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = REMW : (regbits, regbits, regbits, bool)
@@ -655,7 +655,7 @@ function clause print_insn (REMW(rs2, rs1, rd, s)) =
   let insn : string = if s then "remw  " else "remuw " in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = REMW(rs2, rs1, rd, s) <-> "rem" ^^ maybe_not_u(s) ^^ "w" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = REMW(rs2, rs1, rd, s) <-> "rem" ^ maybe_not_u(s) ^ "w" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = FENCE : (bits(4), bits(4))
@@ -699,10 +699,10 @@ mapping bit_maybe_o : bits(1) <-> string = {
 }
 
 mapping fence_bits : bits(4) <-> string = {
-  r : bits(1) @ w : bits(1) @ i : bits(1) @ o : bits(1) <-> bit_maybe_r(r) ^^ bit_maybe_w(w) ^^ bit_maybe_i(i) ^^ bit_maybe_o(o)
+  r : bits(1) @ w : bits(1) @ i : bits(1) @ o : bits(1) <-> bit_maybe_r(r) ^ bit_maybe_w(w) ^ bit_maybe_i(i) ^ bit_maybe_o(o)
 }
 
-mapping clause assembly = FENCE(pred, succ) <-> "fence" ^^ spc() ^^ fence_bits(pred) ^^ sep() ^^ fence_bits(succ)
+mapping clause assembly = FENCE(pred, succ) <-> "fence" ^ spc() ^ fence_bits(pred) ^ sep() ^ fence_bits(succ)
 
 /* ****************************************************************** */
 union clause ast = FENCEI : unit
@@ -829,7 +829,7 @@ function clause execute SFENCE_VMA(rs1, rs2) = {
 function clause print_insn (SFENCE_VMA(rs1, rs2)) =
   "sfence.vma " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^^ spc() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
@@ -860,7 +860,7 @@ function clause print_insn (LOADRES(aq, rl, rs1, width, rd)) =
     } in
   insn ^ rd ^ ", " ^ rs1
 
-mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ size_mnemonic(size) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1)
+mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
 
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
@@ -913,7 +913,7 @@ function clause print_insn (STORECON(aq, rl, rs2, rs1, width, rd)) =
     } in
   insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
-mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ size_mnemonic(size) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = AMO : (amoop, bool, bool, regbits, regbits, word_width, regbits)
@@ -1025,7 +1025,7 @@ mapping amo_mnemonic : amoop <-> string = {
   AMOMAXU <-> "amomaxu"
 }
 
-mapping clause assembly = AMO(op, aq, rl, rs2, rs1, width, rd) <-> amo_mnemonic(op) ^^ "." ^^ size_mnemonic(width) ^^ maybe_aq(aq) ^^ maybe_rl(rl) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ reg_name(rs2)
+mapping clause assembly = AMO(op, aq, rl, rs2, rs1, width, rd) <-> amo_mnemonic(op) ^ "." ^ size_mnemonic(width) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = CSR  : (bits(12), regbits, regbits, bool, csrop)
@@ -1165,8 +1165,8 @@ mapping csr_mnemonic : csrop <-> string = {
   CSRRC <-> "csrrc"
 }
 
-mapping clause assembly = CSR(csr, rs1, rd, true, op) <-> csr_mnemonic(op) ^^ "i" ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ hex_bits_5(rs1) ^^ sep() ^^ csr_name_map(csr)
-mapping clause assembly = CSR(csr, rs1, rd, false, op) <-> csr_mnemonic(op) ^^ spc() ^^ reg_name(rd) ^^ sep() ^^ reg_name(rs1) ^^ sep() ^^ csr_name_map(csr)
+mapping clause assembly = CSR(csr, rs1, rd, true, op) <-> csr_mnemonic(op) ^ "i" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_5(rs1) ^ sep() ^ csr_name_map(csr)
+mapping clause assembly = CSR(csr, rs1, rd, false, op) <-> csr_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ csr_name_map(csr)
 
 /* ****************************************************************** */
 union clause ast = NOP : unit
@@ -1690,7 +1690,7 @@ function clause execute (ILLEGAL(s)) = handle_illegal ()
 
 function clause print_insn (ILLEGAL(s)) = "illegal " ^ hex_bits_32(s)
 
-mapping clause assembly = ILLEGAL(s) <-> "illegal" ^^ spc() ^^ hex_bits_32(s)
+mapping clause assembly = ILLEGAL(s) <-> "illegal" ^ spc() ^ hex_bits_32(s)
 
 
 

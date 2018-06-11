@@ -363,7 +363,7 @@ mapping reg_name = {
 
 val sep : unit <-> string
 mapping sep = {
-  () <-> opt_spc() ^^ "," ^^ def_spc()
+  () <-> opt_spc() ^ "," ^ def_spc()
 }
 
 mapping bool_bits : bool <-> bits(1) = {
