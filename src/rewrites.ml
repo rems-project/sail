@@ -3720,6 +3720,10 @@ let rec exp_of_mpat (MP_aux (mpat, annot)) =
   | MP_cons (mpat1, mpat2)          -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), annot)
   | MP_string_append mpats          -> List.fold_right (string_append annot) (List.map exp_of_mpat mpats) empty_string
   | MP_typ (mpat, typ)              -> E_aux (E_cast (typ, exp_of_mpat mpat), annot)
+  | MP_as (mpat, id)                -> E_aux (E_case (E_aux (E_id id, annot), [
+                                                    Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), annot)
+                                                ]), annot) (* TODO FIXME ditto *)
+
 
 and fexps_of_mfpats mfpats flag annot =
   let fexp_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =
@@ -3727,7 +3731,7 @@ and fexps_of_mfpats mfpats flag annot =
   in
   FES_aux (FES_Fexps (List.map fexp_of_mfpat mfpats, flag), annot)
 
-let rec pat_of_mpat (MP_aux (mpat, annot)) =
+and pat_of_mpat (MP_aux (mpat, annot)) =
   match mpat with
   | MP_lit lit                      -> P_aux (P_lit lit, annot)
   | MP_id id                        -> P_aux (P_id id, annot)
@@ -3740,6 +3744,7 @@ let rec pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
   | MP_string_append (mpats)        -> P_aux ((P_string_append (List.map pat_of_mpat mpats), annot))
   | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
+  | MP_as (mpat, id)                -> P_aux (P_as (pat_of_mpat mpat, id), annot)
 
 and fpats_of_mfpats mfpats =
   let fpat_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =

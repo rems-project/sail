@@ -787,6 +787,7 @@ let rec to_ast_mpat k_env def_ord (Parse_ast.MP_aux(mpat,l)) =
     (match mpat with
     | Parse_ast.MP_lit(lit) -> MP_lit(to_ast_lit lit)
     | Parse_ast.MP_id(id) -> MP_id(to_ast_id id)
+    | Parse_ast.MP_as (mpat, id) -> MP_as (to_ast_mpat k_env def_ord mpat, to_ast_id id)
     | Parse_ast.MP_app(id,mpats) ->
       if mpats = []
       then MP_id (to_ast_id id)

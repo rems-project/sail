@@ -1229,6 +1229,8 @@ mpat_string_append:
 mpat:
   | atomic_mpat
     { $1 }
+  | atomic_mpat As id
+    { mk_mpat (MP_as ($1, $3)) $startpos $endpos }
   | atomic_mpat At mpat_concat
     { mk_mpat (MP_vector_concat ($1 :: $3)) $startpos $endpos }
   | atomic_mpat ColonColon mpat

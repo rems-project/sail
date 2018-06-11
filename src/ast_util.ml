@@ -472,6 +472,7 @@ and map_mpat_annot_aux f = function
   | MP_cons (mpat1, mpat2) -> MP_cons (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
   | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
+  | MP_as (mpat, id) -> MP_as (map_mpat_annot f mpat, id)
 
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
 and map_mfpat_annot f (MFP_aux (MFP_mpat (id, mpat), annot)) = MFP_aux (MFP_mpat (id, map_mpat_annot f mpat), f annot)
@@ -765,6 +766,7 @@ and string_of_mpat (MP_aux (pat, l)) =
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
   | MP_string_append pats -> string_of_list " ^^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
+  | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
   | _ -> "MPAT"
 
 and string_of_lexp (LEXP_aux (lexp, _)) =

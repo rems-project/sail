@@ -440,6 +440,7 @@ type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only
  | MP_cons of ( mpat) * ( mpat)
  | MP_string_append of mpat list
  | MP_typ of mpat * atyp
+ | MP_as of mpat * id
 
 and mpat =
  | MP_aux of ( mpat_aux) * l

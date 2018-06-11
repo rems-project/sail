@@ -1004,6 +1004,7 @@ mpat :: 'MP_' ::=
   | mpat1 '::' mpat2                   ::   :: cons
   | mpat1 ^^ ... ^^ mpatn              ::   :: string_append
   | mpat : typ                         ::   :: typ
+  | mpat as id                         ::   :: as
 
 mpexp :: 'MPat_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}

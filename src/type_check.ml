@@ -3623,6 +3623,11 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
      end
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env) ->
      typ_error l (string_of_id f ^ " is not a union constructor or mapping in mapping-pattern " ^ string_of_mpat mpat)
+  | MP_as (mpat, id) ->
+     let (typed_mpat, env, guards) = bind_mpat allow_unknown other_env env mpat typ in
+     (annot_mpat (MP_as (typed_mpat, id)) (typ_of_mpat typed_mpat),
+      Env.add_local id (Immutable, typ_of_mpat typed_mpat) env,
+      guards)
   (* This is a special case for flow typing when we match a constant numeric literal. *)
   | MP_lit (L_aux (L_num n, _) as lit) when is_atom typ ->
      let nexp = match destruct_atom_nexp env typ with Some n -> n | None -> assert false in
@@ -3723,6 +3728,11 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) 
        List.fold_left fold_pats ([], env, []) mpats
      in
      annot_mpat (MP_string_append typed_mpats) string_typ, env, guards
+  | MP_as (mpat, id) ->
+     let (typed_mpat, env, guards) = infer_mpat allow_unknown other_env env mpat in
+     (annot_mpat (MP_as (typed_mpat, id)) (typ_of_mpat typed_mpat),
+      Env.add_local id (Immutable, typ_of_mpat typed_mpat) env,
+      guards)
 
   | _ ->
      typ_error l ("Couldn't infer type of mapping-pattern " ^ string_of_mpat mpat)
@@ -4028,6 +4038,9 @@ and propagate_mpat_effect_aux = function
   | MP_typ (mpat, typ) ->
      let p_mpat = propagate_mpat_effect mpat in
      MP_typ (p_mpat, typ), effect_of_mpat mpat
+  | MP_as (mpat, id) ->
+     let p_mpat = propagate_mpat_effect mpat in
+     MP_as (p_mpat, id), effect_of_mpat mpat
   | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in mpat"
 
        
