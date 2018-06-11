@@ -68,6 +68,10 @@ val plat_clint_size : forall 'a. Size 'a => unit -> bitvector 'a
 let plat_clint_size () = wordFromInteger 0
 declare ocaml target_rep function plat_clint_size = `Platform.clint_size`
 
+val plat_insns_per_tick : unit -> integer
+let plat_insns_per_tick () = 1
+declare ocaml target_rep function plat_insns_per_tick = `Platform.insns_per_tick`
+
 val plat_htif_tohost : forall 'a. Size 'a => unit -> bitvector 'a
 let plat_htif_tohost () = wordFromInteger 0
 declare ocaml target_rep function plat_htif_tohost = `Platform.htif_tohost`

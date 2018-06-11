@@ -41,9 +41,10 @@ function fetch() -> FetchResult = {
   }
 }
 
-/* returns whether an instruction was executed */
-val step : int -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
-function step(step_no) = {
+/* returns whether an instruction was retired */
+val step : unit -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+function step() = {
+  let step_no = unsigned(minstret);
   match curInterrupt(mip, mie, mideleg) {
     Some(intr, priv) => {
       print_bits("Handling interrupt: ", intr);
@@ -91,17 +92,14 @@ function step(step_no) = {
 
 val loop : int -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 function loop (tohost_addr) = {
-  let tohost = __GetSlice_int(64, tohost_addr, 0);
+  let insns_per_tick = plat_insns_per_tick();
   i : int = 0;
   while true do {
     tick_clock();
     minstret_written = false;     /* see note for minstret */
-    let retired = step(i);
+    let retired = step();
     PC = nextPC;
-    if retired then {
-      i = i + 1;
-      retire_instruction()
-    };
+    if retired then retire_instruction();
 
     /* check htif exit */
     if htif_done then {
@@ -109,6 +107,13 @@ function loop (tohost_addr) = {
       if exit_val == 0 then print("SUCCESS")
       else print_int("FAILURE: ", exit_val);
       exit(());
+    };
+
+    /* update time */
+    i = i + 1;
+    if i == insns_per_tick then {
+      tick_clock();
+      i = 0;
     }
   }
 }

@@ -80,6 +80,8 @@ let htif_tohost () =
 let clint_base () = bits_of_int64 P.clint_base
 let clint_size () = bits_of_int64 P.clint_size
 
+let insns_per_tick () = Big_int.of_int P.insns_per_tick
+
 (* terminal I/O *)
 let term_write char_bits =
   let big_char = Big_int.bitwise_and (uint char_bits) (Big_int.of_int 255) in

@@ -869,10 +869,6 @@ function init_sys() -> unit = {
   minstret_written = false;
 }
 
-function tick_clock() -> unit = {
-  mcycle = mcycle + 1
-}
-
 /* memory access exceptions, defined here for use by the platform model. */
 
 union MemoryOpResult ('a : Type) = {

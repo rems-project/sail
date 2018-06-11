@@ -53,7 +53,7 @@ function within_htif_readable(addr : xlenbits, width : atom('n)) -> forall 'n. b
 
 /* CLINT (Core Local Interruptor), based on Spike. */
 
-val plat_insns_per_tick = {ocaml: "Platform.insns_per_tick"} : unit -> int
+val plat_insns_per_tick = {ocaml: "Platform.insns_per_tick", lem: "plat_insns_per_tick"} : unit -> int
 
 // assumes a single hart, since this typically is a vector of per-hart registers.
 register mtimecmp : xlenbits  // memory-mapped internal clint register.
@@ -110,6 +110,14 @@ function clint_store(addr, width, data) = {
     mtimecmp = zero_extend(data, 64); /* FIXME: Redundant zero_extend currently required by Lem backend */
     MemValue(())
   } else MemException(E_SAMO_Access_Fault)
+}
+
+val tick_clock : unit -> unit effect {rreg, wreg}
+function tick_clock() = {
+  mcycle = mcycle + 1;
+  mtime  = mtime  + 1;
+  if mtime >=_u mtimecmp
+  then mip->MTI() = true
 }
 
 /* Basic terminal character I/O. */
