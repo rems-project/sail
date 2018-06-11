@@ -23,7 +23,7 @@ end*)
 
 (*val native_size : forall 'a. nat*)
 
-(*val ocaml_inject : forall 'a. nat * Num.natural -> mword 'a*)
+(*val ocaml_inject : forall 'a. nat * natural -> mword 'a*)
 
 (* A singleton type family that can be used to carry a size as the type parameter *)
 
@@ -313,25 +313,25 @@ val _ = Define `
 (* Conversions                                                    *)
 (******************************************************************)
 
-(*val signedIntegerFromWord : forall 'a. mword 'a -> Num.integer*)
+(*val signedIntegerFromWord : forall 'a. mword 'a -> integer*)
 
-(*val unsignedIntegerFromWord : forall 'a. mword 'a -> Num.integer*)
+(*val unsignedIntegerFromWord : forall 'a. mword 'a -> integer*)
 
 (* Version without typeclass constraint so that we can derive operations
    in Lem for one of the theorem provers without requiring it. *)
-(*val proverWordFromInteger : forall 'a. Num.integer -> mword 'a*)
+(*val proverWordFromInteger : forall 'a. integer -> mword 'a*)
 
-(*val wordFromInteger : forall 'a. Size 'a => Num.integer -> mword 'a*)
+(*val wordFromInteger : forall 'a. Size 'a => integer -> mword 'a*)
 (* The OCaml version is defined after the arithmetic operations, below. *)
 
-(*val naturalFromWord : forall 'a. mword 'a -> Num.natural*)
+(*val naturalFromWord : forall 'a. mword 'a -> natural*)
 
-(*val wordFromNatural : forall 'a. Size 'a => Num.natural -> mword 'a*)
+(*val wordFromNatural : forall 'a. Size 'a => natural -> mword 'a*)
 
 (*val wordToHex : forall 'a. mword 'a -> string*)
 
 val _ = Define `
-((instance_Show_Show_Machine_word_mword_dict:('a words$word)lem_show$Show_class)= (<|
+((instance_Show_Show_Machine_word_mword_dict:('a words$word)Show_class)= (<|
 
   show_method := words$word_to_hex_string|>))`;
 

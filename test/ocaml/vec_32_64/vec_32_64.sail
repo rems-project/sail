@@ -12,12 +12,12 @@ val main : unit -> unit
 
 function main () = {
   let 'len = get_size ();
-  let xs = zeros(len);
+  let xs = sail_zeros(len);
   if (len == 32) then {
     ()
   } else {
     only64(xs)
   };
   print_bits("xs = ", xs);
-  print_bits("zeros(64) = ", zeros(64))
+  print_bits("zeros(64) = ", sail_zeros(64))
 }

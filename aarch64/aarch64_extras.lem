@@ -15,38 +15,6 @@ type ty2048
 instance (Size ty2048) let size = 2048 end
 declare isabelle target_rep type ty2048 = `2048`
 
-val slice : list bitU -> integer -> integer -> list bitU
-let slice v lo len =
-  subrange_vec_dec v (lo + len - 1) lo
-
-val set_slice : integer -> integer -> list bitU -> integer -> list bitU -> list bitU
-let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
-  update_subrange_vec_dec out (n + slice_len - 1) n v
-
-let get_slice_int_bl len n lo =
-  (* TODO: Is this the intended behaviour? *)
-  let hi = lo + len - 1 in
-  let bs = bools_of_int (hi + 1) n in
-  subrange_list false bs hi lo
-
-val get_slice_int : integer -> integer -> integer -> list bitU
-let get_slice_int len n lo = of_bools (get_slice_int_bl len n lo)
-
-val set_slice_int : integer -> integer -> integer -> list bitU -> integer
-let set_slice_int len n lo v =
-  let hi = lo + len - 1 in
-  let bs = bits_of_int (hi + 1) n in
-  maybe_failwith (signed_of_bits (update_subrange_list false bs hi lo v))
-
-(*let ext_slice signed v i j =
-  let len = length v in
-  let bits = get_bits false (bits_of v) i j in
-  of_bits (if signed then exts_bits len bits else extz_bits len bits)
-val exts_slice : list bitU -> integer -> integer -> list bitU
-let exts_slice v i j = ext_slice true v i j
-val extz_slice : list bitU -> integer -> integer -> list bitU
-let extz_slice v i j = ext_slice false v i j*)
-
 let hexchar_to_bool_list c =
   if c = #'0' then      Just ([false;false;false;false])
   else if c = #'1' then Just ([false;false;false;true ])

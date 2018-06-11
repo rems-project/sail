@@ -12,24 +12,37 @@ MIPS_TLB_STUB:=$(MIPS_SAIL_DIR)/mips_tlb_stub.sail
 MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 MIPS_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 
-mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
-	$(SAIL) -ocaml -o mips -memo_z3 $^
+mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) ../sail
+	$(SAIL) -ocaml -o mips -memo_z3 $(filter %.sail, $^)
+
+mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile ../sail
+	$(SAIL) -O -memo_z3 -c $(filter %.sail, $^) 1> $@
+
+mips_c: mips.c ../lib/sail.h Makefile
+	gcc -O2 -g -I ../lib $< -l gmp -o $@
 
 mips_no_tlb.lem: $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS)
 	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 mips_no_tlb_types.lem: mips_no_tlb.lem
 
-# TODO: Use monomorphisation so that we can switch to machine words
-mips.lem: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS)
-	$(SAIL) -lem -o mips -lem_lib Mips_extras -undefined_gen -memo_z3 $^
+mips.lem: $(MIPS_PRE) $(SAIL_LIB_DIR)/mono_rewrites.sail $(MIPS_TLB) $(MIPS_SAILS)
+	$(SAIL) -lem -o mips -auto_mono -mono_rewrites -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 mips_types.lem: mips.lem
 
 M%.thy: m%.lem m%_types.lem mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' M$*_types.thy
 
+%Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
+	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+
+%Theory.uo: %Script.sml
+	Holmake $@
+
 LOC_FILES:=$(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
 include ../etc/loc.mk
 
 clean:
-	rm -rf mips Mips.thy mips.lem _sbuild
+	rm -rf mips Mips.thy mips.lem mips_types.lem _sbuild mips.c mips_c
+	rm -f mipsScript.sml mips_typesScript.sml mips_extrasScript.sml
+	-Holmake cleanAll

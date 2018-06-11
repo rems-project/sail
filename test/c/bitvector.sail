@@ -13,10 +13,10 @@ function test (x, y)  = {
 val main : unit -> unit
 
 function main () = {
-  if test(0xBEEF, zeros(200)) then () else ();
+  if test(0xBEEF, sail_zeros(200)) then () else ();
   let z = 0xCAFE;
   print_bits("z = ", z);
-  print_bits("zero_extend(z) = ", zero_extend(z, 32));
+  print_bits("zero_extend(z) = ", sail_zero_extend(z, 32));
   let q = 0xAB_FEED_DEAD_BEEF_CAFE;
   print_bits("q = ", q);
   let k = 0xFF;

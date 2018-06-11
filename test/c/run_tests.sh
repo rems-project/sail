@@ -47,36 +47,51 @@ function finish_suite {
 printf "<testsuites>\n" >> $DIR/tests.xml
 
 shopt -s nullglob;
-for file in $DIR/*.sail;
-do
-    if $SAILDIR/sail -no_warn -c $file 1> ${file%.sail}.c 2> /dev/null;
-    then
-	green "compiling $(basename $file)" "ok";
-	if gcc ${file%.sail}.c -lgmp;
+
+function run_c_tests {
+    for file in $DIR/*.sail;
+    do
+	if $SAILDIR/sail -no_warn -c $SAIL_OPTS $file 1> ${file%.sail}.c 2> /dev/null;
 	then
-	    green "compiling $(basename ${file%.sail}.c)" "ok";
-	    $DIR/a.out 1> ${file%.sail}.result 2> /dev/null;
-	    if diff ${file%.sail}.result ${file%.sail}.expect;
+	    green "compiling $(basename $file) ($SAIL_OPTS)" "ok";
+	    if gcc $CC_OPTS ${file%.sail}.c -lgmp -I $SAILDIR/lib;
 	    then
-		green "executing $(basename ${file%.sail})" "ok"
+		green "compiling $(basename ${file%.sail}.c) ($CC_OPTS)" "ok";
+		$DIR/a.out 1> ${file%.sail}.result 2> /dev/null;
+		if diff ${file%.sail}.result ${file%.sail}.expect;
+		then
+		    green "executing $(basename ${file%.sail})" "ok"
+		else
+		    red "executing $(basename ${file%.sail})" "fail"
+		fi;
+		if valgrind -q --leak-check=full --errors-for-leak-kinds=all --error-exitcode=1 $DIR/a.out 1> /dev/null 2> /dev/null;
+		then
+		    green "executing $(basename ${file%.sail}) with valgrind" "ok"
+		else
+		    red "executing $(basename ${file%.sail}) with valgrind" "fail"
+		fi
 	    else
-		red "executing $(basename ${file%.sail})" "fail"
-	    fi;
-	    if valgrind -q --leak-check=full --errors-for-leak-kinds=all --error-exitcode=1 $DIR/a.out 1> /dev/null 2> /dev/null;
-	    then
-		green "executing $(basename ${file%.sail}) with valgrind" "ok"
-	    else
-		red "executing $(basename ${file%.sail}) with valgrind" "fail"
+		red "compiling generated C" "fail"
 	    fi
 	else
-	    red "compiling generated C" "fail"
-	fi
-    else
-	red "compiling $file" "fail"
-    fi;
-    rm -f ${file%.sail}.c
-    rm -f ${file%.sail}.result
-done
+	    red "compiling $file" "fail"
+	fi;
+	rm -f ${file%.sail}.c
+	rm -f ${file%.sail}.result
+    done
+}
+
+SAIL_OPTS=""
+CC_OPTS="-O0"
+run_c_tests
+
+SAIL_OPTS="-O"
+CC_OPTS="-O2"
+run_c_tests
+
+SAIL_OPTS="-O"
+CC_OPTS="-O2 -fsanitize=undefined"
+run_c_tests
 
 finish_suite "C testing"
 

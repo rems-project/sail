@@ -58,6 +58,8 @@ module Big_int = Nat_big_num
 
 (* Option to turn tracing features on or off *)
 let opt_trace_ocaml = ref false
+(* Option to not build generated ocaml by default *)
+let opt_ocaml_nobuild = ref false
 
 type ctx =
   { register_inits : tannot exp list;
@@ -175,9 +177,9 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   | P_id id ->
      begin
        match Env.lookup_id id (pat_env_of pat) with
-       | Local (Immutable, _) | Unbound -> zencode ctx id
+       | Local (_, _) | Unbound -> zencode ctx id
        | Enum _ -> zencode_upper ctx id
-       | _ -> failwith ("Ocaml: Cannot pattern match on mutable variable or register:" ^ string_of_pat pat)
+       | _ -> failwith ("Ocaml: Cannot pattern match on register: " ^ string_of_pat pat)
      end
   | P_lit lit -> ocaml_lit lit
   | P_typ (_, pat) -> ocaml_pat ctx pat
@@ -246,8 +248,8 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
        (ocaml_atomic_exp ctx body ^^ semi)
        ^/^
        separate space [string "if"; ocaml_atomic_exp ctx cond;
-                       string "then loop ()";
-                       string "else ()"]
+                       string "then ()";
+                       string "else loop ()"]
      in
      (string "let rec loop () =" ^//^ loop_body)
      ^/^ string "in"
@@ -285,6 +287,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      (string ("let rec loop " ^ zencode_string (string_of_id id) ^ " =") ^//^ loop_body)
      ^/^ string "in"
      ^/^ (string "loop" ^^ space ^^ ocaml_atomic_exp ctx exp_from)
+  | E_cons (x, xs) -> ocaml_exp ctx x ^^ string " :: " ^^ ocaml_exp ctx xs
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
   match lb_aux with
@@ -697,6 +700,7 @@ let ocaml_compile spec defs =
   Unix.chdir "_sbuild";
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/elf_loader.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/sail_lib.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/util.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/_tags .") in
   let out_chan = open_out (spec ^ ".ml") in
   ocaml_pp_defs out_chan defs;
@@ -708,10 +712,12 @@ let ocaml_compile spec defs =
       let out_chan = open_out "main.ml" in
       output_string out_chan (ocaml_main spec sail_dir);
       close_out out_chan;
-      system_checked "ocamlbuild -use-ocamlfind main.native";
-      let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
-      ()
+      if not !opt_ocaml_nobuild then (
+        system_checked "ocamlbuild -use-ocamlfind main.native";
+        ignore (Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec))
+      )
     end
-  else
-    system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo");
+  else (if not !opt_ocaml_nobuild then
+          system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo")
+       );
   Unix.chdir cwd

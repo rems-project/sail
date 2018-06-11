@@ -235,10 +235,54 @@ function legalize_xepc(v : xlenbits) -> xlenbits = {
 register mtval : xlenbits
 register mscratch : xlenbits
 
-/* time/cycles */
+/* counters */
+
+bitfield Counteren : bits(32) = {
+  HPM  : 31 .. 3,
+  IR   : 2,
+  TM   : 1,
+  CY   : 0
+}
+
+register mcounteren : Counteren
+register scounteren : Counteren
+
+function legalize_mcounteren(c : Counteren, v : xlenbits) -> Counteren = {
+  /* no HPM counters yet */
+  let c = update_IR(c, v[2]);
+  let c = update_TM(c, v[1]);
+  let c = update_CY(c, v[0]);
+  c
+}
+
+function legalize_scounteren(c : Counteren, v : xlenbits) -> Counteren = {
+  /* no HPM counters yet */
+  let c = update_IR(c, v[2]);
+  let c = update_TM(c, v[1]);
+  let c = update_CY(c, v[0]);
+  c
+}
+
 register mcycle : xlenbits
 register mtime : xlenbits
+
+/* minstret is an architectural register, and can be written to.  The
+   spec says that minstret increments on instruction retires need to
+   occur before any explicit writes to instret.  However, in our
+   simulation loop, we need to execute an instruction to find out
+   whether it retired, and hence can only increment instret after
+   execution.  To avoid doing this in the case minstret was explicitly
+   written to, we track writes to it in a separate model-internal
+   register.
+*/
 register minstret : xlenbits
+register minstret_written : bool
+
+function retire_instruction() -> unit = {
+  if   minstret_written == true
+  then minstret_written = false
+  else minstret = minstret + 1
+}
 
 /* informational registers */
 register mvendorid : xlenbits
@@ -597,10 +641,27 @@ function check_CSR_access(csrrw, csrpr, p, isWrite) =
 function check_TVM_SATP(csr : csreg, p : Privilege) -> bool =
   ~ (csr == 0x180 & p == Supervisor & mstatus.TVM() == true)
 
+function check_Counteren(csr : csreg, p : Privilege) -> bool =
+  match(csr, p) {
+    (0xC00, Supervisor) => mcounteren.CY() == true,
+    (0xC01, Supervisor) => mcounteren.TM() == true,
+    (0xC02, Supervisor) => mcounteren.IR() == true,
+
+    (0xC00, User) => scounteren.CY() == true,
+    (0xC01, User) => scounteren.TM() == true,
+    (0xC02, User) => scounteren.IR() == true,
+
+    (_, _) => /* no HPM counters for now */
+              if   0xC03 <=_u csr & csr <=_u 0xC1F
+              then false
+              else true
+  }
+
 function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
     is_CSR_defined(csr, p)
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
   & check_TVM_SATP(csr, p)
+  & check_Counteren(csr, p)
 
 /* Exception delegation: given an exception and the privilege at which
  * it occured, returns the privilege at which it should be handled.
@@ -790,17 +851,31 @@ function init_sys() -> unit = {
   cur_privilege = Machine;
 
   misa->MXL() = arch_to_bits(RV64);
-  misa->C() = true;
-  misa->U() = true;
-  misa->S() = true;
+  misa->A() = true; /* atomics */
+  misa->C() = true; /* RVC */
+  misa->I() = true; /* base integer ISA */
+  misa->M() = true; /* integer multiply/divide */
+  misa->U() = true; /* user-mode */
+  misa->S() = true; /* supervisor-mode */
 
   mstatus->SXL() = misa.MXL();
   mstatus->UXL() = misa.MXL();
   mstatus->SD()  = false;
 
   mhartid = EXTZ(0b0);
+
+  mcounteren->bits() = EXTZ(0b0);
+  minstret = EXTZ(0b0);
+  minstret_written = false;
 }
 
 function tick_clock() -> unit = {
   mcycle = mcycle + 1
+}
+
+/* memory access exceptions, defined here for use by the platform model. */
+
+union MemoryOpResult ('a : Type) = {
+  MemValue : 'a,
+  MemException: ExceptionType
 }

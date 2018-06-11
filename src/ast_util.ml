@@ -708,7 +708,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_exit exp -> "exit " ^ string_of_exp exp
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
-  | E_list xs -> "[||" ^ string_of_list ", " string_of_exp xs ^ "||]"
+  | E_list xs -> "[|" ^ string_of_list ", " string_of_exp xs ^ "|]"
   | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
      "{ " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->

@@ -59,6 +59,7 @@ fragment :: 'F_' ::=
   | op fragment                            :: :: unary
   | string ( fragment0 , ... , fragmentn ) :: :: call
   | fragment . string                      :: :: field
+  | string                                 :: :: raw
 
 % init / clear -> create / kill
 
@@ -104,6 +105,7 @@ clexp :: 'CL_' ::=
   | id                :: :: id
   | id . string       :: :: field
   | * id              :: :: addr
+  | id -> string      :: :: addr_field
   | current_exception :: :: current_exception
   | have_exception    :: :: have_exception
 

@@ -6760,10 +6760,10 @@ function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isb
   priv_match : bool = undefined;
   if ~(ispriv) & ~(isbreakpnt) then priv_match = EL0_match
   else match PSTATE.EL {
-    EL3 => priv_match = EL3_match,
-    EL2 => priv_match = EL2_match,
-    EL1 => priv_match = EL1_match,
-    EL0 => priv_match = EL0_match
+    ? if ? == EL3 => priv_match = EL3_match,
+    ? if ? == EL2 => priv_match = EL2_match,
+    ? if ? == EL1 => priv_match = EL1_match,
+    ? if ? == EL0 => priv_match = EL0_match
   };
   security_state_match : bool = undefined;
   match SSC {
@@ -7067,20 +7067,20 @@ function Strip (A, data) = {
   else
     original_ptr = slice(extfield, 0, negate(bottom_PAC_bit) + 64) @ slice(A, 0, bottom_PAC_bit);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       TrapEL2 = false;
       TrapEL3 = false
     }
@@ -7115,23 +7115,23 @@ function AuthIB (X, Y) = {
   Enable : bits(1) = undefined;
   APIBKey_EL1 : bits(128) = slice(APIBKeyHi_EL1, 0, 64) @ slice(APIBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[30]] else [SCTLR_EL2[30]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[30]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[30]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[30]];
       TrapEL2 = false;
       TrapEL3 = false
@@ -7189,23 +7189,23 @@ function AuthIA (X, Y) = {
   Enable : bits(1) = undefined;
   APIAKey_EL1 : bits(128) = slice(APIAKeyHi_EL1, 0, 64) @ slice(APIAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[31]] else [SCTLR_EL2[31]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[31]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[31]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[31]];
       TrapEL2 = false;
       TrapEL3 = false
@@ -7276,23 +7276,23 @@ function AuthDB (X, Y) = {
   Enable : bits(1) = undefined;
   APDBKey_EL1 : bits(128) = slice(APDBKeyHi_EL1, 0, 64) @ slice(APDBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[13]] else [SCTLR_EL2[13]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[13]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[13]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[13]];
       TrapEL2 = false;
       TrapEL3 = false
@@ -7319,23 +7319,23 @@ function AuthDA (X, Y) = {
   Enable : bits(1) = undefined;
   APDAKey_EL1 : bits(128) = slice(APDAKeyHi_EL1, 0, 64) @ slice(APDAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[27]] else [SCTLR_EL2[27]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[27]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[27]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[27]];
       TrapEL2 = false;
       TrapEL3 = false
@@ -7362,23 +7362,23 @@ function AddPACIB (X, Y) = {
   Enable : bits(1) = undefined;
   APIBKey_EL1 : bits(128) = slice(APIBKeyHi_EL1, 0, 64) @ slice(APIBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[30]] else [SCTLR_EL2[30]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[30]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[30]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[30]];
       TrapEL2 = false;
       TrapEL3 = false
@@ -7436,23 +7436,23 @@ function AddPACIA (X, Y) = {
   Enable : bits(1) = undefined;
   APIAKey_EL1 : bits(128) = slice(APIAKeyHi_EL1, 0, 64) @ slice(APIAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[31]] else [SCTLR_EL2[31]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[31]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[31]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[31]];
       TrapEL2 = false;
       TrapEL3 = false
@@ -7509,20 +7509,20 @@ function AddPACGA (X, Y) = {
   TrapEL3 : bool = undefined;
   APGAKey_EL1 : bits(128) = slice(APGAKeyHi_EL1, 0, 64) @ slice(APGAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       TrapEL2 = false;
       TrapEL3 = false
     }
@@ -7548,23 +7548,23 @@ function AddPACDB (X, Y) = {
   Enable : bits(1) = undefined;
   APDBKey_EL1 : bits(128) = slice(APDBKeyHi_EL1, 0, 64) @ slice(APDBKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[13]] else [SCTLR_EL2[13]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[13]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[13]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[13]];
       TrapEL2 = false;
       TrapEL3 = false
@@ -7591,23 +7591,23 @@ function AddPACDA (X, Y) = {
   Enable : bits(1) = undefined;
   APDAKey_EL1 : bits(128) = slice(APDAKeyHi_EL1, 0, 64) @ slice(APDAKeyLo_EL1, 0, 64);
   match PSTATE.EL {
-    EL0 => {
+    ? if ? == EL0 => {
       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
       Enable = if IsEL1Regime then [SCTLR_EL1[27]] else [SCTLR_EL2[27]];
       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL1 => {
+    ? if ? == EL1 => {
       Enable = [SCTLR_EL1[27]];
       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL2 => {
+    ? if ? == EL2 => {
       Enable = [SCTLR_EL2[27]];
       TrapEL2 = false;
       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
     },
-    EL3 => {
+    ? if ? == EL3 => {
       Enable = [SCTLR_EL3[27]];
       TrapEL2 = false;
       TrapEL3 = false

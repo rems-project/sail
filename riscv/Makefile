@@ -1,16 +1,24 @@
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv_vmem.sail riscv.sail riscv_step.sail
+SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail
+PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
 
 export SAIL_DIR
 
-all: riscv Riscv.thy
+all: platform Riscv.thy
 
 check: $(SAIL_SRCS) main.sail Makefile
 	$(SAIL) $(SAIL_FLAGS) $(SAIL_SRCS) main.sail
 
-riscv: $(SAIL_SRCS) main.sail Makefile
-	$(SAIL) $(SAIL_FLAGS) -ocaml -o riscv $(SAIL_SRCS) main.sail
+_sbuild/riscv.ml: $(SAIL_SRCS) Makefile main.sail
+	$(SAIL) $(SAIL_FLAGS) -ocaml -ocaml-nobuild -o riscv $(SAIL_SRCS)
+
+_sbuild/platform_main.native: _sbuild/riscv.ml _tags $(PLATFORM_OCAML_SRCS) Makefile
+	cp _tags $(PLATFORM_OCAML_SRCS) _sbuild
+	cd _sbuild && ocamlbuild -use-ocamlfind platform_main.native
+
+platform: _sbuild/platform_main.native
+	rm -f $@ && ln -s $^ $@
 
 riscv_duopod_ocaml: prelude.sail riscv_duopod.sail
 	$(SAIL) $(SAIL_FLAGS) -ocaml -o $@ $^
@@ -35,6 +43,18 @@ Riscv.thy: riscv.lem riscv_extras.lem
 riscv.lem: $(SAIL_SRCS) Makefile
 	$(SAIL) $(SAIL_FLAGS) -lem -o riscv -lem_mwords -lem_lib Riscv_extras $(SAIL_SRCS)
 
+riscv_sequential.lem: $(SAIL_SRCS) Makefile
+	$(SAIL_DIR)/sail -lem -lem_sequential -o riscv_sequential -lem_mwords -lem_lib Riscv_extras_sequential $(SAIL_SRCS)
+
+riscvScript.sml : riscv.lem riscv_extras.lem
+	lem -hol -outdir . -lib ../lib/hol -lib ../src/lem_interp -lib ../src/gen_lib \
+		riscv_extras.lem \
+		riscv_types.lem \
+		riscv.lem
+
+riscvTheory.uo riscvTheory.ui: riscvScript.sml
+	Holmake riscvTheory.uo
+
 # we exclude prelude.sail here, most code there should move to sail lib
 LOC_FILES:=$(SAIL_SRCS) main.sail
 include ../etc/loc.mk
@@ -45,3 +65,7 @@ clean:
 	-rm -f Riscv.thy Riscv_types.thy \
 		Riscv_extras.thy
 	-rm -f Riscv_duopod.thy Riscv_duopod_types.thy riscv_duopod.lem riscv_duopod_types.lem
+	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
+	-rm -f platform_main.native platform
+	-Holmake cleanAll
+	ocamlbuild -clean

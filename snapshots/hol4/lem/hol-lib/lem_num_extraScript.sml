@@ -17,18 +17,18 @@ val _ = new_theory "lem_num_extra"
 (*open import Num*)
 (*open import String*)
 
-(*val naturalOfString : string -> Num.natural*)
+(*val naturalOfString : string -> natural*)
 
-(*val integerOfString : string -> Num.integer*)
+(*val integerOfString : string -> integer*)
 
 
 (* Truncation integer division (round toward zero) *)
-(*val integerDiv_t: Num.integer -> Num.integer -> Num.integer*)
+(*val integerDiv_t: integer -> integer -> integer*)
 
 (* Truncation modulo *)
-(*val integerRem_t: Num.integer -> Num.integer -> Num.integer*)
+(*val integerRem_t: integer -> integer -> integer*)
 
 (* Flooring modulo *)
-(*val integerRem_f: Num.integer -> Num.integer -> Num.integer*)
+(*val integerRem_f: integer -> integer -> integer*)
 val _ = export_theory()
 

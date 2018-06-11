@@ -418,7 +418,7 @@ let rewrite_sizeof (Defs defs) =
          let inst =
            try instantiation_of orig_exp with
            | Type_error (l, err) ->
-             raise (Reporting_basic.err_typ l (string_of_type_error err)) in
+             raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err)) in
          (* Rewrite the inst using orig_kid so that each type variable has it's
             original name rather than a mangled typechecker name *)
          let inst = KBindings.fold (fun kid uvar b -> KBindings.add (orig_kid kid) uvar b) inst KBindings.empty in
@@ -431,7 +431,7 @@ let rewrite_sizeof (Defs defs) =
                 let sizeof = E_aux (E_sizeof nexp, (l, Some (env, atom_typ nexp, no_effect))) in
                 (try rewrite_trivial_sizeof_exp sizeof with
                 | Type_error (l, err) ->
-                  raise (Reporting_basic.err_typ l (string_of_type_error err)))
+                  raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err)))
              (* If the type variable is Not_found then it was probably
                 introduced by a P_var pattern, so it likely exists as
                 a variable in scope. It can't be an existential because the assert rules that out. *)
@@ -642,7 +642,7 @@ let rewrite_sizeof (Defs defs) =
                                           (Bindings.empty, []) defs in
   let defs = List.map (rewrite_sizeof_valspec params_map) defs in
   (* Defs defs *)
-  fst (check initial_env (Defs defs))
+  fst (Type_error.check initial_env (Defs defs))
 
 let rewrite_defs_remove_assert defs =
   let e_assert ((E_aux (eaux, (l, _)) as exp), str) = match eaux with
@@ -1667,7 +1667,7 @@ let rewrite_defs_exp_lift_assign defs = rewrite_defs_base
      write_reg_ref (vector_access (GPR, i)) exp
  *)
 let rewrite_register_ref_writes (Defs defs) =
-  let (Defs write_reg_spec) = fst (check Env.empty (Defs (List.map gen_vs
+  let (Defs write_reg_spec) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
     [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit effect {wreg}")]))) in
   let lexp_ref_exp (LEXP_aux (_, annot) as lexp) =
     try
@@ -1902,7 +1902,7 @@ let rewrite_defs_early_return (Defs defs) =
     FD_aux (FD_function (rec_opt, tannot_opt, effect_opt,
       List.map (rewrite_funcl_early_return rewriters) funcls), a) in
 
-  let (Defs early_ret_spec) = fst (check Env.empty (Defs [gen_vs
+  let (Defs early_ret_spec) = fst (Type_error.check Env.empty (Defs [gen_vs
     ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b effect {escape}")])) in
 
   rewrite_defs_base
@@ -2366,7 +2366,7 @@ let rewrite_vector_concat_assignments defs =
          begin
            try check_exp env e_aux unit_typ with
            | Type_error (l, err) ->
-             raise (Reporting_basic.err_typ l (string_of_type_error err))
+             raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
          end
        else E_aux (e_aux, annot)
     | _ -> E_aux (e_aux, annot)
@@ -2392,7 +2392,7 @@ let rewrite_tuple_assignments defs =
        begin
          try check_exp env let_exp unit_typ with
          | Type_error (l, err) ->
-           raise (Reporting_basic.err_typ l (string_of_type_error err))
+           raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
        end
     | _ -> E_aux (e_aux, annot)
   in
@@ -3349,7 +3349,8 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
     | E_for(id,exp1,exp2,exp3,order,exp4) ->
        (* Translate for loops into calls to one of the foreach combinators.
           The loop body becomes a function of the loop variable and any
-          mutable local variables that are updated inside the loop.
+          mutable local variables that are updated inside the loop and
+          are used after or within the loop.
           Since the foreach* combinators are higher-order functions,
           they cannot be represented faithfully in the AST. The following
           code abuses the parameters of an E_app node, embedding the loop body
@@ -3358,7 +3359,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           function and passed to foreach*. *)
        let vars, varpats =
          find_updated_vars exp4
-         |> IdSet.inter used_vars
+         |> IdSet.inter (IdSet.union used_vars (find_used_vars full_exp))
          |> mk_var_exps_pats pl env
        in
        let exp4 = rewrite_var_updates (add_vars overwrite exp4 vars) in
@@ -3414,9 +3415,11 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let v = fix_eff_exp (annot_exp (E_app (mk_id "foreach", [exp1; exp2; exp3; ord_exp; tuple_exp vars; guarded_body])) el env (typ_of body)) in
        Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
      | E_loop(loop,cond,body) ->
+        (* Find variables that might be updated in the loop body and are used
+           either after or within the loop. *)
         let vars, varpats =
           find_updated_vars body
-          |> IdSet.inter used_vars
+          |> IdSet.inter (IdSet.union used_vars (find_used_vars full_exp))
           |> mk_var_exps_pats pl env
         in
         let body = rewrite_var_updates (add_vars overwrite body vars) in
@@ -3659,7 +3662,7 @@ let rewrite_defs_remove_superfluous_returns =
 
 
 let rewrite_defs_remove_e_assign (Defs defs) =
-  let (Defs loop_specs) = fst (check Env.empty (Defs (List.map gen_vs
+  let (Defs loop_specs) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
     [("foreach", "forall ('vars : Type). (int, int, int, bool, 'vars, 'vars) -> 'vars");
      ("while", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
      ("until", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars")]))) in
@@ -3894,7 +3897,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
   in
   Defs (List.map rewrite_def defs |> List.flatten)
 
-let recheck_defs defs = fst (check initial_env defs)
+let recheck_defs defs = fst (Type_error.check initial_env defs)
 
 let remove_mapping_valspecs (Defs defs) =
   let allowed_def def =
@@ -4012,7 +4015,7 @@ let rewrite_check_annot =
        else ());
       exp
     with
-      Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))
+      Type_error (l, err) -> raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
   in
   let check_pat pat =
     prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (pat_typ_of pat));

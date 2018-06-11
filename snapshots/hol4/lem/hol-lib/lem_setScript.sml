@@ -49,7 +49,7 @@ val _ = new_theory "lem_set"
 (* Equality check          *)
 (* ----------------------- *)
 
-(*val setEqualBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a -> set 'a -> bool*)
+(*val setEqualBy : forall 'a. ('a -> 'a -> ordering) -> set 'a -> set 'a -> bool*)
 
 (*val setEqual : forall 'a. SetType 'a => set 'a -> set 'a -> bool*)
 
@@ -58,7 +58,7 @@ val _ = new_theory "lem_set"
 (* ----------------------- *)
 
 (*val empty : forall 'a. SetType 'a => set 'a*) 
-(*val emptyBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a*)
+(*val emptyBy : forall 'a. ('a -> 'a -> ordering) -> set 'a*)
 
 (* ----------------------- *)
 (* any / all               *)
@@ -74,7 +74,7 @@ val _ = new_theory "lem_set"
 (* ----------------------- *)
 
 (*val IN [member] : forall 'a. SetType 'a => 'a -> set 'a -> bool*) 
-(*val memberBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> 'a -> set 'a -> bool*)
+(*val memberBy : forall 'a. ('a -> 'a -> ordering) -> 'a -> set 'a -> bool*)
 
 (* ----------------------- *)
 (* not (IN)                *)
@@ -95,7 +95,7 @@ val _ = new_theory "lem_set"
 (* singleton                *)
 (* ------------------------ *)
 
-(*val singletonBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> 'a -> set 'a*)
+(*val singletonBy : forall 'a. ('a -> 'a -> ordering) -> 'a -> set 'a*)
 (*val singleton : forall 'a. SetType 'a => 'a -> set 'a*)
 
 
@@ -117,7 +117,7 @@ val _ = new_theory "lem_set"
 (* union                    *)
 (* ------------------------ *)
 
-(*val unionBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a -> set 'a -> set 'a*)
+(*val unionBy : forall 'a. ('a -> 'a -> ordering) -> set 'a -> set 'a -> set 'a*)
 (*val union : forall 'a. SetType 'a => set 'a -> set 'a -> set 'a*)
 
 (* ----------------------- *)
@@ -150,13 +150,13 @@ val _ = Define `
 
 (*val split : forall 'a. SetType 'a, Ord 'a => 'a -> set 'a -> set 'a * set 'a*)
 val _ = Define `
- ((SET_SPLIT:'a lem_basic_classes$Ord_class -> 'a -> 'a set -> 'a set#'a set)dict_Basic_classes_Ord_a p s=  (SET_FILTER (
+ ((SET_SPLIT:'a Ord_class -> 'a -> 'a set -> 'a set#'a set)dict_Basic_classes_Ord_a p s=  (SET_FILTER (
   dict_Basic_classes_Ord_a.isGreater_method p) s, SET_FILTER (dict_Basic_classes_Ord_a.isLess_method p) s))`;
 
 
 (*val splitMember : forall 'a. SetType 'a, Ord 'a => 'a -> set 'a -> set 'a * bool * set 'a*)
 val _ = Define `
- ((splitMember:'a lem_basic_classes$Ord_class -> 'a -> 'a set -> 'a set#bool#'a set)dict_Basic_classes_Ord_a p s=  (SET_FILTER (
+ ((splitMember:'a Ord_class -> 'a -> 'a set -> 'a set#bool#'a set)dict_Basic_classes_Ord_a p s=  (SET_FILTER (
   dict_Basic_classes_Ord_a.isLess_method p) s, (p IN s), SET_FILTER (
   dict_Basic_classes_Ord_a.isGreater_method p) s))`;
 
@@ -165,8 +165,8 @@ val _ = Define `
 (* subset and proper subset *)
 (* ------------------------ *)
 
-(*val isSubsetOfBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a -> set 'a -> bool*)
-(*val isProperSubsetOfBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a -> set 'a -> bool*)
+(*val isSubsetOfBy : forall 'a. ('a -> 'a -> ordering) -> set 'a -> set 'a -> bool*)
+(*val isProperSubsetOfBy : forall 'a. ('a -> 'a -> ordering) -> set 'a -> set 'a -> bool*)
 
 (*val isSubsetOf : forall 'a. SetType 'a => set 'a -> set 'a -> bool*)
 (*val isProperSubsetOf : forall 'a. SetType 'a => set 'a -> set 'a -> bool*)
@@ -185,7 +185,7 @@ val _ = Define `
 (* ------------------------ *)
 
 (*val bigunion : forall 'a. SetType 'a => set (set 'a) -> set 'a*)
-(*val bigunionBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set (set 'a) -> set 'a*)
+(*val bigunionBy : forall 'a. ('a -> 'a -> ordering) -> set (set 'a) -> set 'a*)
 
 (*let bigunion bs=  {x | forall (s IN bs) (x IN s) | true}*)
 
@@ -206,7 +206,7 @@ val _ = Define `
 (* difference               *)
 (* ------------------------ *)
 
-(*val differenceBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a -> set 'a -> set 'a*)
+(*val differenceBy : forall 'a. ('a -> 'a -> ordering) -> set 'a -> set 'a -> set 'a*)
 (*val difference : forall 'a. SetType 'a => set 'a -> set 'a -> set 'a*)
 
 (* ------------------------ *)
@@ -214,7 +214,7 @@ val _ = Define `
 (* ------------------------ *)
 
 (*val intersection : forall 'a. SetType 'a => set 'a -> set 'a -> set 'a*)
-(*val intersectionBy : forall 'a. ('a -> 'a -> Basic_classes.ordering) -> set 'a -> set 'a -> set 'a*)
+(*val intersectionBy : forall 'a. ('a -> 'a -> ordering) -> set 'a -> set 'a -> set 'a*)
 
 
 (* ------------------------ *)
@@ -224,7 +224,7 @@ val _ = Define `
 (*val map : forall 'a 'b. SetType 'a, SetType 'b => ('a -> 'b) -> set 'a -> set 'b*) (* before image *)
 (*let map f s=  { f e | forall (e IN s) | true }*)
 
-(*val mapBy : forall 'a 'b. ('b -> 'b -> Basic_classes.ordering) -> ('a -> 'b) -> set 'a -> set 'b*) 
+(*val mapBy : forall 'a 'b. ('b -> 'b -> ordering) -> ('a -> 'b) -> set 'a -> set 'b*) 
 
 
 (* ------------------------ *)
@@ -235,7 +235,7 @@ val _ = Define `
    it might be better to combine bigunion and map sometimes into a single operation. *)
 
 (*val bigunionMap : forall 'a 'b. SetType 'a, SetType 'b => ('a -> set 'b) -> set 'a -> set 'b*)
-(*val bigunionMapBy : forall 'a 'b. ('b -> 'b -> Basic_classes.ordering) -> ('a -> set 'b) -> set 'a -> set 'b*)
+(*val bigunionMapBy : forall 'a 'b. ('b -> 'b -> ordering) -> ('a -> set 'b) -> set 'a -> set 'b*)
 
 (* ------------------------ *)
 (* mapMaybe and fromMaybe   *)
@@ -244,16 +244,16 @@ val _ = Define `
 (* If the mapping function returns Just x, x is added to the result
    set. If it returns Nothing, no element is added. *)
 
-(*val mapMaybe : forall 'a 'b. SetType 'a, SetType 'b => ('a -> Maybe.maybe 'b) -> set 'a -> set 'b*)
+(*val mapMaybe : forall 'a 'b. SetType 'a, SetType 'b => ('a -> maybe 'b) -> set 'a -> set 'b*)
 val _ = Define `
- ((setMapMaybe:('a -> 'b option) -> 'a set -> 'b set) f s=  
-  (BIGUNION (IMAGE (\ x .  (case f x of 
+ ((setMapMaybe:('a -> 'b option) -> 'a set -> 'b set) f s= 
+   (BIGUNION (IMAGE (\ x .  (case f x of 
                           SOME y  => {y} 
                         | NONE => EMPTY
                         )) s)))`;
 
 
-(*val removeMaybe : forall 'a. SetType 'a => set (Maybe.maybe 'a) -> set 'a*)
+(*val removeMaybe : forall 'a. SetType 'a => set (maybe 'a) -> set 'a*)
 val _ = Define `
  ((removeMaybe:('a option)set -> 'a set) s=  (setMapMaybe (\ x .  x) s))`;
 
@@ -262,15 +262,15 @@ val _ = Define `
 (* min and max              *)
 (* ------------------------ *)
 
-(*val findMin : forall 'a.  SetType 'a, Eq 'a => set 'a -> Maybe.maybe 'a*) 
-(*val findMax : forall 'a.  SetType 'a, Eq 'a => set 'a -> Maybe.maybe 'a*)
+(*val findMin : forall 'a.  SetType 'a, Eq 'a => set 'a -> maybe 'a*) 
+(*val findMax : forall 'a.  SetType 'a, Eq 'a => set 'a -> maybe 'a*)
 
 (* ------------------------ *)
 (* fromList                 *)
 (* ------------------------ *)
 
 (*val fromList : forall 'a.  SetType 'a => list 'a -> set 'a*) (* before from_list *)
-(*val fromListBy : forall 'a.  ('a -> 'a -> Basic_classes.ordering) -> list 'a -> set 'a*) 
+(*val fromListBy : forall 'a.  ('a -> 'a -> ordering) -> list 'a -> set 'a*) 
 
 
 (* ------------------------ *)
@@ -278,7 +278,7 @@ val _ = Define `
 (* ------------------------ *)
 
 (*val sigma : forall 'a 'b. SetType 'a, SetType 'b => set 'a -> ('a -> set 'b) -> set ('a * 'b)*)
-(*val sigmaBy : forall 'a 'b. (('a * 'b) -> ('a * 'b) -> Basic_classes.ordering) -> set 'a -> ('a -> set 'b) -> set ('a * 'b)*)
+(*val sigmaBy : forall 'a 'b. (('a * 'b) -> ('a * 'b) -> ordering) -> set 'a -> ('a -> set 'b) -> set ('a * 'b)*)
 
 (*let sigma sa sb=  { (a, b) | forall (a IN sa) (b IN sb a) | true }*)
 
@@ -288,7 +288,7 @@ val _ = Define `
 (* ------------------------ *)
 
 (*val cross : forall 'a 'b. SetType 'a, SetType 'b => set 'a -> set 'b -> set ('a * 'b)*)
-(*val crossBy : forall 'a 'b. (('a * 'b) -> ('a * 'b) -> Basic_classes.ordering) -> set 'a -> set 'b -> set ('a * 'b)*)
+(*val crossBy : forall 'a 'b. (('a * 'b) -> ('a * 'b) -> ordering) -> set 'a -> set 'b -> set ('a * 'b)*)
 
 (*let cross s1 s2=  { (e1, e2) | forall (e1 IN s1) (e2 IN s2) | true }*)
 

@@ -4,7 +4,7 @@ val lslc : forall ('n : Int) ('shift : Int), 'n >= 1.
 
 function lslc (vec, shift) = {
   assert(constraint('shift >= 1), "shift must be positive");
-  extended : bits('shift + 'n) = vec @ zeros(shift);
+  extended : bits('shift + 'n) = vec @ sail_zeros(shift);
   result : bits('n) = extended[sizeof('n - 1) .. 0];
   c : bit = extended['n];
   return((result, c))

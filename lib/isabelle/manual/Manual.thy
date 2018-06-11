@@ -288,7 +288,7 @@ exception handler as arguments.
 The exception mechanism is also used to implement early returns by throwing and catching return
 values:  A function body with one or more early returns of type @{typ 'a} (and exception type
 @{typ 'e}) is lifted to a monadic expression with exception type @{typ "('a + 'e)"} using
-@{term liftSR}, such that an early return of the value @{term a} throws @{term "Inl a"}, and a
+@{term liftRS}, such that an early return of the value @{term a} throws @{term "Inl a"}, and a
 regular exception @{term e} is thrown as @{term "Inr e"}.  The function body is then wrapped in
 @{term catch_early_returnS} to lower it back to the default monad and exception type.  These
 liftings and lowerings are automatically inserted by Sail for functions with early returns.\<^footnote>\<open>To be
@@ -412,7 +412,9 @@ case, defined as
 @{thm [display, names_short] PrePostE_def}
 The theory includes standard proof rules for both of these variants, in particular rules
 giving weakest preconditions of the predefined primitives of the monad, collected under the names
-@{attribute PrePost_intro} and @{attribute PrePostE_intro}, respectively.
+@{attribute PrePost_atomI} for atoms such as @{term return} and @{attribute PrePost_compositeI}
+for composites such as @{term bind} (or @{attribute PrePostE_atomI} and
+@{attribute PrePostE_compositeI}, respectively, for the quadruple variant).
 
 The instruction we are considering is defined as
 @{thm [display] execute_ITYPE.simps[of _ rs for rs]}
@@ -448,16 +450,17 @@ lemma
   shows "PrePostE pre (liftS instr) post (\<lambda>_ _. False)"
 
   unfolding pre_def instr_def post_def
-  by (simp add: rX_def wX_def cong: bindS_cong if_cong split del: if_split)
-     (rule PrePostE_strengthen_pre, (rule PrePostE_intro)+, auto simp: uint_0_iff)
+  by (simp add: rX_def wX_def liftState_simp cong: bindS_cong if_cong split del: if_split)
+     (rule PrePostE_strengthen_pre, (rule PrePostE_atomI PrePostE_compositeI)+, auto simp: uint_0_iff)
 
 text \<open>The proof begins with a simplification step, which not only unfolds the definitions of the
 auxiliary functions @{term rX} and @{term wX}, but also performs the lifting from the free monad
 to the state monad.  We apply the rule @{thm [source] PrePostE_strengthen_pre} (in a
-backward manner) to allow a weaker precondition, then use the rules in @{attribute PrePostE_intro}
-to derive a weakest precondition, and then use @{method auto} to show that it is implied by
-the given precondition.  For more serious proofs, one will want to set up specialised proof
-tactics.  This example uses only basic proof methods, to make the reasoning steps more explicit.\<close>
+backward manner) to allow a weaker precondition, then use the rules in
+@{attribute PrePostE_compositeI} and @{attribute PrePostE_atomI} to derive a weakest precondition,
+and then use @{method auto} to show that it is implied by the given precondition.  For more serious
+proofs, one will want to set up specialised proof tactics.  This example uses only basic proof
+methods, to make the reasoning steps more explicit.\<close>
 
 (*<*)
 end

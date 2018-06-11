@@ -335,12 +335,13 @@ let specialize_id_fundef instantiations id ast =
        let spec_id = id_of_instantiation id instantiation in
        if IdSet.mem spec_id !spec_ids then [] else
          begin
+           prerr_endline ("specialised fundef " ^ string_of_id id ^ " to " ^ string_of_id spec_id);
            spec_ids := IdSet.add spec_id !spec_ids;
            [DEF_fundef (rename_fundef spec_id fundef)]
          end
      in
      let fundefs = List.map specialize_fundef instantiations |> List.concat in
-     append_ast pre_ast (append_ast (Defs fundefs) post_ast)
+     append_ast pre_ast (append_ast (Defs (DEF_fundef fundef :: fundefs)) post_ast)
   | Some _ -> assert false (* unreachable *)
 
 let specialize_id_overloads instantiations id (Defs defs) =
@@ -380,8 +381,11 @@ let remove_unused_valspecs env ast =
 
   let rec remove_unused (Defs defs) id =
     match defs with
-    | def :: defs when is_fundef id def -> remove_unused (Defs defs) id
+    | def :: defs when is_fundef id def ->
+       prerr_endline ("Removing fundef: " ^ string_of_id id);
+       remove_unused (Defs defs) id
     | def :: defs when is_valspec id def ->
+       prerr_endline ("Removing valspec: " ^ string_of_id id);
        remove_unused (Defs defs) id
     | DEF_overload (overload_id, overloads) :: defs ->
        begin
@@ -396,7 +400,9 @@ let remove_unused_valspecs env ast =
   List.fold_left (fun ast id -> Defs (remove_unused ast id)) ast (IdSet.elements unused)
 
 let specialize_id id ast =
+  prerr_endline ("specialising: " ^ string_of_id id);
   let instantiations = instantiations_of id ast in
+  List.iter (fun i -> prerr_endline (string_of_instantiation i)) instantiations;
 
   let ast = specialize_id_valspec instantiations id ast in
   let ast = specialize_id_fundef instantiations id ast in
@@ -423,9 +429,11 @@ let reorder_typedefs (Defs defs) =
 let specialize_ids ids ast =
   let ast = List.fold_left (fun ast id -> specialize_id id ast) ast (IdSet.elements ids) in
   let ast = reorder_typedefs ast in
-  let ast, _ = Type_check.check Type_check.initial_env ast in
-  let ast = List.fold_left (fun ast id -> rewrite_polymorphic_calls id ast) ast (IdSet.elements ids) in
-  let ast, env = Type_check.check Type_check.initial_env ast in
+  let ast, _ = Type_error.check Type_check.initial_env ast in
+  let ast =
+    List.fold_left (fun ast id -> rewrite_polymorphic_calls id ast) ast (IdSet.elements ids)
+  in
+  let ast, env = Type_error.check Type_check.initial_env ast in
   let ast = remove_unused_valspecs env ast in
   ast, env
 
@@ -519,9 +527,10 @@ let specialize_variants ((Defs defs) as ast) env =
 
   let ast = Defs (specialize_variants' defs) in
   let ast = List.fold_left (fun ast id -> rewrite_polymorphic_constructors id ast) ast !ctors in
-  Type_check.check Type_check.initial_env ast
+  Type_error.check Type_check.initial_env ast
 
 let rec specialize ast env =
+  prerr_endline (Util.log_line __MODULE__ __LINE__ "Performing specialisation pass");
   let ids = polymorphic_functions (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) ast in
   if IdSet.is_empty ids then
     specialize_variants ast env

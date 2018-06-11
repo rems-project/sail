@@ -68,31 +68,31 @@ val _ = Hol_datatype `
 
 
 
-(*val enumeration_typeCompare : forall 'a. EnumerationType 'a => 'a -> 'a -> Basic_classes.ordering*)
+(*val enumeration_typeCompare : forall 'a. EnumerationType 'a => 'a -> 'a -> ordering*)
 val _ = Define `
- ((enumeration_typeCompare:'a EnumerationType_class -> 'a -> 'a -> lem_basic_classes$ordering)dict_Sail_instr_kinds_EnumerationType_a e1 e2=   
-(genericCompare (<) (=) (
+ ((enumeration_typeCompare:'a EnumerationType_class -> 'a -> 'a -> ordering)dict_Sail_instr_kinds_EnumerationType_a e1 e2=
+   (genericCompare (<) (=) (
   dict_Sail_instr_kinds_EnumerationType_a.toNat_method e1) (dict_Sail_instr_kinds_EnumerationType_a.toNat_method e2)))`;
 
 
 
 val _ = Define `
-((instance_Basic_classes_Ord_var_dict:'a EnumerationType_class -> 'a lem_basic_classes$Ord_class)dict_Sail_instr_kinds_EnumerationType_a= (<|
+((instance_Basic_classes_Ord_var_dict:'a EnumerationType_class -> 'a Ord_class)dict_Sail_instr_kinds_EnumerationType_a= (<|
 
   compare_method := 
   (enumeration_typeCompare dict_Sail_instr_kinds_EnumerationType_a);
 
   isLess_method := (\  r1 r2. (enumeration_typeCompare 
-  dict_Sail_instr_kinds_EnumerationType_a r1 r2) = LT);
+  dict_Sail_instr_kinds_EnumerationType_a r1 r2) = LESS);
 
   isLessEqual_method := (\ r1 r2. (enumeration_typeCompare 
-  dict_Sail_instr_kinds_EnumerationType_a r1 r2) <> GT);
+  dict_Sail_instr_kinds_EnumerationType_a r1 r2) <> GREATER);
 
   isGreater_method := (\  r1 r2. (enumeration_typeCompare 
-  dict_Sail_instr_kinds_EnumerationType_a r1 r2) = GT);
+  dict_Sail_instr_kinds_EnumerationType_a r1 r2) = GREATER);
 
   isGreaterEqual_method := (\ r1 r2. (enumeration_typeCompare 
-  dict_Sail_instr_kinds_EnumerationType_a r1 r2) <> LT)|>))`;
+  dict_Sail_instr_kinds_EnumerationType_a r1 r2) <> LESS)|>))`;
 
 
 
@@ -117,7 +117,7 @@ val _ = Hol_datatype `
  (* the read part of a lock'd instruction (rmw) *)
 
 val _ = Define `
-((instance_Show_Show_Sail_instr_kinds_read_kind_dict:(read_kind)lem_show$Show_class)= (<|
+((instance_Show_Show_Sail_instr_kinds_read_kind_dict:(read_kind)Show_class)= (<|
 
   show_method := (\x .  
   (case x of
@@ -153,7 +153,7 @@ val _ = Hol_datatype `
  (* the write part of a lock'd instruction (rmw) *)
 
 val _ = Define `
-((instance_Show_Show_Sail_instr_kinds_write_kind_dict:(write_kind)lem_show$Show_class)= (<|
+((instance_Show_Show_Sail_instr_kinds_write_kind_dict:(write_kind)Show_class)= (<|
 
   show_method := (\x .  
   (case x of
@@ -194,7 +194,7 @@ val _ = Hol_datatype `
 
 
 val _ = Define `
-((instance_Show_Show_Sail_instr_kinds_barrier_kind_dict:(barrier_kind)lem_show$Show_class)= (<|
+((instance_Show_Show_Sail_instr_kinds_barrier_kind_dict:(barrier_kind)Show_class)= (<|
 
   show_method := (\x .  
   (case x of
@@ -228,7 +228,7 @@ val _ = Hol_datatype `
 
 
 val _ = Define `
-((instance_Show_Show_Sail_instr_kinds_trans_kind_dict:(trans_kind)lem_show$Show_class)= (<|
+((instance_Show_Show_Sail_instr_kinds_trans_kind_dict:(trans_kind)Show_class)= (<|
 
   show_method := (\x .  
   (case x of
@@ -253,7 +253,7 @@ val _ = Hol_datatype `
 
 
 val _ = Define `
-((instance_Show_Show_Sail_instr_kinds_instruction_kind_dict:(instruction_kind)lem_show$Show_class)= (<|
+((instance_Show_Show_Sail_instr_kinds_instruction_kind_dict:(instruction_kind)Show_class)= (<|
 
   show_method := (\x .  
   (case x of

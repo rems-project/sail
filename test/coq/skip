@@ -1,12 +1,15 @@
-XXXXX tests with undefined functions
-bind_typ_var.sail
-bitwise_not.*
-bv_simple_index_bit.sail
-ex_cast.sail
-exint.sail
-exist1.sail
-exist2.sail
-exist_subrange.sail
-exist_tlb.sail
 XXXXX tests with full generic equality
 decode_patterns.sail
+XXXXX tests with deliberate redundant pattern match clause
+option_tuple.sail
+pat_completeness.sail
+XXXXX tests which need inline extern definitions adjusted
+patternrefinement.sail
+procstate1.sail
+vector_subrange_gen.sail
+XXXXX currently unsupported use of a bitvector in a parametric vector type
+pure_record.sail
+pure_record2.sail
+pure_record3.sail
+vector_access_dec.sail
+vector_access.sail

@@ -442,3 +442,6 @@ let warn str =
   if !opt_warnings then
     prerr_endline (("Warning" |> yellow |> clear) ^ ": " ^ str)
   else ()
+
+let log_line str line msg =
+  "\n[" ^ (str ^ ":" ^ string_of_int line |> blue |> clear) ^ "] " ^ msg

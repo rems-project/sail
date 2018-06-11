@@ -2064,10 +2064,12 @@ val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
 
 function Replicate x = {
   assert('N % 'M == 0, "((N MOD M) == 0)");
+  let 'O = 'N / 'M;
+  assert(constraint('O * 'M = 'N));
   return(replicate_bits(x, 'N / 'M))
 }
 
-val Zeros__0 : forall ('N : Int), 'N >= 0. atom('N) -> bits('N)
+val Zeros__0  = {c: "zeros"} : forall ('N : Int), 'N >= 0. atom('N) -> bits('N)
 
 val Zeros__1 : forall ('N : Int), 'N >= 0. unit -> bits('N)
 
@@ -2084,7 +2086,7 @@ function __ResetMemoryState () = {
   __ExclusiveLocal = false
 }
 
-val ZeroExtend__0 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
+val ZeroExtend__0 = {c: "zero_extend"} : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   (bits('M), atom('N)) -> bits('N) effect {escape}
 
 val ZeroExtend__1 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.

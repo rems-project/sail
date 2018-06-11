@@ -21,6 +21,7 @@ install:
 	mkdir -p $(SHARE_DIR)/src
 	cp src/elf_loader.ml $(SHARE_DIR)/src
 	cp src/sail_lib.ml $(SHARE_DIR)/src
+	cp src/util.ml $(SHARE_DIR)/src
 	cp -r src/gen_lib $(SHARE_DIR)/src
 	cp -r src/lem_interp $(SHARE_DIR)/src
 

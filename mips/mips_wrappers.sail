@@ -42,7 +42,7 @@ function MEMw_wrapper(addr, size, data) =
     if (addr == 0x000000007f000000) then
       {
         UART_WDATA   = ledata[7..0];
-	UART_WRITTEN = bitone;
+        UART_WRITTEN = bitone;
       } else {
         MEMea(addr, size);
         MEMval(addr, size, ledata);

@@ -366,11 +366,11 @@ let generate_isa_lemmas mwords (Defs defs : tannot defs) =
     let id = remove_leading_underscores (string_of_id id) in
     let id' = remove_trailing_underscores id in
     separate_map hardline string [
-      "lemma liftS_read_reg_" ^ id ^ "[simp]:";
+      "lemma liftS_read_reg_" ^ id ^ "[liftState_simp]:";
       "  \"liftS (read_reg " ^ id ^ "_ref) = readS (" ^ id' ^ " \\<circ> regstate)\"";
       "  by (auto simp: liftState_read_reg_readS register_defs)";
       "";
-      "lemma liftS_write_reg_" ^ id ^ "[simp]:";
+      "lemma liftS_write_reg_" ^ id ^ "[liftState_simp]:";
       "  \"liftS (write_reg " ^ id ^ "_ref v) = updateS (regstate_update (" ^ id' ^ "_update (\\<lambda>_. v)))\"";
       "  by (auto simp: liftState_write_reg_updateS register_defs)"
     ]
@@ -510,5 +510,5 @@ let generate_regstate_defs mwords defs =
   defs
 
 let add_regstate_defs mwords env (Defs defs) =
-  let reg_defs, env = check env (generate_regstate_defs mwords defs) in
+  let reg_defs, env = Type_error.check env (generate_regstate_defs mwords defs) in
   env, append_ast (Defs defs) reg_defs

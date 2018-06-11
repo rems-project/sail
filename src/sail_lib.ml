@@ -52,7 +52,7 @@ let trace_call str =
 type bit = B0 | B1
 
 let eq_bit (a, b) = a = b
-                  
+
 let and_bit = function
   | B1, B1 -> B1
   | _, _ -> B0
@@ -400,55 +400,85 @@ let rec bits_of_int bit n =
 
 let byte_of_int n = bits_of_int 128 n
 
-module BigIntHash =
-  struct
-    type t = Big_int.num
-    let equal i j = Big_int.equal i j
-    let hash i = Hashtbl.hash i
+module Mem = struct
+  include Map.Make(struct
+      type t = Big_int.num
+      let compare = Big_int.compare
+    end)
+end
+
+let mem_pages = (ref Mem.empty : (Bytes.t Mem.t) ref);;
+
+let page_shift_bits = 20 (* 1M page *)
+let page_size_bytes = 1 lsl page_shift_bits;; 
+
+let page_no_of_addr a = Big_int.shift_right a page_shift_bits
+let bottom_addr_of_page p = Big_int.shift_left p page_shift_bits
+let top_addr_of_page p = Big_int.shift_left (Big_int.succ p) page_shift_bits
+let get_mem_page p =
+  try
+    Mem.find p !mem_pages
+  with Not_found -> 
+    let new_page = Bytes.create page_size_bytes in
+    mem_pages := Mem.add p new_page !mem_pages;
+    new_page
+
+let rec add_mem_bytes addr buf off len =
+  let page_no = page_no_of_addr addr in
+  let page_bot = bottom_addr_of_page page_no in
+  let page_top = top_addr_of_page page_no in
+  let page_off = Big_int.to_int (Big_int.sub addr page_bot) in
+  let page = get_mem_page page_no in
+  let bytes_left_in_page = Big_int.sub page_top addr in
+  let to_copy = min (Big_int.to_int bytes_left_in_page) len in
+  Bytes.blit buf off page page_off to_copy;
+  if (to_copy < len) then
+    add_mem_bytes page_top buf (off + to_copy) (len - to_copy)
+
+let rec read_mem_bytes addr len = 
+  let page_no = page_no_of_addr addr in
+  let page_bot = bottom_addr_of_page page_no in
+  let page_top = top_addr_of_page page_no in
+  let page_off = Big_int.to_int (Big_int.sub addr page_bot) in
+  let page = get_mem_page page_no in
+  let bytes_left_in_page = Big_int.sub page_top addr in
+  let to_get = min (Big_int.to_int bytes_left_in_page) len in
+  let bytes = Bytes.sub page page_off to_get in
+  if to_get >= len then
+    bytes
+  else
+    Bytes.cat bytes (read_mem_bytes page_top (len - to_get))
+
+let write_ram' (data_size, addr, data) =
+  let len   = Big_int.to_int data_size in
+  let bytes = Bytes.create len in begin
+    List.iteri (fun i byte -> Bytes.set bytes (len - i - 1) (char_of_int (Big_int.to_int (uint byte)))) (break 8 data);
+    add_mem_bytes addr bytes 0 len
   end
 
-module RAM = Hashtbl.Make(BigIntHash)
-
-let ram : int RAM.t = RAM.create 256
-
-let write_ram' (addr_size, data_size, hex_ram, addr, data) =
-  let data = List.map (fun byte -> Big_int.to_int (uint byte)) (break 8 data) in
-  let rec write_byte i byte =
-    trace (Printf.sprintf "Store: %s 0x%02X" (Big_int.to_string (Big_int.add addr (Big_int.of_int i))) byte);
-    RAM.add ram (Big_int.add addr (Big_int.of_int i)) byte
-  in
-  List.iteri write_byte (List.rev data)
-
 let write_ram (addr_size, data_size, hex_ram, addr, data) =
-  write_ram' (addr_size, data_size, hex_ram, uint addr, data)
+  write_ram' (data_size, uint addr, data)
 
 let wram addr byte =
-  RAM.add ram addr byte
+  let bytes = Bytes.make 1 (char_of_int byte) in
+  add_mem_bytes addr bytes 0 1
 
 let read_ram (addr_size, data_size, hex_ram, addr) =
   let addr = uint addr in
-  let rec read_byte i =
-    if Big_int.equal i Big_int.zero
-    then []
-    else
-      begin
-        let loc = Big_int.sub (Big_int.add addr i) (Big_int.of_int 1) in
-        let byte = try RAM.find ram loc with Not_found -> 0 in
-        trace (Printf.sprintf "Load: %s 0x%02X" (Big_int.to_string loc) byte);
-        byte_of_int byte @ read_byte (Big_int.sub i (Big_int.of_int 1))
-      end
-  in
-  read_byte data_size
+  let bytes = read_mem_bytes addr (Big_int.to_int data_size) in
+  let vector = ref [] in
+  Bytes.iter (fun byte -> vector := (byte_of_int (int_of_char byte)) @ !vector) bytes;
+  !vector
 
-let tag_ram : bool RAM.t = RAM.create 256
-
+let tag_ram = (ref Mem.empty : (bool Mem.t) ref);;
+  
 let write_tag_bool (addr, tag) =
   let addri = uint addr in
-  RAM.add tag_ram addri tag
+  tag_ram := Mem.add addri tag !tag_ram
 
 let read_tag_bool addr =
   let addri = uint addr in
-  try RAM.find tag_ram addri with Not_found -> false
+  try Mem.find addri !tag_ram with Not_found -> false
 
 let rec reverse_endianness bits =
   if List.length bits <= 8 then bits else
@@ -503,8 +533,8 @@ let gteq_real (x, y) = Rational.geq x y
 let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
 let negate_real x = Rational.neg x
 
-let round_down x = failwith "round_down" (* Num.big_int_of_num (Num.floor_num x) *)
-let round_up x = failwith "round_up" (* Num.big_int_of_num (Num.ceiling_num x) *)
+let round_down x = Rational.floor x (* Num.big_int_of_num (Num.floor_num x) *)
+let round_up x = Rational.ceiling x (* Num.big_int_of_num (Num.ceiling_num x) *)
 let quotient_real (x, y) = Rational.div x y
 let mult_real (x, y) = Rational.mul x y (* Num.mult_num x y *)
 let real_power (x, y) = failwith "real_power" (* Num.power_num x (Num.num_of_big_int y) *)
@@ -534,15 +564,13 @@ let rec pow x = function
   | n -> x * pow x (n - 1)
 
 let real_of_string str =
-  let rat_of_string sr = Rational.of_int (int_of_string str) in
-  try
-    let point = String.index str '.' in
-    let whole = Rational.of_int (int_of_string (String.sub str 0 point)) in
-    let frac_str = String.sub str (point + 1) (String.length str - (point + 1)) in
-    let frac = Rational.div (rat_of_string frac_str) (Rational.of_int (pow 10 (String.length frac_str))) in
-    Rational.add whole frac
-  with
-  | Not_found -> Rational.of_int (int_of_string str)
+  match Util.split_on_char '.' str with
+  | [whole; frac] ->
+     let whole = Rational.of_int (int_of_string whole) in
+     let frac = Rational.div (Rational.of_int (int_of_string frac)) (Rational.of_int (pow 10 (String.length frac)))  in
+     Rational.add whole frac
+  | [whole] -> Rational.of_int (int_of_string str)
+  | _ -> failwith "invalid real literal"
 
 (* Not a very good sqrt implementation *)
 let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt (Num.float_of_num x))) *)
@@ -550,11 +578,20 @@ let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt 
 let print_int (str, x) =
   print_endline (str ^ Big_int.to_string x)
 
+let prerr_int (str, x) =
+  prerr_endline (str ^ Big_int.to_string x)
+
 let print_bits (str, xs) =
   print_endline (str ^ string_of_bits xs)
 
+let prerr_bits (str, xs) =
+  prerr_endline (str ^ string_of_bits xs)
+
 let print_string(str, msg) =
   print_endline (str ^ msg)
+
+let prerr_string(str, msg) =
+  prerr_endline (str ^ msg)
 
 let reg_deref r = !r
 
@@ -713,3 +750,30 @@ let hex_bits_32_matches_prefix s =
        ZSome ((bits_of_int 2147483648 n, len))
      else
        ZNone ()
+
+let string_of_bool = function
+  | true -> "true"
+  | false -> "false"
+
+let dec_str x = Big_int.to_string x
+
+let hex_str x = Big_int.to_string x
+
+let trace_memory_write (_, _, _) = ()
+let trace_memory_read (_, _, _) = ()
+
+let sleep_request () = ()
+
+let load_raw (paddr, file) =
+  let i = ref 0 in
+  let paddr = uint paddr in
+  let in_chan = open_in file in
+  try
+    while true do
+      let byte = input_char in_chan |> Char.code in
+      wram (Big_int.add paddr (Big_int.of_int !i)) byte;
+      incr i
+    done
+  with
+  | End_of_file -> ()
+

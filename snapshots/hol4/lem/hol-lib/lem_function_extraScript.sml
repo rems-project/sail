@@ -19,7 +19,7 @@ val _ = new_theory "lem_function_extra"
 (* getting a unique value  *)
 (* ----------------------- *)
 
-(*val THE : forall 'a. ('a -> bool) -> Maybe.maybe 'a*)
+(*val THE : forall 'a. ('a -> bool) -> maybe 'a*)
 
 val _ = export_theory()
 

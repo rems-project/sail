@@ -50,8 +50,8 @@ val _ = new_theory "lem_string"
 
 (*val string_case : forall 'a. string -> 'a -> (char -> string -> 'a) -> 'a*)
 
-(*let string_case s c_empty c_cons= 
-  match (toCharList s) with
+(*let string_case s c_empty c_cons=
+   match (toCharList s) with
     | [] -> c_empty
     | c :: cs -> c_cons c (toString cs)
   end*)
@@ -63,8 +63,8 @@ val _ = new_theory "lem_string"
 (*val concat : string -> list string -> string*)
  val concat_defn = Defn.Hol_multi_defns `
  ((concat:string ->(string)list -> string) sep ([])=  "")
-/\ ((concat:string ->(string)list -> string) sep (s :: ss')=      
- ((case ss' of
+/\ ((concat:string ->(string)list -> string) sep (s :: ss')=
+       ((case ss' of
         [] => s
       | _ =>  STRCAT s  (STRCAT sep (concat sep ss'))
       )))`;

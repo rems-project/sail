@@ -65,8 +65,6 @@ val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val load_file_no_check : Ast.order -> string -> unit Ast.defs
 val load_file : Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t
 
-val opt_lem_sequential : bool ref
-val opt_lem_mwords : bool ref
 val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref

@@ -55,6 +55,7 @@ module Big_int = Nat_big_num
 
 (* See mli file for details on what these flags do *)
 let opt_undefined_gen = ref false
+let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
 let opt_enum_casts = ref false
 
@@ -1137,8 +1138,11 @@ let generate_undefineds vs_ids (Defs defs) =
        [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, (fun _ -> None), false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             (mk_pat (P_lit (mk_lit L_unit)))
-                            (mk_exp (E_app (mk_id "internal_pick",
-                                            [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
+                            (if !opt_fast_undefined && List.length ids > 0 then
+                               mk_exp (E_id (List.hd ids))
+                             else
+                               mk_exp (E_app (mk_id "internal_pick",
+                                              [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
     | TD_record (id, _, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = mk_pat (P_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))) in
        [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
@@ -1150,7 +1154,10 @@ let generate_undefineds vs_ids (Defs defs) =
        [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
-                            (mk_exp (E_app (mk_id "internal_pick",
+                            (if !opt_fast_undefined && List.length tus > 0 then
+                               undefined_tu (List.hd tus)
+                             else
+                               mk_exp (E_app (mk_id "internal_pick",
                                             [mk_exp (E_list (List.map undefined_tu tus))])))]]
     | _ -> []
   in

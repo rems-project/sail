@@ -54,7 +54,9 @@ open Value
 
 type gstate =
   { registers : value Bindings.t;
+    allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
     boxes : value StringMap.t;
+    primops : (value list -> value) StringMap.t;
     letbinds : (Type_check.tannot letbind) list;
   }
 
@@ -80,16 +82,18 @@ let rec ast_letbinds (Defs defs) =
   | DEF_val lb :: defs -> lb :: ast_letbinds (Defs defs)
   | _ :: defs -> ast_letbinds (Defs defs)
 
-let initial_gstate ast =
+let initial_gstate ast primops =
   { registers = Bindings.empty;
+    allow_registers = true;
     boxes = StringMap.empty;
+    primops = primops;
     letbinds = ast_letbinds ast;
   }
 
 let initial_lstate =
   { locals = Bindings.empty }
 
-let initial_state ast = initial_lstate, initial_gstate ast
+let initial_state ast primops = initial_lstate, initial_gstate ast primops
 
 let value_of_lit (L_aux (l_aux, _)) =
   match l_aux with
@@ -109,6 +113,14 @@ let value_of_lit (L_aux (l_aux, _)) =
      Util.string_to_list str
      |> List.map (fun c -> V_bit (Sail_lib.bin_char c))
      |> (fun v -> V_vector v)
+  | L_real str ->
+     begin match Util.split_on_char '.' str with
+     | [whole; frac] ->
+        let whole = Rational.of_int (int_of_string whole) in
+        let frac = Rational.div (Rational.of_int (int_of_string frac)) (Rational.of_int (Util.power 10 (String.length frac)))  in
+        V_real (Rational.add whole frac)
+     | _ -> failwith "could not parse real literal"
+     end
   | _ -> failwith "Unimplemented value_of_lit" (* TODO *)
 
 let is_value = function
@@ -254,7 +266,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      step exp >>= fun exp' -> wrap (E_if (exp', then_exp, else_exp))
 
   | E_loop (While, exp, body) -> wrap (E_if (exp, E_aux (E_block [body; orig_exp], annot), exp_of_value V_unit))
-  | E_loop (Until, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, orig_exp, exp_of_value V_unit), annot)])
+  | E_loop (Until, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, exp_of_value V_unit, orig_exp), annot)])
 
   | E_assert (exp, msg) when is_true exp -> wrap unit_exp
   | E_assert (exp, msg) when is_false exp && is_value msg ->
@@ -327,10 +339,15 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
             if extern = "reg_deref" then
               let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
               gets >>= fun (_, gstate) ->
-              try return (exp_of_value (Bindings.find (mk_id regname) gstate.registers)) with
+              try
+                if gstate.allow_registers
+                then return (exp_of_value (Bindings.find (mk_id regname) gstate.registers))
+                else raise Not_found
+              with
               | Not_found -> return (exp_of_value (StringMap.find regname gstate.boxes))
             else
-              let primop = try StringMap.find extern primops with Not_found -> failwith ("No primop " ^ extern) in
+              gets >>= fun (_, gstate) ->
+              let primop = try StringMap.find extern gstate.primops with Not_found -> failwith ("No primop " ^ extern) in
               return (exp_of_value (primop (List.map value_of_exp evaluated)))
           end
        | [] -> liftM exp_of_value (call id (List.map value_of_exp evaluated))
@@ -384,7 +401,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | E_ref id ->
      gets >>= fun (lstate, gstate) ->
-     if Bindings.mem id gstate.registers then
+     if Bindings.mem id gstate.registers && gstate.allow_registers then
        return (exp_of_value (V_ref (string_of_id id)))
      else if Bindings.mem id lstate.locals then
        let b = box_name id in
@@ -405,7 +422,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        let open Type_check in
        gets >>= fun (lstate, gstate) ->
        match Env.lookup_id id (env_of_annot annot) with
-       | Register _ ->
+       | Register _ when gstate.allow_registers ->
           let exp =
             try exp_of_value (Bindings.find id gstate.registers) with
             | Not_found ->
@@ -420,7 +437,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           return chain
        | Enum _ ->
           return (exp_of_value (V_ctor (string_of_id id, [])))
-       | _ -> failwith ("id " ^ string_of_id id)
+       | _ -> failwith ("Coudln't find id " ^ string_of_id id)
      end
 
   | E_record (FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
@@ -484,7 +501,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        let open Type_check in
        gets >>= fun (lstate, gstate) ->
        match Env.lookup_id id (env_of_annot annot) with
-       | Register _ ->
+       | Register _ when gstate.allow_registers ->
           puts (lstate, { gstate with registers = Bindings.add id (value_of_exp exp) gstate.registers }) >> wrap unit_exp
        | Local (Mutable, _) | Unbound ->
           begin
@@ -500,7 +517,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) ->
      let name = coerce_ref (value_of_exp reference) in
      gets >>= fun (lstate, gstate) ->
-     if Bindings.mem (mk_id name) gstate.registers then
+     if Bindings.mem (mk_id name) gstate.registers && gstate.allow_registers then
        puts (lstate, { gstate with registers = Bindings.add (mk_id name) (value_of_exp exp) gstate.registers }) >> wrap unit_exp
      else
        puts (lstate, { gstate with boxes = StringMap.add name (value_of_exp exp) gstate.boxes }) >> wrap unit_exp
@@ -524,11 +541,22 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      let v_from = value_of_exp exp_from in
      let v_to = value_of_exp exp_to in
      let v_step = value_of_exp exp_step in
-     begin match value_gt [v_from; v_to] with
-     | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
-     | V_bool false ->
-        wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_add_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
-     | _ -> assert false
+     begin match ord with
+     | Ord_aux (Ord_inc, _) ->
+        begin match value_gt [v_from; v_to] with
+        | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
+        | V_bool false ->
+           wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_add_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
+        | _ -> assert false
+        end
+     | Ord_aux (Ord_dec, _) ->
+        begin match value_lt [v_from; v_to] with
+        | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
+        | V_bool false ->
+           wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_sub_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
+        | _ -> assert false
+        end
+     | Ord_aux (Ord_var _, _) -> failwith "Polymorphic order in foreach"
      end
   | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_to && is_value exp_step ->
      step exp_from >>= fun exp_from' -> wrap (E_for (id, exp_from', exp_to, exp_step, ord, body))
@@ -616,7 +644,7 @@ let stack_state (_, lstate, _) = lstate
 
 type frame =
   | Done of state * value
-  | Step of string * state * (Type_check.tannot exp) monad * (string * lstate * (value -> (Type_check.tannot exp) monad)) list
+  | Step of string Lazy.t * state * (Type_check.tannot exp) monad * (string Lazy.t * lstate * (value -> (Type_check.tannot exp) monad)) list
   | Break of frame
 
 let rec eval_frame' ast = function
@@ -629,17 +657,17 @@ let rec eval_frame' ast = function
         (* print_endline ("Returning value: " ^ string_of_value (value_of_exp v) |> Util.cyan |> Util.clear); *)
         Step (stack_string head, (stack_state head, snd state), stack_cont head (value_of_exp v), stack')
      | Pure exp', _ ->
-        let out' = Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp') in
+        let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp')) in
         Step (out', state, step exp', stack)
      | Yield (Call(id, vals, cont)), _ when string_of_id id = "break" ->
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
         let body = exp_of_fundef (get_fundef id ast) arg in
-        Break (Step ("", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack))
+        Break (Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack))
      | Yield (Call(id, vals, cont)), _ ->
         (* print_endline ("Calling " ^ string_of_id id |> Util.cyan |> Util.clear); *)
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
         let body = exp_of_fundef (get_fundef id ast) arg in
-        Step ("", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack)
+        Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack)
      | Yield (Gets cont), _ ->
         eval_frame' ast (Step (out, state, cont state, stack))
      | Yield (Puts (state', cont)), _ ->
@@ -651,10 +679,9 @@ let rec eval_frame' ast = function
      | Yield (Assertion_failed msg), _ ->
         failwith msg
      | Yield (Exception v), _ ->
-        print_endline ("Uncaught Exception" |> Util.cyan |> Util.clear);
-        Done (state, v)
+        failwith ("Uncaught Exception" |> Util.cyan |> Util.clear)
 
 let eval_frame ast frame =
   try eval_frame' ast frame with
   | Type_check.Type_error (l, err) ->
-     raise (Reporting_basic.err_typ l (Type_check.string_of_type_error err))
+     raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))

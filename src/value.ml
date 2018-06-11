@@ -73,6 +73,7 @@ type value =
   | V_vector of value list
   | V_list of value list
   | V_int of Big_int.num
+  | V_real of Rational.t
   | V_bool of bool
   | V_bit of Sail_lib.bit
   | V_tuple of value list
@@ -126,6 +127,10 @@ let coerce_listlike = function
 
 let coerce_int = function
   | V_int i -> i
+  | _ -> assert false
+
+let coerce_real = function
+  | V_real r -> r
   | _ -> assert false
 
 let coerce_cons = function
@@ -277,6 +282,10 @@ let value_sub_int = function
   | [v1; v2] -> V_int (Sail_lib.sub_int (coerce_int v1, coerce_int v2))
   | _ -> failwith "value sub"
 
+let value_negate = function
+  | [v1] -> V_int (Sail_lib.negate (coerce_int v1))
+  | _ -> failwith "value negate"
+
 let value_mult = function
   | [v1; v2] -> V_int (Sail_lib.mult (coerce_int v1, coerce_int v2))
   | _ -> failwith "value mult"
@@ -291,6 +300,10 @@ let value_modulus = function
 
 let value_add_vec_int = function
   | [v1; v2] -> mk_vector (Sail_lib.add_vec_int (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value add_vec_int"
+
+let value_sub_vec_int = function
+  | [v1; v2] -> mk_vector (Sail_lib.sub_vec_int (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value add_vec_int"
 
 let value_add_vec = function
@@ -343,6 +356,7 @@ let rec string_of_value = function
   | V_unit -> "()"
   | V_string str -> "\"" ^ str ^ "\""
   | V_ref str -> "ref " ^ str
+  | V_real r -> "REAL" (* No Rational.to_string *)
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
      "{" ^ Util.string_of_list ", " (fun (field, v) -> field ^ "=" ^ string_of_value v) (StringMap.bindings record) ^ "}"
@@ -396,6 +410,10 @@ let value_write_ram = function
      V_unit
   | _ -> failwith "value write_ram"
 
+let value_load_raw = function
+  | [v1; v2] -> Sail_lib.load_raw (coerce_bv v1, coerce_string v2) ; V_unit
+  | _ -> failwith "value load_raw"
+
 let value_putchar = function
   | [v] ->
      output_char !print_chan (char_of_int (Big_int.to_int (coerce_int v)));
@@ -411,6 +429,62 @@ let value_print_int = function
   | [msg; n] -> output_endline (coerce_string msg ^ string_of_value n); V_unit
   | _ -> failwith "value print_int"
 
+let value_print_string = function
+  | [msg; str] -> output_endline (coerce_string msg ^ coerce_string str); V_unit
+  | _ -> failwith "value print_string"
+
+let value_prerr_bits = function
+  | [msg; bits] -> prerr_endline (coerce_string msg ^ string_of_value bits); V_unit
+  | _ -> failwith "value prerr_bits"
+
+let value_prerr_int = function
+  | [msg; n] -> prerr_endline (coerce_string msg ^ string_of_value n); V_unit
+  | _ -> failwith "value prerr_int"
+
+let value_prerr_string = function
+  | [msg; str] -> output_endline (coerce_string msg ^ coerce_string str); V_unit
+  | _ -> failwith "value print_string"
+
+let value_concat_str = function
+  | [v1; v2] -> V_string (Sail_lib.concat_str (coerce_string v1, coerce_string v2))
+  | _ -> failwith "value concat_str"
+
+let value_to_real = function
+  | [v] -> V_real (Sail_lib.to_real (coerce_int v))
+  | _ -> failwith "value to_real"
+
+let value_quotient_real = function
+  | [v1; v2] -> V_real (Sail_lib.quotient_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value quotient_real"
+
+let value_round_up = function
+  | [v] -> V_int (Sail_lib.round_up (coerce_real v))
+  | _ -> failwith "value round_up"
+
+let value_round_down = function
+  | [v] -> V_int (Sail_lib.round_down (coerce_real v))
+  | _ -> failwith "value round_down"
+
+let value_eq_real = function
+  | [v1; v2] -> V_bool (Sail_lib.eq_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value eq_real"
+
+let value_lt_real = function
+  | [v1; v2] -> V_bool (Sail_lib.lt_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value lt_real"
+
+let value_gt_real = function
+  | [v1; v2] -> V_bool (Sail_lib.gt_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value gt_real"
+
+let value_lteq_real = function
+  | [v1; v2] -> V_bool (Sail_lib.lteq_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value lteq_real"
+
+let value_gteq_real = function
+  | [v1; v2] -> V_bool (Sail_lib.gteq_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value gteq_real"
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -424,6 +498,11 @@ let primops =
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
       ("print_bits", value_print_bits);
       ("print_int", value_print_int);
+      ("print_string", value_print_string);
+      ("prerr_bits", value_print_bits);
+      ("prerr_int", value_print_int);
+      ("prerr_string", value_prerr_string);
+      ("concat_str", value_concat_str);
       ("eq_int", value_eq_int);
       ("lteq", value_lteq);
       ("gteq", value_gteq);
@@ -461,18 +540,34 @@ let primops =
       ("shiftl", value_shiftl);
       ("add_int", value_add_int);
       ("sub_int", value_sub_int);
+      ("div_int", value_quotient);
+      ("mult_int", value_mult);
       ("mult", value_mult);
       ("quotient", value_quotient);
       ("modulus", value_modulus);
+      ("negate", value_negate);
       ("shr_int", value_shr_int);
       ("shl_int", value_shl_int);
       ("max_int", value_max_int);
       ("min_int", value_min_int);
       ("add_vec_int", value_add_vec_int);
+      ("sub_vec_int", value_sub_vec_int);
       ("add_vec", value_add_vec);
       ("sub_vec", value_sub_vec);
       ("read_ram", value_read_ram);
       ("write_ram", value_write_ram);
+      ("trace_memory_read", fun _ -> V_unit);
+      ("trace_memory_write", fun _ -> V_unit);
+      ("load_raw", value_load_raw);
+      ("to_real", value_to_real);
+      ("eq_real", value_eq_real);
+      ("lt_real", value_lt_real);
+      ("gt_real", value_gt_real);
+      ("lteq_real", value_lt_real);
+      ("gteq_real", value_gt_real);
+      ("round_up", value_round_up);
+      ("round_down", value_round_down);
+      ("quotient_real", value_quotient_real);
       ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
       ("undefined_int", fun _ -> V_int Big_int.zero);

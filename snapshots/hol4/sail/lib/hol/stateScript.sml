@@ -13,41 +13,51 @@ val _ = new_theory "state"
 (*open import State_monad*)
 (*open import {isabelle} `State_monad_lemmas`*)
 
-(*val iterS_aux : forall 'rv 'a 'e. Num.integer -> (Num.integer -> 'a -> State_monad.monadS 'rv unit 'e) -> list 'a -> State_monad.monadS 'rv unit 'e*)
+(*val iterS_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e*)
  val iterS_aux_defn = Hol_defn "iterS_aux" `
- ((iterS_aux:int ->(int -> 'a -> 'rv state_monad$sequential_state ->(((unit),'e)state_monad$result#'rv state_monad$sequential_state)set) -> 'a list -> 'rv state_monad$sequential_state ->(((unit),'e)state_monad$result#'rv state_monad$sequential_state)set) i f xs=  ((case xs of
+ ((iterS_aux:int ->(int -> 'a -> 'rv sequential_state ->(((unit),'e)result#'rv sequential_state)set) -> 'a list -> 'rv sequential_state ->(((unit),'e)result#'rv sequential_state)set) i f xs=  ((case xs of
     x :: xs => seqS (f i x) (iterS_aux (i +( 1 : int)) f xs)
   | [] => returnS () 
   )))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn iterS_aux_defn;
 
-(*val iteriS : forall 'rv 'a 'e. (Num.integer -> 'a -> State_monad.monadS 'rv unit 'e) -> list 'a -> State_monad.monadS 'rv unit 'e*)
+(*val iteriS : forall 'rv 'a 'e. (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e*)
 val _ = Define `
- ((iteriS:(int -> 'a ->('rv,(unit),'e)state_monad$monadS) -> 'a list -> 'rv state_monad$sequential_state ->(((unit),'e)state_monad$result#'rv state_monad$sequential_state)set) f xs=  (iterS_aux(( 0 : int)) f xs))`;
+ ((iteriS:(int -> 'a ->('rv,(unit),'e)monadS) -> 'a list -> 'rv sequential_state ->(((unit),'e)result#'rv sequential_state)set) f xs=  (iterS_aux(( 0 : int)) f xs))`;
 
 
-(*val iterS : forall 'rv 'a 'e. ('a -> State_monad.monadS 'rv unit 'e) -> list 'a -> State_monad.monadS 'rv unit 'e*)
+(*val iterS : forall 'rv 'a 'e. ('a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e*)
 val _ = Define `
- ((iterS:('a -> 'rv state_monad$sequential_state ->(((unit),'e)state_monad$result#'rv state_monad$sequential_state)set) -> 'a list -> 'rv state_monad$sequential_state ->(((unit),'e)state_monad$result#'rv state_monad$sequential_state)set) f xs=  (iteriS (\i x .  
+ ((iterS:('a -> 'rv sequential_state ->(((unit),'e)result#'rv sequential_state)set) -> 'a list -> 'rv sequential_state ->(((unit),'e)result#'rv sequential_state)set) f xs=  (iteriS (\i x .  
   (case (i ,x ) of ( _ , x ) => f x )) xs))`;
 
 
 (*val foreachS : forall 'a 'rv 'vars 'e.
-  list 'a -> 'vars -> ('a -> 'vars -> State_monad.monadS 'rv 'vars 'e) -> State_monad.monadS 'rv 'vars 'e*)
+  list 'a -> 'vars -> ('a -> 'vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e*)
  val foreachS_defn = Hol_defn "foreachS" `
- ((foreachS:'a list -> 'vars ->('a -> 'vars -> 'rv state_monad$sequential_state ->(('vars,'e)state_monad$result#'rv state_monad$sequential_state)set) -> 'rv state_monad$sequential_state ->(('vars,'e)state_monad$result#'rv state_monad$sequential_state)set) xs vars body=  ((case xs of
+ ((foreachS:'a list -> 'vars ->('a -> 'vars -> 'rv sequential_state ->(('vars,'e)result#'rv sequential_state)set) -> 'rv sequential_state ->(('vars,'e)result#'rv sequential_state)set) xs vars body=  ((case xs of
     [] => returnS vars
-  | x :: xs => bindS     
-(body x vars) (\ vars . 
+  | x :: xs => bindS
+     (body x vars) (\ vars . 
      foreachS xs vars body)
 )))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn foreachS_defn;
 
-(*val bool_of_bitU_fail : forall 'rv 'e. Sail_values.bitU -> State_monad.monadS 'rv bool 'e*)
+(*val and_boolS : forall 'rv 'e. monadS 'rv bool 'e -> monadS 'rv bool 'e -> monadS 'rv bool 'e*)
 val _ = Define `
- ((bool_of_bitU_fail:sail_values$bitU -> 'rv state_monad$sequential_state ->(((bool),'e)state_monad$result#'rv state_monad$sequential_state)set)= 
+ ((and_boolS:('rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) ->('rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) -> 'rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) l r=  (bindS l (\ l .  if l then r else returnS F)))`;
+
+
+(*val or_boolS : forall 'rv 'e. monadS 'rv bool 'e -> monadS 'rv bool 'e -> monadS 'rv bool 'e*)
+val _ = Define `
+ ((or_boolS:('rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) ->('rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) -> 'rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) l r=  (bindS l (\ l .  if l then returnS T else r)))`;
+
+
+(*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monadS 'rv bool 'e*)
+val _ = Define `
+ ((bool_of_bitU_fail:bitU -> 'rv sequential_state ->(((bool),'e)result#'rv sequential_state)set)= 
   (\x .  (case x of
                B0 => returnS F
            | B1 => returnS T
@@ -55,9 +65,9 @@ val _ = Define `
          )))`;
 
 
-(*val bool_of_bitU_oracleS : forall 'rv 'e. Sail_values.bitU -> State_monad.monadS 'rv bool 'e*)
+(*val bool_of_bitU_oracleS : forall 'rv 'e. bitU -> monadS 'rv bool 'e*)
 val _ = Define `
- ((bool_of_bitU_oracleS:sail_values$bitU -> 'rv state_monad$sequential_state ->(((bool),'e)state_monad$result#'rv state_monad$sequential_state)set)= 
+ ((bool_of_bitU_oracleS:bitU -> 'rv sequential_state ->(((bool),'e)result#'rv sequential_state)set)= 
   (\x .  (case x of
                B0 => returnS F
            | B1 => returnS T
@@ -65,52 +75,52 @@ val _ = Define `
          )))`;
 
 
-(*val bools_of_bits_oracleS : forall 'rv 'e. list Sail_values.bitU -> State_monad.monadS 'rv (list bool) 'e*)
+(*val bools_of_bits_oracleS : forall 'rv 'e. list bitU -> monadS 'rv (list bool) 'e*)
 val _ = Define `
- ((bools_of_bits_oracleS:(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((((bool)list),'e)state_monad$result#'rv state_monad$sequential_state)set) bits=  
- (foreachS bits []
-    (\ b bools .  bindS      
-(bool_of_bitU_oracleS b) (\ b . 
+ ((bools_of_bits_oracleS:(bitU)list -> 'rv sequential_state ->((((bool)list),'e)result#'rv sequential_state)set) bits=
+   (foreachS bits []
+    (\ b bools .  bindS
+      (bool_of_bitU_oracleS b) (\ b . 
       returnS (bools ++ [b])))))`;
 
 
-(*val of_bits_oracleS : forall 'rv 'a 'e. Bitvector 'a => list Sail_values.bitU -> State_monad.monadS 'rv 'a 'e*)
+(*val of_bits_oracleS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e*)
 val _ = Define `
- ((of_bits_oracleS:'a sail_values$Bitvector_class ->(sail_values$bitU)list ->('rv,'a,'e)state_monad$monadS)dict_Sail_values_Bitvector_a bits=  (bindS  
-(bools_of_bits_oracleS bits) (\ bs . 
+ ((of_bits_oracleS:'a Bitvector_class ->(bitU)list ->('rv,'a,'e)monadS)dict_Sail_values_Bitvector_a bits=  (bindS
+  (bools_of_bits_oracleS bits) (\ bs . 
   returnS (dict_Sail_values_Bitvector_a.of_bools_method bs))))`;
 
 
-(*val of_bits_failS : forall 'rv 'a 'e. Bitvector 'a => list Sail_values.bitU -> State_monad.monadS 'rv 'a 'e*)
+(*val of_bits_failS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e*)
 val _ = Define `
- ((of_bits_failS:'a sail_values$Bitvector_class ->(sail_values$bitU)list ->('rv,'a,'e)state_monad$monadS)dict_Sail_values_Bitvector_a bits=  (maybe_failS "of_bits" (
+ ((of_bits_failS:'a Bitvector_class ->(bitU)list ->('rv,'a,'e)monadS)dict_Sail_values_Bitvector_a bits=  (maybe_failS "of_bits" (
   dict_Sail_values_Bitvector_a.of_bits_method bits)))`;
 
 
-(*val mword_oracleS : forall 'rv 'a 'e. Size 'a => unit -> State_monad.monadS 'rv (Machine_word.mword 'a) 'e*)
+(*val mword_oracleS : forall 'rv 'a 'e. Size 'a => unit -> monadS 'rv (mword 'a) 'e*)
 val _ = Define `
- ((mword_oracleS:unit -> 'rv state_monad$sequential_state ->((('a words$word),'e)state_monad$result#'rv state_monad$sequential_state)set) () =  (bindS  
-(bools_of_bits_oracleS (repeat [BU] (int_of_num (dimindex (the_value : 'a itself))))) (\ bs . 
+ ((mword_oracleS:unit -> 'rv sequential_state ->((('a words$word),'e)result#'rv sequential_state)set) () =  (bindS
+  (bools_of_bits_oracleS (repeat [BU] (int_of_num (dimindex (the_value : 'a itself))))) (\ bs . 
   returnS (bitstring$v2w bs))))`;
 
 
 
-(*val whileS : forall 'rv 'vars 'e. 'vars -> ('vars -> State_monad.monadS 'rv bool 'e) ->
-                ('vars -> State_monad.monadS 'rv 'vars 'e) -> State_monad.monadS 'rv 'vars 'e*)
+(*val whileS : forall 'rv 'vars 'e. 'vars -> ('vars -> monadS 'rv bool 'e) ->
+                ('vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e*)
  val whileS_defn = Hol_defn "whileS" `
- ((whileS:'vars ->('vars -> 'rv state_monad$sequential_state ->(((bool),'e)state_monad$result#'rv state_monad$sequential_state)set) ->('vars -> 'rv state_monad$sequential_state ->(('vars,'e)state_monad$result#'rv state_monad$sequential_state)set) -> 'rv state_monad$sequential_state ->(('vars,'e)state_monad$result#'rv state_monad$sequential_state)set) vars cond body s=  
- (( bindS(cond vars) (\ cond_val s' . 
+ ((whileS:'vars ->('vars -> 'rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) ->('vars -> 'rv sequential_state ->(('vars,'e)result#'rv sequential_state)set) -> 'rv sequential_state ->(('vars,'e)result#'rv sequential_state)set) vars cond body s=
+   (( bindS(cond vars) (\ cond_val s' . 
   if cond_val then
     ( bindS(body vars) (\ vars s'' .  whileS vars cond body s'')) s'
   else returnS vars s')) s))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn whileS_defn;
 
-(*val untilS : forall 'rv 'vars 'e. 'vars -> ('vars -> State_monad.monadS 'rv bool 'e) ->
-                ('vars -> State_monad.monadS 'rv 'vars 'e) -> State_monad.monadS 'rv 'vars 'e*)
+(*val untilS : forall 'rv 'vars 'e. 'vars -> ('vars -> monadS 'rv bool 'e) ->
+                ('vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e*)
  val untilS_defn = Hol_defn "untilS" `
- ((untilS:'vars ->('vars -> 'rv state_monad$sequential_state ->(((bool),'e)state_monad$result#'rv state_monad$sequential_state)set) ->('vars -> 'rv state_monad$sequential_state ->(('vars,'e)state_monad$result#'rv state_monad$sequential_state)set) -> 'rv state_monad$sequential_state ->(('vars,'e)state_monad$result#'rv state_monad$sequential_state)set) vars cond body s=  
- (( bindS(body vars) (\ vars s' . 
+ ((untilS:'vars ->('vars -> 'rv sequential_state ->(((bool),'e)result#'rv sequential_state)set) ->('vars -> 'rv sequential_state ->(('vars,'e)result#'rv sequential_state)set) -> 'rv sequential_state ->(('vars,'e)result#'rv sequential_state)set) vars cond body s=
+   (( bindS(body vars) (\ vars s' . 
   ( bindS(cond vars) (\ cond_val s'' . 
   if cond_val then returnS vars s'' else untilS vars cond body s'')) s')) s))`;
 

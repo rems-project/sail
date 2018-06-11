@@ -32,8 +32,8 @@ val _ = Hol_datatype `
 (*val boolListFrombitSeq : nat -> bitSequence -> list bool*)
 
  val _ = Define `
- ((boolListFrombitSeqAux:num -> 'a -> 'a list -> 'a list) n s bl=  
- (if n =( 0 : num) then [] else
+ ((boolListFrombitSeqAux:num -> 'a -> 'a list -> 'a list) n s bl=
+   (if n =( 0 : num) then [] else
   (case bl of
       []       => REPLICATE n s
     | b :: bl' => b :: (boolListFrombitSeqAux (n -( 1 : num)) s bl')
@@ -45,10 +45,10 @@ val _ = Define `
 
 
 
-(*val bitSeqFromBoolList : list bool -> Maybe.maybe bitSequence*)
+(*val bitSeqFromBoolList : list bool -> maybe bitSequence*)
 val _ = Define `
- ((bitSeqFromBoolList:(bool)list ->(bitSequence)option) bl=  
- ((case dest_init bl of
+ ((bitSeqFromBoolList:(bool)list ->(bitSequence)option) bl=
+   ((case dest_init bl of
       NONE => NONE
     | SOME (bl', s) => SOME (BitSeq (SOME (LENGTH bl)) s bl')
   )))`;
@@ -65,7 +65,7 @@ val _ = Define `
 
 
 
-(*val bitSeqTestBit : bitSequence -> nat -> Maybe.maybe bool*)
+(*val bitSeqTestBit : bitSequence -> nat -> maybe bool*)
 val _ = Define `
  ((bitSeqTestBit:bitSequence -> num ->(bool)option) (BitSeq NONE s bl) pos=  (if pos < LENGTH bl then list_index bl pos else SOME s))
 /\ ((bitSeqTestBit:bitSequence -> num ->(bool)option) (BitSeq(SOME l) s bl) pos=  (if (pos >= l) then NONE else
@@ -75,15 +75,15 @@ val _ = Define `
 
 (*val bitSeqSetBit : bitSequence -> nat -> bool -> bitSequence*)
 val _ = Define `
- ((bitSeqSetBit:bitSequence -> num -> bool -> bitSequence) (BitSeq len s bl) pos v=  
- (let bl' = (if (pos < LENGTH bl) then bl else bl ++ REPLICATE pos s) in
+ ((bitSeqSetBit:bitSequence -> num -> bool -> bitSequence) (BitSeq len s bl) pos v=
+   (let bl' = (if (pos < LENGTH bl) then bl else bl ++ REPLICATE pos s) in
   let bl'' = (LUPDATE v pos bl') in
   let bs' = (BitSeq len s bl'') in
   cleanBitSeq bs'))`;
 
 
 
-(*val resizeBitSeq : Maybe.maybe nat -> bitSequence -> bitSequence*)
+(*val resizeBitSeq : maybe nat -> bitSequence -> bitSequence*)
 val _ = Define `
  ((resizeBitSeq:(num)option -> bitSequence -> bitSequence) new_len bs= 
   ((case cleanBitSeq bs of
@@ -165,8 +165,8 @@ val _ = Define `
 
 (*val bitSeqLogicalShiftRight : bitSequence -> nat -> bitSequence*)
 val _ = Define `
- ((bitSeqLogicalShiftRight:bitSequence -> num -> bitSequence) bs n=  
-  (if (n =( 0 : num)) then cleanBitSeq bs else  
+ ((bitSeqLogicalShiftRight:bitSequence -> num -> bitSequence) bs n= 
+   (if (n =( 0 : num)) then cleanBitSeq bs else  
   (case cleanBitSeq bs of
       (BitSeq len s bl) =>
   (case len of
@@ -180,7 +180,7 @@ val _ = Define `
 (* integerFromBoolList sign bl creates an integer from a list of bits
    (least significant bit first) and an explicitly given sign bit.
    It uses two's complement encoding. *)
-(*val integerFromBoolList : (bool * list bool) -> Num.integer*)
+(*val integerFromBoolList : (bool * list bool) -> integer*)
 
  val _ = Define `
  ((integerFromBoolListAux:int ->(bool)list -> int) (acc : int) (([]) : bool list)=  acc)
@@ -189,18 +189,18 @@ val _ = Define `
 
 
 val _ = Define `
- ((integerFromBoolList:bool#(bool)list -> int) (sign, bl)=   
-  (if sign then 
+ ((integerFromBoolList:bool#(bool)list -> int) (sign, bl)= 
+    (if sign then 
      ~ (integerFromBoolListAux(( 0 : int)) (REVERSE (MAP (\ x. ~ x) bl)) +( 1 : int))
    else integerFromBoolListAux(( 0 : int)) (REVERSE bl)))`;
 
 
 (* [boolListFromInteger i] creates a sign bit and a list of booleans from an integer. The len_opt tells it when to stop.*)
-(*val boolListFromInteger :    Num.integer -> bool * list bool*)
+(*val boolListFromInteger :    integer -> bool * list bool*)
 
  val _ = Define `
- ((boolListFromNatural:(bool)list -> num ->(bool)list) acc (remainder : num)= 
- (if (remainder >( 0:num)) then 
+ ((boolListFromNatural:(bool)list -> num ->(bool)list) acc (remainder : num)=
+  (if (remainder >( 0:num)) then 
    (boolListFromNatural (((remainder MOD( 2:num)) =( 1:num)) :: acc) 
       (remainder DIV( 2:num)))
  else
@@ -208,8 +208,8 @@ val _ = Define `
 
 
 val _ = Define `
- ((boolListFromInteger:int -> bool#(bool)list) (i : int)=  
-  (if (i <( 0 : int)) then
+ ((boolListFromInteger:int -> bool#(bool)list) (i : int)= 
+   (if (i <( 0 : int)) then
     (T, MAP (\ x. ~ x) (boolListFromNatural [] (Num (ABS (~ (i +( 1 : int)))))))
   else
     (F, boolListFromNatural [] (Num (ABS i)))))`;
@@ -218,15 +218,15 @@ val _ = Define `
 
 (* [bitSeqFromInteger len_opt i] encodes [i] as a bitsequence with [len_opt] bits. If there are not enough
    bits, truncation happens *)
-(*val bitSeqFromInteger : Maybe.maybe nat -> Num.integer -> bitSequence*)
+(*val bitSeqFromInteger : maybe nat -> integer -> bitSequence*)
 val _ = Define `
- ((bitSeqFromInteger:(num)option -> int -> bitSequence) len_opt i=  
- (let (s, bl) = (boolListFromInteger i) in
+ ((bitSeqFromInteger:(num)option -> int -> bitSequence) len_opt i=
+   (let (s, bl) = (boolListFromInteger i) in
   resizeBitSeq len_opt (BitSeq NONE s bl)))`;
 
 
 
-(*val integerFromBitSeq : bitSequence -> Num.integer*)
+(*val integerFromBitSeq : bitSequence -> integer*)
 val _ = Define `
  ((integerFromBitSeq:bitSequence -> int) bs= 
   ((case cleanBitSeq bs of (BitSeq len s bl) => integerFromBoolList (s, bl) )))`;
@@ -235,7 +235,7 @@ val _ = Define `
 
 (* Now we can via translation to integers map arithmetic operations to bitSequences *)
 
-(*val bitSeqArithUnaryOp : (Num.integer -> Num.integer) -> bitSequence -> bitSequence*)
+(*val bitSeqArithUnaryOp : (integer -> integer) -> bitSequence -> bitSequence*)
 val _ = Define `
  ((bitSeqArithUnaryOp:(int -> int) -> bitSequence -> bitSequence) uop bs= 
   ((case bs of
@@ -244,7 +244,7 @@ val _ = Define `
    )))`;
 
 
-(*val bitSeqArithBinOp : (Num.integer -> Num.integer -> Num.integer) -> bitSequence -> bitSequence -> bitSequence*)
+(*val bitSeqArithBinOp : (integer -> integer -> integer) -> bitSequence -> bitSequence -> bitSequence*)
 val _ = Define `
  ((bitSeqArithBinOp:(int -> int -> int) -> bitSequence -> bitSequence -> bitSequence) binop bs1 bs2= 
   ((case bs1 of
@@ -261,7 +261,7 @@ val _ = Define `
    )))`;
 
 
-(*val bitSeqArithBinTest : forall 'a. (Num.integer -> Num.integer -> 'a) -> bitSequence -> bitSequence -> 'a*)
+(*val bitSeqArithBinTest : forall 'a. (integer -> integer -> 'a) -> bitSequence -> bitSequence -> 'a*)
 val _ = Define `
  ((bitSeqArithBinTest:(int -> int -> 'a) -> bitSequence -> bitSequence -> 'a) binop bs1 bs2=  (binop (integerFromBitSeq bs1) (integerFromBitSeq bs2)))`;
 
@@ -291,13 +291,13 @@ val _ = Define `
  ((bitSeqGreaterEqual:bitSequence -> bitSequence -> bool) bs1 bs2=  (bitSeqArithBinTest (>=) bs1 bs2))`;
 
 
-(*val bitSeqCompare : bitSequence -> bitSequence -> Basic_classes.ordering*)
+(*val bitSeqCompare : bitSequence -> bitSequence -> ordering*)
 val _ = Define `
- ((bitSeqCompare:bitSequence -> bitSequence -> lem_basic_classes$ordering) bs1 bs2=  (bitSeqArithBinTest (genericCompare (<) (=)) bs1 bs2))`;
+ ((bitSeqCompare:bitSequence -> bitSequence -> ordering) bs1 bs2=  (bitSeqArithBinTest (genericCompare (<) (=)) bs1 bs2))`;
 
 
 val _ = Define `
-((instance_Basic_classes_Ord_Word_bitSequence_dict:(bitSequence)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_Word_bitSequence_dict:(bitSequence)Ord_class)= (<|
 
   compare_method := bitSeqCompare;
 
@@ -317,7 +317,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumNegate_Word_bitSequence_dict:(bitSequence)lem_num$NumNegate_class)= (<|
+((instance_Num_NumNegate_Word_bitSequence_dict:(bitSequence)NumNegate_class)= (<|
 
   numNegate_method := bitSeqNegate|>))`;
 
@@ -329,7 +329,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumAdd_Word_bitSequence_dict:(bitSequence)lem_num$NumAdd_class)= (<|
+((instance_Num_NumAdd_Word_bitSequence_dict:(bitSequence)NumAdd_class)= (<|
 
   numAdd_method := bitSeqAdd|>))`;
 
@@ -340,7 +340,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumMinus_Word_bitSequence_dict:(bitSequence)lem_num$NumMinus_class)= (<|
+((instance_Num_NumMinus_Word_bitSequence_dict:(bitSequence)NumMinus_class)= (<|
 
   numMinus_method := bitSeqMinus|>))`;
 
@@ -351,7 +351,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumSucc_Word_bitSequence_dict:(bitSequence)lem_num$NumSucc_class)= (<|
+((instance_Num_NumSucc_Word_bitSequence_dict:(bitSequence)NumSucc_class)= (<|
 
   succ_method := bitSeqSucc|>))`;
 
@@ -362,7 +362,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumPred_Word_bitSequence_dict:(bitSequence)lem_num$NumPred_class)= (<|
+((instance_Num_NumPred_Word_bitSequence_dict:(bitSequence)NumPred_class)= (<|
 
   pred_method := bitSeqPred|>))`;
 
@@ -373,7 +373,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumMult_Word_bitSequence_dict:(bitSequence)lem_num$NumMult_class)= (<|
+((instance_Num_NumMult_Word_bitSequence_dict:(bitSequence)NumMult_class)= (<|
 
   numMult_method := bitSeqMult|>))`;
 
@@ -385,7 +385,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumPow_Word_bitSequence_dict:(bitSequence)lem_num$NumPow_class)= (<|
+((instance_Num_NumPow_Word_bitSequence_dict:(bitSequence)NumPow_class)= (<|
 
   numPow_method := bitSeqPow|>))`;
 
@@ -396,13 +396,13 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumIntegerDivision_Word_bitSequence_dict:(bitSequence)lem_num$NumIntegerDivision_class)= (<|
+((instance_Num_NumIntegerDivision_Word_bitSequence_dict:(bitSequence)NumIntegerDivision_class)= (<|
 
   div_method := bitSeqDiv|>))`;
 
 
 val _ = Define `
-((instance_Num_NumDivision_Word_bitSequence_dict:(bitSequence)lem_num$NumDivision_class)= (<|
+((instance_Num_NumDivision_Word_bitSequence_dict:(bitSequence)NumDivision_class)= (<|
 
   numDivision_method := bitSeqDiv|>))`;
 
@@ -413,7 +413,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Num_NumRemainder_Word_bitSequence_dict:(bitSequence)lem_num$NumRemainder_class)= (<|
+((instance_Num_NumRemainder_Word_bitSequence_dict:(bitSequence)NumRemainder_class)= (<|
 
   mod_method := bitSeqMod|>))`;
 
@@ -429,7 +429,7 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Basic_classes_OrdMaxMin_Word_bitSequence_dict:(bitSequence)lem_basic_classes$OrdMaxMin_class)= (<|
+((instance_Basic_classes_OrdMaxMin_Word_bitSequence_dict:(bitSequence)OrdMaxMin_class)= (<|
 
   max_method := bitSeqMax;
 
@@ -537,7 +537,7 @@ val _ = Define `
 (* int32                   *)
 (* ----------------------- *)
 
-(*val int32Lnot : Num.int32 -> Num.int32*) (* XXX: fix *)
+(*val int32Lnot : int32 -> int32*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordNot_Num_int32_dict:(word32)WordNot_class)= (<|
@@ -546,7 +546,7 @@ val _ = Define `
 
 
 
-(*val int32Lor  : Num.int32 -> Num.int32 -> Num.int32*) (* XXX: fix *)
+(*val int32Lor  : int32 -> int32 -> int32*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordOr_Num_int32_dict:(word32)WordOr_class)= (<|
@@ -554,7 +554,7 @@ val _ = Define `
   lor_method := word_or|>))`;
 
 
-(*val int32Lxor : Num.int32 -> Num.int32 -> Num.int32*) (* XXX: fix *)
+(*val int32Lxor : int32 -> int32 -> int32*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordXor_Num_int32_dict:(word32)WordXor_class)= (<|
@@ -562,7 +562,7 @@ val _ = Define `
   lxor_method := word_xor|>))`;
 
 
-(*val int32Land : Num.int32 -> Num.int32 -> Num.int32*) (* XXX: fix *)
+(*val int32Land : int32 -> int32 -> int32*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordAnd_Num_int32_dict:(word32)WordAnd_class)= (<|
@@ -570,7 +570,7 @@ val _ = Define `
   land_method := word_and|>))`;
 
 
-(*val int32Lsl  : Num.int32 -> nat -> Num.int32*) (* XXX: fix *)
+(*val int32Lsl  : int32 -> nat -> int32*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordLsl_Num_int32_dict:(word32)WordLsl_class)= (<|
@@ -578,7 +578,7 @@ val _ = Define `
   lsl_method := word_lsl|>))`;
 
 
-(*val int32Lsr  : Num.int32 -> nat -> Num.int32*) (* XXX: fix *)
+(*val int32Lsr  : int32 -> nat -> int32*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordLsr_Num_int32_dict:(word32)WordLsr_class)= (<|
@@ -587,7 +587,7 @@ val _ = Define `
 
 
 
-(*val int32Asr  : Num.int32 -> nat -> Num.int32*) (* XXX: fix *)
+(*val int32Asr  : int32 -> nat -> int32*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordAsr_Num_int32_dict:(word32)WordAsr_class)= (<|
@@ -600,7 +600,7 @@ val _ = Define `
 (* int64                   *)
 (* ----------------------- *)
 
-(*val int64Lnot : Num.int64 -> Num.int64*) (* XXX: fix *)
+(*val int64Lnot : int64 -> int64*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordNot_Num_int64_dict:(word64)WordNot_class)= (<|
@@ -608,7 +608,7 @@ val _ = Define `
   lnot_method := (\ w. (~ w))|>))`;
 
 
-(*val int64Lor  : Num.int64 -> Num.int64 -> Num.int64*) (* XXX: fix *)
+(*val int64Lor  : int64 -> int64 -> int64*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordOr_Num_int64_dict:(word64)WordOr_class)= (<|
@@ -616,7 +616,7 @@ val _ = Define `
   lor_method := word_or|>))`;
 
 
-(*val int64Lxor : Num.int64 -> Num.int64 -> Num.int64*) (* XXX: fix *)
+(*val int64Lxor : int64 -> int64 -> int64*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordXor_Num_int64_dict:(word64)WordXor_class)= (<|
@@ -624,7 +624,7 @@ val _ = Define `
   lxor_method := word_xor|>))`;
 
 
-(*val int64Land : Num.int64 -> Num.int64 -> Num.int64*) (* XXX: fix *)
+(*val int64Land : int64 -> int64 -> int64*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordAnd_Num_int64_dict:(word64)WordAnd_class)= (<|
@@ -632,7 +632,7 @@ val _ = Define `
   land_method := word_and|>))`;
 
 
-(*val int64Lsl  : Num.int64 -> nat -> Num.int64*) (* XXX: fix *)
+(*val int64Lsl  : int64 -> nat -> int64*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordLsl_Num_int64_dict:(word64)WordLsl_class)= (<|
@@ -640,7 +640,7 @@ val _ = Define `
   lsl_method := word_lsl|>))`;
 
 
-(*val int64Lsr  : Num.int64 -> nat -> Num.int64*) (* XXX: fix *)
+(*val int64Lsr  : int64 -> nat -> int64*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordLsr_Num_int64_dict:(word64)WordLsr_class)= (<|
@@ -648,7 +648,7 @@ val _ = Define `
   lsr_method := word_lsr|>))`;
 
 
-(*val int64Asr  : Num.int64 -> nat -> Num.int64*) (* XXX: fix *)
+(*val int64Asr  : int64 -> nat -> int64*) (* XXX: fix *)
 
 val _ = Define `
 ((instance_Word_WordAsr_Num_int64_dict:(word64)WordAsr_class)= (<|
@@ -700,7 +700,7 @@ val _ = Define `
 (* integer                 *)
 (* ----------------------- *)
 
-(*val integerLnot : Num.integer -> Num.integer*)
+(*val integerLnot : integer -> integer*)
 val _ = Define `
  ((integerLnot:int -> int) i=  (~ (i +( 1 : int))))`;
 
@@ -712,7 +712,7 @@ val _ = Define `
 
 
 
-(*val integerLor  : Num.integer -> Num.integer -> Num.integer*)
+(*val integerLor  : integer -> integer -> integer*)
 val _ = Define `
  ((integerLor:int -> int -> int) i1 i2=  (defaultLor integerFromBitSeq (bitSeqFromInteger NONE) i1 i2))`;
 
@@ -723,7 +723,7 @@ val _ = Define `
   lor_method := integerLor|>))`;
 
 
-(*val integerLxor : Num.integer -> Num.integer -> Num.integer*)
+(*val integerLxor : integer -> integer -> integer*)
 val _ = Define `
  ((integerLxor:int -> int -> int) i1 i2=  (defaultLxor integerFromBitSeq (bitSeqFromInteger NONE) i1 i2))`;
 
@@ -734,7 +734,7 @@ val _ = Define `
   lxor_method := integerLxor|>))`;
 
 
-(*val integerLand : Num.integer -> Num.integer -> Num.integer*)
+(*val integerLand : integer -> integer -> integer*)
 val _ = Define `
  ((integerLand:int -> int -> int) i1 i2=  (defaultLand integerFromBitSeq (bitSeqFromInteger NONE) i1 i2))`;
 
@@ -745,7 +745,7 @@ val _ = Define `
   land_method := integerLand|>))`;
 
 
-(*val integerLsl  : Num.integer -> nat -> Num.integer*)
+(*val integerLsl  : integer -> nat -> integer*)
 val _ = Define `
  ((integerLsl:int -> num -> int) i n=  (defaultLsl integerFromBitSeq (bitSeqFromInteger NONE) i n))`;
 
@@ -756,7 +756,7 @@ val _ = Define `
   lsl_method := integerLsl|>))`;
 
 
-(*val integerAsr  : Num.integer -> nat -> Num.integer*)
+(*val integerAsr  : integer -> nat -> integer*)
 val _ = Define `
  ((integerAsr:int -> num -> int) i n=  (defaultAsr integerFromBitSeq (bitSeqFromInteger NONE) i n))`;
 
@@ -783,19 +783,19 @@ val _ = Define `
    it should be used very carefully and only for operations that don't depend on the
    bitwidth of int *)
 
-(*val intFromBitSeq : bitSequence -> Num.int*)
+(*val intFromBitSeq : bitSequence -> int*)
 val _ = Define `
  ((intFromBitSeq:bitSequence -> int) bs=  (I (integerFromBitSeq (resizeBitSeq (SOME(( 31 : num))) bs))))`;
 
 
 
-(*val bitSeqFromInt : Num.int -> bitSequence*) 
+(*val bitSeqFromInt : int -> bitSequence*) 
 val _ = Define `
  ((bitSeqFromInt:int -> bitSequence) i=  (bitSeqFromInteger (SOME(( 31 : num))) ( i)))`;
 
 
 
-(*val intLnot : Num.int -> Num.int*)
+(*val intLnot : int -> int*)
 val _ = Define `
  ((intLnot:int -> int) i=  (~ (i +( 1 : int))))`;
 
@@ -806,7 +806,7 @@ val _ = Define `
   lnot_method := intLnot|>))`;
 
 
-(*val intLor  : Num.int -> Num.int -> Num.int*)
+(*val intLor  : int -> int -> int*)
 val _ = Define `
  ((intLor:int -> int -> int) i1 i2=  (defaultLor intFromBitSeq bitSeqFromInt i1 i2))`;
 
@@ -817,7 +817,7 @@ val _ = Define `
   lor_method := intLor|>))`;
 
 
-(*val intLxor : Num.int -> Num.int -> Num.int*)
+(*val intLxor : int -> int -> int*)
 val _ = Define `
  ((intLxor:int -> int -> int) i1 i2=  (defaultLxor intFromBitSeq bitSeqFromInt i1 i2))`;
 
@@ -828,7 +828,7 @@ val _ = Define `
   lxor_method := intLxor|>))`;
 
 
-(*val intLand : Num.int -> Num.int -> Num.int*)
+(*val intLand : int -> int -> int*)
 val _ = Define `
  ((intLand:int -> int -> int) i1 i2=  (defaultLand intFromBitSeq bitSeqFromInt i1 i2))`;
 
@@ -839,7 +839,7 @@ val _ = Define `
   land_method := intLand|>))`;
 
 
-(*val intLsl  : Num.int -> nat -> Num.int*)
+(*val intLsl  : int -> nat -> int*)
 val _ = Define `
  ((intLsl:int -> num -> int) i n=  (defaultLsl intFromBitSeq bitSeqFromInt i n))`;
 
@@ -850,7 +850,7 @@ val _ = Define `
   lsl_method := intLsl|>))`;
 
 
-(*val intAsr  : Num.int -> nat -> Num.int*)
+(*val intAsr  : int -> nat -> int*)
 val _ = Define `
  ((intAsr:int -> num -> int) i n=  (defaultAsr intFromBitSeq bitSeqFromInt i n))`;
 
@@ -869,17 +869,17 @@ val _ = Define `
 
 (* some operations work also on positive numbers *)
 
-(*val naturalFromBitSeq : bitSequence -> Num.natural*)
+(*val naturalFromBitSeq : bitSequence -> natural*)
 val _ = Define `
  ((naturalFromBitSeq:bitSequence -> num) bs=  (Num (ABS (integerFromBitSeq bs))))`;
 
 
-(*val bitSeqFromNatural : Maybe.maybe nat -> Num.natural -> bitSequence*)
+(*val bitSeqFromNatural : maybe nat -> natural -> bitSequence*)
 val _ = Define `
  ((bitSeqFromNatural:(num)option -> num -> bitSequence) len n=  (bitSeqFromInteger len (int_of_num n)))`;
 
 
-(*val naturalLor  : Num.natural -> Num.natural -> Num.natural*)
+(*val naturalLor  : natural -> natural -> natural*)
 val _ = Define `
  ((naturalLor:num -> num -> num) i1 i2=  (defaultLor naturalFromBitSeq (bitSeqFromNatural NONE) i1 i2))`;
 
@@ -890,7 +890,7 @@ val _ = Define `
   lor_method := naturalLor|>))`;
 
 
-(*val naturalLxor : Num.natural -> Num.natural -> Num.natural*)
+(*val naturalLxor : natural -> natural -> natural*)
 val _ = Define `
  ((naturalLxor:num -> num -> num) i1 i2=  (defaultLxor naturalFromBitSeq (bitSeqFromNatural NONE) i1 i2))`;
 
@@ -901,7 +901,7 @@ val _ = Define `
   lxor_method := naturalLxor|>))`;
 
 
-(*val naturalLand : Num.natural -> Num.natural -> Num.natural*)
+(*val naturalLand : natural -> natural -> natural*)
 val _ = Define `
  ((naturalLand:num -> num -> num) i1 i2=  (defaultLand naturalFromBitSeq (bitSeqFromNatural NONE) i1 i2))`;
 
@@ -912,7 +912,7 @@ val _ = Define `
   land_method := naturalLand|>))`;
 
 
-(*val naturalLsl  : Num.natural -> nat -> Num.natural*)
+(*val naturalLsl  : natural -> nat -> natural*)
 val _ = Define `
  ((naturalLsl:num -> num -> num) i n=  (defaultLsl naturalFromBitSeq (bitSeqFromNatural NONE) i n))`;
 
@@ -923,7 +923,7 @@ val _ = Define `
   lsl_method := naturalLsl|>))`;
 
 
-(*val naturalAsr  : Num.natural -> nat -> Num.natural*)
+(*val naturalAsr  : natural -> nat -> natural*)
 val _ = Define `
  ((naturalAsr:num -> num -> num) i n=  (defaultAsr naturalFromBitSeq (bitSeqFromNatural NONE) i n))`;
 

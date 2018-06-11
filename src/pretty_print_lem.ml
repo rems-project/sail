@@ -883,8 +883,7 @@ let doc_exp_lem, doc_let_lem =
          let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
          let middle =
            match fst (untyp_pat pat) with
-           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
-              string ">>"
+           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) -> string ">>"
            | P_aux (P_tup _, _)
              when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
               (* Work around indentation issues in Lem when translating
@@ -894,7 +893,8 @@ let doc_exp_lem, doc_let_lem =
                  doc_pat_lem ctxt true pat;
                  string "= varstup in"]
            | _ ->
-              separate space [string ">>= fun"; doc_pat_lem ctxt true pat; arrow]
+              separate space [string ">>= fun";
+                              doc_pat_lem ctxt true pat; arrow]
          in
          infix 0 1 middle (expV b e1) (expN e2)
        in
@@ -908,12 +908,11 @@ let doc_exp_lem, doc_let_lem =
           raise (Reporting_basic.err_unreachable l
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
-      let ret_monad = if !opt_sequential then " : MR regstate" else " : MR" in
       let ta =
         if contains_t_pp_var ctxt (typ_of full_exp) || contains_t_pp_var ctxt (typ_of r)
         then empty
         else separate space
-          [string ret_monad;
+          [string ": MR";
           parens (doc_typ_lem (typ_of full_exp));
           parens (doc_typ_lem (typ_of r))] in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
@@ -1438,17 +1437,11 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
         separate empty (List.map doc_def_lem statedefs); hardline;
         hardline;
         register_refs; hardline;
-        (* if !opt_sequential then
-          concat [
-            string ("type MR 'a 'r = State_monad.MR regstate 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = State_monad.M regstate 'a " ^ exc_typ); hardline;
-          ]
-        else *)
-          concat [
-            string ("type MR 'a 'r = monadR register_value 'a 'r " ^ exc_typ); hardline;
-            string ("type M 'a = monad register_value 'a " ^ exc_typ); hardline
-          ]
-        ]);
+        concat [
+          string ("type MR 'a 'r = base_monadR register_value regstate 'a 'r " ^ exc_typ); hardline;
+          string ("type M 'a = base_monad register_value regstate 'a " ^ exc_typ); hardline
+        ]
+       ]);
   (print defs_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;

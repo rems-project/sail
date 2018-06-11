@@ -94,10 +94,10 @@ val _ = Define `
 
 end*)
 
-(*val     unfoldr: forall 'a 'b. ('a -> Maybe.maybe ('b * 'a)) -> 'a -> list 'b*)
+(*val     unfoldr: forall 'a 'b. ('a -> maybe ('b * 'a)) -> 'a -> list 'b*)
  val unfoldr_defn = Hol_defn "unfoldr" `
- ((unfoldr:('a ->('b#'a)option) -> 'a -> 'b list) f x=  
- ((case f x of
+ ((unfoldr:('a ->('b#'a)option) -> 'a -> 'b list) f x=
+   ((case f x of
       SOME (y, x') =>
         y :: unfoldr f x'
     | NONE =>

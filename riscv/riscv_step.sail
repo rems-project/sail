@@ -42,8 +42,8 @@ function fetch() -> FetchResult = {
 }
 
 /* returns whether an instruction was executed */
-val step : unit -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
-function step() = {
+val step : int -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+function step(step_no) = {
   match curInterrupt(mip, mie, mideleg) {
     Some(intr, priv) => {
       print_bits("Handling interrupt: ", intr);
@@ -59,34 +59,56 @@ function step() = {
         F_RVC(h) => {
           match decodeCompressed(h) {
             None() => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(h) ^ " :  <no-decode>");
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") <no-decode>");
               handle_decode_exception(EXTZ(h));
               false
             },
             Some(ast) => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(h) ^ " :  " ^ ast);
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") " ^ ast);
               nextPC = PC + 2;
-              execute(ast);
-              true
+              execute(ast)
             }
           }
         },
         F_Base(w) => {
           match decode(w) {
             None() => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(w) ^ " :  <no-decode>");
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") <no-decode>");
               handle_decode_exception(EXTZ(w));
               false
             },
             Some(ast) => {
-              print("PC: " ^ BitStr(PC) ^ " instr: " ^ BitStr(w) ^ " :  " ^ ast);
+              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ ast);
               nextPC = PC + 4;
-              execute(ast);
-              true
+              execute(ast)
             }
           }
         }
       }
+    }
+  }
+}
+
+val loop : int -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+function loop (tohost_addr) = {
+  let tohost = __GetSlice_int(64, tohost_addr, 0);
+  i : int = 0;
+  while true do {
+    tick_clock();
+    minstret_written = false;     /* see note for minstret */
+    let retired = step(i);
+    PC = nextPC;
+    if retired then {
+      i = i + 1;
+      retire_instruction()
+    };
+
+    /* check htif exit */
+    if htif_done then {
+      let exit_val = unsigned(htif_exit_code);
+      if exit_val == 0 then print("SUCCESS")
+      else print_int("FAILURE: ", exit_val);
+      exit(());
     }
   }
 }

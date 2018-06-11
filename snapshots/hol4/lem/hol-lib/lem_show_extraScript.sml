@@ -14,51 +14,51 @@ val _ = new_theory "lem_show_extra"
 (*import Set_extra String_extra*)
 
 val _ = Define `
-((instance_Show_Show_nat_dict:(num)lem_show$Show_class)= (<|
+((instance_Show_Show_nat_dict:(num)Show_class)= (<|
 
   show_method := num_to_dec_string|>))`;
 
 
 val _ = Define `
-((instance_Show_Show_Num_natural_dict:(num)lem_show$Show_class)= (<|
+((instance_Show_Show_Num_natural_dict:(num)Show_class)= (<|
 
   show_method := num_to_dec_string|>))`;
 
 
 val _ = Define `
-((instance_Show_Show_Num_int_dict:(int)lem_show$Show_class)= (<|
+((instance_Show_Show_Num_int_dict:(int)Show_class)= (<|
 
   show_method := lem_string_extra$stringFromInt|>))`;
 
 
 val _ = Define `
-((instance_Show_Show_Num_integer_dict:(int)lem_show$Show_class)= (<|
+((instance_Show_Show_Num_integer_dict:(int)Show_class)= (<|
 
   show_method := lem_string_extra$stringFromInteger|>))`;
 
 
 val _ = Define `
- ((stringFromSet:('a -> string) -> 'a set -> string) showX xs=   
- (STRCAT"{"  (STRCAT(lem_show$stringFromListAux showX (SET_TO_LIST xs)) "}")))`;
+ ((stringFromSet:('a -> string) -> 'a set -> string) showX xs= 
+   (STRCAT"{"  (STRCAT(lem_show$stringFromListAux showX (SET_TO_LIST xs)) "}")))`;
 
 
 (* Abbreviates the representation if the relation is transitive. *)
 val _ = Define `
- ((stringFromRelation:('a#'a -> string) ->('a#'a)set -> string) showX rel=  
- (if transitive rel then
+ ((stringFromRelation:('a#'a -> string) ->('a#'a)set -> string) showX rel=
+   (if transitive rel then
     let pruned_rel = (withoutTransitiveEdges rel) in
     if (! (e :: rel). (e IN pruned_rel)) then
       (* The relations are the same (there are no transitive edges),
          so we can just as well print the original one. *)
       stringFromSet showX rel
-    else
-       STRCAT"trancl of " (stringFromSet showX pruned_rel)
+    else 
+      STRCAT"trancl of " (stringFromSet showX pruned_rel)
   else
     stringFromSet showX rel))`;
 
 
 val _ = Define `
-((instance_Show_Show_set_dict:'a lem_show$Show_class ->('a set)lem_show$Show_class)dict_Show_Show_a= (<|
+((instance_Show_Show_set_dict:'a Show_class ->('a set)Show_class)dict_Show_Show_a= (<|
 
   show_method := (\ xs. stringFromSet  
   dict_Show_Show_a.show_method xs)|>))`;

@@ -5,7 +5,8 @@ val decode : bits(32) -> option(ast) effect pure
 val decodeCompressed : bits(16) -> option(ast) effect pure
 scattered function decodeCompressed
 
-val execute : ast -> unit effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
+/* returns whether an instruction was retired, used for computing minstret */
+val execute : ast -> bool effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
 scattered function execute
 
 val cast print_insn : ast -> string
@@ -32,8 +33,10 @@ function clause execute UTYPE(imm, rd, op) =
     let ret : xlenbits   = match op {
       RISCV_LUI   => off,
       RISCV_AUIPC => PC + off
-    } in
-    X(rd) = ret
+    } in {
+      X(rd) = ret;
+      true
+    }
 
 function clause print_insn UTYPE(imm, rd, op) =
   match (op) {
@@ -71,6 +74,7 @@ function clause execute (RISCV_JAL(imm, rd)) = {
     X(rd) = nextPC;  /* compatible with JAL and C.JAL */
     let offset : xlenbits = EXTS(imm);
     nextPC = pc + offset;
+    true
 }
 
 function clause print_insn (RISCV_JAL(imm, rd)) =
@@ -90,6 +94,7 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
     let newPC : xlenbits = X(rs1) + EXTS(imm);
     nextPC = newPC[63..1] @ 0b0;
+    true
 }
 
 function clause print_insn (RISCV_JALR(imm, rs1, rd)) =
@@ -122,9 +127,10 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) =
     RISCV_BGE  => rs1_val >=_s rs2_val,
     RISCV_BLTU => rs1_val <_u rs2_val,
     RISCV_BGEU => rs1_val >=_u rs2_val
-  } in
-  if taken then
-    nextPC = PC + EXTS(imm)
+  } in {
+    if taken then nextPC = PC + EXTS(imm);
+    true
+  }
 
 function clause print_insn (BTYPE(imm, rs2, rs1, op)) =
   let insn : string =
@@ -174,8 +180,10 @@ function clause execute (ITYPE (imm, rs1, rd, op)) =
     RISCV_XORI  => rs1_val ^ immext,
     RISCV_ORI   => rs1_val | immext,
     RISCV_ANDI  => rs1_val & immext
-  } in
-  X(rd) = result
+  } in {
+    X(rd) = result;
+    true
+  }
 
 function clause print_insn (ITYPE(imm, rs1, rd, op)) =
   let insn : string =
@@ -219,9 +227,10 @@ function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
       RISCV_SLLI => rs1_val << shamt,
       RISCV_SRLI => rs1_val >> shamt,
       RISCV_SRAI => shift_right_arith64(rs1_val, shamt)
-    } in
-    X(rd) = result
-
+    } in {
+      X(rd) = result;
+      true
+    }
 
 function clause print_insn (SHIFTIOP(shamt, rs1, rd, op)) =
   let insn : string =
@@ -268,8 +277,10 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
     RISCV_SRA  => shift_right_arith64(rs1_val, rs2_val[5..0]),
     RISCV_OR   => rs1_val | rs2_val,
     RISCV_AND  => rs1_val & rs2_val
-  } in
-  X(rd) = result
+  } in {
+    X(rd) = result;
+    true
+  }
 
 function clause print_insn (RTYPE(rs2, rs1, rd, op)) =
   let insn : string =
@@ -315,17 +326,17 @@ function extend_value(is_unsigned, value) = match (value) {
   MemException(e) => MemException(e)
 }
 
-val process_load : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> unit effect {escape, rreg, wreg}
+val process_load : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> bool effect {escape, rreg, wreg}
 function process_load(rd, addr, value, is_unsigned) =
   match (extend_value(is_unsigned, value)) {
-    MemValue(result) => X(rd) = result,
-    MemException(e)  => handle_mem_exception(addr, e)
+    MemValue(result) => { X(rd) = result; true },
+    MemException(e)  => { handle_mem_exception(addr, e); false }
   }
 
 function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
     let vaddr : xlenbits = X(rs1) + EXTS(imm) in
     match translateAddr(vaddr, Read, Data) {
-      TR_Failure(e) => handle_mem_exception(vaddr, e),
+      TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
       TR_Address(addr) =>
         match width {
           BYTE   => process_load(rd, vaddr, mem_read(addr, 1, aq, rl, false), is_unsigned),
@@ -383,7 +394,7 @@ mapping clause encdec = STORE(imm7 @ imm5, rs2, rs1, size, false, false) <-> imm
 function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
     let vaddr : xlenbits = X(rs1) + EXTS(imm) in
     match translateAddr(vaddr, Write, Data) {
-      TR_Failure(e) => handle_mem_exception(vaddr, e),
+      TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
       TR_Address(addr) =>
         let eares : MemoryOpResult(unit) = match width {
           BYTE   => mem_write_ea(addr, 1, aq, rl, false),
@@ -392,7 +403,7 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
           DOUBLE => mem_write_ea(addr, 8, aq, rl, false)
         } in
         match (eares) {
-          MemException(e) => handle_mem_exception(addr, e),
+          MemException(e) => { handle_mem_exception(addr, e); false },
           MemValue(_) => {
             let rs2_val = X(rs2) in
             let res : MemoryOpResult(unit) = match width {
@@ -402,8 +413,8 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
               DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, false)
             } in
             match (res) {
-              MemValue(_)     => (),
-              MemException(e) => handle_mem_exception(addr, e)
+              MemValue(_)     => true,
+              MemException(e) => { handle_mem_exception(addr, e); false }
             }
           }
         }
@@ -428,9 +439,11 @@ union clause ast = ADDIW : (bits(12), regbits, regbits)
 
 mapping clause encdec = ADDIW(imm, rs1, rd) <-> imm @ rs1 @ 0b000 @ rd @ 0b0011011
 
-function clause execute (ADDIW(imm, rs1, rd)) =
-  let result : xlenbits = EXTS(imm) + X(rs1) in
-  X(rd) = EXTS(result[31..0])
+function clause execute (ADDIW(imm, rs1, rd)) = {
+  let result : xlenbits = EXTS(imm) + X(rs1);
+  X(rd) = EXTS(result[31..0]);
+  true
+}
 
 function clause print_insn (ADDIW(imm, rs1, rd)) =
   "addiw " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
@@ -450,8 +463,10 @@ function clause execute (SHIFTW(shamt, rs1, rd, op)) =
       RISCV_SLLI => rs1_val << shamt,
       RISCV_SRLI => rs1_val >> shamt,
       RISCV_SRAI => shift_right_arith32(rs1_val, shamt)
-    } in
-    X(rd) = EXTS(result)
+    } in {
+      X(rd) = EXTS(result);
+      true
+    }
 
 function clause print_insn (SHIFTW(shamt, rs1, rd, op)) =
   let insn : string =
@@ -488,8 +503,10 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
     RISCV_SLLW => rs1_val << (rs2_val[4..0]),
     RISCV_SRLW => rs1_val >> (rs2_val[4..0]),
     RISCV_SRAW => shift_right_arith32(rs1_val, rs2_val[4..0])
-  } in
-  X(rd) = EXTS(result)
+  } in {
+    X(rd) = EXTS(result);
+    true
+  }
 
 function clause print_insn (RTYPEW(rs2, rs1, rd, op)) =
   let insn : string =
@@ -532,8 +549,10 @@ function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) =
   let rs1_int : int = if signed1 then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if signed2 then signed(rs2_val) else unsigned(rs2_val) in
   let result128 = to_bits(128, rs1_int * rs2_int) in
-  let result = if high then result128[127..64] else result128[63..0] in
-  X(rd) = result
+  let result = if high then result128[127..64] else result128[63..0] in {
+    X(rd) = result;
+    true
+  }
 
 function clause print_insn (MUL(rs2, rs1, rd, high, signed1, signed2)) =
   let insn : string =
@@ -565,7 +584,10 @@ function clause execute (DIV(rs2, rs1, rd, s)) =
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
   let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int) in
-  let q': int = if s & q > xlen_max_signed then xlen_min_signed else q in /* check for signed overflow */  X(rd) = to_bits(xlen, q')
+  let q': int = if s & q > xlen_max_signed then xlen_min_signed else q in /* check for signed overflow */ {
+    X(rd) = to_bits(xlen, q');
+    true
+  }
 
 function clause print_insn (DIV(rs2, rs1, rd, s)) =
   let insn : string = if s then "div   " else "divu  " in
@@ -588,9 +610,11 @@ function clause execute (REM(rs2, rs1, rd, s)) =
   let rs2_val = X(rs2) in
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
-  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in
+  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in {
   /* signed overflow case returns zero naturally as required due to -1 divisor */
-  X(rd) = to_bits(xlen, r)
+    X(rd) = to_bits(xlen, r);
+    true
+  }
 
 function clause print_insn (REM(rs2, rs1, rd, s)) =
   let insn : string = if s then "rem   " else "remu  " in
@@ -609,8 +633,10 @@ function clause execute (MULW(rs2, rs1, rd)) =
   let rs1_int : int = signed(rs1_val) in
   let rs2_int : int = signed(rs2_val) in
   let result32 = to_bits(64, rs1_int * rs2_int)[31..0] in /* XXX surprising behaviour of to_bits requires exapnsion to 64 bits followed by truncation... */
-  let result : xlenbits = EXTS(result32) in
-  X(rd) = result
+  let result : xlenbits = EXTS(result32) in {
+    X(rd) = result;
+    true
+  }
 
 function clause print_insn (MULW(rs2, rs1, rd)) =
   "mulw  " ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
@@ -628,8 +654,10 @@ function clause execute (DIVW(rs2, rs1, rd, s)) =
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
   let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int) in
-  let q': int = if s & q > (2 ^ 31 - 1) then  (0 - 2^31) else q in /* check for signed overflow */
-  X(rd) = EXTS(to_bits(32, q'))
+  let q': int = if s & q > (2 ^ 31 - 1) then  (0 - 2^31) else q in /* check for signed overflow */ {
+    X(rd) = EXTS(to_bits(32, q'));
+    true
+  }
 
 function clause print_insn (DIVW(rs2, rs1, rd, s)) =
   let insn : string = if s then "divw  " else "divuw " in
@@ -647,9 +675,11 @@ function clause execute (REMW(rs2, rs1, rd, s)) =
   let rs2_val = X(rs2)[31..0] in
   let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
   let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
-  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in
-  /* signed overflow case returns zero naturally as required due to -1 divisor */
-  X(rd) = EXTS(to_bits(32, r))
+  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in {
+    /* signed overflow case returns zero naturally as required due to -1 divisor */
+    X(rd) = EXTS(to_bits(32, r));
+    true
+  }
 
 function clause print_insn (REMW(rs2, rs1, rd, s)) =
   let insn : string = if s then "remw  " else "remuw " in
@@ -671,7 +701,8 @@ function clause execute (FENCE(pred, succ)) = {
     (0b0001, 0b0001) => MEM_fence_w_w(),
     _ => { print("FIXME: unsupported fence");
            () }
-  }
+  };
+  true
 }
 
 /* FIXME */
@@ -709,7 +740,7 @@ union clause ast = FENCEI : unit
 
 mapping clause encdec = FENCEI() <-> 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111
 
-function clause execute FENCEI() = MEM_fence_i()
+function clause execute FENCEI() = { MEM_fence_i(); true }
 
 function clause print_insn (FENCEI()) =
   "fence.i"
@@ -727,9 +758,11 @@ function clause execute ECALL() =
                       User => E_U_EnvCall,
                       Supervisor => E_S_EnvCall,
                       Machine => E_M_EnvCall
-		    },
-	     excinfo = (None() : option(xlenbits)) } in
-  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
+                    },
+             excinfo = (None() : option(xlenbits)) } in {
+    nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC);
+    false
+  }
 
 function clause print_insn (ECALL()) =
   "ecall"
@@ -745,7 +778,8 @@ function clause execute MRET() = {
   if cur_privilege == Machine then
     nextPC = handle_exception(cur_privilege, CTL_MRET(), PC)
   else
-    handle_illegal()
+    handle_illegal();
+  false
 }
 
 function clause print_insn (MRET()) =
@@ -758,14 +792,16 @@ union clause ast = SRET : unit
 
 mapping clause encdec = SRET() <-> 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
-function clause execute SRET() =
+function clause execute SRET() = {
   match cur_privilege {
     User       => handle_illegal(),
     Supervisor => if mstatus.TSR() == true
                   then handle_illegal()
                   else nextPC = handle_exception(cur_privilege, CTL_SRET(), PC),
     Machine    => nextPC = handle_exception(cur_privilege, CTL_SRET(), PC)
-  }
+  };
+  false
+}
 
 function clause print_insn (SRET()) =
   "sret"
@@ -777,8 +813,10 @@ union clause ast = EBREAK : unit
 
 mapping clause encdec = EBREAK() <-> 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
-function clause execute EBREAK() =
-  handle_mem_exception(PC, E_Breakpoint)
+function clause execute EBREAK() = {
+  handle_mem_exception(PC, E_Breakpoint);
+  false
+}
 
 function clause print_insn (EBREAK()) =
   "ebreak"
@@ -797,7 +835,9 @@ function clause execute WFI() = {
                   then handle_illegal()
                   else (),
     User       => handle_illegal()
-  }
+  };
+  /* NOTE: since WFI is always interrupted, it should never retire.  TODO: Confirm this. */
+  false
 }
 
 function clause print_insn (WFI()) =
@@ -814,13 +854,14 @@ function clause execute SFENCE_VMA(rs1, rs2) = {
   /* FIXME: spec leaves unspecified what happens if this is executed in M-mode.
      We assume it is the same as S-mode, which is definitely wrong.
    */
-  if cur_privilege == User then handle_illegal()
+  if cur_privilege == User then { handle_illegal(); false }
   else match (architecture(mstatus.SXL()), mstatus.TVM()) {
-    (Some(RV64), true)  => handle_illegal(),
+    (Some(RV64), true)  => { handle_illegal(); false },
     (Some(RV64), false) => {
       let addr : option(vaddr39) = if rs1 == 0 then None() else Some(X(rs1)[38 .. 0]);
       let asid : option(asid64)  = if rs2 == 0 then None() else Some(X(rs2)[15 .. 0]);
-      flushTLB(asid, addr)
+      flushTLB(asid, addr);
+      true
     },
     (_, _) => internal_error("unimplemented sfence architecture")
   }
@@ -841,7 +882,7 @@ val process_loadres : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
   let vaddr : xlenbits = X(rs1) in
   match translateAddr(vaddr, Read, Data) {
-    TR_Failure(e) => handle_mem_exception(vaddr, e),
+    TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
     TR_Address(addr) =>
       match width {
         WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, true), false),
@@ -873,10 +914,10 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   status : bits(1) = if speculate_conditional_success() then 0b0 else 0b1;
   X(rd) = EXTZ(status);
 
-  if status == 0b1 then () else {
+  if status == 0b1 then true else {
     vaddr : xlenbits = X(rs1);
     match translateAddr(vaddr, Write, Data) {
-      TR_Failure(e) => handle_mem_exception(vaddr, e),
+      TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
       TR_Address(addr) => {
         let eares : MemoryOpResult(unit) = match width {
           WORD   => mem_write_ea(addr, 4, aq, rl, true),
@@ -884,7 +925,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
           _      => internal_error("STORECON expected word or double")
         };
         match (eares) {
-          MemException(e)  => handle_mem_exception(addr, e),
+          MemException(e)  => { handle_mem_exception(addr, e); false },
           MemValue(_) => {
             rs2_val = X(rs2);
             let res : MemoryOpResult(unit) = match width {
@@ -893,8 +934,8 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
               _      => internal_error("STORECON expected word or double")
             } in
             match (res) {
-              MemValue(_)     => (),
-              MemException(e) => handle_mem_exception(addr, e)
+              MemValue(_)     => true,
+              MemException(e) => { handle_mem_exception(addr, e); false }
             }
           }
         }
@@ -937,7 +978,7 @@ mapping clause encdec = AMO(op, aq, rl, rs2, rs1, size, rd) <-> encdec_amoop(op)
 function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   vaddr : xlenbits = X(rs1);
   match translateAddr(vaddr, ReadWrite, Data) {
-    TR_Failure(e) => handle_mem_exception(vaddr, e),
+    TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
     TR_Address(addr) => {
       let eares : MemoryOpResult(unit) = match width {
         WORD   => mem_write_ea(addr, 4, aq & rl, rl, true),
@@ -945,7 +986,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
         _      => internal_error ("AMO expected WORD or DOUBLE")
       };
       match (eares) {
-        MemException(e) => handle_mem_exception(addr, e),
+        MemException(e) => { handle_mem_exception(addr, e); false },
         MemValue(_) => {
           let rval : MemoryOpResult(xlenbits) = match width {
             WORD   => extend_value(false, mem_read(addr, 4, aq, aq & rl, true)),
@@ -953,7 +994,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
           _        => internal_error ("AMO expected WORD or DOUBLE")
           };
           match (rval) {
-            MemException(e) => handle_mem_exception(addr, e),
+            MemException(e) => { handle_mem_exception(addr, e); false },
             MemValue(loaded) => {
               rs2_val : xlenbits = X(rs2);
               result : xlenbits =
@@ -977,8 +1018,8 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
                 _      => internal_error("AMO expected WORD or DOUBLE")
               };
               match (wval) {
-                MemValue(_) => X(rd) = loaded,
-                MemException(e) => handle_mem_exception(addr, e)
+                MemValue(_) => { X(rd) = loaded; true },
+                MemException(e) => { handle_mem_exception(addr, e); false }
               }
             }
           }
@@ -1051,6 +1092,7 @@ function readCSR csr : csreg -> xlenbits =
     0x303 => mideleg.bits(),
     0x304 => mie.bits(),
     0x305 => mtvec.bits(),
+    0x306 => EXTZ(mcounteren.bits()),
     0x340 => mscratch,
     0x341 => mepc,
     0x342 => mcause.bits(),
@@ -1063,6 +1105,7 @@ function readCSR csr : csreg -> xlenbits =
     0x103 => sideleg.bits(),
     0x104 => lower_mie(mie, mideleg).bits(),
     0x105 => stvec.bits(),
+    0x106 => EXTZ(scounteren.bits()),
     0x140 => sscratch,
     0x141 => sepc,
     0x142 => scause.bits(),
@@ -1091,6 +1134,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     0x303 => { mideleg = legalize_mideleg(mideleg, value); Some(mideleg.bits()) },
     0x304 => { mie = legalize_mie(mie, value); Some(mie.bits()) },
     0x305 => { mtvec = legalize_tvec(mtvec, value); Some(mtvec.bits()) },
+    0x306 => { mcounteren = legalize_mcounteren(mcounteren, value); Some(EXTZ(mcounteren.bits())) },
     0x340 => { mscratch = value; Some(mscratch) },
     0x341 => { mepc = legalize_xepc(value); Some(mepc) },
     0x342 => { mcause->bits() = value; Some(mcause.bits()) },
@@ -1103,6 +1147,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     0x103 => { sideleg->bits() = value; Some(sideleg.bits()) }, /* TODO: does this need legalization? */
     0x104 => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) },
     0x105 => { stvec = legalize_tvec(stvec, value); Some(stvec.bits()) },
+    0x106 => { scounteren = legalize_scounteren(scounteren, value); Some(EXTZ(scounteren.bits())) },
     0x140 => { sscratch = value; Some(sscratch) },
     0x141 => { sepc = legalize_xepc(value); Some(sepc) },
     0x142 => { scause->bits() = value; Some(scause.bits()) },
@@ -1112,6 +1157,11 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
 
     /* trigger/debug */
     0x7a0 => { tselect = value; Some(tselect) },
+
+    /* counters */
+    0xC00 => { mcycle = value; Some(mcycle) },
+    /* FIXME: it is not clear whether writable mtime is platform-dependent. */
+    0xC02 => { minstret = value; minstret_written = true; Some(minstret) },
 
     _     => None()
   } in
@@ -1127,7 +1177,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   } in
   if ~ (check_CSR(csr, cur_privilege, isWrite))
-  then handle_illegal()
+  then { handle_illegal(); false }
   else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
     if isWrite then {
@@ -1138,7 +1188,8 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
       } in
       writeCSR(csr, new_val)
     };
-    X(rd) = csr_val
+    X(rd) = csr_val;
+    true
   }
 
 function clause print_insn (CSR(csr, rs1, rd, is_imm, op)) =
@@ -1176,7 +1227,7 @@ function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bit
   else None()
 }
 
-function clause execute NOP() = ()
+function clause execute NOP() = true
 
 function clause print_insn (NOP()) =
   "nop"
@@ -1304,10 +1355,11 @@ function clause execute (C_JAL(imm)) = {
 }
 
 function clause execute (C_ADDIW(imm, rsd)) = {
-  let imm : bits(32) = EXTS(imm) in
-  let rs_val = X(rsd) in
-  let res : bits(32) = rs_val[31..0] + imm in
-  X(rsd) = EXTS(res)
+  let imm : bits(32) = EXTS(imm);
+  let rs_val = X(rsd);
+  let res : bits(32) = rs_val[31..0] + imm;
+  X(rsd) = EXTS(res);
+  true
 }
 
 function clause print_insn (C_JAL(imm)) =
@@ -1686,7 +1738,7 @@ union clause ast = ILLEGAL : word
 
 mapping clause encdec = ILLEGAL(s) <-> s
 
-function clause execute (ILLEGAL(s)) = handle_illegal ()
+function clause execute (ILLEGAL(s)) = { handle_illegal(); false }
 
 function clause print_insn (ILLEGAL(s)) = "illegal " ^ hex_bits_32(s)
 
@@ -1700,7 +1752,7 @@ union clause ast = C_ILLEGAL : unit
 
 function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(C_ILLEGAL())
 
-function clause execute C_ILLEGAL() = handle_illegal ()
+function clause execute C_ILLEGAL() = { handle_illegal(); false }
 
 function clause print_insn (C_ILLEGAL()) =
   "c.illegal"

@@ -103,15 +103,15 @@ let sail_logo =
 
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
-let interactive_state = ref (initial_state !interactive_ast)
+let interactive_state = ref (initial_state !interactive_ast Value.primops)
 
 let print_program () =
   match !current_mode with
   | Normal -> ()
   | Evaluation (Step (out, _, _, stack)) ->
      let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
-     List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
-     print_endline out
+     List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline (Lazy.force code); print_endline sep);
+     print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) ->
      print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
@@ -135,6 +135,7 @@ let rec run () =
      end
 
 let rec run_steps n =
+  print_endline ("step " ^ string_of_int n);
   match !current_mode with
   | _ when n <= 0 -> ()
   | Normal -> ()
@@ -262,7 +263,7 @@ let handle_input' input =
             let ast, env = Specialize.specialize !interactive_ast !interactive_env in
             interactive_ast := ast;
             interactive_env := env;
-            interactive_state := initial_state !interactive_ast
+            interactive_state := initial_state !interactive_ast Value.primops
          | ":pretty" ->
             print_endline (Pretty_print_sail.to_string (Latex.latex_defs "sail_latex" !interactive_ast))
          | ":bytecode" ->
@@ -274,7 +275,7 @@ let handle_input' input =
             let byte_ast = bytecode_ast ctx (fun cdefs -> List.concat (List.map (flatten_instrs ctx) cdefs)) ast in
             let chan = open_out arg in
             Util.opt_colors := false;
-            Pretty_print_sail.pretty_sail chan (separate_map hardline pp_cdef byte_ast);
+            Pretty_print_sail.pretty_sail chan (separate_map hardline Bytecode_util.pp_cdef byte_ast);
             Util.opt_colors := true;
             close_out chan
          | ":ast" ->
@@ -304,13 +305,13 @@ let handle_input' input =
                let (_, ast, env) = load_files !interactive_env files in
                let ast = Process_file.rewrite_ast_interpreter ast in
                interactive_ast := append_ast !interactive_ast ast;
-               interactive_state := initial_state !interactive_ast;
+               interactive_state := initial_state !interactive_ast Value.primops;
                interactive_env := env;
                vs_ids := Initial_check.val_spec_ids !interactive_ast
             | ":u" | ":unload" ->
                interactive_ast := Ast.Defs [];
                interactive_env := Type_check.initial_env;
-               interactive_state := initial_state !interactive_ast;
+               interactive_state := initial_state !interactive_ast Value.primops;
                vs_ids := Initial_check.val_spec_ids !interactive_ast;
                (* See initial_check.mli for an explanation of why we need this. *)
                Initial_check.have_undefined_builtins := false
@@ -320,7 +321,7 @@ let handle_input' input =
           (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
           let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord str) in
-          current_mode := Evaluation (eval_frame !interactive_ast (Step ("", !interactive_state, return exp, [])));
+          current_mode := Evaluation (eval_frame !interactive_ast (Step (lazy "", !interactive_state, return exp, [])));
           print_program ()
        | Empty -> ()
      end
@@ -363,7 +364,7 @@ let handle_input' input =
 let handle_input input =
   try handle_input' input with
   | Type_check.Type_error (l, err) ->
-     print_endline (Type_check.string_of_type_error err)
+     print_endline (Type_error.string_of_type_error err)
   | Reporting_basic.Fatal_error err ->
      Reporting_basic.print_error err
   | exn ->

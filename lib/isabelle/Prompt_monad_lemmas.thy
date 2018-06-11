@@ -17,6 +17,7 @@ lemmas bind_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Write_e
 
 lemma bind_return[simp]: "bind (return a) f = f a"
   by (auto simp: return_def)
+lemma bind_return_right[simp]: "bind x return = x" by (induction x) (auto simp: return_def)
 
 lemma bind_assoc[simp]: "bind (bind m f) g = bind m (\<lambda>x. bind (f x) g)"
   by (induction m f arbitrary: g rule: bind.induct) auto

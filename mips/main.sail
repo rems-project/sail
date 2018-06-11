@@ -1,39 +1,44 @@
 
 register instCount : int
 
-val fetch_and_execute : unit -> unit effect {barr, eamem, escape, rmem, rreg, wmv, wreg, undef, wmvt, rmemt}
+val fetch_and_execute : unit -> bool effect {barr, eamem, escape, rmem, rreg, wmv, wreg, undef, wmvt, rmemt}
 function fetch_and_execute () = {
-  while true do {
-    PC = nextPC;
-    inBranchDelay = branchPending;
-    branchPending = 0b0;
-    nextPC = if inBranchDelay then delayedPC else PC + 4;
-    cp2_next_pc();
-    instCount = instCount + 1;
-    print_bits("PC: ", PC);
-    try {
-      let pc_pa = TranslatePC(PC);
-      /*print_bits("pa: ", pc_pa);*/
-      let instr = MEMr_wrapper(pc_pa, 4);
-      /*print_bits("hex: ", instr);*/
-      let instr_ast = decode(instr);
-      match instr_ast {
-        Some(HCF()) => {
-                       print("simulation stopped due to halt instruction.");
-                       return ();
-                     },
-        Some(ast) => execute(ast),
-        None()    => {print("Decode failed"); exit (())} /* Never expect this -- unknown instruction should actually result in reserved instruction ISA-level exception (see mips_ri.sail). */
-      }
-    } catch {
-      ISAException() => print("EXCEPTION")
-      /* ISA-level exception occurrred either during TranslatePC or execute --
-         just continue from nextPC, which should have been set to the appropriate
-         exception vector (along with clearing branchPending etc.) . */
-    };
+  PC = nextPC;
+  inBranchDelay = branchPending;
+  branchPending = 0b0;
+  nextPC = if inBranchDelay then delayedPC else PC + 4;
+  cp2_next_pc();
+  instCount = instCount + 1;
+  if UART_WRITTEN then {
+    putchar(unsigned(UART_WDATA));
+    UART_WRITTEN = 0b0;
   };
+  /* the following skips are required on mips to fake the tag effects otherwise type checker complains  */
   skip_rmemt();
   skip_wmvt();
+  prerr_bits("PC: ", PC);
+  loop_again = true;
+  try {
+    let pc_pa = TranslatePC(PC);
+    /*print_bits("pa: ", pc_pa);*/
+    let instr = MEMr_wrapper(pc_pa, 4);
+    /*print_bits("hex: ", instr);*/
+    let instr_ast = decode(instr);
+    match instr_ast {
+      Some(HCF()) => {
+                     print("simulation stopped due to halt instruction.");
+                     loop_again = false
+                   },
+      Some(ast) => execute(ast),
+      None()    => { print("Decode failed"); loop_again=false } /* Never expect this -- unknown instruction should actually result in reserved instruction ISA-level exception (see mips_ri.sail). */
+    }
+  } catch {
+    ISAException() => prerr_endline("EXCEPTION")
+    /* ISA-level exception occurrred either during TranslatePC or execute --
+       just continue from nextPC, which should have been set to the appropriate
+       exception vector (along with clearing branchPending etc.) . */
+  };
+  loop_again;
 }
 
 val elf_entry = {
@@ -42,7 +47,13 @@ val elf_entry = {
   c: "elf_entry"
 } : unit -> int
 
-val main : unit -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg, rmemt, wmvt}
+val init_registers : bits(64) -> unit effect {wreg}
+
+function init_registers (initialPC) = {
+  init_cp0_state();
+  init_cp2_state();
+  nextPC = initialPC;
+}
 
 function dump_mips_state () : unit -> unit = {
   print_bits("DEBUG MIPS PC ", PC);
@@ -51,12 +62,12 @@ function dump_mips_state () : unit -> unit = {
   }
 }
 
+val main : unit -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg, rmemt, wmvt}
+
 function main () = {
-  init_cp0_state();
-  init_cp2_state();
-  nextPC = to_bits(64, elf_entry());
+  init_registers(to_bits(64, elf_entry()));
   startTime = get_time_ns();
-  fetch_and_execute();
+  while (fetch_and_execute()) do ();
   endTime = get_time_ns();
   elapsed = endTime - startTime;
   inst_1e9 = instCount * 1000000000;

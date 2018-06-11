@@ -1,19 +1,26 @@
 /* memory */
 
-union MemoryOpResult ('a : Type) = {
-  MemValue : 'a,
-  MemException: ExceptionType
-}
-
 function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool =
   unsigned(addr) % width == 0
 
-function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+// only used for actual memory regions, to avoid MMIO effects
+function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
   match (t, __RISCV_read(addr, width)) {
     (Instruction, None()) => MemException(E_Fetch_Access_Fault),
     (Data, None())        => MemException(E_Load_Access_Fault),
-    (_, Some(v))          => MemValue(v)
+    (_, Some(v))          => { print("mem[" ^ t ^ "," ^ BitStr(addr) ^ "] -> " ^ BitStr(v));
+                               MemValue(v) }
   }
+
+function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+  /* treat MMIO regions as not executable for now. TODO: this should actually come from PMP/PMA. */
+  if   t == Data & within_mmio_readable(addr, width)
+  then mmio_read(addr, width)
+  else if within_phys_mem(addr, width)
+  then phys_mem_read(t, addr, width)
+  else MemException(E_Load_Access_Fault)
+
+/* FIXME: We assume atomic accesses are only done to memory-backed regions.  MMIO is not modeled. */
 
 val MEMr                         : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
 val MEMr_acquire                 : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
@@ -22,20 +29,21 @@ val MEMr_reserved                : forall 'n. (xlenbits, atom('n)) -> MemoryOpRe
 val MEMr_reserved_acquire        : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
 val MEMr_reserved_strong_acquire : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
 
-function MEMr                         (addr, width) = checked_mem_read(Data, addr, width)
-function MEMr_acquire                 (addr, width) = checked_mem_read(Data, addr, width)
-function MEMr_strong_acquire          (addr, width) = checked_mem_read(Data, addr, width)
-function MEMr_reserved                (addr, width) = checked_mem_read(Data, addr, width)
-function MEMr_reserved_acquire        (addr, width) = checked_mem_read(Data, addr, width)
-function MEMr_reserved_strong_acquire (addr, width) = checked_mem_read(Data, addr, width)
+function MEMr                         (addr, width) = phys_mem_read(Data, addr, width)
+function MEMr_acquire                 (addr, width) = phys_mem_read(Data, addr, width)
+function MEMr_strong_acquire          (addr, width) = phys_mem_read(Data, addr, width)
+function MEMr_reserved                (addr, width) = phys_mem_read(Data, addr, width)
+function MEMr_reserved_acquire        (addr, width) = phys_mem_read(Data, addr, width)
+function MEMr_reserved_strong_acquire (addr, width) = phys_mem_read(Data, addr, width)
 
-val mem_read : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n)) effect {rmem, escape}
+/* NOTE: The rreg effect is due to MMIO. */
+val mem_read : forall 'n, 'n > 0. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n)) effect {rmem, rreg, escape}
 
 function mem_read (addr, width, aq, rl, res) = {
   if (aq | res) & (~ (is_aligned_addr(addr, width)))
   then MemException(E_Load_Addr_Align)
   else match (aq, rl, res) {
-    (false, false, false) => MEMr(addr, width),
+    (false, false, false) => checked_mem_read(Data, addr, width),
     (true,  false, false) => MEMr_acquire(addr, width),
     (false, false, true)  => MEMr_reserved(addr, width),
     (true,  false, true)  => MEMr_reserved_acquire(addr, width),
@@ -76,10 +84,22 @@ function mem_write_ea (addr, width, aq, rl, con) = {
   }
 }
 
-function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(unit) =
-  if (__RISCV_write(addr, width, data))
+// only used for actual memory regions, to avoid MMIO effects
+function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(unit) = {
+  print("mem[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
+  if   __RISCV_write(addr, width, data)
   then MemValue(())
   else MemException(E_SAMO_Access_Fault)
+}
+
+function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(unit) =
+  if   within_mmio_writable(addr, width)
+  then mmio_write(addr, width, data)
+  else if within_phys_mem(addr, width)
+  then phys_mem_write(addr, width, data)
+  else MemException(E_SAMO_Access_Fault)
+
+/* FIXME: We assume atomic accesses are only done to memory-backed regions.  MMIO is not modeled. */
 
 val MEMval                            : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
 val MEMval_release                    : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
@@ -88,21 +108,21 @@ val MEMval_conditional                : forall 'n. (xlenbits, atom('n), bits(8 *
 val MEMval_conditional_release        : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
 val MEMval_conditional_strong_release : forall 'n. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv}
 
-function MEMval                            (addr, width, data) = checked_mem_write(addr, width, data)
-function MEMval_release                    (addr, width, data) = checked_mem_write(addr, width, data)
-function MEMval_strong_release             (addr, width, data) = checked_mem_write(addr, width, data)
-function MEMval_conditional                (addr, width, data) = checked_mem_write(addr, width, data)
-function MEMval_conditional_release        (addr, width, data) = checked_mem_write(addr, width, data)
-function MEMval_conditional_strong_release (addr, width, data) = checked_mem_write(addr, width, data)
+function MEMval                            (addr, width, data) = phys_mem_write(addr, width, data)
+function MEMval_release                    (addr, width, data) = phys_mem_write(addr, width, data)
+function MEMval_strong_release             (addr, width, data) = phys_mem_write(addr, width, data)
+function MEMval_conditional                (addr, width, data) = phys_mem_write(addr, width, data)
+function MEMval_conditional_release        (addr, width, data) = phys_mem_write(addr, width, data)
+function MEMval_conditional_strong_release (addr, width, data) = phys_mem_write(addr, width, data)
 
-
-val mem_write_value : forall 'n. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(unit) effect {wmv, escape}
+/* NOTE: The wreg effect is due to MMIO. */
+val mem_write_value : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(unit) effect {wmv, wreg, escape}
 
 function mem_write_value (addr, width, value, aq, rl, con) = {
   if (rl | con) & (~ (is_aligned_addr(addr, width)))
   then MemException(E_SAMO_Addr_Align)
   else match (aq, rl, con) {
-    (false, false, false) => MEMval(addr, width, value),
+    (false, false, false) => checked_mem_write(addr, width, value),
     (false, true,  false) => MEMval_release(addr, width, value),
     (false, false, true)  => MEMval_conditional(addr, width, value),
     (false, true,  true)  => MEMval_conditional_release(addr, width, value),

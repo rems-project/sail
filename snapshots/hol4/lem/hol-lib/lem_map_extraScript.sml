@@ -16,7 +16,7 @@ val _ = new_theory "lem_map_extra"
 (* find                                                                       *)
 (* -------------------------------------------------------------------------- *)
 
-(*val find : forall 'k 'v. MapKeyType 'k => 'k -> Map.map 'k 'v -> 'v*)
+(*val find : forall 'k 'v. MapKeyType 'k => 'k -> map 'k 'v -> 'v*)
 (*let find k m=  match (lookup k m) with Just x -> x | Nothing -> failwith "Map_extra.find" end*)
 
 
@@ -26,7 +26,7 @@ val _ = new_theory "lem_map_extra"
 (* -------------------------------------------------------------------------- *)
 
 
-(*val fromSet : forall 'k 'v. MapKeyType 'k => ('k -> 'v) -> set 'k -> Map.map 'k 'v*)
+(*val fromSet : forall 'k 'v. MapKeyType 'k => ('k -> 'v) -> set 'k -> map 'k 'v*)
 (*let fromSet f s=  Set_helpers.fold (fun k m -> Map.insert k (f k) m) s Map.empty*)
 
 (*
@@ -38,7 +38,7 @@ assert fromSet_1: (fromSet succ {(2:nat); 3; 4}) = Map.fromList [(2,3); (3, 4); 
 (* fold                                                                       *)
 (* -------------------------------------------------------------------------- *)
 
-(*val fold : forall 'k 'v 'r. MapKeyType 'k, SetType 'k, SetType 'v => ('k -> 'v -> 'r -> 'r) -> Map.map 'k 'v -> 'r -> 'r*)
+(*val fold : forall 'k 'v 'r. MapKeyType 'k, SetType 'k, SetType 'v => ('k -> 'v -> 'r -> 'r) -> map 'k 'v -> 'r -> 'r*)
 val _ = Define `
  ((fold:('k -> 'v -> 'r -> 'r) ->('k,'v)fmap -> 'r -> 'r) f m v=  (ITSET (\ (k, v) r .  f k v r) (FMAP_TO_SET m) v))`;
 
@@ -48,17 +48,17 @@ assert fold_1: (fold (fun k v a -> (a+k)) (Map.fromList [((2:nat),(3:nat)); (3, 
 assert fold_2: (fold (fun k v a -> (a+v)) (Map.fromList [((2:nat),(3:nat)); (3, 4); (4, 5)]) 0 = 12)
 *)
 
-(*val toList: forall 'k 'v. MapKeyType 'k => Map.map 'k 'v -> list ('k * 'v)*)
+(*val toList: forall 'k 'v. MapKeyType 'k => map 'k 'v -> list ('k * 'v)*)
 (* declare compile_message toList = "Map_extra.toList is only defined for the ocaml, isabelle and coq backend" *)
 
 (* more 'map' functions *)
 
 (* TODO: this function is in map_extra rather than map just for implementation reasons *)
-(*val mapMaybe : forall 'a 'b 'c. MapKeyType 'a => ('a -> 'b -> Maybe.maybe 'c) -> Map.map 'a 'b -> Map.map 'a 'c*)
+(*val mapMaybe : forall 'a 'b 'c. MapKeyType 'a => ('a -> 'b -> maybe 'c) -> map 'a 'b -> map 'a 'c*)
 (* OLD: TODO: mapMaybe depends on toList that is not defined for hol and isabelle *)
 val _ = Define `
- ((option_map:('a -> 'b -> 'c option) ->('a,'b)fmap ->('a,'c)fmap) f m=  
- (FOLDL
+ ((option_map:('a -> 'b -> 'c option) ->('a,'b)fmap ->('a,'c)fmap) f m=
+   (FOLDL
     (\ m' (k, v) . 
       (case f k v of
           NONE => m'

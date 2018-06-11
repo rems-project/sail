@@ -30,7 +30,7 @@ val _ = new_theory "lem_map"
 (* -------------------------------------------------------------------------- *)
 
 (*class ( MapKeyType 'a )
-  val {ocaml;coq} mapKeyCompare : 'a -> 'a -> Basic_classes.ordering
+  val {ocaml;coq} mapKeyCompare : 'a -> 'a -> ordering
 end*)
 
 (* -------------------------------------------------------------------------- *)
@@ -38,7 +38,7 @@ end*)
 (* -------------------------------------------------------------------------- *)
 
 (*val empty : forall 'k 'v. MapKeyType 'k => map 'k 'v*)
-(*val emptyBy : forall 'k 'v. ('k -> 'k -> Basic_classes.ordering) -> map 'k 'v*)
+(*val emptyBy : forall 'k 'v. ('k -> 'k -> ordering) -> map 'k 'v*)
 
 
 (* -------------------------------------------------------------------------- *)
@@ -67,9 +67,9 @@ end*)
 (* lookup                                                                     *)
 (* -------------------------------------------------------------------------- *)
 
-(*val lookupBy : forall 'k 'v. ('k -> 'k -> Basic_classes.ordering) -> 'k -> map 'k 'v -> Maybe.maybe 'v*)
+(*val lookupBy : forall 'k 'v. ('k -> 'k -> ordering) -> 'k -> map 'k 'v -> maybe 'v*)
 
-(*val lookup          : forall 'k 'v. MapKeyType 'k => 'k -> map 'k 'v -> Maybe.maybe 'v*)
+(*val lookup          : forall 'k 'v. MapKeyType 'k => 'k -> map 'k 'v -> maybe 'v*)
 
 (* -------------------------------------------------------------------------- *)
 (* findWithDefault                                                            *)
@@ -90,15 +90,15 @@ end*)
 (* -------------------------------------------------------------------------- *)
 
 (*val toSet : forall 'k 'v. MapKeyType 'k, SetType 'k, SetType 'v => map 'k 'v -> set ('k * 'v)*) 
-(*val toSetBy : forall 'k 'v. (('k * 'v) -> ('k * 'v) -> Basic_classes.ordering) -> map 'k 'v -> set ('k * 'v)*)
+(*val toSetBy : forall 'k 'v. (('k * 'v) -> ('k * 'v) -> ordering) -> map 'k 'v -> set ('k * 'v)*)
 
 
-(*val domainBy : forall 'k 'v. ('k -> 'k -> Basic_classes.ordering) -> map 'k 'v -> set 'k*)
+(*val domainBy : forall 'k 'v. ('k -> 'k -> ordering) -> map 'k 'v -> set 'k*)
 (*val domain : forall 'k 'v. MapKeyType 'k, SetType 'k => map 'k 'v -> set 'k*)
 
 
 (*val range : forall 'k 'v. MapKeyType 'k, SetType 'v => map 'k 'v -> set 'v*)
-(*val rangeBy : forall 'k 'v. ('v -> 'v -> Basic_classes.ordering) -> map 'k 'v -> set 'v*)
+(*val rangeBy : forall 'k 'v. ('v -> 'v -> ordering) -> map 'k 'v -> set 'v*)
 
 
 (* -------------------------------------------------------------------------- *)
@@ -122,7 +122,7 @@ end*)
 (* -------------------------------------------------------------------------- *)
 (* Set-like operations.                                                       *)
 (* -------------------------------------------------------------------------- *)
-(*val deleteBy         : forall 'k 'v. ('k -> 'k -> Basic_classes.ordering) -> 'k -> map 'k 'v -> map 'k 'v*)
+(*val deleteBy         : forall 'k 'v. ('k -> 'k -> ordering) -> 'k -> map 'k 'v -> map 'k 'v*)
 (*val delete           : forall 'k 'v. MapKeyType 'k => 'k -> map 'k 'v -> map 'k 'v*)
 (*val deleteSwap      : forall 'k 'v. MapKeyType 'k => map 'k 'v -> 'k -> map 'k 'v*)
 
@@ -146,8 +146,8 @@ end*)
 
 (* instance of SetType *)
 val _ = Define `
- ((map_setElemCompare:(('d#'c)set ->('b#'a)set -> 'e) ->('d,'c)fmap ->('b,'a)fmap -> 'e) cmp x y=  
- (cmp (FMAP_TO_SET x) (FMAP_TO_SET y)))`;
+ ((map_setElemCompare:(('d#'c)set ->('b#'a)set -> 'e) ->('d,'c)fmap ->('b,'a)fmap -> 'e) cmp x y=
+   (cmp (FMAP_TO_SET x) (FMAP_TO_SET y)))`;
 
 val _ = export_theory()
 

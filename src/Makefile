@@ -102,7 +102,7 @@ isail: ast.ml bytecode.ml share_directory.ml
 
 sail.native: sail
 
-sail.byte:
+sail.byte: ast.ml bytecode.ml share_directory.ml
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
 interpreter: lem_interp/interp_ast.lem

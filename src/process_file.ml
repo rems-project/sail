@@ -51,9 +51,6 @@
 open PPrint
 open Pretty_print_common
 
-let opt_lem_sequential = ref false
-let opt_lem_mwords = ref false
-
 type out_type =
   | Lem_ast_out
   | Lem_out of string list
@@ -221,7 +218,7 @@ let load_file_no_check order f = convert_ast order (preprocess_ast (parse_file f
 
 let load_file order env f =
   let ast = convert_ast order (preprocess_ast (parse_file f)) in
-  Type_check.check env ast
+  Type_error.check env ast
 
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
@@ -230,7 +227,7 @@ let opt_dno_cast = ref false
 
 let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
-  let ast, env = Type_check.check env defs in
+  let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
@@ -282,10 +279,7 @@ let output_lem filename libs defs =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let types_module = (filename ^ "_types") in
-  let monad_modules = ["Prompt_monad"; "Prompt"; "State"] in
-    (* if !Pretty_print_lem.opt_sequential
-    then ["State_monad"; "State"]
-    else ["Prompt_monad"; "Prompt"] in *)
+  let monad_modules = ["Prompt_monad"; "Prompt"] in
   let operators_module =
     if !Pretty_print_lem.opt_mwords
     then "Sail_operators_mwords"
@@ -399,13 +393,17 @@ let rewrite_step defs (name,rewriter) =
 let rewrite rewriters defs =
   try List.fold_left rewrite_step defs rewriters with
   | Type_check.Type_error (l, err) ->
-     raise (Reporting_basic.err_typ l (Type_check.string_of_type_error err))
+     raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !Pretty_print_lem.opt_mwords x)]
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_coq = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
-let rewrite_ast_c = rewrite Rewrites.rewrite_defs_c
+let rewrite_ast_c ast =
+  ast
+  |> rewrite Rewrites.rewrite_defs_c
+  |> Constant_fold.rewrite_constant_function_calls
+
 let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
 let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check

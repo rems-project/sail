@@ -50,6 +50,8 @@
 
 open Process_file
 
+module Big_int = Nat_big_num
+
 let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
 let opt_interactive = ref false
@@ -60,6 +62,7 @@ let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
+let opt_ocaml_nobuild = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
@@ -88,6 +91,9 @@ let options = Arg.align ([
   ( "-ocaml",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
+  ( "-ocaml-nobuild",
+    Arg.Set Ocaml_backend.opt_ocaml_nobuild,
+    " do not build generated ocaml");
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
@@ -103,10 +109,16 @@ let options = Arg.align ([
   ( "-O",
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
-               (* Arg.Set C_backend.optimize_enum_undefined; *)
-               (* Arg.Set C_backend.optimize_struct_undefined; *)
+               Arg.Set Initial_check.opt_fast_undefined;
+               Arg.Set Type_check.opt_no_effects;
                Arg.Set C_backend.optimize_struct_updates ],
     " turn on optimizations for C compilation");
+  ( "-Oz3",
+    Arg.Set C_backend.optimize_z3,
+    " use z3 analysis for optimization (experimental)");
+  ( "-Oconstant_fold",
+    Arg.Set Constant_fold.optimize_constant_fold,
+    " Apply constant folding optimizations");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
     " output a Lem AST representation of the input");
@@ -128,6 +140,9 @@ let options = Arg.align ([
   ( "-coq_lib",
     Arg.String (fun l -> opt_libs_coq := l::!opt_libs_coq),
     "<filename> provide additional library to open in Coq output");
+  ( "-dcoq_undef_axioms",
+    Arg.Set Pretty_print_coq.opt_undef_axioms,
+    "Generate axioms for functions that are declared but not defined");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
     " set a custom prefix for generated latex command (default sail)");
@@ -275,6 +290,8 @@ let main() =
          let open Elf_loader in
          let chan = open_out out in
          load_elf ~writer:(write_file chan) elf;
+         output_string chan "elf_entry\n";
+         output_string chan (Big_int.to_string !opt_elf_entry ^ "\n");
          close_out chan;
          exit 0
        end

@@ -14,8 +14,8 @@ val _ = new_theory "state_monad"
 
 (* 'a is result type *)
 
-val _ = type_abbrev( "memstate" , ``: (int, sail_values$memory_byte) fmap``);
-val _ = type_abbrev( "tagstate" , ``: (int, sail_values$bitU) fmap``);
+val _ = type_abbrev( "memstate" , ``: (int, memory_byte) fmap``);
+val _ = type_abbrev( "tagstate" , ``: (int, bitU) fmap``);
 (* type regstate = map string (vector bitU) *)
 
 val _ = Hol_datatype `
@@ -23,7 +23,7 @@ val _ = Hol_datatype `
   <| regstate : 'regs;
      memstate : memstate;
      tagstate : tagstate;
-     write_ea :  (sail_instr_kinds$write_kind # int # int)option;
+     write_ea :  (write_kind # int # int)option;
      last_exclusive_operation_was_load : bool;
      (* Random bool generator for use as an undefined bit oracle *)
      next_bool : num -> (bool # num);
@@ -32,8 +32,8 @@ val _ = Hol_datatype `
 
 (*val init_state : forall 'regs. 'regs -> (nat -> (bool* nat)) -> nat -> sequential_state 'regs*)
 val _ = Define `
- ((init_state:'regs ->(num -> bool#num) -> num -> 'regs sequential_state) regs o1 s=  
- (<| regstate := regs;
+ ((init_state:'regs ->(num -> bool#num) -> num -> 'regs sequential_state) regs o1 s=
+   (<| regstate := regs;
      memstate := FEMPTY;
      tagstate := FEMPTY;
      write_ea := NONE;
@@ -65,8 +65,8 @@ val _ = Define `
 
 (*val bindS : forall 'regs 'a 'b 'e. monadS 'regs 'a 'e -> ('a -> monadS 'regs 'b 'e) -> monadS 'regs 'b 'e*)
 val _ = Define `
- ((bindS:('regs sequential_state ->(('a,'e)result#'regs sequential_state)set) ->('a -> 'regs sequential_state ->(('b,'e)result#'regs sequential_state)set) -> 'regs sequential_state ->(('b,'e)result#'regs sequential_state)set) m f (s : 'regs sequential_state)=  
- (BIGUNION (IMAGE (\x .  
+ ((bindS:('regs sequential_state ->(('a,'e)result#'regs sequential_state)set) ->('a -> 'regs sequential_state ->(('b,'e)result#'regs sequential_state)set) -> 'regs sequential_state ->(('b,'e)result#'regs sequential_state)set) m f (s : 'regs sequential_state)=
+   (BIGUNION (IMAGE (\x .  
   (case x of   (Value a, s') => f a s' | (Ex e, s') => {(Ex e, s')} )) (m s))))`;
 
 
@@ -98,10 +98,10 @@ val _ = Define `
 
 (*val undefined_boolS : forall 'regval 'regs 'a 'e. unit -> monadS 'regs bool 'e*)
 val _ = Define `
- ((undefined_boolS:unit -> 'regs sequential_state ->(((bool),'e)result#'regs sequential_state)set) () =  (bindS  
-(readS (\ s .  s.next_bool (s.seed))) (\ (b, seed) .  seqS  
-(updateS (\ s .  ( s with<| seed := seed |>)))  
-(returnS b))))`;
+ ((undefined_boolS:unit -> 'regs sequential_state ->(((bool),'e)result#'regs sequential_state)set) () =  (bindS
+  (readS (\ s .  s.next_bool (s.seed))) (\ (b, seed) .  seqS
+  (updateS (\ s .  ( s with<| seed := seed |>)))
+  (returnS b))))`;
 
 
 (*val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e*)
@@ -116,8 +116,8 @@ val _ = Define `
 
 (*val try_catchS : forall 'regs 'a 'e1 'e2. monadS 'regs 'a 'e1 -> ('e1 -> monadS 'regs 'a 'e2) ->  monadS 'regs 'a 'e2*)
 val _ = Define `
- ((try_catchS:('regs sequential_state ->(('a,'e1)result#'regs sequential_state)set) ->('e1 -> 'regs sequential_state ->(('a,'e2)result#'regs sequential_state)set) -> 'regs sequential_state ->(('a,'e2)result#'regs sequential_state)set) m h s=  
- (BIGUNION (IMAGE (\x .  
+ ((try_catchS:('regs sequential_state ->(('a,'e1)result#'regs sequential_state)set) ->('e1 -> 'regs sequential_state ->(('a,'e2)result#'regs sequential_state)set) -> 'regs sequential_state ->(('a,'e2)result#'regs sequential_state)set) m h s=
+   (BIGUNION (IMAGE (\x .  
   (case x of
         (Value a, s') => returnS a s'
     | (Ex (Throw e), s') => h e s'
@@ -142,8 +142,8 @@ val _ = Define `
 
 (*val catch_early_returnS : forall 'regs 'a 'e. monadRS 'regs 'a 'a 'e -> monadS 'regs 'a 'e*)
 val _ = Define `
- ((catch_early_returnS:('regs sequential_state ->(('a,(('a,'e)sum))result#'regs sequential_state)set) -> 'regs sequential_state ->(('a,'e)result#'regs sequential_state)set) m=  
- (try_catchS m
+ ((catch_early_returnS:('regs sequential_state ->(('a,(('a,'e)sum))result#'regs sequential_state)set) -> 'regs sequential_state ->(('a,'e)result#'regs sequential_state)set) m=
+   (try_catchS m
     (\x .  (case x of   INL a => returnS a | INR e => throwS e ))))`;
 
 
@@ -156,30 +156,30 @@ val _ = Define `
 (* Catch exceptions in the presence of early returns *)
 (*val try_catchRS : forall 'regs 'a 'r 'e1 'e2. monadRS 'regs 'a 'r 'e1 -> ('e1 -> monadRS 'regs 'a 'r 'e2) ->  monadRS 'regs 'a 'r 'e2*)
 val _ = Define `
- ((try_catchRS:('regs sequential_state ->(('a,(('r,'e1)sum))result#'regs sequential_state)set) ->('e1 -> 'regs sequential_state ->(('a,(('r,'e2)sum))result#'regs sequential_state)set) -> 'regs sequential_state ->(('a,(('r,'e2)sum))result#'regs sequential_state)set) m h=  
- (try_catchS m
+ ((try_catchRS:('regs sequential_state ->(('a,(('r,'e1)sum))result#'regs sequential_state)set) ->('e1 -> 'regs sequential_state ->(('a,(('r,'e2)sum))result#'regs sequential_state)set) -> 'regs sequential_state ->(('a,(('r,'e2)sum))result#'regs sequential_state)set) m h=
+   (try_catchS m
     (\x .  (case x of   INL r => throwS (INL r) | INR e => h e ))))`;
 
 
-(*val maybe_failS : forall 'regs 'a 'e. string -> Maybe.maybe 'a -> monadS 'regs 'a 'e*)
+(*val maybe_failS : forall 'regs 'a 'e. string -> maybe 'a -> monadS 'regs 'a 'e*)
 val _ = Define `
  ((maybe_failS:string -> 'a option -> 'regs sequential_state ->(('a,'e)result#'regs sequential_state)set) msg= 
   (\x .  (case x of   SOME a => returnS a | NONE => failS msg )))`;
 
 
-(*val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs Sail_values.bitU 'e*)
+(*val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e*)
 val _ = Define `
- ((read_tagS:'a sail_values$Bitvector_class -> 'a ->('regs,(sail_values$bitU),'e)monadS)dict_Sail_values_Bitvector_a addr=  (bindS  
-(maybe_failS "unsigned" (
+ ((read_tagS:'a Bitvector_class -> 'a ->('regs,(bitU),'e)monadS)dict_Sail_values_Bitvector_a addr=  (bindS
+  (maybe_failS "unsigned" (
   dict_Sail_values_Bitvector_a.unsigned_method addr)) (\ addr . 
   readS (\ s .  option_CASE (FLOOKUP s.tagstate addr) B0 I))))`;
 
 
 (* Read bytes from memory and return in little endian order *)
-(*val read_mem_bytesS : forall 'regs 'e 'a. Bitvector 'a => Sail_instr_kinds.read_kind -> 'a -> nat -> monadS 'regs (list Sail_values.memory_byte) 'e*)
+(*val read_mem_bytesS : forall 'regs 'e 'a. Bitvector 'a => read_kind -> 'a -> nat -> monadS 'regs (list memory_byte) 'e*)
 val _ = Define `
- ((read_mem_bytesS:'a sail_values$Bitvector_class -> sail_instr_kinds$read_kind -> 'a -> num ->('regs,((sail_values$memory_byte)list),'e)monadS)dict_Sail_values_Bitvector_a read_kind addr sz=  (bindS  
-(maybe_failS "unsigned" (
+ ((read_mem_bytesS:'a Bitvector_class -> read_kind -> 'a -> num ->('regs,((memory_byte)list),'e)monadS)dict_Sail_values_Bitvector_a read_kind addr sz=  (bindS
+  (maybe_failS "unsigned" (
   dict_Sail_values_Bitvector_a.unsigned_method addr)) (\ addr . 
   let sz = (int_of_num sz) in
   let addrs = (index_list addr ((addr+sz)-( 1 : int))(( 1 : int))) in  
@@ -196,36 +196,36 @@ val _ = Define `
            )))))`;
 
 
-(*val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => Sail_instr_kinds.read_kind -> 'a -> Num.integer -> monadS 'regs 'b 'e*)
+(*val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e*)
 val _ = Define `
- ((read_memS:'a sail_values$Bitvector_class -> 'b sail_values$Bitvector_class -> sail_instr_kinds$read_kind -> 'a -> int ->('regs,'b,'e)monadS)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b rk a sz=  (bindS  
-(read_mem_bytesS dict_Sail_values_Bitvector_a rk a (nat_of_int sz)) (\ bytes . 
+ ((read_memS:'a Bitvector_class -> 'b Bitvector_class -> read_kind -> 'a -> int ->('regs,'b,'e)monadS)dict_Sail_values_Bitvector_a dict_Sail_values_Bitvector_b rk a sz=  (bindS
+  (read_mem_bytesS dict_Sail_values_Bitvector_a rk a (nat_of_int sz)) (\ bytes . 
   maybe_failS "bits_of_mem_bytes" (
   dict_Sail_values_Bitvector_b.of_bits_method (bits_of_mem_bytes bytes)))))`;
 
 
 (*val excl_resultS : forall 'regs 'e. unit -> monadS 'regs bool 'e*)
 val _ = Define `
- ((excl_resultS:unit -> 'regs sequential_state ->(((bool),'e)result#'regs sequential_state)set) () =  (bindS  
-(readS (\ s .  s.last_exclusive_operation_was_load)) (\ excl_load .  seqS  
-(updateS (\ s .  ( s with<| last_exclusive_operation_was_load := F |>)))  
-(chooseS (if excl_load then {F; T} else {F})))))`;
+ ((excl_resultS:unit -> 'regs sequential_state ->(((bool),'e)result#'regs sequential_state)set) () =  (bindS
+  (readS (\ s .  s.last_exclusive_operation_was_load)) (\ excl_load .  seqS
+  (updateS (\ s .  ( s with<| last_exclusive_operation_was_load := F |>)))
+  (chooseS (if excl_load then {F; T} else {F})))))`;
 
 
-(*val write_mem_eaS : forall 'regs 'e 'a. Bitvector 'a => Sail_instr_kinds.write_kind -> 'a -> nat -> monadS 'regs unit 'e*)
+(*val write_mem_eaS : forall 'regs 'e 'a. Bitvector 'a => write_kind -> 'a -> nat -> monadS 'regs unit 'e*)
 val _ = Define `
- ((write_mem_eaS:'a sail_values$Bitvector_class -> sail_instr_kinds$write_kind -> 'a -> num ->('regs,(unit),'e)monadS)dict_Sail_values_Bitvector_a write_kind addr sz=  (bindS  
-(maybe_failS "unsigned" (
+ ((write_mem_eaS:'a Bitvector_class -> write_kind -> 'a -> num ->('regs,(unit),'e)monadS)dict_Sail_values_Bitvector_a write_kind addr sz=  (bindS
+  (maybe_failS "unsigned" (
   dict_Sail_values_Bitvector_a.unsigned_method addr)) (\ addr . 
   let sz = (int_of_num sz) in
   updateS (\ s .  ( s with<| write_ea := (SOME (write_kind, addr, sz)) |>)))))`;
 
 
 (* Write little-endian list of bytes to previously announced address *)
-(*val write_mem_bytesS : forall 'regs 'e. list Sail_values.memory_byte -> monadS 'regs bool 'e*)
+(*val write_mem_bytesS : forall 'regs 'e. list memory_byte -> monadS 'regs bool 'e*)
 val _ = Define `
- ((write_mem_bytesS:((sail_values$bitU)list)list -> 'regs sequential_state ->(((bool),'e)result#'regs sequential_state)set) v=  (bindS  
-(readS (\ s .  s.write_ea)) (\x .  
+ ((write_mem_bytesS:((bitU)list)list -> 'regs sequential_state ->(((bool),'e)result#'regs sequential_state)set) v=  (bindS
+  (readS (\ s .  s.write_ea)) (\x .  
   (case x of
         NONE => failS "write ea has not been announced yet"
     | SOME (_, addr, sz) =>
@@ -245,25 +245,25 @@ val _ = Define `
 
 (*val write_mem_valS : forall 'regs 'e 'a. Bitvector 'a => 'a -> monadS 'regs bool 'e*)
 val _ = Define `
- ((write_mem_valS:'a sail_values$Bitvector_class -> 'a ->('regs,(bool),'e)monadS)dict_Sail_values_Bitvector_a v=  ((case mem_bytes_of_bits 
+ ((write_mem_valS:'a Bitvector_class -> 'a ->('regs,(bool),'e)monadS)dict_Sail_values_Bitvector_a v=  ((case mem_bytes_of_bits 
   dict_Sail_values_Bitvector_a v of
     SOME v => write_mem_bytesS v
   | NONE => failS "write_mem_val"
 )))`;
 
 
-(*val write_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> Sail_values.bitU -> monadS 'regs bool 'e*)
+(*val write_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> bitU -> monadS 'regs bool 'e*)
 val _ = Define `
- ((write_tagS:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU ->('regs,(bool),'e)monadS)dict_Sail_values_Bitvector_a addr t=  (bindS   
-(maybe_failS "unsigned" (
-  dict_Sail_values_Bitvector_a.unsigned_method addr)) (\ addr .  seqS   
-(updateS (\ s .  ( s with<| tagstate := (s.tagstate |+ (addr, t)) |>)))   
-(returnS T))))`;
+ ((write_tagS:'a Bitvector_class -> 'a -> bitU ->('regs,(bool),'e)monadS)dict_Sail_values_Bitvector_a addr t=  (bindS
+   (maybe_failS "unsigned" (
+  dict_Sail_values_Bitvector_a.unsigned_method addr)) (\ addr .  seqS
+   (updateS (\ s .  ( s with<| tagstate := (s.tagstate |+ (addr, t)) |>)))
+   (returnS T))))`;
 
 
-(*val read_regS : forall 'regs 'rv 'a 'e. Sail_values.register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e*)
+(*val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e*)
 val _ = Define `
- ((read_regS:('regs,'rv,'a)sail_values$register_ref -> 'regs sequential_state ->(('a,'e)result#'regs sequential_state)set) reg=  (readS (\ s .  reg.read_from s.regstate)))`;
+ ((read_regS:('regs,'rv,'a)register_ref -> 'regs sequential_state ->(('a,'e)result#'regs sequential_state)set) reg=  (readS (\ s .  reg.read_from s.regstate)))`;
 
 
 (* TODO
@@ -281,10 +281,10 @@ let read_reg_bitfield reg regfield =
   read_reg_bit reg i *)
 
 (*val read_regvalS : forall 'regs 'rv 'e.
-  Sail_values.register_accessors 'regs 'rv -> string -> monadS 'regs 'rv 'e*)
+  register_accessors 'regs 'rv -> string -> monadS 'regs 'rv 'e*)
 val _ = Define `
- ((read_regvalS:(string -> 'regs -> 'rv option)#(string -> 'rv -> 'regs -> 'regs option) -> string -> 'regs sequential_state ->(('rv,'e)result#'regs sequential_state)set) (read, _) reg=  (bindS  
-(readS (\ s .  read reg s.regstate)) (\x .  
+ ((read_regvalS:(string -> 'regs -> 'rv option)#(string -> 'rv -> 'regs -> 'regs option) -> string -> 'regs sequential_state ->(('rv,'e)result#'regs sequential_state)set) (read, _) reg=  (bindS
+  (readS (\ s .  read reg s.regstate)) (\x .  
   (case x of
         SOME v => returnS v
     | NONE => failS ( STRCAT "read_regvalS " reg)
@@ -292,20 +292,20 @@ val _ = Define `
 
 
 (*val write_regvalS : forall 'regs 'rv 'e.
-  Sail_values.register_accessors 'regs 'rv -> string -> 'rv -> monadS 'regs unit 'e*)
+  register_accessors 'regs 'rv -> string -> 'rv -> monadS 'regs unit 'e*)
 val _ = Define `
- ((write_regvalS:(string -> 'regs -> 'rv option)#(string -> 'rv -> 'regs -> 'regs option) -> string -> 'rv -> 'regs sequential_state ->(((unit),'e)result#'regs sequential_state)set) (_, write) reg v=  (bindS  
-(readS (\ s .  write reg v s.regstate)) (\x .  
+ ((write_regvalS:(string -> 'regs -> 'rv option)#(string -> 'rv -> 'regs -> 'regs option) -> string -> 'rv -> 'regs sequential_state ->(((unit),'e)result#'regs sequential_state)set) (_, write) reg v=  (bindS
+  (readS (\ s .  write reg v s.regstate)) (\x .  
   (case x of
         SOME rs' => updateS (\ s .  ( s with<| regstate := rs' |>))
     | NONE => failS ( STRCAT "write_regvalS " reg)
   ))))`;
 
 
-(*val write_regS : forall 'regs 'rv 'a 'e. Sail_values.register_ref 'regs 'rv 'a -> 'a -> monadS 'regs unit 'e*)
+(*val write_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> 'a -> monadS 'regs unit 'e*)
 val _ = Define `
- ((write_regS:('regs,'rv,'a)sail_values$register_ref -> 'a -> 'regs sequential_state ->(((unit),'e)result#'regs sequential_state)set) reg v=  
- (updateS (\ s .  ( s with<| regstate := (reg.write_to v s.regstate) |>))))`;
+ ((write_regS:('regs,'rv,'a)register_ref -> 'a -> 'regs sequential_state ->(((unit),'e)result#'regs sequential_state)set) reg v=
+   (updateS (\ s .  ( s with<| regstate := (reg.write_to v s.regstate) |>))))`;
 
 
 (* TODO
@@ -344,5 +344,24 @@ let update_reg_field_bit regfield i reg_val bit =
   let new_field_value = set_bit (regfield.field_is_inc) current_field_value i (to_bitU bit) in
   regfield.set_field reg_val new_field_value
 let write_reg_field_bit reg regfield i = update_reg reg (update_reg_field_bit regfield i)*)
+
+(* TODO Add Show typeclass for value and exception type *)
+(*val show_result : forall 'a 'e. result 'a 'e -> string*)
+val _ = Define `
+ ((show_result:('a,'e)result -> string)= 
+  (\x .  (case x of
+               Value _ => "Value ()"
+           | Ex (Failure msg) => STRCAT "Failure " msg
+           | Ex (Throw _) => "Throw"
+         )))`;
+
+
+(*val prerr_results : forall 'a 'e 's. SetType 's => set (result 'a 'e * 's) -> unit*)
+val _ = Define `
+ ((prerr_results:(('a,'e)result#'s)set -> unit) rs=
+   (let _ = (IMAGE (\p .  
+  (case (p ) of ( (r, _) ) => let _ = (prerr_endline (show_result r)) in ()  )) rs) in
+  () ))`;
+
 val _ = export_theory()
 

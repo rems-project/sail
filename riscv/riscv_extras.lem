@@ -44,12 +44,41 @@ let read_ram addrsize size hexRAM address =
 
 let speculate_conditional_success () = excl_result ()
 
-val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> bitvector 'a
-let get_slice_int len n lo =
-  (* TODO: Is this the intended behaviour? *)
-  let hi = lo + len - 1 in
-  let bits = bits_of_int (hi + 1) n in
-  of_bits_failwith (subrange_list false bits hi lo)
+val plat_ram_base : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_ram_base () = wordFromInteger 0
+declare ocaml target_rep function plat_ram_base = `Platform.dram_base`
+
+val plat_ram_size : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_ram_size () = wordFromInteger 0
+declare ocaml target_rep function plat_ram_size = `Platform.dram_size`
+
+val plat_rom_base : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_rom_base () = wordFromInteger 0
+declare ocaml target_rep function plat_rom_base = `Platform.rom_base`
+
+val plat_rom_size : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_rom_size () = wordFromInteger 0
+declare ocaml target_rep function plat_rom_size = `Platform.rom_size`
+
+val plat_clint_base : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_clint_base () = wordFromInteger 0
+declare ocaml target_rep function plat_clint_base = `Platform.clint_base`
+
+val plat_clint_size : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_clint_size () = wordFromInteger 0
+declare ocaml target_rep function plat_clint_size = `Platform.clint_size`
+
+val plat_htif_tohost : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_htif_tohost () = wordFromInteger 0
+declare ocaml target_rep function plat_htif_tohost = `Platform.htif_tohost`
+
+val plat_term_write : forall 'a. Size 'a => bitvector 'a -> unit
+let plat_term_write _ = ()
+declare ocaml target_rep function plat_term_write = `Platform.term_write`
+
+val plat_term_read : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_term_read () = wordFromInteger 0
+declare ocaml target_rep function plat_term_read = `Platform.term_read`
 
 val shift_bits_right : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
 let shift_bits_right v m = shiftr v (uint m)
@@ -59,5 +88,5 @@ let shift_bits_left v m = shiftl v (uint m)
 val print_string : string -> string -> unit
 let print_string msg s = prerr_endline (msg ^ s)
 
-val print_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
-let print_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))
+val prerr_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
+let prerr_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))

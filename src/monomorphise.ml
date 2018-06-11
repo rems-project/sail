@@ -735,7 +735,7 @@ let reduce_cast typ exp l annot =
   let typ' = Env.base_typ_of env typ in
   match exp, destruct_exist env typ' with
   | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nc_env = Env.add_typ_var kid BK_int env in
+     let nc_env = Env.add_typ_var l kid BK_int env in
      let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
@@ -3729,6 +3729,7 @@ let rewrite_app env typ (id,args) =
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
     let is_zeros = is_id env (Id "Zeros") in
+    let is_ones = is_id env (Id "Ones") in
     match args with
     | (E_aux (E_app (append1,
                      [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
@@ -3757,7 +3758,8 @@ let rewrite_app env typ (id,args) =
        E_app (mk_id "zext_slice", [vector1; start1; length1])
 
     | [E_aux (E_app (ones, [len1]),_);
-       _ (* unnecessary ZeroExtend length *)] ->
+       _ (* unnecessary ZeroExtend length *)]
+        when is_ones ones ->
        E_app (mk_id "zext_ones", [len1])
 
     | _ -> E_app (id,args)
@@ -3975,6 +3977,9 @@ let add_bitvector_casts (Defs defs) =
       end
       | E_return e' ->
          E_aux (E_return (make_bitvector_cast_exp top_env quant_kids (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
+      (* TODO: (env_of_annot ann) isn't suitable, because it contains
+         constraints revealing the case splits involved; needs a more
+         subtle approach *)
       | E_assign (LEXP_aux (lexp,lexp_annot),e') ->
          E_aux (E_assign (LEXP_aux (lexp,lexp_annot),
                           make_bitvector_cast_exp (env_of_annot ann) quant_kids (fill_in_type (env_of e') (typ_of e'))
@@ -3987,7 +3992,8 @@ let add_bitvector_casts (Defs defs) =
         e_aux = rewrite_aux } exp
   in
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann)) =
-    let (tq,typ) = Env.get_val_spec_orig id (env_of_annot fcl_ann) in
+    let fcl_env = env_of_annot fcl_ann in
+    let (tq,typ) = Env.get_val_spec_orig id fcl_env in
     let quant_kids = List.map kopt_kid (quant_kopts tq) in
     let ret_typ =
       match typ with
@@ -3998,11 +4004,11 @@ let add_bitvector_casts (Defs defs) =
                       " is not a function type"))
     in
     let pat,guard,body,annot = destruct_pexp pexp in
-    let env = env_of body in
-    let body = rewrite_body id quant_kids env ret_typ body in
+    let body_env = env_of body in
+    let body = rewrite_body id quant_kids body_env ret_typ body in
     (* Also add a cast around the entire function clause body, if necessary *)
     let body =
-      make_bitvector_cast_exp env quant_kids (fill_in_type (env_of body) (typ_of body)) ret_typ body
+      make_bitvector_cast_exp fcl_env quant_kids (fill_in_type body_env (typ_of body)) ret_typ body
     in
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)
@@ -4113,7 +4119,7 @@ let rewrite_toplevel_nexps (Defs defs) =
     | TypQ_aux (TypQ_no_forall,_) -> None
     | TypQ_aux (TypQ_tq qs, tq_l) ->
        let env = env_of_annot ann in
-       let env = add_typquant tqs env in
+       let env = add_typquant tq_l tqs env in
        let nexp_map, typ = rewrite_typ_in_spec env [] typ in
        match nexp_map with
        | [] -> None
@@ -4198,7 +4204,7 @@ type options = {
 let recheck defs =
   let w = !Util.opt_warnings in
   let () = Util.opt_warnings := false in
-  let r = Type_check.check (Type_check.Env.no_casts Type_check.initial_env) defs in
+  let r = Type_error.check (Type_check.Env.no_casts Type_check.initial_env) defs in
   let () = Util.opt_warnings := w in
   r
 

@@ -1,4 +1,4 @@
-/sail
+# global things
 
 *~
 .#*
@@ -6,16 +6,39 @@
 
 *.native
 *.byte
+
 a.out
 
 _build/
 _sbuild/
+
+# HOL4
+
+.HOLMK
+.hollogs
+*Theory.dat
+*Theory.sig
+*Theory.sml
+*Theory.ui
+*Theory.uo
+lib/hol/sail-heap
+
+# Coq
+
+*.vo
+*.glob
+.*.aux
+
+# location specific things
+
+/sail
 
 /src/sail.docdir
 /src/ast.lem
 /src/ast.ml
 /src/bytecode.lem
 /src/bytecode.ml
+/src/share_directory.ml
 
 /test/typecheck/rtpass*/
 /test/typecheck/tests.xml
@@ -63,6 +86,7 @@ _sbuild/
 /riscv/riscv.lem
 /riscv/riscv_types.lem
 /riscv/riscv
+/riscv/platform
 
 /x86/x86.lem
 /x86/x86.ml

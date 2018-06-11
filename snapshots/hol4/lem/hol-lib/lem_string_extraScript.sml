@@ -35,8 +35,8 @@ val _ = new_theory "lem_string_extra"
 
 (*val stringFromNatHelper : nat -> list char -> list char*)
  val stringFromNatHelper_defn = Hol_defn "stringFromNatHelper" `
- ((stringFromNatHelper:num ->(char)list ->(char)list) n acc=  
- (if n =( 0 : num) then
+ ((stringFromNatHelper:num ->(char)list ->(char)list) n acc=
+   (if n =( 0 : num) then
     acc
   else
     stringFromNatHelper (n DIV( 10 : num)) (CHR ((n MOD( 10 : num)) +( 48 : num)) :: acc)))`;
@@ -45,32 +45,32 @@ val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn
 
 (*val stringFromNat : nat -> string*)
 
-(*val stringFromNaturalHelper : Num.natural -> list char -> list char*)
+(*val stringFromNaturalHelper : natural -> list char -> list char*)
  val stringFromNaturalHelper_defn = Hol_defn "stringFromNaturalHelper" `
- ((stringFromNaturalHelper:num ->(char)list ->(char)list) n acc=  
- (if n =( 0:num) then
+ ((stringFromNaturalHelper:num ->(char)list ->(char)list) n acc=
+   (if n =( 0:num) then
     acc
   else
     stringFromNaturalHelper (n DIV( 10:num)) (CHR ((((n MOD( 10:num)) +( 48:num)):num)) :: acc)))`;
 
 val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn stringFromNaturalHelper_defn;
 
-(*val stringFromNatural : Num.natural -> string*)
+(*val stringFromNatural : natural -> string*)
 
-(*val stringFromInt : Num.int -> string*)
+(*val stringFromInt : int -> string*)
 val _ = Define `
- ((stringFromInt:int -> string) i=  
-  (if i <( 0 : int) then 
-     STRCAT"-" (num_to_dec_string (Num (ABS i)))
+ ((stringFromInt:int -> string) i= 
+   (if i <( 0 : int) then  
+    STRCAT"-" (num_to_dec_string (Num (ABS i)))
   else
     num_to_dec_string (Num (ABS i))))`;
 
 
-(*val stringFromInteger : Num.integer -> string*)
+(*val stringFromInteger : integer -> string*)
 val _ = Define `
- ((stringFromInteger:int -> string) i=  
-  (if i <( 0 : int) then 
-     STRCAT"-" (num_to_dec_string (Num (ABS i)))
+ ((stringFromInteger:int -> string) i= 
+   (if i <( 0 : int) then  
+    STRCAT"-" (num_to_dec_string (Num (ABS i)))
   else
     num_to_dec_string (Num (ABS i))))`;
 
@@ -84,20 +84,20 @@ val _ = Define `
 (*let nth s n=  List_extra.nth (toCharList s) n*)
 
 (*val stringConcat : list string -> string*)
-(*let stringConcat s= 
-  List.foldr (^) "" s*)
+(*let stringConcat s=
+   List.foldr (^) "" s*)
 
 (******************************************************************************)
 (* String comparison                                                          *)
 (******************************************************************************)
 
-(*val stringCompare : string -> string -> Basic_classes.ordering*)
+(*val stringCompare : string -> string -> ordering*)
 
 val _ = Define `
- ((stringLess:string -> string -> bool) x y=  (orderingIsLess (EQ)))`;
+ ((stringLess:string -> string -> bool) x y=  (orderingIsLess (EQUAL)))`;
 
 val _ = Define `
- ((stringLessEq:string -> string -> bool) x y=  (~ (orderingIsGreater (EQ))))`;
+ ((stringLessEq:string -> string -> bool) x y=  (~ (orderingIsGreater (EQUAL))))`;
 
 val _ = Define `
  ((stringGreater:string -> string -> bool) x y=  (stringLess y x))`;
@@ -107,9 +107,9 @@ val _ = Define `
 
 
 val _ = Define `
-((instance_Basic_classes_Ord_string_dict:(string)lem_basic_classes$Ord_class)= (<|
+((instance_Basic_classes_Ord_string_dict:(string)Ord_class)= (<|
 
-  compare_method := (\ x y. EQ);
+  compare_method := (\ x y. EQUAL);
 
   isLess_method := stringLess;
 

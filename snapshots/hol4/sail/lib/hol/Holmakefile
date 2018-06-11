@@ -1,8 +1,11 @@
-SCRIPTS = sail_instr_kindsScript.sml sail_valuesScript.sml sail_operatorsScript.sml \
+LEM_SCRIPTS = sail_instr_kindsScript.sml sail_valuesScript.sml sail_operatorsScript.sml \
   sail_operators_mwordsScript.sml sail_operators_bitlistsScript.sml \
   state_monadScript.sml stateScript.sml promptScript.sml prompt_monadScript.sml
 
-#EXTRA_CLEANS = $(SCRIPTS)
+LEM_CLEANS = $(LEM_SCRIPTS)
+
+SCRIPTS = $(LEM_SCRIPTS) \
+  sail_valuesAuxiliaryScript.sml stateAuxiliaryScript.sml
 
 THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))
 
@@ -13,14 +16,16 @@ INCLUDES = $(LEMDIR)
 all: $(THYS)
 .PHONY: all
 
+# EXTRA_CLEANS = $(LEM_CLEANS)
+
 ifdef POLY
 HOLHEAP = sail-heap
-#EXTRA_CLEANS = $(SCRIPTS) $(HOLHEAP) $(HOLHEAP).o
+# EXTRA_CLEANS = $(LEM_CLEANS) $(HOLHEAP) $(HOLHEAP).o
 EXTRA_CLEANS = $(HOLHEAP) $(HOLHEAP).o
 
 BASE_HEAP = $(LEMDIR)/lemheap
 
-$(HOLHEAP):
+$(HOLHEAP): $(BASE_HEAP)
 	$(protect $(HOLDIR)/bin/buildheap) -o $(HOLHEAP) -b $(BASE_HEAP)
 
 all: $(HOLHEAP)

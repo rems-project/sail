@@ -17,148 +17,153 @@ val _ = new_theory "sail_operators_bitlists"
 
 (* Specialisation of operators to bit lists *)
 
-(*val uint_maybe : list Sail_values.bitU -> Maybe.maybe Num.integer*)
+(*val uint_maybe : list bitU -> maybe integer*)
 val _ = Define `
- ((uint_maybe0:(sail_values$bitU)list ->(int)option) v=  (unsigned_of_bits (MAP (\ b. b) v)))`;
+ ((uint_maybe0:(bitU)list ->(int)option) v=  (unsigned_of_bits (MAP (\ b. b) v)))`;
 
 val _ = Define `
- ((uint_fail0:'a sail_values$Bitvector_class -> 'a -> 'b state_monad$sequential_state ->(((int),'c)state_monad$result#'b state_monad$sequential_state)set)dict_Sail_values_Bitvector_a v=  (state_monad$maybe_failS "uint" (
+ ((uint_fail0:'a Bitvector_class -> 'a -> 'b state_monad$sequential_state ->(((int),'c)state_monad$result#'b state_monad$sequential_state)set)dict_Sail_values_Bitvector_a v=  (state_monad$maybe_failS "uint" (
   dict_Sail_values_Bitvector_a.unsigned_method v)))`;
 
 val _ = Define `
- ((uint_oracle0:(sail_values$bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) v=  (state_monad$bindS  
-(state$bools_of_bits_oracleS v) (\ bs . 
+ ((uint_oracle0:(bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) v=  (state_monad$bindS
+  (state$bools_of_bits_oracleS v) (\ bs . 
   state_monad$returnS (int_of_bools F bs))))`;
 
 val _ = Define `
- ((uint:(sail_values$bitU)list -> int) v=  (maybe_failwith (uint_maybe0 v)))`;
+ ((uint:(bitU)list -> int) v=  (maybe_failwith (uint_maybe0 v)))`;
 
 
-(*val sint_maybe : list Sail_values.bitU -> Maybe.maybe Num.integer*)
+(*val sint_maybe : list bitU -> maybe integer*)
 val _ = Define `
- ((sint_maybe0:(sail_values$bitU)list ->(int)option) v=  (signed_of_bits (MAP (\ b. b) v)))`;
+ ((sint_maybe0:(bitU)list ->(int)option) v=  (signed_of_bits (MAP (\ b. b) v)))`;
 
 val _ = Define `
- ((sint_fail0:'a sail_values$Bitvector_class -> 'a -> 'b state_monad$sequential_state ->(((int),'c)state_monad$result#'b state_monad$sequential_state)set)dict_Sail_values_Bitvector_a v=  (state_monad$maybe_failS "sint" (
+ ((sint_fail0:'a Bitvector_class -> 'a -> 'b state_monad$sequential_state ->(((int),'c)state_monad$result#'b state_monad$sequential_state)set)dict_Sail_values_Bitvector_a v=  (state_monad$maybe_failS "sint" (
   dict_Sail_values_Bitvector_a.signed_method v)))`;
 
 val _ = Define `
- ((sint_oracle0:(sail_values$bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) v=  (state_monad$bindS  
-(state$bools_of_bits_oracleS v) (\ bs . 
+ ((sint_oracle0:(bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) v=  (state_monad$bindS
+  (state$bools_of_bits_oracleS v) (\ bs . 
   state_monad$returnS (int_of_bools T bs))))`;
 
 val _ = Define `
- ((sint:(sail_values$bitU)list -> int) v=  (maybe_failwith (sint_maybe0 v)))`;
+ ((sint:(bitU)list -> int) v=  (maybe_failwith (sint_maybe0 v)))`;
 
 
-(*val extz_vec : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val extz_vec : integer -> list bitU -> list bitU*)
 val _ = Define `
- ((extz_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list)= 
+ ((extz_vec0:int ->(bitU)list ->(bitU)list)= 
   (extz_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val exts_vec : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val exts_vec : integer -> list bitU -> list bitU*)
 val _ = Define `
- ((exts_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list)= 
+ ((exts_vec0:int ->(bitU)list ->(bitU)list)= 
   (exts_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val zero_extend : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
+(*val zero_extend : list bitU -> integer -> list bitU*)
 val _ = Define `
- ((zero_extend0:(sail_values$bitU)list -> int ->(sail_values$bitU)list) bits len=  (extz_bits len bits))`;
+ ((zero_extend0:(bitU)list -> int ->(bitU)list) bits len=  (extz_bits len bits))`;
 
 
-(*val sign_extend : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
+(*val sign_extend : list bitU -> integer -> list bitU*)
 val _ = Define `
- ((sign_extend0:(sail_values$bitU)list -> int ->(sail_values$bitU)list) bits len=  (exts_bits len bits))`;
+ ((sign_extend0:(bitU)list -> int ->(bitU)list) bits len=  (exts_bits len bits))`;
 
 
-(*val vector_truncate : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
+(*val zeros : integer -> list bitU*)
 val _ = Define `
- ((vector_truncate0:(sail_values$bitU)list -> int ->(sail_values$bitU)list) bs len=  (extz_bv 
+ ((zeros0:int ->(bitU)list) len=  (repeat [B0] len))`;
+
+
+(*val vector_truncate : list bitU -> integer -> list bitU*)
+val _ = Define `
+ ((vector_truncate0:(bitU)list -> int ->(bitU)list) bs len=  (extz_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) len bs))`;
 
 
-(*val vec_of_bits_maybe    : list Sail_values.bitU -> Maybe.maybe (list Sail_values.bitU)*)
-(*val vec_of_bits_fail     : forall 'rv 'e. list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
-(*val vec_of_bits_oracle   : forall 'rv 'e. list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
-(*val vec_of_bits_failwith : list Sail_values.bitU -> list Sail_values.bitU*)
-(*val vec_of_bits          : list Sail_values.bitU -> list Sail_values.bitU*)
+(*val vec_of_bits_maybe    : list bitU -> maybe (list bitU)*)
+(*val vec_of_bits_fail     : forall 'rv 'e. list bitU -> monad 'rv (list bitU) 'e*)
+(*val vec_of_bits_oracle   : forall 'rv 'e. list bitU -> monad 'rv (list bitU) 'e*)
+(*val vec_of_bits_failwith : list bitU -> list bitU*)
+(*val vec_of_bits          : list bitU -> list bitU*)
 
-(*val access_vec_inc : list Sail_values.bitU -> Num.integer -> Sail_values.bitU*)
+(*val access_vec_inc : list bitU -> integer -> bitU*)
 val _ = Define `
- ((access_vec_inc0:(sail_values$bitU)list -> int -> sail_values$bitU)= 
+ ((access_vec_inc0:(bitU)list -> int -> bitU)= 
   (access_bv_inc
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val access_vec_dec : list Sail_values.bitU -> Num.integer -> Sail_values.bitU*)
+(*val access_vec_dec : list bitU -> integer -> bitU*)
 val _ = Define `
- ((access_vec_dec0:(sail_values$bitU)list -> int -> sail_values$bitU)= 
+ ((access_vec_dec0:(bitU)list -> int -> bitU)= 
   (access_bv_dec
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val update_vec_inc : list Sail_values.bitU -> Num.integer -> Sail_values.bitU -> list Sail_values.bitU*)
+(*val update_vec_inc : list bitU -> integer -> bitU -> list bitU*)
 val _ = Define `
- ((update_vec_inc0:(sail_values$bitU)list -> int -> sail_values$bitU ->(sail_values$bitU)list)= 
+ ((update_vec_inc0:(bitU)list -> int -> bitU ->(bitU)list)= 
   (update_bv_inc
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((update_vec_inc_maybe0:(sail_values$bitU)list -> int -> sail_values$bitU ->((sail_values$bitU)list)option) v i b=  (SOME (update_vec_inc0 v i b)))`;
+ ((update_vec_inc_maybe0:(bitU)list -> int -> bitU ->((bitU)list)option) v i b=  (SOME (update_vec_inc0 v i b)))`;
 
 val _ = Define `
- ((update_vec_inc_fail0:(sail_values$bitU)list -> int -> sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_inc0 v i b)))`;
+ ((update_vec_inc_fail0:(bitU)list -> int -> bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_inc0 v i b)))`;
 
 val _ = Define `
- ((update_vec_inc_oracle0:(sail_values$bitU)list -> int -> sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_inc0 v i b)))`;
+ ((update_vec_inc_oracle0:(bitU)list -> int -> bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_inc0 v i b)))`;
 
 
-(*val update_vec_dec : list Sail_values.bitU -> Num.integer -> Sail_values.bitU -> list Sail_values.bitU*)
+(*val update_vec_dec : list bitU -> integer -> bitU -> list bitU*)
 val _ = Define `
- ((update_vec_dec0:(sail_values$bitU)list -> int -> sail_values$bitU ->(sail_values$bitU)list)= 
+ ((update_vec_dec0:(bitU)list -> int -> bitU ->(bitU)list)= 
   (update_bv_dec
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((update_vec_dec_maybe0:(sail_values$bitU)list -> int -> sail_values$bitU ->((sail_values$bitU)list)option) v i b=  (SOME (update_vec_dec0 v i b)))`;
+ ((update_vec_dec_maybe0:(bitU)list -> int -> bitU ->((bitU)list)option) v i b=  (SOME (update_vec_dec0 v i b)))`;
 
 val _ = Define `
- ((update_vec_dec_fail0:(sail_values$bitU)list -> int -> sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_dec0 v i b)))`;
+ ((update_vec_dec_fail0:(bitU)list -> int -> bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_dec0 v i b)))`;
 
 val _ = Define `
- ((update_vec_dec_oracle0:(sail_values$bitU)list -> int -> sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_dec0 v i b)))`;
+ ((update_vec_dec_oracle0:(bitU)list -> int -> bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) v i b=  (state_monad$returnS (update_vec_dec0 v i b)))`;
 
 
-(*val subrange_vec_inc : list Sail_values.bitU -> Num.integer -> Num.integer -> list Sail_values.bitU*)
+(*val subrange_vec_inc : list bitU -> integer -> integer -> list bitU*)
 val _ = Define `
- ((subrange_vec_inc0:(sail_values$bitU)list -> int -> int ->(sail_values$bitU)list)= 
+ ((subrange_vec_inc0:(bitU)list -> int -> int ->(bitU)list)= 
   (subrange_bv_inc
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val subrange_vec_dec : list Sail_values.bitU -> Num.integer -> Num.integer -> list Sail_values.bitU*)
+(*val subrange_vec_dec : list bitU -> integer -> integer -> list bitU*)
 val _ = Define `
- ((subrange_vec_dec0:(sail_values$bitU)list -> int -> int ->(sail_values$bitU)list)= 
+ ((subrange_vec_dec0:(bitU)list -> int -> int ->(bitU)list)= 
   (subrange_bv_dec
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val update_subrange_vec_inc : list Sail_values.bitU -> Num.integer -> Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val update_subrange_vec_inc : list bitU -> integer -> integer -> list bitU -> list bitU*)
 val _ = Define `
- ((update_subrange_vec_inc0:(sail_values$bitU)list -> int -> int ->(sail_values$bitU)list ->(sail_values$bitU)list)= 
+ ((update_subrange_vec_inc0:(bitU)list -> int -> int ->(bitU)list ->(bitU)list)= 
   (update_subrange_bv_inc
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)
@@ -166,9 +171,9 @@ val _ = Define `
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val update_subrange_vec_dec : list Sail_values.bitU -> Num.integer -> Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val update_subrange_vec_dec : list bitU -> integer -> integer -> list bitU -> list bitU*)
 val _ = Define `
- ((update_subrange_vec_dec0:(sail_values$bitU)list -> int -> int ->(sail_values$bitU)list ->(sail_values$bitU)list)= 
+ ((update_subrange_vec_dec0:(bitU)list -> int -> int ->(bitU)list ->(bitU)list)= 
   (update_subrange_bv_dec
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)
@@ -176,9 +181,9 @@ val _ = Define `
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val concat_vec : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val concat_vec : list bitU -> list bitU -> list bitU*)
 val _ = Define `
- ((concat_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)= 
+ ((concat_vec0:(bitU)list ->(bitU)list ->(bitU)list)= 
   (concat_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)
@@ -186,106 +191,106 @@ val _ = Define `
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val cons_vec : Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val cons_vec : bitU -> list bitU -> list bitU*)
 val _ = Define `
- ((cons_vec0:sail_values$bitU ->(sail_values$bitU)list ->(sail_values$bitU)list)= 
+ ((cons_vec0:bitU ->(bitU)list ->(bitU)list)= 
   (cons_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((cons_vec_maybe0:sail_values$bitU ->(sail_values$bitU)list ->((sail_values$bitU)list)option) b v=  (SOME (cons_vec0 b v)))`;
+ ((cons_vec_maybe0:bitU ->(bitU)list ->((bitU)list)option) b v=  (SOME (cons_vec0 b v)))`;
 
 val _ = Define `
- ((cons_vec_fail0:sail_values$bitU ->(sail_values$bitU)list -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b v=  (state_monad$returnS (cons_vec0 b v)))`;
+ ((cons_vec_fail0:bitU ->(bitU)list -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b v=  (state_monad$returnS (cons_vec0 b v)))`;
 
 val _ = Define `
- ((cons_vec_oracle0:sail_values$bitU ->(sail_values$bitU)list -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b v=  (state_monad$returnS (cons_vec0 b v)))`;
+ ((cons_vec_oracle0:bitU ->(bitU)list -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b v=  (state_monad$returnS (cons_vec0 b v)))`;
 
 
-(*val cast_unit_vec : Sail_values.bitU -> list Sail_values.bitU*)
+(*val cast_unit_vec : bitU -> list bitU*)
 val _ = Define `
- ((cast_unit_vec0:sail_values$bitU ->(sail_values$bitU)list)=  cast_unit_bv)`;
-
-val _ = Define `
- ((cast_unit_vec_maybe0:sail_values$bitU ->((sail_values$bitU)list)option) b=  (SOME (cast_unit_vec0 b)))`;
+ ((cast_unit_vec0:bitU ->(bitU)list)=  cast_unit_bv)`;
 
 val _ = Define `
- ((cast_unit_vec_fail0:sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$returnS (cast_unit_vec0 b)))`;
+ ((cast_unit_vec_maybe0:bitU ->((bitU)list)option) b=  (SOME (cast_unit_vec0 b)))`;
 
 val _ = Define `
- ((cast_unit_vec_oracle0:sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$returnS (cast_unit_vec0 b)))`;
-
-
-(*val vec_of_bit : Num.integer -> Sail_values.bitU -> list Sail_values.bitU*)
-val _ = Define `
- ((vec_of_bit0:int -> sail_values$bitU ->(sail_values$bitU)list)=  bv_of_bit)`;
+ ((cast_unit_vec_fail0:bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$returnS (cast_unit_vec0 b)))`;
 
 val _ = Define `
- ((vec_of_bit_maybe0:int -> sail_values$bitU ->((sail_values$bitU)list)option) len b=  (SOME (vec_of_bit0 len b)))`;
+ ((cast_unit_vec_oracle0:bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b=  (state_monad$returnS (cast_unit_vec0 b)))`;
+
+
+(*val vec_of_bit : integer -> bitU -> list bitU*)
+val _ = Define `
+ ((vec_of_bit0:int -> bitU ->(bitU)list)=  bv_of_bit)`;
 
 val _ = Define `
- ((vec_of_bit_fail0:int -> sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) len b=  (state_monad$returnS (vec_of_bit0 len b)))`;
+ ((vec_of_bit_maybe0:int -> bitU ->((bitU)list)option) len b=  (SOME (vec_of_bit0 len b)))`;
 
 val _ = Define `
- ((vec_of_bit_oracle0:int -> sail_values$bitU -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) len b=  (state_monad$returnS (vec_of_bit0 len b)))`;
+ ((vec_of_bit_fail0:int -> bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) len b=  (state_monad$returnS (vec_of_bit0 len b)))`;
 
-
-(*val msb : list Sail_values.bitU -> Sail_values.bitU*)
 val _ = Define `
- ((msb0:(sail_values$bitU)list -> sail_values$bitU)= 
+ ((vec_of_bit_oracle0:int -> bitU -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) len b=  (state_monad$returnS (vec_of_bit0 len b)))`;
+
+
+(*val msb : list bitU -> bitU*)
+val _ = Define `
+ ((msb0:(bitU)list -> bitU)= 
   (most_significant
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val int_of_vec_maybe : bool -> list Sail_values.bitU -> Maybe.maybe Num.integer*)
+(*val int_of_vec_maybe : bool -> list bitU -> maybe integer*)
 val _ = Define `
- ((int_of_vec_maybe0:bool ->(sail_values$bitU)list ->(int)option)= 
+ ((int_of_vec_maybe0:bool ->(bitU)list ->(int)option)= 
   (int_of_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((int_of_vec_fail0:bool ->(sail_values$bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) sign v=  (state_monad$maybe_failS "int_of_vec" (int_of_vec_maybe0 sign v)))`;
+ ((int_of_vec_fail0:bool ->(bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) sign v=  (state_monad$maybe_failS "int_of_vec" (int_of_vec_maybe0 sign v)))`;
 
 val _ = Define `
- ((int_of_vec_oracle:bool ->(sail_values$bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) sign v=  (state_monad$bindS (state$bools_of_bits_oracleS v) (\ v .  state_monad$returnS (int_of_bools sign v))))`;
+ ((int_of_vec_oracle:bool ->(bitU)list -> 'a state_monad$sequential_state ->(((int),'b)state_monad$result#'a state_monad$sequential_state)set) sign v=  (state_monad$bindS (state$bools_of_bits_oracleS v) (\ v .  state_monad$returnS (int_of_bools sign v))))`;
 
 val _ = Define `
- ((int_of_vec0:bool ->(sail_values$bitU)list -> int) sign v=  (maybe_failwith (int_of_vec_maybe0 sign v)))`;
+ ((int_of_vec0:bool ->(bitU)list -> int) sign v=  (maybe_failwith (int_of_vec_maybe0 sign v)))`;
 
 
-(*val string_of_vec : list Sail_values.bitU -> string*)
+(*val string_of_vec : list bitU -> string*)
 val _ = Define `
- ((string_of_vec0:(sail_values$bitU)list -> string)= 
+ ((string_of_vec0:(bitU)list -> string)= 
   (string_of_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val and_vec : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val or_vec  : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val xor_vec : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val not_vec : list Sail_values.bitU -> list Sail_values.bitU*)
+(*val and_vec : list bitU -> list bitU -> list bitU*)
+(*val or_vec  : list bitU -> list bitU -> list bitU*)
+(*val xor_vec : list bitU -> list bitU -> list bitU*)
+(*val not_vec : list bitU -> list bitU*)
 val _ = Define `
- ((and_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=  (binop_list and_bit))`;
+ ((and_vec0:(bitU)list ->(bitU)list ->(bitU)list)=  (binop_list and_bit))`;
 
 val _ = Define `
- ((or_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=   (binop_list or_bit))`;
+ ((or_vec0:(bitU)list ->(bitU)list ->(bitU)list)=   (binop_list or_bit))`;
 
 val _ = Define `
- ((xor_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=  (binop_list xor_bit))`;
+ ((xor_vec0:(bitU)list ->(bitU)list ->(bitU)list)=  (binop_list xor_bit))`;
 
 val _ = Define `
- ((not_vec0:(sail_values$bitU)list ->(sail_values$bitU)list)=  (MAP not_bit))`;
+ ((not_vec0:(bitU)list ->(bitU)list)=  (MAP not_bit))`;
 
 
 (*val arith_op_double_bl : forall 'a 'b. Bitvector 'a =>
-  (Num.integer -> Num.integer -> Num.integer) -> bool -> 'a -> 'a -> list Sail_values.bitU*)
+  (integer -> integer -> integer) -> bool -> 'a -> 'a -> list bitU*)
 val _ = Define `
- ((arith_op_double_bl:'a sail_values$Bitvector_class ->(int -> int -> int) -> bool -> 'a -> 'a ->(sail_values$bitU)list)dict_Sail_values_Bitvector_a op sign l r=  
- (let len =(( 2 : int) * 
+ ((arith_op_double_bl:'a Bitvector_class ->(int -> int -> int) -> bool -> 'a -> 'a ->(bitU)list)dict_Sail_values_Bitvector_a op sign l r=
+   (let len =(( 2 : int) * 
   dict_Sail_values_Bitvector_a.length_method l) in
   let l' = (if sign then exts_bv 
   dict_Sail_values_Bitvector_a len l else extz_bv dict_Sail_values_Bitvector_a len l) in
@@ -294,198 +299,198 @@ val _ = Define `
   MAP (\ b. b) (arith_op_bits op sign (MAP (\ b. b) l') (MAP (\ b. b) r'))))`;
 
 
-(*val add_vec   : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val adds_vec  : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val sub_vec   : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val subs_vec  : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val mult_vec  : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val mults_vec : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val add_vec   : list bitU -> list bitU -> list bitU*)
+(*val adds_vec  : list bitU -> list bitU -> list bitU*)
+(*val sub_vec   : list bitU -> list bitU -> list bitU*)
+(*val subs_vec  : list bitU -> list bitU -> list bitU*)
+(*val mult_vec  : list bitU -> list bitU -> list bitU*)
+(*val mults_vec : list bitU -> list bitU -> list bitU*)
 val _ = Define `
- ((add_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=    (\ l r. MAP (\ b. b) (arith_op_bits (+) F (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
+ ((add_vec0:(bitU)list ->(bitU)list ->(bitU)list)=    (\ l r. MAP (\ b. b) (arith_op_bits (+) F (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
 
 val _ = Define `
- ((adds_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=   (\ l r. MAP (\ b. b) (arith_op_bits (+) T (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
+ ((adds_vec0:(bitU)list ->(bitU)list ->(bitU)list)=   (\ l r. MAP (\ b. b) (arith_op_bits (+) T (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
 
 val _ = Define `
- ((sub_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=    (\ l r. MAP (\ b. b) (arith_op_bits (-) F (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
+ ((sub_vec0:(bitU)list ->(bitU)list ->(bitU)list)=    (\ l r. MAP (\ b. b) (arith_op_bits (-) F (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
 
 val _ = Define `
- ((subs_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=   (\ l r. MAP (\ b. b) (arith_op_bits (-) T (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
+ ((subs_vec0:(bitU)list ->(bitU)list ->(bitU)list)=   (\ l r. MAP (\ b. b) (arith_op_bits (-) T (MAP (\ b. b) l) (MAP (\ b. b) r))))`;
 
 val _ = Define `
- ((mult_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=   (arith_op_double_bl 
+ ((mult_vec0:(bitU)list ->(bitU)list ->(bitU)list)=   (arith_op_double_bl 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) ( * ) F))`;
 
 val _ = Define `
- ((mults_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)=  (arith_op_double_bl 
+ ((mults_vec0:(bitU)list ->(bitU)list ->(bitU)list)=  (arith_op_double_bl 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) ( * ) T))`;
 
 
-(*val add_vec_int       : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val adds_vec_int      : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val sub_vec_int       : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val subs_vec_int      : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val mult_vec_int      : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val mults_vec_int     : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
+(*val add_vec_int       : list bitU -> integer -> list bitU*)
+(*val adds_vec_int      : list bitU -> integer -> list bitU*)
+(*val sub_vec_int       : list bitU -> integer -> list bitU*)
+(*val subs_vec_int      : list bitU -> integer -> list bitU*)
+(*val mult_vec_int      : list bitU -> integer -> list bitU*)
+(*val mults_vec_int     : list bitU -> integer -> list bitU*)
 val _ = Define `
- ((add_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)   l r=  (arith_op_bv_int 
+ ((add_vec_int0:(bitU)list -> int ->(bitU)list)   l r=  (arith_op_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (+) F l r))`;
 
 val _ = Define `
- ((adds_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)  l r=  (arith_op_bv_int 
+ ((adds_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (+) T l r))`;
 
 val _ = Define `
- ((sub_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)   l r=  (arith_op_bv_int 
+ ((sub_vec_int0:(bitU)list -> int ->(bitU)list)   l r=  (arith_op_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (-) F l r))`;
 
 val _ = Define `
- ((subs_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)  l r=  (arith_op_bv_int 
+ ((subs_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (-) T l r))`;
 
 val _ = Define `
- ((mult_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)  l r=  (arith_op_double_bl 
+ ((mult_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_double_bl 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) ( * ) F l (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH l)) r))))`;
 
 val _ = Define `
- ((mults_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list) l r=  (arith_op_double_bl 
+ ((mults_vec_int0:(bitU)list -> int ->(bitU)list) l r=  (arith_op_double_bl 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) ( * ) T l (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH l)) r))))`;
 
 
-(*val add_int_vec       : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val adds_int_vec      : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val sub_int_vec       : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val subs_int_vec      : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val mult_int_vec      : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val mults_int_vec     : Num.integer -> list Sail_values.bitU -> list Sail_values.bitU*)
+(*val add_int_vec       : integer -> list bitU -> list bitU*)
+(*val adds_int_vec      : integer -> list bitU -> list bitU*)
+(*val sub_int_vec       : integer -> list bitU -> list bitU*)
+(*val subs_int_vec      : integer -> list bitU -> list bitU*)
+(*val mult_int_vec      : integer -> list bitU -> list bitU*)
+(*val mults_int_vec     : integer -> list bitU -> list bitU*)
 val _ = Define `
- ((add_int_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list)   l r=  (arith_op_int_bv 
+ ((add_int_vec0:int ->(bitU)list ->(bitU)list)   l r=  (arith_op_int_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (+) F l r))`;
 
 val _ = Define `
- ((adds_int_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list)  l r=  (arith_op_int_bv 
+ ((adds_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_int_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (+) T l r))`;
 
 val _ = Define `
- ((sub_int_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list)   l r=  (arith_op_int_bv 
+ ((sub_int_vec0:int ->(bitU)list ->(bitU)list)   l r=  (arith_op_int_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (-) F l r))`;
 
 val _ = Define `
- ((subs_int_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list)  l r=  (arith_op_int_bv 
+ ((subs_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_int_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (-) T l r))`;
 
 val _ = Define `
- ((mult_int_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list)  l r=  (arith_op_double_bl 
+ ((mult_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_double_bl 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) ( * ) F (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH r)) l)) r))`;
 
 val _ = Define `
- ((mults_int_vec0:int ->(sail_values$bitU)list ->(sail_values$bitU)list) l r=  (arith_op_double_bl 
+ ((mults_int_vec0:int ->(bitU)list ->(bitU)list) l r=  (arith_op_double_bl 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) ( * ) T (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH r)) l)) r))`;
 
 
-(*val add_vec_bit      : list Sail_values.bitU -> Sail_values.bitU -> list Sail_values.bitU*)
-(*val adds_vec_bit     : list Sail_values.bitU -> Sail_values.bitU -> list Sail_values.bitU*)
-(*val sub_vec_bit      : list Sail_values.bitU -> Sail_values.bitU -> list Sail_values.bitU*)
-(*val subs_vec_bit     : list Sail_values.bitU -> Sail_values.bitU -> list Sail_values.bitU*)
+(*val add_vec_bit      : list bitU -> bitU -> list bitU*)
+(*val adds_vec_bit     : list bitU -> bitU -> list bitU*)
+(*val sub_vec_bit      : list bitU -> bitU -> list bitU*)
+(*val subs_vec_bit     : list bitU -> bitU -> list bitU*)
 
 val _ = Define `
- ((add_vec_bool0:'a sail_values$Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a       l r=  (arith_op_bv_bool 
+ ((add_vec_bool0:'a Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a       l r=  (arith_op_bv_bool 
   dict_Sail_values_Bitvector_a (+) F l r))`;
 
 val _ = Define `
- ((add_vec_bit_maybe0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'a option)dict_Sail_values_Bitvector_a  l r=  (arith_op_bv_bit 
+ ((add_vec_bit_maybe0:'a Bitvector_class -> 'a -> bitU -> 'a option)dict_Sail_values_Bitvector_a  l r=  (arith_op_bv_bit 
   dict_Sail_values_Bitvector_a (+) F l r))`;
 
 val _ = Define `
- ((add_vec_bit_fail0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a   l r=  (state_monad$maybe_failS "add_vec_bit" (add_vec_bit_maybe0 
+ ((add_vec_bit_fail0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a   l r=  (state_monad$maybe_failS "add_vec_bit" (add_vec_bit_maybe0 
   dict_Sail_values_Bitvector_a l r)))`;
 
 val _ = Define `
- ((add_vec_bit_oracle0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (add_vec_bool0 
+ ((add_vec_bit_oracle0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (add_vec_bool0 
   dict_Sail_values_Bitvector_a l r))))`;
 
 val _ = Define `
- ((add_vec_bit0:(sail_values$bitU)list -> sail_values$bitU ->(sail_values$bitU)list)        l r=  (option_CASE (add_vec_bit_maybe0 
+ ((add_vec_bit0:(bitU)list -> bitU ->(bitU)list)        l r=  (option_CASE (add_vec_bit_maybe0 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 
 val _ = Define `
- ((adds_vec_bool0:'a sail_values$Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a       l r=  (arith_op_bv_bool 
+ ((adds_vec_bool0:'a Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a       l r=  (arith_op_bv_bool 
   dict_Sail_values_Bitvector_a (+) T l r))`;
 
 val _ = Define `
- ((adds_vec_bit_maybe0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'a option)dict_Sail_values_Bitvector_a  l r=  (arith_op_bv_bit 
+ ((adds_vec_bit_maybe0:'a Bitvector_class -> 'a -> bitU -> 'a option)dict_Sail_values_Bitvector_a  l r=  (arith_op_bv_bit 
   dict_Sail_values_Bitvector_a (+) T l r))`;
 
 val _ = Define `
- ((adds_vec_bit_fail0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a   l r=  (state_monad$maybe_failS "adds_vec_bit" (adds_vec_bit_maybe0 
+ ((adds_vec_bit_fail0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a   l r=  (state_monad$maybe_failS "adds_vec_bit" (adds_vec_bit_maybe0 
   dict_Sail_values_Bitvector_a l r)))`;
 
 val _ = Define `
- ((adds_vec_bit_oracle0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (adds_vec_bool0 
+ ((adds_vec_bit_oracle0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (adds_vec_bool0 
   dict_Sail_values_Bitvector_a l r))))`;
 
 val _ = Define `
- ((adds_vec_bit0:(sail_values$bitU)list -> sail_values$bitU ->(sail_values$bitU)list)        l r=  (option_CASE (adds_vec_bit_maybe0 
+ ((adds_vec_bit0:(bitU)list -> bitU ->(bitU)list)        l r=  (option_CASE (adds_vec_bit_maybe0 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 
 val _ = Define `
- ((sub_vec_bool0:'a sail_values$Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a        l r=  (arith_op_bv_bool 
+ ((sub_vec_bool0:'a Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a        l r=  (arith_op_bv_bool 
   dict_Sail_values_Bitvector_a (-) F l r))`;
 
 val _ = Define `
- ((sub_vec_bit_maybe0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'a option)dict_Sail_values_Bitvector_a   l r=  (arith_op_bv_bit 
+ ((sub_vec_bit_maybe0:'a Bitvector_class -> 'a -> bitU -> 'a option)dict_Sail_values_Bitvector_a   l r=  (arith_op_bv_bit 
   dict_Sail_values_Bitvector_a (-) F l r))`;
 
 val _ = Define `
- ((sub_vec_bit_fail0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a    l r=  (state_monad$maybe_failS "sub_vec_bit" (sub_vec_bit_maybe0 
+ ((sub_vec_bit_fail0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a    l r=  (state_monad$maybe_failS "sub_vec_bit" (sub_vec_bit_maybe0 
   dict_Sail_values_Bitvector_a l r)))`;
 
 val _ = Define `
- ((sub_vec_bit_oracle0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a  l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (sub_vec_bool0 
+ ((sub_vec_bit_oracle0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a  l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (sub_vec_bool0 
   dict_Sail_values_Bitvector_a l r))))`;
 
 val _ = Define `
- ((sub_vec_bit0:(sail_values$bitU)list -> sail_values$bitU ->(sail_values$bitU)list)         l r=  (option_CASE (sub_vec_bit_maybe0 
+ ((sub_vec_bit0:(bitU)list -> bitU ->(bitU)list)         l r=  (option_CASE (sub_vec_bit_maybe0 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 
 val _ = Define `
- ((subs_vec_bool0:'a sail_values$Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a       l r=  (arith_op_bv_bool 
+ ((subs_vec_bool0:'a Bitvector_class -> 'a -> bool -> 'a)dict_Sail_values_Bitvector_a       l r=  (arith_op_bv_bool 
   dict_Sail_values_Bitvector_a (-) T l r))`;
 
 val _ = Define `
- ((subs_vec_bit_maybe0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'a option)dict_Sail_values_Bitvector_a  l r=  (arith_op_bv_bit 
+ ((subs_vec_bit_maybe0:'a Bitvector_class -> 'a -> bitU -> 'a option)dict_Sail_values_Bitvector_a  l r=  (arith_op_bv_bit 
   dict_Sail_values_Bitvector_a (-) T l r))`;
 
 val _ = Define `
- ((subs_vec_bit_fail0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a   l r=  (state_monad$maybe_failS "sub_vec_bit" (subs_vec_bit_maybe0 
+ ((subs_vec_bit_fail0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a   l r=  (state_monad$maybe_failS "sub_vec_bit" (subs_vec_bit_maybe0 
   dict_Sail_values_Bitvector_a l r)))`;
 
 val _ = Define `
- ((subs_vec_bit_oracle0:'a sail_values$Bitvector_class -> 'a -> sail_values$bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (subs_vec_bool0 
+ ((subs_vec_bit_oracle0:'a Bitvector_class -> 'a -> bitU -> 'c state_monad$sequential_state ->(('a,'d)state_monad$result#'c state_monad$sequential_state)set)dict_Sail_values_Bitvector_a l r=  (state_monad$bindS (state$bool_of_bitU_oracleS r) (\ r .  state_monad$returnS (subs_vec_bool0 
   dict_Sail_values_Bitvector_a l r))))`;
 
 val _ = Define `
- ((subs_vec_bit0:(sail_values$bitU)list -> sail_values$bitU ->(sail_values$bitU)list)        l r=  (option_CASE (subs_vec_bit_maybe0 
+ ((subs_vec_bit0:(bitU)list -> bitU ->(bitU)list)        l r=  (option_CASE (subs_vec_bit_maybe0 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
@@ -512,279 +517,251 @@ let add_overflow_vec_bit_signed  = add_overflow_bv_bit_signed
 let sub_overflow_vec_bit         = sub_overflow_bv_bit
 let sub_overflow_vec_bit_signed  = sub_overflow_bv_bit_signed*)
 
-(*val shiftl       : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val shiftr       : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val arith_shiftr : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val rotl         : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val rotr         : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
+(*val shiftl       : list bitU -> integer -> list bitU*)
+(*val shiftr       : list bitU -> integer -> list bitU*)
+(*val arith_shiftr : list bitU -> integer -> list bitU*)
+(*val rotl         : list bitU -> integer -> list bitU*)
+(*val rotr         : list bitU -> integer -> list bitU*)
 val _ = Define `
- ((shiftl0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)= 
+ ((shiftl0:(bitU)list -> int ->(bitU)list)= 
   (shiftl_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((shiftr0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)= 
+ ((shiftr0:(bitU)list -> int ->(bitU)list)= 
   (shiftr_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((arith_shiftr0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)= 
+ ((arith_shiftr0:(bitU)list -> int ->(bitU)list)= 
   (arith_shiftr_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((rotl0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)= 
+ ((rotl0:(bitU)list -> int ->(bitU)list)= 
   (rotl_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((rotr0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)= 
+ ((rotr0:(bitU)list -> int ->(bitU)list)= 
   (rotr_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val mod_vec        : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val mod_vec_maybe  : list Sail_values.bitU -> list Sail_values.bitU -> Maybe.maybe (list Sail_values.bitU)*)
-(*val mod_vec_fail   : forall 'rv 'e. list Sail_values.bitU -> list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
-(*val mod_vec_oracle : forall 'rv 'e. list Sail_values.bitU -> list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
+(*val mod_vec        : list bitU -> list bitU -> list bitU*)
+(*val mod_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)*)
+(*val mod_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e*)
+(*val mod_vec_oracle : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e*)
 val _ = Define `
- ((mod_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)        l r=  (option_CASE (mod_bv 
+ ((mod_vec0:(bitU)list ->(bitU)list ->(bitU)list)        l r=  (option_CASE (mod_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 val _ = Define `
- ((mod_vec_maybe0:(sail_values$bitU)list ->(sail_values$bitU)list ->((sail_values$bitU)list)option)  l r=  (mod_bv 
+ ((mod_vec_maybe0:(bitU)list ->(bitU)list ->((bitU)list)option)  l r=  (mod_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r))`;
 
 val _ = Define `
- ((mod_vec_fail0:(sail_values$bitU)list ->(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "mod_vec" (mod_bv 
+ ((mod_vec_fail0:(bitU)list ->(bitU)list -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "mod_vec" (mod_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r)))`;
 
 val _ = Define `
- ((mod_vec_oracle0:(sail_values$bitU)list ->(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
+ ((mod_vec_oracle0:(bitU)list ->(bitU)list -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (mod_vec0 l r)))`;
 
 
-(*val quot_vec        : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val quot_vec_maybe  : list Sail_values.bitU -> list Sail_values.bitU -> Maybe.maybe (list Sail_values.bitU)*)
-(*val quot_vec_fail   : forall 'rv 'e. list Sail_values.bitU -> list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
-(*val quot_vec_oracle : forall 'rv 'e. list Sail_values.bitU -> list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
+(*val quot_vec        : list bitU -> list bitU -> list bitU*)
+(*val quot_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)*)
+(*val quot_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e*)
+(*val quot_vec_oracle : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e*)
 val _ = Define `
- ((quot_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)        l r=  (option_CASE (quot_bv 
+ ((quot_vec0:(bitU)list ->(bitU)list ->(bitU)list)        l r=  (option_CASE (quot_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 val _ = Define `
- ((quot_vec_maybe0:(sail_values$bitU)list ->(sail_values$bitU)list ->((sail_values$bitU)list)option)  l r=  (quot_bv 
+ ((quot_vec_maybe0:(bitU)list ->(bitU)list ->((bitU)list)option)  l r=  (quot_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r))`;
 
 val _ = Define `
- ((quot_vec_fail0:(sail_values$bitU)list ->(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "quot_vec" (quot_bv 
+ ((quot_vec_fail0:(bitU)list ->(bitU)list -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "quot_vec" (quot_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r)))`;
 
 val _ = Define `
- ((quot_vec_oracle0:(sail_values$bitU)list ->(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
+ ((quot_vec_oracle0:(bitU)list ->(bitU)list -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (quot_vec0 l r)))`;
 
 
-(*val quots_vec        : list Sail_values.bitU -> list Sail_values.bitU -> list Sail_values.bitU*)
-(*val quots_vec_maybe  : list Sail_values.bitU -> list Sail_values.bitU -> Maybe.maybe (list Sail_values.bitU)*)
-(*val quots_vec_fail   : forall 'rv 'e. list Sail_values.bitU -> list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
-(*val quots_vec_oracle : forall 'rv 'e. list Sail_values.bitU -> list Sail_values.bitU -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
+(*val quots_vec        : list bitU -> list bitU -> list bitU*)
+(*val quots_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)*)
+(*val quots_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e*)
+(*val quots_vec_oracle : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e*)
 val _ = Define `
- ((quots_vec0:(sail_values$bitU)list ->(sail_values$bitU)list ->(sail_values$bitU)list)        l r=  (option_CASE (quots_bv 
+ ((quots_vec0:(bitU)list ->(bitU)list ->(bitU)list)        l r=  (option_CASE (quots_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 val _ = Define `
- ((quots_vec_maybe0:(sail_values$bitU)list ->(sail_values$bitU)list ->((sail_values$bitU)list)option)  l r=  (quots_bv 
+ ((quots_vec_maybe0:(bitU)list ->(bitU)list ->((bitU)list)option)  l r=  (quots_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r))`;
 
 val _ = Define `
- ((quots_vec_fail0:(sail_values$bitU)list ->(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "quots_vec" (quots_bv 
+ ((quots_vec_fail0:(bitU)list ->(bitU)list -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "quots_vec" (quots_bv 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r)))`;
 
 val _ = Define `
- ((quots_vec_oracle0:(sail_values$bitU)list ->(sail_values$bitU)list -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
+ ((quots_vec_oracle0:(bitU)list ->(bitU)list -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (quots_vec0 l r)))`;
 
 
-(*val mod_vec_int        : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val mod_vec_int_maybe  : list Sail_values.bitU -> Num.integer -> Maybe.maybe (list Sail_values.bitU)*)
-(*val mod_vec_int_fail   : forall 'rv 'e. list Sail_values.bitU -> Num.integer -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
-(*val mod_vec_int_oracle : forall 'rv 'e. list Sail_values.bitU -> Num.integer -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
+(*val mod_vec_int        : list bitU -> integer -> list bitU*)
+(*val mod_vec_int_maybe  : list bitU -> integer -> maybe (list bitU)*)
+(*val mod_vec_int_fail   : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e*)
+(*val mod_vec_int_oracle : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e*)
 val _ = Define `
- ((mod_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)        l r=  (option_CASE (mod_bv_int 
+ ((mod_vec_int0:(bitU)list -> int ->(bitU)list)        l r=  (option_CASE (mod_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 val _ = Define `
- ((mod_vec_int_maybe0:(sail_values$bitU)list -> int ->((sail_values$bitU)list)option)  l r=  (mod_bv_int 
+ ((mod_vec_int_maybe0:(bitU)list -> int ->((bitU)list)option)  l r=  (mod_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r))`;
 
 val _ = Define `
- ((mod_vec_int_fail0:(sail_values$bitU)list -> int -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "mod_vec_int" (mod_bv_int 
+ ((mod_vec_int_fail0:(bitU)list -> int -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "mod_vec_int" (mod_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r)))`;
 
 val _ = Define `
- ((mod_vec_int_oracle0:(sail_values$bitU)list -> int -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
+ ((mod_vec_int_oracle0:(bitU)list -> int -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (mod_vec_int0 l r)))`;
 
 
-(*val quot_vec_int        : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
-(*val quot_vec_int_maybe  : list Sail_values.bitU -> Num.integer -> Maybe.maybe (list Sail_values.bitU)*)
-(*val quot_vec_int_fail   : forall 'rv 'e. list Sail_values.bitU -> Num.integer -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
-(*val quot_vec_int_oracle : forall 'rv 'e. list Sail_values.bitU -> Num.integer -> Prompt_monad.monad 'rv (list Sail_values.bitU) 'e*)
+(*val quot_vec_int        : list bitU -> integer -> list bitU*)
+(*val quot_vec_int_maybe  : list bitU -> integer -> maybe (list bitU)*)
+(*val quot_vec_int_fail   : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e*)
+(*val quot_vec_int_oracle : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e*)
 val _ = Define `
- ((quot_vec_int0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)        l r=  (option_CASE (quot_bv_int 
+ ((quot_vec_int0:(bitU)list -> int ->(bitU)list)        l r=  (option_CASE (quot_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r) (repeat [BU] (int_of_num (LENGTH l))) I))`;
 
 val _ = Define `
- ((quot_vec_int_maybe0:(sail_values$bitU)list -> int ->((sail_values$bitU)list)option)  l r=  (quot_bv_int 
+ ((quot_vec_int_maybe0:(bitU)list -> int ->((bitU)list)option)  l r=  (quot_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r))`;
 
 val _ = Define `
- ((quot_vec_int_fail0:(sail_values$bitU)list -> int -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "quot_vec_int" (quot_bv_int 
+ ((quot_vec_int_fail0:(bitU)list -> int -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set)   l r=  (state_monad$maybe_failS "quot_vec_int" (quot_bv_int 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (instance_Sail_values_Bitvector_list_dict
    instance_Sail_values_BitU_Sail_values_bitU_dict) l r)))`;
 
 val _ = Define `
- ((quot_vec_int_oracle0:(sail_values$bitU)list -> int -> 'rv state_monad$sequential_state ->((((sail_values$bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
+ ((quot_vec_int_oracle0:(bitU)list -> int -> 'rv state_monad$sequential_state ->((((bitU)list),'e)state_monad$result#'rv state_monad$sequential_state)set) l r=  (state$of_bits_oracleS 
   (instance_Sail_values_Bitvector_list_dict
      instance_Sail_values_BitU_Sail_values_bitU_dict) (quot_vec_int0 l r)))`;
 
 
-(*val replicate_bits : list Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
+(*val replicate_bits : list bitU -> integer -> list bitU*)
 val _ = Define `
- ((replicate_bits0:(sail_values$bitU)list -> int ->(sail_values$bitU)list)= 
+ ((replicate_bits0:(bitU)list -> int ->(bitU)list)= 
   (replicate_bits_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 
-(*val duplicate : Sail_values.bitU -> Num.integer -> list Sail_values.bitU*)
+(*val duplicate : bitU -> integer -> list bitU*)
 val _ = Define `
- ((duplicate0:sail_values$bitU -> int ->(sail_values$bitU)list)= 
+ ((duplicate0:bitU -> int ->(bitU)list)= 
   (duplicate_bit_bv instance_Sail_values_BitU_Sail_values_bitU_dict))`;
 
 val _ = Define `
- ((duplicate_maybe0:sail_values$bitU -> int ->((sail_values$bitU)list)option) b n=  (SOME (duplicate0 b n)))`;
+ ((duplicate_maybe0:bitU -> int ->((bitU)list)option) b n=  (SOME (duplicate0 b n)))`;
 
 val _ = Define `
- ((duplicate_fail0:sail_values$bitU -> int -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b n=  (state_monad$returnS (duplicate0 b n)))`;
+ ((duplicate_fail0:bitU -> int -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b n=  (state_monad$returnS (duplicate0 b n)))`;
 
 val _ = Define `
- ((duplicate_oracle0:sail_values$bitU -> int -> 'a state_monad$sequential_state ->((((sail_values$bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b n=  (state_monad$bindS  
-(state$bool_of_bitU_oracleS b) (\ b . 
+ ((duplicate_oracle0:bitU -> int -> 'a state_monad$sequential_state ->((((bitU)list),'b)state_monad$result#'a state_monad$sequential_state)set) b n=  (state_monad$bindS
+  (state$bool_of_bitU_oracleS b) (\ b . 
   state_monad$returnS (duplicate0 (bitU_of_bool b) n))))`;
 
 
-(*val reverse_endianness : list Sail_values.bitU -> list Sail_values.bitU*)
+(*val reverse_endianness : list bitU -> list bitU*)
 val _ = Define `
- ((reverse_endianness0:(sail_values$bitU)list ->(sail_values$bitU)list) v=  (reverse_endianness_list v))`;
+ ((reverse_endianness0:(bitU)list ->(bitU)list) v=  (reverse_endianness_list v))`;
 
 
-(*val eq_vec    : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val neq_vec   : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val ult_vec   : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val slt_vec   : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val ugt_vec   : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val sgt_vec   : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val ulteq_vec : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val slteq_vec : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val ugteq_vec : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
-(*val sgteq_vec : list Sail_values.bitU -> list Sail_values.bitU -> bool*)
+(*val get_slice_int : integer -> integer -> integer -> list bitU*)
 val _ = Define `
- ((eq_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
+ ((get_slice_int0:int -> int -> int ->(bitU)list)= 
+  (get_slice_int_bv
+     (instance_Sail_values_Bitvector_list_dict
+        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
+
+
+(*val set_slice_int : integer -> integer -> integer -> list bitU -> integer*)
+val _ = Define `
+ ((set_slice_int0:int -> int -> int ->(bitU)list -> int)= 
+  (set_slice_int_bv
+     (instance_Sail_values_Bitvector_list_dict
+        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
+
+
+(*val slice : list bitU -> integer -> integer -> list bitU*)
+val _ = Define `
+ ((slice0:(bitU)list -> int -> int ->(bitU)list) v lo len=
+   (subrange_vec_dec0 v ((lo + len) -( 1 : int)) lo))`;
+
+
+(*val set_slice : integer -> integer -> list bitU -> integer -> list bitU -> list bitU*)
+val _ = Define `
+ ((set_slice0:int -> int ->(bitU)list -> int ->(bitU)list ->(bitU)list) (out_len:ii) (slice_len:ii) out (n:ii) v=
+   (update_subrange_vec_dec0 out ((n + slice_len) -( 1 : int)) n v))`;
+
+
+(*val eq_vec    : list bitU -> list bitU -> bool*)
+(*val neq_vec   : list bitU -> list bitU -> bool*)
+val _ = Define `
+ ((eq_vec:(bitU)list ->(bitU)list -> bool)= 
   (eq_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
 val _ = Define `
- ((neq_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
+ ((neq_vec:(bitU)list ->(bitU)list -> bool)= 
   (neq_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((ult_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (ult_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((slt_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (slt_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((ugt_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (ugt_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((sgt_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (sgt_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((ulteq_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (ulteq_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((slteq_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (slteq_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((ugteq_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (ugteq_bv
-     (instance_Sail_values_Bitvector_list_dict
-        instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
-
-val _ = Define `
- ((sgteq_vec:(sail_values$bitU)list ->(sail_values$bitU)list -> bool)= 
-  (sgteq_bv
      (instance_Sail_values_Bitvector_list_dict
         instance_Sail_values_BitU_Sail_values_bitU_dict)))`;
 
