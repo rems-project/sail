@@ -2,8 +2,6 @@ default Order dec
 
 $include <prelude.sail>
 
-union option ('a : Type) = {None : unit, Some : 'a}
-
 val eq_string = "eq_string" : (string, string) -> bool
 val string_startswith = "string_startswith" : (string, string) -> bool
 val string_drop = "string_drop" : (string, nat) -> string
