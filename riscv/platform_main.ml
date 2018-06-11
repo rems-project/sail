@@ -64,7 +64,7 @@ let elf_arg =
   Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s])
             usage_msg;
   ( match !opt_file_arguments with
-      | f :: _ -> print_endline ("Loading ELF file " ^ f); f
+      | f :: _ -> prerr_endline ("Loading ELF file " ^ f); f
       | _ -> (prerr_endline "Please provide an ELF file."; exit 0)
   )
 
