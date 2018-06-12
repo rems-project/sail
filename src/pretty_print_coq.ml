@@ -298,12 +298,12 @@ let drop_duplicate_atoms kids ty =
     match typ with
     | Typ_id _
     | Typ_var _ -> Some full_typ
-    | Typ_fn (arg,res,eff) -> failwith "Function type nested inside existential"
+    | Typ_fn (arg,res,eff) -> raise (Reporting_basic.err_unreachable l "Function type nested inside existential")
     | Typ_tup typs ->
        (match Util.map_filter aux_typ typs with
        | [] -> None
        | typs' -> Some (Typ_aux (Typ_tup typs',l)))
-    | Typ_exist _ -> failwith "Nested existential type"
+    | Typ_exist _ -> raise (Reporting_basic.err_unreachable l "Nested existential type")
        (* This is an AST type, don't need to check for equivalent nexps *)
     | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)])
         when KidSet.mem kid kids ->
@@ -385,7 +385,7 @@ let doc_typ, doc_atomic_typ =
       | Typ_app(Id_aux (Id "range", _), _) ->
          (match maybe_expand_range_type ty with
          | Some typ -> atomic_typ atyp_needed typ
-         | None -> failwith "Bad range type")
+         | None -> raise (Reporting_basic.err_unreachable l "Bad range type"))
       | Typ_app(Id_aux (Id "implicit", _),_) ->
          (string "Z")
       | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
@@ -627,7 +627,7 @@ let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot)) as pat, typ) =
         let el_typ =
           match destruct_vector env typ with
           | Some (_,_,t) -> t
-          | None -> failwith "vector pattern doesn't have vector type"
+          | None -> raise (Reporting_basic.err_unreachable l "vector pattern doesn't have vector type")
         in
         let ppp = brackets (separate_map semi (fun p -> doc_pat ctxt true (p,el_typ)) pats) in
         if apat_needed then parens ppp else ppp
@@ -637,24 +637,24 @@ let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot)) as pat, typ) =
      | P_tup pats  ->
         let typs = match typ with
           | Typ_aux (Typ_tup typs, _) -> typs
-          | _ -> failwith "tuple pattern doesn't have tuple type"
+          | _ -> raise (Reporting_basic.err_unreachable l "tuple pattern doesn't have tuple type")
         in
         (match pats, typs with
         | [p], [typ'] -> doc_pat ctxt apat_needed (p, typ')
-        | [_], _ -> failwith "tuple pattern length does not match tuple type length"
+        | [_], _ -> raise (Reporting_basic.err_unreachable l "tuple pattern length does not match tuple type length")
         | _ -> parens (separate_map comma_sp (doc_pat ctxt false) (List.combine pats typs)))
      | P_list pats ->
         let el_typ = match typ with
           | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ el_typ,_)]),_)
               when Id.compare f (mk_id "list") = 0 -> el_typ
-          | _ -> failwith "list pattern not a list"
+          | _ -> raise (Reporting_basic.err_unreachable l "list pattern not a list")
         in
         brackets (separate_map semi (fun p -> doc_pat ctxt false (p, el_typ)) pats)
      | P_cons (p,p') ->
         let el_typ = match typ with
           | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ el_typ,_)]),_)
               when Id.compare f (mk_id "list") = 0 -> el_typ
-          | _ -> failwith "list pattern not a list"
+          | _ -> raise (Reporting_basic.err_unreachable l "list pattern not a list")
         in
         doc_op (string "::") (doc_pat ctxt true (p, el_typ)) (doc_pat ctxt true (p', typ))
      | P_record (_,_) -> empty (* TODO *)
@@ -903,7 +903,7 @@ let doc_exp_lem, doc_let_lem =
                  (match arg_typ with
                  | Typ_aux (Typ_tup typs,_) -> typs, ret_typ
                  | _ -> [arg_typ], ret_typ)
-              | _ -> failwith "Function not a function type"
+              | _ -> raise (Reporting_basic.err_unreachable l "Function not a function type")
             in
             (* Insert existential unpacking of arguments where necessary *)
             let doc_arg arg typ_from_fn =
@@ -1316,7 +1316,7 @@ let rec untuple_args_pat typ (P_aux (paux, ((l, _) as annot)) as pat) =
      let annot = (l, Some (Env.empty, unit_typ, no_effect)) in
      [P_aux (P_lit (mk_lit L_unit), annot), unit_typ], identity
   | P_tup pats, Some typs -> List.combine pats typs, identity
-  | P_tup pats, _ -> failwith "Tuple pattern against non-tuple type"
+  | P_tup pats, _ -> raise (Reporting_basic.err_unreachable l "Tuple pattern against non-tuple type")
   | P_wild, Some typs ->
      let wild typ = P_aux (P_wild, (l, Some (env, typ, no_effect))), typ in
      List.map wild typs, identity
@@ -1625,7 +1625,8 @@ let doc_val pat exp =
   let (id,typpp) = match pat with
     | P_aux (P_typ (typ, P_aux (P_id id,_)),_) -> id, space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
     | P_aux (P_id id, _) -> id, empty
-    | _ -> failwith "Top-level value definition with complex pattern not supported for Coq yet"
+    | _ -> raise (Reporting_basic.err_todo (pat_loc pat)
+                    "Top-level value definition with complex pattern not supported for Coq yet")
   in
   let env = env_of exp in
   let typ = expand_range_type (Env.expand_synonyms env (typ_of exp)) in
