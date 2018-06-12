@@ -1625,6 +1625,10 @@ let doc_val pat exp =
   let (id,typpp) = match pat with
     | P_aux (P_typ (typ, P_aux (P_id id,_)),_) -> id, space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
     | P_aux (P_id id, _) -> id, empty
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)),_) when Id.compare id (id_of_kid kid) == 0 ->
+       id, empty
+    | P_aux (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)),_)),_) when Id.compare id (id_of_kid kid) == 0 ->
+       id, space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
     | _ -> raise (Reporting_basic.err_todo (pat_loc pat)
                     "Top-level value definition with complex pattern not supported for Coq yet")
   in
@@ -1697,6 +1701,7 @@ let find_unimplemented defs =
   List.fold_left adjust_def IdSet.empty defs
 
 let pp_defs_coq (types_file,types_modules) (defs_file,defs_modules) (Defs defs) top_line =
+try
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs true defs
@@ -1752,4 +1757,5 @@ string "Require Import List. Import ListNotations. Require Import Sumbool.";
         separate empty (List.map (doc_def unimplemented) defs);
         hardline;
         string "End Content.";
-        hardline]);
+        hardline])
+with Type_check.Type_error (l,err) -> raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
