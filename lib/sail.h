@@ -163,6 +163,11 @@ void concat_str(sail_string *stro, const sail_string str1, const sail_string str
 void undefined_string(sail_string *str, const unit u) {
 }
 
+unit print(const sail_string str) {
+  printf("%s", str);
+  return UNIT;
+}
+
 unit print_endline(const sail_string str) {
   printf("%s\n", str);
   return UNIT;
@@ -170,6 +175,11 @@ unit print_endline(const sail_string str) {
 
 unit print_string(const sail_string str1, const sail_string str2) {
   printf("%s%s\n", str1, str2);
+  return UNIT;
+}
+
+unit prerr(const sail_string str) {
+  fprintf(stderr, "%s", str);
   return UNIT;
 }
 
@@ -185,6 +195,13 @@ unit print_int(const sail_string str, const mpz_t op) {
   return UNIT;
 }
 
+unit prerr_int(const sail_string str, const mpz_t op) {
+  fputs(str, stderr);
+  mpz_out_str(stderr, 10, op);
+  fputs("\n", stderr);
+  return UNIT;
+}
+
 unit print_int64(const sail_string str, const int64_t op) {
   printf("%s%" PRId64 "\n", str, op);
   return UNIT;
@@ -192,7 +209,8 @@ unit print_int64(const sail_string str, const int64_t op) {
 
 unit sail_putchar(const mpz_t op) {
   char c = (char) mpz_get_ui(op);
-  putchar(c);
+  printf("%c", c);
+  fflush(stdout);
   return UNIT;
 }
 
@@ -936,8 +954,6 @@ void init_real_of_sail_string(real *rop, const sail_string op) {
 
 #endif
 
-#endif
-
 /* ***** Sail memory builtins ***** */
 
 /* We organise memory available to the sail model into a linked list
@@ -954,7 +970,7 @@ struct block {
 struct block *sail_memory = NULL;
 
 /* Must be one less than a power of two. */
-uint64_t MASK = 0xFFFFul;
+uint64_t MASK = 0xFFFFFFul;
 
 // All sail vectors are at least 64-bits, but only the bottom 8 bits
 // are used in the second argument.
@@ -979,10 +995,11 @@ void write_mem(uint64_t address, uint64_t byte)
   /* If we couldn't find a block matching the mask, allocate a new
      one, write the byte, and put it at the front of the block
      list. */
+  fprintf(stderr, "[Sail] Allocating new block 0x%" PRIx64 "\n", mask);
   struct block *new_block = malloc(sizeof(struct block));
   new_block->block_id = mask;
   new_block->mem = calloc(MASK + 1, sizeof(uint8_t));
-  new_block->mem[offset] = byte;
+  new_block->mem[offset] = (uint8_t) byte;
   new_block->next = sail_memory;
   sail_memory = new_block;
 }
@@ -1002,7 +1019,7 @@ uint64_t read_mem(uint64_t address)
     }
   }
 
-  return 0;
+  return 0x58;
 }
 
 void kill_mem()
@@ -1040,7 +1057,7 @@ unit write_ram(const mpz_t addr_size,     // Either 32 or 64
     byte = mpz_get_ui(buf) & 0xFF;
     write_mem(addr + i, byte);
 
-    // Then shift buf 8 bits right, and increment addr.
+    // Then shift buf 8 bits right.
     mpz_fdiv_q_2exp(buf, buf, 8);
   }
 
@@ -1072,6 +1089,7 @@ void read_ram(bv_t *data,
 }
 
 unit load_raw(uint64_t addr, const sail_string file) {
+  fprintf(stderr, "[Sail] Loading %s from 0x%" PRIx64 " to ", file, addr);
   FILE *fp = fopen(file, "r");
 
   uint64_t byte;
@@ -1079,6 +1097,8 @@ unit load_raw(uint64_t addr, const sail_string file) {
     write_mem(addr, byte);
     addr++;
   }
+
+  fprintf(stderr, "0x%" PRIx64 "\n", addr - 1);
 
   return UNIT;
 }
@@ -1117,16 +1137,131 @@ void load_image(char *file) {
   fclose(fp);
 }
 
-void load_instr(uint64_t addr, uint32_t instr) {
-  write_mem(addr    , instr       & 0xFF);
-  write_mem(addr + 1, instr >> 8  & 0xFF);
-  write_mem(addr + 2, instr >> 16 & 0xFF);
-  write_mem(addr + 3, instr >> 24 & 0xFF);
+// ***** Setup and cleanup functions for library code *****
+
+static int64_t g_trace_depth;
+static bool g_trace_enabled;
+
+/*
+ * Bind these functions in Sail to enable and disable tracing:
+ *
+ * val "enable_tracing" : unit -> unit
+ * val "disable_tracing" : unit -> unit
+ *
+ * Compile with sail -c -c_trace.
+ */
+unit enable_tracing(const unit u)
+{
+  g_trace_depth = 0;
+  g_trace_enabled = true;
+  return UNIT;
+}
+
+unit disable_tracing(const unit u)
+{
+  g_trace_depth = 0;
+  g_trace_enabled = false;
+  return UNIT;
+}
+
+void trace_bv_t(const bv_t op)
+{
+  if (g_trace_enabled) {
+    if (op.len % 4 == 0) {
+      fputs("0x", stderr);
+      mpz_t buf;
+      mpz_init_set(buf, *op.bits);
+
+      char *hex = malloc((op.len / 4) * sizeof(char));
+
+      for (int i = 0; i < op.len / 4; ++i) {
+	char c = (char) ((0xF & mpz_get_ui(buf)) + 0x30);
+	hex[i] = (c < 0x3A) ? c : c + 0x7;
+	mpz_fdiv_q_2exp(buf, buf, 4);
+      }
+
+      for (int i = op.len / 4; i > 0; --i) {
+	fputc(hex[i - 1], stderr);
+      }
+
+      free(hex);
+      mpz_clear(buf);
+    } else {
+      fputs("0b", stderr);
+      for (int i = op.len; i > 0; --i) {
+	fputc(mpz_tstbit(*op.bits, i - 1) + 0x30, stderr);
+      }
+    }
+  }
+}
+
+void trace_uint64_t(const uint64_t x) {
+  if (g_trace_enabled) fprintf(stderr, "0x%" PRIx64, x);
+}
+
+void trace_sail_string(const sail_string str) {
+  if (g_trace_enabled) fprintf(stderr, "\"%s\"", str);
+}
+
+void trace_unit(const unit u) {
+  if (g_trace_enabled) fputs("()", stderr);
+}
+
+void trace_mpz_t(const mpz_t op) {
+  if (g_trace_enabled) mpz_out_str(stderr, 10, op);
+}
+
+void trace_bool(const bool b) {
+  if (g_trace_enabled) {
+    if (b) {
+      fprintf(stderr, "true");
+    } else {
+      fprintf(stderr, "false");
+    }
+  }
+}
+
+void trace_unknown(void) {
+  if (g_trace_enabled) fputs("?", stderr);
+}
+
+void trace_argsep(void) {
+  if (g_trace_enabled) fputs(", ", stderr);
+}
+
+void trace_argend(void) {
+  if (g_trace_enabled) fputs(")\n", stderr);
+}
+
+void trace_retend(void) {
+  if (g_trace_enabled) fputs("\n", stderr);
+}
+
+void trace_start(char *name)
+{
+  if (g_trace_enabled) {
+    fprintf(stderr, "[TRACE] ");
+    for (int64_t i = 0; i < g_trace_depth; ++i) {
+      fprintf(stderr, "%s", "|   ");
+    }
+    fprintf(stderr, "%s(", name);
+  }
+}
+
+void trace_end(void)
+{
+  if (g_trace_enabled) {
+    fprintf(stderr, "[TRACE] ");
+    for (int64_t i = 0; i < g_trace_depth; ++i) {
+      fprintf(stderr, "%s", "|   ");
+    }
+  }
 }
 
 // ***** Setup and cleanup functions for library code *****
 
 void setup_library(void) {
+  disable_tracing(UNIT);
   mpf_set_default_prec(FLOAT_PRECISION);
   mpz_init(sail_lib_tmp1);
   mpz_init(sail_lib_tmp2);
@@ -1137,3 +1272,5 @@ void cleanup_library(void) {
   mpz_clear(sail_lib_tmp2);
   kill_mem();
 }
+
+#endif

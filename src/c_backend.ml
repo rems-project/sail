@@ -59,6 +59,7 @@ module Big_int = Nat_big_num
 
 let c_verbosity = ref 1
 let opt_ddump_flow_graphs = ref false
+let opt_trace = ref false
 
 (* Optimization flags *)
 let optimize_primops = ref false
@@ -990,8 +991,10 @@ let analyze_primop' ctx env l id args typ =
   | "and_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "&", v2), typ))
 
+            (*
   | "not_bits", [AV_C_fragment (v, _)] ->
      AE_val (AV_C_fragment (F_unary ("~", v), typ))
+             *)
 
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] ->
      let len = F_op (f, "-", F_op (t, "-", v_one)) in
@@ -3231,6 +3234,59 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_id id)
   | _ -> assert false
 
+let instrument_tracing ctx =
+  let module StringSet = Set.Make(String) in
+  let traceable = StringSet.of_list ["uint64_t"; "sail_string"; "bv_t"; "mpz_t"; "unit"; "bool"] in
+  let rec instrument = function
+    | (I_aux (I_funcall (clexp, _, id, args, ctyp), _) as instr) :: instrs ->
+       let trace_start =
+         iraw (Printf.sprintf "trace_start(\"%s\");" (String.escaped (string_of_id id)))
+       in
+       let trace_arg cval =
+         let ctyp_name = sgen_ctyp_name (cval_ctyp cval) in
+         if StringSet.mem ctyp_name traceable then
+           iraw (Printf.sprintf "trace_%s(%s);" ctyp_name (sgen_cval cval))
+         else
+           iraw "trace_unknown();"
+       in
+       let rec trace_args = function
+         | [] -> []
+         | [cval] -> [trace_arg cval]
+         | cval :: cvals ->
+            trace_arg cval :: iraw "trace_argsep();" :: trace_args cvals
+       in
+       let trace_end = iraw "trace_end();" in
+       let trace_ret =
+         let ctyp_name = sgen_ctyp_name ctyp in
+         if StringSet.mem ctyp_name traceable then
+           iraw (Printf.sprintf "trace_%s(%s);" (sgen_ctyp_name ctyp) (sgen_clexp_pure clexp))
+         else
+           iraw "trace_unknown();"
+       in
+       [trace_start;
+        iraw "g_trace_depth++;"]
+       @ trace_args args
+       @ [iraw "trace_argend();";
+          instr;
+          iraw "g_trace_depth--;";
+          trace_end;
+          trace_ret;
+          iraw "trace_retend();"]
+       @ instrument instrs
+
+    | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (instrument block), aux) :: instrument instrs
+    | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (instrument block), aux) :: instrument instrs
+    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+       I_aux (I_if (cval, instrument then_instrs, instrument else_instrs, ctyp), aux) :: instrument instrs
+
+    | instr :: instrs -> instr :: instrument instrs
+    | [] -> []
+  in
+  function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     CDEF_fundef (function_id, heap_return, args, instrument body)
+  | cdef -> cdef
+
 let bytecode_ast ctx rewrites (Defs defs) =
   let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
   let exit_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_exit") "unit -> unit effect {escape}" in
@@ -3258,7 +3314,7 @@ let compile_ast ctx (Defs defs) =
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
-    let cdefs = optimize ctx cdefs in
+    let cdefs = List.map (instrument_tracing ctx) (optimize ctx cdefs) in
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline

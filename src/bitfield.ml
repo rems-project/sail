@@ -83,6 +83,22 @@ let rec translate_indices hi lo =
   else
     (hi / 64, hi mod 64, 0) :: translate_indices (hi - (hi mod 64 + 1)) lo
 
+let constructor name order start stop =
+  let indices = translate_indices start stop in
+  let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
+  let constructor_val = Printf.sprintf "val Mk_%s : %s -> %s" name (bitvec size order) name in
+  let body (chunk, hi, lo) =
+    Printf.sprintf "%s_chunk_%i = v[%i .. %i]"
+                   name chunk ((hi + chunk * 64) - stop) ((lo + chunk * 64) - stop)
+  in
+  let constructor_function = String.concat "\n"
+    [ Printf.sprintf "function Mk_%s v = struct {" name;
+      Printf.sprintf "  %s" (Util.string_of_list ",\n  " body indices);
+                     "}"
+    ]
+  in
+  combine [ast_of_def_string order constructor_val; ast_of_def_string order constructor_function]
+
 (* For every index range, create a getter and setter *)
 let index_range_getter name field order start stop =
   let indices = translate_indices start stop in
@@ -149,4 +165,4 @@ let field_accessor name order (id, ir) = index_range_accessor name (string_of_id
 let macro id size order ranges =
   let name = string_of_id id in
   let ranges = (mk_id "bits", BF_aux (BF_range (Big_int.of_int (size - 1), Big_int.of_int 0), Parse_ast.Unknown)) :: ranges in
-  combine ([newtype name size order] @ List.map (field_accessor name order) ranges)
+  combine ([newtype name size order; constructor name order (size - 1) 0] @ List.map (field_accessor name order) ranges)

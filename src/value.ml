@@ -491,6 +491,9 @@ let primops =
     StringMap.empty
     [ ("and_bool", and_bool);
       ("or_bool", or_bool);
+      ("print", value_print);
+      ("prerr", fun vs -> (prerr_endline (string_of_value (List.hd vs)); V_unit));
+      ("dec_str", fun _ -> V_string "X");
       ("print_endline", value_print);
       ("prerr_endline", fun vs -> (prerr_endline (string_of_value (List.hd vs)); V_unit));
       ("putchar", value_putchar);
