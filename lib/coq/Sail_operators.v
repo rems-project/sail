@@ -7,16 +7,16 @@ Section Bitvectors.
 Context {a b c} `{Bitvector a} `{Bitvector b} `{Bitvector c}.
 
 (*val concat_bv : forall 'a 'b 'c. Bitvector 'a, Bitvector 'b, Bitvector 'c => 'a -> 'b -> 'c*)
-Definition concat_bv (l : a) (r : b) : c := of_bits (bits_of l ++ bits_of r).
+Definition concat_bv (l : a) (r : b) : list bitU := bits_of l ++ bits_of r.
 
 (*val cons_bv : forall 'a 'b 'c. Bitvector 'a, Bitvector 'b => bitU -> 'a -> 'b*)
-Definition cons_bv b' (v : a) : b := of_bits (b' :: bits_of v).
+Definition cons_bv b' (v : a) : list bitU := b' :: bits_of v.
 
 (*Definition bool_of_bv v := extract_only_element (bits_of v).
 Definition cast_unit_bv b := of_bits [b]
-Definition bv_of_bit len b := of_bits (extz_bits len [b])*)
+Definition bv_of_bit len b := of_bits (extz_bits len [b])
 Definition int_of_bv {a} `{Bitvector a} (sign : bool) : a -> Z := if sign then signed else unsigned.
-(*
+
 Definition most_significant v := match bits_of v with
   | b :: _ -> b
   | _ -> failwith "most_significant applied to empty vector"
@@ -39,7 +39,7 @@ Definition get_min_representable_in _ (n : integer) : integer :=
   else 0 - (integerPow 2 (natFromInteger n))
 
 val bitwise_binop_bv : forall 'a. Bitvector 'a =>
-  (bool -> bool -> bool) -> 'a -> 'a -> 'a*)
+  (bool -> bool -> bool) -> 'a -> 'a -> 'a
 Definition bitwise_binop_bv {a} `{Bitvector a} op (l : a) (r : a) : a :=
  of_bits (binop_bits op (bits_of l) (bits_of r)).
 
@@ -242,7 +242,7 @@ Definition ugteq_bv := ucmp_bv (>=)
 Definition sgteq_bv := scmp_bv (>=)
 *)
 
-(*val get_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a*)
+(*val get_slice_int_bv : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a*)*)
 Definition get_slice_int_bv {a} `{Bitvector a} len n lo : a :=
   let hi := lo + len - 1 in
   let bs := bools_of_int (hi + 1) n in

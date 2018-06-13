@@ -30,7 +30,31 @@ match l with
   foreachM xs vars body
 end.
 
-(*declare {isabelle} termination_argument foreachM = automatic
+(*declare {isabelle} termination_argument foreachM = automatic*)
+
+(*val and_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e*)
+Definition and_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
+ l >>= (fun l => if l then r else returnm false).
+
+(*val or_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e*)
+Definition or_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
+ l >>= (fun l => if l then returnm true else r).
+
+(*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monad 'rv bool 'e*)
+Definition bool_of_bitU_fail {rv E} (b : bitU) : monad rv bool E :=
+match b with
+  | B0 => returnm false
+  | B1 => returnm true
+  | BU => Fail "bool_of_bitU"
+end.
+
+(*val bool_of_bitU_oracle : forall 'rv 'e. bitU -> monad 'rv bool 'e
+Definition bool_of_bitU_oracle {rv E} (b : bitU) : monad rv bool E :=
+match b with
+  | B0 => returnm false
+  | B1 => returnm true
+  | BU => undefined_bool tt
+end.
 
 
 val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->

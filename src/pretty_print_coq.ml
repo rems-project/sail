@@ -1187,7 +1187,9 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
 let doc_typdef (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,nm,(TypSchm_aux (TypSchm_ts (typq, _), _) as typschm)) ->
      doc_op coloneq
-       (separate space [string "Definition"; doc_id_type id; doc_typquant_items empty_ctxt parens typq])
+       (separate space [string "Definition"; doc_id_type id;
+                        doc_typquant_items empty_ctxt parens typq;
+                        colon; string "Type"])
        (doc_typschm empty_ctxt false typschm) ^^ dot
   | TD_record(id,nm,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
@@ -1758,4 +1760,11 @@ string "Require Import List. Import ListNotations. Require Import Sumbool.";
         hardline;
         string "End Content.";
         hardline])
-with Type_check.Type_error (l,err) -> raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
+with Type_check.Type_error (l,err) ->
+  let extra =
+    "\nError during Coq printing\n" ^
+    if Printexc.backtrace_status ()
+    then "\n" ^ Printexc.get_backtrace ()
+    else "(backtracing unavailable)"
+  in
+  raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err ^ extra))

@@ -144,11 +144,23 @@ Definition try_catchR {rv A R E1 E2} (m : monadR rv A R E1) (h : E1 -> monadR rv
       | inr e => h e
      end).
 
+(*val maybe_fail : forall 'rv 'a 'e. string -> maybe 'a -> monad 'rv 'a 'e*)
+Definition maybe_fail {rv A E} msg (x : option A) : monad rv A E :=
+match x with
+  | Some a => returnm a
+  | None => Fail msg
+end.
 
-(*Parameter read_mem : forall {rv n m e}, read_kind -> mword m -> Z -> monad rv (mword n) e.*)
-Definition read_mem {a b e rv : Type} `{Bitvector a} `{Bitvector b}  (rk : read_kind ) (addr : a) (sz : Z )  : monad rv b e:= 
-  let k bytes : monad rv b e := Done (bits_of_mem_bytes bytes) in
-  Read_mem rk (bits_of addr) (Z.to_nat sz) k.
+(*val read_mem_bytes : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv (list memory_byte) 'e*)
+Definition read_mem_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memory_byte) E :=
+  Read_mem rk (bits_of addr) (Z.to_nat sz) returnm.
+
+(*val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e*)
+Definition read_mem {rv A B E} `{ArithFact (B >= 0)} rk (addr : mword A) sz : monad rv (mword B) E :=
+  bind
+    (read_mem_bytes rk addr sz)
+    (fun bytes =>
+       maybe_fail "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes))).
 
 (*val read_tag : forall rv a e. Bitvector a => a -> monad rv bitU e*)
 Definition read_tag {rv a e} `{Bitvector a} (addr : a) : monad rv bitU e :=
