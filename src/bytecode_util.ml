@@ -161,11 +161,11 @@ and string_of_fragment' ?zencode:(zencode=true) f =
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
 let rec string_of_ctyp = function
-  | CT_mpz -> "mpz_t"
-  | CT_bv true -> "bv_t(dec)"
-  | CT_bv false -> "bv_t(inc)"
-  | CT_uint64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
-  | CT_uint64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
+  | CT_int -> "mpz_t"
+  | CT_bits true -> "bv_t(dec)"
+  | CT_bits false -> "bv_t(inc)"
+  | CT_bits64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
+  | CT_bits64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
   | CT_int64 -> "int64_t"
   | CT_bit -> "bit"
   | CT_unit -> "unit"

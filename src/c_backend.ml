@@ -751,9 +751,9 @@ let initial_ctx env =
 
 let rec ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
-  | CT_mpz, CT_mpz -> true
-  | CT_bv d1, CT_bv d2 -> d1 = d2
-  | CT_uint64 (m1, d1), CT_uint64 (m2, d2) -> m1 = m2 && d1 = d2
+  | CT_int, CT_int -> true
+  | CT_bits d1, CT_bits d2 -> d1 = d2
+  | CT_bits64 (m1, d1), CT_bits64 (m2, d2) -> m1 = m2 && d1 = d2
   | CT_bit, CT_bit -> true
   | CT_int64, CT_int64 -> true
   | CT_unit, CT_unit -> true
@@ -776,8 +776,8 @@ let rec ctyp_of_typ ctx typ =
   match typ_aux with
   | Typ_id id when string_of_id id = "bit" -> CT_bit
   | Typ_id id when string_of_id id = "bool" -> CT_bool
-  | Typ_id id when string_of_id id = "int" -> CT_mpz
-  | Typ_id id when string_of_id id = "nat" -> CT_mpz
+  | Typ_id id when string_of_id id = "int" -> CT_int
+  | Typ_id id when string_of_id id = "nat" -> CT_int
   | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
      begin
        match destruct_range Env.empty typ with
@@ -792,8 +792,8 @@ let rec ctyp_of_typ ctx typ =
              if prove ctx.local_env (nc_lteq (nconstant min_int64) n) && prove ctx.local_env (nc_lteq m (nconstant max_int64)) then
                (prerr_endline "yes"; CT_int64)
              else
-               (prerr_endline "no"; CT_mpz)
-          | _ -> CT_mpz
+               (prerr_endline "no"; CT_int)
+          | _ -> CT_int
      end
 
   | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "list" ->
@@ -806,8 +806,8 @@ let rec ctyp_of_typ ctx typ =
      begin
        let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
        match nexp_simp n with
-       | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_uint64 (Big_int.to_int n, direction)
-       | _ -> CT_bv direction
+       | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_bits64 (Big_int.to_int n, direction)
+       | _ -> CT_bits direction
      end
   | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _);
                   Typ_arg_aux (Typ_arg_order ord, _);
@@ -846,8 +846,8 @@ let rec ctyp_of_typ ctx typ =
   | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
 
 let rec is_stack_ctyp ctyp = match ctyp with
-  | CT_uint64 _ | CT_int64 | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
-  | CT_bv _ | CT_mpz | CT_real | CT_string | CT_list _ | CT_vector _ -> false
+  | CT_bits64 _ | CT_int64 | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
+  | CT_bits _ | CT_int | CT_real | CT_string | CT_list _ | CT_vector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (*FIXME*)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
@@ -1184,17 +1184,17 @@ let rec compile_aval ctx = function
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
      let gs = gensym () in
-     [idecl CT_mpz gs;
-      iinit CT_mpz gs (F_lit (V_int n), CT_int64)],
-     (F_id gs, CT_mpz),
-     [iclear CT_mpz gs]
+     [idecl CT_int gs;
+      iinit CT_int gs (F_lit (V_int n), CT_int64)],
+     (F_id gs, CT_int),
+     [iclear CT_int gs]
 
   | AV_lit (L_aux (L_num n, _), typ) ->
      let gs = gensym () in
-     [idecl CT_mpz gs;
-      iinit CT_mpz gs (F_lit (V_string (Big_int.to_string n)), CT_string)],
-     (F_id gs, CT_mpz),
-     [iclear CT_mpz gs]
+     [idecl CT_int gs;
+      iinit CT_int gs (F_lit (V_string (Big_int.to_string n)), CT_string)],
+     (F_id gs, CT_int),
+     [iclear CT_int gs]
 
   | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit (V_bit Sail_values.B0), CT_bit), []
   | AV_lit (L_aux (L_one, _), _) -> [], (F_lit (V_bit Sail_values.B1), CT_bit), []
@@ -1254,9 +1254,9 @@ let rec compile_aval ctx = function
        let len = List.length avals in
        match destruct_vector ctx.tc_env typ with
        | Some (_, Ord_aux (Ord_inc, _), _) ->
-          [], (bitstring, CT_uint64 (len, false)), []
+          [], (bitstring, CT_bits64 (len, false)), []
        | Some (_, Ord_aux (Ord_dec, _), _) ->
-          [], (bitstring, CT_uint64 (len, true)), []
+          [], (bitstring, CT_bits64 (len, true)), []
        | Some _ ->
           c_error "Encountered order polymorphic bitvector literal"
        | None ->
@@ -1271,14 +1271,14 @@ let rec compile_aval ctx = function
      let first_chunk = bitstring (Util.take (len mod 64) avals) in
      let chunks = Util.drop (len mod 64) avals |> chunkify 64 |> List.map bitstring in
      let gs = gensym () in
-     [idecl (CT_bv true) gs;
-      iinit (CT_bv true) gs (first_chunk, CT_uint64 (len mod 64, true))]
+     [idecl (CT_bits true) gs;
+      iinit (CT_bits true) gs (first_chunk, CT_bits64 (len mod 64, true))]
      @ List.map (fun chunk -> ifuncall (CL_id gs)
                                        (mk_id "append_64")
-                                       [(F_id gs, CT_bv true); (chunk, CT_uint64 (64, true))]
-                                       (CT_bv true)) chunks,
-     (F_id gs, CT_bv true),
-     [iclear (CT_bv true) gs]
+                                       [(F_id gs, CT_bits true); (chunk, CT_bits64 (64, true))]
+                                       (CT_bits true)) chunks,
+     (F_id gs, CT_bits true),
+     [iclear (CT_bits true) gs]
 
   (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
   | AV_vector (avals, Typ_aux (Typ_app (id, [_; Typ_arg_aux (Typ_arg_order ord, _); Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id bit_id, _)), _)]), _))
@@ -1290,7 +1290,7 @@ let rec compile_aval ctx = function
        | Ord_aux (Ord_var _, _) -> c_error "Polymorphic vector direction found"
      in
      let gs = gensym () in
-     let ctyp = CT_uint64 (len, direction) in
+     let ctyp = CT_bits64 (len, direction) in
      let mask i = V_bits (Util.list_init (63 - i) (fun _ -> Sail_values.B0) @ [Sail_values.B1] @ Util.list_init i (fun _ -> Sail_values.B0)) in
      let aval_mask i aval =
        let setup, cval, cleanup = compile_aval ctx aval in
@@ -2304,7 +2304,7 @@ let rec instrs_rename from_id to_id =
   | [] -> []
 
 let hoist_ctyp = function
-  | CT_mpz | CT_bv _ | CT_struct _ -> true
+  | CT_int | CT_bits _ | CT_struct _ -> true
   | _ -> false
 
 let hoist_counter = ref 0
@@ -2497,12 +2497,12 @@ let upper_codegen_id id = string (upper_sgen_id id)
 
 let rec sgen_ctyp = function
   | CT_unit -> "unit"
-  | CT_bit -> "uint64_t"
+  | CT_bit -> "mach_bits"
   | CT_bool -> "bool"
-  | CT_uint64 _ -> "uint64_t"
-  | CT_int64 -> "int64_t"
-  | CT_mpz -> "mpz_t"
-  | CT_bv _ -> "bv_t"
+  | CT_bits64 _ -> "mach_bits"
+  | CT_int64 -> "mach_int"
+  | CT_int -> "sail_int"
+  | CT_bits _ -> "sail_bits"
   | CT_tup _ as tup -> "struct " ^ Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> "struct " ^ sgen_id id
   | CT_enum (id, _) -> "enum " ^ sgen_id id
@@ -2515,12 +2515,12 @@ let rec sgen_ctyp = function
 
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
-  | CT_bit -> "uint64_t"
+  | CT_bit -> "mach_bits"
   | CT_bool -> "bool"
-  | CT_uint64 _ -> "uint64_t"
-  | CT_int64 -> "int64_t"
-  | CT_mpz -> "mpz_t"
-  | CT_bv _ -> "bv_t"
+  | CT_bits64 _ -> "mach_bits"
+  | CT_int64 -> "mach_int"
+  | CT_int -> "sail_int"
+  | CT_bits _ -> "sail_bits"
   | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> sgen_id id
   | CT_enum (id, _) -> sgen_id id
@@ -2533,9 +2533,9 @@ let rec sgen_ctyp_name = function
 
 let sgen_cval_param (frag, ctyp) =
   match ctyp with
-  | CT_bv direction ->
+  | CT_bits direction ->
      string_of_fragment frag ^ ", " ^ string_of_bool direction
-  | CT_uint64 (len, direction) ->
+  | CT_bits64 (len, direction) ->
      string_of_fragment frag ^ ", " ^ string_of_int len ^ "ul , " ^ string_of_bool direction
   | _ ->
      string_of_fragment frag
@@ -2567,7 +2567,7 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
      if is_stack_ctyp ctyp then
        string (Printf.sprintf "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval))
      else
-       string (Printf.sprintf "  set_%s(%s, %s);" (sgen_ctyp_name ctyp) (sgen_clexp clexp) (sgen_cval cval))
+       string (Printf.sprintf "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp) (sgen_clexp clexp) (sgen_cval cval))
   | I_jump (cval, label) ->
      string (Printf.sprintf "  if (%s) goto %s;" (sgen_cval cval) label)
   | I_if (cval, [then_instr], [], ctyp) ->
@@ -2620,43 +2620,44 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
           end
        | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
        | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
-       | "vector_update", CT_uint64 _ -> "update_uint64_t"
-       | "vector_update", CT_bv _ -> "update_bv"
+       | "vector_update", CT_bits64 _ -> "update_uint64_t"
+       | "vector_update", CT_bits _ -> "update_bv"
        | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
-       | "undefined_vector", CT_uint64 _ -> "undefined_uint64_t"
-       | "undefined_vector", CT_bv _ -> "undefined_bv_t"
-       | "undefined_vector", _ -> Printf.sprintf "undefined_vector_%s" (sgen_ctyp_name ctyp)
+       | "undefined_vector", CT_bits64 _ -> "UNDEFINED(mach_bits)"
+       | "undefined_vector", CT_bits _ -> "UNDEFINED(sail_bits)"
+       | "undefined_bit", _ -> "UNDEFINED(mach_bits)"
+       | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
        | fname, _ -> fname
      in
      if fname = "reg_deref" then
        if is_stack_ctyp ctyp then
          string (Printf.sprintf  " %s = *(%s);" (sgen_clexp_pure x) c_args)
        else
-         string (Printf.sprintf  " set_%s(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
+         string (Printf.sprintf  " COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
      else if is_stack_ctyp ctyp then
        string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname c_args)
      else
        string (Printf.sprintf "  %s(%s, %s);" fname (sgen_clexp x) c_args)
   | I_clear (ctyp, id) ->
-     string (Printf.sprintf "  clear_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
+     string (Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
   | I_init (ctyp, id, cval) ->
-     string (Printf.sprintf "  init_%s_of_%s(&%s, %s);"
+     string (Printf.sprintf "  CREATE_OF(%s, %s)(&%s, %s);"
                             (sgen_ctyp_name ctyp)
                             (sgen_ctyp_name (cval_ctyp cval))
                             (sgen_id id)
                             (sgen_cval_param cval))
   | I_alloc (ctyp, id) ->
-     string (Printf.sprintf "  init_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
+     string (Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
   | I_reinit (ctyp, id, cval) ->
-     string (Printf.sprintf "  reinit_%s_of_%s(&%s, %s);"
+     string (Printf.sprintf "  RECREATE_OF(%s, %s)(&%s, %s);"
                             (sgen_ctyp_name ctyp)
                             (sgen_ctyp_name (cval_ctyp cval))
                             (sgen_id id)
                             (sgen_cval_param cval))
   | I_reset (ctyp, id) ->
-     string (Printf.sprintf "  reinit_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
+     string (Printf.sprintf "  RECREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
   (* FIXME: This just covers the cases we see in our specs, need a
      special conversion code-generator for full generality *)
   | I_convert (x, CT_tup ctyps1, y, CT_tup ctyps2) when List.length ctyps1 = List.length ctyps2 ->
@@ -2666,7 +2667,7 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
        else if ctyp_equal ctyp1 ctyp2 then
          c_error "heap tuple type conversion"
        else if is_stack_ctyp ctyp1 then
-         string (Printf.sprintf "  %s.ztup%i = convert_%s_of_%s(%s.ztup%i);"
+         string (Printf.sprintf "  %s.ztup%i = CONVERT_OF(%s, %s)(%s.ztup%i);"
                                 (sgen_clexp_pure x)
                                 i
                                 (sgen_ctyp_name ctyp1)
@@ -2674,7 +2675,7 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
                                 (sgen_id y)
                                 i)
        else
-         string (Printf.sprintf "  convert_%s_of_%s(%s.ztup%i, %s.ztup%i);"
+         string (Printf.sprintf "  CONVERT_OF(%s, %s)(%s.ztup%i, %s.ztup%i);"
                                 (sgen_ctyp_name ctyp1)
                                 (sgen_ctyp_name ctyp2)
                                 (sgen_clexp x)
@@ -2685,13 +2686,13 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
      separate hardline (List.mapi convert (List.map2 (fun x y -> (x, y)) ctyps1 ctyps2))
   | I_convert (x, ctyp1, y, ctyp2) ->
      if is_stack_ctyp ctyp1 then
-       string (Printf.sprintf "  %s = convert_%s_of_%s(%s);"
+       string (Printf.sprintf "  %s = CONVERT_OF(%s, %s)(%s);"
                  (sgen_clexp_pure x)
                  (sgen_ctyp_name ctyp1)
                  (sgen_ctyp_name ctyp2)
                  (sgen_id y))
      else
-       string (Printf.sprintf "  convert_%s_of_%s(%s, %s);"
+       string (Printf.sprintf "  CONVERT_OF(%s, %s)(%s, %s);"
                  (sgen_ctyp_name ctyp1)
                  (sgen_ctyp_name ctyp2)
                  (sgen_clexp x)
@@ -2699,7 +2700,7 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
   | I_return cval ->
      string (Printf.sprintf "  return %s;" (sgen_cval cval))
   | I_throw cval ->
-     string (Printf.sprintf "  THROW(%s)" (sgen_cval cval))
+     c_error "I_throw reached code generator"
   | I_comment str ->
      string ("  /* " ^ str ^ " */")
   | I_label str ->
@@ -2728,10 +2729,10 @@ let codegen_type_def ctx = function
        if is_stack_ctyp ctyp then
          string (Printf.sprintf "rop->%s = op.%s;" (sgen_id id) (sgen_id id))
        else
-         string (Printf.sprintf "set_%s(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id id) (sgen_id id))
+         string (Printf.sprintf "COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id id) (sgen_id id))
      in
      let codegen_setter id ctors =
-       string (let n = sgen_id id in Printf.sprintf "void set_%s(struct %s *rop, const struct %s op)" n n n) ^^ space
+       string (let n = sgen_id id in Printf.sprintf "void COPY(%s)(struct %s *rop, const struct %s op)" n n n) ^^ space
        ^^ surround 2 0 lbrace
                    (separate_map hardline codegen_set (Bindings.bindings ctors))
                    rbrace
@@ -2739,11 +2740,11 @@ let codegen_type_def ctx = function
      (* Generate an init/clear_T function for every struct T *)
      let codegen_field_init f (id, ctyp) =
        if not (is_stack_ctyp ctyp) then
-         [string (Printf.sprintf "%s_%s(&op->%s);" f (sgen_ctyp_name ctyp) (sgen_id id))]
+         [string (Printf.sprintf "%s(%s)(&op->%s);" f (sgen_ctyp_name ctyp) (sgen_id id))]
        else []
      in
      let codegen_init f id ctors =
-       string (let n = sgen_id id in Printf.sprintf "void %s_%s(struct %s *op)" f n n) ^^ space
+       string (let n = sgen_id id in Printf.sprintf "void %s(%s)(struct %s *op)" f n n) ^^ space
        ^^ surround 2 0 lbrace
                    (separate hardline (Bindings.bindings ctors |> List.map (codegen_field_init f) |> List.concat))
                    rbrace
@@ -2763,11 +2764,11 @@ let codegen_type_def ctx = function
      ^^ semi ^^ twice hardline
      ^^ codegen_setter id (ctor_bindings ctors)
      ^^ twice hardline
-     ^^ codegen_init "init" id (ctor_bindings ctors)
+     ^^ codegen_init "CREATE" id (ctor_bindings ctors)
      ^^ twice hardline
-     ^^ codegen_init "reinit" id (ctor_bindings ctors)
+     ^^ codegen_init "RECREATE" id (ctor_bindings ctors)
      ^^ twice hardline
-     ^^ codegen_init "clear" id (ctor_bindings ctors)
+     ^^ codegen_init "KILL" id (ctor_bindings ctors)
      ^^ twice hardline
      ^^ codegen_eq
 
@@ -2790,28 +2791,28 @@ let codegen_type_def ctx = function
      let codegen_init =
        let n = sgen_id id in
        let ctor_id, ctyp = List.hd tus in
-       string (Printf.sprintf "void init_%s(struct %s *op)" n n)
+       string (Printf.sprintf "void CREATE(%s)(struct %s *op)" n n)
        ^^ hardline
        ^^ surround 2 0 lbrace
                    (string (Printf.sprintf "op->kind = Kind_%s;" (sgen_id ctor_id)) ^^ hardline
                     ^^ if not (is_stack_ctyp ctyp) then
-                         string (Printf.sprintf "init_%s(&op->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
+                         string (Printf.sprintf "CREATE(%s)(&op->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
                        else empty)
                    rbrace
      in
      let codegen_reinit =
        let n = sgen_id id in
-       string (Printf.sprintf "void reinit_%s(struct %s *op) {}" n n)
+       string (Printf.sprintf "void RECREATE(%s)(struct %s *op) {}" n n)
      in
      let clear_field v ctor_id ctyp =
        if is_stack_ctyp ctyp then
          string (Printf.sprintf "/* do nothing */")
        else
-         string (Printf.sprintf "clear_%s(&%s->%s);" (sgen_ctyp_name ctyp) v (sgen_id ctor_id))
+         string (Printf.sprintf "KILL(%s)(&%s->%s);" (sgen_ctyp_name ctyp) v (sgen_id ctor_id))
      in
      let codegen_clear =
        let n = sgen_id id in
-       string (Printf.sprintf "void clear_%s(struct %s *op)" n n) ^^ hardline
+       string (Printf.sprintf "void KILL(%s)(struct %s *op)" n n) ^^ hardline
        ^^ surround 2 0 lbrace
                    (each_ctor "op->" (clear_field "op") tus ^^ semi)
                    rbrace
@@ -2828,7 +2829,7 @@ let codegen_type_def ctx = function
          | CT_tup ctyps ->
             String.concat ", " (List.mapi (fun i ctyp -> Printf.sprintf "%s op%d" (sgen_ctyp ctyp) i) ctyps),
             string (Printf.sprintf "%s op;" (sgen_ctyp ctyp)) ^^ hardline
-            ^^ string (Printf.sprintf "init_%s(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
+            ^^ string (Printf.sprintf "CREATE(%s)(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
             ^^ separate hardline (List.mapi tuple_set ctyps) ^^ hardline
          | ctyp -> Printf.sprintf "%s op" (sgen_ctyp ctyp), empty
        in
@@ -2840,8 +2841,8 @@ let codegen_type_def ctx = function
                     ^^ if is_stack_ctyp ctyp then
                          string (Printf.sprintf "rop->%s = op;" (sgen_id ctor_id))
                        else
-                         string (Printf.sprintf "init_%s(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)) ^^ hardline
-                         ^^ string (Printf.sprintf "set_%s(&rop->%s, op);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)))
+                         string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)) ^^ hardline
+                         ^^ string (Printf.sprintf "COPY(%s)(&rop->%s, op);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)))
                    rbrace
      in
      let codegen_setter =
@@ -2850,10 +2851,10 @@ let codegen_type_def ctx = function
          if is_stack_ctyp ctyp then
            string (Printf.sprintf "rop->%s = op.%s;" (sgen_id ctor_id) (sgen_id ctor_id))
          else
-           string (Printf.sprintf "init_%s(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
-           ^^ string (Printf.sprintf " set_%s(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id) (sgen_id ctor_id))
+           string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
+           ^^ string (Printf.sprintf " COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id) (sgen_id ctor_id))
        in
-       string (Printf.sprintf "void set_%s(struct %s *rop, struct %s op)" n n n) ^^ hardline
+       string (Printf.sprintf "void COPY(%s)(struct %s *rop, struct %s op)" n n n) ^^ hardline
        ^^ surround 2 0 lbrace
                    (each_ctor "rop->" (clear_field "rop") tus
                     ^^ semi ^^ hardline
@@ -2935,14 +2936,14 @@ let codegen_node id ctyp =
   ^^ string (Printf.sprintf "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id))
 
 let codegen_list_init id =
-  string (Printf.sprintf "void init_%s(%s *rop) { *rop = NULL; }" (sgen_id id) (sgen_id id))
+  string (Printf.sprintf "void CREATE(%s)(%s *rop) { *rop = NULL; }" (sgen_id id) (sgen_id id))
 
 let codegen_list_clear id ctyp =
-  string (Printf.sprintf "void clear_%s(%s *rop) {\n" (sgen_id id) (sgen_id id))
+  string (Printf.sprintf "void KILL(%s)(%s *rop) {\n" (sgen_id id) (sgen_id id))
   ^^ string (Printf.sprintf "  if (*rop == NULL) return;")
   ^^ (if is_stack_ctyp ctyp then empty
-      else string (Printf.sprintf "  clear_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
-  ^^ string (Printf.sprintf "  clear_%s(&(*rop)->tl);\n" (sgen_id id))
+      else string (Printf.sprintf "  KILL(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
+  ^^ string (Printf.sprintf "  KILL(%s)(&(*rop)->tl);\n" (sgen_id id))
   ^^ string "  free(*rop);"
   ^^ string "}"
 
@@ -2953,13 +2954,13 @@ let codegen_list_set id ctyp =
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = op->hd;\n"
       else
-        string (Printf.sprintf "  init_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
-        ^^ string (Printf.sprintf "  set_%s(&(*rop)->hd, op->hd);\n" (sgen_ctyp_name ctyp)))
+        string (Printf.sprintf "  CREATE(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
+        ^^ string (Printf.sprintf "  COPY(%s)(&(*rop)->hd, op->hd);\n" (sgen_ctyp_name ctyp)))
   ^^ string (Printf.sprintf "  internal_set_%s(&(*rop)->tl, op->tl);\n" (sgen_id id))
   ^^ string "}"
   ^^ twice hardline
-  ^^ string (Printf.sprintf "void set_%s(%s *rop, const %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
-  ^^ string (Printf.sprintf "  clear_%s(rop);\n" (sgen_id id))
+  ^^ string (Printf.sprintf "void COPY(%s)(%s *rop, const %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
+  ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
   ^^ string (Printf.sprintf "  internal_set_%s(rop, op);\n" (sgen_id id))
   ^^ string "}"
 
@@ -2970,8 +2971,8 @@ let codegen_cons id ctyp =
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = x;\n"
       else
-        string (Printf.sprintf "  init_%s(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
-        ^^ string (Printf.sprintf "  set_%s(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp)))
+        string (Printf.sprintf "  CREATE(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
+        ^^ string (Printf.sprintf "  COPY(%s)(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp)))
   ^^ string "  (*rop)->tl = xs;\n"
   ^^ string "}"
 
@@ -2979,7 +2980,7 @@ let codegen_pick id ctyp =
   if is_stack_ctyp ctyp then
     string (Printf.sprintf "%s pick_%s(const %s xs) { return xs->hd; }" (sgen_ctyp ctyp) (sgen_ctyp_name ctyp) (sgen_id id))
   else
-    string (Printf.sprintf "void pick_%s(%s *x, const %s xs) { set_%s(x, xs->hd); }" (sgen_ctyp_name ctyp) (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp))
+    string (Printf.sprintf "void pick_%s(%s *x, const %s xs) { COPY(%s)(x, xs->hd); }" (sgen_ctyp_name ctyp) (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp))
 
 let codegen_list ctx ctyp =
   let id = mk_id (string_of_ctyp (CT_list ctyp)) in
@@ -3007,27 +3008,27 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string (Printf.sprintf "typedef struct %s %s;" (sgen_id id) (sgen_id id))
     in
     let vector_init =
-      string (Printf.sprintf "void init_%s(%s *rop) {\n  rop->len = 0;\n  rop->data = NULL;\n}" (sgen_id id) (sgen_id id))
+      string (Printf.sprintf "void CREATE(%s)(%s *rop) {\n  rop->len = 0;\n  rop->data = NULL;\n}" (sgen_id id) (sgen_id id))
     in
     let vector_set =
-      string (Printf.sprintf "void set_%s(%s *rop, %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
-      ^^ string (Printf.sprintf "  clear_%s(rop);\n" (sgen_id id))
+      string (Printf.sprintf "void COPY(%s)(%s *rop, %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
+      ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
       ^^ string "  rop->len = op.len;\n"
       ^^ string (Printf.sprintf "  rop->data = malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < op.len; i++) {\n"
       ^^ string (if is_stack_ctyp ctyp then
                    "    (rop->data)[i] = op.data[i];\n"
                  else
-                   Printf.sprintf "    init_%s((rop->data) + i);\n    set_%s((rop->data) + i, op.data[i]);\n" (sgen_ctyp_name ctyp) (sgen_ctyp_name ctyp))
+                   Printf.sprintf "    CREATE(%s)((rop->data) + i);\n    COPY(%s)((rop->data) + i, op.data[i]);\n" (sgen_ctyp_name ctyp) (sgen_ctyp_name ctyp))
       ^^ string "  }\n"
       ^^ string "}"
     in
     let vector_clear =
-      string (Printf.sprintf "void clear_%s(%s *rop) {\n" (sgen_id id) (sgen_id id))
+      string (Printf.sprintf "void KILL(%s)(%s *rop) {\n" (sgen_id id) (sgen_id id))
       ^^ (if is_stack_ctyp ctyp then empty
          else
            string "  for (int i = 0; i < (rop->len); i++) {\n"
-           ^^ string (Printf.sprintf "    clear_%s((rop->data) + i);\n" (sgen_ctyp_name ctyp))
+           ^^ string (Printf.sprintf "    KILL(%s)((rop->data) + i);\n" (sgen_ctyp_name ctyp))
            ^^ string "  }\n")
       ^^ string "  if (rop->data != NULL) free(rop->data);\n"
       ^^ string "}"
@@ -3039,13 +3040,13 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string (if is_stack_ctyp ctyp then
                    "    rop->data[m] = elem;\n"
                  else
-                   Printf.sprintf "  set_%s((rop->data) + m, elem);\n" (sgen_ctyp_name ctyp))
+                   Printf.sprintf "  COPY(%s)((rop->data) + m, elem);\n" (sgen_ctyp_name ctyp))
       ^^ string "  } else {\n"
-      ^^ string (Printf.sprintf "    set_%s(rop, op);\n" (sgen_id id))
+      ^^ string (Printf.sprintf "    COPY(%s)(rop, op);\n" (sgen_id id))
       ^^ string (if is_stack_ctyp ctyp then
                    "    rop->data[m] = elem;\n"
                  else
-                   Printf.sprintf "  set_%s((rop->data) + m, elem);\n" (sgen_ctyp_name ctyp))
+                   Printf.sprintf "  COPY(%s)((rop->data) + m, elem);\n" (sgen_ctyp_name ctyp))
       ^^ string "  }\n"
       ^^ string "}"
     in
@@ -3054,7 +3055,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string (if is_stack_ctyp ctyp then
                    "  rop->data[n] = elem;\n"
                  else
-                   Printf.sprintf "  set_%s((rop->data) + n, elem);\n" (sgen_ctyp_name ctyp))
+                   Printf.sprintf "  COPY(%s)((rop->data) + n, elem);\n" (sgen_ctyp_name ctyp))
       ^^ string "}"
     in
     let vector_access =
@@ -3066,7 +3067,7 @@ let codegen_vector ctx (direction, ctyp) =
       else
         string (Printf.sprintf "void vector_access_%s(%s *rop, %s op, mpz_t n) {\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
         ^^ string "  int m = mpz_get_ui(n);\n"
-        ^^ string (Printf.sprintf "  set_%s(rop, op.data[m]);\n" (sgen_ctyp_name ctyp))
+        ^^ string (Printf.sprintf "  COPY(%s)(rop, op.data[m]);\n" (sgen_ctyp_name ctyp))
         ^^ string "}"
     in
     let internal_vector_init =
@@ -3083,7 +3084,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string (if is_stack_ctyp ctyp then
                    "    (rop->data)[i] = elem;\n"
                  else
-                   Printf.sprintf "    init_%s((rop->data) + i);\n    set_%s((rop->data) + i, elem);\n" (sgen_ctyp_name ctyp) (sgen_ctyp_name ctyp))
+                   Printf.sprintf "    CREATE(%s)((rop->data) + i);\n    COPY(%s)((rop->data) + i, elem);\n" (sgen_ctyp_name ctyp) (sgen_ctyp_name ctyp))
       ^^ string "  }\n"
       ^^ string "}"
     in
@@ -3152,11 +3153,9 @@ let codegen_def' ctx = function
           ^^ hardline
      in
      function_header
-     (* ^^ string (Printf.sprintf "{ fprintf(stderr, \"%s \"); " (string_of_id id)) *)
      ^^ string "{"
      ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs) ^^ hardline
      ^^ string "}"
-     (* ^^ string "}" *)
 
   | CDEF_type ctype_def ->
      codegen_type_def ctx ctype_def
@@ -3290,6 +3289,7 @@ let instrument_tracing ctx =
 let bytecode_ast ctx rewrites (Defs defs) =
   let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
   let exit_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_exit") "unit -> unit effect {escape}" in
+  
   let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
   let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
   let cdefs = List.concat (List.rev chunks) in
@@ -3314,18 +3314,19 @@ let compile_ast ctx (Defs defs) =
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
-    let cdefs = List.map (instrument_tracing ctx) (optimize ctx cdefs) in
+    let cdefs = optimize ctx cdefs in
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
-                            [ string "#include \"sail.h\"" ]
+                     [ string "#include \"sail.h\"";
+                       string "#include \"rts.h\""]
     in
 
     let exn_boilerplate =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], []) else
         ([ "  current_exception = malloc(sizeof(struct zexception));";
-           "  init_zexception(current_exception);" ],
-         [ "  clear_zexception(current_exception);";
+           "  CREATE(zexception)(current_exception);" ],
+         [ "  KILL(zexception)(current_exception);";
            "  free(current_exception);";
            "  if (have_exception) fprintf(stderr, \"Exiting due to uncaught exception\\n\");" ])
     in
@@ -3349,15 +3350,15 @@ let compile_ast ctx (Defs defs) =
       if is_stack_ctyp ctyp then
         [], []
       else
-        [ Printf.sprintf "  init_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ],
-        [ Printf.sprintf "  clear_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ]
+        [ Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ],
+        [ Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ]
     in
 
     let postamble = separate hardline (List.map string
        ( [ "int main(int argc, char *argv[])";
            "{";
            "  if (argc > 1) { load_image(argv[1]); }";
-           "  setup_library();" ]
+           "  setup_rts();" ]
        @ fst exn_boilerplate
        @ startup cdefs
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
@@ -3368,7 +3369,7 @@ let compile_ast ctx (Defs defs) =
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
        @ finish cdefs
        @ snd exn_boilerplate
-       @ [ "  cleanup_library();";
+       @ [ "  cleanup_rts();";
            "  return EXIT_SUCCESS;";
            "}" ] ))
     in

@@ -54,7 +54,7 @@ function run_c_tests {
 	if $SAILDIR/sail -no_warn -c $SAIL_OPTS $file 1> ${file%.sail}.c 2> /dev/null;
 	then
 	    green "compiling $(basename $file) ($SAIL_OPTS)" "ok";
-	    if gcc $CC_OPTS ${file%.sail}.c -lgmp -I $SAILDIR/lib;
+	    if gcc $CC_OPTS ${file%.sail}.c $SAILDIR/lib/*.c -lgmp -I $SAILDIR/lib;
 	    then
 		green "compiling $(basename ${file%.sail}.c) ($CC_OPTS)" "ok";
 		$DIR/a.out 1> ${file%.sail}.result 2> /dev/null;

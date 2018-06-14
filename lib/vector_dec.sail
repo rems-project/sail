@@ -121,10 +121,13 @@ val unsigned = {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",
-  c: "sail_uint",
+  c: "sail_unsigned",
   coq: "unsigned"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
-val signed = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+val signed = {
+  c: "sail_signed",
+  _: "sint"
+} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 $endif

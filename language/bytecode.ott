@@ -65,11 +65,11 @@ fragment :: 'F_' ::=
 
 ctyp :: 'CT_' ::=
   {{ com C type }}
-  | mpz_t                   :: :: mpz
+  | mpz_t                   :: :: int
 % Arbitrary precision GMP integer, mpz_t in C. }}
-  | bv_t ( bool )           :: :: bv
+  | bv_t ( bool )           :: :: bits
 % Variable length bitvector - flag represents direction, true - dec or false - inc }}
-  | 'uint64_t' ( nat , bool ) :: :: uint64
+  | 'uint64_t' ( nat , bool ) :: :: bits64
 % Fixed length bitvector that fits within a 64-bit word. - int
 % represents length, and flag is the same as CT_bv. }}
   | 'int64_t'               :: :: int64
