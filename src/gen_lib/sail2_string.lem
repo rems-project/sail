@@ -4,8 +4,8 @@ open import List_extra
 open import String
 open import String_extra
 
-open import Sail_operators_mwords
-open import Sail_values
+open import Sail2_operators_mwords
+open import Sail2_values
 
 val string_sub : string -> ii -> ii -> string
 let string_sub str start len =
@@ -115,6 +115,17 @@ let hex_bits_13_matches_prefix s =
      else
        Nothing
   end
+
+let hex_bits_16_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+     if 0 <= n && n < 65536 then
+       Just ((of_int 16 n, len))
+     else
+       Nothing
+  end
+
 
 let hex_bits_20_matches_prefix s =
   match maybe_int_of_prefix s with

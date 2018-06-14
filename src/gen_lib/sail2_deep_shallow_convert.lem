@@ -1,8 +1,8 @@
 open import Pervasives_extra
-open import Sail_impl_base
-open import Interp
-open import Interp_ast
-open import Sail_values
+open import Sail2_impl_base
+open import Sail2_interp
+open import Sail2_interp_ast
+open import Sail2_values
 
 
 class (ToFromInterpValue 'a)

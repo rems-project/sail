@@ -49,7 +49,7 @@
 (*========================================================================*)
 
 open import Pervasives_extra
-open import Sail_instr_kinds
+open import Sail2_instr_kinds
 
 
 class ( EnumerationType 'a ) 

@@ -1,9 +1,9 @@
 open import Pervasives_extra
-open import Sail_values
-open import Prompt_monad
-open import Prompt
-open import State_monad
-open import {isabelle} `State_monad_lemmas`
+open import Sail2_values
+open import Sail2_prompt_monad
+open import Sail2_prompt
+open import Sail2_state_monad
+open import {isabelle} `Sail2_state_monad_lemmas`
 
 (* State monad wrapper around prompt monad *)
 

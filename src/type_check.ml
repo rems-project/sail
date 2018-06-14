@@ -2724,13 +2724,17 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           begin
             try
               typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
+
               let unifiers, _, _ (* FIXME! *) = unify l env typ2 typ in
-              typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
+
+              typ_debug (lazy ("unifiers: " ^ string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
+
               let arg_typ' = subst_unifiers unifiers typ1 in
               let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
               then typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_pat pat)
               else ();
+
               let ret_typ' = subst_unifiers unifiers typ2 in
               let tpats, env, guards =
                 try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ') with

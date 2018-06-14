@@ -1,10 +1,10 @@
 open import Pervasives
 open import Pervasives_extra
-open import Sail_instr_kinds
-open import Sail_values
-open import Sail_operators_mwords
-open import Prompt_monad
-open import Prompt
+open import Sail2_instr_kinds
+open import Sail2_values
+open import Sail2_operators_mwords
+open import Sail2_prompt_monad
+open import Sail2_prompt
 
 type bitvector 'a = mword 'a
 

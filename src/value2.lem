@@ -52,7 +52,7 @@ open import Pervasives
 open import Assert_extra
 open Map
 
-open import Sail_values
+open import Sail2_values
 
 type vl =
   | V_vector of list vl

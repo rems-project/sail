@@ -1,7 +1,7 @@
 open import Pervasives_extra
 (*open import Sail_impl_base*)
-open import Sail_values
-open import Prompt_monad
+open import Sail2_values
+open import Sail2_prompt_monad
 open import {isabelle} `Prompt_monad_lemmas`
 
 val (>>=) : forall 'rv 'a 'b 'e. monad 'rv 'a 'e -> ('a -> monad 'rv 'b 'e) -> monad 'rv 'b 'e

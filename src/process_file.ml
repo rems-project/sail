@@ -279,17 +279,17 @@ let output_lem filename libs defs =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let types_module = (filename ^ "_types") in
-  let monad_modules = ["Prompt_monad"; "Prompt"] in
+  let monad_modules = ["Sail2_prompt_monad"; "Sail2_prompt"] in
   let operators_module =
     if !Pretty_print_lem.opt_mwords
-    then "Sail_operators_mwords"
-    else "Sail_operators_bitlists" in
+    then "Sail2_operators_mwords"
+    else "Sail2_operators_bitlists" in
   (* let libs = List.map (fun lib -> lib ^ seq_suffix) libs in *)
   let base_imports = [
       "Pervasives_extra";
-      "Sail_instr_kinds";
-      "Sail_values";
-      "Sail_string";
+      "Sail2_instr_kinds";
+      "Sail2_values";
+      "Sail2_string";
       operators_module
     ] @ monad_modules
   in
@@ -298,8 +298,8 @@ let output_lem filename libs defs =
     separate hardline [
       string ("theory " ^ isa_thy_name);
       string  "  imports";
-      string  "    Sail.Sail_values_lemmas";
-      string  "    Sail.State_lemmas";
+      string  "    Sail.Sail2_values_lemmas";
+      string  "    Sail.Sail2_state_lemmas";
       string ("    " ^ String.capitalize filename);
       string  "begin";
       string  "";
@@ -326,11 +326,11 @@ let output_lem filename libs defs =
 let output_coq filename libs defs =
   let generated_line = generated_line filename in
   let types_module = (filename ^ "_types") in
-  let monad_modules = ["Prompt_monad"; "Prompt"; "State"] in
-  let operators_module = "Sail_operators_mwords" in
+  let monad_modules = ["Sail2_prompt_monad"; "Sail2_prompt"; "Sail2_state"] in
+  let operators_module = "Sail2_operators_mwords" in
   let base_imports = [
-      "Sail_instr_kinds";
-      "Sail_values";
+      "Sail2_instr_kinds";
+      "Sail2_values";
       operators_module
     ] @ monad_modules
   in

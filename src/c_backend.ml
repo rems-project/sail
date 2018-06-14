@@ -861,7 +861,7 @@ let ctor_bindings = List.fold_left (fun map (id, ctyp) -> Bindings.add id ctyp m
 (**************************************************************************)
 
 let hex_char =
-  let open Sail_values in
+  let open Sail2_values in
   function
   | '0' -> [B0; B0; B0; B0]
   | '1' -> [B0; B0; B0; B1]
@@ -887,7 +887,7 @@ let literal_to_fragment (L_aux (l_aux, _) as lit) =
      Some (F_lit (V_int n))
   | L_hex str when String.length str <= 16 ->
      let padding = 16 - String.length str in
-     let padding = Util.list_init padding (fun _ -> Sail_values.B0) in
+     let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
      let content = Util.string_to_list str |> List.map hex_char |> List.concat in
      Some (F_lit (V_bits (padding @ content)))
   | L_unit -> Some (F_lit V_unit)
@@ -924,8 +924,8 @@ let rec is_bitvector = function
   | _ :: _ -> false
 
 let rec value_of_aval_bit = function
-  | AV_lit (L_aux (L_zero, _), _) -> Sail_values.B0
-  | AV_lit (L_aux (L_one, _), _) -> Sail_values.B1
+  | AV_lit (L_aux (L_zero, _), _) -> Sail2_values.B0
+  | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
   | _ -> assert false
 
 let rec c_aval ctx = function
@@ -1004,13 +1004,13 @@ let analyze_primop' ctx env l id args typ =
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", start)), typ))
 
   | "undefined_bit", _ ->
-     AE_val (AV_C_fragment (F_lit (V_bit Sail_values.B0), typ))
+     AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ))
 
   | "undefined_vector", [AV_C_fragment (len, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-       AE_val (AV_C_fragment (F_lit (V_bit Sail_values.B0), typ))
+       AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ))
      | _ -> no_change
      end
 
@@ -1190,8 +1190,8 @@ let rec compile_aval ctx = function
      (F_id gs, CT_mpz),
      [iclear CT_mpz gs]
 
-  | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit (V_bit Sail_values.B0), CT_bit), []
-  | AV_lit (L_aux (L_one, _), _) -> [], (F_lit (V_bit Sail_values.B1), CT_bit), []
+  | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit (V_bit Sail2_values.B0), CT_bit), []
+  | AV_lit (L_aux (L_one, _), _) -> [], (F_lit (V_bit Sail2_values.B1), CT_bit), []
 
   | AV_lit (L_aux (L_true, _), _) -> [], (F_lit (V_bool true), CT_bool), []
   | AV_lit (L_aux (L_false, _), _) -> [], (F_lit (V_bool false), CT_bool), []
@@ -1285,18 +1285,18 @@ let rec compile_aval ctx = function
      in
      let gs = gensym () in
      let ctyp = CT_uint64 (len, direction) in
-     let mask i = V_bits (Util.list_init (63 - i) (fun _ -> Sail_values.B0) @ [Sail_values.B1] @ Util.list_init i (fun _ -> Sail_values.B0)) in
+     let mask i = V_bits (Util.list_init (63 - i) (fun _ -> Sail2_values.B0) @ [Sail2_values.B1] @ Util.list_init i (fun _ -> Sail2_values.B0)) in
      let aval_mask i aval =
        let setup, cval, cleanup = compile_aval ctx aval in
        match cval with
-       | (F_lit (V_bit Sail_values.B0), _) -> []
-       | (F_lit (V_bit Sail_values.B1), _) ->
+       | (F_lit (V_bit Sail2_values.B0), _) -> []
+       | (F_lit (V_bit Sail2_values.B1), _) ->
           [icopy (CL_id gs) (F_op (F_id gs, "|", F_lit (mask i)), ctyp)]
        | _ ->
           setup @ [iif cval [icopy (CL_id gs) (F_op (F_id gs, "|", F_lit (mask i)), ctyp)] [] CT_unit] @ cleanup
      in
      [idecl ctyp gs;
-      icopy (CL_id gs) (F_lit (V_bits (Util.list_init 64 (fun _ -> Sail_values.B0))), ctyp)]
+      icopy (CL_id gs) (F_lit (V_bits (Util.list_init 64 (fun _ -> Sail2_values.B0))), ctyp)]
      @ List.concat (List.mapi aval_mask (List.rev avals)),
      (F_id gs, ctyp),
      []

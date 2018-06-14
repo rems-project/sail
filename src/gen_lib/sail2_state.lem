@@ -1,7 +1,7 @@
 open import Pervasives_extra
-open import Sail_values
-open import State_monad
-open import {isabelle} `State_monad_lemmas`
+open import Sail2_values
+open import Sail2_state_monad
+open import {isabelle} `Sail2_state_monad_lemmas`
 
 val iterS_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
 let rec iterS_aux i f xs = match xs with
