@@ -850,19 +850,33 @@ function handle_illegal() -> unit = {
 function init_sys() -> unit = {
   cur_privilege = Machine;
 
-  misa->MXL() = arch_to_bits(RV64);
-  misa->A() = true; /* atomics */
-  misa->C() = true; /* RVC */
-  misa->I() = true; /* base integer ISA */
-  misa->M() = true; /* integer multiply/divide */
-  misa->U() = true; /* user-mode */
-  misa->S() = true; /* supervisor-mode */
+  mhartid = EXTZ(0b0);
 
+  misa->MXL() = arch_to_bits(RV64);
+  misa->A()   = true; /* atomics */
+  misa->C()   = true; /* RVC */
+  misa->I()   = true; /* base integer ISA */
+  misa->M()   = true; /* integer multiply/divide */
+  misa->U()   = true; /* user-mode */
+  misa->S()   = true; /* supervisor-mode */
+
+  /* 64-bit only mode with no extensions */
   mstatus->SXL() = misa.MXL();
   mstatus->UXL() = misa.MXL();
   mstatus->SD()  = false;
 
-  mhartid = EXTZ(0b0);
+  mip->bits()     = EXTZ(0b0);
+  mie->bits()     = EXTZ(0b0);
+  mideleg->bits() = EXTZ(0b0);
+  medeleg->bits() = EXTZ(0b0);
+  mtvec->bits()   = EXTZ(0b0);
+  mcause->bits()  = EXTZ(0b0);
+  mepc            = EXTZ(0b0);
+  mtval           = EXTZ(0b0);
+  mscratch        = EXTZ(0b0);
+
+  mcycle          = EXTZ(0b0);
+  mtime           = EXTZ(0b0);
 
   mcounteren->bits() = EXTZ(0b0);
   minstret = EXTZ(0b0);
