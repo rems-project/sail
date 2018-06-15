@@ -22,7 +22,7 @@ Inductive monad regval a e :=
      times the size given in ea signal, given in little endian order *)
   | Write_memv : list memory_byte -> (bool -> monad regval a e) -> monad regval a e
   (* Request to write the tag at last signalled address. *)
-  | Write_tagv : bitU -> (bool -> monad regval a e) -> monad regval a e
+  | Write_tag : address -> bitU -> (bool -> monad regval a e) -> monad regval a e
   (* Tell the system to dynamically recalculate dependency footprint *)
   | Footprint : monad regval a e -> monad regval a e
   (* Request a memory barrier *)
@@ -44,7 +44,7 @@ Arguments Read_tag [_ _ _].
 Arguments Write_ea [_ _ _].
 Arguments Excl_res [_ _ _].
 Arguments Write_memv [_ _ _].
-Arguments Write_tagv [_ _ _].
+Arguments Write_tag [_ _ _].
 Arguments Footprint [_ _ _].
 Arguments Barrier [_ _ _].
 Arguments Read_reg [_ _ _].
@@ -62,7 +62,7 @@ Fixpoint bind {rv A B E} (m : monad rv A E) (f : A -> monad rv B E) := match m w
   | Read_mem rk a sz k => Read_mem rk a sz (fun v => bind (k v) f)
   | Read_tag a k =>       Read_tag a       (fun v => bind (k v) f)
   | Write_memv descr k => Write_memv descr (fun v => bind (k v) f)
-  | Write_tagv t k =>     Write_tagv t     (fun v => bind (k v) f)
+  | Write_tag a t k =>    Write_tag a t    (fun v => bind (k v) f)
   | Read_reg descr k =>   Read_reg descr   (fun v => bind (k v) f)
   | Excl_res k =>         Excl_res         (fun v => bind (k v) f)
   | Write_ea wk a sz k => Write_ea wk a sz (bind k f)
@@ -102,7 +102,7 @@ Fixpoint try_catch {rv A E1 E2} (m : monad rv A E1) (h : E1 -> monad rv A E2) :=
   | Read_mem rk a sz k => Read_mem rk a sz (fun v => try_catch (k v) h)
   | Read_tag a k =>       Read_tag a       (fun v => try_catch (k v) h)
   | Write_memv descr k => Write_memv descr (fun v => try_catch (k v) h)
-  | Write_tagv t k =>     Write_tagv t     (fun v => try_catch (k v) h)
+  | Write_tag a t k =>    Write_tag a t     (fun v => try_catch (k v) h)
   | Read_reg descr k =>   Read_reg descr   (fun v => try_catch (k v) h)
   | Excl_res k =>         Excl_res         (fun v => try_catch (k v) h)
   | Write_ea wk a sz k => Write_ea wk a sz (try_catch k h)
@@ -179,8 +179,8 @@ Definition write_mem_val {rv a e} `{Bitvector a} (v : a) : monad rv bool e := ma
   | None => Fail "write_mem_val"
 end.
 
-(*val write_tag_val : forall rv e. bitU -> monad rv bool e*)
-Definition write_tag_val {rv e} (b : bitU) : monad rv bool e := Write_tagv b returnm.
+(*val write_tag : forall rv a e. Bitvector 'a => 'a -> bitU -> monad rv bool e*)
+Definition write_tag {rv a e} (addr : mword a) (b : bitU) : monad rv bool e := Write_tag (bits_of addr) b returnm.
 
 Definition read_reg {s rv a e} (reg : register_ref s rv a) : monad rv a e :=
   let k v :=
