@@ -212,8 +212,8 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
     | AE_val aval -> AE_val (aval_rename from_id to_id aval)
     | AE_app (id, avals, typ) -> AE_app (id, List.map (aval_rename from_id to_id) avals, typ)
     | AE_cast (aexp, typ) -> AE_cast (recur aexp, typ)
-    | AE_assign (id, typ, aexp) when Id.compare from_id id = 0 -> AE_assign (to_id, typ, aexp)
-    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, aexp)
+    | AE_assign (id, typ, aexp) when Id.compare from_id id = 0 -> AE_assign (to_id, typ, aexp_rename from_id to_id aexp)
+    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, aexp_rename from_id to_id aexp)
     | AE_let (id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 -> AE_let (id, typ1, aexp1, aexp2, typ2)
     | AE_let (id, typ1, aexp1, aexp2, typ2) -> AE_let (id, typ1, recur aexp1, recur aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map recur aexps, recur aexp, typ)
@@ -1383,6 +1383,19 @@ let compile_funcall l ctx id args typ =
       setup := iinit ctyp gs cval :: !setup;
       cleanup := iclear ctyp gs :: !cleanup;
       (F_id gs, ctyp)
+    else if not (is_stack_ctyp have_ctyp) && is_stack_ctyp ctyp then
+      (* This is inefficient. FIXME: Remove id restriction on iconvert
+         instruction. Fortunatly only happens when flow typing makes a
+         length-polymorphic bitvector monomorphic. *)
+      let gs1 = gensym () in
+      let gs2 = gensym () in
+      setup := idecl have_ctyp gs1 :: !setup;
+      setup := ialloc have_ctyp gs1 :: !setup;
+      setup := icopy (CL_id gs1) cval :: !setup;
+      setup := idecl ctyp gs2 :: !setup;
+      setup := iconvert (CL_id gs2) ctyp gs1 have_ctyp :: !setup;
+      cleanup := iclear have_ctyp gs1 :: !cleanup;
+      (F_id gs2, ctyp)
     else
       c_error ~loc:l
         (Printf.sprintf "Failure when setting up function %s arguments: %s and %s." (string_of_id id) (string_of_ctyp have_ctyp) (string_of_ctyp ctyp))
@@ -3235,7 +3248,7 @@ let sgen_finish = function
 
 let instrument_tracing ctx =
   let module StringSet = Set.Make(String) in
-  let traceable = StringSet.of_list ["uint64_t"; "sail_string"; "bv_t"; "mpz_t"; "unit"; "bool"] in
+  let traceable = StringSet.of_list ["mach_bits"; "sail_string"; "sail_bits"; "sail_int"; "unit"; "bool"] in
   let rec instrument = function
     | (I_aux (I_funcall (clexp, _, id, args, ctyp), _) as instr) :: instrs ->
        let trace_start =
@@ -3262,12 +3275,10 @@ let instrument_tracing ctx =
          else
            iraw "trace_unknown();"
        in
-       [trace_start;
-        iraw "g_trace_depth++;"]
+       [trace_start]
        @ trace_args args
        @ [iraw "trace_argend();";
           instr;
-          iraw "g_trace_depth--;";
           trace_end;
           trace_ret;
           iraw "trace_retend();"]
@@ -3314,7 +3325,10 @@ let compile_ast ctx (Defs defs) =
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
+
     let cdefs = optimize ctx cdefs in
+    let cdefs = if !opt_trace then List.map (instrument_tracing ctx) cdefs else cdefs in
+
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline

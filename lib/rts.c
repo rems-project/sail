@@ -16,6 +16,18 @@ unit sail_assert(bool b, sail_string msg)
   exit(EXIT_FAILURE);
 }
 
+unit sail_exit(unit u)
+{
+  exit(EXIT_SUCCESS);
+  return UNIT;
+}
+
+unit sleep_request(const unit u)
+{
+  fprintf(stderr, "Sail model going to sleep\n");
+  exit(EXIT_SUCCESS);
+}
+
 /* ***** Sail memory builtins ***** */
 
 /*
@@ -151,6 +163,19 @@ void read_ram(sail_bits *data,
   mpz_clear(byte);
 }
 
+unit load_raw(mach_bits addr, const sail_string file)
+{
+  FILE *fp = fopen(file, "r");
+
+  uint64_t byte;
+  while ((byte = (uint64_t)fgetc(fp)) != EOF) {
+    write_mem(addr, byte);
+    addr++;
+  }
+
+  return UNIT;
+}
+
 void load_image(char *file) {
   FILE *fp = fopen(file, "r");
 
@@ -201,7 +226,12 @@ unit disable_tracing(const unit u)
   return UNIT;
 }
 
-void trace_uint64_t(const uint64_t x) {
+bool is_tracing(const unit u)
+{
+  return g_trace_enabled;
+}
+
+void trace_mach_bits(const mach_bits x) {
   if (g_trace_enabled) fprintf(stderr, "0x%" PRIx64, x);
 }
 
@@ -209,8 +239,16 @@ void trace_unit(const unit u) {
   if (g_trace_enabled) fputs("()", stderr);
 }
 
-void trace_mpz_t(const mpz_t op) {
+void trace_sail_string(const sail_string str) {
+  if (g_trace_enabled) fputs(str, stderr);
+}
+
+void trace_sail_int(const sail_int op) {
   if (g_trace_enabled) mpz_out_str(stderr, 10, op);
+}
+
+void trace_sail_bits(const sail_bits op) {
+  if (g_trace_enabled) fprint_bits("", op, "", stderr);
 }
 
 void trace_bool(const bool b) {
@@ -247,6 +285,7 @@ void trace_start(char *name)
       fprintf(stderr, "%s", "|   ");
     }
     fprintf(stderr, "%s(", name);
+    g_trace_depth++;
   }
 }
 
@@ -257,7 +296,18 @@ void trace_end(void)
     for (int64_t i = 0; i < g_trace_depth; ++i) {
       fprintf(stderr, "%s", "|   ");
     }
+    g_trace_depth--;
   }
+}
+
+/* ***** ELF functions ***** */
+
+void elf_entry(mpz_t *rop, const unit u) {
+  mpz_set_ui(*rop, g_elf_entry);
+}
+
+void elf_tohost(mpz_t *rop, const unit u) {
+  mpz_set_ui(*rop, 0x0ul);
 }
 
 /* ***** Setup and cleanup functions for RTS ***** */

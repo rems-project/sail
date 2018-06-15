@@ -12,11 +12,20 @@
  */
 void sail_match_failure(sail_string msg);
 
-/* 
+/*
  * sail_assert implements the assert construct in Sail. If any
  * assertion fails we immediately exit the model.
  */
 unit sail_assert(bool b, sail_string msg);
+
+unit sail_exit(unit);
+
+/*
+ * ASL->Sail model has an EnterLowPowerState() function that calls a
+ * sleep request builtin. If it gets called we print a message and
+ * exit the model.
+ */
+unit sleep_request(const unit u);
 
 /* ***** Memory builtins ***** */
 
@@ -35,6 +44,8 @@ void read_ram(sail_bits *data,
 	      const sail_bits hex_ram,
 	      const sail_bits addr_bv);
 
+unit load_raw(mach_bits addr, const sail_string file);
+
 void load_image(char *);
 
 /* ***** Tracing ***** */
@@ -43,15 +54,19 @@ static int64_t g_trace_depth;
 static bool g_trace_enabled;
 
 /*
- * Bind these functions in Sail to enable and disable tracing:
+ * Bind these functions in Sail to enable and disable tracing (see
+ * lib/trace.sail):
  *
  * val "enable_tracing" : unit -> unit
  * val "disable_tracing" : unit -> unit
+ * val "is_tracing" : unit -> bool
  *
  * Compile with sail -c -c_trace.
  */
 unit enable_tracing(const unit);
 unit disable_tracing(const unit);
+
+bool is_tracing(const unit);
 
 /*
  * Tracing is implemented by void trace_TYPE functions, each of which
@@ -68,7 +83,11 @@ unit disable_tracing(const unit);
 */
 void trace_sail_int(const sail_int);
 void trace_bool(const bool);
-  
+void trace_unit(const unit);
+void trace_sail_string(const sail_string);
+void trace_mach_bits(const mach_bits);
+void trace_sail_bits(const sail_bits);
+
 void trace_unknown(void);
 void trace_argsep(void);
 void trace_argend(void);
@@ -76,7 +95,14 @@ void trace_retend(void);
 void trace_start(char *);
 void trace_end(void);
 
+/*
+ * Functions to get info from ELF files.
+ */
+
 static uint64_t g_elf_entry;
+
+void elf_entry(sail_int *rop, const unit u);
+void elf_tohost(sail_int *rop, const unit u);
 
 /*
  * setup_rts and cleanup_rts are responsible for calling setup_library
