@@ -69,22 +69,24 @@ do
         mv out.lem out_types.lem "$OUTPUTDIR"
 	if lem -ocaml -lib "$SAILDIR/src/lem_interp" \
                -outdir "$OUTPUTDIR" \
-               "$SAILDIR/src/gen_lib/sail_values.lem" \
-               "$SAILDIR/src/gen_lib/sail_operators.lem" \
-               "$SAILDIR/src/gen_lib/sail_operators_mwords.lem" \
-               "$SAILDIR/src/lem_interp/sail_instr_kinds.lem" \
-               "$SAILDIR/src/gen_lib/prompt.lem" \
-               "$SAILDIR/src/gen_lib/state_monad.lem" \
-               "$SAILDIR/src/gen_lib/state.lem" \
-               "$SAILDIR/src/gen_lib/prompt_monad.lem" \
+               "$SAILDIR/src/gen_lib/sail2_values.lem" \
+               "$SAILDIR/src/gen_lib/sail2_operators.lem" \
+               "$SAILDIR/src/gen_lib/sail2_operators_mwords.lem" \
+               "$SAILDIR/src/lem_interp/sail2_instr_kinds.lem" \
+               "$SAILDIR/src/gen_lib/sail2_prompt.lem" \
+               "$SAILDIR/src/gen_lib/sail2_state_monad.lem" \
+               "$SAILDIR/src/gen_lib/sail2_state.lem" \
+               "$SAILDIR/src/gen_lib/sail2_prompt_monad.lem" \
+               "$SAILDIR/src/gen_lib/sail2_string.lem" \
                "$DIR/test_extra.lem" \
                "$OUTPUTDIR/out_types.lem" "$OUTPUTDIR/out.lem" &>>log;
 	then
             cd "$OUTPUTDIR"
             if ocamlfind ocamlc -linkpkg -package zarith -package lem \
-                         sail_values.ml sail_operators.ml \
-                         sail_instr_kinds.ml prompt_monad.ml prompt.ml \
-                         sail_operators_mwords.ml state_monad.ml state.ml \
+                         sail2_values.ml sail2_operators.ml \
+                         sail2_instr_kinds.ml sail2_prompt_monad.ml sail2_prompt.ml \
+                         sail2_operators_mwords.ml sail2_state_monad.ml sail2_state.ml \
+                         sail2_string.ml \
                          test_extra.ml out_types.ml out.ml ../test.ml \
                          -o test &>>"$DIR/log"
             then
