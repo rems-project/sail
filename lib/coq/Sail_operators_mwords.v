@@ -11,6 +11,9 @@ rewrite <- eq.
 exact x.
 Defined.
 
+Definition autocast {m n} (x : mword m) `{H:ArithFact (m = n)} : mword n :=
+  cast_mword x (use_ArithFact H).
+
 Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n.
 rewrite <- eq.
 exact x.
@@ -131,6 +134,75 @@ Definition cast_unit_vec := cast_unit_bv
 
 val vec_of_bit : forall 'a. Size 'a => integer -> bitU -> mword 'a
 Definition vec_of_bit := bv_of_bit*)
+
+Require Import bbv.NatLib.
+
+Lemma Npow2_pow {n} : (2 ^ (N.of_nat n) = Npow2 n)%N.
+induction n.
+* reflexivity.
+* rewrite Nnat.Nat2N.inj_succ.
+  rewrite N.pow_succ_r'.
+  rewrite IHn.
+  rewrite Npow2_S.
+  rewrite Word.Nmul_two.
+  reflexivity.
+Qed.
+
+Program Definition uint {a} (x : mword a) : {z : Z & ArithFact (0 <= z /\ z <= 2 ^ a - 1)} :=
+ existT _ (Z.of_N (Word.wordToN (get_word x))) _.
+Next Obligation.
+constructor.
+constructor.
+* apply N2Z.is_nonneg.
+* assert (2 ^ a - 1 = Z.of_N (2 ^ (Z.to_N a) - 1)). {
+    rewrite N2Z.inj_sub.
+    * rewrite N2Z.inj_pow.
+      rewrite Z2N.id; auto.
+      destruct a; auto with zarith. destruct x.
+    * apply N.le_trans with (m := (2^0)%N); auto using N.le_refl.
+      apply N.pow_le_mono_r.
+      inversion 1.
+      apply N.le_0_l.
+  }
+  rewrite H.
+  apply N2Z.inj_le.
+  rewrite N.sub_1_r.
+  apply N.lt_le_pred.
+  rewrite <- Z_nat_N.
+  rewrite Npow2_pow.
+  apply Word.wordToN_bound.
+Defined.
+
+Lemma Zpow_pow2 {n} : 2 ^ Z.of_nat n = Z.of_nat (pow2 n).
+induction n.
+* reflexivity.
+* rewrite pow2_S_z.
+  rewrite Nat2Z.inj_succ.
+  rewrite Z.pow_succ_r; auto with zarith.
+Qed.
+
+Program Definition sint {a} `{ArithFact (a > 0)} (x : mword a) : {z : Z & ArithFact (-(2^(a-1)) <= z /\ z <= 2 ^ (a-1) - 1)} :=
+  existT _ (Word.wordToZ (get_word x)) _.
+Next Obligation.
+destruct H.
+destruct a; try inversion fact.
+constructor.
+generalize (get_word x).
+rewrite <- positive_nat_Z.
+destruct (Pos2Nat.is_succ p) as [n eq].
+rewrite eq.
+rewrite Nat2Z.id.
+intro w.
+destruct (Word.wordToZ_size' w) as [LO HI].
+replace 1 with (Z.of_nat 1); auto.
+rewrite <- Nat2Z.inj_sub; auto with arith.
+simpl.
+rewrite <- minus_n_O.
+rewrite Zpow_pow2.
+rewrite Z.sub_1_r.
+rewrite <- Z.lt_le_pred.
+auto.
+Defined.
 
 Lemma length_list_pos : forall {A} {l:list A}, length_list l >= 0.
 unfold length_list.
@@ -258,12 +330,13 @@ match n with
 | S m => Word.combine w (replicate_bits_aux w m)
 end.
 Lemma replicate_ok {n a} `{ArithFact (n >= 0)} `{ArithFact (a >= 0)} :
-   Z.of_nat (Z.to_nat n * Z.to_nat a) = n * a.
+   Z.of_nat (Z.to_nat n * Z.to_nat a) = a * n.
 destruct H. destruct H0.
 rewrite <- Z2Nat.id; auto with zarith.
 rewrite Z2Nat.inj_mul; auto with zarith.
+rewrite Nat.mul_comm. reflexivity.
 Qed.
-Definition replicate_bits {a} (w : mword a) (n : Z) `{ArithFact (n >= 0)} : mword (n * a) :=
+Definition replicate_bits {a} (w : mword a) (n : Z) `{ArithFact (n >= 0)} : mword (a * n) :=
  cast_to_mword (replicate_bits_aux (get_word w) (Z.to_nat n)) replicate_ok.
 
 (*val duplicate : forall 'a. Size 'a => bitU -> integer -> mword 'a

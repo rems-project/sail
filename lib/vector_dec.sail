@@ -58,19 +58,37 @@ overload append = {bitvector_concat}
 /* Used for creating long bitvector literals in the C backend. */
 val "append_64" : forall 'n. (bits('n), bits(64)) -> bits('n + 64)
 
-val vector_access = {
+val bitvector_access = {
+  ocaml: "access",
+  lem: "access_vec_dec",
+  coq: "access_vec_dec",
+  c: "vector_access"
+} : forall ('n : Int), 'n >= 0. (bits('n), int) -> bit
+
+val plain_vector_access = {
   ocaml: "access",
   lem: "access_list_dec",
   coq: "access_list_dec",
   c: "vector_access"
 } : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), atom('m)) -> 'a
 
-val vector_update = {
+overload vector_access = {bitvector_access, plain_vector_access}
+
+val bitvector_update = {
+  ocaml: "update",
+  lem: "update_vec_dec",
+  coq: "update_vec_dec",
+  c: "vector_update"
+} : forall 'n, 'n >= 0. (bits('n), int, bit) -> bits('n)
+
+val plain_vector_update = {
   ocaml: "update",
   lem: "update_list_dec",
   coq: "update_list_dec",
   c: "vector_update"
 } : forall 'n ('a : Type). (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
+
+overload vector_update = {bitvector_update, plain_vector_update}
 
 val add_bits = {
   ocaml: "add_vec",
@@ -122,9 +140,10 @@ val unsigned = {
   lem: "uint",
   interpreter: "uint",
   c: "sail_uint",
-  coq: "unsigned"
+  coq: "uint"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
-val signed = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+/* We need a non-empty vector so that the range makes sense */
+val signed = "sint" : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 $endif
