@@ -17,7 +17,7 @@ val lt_atom = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm. (atom('n), atom('m)) -
 val gt_atom = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val lt_range_atom = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val lteq_range_atom = {coq: "Z.lte", _: "lteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val lteq_range_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
 val gt_range_atom = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
 val gteq_range_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
 val lt_atom_range = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
@@ -38,10 +38,10 @@ function neq_int (x, y) = not_bool(eq_int(x, y))
 val neq_bool : (bool, bool) -> bool
 function neq_bool (x, y) = not_bool(eq_bool(x, y))
 
-val lteq_int = "lteq" : (int, int) -> bool
-val gteq_int = "gteq" : (int, int) -> bool
-val lt_int = "lt" : (int, int) -> bool
-val gt_int = "gt" : (int, int) -> bool
+val lteq_int = {coq: "Z.leb", _:"lteq"} : (int, int) -> bool
+val gteq_int = {coq: "Z.geb", _:"gteq"} : (int, int) -> bool
+val lt_int = {coq: "Z.ltb", _:"lt"} : (int, int) -> bool
+val gt_int = {coq: "Z.gtb", _:"gt"} : (int, int) -> bool
 
 overload operator == = {eq_atom, eq_range, eq_int, eq_bool}
 overload operator != = {neq_atom, neq_range, neq_int, neq_bool}
