@@ -53,7 +53,6 @@
   | DEF_fundef fdef -> group (doc_fundef_lem fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec_lem fundefs ^/^ hardline
 
-  doc_id / doc_id_type with a DeIid ...*
   fix_id
   doc_quant_item on constraints
   type quantifiers in records, unions
@@ -142,6 +141,8 @@ let rec fix_id remove_tick name = match name with
        fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
      else if String.contains name '?' then
        fix_id remove_tick (String.concat "_pat_" (Util.split_on_char '?' name))
+     else if String.contains name '^' then
+       fix_id remove_tick (String.concat "__" (Util.split_on_char '^' name))
      else if name.[0] = '\'' then
        let var = String.sub name 1 (String.length name - 1) in
        if remove_tick then var else (var ^ "'")
@@ -152,28 +153,19 @@ let rec fix_id remove_tick name = match name with
 let doc_id (Id_aux(i,_)) =
   match i with
   | Id i -> string (fix_id false i)
-  | DeIid x ->
-     (* add an extra space through empty to avoid a closing-comment
-      * token in case of x ending with star. *)
-     parens (separate space [colon; string x; empty])
+  | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_type (Id_aux(i,_)) =
   match i with
   | Id("int") -> string "Z"
   | Id("nat") -> string "Z"
   | Id i -> string (fix_id false i)
-  | DeIid x ->
-     (* add an extra space through empty to avoid a closing-comment
-      * token in case of x ending with star. *)
-     parens (separate space [colon; string x; empty])
+  | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_ctor (Id_aux(i,_)) =
   match i with
   | Id i -> string (fix_id false i)
-  | DeIid x ->
-     (* add an extra space through empty to avoid a closing-comment
-      * token in case of x ending with star. *)
-     separate space [colon; string x; empty]
+  | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_var_lem ctx kid =
   match KBindings.find kid ctx.kid_id_renames with
