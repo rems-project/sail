@@ -396,7 +396,7 @@ let rewrite rewriters defs =
      raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
-let rewrite_undefined = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined !Pretty_print_lem.opt_mwords x)]
+let rewrite_undefined bitvectors = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined bitvectors x)]
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_coq = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml

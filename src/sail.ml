@@ -265,7 +265,7 @@ let load_files type_envs files =
 
   let ast =
     if !Initial_check.opt_undefined_gen then
-      rewrite_undefined (rewrite_ast ast)
+      rewrite_undefined (!Pretty_print_lem.opt_mwords || !opt_print_coq) (rewrite_ast ast)
     else rewrite_ast ast in
 
   let out_name = match !opt_file_out with
