@@ -166,7 +166,10 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
-  | L_num n -> parens (string "Big_int.of_string" ^^ space ^^ string ("\"" ^ Big_int.to_string n ^ "\""))
+  | L_num n -> if Big_int.equal n Big_int.zero
+               then string "Big_int.zero"
+               else parens (string "Big_int.of_int" ^^ space
+                            ^^ string "(" ^^ string (Big_int.to_string n) ^^ string ")")
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
   | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
