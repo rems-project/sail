@@ -360,6 +360,13 @@ mach_bits CONVERT_OF(mach_bits, sail_bits)(const sail_bits op)
   return mpz_get_ui(*op.bits);
 }
 
+void CONVERT_OF(sail_bits, mach_bits)(sail_bits *rop, const mach_bits op, const uint64_t len)
+{
+  rop->len = len;
+  // use safe_rshift to correctly handle the case when we have a 0-length vector.
+  mpz_set_ui(*rop->bits, op & safe_rshift(UINT64_MAX, 64 - len));
+}
+
 void UNDEFINED(sail_bits)(sail_bits *rop, const sail_int len, const mach_bits bit)
 {
   zeros(rop, len);

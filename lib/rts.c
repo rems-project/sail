@@ -25,7 +25,7 @@ unit sail_exit(unit u)
 unit sleep_request(const unit u)
 {
   fprintf(stderr, "Sail model going to sleep\n");
-  exit(EXIT_SUCCESS);
+  return UNIT;
 }
 
 /* ***** Sail memory builtins ***** */
@@ -176,7 +176,8 @@ unit load_raw(mach_bits addr, const sail_string file)
   return UNIT;
 }
 
-void load_image(char *file) {
+void load_image(char *file)
+{
   FILE *fp = fopen(file, "r");
 
   if (!fp) {

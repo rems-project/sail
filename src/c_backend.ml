@@ -465,12 +465,12 @@ let gensym () =
   incr gensym_counter;
   id
 
-let rec split_block = function
+let rec split_block l = function
   | [exp] -> [], exp
   | exp :: exps ->
-     let exps, last = split_block exps in
+     let exps, last = split_block l exps in
      exp :: exps, last
-  | [] -> c_error "empty block"
+  | [] -> c_error ~loc:l "empty block"
 
 let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   let mk_apat aux = AP_aux (aux, env_of_annot annot, fst annot) in
@@ -525,7 +525,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
 
   | E_block exps ->
-     let exps, last = split_block exps in
+     let exps, last = split_block l exps in
      let aexps = List.map anf exps in
      let alast = anf last in
      mk_aexp (AE_block (aexps, alast, typ_of exp))
@@ -1740,6 +1740,18 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        CT_unit,
        (fun clexp -> icopy clexp unit_fragment),
        cleanup
+     else if is_stack_ctyp assign_ctyp && not (is_stack_ctyp ctyp) then
+       let gs = gensym () in
+       setup @ [ icomment comment;
+                 idecl ctyp gs;
+                 ialloc ctyp gs;
+                 call (CL_id gs);
+                 iconvert (CL_id id) assign_ctyp gs ctyp;
+                 iclear ctyp gs
+               ],
+       CT_unit,
+       (fun clexp -> icopy clexp unit_fragment),
+       cleanup
      else
        failwith comment
 
@@ -2159,7 +2171,7 @@ let rec compile_def ctx = function
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      c_debug (lazy ("Compiling function " ^ string_of_id id));
      let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow (pat_ids pat) (anf exp))) in
-     prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp));
+     if string_of_id id = "fetch_and_execute" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      c_debug (lazy "Compiled aexp");
      let fundef_label = label "fundef_fail_" in
@@ -2633,8 +2645,8 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
           end
        | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
        | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
-       | "vector_update", CT_bits64 _ -> "update_uint64_t"
-       | "vector_update", CT_bits _ -> "update_bv"
+       | "vector_update", CT_bits64 _ -> "update_mach_bits"
+       | "vector_update", CT_bits _ -> "update_sail_bits"
        | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
@@ -2697,6 +2709,23 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
                                 i)
      in
      separate hardline (List.mapi convert (List.map2 (fun x y -> (x, y)) ctyps1 ctyps2))
+  (* If we're converting from a bits type with a known compile time
+     length, pass it as an extra parameter to the conversion. *)
+  | I_convert (x, ctyp1, y, (CT_bits64 (n, _) as ctyp2)) ->
+     if is_stack_ctyp ctyp1 then
+       string (Printf.sprintf "  %s = CONVERT_OF(%s, %s)(%s, %d);"
+                 (sgen_clexp_pure x)
+                 (sgen_ctyp_name ctyp1)
+                 (sgen_ctyp_name ctyp2)
+                 (sgen_id y)
+                 n)
+     else
+       string (Printf.sprintf "  CONVERT_OF(%s, %s)(%s, %s, %d);"
+                 (sgen_ctyp_name ctyp1)
+                 (sgen_ctyp_name ctyp2)
+                 (sgen_clexp x)
+                 (sgen_id y)
+                 n)
   | I_convert (x, ctyp1, y, ctyp2) ->
      if is_stack_ctyp ctyp1 then
        string (Printf.sprintf "  %s = CONVERT_OF(%s, %s)(%s);"
