@@ -1,7 +1,7 @@
 Require Import String.
 (*Require Import Sail_impl_base*)
-Require Import Sail_instr_kinds.
-Require Import Sail_values.
+Require Import Sail2_instr_kinds.
+Require Import Sail2_values.
 
 
 

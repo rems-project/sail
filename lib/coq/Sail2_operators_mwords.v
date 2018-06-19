@@ -1,7 +1,7 @@
-Require Import Sail_values.
-Require Import Sail_operators.
-Require Import Prompt_monad.
-Require Import Prompt.
+Require Import Sail2_values.
+Require Import Sail2_operators.
+Require Import Sail2_prompt_monad.
+Require Import Sail2_prompt.
 Require bbv.Word.
 Require Import Arith.
 Require Import Omega.

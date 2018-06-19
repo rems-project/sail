@@ -1,6 +1,6 @@
 (*Require Import Sail_impl_base*)
-Require Import Sail_values.
-Require Import Prompt_monad.
+Require Import Sail2_values.
+Require Import Sail2_prompt_monad.
 
 Require Import List.
 Import ListNotations.

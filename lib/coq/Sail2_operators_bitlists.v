@@ -1,5 +1,5 @@
-Require Import Sail_values.
-Require Import Sail_operators.
+Require Import Sail2_values.
+Require Import Sail2_operators.
 
 (*
 

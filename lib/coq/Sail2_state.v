@@ -1,8 +1,8 @@
 (*Require Import Sail_impl_base*)
-Require Import Sail_values.
-Require Import Prompt_monad.
-Require Import Prompt.
-Require Import State_monad.
+Require Import Sail2_values.
+Require Import Sail2_prompt_monad.
+Require Import Sail2_prompt.
+Require Import Sail2_state_monad.
 (*
 (* State monad wrapper around prompt monad *)
 

@@ -1,5 +1,5 @@
-Require Import Sail_instr_kinds.
-Require Import Sail_values.
+Require Import Sail2_instr_kinds.
+Require Import Sail2_values.
 (*
 (* 'a is result type *)
 
