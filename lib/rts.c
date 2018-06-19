@@ -2,6 +2,7 @@
 
 #include"sail.h"
 #include"rts.h"
+#include"elf.h"
 
 void sail_match_failure(sail_string msg)
 {
@@ -303,11 +304,13 @@ void trace_end(void)
 
 /* ***** ELF functions ***** */
 
-void elf_entry(mpz_t *rop, const unit u) {
+void elf_entry(mpz_t *rop, const unit u)
+{
   mpz_set_ui(*rop, g_elf_entry);
 }
 
-void elf_tohost(mpz_t *rop, const unit u) {
+void elf_tohost(mpz_t *rop, const unit u)
+{
   mpz_set_ui(*rop, 0x0ul);
 }
 

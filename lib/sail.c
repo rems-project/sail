@@ -491,7 +491,7 @@ void vector_subrange_sail_bits(sail_bits *rop,
   normalize_sail_bits(rop);
 }
 
-void truncate(sail_bits *rop, const sail_bits op, const sail_int len)
+void sail_truncate(sail_bits *rop, const sail_bits op, const sail_int len)
 {
   rop->len = mpz_get_ui(len);
   mpz_set(*rop->bits, *op.bits);

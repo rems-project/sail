@@ -215,7 +215,7 @@ void vector_subrange_sail_bits(sail_bits *rop,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz);
 
-void truncate(sail_bits *rop, const sail_bits op, const sail_int len);
+void sail_truncate(sail_bits *rop, const sail_bits op, const sail_int len);
 
 mach_bits bitvector_access(const sail_bits op, const sail_int n_mpz);
 

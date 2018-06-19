@@ -29,6 +29,9 @@ unit sleep_request(const unit u);
 
 /* ***** Memory builtins ***** */
 
+void write_mem(uint64_t, uint64_t);
+uint64_t read_mem(uint64_t);
+
 // These memory builtins are intended to match the semantics for the
 // __ReadRAM and __WriteRAM functions in ASL.
 
@@ -51,6 +54,7 @@ void load_image(char *);
 /* ***** Tracing ***** */
 
 static int64_t g_trace_depth;
+static int64_t g_trace_max_depth;
 static bool g_trace_enabled;
 
 /*

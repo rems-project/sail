@@ -41,7 +41,7 @@ val truncate = {
   ocaml: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
-  c: "truncate"
+  c: "sail_truncate"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 
 val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)

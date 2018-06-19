@@ -3362,7 +3362,8 @@ let compile_ast ctx (Defs defs) =
 
     let preamble = separate hardline
                      [ string "#include \"sail.h\"";
-                       string "#include \"rts.h\""]
+                       string "#include \"rts.h\"";
+                       string "#include \"elf.h\"" ]
     in
 
     let exn_boilerplate =
@@ -3400,7 +3401,7 @@ let compile_ast ctx (Defs defs) =
     let postamble = separate hardline (List.map string
        ( [ "int main(int argc, char *argv[])";
            "{";
-           "  if (argc > 1) { load_image(argv[1]); }";
+           "  if (argc > 1) { loadELF(argv[1]); }";
            "  setup_rts();" ]
        @ fst exn_boilerplate
        @ startup cdefs
