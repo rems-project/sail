@@ -60,7 +60,7 @@ function step() = {
         F_RVC(h) => {
           match decodeCompressed(h) {
             None() => {
-              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") <no-decode>");
+              print("[" ^ string_of_int(step_no) ^ "] [" ^ cur_privilege ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") <no-decode>");
               handle_decode_exception(EXTZ(h));
               false
             },

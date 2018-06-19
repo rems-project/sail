@@ -102,22 +102,31 @@ function clint_load(addr, width) = {
 val clint_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wreg}
 function clint_store(addr, width, data) = {
   let addr = addr - plat_clint_base ();
-  print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
   if addr == MSIP_BASE & ('n == 8 | 'n == 4) then {
+    print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (mip.MSI <- " ^ BitStr(data[0]) ^ ")");
     mip->MSI() = data[0] == 0b1;
     MemValue(())
   } else if addr == MTIMECMP_BASE & 'n == 8 then {
+    print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (mtimecmp)");
     mtimecmp = zero_extend(data, 64); /* FIXME: Redundant zero_extend currently required by Lem backend */
     MemValue(())
-  } else MemException(E_SAMO_Access_Fault)
+  } else {
+    print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (<unmapped>)");
+    MemException(E_SAMO_Access_Fault)
+  }
 }
 
 val tick_clock : unit -> unit effect {rreg, wreg}
 function tick_clock() = {
   mcycle = mcycle + 1;
   mtime  = mtime  + 1;
-  if mtime >=_u mtimecmp
-  then mip->MTI() = true
+  mip->MTI() = false;
+  if mtimecmp <_u mtime & mtimecmp != EXTZ(0b0) then {
+    print(" firing clint timer at mtime " ^ BitStr(mtime));
+    mip->MTI() = true
+  };
+  if mtimecmp != EXTZ(0b0) & mtimecmp != EXTS(0b1) then
+    print(" mtime=" ^ BitStr(mtime) ^ "  mtimecmp=" ^ BitStr(mtimecmp));
 }
 
 /* Basic terminal character I/O. */

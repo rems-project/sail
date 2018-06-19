@@ -714,15 +714,30 @@ function curInterrupt(pend : Minterrupts, enbl : Minterrupts, delg : Minterrupts
     if (mstatus.MIE() == true) & (eff_mip != EXTZ(0b0))
     then match findPendingInterrupt(eff_mip) {
            Some(i) => let r = (i, Machine) in Some(r),
-           None()  => None()
+           None()  => { print("mstatus.MIE and eff_mip=" ^ BitStr(eff_mip) ^ ", but nothing pending");
+                        None() }
          }
     else if (mstatus.SIE() == true) & (eff_sip != EXTZ(0b0))
             & (cur_privilege == Supervisor | cur_privilege == User)
     then match findPendingInterrupt(eff_sip) {
            Some(i) => let r = (i, Supervisor) in Some(r),
-           None()  => None()
+           None()  => { print("mstatus.SIE and eff_sip=" ^ BitStr(eff_sip) ^ ", but nothing pending");
+                        None() }
          }
-    else None()
+    else {
+      let p = if pend.MTI() == true then "1" else "0";
+      let e = if enbl.MTI() == true then "1" else "0";
+      let d = if delg.MTI() == true then "1" else "0";
+      print(" MTI: pend=" ^ p ^ " enbl=" ^ e ^ " delg=" ^ d);
+      let eff_mip = en_mip & (~ (delg.bits())); /* retained at M-mode */
+      let eff_sip = en_mip & delg.bits();       /* delegated to S-mode */
+      print("mstatus=" ^ BitStr(mstatus.bits())
+            ^ " mie,sie=" ^ BitStr(mstatus.MIE()) ^ "," ^ BitStr(mstatus.SIE())
+            ^ " en_mip=" ^ BitStr(en_mip)
+            ^ " eff_mip=" ^ BitStr(eff_mip)
+            ^ " eff_sip=" ^ BitStr(eff_sip));
+      None()
+    }
   }
 }
 
