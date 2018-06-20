@@ -461,7 +461,10 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
 let doc_tannot_lem ctxt env eff typ =
   let of_typ typ =
     let ta = doc_typ ctxt typ in
-    if eff then string " : M " ^^ parens ta
+    if eff then
+      if ctxt.early_ret
+      then string " : MR " ^^ parens ta ^^ string " _"
+      else string " : M " ^^ parens ta
     else string " : " ^^ ta
   in
   if contains_t_pp_var ctxt typ
@@ -1093,9 +1096,9 @@ let doc_exp_lem, doc_let_lem =
               separate space
                 [string ">>= fun varstup => let";
                  doc_pat ctxt true (pat, typ_of e1);
-                 string "= varstup in"]
+                 string ":= varstup in"]
            | _ ->
-              separate space [string ">>= fun"; doc_pat ctxt true (pat, typ_of e1); bigarrow]
+              separate space [string ">>= fun"; squote ^^ doc_pat ctxt true (pat, typ_of e1); bigarrow]
          in
          infix 0 1 middle (expV b e1) (expN e2)
        in
