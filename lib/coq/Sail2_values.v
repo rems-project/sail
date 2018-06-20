@@ -1,11 +1,11 @@
 (* Version of sail_values.lem that uses Lems machine words library *)
 
 (*Require Import Sail_impl_base*)
-Require Import ZArith.
 Require Export ZArith.
-Require Import String.
+Require Export String.
 Require Import bbv.Word.
-Require Import List.
+Require Export List.
+Require Export Sumbool.
 Import ListNotations.
 
 Open Scope Z.

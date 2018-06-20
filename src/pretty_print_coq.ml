@@ -1742,7 +1742,6 @@ try
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) types_modules;hardline;
-string "Require Import String."; hardline;
         separate empty (List.map (doc_def unimplemented) typdefs); hardline;
         hardline;
         separate empty (List.map (doc_def unimplemented) statedefs); hardline;
@@ -1758,7 +1757,7 @@ string "Require Import String."; hardline;
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) defs_modules;hardline;
-string "Require Import List. Import ListNotations. Require Import Sumbool.";
+        string "Import ListNotations.";
         hardline;
         (* Put the body into a Section so that we can define some values with
            Let to put them into the local context, where tactics can see them *)
