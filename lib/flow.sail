@@ -2,6 +2,8 @@ $ifndef _FLOW
 $define _FLOW
 
 val not_bool = {coq: "negb", _: "not"} : bool -> bool
+/* NB: There are special cases in Sail for effectful uses of and_bool and
+   or_bool that are not shown here. */
 val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
 val or_bool = {coq: "orb", _: "or_bool"} : (bool, bool) -> bool
 

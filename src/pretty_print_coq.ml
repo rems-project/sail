@@ -680,6 +680,7 @@ let doc_exp_lem, doc_let_lem =
     let expY = top_exp ctxt true in
     let expN = top_exp ctxt false in
     let expV = top_exp ctxt in
+    let wrap_parens doc = if aexp_needed then parens (doc) else doc in
     let maybe_add_exist epp =
       let env = env_of full_exp in
       let typ = Env.expand_synonyms env (typ_of full_exp) in
@@ -769,6 +770,10 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
        begin match f with
+       | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
+         when effectful (effect_of full_exp) ->
+          let call = doc_id (append_id f "M") in
+          wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
        (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "None", _) as none -> doc_id_ctor none
        | Id_aux (Id "foreach", _) ->
@@ -1084,7 +1089,7 @@ let doc_exp_lem, doc_let_lem =
        in
        if aexp_needed then parens (align epp) else epp
     | E_internal_return (e1) ->
-       separate space [string "returnm"; expY e1]
+       wrap_parens (align (separate space [string "returnm"; expY e1]))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit (L_aux (L_num i, l))
