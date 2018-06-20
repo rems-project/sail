@@ -135,6 +135,7 @@ let rec fix_id remove_tick name = match name with
   | "GT"
   | "EQ"
   | "Z"
+  | "mod"
     -> name ^ "'"
   | _ ->
      if String.contains name '#' then
@@ -204,12 +205,12 @@ let doc_nexp ctx nexp =
   (* Print according to Coq's precedence rules *)
   let rec plussub (Nexp_aux (n,l) as nexp) =
     match n with
-    | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; muldiv n2]
-    | Nexp_minus (n1, n2) -> separate space [plussub n1; minus; muldiv n2]
-    | _ -> muldiv nexp
-  and muldiv (Nexp_aux (n,l) as nexp) =
+    | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; mul n2]
+    | Nexp_minus (n1, n2) -> separate space [plussub n1; minus; mul n2]
+    | _ -> mul nexp
+  and mul (Nexp_aux (n,l) as nexp) =
     match n with
-    | Nexp_times (n1, n2) -> separate space [muldiv n1; star; uneg n2]
+    | Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2]
     | _ -> uneg nexp
   and uneg (Nexp_aux (n,l) as nexp) =
     match n with
@@ -218,6 +219,15 @@ let doc_nexp ctx nexp =
   and exp (Nexp_aux (n,l) as nexp) =
     match n with
     | Nexp_exp n -> separate space [string "2"; caret; exp n]
+    | _ -> app nexp
+  and app (Nexp_aux (n,l) as nexp) =
+    match n with
+    | Nexp_app (Id_aux (Id "div",_), [n1;n2])
+        -> separate space [string "Z.quot"; atomic n1; atomic n2]
+    | Nexp_app (Id_aux (Id "mod",_), [n1;n2])
+        -> separate space [string "Z.rem"; atomic n1; atomic n2]
+    | Nexp_app (Id_aux (Id "abs_atom",_), [n1])
+        -> separate space [string "Z.abs"; atomic n1]
     | _ -> atomic nexp
   and atomic (Nexp_aux (n,l) as nexp) =
     match n with
@@ -225,6 +235,8 @@ let doc_nexp ctx nexp =
     | Nexp_var v -> doc_var_lem ctx v
     | Nexp_id id -> doc_id id
     | Nexp_sum _ | Nexp_minus _ | Nexp_times _ | Nexp_neg _ | Nexp_exp _
+    | Nexp_app (Id_aux (Id ("div"|"mod"),_), [_;_])
+    | Nexp_app (Id_aux (Id "abs_atom",_), [_])
         -> parens (plussub nexp)
     | _ ->
        raise (Reporting_basic.err_unreachable l
