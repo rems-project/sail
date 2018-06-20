@@ -1140,7 +1140,8 @@ let doc_exp_lem, doc_let_lem =
   and let_exp ctxt (LB_aux(lb,_)) = match lb with
     (* Prefer simple lets over patterns, because I've found Coq can struggle to
        work out return types otherwise *)
-    | LB_val(P_aux (P_id id,_),e) ->
+    | LB_val(P_aux (P_id id,_),e)
+      when Util.is_none (is_auto_decomposed_exist (env_of e) (typ_of e)) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
