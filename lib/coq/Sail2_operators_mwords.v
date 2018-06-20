@@ -4,6 +4,7 @@ Require Import Sail2_prompt_monad.
 Require Import Sail2_prompt.
 Require bbv.Word.
 Require Import Arith.
+Require Import ZArith.
 Require Import Omega.
 
 Definition cast_mword {m n} (x : mword m) (eq : m = n) : mword n.
@@ -252,9 +253,9 @@ val sadd_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 val smult_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
-(*Definition add_vec_int   {a} (w : mword a) : Z -> mword a := add_bv_int w.
-Definition sadd_vec_int  {a} (w : mword a) : Z -> mword a := sadd_bv_int w.
-Definition sub_vec_int   {a} (w : mword a) : Z -> mword a := sub_bv_int w.*)
+Definition add_vec_int   {a} (l : mword a) (r : Z) : mword a := arith_op_bv_int Z.add   false l r.
+Definition sadd_vec_int  {a} (l : mword a) (r : Z) : mword a := arith_op_bv_int Z.add   true  l r.
+Definition sub_vec_int   {a} (l : mword a) (r : Z) : mword a := arith_op_bv_int Z.sub   false l r.
 (*Definition mult_vec_int  {a b} : mword a -> Z -> mword b := mult_bv_int.
 Definition smult_vec_int {a b} : mword a -> Z -> mword b := smult_bv_int.*)
 

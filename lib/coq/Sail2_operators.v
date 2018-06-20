@@ -1,5 +1,6 @@
 Require Import Sail2_values.
 Require List.
+Import List.ListNotations.
 
 (*** Bit vector operations *)
 
@@ -12,15 +13,13 @@ Definition concat_bv (l : a) (r : b) : list bitU := bits_of l ++ bits_of r.
 (*val cons_bv : forall 'a 'b 'c. Bitvector 'a, Bitvector 'b => bitU -> 'a -> 'b*)
 Definition cons_bv b' (v : a) : list bitU := b' :: bits_of v.
 
-(*Definition bool_of_bv v := extract_only_element (bits_of v).
-Definition cast_unit_bv b := of_bits [b]
-Definition bv_of_bit len b := of_bits (extz_bits len [b])
-Definition int_of_bv {a} `{Bitvector a} (sign : bool) : a -> Z := if sign then signed else unsigned.
+Definition cast_unit_bv b : list bitU := [b].
+Definition bv_of_bit len b : list bitU := extz_bits len [b].
 
-Definition most_significant v := match bits_of v with
-  | b :: _ -> b
-  | _ -> failwith "most_significant applied to empty vector"
-  end
+(*Definition most_significant v := match bits_of v with
+  | cons b _ => b
+  | _ => failwith "most_significant applied to empty vector"
+  end.
 
 Definition get_max_representable_in sign (n : integer) : integer :=
   if (n = 64) then match sign with | true -> max_64 | false -> max_64u end
@@ -38,42 +37,18 @@ Definition get_min_representable_in _ (n : integer) : integer :=
   else if n = 5 then min_5
   else 0 - (integerPow 2 (natFromInteger n))
 
-val bitwise_binop_bv : forall 'a. Bitvector 'a =>
-  (bool -> bool -> bool) -> 'a -> 'a -> 'a
-Definition bitwise_binop_bv {a} `{Bitvector a} op (l : a) (r : a) : a :=
- of_bits (binop_bits op (bits_of l) (bits_of r)).
+val arith_op_bv_int : forall 'a 'b. Bitvector 'a =>
+  (integer -> integer -> integer) -> bool -> 'a -> integer -> 'a*)
+Definition arith_op_bv_int {a} `{Bitvector a} (op : Z -> Z -> Z) (sign : bool) (l : a) (r : Z) : a :=
+  let r' := of_int (length l) r in
+  arith_op_bv op sign l r'.
 
-Definition and_bv {a} `{Bitvector a} : a -> a -> a := bitwise_binop_bv (andb).
-Definition or_bv {a} `{Bitvector a} : a -> a -> a := bitwise_binop_bv orb.
-Definition xor_bv {a} `{Bitvector a} : a -> a -> a := bitwise_binop_bv xorb.
-Definition not_bv {a} `{Bitvector a} (v : a) : a := of_bits (not_bits (bits_of v)).
-
-(*val arith_op_bv : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
-  (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a -> 'b*)
-Definition arith_op_bv op (sign : bool) size (l : a) (r : a) : b :=
-  let (l',r') := (int_of_bv sign l, int_of_bv sign r) in
-  let n := op l' r' in
-  of_int (size * length l) n.
-
-
-Definition add_bv   := arith_op_bv Zplus false 1.
-Definition sadd_bv  := arith_op_bv Zplus true 1.
-Definition sub_bv   := arith_op_bv Zminus false 1.
-Definition mult_bv  := arith_op_bv Zmult false 2.
-Definition smult_bv := arith_op_bv Zmult true 2.
+(*val arith_op_int_bv : forall 'a 'b. Bitvector 'a =>
+  (integer -> integer -> integer) -> bool -> integer -> 'a -> 'a*)
+Definition arith_op_int_bv {a} `{Bitvector a} (op : Z -> Z -> Z) (sign : bool) (l : Z) (r : a) : a :=
+  let l' := of_int (length r) l in
+  arith_op_bv op sign l' r.
 (*
-Definition inline add_mword := Machine_word.plus
-Definition inline sub_mword := Machine_word.minus
-val mult_mword : forall 'a 'b. Size 'b => mword 'a -> mword 'a -> mword 'b
-Definition mult_mword l r := times (zeroExtend l) (zeroExtend r)
-
-val arith_op_bv_int : forall 'a 'b. Bitvector 'a, Bitvector 'b =>
-  (integer -> integer -> integer) -> bool -> integer -> 'a -> integer -> 'b*)
-Definition arith_op_bv_int (op : Z -> Z -> Z) (sign : bool) (size : Z) (l : a) (r : Z) : b :=
-  let l' := int_of_bv sign l in
-  let n := op l' r in
-  of_int (size * length l) n.
-
 Definition add_bv_int := arith_op_bv_int Zplus false 1.
 Definition sadd_bv_int := arith_op_bv_int Zplus true 1.
 Definition sub_bv_int := arith_op_bv_int Zminus false 1.
