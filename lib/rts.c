@@ -70,7 +70,7 @@ void write_mem(uint64_t address, uint64_t byte)
     }
   }
 
-  /* 
+  /*
    * If we couldn't find a block matching the mask, allocate a new
    * one, write the byte, and put it at the front of the block list.
    */

@@ -122,7 +122,6 @@ iannot :: 'IA_' ::=
 instr :: 'I_' ::=
   {{ aux _ iannot }}
   | ctyp id                                        :: :: decl
-  | alloc ctyp id                                  :: :: alloc
   | ctyp id = cval                                 :: :: init
   | if ( cval ) { instr0 ; ... ; instrn }
     else { instr0 ; ... ; instrm } : ctyp          :: :: if
@@ -150,8 +149,6 @@ cdef :: 'CDEF_' ::=
   | ctype_def          :: :: type
   | let nat ( id0 : ctyp0 , ... , idn : ctypn ) = {
       instr0 ; ... ; instrm
-    } {
-      instr0 ; ... ; instri
     } :: :: let
 % The first list of instructions creates up the global letbinding, the
 % second kills it.
