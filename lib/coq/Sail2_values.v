@@ -939,7 +939,7 @@ Definition mem_bytes_of_bits (bs : a) := option_map (@rev (list bitU)) (bytes_of
 Definition bits_of_mem_bytes (bs : list memory_byte) := bits_of_bytes (List.rev bs).
 
 End BytesBits.
-(*
+
 (*val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> list bitU
 Definition bitv_of_byte_lifteds v :=
   foldl (fun x (Byte_lifted y) => x ++ (List.map bitU_of_bit_lifted y)) [] v
@@ -983,13 +983,12 @@ Definition address_of_bitv v :=
   let bytes := bytes_of_bitv v in
   address_of_byte_list bytes*)
 
-Fixpoint reverse_endianness_list bits :=
-  if List.length bits <= 8 then bits else
-    reverse_endianness_list (drop_list 8 bits) ++ take_list 8 bits
-
-val reverse_endianness : forall a. Bitvector a => a -> a
-Definition reverse_endianness v := of_bits (reverse_endianness_list (bits_of v))
-*)
+Fixpoint reverse_endianness_list (bits : list bitU) :=
+  match bits with
+  | _ :: _ :: _ :: _ :: _ :: _ :: _ :: _ :: t =>
+    reverse_endianness_list t ++ firstn 8 bits
+  | _ => bits
+  end.
 
 (*** Registers *)
 

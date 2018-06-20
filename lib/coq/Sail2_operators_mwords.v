@@ -2,7 +2,7 @@ Require Import Sail2_values.
 Require Import Sail2_operators.
 Require Import Sail2_prompt_monad.
 Require Import Sail2_prompt.
-Require bbv.Word.
+Require Import bbv.Word.
 Require Import Arith.
 Require Import ZArith.
 Require Import Omega.
@@ -365,5 +365,19 @@ Definition ugteq_vec := ugteq_bv.
 Definition sgteq_vec := sgteq_bv.
 
 *)
+
+Program Fixpoint reverse_endianness_word {n} (bits : word n) : word n :=
+  match n with
+  | S (S (S (S (S (S (S (S m))))))) =>
+    combine
+      (reverse_endianness_word (split2 8 m bits))
+      (split1 8 m bits)
+  | _ => bits
+  end.
+Next Obligation.
+omega.
+Qed.
+
+Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) reverse_endianness_word bits.
 
 Definition get_slice_int {a} `{ArithFact (a >= 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
