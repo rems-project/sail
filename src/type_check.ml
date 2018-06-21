@@ -132,27 +132,10 @@ let is_unknown_type = function
   | (Typ_aux (Typ_internal_unknown, _)) -> true
   | _ -> false
 
-(* An index_sort is a more general form of range type: it can either
-   be IS_int, which represents every natural number, or some set of
-   natural numbers given by an IS_prop expression of the form
-   {'n. f('n) <= g('n) /\ ...} *)
-type index_sort =
-  | IS_int
-  | IS_prop of kid * (nexp * nexp) list
-
-let string_of_index_sort = function
-  | IS_int -> "INT"
-  | IS_prop (kid, constraints) ->
-     "{" ^ string_of_kid kid ^ " | "
-     ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
-     ^ "}"
-
 let is_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [_]) when string_of_id f = "atom" -> true
   | _ -> false
-
-
 
 let rec strip_id = function
   | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)

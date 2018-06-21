@@ -403,7 +403,7 @@ let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
 let rewrite_ast_c ast =
   ast
   |> rewrite Rewrites.rewrite_defs_c
-  |> Constant_fold.rewrite_constant_function_calls
+  |> rewrite [("constant_fold", Constant_fold.rewrite_constant_function_calls)]
 
 let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
 let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check

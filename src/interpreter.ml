@@ -232,7 +232,6 @@ let is_value_fexp (FE_aux (FE_Fexp (id, exp), _)) = is_value exp
 let value_of_fexp (FE_aux (FE_Fexp (id, exp), _)) = (string_of_id id, value_of_exp exp)
 
 let rec build_letchain id lbs (E_aux (_, annot) as exp) =
-  (* print_endline ("LETCHAIN " ^ string_of_exp exp); *)
   match lbs with
   | [] -> exp
   | lb :: lbs when IdSet.mem id (letbind_pat_ids lb)->
@@ -310,7 +309,6 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
      else
        failwith "Match failure"
-
 
   | E_vector_subrange (vec, n, m) ->
      wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
