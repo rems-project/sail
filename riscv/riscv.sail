@@ -1096,6 +1096,9 @@ function readCSR csr : csreg -> xlenbits =
     0x343 => mtval,
     0x344 => mip.bits(),
 
+    0x3A0 => pmpcfg0,
+    0x3B0 => pmpaddr0,
+
     /* supervisor mode */
     0x100 => mstatus.bits(), /* FIXME: legalize view*/
     0x102 => sedeleg.bits(),
@@ -1137,6 +1140,9 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     0x342 => { mcause->bits() = value; Some(mcause.bits()) },
     0x343 => { mtval = value; Some(mtval) },
     0x344 => { mip = legalize_mip(mip, value); Some(mip.bits()) },
+
+    0x3A0 => { pmpcfg0 = value; Some(pmpcfg0) }, /* FIXME: legalize */
+    0x3B0 => { pmpaddr0 = value; Some(pmpaddr0) }, /* FIXME: legalize */
 
     /* supervisor mode */
     0x100 => { mstatus = legalize_sstatus(mstatus, value); Some(mstatus.bits()) },
@@ -1777,7 +1783,6 @@ end execute
 end print_insn
 end assembly
 end encdec
-end encdec_compressed
 
 function decode bv = Some(encdec(bv))
 
@@ -1892,20 +1897,20 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
              if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
              if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
       },
-      FENCE(pred, succ) -> {
+      FENCE(pred, succ) => {
              ik =
-               switch(pred, succ) {
+               match (pred, succ) {
                  (0b0011, 0b0011) => IK_barrier (Barrier_RISCV_rw_rw),
                  (0b0010, 0b0011) => IK_barrier (Barrier_RISCV_r_rw),
-                 (0b0001, 0b0011) => IK_barrier (Barrier_RISCV_w_rw),
+//                 (0b0001, 0b0011) => IK_barrier (Barrier_RISCV_w_rw),
 
-                 (0b0011, 0b0010) => IK_barrier (Barrier_RISCV_rw_r),
-                 (0b0010, 0b0010) => IK_barrier (Barrier_RISCV_r_r),
-                 (0b0001, 0b0010) => IK_barrier (Barrier_RISCV_w_r),
+                 // (0b0011, 0b0010) => IK_barrier (Barrier_RISCV_rw_r),
+                 // (0b0010, 0b0010) => IK_barrier (Barrier_RISCV_r_r),
+                 // (0b0001, 0b0010) => IK_barrier (Barrier_RISCV_w_r),
 
-                 (0b0011, 0b0001) => IK_barrier (Barrier_RISCV_rw_w),
-                 (0b0010, 0b0001) => IK_barrier (Barrier_RISCV_r_w),
-                 (0b0001, 0b0001) => IK_barrier (Barrier_RISCV_w_w),
+                 // (0b0011, 0b0001) => IK_barrier (Barrier_RISCV_rw_w),
+                 // (0b0010, 0b0001) => IK_barrier (Barrier_RISCV_r_w),
+                 // (0b0001, 0b0001) => IK_barrier (Barrier_RISCV_w_w),
 
                  _ => internal_error("barrier type not implemented in initial_analysis")
   //               case (FM_NORMAL, _, _) -> exit "not implemented"
@@ -1913,10 +1918,10 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
   //               case (FM_TSO, 0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_tso)
   //               case (FM_TSO, _, _) -> exit "not implemented"
                };
-      }
+      },
      FENCEI() => {
               ik = IK_barrier (Barrier_RISCV_i);
-     }
+     },
   //    case (LOADRES ( aq, rl, rs1, width, rd)) -> {
   //           if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
   //           if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
