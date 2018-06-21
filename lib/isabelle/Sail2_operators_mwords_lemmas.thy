@@ -1,5 +1,5 @@
-theory "Sail_operators_mwords_lemmas"
-  imports Sail_operators_mwords
+theory Sail2_operators_mwords_lemmas
+  imports Sail2_operators_mwords
 begin
 
 lemmas uint_simps[simp] = uint_maybe_def uint_fail_def uint_oracle_def

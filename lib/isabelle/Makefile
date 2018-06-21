@@ -1,8 +1,11 @@
-THYS = Sail_instr_kinds.thy Sail_values.thy Sail_operators.thy \
-  Sail_operators_mwords.thy Sail_operators_bitlists.thy \
-  State_monad.thy State.thy State_lifting.thy Prompt_monad.thy Prompt.thy
-EXTRA_THYS = State_monad_lemmas.thy State_lemmas.thy Prompt_monad_lemmas.thy \
-  Sail_operators_mwords_lemmas.thy Hoare.thy
+THYS = Sail2_instr_kinds.thy Sail2_values.thy Sail2_operators.thy \
+  Sail2_operators_mwords.thy Sail2_operators_bitlists.thy \
+  Sail2_state_monad.thy Sail2_state.thy Sail2_state_lifting.thy \
+  Sail2_prompt_monad.thy Sail2_prompt.thy \
+  Sail2_string.thy
+EXTRA_THYS = Sail2_state_monad_lemmas.thy Sail2_state_lemmas.thy \
+  Sail2_prompt_monad_lemmas.thy \
+  Sail2_operators_mwords_lemmas.thy Hoare.thy
 
 RISCV_DIR = ../../riscv
 
@@ -24,34 +27,37 @@ manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	make -C $(RISCV_DIR) Riscv_duopod.thy
 	isabelle build -d manual Sail-Manual
 
-Sail_instr_kinds.thy: ../../src/lem_interp/sail_instr_kinds.lem
+Sail2_instr_kinds.thy: ../../src/lem_interp/sail2_instr_kinds.lem
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_values.thy: ../../src/gen_lib/sail_values.lem Sail_instr_kinds.thy
+Sail2_values.thy: ../../src/gen_lib/sail2_values.lem Sail2_instr_kinds.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_operators.thy: ../../src/gen_lib/sail_operators.lem Sail_values.thy
+Sail2_operators.thy: ../../src/gen_lib/sail2_operators.lem Sail2_values.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_operators_mwords.thy: ../../src/gen_lib/sail_operators_mwords.lem Sail_operators.thy Prompt.thy
+Sail2_operators_mwords.thy: ../../src/gen_lib/sail2_operators_mwords.lem Sail2_operators.thy Sail2_prompt.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Sail_operators_bitlists.thy: ../../src/gen_lib/sail_operators_bitlists.lem Sail_operators.thy Prompt.thy
+Sail2_operators_bitlists.thy: ../../src/gen_lib/sail2_operators_bitlists.lem Sail2_operators.thy Sail2_prompt.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Prompt_monad.thy: ../../src/gen_lib/prompt_monad.lem Sail_values.thy
+Sail2_prompt_monad.thy: ../../src/gen_lib/sail2_prompt_monad.lem Sail2_values.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-Prompt.thy: ../../src/gen_lib/prompt.lem Prompt_monad.thy Prompt_monad_lemmas.thy
+Sail2_prompt.thy: ../../src/gen_lib/sail2_prompt.lem Sail2_prompt_monad.thy Sail2_prompt_monad_lemmas.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-State_monad.thy: ../../src/gen_lib/state_monad.lem Sail_values.thy
+Sail2_state_monad.thy: ../../src/gen_lib/sail2_state_monad.lem Sail2_values.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-State.thy: ../../src/gen_lib/state.lem Prompt.thy State_monad.thy State_monad_lemmas.thy
+Sail2_state.thy: ../../src/gen_lib/sail2_state.lem Sail2_prompt.thy Sail2_state_monad.thy Sail2_state_monad_lemmas.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
-State_lifting.thy: ../../src/gen_lib/state_lifting.lem Prompt.thy State.thy
+Sail2_state_lifting.thy: ../../src/gen_lib/sail2_state_lifting.lem Sail2_prompt.thy Sail2_state.thy
+	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
+
+Sail2_string.thy: ../../src/gen_lib/sail2_string.lem Sail2_operators_mwords.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 clean:

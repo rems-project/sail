@@ -1,5 +1,5 @@
-theory State_lemmas
-  imports State State_lifting
+theory Sail2_state_lemmas
+  imports Sail2_state Sail2_state_lifting
 begin
 
 lemma All_liftState_dom: "liftState_dom (r, m)"
@@ -220,19 +220,27 @@ qed
 lemma if_return_return[simp]: "(if a then return True else return False) = return a" by auto
 
 lemma and_boolM_simps[simp]:
-  "and_boolM (return b) y = (if b then y else return False)"
+  "and_boolM (return b) (return c) = return (b \<and> c)"
   "and_boolM x (return True) = x"
   "and_boolM x (return False) = x \<bind> (\<lambda>_. return False)"
   "\<And>x y z. and_boolM (x \<bind> y) z = (x \<bind> (\<lambda>r. and_boolM (y r) z))"
   by (auto simp: and_boolM_def)
 
+lemma and_boolM_return_if:
+  "and_boolM (return b) y = (if b then y else return False)"
+  by (auto simp: and_boolM_def)
+
 lemmas and_boolM_if_distrib[simp] = if_distrib[where f = "\<lambda>x. and_boolM x y" for y]
 
 lemma or_boolM_simps[simp]:
-  "or_boolM (return b) y = (if b then return True else y)"
+  "or_boolM (return b) (return c) = return (b \<or> c)"
   "or_boolM x (return True) = x \<bind> (\<lambda>_. return True)"
   "or_boolM x (return False) = x"
   "\<And>x y z. or_boolM (x \<bind> y) z = (x \<bind> (\<lambda>r. or_boolM (y r) z))"
+  by (auto simp: or_boolM_def)
+
+lemma or_boolM_return_if:
+  "or_boolM (return b) y = (if b then return True else y)"
   by (auto simp: or_boolM_def)
 
 lemmas or_boolM_if_distrib[simp] = if_distrib[where f = "\<lambda>x. or_boolM x y" for y]
@@ -240,19 +248,27 @@ lemmas or_boolM_if_distrib[simp] = if_distrib[where f = "\<lambda>x. or_boolM x 
 lemma if_returnS_returnS[simp]: "(if a then returnS True else returnS False) = returnS a" by auto
 
 lemma and_boolS_simps[simp]:
-  "and_boolS (returnS b) y = (if b then y else returnS False)"
+  "and_boolS (returnS b) (returnS c) = returnS (b \<and> c)"
   "and_boolS x (returnS True) = x"
   "and_boolS x (returnS False) = bindS x (\<lambda>_. returnS False)"
   "\<And>x y z. and_boolS (bindS x y) z = (bindS x (\<lambda>r. and_boolS (y r) z))"
   by (auto simp: and_boolS_def)
 
+lemma and_boolS_returnS_if:
+  "and_boolS (returnS b) y = (if b then y else returnS False)"
+  by (auto simp: and_boolS_def)
+
 lemmas and_boolS_if_distrib[simp] = if_distrib[where f = "\<lambda>x. and_boolS x y" for y]
 
 lemma or_boolS_simps[simp]:
-  "or_boolS (returnS b) y = (if b then returnS True else y)"
+  "or_boolS (returnS b) (returnS c) = returnS (b \<or> c)"
   "or_boolS x (returnS True) = bindS x (\<lambda>_. returnS True)"
   "or_boolS x (returnS False) = x"
   "\<And>x y z. or_boolS (bindS x y) z = (bindS x (\<lambda>r. or_boolS (y r) z))"
+  by (auto simp: or_boolS_def)
+
+lemma or_boolS_returnS_if:
+  "or_boolS (returnS b) y = (if b then returnS True else y)"
   by (auto simp: or_boolS_def)
 
 lemmas or_boolS_if_distrib[simp] = if_distrib[where f = "\<lambda>x. or_boolS x y" for y]

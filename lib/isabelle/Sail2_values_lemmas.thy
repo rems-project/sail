@@ -1,5 +1,5 @@
-theory Sail_values_lemmas
-  imports Sail_values
+theory Sail2_values_lemmas
+  imports Sail2_values
 begin
 
 lemma nat_of_int_nat_simps[simp]: "nat_of_int = nat" by (auto simp: nat_of_int_def)
@@ -57,10 +57,10 @@ lemma bool_of_bitU_bitU_of_bool[simp]:
   "bool_of_bitU (bitU_of_bool x) = Some x"
   by (intro ext, auto simp: bool_of_bitU_def bitU_of_bool_def)+
 
-abbreviation "BC_bitU_list \<equiv> instance_Sail_values_Bitvector_list_dict instance_Sail_values_BitU_Sail_values_bitU_dict"
-lemmas BC_bitU_list_def = instance_Sail_values_Bitvector_list_dict_def instance_Sail_values_BitU_Sail_values_bitU_dict_def
-abbreviation "BC_mword \<equiv> instance_Sail_values_Bitvector_Machine_word_mword_dict"
-lemmas BC_mword_defs = instance_Sail_values_Bitvector_Machine_word_mword_dict_def
+abbreviation "BC_bitU_list \<equiv> instance_Sail2_values_Bitvector_list_dict instance_Sail2_values_BitU_Sail2_values_bitU_dict"
+lemmas BC_bitU_list_def = instance_Sail2_values_Bitvector_list_dict_def instance_Sail2_values_BitU_Sail2_values_bitU_dict_def
+abbreviation "BC_mword \<equiv> instance_Sail2_values_Bitvector_Machine_word_mword_dict"
+lemmas BC_mword_defs = instance_Sail2_values_Bitvector_Machine_word_mword_dict_def
   access_mword_def access_mword_inc_def access_mword_dec_def
   (*update_mword_def update_mword_inc_def update_mword_dec_def*)
   subrange_list_def subrange_list_inc_def subrange_list_dec_def

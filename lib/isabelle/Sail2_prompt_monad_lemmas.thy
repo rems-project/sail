@@ -1,7 +1,7 @@
-theory Prompt_monad_lemmas
+theory Sail2_prompt_monad_lemmas
   imports
-    Prompt_monad
-    Sail_values_lemmas
+    Sail2_prompt_monad
+    Sail2_values_lemmas
 begin
 
 notation bind (infixr "\<bind>" 54)

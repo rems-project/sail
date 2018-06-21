@@ -1,6 +1,6 @@
 theory Hoare
   imports
-    State_lemmas
+    Sail2_state_lemmas
     "HOL-Eisbach.Eisbach_Tools"
 begin
 

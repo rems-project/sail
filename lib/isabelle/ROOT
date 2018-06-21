@@ -3,10 +3,11 @@ session "Sail" = "LEM" +
   sessions
     "HOL-Eisbach"
   theories [document = false]
-    Sail_values_lemmas
-    Prompt
-    State_lemmas
-    Sail_operators_mwords_lemmas
-    Sail_operators_bitlists
+    Sail2_values_lemmas
+    Sail2_prompt
+    Sail2_state_lemmas
+    Sail2_operators_mwords_lemmas
+    Sail2_operators_bitlists
+    Sail2_string
     Hoare
   document_files "root.tex"

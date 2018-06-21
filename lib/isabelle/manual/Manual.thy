@@ -1,8 +1,8 @@
 (*<*)
 theory Manual
   imports
-    Sail.State_lemmas
-    Sail.Sail_operators_mwords_lemmas
+    Sail.Sail2_state_lemmas
+    Sail.Sail2_operators_mwords_lemmas
     Sail.Hoare
     Riscv_duopod.Riscv_duopod_lemmas
 begin
@@ -183,7 +183,7 @@ Vectors in Sail are mapped to lists in Isabelle, except for bitvectors, which ar
 Both increasing and decreasing indexing order are supported by having two versions for each
 operation that involves indexing, such as @{term update_list_inc} and @{term update_list_dec},
 or @{term subrange_list_inc} and @{term subrange_list_dec}.  These operations are defined in the
-theory @{theory Sail_values}, while @{theory Sail_values_lemmas} provides simplification rules
+theory @{theory Sail2_values}, while @{theory Sail2_values_lemmas} provides simplification rules
 such as
 
 @{lemma "access_list_inc xs i = xs ! nat i" by auto} \\
@@ -209,7 +209,7 @@ into multiple clauses with concrete bitvector lengths.  This is not enabled by d
 so Sail generates Lem definitions using bit lists unless the @{verbatim "-lem_mwords"} command
 line flag is used.
 
-The theory @{theory Sail_values} defines a (Lem) typeclass @{verbatim Bitvector}, which provides
+The theory @{theory Sail2_values} defines a (Lem) typeclass @{verbatim Bitvector}, which provides
 an interface to some basic bitvector operations and has instantiations for both bit lists and machine
 words.  It is mainly intended for internal use in the Sail library,\<^footnote>\<open>Lem typeclasses are not very
 convenient to use in Isabelle, as they get translated to dictionaries that have to be passed to functions
@@ -219,7 +219,7 @@ representations.  For use in Sail specifications, wrappers are defined in the th
 right theory is automatically added to the generated files, depending on which bitvector
 representation is used.  Hence, bitvector operations can be referred to in the Sail source code
 using uniform names, e.g.~@{term add_vec}, @{term update_vec_dec}, or @{term subrange_vec_inc}.
-The theory @{theory Sail_operators_mwords_lemmas} sets up simplification rules that relate these
+The theory @{theory Sail2_operators_mwords_lemmas} sets up simplification rules that relate these
 operations to the native operations in Isabelle, e.g.
 
 @{lemma "add_vec l r = l + r" by simp} \\
@@ -235,8 +235,8 @@ for integration with relaxed memory models.  For the sequential case, we use a s
 exceptions and nondeterminism).
 
 The generated definitions use the free monad, and the sequential case is supported via a lifting
-to the state monad defined in the theory @{theory State}.  Simplification rules are set up in the
-theory @{theory State_lemmas}, allowing seamless reasoning about the generated definitions in terms
+to the state monad defined in the theory @{theory Sail2_state}.  Simplification rules are set up in the
+theory @{theory Sail2_state_lemmas}, allowing seamless reasoning about the generated definitions in terms
 of the state monad.\<close>
 
 subsubsection \<open>State Monad \label{sec:state-monad}\<close>
@@ -308,7 +308,7 @@ instances.\<close>
 
 subsubsection \<open>Free Monad \label{sec:free-monad}\<close>
 
-text \<open>In addition to the state monad, the theory @{theory Prompt_monad} defines a free monad of an
+text \<open>In addition to the state monad, the theory @{theory Sail2_prompt_monad} defines a free monad of an
 effect datatype.  A monadic expression either returns a pure value @{term a}, denoted
 @{term "Done a"}, or it has an effect.  The latter can be a failure or an exception, or an effect
 together with a continuation.  For example, @{term \<open>Read_reg ''PC'' k\<close>} represents a request to
@@ -383,7 +383,7 @@ register state record:
 Sail aims to generate Isabelle definitions that can be used with either the state or the free monad.
 To achieve this, the definitions are generated using the free monad, and a lifting to the state
 monad is provided together with simplification rules.  These include generic simplification rules
-(proved in the theory @{theory State_lemmas}) such as
+(proved in the theory @{theory Sail2_state_lemmas}) such as
 @{thm [display]
     liftState_return[where r = "(get_regval, set_regval)"]
     liftState_bind[where r = "(get_regval, set_regval)"]
