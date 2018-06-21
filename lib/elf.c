@@ -357,7 +357,7 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
     }
 }
 
-void loadELF(char *filename) {
+void load_elf(char *filename) {
     // Read input file into memory
     char* buffer = NULL;
     int   size   = 0;

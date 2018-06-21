@@ -9,6 +9,8 @@
 #include<gmp.h>
 #endif
 
+#include<time.h>
+
 /*
  * Called by the RTS to initialise and clear any library state.
  */
@@ -43,6 +45,8 @@ typedef int unit;
 
 unit UNDEFINED(unit)(const unit);
 bool eq_unit(const unit, const unit);
+
+unit skip(const unit);
 
 /* ***** Sail booleans ***** */
 
@@ -203,8 +207,13 @@ void or_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 void xor_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 void not_bits(sail_bits *rop, const sail_bits op);
 
+void mults_vec(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void mult_vec(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+
 void zeros(sail_bits *rop, const sail_int op);
+
 void zero_extend(sail_bits *rop, const sail_bits op, const sail_int len);
+void sign_extend(sail_bits *rop, const sail_bits op, const sail_int len);
 
 void length_sail_bits(sail_int *rop, const sail_bits op);
 
@@ -249,6 +258,13 @@ void set_slice(sail_bits *rop,
 	       const sail_bits op,
 	       const sail_int start_mpz,
 	       const sail_bits slice);
+
+
+void shift_bits_left(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void shift_bits_right(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void shift_bits_right_arith(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+
+void reverse_endianness(sail_bits*, sail_bits);
 
 /* ***** Sail reals ***** */
 
@@ -310,3 +326,7 @@ unit print_int(const sail_string str, const sail_int op);
 unit prerr_int(const sail_string str, const sail_int op);
 
 unit sail_putchar(const sail_int op);
+
+/* ***** Misc ***** */
+
+void get_time_ns(sail_int*, const unit);

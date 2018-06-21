@@ -963,6 +963,8 @@ let c_fragment = function
   | AV_C_fragment (frag, _) -> frag
   | _ -> assert false
 
+let v_mask_lower i = F_lit (V_bits (Util.list_init i (fun _ -> Sail_values.B1)))
+
 let analyze_primop' ctx env l id args typ =
   let ctx = { ctx with local_env = env } in
   let no_change = AE_app (id, args, typ) in
@@ -993,10 +995,12 @@ let analyze_primop' ctx env l id args typ =
   | "and_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "&", v2), typ))
 
-            (*
   | "not_bits", [AV_C_fragment (v, _)] ->
-     AE_val (AV_C_fragment (F_unary ("~", v), typ))
-             *)
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        AE_val (AV_C_fragment (F_op (F_unary ("~", v), "&", v_mask_lower (Big_int.to_int n)), typ))
+     end
 
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] ->
      let len = F_op (f, "-", F_op (t, "-", v_one)) in
@@ -3370,7 +3374,7 @@ let compile_ast ctx (Defs defs) =
     let postamble = separate hardline (List.map string
        ( [ "int main(int argc, char *argv[])";
            "{";
-           "  if (argc > 1) { loadELF(argv[1]); }";
+           "  if (argc > 1) { load_image(argv[1]); }";
            "  setup_rts();" ]
        @ fst exn_boilerplate
        @ startup cdefs

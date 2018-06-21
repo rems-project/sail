@@ -37,6 +37,11 @@ unit UNDEFINED(unit)(const unit u)
   return UNIT;
 }
 
+unit skip(const unit u)
+{
+  return UNIT;
+}
+
 /* ***** Sail bit type ***** */
 
 bool eq_bit(const mach_bits a, const mach_bits b)
@@ -453,6 +458,28 @@ void not_bits(sail_bits *rop, const sail_bits op)
   }
 }
 
+void mults_vec(sail_bits *rop, const sail_bits op1, const sail_bits op2)
+{
+  mpz_t op1_int, op2_int;
+  mpz_init(op1_int);
+  mpz_init(op2_int);
+  sail_signed(&op1_int, op1);
+  sail_signed(&op2_int, op2);
+  rop->len = op1.len * 2;
+  mpz_mul(*rop->bits, op1_int, op2_int);
+  normalize_sail_bits(rop);
+  mpz_clear(op1_int);
+  mpz_clear(op2_int);
+}
+
+void mult_vec(sail_bits *rop, const sail_bits op1, const sail_bits op2)
+{
+  rop->len = op1.len * 2;
+  mpz_mul(*rop->bits, *op1.bits, *op2.bits);
+  normalize_sail_bits(rop); /* necessary? */
+}
+
+
 void zeros(sail_bits *rop, const sail_int op)
 {
   rop->len = mpz_get_ui(op);
@@ -463,6 +490,19 @@ void zero_extend(sail_bits *rop, const sail_bits op, const sail_int len)
 {
   rop->len = mpz_get_ui(len);
   mpz_set(*rop->bits, *op.bits);
+}
+
+void sign_extend(sail_bits *rop, const sail_bits op, const sail_int len)
+{
+  rop->len = mpz_get_ui(len);
+  if(mpz_tstbit(*op.bits, op.len - 1)) {
+    mpz_set(*rop->bits, *op.bits);
+    for(mp_bitcnt_t i = rop->len - 1; i >= op.len; i--) {
+      mpz_setbit(*rop->bits, i);
+    }
+  } else {
+    mpz_set(*rop->bits, *op.bits);
+  }
 }
 
 void length_sail_bits(sail_int *rop, const sail_bits op)
@@ -655,6 +695,68 @@ void set_slice(sail_bits *rop,
       mpz_setbit(*rop->bits, i + start);
     } else {
       mpz_clrbit(*rop->bits, i + start);
+    }
+  }
+}
+
+void shift_bits_left(sail_bits *rop, const sail_bits op1, const sail_bits op2)
+{
+  rop->len = op1.len;
+  mpz_mul_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
+  normalize_sail_bits(rop);
+}
+
+void shift_bits_right(sail_bits *rop, const sail_bits op1, const sail_bits op2)
+{
+  rop->len = op1.len;
+  mpz_tdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
+}
+
+/* FIXME */
+void shift_bits_right_arith(sail_bits *rop, const sail_bits op1, const sail_bits op2)
+{
+  rop->len = op1.len;
+  mp_bitcnt_t shift_amt = mpz_get_ui(*op2.bits);
+  mp_bitcnt_t sign_bit = op1.len - 1;
+  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, shift_amt);
+  if(mpz_tstbit(*op1.bits, sign_bit) != 0) {
+    /* */
+    for(; shift_amt > 0; shift_amt--) {
+      mpz_setbit(*rop->bits, sign_bit - shift_amt + 1);
+    }
+  }
+}
+
+void reverse_endianness(sail_bits *rop, const sail_bits op)
+{
+  rop->len = op.len;
+  if (rop->len == 64ul) {
+    uint64_t x = mpz_get_ui(*op.bits);
+    x = (x & 0xFFFFFFFF00000000) >> 32 | (x & 0x00000000FFFFFFFF) << 32;
+    x = (x & 0xFFFF0000FFFF0000) >> 16 | (x & 0x0000FFFF0000FFFF) << 16;
+    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
+    mpz_set_ui(*rop->bits, x);
+  } else if (rop->len == 32ul) {
+    uint64_t x = mpz_get_ui(*op.bits);
+    x = (x & 0xFFFF0000FFFF0000) >> 16 | (x & 0x0000FFFF0000FFFF) << 16;
+    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
+    mpz_set_ui(*rop->bits, x);
+  } else if (rop->len == 16ul) {
+    uint64_t x = mpz_get_ui(*op.bits);
+    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
+    mpz_set_ui(*rop->bits, x);
+  } else if (rop->len == 8ul) {
+    mpz_set(*rop->bits, *op.bits);
+  } else {
+    /* For other numbers of bytes we reverse the bytes.
+     * XXX could use mpz_import/export for this. */
+    mpz_set_ui(sail_lib_tmp1, 0xff); // byte mask
+    mpz_set_ui(*rop->bits, 0); // reset accumulator for result
+    for(mp_bitcnt_t byte = 0; byte < op.len; byte+=8) {
+      mpz_tdiv_q_2exp(sail_lib_tmp2, *op.bits, byte); // shift byte to bottom
+      mpz_and(sail_lib_tmp2, sail_lib_tmp2, sail_lib_tmp1); // and with mask
+      mpz_mul_2exp(*rop->bits, *rop->bits, 8); // shift result left 8
+      mpz_ior(*rop->bits, *rop->bits, sail_lib_tmp2); // or byte into result
     }
   }
 }
@@ -889,4 +991,13 @@ unit sail_putchar(const sail_int op)
   char c = (char) mpz_get_ui(op);
   putchar(c);
   return UNIT;
+}
+
+void get_time_ns(sail_int *rop, const unit u)
+{
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
+  mpz_set_si(*rop, t.tv_sec);
+  mpz_mul_ui(*rop, *rop, 1000000000);
+  mpz_add_ui(*rop, *rop, t.tv_nsec);
 }

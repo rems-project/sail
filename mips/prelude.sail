@@ -103,10 +103,10 @@ val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
 overload operator / = {quotient_nat, quotient}
 
-val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot", _ : "div_int"} : (int, int) -> int
-val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod", _ : "mod_int"} : (int, int) -> int
+val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot", _ : "tdiv_int"} : (int, int) -> int
+val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod", _ : "tmod_int"} : (int, int) -> int
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod", _ : "mod_int"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
+val modulus = {ocaml: "modulus", lem: "hardware_mod", _ : "tmod_int"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
 
 overload operator % = {modulus}
 

@@ -2,4 +2,4 @@
 
 #include<string.h>
 
-void loadELF(char *filename);
+void load_elf(char *filename);
