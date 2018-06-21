@@ -67,7 +67,6 @@ val "load_raw" : (bits(64), string) -> unit
 val main : unit -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg, rmemt, wmvt}
 
 function main () = {
-  load_raw(0x0000000000100000, "/home/aa2019/mips_freebsd/kernel");
   init_registers(to_bits(64, elf_entry()));
   startTime = get_time_ns();
   while (fetch_and_execute()) do ();
