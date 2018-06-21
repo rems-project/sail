@@ -15,6 +15,7 @@ let rec liftState ra s = match s with
   | (Write_tagv t k)     -> bindS (write_tagS t)            (fun v -> liftState ra (k v))
   | (Read_reg r k)       -> bindS (read_regvalS ra r)       (fun v -> liftState ra (k v))
   | (Excl_res k)         -> bindS (excl_resultS ())         (fun v -> liftState ra (k v))
+  | (Undefined k)        -> bindS (undefined_boolS ())      (fun v -> liftState ra (k v))
   | (Write_ea wk a sz k) -> seqS (write_mem_eaS wk a sz)    (liftState ra k)
   | (Write_reg r v k)    -> seqS (write_regvalS ra r v)     (liftState ra k)
   | (Footprint k)        -> liftState ra k

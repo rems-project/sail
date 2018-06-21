@@ -31,6 +31,7 @@ Inductive monad regval a e :=
   | Read_reg : register_name -> (regval -> monad regval a e) -> monad regval a e
   (* Request to write register *)
   | Write_reg : register_name -> regval -> monad regval a e -> monad regval a e
+  | Undefined : (bool -> monad regval a e) -> monad regval a e
   (*Result : a failed assert with possible error message to report*)
   | Fail : string -> monad regval a e
   | Error : string -> monad regval a e
@@ -49,6 +50,7 @@ Arguments Footprint [_ _ _].
 Arguments Barrier [_ _ _].
 Arguments Read_reg [_ _ _].
 Arguments Write_reg [_ _ _].
+Arguments Undefined [_ _ _].
 Arguments Fail [_ _ _].
 Arguments Error [_ _ _].
 Arguments Exception [_ _ _].
@@ -65,6 +67,7 @@ Fixpoint bind {rv A B E} (m : monad rv A E) (f : A -> monad rv B E) := match m w
   | Write_tag a t k =>    Write_tag a t    (fun v => bind (k v) f)
   | Read_reg descr k =>   Read_reg descr   (fun v => bind (k v) f)
   | Excl_res k =>         Excl_res         (fun v => bind (k v) f)
+  | Undefined k =>        Undefined        (fun v => bind (k v) f)
   | Write_ea wk a sz k => Write_ea wk a sz (bind k f)
   | Footprint k =>        Footprint        (bind k f)
   | Barrier bk k =>       Barrier bk       (bind k f)
@@ -82,6 +85,9 @@ Notation "m >> n" := (bind0 m n) (at level 50, left associativity).
 
 (*val exit : forall rv a e. unit -> monad rv a e*)
 Definition exit {rv A E} (_ : unit) : monad rv A E := Fail "exit".
+
+(*val undefined_bool : forall 'rv 'e. unit -> monad 'rv bool 'e*)
+Definition undefined_bool {rv e} (_:unit) : monad rv bool e := Undefined returnm.
 
 (*val assert_exp : forall rv e. bool -> string -> monad rv unit e*)
 Definition assert_exp {rv E} (exp :bool) msg : monad rv unit E :=
@@ -105,6 +111,7 @@ Fixpoint try_catch {rv A E1 E2} (m : monad rv A E1) (h : E1 -> monad rv A E2) :=
   | Write_tag a t k =>    Write_tag a t     (fun v => try_catch (k v) h)
   | Read_reg descr k =>   Read_reg descr   (fun v => try_catch (k v) h)
   | Excl_res k =>         Excl_res         (fun v => try_catch (k v) h)
+  | Undefined k =>        Undefined        (fun v => try_catch (k v) h)
   | Write_ea wk a sz k => Write_ea wk a sz (try_catch k h)
   | Footprint k =>        Footprint        (try_catch k h)
   | Barrier bk k =>       Barrier bk       (try_catch k h)

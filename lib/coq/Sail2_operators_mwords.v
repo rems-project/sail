@@ -245,8 +245,10 @@ val smult_vec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 
 Definition add_vec   {n} : mword n -> mword n -> mword n := word_binop Word.wplus.
 (*Definition sadd_vec  {n} : mword n -> mword n -> mword n := sadd_bv w.*)
 Definition sub_vec   {n} : mword n -> mword n -> mword n := word_binop Word.wminus.
-Definition mult_vec  {n} : mword n -> mword n -> mword n := word_binop Word.wmult.
-(*Definition smult_vec {n} : mword n -> mword n -> mword n := smult_bv w.*)
+Definition mult_vec  {n m} `{ArithFact (m >= n)} (l : mword n) (r : mword n) : mword m :=
+  word_binop Word.wmult (zero_extend l _) (zero_extend r _).
+Definition mults_vec  {n m} `{ArithFact (m >= n)} (l : mword n) (r : mword n) : mword m :=
+  word_binop Word.wmult (sign_extend l _) (sign_extend r _).
 
 (*val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val sadd_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a

@@ -48,7 +48,7 @@ match b with
   | BU => Fail "bool_of_bitU"
 end.
 
-(*val bool_of_bitU_oracle : forall 'rv 'e. bitU -> monad 'rv bool 'e
+(*val bool_of_bitU_oracle : forall 'rv 'e. bitU -> monad 'rv bool 'e*)
 Definition bool_of_bitU_oracle {rv E} (b : bitU) : monad rv bool E :=
 match b with
   | B0 => returnm false
@@ -57,7 +57,7 @@ match b with
 end.
 
 
-val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+(*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec whileM vars cond body =
   cond vars >>= fun cond_val ->

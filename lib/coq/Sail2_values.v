@@ -1032,6 +1032,7 @@ Arguments write_to [_ _ _].
 Arguments of_regval [_ _ _].
 Arguments regval_of [_ _ _].
 
+(* Register accessors: pair of functions for reading and writing register values *)
 Definition register_accessors regstate regval : Type :=
   ((string -> regstate -> option regval) *
    (string -> regval -> regstate -> option regstate)).
