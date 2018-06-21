@@ -506,6 +506,9 @@ function csr_name(csr) = {
     0x342  => "mcause",
     0x343  => "mtval",
     0x344  => "mip",
+
+    0x3A0  => "pmpcfg0",
+    0x3B0  => "pmpaddr0",
     /* TODO: machine protection and translation */
     /* machine counters/timers */
     0xB00  => "mcycle",
@@ -608,6 +611,9 @@ function is_CSR_defined (csr : bits(12), p : Privilege) -> bool =
     0x342 => p == Machine, // mcause
     0x343 => p == Machine, // mtval
     0x344 => p == Machine, // mip
+
+    0x3A0 => p == Machine, // pmpcfg0
+    0x3B0 => p == Machine, // pmpaddr0
 
     /* supervisor mode: trap setup */
     0x100 => p == Machine | p == Supervisor, // sstatus
