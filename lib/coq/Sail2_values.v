@@ -22,6 +22,15 @@ Defined.
 Definition build_ex (n:Z) {P:Z -> Prop} `{H:ArithFact (P n)} : {x : Z & ArithFact (P x)} :=
   existT _ n H.
 
+(* Project away range constraints in comparisons *)
+Definition ltb_range_l {P} (l : sigT P) r := Z.ltb (projT1 l) r.
+Definition leb_range_l {P} (l : sigT P) r := Z.leb (projT1 l) r.
+Definition gtb_range_l {P} (l : sigT P) r := Z.gtb (projT1 l) r.
+Definition geb_range_l {P} (l : sigT P) r := Z.geb (projT1 l) r.
+Definition ltb_range_r {P} l (r : sigT P) := Z.ltb l (projT1 r).
+Definition leb_range_r {P} l (r : sigT P) := Z.leb l (projT1 r).
+Definition gtb_range_r {P} l (r : sigT P) := Z.gtb l (projT1 r).
+Definition geb_range_r {P} l (r : sigT P) := Z.geb l (projT1 r).
 
 Definition ii := Z.
 Definition nn := nat.

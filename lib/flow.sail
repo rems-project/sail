@@ -18,14 +18,14 @@ val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -
 val lt_atom = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val lt_range_atom = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val lteq_range_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val gt_range_atom = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val gteq_range_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val lt_atom_range = {coq: "Z.ltb", _: "lt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val lteq_atom_range = {coq: "Z.leb", _: "lteq"} : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val gt_atom_range = {coq: "Z.gtb", _: "gt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val gteq_atom_range = {coq: "Z.geb", _: "gteq"} : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val lt_range_atom = {coq: "ltb_range_l", _: "lt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val lteq_range_atom = {coq: "leb_range_l", _: "lteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val gt_range_atom = {coq: "gtb_range_l", _: "gt"}     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val gteq_range_atom = {coq: "geb_range_l", _: "gteq"} : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
+val lt_atom_range = {coq: "ltb_range_r", _: "lt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val lteq_atom_range = {coq: "leb_range_r", _: "lteq"} : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val gt_atom_range = {coq: "gtb_range_r", _: "gt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
+val gteq_atom_range = {coq: "geb_range_r", _: "gteq"} : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 
 val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
 val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : (int, int) -> bool
