@@ -1731,6 +1731,18 @@ function clause print_insn (C_ADD(rsd, rs2)) =
 
 /* ****************************************************************** */
 
+union clause ast = STOP_FETCHING : unit
+
+/* RMEM stop fetching sentinel, using RISCV encoding space custom-0 */
+mapping clause encdec = STOP_FETCHING() <-> 0xfade @ 0b00000000 @ 0b0 @ 0b00 @ 0b010 @ 0b11
+
+function clause execute (STOP_FETCHING()) = true
+
+function clause print_insn (STOP_FETCHING()) = "stop_fetching"
+
+
+/* ****************************************************************** */
+
 union clause ast = ILLEGAL : word
 
 mapping clause encdec = ILLEGAL(s) <-> s
@@ -1765,5 +1777,188 @@ end execute
 end print_insn
 end assembly
 end encdec
+end encdec_compressed
 
 function decode bv = Some(encdec(bv))
+
+$include <regfp.sail>
+
+/* in reverse order because inc vectors don't seem to work (bug) */
+let GPRstr : vector(32, dec, string) = [ "x31", "x30", "x29", "x28", "x27", "x26", "x25", "x24", "x23", "x22", "x21",
+  "x20", "x19", "x18", "x17", "x16", "x15", "x14", "x13", "x12", "x21",
+  "x10", "x9", "x8", "x7", "x6", "x5", "x4", "x3", "x2", "x1", "x0"
+  ]
+
+
+let CIA_fp = RFull("CIA")
+let NIA_fp = RFull("NIA")
+
+function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,instruction_kind) = {
+  iR = [| |] : regfps;
+  oR = [| |] : regfps;
+  aR = [| |] : regfps;
+  ik = IK_simple() : instruction_kind;
+  Nias = [| NIAFP_successor() |] : niafps;
+  Dia = DIAFP_none() : diafp;
+
+  match instr {
+     EBREAK() => (),
+     UTYPE(imm, rd, op) => {
+            if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+     },
+     RISCV_JAL(imm, rd) => {
+            if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+            let offset : bits(64) = EXTS(imm) in
+            Nias = [| NIAFP_concrete_address (PC + offset) |];
+            ik = IK_branch();
+     },
+     RISCV_JALR(imm, rs, rd) => {
+            if (rs == 0) then () else iR = RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+            let offset : bits(64) = EXTS(imm) in
+            Nias = [| NIAFP_indirect_address() |];
+            ik = IK_branch();
+     },
+     BTYPE(imm, rs2, rs1, op) => {
+            if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+            ik = IK_branch();
+            let offset : bits(64) = EXTS(imm) in
+            Nias = [| NIAFP_concrete_address(PC + offset), NIAFP_successor() |];
+      },
+      ITYPE(imm, rs, rd, op) => {
+            if (rs == 0) then () else iR = RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+      },
+      SHIFTIOP(imm, rs, rd, op) => {
+             if (rs == 0) then () else iR = RFull(GPRstr[rs]) :: iR;
+             if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+      },
+      RTYPE(rs2, rs1, rd, op) => {
+             if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+             if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+             if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+      },
+      CSR(csr, rs1, rd, is_imm, op) => {
+               let isWrite : bool = match op {
+                   CSRRW  => true,
+                   _      => if is_imm then unsigned(rs1) != 0 else unsigned(rs1) != 0
+               };
+               iR = RFull(csr_name(csr)) :: iR;
+               if ~(is_imm) then {
+                  iR = RFull(GPRstr[rs1]) :: iR;
+               };
+               if isWrite then {
+                  oR = RFull(csr_name(csr)) :: oR;
+               };
+               oR = RFull(GPRstr[rd]) :: oR;
+      },
+      LOAD(imm, rs, rd, unsign, width, aq, rl) => { /* XXX "unsigned" causes name conflict in lem shallow embedding... */
+             if (rs == 0) then () else iR = RFull(GPRstr[rs]) :: iR;
+             if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+             aR = iR;
+             ik =
+               match (aq, rl) {
+                 (false, false) => IK_mem_read (Read_plain),
+                 //(true,  false) -> IK_mem_read (Read_RISCV_acquire_RCpc)
+                 //(true,  true)  -> IK_mem_read (Read_RISCV_acquire_RCsc)
+
+                 _  => internal_error("LOAD type not implemented in initial_analysis")
+               }
+      },
+      STORE(imm, rs2, rs1, width, aq, rl) => {
+             if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+             if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+             if (rs1 == 0) then () else aR = RFull(GPRstr[rs1]) :: aR;
+             ik =
+               match (aq, rl) {
+                 (false, false) => IK_mem_write (Write_plain),
+                 //case (false, true)  -> IK_mem_write (Write_RISCV_release_RCpc)
+                 //case (true,  true)  -> IK_mem_write (Write_RISCV_release_RCsc)
+
+                 _ => internal_error("STORE type not implemented in initial_analysis")
+               }
+      },
+      ADDIW(imm, rs, rd) => {
+             if (rs == 0) then () else iR = RFull(GPRstr[rs]) :: iR;
+             if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+      },
+      SHIFTW(imm, rs, rd, op) => {
+             if (rs == 0) then () else iR = RFull(GPRstr[rs]) :: iR;
+             if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+      },
+      RTYPEW(rs2, rs1, rd, op) => {
+             if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+             if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+             if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+      },
+      FENCE(pred, succ) -> {
+             ik =
+               switch(pred, succ) {
+                 (0b0011, 0b0011) => IK_barrier (Barrier_RISCV_rw_rw),
+                 (0b0010, 0b0011) => IK_barrier (Barrier_RISCV_r_rw),
+                 (0b0001, 0b0011) => IK_barrier (Barrier_RISCV_w_rw),
+
+                 (0b0011, 0b0010) => IK_barrier (Barrier_RISCV_rw_r),
+                 (0b0010, 0b0010) => IK_barrier (Barrier_RISCV_r_r),
+                 (0b0001, 0b0010) => IK_barrier (Barrier_RISCV_w_r),
+
+                 (0b0011, 0b0001) => IK_barrier (Barrier_RISCV_rw_w),
+                 (0b0010, 0b0001) => IK_barrier (Barrier_RISCV_r_w),
+                 (0b0001, 0b0001) => IK_barrier (Barrier_RISCV_w_w),
+
+                 _ => internal_error("barrier type not implemented in initial_analysis")
+  //               case (FM_NORMAL, _, _) -> exit "not implemented"
+
+  //               case (FM_TSO, 0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_tso)
+  //               case (FM_TSO, _, _) -> exit "not implemented"
+               };
+      }
+     FENCEI() => {
+              ik = IK_barrier (Barrier_RISCV_i);
+     }
+  //    case (LOADRES ( aq, rl, rs1, width, rd)) -> {
+  //           if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+  //           if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+  //           aR := iR;
+  //           ik := switch (aq, rl) {
+  //             case (false, false) -> IK_mem_read (Read_RISCV_reserved)
+  //             case (true,  false) -> IK_mem_read (Read_RISCV_reserved_acquire_RCsc)
+  //             case (true,  true)  -> IK_mem_read (Read_RISCV_reserved_acquire_release)
+
+  //             case (false, true)  -> exit "not implemented"
+  //           };
+  //    }
+  //    case (STORECON( aq, rl, rs2, rs1, width, rd)) -> {
+  //           if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+  //           if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+  //           if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
+  //           if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+
+  //           ik := switch (aq, rl) {
+  //             case (false, false) -> IK_mem_write (Write_RISCV_conditional)
+  //             case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release_RCsc)
+  //             case (true,  true)  -> IK_mem_write (Write_RISCV_conditional_acquire_release)
+
+  //             case (true,  false) -> exit "not implemented"
+  //           };
+  //    }
+  //    case (AMO( op, aq, rl, rs2, rs1, width, rd)) -> {
+  //           if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+  //           if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+  //           if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
+  //           if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+
+  //           ik := switch (aq, rl) {
+  //             case (false, false) -> IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional)
+  //             case (false, true)  -> IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional_release_RCsc)
+  //             case (true,  false) -> IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
+  //                                                                     Write_RISCV_conditional)
+  //             case (true,  true)  -> IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
+  //                                                                     Write_RISCV_conditional_release_RCsc)
+  //           };
+  //    }
+        _ => ()
+  };
+  (iR,oR,aR,Nias,Dia,ik)
+}

@@ -198,11 +198,11 @@ type instruction_kind =
   | IK_mem_read  of read_kind
   | IK_mem_write of write_kind
   | IK_mem_rmw   of (read_kind * write_kind)
-  | IK_branch (* this includes conditional-branch (multiple nias, none of which is NIA_indirect_address),
+  | IK_branch    of unit(* this includes conditional-branch (multiple nias, none of which is NIA_indirect_address),
   indirect/computed-branch (single nia of kind NIA_indirect_address)
   and branch/jump (single nia of kind NIA_concrete_address) *)
   | IK_trans     of trans_kind
-  | IK_simple
+  | IK_simple    of unit
 
 
 instance (Show instruction_kind)
@@ -213,7 +213,7 @@ instance (Show instruction_kind)
     | IK_mem_rmw (r, w)       -> "IK_mem_rmw " ^ (show r) ^ " " ^ (show w)
     | IK_branch               -> "IK_branch"
     | IK_trans trans_kind     -> "IK_trans " ^ (show trans_kind)
-    | IK_simple               -> "IK_simple"
+    | IK_simple ()            -> "IK_simple"
   end
 end
 
