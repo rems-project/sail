@@ -119,6 +119,9 @@ let options = Arg.align ([
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " Apply constant folding optimizations");
+  ( "-trace",
+    Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
+    " Instrument ouput with tracing");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
     " output a Lem AST representation of the input");

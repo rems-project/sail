@@ -67,9 +67,6 @@ let instr_number () =
 let idecl ?loc:(l=Parse_ast.Unknown) ctyp id =
   I_aux (I_decl (ctyp, id), (instr_number (), l))
 
-let ialloc ?loc:(l=Parse_ast.Unknown) ctyp id =
-  I_aux (I_alloc (ctyp, id), (instr_number (), l))
-
 let iinit ?loc:(l=Parse_ast.Unknown) ctyp id cval =
   I_aux (I_init (ctyp, id, cval), (instr_number (), l))
 
@@ -161,11 +158,11 @@ and string_of_fragment' ?zencode:(zencode=true) f =
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
 let rec string_of_ctyp = function
-  | CT_mpz -> "mpz_t"
-  | CT_bv true -> "bv_t(dec)"
-  | CT_bv false -> "bv_t(inc)"
-  | CT_uint64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
-  | CT_uint64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
+  | CT_int -> "mpz_t"
+  | CT_bits true -> "bv_t(dec)"
+  | CT_bits false -> "bv_t(inc)"
+  | CT_bits64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
+  | CT_bits64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
   | CT_int64 -> "int64_t"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
@@ -221,8 +218,6 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
      surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
   | I_try_block instrs ->
      pp_keyword "try" ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-  | I_alloc (ctyp, id) ->
-     pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_reset (ctyp, id) ->
      pp_keyword "recreate" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_init (ctyp, id, cval) ->
@@ -282,11 +277,10 @@ let pp_cdef = function
      pp_keyword "register" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
      ^^ hardline
   | CDEF_type tdef -> pp_ctype_def tdef ^^ hardline
-  | CDEF_let (n, bindings, instrs, cleanup) ->
+  | CDEF_let (n, bindings, instrs) ->
      let pp_binding (id, ctyp) = pp_id id ^^ string " : " ^^ pp_ctyp ctyp in
      pp_keyword "let" ^^ string (string_of_int n) ^^ parens (separate_map (comma ^^ space) pp_binding bindings) ^^ space
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace ^^ space
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr cleanup) rbrace ^^ space
      ^^ hardline
   | CDEF_startup (id, instrs)->
      pp_keyword "startup" ^^ pp_id id ^^ space
@@ -357,7 +351,7 @@ let rec clexp_deps = function
    instruction **)
 let instr_deps = function
   | I_decl (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_alloc (ctyp, id) | I_reset (ctyp, id) -> NS.empty, NS.singleton (G_id id)
+  | I_reset (ctyp, id) -> NS.empty, NS.singleton (G_id id)
   | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NS.singleton (G_id id)
   | I_if (cval, _, _, _) -> cval_deps cval, NS.empty
   | I_jump (cval, label) -> cval_deps cval, NS.singleton (G_label label)
@@ -438,7 +432,6 @@ let make_dot id graph =
     | G_id _                            -> "yellow"
     | G_instr (_, I_aux (I_decl _, _))  -> "olivedrab1"
     | G_instr (_, I_aux (I_init _, _))  -> "springgreen"
-    | G_instr (_, I_aux (I_alloc _, _)) -> "palegreen"
     | G_instr (_, I_aux (I_clear _, _)) -> "peachpuff"
     | G_instr (_, I_aux (I_goto _, _))  -> "orange1"
     | G_instr (_, I_aux (I_label _, _)) -> "white"

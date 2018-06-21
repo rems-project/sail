@@ -41,7 +41,7 @@ val truncate = {
   ocaml: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
-  c: "truncate"
+  c: "sail_truncate"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 
 val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)
@@ -139,11 +139,14 @@ val unsigned = {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",
-  c: "sail_uint",
+  c: "sail_unsigned",
   coq: "uint"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 /* We need a non-empty vector so that the range makes sense */
-val signed = "sint" : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+val signed = {
+  c: "sail_signed",
+  _: "sint"
+} : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 $endif

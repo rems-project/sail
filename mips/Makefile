@@ -19,7 +19,7 @@ mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile ../sail
 	$(SAIL) -O -memo_z3 -c $(filter %.sail, $^) 1> $@
 
 mips_c: mips.c ../lib/sail.h Makefile
-	gcc -O2 -g -I ../lib $< -l gmp -o $@
+	gcc -O2 -g -I ../lib $< ../lib/*.c -lgmp -lz -o $@
 
 mips_no_tlb.lem: $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS)
 	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^

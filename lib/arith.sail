@@ -54,7 +54,7 @@ val div_int = {
   smt: "div",
   ocaml: "quotient",
   lem: "integerDiv",
-  c: "div_int",
+  c: "tdiv_int",
   coq: "Z.quot"
 } : (int, int) -> int
 
@@ -64,7 +64,7 @@ val mod_int = {
   smt: "mod",
   ocaml: "modulus",
   lem: "integerMod",
-  c: "mod_int",
+  c: "tmod_int",
   coq: "Z.rem"
 } : (int, int) -> int
 

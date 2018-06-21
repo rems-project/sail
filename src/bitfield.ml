@@ -64,62 +64,84 @@ let rec combine = function
      Defs (defs @ defs')
 
 let newtype name size order =
-  let nt = Printf.sprintf "newtype %s = Mk_%s : %s" name name (bitvec size order) in
+  let chunks_64 =
+    Util.list_init (size / 64) (fun i -> Printf.sprintf "%s_chunk_%i : vector(64, %s, bit)" name i (string_of_order order))
+  in
+  let chunks =
+    if size mod 64 = 0 then chunks_64 else
+      let chunk_rem =
+        Printf.sprintf "%s_chunk_%i : vector(%i, %s, bit)" name (List.length chunks_64) (size mod 64) (string_of_order order)
+      in
+      chunk_rem :: List.rev chunks_64
+  in
+  let nt = Printf.sprintf "struct %s = {\n  %s }" name (Util.string_of_list ",\n  " (fun x -> x) chunks) in
   ast_of_def_string order nt
 
-(* These functions define the getter and setter for all the bits in the field. *)
-let full_getter name size order =
-  let fg_val = Printf.sprintf "val _get_%s : %s -> %s" name name (bitvec size order) in
-  let fg_function = Printf.sprintf "function _get_%s Mk_%s(v) = v" name name in
-  combine [ast_of_def_string order fg_val; ast_of_def_string order fg_function]
+let rec translate_indices hi lo =
+  if hi / 64 = lo / 64 then
+    [(hi / 64, hi mod 64, lo mod 64)]
+  else
+    (hi / 64, hi mod 64, 0) :: translate_indices (hi - (hi mod 64 + 1)) lo
 
-let full_setter name size order =
-  let fs_val = Printf.sprintf "val _set_%s : (register(%s), %s) -> unit effect {wreg}" name name (bitvec size order) in
-  let fs_function = String.concat "\n"
-    [ Printf.sprintf "function _set_%s (r_ref, v) = {" name;
-                     "  r = _reg_deref(r_ref);";
-      Printf.sprintf "  r = Mk_%s(v);" name;
-                     "  (*r_ref) = r";
+let constructor name order start stop =
+  let indices = translate_indices start stop in
+  let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
+  let constructor_val = Printf.sprintf "val Mk_%s : %s -> %s" name (bitvec size order) name in
+  let body (chunk, hi, lo) =
+    Printf.sprintf "%s_chunk_%i = v[%i .. %i]"
+                   name chunk ((hi + chunk * 64) - stop) ((lo + chunk * 64) - stop)
+  in
+  let constructor_function = String.concat "\n"
+    [ Printf.sprintf "function Mk_%s v = struct {" name;
+      Printf.sprintf "  %s" (Util.string_of_list ",\n  " body indices);
                      "}"
     ]
   in
-  combine [ast_of_def_string order fs_val; ast_of_def_string order fs_function]
-
-let full_overload name order =
-  ast_of_def_string order (Printf.sprintf "overload _mod_bits = {_get_%s, _set_%s}" name name)
-
-let full_accessor name size order =
-  combine [full_getter name size order; full_setter name size order; full_overload name order]
+  combine [ast_of_def_string order constructor_val; ast_of_def_string order constructor_function]
 
 (* For every index range, create a getter and setter *)
 let index_range_getter name field order start stop =
+  let indices = translate_indices start stop in
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
   let irg_val = Printf.sprintf "val _get_%s_%s : %s -> %s" name field name (bitvec size order) in
-  let irg_function = Printf.sprintf "function _get_%s_%s Mk_%s(v) = v[%i .. %i]" name field name start stop in
+  let body (chunk, start, stop) =
+    Printf.sprintf "v.%s_chunk_%i[%i .. %i]" name chunk start stop
+  in
+  let irg_function = Printf.sprintf "function _get_%s_%s v = %s" name field (Util.string_of_list " @ " body indices) in
   combine [ast_of_def_string order irg_val; ast_of_def_string order irg_function]
 
 let index_range_setter name field order start stop =
+  let indices = translate_indices start stop in
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
   let irs_val = Printf.sprintf "val _set_%s_%s : (register(%s), %s) -> unit effect {wreg}" name field name (bitvec size order) in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
+  let body (chunk, hi, lo) =
+    Printf.sprintf "r.%s_chunk_%i = [ r.%s_chunk_%i with %i .. %i = v[%i .. %i]]"
+                   name chunk name chunk hi lo ((hi + chunk * 64) - stop) ((lo + chunk * 64) - stop)
+  in
   let irs_function = String.concat "\n"
     [ Printf.sprintf "function _set_%s_%s (r_ref, v) = {" name field;
-      Printf.sprintf "  r = _get_%s(_reg_deref(r_ref));" name;
-      Printf.sprintf "  r[%i .. %i] = v;" start stop;
-      Printf.sprintf "  (*r_ref) = Mk_%s(r)" name;
+                     "  r = _reg_deref(r_ref);";
+      Printf.sprintf "  %s;" (Util.string_of_list ";\n  " body indices);
+                     "  (*r_ref) = r";
                      "}"
     ]
   in
   combine [ast_of_def_string order irs_val; ast_of_def_string order irs_function]
 
 let index_range_update name field order start stop =
+  let indices = translate_indices start stop in
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
   let iru_val = Printf.sprintf "val _update_%s_%s : (%s, %s) -> %s" name field name (bitvec size order) name in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
+  let body (chunk, hi, lo) =
+    Printf.sprintf "let v = { v with %s_chunk_%i = [ v.%s_chunk_%i with %i .. %i = x[%i .. %i]] }"
+                   name chunk name chunk hi lo ((hi + chunk * 64) - stop) ((lo + chunk * 64) - stop)
+  in
   let iru_function = String.concat "\n"
-    [ Printf.sprintf "function _update_%s_%s (Mk_%s(v), x) = {" name field name;
-      Printf.sprintf "  Mk_%s([v with %i .. %i = x]);" name start stop;
-                     "}"
+    [ Printf.sprintf "function _update_%s_%s (v, x) =" name field;
+      Printf.sprintf "  %s in" (Util.string_of_list " in\n  " body indices);
+                     "  v"
     ]
   in
   let iru_overload = Printf.sprintf "overload update_%s = {_update_%s_%s}" field name field in
@@ -142,4 +164,5 @@ let field_accessor name order (id, ir) = index_range_accessor name (string_of_id
 
 let macro id size order ranges =
   let name = string_of_id id in
-  combine ([newtype name size order; full_accessor name size order] @ List.map (field_accessor name order) ranges)
+  let ranges = (mk_id "bits", BF_aux (BF_range (Big_int.of_int (size - 1), Big_int.of_int 0), Parse_ast.Unknown)) :: ranges in
+  combine ([newtype name size order; constructor name order (size - 1) 0] @ List.map (field_accessor name order) ranges)

@@ -582,6 +582,10 @@ let real_of_string str =
 (* Not a very good sqrt implementation *)
 let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt (Num.float_of_num x))) *)
 
+let print str = Pervasives.print_string str
+
+let prerr str = Pervasives.prerr_string str
+
 let print_int (str, x) =
   print_endline (str ^ Big_int.to_string x)
 

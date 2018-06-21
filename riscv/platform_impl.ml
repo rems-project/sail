@@ -152,7 +152,7 @@ let rec term_read () =
   let buf = Bytes.make 1 '\000' in
   let nbytes = Unix.read Unix.stdin buf 0 1 in
   (* todo: handle nbytes == 0 *)
-  buf.[0]
+  Bytes.get buf 0
 
 (*
 let save_string_to_file s fname =

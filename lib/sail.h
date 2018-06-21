@@ -1,1124 +1,332 @@
-#ifndef SAIL_LIB
-#define SAIL_LIB
+#pragma once
 
-#include<stdio.h>
 #include<inttypes.h>
 #include<stdlib.h>
+#include<stdio.h>
 #include<stdbool.h>
-#include<string.h>
+
+#ifndef USE_INT128
 #include<gmp.h>
+#endif
+
 #include<time.h>
+
+/*
+ * Called by the RTS to initialise and clear any library state.
+ */
+void setup_library(void);
+void cleanup_library(void);
+
+/*
+ * The Sail compiler expects functions to follow a specific naming
+ * convention for allocation, deallocation, and (deep)-copying. These
+ * macros implement this naming convention.
+ */
+#define CREATE(type) create_ ## type
+#define RECREATE(type) recreate_ ## type
+#define CREATE_OF(type1, type2) create_ ## type1 ## _of_ ## type2
+#define RECREATE_OF(type1, type2) recreate_ ## type1 ## _of_ ## type2
+#define CONVERT_OF(type1, type2) convert_ ## type1 ## _of_ ## type2
+#define COPY(type) copy_ ## type
+#define KILL(type) kill_ ## type
+#define UNDEFINED(type) undefined_ ## type
+
+#define SAIL_BUILTIN_TYPE(type)\
+  void create_ ## type(type *);\
+  void recreate_ ## type(type *);\
+  void copy_ ## type(type *, const type);\
+  void kill_ ## type(type *);
+
+/* ***** Sail unit type ***** */
 
 typedef int unit;
 
 #define UNIT 0
 
-unit undefined_unit(const unit u) {
-  return UNIT;
-}
+unit UNDEFINED(unit)(const unit);
+bool eq_unit(const unit, const unit);
 
-bool eq_unit(const unit u1, const unit u2) {
-  return true;
-}
+unit skip(const unit);
+
+/* ***** Sail booleans ***** */
+
+/*
+ * and_bool and or_bool are special-cased by the compiler to ensure
+ * short-circuiting evaluation.
+ */
+bool not(const bool);
+bool eq_bool(const bool, const bool);
+bool UNDEFINED(bool)(const unit);
+
+/* ***** Sail strings ***** */
+
+/*
+ * Sail strings are just C strings.
+ */
+typedef char *sail_string;
+
+SAIL_BUILTIN_TYPE(sail_string);
+
+void dec_str(sail_string *str, const mpz_t n);
+void hex_str(sail_string *str, const mpz_t n);
+
+void undefined_string(sail_string *str, const unit u);
+
+bool eq_string(const sail_string, const sail_string);
+
+void concat_str(sail_string *stro, const sail_string str1, const sail_string str2);
+
+/* ***** Sail integers ***** */
+
+typedef int64_t mach_int;
+
+/*
+ * Integers can be either stack-allocated as 128-bit integers if
+ * __int128 is available, or use GMP arbitrary precision
+ * integers. This affects the function signatures, so use a macro to
+ * paper over the differences.
+ */
+#ifndef USE_INT128
+
+typedef mpz_t sail_int;
+
+#define SAIL_INT_FUNCTION(fname, rtype, ...) void fname(rtype*, __VA_ARGS__)
+
+SAIL_BUILTIN_TYPE(sail_int);
+
+void CREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
+void RECREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
+
+void CREATE_OF(sail_int, sail_string)(sail_int *, const sail_string);
+void RECREATE_OF(sail_int, sail_string)(mpz_t *, const sail_string);
+
+mach_int CONVERT_OF(mach_int, sail_int)(const sail_int);
+void CONVERT_OF(sail_int, mach_int)(sail_int *, const mach_int);
+
+#else
+
+typedef __int128 sail_int;
+#define SAIL_INT_FUNCTION(fname, rtype, ...) rtype fname(__VA_ARGS__)
+
+#endif
+
+/*
+ * Comparison operators for integers
+ */
+bool eq_int(const sail_int, const sail_int);
+
+bool lt(const sail_int, const sail_int);
+bool gt(const sail_int, const sail_int);
+bool lteq(const sail_int, const sail_int);
+bool gteq(const sail_int, const sail_int);
+
+/*
+ * Left and right shift for integers
+ */
+SAIL_INT_FUNCTION(shl_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(shr_int, sail_int, const sail_int, const sail_int);
+
+/*
+ * undefined_int and undefined_range can't use the UNDEFINED(TYPE)
+ * macro, because they're slightly magical. They take extra parameters
+ * to ensure that no undefined int can violate any type-guaranteed
+ * constraints.
+ */
+SAIL_INT_FUNCTION(undefined_int, sail_int, const int);
+SAIL_INT_FUNCTION(undefined_range, sail_int, const sail_int, const sail_int);
+
+/*
+ * Arithmetic operations in integers. We include functions for both
+ * truncating towards zero, and rounding towards -infinity (floor) as
+ * fdiv/fmod and tdiv/tmod respectively.
+ */
+SAIL_INT_FUNCTION(add_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(sub_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(mult_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(tdiv_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(tmod_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(fdiv_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(fmod_int, sail_int, const sail_int, const sail_int);
+
+SAIL_INT_FUNCTION(max_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(min_int, sail_int, const sail_int, const sail_int);
+
+SAIL_INT_FUNCTION(neg_int, sail_int, const sail_int);
+SAIL_INT_FUNCTION(abs_int, sail_int, const sail_int);
+
+SAIL_INT_FUNCTION(pow2, sail_int, const sail_int);
+
+/* ***** Sail bitvectors ***** */
+
+typedef uint64_t mach_bits;
+
+bool eq_bit(const mach_bits a, const mach_bits b);
 
 typedef struct {
   mp_bitcnt_t len;
   mpz_t *bits;
-} bv_t;
+} sail_bits;
 
-typedef char *sail_string;
+SAIL_BUILTIN_TYPE(sail_bits);
 
-/* Temporary mpzs for use in functions below. To avoid conflicts, only
- * use in functions that do not call other functions in this file. */
-static mpz_t sail_lib_tmp1, sail_lib_tmp2;
+void CREATE_OF(sail_bits, mach_bits)(sail_bits *,
+				     const mach_bits op,
+				     const mach_bits len,
+				     const bool direction);
 
-/* Wrapper around >> operator to avoid UB when shift amount is greater
-   than or equal to 64. */
-uint64_t safe_rshift(const uint64_t x, const uint64_t n) {
-  if (n >= 64) {
-    return 0ul;
-  } else {
-    return x >> n;
-  }
-}
+void RECREATE_OF(sail_bits, mach_bits)(sail_bits *,
+				       const mach_bits op,
+				       const mach_bits len,
+				       const bool direction);
 
-/* This function should be called whenever a pattern match failure
-   occurs. Pattern match failures are always fatal. */
-void sail_match_failure(sail_string msg) {
-  fprintf(stderr, "Pattern match failure in %s\n", msg);
-  exit(EXIT_FAILURE);
-}
+mach_bits CONVERT_OF(mach_bits, sail_bits)(const sail_bits);
+void CONVERT_OF(sail_bits, mach_bits)(sail_bits *, const mach_bits, const uint64_t);
 
-/* sail_assert implements the assert construct in Sail. If any
-   assertion fails we immediately exit the model. */
-unit sail_assert(bool b, sail_string msg) {
-  if (b) return UNIT;
-  fprintf(stderr, "Assertion failed: %s\n", msg);
-  exit(EXIT_FAILURE);
-}
+void UNDEFINED(sail_bits)(sail_bits *, const sail_int len, const mach_bits bit);
+mach_bits UNDEFINED(mach_bits)(const unit);
 
-/* If the sail model calls the exit() function we print a message and
-   exit successfully. */
-unit sail_exit(const unit u) {
-  fprintf(stderr, "Sail model exit\n");
-  exit(EXIT_SUCCESS);
-}
+/*
+ * Wrapper around >> operator to avoid UB when shift amount is greater
+ * than or equal to 64.
+ */
+mach_bits safe_rshift(const mach_bits, const mach_bits);
 
-uint64_t g_elf_entry;
+/*
+ * Used internally to construct large bitvector literals.
+ */
+void append_64(sail_bits *rop, const sail_bits op, const mach_bits chunk);
 
-void elf_entry(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, g_elf_entry);
-}
+void add_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void sub_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 
-void elf_tohost(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, 0x0ul);
-}
+void add_bits_int(sail_bits *rop, const sail_bits op1, const mpz_t op2);
+void sub_bits_int(sail_bits *rop, const sail_bits op1, const mpz_t op2);
 
-/* ASL->Sail model has an EnterLowPowerState() function that calls a
-   sleep request builtin. If it gets called we print a message and
-   exit the model. */
-unit sleep_request(const unit u) {
-  fprintf(stderr, "Sail model going to sleep\n");
-  exit(EXIT_SUCCESS);
-}
+void and_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void or_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void xor_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void not_bits(sail_bits *rop, const sail_bits op);
 
-// Sail bits are mapped to uint64_t where bitzero = 0ul and bitone = 1ul
-bool eq_bit(const uint64_t a, const uint64_t b) {
-  return a == b;
-}
+void mults_vec(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void mult_vec(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 
-uint64_t undefined_bit(unit u) { return 0; }
+void zeros(sail_bits *rop, const sail_int op);
 
-unit skip(const unit u) {
-  return UNIT;
-}
+void zero_extend(sail_bits *rop, const sail_bits op, const sail_int len);
+void sign_extend(sail_bits *rop, const sail_bits op, const sail_int len);
 
-// ***** Sail booleans *****
+void length_sail_bits(sail_int *rop, const sail_bits op);
 
-bool not(const bool b) {
-  return !b;
-}
+bool eq_bits(const sail_bits op1, const sail_bits op2);
 
-bool and_bool(const bool a, const bool b) {
-  return a && b;
-}
+void vector_subrange_sail_bits(sail_bits *rop,
+			       const sail_bits op,
+			       const sail_int n_mpz,
+			       const sail_int m_mpz);
 
-bool or_bool(const bool a, const bool b) {
-  return a || b;
-}
+void sail_truncate(sail_bits *rop, const sail_bits op, const sail_int len);
 
-bool eq_bool(const bool a, const bool b) {
-  return a == b;
-}
+mach_bits bitvector_access(const sail_bits op, const sail_int n_mpz);
 
-bool undefined_bool(const unit u) {
-  return false;
-}
+void sail_unsigned(sail_int *rop, const sail_bits op);
+void sail_signed(sail_int *rop, const sail_bits op);
 
-// ***** Sail strings *****
-void init_sail_string(sail_string *str) {
-  char *istr = (char *) malloc(1 * sizeof(char));
-  istr[0] = '\0';
-  *str = istr;
-}
+void append(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 
-void reinit_sail_string(sail_string *str) {
-  free(*str);
-  char *istr = (char *) malloc(1 * sizeof(char));
-  istr[0] = '\0';
-  *str = istr;
-}
+void replicate_bits(sail_bits *rop, const sail_bits op1, const sail_int op2);
+mach_bits fast_replicate_bits(const mach_bits shift, const mach_bits v, const mach_int times);
 
-void set_sail_string(sail_string *str1, const sail_string str2) {
-  size_t len = strlen(str2);
-  *str1 = realloc(*str1, len + 1);
-  *str1 = strcpy(*str1, str2);
-}
+void get_slice_int(sail_bits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz);
 
-void dec_str(sail_string *str, const mpz_t n) {
-  free(*str);
-  gmp_asprintf(str, "%Zd", n);
-}
+void set_slice_int(sail_int *rop,
+		   const sail_int len_mpz,
+		   const sail_int n,
+		   const sail_int start_mpz,
+		   const sail_bits slice);
 
-void hex_str(sail_string *str, const mpz_t n) {
-  free(*str);
-  gmp_asprintf(str, "0x%Zx", n);
-}
+void vector_update_subrange_sail_bits(sail_bits *rop,
+				      const sail_bits op,
+				      const sail_int n_mpz,
+				      const sail_int m_mpz,
+				      const sail_bits slice);
 
-void clear_sail_string(sail_string *str) {
-  free(*str);
-}
+void slice(sail_bits *rop, const sail_bits op, const sail_int start_mpz, const sail_int len_mpz);
 
-bool eq_string(const sail_string str1, const sail_string str2) {
-  return strcmp(str1, str2) == 0;
-}
+void set_slice(sail_bits *rop,
+	       const sail_int len_mpz,
+	       const sail_int slen_mpz,
+	       const sail_bits op,
+	       const sail_int start_mpz,
+	       const sail_bits slice);
 
-void concat_str(sail_string *stro, const sail_string str1, const sail_string str2) {
-  *stro = realloc(*stro, strlen(str1) + strlen(str2) + 1);
-  (*stro)[0] = '\0';
-  strcat(*stro, str1);
-  strcat(*stro, str2);
-}
 
-void undefined_string(sail_string *str, const unit u) {
-}
+void shift_bits_left(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void shift_bits_right(sail_bits *rop, const sail_bits op1, const sail_bits op2);
+void shift_bits_right_arith(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 
-unit print_endline(const sail_string str) {
-  printf("%s\n", str);
-  return UNIT;
-}
+void reverse_endianness(sail_bits*, sail_bits);
 
-unit print_string(const sail_string str1, const sail_string str2) {
-  printf("%s%s\n", str1, str2);
-  return UNIT;
-}
-
-unit prerr_endline(const sail_string str) {
-  fprintf(stderr, "%s\n", str);
-  return UNIT;
-}
-
-unit print_int(const sail_string str, const mpz_t op) {
-  fputs(str, stdout);
-  mpz_out_str(stdout, 10, op);
-  putchar('\n');
-  return UNIT;
-}
-
-unit print_int64(const sail_string str, const int64_t op) {
-  printf("%s%" PRId64 "\n", str, op);
-  return UNIT;
-}
-
-unit sail_putchar(const mpz_t op) {
-  char c = (char) mpz_get_ui(op);
-  putchar(c);
-  return UNIT;
-}
-
-// ***** Arbitrary precision integers *****
-
-// We wrap around the GMP functions so they follow a consistent naming
-// scheme that is shared with the other builtin sail types.
-
-void set_mpz_t(mpz_t *rop, const mpz_t op) {
-  mpz_set(*rop, op);
-}
-
-void init_mpz_t(mpz_t *op) {
-  mpz_init(*op);
-}
-
-void reinit_mpz_t(mpz_t *op) {
-  mpz_set_ui(*op, 0);
-}
-
-void clear_mpz_t(mpz_t *op) {
-  mpz_clear(*op);
-}
-
-void init_mpz_t_of_int64_t(mpz_t *rop, int64_t op) {
-  mpz_init_set_si(*rop, op);
-}
-
-void reinit_mpz_t_of_int64_t(mpz_t *rop, int64_t op) {
-  mpz_set_si(*rop, op);
-}
-
-void init_mpz_t_of_sail_string(mpz_t *rop, sail_string str) {
-  mpz_init_set_str(*rop, str, 10);
-}
-
-void reinit_mpz_t_of_sail_string(mpz_t *rop, sail_string str) {
-  mpz_set_str(*rop, str, 10);
-}
-
-int64_t convert_int64_t_of_mpz_t(const mpz_t op) {
-  return mpz_get_si(op);
-}
-
-void convert_mpz_t_of_int64_t(mpz_t *rop, const int64_t op) {
-  mpz_set_si(*rop, op);
-}
-
-// ***** Sail builtins for integers *****
-
-bool eq_int(const mpz_t op1, const mpz_t op2) {
-  return !abs(mpz_cmp(op1, op2));
-}
-
-bool lt(const mpz_t op1, const mpz_t op2) {
-  return mpz_cmp(op1, op2) < 0;
-}
-
-bool gt(const mpz_t op1, const mpz_t op2) {
-  return mpz_cmp(op1, op2) > 0;
-}
-
-bool lteq(const mpz_t op1, const mpz_t op2) {
-  return mpz_cmp(op1, op2) <= 0;
-}
-
-bool gteq(const mpz_t op1, const mpz_t op2) {
-  return mpz_cmp(op1, op2) >= 0;
-}
-
-void shl_int(mpz_t *rop, const mpz_t op1, const mpz_t op2) {
-  mpz_mul_2exp(*rop, op1, mpz_get_ui(op2));
-}
-
-void shr_int(mpz_t *rop, const mpz_t op1, const mpz_t op2) {
-  mpz_fdiv_q_2exp(*rop, op1, mpz_get_ui(op2));
-}
-
-void undefined_int(mpz_t *rop, const unit u) {
-  mpz_set_ui(*rop, 0ul);
-}
-
-void undefined_range(mpz_t *rop, const mpz_t l, const mpz_t u) {
-  mpz_set(*rop, l);
-}
-
-void add_int(mpz_t *rop, const mpz_t op1, const mpz_t op2)
-{
-  mpz_add(*rop, op1, op2);
-}
-
-void sub_int(mpz_t *rop, const mpz_t op1, const mpz_t op2)
-{
-  mpz_sub(*rop, op1, op2);
-}
-
-void mult_int(mpz_t *rop, const mpz_t op1, const mpz_t op2)
-{
-  mpz_mul(*rop, op1, op2);
-}
-
-void div_int(mpz_t *rop, const mpz_t op1, const mpz_t op2)
-{
-  mpz_tdiv_q(*rop, op1, op2);
-}
-
-void mod_int(mpz_t *rop, const mpz_t op1, const mpz_t op2)
-{
-  mpz_tdiv_r(*rop, op1, op2);
-}
-
-void max_int(mpz_t *rop, const mpz_t op1, const mpz_t op2) {
-  if (lt(op1, op2)) {
-    mpz_set(*rop, op2);
-  } else {
-    mpz_set(*rop, op1);
-  }
-}
-
-void min_int(mpz_t *rop, const mpz_t op1, const mpz_t op2) {
-  if (gt(op1, op2)) {
-    mpz_set(*rop, op2);
-  } else {
-    mpz_set(*rop, op1);
-  }
-}
-
-void neg_int(mpz_t *rop, const mpz_t op) {
-  mpz_neg(*rop, op);
-}
-
-void abs_int(mpz_t *rop, const mpz_t op) {
-  mpz_abs(*rop, op);
-}
-
-void pow2(mpz_t *rop, mpz_t exp) {
-  uint64_t exp_ui = mpz_get_ui(exp);
-  mpz_t base;
-  mpz_init_set_ui(base, 2ul);
-  mpz_pow_ui(*rop, base, exp_ui);
-  mpz_clear(base);
-}
-
-void get_time_ns(mpz_t *rop, const unit u) {
-  struct timespec t;
-  clock_gettime(CLOCK_REALTIME, &t);
-  mpz_set_si(*rop, t.tv_sec);
-  mpz_mul_ui(*rop, *rop, 1000000000);
-  mpz_add_ui(*rop, *rop, t.tv_nsec);
-}
-
-// ***** Sail bitvectors *****
-
-void string_of_int(sail_string *str, mpz_t i) {
-  gmp_asprintf(str, "%Zd", i);
-}
-
-void string_of_bits(sail_string *str, const bv_t op) {
-  if ((op.len % 4) == 0) {
-    gmp_asprintf(str, "0x%*0Zx", op.len / 4, *op.bits);
-  } else {
-    gmp_asprintf(str, "0b%*0Zb", op.len, *op.bits);
-  }
-}
-
-unit fprint_bits(const sail_string str, const bv_t op, FILE *stream)
-{
-  fputs(str, stream);
-
-  if (op.len % 4 == 0) {
-    fputs("0x", stream);
-    mpz_t buf;
-    mpz_init_set(buf, *op.bits);
-
-    char *hex = malloc((op.len / 4) * sizeof(char));
-
-    for (int i = 0; i < op.len / 4; ++i) {
-      char c = (char) ((0xF & mpz_get_ui(buf)) + 0x30);
-      hex[i] = (c < 0x3A) ? c : c + 0x7;
-      mpz_fdiv_q_2exp(buf, buf, 4);
-    }
-
-    for (int i = op.len / 4; i > 0; --i) {
-      fputc(hex[i - 1], stream);
-    }
-
-    free(hex);
-    mpz_clear(buf);
-  } else {
-    fputs("0b", stream);
-    for (int i = op.len; i > 0; --i) {
-      fputc(mpz_tstbit(*op.bits, i - 1) + 0x30, stream);
-    }
-  }
-
-  fputs("\n", stream);
-  return UNIT;
-}
-
-unit print_bits(const sail_string str, const bv_t op)
-{
-  return fprint_bits(str, op, stdout);
-}
-
-unit prerr_bits(const sail_string str, const bv_t op)
-{
-  return fprint_bits(str, op, stderr);
-}
-
-void length_bv_t(mpz_t *rop, const bv_t op) {
-  mpz_set_ui(*rop, op.len);
-}
-
-void init_bv_t(bv_t *rop) {
-  rop->bits = malloc(sizeof(mpz_t));
-  rop->len = 0;
-  mpz_init(*rop->bits);
-}
-
-void reinit_bv_t(bv_t *rop) {
-  rop->len = 0;
-  mpz_set_ui(*rop->bits, 0);
-}
-
-void normalise_bv_t(bv_t *rop) {
-  /* TODO optimisation: keep a set of masks of various sizes handy */
-  mpz_set_ui(sail_lib_tmp1, 1);
-  mpz_mul_2exp(sail_lib_tmp1, sail_lib_tmp1, rop->len);
-  mpz_sub_ui(sail_lib_tmp1, sail_lib_tmp1, 1);
-  mpz_and(*rop->bits, *rop->bits, sail_lib_tmp1);
-}
-
-void init_bv_t_of_uint64_t(bv_t *rop, const uint64_t op, const uint64_t len, const bool direction) {
-  rop->bits = malloc(sizeof(mpz_t));
-  rop->len = len;
-  mpz_init_set_ui(*rop->bits, op);
-}
-
-void reinit_bv_t_of_uint64_t(bv_t *rop, const uint64_t op, const uint64_t len, const bool direction) {
-  rop->len = len;
-  mpz_set_ui(*rop->bits, op);
-}
-
-void set_bv_t(bv_t *rop, const bv_t op) {
-  rop->len = op.len;
-  mpz_set(*rop->bits, *op.bits);
-}
-
-void append_64(bv_t *rop, const bv_t op, const uint64_t chunk) {
-  rop->len = rop->len + 64ul;
-  mpz_mul_2exp(*rop->bits, *op.bits, 64ul);
-  mpz_add_ui(*rop->bits, *rop->bits, chunk);
-}
-
-void append(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len + op2.len;
-  mpz_mul_2exp(*rop->bits, *op1.bits, op2.len);
-  mpz_ior(*rop->bits, *rop->bits, *op2.bits);
-}
-
-void replicate_bits(bv_t *rop, const bv_t op1, const mpz_t op2) {
-  uint64_t op2_ui = mpz_get_ui(op2);
-  rop->len = op1.len * op2_ui;
-  mpz_set(*rop->bits, *op1.bits);
-  for (int i = 1; i < op2_ui; i++) {
-    mpz_mul_2exp(*rop->bits, *rop->bits, op1.len);
-    mpz_ior(*rop->bits, *rop->bits, *op1.bits);
-  }
-}
-
-uint64_t fast_replicate_bits(const uint64_t shift, const uint64_t v, const int64_t times) {
-  uint64_t r = v;
-  for (int i = 1; i < times; ++i) {
-    r |= (r << shift);
-  }
-  return r;
-}
-
-void slice(bv_t *rop, const bv_t op, const mpz_t start_mpz, const mpz_t len_mpz)
-{
-  uint64_t start = mpz_get_ui(start_mpz);
-  uint64_t len = mpz_get_ui(len_mpz);
-
-  mpz_set_ui(*rop->bits, 0ul);
-  rop->len = len;
-
-  for (uint64_t i = 0; i < len; i++) {
-    if (mpz_tstbit(*op.bits, i + start)) mpz_setbit(*rop->bits, i);
-  }
-}
-
-uint64_t convert_uint64_t_of_bv_t(const bv_t op) {
-  return mpz_get_ui(*op.bits);
-}
-
-void zeros(bv_t *rop, const mpz_t op) {
-  rop->len = mpz_get_ui(op);
-  mpz_set_ui(*rop->bits, 0ul);
-}
-
-void zero_extend(bv_t *rop, const bv_t op, const mpz_t len) {
-  rop->len = mpz_get_ui(len);
-  mpz_set(*rop->bits, *op.bits);
-}
-
-void sign_extend(bv_t *rop, const bv_t op, const mpz_t len) {
-  rop->len = mpz_get_ui(len);
-  if(mpz_tstbit(*op.bits, op.len - 1)) {
-    mpz_set(*rop->bits, *op.bits);
-    for(mp_bitcnt_t i = rop->len - 1; i >= op.len; i--) {
-      mpz_setbit(*rop->bits, i);
-    }
-  } else {
-    mpz_set(*rop->bits, *op.bits);
-  }
-}
-
-void clear_bv_t(bv_t *rop) {
-  mpz_clear(*rop->bits);
-  free(rop->bits);
-}
-
-void undefined_bv_t(bv_t *rop, mpz_t len, int bit) {
-  zeros(rop, len);
-}
-
-void mask(bv_t *rop) {
-  if (mpz_sizeinbase(*rop->bits, 2) > rop->len) {
-    mpz_t m;
-    mpz_init(m);
-    mpz_ui_pow_ui(m, 2ul, rop->len);
-    mpz_sub_ui(m, m, 1ul);
-    mpz_and(*rop->bits, *rop->bits, m);
-    mpz_clear(m);
-  }
-}
-
-void truncate(bv_t *rop, const bv_t op, const mpz_t len) {
-  rop->len = mpz_get_ui(len);
-  mpz_set(*rop->bits, *op.bits);
-  mask(rop);
-}
-
-void and_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mpz_and(*rop->bits, *op1.bits, *op2.bits);
-}
-
-void or_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mpz_ior(*rop->bits, *op1.bits, *op2.bits);
-}
-
-void not_bits(bv_t *rop, const bv_t op) {
-  rop->len = op.len;
-  mpz_set(*rop->bits, *op.bits);
-  for (mp_bitcnt_t i = 0; i < op.len; i++) {
-    mpz_combit(*rop->bits, i);
-  }
-}
-
-void xor_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mpz_xor(*rop->bits, *op1.bits, *op2.bits);
-}
-
-bool eq_bits(const bv_t op1, const bv_t op2)
-{
-  for (mp_bitcnt_t i = 0; i < op1.len; i++) {
-    if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return false;
-  }
-  return true;
-}
-
-void sail_uint(mpz_t *rop, const bv_t op) {
-  /* Normal form of bv_t is always positive so just return the bits. */
-  mpz_set(*rop, *op.bits);
-}
-
-void sint(mpz_t *rop, const bv_t op)
-{
-  if (op.len == 0) {
-    mpz_set_ui(*rop, 0);
-  } else {
-    mp_bitcnt_t sign_bit = op.len - 1;
-    mpz_set(*rop, *op.bits);
-    if (mpz_tstbit(*op.bits, sign_bit) != 0) {
-      /* If sign bit is unset then we are done,
-         otherwise clear sign_bit and subtract 2**sign_bit */
-      mpz_set_ui(sail_lib_tmp1, 1);
-      mpz_mul_2exp(sail_lib_tmp1, sail_lib_tmp1, sign_bit); /* 2**sign_bit */
-      mpz_combit(*rop, sign_bit); /* clear sign_bit */
-      mpz_sub(*rop, *rop, sail_lib_tmp1);
-    }
-  }
-}
-
-void add_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mpz_add(*rop->bits, *op1.bits, *op2.bits);
-  normalise_bv_t(rop);
-}
-
-void sub_bits(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mpz_sub(*rop->bits, *op1.bits, *op2.bits);
-  normalise_bv_t(rop);
-}
-
-void add_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
-  rop->len = op1.len;
-  mpz_add(*rop->bits, *op1.bits, op2);
-  normalise_bv_t(rop);
-}
-
-void sub_bits_int(bv_t *rop, const bv_t op1, const mpz_t op2) {
-  rop->len = op1.len;
-  mpz_sub(*rop->bits, *op1.bits, op2);
-}
-
-void mults_vec(bv_t *rop, const bv_t op1, const bv_t op2) {
-  mpz_t op1_int, op2_int;
-  mpz_init(op1_int);
-  mpz_init(op2_int);
-  sint(&op1_int, op1);
-  sint(&op2_int, op2);
-  rop->len = op1.len * 2;
-  mpz_mul(*rop->bits, op1_int, op2_int);
-  normalise_bv_t(rop);
-  mpz_clear(op1_int);
-  mpz_clear(op2_int);
-}
-
-void mult_vec(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len * 2;
-  mpz_mul(*rop->bits, *op1.bits, *op2.bits);
-  normalise_bv_t(rop); /* necessary? */
-}
-
-void shift_bits_left(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mpz_mul_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
-  normalise_bv_t(rop);
-}
-
-void shift_bits_right(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mpz_tdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(*op2.bits));
-}
-
-/* FIXME */
-void shift_bits_right_arith(bv_t *rop, const bv_t op1, const bv_t op2) {
-  rop->len = op1.len;
-  mp_bitcnt_t shift_amt = mpz_get_ui(*op2.bits);
-  mp_bitcnt_t sign_bit = op1.len - 1;
-  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, shift_amt);
-  if(mpz_tstbit(*op1.bits, sign_bit) != 0) {
-    /* */
-    for(; shift_amt > 0; shift_amt--) {
-      mpz_setbit(*rop->bits, sign_bit - shift_amt + 1);
-    }
-  }
-}
-
-void reverse_endianness(bv_t *rop, const bv_t op) {
-  rop->len = op.len;
-  if (rop->len == 64ul) {
-    uint64_t x = mpz_get_ui(*op.bits);
-    x = (x & 0xFFFFFFFF00000000) >> 32 | (x & 0x00000000FFFFFFFF) << 32;
-    x = (x & 0xFFFF0000FFFF0000) >> 16 | (x & 0x0000FFFF0000FFFF) << 16;
-    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
-    mpz_set_ui(*rop->bits, x);
-  } else if (rop->len == 32ul) {
-    uint64_t x = mpz_get_ui(*op.bits);
-    x = (x & 0xFFFF0000FFFF0000) >> 16 | (x & 0x0000FFFF0000FFFF) << 16;
-    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
-    mpz_set_ui(*rop->bits, x);
-  } else if (rop->len == 16ul) {
-    uint64_t x = mpz_get_ui(*op.bits);
-    x = (x & 0xFF00FF00FF00FF00) >> 8  | (x & 0x00FF00FF00FF00FF) << 8;
-    mpz_set_ui(*rop->bits, x);
-  } else if (rop->len == 8ul) {
-    mpz_set(*rop->bits, *op.bits);
-  } else {
-    /* For other numbers of bytes we reverse the bytes.
-     * XXX could use mpz_import/export for this. */
-    mpz_set_ui(sail_lib_tmp1, 0xff); // byte mask
-    mpz_set_ui(*rop->bits, 0); // reset accumulator for result
-    for(mp_bitcnt_t byte = 0; byte < op.len; byte+=8) {
-      mpz_tdiv_q_2exp(sail_lib_tmp2, *op.bits, byte); // shift byte to bottom
-      mpz_and(sail_lib_tmp2, sail_lib_tmp2, sail_lib_tmp1); // and with mask
-      mpz_mul_2exp(*rop->bits, *rop->bits, 8); // shift result left 8
-      mpz_ior(*rop->bits, *rop->bits, sail_lib_tmp2); // or byte into result
-    }
-  }
-}
-
-// Takes a slice of the (two's complement) binary representation of
-// integer n, starting at bit start, and of length len. With the
-// argument in the following order:
-//
-// get_slice_int(len, n, start)
-//
-// For example:
-//
-// get_slice_int(8, 1680, 4) =
-//
-//                    11           0
-//                    V            V
-// get_slice_int(8, 0b0110_1001_0000, 4) = 0b0110_1001
-//                    <-------^
-//                    (8 bit) 4
-//
-void get_slice_int(bv_t *rop, const mpz_t len_mpz, const mpz_t n, const mpz_t start_mpz)
-{
-  uint64_t start = mpz_get_ui(start_mpz);
-  uint64_t len = mpz_get_ui(len_mpz);
-
-  mpz_set_ui(*rop->bits, 0ul);
-  rop->len = len;
-
-  for (uint64_t i = 0; i < len; i++) {
-    if (mpz_tstbit(n, i + start)) mpz_setbit(*rop->bits, i);
-  }
-}
-
-// Set slice uses the same indexing scheme as get_slice_int, but it
-// puts a bitvector slice into an integer rather than returning it.
-void set_slice_int(mpz_t *rop,
-		   const mpz_t len_mpz,
-		   const mpz_t n,
-		   const mpz_t start_mpz,
-		   const bv_t slice)
-{
-  uint64_t start = mpz_get_ui(start_mpz);
-
-  mpz_set(*rop, n);
-
-  for (uint64_t i = 0; i < slice.len; i++) {
-    if (mpz_tstbit(*slice.bits, i)) {
-      mpz_setbit(*rop, i + start);
-    } else {
-      mpz_clrbit(*rop, i + start);
-    }
-  }
-}
-
-void vector_update_subrange_bv_t(bv_t *rop,
-				 const bv_t op,
-				 const mpz_t n_mpz,
-				 const mpz_t m_mpz,
-				 const bv_t slice)
-{
-  uint64_t n = mpz_get_ui(n_mpz);
-  uint64_t m = mpz_get_ui(m_mpz);
-
-  mpz_set(*rop->bits, *op.bits);
-
-  for (uint64_t i = 0; i < n - (m - 1ul); i++) {
-    if (mpz_tstbit(*slice.bits, i)) {
-      mpz_setbit(*rop->bits, i + m);
-    } else {
-      mpz_clrbit(*rop->bits, i + m);
-    }
-  }
-}
-
-void vector_subrange_bv_t(bv_t *rop, const bv_t op, const mpz_t n_mpz, const mpz_t m_mpz)
-{
-  uint64_t n = mpz_get_ui(n_mpz);
-  uint64_t m = mpz_get_ui(m_mpz);
-
-  mpz_set_ui(*rop->bits, 0ul);
-  rop->len = n - (m - 1ul);
-
-  for (uint64_t i = 0; i < rop->len; i++) {
-    if (mpz_tstbit(*op.bits, i + m)) {
-      mpz_setbit(*rop->bits, i);
-    } else {
-      mpz_clrbit(*rop->bits, i);
-    }
-  }
-}
-
-int bitvector_access(const bv_t op, const mpz_t n_mpz) {
-  uint64_t n = mpz_get_ui(n_mpz);
-  return mpz_tstbit(*op.bits, n);
-}
-
-// Like slice but slices from a hexadecimal string.
-void hex_slice (bv_t *rop, const sail_string hex, const mpz_t len_mpz, const mpz_t start_mpz) {
-  mpz_t op;
-  mpz_init_set_str(op, hex, 0);
-  get_slice_int(rop, len_mpz, op, start_mpz);
-  mpz_clear(op);
-}
-
-void set_slice (bv_t *rop,
-		const mpz_t len_mpz,
-		const mpz_t slen_mpz,
-		const bv_t op,
-		const mpz_t start_mpz,
-		const bv_t slice)
-{
-  uint64_t start = mpz_get_ui(start_mpz);
-
-  mpz_set(*rop->bits, *op.bits);
-  rop->len = op.len;
-
-  for (uint64_t i = 0; i < slice.len; i++) {
-    if (mpz_tstbit(*slice.bits, i)) {
-      mpz_setbit(*rop->bits, i + start);
-    } else {
-      mpz_clrbit(*rop->bits, i + start);
-    }
-  }
-}
-
-// ***** Real number implementation *****
-
-#define REAL_FLOAT
-
-#ifdef REAL_FLOAT
+/* ***** Sail reals ***** */
 
 typedef mpf_t real;
 
-#define FLOAT_PRECISION 255
-
-void init_real(real *rop) {
-  mpf_init(*rop);
-}
-
-void reinit_real(real *rop) {
-  mpf_set_ui(*rop, 0);
-}
-
-void clear_real(real *rop) {
-  mpf_clear(*rop);
-}
-
-void set_real(real *rop, const real op) {
-  mpf_set(*rop, op);
-}
-
-void undefined_real(real *rop, unit u) {
-  mpf_set_ui(*rop, 0ul);
-}
-
-void neg_real(real *rop, const real op) {
-  mpf_neg(*rop, op);
-}
-
-void mult_real(real *rop, const real op1, const real op2) {
-  mpf_mul(*rop, op1, op2);
-}
-
-void sub_real(real *rop, const real op1, const real op2) {
-  mpf_sub(*rop, op1, op2);
-}
-
-void add_real(real *rop, const real op1, const real op2) {
-  mpf_add(*rop, op1, op2);
-}
-
-void div_real(real *rop, const real op1, const real op2) {
-  mpf_div(*rop, op1, op2);
-}
-
-void sqrt_real(real *rop, const real op) {
-  mpf_sqrt(*rop, op);
-}
-
-void abs_real(real *rop, const real op) {
-  mpf_abs(*rop, op);
-}
-
-void round_up(mpz_t *rop, const real op) {
-  mpf_t x;
-  mpf_init(x);
-  mpf_ceil(x, op);
-  mpz_set_ui(*rop, mpf_get_ui(x));
-  mpf_clear(x);
-}
-
-void round_down(mpz_t *rop, const real op) {
-  mpf_t x;
-  mpf_init(x);
-  mpf_floor(x, op);
-  mpz_set_ui(*rop, mpf_get_ui(x));
-  mpf_clear(x);
-}
-
-void to_real(real *rop, const mpz_t op) {
-  mpf_set_z(*rop, op);
-}
-
-bool eq_real(const real op1, const real op2) {
-  return mpf_cmp(op1, op2) == 0;
-}
-
-bool lt_real(const real op1, const real op2) {
-  return mpf_cmp(op1, op2) < 0;
-}
-
-bool gt_real(const real op1, const real op2) {
-  return mpf_cmp(op1, op2) > 0;
-}
-
-bool lteq_real(const real op1, const real op2) {
-  return mpf_cmp(op1, op2) <= 0;
-}
-
-bool gteq_real(const real op1, const real op2) {
-  return mpf_cmp(op1, op2) >= 0;
-}
-
-void real_power(real *rop, const real base, const mpz_t exp) {
-  uint64_t exp_ui = mpz_get_ui(exp);
-  mpf_pow_ui(*rop, base, exp_ui);
-}
-
-void init_real_of_sail_string(real *rop, const sail_string op) {
-  // FIXME
-  mpf_init(*rop);
-}
-
-#endif
-
-#endif
-
-/* ***** Sail memory builtins ***** */
-
-/* We organise memory available to the sail model into a linked list
-   of dynamically allocated MASK + 1 size blocks. The most recently
-   written block is moved to the front of the list, so contiguous
-   accesses should be as fast as possible. */
-
-struct block {
-  uint64_t block_id;
-  uint8_t *mem;
-  struct block *next;
-};
-
-struct block *sail_memory = NULL;
-
-/* Must be one less than a power of two. */
-uint64_t MASK = 0xFFFFul;
-
-// All sail vectors are at least 64-bits, but only the bottom 8 bits
-// are used in the second argument.
-void write_mem(uint64_t address, uint64_t byte)
-{
-  //printf("ADDR: %lu, BYTE: %lu\n", address, byte);
-
-  uint64_t mask = address & ~MASK;
-  uint64_t offset = address & MASK;
-
-  struct block *current = sail_memory;
-
-  while (current != NULL) {
-    if (current->block_id == mask) {
-      current->mem[offset] = (uint8_t) byte;
-      return;
-    } else {
-      current = current->next;
-    }
-  }
-
-  /* If we couldn't find a block matching the mask, allocate a new
-     one, write the byte, and put it at the front of the block
-     list. */
-  struct block *new_block = malloc(sizeof(struct block));
-  new_block->block_id = mask;
-  new_block->mem = calloc(MASK + 1, sizeof(uint8_t));
-  new_block->mem[offset] = byte;
-  new_block->next = sail_memory;
-  sail_memory = new_block;
-}
-
-uint64_t read_mem(uint64_t address)
-{
-  uint64_t mask = address & ~MASK;
-  uint64_t offset = address & MASK;
-
-  struct block *current = sail_memory;
-
-  while (current != NULL) {
-    if (current->block_id == mask) {
-      return (uint64_t) current->mem[offset];
-    } else {
-      current = current->next;
-    }
-  }
-
-  return 0;
-}
-
-void kill_mem()
-{
-  while (sail_memory != NULL) {
-    struct block *next = sail_memory->next;
-
-    free(sail_memory->mem);
-    free(sail_memory);
-
-    sail_memory = next;
-  }
-}
-
-// ***** ARM Memory builtins *****
-
-// These memory builtins are intended to match the semantics for the
-// __ReadRAM and __WriteRAM functions in ASL.
-
-unit write_ram(const mpz_t addr_size,     // Either 32 or 64
-	       const mpz_t data_size_mpz, // Number of bytes
-	       const bv_t  hex_ram,       // Currently unused
-	       const bv_t  addr_bv,
-	       const bv_t  data)
-{
-  uint64_t addr = mpz_get_ui(*addr_bv.bits);
-  uint64_t data_size = mpz_get_ui(data_size_mpz);
-
-  mpz_t buf;
-  mpz_init_set(buf, *data.bits);
-
-  uint64_t byte;
-  for(uint64_t i = 0; i < data_size; ++i) {
-    // Take the 8 low bits of buf and write to addr.
-    byte = mpz_get_ui(buf) & 0xFF;
-    write_mem(addr + i, byte);
-
-    // Then shift buf 8 bits right, and increment addr.
-    mpz_fdiv_q_2exp(buf, buf, 8);
-  }
-
-  mpz_clear(buf);
-  return UNIT;
-}
-
-void read_ram(bv_t *data,
-	      const mpz_t addr_size,
-	      const mpz_t data_size_mpz,
-	      const bv_t hex_ram,
-	      const bv_t addr_bv)
-{
-  uint64_t addr = mpz_get_ui(*addr_bv.bits);
-  uint64_t data_size = mpz_get_ui(data_size_mpz);
-
-  mpz_set_ui(*data->bits, 0);
-  data->len = data_size * 8;
-
-  mpz_t byte;
-  mpz_init(byte);
-  for(uint64_t i = data_size; i > 0; --i) {
-    mpz_set_ui(byte, read_mem(addr + (i - 1)));
-    mpz_mul_2exp(*data->bits, *data->bits, 8);
-    mpz_add(*data->bits, *data->bits, byte);
-  }
-
-  mpz_clear(byte);
-}
-
-unit load_raw(uint64_t addr, const sail_string file) {
-  FILE *fp = fopen(file, "r");
-
-  uint64_t byte;
-  while ((byte = (uint64_t)fgetc(fp)) != EOF) {
-    write_mem(addr, byte);
-    addr++;
-  }
-
-  return UNIT;
-}
-
-void load_image(char *file) {
-  FILE *fp = fopen(file, "r");
-
-  if (!fp) {
-    fprintf(stderr, "Image file %s could not be loaded\n", file);
-    exit(EXIT_FAILURE);
-  }
-
-  char *addr = NULL;
-  char *data = NULL;
-  size_t len = 0;
-
-  while (true) {
-    ssize_t addr_len = getline(&addr, &len, fp);
-    if (addr_len == -1) break;
-    ssize_t data_len = getline(&data, &len, fp);
-    if (data_len == -1) break;
-
-    if (!strcmp(addr, "elf_entry\n")) {
-      if (sscanf(data, "%" PRIu64 "\n", &g_elf_entry) != 1) {
-        fprintf(stderr, "Failed to parse elf_entry\n");
-        exit(EXIT_FAILURE);
-      };
-      printf("Elf entry point: %" PRIx64 "\n", g_elf_entry);
-    } else {
-      write_mem((uint64_t) atoll(addr), (uint64_t) atoll(data));
-    }
-  }
-
-  free(addr);
-  free(data);
-  fclose(fp);
-}
-
-void load_instr(uint64_t addr, uint32_t instr) {
-  write_mem(addr    , instr       & 0xFF);
-  write_mem(addr + 1, instr >> 8  & 0xFF);
-  write_mem(addr + 2, instr >> 16 & 0xFF);
-  write_mem(addr + 3, instr >> 24 & 0xFF);
-}
-
-// ***** Setup and cleanup functions for library code *****
-
-void setup_library(void) {
-  mpf_set_default_prec(FLOAT_PRECISION);
-  mpz_init(sail_lib_tmp1);
-  mpz_init(sail_lib_tmp2);
-}
-
-void cleanup_library(void) {
-  mpz_clear(sail_lib_tmp1);
-  mpz_clear(sail_lib_tmp2);
-  kill_mem();
-}
+SAIL_BUILTIN_TYPE(real);
+
+void CREATE_OF(real, sail_string)(real *rop, const sail_string op);
+
+void UNDEFINED(real)(real *rop, unit u);
+
+void neg_real(real *rop, const real op);
+
+void mult_real(real *rop, const real op1, const real op2);
+void sub_real(real *rop, const real op1, const real op2);
+void add_real(real *rop, const real op1, const real op2);
+void div_real(real *rop, const real op1, const real op2);
+
+void sqrt_real(real *rop, const real op);
+void abs_real(real *rop, const real op);
+
+void round_up(sail_int *rop, const real op);
+void round_down(sail_int *rop, const real op);
+
+void to_real(real *rop, const sail_int op);
+
+bool eq_real(const real op1, const real op2);
+
+bool lt_real(const real op1, const real op2);
+bool gt_real(const real op1, const real op2);
+bool lteq_real(const real op1, const real op2);
+bool gteq_real(const real op1, const real op2);
+
+void real_power(real *rop, const real base, const sail_int exp);
+
+/* ***** Printing ***** */
+
+void string_of_int(sail_string *str, const sail_int i);
+void string_of_bits(sail_string *str, const sail_bits op);
+
+/*
+ * Utility function not callable from Sail!
+ */
+void fprint_bits(const sail_string pre,
+		 const sail_bits op,
+		 const sail_string post,
+		 FILE *stream);
+
+unit print_bits(const sail_string str, const sail_bits op);
+unit prerr_bits(const sail_string str, const sail_bits op);
+
+unit print(const sail_string str);
+unit print_endline(const sail_string str);
+
+unit prerr(const sail_string str);
+unit prerr_endline(const sail_string str);
+
+unit print_int(const sail_string str, const sail_int op);
+unit prerr_int(const sail_string str, const sail_int op);
+
+unit sail_putchar(const sail_int op);
+
+/* ***** Misc ***** */
+
+void get_time_ns(sail_int*, const unit);
