@@ -3374,8 +3374,8 @@ let compile_ast ctx (Defs defs) =
     let postamble = separate hardline (List.map string
        ( [ "int main(int argc, char *argv[])";
            "{";
-           "  if (argc > 1) { load_image(argv[1]); }";
-           "  setup_rts();" ]
+           "  setup_rts();";
+           "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);" ]
        @ fst exn_boilerplate
        @ startup cdefs
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)

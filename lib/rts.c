@@ -1,4 +1,6 @@
 #include<string.h>
+#include<argp.h>
+#include<inttypes.h>
 
 #include"sail.h"
 #include"rts.h"
@@ -168,6 +170,11 @@ unit load_raw(mach_bits addr, const sail_string file)
 {
   FILE *fp = fopen(file, "r");
 
+  if (!fp) {
+    fprintf(stderr, "[Sail] Raw file %s could not be loaded\n", file);
+    exit(EXIT_FAILURE);
+  }
+
   uint64_t byte;
   while ((byte = (uint64_t)fgetc(fp)) != EOF) {
     write_mem(addr, byte);
@@ -182,7 +189,7 @@ void load_image(char *file)
   FILE *fp = fopen(file, "r");
 
   if (!fp) {
-    fprintf(stderr, "Image file %s could not be loaded\n", file);
+    fprintf(stderr, "[Sail] Image file %s could not be loaded\n", file);
     exit(EXIT_FAILURE);
   }
 
@@ -198,10 +205,10 @@ void load_image(char *file)
 
     if (!strcmp(addr, "elf_entry\n")) {
       if (sscanf(data, "%" PRIu64 "\n", &g_elf_entry) != 1) {
-        fprintf(stderr, "Failed to parse elf_entry\n");
+	fprintf(stderr, "[Sail] Failed to parse elf_entry\n");
         exit(EXIT_FAILURE);
       };
-      printf("Elf entry point: %" PRIx64 "\n", g_elf_entry);
+      fprintf(stderr, "[Sail] Elf entry point: %" PRIx64 "\n", g_elf_entry);
     } else {
       write_mem((uint64_t) atoll(addr), (uint64_t) atoll(data));
     }
@@ -312,6 +319,90 @@ void elf_entry(mpz_t *rop, const unit u)
 void elf_tohost(mpz_t *rop, const unit u)
 {
   mpz_set_ui(*rop, 0x0ul);
+}
+
+/* ***** Cycle limit ***** */
+
+static uint64_t g_cycle_count = 0;
+static uint64_t g_cycle_limit;
+
+unit cycle_count(const unit u)
+{
+  if (++g_cycle_count >= g_cycle_limit && g_cycle_limit != 0) {
+    printf("[Sail] cycle limit %" PRId64 " reached\n", g_cycle_limit);
+    exit(EXIT_SUCCESS);
+  }
+
+  return UNIT;
+}
+
+/* ***** Argument Parsing ***** */
+
+static char doc[] =
+  "Sail RTS -- Sail C run time system";
+
+/* A description of the arguments we accept. */
+static char args_doc[] = "ARG";
+
+static struct argp_option options[] = {
+  {"elf",        'e', "FILE",         0,  "Load an ELF file"},
+  {"entry",      'n', "ADDRESS",      0,  "Manually set the entry address"},
+  {"image",      'i', "FILE",         0,  "Load an Linksem preprocessed ELF image"},
+  {"binary",     'b', "ADDRESS,FILE", 0,  "Load a raw binary file"},
+  {"cyclelimit", 'l', "NUMBER",       0,  "Set a cycle limit"},
+  { 0 }
+};
+
+static error_t parse_opt(int key, char *arg, struct argp_state *state)
+{
+  switch (key) {
+  case 'b': ;
+    uint64_t addr;
+    char *file;
+
+    if (!sscanf(arg, "0x%" PRIx64 ",%ms", &addr, &file)) {
+      fprintf(stderr, "Could not parse argument %s\n", arg);
+      return EINVAL;
+    };
+
+    load_raw(addr, file);
+    free(file);
+    break;
+
+  case 'i':
+    load_image(arg);
+    break;
+
+  case 'e':
+    load_elf(arg);
+    break;
+
+  case 'n':
+    if (!sscanf(arg, "0x%" PRIx64, &g_elf_entry)) {
+      fprintf(stderr, "Could not parse address %s\n", arg);
+      return EINVAL;
+    }
+    break;
+
+  case 'l':
+    if (!sscanf(arg, "%" PRId64, &g_cycle_limit)) {
+      fprintf(stderr, "Could not parse cycle limit %s\n", arg);
+      return EINVAL;
+    }
+    break;
+
+  default:
+    return ARGP_ERR_UNKNOWN;
+  }
+
+  return 0;
+}
+
+static struct argp argp = {options, parse_opt, args_doc, doc};
+
+int process_arguments(int argc, char *argv[])
+{
+  return argp_parse (&argp, argc, argv, 0, 0, NULL);
 }
 
 /* ***** Setup and cleanup functions for RTS ***** */

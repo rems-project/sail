@@ -100,6 +100,12 @@ void trace_start(char *);
 void trace_end(void);
 
 /*
+ * Functions for counting and limiting cycles
+ */
+
+unit cycle_count(const unit);
+
+/*
  * Functions to get info from ELF files.
  */
 
@@ -107,6 +113,8 @@ static uint64_t g_elf_entry;
 
 void elf_entry(sail_int *rop, const unit u);
 void elf_tohost(sail_int *rop, const unit u);
+
+int process_arguments(int, char**);
 
 /*
  * setup_rts and cleanup_rts are responsible for calling setup_library
