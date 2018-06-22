@@ -852,7 +852,7 @@ Ltac solve_arithfact :=
  reduce_list_lengths;
  reduce_pow;
  solve [apply ArithFact_mword; assumption
-       | constructor; omega
+       | constructor; omega with Z
          (* The datatypes hints give us some list handling, esp In *)
        | constructor; auto with datatypes zbool zarith sail].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
@@ -1281,3 +1281,28 @@ Definition diafp_to_dia reginfo = function
 end
 *)
 *)
+
+(* Arithmetic functions which return proofs that match the expected Sail
+   types in smt.sail. *)
+
+Definition div_with_eq n m : {o : Z & ArithFact (o = Z.quot n m)} := build_ex (Z.quot n m).
+Definition mod_with_eq n m : {o : Z & ArithFact (o = Z.rem n m)} := build_ex (Z.rem n m).
+Definition abs_with_eq n   : {o : Z & ArithFact (o = Z.abs n)} := build_ex (Z.abs n).
+
+(* Similarly, for ranges (currently in MIPS) *)
+
+Definition add_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)})
+  : {x & ArithFact (n+o <= x <= m+p)} :=
+  build_ex ((projT1 l) + (projT1 r)).
+Definition sub_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)})
+  : {x & ArithFact (n-p <= x <= m-o)} :=
+  build_ex ((projT1 l) - (projT1 r)).
+Definition negate_range {n m} (l : {l : Z & ArithFact (n <= l <= m)})
+  : {x : Z & ArithFact ((- m) <= x <= (- n))} :=
+  build_ex (- (projT1 l)).
+
+Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c <= a /\ c <= b)} :=
+  build_ex (Z.min a b).
+Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c >= a /\ c >= b)} :=
+  build_ex (Z.max a b).
+

@@ -22,7 +22,7 @@ val not_vec = {c:"not_bits", _:"not_vec"} : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val not = "not" : bool -> bool
+val not = {coq:"negb", _:"not"} : bool -> bool
 
 val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
 function neq_vec (x, y) = not_bool(eq_bits(x, y))
@@ -57,20 +57,20 @@ val putchar = {c:"sail_putchar", _:"putchar"} : forall ('a : Type). 'a -> unit
 val concat_str = {lem: "stringAppend", _: "concat_str"} : (string, string) -> string
 
 val string_of_int = "string_of_int" : int -> string
-
+/* Unused?
 val DecStr : int -> string
 
 val HexStr : int -> string
-
+*/
 val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
 
 val xor_vec = {c: "xor_bits" , _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val int_power = {ocaml: "int_power", lem: "pow"} : (int, int) -> int
+val int_power = {ocaml: "int_power", lem: "pow", coq: "Z.pow"} : (int, int) -> int
 
 overload operator ^ = {xor_vec, int_power}
 
-val add_range = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm 'o 'p.
+val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
 val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -79,48 +79,45 @@ val add_vec_int = "add_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 overload operator + = {add_range, add_int, add_vec, add_vec_int}
 
-val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
+val sub_range = {ocaml: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
 val sub_vec = {c : "sub_bits", _:"sub_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val sub_vec_int = {c:"sub_bits_int", _: "sub_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
 
-val negate_range = {ocaml: "minus_big_int", lem: "integerNegate"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
+val negate_range = {ocaml: "minus_big_int", lem: "integerNegate", coq: "negate_range"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
 
 overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int}
 
 overload negate = {negate_range, negate_int}
 
-val mult_range = {ocaml: "mult", lem: "integerMult"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
+overload operator * = {mult_int}
 
-overload operator * = {mult_range, mult_int}
+val quotient_nat = {ocaml: "quotient", lem: "integerDiv", coq: "Z.div"} : (nat, nat) -> nat
 
-val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : (nat, nat) -> nat
-
-val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
+val quotient = {ocaml: "quotient", lem: "integerDiv", coq: "Z.mod"} : (int, int) -> int
 
 overload operator / = {quotient_nat, quotient}
 
-val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot", _ : "tdiv_int"} : (int, int) -> int
-val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod", _ : "tmod_int"} : (int, int) -> int
+val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot", coq: "Z.quot", _ : "tdiv_int"} : (int, int) -> int
+val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod", coq: "Z.rem", _ : "tmod_int"} : (int, int) -> int
 
 val modulus = {ocaml: "modulus", lem: "hardware_mod", _ : "tmod_int"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
 
 overload operator % = {modulus}
 
-val min_nat = {ocaml: "min_int", lem: "min"} : (nat, nat) -> nat
+val min_nat = {ocaml: "min_int", lem: "min", coq: "Z.min"} : (nat, nat) -> nat
 
-val min_int = {ocaml: "min_int", lem: "min"} : (int, int) -> int
+val min_int = {ocaml: "min_int", lem: "min", coq: "Z.min"} : (int, int) -> int
 
-val max_nat = {ocaml: "max_int", lem: "max"} : (nat, nat) -> nat
+val max_nat = {ocaml: "max_int", lem: "max", coq: "Z.max"} : (nat, nat) -> nat
 
-val max_int = {ocaml: "max_int", lem: "max"} : (int, int) -> int
+val max_int = {ocaml: "max_int", lem: "max", coq: "Z.max"} : (int, int) -> int
 
-val min_atom = {ocaml: "min_int", lem: "min"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
+val min_atom = {ocaml: "min_int", lem: "min", coq: "min_atom"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
-val max_atom = {ocaml: "max_int", lem: "max"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
+val max_atom = {ocaml: "max_int", lem: "max", coq: "max_atom"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
 
 overload min = {min_atom, min_nat, min_int}
 
