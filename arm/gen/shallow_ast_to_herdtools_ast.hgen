@@ -172,7 +172,7 @@
                               translate_out_bool else_inf,
                               translate_out_bool else_inc)
 
-| Barrier3 (op, domain, types) ->
+| Barrier2 (op, domain, types) ->
   `AArch64Barrier ( translate_out_memBarrierOp op,
                     translate_out_mBReqDomain domain,
                     translate_out_mBReqTypes types)

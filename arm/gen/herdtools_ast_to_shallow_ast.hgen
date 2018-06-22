@@ -176,7 +176,7 @@
         translate_boolean "else_inc" else_inc)
 
 | `AArch64Barrier (op,domain,types) ->
-    Barrier3
+    Barrier2
       (translate_memBarrierOp "op" op,
         translate_mBReqDomain "domain" domain,
         translate_mBReqTypes "types" types)
