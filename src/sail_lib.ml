@@ -798,3 +798,5 @@ let load_raw (paddr, file) =
   with
   | End_of_file -> ()
 
+(* XXX this could count cycles and exit after given limit *)
+let cycle_count () = ()
