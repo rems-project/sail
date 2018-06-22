@@ -1077,6 +1077,7 @@ mapping encdec_csrop : csrop <-> bits(2) = {
 mapping clause encdec = CSR(csr, rs1, rd, is_imm, op) <-> csr @ rs1 @ bool_bits(is_imm) @ encdec_csrop(op) @ rd @ 0b1110011
 
 function readCSR csr : csreg -> xlenbits =
+  let res : xlenbits =
   match csr {
     /* machine mode */
     0xF11 => mvendorid,
@@ -1123,6 +1124,9 @@ function readCSR csr : csreg -> xlenbits =
 
     _     => { print_bits("unhandled read to CSR ", csr);
                0x0000_0000_0000_0000 }
+  } in {
+    print("CSR " ^ csr ^ " -> " ^ BitStr(res));
+    res
   }
 
 function writeCSR (csr : csreg, value : xlenbits) -> unit =

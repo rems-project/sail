@@ -65,7 +65,7 @@ function step() = {
               false
             },
             Some(ast) => {
-              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") " ^ ast);
+              print("[" ^ string_of_int(step_no) ^ "] [" ^ cur_privilege ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") " ^ ast);
               nextPC = PC + 2;
               execute(ast)
             }
@@ -74,12 +74,12 @@ function step() = {
         F_Base(w) => {
           match decode(w) {
             None() => {
-              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") <no-decode>");
+              print("[" ^ string_of_int(step_no) ^ "] [" ^ cur_privilege ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") <no-decode>");
               handle_decode_exception(EXTZ(w));
               false
             },
             Some(ast) => {
-              print("[" ^ string_of_int(step_no) ^ "] " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ ast);
+              print("[" ^ string_of_int(step_no) ^ "] [" ^ cur_privilege ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ ast);
               nextPC = PC + 4;
               execute(ast)
             }
@@ -90,8 +90,8 @@ function step() = {
   }
 }
 
-val loop : int -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
-function loop (tohost_addr) = {
+val loop : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+function loop () = {
   let insns_per_tick = plat_insns_per_tick();
   i : int = 0;
   while true do {

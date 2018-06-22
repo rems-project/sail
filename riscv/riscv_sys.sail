@@ -902,6 +902,9 @@ function init_sys() -> unit = {
   mcounteren->bits() = EXTZ(0b0);
   minstret = EXTZ(0b0);
   minstret_written = false;
+
+  // log compatibility with spike
+  print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(EXTZ(0b0) : xlenbits) ^ ")")
 }
 
 /* memory access exceptions, defined here for use by the platform model. */

@@ -64,7 +64,7 @@ let elf_arg =
   Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s])
             usage_msg;
   ( match !opt_file_arguments with
-      | f :: _ -> prerr_endline ("Loading ELF file " ^ f); f
+      | f :: _ -> prerr_endline ("Sail/RISC-V: running ELF file " ^ f); f
       | _ -> (prerr_endline "Please provide an ELF file."; exit 0)
   )
 
@@ -78,7 +78,7 @@ let () =
       try ( zinit_platform (); (* devices *)
             zinit_sys ();      (* processor *)
             zPC := pc;
-            zloop (Elf_loader.elf_tohost ())
+            zloop ()
           )
       with
         | ZError_not_implemented (zs) ->
