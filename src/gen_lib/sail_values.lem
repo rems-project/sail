@@ -358,7 +358,10 @@ let add = integerAdd
 let add_signed = integerAdd
 let minus = integerMinus
 let multiply = integerMult
-let modulo = hardware_mod
+
+(* for ARM *)
+let modulo = integerRem_f
+
 let quot = hardware_quot
 let power = integerPow
 
