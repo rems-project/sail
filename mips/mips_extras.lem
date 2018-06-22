@@ -1,10 +1,10 @@
 open import Pervasives
 open import Pervasives_extra
-open import Sail_instr_kinds
-open import Sail_values
-open import Sail_operators
-open import Prompt_monad
-open import Prompt
+open import Sail2_instr_kinds
+open import Sail2_values
+open import Sail2_operators
+open import Sail2_prompt_monad
+open import Sail2_prompt
 
 val MEMr             : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b => 'a -> integer -> monad 'regval 'b 'e
 val MEMr_reserve     : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b => 'a -> integer -> monad 'regval 'b 'e
@@ -80,9 +80,6 @@ let read_ram _ size _ addr = MEMr addr size
 let string_of_bits bs = string_of_bv (bits_of bs)
 let string_of_int = show
 
-let _sign_extend bits len = maybe_failwith (of_bits (exts_bv len bits))
-let _zero_extend bits len = maybe_failwith (of_bits (extz_bv len bits))
-
 let shift_bits_left v n =
   let r = Maybe.bind (unsigned n) (fun n -> of_bits (shiftl_bv v n)) in
   maybe_fail "shift_bits_left" r
@@ -121,3 +118,8 @@ let print_bits msg bs = prerr_endline (msg ^ (string_of_bits bs))
 val get_time_ns : unit -> integer
 let get_time_ns () = 0
 declare ocaml target_rep function get_time_ns = `(fun () -> Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ())))`
+
+val cycle_count : unit -> unit
+let cycle_count _ = ()
+
+let inline eq_bit = eq

@@ -149,11 +149,14 @@ union exception = {
   Error_internal_error : unit
 }
 
-val sign_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
-val zero_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val mips_sign_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val mips_zero_extend : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 
-function sign_extend v = sail_sign_extend(v, sizeof('m))
-function zero_extend v = sail_zero_extend(v, sizeof('m))
+function mips_sign_extend v = sail_sign_extend(v, sizeof('m))
+function mips_zero_extend v = sail_zero_extend(v, sizeof('m))
+
+overload sign_extend = {mips_sign_extend}
+overload zero_extend = {mips_zero_extend}
 
 val zeros : forall 'n, 'n >= 0 . unit -> bits('n)
 function zeros() = replicate_bits (0b0,'n)
