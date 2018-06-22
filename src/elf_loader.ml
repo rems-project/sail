@@ -108,6 +108,14 @@ let read name =
 let write_sail_lib paddr i byte =
   Sail_lib.wram (Big_int.add paddr (Big_int.of_int i)) byte
 
+let write_mem_zeros start len =
+  (* write in order for mem tracing logs *)
+  let i = ref Big_int.zero in
+  while (Big_int.less !i len) do
+    Sail_lib.wram (Big_int.add start !i) 0;
+    i := Big_int.succ !i
+  done
+
 let write_file chan paddr i byte =
   output_string chan (Big_int.to_string (Big_int.add paddr (Big_int.of_int i)) ^ "\n");
   output_string chan (string_of_int byte ^ "\n")
@@ -118,12 +126,17 @@ let load_segment ?writer:(writer=write_sail_lib) seg =
   let paddr = seg.elf64_segment_paddr in
   let base = seg.elf64_segment_base in
   let offset = seg.elf64_segment_offset in
+  let size = seg.elf64_segment_size in
+  let memsz = seg.elf64_segment_memsz in
   prerr_endline "\nLoading Segment";
-  prerr_endline ("Segment offset: " ^ Big_int.to_string offset);
-  prerr_endline ("Segment base address: " ^ Big_int.to_string base);
-  prerr_endline ("Segment physical address: " ^ Big_int.to_string paddr);
+  prerr_endline ("Segment offset: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 offset)));
+  prerr_endline ("Segment base address: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 base)));
+  prerr_endline ("Segment physical address: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 paddr)));
+  prerr_endline ("Segment size: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 size)));
+  prerr_endline ("Segment memsz: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 memsz)));
   print_segment seg;
-  List.iteri (writer paddr) (List.rev_map int_of_char (List.rev (Byte_sequence.char_list_of_byte_sequence bs)))
+  List.iteri (writer paddr) (List.rev_map int_of_char (List.rev (Byte_sequence.char_list_of_byte_sequence bs)));
+  write_mem_zeros (Big_int.add paddr size) (Big_int.sub memsz size)
 
 let load_elf ?writer:(writer=write_sail_lib) name =
   let segments, e_entry, symbol_map = read name in
