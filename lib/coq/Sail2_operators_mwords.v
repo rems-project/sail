@@ -6,11 +6,23 @@ Require Import bbv.Word.
 Require Import Arith.
 Require Import ZArith.
 Require Import Omega.
+Require Import Eqdep_dec.
+
+Module Z_eq_dec.
+Definition U := Z.
+Definition eq_dec := Z.eq_dec.
+End Z_eq_dec.
+Module ZEqdep := DecidableEqDep (Z_eq_dec).
 
 Definition cast_mword {m n} (x : mword m) (eq : m = n) : mword n.
 rewrite <- eq.
 exact x.
 Defined.
+
+Lemma cast_mword_refl {m} {H:m = m} (x : mword m) : cast_mword x H = x.
+rewrite (ZEqdep.UIP _ _ H eq_refl).
+reflexivity.
+Qed.
 
 Definition autocast {m n} (x : mword m) `{H:ArithFact (m = n)} : mword n :=
   cast_mword x (use_ArithFact H).
@@ -19,6 +31,11 @@ Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n.
 rewrite <- eq.
 exact x.
 Defined.
+
+Lemma cast_word_refl {m} {H:m = m} (x : word m) : cast_word x H = x.
+rewrite (UIP_refl_nat _ H).
+reflexivity.
+Qed.
 
 Definition mword_of_nat {m} (x : Word.word m) : mword (Z.of_nat m).
 destruct m.
@@ -51,16 +68,43 @@ Definition update_vec_inc {a} (w : mword a) i b : mword a :=
 (*val update_vec_dec : forall 'a. Size 'a => mword 'a -> integer -> bitU -> mword 'a*)
 Definition update_vec_dec {a} (w : mword a) i b : mword a := opt_def w (update_mword_dec w i b).
 
-(*val subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b*)
+Lemma subrange_lemma0 {n m o} `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} : (Z.to_nat o <= Z.to_nat m < Z.to_nat n)%nat.
+intros.
+unwrap_ArithFacts.
+split.
++ apply Z2Nat.inj_le; omega.
++ apply Z2Nat.inj_lt; omega.
+Qed.
+Lemma subrange_lemma1 {n m o} : (o <= m < n -> n = m + 1 + (n - (m + 1)))%nat.
+intros. omega.
+Qed.
+Lemma subrange_lemma2 {n m o} : (o <= m < n -> m+1 = o+(m-o+1))%nat.
+omega.
+Qed.
+Lemma subrange_lemma3 {n m o} `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} :
+  Z.of_nat (Z.to_nat m - Z.to_nat o + 1)%nat = m - o + 1.
+unwrap_ArithFacts.
+rewrite Nat2Z.inj_add.
+rewrite Nat2Z.inj_sub.
+repeat rewrite Z2Nat.id; try omega.
+reflexivity.
+apply Z2Nat.inj_le; omega.
+Qed.
+
+Definition subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} : mword (m - o + 1) :=
+  let n := Z.to_nat n in
+  let m := Z.to_nat m in
+  let o := Z.to_nat o in
+  let prf : (o <= m < n)%nat := subrange_lemma0 in
+  let w := get_word v in
+  cast_to_mword (split2 o (m-o+1)
+                        (cast_word (split1 (m+1) (n-(m+1)) (cast_word w (subrange_lemma1 prf)))
+                                   (subrange_lemma2 prf))) subrange_lemma3.
+
+Definition subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <= m)} `{ArithFact (m <= o < n)} : mword (o - m + 1) := autocast (subrange_vec_dec v (n-1-m) (n-1-o)).
+
 (* TODO: get rid of bogus default *)
 Parameter dummy_vector : forall {n} `{ArithFact (n >= 0)}, mword n.
-Definition subrange_vec_inc {a b} `{ArithFact (b >= 0)} (w: mword a) i j : mword b :=
-  opt_def dummy_vector (of_bits (subrange_bv_inc w i j)).
-
-(*val subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b*)
-(* TODO: get rid of bogus default *)
-Definition subrange_vec_dec {n m} `{ArithFact (m >= 0)} (w : mword n) i j :mword m :=
-  opt_def dummy_vector (of_bits (subrange_bv_dec w i j)).
 
 (*val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
 Definition update_subrange_vec_inc {a b} (v : mword a) i j (w : mword b) : mword a :=
