@@ -66,6 +66,13 @@ let make_rom start_pc =
   let dtb = P.make_dtb P.dts in
   let rom = reset_vec @ dtb in
   ( rom_size_ref := List.length rom;
+    (*
+    List.iteri (fun i c ->
+                Printf.eprintf "rom[0x%Lx] <- %x\n"
+                               (Int64.add P.rom_base (Int64.of_int i))
+                               c
+               ) rom;
+     *)
     rom )
 
 let rom_base () = bits_of_int64 P.rom_base

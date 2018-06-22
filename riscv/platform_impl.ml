@@ -154,13 +154,18 @@ let rec term_read () =
   (* todo: handle nbytes == 0 *)
   Bytes.get buf 0
 
+(* Platform diagnostics *)
+
+let show_bytes s =
+  output_string stdout s
+
+let dump_dts () = show_bytes dts
+let dump_dtb () = show_bytes (bytes_to_string (make_dtb dts))
+
 (*
 let save_string_to_file s fname =
   let out = open_out fname in
   output_string out s;
   close_out out;;
 
-let _ =
-  save_string_to_file dts "/tmp/platform.dts";
-  save_string_to_file (bytes_to_string (get_dtb dts)) "/tmp/platform.dtb";
  *)
