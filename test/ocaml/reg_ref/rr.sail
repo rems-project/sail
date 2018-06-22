@@ -42,12 +42,12 @@ val slice_bits : forall 'n 'm. slice('n, 'm) -> bits('m)
 function slice_bits MkSlice(_, xs) = xs
 
 /* Take a slice from a bitvector */
-val vector_slice : forall 'n 'm 'o, 0 <= 'm <= 'o <= 'n.
+val vector_slice : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n.
   (bits('n), atom('o), atom('m)) -> slice('m, 'o - ('m - 1))
 
 function vector_slice (v, to, from) = MkSlice(from, v[to .. from])
 
-val slice_slice : forall 'n 'm 'o 'p, 'm <= 'o & 'o - 'p <= 'n.
+val slice_slice : forall 'n 'm 'o 'p, 0 <= 'p <= 'm <= 'o & 'o - 'p < 'n.
   (slice('p, 'n), atom('o), atom('m)) -> slice('m, 'o - ('m - 1))
 
 function slice_slice (MkSlice(start, v), to, from) = MkSlice(from, v[to - start .. from - start])
