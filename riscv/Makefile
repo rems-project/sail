@@ -20,6 +20,9 @@ _sbuild/platform_main.native: _sbuild/riscv.ml _tags $(PLATFORM_OCAML_SRCS) Make
 platform: _sbuild/platform_main.native
 	rm -f $@ && ln -s $^ $@
 
+tracecmp: tracecmp.ml
+	ocamlfind ocamlopt -annot -linkpkg -package unix $^ -o $@
+
 riscv_duopod_ocaml: prelude.sail riscv_duopod.sail
 	$(SAIL) $(SAIL_FLAGS) -ocaml -o $@ $^
 
