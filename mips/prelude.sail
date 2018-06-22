@@ -129,14 +129,14 @@ val __WriteRAM = "write_ram" : forall 'n 'm.
 val __MIPS_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
 function __MIPS_write (addr, width, data) = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
 
-val __ReadRAM = "read_ram" : forall 'n 'm.
+val __ReadRAM = "read_ram" : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __MIPS_read : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
+val __MIPS_read : forall 'n, 'n >= 0. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
 function __MIPS_read (addr, width) = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr)
 
 infix 8 ^^
-val operator ^^ = {lem: "replicate_bits"} : forall 'n 'm . (bits('n), atom('m)) -> bits('n * 'm)
+val operator ^^ = {lem: "replicate_bits"} : forall 'n 'm, 'm >= 0 . (bits('n), atom('m)) -> bits('n * 'm)
 function operator ^^ (bs, n) = replicate_bits (bs, n)
 
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
@@ -210,7 +210,7 @@ val operator *_u = "mult_vec" : forall 'n . (bits('n), bits('n)) -> bits(2 * 'n)
 /*!
 \function{to\_bits} converts an integer to a bit vector of given length. If the integer is negative a twos-complement representation is used. If the integer is too large (or too negative) to fit in the requested length then it is truncated to the least significant bits.
 */
-val to_bits : forall 'l.(atom('l), int) -> bits('l)
+val to_bits : forall 'l, 'l >= 0 .(atom('l), int) -> bits('l)
 function to_bits (l, n) = get_slice_int(l, n, 0)
 
 val mask : forall 'm 'n , 'm >= 'n > 0 . bits('m) -> bits('n)

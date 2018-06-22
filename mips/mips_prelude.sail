@@ -331,9 +331,9 @@ function wGPR (idx, v) = {
          if i == 0 then () else GPR[i] = v
 }
 
-val MEMr = {lem: "MEMr"} : forall 'n.
+val MEMr = {lem: "MEMr"} : forall 'n, 'n >= 0.
   ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
-val MEMr_reserve = {lem: "MEMr_reserve"} : forall 'n.
+val MEMr_reserve = {lem: "MEMr_reserve"} : forall 'n, 'n >= 0.
   ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
 val MEM_sync = {lem: "MEM_sync"} :
   unit -> unit effect { barr }
