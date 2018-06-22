@@ -42,9 +42,8 @@ function fetch() -> FetchResult = {
 }
 
 /* returns whether an instruction was retired */
-val step : unit -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
-function step() = {
-  let step_no = unsigned(minstret);
+val step : int -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
+function step(step_no) = {
   match curInterrupt(mip, mie, mideleg) {
     Some(intr, priv) => {
       print_bits("Handling interrupt: ", intr);
@@ -94,12 +93,15 @@ val loop : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wre
 function loop () = {
   let insns_per_tick = plat_insns_per_tick();
   i : int = 0;
+  step_no : int = 0;
   while true do {
     tick_clock();
     minstret_written = false;     /* see note for minstret */
-    let retired = step();
+    let retired = step(step_no);
     PC = nextPC;
     if retired then retire_instruction();
+
+    step_no = step_no + 1;
 
     /* check htif exit */
     if htif_done then {

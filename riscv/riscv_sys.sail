@@ -613,7 +613,8 @@ function is_CSR_defined (csr : bits(12), p : Privilege) -> bool =
     0x344 => p == Machine, // mip
 
     0x3A0 => p == Machine, // pmpcfg0
-    0x3B0 => p == Machine, // pmpaddr0
+    0x3B0 => false, // (Disabled for Spike compatibility)
+//  0x3B0 => p == Machine, // pmpaddr0
 
     /* supervisor mode: trap setup */
     0x100 => p == Machine | p == Supervisor, // sstatus
@@ -786,6 +787,8 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        cur_privilege   = del_priv;
 
+       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+
        match tvec_addr(mtvec, mcause) {
          Some(epc) => epc,
          None()    => internal_error("Invalid mtvec mode")
@@ -806,6 +809,8 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
        sepc            = pc;
 
        cur_privilege   = del_priv;
+
+       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
 
        match tvec_addr(stvec, scause) {
          Some(epc) => epc,
@@ -832,6 +837,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       mstatus->MPIE() = true;
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
+
+      print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
       mepc
     },
@@ -841,6 +848,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       mstatus->SPIE() = true;
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
       mstatus->SPP()  = false;
+
+      print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
       sepc
     }
