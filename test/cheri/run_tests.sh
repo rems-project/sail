@@ -47,7 +47,23 @@ SAILLIBDIR="$DIR/../../lib/"
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
-cd $SAILDIR/riscv
+printf "Building MIPS specification...\n"
+
+if make -C $SAILDIR/mips mips ;
+then
+    green "Building MIPS specification" "ok"
+else
+    red "Building MIPS specification" "fail"
+fi
+
+printf "Building MIPS_C specification...\n"
+
+if make -C $SAILDIR/mips mips_c ;
+then
+    green "Building MIPS_C specification" "ok"
+else
+    red "Building MIPS_C specification" "fail"
+fi
 
 printf "Building CHERI 256 specification...\n"
 
