@@ -29,6 +29,10 @@ mips.lem: $(MIPS_PRE) $(SAIL_LIB_DIR)/mono_rewrites.sail $(MIPS_TLB) $(MIPS_SAIL
 	$(SAIL) -lem -o mips -auto_mono -mono_rewrites -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^
 mips_types.lem: mips.lem
 
+mips.v: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS)
+	$(SAIL) -coq -dcoq_undef_axioms -o mips -coq_lib mips_extras -undefined_gen -memo_z3 $^
+mips_types.v: mips.v
+
 M%.thy: m%.lem m%_types.lem mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' M$*_types.thy
@@ -45,4 +49,5 @@ include ../etc/loc.mk
 clean:
 	rm -rf mips Mips.thy mips.lem mips_types.lem _sbuild mips.c mips_c
 	rm -f mipsScript.sml mips_typesScript.sml mips_extrasScript.sml
+	rm -f mips.v mips_types.v
 	-Holmake cleanAll
