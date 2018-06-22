@@ -17,6 +17,3 @@ let undefined_bitvector len = return (zeros(len))
 
 val undefined_unit : forall 'rv 'e. unit -> monad 'rv unit 'e
 let undefined_unit () = return ()
-
-val internal_pick : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
-let internal_pick xs = return (List_extra.head xs)

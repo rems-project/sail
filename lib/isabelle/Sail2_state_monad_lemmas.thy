@@ -35,6 +35,9 @@ lemma bindS_updateS: "bindS (updateS f) m = (\<lambda>s. m () (f s))"
 lemma bindS_assertS_True[simp]: "bindS (assert_expS True msg) f = f ()"
   by (auto simp: assert_expS_def)
 
+lemma bindS_chooseS_returnS[simp]: "bindS (chooseS xs) (\<lambda>x. returnS (f x)) = chooseS (f ` xs)"
+  by (intro ext) (auto simp: bindS_def chooseS_def returnS_def)
+
 
 lemma result_cases:
   fixes r :: "('a, 'e) result"

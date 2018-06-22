@@ -168,8 +168,8 @@ following variants:
   \<^item> @{term quot_vec_maybe} returns an option type, with
     @{lemma "quot_vec_maybe w 0 = None" by (auto simp: quot_vec_maybe_def quot_bv_def arith_op_bv_no0_def)}.
   \<^item> @{term quot_vec_fail} is monadic and either returns the result or raises an exception.
-  \<^item> @{term quot_vec_oracle} is monadic and uses the @{term Undefined} effect in the exception case
-    to fill the result with bits drawn from a bitstream oracle.
+  \<^item> @{term quot_vec_nondet} is monadic and uses the @{term Undefined} effect in the exception case
+    to fill the result with bits chosen nondeterministically.
   \<^item> @{term quot_vec} is pure and returns an arbitrary (but fixed) value in the exception case,
     currently defined as follows:  For the bitlist representation of bitvectors,
     @{term "quot_vec w 0"} returns a list filled with @{term BU}, while for the machine word
@@ -263,9 +263,6 @@ The @{type sequential_state} record has the following fields:
     of the last announced memory write, if any.
   \<^item> The @{term last_exclusive_operation_was_load} flag is used to determine whether exclusive
     operations can succeed.
-  \<^item> The function stored in the @{term next_bool} field together with the seed in the @{term seed}
-    field are used as a random bit generator for undefined values.  The @{term next_bool}
-    function takes the current seed as an argument and returns a @{type bool} and the next seed.
 
 The library defines several combinators and wrappers in addition to the standard monadic bind and
 return (called @{term bindS} and @{term returnS} here, where the suffix @{term S} differentiates them

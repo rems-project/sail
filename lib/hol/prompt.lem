@@ -3,12 +3,12 @@ open import State_monad
 open import State
 
 let inline undefined_bool = undefined_boolS
-let inline bool_of_bitU_oracle = bool_of_bitU_oracleS
+let inline bool_of_bitU_nondet = bool_of_bitU_nondetS
 let inline bool_of_bitU_fail = bool_of_bitU_fail
-let inline bools_of_bits_oracle = bools_of_bits_oracleS
-let inline of_bits_oracle = of_bits_oracleS
+let inline bools_of_bits_nondet = bools_of_bits_nondetS
+let inline of_bits_nondet = of_bits_nondetS
 let inline of_bits_fail = of_bits_failS
-let inline mword_oracle = mword_oracleS
+let inline mword_nondet = mword_nondetS
 let inline reg_deref = read_regS
 
 let inline foreachM = foreachS

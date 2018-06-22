@@ -363,4 +363,24 @@ lemma PrePostE_foreachS_invariant:
   using assms unfolding PrePostE_def
   by (intro PrePost_foreachS_invariant[THEN PrePost_strengthen_pre]) auto
 
+lemma PrePostE_bool_of_bitU_nondetS_any:
+  "PrePostE (\<lambda>s. \<forall>b. Q b s) (bool_of_bitU_nondetS b) Q E"
+  unfolding bool_of_bitU_nondetS_def undefined_boolS_def
+  by (cases b; simp; rule PrePostE_strengthen_pre, rule PrePostE_atomI) auto
+
+lemma PrePostE_bools_of_bits_nondetS_any:
+  "PrePostE (\<lambda>s. \<forall>bs. Q bs s) (bools_of_bits_nondetS bs) Q E"
+  unfolding bools_of_bits_nondetS_def
+  by (rule PrePostE_weaken_post[where B = "\<lambda>_ s. \<forall>bs. Q bs s"], rule PrePostE_strengthen_pre,
+      (rule PrePostE_foreachS_invariant[OF PrePostE_strengthen_pre] PrePostE_bindS PrePostE_returnS
+            PrePostE_bool_of_bitU_nondetS_any)+)
+     auto
+
+lemma PrePostE_internal_pick:
+  "xs \<noteq> [] \<Longrightarrow> PrePostE (\<lambda>s. \<forall>x \<in> set xs. Q x s) (internal_pickS xs) Q E"
+  unfolding internal_pickS_def Let_def
+  by (rule PrePostE_strengthen_pre,
+      (rule PrePostE_compositeI PrePostE_atomI PrePostE_bools_of_bits_nondetS_any)+)
+     (auto split: option.splits)
+
 end

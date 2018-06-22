@@ -23,6 +23,22 @@ lemma Value_liftState_Run:
 
 lemmas liftState_if_distrib[liftState_simp] = if_distrib[where f = "liftState ra" for ra]
 
+lemma member_set_nth:
+  assumes "x \<in> set xs"
+  obtains n where "x = xs ! n" and "n < length xs"
+proof (use assms in \<open>induction xs arbitrary: thesis\<close>)
+  case (Cons a xs) print_cases
+  show ?case proof cases
+    assume "x = a"
+    then show ?thesis using Cons(2)[where n = 0] Cons(3) by auto
+  next
+    assume "x \<noteq> a"
+    then obtain n where "x = xs ! n" and "n < length xs" using Cons by auto
+    then show ?thesis using Cons(2)[of "Suc n"] by auto
+  qed
+qed auto
+
+
 lemma liftState_throw[liftState_simp]: "liftState r (throw e) = throwS e"
   by (auto simp: throw_def)
 lemma liftState_assert[liftState_simp]: "liftState r (assert_exp c msg) = assert_expS c msg"
@@ -66,6 +82,10 @@ lemma liftState_try_catchR[liftState_simp]:
   "liftState r (try_catchR m h) = try_catchRS (liftState r m) (liftState r \<circ> h)"
   by (auto simp: try_catchR_def try_catchRS_def sum.case_distrib liftState_simp cong: sum.case_cong)
 
+lemma liftState_bool_of_bitU_nondet[liftState_simp]:
+  "liftState r (bool_of_bitU_nondet b) = bool_of_bitU_nondetS b"
+  by (cases b; auto simp: bool_of_bitU_nondet_def bool_of_bitU_nondetS_def liftState_simp)
+
 lemma liftState_read_mem_BC:
   assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
   shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
@@ -87,7 +107,7 @@ lemma liftState_write_mem_ea[liftState_simp]:
   "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = write_mem_eaS BC_bitU_list rk a (nat sz)"
   by (auto simp: liftState_write_mem_ea_BC)
 
-lemma liftState_write_mem_val:
+lemma liftState_write_mem_val[liftState_simp]:
   "liftState r (write_mem_val BC v) = write_mem_valS BC v"
   by (auto simp: write_mem_val_def write_mem_valS_def liftState_simp split: option.splits)
 
@@ -125,6 +145,18 @@ lemma liftState_foreachM[liftState_simp]:
   "liftState r (foreachM xs vars body) = foreachS xs vars (\<lambda>x vars. liftState r (body x vars))"
   by (induction xs vars "\<lambda>x vars. liftState r (body x vars)" rule: foreachS.induct)
      (auto simp: liftState_simp cong: bindS_cong)
+
+lemma liftState_bools_of_bits_nondet[liftState_simp]:
+  "liftState r (bools_of_bits_nondet bs) = bools_of_bits_nondetS bs"
+  unfolding bools_of_bits_nondet_def bools_of_bits_nondetS_def
+  by (auto simp: liftState_simp comp_def)
+
+lemma liftState_internal_pick[liftState_simp]:
+  "liftState r (internal_pick xs) = internal_pickS xs"
+  by (auto simp: internal_pick_def internal_pickS_def liftState_simp comp_def
+                 option.case_distrib[where h = "liftState r"]
+           simp del: repeat.simps
+           cong: option.case_cong)
 
 lemma whileS_dom_step:
   assumes "whileS_dom (vars, cond, body, s)"

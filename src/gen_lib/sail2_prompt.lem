@@ -51,31 +51,31 @@ let bool_of_bitU_fail = function
   | BU -> Fail "bool_of_bitU"
 end
 
-val bool_of_bitU_oracle : forall 'rv 'e. bitU -> monad 'rv bool 'e
-let bool_of_bitU_oracle = function
+val bool_of_bitU_nondet : forall 'rv 'e. bitU -> monad 'rv bool 'e
+let bool_of_bitU_nondet = function
   | B0 -> return false
   | B1 -> return true
   | BU -> undefined_bool ()
 end
 
-val bools_of_bits_oracle : forall 'rv 'e. list bitU -> monad 'rv (list bool) 'e
-let bools_of_bits_oracle bits =
+val bools_of_bits_nondet : forall 'rv 'e. list bitU -> monad 'rv (list bool) 'e
+let bools_of_bits_nondet bits =
   foreachM bits []
     (fun b bools ->
-      bool_of_bitU_oracle b >>= (fun b ->
+      bool_of_bitU_nondet b >>= (fun b ->
       return (bools ++ [b])))
 
-val of_bits_oracle : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
-let of_bits_oracle bits =
-  bools_of_bits_oracle bits >>= (fun bs ->
+val of_bits_nondet : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
+let of_bits_nondet bits =
+  bools_of_bits_nondet bits >>= (fun bs ->
   return (of_bools bs))
 
 val of_bits_fail : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
 let of_bits_fail bits = maybe_fail "of_bits" (of_bits bits)
 
-val mword_oracle : forall 'rv 'a 'e. Size 'a => unit -> monad 'rv (mword 'a) 'e
-let mword_oracle () =
-  bools_of_bits_oracle (repeat [BU] (integerFromNat size)) >>= (fun bs ->
+val mword_nondet : forall 'rv 'a 'e. Size 'a => unit -> monad 'rv (mword 'a) 'e
+let mword_nondet () =
+  bools_of_bits_nondet (repeat [BU] (integerFromNat size)) >>= (fun bs ->
   return (wordFromBitlist bs))
 
 val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
@@ -92,6 +92,16 @@ let rec untilM vars cond body =
   body vars >>= fun vars ->
   cond vars >>= fun cond_val ->
   if cond_val then return vars else untilM vars cond body
+
+val internal_pick : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
+let internal_pick xs =
+  (* Use sufficiently many undefined bits and convert into an index into the list *)
+  bools_of_bits_nondet (repeat [BU] (length_list xs)) >>= fun bs ->
+  let idx = (natFromNatural (nat_of_bools bs)) mod List.length xs in
+  match index xs idx with
+    | Just x -> return x
+    | Nothing -> Fail "internal_pick"
+  end
 
 (*let write_two_regs r1 r2 vec =
   let is_inc =

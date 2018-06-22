@@ -64,7 +64,7 @@ inductive_set T :: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a, '
 | Barrier: "((Barrier bk k), e_barrier bk, k) \<in> T"
 | Read_reg: "((Read_reg r k), e_read_reg r v, k v) \<in> T"
 | Write_reg: "((Write_reg r v k), e_write_reg r v, k) \<in> T"
-| Undefined : "((Undefined k), e_undefined v, k v) \<in> T"
+| Undefined: "((Undefined k), e_undefined v, k v) \<in> T"
 | Print: "((Print msg k), e_print msg, k) \<in> T"
 
 inductive_set Traces :: "(('rv, 'a, 'e) monad \<times> 'rv event list \<times> ('rv, 'a, 'e) monad) set" where
@@ -95,7 +95,7 @@ lemma Traces_cases:
   | (Write_ea) wk addr s k t' where "m = Write_ea wk addr s k" and "t = e_write_ea wk addr s # t'" and "(k, t', m') \<in> Traces"
   | (Footprint) k t' where "m = Footprint k" and "t = e_footprint # t'" and "(k, t', m') \<in> Traces"
   | (Write_reg) reg v k t' where "m = Write_reg reg v k" and "t = e_write_reg reg v # t'" and "(k, t', m') \<in> Traces"
-  | (Undefined) v k t' where "m = Undefined k" and "t = e_undefined v # t'" and "(k v, t', m') \<in> Traces"
+  | (Undefined) xs v k t' where "m = Undefined k" and "t = e_undefined v # t'" and "(k v, t', m') \<in> Traces"
   | (Print) msg k t' where "m = Print msg k" and "t = e_print msg # t'" and "(k, t', m') \<in> Traces"
 proof (use Run in \<open>cases m t m' set: Traces\<close>)
   case Nil

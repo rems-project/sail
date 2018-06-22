@@ -2,14 +2,14 @@ theory Sail2_operators_mwords_lemmas
   imports Sail2_operators_mwords
 begin
 
-lemmas uint_simps[simp] = uint_maybe_def uint_fail_def uint_oracle_def
-lemmas sint_simps[simp] = sint_maybe_def sint_fail_def sint_oracle_def
+lemmas uint_simps[simp] = uint_maybe_def uint_fail_def uint_nondet_def
+lemmas sint_simps[simp] = sint_maybe_def sint_fail_def sint_nondet_def
 
-lemma bools_of_bits_oracle_just_list[simp]:
+lemma bools_of_bits_nondet_just_list[simp]:
   assumes "just_list (map bool_of_bitU bus) = Some bs"
-  shows "bools_of_bits_oracle bus = return bs"
+  shows "bools_of_bits_nondet bus = return bs"
 proof -
-  have f: "foreachM bus bools (\<lambda>b bools. bool_of_bitU_oracle b \<bind> (\<lambda>b. return (bools @ [b]))) = return (bools @ bs)"
+  have f: "foreachM bus bools (\<lambda>b bools. bool_of_bitU_nondet b \<bind> (\<lambda>b. return (bools @ [b]))) = return (bools @ bs)"
     if "just_list (map bool_of_bitU bus) = Some bs" for bus bs bools
   proof (use that in \<open>induction bus arbitrary: bs bools\<close>)
     case (Cons bu bus bs)
@@ -17,26 +17,26 @@ proof -
       using Cons.prems by (cases bu) (auto split: option.splits)
     then show ?case
       using Cons.prems Cons.IH[where bs = bs' and bools = "bools @ [b]"]
-      by (cases bu) (auto simp: bool_of_bitU_oracle_def split: option.splits)
+      by (cases bu) (auto simp: bool_of_bitU_nondet_def split: option.splits)
   qed auto
-  then show ?thesis using f[OF assms, of "[]"] unfolding bools_of_bits_oracle_def
+  then show ?thesis using f[OF assms, of "[]"] unfolding bools_of_bits_nondet_def
     by auto
 qed
 
 lemma of_bits_mword_return_of_bl[simp]:
   assumes "just_list (map bool_of_bitU bus) = Some bs"
-  shows "of_bits_oracle BC_mword bus = return (of_bl bs)"
+  shows "of_bits_nondet BC_mword bus = return (of_bl bs)"
     and "of_bits_fail BC_mword bus = return (of_bl bs)"
-  by (auto simp: of_bits_oracle_def of_bits_fail_def maybe_fail_def assms BC_mword_defs)
+  by (auto simp: of_bits_nondet_def of_bits_fail_def maybe_fail_def assms BC_mword_defs)
 
 lemma vec_of_bits_of_bl[simp]:
   assumes "just_list (map bool_of_bitU bus) = Some bs"
   shows "vec_of_bits_maybe bus = Some (of_bl bs)"
     and "vec_of_bits_fail bus = return (of_bl bs)"
-    and "vec_of_bits_oracle bus = return (of_bl bs)"
+    and "vec_of_bits_nondet bus = return (of_bl bs)"
     and "vec_of_bits_failwith bus = of_bl bs"
     and "vec_of_bits bus = of_bl bs"
-  unfolding vec_of_bits_maybe_def vec_of_bits_fail_def vec_of_bits_oracle_def
+  unfolding vec_of_bits_maybe_def vec_of_bits_fail_def vec_of_bits_nondet_def
             vec_of_bits_failwith_def vec_of_bits_def
   by (auto simp: assms)
 
@@ -53,10 +53,10 @@ lemma bool_of_bitU_monadic_simps[simp]:
   "bool_of_bitU_fail B0 = return False"
   "bool_of_bitU_fail B1 = return True"
   "bool_of_bitU_fail BU = Fail ''bool_of_bitU''"
-  "bool_of_bitU_oracle B0 = return False"
-  "bool_of_bitU_oracle B1 = return True"
-  "bool_of_bitU_oracle BU = undefined_bool ()"
-  unfolding bool_of_bitU_fail_def bool_of_bitU_oracle_def
+  "bool_of_bitU_nondet B0 = return False"
+  "bool_of_bitU_nondet B1 = return True"
+  "bool_of_bitU_nondet BU = undefined_bool ()"
+  unfolding bool_of_bitU_fail_def bool_of_bitU_nondet_def
   by auto
 
 lemma update_vec_dec_simps[simp]:
@@ -66,12 +66,12 @@ lemma update_vec_dec_simps[simp]:
   "update_vec_dec_fail w i B0 = return (set_bit w (nat i) False)"
   "update_vec_dec_fail w i B1 = return (set_bit w (nat i) True)"
   "update_vec_dec_fail w i BU = Fail ''bool_of_bitU''"
-  "update_vec_dec_oracle w i B0 = return (set_bit w (nat i) False)"
-  "update_vec_dec_oracle w i B1 = return (set_bit w (nat i) True)"
-  "update_vec_dec_oracle w i BU = undefined_bool () \<bind> (\<lambda>b. return (set_bit w (nat i) b))"
+  "update_vec_dec_nondet w i B0 = return (set_bit w (nat i) False)"
+  "update_vec_dec_nondet w i B1 = return (set_bit w (nat i) True)"
+  "update_vec_dec_nondet w i BU = undefined_bool () \<bind> (\<lambda>b. return (set_bit w (nat i) b))"
   "update_vec_dec w i B0 = set_bit w (nat i) False"
   "update_vec_dec w i B1 = set_bit w (nat i) True"
-  unfolding update_vec_dec_maybe_def update_vec_dec_fail_def update_vec_dec_oracle_def update_vec_dec_def
+  unfolding update_vec_dec_maybe_def update_vec_dec_fail_def update_vec_dec_nondet_def update_vec_dec_def
   by (auto simp: update_mword_dec_def update_mword_bool_dec_def maybe_failwith_def)
 
 lemma len_of_minus_One_minus_nonneg_lt_len_of[simp]:

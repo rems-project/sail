@@ -90,7 +90,6 @@ let shift_bits_right_arith v n =
   maybe_fail "shift_bits_right_arith" r
 
 (* Use constants for undefined values for now *)
-let internal_pick vs = return (head vs)
 let undefined_string () = return ""
 let undefined_unit () = return ()
 let undefined_int () = return (0:ii)
