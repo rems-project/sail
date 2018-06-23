@@ -23,12 +23,17 @@ type inst = {
   inst: int32
 }
 
+type tick = {
+  time : int64
+}
+
 type line =
   | L_none
   | L_inst of inst
   | L_reg_write of reg_write
   | L_csr_read of csr_read
   | L_csr_write of csr_write
+  | L_tick of tick
 
 let inst_count = ref 0
 
@@ -86,7 +91,7 @@ let parse_sail_inst l =
   try Scanf.sscanf l " [%u] [%c]: 0x%Lx (0x%lx) %s"
                    (fun count  priv  pc inst _ ->
                     inst_count := count;
-                    L_inst { count; priv; pc; inst } )
+                    L_inst { count; priv; pc; inst })
   with
     | Scanf.Scan_failure _ -> L_none
     | End_of_file -> L_none
@@ -99,10 +104,24 @@ let parse_spike_inst l =
   try Scanf.sscanf l " [%u] core   0 [%c]: 0x%Lx (0x%lx) %s"
                    (fun count  priv  pc inst _ ->
                     inst_count := count;
-                    L_inst { count; priv; pc; inst } )
+                    L_inst { count; priv; pc; inst })
   with
     | Scanf.Scan_failure _ -> L_none
     | End_of_file -> L_none
+
+(* clock tick
+   clint::tick mtime <- 0x1
+ *)
+
+let parse_tick l =
+  try Scanf.sscanf l " clint::tick mtime <- 0x%Lx"
+                   (fun time -> L_tick { time })
+  with
+    | Scanf.Scan_failure _ -> L_none
+    | End_of_file -> L_none
+
+let sprint_tick t =
+  Printf.sprintf "clint::tick mtime <- 0x%Lx" t.time
 
 (* scanners *)
 
@@ -111,7 +130,8 @@ let popt p l = function
   | res -> res
 
 let parse_line l =
-  parse_csr_read l |> popt parse_csr_write l |> popt parse_reg_write l
+  parse_csr_read l |> popt parse_csr_write l
+  |> popt parse_reg_write l |> popt parse_tick l
 
 let parse_sail_line l =
   parse_line l |> popt parse_sail_inst l
@@ -126,6 +146,7 @@ let sprint_line = function
   | L_reg_write r -> Printf.sprintf "<%d> %s" !inst_count (sprint_reg_write r)
   | L_csr_read  r -> Printf.sprintf "<%d> %s" !inst_count (sprint_csr_read r)
   | L_csr_write r -> Printf.sprintf "<%d> %s" !inst_count (sprint_csr_write r)
+  | L_tick t      -> Printf.sprintf "<%d> %s" !inst_count (sprint_tick t)
 
 (* file processing *)
 
