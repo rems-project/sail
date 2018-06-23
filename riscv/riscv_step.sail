@@ -95,7 +95,6 @@ function loop () = {
   i : int = 0;
   step_no : int = 0;
   while true do {
-    tick_clock();
     minstret_written = false;     /* see note for minstret */
     let retired = step(step_no);
     PC = nextPC;

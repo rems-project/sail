@@ -51,7 +51,8 @@
 open Elf_loader
 open Sail_lib
 open Riscv
-module P = Platform_impl
+module PI = Platform_impl
+module P = Platform
 
 (* OCaml driver for generated RISC-V model. *)
 
@@ -66,6 +67,9 @@ let options = Arg.align ([("-dump-dts",
                           ("-dump-dtb",
                            Arg.Set opt_dump_dtb,
                            " dump the *binary* platform device-tree blob to stdout");
+                          ("-enable-dirty-update",
+                           Arg.Set P.config_enable_dirty_update,
+                           " enable dirty-bit update during page-table walks")
                          ])
 
 let usage_msg = "RISC-V platform options:"
@@ -73,8 +77,8 @@ let usage_msg = "RISC-V platform options:"
 let elf_arg =
   Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s])
             usage_msg;
-  if !opt_dump_dts then (P.dump_dts (); exit 0);
-  if !opt_dump_dtb then (P.dump_dtb (); exit 0);
+  if !opt_dump_dts then (PI.dump_dts (); exit 0);
+  if !opt_dump_dtb then (PI.dump_dtb (); exit 0);
   ( match !opt_file_arguments with
       | f :: _ -> prerr_endline ("Sail/RISC-V: running ELF file " ^ f); f
       | _ -> (prerr_endline "Please provide an ELF file."; exit 0)

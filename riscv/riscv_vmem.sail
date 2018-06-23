@@ -257,8 +257,6 @@ union TR39_Result = {
   TR39_Failure : PTW_Error
 }
 
-let enable_dirty_update = false
-
 val translate39 : (vaddr39, AccessType, Privilege, bool, bool, nat) -> TR39_Result effect {rreg, wreg, wmv, escape, rmem}
 function translate39(vAddr, ac, priv, mxr, do_sum, level) = {
   let asid = curAsid64();
@@ -271,7 +269,7 @@ function translate39(vAddr, ac, priv, mxr, do_sum, level) = {
         match update_PTE_Bits(pteBits, ac) {
           None() => TR39_Address(ent.pAddr | EXTZ(vAddr & ent.vAddrMask)),
           Some(pbits) => {
-            if ~ (enable_dirty_update)
+            if ~ (plat_enable_dirty_update ())
             then {
               /* pte needs dirty/accessed update but that is not enabled */
               TR39_Failure(PTW_PTE_Update)
@@ -301,7 +299,7 @@ function translate39(vAddr, ac, priv, mxr, do_sum, level) = {
               TR39_Address(pAddr)
             },
             Some(pbits) =>
-              if ~ (enable_dirty_update)
+              if ~ (plat_enable_dirty_update ())
               then {
                 /* pte needs dirty/accessed update but that is not enabled */
                 TR39_Failure(PTW_PTE_Update)

@@ -10,6 +10,9 @@
 val plat_ram_base = {ocaml: "Platform.dram_base", lem: "plat_ram_base"} : unit -> xlenbits
 val plat_ram_size = {ocaml: "Platform.dram_size", lem: "plat_ram_size"} : unit -> xlenbits
 
+/* whether the MMU should update dirty bits in PTEs */
+val plat_enable_dirty_update = {ocaml: "Platform.enable_dirty_update", lem: "plat_enable_dirty_update"} : unit -> bool
+
 /* ROM holding reset vector and device-tree DTB */
 val plat_rom_base = {ocaml: "Platform.rom_base", lem: "plat_rom_base"} : unit -> xlenbits
 val plat_rom_size = {ocaml: "Platform.rom_size", lem: "plat_rom_size"} : unit -> xlenbits

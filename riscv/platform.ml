@@ -52,6 +52,9 @@ open Sail_lib;;
 module P = Platform_impl;;
 module Elf = Elf_loader;;
 
+(* Platform configuration *)
+let config_enable_dirty_update = ref false
+
 (* Mapping to Sail externs *)
 
 let bits_of_int i =
@@ -74,6 +77,8 @@ let make_rom start_pc =
                ) rom;
      *)
     rom )
+
+let enable_dirty_update () = !config_enable_dirty_update
 
 let rom_base () = bits_of_int64 P.rom_base
 let rom_size () = bits_of_int   !rom_size_ref
