@@ -67,6 +67,9 @@ val opt_no_effects : bool ref
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
+(** Note: Partial function -- fails for Unknown lvars *)
+val lvar_typ : lvar -> typ
+  
 (** {2 Type errors} *)
 
 type type_error =

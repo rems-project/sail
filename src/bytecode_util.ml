@@ -116,6 +116,20 @@ let iraw ?loc:(l=Parse_ast.Unknown) str =
 let ijump ?loc:(l=Parse_ast.Unknown) cval label =
   I_aux (I_jump (cval, label), (instr_number (), l))
 
+let rec frag_rename from_id to_id = function
+  | F_id id when Id.compare id from_id = 0 -> F_id to_id
+  | F_id id -> F_id id
+  | F_ref id when Id.compare id from_id = 0 -> F_ref to_id
+  | F_ref id -> F_ref id
+  | F_lit v -> F_lit v
+  | F_have_exception -> F_have_exception
+  | F_current_exception -> F_current_exception
+  | F_call (call, frags) -> F_call (call, List.map (frag_rename from_id to_id) frags)
+  | F_op (f1, op, f2) -> F_op (frag_rename from_id to_id f1, op, frag_rename from_id to_id f2)
+  | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
+  | F_field (f, field) -> F_field (frag_rename from_id to_id f, field)
+  | F_raw raw -> F_raw raw
+
 (**************************************************************************)
 (* 1. Instruction pretty printer                                          *)
 (**************************************************************************)

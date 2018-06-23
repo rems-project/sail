@@ -80,6 +80,12 @@ let typ_debug m = if !opt_tc_debug > 1 then prerr_endline (indent !depth ^ Lazy.
 
 let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ Lazy.force m) else ()
 
+let lvar_typ = function
+  | Local (_, typ) -> typ
+  | Register typ -> typ
+  | Enum typ -> typ
+  | _ -> assert false
+                
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
