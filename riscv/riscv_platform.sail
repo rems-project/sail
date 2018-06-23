@@ -102,16 +102,30 @@ function clint_load(addr, width) = {
   }
 }
 
-val clint_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wreg}
+function clint_dispatch() -> unit = {
+  print("clint::tick mtime <- " ^ BitStr(mtime));
+  mip->MTI() = false;
+  if mtimecmp <_u mtime & mtimecmp != EXTZ(0b0) then {
+    print(" firing clint timer at mtime " ^ BitStr(mtime));
+    mip->MTI() = true
+  };
+  if mtimecmp != EXTZ(0b0) & mtimecmp != EXTS(0b1) then
+    print(" mtime=" ^ BitStr(mtime) ^ "  mtimecmp=" ^ BitStr(mtimecmp));
+}
+
+/* The rreg effect is due to checking mtime. */
+val clint_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {rreg,wreg}
 function clint_store(addr, width, data) = {
   let addr = addr - plat_clint_base ();
   if addr == MSIP_BASE & ('n == 8 | 'n == 4) then {
     print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (mip.MSI <- " ^ BitStr(data[0]) ^ ")");
     mip->MSI() = data[0] == 0b1;
+    clint_dispatch();
     MemValue(())
   } else if addr == MTIMECMP_BASE & 'n == 8 then {
     print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (mtimecmp)");
     mtimecmp = zero_extend(data, 64); /* FIXME: Redundant zero_extend currently required by Lem backend */
+    clint_dispatch();
     MemValue(())
   } else {
     print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (<unmapped>)");
@@ -123,13 +137,7 @@ val tick_clock : unit -> unit effect {rreg, wreg}
 function tick_clock() = {
   mcycle = mcycle + 1;
   mtime  = mtime  + 1;
-  mip->MTI() = false;
-  if mtimecmp <_u mtime & mtimecmp != EXTZ(0b0) then {
-    print(" firing clint timer at mtime " ^ BitStr(mtime));
-    mip->MTI() = true
-  };
-  if mtimecmp != EXTZ(0b0) & mtimecmp != EXTS(0b1) then
-    print(" mtime=" ^ BitStr(mtime) ^ "  mtimecmp=" ^ BitStr(mtimecmp));
+  clint_dispatch()
 }
 
 /* Basic terminal character I/O. */

@@ -115,8 +115,8 @@ function MEMval_conditional                (addr, width, data) = phys_mem_write(
 function MEMval_conditional_release        (addr, width, data) = phys_mem_write(addr, width, data)
 function MEMval_conditional_strong_release (addr, width, data) = phys_mem_write(addr, width, data)
 
-/* NOTE: The wreg effect is due to MMIO. */
-val mem_write_value : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(unit) effect {wmv, wreg, escape}
+/* NOTE: The wreg effect is due to MMIO, the rreg is due to checking mtime. */
+val mem_write_value : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(unit) effect {wmv, rreg, wreg, escape}
 
 function mem_write_value (addr, width, value, aq, rl, con) = {
   if (rl | con) & (~ (is_aligned_addr(addr, width)))
