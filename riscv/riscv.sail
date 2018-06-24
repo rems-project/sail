@@ -1101,7 +1101,7 @@ function readCSR csr : csreg -> xlenbits =
     0x3B0 => pmpaddr0,
 
     /* supervisor mode */
-    0x100 => mstatus.bits(), /* FIXME: legalize view*/
+    0x100 => lower_mstatus(mstatus).bits(),
     0x102 => sedeleg.bits(),
     0x103 => sideleg.bits(),
     0x104 => lower_mie(mie, mideleg).bits(),
