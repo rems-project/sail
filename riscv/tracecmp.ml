@@ -167,6 +167,21 @@ let rec print_lines ch parse =
                  print_lines ch parse)
 
 
+let lines_matched k l =
+  match k, l with
+    (* Special case for CSR writes to sie/sip/sstatus, since spike
+     * does a recursive call which messes the trace log.  For these
+     * registers, we just match the final written value, and need to
+     * unfortunately ignore the input value.
+     *)
+    | L_csr_write kw, L_csr_write lw ->
+          if   (   (kw.csrw = "mie"     && lw.csrw = "sie")
+                || (kw.csrw = "mip"     && lw.csrw = "sip")
+                || (kw.csrw = "mstatus" && lw.csrw = "sstatus"))
+          then kw.wrval = lw.wrval
+          else kw = lw
+    | _, _ ->   k = l
+
 let rec compare_traces k l cnt =
   let kro = get_line k parse_spike_line in
   let lro = get_line l parse_sail_line in
@@ -182,11 +197,11 @@ let rec compare_traces k l cnt =
           print_endline  "Sail:  not reached";
           exit 1
     | kr, lr ->
-          if kr <> lr
-          then ( print_endline ("Spike: " ^ sprint_line kr);
-                 print_endline ("Sail:  " ^ sprint_line lr);
-                 exit 1 )
-          else compare_traces k l (cnt + 1)
+          if   lines_matched kr lr
+          then compare_traces k l (cnt + 1)
+          else (print_endline ("Spike: " ^ sprint_line kr);
+                print_endline ("Sail:  " ^ sprint_line lr);
+                exit 1)
 
 let spike_log  = ref (None : string option)
 let sail_log   = ref (None : string option)
