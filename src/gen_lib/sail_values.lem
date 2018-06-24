@@ -111,7 +111,18 @@ let showVector (Vector elems start inc) =
 let get_dir (Vector _ _ ord) = ord
 let get_start (Vector _ s _) = s
 let get_elems (Vector elems _ _) = elems
-let length (Vector bs _ _) = integerFromNat (length bs)
+
+let rec list_length_aux (acc : nat) xs =
+  match xs with
+  | [] -> acc
+  | x :: xs -> list_length_aux (acc + 1) xs
+  end
+
+let list_length xs = list_length_aux 0 xs
+
+
+
+let length (Vector bs _ _) = integerFromNat (list_length bs)
 
 instance forall 'a. Show 'a => (Show (vector 'a))
   let show = showVector
@@ -170,7 +181,7 @@ let slice_raw (Vector bs start is_inc) i j =
   let iN = natFromInteger i in
   let jN = natFromInteger j in
   let bits = sublist bs (iN,jN) in
-  let len = integerFromNat (List.length bits) in
+  let len = integerFromNat (list_length bits) in
   Vector bits (if is_inc then 0 else len - 1) is_inc
 
 
@@ -339,7 +350,7 @@ let add_one_bit_ignore_overflow bits =
 let to_vec is_inc ((len : integer),(n : integer)) =
   let start = if is_inc then 0 else len - 1 in
   let bits = to_bin (naturalFromInteger (abs n)) in
-  let len_bits = integerFromNat (List.length bits) in
+  let len_bits = integerFromNat (list_length bits) in
   let longer = len - len_bits in
   let bits' =
     if longer < 0 then drop (natFromInteger (abs (longer))) bits
@@ -535,11 +546,11 @@ let shift_op_vec op (Vector bs start is_inc,(n : integer)) =
   let n = natFromInteger n in
   match op with
   | LL_shift (*"<<"*) ->
-     Vector (sublist bs (n,List.length bs -1) ++ List.replicate n B0) start is_inc
+     Vector (sublist bs (n,list_length bs -1) ++ List.replicate n B0) start is_inc
   | RR_shift (*">>"*) ->
      Vector (List.replicate n B0 ++ sublist bs (0,n-1)) start is_inc
   | LLL_shift (*"<<<"*) ->
-     Vector (sublist bs (n,List.length bs - 1) ++ sublist bs (0,n-1)) start is_inc
+     Vector (sublist bs (n,list_length bs - 1) ++ sublist bs (0,n-1)) start is_inc
   end
 
 let bitwise_leftshift = shift_op_vec LL_shift (*"<<"*)
@@ -683,7 +694,7 @@ let make_bitvector_undef length =
 (* let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n) *)
 
 let mask (n,Vector bits start dir) =
-  let current_size = List.length bits in
+  let current_size = list_length bits in
   Vector (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
 
 
@@ -697,20 +708,39 @@ end
 val bitv_of_byte_lifteds : bool -> list Sail_impl_base.byte_lifted -> vector bitU
 let bitv_of_byte_lifteds dir v =
   let bits = foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v in
-  let len = integerFromNat (List.length bits) in
+  let len = integerFromNat (list_length bits) in
   Vector bits (if dir then 0 else len - 1) dir
 
 val bitv_of_bytes : bool -> list Sail_impl_base.byte -> vector bitU
 let bitv_of_bytes dir v =
   let bits = foldl (fun x (Byte y) -> x ++ (List.map bitU_of_bit y)) [] v in
-  let len = integerFromNat (List.length bits) in
+  let len = integerFromNat (list_length bits) in
   Vector bits (if dir then 0 else len - 1) dir
 
 
-val byte_lifteds_of_bitv : vector bitU -> list byte_lifted
-let byte_lifteds_of_bitv (Vector bits length is_inc) =
-  let bits = List.map bit_lifted_of_bitU bits in
-  byte_lifteds_of_bit_lifteds bits
+(* val byte_lifteds_of_bitv : vector bitU -> list byte_lifted
+ * let byte_lifteds_of_bitv (Vector bits length is_inc) =
+ *   let bits = List.map bit_lifted_of_bitU bits in
+ *   byte_lifteds_of_bit_lifteds bits *)
+
+val byte_lifteds_of_bitv_aux : list bitU -> list byte_lifted
+let rec byte_lifteds_of_bitv_aux bits =
+  match bits with
+  | [] -> []
+  | b0::b1::b2::b3::b4::b5::b6::b7::bits -> 
+     (Byte_lifted [bit_lifted_of_bitU b0;
+                   bit_lifted_of_bitU b1;
+                   bit_lifted_of_bitU b2;
+                   bit_lifted_of_bitU b3;
+                   bit_lifted_of_bitU b4;
+                   bit_lifted_of_bitU b5;
+                   bit_lifted_of_bitU b6;
+                   bit_lifted_of_bitU b7])::(byte_lifteds_of_bitv_aux bits)
+  | _ -> failwith "byte_lifteds of bit_lifteds not given bits divisible by 8"
+end
+
+let byte_lifteds_of_bitv (Vector bits _ _ ) = byte_lifteds_of_bitv_aux bits
+
 
 val bytes_of_bitv : vector bitU -> list byte
 let bytes_of_bitv (Vector bits length is_inc) =
