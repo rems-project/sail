@@ -229,17 +229,29 @@ let bitwise_and = bitwise_binop (&&)
 let bitwise_or = bitwise_binop (||)
 let bitwise_xor = bitwise_binop xor
 
-let unsigned (Vector bs _ _) : integer =
-  let (sum,_) =
-    List.foldr
-      (fun b (acc,exp) ->
-        match b with
-        | B1 -> (acc + integerPow 2 exp,exp + 1)
-        | B0 -> (acc, exp + 1)
-        | BU -> failwith "unsigned: vector has undefined bits"
-        end)
-      (0,0) bs in
-  sum
+val unsigned_of_bools_aux : integer -> list bitU -> integer
+let rec unsigned_of_bools_aux acc bs = match bs with
+  | [] -> acc
+  | B1 :: bs -> unsigned_of_bools_aux ((2 * acc) + 1) bs
+  | B0 :: bs -> unsigned_of_bools_aux (2 * acc) bs
+  | BU :: _ -> failwith "unsigned_of_bools with undefined bit"
+end
+let inline unsigned_of_bools = unsigned_of_bools_aux 0
+
+let unsigned (Vector bs _ _) = unsigned_of_bools bs
+
+
+(* let unsigned (Vector bs _ _) : integer =
+ *   let (sum,_) =
+ *     List.foldr
+ *       (fun b (acc,exp) ->
+ *         match b with
+ *         | B1 -> (acc + integerPow 2 exp,exp + 1)
+ *         | B0 -> (acc, exp + 1)
+ *         | BU -> failwith "unsigned: vector has undefined bits"
+ *         end)
+ *       (0,0) bs in
+ *   sum *)
 
 let unsigned_big = unsigned
 
