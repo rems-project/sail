@@ -1061,6 +1061,25 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
 and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
   if id1 = id2 then subsumes_pat pat1 pat2 else None
 
+(* A simple check for pattern disjointness; used for optimisation in the
+   guarded pattern rewrite step *)
+let rec disjoint_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
+  match p1, p2 with
+  | P_as (pat1, _), _ -> disjoint_pat pat1 pat2
+  | _, P_as (pat2, _) -> disjoint_pat pat1 pat2
+  | P_typ (_, pat1), _ -> disjoint_pat pat1 pat2
+  | _, P_typ (_, pat2) -> disjoint_pat pat1 pat2
+  | P_var (pat1, _), _ -> disjoint_pat pat1 pat2
+  | _, P_var (pat2, _) -> disjoint_pat pat1 pat2
+  | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
+  | P_app (id1, args1), P_app (id2, args2) ->
+     Id.compare id1 id2 <> 0 || List.exists2 disjoint_pat args1 args2
+  | P_vector pats1, P_vector pats2
+  | P_tup pats1, P_tup pats2
+  | P_list pats1, P_list pats2 ->
+     List.exists2 disjoint_pat pats1 pats2
+  | _ -> false
+
 let equiv_pats pat1 pat2 =
   match subsumes_pat pat1 pat2, subsumes_pat pat2 pat1 with
   | Some _, Some _ -> true
@@ -1113,7 +1132,7 @@ let case_exp e t cs =
     fix_eff_exp (annot_exp (E_case (e,ps)) l env t)
 
 let rewrite_guarded_clauses l cs =
-  let rec group clauses =
+  let rec group fallthrough clauses =
     let add_clause (pat,cls,annot) c = (pat,cls @ [c],annot) in
     let rec group_aux current acc = (function
       | ((pat,guard,body,annot) as c) :: cs ->
@@ -1137,32 +1156,43 @@ let rewrite_guarded_clauses l cs =
       | _ ->
           raise (Reporting_basic.err_unreachable l
             "group given empty list in rewrite_guarded_clauses") in
-    List.map (fun cs -> if_pexp cs) groups
-  and if_pexp (pat,cs,annot) = (match cs with
+    let add_group cs groups = (if_pexp (groups @ fallthrough) cs) :: groups in
+    List.fold_right add_group groups []
+  and if_pexp fallthrough (pat,cs,annot) = (match cs with
     | c :: _ ->
         (* fix_eff_pexp (pexp *)
-        let body = if_exp pat cs in
+        let body = if_exp fallthrough pat cs in
         let pexp = fix_eff_pexp (Pat_aux (Pat_exp (pat,body),annot)) in
         let (Pat_aux (_,annot)) = pexp in
         (pat, body, annot)
     | [] ->
         raise (Reporting_basic.err_unreachable l
             "if_pexp given empty list in rewrite_guarded_clauses"))
-  and if_exp current_pat = (function
+  and if_exp fallthrough current_pat = (function
     | (pat,guard,body,annot) :: ((pat',guard',body',annot') as c') :: cs ->
         (match guard with
           | Some exp ->
               let else_exp =
                 if equiv_pats current_pat pat'
-                then if_exp current_pat (c' :: cs)
-                else case_exp (pat_to_exp current_pat) (typ_of body') (group (c' :: cs)) in
+                then if_exp fallthrough current_pat (c' :: cs)
+                else case_exp (pat_to_exp current_pat) (typ_of body') (group fallthrough (c' :: cs)) in
               fix_eff_exp (annot_exp (E_if (exp,body,else_exp)) (fst annot) (env_of exp) (typ_of body))
           | None -> body)
-    | [(pat,guard,body,annot)] -> body
+    | [(pat,guard,body,annot)] ->
+        (* For singleton clauses with a guard, use fallthrough clauses if the
+           guard is not satisfied, but only those fallthrough clauses that are
+           not disjoint with the current pattern *)
+        let overlapping_clause (pat, _, _) = not (disjoint_pat current_pat pat) in
+        let fallthrough = List.filter overlapping_clause fallthrough in
+        (match guard, fallthrough with
+          | Some exp, _ :: _ ->
+              let else_exp = case_exp (pat_to_exp current_pat) (typ_of body) fallthrough in
+              fix_eff_exp (annot_exp (E_if (exp,body,else_exp)) (fst annot) (env_of exp) (typ_of body))
+          | _, _ -> body)
     | [] ->
         raise (Reporting_basic.err_unreachable l
             "if_exp given empty list in rewrite_guarded_clauses")) in
-  group cs
+  group [] cs
 
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_,(l,_))) = exp1 in
