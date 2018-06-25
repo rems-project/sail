@@ -1134,6 +1134,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
   match csr {
     /* machine mode */
     0x300 => { mstatus = legalize_mstatus(mstatus, value); Some(mstatus.bits()) },
+    0x301 => { misa = legalize_misa(misa, value); Some(misa.bits()) },
     0x302 => { medeleg = legalize_medeleg(medeleg, value); Some(medeleg.bits()) },
     0x303 => { mideleg = legalize_mideleg(mideleg, value); Some(mideleg.bits()) },
     0x304 => { mie = legalize_mie(mie, value); Some(mie.bits()) },
