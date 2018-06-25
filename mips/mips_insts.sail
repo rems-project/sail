@@ -1298,7 +1298,7 @@ function clause execute(LDL(base, rt, offset)) =
   {
     /* XXX length check not quite right, but conservative */
     vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, D);
-    let pAddr = TLBTranslate(vAddr, StoreData) in
+    let pAddr = TLBTranslate(vAddr, LoadData) in
       {
         mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
         reg_val = rGPR(rt);
@@ -1324,7 +1324,7 @@ function clause execute(LDR(base, rt, offset)) =
   {
     /* XXX length check not quite right, but conservative */
     vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, D);
-    let pAddr = TLBTranslate(vAddr, StoreData) in
+    let pAddr = TLBTranslate(vAddr, LoadData) in
       {
         mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
         reg_val = rGPR(rt);
