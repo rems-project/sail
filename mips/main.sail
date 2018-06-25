@@ -1,4 +1,8 @@
 
+val cycle_count = { c: "cycle_count" } : unit -> unit
+
+function cycle_count() = ()
+
 register instCount : int
 
 val fetch_and_execute : unit -> bool effect {barr, eamem, escape, rmem, rreg, wmv, wreg, undef, wmvt, rmemt}
@@ -38,6 +42,7 @@ function fetch_and_execute () = {
        just continue from nextPC, which should have been set to the appropriate
        exception vector (along with clearing branchPending etc.) . */
   };
+  cycle_count();
   loop_again;
 }
 

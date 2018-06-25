@@ -518,6 +518,14 @@ bool eq_bits(const sail_bits op1, const sail_bits op2)
   return true;
 }
 
+bool neq_bits(const sail_bits op1, const sail_bits op2)
+{
+  for (mp_bitcnt_t i = 0; i < op1.len; i++) {
+    if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return true;
+  }
+  return false;
+}
+
 void vector_subrange_sail_bits(sail_bits *rop,
 			       const sail_bits op,
 			       const sail_int n_mpz,

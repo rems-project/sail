@@ -337,12 +337,19 @@ let analyze_primop' ctx env l id args typ =
   | "eq_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "==", v2), typ))
 
+  | "neq_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
+     AE_val (AV_C_fragment (F_op (v1, "!=", v2), typ))
+
   | "eq_int", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "==", v2), typ))
 
-  (*
-  | "add_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
-     AE_val (AV_C_fragment (F_op (v1, "+", v2), typ)) *)
+  | "zeros", [_] ->
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        AE_val (AV_C_fragment (F_raw "0x0", typ))
+     | _ -> no_change
+     end
 
   | "xor_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
      AE_val (AV_C_fragment (F_op (v1, "^", v2), typ))
@@ -358,6 +365,7 @@ let analyze_primop' ctx env l id args typ =
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
         AE_val (AV_C_fragment (F_op (F_unary ("~", v), "&", v_mask_lower (Big_int.to_int n)), typ))
+     | _ -> no_change
      end
 
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] ->

@@ -218,6 +218,7 @@ void sign_extend(sail_bits *rop, const sail_bits op, const sail_int len);
 void length_sail_bits(sail_int *rop, const sail_bits op);
 
 bool eq_bits(const sail_bits op1, const sail_bits op2);
+bool neq_bits(const sail_bits op1, const sail_bits op2);
 
 void vector_subrange_sail_bits(sail_bits *rop,
 			       const sail_bits op,

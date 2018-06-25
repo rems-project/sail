@@ -1,5 +1,5 @@
 #include<string.h>
-#include<argp.h>
+#include<getopt.h>
 #include<inttypes.h>
 
 #include"sail.h"
@@ -329,7 +329,7 @@ static uint64_t g_cycle_limit;
 unit cycle_count(const unit u)
 {
   if (++g_cycle_count >= g_cycle_limit && g_cycle_limit != 0) {
-    printf("[Sail] cycle limit %" PRId64 " reached\n", g_cycle_limit);
+    printf("\n[Sail] cycle limit %" PRId64 " reached\n", g_cycle_limit);
     exit(EXIT_SUCCESS);
   }
 
@@ -338,71 +338,67 @@ unit cycle_count(const unit u)
 
 /* ***** Argument Parsing ***** */
 
-static char doc[] =
-  "Sail RTS -- Sail C run time system";
-
-/* A description of the arguments we accept. */
-static char args_doc[] = "ARG";
-
-static struct argp_option options[] = {
-  {"elf",        'e', "FILE",         0,  "Load an ELF file"},
-  {"entry",      'n', "ADDRESS",      0,  "Manually set the entry address"},
-  {"image",      'i', "FILE",         0,  "Load an Linksem preprocessed ELF image"},
-  {"binary",     'b', "ADDRESS,FILE", 0,  "Load a raw binary file"},
-  {"cyclelimit", 'l', "NUMBER",       0,  "Set a cycle limit"},
-  { 0 }
+static struct option options[] = {
+  {"elf",        required_argument, 0, 'e'},
+  {"entry",      required_argument, 0, 'n'},
+  {"image",      required_argument, 0, 'i'},
+  {"binary",     required_argument, 0, 'b'},
+  {"cyclelimit", required_argument, 0, 'l'},
+  {0, 0, 0, 0}
 };
-
-static error_t parse_opt(int key, char *arg, struct argp_state *state)
-{
-  switch (key) {
-  case 'b': ;
-    uint64_t addr;
-    char *file;
-
-    if (!sscanf(arg, "0x%" PRIx64 ",%ms", &addr, &file)) {
-      fprintf(stderr, "Could not parse argument %s\n", arg);
-      return EINVAL;
-    };
-
-    load_raw(addr, file);
-    free(file);
-    break;
-
-  case 'i':
-    load_image(arg);
-    break;
-
-  case 'e':
-    load_elf(arg);
-    break;
-
-  case 'n':
-    if (!sscanf(arg, "0x%" PRIx64, &g_elf_entry)) {
-      fprintf(stderr, "Could not parse address %s\n", arg);
-      return EINVAL;
-    }
-    break;
-
-  case 'l':
-    if (!sscanf(arg, "%" PRId64, &g_cycle_limit)) {
-      fprintf(stderr, "Could not parse cycle limit %s\n", arg);
-      return EINVAL;
-    }
-    break;
-
-  default:
-    return ARGP_ERR_UNKNOWN;
-  }
-
-  return 0;
-}
-
-static struct argp argp = {options, parse_opt, args_doc, doc};
 
 int process_arguments(int argc, char *argv[])
 {
-  return argp_parse (&argp, argc, argv, 0, 0, NULL);
+  int c;
+
+  while (true) {
+    int option_index = 0;
+    c = getopt_long(argc, argv, "e:n:i:b:l:", options, &option_index);
+
+    if (c == -1) break;
+
+    switch (c) {
+    case 'b': ;
+      uint64_t addr;
+      char *file;
+
+      if (!sscanf(optarg, "0x%" PRIx64 ",%ms", &addr, &file)) {
+	fprintf(stderr, "Could not parse argument %s\n", optarg);
+	return -1;
+      };
+
+      load_raw(addr, file);
+      free(file);
+      break;
+
+    case 'i':
+      load_image(optarg);
+      break;
+
+    case 'e':
+      load_elf(optarg);
+      break;
+
+    case 'n':
+      if (!sscanf(optarg, "0x%" PRIx64, &g_elf_entry)) {
+	fprintf(stderr, "Could not parse address %s\n", optarg);
+	return -1;
+      }
+      break;
+
+    case 'l':
+      if (!sscanf(optarg, "%" PRId64, &g_cycle_limit)) {
+	fprintf(stderr, "Could not parse cycle limit %s\n", optarg);
+	return -1;
+      }
+      break;
+
+    default:
+      return -1;
+    }
+  }
+
+  return 0;
 }
 
 /* ***** Setup and cleanup functions for RTS ***** */
