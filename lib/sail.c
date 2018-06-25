@@ -990,6 +990,7 @@ unit sail_putchar(const sail_int op)
 {
   char c = (char) mpz_get_ui(op);
   putchar(c);
+  fflush(stdout);
   return UNIT;
 }
 
