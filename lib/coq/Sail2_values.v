@@ -6,6 +6,7 @@ Require Export String.
 Require Import bbv.Word.
 Require Export List.
 Require Export Sumbool.
+Require Export DecidableClass.
 Import ListNotations.
 
 Open Scope Z.
@@ -21,6 +22,39 @@ Defined.
 
 Definition build_ex (n:Z) {P:Z -> Prop} `{H:ArithFact (P n)} : {x : Z & ArithFact (P x)} :=
   existT _ n H.
+
+Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
+Definition generic_neq {T:Type} (x y:T) `{Decidable (x = y)} := negb Decidable_witness.
+Lemma generic_eq_true {T} {x y:T} `{Decidable (x = y)} : generic_eq x y = true -> x = y.
+apply Decidable_spec.
+Qed.
+Lemma generic_eq_false {T} {x y:T} `{Decidable (x = y)} : generic_eq x y = false -> x <> y.
+unfold generic_eq.
+intros H1 H2.
+rewrite <- Decidable_spec in H2.
+congruence.
+Qed.
+Lemma generic_neq_true {T} {x y:T} `{Decidable (x = y)} : generic_neq x y = true -> x <> y.
+unfold generic_neq.
+intros H1 H2.
+rewrite <- Decidable_spec in H2.
+destruct Decidable_witness; simpl in *; 
+congruence.
+Qed.
+Lemma generic_neq_false {T} {x y:T} `{Decidable (x = y)} : generic_neq x y = false -> x = y.
+unfold generic_neq.
+intro H1.
+rewrite <- Decidable_spec.
+destruct Decidable_witness; simpl in *; 
+congruence.
+Qed.
+Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> y}) : 
+  forall (x y : T), Decidable (eq x y) := {
+  Decidable_witness := proj1_sig (bool_of_sumbool (eqdec x y))
+}.
+destruct (eqdec x y); simpl; split; congruence.
+Qed.
+
 
 (* Project away range constraints in comparisons *)
 Definition ltb_range_l {P} (l : sigT P) r := Z.ltb (projT1 l) r.
@@ -821,6 +855,10 @@ Ltac unbool_comparisons :=
   | H:context [Z.ltb _ _ = false] |- _ => rewrite Z.ltb_ge in H
   | H:context [Z.eqb _ _ = false] |- _ => rewrite Z.eqb_neq in H
   | H:context [orb _ _ = true] |- _ => rewrite Bool.orb_true_iff in H
+  | H:context [generic_eq _ _ = true] |- _ => apply generic_eq_true in H
+  | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
+  | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H
+  | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
   end.
 (* Split up dependent pairs to get at proofs of properties *)
 (* TODO: simpl is probably too strong here *)
@@ -866,12 +904,6 @@ auto with zarith.
 auto using Z.le_ge, Zle_0_pos.
 destruct w.
 Qed.
-
-Goal forall x y, ArithFact (x > y) -> ArithFact (y > 0) -> x >= 0.
-intros.
-unwrap_ArithFacts.
-omega.
-Abort.
 
 Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; omega]) : typeclass_instances.
 

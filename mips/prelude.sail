@@ -15,7 +15,7 @@ $include <arith.sail>
 $include <option.sail>
 $include <vector_dec.sail>
 
-val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", _:"eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
+val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", _:"eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
 overload operator == = {eq_anything}
 
 val not_vec = {c:"not_bits", _:"not_vec"} : forall 'n. bits('n) -> bits('n)
@@ -27,7 +27,7 @@ val not = {coq:"negb", _:"not"} : bool -> bool
 val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
 function neq_vec (x, y) = not_bool(eq_bits(x, y))
 
-val neq_anything = {lem: "neq"} : forall ('a : Type). ('a, 'a) -> bool
+val neq_anything = {lem: "neq", coq: "generic_neq"} : forall ('a : Type). ('a, 'a) -> bool
 function neq_anything (x, y) = not_bool(x == y)
 
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}

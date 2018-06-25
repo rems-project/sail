@@ -1336,10 +1336,15 @@ let doc_typdef (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "diafp"),_) -> empty
       | _ ->
          let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_ctor enums) in
+         let id_pp = doc_id_type id in
          let typ_pp = (doc_op coloneq)
-                        (concat [string "Inductive"; space; doc_id_type id;])
+                        (concat [string "Inductive"; space; id_pp])
                         (enums_doc) in
-          typ_pp ^^ dot ^^ hardline ^^ hardline)
+         let eq1_pp = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
+         let eq2_pp = string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^^ space ^^
+           string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=" ^/^
+           string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec." in
+          typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline)
     | _ -> raise (Reporting_basic.err_unreachable l "register with non-constant indices")
 
 let args_of_typ l env typs =
