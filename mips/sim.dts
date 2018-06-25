@@ -1,0 +1,79 @@
+/dts-v1/;
+/ {
+ model = "SRI/Cambridge BERI simulation";
+ compatible = "sri-cambridge,beri-sim";
+ #address-cells = <1>;
+ #size-cells = <1>;
+ sri-cambridge,build-time = <0 1527247299>;
+ sri-cambridge,build-host = "TODO";
+ sri-cambridge,build-path = "TODO";
+ sri-cambridge,build-source-path = "TODO";
+ sri-cambridge,build-source-revision = "TODO";
+
+ cpus {
+  #address-cells = <1>;
+  #size-cells = <1>;
+  status = "disabled";
+  enable-method = "spin-table";
+
+  cpu@0 {
+   device-type = "cpu";
+   compatible = "sri-cambridge,beri";
+
+   reg = <0 1>;
+   status = "okay";
+  };
+ };
+
+ cpuintc: cpuintc@0 {
+  #address-cells = <0>;
+  #interrupt-cells = <1>;
+  interrupt-controller;
+  compatible = "mti,cpu-interrupt-controller";
+ };
+ /* THE PIC IS A LIE! 
+    FreeBSD panics if there isn't one even though 
+    we don't actually need one if we put the UART 
+    in polled mode. We can get away with just pointing
+    FreeBSD at some plain memory and telling it that
+    is a PIC... */
+ beripic0: beripic@7f804000 {
+  compatible = "sri-cambridge,beri-pic";
+  interrupt-controller;
+  #address-cells = <0>;
+  #interrupt-cells = <1>;
+  reg = <0x7f804000 0x400
+         0x7f806000 0x10
+         0x7f806080 0x10
+         0x7f806100 0x10>;
+  interrupts = < 2 3 4 5 6 >;
+  hard-interrupt-sources = <64>;
+  soft-interrupt-sources = <64>;
+  interrupt-parent = <&cpuintc>;
+ };
+ soc {
+  #address-cells = <1>;
+  #size-cells = <1>;
+  #interrupt-cells = <1>;
+
+  compatible = "simple-bus", "mips,mips4k";
+  ranges;
+
+  memory {
+   device_type = "memory";
+   reg = <0x0 0x4000000>;
+  };
+
+  serial@7f000000 {
+   compatible = "altera,jtag_uart-11_0";
+   reg = <0x7f000000 0x40>;
+   /* Removing these two lines puts the UART
+      in polled mode which is necessary because
+      we don't have a PIC or a UART capable of 
+      generating interrupts. Fortunately FreeBSD 
+      copes.
+   interrupts = <0>;
+   interrupt-parent = <&beripic0>;*/
+  };
+ };
+};
