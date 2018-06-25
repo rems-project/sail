@@ -44,7 +44,7 @@ function fetch() -> FetchResult = {
 /* returns whether an instruction was retired */
 val step : int -> bool effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 function step(step_no) = {
-  match curInterrupt(mip, mie, mideleg) {
+  match curInterrupt(cur_privilege, mip, mie, mideleg) {
     Some(intr, priv) => {
       print_bits("Handling interrupt: ", intr);
       handle_interrupt(intr, priv);

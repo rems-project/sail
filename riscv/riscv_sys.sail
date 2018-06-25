@@ -711,25 +711,27 @@ function findPendingInterrupt(ip : xlenbits) -> option(InterruptType) = {
  *
  * For now, it assumes 'S' and no 'N' extension, which is the common case.
  */
-function curInterrupt(pend : Minterrupts, enbl : Minterrupts, delg : Minterrupts)
+function curInterrupt(priv : Privilege, pend : Minterrupts, enbl : Minterrupts, delg : Minterrupts)
                      -> option((InterruptType, Privilege)) = {
   let en_mip : xlenbits = pend.bits() & enbl.bits();
   if en_mip == EXTZ(0b0) then None() /* fast path */
   else {
+    /* check implicit enabling when in lower privileges */
+    let eff_mie = priv != Machine | (priv == Machine & mstatus.MIE() == true);
+    let eff_sie = priv == User | (priv == Supervisor & mstatus.SIE() == true);
+    /* handle delegation */
     let eff_mip = en_mip & (~ (delg.bits())); /* retained at M-mode */
     let eff_sip = en_mip & delg.bits();       /* delegated to S-mode */
-    if (mstatus.MIE() == true) & (eff_mip != EXTZ(0b0))
+
+    if eff_mie & eff_mip != EXTZ(0b0)
     then match findPendingInterrupt(eff_mip) {
            Some(i) => let r = (i, Machine) in Some(r),
-           None()  => { print("mstatus.MIE and eff_mip=" ^ BitStr(eff_mip) ^ ", but nothing pending");
-                        None() }
+           None()  => { internal_error("non-zero eff_mip=" ^ BitStr(eff_mip) ^ ", but nothing pending") }
          }
-    else if (mstatus.SIE() == true) & (eff_sip != EXTZ(0b0))
-            & (cur_privilege == Supervisor | cur_privilege == User)
+    else if eff_sie & eff_sip != EXTZ(0b0)
     then match findPendingInterrupt(eff_sip) {
            Some(i) => let r = (i, Supervisor) in Some(r),
-           None()  => { print("mstatus.SIE and eff_sip=" ^ BitStr(eff_sip) ^ ", but nothing pending");
-                        None() }
+           None()  => { internal_error("non-zero eff_sip=" ^ BitStr(eff_sip) ^ ", but nothing pending") }
          }
     else {
       let p = if pend.MTI() == true then "1" else "0";

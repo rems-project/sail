@@ -105,12 +105,10 @@ function clint_load(addr, width) = {
 function clint_dispatch() -> unit = {
   print("clint::tick mtime <- " ^ BitStr(mtime));
   mip->MTI() = false;
-  if mtimecmp <_u mtime & mtimecmp != EXTZ(0b0) then {
-    print(" firing clint timer at mtime " ^ BitStr(mtime));
+  if mtimecmp <=_u mtime then {
+    print(" clint timer pending at mtime " ^ BitStr(mtime));
     mip->MTI() = true
-  };
-  if mtimecmp != EXTZ(0b0) & mtimecmp != EXTS(0b1) then
-    print(" mtime=" ^ BitStr(mtime) ^ "  mtimecmp=" ^ BitStr(mtimecmp));
+  }
 }
 
 /* The rreg effect is due to checking mtime. */
