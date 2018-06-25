@@ -229,7 +229,7 @@ val DecStr : int -> string
 
 val HexStr : int -> string
 
-val BitStr = {ocaml: "string_of_bits", lem: "string_of_vec"} : forall 'n. bits('n) -> string
+val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
 
 val xor_vec = "xor_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 

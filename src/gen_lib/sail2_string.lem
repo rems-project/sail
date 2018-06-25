@@ -4,7 +4,7 @@ open import List_extra
 open import String
 open import String_extra
 
-open import Sail2_operators_mwords
+open import Sail2_operators
 open import Sail2_values
 
 val string_sub : string -> ii -> ii -> string
@@ -162,6 +162,3 @@ let hex_bits_32_matches_prefix s =
      else
        Nothing
   end
-
-
-let string_of_bits = string_of_vec

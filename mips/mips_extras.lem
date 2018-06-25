@@ -77,7 +77,6 @@ let write_ram _ size _ addr data =
 
 let read_ram _ size _ addr = MEMr addr size
 
-let string_of_bits bs = string_of_bv (bits_of bs)
 let string_of_int = show
 
 let shift_bits_left v n =
@@ -113,7 +112,7 @@ val elf_entry : unit -> integer
 let elf_entry () = 0
 declare ocaml target_rep function elf_entry = `Elf_loader.elf_entry`
 
-let print_bits msg bs = prerr_endline (msg ^ (string_of_bits bs))
+let print_bits msg bs = prerr_endline (msg ^ (string_of_bv bs))
 
 val get_time_ns : unit -> integer
 let get_time_ns () = 0

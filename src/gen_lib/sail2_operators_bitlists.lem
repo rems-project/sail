@@ -112,8 +112,8 @@ let int_of_vec_fail sign v = maybe_fail "int_of_vec" (int_of_vec_maybe sign v)
 let int_of_vec_oracle sign v = bools_of_bits_oracle v >>= (fun v -> return (int_of_bools sign v))
 let int_of_vec sign v = maybe_failwith (int_of_vec_maybe sign v)
 
-val string_of_vec : list bitU -> string
-let string_of_vec = string_of_bv
+val string_of_bits : list bitU -> string
+let string_of_bits = string_of_bv
 
 val and_vec : list bitU -> list bitU -> list bitU
 val or_vec  : list bitU -> list bitU -> list bitU
