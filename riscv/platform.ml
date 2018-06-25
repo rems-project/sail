@@ -53,7 +53,9 @@ module P = Platform_impl;;
 module Elf = Elf_loader;;
 
 (* Platform configuration *)
+
 let config_enable_dirty_update = ref false
+let config_enable_misaligned_access = ref false
 
 (* Mapping to Sail externs *)
 
@@ -79,6 +81,7 @@ let make_rom start_pc =
     rom )
 
 let enable_dirty_update () = !config_enable_dirty_update
+let enable_misaligned_access () = !config_enable_misaligned_access
 
 let rom_base () = bits_of_int64 P.rom_base
 let rom_size () = bits_of_int   !rom_size_ref

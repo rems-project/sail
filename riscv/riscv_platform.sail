@@ -11,7 +11,14 @@ val plat_ram_base = {ocaml: "Platform.dram_base", lem: "plat_ram_base"} : unit -
 val plat_ram_size = {ocaml: "Platform.dram_size", lem: "plat_ram_size"} : unit -> xlenbits
 
 /* whether the MMU should update dirty bits in PTEs */
-val plat_enable_dirty_update = {ocaml: "Platform.enable_dirty_update", lem: "plat_enable_dirty_update"} : unit -> bool
+val plat_enable_dirty_update = {ocaml: "Platform.enable_dirty_update",
+                                lem: "plat_enable_dirty_update"} : unit -> bool
+
+/* whether the platform supports misaligned accesses without trapping to M-mode. if false,
+ * misaligned loads/stores are trapped to Machine mode.
+ */
+val plat_enable_misaligned_access = {ocaml: "Platform.enable_misaligned_access",
+                                     lem: "plat_enable_misaligned_access"} : unit -> bool
 
 /* ROM holding reset vector and device-tree DTB */
 val plat_rom_base = {ocaml: "Platform.rom_base", lem: "plat_rom_base"} : unit -> xlenbits

@@ -69,7 +69,10 @@ let options = Arg.align ([("-dump-dts",
                            " dump the *binary* platform device-tree blob to stdout");
                           ("-enable-dirty-update",
                            Arg.Set P.config_enable_dirty_update,
-                           " enable dirty-bit update during page-table walks")
+                           " enable dirty-bit update during page-table walks");
+                          ("-enable-misaligned-access",
+                           Arg.Set P.config_enable_misaligned_access,
+                           " enable misaligned accesses without M-mode traps")
                          ])
 
 let usage_msg = "RISC-V platform options:"

@@ -333,9 +333,20 @@ function process_load(rd, addr, value, is_unsigned) =
     MemException(e)  => { handle_mem_exception(addr, e); false }
   }
 
+function check_misaligned(vaddr : xlenbits, width : word_width) -> bool =
+  if plat_enable_misaligned_access() then false
+  else match width {
+         BYTE   => false,
+         HALF   => vaddr[0] == true,
+         WORD   => vaddr[0] == true | vaddr[1] == true,
+         DOUBLE => vaddr[0] == true | vaddr[1] == true | vaddr[2] == true
+       }
+
 function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
     let vaddr : xlenbits = X(rs1) + EXTS(imm) in
-    match translateAddr(vaddr, Read, Data) {
+    if check_misaligned(vaddr, width)
+    then { handle_mem_exception(vaddr, E_Load_Addr_Align); false }
+    else match translateAddr(vaddr, Read, Data) {
       TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
       TR_Address(addr) =>
         match width {
@@ -393,7 +404,9 @@ mapping clause encdec = STORE(imm7 @ imm5, rs2, rs1, size, false, false) <-> imm
    This may need revisiting. */
 function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
     let vaddr : xlenbits = X(rs1) + EXTS(imm) in
-    match translateAddr(vaddr, Write, Data) {
+    if check_misaligned(vaddr, width)
+    then { handle_mem_exception(vaddr, E_SAMO_Addr_Align); false }
+    else match translateAddr(vaddr, Write, Data) {
       TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
       TR_Address(addr) =>
         let eares : MemoryOpResult(unit) = match width {

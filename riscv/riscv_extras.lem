@@ -72,6 +72,10 @@ val plat_enable_dirty_update : unit -> bool
 let plat_enable_dirty_update () = false
 declare ocaml target_rep function plat_enable_dirty_update = `Platform.enable_dirty_update`
 
+val plat_enable_misaligned_access : unit -> bool
+let plat_enable_misaligned_access () = false
+declare ocaml target_rep function plat_enable_misaligned_access = `Platform.enable_misaligned_access`
+
 val plat_insns_per_tick : unit -> integer
 let plat_insns_per_tick () = 1
 declare ocaml target_rep function plat_insns_per_tick = `Platform.insns_per_tick`
