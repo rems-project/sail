@@ -51,6 +51,7 @@ val print = "print_endline" : string -> unit
 
 val "prerr_endline" : string -> unit
 
+val "prerr_string" : string -> unit
 
 val putchar = {c:"sail_putchar", _:"putchar"} : forall ('a : Type). 'a -> unit
 

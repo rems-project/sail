@@ -327,8 +327,12 @@ function rGPR idx = {
 /* Write numbered GP reg. (writes to r0 ignored) */
 val wGPR : (bits(5), bits(64)) -> unit effect {wreg}
 function wGPR (idx, v) = {
-         let i as atom(_) = unsigned(idx) in
-         if i == 0 then () else GPR[i] = v
+  let i as atom(_) = unsigned(idx) in
+  if i != 0 then {
+    /*prerr_string(string_of_int(i));
+    prerr_bits(" <- ", v);*/
+    GPR[i] = v;
+  };
 }
 
 val MEMr = {lem: "MEMr"} : forall 'n, 'n >= 0.
