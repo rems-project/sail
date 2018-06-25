@@ -329,7 +329,7 @@ function lower_mstatus(m : Mstatus) -> Sstatus = {
 
 function lift_sstatus(m : Mstatus, s : Sstatus) -> Mstatus = {
   let m = update_SD(m, s.SD());
-  let m = update_UXL(m, s.UXL());
+  // let m = update_UXL(m, s.UXL());  FIXME: This should be parameterized by a platform setting.  For now, match spike.
   let m = update_MXR(m, s.MXR());
   let m = update_SUM(m, s.SUM());
   let m = update_XS(m, s.XS());
