@@ -687,6 +687,27 @@ let typ_id_of (Typ_aux (typ, l)) = match typ with
   | Typ_app (id, _) -> id
   | _ -> raise (Reporting_basic.err_unreachable l "failed to get type id")
 
+(* Decide whether two nexps used in a vector size are similar; if not
+   a cast will be inserted *)
+let similar_nexps n1 n2 =
+  let rec same_nexp_shape (Nexp_aux (n1,_)) (Nexp_aux (n2,_)) =
+    match n1, n2 with
+    | Nexp_id _, Nexp_id _
+    | Nexp_var _, Nexp_var _
+      -> true
+    | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
+    | Nexp_app (f1,args1), Nexp_app (f2,args2) ->
+       Id.compare f1 f2 == 0 && List.for_all2 same_nexp_shape args1 args2
+    | Nexp_times (n1,n2), Nexp_times (n3,n4)
+    | Nexp_sum (n1,n2), Nexp_sum (n3,n4)
+    | Nexp_minus (n1,n2), Nexp_minus (n3,n4)
+      -> same_nexp_shape n1 n3 && same_nexp_shape n2 n4
+    | Nexp_exp n1, Nexp_exp n2
+    | Nexp_neg n1, Nexp_neg n2
+      -> same_nexp_shape n1 n2
+    | _ -> false
+  in if same_nexp_shape n1 n2 then true else false
+
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
@@ -910,11 +931,11 @@ let doc_exp_lem, doc_let_lem =
               then string (Env.get_extern f env "coq"), true
               else doc_id f, false in
             let (tqs,fn_ty) = Env.get_val_spec_orig f env in
-            let arg_typs, ret_typ = match fn_ty with
-              | Typ_aux (Typ_fn (arg_typ,ret_typ,_),_) ->
+            let arg_typs, ret_typ, eff = match fn_ty with
+              | Typ_aux (Typ_fn (arg_typ,ret_typ,eff),_) ->
                  (match arg_typ with
-                 | Typ_aux (Typ_tup typs,_) -> typs, ret_typ
-                 | _ -> [arg_typ], ret_typ)
+                 | Typ_aux (Typ_tup typs,_) -> typs, ret_typ, eff
+                 | _ -> [arg_typ], ret_typ, eff)
               | _ -> raise (Reporting_basic.err_unreachable l "Function not a function type")
             in
             (* Insert existential unpacking of arguments where necessary *)
@@ -929,19 +950,34 @@ let doc_exp_lem, doc_let_lem =
             in
             let epp = hang 2 (flow (break 1) (call :: List.map2 doc_arg args arg_typs)) in
             (* Unpack existential result *)
-            let ret_typ_inst = subst_unifiers (instantiation_of full_exp) ret_typ in
-            let unpack,build_ex =
+            let inst = instantiation_of full_exp in
+            let inst = KBindings.fold (fun k u m -> KBindings.add (orig_kid k) u m) inst KBindings.empty in
+            let ret_typ_inst = subst_unifiers inst ret_typ in
+            let unpack,build_ex,autocast =
               let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
               let ann_typ = expand_range_type ann_typ in
               let ret_typ_inst = expand_range_type (Env.expand_synonyms env ret_typ_inst) in
-              match ret_typ_inst, ann_typ with
-              | Typ_aux (Typ_exist _,_), Typ_aux (Typ_exist _,_) ->
-                 if alpha_equivalent env ret_typ_inst ann_typ then false,false else true,true
-              | Typ_aux (Typ_exist _,_), _ -> true,false
-              | _, Typ_aux (Typ_exist _,_) -> false,true
-              | _, _ -> false,false
+              let unpack, build_ex, in_typ, out_typ =
+                match ret_typ_inst, ann_typ with
+                | Typ_aux (Typ_exist (_,_,t1),_), Typ_aux (Typ_exist (_,_,t2),_) ->
+                   if alpha_equivalent env ret_typ_inst ann_typ
+                   then false,false,t1,t2
+                   else true,true,t1,t2
+                | Typ_aux (Typ_exist (_,_,t1),_),t2 -> true,false,t1,t2
+                | t1, Typ_aux (Typ_exist (_,_,t2),_) -> false,true,t1,t2
+                | t1, t2 -> false,false,t1,t2
+              in
+              let autocast =
+                match destruct_vector env in_typ, destruct_vector env out_typ with
+                | Some (n1,_,t1), Some (n2,_,t2) 
+                  when is_bit_typ t1 && is_bit_typ t2 ->
+                   not (similar_nexps n1 n2)
+                | _ -> false
+              in unpack,build_ex,autocast
             in
+            let autocast_id = if effectful eff then "autocast_m" else "autocast" in
             let epp = if unpack then string "projT1" ^^ space ^^ parens epp else epp in
+            let epp = if autocast then string autocast_id ^^ space ^^ parens epp else epp in
             let epp = if build_ex then string "build_ex" ^^ space ^^ parens epp else epp in
             liftR (if aexp_needed then parens (align epp) else epp)
        end

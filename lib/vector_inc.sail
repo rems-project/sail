@@ -106,7 +106,7 @@ val vector_subrange = {
   c: "vector_subrange",
   coq: "subrange_vec_inc"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'm <= 'o < 'n.
-  (bits('n), atom('m), atom('o)) -> bits('o - ('m - 1))
+  (bits('n), atom('m), atom('o)) -> bits('o - 'm + 1)
 
 val vector_update_subrange = {
   ocaml: "update_subrange",

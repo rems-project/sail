@@ -27,6 +27,9 @@ Qed.
 Definition autocast {m n} (x : mword m) `{H:ArithFact (m = n)} : mword n :=
   cast_mword x (use_ArithFact H).
 
+Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m = n)} : monad rv (mword n) e :=
+  x >>= fun x => returnm (cast_mword x (use_ArithFact H)).
+
 Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n.
 rewrite <- eq.
 exact x.
