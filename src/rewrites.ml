@@ -1071,6 +1071,8 @@ let rec disjoint_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   | _, P_typ (_, pat2) -> disjoint_pat pat1 pat2
   | P_var (pat1, _), _ -> disjoint_pat pat1 pat2
   | _, P_var (pat2, _) -> disjoint_pat pat1 pat2
+  | P_id id, _ when id_is_unbound id (env_of_annot annot1) -> false
+  | _, P_id id when id_is_unbound id (env_of_annot annot2) -> false
   | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
   | P_app (id1, args1), P_app (id2, args2) ->
      Id.compare id1 id2 <> 0 || List.exists2 disjoint_pat args1 args2
