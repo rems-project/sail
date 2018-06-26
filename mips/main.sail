@@ -67,15 +67,12 @@ function dump_mips_state () : unit -> unit = {
   }
 }
 
-val "cycle_count" : unit -> unit
-
 val main : unit -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg, rmemt, wmvt}
 
 function main () = {
   init_registers(to_bits(64, elf_entry()));
   startTime = get_time_ns();
   while (fetch_and_execute()) do {
-    cycle_count();
     /* uncomment to print IPS every 10M instructions (~10s)
     if (instCount == 10000000) then {
       endTime = get_time_ns();
@@ -86,6 +83,7 @@ function main () = {
       startTime = get_time_ns();
       instCount = 0; 
     };*/
+    ();
   };
 
   endTime = get_time_ns();
