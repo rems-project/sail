@@ -2,6 +2,7 @@ default Order dec
 
 $include <smt.sail>
 $include <arith.sail>
+// $include <trace.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
@@ -133,10 +134,13 @@ val UInt = {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",
-  c: "sail_uint"
+  c: "sail_unsigned"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
-val SInt = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+val SInt = {
+  c: "sail_signed",
+  _: "sint"
+} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm) effect {escape}
 
@@ -173,7 +177,8 @@ function cast_unit_vec b =
     bitone  => 0b1
   }
 
-val print = "prerr_endline" : string -> unit
+val print = "prerr" : string -> unit
+val prerr = "prerr" : string -> unit
 
 val putchar = {
   ocaml: "putchar",
@@ -182,11 +187,15 @@ val putchar = {
   c: "sail_putchar"
 } : int -> unit
 
-val concat_str = {ocaml: "concat_str", lem: "stringAppend"} : (string, string) -> string
+val concat_str = {ocaml: "concat_str", lem: "stringAppend", c: "concat_str"} : (string, string) -> string
 
-val DecStr : int -> string
+val DecStr = "dec_str" : int -> string
 
-val HexStr : int -> string
+val HexStr = "hex_str" : int -> string
+
+val BoolStr : bool -> string
+
+function BoolStr(b) = if b then "true" else "false"
 
 val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
 
@@ -218,7 +227,7 @@ val add_real = {ocaml: "add_real", lem: "realAdd", c: "add_real"} : (real, real)
 
 overload operator + = {add_vec, add_vec_int, add_real}
 
-val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
+val sub_vec = {c: "sub_bits", _: "sub_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val sub_vec_int = {
   ocaml: "sub_vec_int",
@@ -264,23 +273,23 @@ val abs_real = "abs_real" : real -> real
 
 overload abs = {abs_atom, abs_real}
 
-val quotient_nat = {ocaml: "quotient", lem: "integerDiv", c: "div_int"} : (nat, nat) -> nat
+val quotient_nat = {ocaml: "quotient", lem: "integerDiv", c: "tdiv_int"} : (nat, nat) -> nat
 
 val quotient_real = {ocaml: "quotient_real", lem: "realDiv", c: "div_real"} : (real, real) -> real
 
-val quotient = {ocaml: "quotient", lem: "integerDiv", c: "div_int"} : (int, int) -> int
+val quotient = {ocaml: "quotient", lem: "integerDiv", c: "tdiv_int"} : (int, int) -> int
 
 overload operator / = {quotient_nat, quotient, quotient_real}
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod", c: "mod_int"} : (int, int) -> int
+val modulus = {ocaml: "modulus", lem: "hardware_mod", c: "tmod_int"} : (int, int) -> int
 
 overload operator % = {modulus}
 
 val Real = {ocaml: "to_real", lem: "realFromInteger", c: "to_real"} : int -> real
 
-val min_nat = {ocaml: "min_int", lem: "min", c: "max_int"} : (nat, nat) -> nat
+val min_nat = {ocaml: "min_int", lem: "min", c: "min_int"} : (nat, nat) -> nat
 
-val min_int = {ocaml: "min_int", lem: "min", c: "max_int"} : (int, int) -> int
+val min_int = {ocaml: "min_int", lem: "min", c: "min_int"} : (int, int) -> int
 
 val max_nat = {ocaml: "max_int", lem: "max", c: "max_int"} : (nat, nat) -> nat
 
@@ -290,20 +299,9 @@ overload min = {min_nat, min_int}
 
 overload max = {max_nat, max_int}
 
-val __WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmem}
+val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 
-val __TraceMemoryWrite : forall 'n 'm.
-  (atom('n), bits('m), bits(8 * 'n)) -> unit
-
-val __InitRAM : forall 'm. (atom('m), int, bits('m), bits(8)) -> unit
-
-function __InitRAM (_, _, _, _) = ()
-
-val __ReadRAM = "read_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
-
-val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
+val prerr_bits = "prerr_bits" : forall 'n. (string, bits('n)) -> unit
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
@@ -328,9 +326,11 @@ function coerce_int_nat 'x = {
 val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
   (bits('m), int, atom('n)) -> bits('n)
 
-val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
+val pow2_atom = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
+val pow2_int = "pow2" : int -> int
 
-val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
+overload pow2 = {pow2_atom, pow2_int}
+
 val break : unit -> unit
 
 function break () = ()
