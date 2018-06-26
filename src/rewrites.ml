@@ -1007,6 +1007,40 @@ let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
         | (p,annot) -> P_aux (p,annot) }
     pat
 
+let rec is_irrefutable_pattern (P_aux (p,ann)) =
+  match p with
+  | P_lit (L_aux (L_unit,_))
+  | P_wild
+    -> true
+  | P_lit _ -> false
+  | P_as (p1,_)
+  | P_typ (_,p1)
+    -> is_irrefutable_pattern p1
+  | P_id id -> begin
+    match Env.lookup_id id (env_of_annot ann) with
+    | Local _ | Unbound -> true
+    | Register _ -> false (* should be impossible, anyway *)
+    | Enum enum ->
+       match enum with
+       | Typ_aux (Typ_id enum_id,_) ->
+          List.length (Env.get_enum enum_id (env_of_annot ann)) <= 1
+       | _ -> false (* should be impossible, anyway *)
+  end
+  | P_var (p1,_) -> is_irrefutable_pattern p1
+  | P_app (f,args) ->
+     Env.is_singleton_union_constructor f (env_of_annot ann) &&
+       List.for_all is_irrefutable_pattern args
+  | P_record (fps,_) ->
+     List.for_all (fun (FP_aux (FP_Fpat (_,p),_)) -> is_irrefutable_pattern p) fps
+  | P_vector ps
+  | P_vector_concat ps
+  | P_tup ps
+  | P_list ps
+    -> List.for_all is_irrefutable_pattern ps
+  | P_cons (p1,p2) -> is_irrefutable_pattern p1 && is_irrefutable_pattern p2
+  | P_string_append ps
+    -> List.for_all is_irrefutable_pattern ps
+
 (* Check if one pattern subsumes the other, and if so, calculate a
    substitution of variables that are used in the same position.
    TODO: Check somewhere that there are no variable clashes (the same variable
@@ -1057,6 +1091,7 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
     (match subsumes_pat pat1 pat2, subsumes_pat pats1 pats2 with
     | Some substs1, Some substs2 -> Some (substs1 @ substs2)
     | _ -> None)
+  | _, P_wild -> if is_irrefutable_pattern pat1 then Some [] else None
   | _ -> None
 and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
   if id1 = id2 then subsumes_pat pat1 pat2 else None

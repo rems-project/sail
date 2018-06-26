@@ -369,6 +369,7 @@ module Env : sig
   val get_val_spec : id -> t -> typquant * typ
   val get_val_spec_orig : id -> t -> typquant * typ
   val is_union_constructor : id -> t -> bool
+  val is_singleton_union_constructor : id -> t -> bool
   val is_mapping : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
@@ -905,6 +906,16 @@ end = struct
     in
     let type_unions = List.concat (List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants)) in
     List.exists (is_ctor id) type_unions
+
+  let is_singleton_union_constructor id env =
+    let is_ctor id (Tu_aux (tu, _)) = match tu with
+      | Tu_ty_id (_, ctor_id) when Id.compare id ctor_id = 0 -> true
+      | _ -> false
+    in
+    let type_unions = List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants) in
+    match List.find (List.exists (is_ctor id)) type_unions with
+    | l -> List.length l = 1
+    | exception Not_found -> false
 
   let is_mapping id env = Bindings.mem id env.mappings
 

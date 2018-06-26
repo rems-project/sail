@@ -164,6 +164,10 @@ module Env : sig
 
   val is_union_constructor : id -> t -> bool
 
+  (** Check if the id is both a constructor, and the only constructor of that
+      type. *)
+  val is_singleton_union_constructor : id -> t -> bool
+
   val is_mapping : id -> t -> bool
 
   val is_register : id -> t -> bool
