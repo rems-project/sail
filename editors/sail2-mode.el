@@ -14,7 +14,7 @@
 (defconst sail2-kinds
   '("Int" "Type" "Order" "inc" "dec"
     "barr" "depend" "rreg" "wreg" "rmem" "rmemt" "wmv" "wmvt" "eamem" "wmem"
-    "exmem" "undef" "unspec" "nondet" "escape"))
+    "exmem" "undef" "unspec" "nondet" "escape" "configuration"))
 
 (defconst sail2-types
   '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits" "option"

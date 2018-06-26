@@ -287,8 +287,9 @@ let pp_cdef = function
      pp_keyword "function" ^^ pp_id id ^^ ret ^^ parens (separate_map (comma ^^ space) pp_id args) ^^ space
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
      ^^ hardline
-  | CDEF_reg_dec (id, ctyp) ->
-     pp_keyword "register" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+  | CDEF_reg_dec (id, ctyp, instrs) ->
+     pp_keyword "register" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ space
+     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
      ^^ hardline
   | CDEF_type tdef -> pp_ctype_def tdef ^^ hardline
   | CDEF_let (n, bindings, instrs) ->

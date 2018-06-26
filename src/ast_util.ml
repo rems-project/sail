@@ -54,7 +54,7 @@ module Big_int = Nat_big_num
 
 type mut = Immutable | Mutable
 
-type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
+type lvar = Register of effect * effect * typ | Enum of typ | Local of mut * typ | Unbound
 
 let no_annot = (Parse_ast.Unknown, ())
 
@@ -562,6 +562,7 @@ let string_of_base_effect_aux = function
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet"
   | BE_escape -> "escape"
+  | BE_config -> "configuration"
   (*| BE_lset -> "lset"
   | BE_lret -> "lret"*)
 

@@ -307,7 +307,7 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
 
 let pp_lvar lvar doc =
   match lvar with
-  | Register typ ->
+  | Register (_, _, typ) ->
      string "[R/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
   | Local (Mutable, typ) ->
      string "[M/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc

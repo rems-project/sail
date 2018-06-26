@@ -98,7 +98,7 @@ base_effect_aux =  (* effect *)
  | BE_unspec (* unspecified values *)
  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
  | BE_escape
-
+ | BE_config
 
 type 
 kid_aux =  (* identifiers with kind, ticked to differntiate from program variables *)
@@ -496,6 +496,7 @@ kind_def_aux =  (* Definition body for elements of kind; many are shorthands for
 type 
 dec_spec_aux =  (* Register declarations *)
    DEC_reg of atyp * id
+ | DEC_config of id * atyp * exp
  | DEC_alias of id * exp
  | DEC_typ_alias of atyp * id * exp
 

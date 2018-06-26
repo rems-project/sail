@@ -230,6 +230,7 @@ base_effect :: 'BE_' ::=
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism, from $[[nondet]]$ }}
   | escape                              :: :: escape {{ com potential exception }}
+  | config                              :: :: config {{ com configuration option }}
 
 effect :: 'Effect_' ::=
   {{ com effect set, of kind $[[Effect]]$ }}
@@ -1096,6 +1097,7 @@ dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | register typ id                                             :: :: reg
+  | register configuration id : typ = exp                       :: :: config
   | register alias id = alias_spec				:: :: alias
   | register alias typ id = alias_spec				:: :: typ_alias
 

@@ -319,7 +319,8 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
                                | Parse_ast.BE_undef  -> BE_undef
                                | Parse_ast.BE_unspec -> BE_unspec
                                | Parse_ast.BE_nondet -> BE_nondet
-                               | Parse_ast.BE_escape -> BE_escape),l))
+                               | Parse_ast.BE_escape -> BE_escape
+                               | Parse_ast.BE_config -> BE_config),l))
                              effects)
                | _ -> typ_error l "Required an item of kind Effects, encountered an illegal form for this kind" None None None
     ), l)
@@ -857,7 +858,9 @@ let to_ast_dec (names,k_env,def_ord) (Parse_ast.DEC_aux(regdec,l)) =
   DEC_aux(
     (match regdec with
       | Parse_ast.DEC_reg(typ,id) ->
-	DEC_reg(to_ast_typ k_env def_ord typ,to_ast_id id)
+        DEC_reg(to_ast_typ k_env def_ord typ,to_ast_id id)
+      | Parse_ast.DEC_config(id,typ,exp) ->
+        DEC_config(to_ast_id id,to_ast_typ k_env def_ord typ,to_ast_exp k_env def_ord exp)
       | Parse_ast.DEC_alias(id,e) ->
 	DEC_alias(to_ast_id id,to_ast_alias_spec k_env def_ord e)
       | Parse_ast.DEC_typ_alias(typ,id,e) ->

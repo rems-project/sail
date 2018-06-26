@@ -445,6 +445,8 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
 let fv_of_rd consider_var (DEC_aux (d,_)) = match d with
   | DEC_reg(t,id) ->
     init_env (string_of_id id), fv_of_typ consider_var mt mt t
+  | DEC_config(id,t,exp) ->
+    init_env (string_of_id id), fv_of_typ consider_var mt mt t
   | DEC_alias(id,alias) ->
     init_env (string_of_id id),mt
   | DEC_typ_alias(t,id,alias) ->

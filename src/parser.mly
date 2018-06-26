@@ -178,7 +178,7 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Mutual Var Ref
+%token Repeat Until While Do Mutual Var Ref Configuration
 
 %nonassoc Then
 %nonassoc Else
@@ -634,6 +634,8 @@ effect:
     { mk_effect BE_nondet $startpos $endpos }
   | Escape
     { mk_effect BE_escape $startpos $endpos }
+  | Configuration
+    { mk_effect BE_config $startpos $endpos }
 
 effect_list:
   | effect
@@ -1331,6 +1333,8 @@ val_spec_def:
 register_def:
   | Register id Colon typ
     { mk_reg_dec (DEC_reg ($4, $2)) $startpos $endpos }
+  | Register Configuration id Colon typ Eq exp
+    { mk_reg_dec (DEC_config ($3, $5, $7)) $startpos $endpos }
 
 default_def:
   | Default base_kind Inc

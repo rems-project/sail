@@ -322,7 +322,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
        | Local (Immutable, _) | Unbound -> zencode ctx id
        | Enum _ -> zencode_upper ctx id
        | Register _ when is_passed_by_name (typ_of exp) -> zencode ctx id
-       | Register typ ->
+       | Register (_, _, typ) ->
           if !opt_trace_ocaml then
             let var = gensym () in
             let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
@@ -339,7 +339,7 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
   | LEXP_cast (_, id) | LEXP_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
-       | Register typ ->
+       | Register (_, _, typ) ->
           let var = gensym () in
           let traced_exp =
             if !opt_trace_ocaml then

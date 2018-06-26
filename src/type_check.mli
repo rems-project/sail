@@ -106,7 +106,7 @@ module Env : sig
 
   val update_val_spec : id -> typquant * typ -> t -> t
 
-  val get_register : id -> t -> typ
+  val get_register : id -> t -> effect * effect * typ
 
   (** Return all the identifiers in an enumeration. Throws a type
      error if the enumeration doesn't exist. *)

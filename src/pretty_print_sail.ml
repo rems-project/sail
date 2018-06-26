@@ -487,6 +487,7 @@ let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
   | DEC_reg (typ, id) -> separate space [string "register"; doc_id id; colon; doc_typ typ]
+  | DEC_config (id, typ, exp) -> separate space [string "register configuration"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
   | DEC_alias(id,alspec) -> string "ALIAS"
   | DEC_typ_alias(typ,id,alspec) -> string "ALIAS"
 

@@ -82,10 +82,9 @@ let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ Lazy.
 
 let lvar_typ = function
   | Local (_, typ) -> typ
-  | Register typ -> typ
+  | Register (_, _, typ) -> typ
   | Enum typ -> typ
-  | _ -> assert false
-                
+
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
@@ -384,8 +383,8 @@ module Env : sig
   val get_flow : id -> t -> typ -> typ
   val remove_flow : id -> t -> t
   val is_register : id -> t -> bool
-  val get_register : id -> t -> typ
-  val add_register : id -> typ -> t -> t
+  val get_register : id -> t -> effect * effect * typ
+  val add_register : id -> effect -> effect -> typ -> t -> t
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
@@ -450,7 +449,7 @@ end = struct
       defined_val_specs : IdSet.t;
       locals : (mut * typ) Bindings.t;
       union_ids : (typquant * typ) Bindings.t;
-      registers : typ Bindings.t;
+      registers : (effect * effect * typ) Bindings.t;
       variants : (typquant * type_union list) Bindings.t;
       mappings : (typquant * typ * typ) Bindings.t;
       typ_vars : (Ast.l * base_kind_aux) KBindings.t;
@@ -1048,14 +1047,14 @@ end = struct
 
   let get_casts env = env.casts
 
-  let add_register id typ env =
+  let add_register id reff weff typ env =
     wf_typ env typ;
     if Bindings.mem id env.registers
     then typ_error (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
     else
       begin
         typ_print (lazy ("Adding register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ));
-        { env with registers = Bindings.add id typ env.registers }
+        { env with registers = Bindings.add id (reff, weff, typ) env.registers }
       end
 
   let get_locals env = env.locals
@@ -1067,17 +1066,16 @@ end = struct
       Local (mut, if raw then typ else flow typ)
     with
     | Not_found ->
-       begin
-         try Register (Bindings.find id env.registers) with
-         | Not_found ->
-            begin
-              try
-                let (enum, _) = List.find (fun (enum, ctors) -> IdSet.mem id ctors) (Bindings.bindings env.enums) in
-                Enum (mk_typ (Typ_id enum))
-              with
-              | Not_found -> Unbound
-            end
-       end
+    try
+      let reff, weff, typ = Bindings.find id env.registers in
+      Register (reff, weff, typ)
+    with
+    | Not_found ->
+    try
+      let (enum, _) = List.find (fun (enum, ctors) -> IdSet.mem id ctors) (Bindings.bindings env.enums) in
+      Enum (mk_typ (Typ_id enum))
+    with
+    | Not_found -> Unbound
 
   let add_typ_var l kid k env =
     if KBindings.mem kid env.typ_vars
@@ -2926,7 +2924,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
        let infer_flexp = function
          | LEXP_id v ->
             begin match Env.lookup_id v env with
-            | Register typ -> typ, LEXP_id v, true
+            | Register (_, _, typ) -> typ, LEXP_id v, true
             | Local (Mutable, typ) -> typ, LEXP_id v, false
             | _ -> typ_error l "l-expression field is not a register or a local mutable type"
             end
@@ -2938,7 +2936,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
                 | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
                 | Local (Immutable, vtyp) -> true, vtyp, false
                 | Local (Mutable, vtyp) -> false, vtyp, false
-                | Register vtyp -> false, vtyp, true
+                | Register (_, _, vtyp) -> false, vtyp, true
               in
               let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
               let inferred_exp = match access with
@@ -2969,7 +2967,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
      annot_assign tlexp checked_exp, env'
   | LEXP_id v when has_typ v env ->
      begin match Env.lookup_id ~raw:true v env with
-     | Local (Mutable, vtyp) | Register vtyp ->
+     | Local (Mutable, vtyp) | Register (_, _, vtyp) ->
         let checked_exp = crule check_exp env exp vtyp in
         let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
         annot_assign tlexp checked_exp, env'
@@ -2993,10 +2991,10 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           subtyp l env typ typ_annot;
           subtyp l env typ_annot vtyp;
           annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
-       | Register vtyp ->
+       | Register (_, weff, vtyp) ->
           subtyp l env typ typ_annot;
           subtyp l env typ_annot vtyp;
-          annot_lexp_effect (LEXP_cast (typ_annot, v)) typ (mk_effect [BE_wreg]), env
+          annot_lexp_effect (LEXP_cast (typ_annot, v)) typ weff, env
        | Unbound ->
           subtyp l env typ typ_annot;
           annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
@@ -3016,7 +3014,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      | Local (Immutable, _) | Enum _ ->
         typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
      | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, Env.remove_flow v env
-     | Register vtyp -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ (mk_effect [BE_wreg]), env
+     | Register (_, weff, vtyp) -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ weff, env
      | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
      end
   | LEXP_tup lexps ->
@@ -3048,7 +3046,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
      begin match Env.lookup_id v env with
      | Local (Mutable, typ) -> annot_lexp (LEXP_id v) typ
      (* Probably need to remove flows here *)
-     | Register typ -> annot_lexp_effect (LEXP_id v) typ (mk_effect [BE_wreg])
+     | Register (_, weff, typ) -> annot_lexp_effect (LEXP_id v) typ weff
      | Local (Immutable, _) | Enum _ ->
         typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
      | Unbound ->
@@ -3115,13 +3113,13 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
      end
   | LEXP_field (LEXP_aux (LEXP_id v, _), fid) ->
      (* FIXME: will only work for ASL *)
-     let rec_id =
+     let rec_id, weff =
        match Env.lookup_id v env with
-       | Register (Typ_aux (Typ_id rec_id, _)) -> rec_id
+       | Register (_, weff, Typ_aux (Typ_id rec_id, _)) -> rec_id, weff
        | _ -> typ_error l (string_of_lexp lexp ^ " must be a record register here")
      in
      let typq, _, ret_typ, _ = Env.get_accessor rec_id fid env in
-     annot_lexp_effect (LEXP_field (annot_lexp (LEXP_id v) (mk_id_typ rec_id), fid)) ret_typ (mk_effect [BE_wreg])
+     annot_lexp_effect (LEXP_field (annot_lexp (LEXP_id v) (mk_id_typ rec_id), fid)) ret_typ weff
   | _ -> typ_error l ("Unhandled l-expression " ^ string_of_lexp lexp)
 
 and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
@@ -3134,7 +3132,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      begin
        match Env.lookup_id v env with
        | Local (_, typ) | Enum typ -> annot_exp (E_id v) typ
-       | Register typ -> annot_exp_effect (E_id v) typ (mk_effect [BE_rreg])
+       | Register (reff, _, typ) -> annot_exp_effect (E_id v) typ reff
        | Unbound -> typ_error l ("Identifier " ^ string_of_id v ^ " is unbound")
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
@@ -3306,7 +3304,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let (_, typ) = Bindings.find id (Env.get_locals env) in
      annot_exp (E_ref id) (ref_typ typ)
   | E_ref id when Env.is_register id env ->
-     let typ = Env.get_register id env in
+     let _, _, typ = Env.get_register id env in
      annot_exp (E_ref id) (register_typ typ)
   | _ -> typ_error l ("Cannot infer type of: " ^ string_of_exp exp)
 
@@ -4460,8 +4458,12 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, _))) ->
-     let env = Env.add_register id typ env in
+     let env = Env.add_register id (mk_effect [BE_rreg]) (mk_effect [BE_wreg]) typ env in
      [DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, Some (env, typ, no_effect))))], env
+  | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), (l, _))) ->
+     let checked_exp = crule check_exp env (strip_exp exp) typ in
+     let env = Env.add_register id no_effect (mk_effect [BE_config]) typ env in
+     [DEF_reg_dec (DEC_aux (DEC_config (id, typ, checked_exp), (l, Some (env, typ, no_effect))))], env
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")

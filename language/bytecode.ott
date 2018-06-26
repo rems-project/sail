@@ -145,7 +145,9 @@ instr :: 'I_' ::=
   | ctyp id = cval                            :: :: reinit
 
 cdef :: 'CDEF_' ::=
-  | register id : ctyp :: :: reg_dec
+  | register id : ctyp = {
+      instr0 ; ... ; instrn
+    } :: :: reg_dec
   | ctype_def          :: :: type
   | let nat ( id0 : ctyp0 , ... , idn : ctypn ) = {
       instr0 ; ... ; instrm

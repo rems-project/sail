@@ -57,7 +57,7 @@ open PPrint
 open Value2
 
 open Anf
-   
+
 module Big_int = Nat_big_num
 
 let c_verbosity = ref 1
@@ -303,7 +303,7 @@ let rec c_aval ctx = function
        match lvar with
        | Local (_, typ) when is_stack_typ ctx typ ->
           AV_C_fragment (F_id id, typ)
-       | Register typ when is_stack_typ ctx typ ->
+       | Register (_, _, typ) when is_stack_typ ctx typ ->
           AV_C_fragment (F_id id, typ)
        | _ -> v
      end
@@ -484,12 +484,12 @@ let rec instr_ctyps (I_aux (instr, aux)) =
   | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure -> []
 
 let rec c_ast_registers = function
-  | CDEF_reg_dec (id, ctyp) :: ast -> (id, ctyp) :: c_ast_registers ast
+  | CDEF_reg_dec (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
   | _ :: ast -> c_ast_registers ast
   | [] -> []
 
 let cdef_ctyps ctx = function
-  | CDEF_reg_dec (_, ctyp) -> [ctyp]
+  | CDEF_reg_dec (_, ctyp, instrs) -> ctyp :: List.concat (List.map instr_ctyps instrs)
   | CDEF_spec (_, ctyps, ctyp) -> ctyp :: ctyps
   | CDEF_fundef (id, _, _, instrs) ->
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
@@ -1482,8 +1482,12 @@ let letdef_count = ref 0
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
-     [CDEF_reg_dec (id, ctyp_of_typ ctx typ)], ctx
-  | DEF_reg_dec _ -> failwith "Unsupported register declaration" (* FIXME *)
+     [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
+  | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
+     let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
+     let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
+     let instrs = setup @ [call (CL_id id)] @ cleanup in
+     [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
 
   | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
      c_debug (lazy "Compiling VS");
@@ -2485,7 +2489,7 @@ let codegen_alloc = function
   | _ -> assert false
 
 let codegen_def' ctx = function
-  | CDEF_reg_dec (id, ctyp) ->
+  | CDEF_reg_dec (id, ctyp, _) ->
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
 
@@ -2604,6 +2608,9 @@ let sgen_startup = function
   | CDEF_startup (id, _) ->
      Printf.sprintf "  startup_%s();" (sgen_id id)
   | _ -> assert false
+
+let sgen_instr id ctx instr =
+  Pretty_print_sail.to_string (codegen_instr id ctx instr)
 
 let is_cdef_finish = function
   | CDEF_startup _ -> true
@@ -2729,11 +2736,12 @@ let compile_ast ctx (Defs defs) =
 
     let regs = c_ast_registers cdefs in
 
-    let register_init_clear (id, ctyp) =
+    let register_init_clear (id, ctyp, instrs) =
       if is_stack_ctyp ctyp then
-        [], []
+        List.map (sgen_instr (mk_id "reg") ctx) instrs, []
       else
-        [ Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ],
+        [ Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ]
+        @ List.map (sgen_instr (mk_id "reg") ctx) instrs,
         [ Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ]
     in
 

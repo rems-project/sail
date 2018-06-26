@@ -179,6 +179,7 @@ let kw_table =
      ("unspec",                  (fun x -> Unspec));
      ("nondet",                  (fun x -> Nondet));
      ("escape",                  (fun x -> Escape));
+     ("configuration",           (fun _ -> Configuration));
    ]
 
 
