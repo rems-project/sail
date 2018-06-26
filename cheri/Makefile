@@ -32,6 +32,9 @@ cheri_trace: $(CHERI_SAILS) $(CHERI_MAIN)
 cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -memo_z3 -c $^ 1> $@
 
+cheri_c: cheri.c ../lib/sail.h Makefile
+	gcc -O2 -g -I ../lib $< ../lib/*.c -lgmp -lz -o $@
+
 latex_128: $(MIPS_SAIL_DIR)/prelude.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_128.sail
 	rm -rf sail_latexcc
 	$(SAIL) -latex -latex_prefix sailcc -o sail_latexcc $^

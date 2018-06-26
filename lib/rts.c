@@ -6,6 +6,8 @@
 #include"rts.h"
 #include"elf.h"
 
+static uint64_t g_elf_entry;
+
 void sail_match_failure(sail_string msg)
 {
   fprintf(stderr, "Pattern match failure in %s\n", msg);
@@ -235,6 +237,10 @@ void load_image(char *file)
 }
 
 // ***** Tracing support *****
+
+static int64_t g_trace_depth;
+//static int64_t g_trace_max_depth;
+static bool g_trace_enabled;
 
 unit enable_tracing(const unit u)
 {

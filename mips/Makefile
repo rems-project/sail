@@ -18,8 +18,8 @@ mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) ../sail
 mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile ../sail
 	$(SAIL) -O -memo_z3 -c $(filter %.sail, $^) 1> $@
 
-mips_c: mips.c ../lib/sail.h Makefile
-	gcc -O2 -g -I ../lib $< ../lib/*.c -lgmp -lz -o $@
+mips_c: mips.c ../lib/sail.h ../lib/*.c Makefile 
+	gcc -Wall -Wno-unused-but-set-variable -Wno-unused-label -Wno-maybe-uninitialized -Wno-return-type -O2 -g -I ../lib $< ../lib/*.c -lgmp -lz -o $@
 
 sim.dtb: sim.dts
 	dtc -O dtb -o $@ -b 0 $<

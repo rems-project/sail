@@ -63,10 +63,6 @@ void load_image(char *);
 
 /* ***** Tracing ***** */
 
-static int64_t g_trace_depth;
-static int64_t g_trace_max_depth;
-static bool g_trace_enabled;
-
 /*
  * Bind these functions in Sail to enable and disable tracing (see
  * lib/trace.sail):
@@ -118,8 +114,6 @@ unit cycle_count(const unit);
 /*
  * Functions to get info from ELF files.
  */
-
-static uint64_t g_elf_entry;
 
 void elf_entry(sail_int *rop, const unit u);
 void elf_tohost(sail_int *rop, const unit u);
