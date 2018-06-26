@@ -344,20 +344,61 @@ static struct option options[] = {
   {"image",      required_argument, 0, 'i'},
   {"binary",     required_argument, 0, 'b'},
   {"cyclelimit", required_argument, 0, 'l'},
+  {"config",     required_argument, 0, 'C'},
   {0, 0, 0, 0}
 };
+
+void z__SetConfig(char* arg, char* value)
+{
+    fprintf(stderr, "Warning: ignoring option -C %s=%s\n", arg, value);
+}
+
+void z__ListConfig()
+{
+    fprintf(stderr, "Unable to list configuration options\n");
+}
+
 
 int process_arguments(int argc, char *argv[])
 {
   int c;
+  bool     elf_entry_set = false;
+  uint64_t elf_entry;
 
   while (true) {
     int option_index = 0;
-    c = getopt_long(argc, argv, "e:n:i:b:l:", options, &option_index);
+    c = getopt_long(argc, argv, "e:n:i:b:l:C:", options, &option_index);
 
     if (c == -1) break;
 
     switch (c) {
+    case 'C': {
+        char arg[100];
+        char value[100];
+        if (!sscanf(optarg, "%99[a-zA-Z0-9_.]=%99s", arg, value)) {
+          fprintf(stderr, "Could not parse argument %s\n", optarg);
+          z__ListConfig();
+          return -1;
+        };
+
+#ifndef NO_AARCH64
+        // Vile AArch64-specific hack to read the start address from standard
+        // command line option.  This will not be needed once the official
+        // __SetConfig function is used.
+        if (strcmp(arg, "cpu.cpu0.RVBAR") == 0) {
+          if (!sscanf(value, "0x%" PRIx64, &elf_entry)) {
+            fprintf(stderr, "Could not parse RVBAR address %s\n", value);
+            exit(1);
+          }
+          elf_entry_set = true;
+          break;
+        }
+#endif
+
+        z__SetConfig(arg, value);
+      }
+      break;
+
     case 'b': ;
       uint64_t addr;
       char *file;
@@ -380,10 +421,11 @@ int process_arguments(int argc, char *argv[])
       break;
 
     case 'n':
-      if (!sscanf(optarg, "0x%" PRIx64, &g_elf_entry)) {
+      if (!sscanf(optarg, "0x%" PRIx64, &elf_entry)) {
 	fprintf(stderr, "Could not parse address %s\n", optarg);
 	return -1;
       }
+      elf_entry_set = true;
       break;
 
     case 'l':
@@ -394,10 +436,19 @@ int process_arguments(int argc, char *argv[])
       break;
 
     default:
+      fprintf(stderr, "Unrecognized option %s\n", optarg);
       return -1;
     }
   }
 
+  // assignment to g_elf_entry is deferred until the end of file so that an
+  // explicit command line flag will override the address read from the ELF
+  // file.
+  if (elf_entry_set) {
+      g_elf_entry = elf_entry;
+  }
+
+  fprintf(stderr, "Parsed all command line options\n");
   return 0;
 }
 
