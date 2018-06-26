@@ -16,8 +16,10 @@ let SPI_OFFSET = 32
 // Simple top level fetch and execute loop.
 val fetch_and_execute : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
+register cycle_counter : int
+
 function fetch_and_execute () = {
-  var cycle_counter : int = 0;
+  cycle_counter = 0;
   while true do {
     cycle_counter = cycle_counter + 1;
     try {
@@ -87,12 +89,22 @@ function fetch_and_execute () = {
           interrupt_req.take_SE  = true; interrupt_req.take_vSE  = true;
           interrupt_req.take_IRQ = true; interrupt_req.take_vIRQ = true;
           interrupt_req.take_FIQ = true; interrupt_req.take_vFIQ = true;
-          if TakePendingInterrupts(interrupt_req) then {
-              print("Pending interrupt taken\n");
-          } else {
-              var ok = false;
+          var interrupted = false;
+          try {
+              interrupted = TakePendingInterrupts(interrupt_req);
+              if interrupted then {
+                  print("Pending interrupt taken\n");
+              }
+          } catch {
+              _ => {
+                print("Unhandled exception while pending exceptions\n");
+              }
+          };
+          var ok = true;
+          if ok then {
               try {
-                  __currentInstr = __fetchA64();
+                  __currentInstr       = __fetchA64();
+                  __currentInstrLength = 4;
                   ok = true;
               } catch {
                   Error_ExceptionTaken() => {
@@ -105,31 +117,28 @@ function fetch_and_execute () = {
               };
               if ok then {
                   try {
-                      ok = false;
                       __PC_changed = false;
                       ShouldAdvanceIT = (PSTATE.nRW == [bitone]) & (PSTATE.T == [bitone]);
                       decode(__currentInstr);
-                      if ~(__PC_changed) then _PC = _PC + 4 else ();
-                      if ShouldAdvanceIT then AArch32_ITAdvance() else ();
-                      SSAdvance();
-                      __UpdateSystemCounter(); // should this happen even if sleeping?
-                      ok = true;
                   } catch {
-                      Error_See(_)              => UndefinedFault(),
-                      Error_ReservedEncoding(_) => UndefinedFault(),
-                      Error_Undefined()         => UndefinedFault(),
+                      // note: if supporting AArch32 as well, call _UndefinedFault() instead
+                      Error_Undefined()         => try { AArch64_UndefinedFault() } catch { _ => print("Exception during Undefined recovery\n") },
+                      Error_See(_)              => try { AArch64_UndefinedFault() } catch { _ => print("Exception during SEE recovery\n") },
+                      Error_ReservedEncoding(_) => try { AArch64_UndefinedFault() } catch { _ => print("Exception during ReservedEncoding recovery\n") },
                       Error_ExceptionTaken() => {
-                        print(concat_str("Exception taken during Decode/Execute from PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
+                        print(concat_str("ExceptionTaken during Decode/Execute from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" opcode=", concat_str(HexStr(UInt(__currentInstr)), "\n")))));
+                        // print("  This might just be a HINT like 0xd50320df\n");
+                        ()
                       },
-                      _ => {
-                        print("Exiting due to unhandled exception during decode/execute\n");
-                        exit()
+                      Error_Implementation_Defined(s) => {
+                        print(concat_str("Ignoring IMPLEMENTATION_DEFINED", concat_str(s, "\n")));
                       }
                   }
               };
-              if ~(ok) then {
-                  print(concat_str("Yoiks: something went wrong at ", concat_str(DecStr(cycle_counter), "\n")));
-              }
+              if ~(__PC_changed) then _PC = _PC + __currentInstrLength else ();
+              if ShouldAdvanceIT then AArch32_ITAdvance() else ();
+              SSAdvance();
+              __UpdateSystemCounter(); // should this happen even if sleeping?
           }
       };
 
@@ -139,6 +148,7 @@ function fetch_and_execute () = {
       };
       if prevI != PSTATE.I then {
 	prerr_bits("[Sail] PSTATE.I changed to: ", PSTATE.I);
+        print(concat_str("   at PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(cycle_counter), "\n")))));
       };
       if prevCNTKCTL_EL1 != CNTKCTL_EL1 then {
         prerr_bits("[Clock] CNTKCTL_EL1 changed to ", CNTKCTL_EL1);
@@ -158,7 +168,7 @@ function fetch_and_execute () = {
         exit()
       }
     };
-    __EndCycle()
+    __EndCycle() // advance state of non-sleeping parts of the system
   }
 }
 
