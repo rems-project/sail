@@ -37,7 +37,7 @@ function fetch_and_execute () = {
       None()    => { print("Decode failed"); loop_again=false } /* Never expect this -- unknown instruction should actually result in reserved instruction ISA-level exception (see mips_ri.sail). */
     }
   } catch {
-    ISAException() => prerr_endline("EXCEPTION")
+    ISAException() => () /*prerr_endline("EXCEPTION")*/
     /* ISA-level exception occurrred either during TranslatePC or execute --
        just continue from nextPC, which should have been set to the appropriate
        exception vector (along with clearing branchPending etc.) . */
