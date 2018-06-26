@@ -258,7 +258,7 @@ void loadBlock32(const char* buffer, Elf32_Off off, Elf32_Addr addr, Elf32_Word 
 void loadProgHdr32(bool le, const char* buffer, Elf32_Off off, const int total_file_size) {
     //// std::cout << "Loading program header at " << off << std::endl;
     if (off > total_file_size - sizeof(Elf32_Phdr)) {
-      // // std::cout << "Invalid ELF file, section header overruns end of file" << std::endl;
+      fprintf(stderr, "Invalid ELF file, section header overruns end of file\n");
       exit(EXIT_FAILURE);
     }
     Elf32_Phdr *phdr = (Elf32_Phdr*) &buffer[off];
@@ -267,7 +267,7 @@ void loadProgHdr32(bool le, const char* buffer, Elf32_Off off, const int total_f
         Elf32_Off off = rdOff32(le, phdr->p_offset);
         Elf32_Word filesz = rdWord32(le, phdr->p_filesz);
         if (filesz > total_file_size - off) {
-	  // // std::cout << "Invalid ELF file, section overruns end of file" << std::endl;
+	    fprintf(stderr, "Invalid ELF file, section overruns end of file\n");
 	    exit(EXIT_FAILURE);
         }
         loadBlock32(buffer, off, rdAddr32(le, phdr->p_paddr), filesz, rdWord32(le, phdr->p_memsz));
@@ -277,7 +277,7 @@ void loadProgHdr32(bool le, const char* buffer, Elf32_Off off, const int total_f
 void loadBlock64(const char* buffer, Elf64_Off off, Elf64_Addr addr, Elf64_Word filesz, Elf64_Word memsz) {
     //// std::cout << "Loading block from " << off << " to " << addr << "+:" << filesz << std::endl;
     for(Elf64_Off i = 0; i < filesz; ++i) {
-        //// std::cout << "Writing " << (int)buffer[off+i] << " to " << addr+i << std::endl;
+        // fprintf(stderr, "Writing 0x%x to 0x%lx\n", (int)buffer[off+i], addr+i);
 	write_mem(addr+i, 0xff & buffer[off+i]);
     }
     // Zero fill if p_memsz > p_filesz
@@ -289,7 +289,7 @@ void loadBlock64(const char* buffer, Elf64_Off off, Elf64_Addr addr, Elf64_Word 
 void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int total_file_size) {
     //// std::cout << "Loading program header at " << off << std::endl;
     if (off > total_file_size - sizeof(Elf64_Phdr)) {
-      //// std::cout << "Invalid ELF file, section header overruns end of file" << std::endl;
+      fprintf(stderr, "Invalid ELF file, section header overruns end of file\n");
       exit(EXIT_FAILURE);
     }
     Elf64_Phdr *phdr = (Elf64_Phdr*) &buffer[off];
@@ -298,7 +298,7 @@ void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int total_f
         Elf64_Off off = rdOff64(le, phdr->p_offset);
         Elf64_Word filesz = rdXword64(le, phdr->p_filesz);
         if (filesz > total_file_size - off) {
-	  // // std::cout << "Invalid ELF file, section overruns end of file" << std::endl;
+	  fprintf(stderr, "Invalid ELF file, section overruns end of file\n");
 	  exit(EXIT_FAILURE);
         }
         loadBlock64(buffer, off, rdAddr64(le, phdr->p_paddr), filesz, rdXword64(le, phdr->p_memsz));
@@ -307,7 +307,7 @@ void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int total_f
 
 void loadELFHdr(const char* buffer, const int total_file_size) {
     if (total_file_size < sizeof(Elf32_Ehdr)) {
-        // std::cout << "File too small, not big enough even for 32-bit ELF header" << std::endl;
+        fprintf(stderr, "File too small, not big enough even for 32-bit ELF header\n");
         exit(EXIT_FAILURE);
     }
     Elf32_Ehdr *hdr = (Elf32_Ehdr*) &buffer[0]; // both Elf32 and Elf64 have same magic
@@ -315,7 +315,7 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
         hdr->e_ident[EI_MAG1] != ELFMAG1 ||
         hdr->e_ident[EI_MAG2] != ELFMAG2 ||
         hdr->e_ident[EI_MAG3] != ELFMAG3) {
-        // std::cout << "Invalid ELF magic bytes. Not an ELF file?" << std::endl;
+        fprintf(stderr, "Invalid ELF magic bytes. Not an ELF file?\n");
         exit(EXIT_FAILURE);
     }
 
@@ -324,7 +324,7 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
         Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
         if (rdHalf32(le, ehdr->e_type) != ET_EXEC ||
             rdHalf32(le, ehdr->e_machine) != EM_ARM) {
-            // std::cout << "Invalid ELF type or machine for class (32-bit)" << std::endl;
+            fprintf(stderr, "Invalid ELF type or machine for class (32-bit)\n");
             exit(EXIT_FAILURE);
         }
 
@@ -335,14 +335,14 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
 	return;
     } else if (hdr->e_ident[EI_CLASS] == ELFCLASS64) {
         if (total_file_size < sizeof(Elf64_Ehdr)) {
-            // std::cout << "File too small, specifies 64-bit ELF but not big enough for 64-bit ELF header" << std::endl;
+            fprintf(stderr, "File too small, specifies 64-bit ELF but not big enough for 64-bit ELF header\n");
             exit(EXIT_FAILURE);
         }
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf64_Ehdr *ehdr = (Elf64_Ehdr*) &buffer[0];
         if (rdHalf64(le, ehdr->e_type) != ET_EXEC ||
             rdHalf64(le, ehdr->e_machine) != EM_AARCH64) {
-            // std::cout << "Invalid ELF type or machine for class (64-bit)" << std::endl;
+            fprintf(stderr, "Invalid ELF type or machine for class (64-bit)\n");
             exit(EXIT_FAILURE);
         }
 
@@ -352,7 +352,7 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
 
 	return;
     } else {
-        // std::cout << "Unrecognized ELF file format" << std::endl;
+        fprintf(stderr, "Unrecognized ELF file format\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -380,7 +380,7 @@ void load_elf(char *filename) {
     return;
 
 fail:
-    // std::cout << "Unable to read file " << filename << std::endl;
+    fprintf(stderr, "Unable to read file %s\n", filename);
     exit(EXIT_FAILURE);
 }
 
