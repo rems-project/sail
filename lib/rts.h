@@ -21,11 +21,21 @@ unit sail_assert(bool b, sail_string msg);
 unit sail_exit(unit);
 
 /*
- * ASL->Sail model has an EnterLowPowerState() function that calls a
- * sleep request builtin. If it gets called we print a message and
- * exit the model.
+ * Put processor to sleep until an external device calls wakeup_request().
  */
 unit sleep_request(const unit u);
+
+/*
+ * Stop processor sleeping.
+ * (Typically called when a device generates an interrupt.)
+ */
+unit wakeup_request(const unit u);
+
+/*
+ * Test whether processor is sleeping.
+ * (Typically used to disable execution of instructions.)
+ */
+bool sleeping(const unit u);
 
 /* ***** Memory builtins ***** */
 

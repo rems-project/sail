@@ -349,3 +349,10 @@ union option ('a : Type) = {
   Some : 'a
 }
 */
+
+val __SleepRequest = {ocaml: "sleep_request", lem: "sleep_request", smt: "sleep_request", interpreter: "sleep_request", c: "sleep_request"}: unit -> unit effect {escape, rreg, undef}
+
+val __WakeupRequest = {ocaml: "wakeup_request", lem: "wakeup_request", smt: "wakeup_request", interpreter: "wakeup_request", c: "wakeup_request"}: unit -> unit effect {escape, rreg, undef}
+
+val __Sleeping = {ocaml: "sleeping", lem: "sleeping", smt: "sleeping", interpreter: "sleeping", c: "sleeping"}: unit -> bool effect {escape, rreg, undef}
+

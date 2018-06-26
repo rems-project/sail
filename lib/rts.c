@@ -25,10 +25,25 @@ unit sail_exit(unit u)
   return UNIT;
 }
 
+bool g_sleeping = false;
+
 unit sleep_request(const unit u)
 {
-  fprintf(stderr, "Sail model going to sleep\n");
+  fprintf(stderr, "Sail CPU model going to sleep\n");
+  g_sleeping = true;
   return UNIT;
+}
+
+unit wakeup_request(const unit u)
+{
+  fprintf(stderr, "Sail CPU model waking up\n");
+  g_sleeping = false;
+  return UNIT;
+}
+
+bool sleeping(const unit u)
+{
+    return g_sleeping;
 }
 
 /* ***** Sail memory builtins ***** */
@@ -448,7 +463,6 @@ int process_arguments(int argc, char *argv[])
       g_elf_entry = elf_entry;
   }
 
-  fprintf(stderr, "Parsed all command line options\n");
   return 0;
 }
 
