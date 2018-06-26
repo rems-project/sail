@@ -129,11 +129,14 @@ let load_segment ?writer:(writer=write_sail_lib) seg =
   let size = seg.elf64_segment_size in
   let memsz = seg.elf64_segment_memsz in
   prerr_endline "\nLoading Segment";
-  prerr_endline ("Segment offset: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 offset)));
-  prerr_endline ("Segment base address: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 base)));
-  prerr_endline ("Segment physical address: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 paddr)));
-  prerr_endline ("Segment size: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 size)));
-  prerr_endline ("Segment memsz: " ^ (Printf.sprintf "%Lx" (Big_int.to_int64 memsz)));
+  prerr_endline ("Segment offset: " ^ (Printf.sprintf "0x%Lx" (Big_int.to_int64 offset)));
+  prerr_endline ("Segment base address: " ^ (Big_int.to_string base));
+  (* NB don't attempt to convert paddr to int64 because on MIPS it is quite likely to exceed signed
+     64-bit range e.g. addresses beginning 0x9.... Really need to_uint64 or to_string_hex but lem 
+     doesn't have them. *)
+  prerr_endline ("Segment physical address: " ^ (Printf.sprintf "0x%Lx" (Big_int.to_int64 paddr)));
+  prerr_endline ("Segment size: " ^  (Printf.sprintf "0x%Lx" (Big_int.to_int64 size)));
+  prerr_endline ("Segment memsz: " ^ (Printf.sprintf "0x%Lx" (Big_int.to_int64 memsz)));
   print_segment seg;
   List.iteri (writer paddr) (List.rev_map int_of_char (List.rev (Byte_sequence.char_list_of_byte_sequence bs)));
   write_mem_zeros (Big_int.add paddr size) (Big_int.sub memsz size)
