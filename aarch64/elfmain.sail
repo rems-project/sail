@@ -81,53 +81,55 @@ function fetch_and_execute () = {
       var prevCNTHCTL_EL2 = CNTHCTL_EL2;
 
       if ~(__Sleeping()) then {
-          var ok = false;
 
           // Check for pending interrupts
           var interrupt_req : InterruptReq = undefined;
           interrupt_req.take_SE  = true; interrupt_req.take_vSE  = true;
           interrupt_req.take_IRQ = true; interrupt_req.take_vIRQ = true;
           interrupt_req.take_FIQ = true; interrupt_req.take_vFIQ = true;
-          ok = ~(TakePendingInterrupts(interrupt_req));
-
-          try {
-              __currentInstr = __fetchA64();
-              ok = true;
-          } catch {
-              Error_ExceptionTaken() => {
-                print("Exception taken during IFetch\n")
-              },
-              _ => {
-                print("Exiting due to unhandled exception during fetch\n");
-                exit()
-              }
-          };
-          if ok then {
+          if TakePendingInterrupts(interrupt_req) then {
+              print("Pending interrupt taken\n");
+          } else {
+              var ok = false;
               try {
-                  ok = false;
-                  __PC_changed = false;
-                  ShouldAdvanceIT = (PSTATE.nRW == [bitone]) & (PSTATE.T == [bitone]);
-                  decode(__currentInstr);
-                  if ~(__PC_changed) then _PC = _PC + 4 else ();
-                  if ShouldAdvanceIT then AArch32_ITAdvance() else ();
-                  SSAdvance();
-                  __UpdateSystemCounter(); // should this happen even if sleeping?
+                  __currentInstr = __fetchA64();
                   ok = true;
               } catch {
-                  Error_See(_)              => UndefinedFault(),
-                  Error_ReservedEncoding(_) => UndefinedFault(),
-                  Error_Undefined()         => UndefinedFault(),
                   Error_ExceptionTaken() => {
-                    print("Exception taken during IFetch\n")
+                    print(concat_str("Exception taken during IFetch from PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
                   },
                   _ => {
-                    print("Exiting due to unhandled exception during decode/execute\n");
+                    print("Exiting due to unhandled exception during fetch\n");
                     exit()
                   }
+              };
+              if ok then {
+                  try {
+                      ok = false;
+                      __PC_changed = false;
+                      ShouldAdvanceIT = (PSTATE.nRW == [bitone]) & (PSTATE.T == [bitone]);
+                      decode(__currentInstr);
+                      if ~(__PC_changed) then _PC = _PC + 4 else ();
+                      if ShouldAdvanceIT then AArch32_ITAdvance() else ();
+                      SSAdvance();
+                      __UpdateSystemCounter(); // should this happen even if sleeping?
+                      ok = true;
+                  } catch {
+                      Error_See(_)              => UndefinedFault(),
+                      Error_ReservedEncoding(_) => UndefinedFault(),
+                      Error_Undefined()         => UndefinedFault(),
+                      Error_ExceptionTaken() => {
+                        print(concat_str("Exception taken during Decode/Execute from PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
+                      },
+                      _ => {
+                        print("Exiting due to unhandled exception during decode/execute\n");
+                        exit()
+                      }
+                  }
+              };
+              if ~(ok) then {
+                  print(concat_str("Yoiks: something went wrong at ", concat_str(DecStr(cycle_counter), "\n")));
               }
-          };
-          if ~(ok) then {
-              print(concat_str("Yoiks: something went wrong at ", concat_str(DecStr(cycle_counter), "\n")));
           }
       };
 
