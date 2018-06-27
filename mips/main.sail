@@ -1,7 +1,7 @@
 
-val cycle_count = { c: "cycle_count" } : unit -> unit
+val cycle_limit_reached = { c: "cycle_limit_reached" } : unit -> bool
 
-function cycle_count() = ()
+function cycle_limit_reached() = false
 
 register instCount : int
 
@@ -42,8 +42,7 @@ function fetch_and_execute () = {
        just continue from nextPC, which should have been set to the appropriate
        exception vector (along with clearing branchPending etc.) . */
   };
-  cycle_count();
-  loop_again;
+  loop_again & not (cycle_limit_reached());
 }
 
 val elf_entry = {

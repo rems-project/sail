@@ -347,13 +347,18 @@ void elf_tohost(mpz_t *rop, const unit u)
 static uint64_t g_cycle_count = 0;
 static uint64_t g_cycle_limit;
 
+/* NB Also increments cycle_count */
+bool cycle_limit_reached(const unit u)
+{
+  return ++g_cycle_count >= g_cycle_limit && g_cycle_limit != 0;
+}
+
 unit cycle_count(const unit u)
 {
-  if (++g_cycle_count >= g_cycle_limit && g_cycle_limit != 0) {
+  if (cycle_limit_reached(UNIT)) {
     printf("\n[Sail] cycle limit %" PRId64 " reached\n", g_cycle_limit);
     exit(EXIT_SUCCESS);
   }
-
   return UNIT;
 }
 

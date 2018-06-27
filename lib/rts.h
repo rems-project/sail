@@ -109,6 +109,8 @@ void trace_end(void);
  * Functions for counting and limiting cycles
  */
 
+bool cycle_limit_reached(const unit);
+
 unit cycle_count(const unit);
 
 /*
