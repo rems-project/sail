@@ -13,7 +13,7 @@ let CNT_IRQ  = [0x0000_000d,       0x0000_000a,        0x0000_03ff,        0x000
 // SGI Interrupts are 0-15, PPI interrupts are 16-31, so SPI interrupts have an offset of 32.
 let SPI_OFFSET = 32
 
-register cycle_counter : int
+val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {escape, undef, wreg, rreg, rmem, wmem}
 
 // Advance CPU by one cycle
 val Step_CPU : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
@@ -43,7 +43,7 @@ function Step_CPU() = {
       fetch_ok = true;
   } catch {
       Error_ExceptionTaken() => {
-        print(concat_str("Exception taken during IFetch from PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
+        print(concat_str("Exception taken during IFetch from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
       },
       _ => {
         print("Exiting due to unhandled exception during fetch\n");
@@ -62,12 +62,12 @@ function Step_CPU() = {
           Error_See(_)              => try { AArch64_UndefinedFault() } catch { _ => print("Exception during SEE recovery\n") },
           Error_ReservedEncoding(_) => try { AArch64_UndefinedFault() } catch { _ => print("Exception during ReservedEncoding recovery\n") },
           Error_ExceptionTaken() => {
-            print(concat_str("ExceptionTaken during Decode/Execute from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" opcode=", concat_str(HexStr(UInt(__currentInstr)), "\n")))));
+            print(concat_str("ExceptionTaken during Decode/Execute from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" opcode=", concat_str(HexStr(UInt(__currentInstr)), concat_str(" in cycle ", concat_str(DecStr(get_cycle_count()), "\n")))))));
             // print("  This might just be a HINT like 0xd50320df\n");
             ()
           },
           Error_Implementation_Defined(s) => {
-            print(concat_str("Ignoring IMPLEMENTATION_DEFINED", concat_str(s, "\n")));
+            print(concat_str("Ignoring IMPLEMENTATION_DEFINED ", concat_str(s, "\n")));
           }
       }
   };
@@ -158,7 +158,7 @@ function fetch_and_execute () = {
       };
       if prevI != PSTATE.I then {
 	prerr_bits("[Sail] PSTATE.I changed to: ", PSTATE.I);
-        print(concat_str("   at PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(cycle_counter), "\n")))));
+        print(concat_str("   at PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
       };
       if prevCNTKCTL_EL1 != CNTKCTL_EL1 then {
         prerr_bits("[Clock] CNTKCTL_EL1 changed to ", CNTKCTL_EL1);
@@ -179,7 +179,6 @@ function fetch_and_execute () = {
       }
     };
     __EndCycle(); // advance state of non-sleeping parts of the system
-    cycle_counter = cycle_counter + 1;
 }
 
 let COLD_RESET : bool = true
@@ -191,15 +190,16 @@ val init : unit -> unit effect {escape, undef, rreg, wreg}
 function init() = {
   __currentInstrLength = 4;
   TakeReset(COLD_RESET);
-  _PC = CFG_RVBAR;
 }
 
 val main : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
+val check_cycle_count = { c: "cycle_count" } : unit -> unit
+
 function main() = {
   init();
-  cycle_counter = 0;
   while true do {
-    fetch_and_execute()
+    fetch_and_execute();
+    check_cycle_count();
   }
 }

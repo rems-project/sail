@@ -109,9 +109,14 @@ void trace_end(void);
  * Functions for counting and limiting cycles
  */
 
+// increment cycle count and test if over limit
 bool cycle_limit_reached(const unit);
 
+// increment cycle count and abort if over
 unit cycle_count(const unit);
+
+// read cycle count
+void get_cycle_count(sail_int *rop, const unit);
 
 /*
  * Functions to get info from ELF files.

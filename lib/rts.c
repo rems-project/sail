@@ -7,6 +7,8 @@
 #include"elf.h"
 
 static uint64_t g_elf_entry;
+static uint64_t g_cycle_count = 0;
+static uint64_t g_cycle_limit;
 
 void sail_match_failure(sail_string msg)
 {
@@ -23,6 +25,7 @@ unit sail_assert(bool b, sail_string msg)
 
 unit sail_exit(unit u)
 {
+  fprintf(stderr, "[Sail] Exiting after %lld cycles\n", g_cycle_count);
   exit(EXIT_SUCCESS);
   return UNIT;
 }
@@ -344,9 +347,6 @@ void elf_tohost(mpz_t *rop, const unit u)
 
 /* ***** Cycle limit ***** */
 
-static uint64_t g_cycle_count = 0;
-static uint64_t g_cycle_limit;
-
 /* NB Also increments cycle_count */
 bool cycle_limit_reached(const unit u)
 {
@@ -360,6 +360,11 @@ unit cycle_count(const unit u)
     exit(EXIT_SUCCESS);
   }
   return UNIT;
+}
+
+void get_cycle_count(sail_int *rop, const unit u)
+{
+    mpz_init_set_ui(*rop, g_cycle_count);
 }
 
 /* ***** Argument Parsing ***** */
