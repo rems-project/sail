@@ -2748,13 +2748,13 @@ let compile_ast ctx (Defs defs) =
     let postamble = separate hardline (List.map string
        ( [ "int main(int argc, char *argv[])";
            "{";
-           "  setup_rts();";
-           "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);" ]
+           "  setup_rts();" ]
        @ fst exn_boilerplate
        @ startup cdefs
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
        @ (if regs = [] then [] else [ "  zinitializze_registers(UNIT);" ])
        @ letbind_initializers
+       @ [  "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);" ]
        @ [ "  zmain(UNIT);" ]
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)

@@ -126,3 +126,5 @@ int process_arguments(int, char**);
  */
 void setup_rts(void);
 void cleanup_rts(void);
+
+unit z__SetConfig(sail_string, sail_int);
