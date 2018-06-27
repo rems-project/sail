@@ -301,6 +301,11 @@ bool gteq_real(const real op1, const real op2);
 
 void real_power(real *rop, const real base, const sail_int exp);
 
+unit print_real(const sail_string, const real);
+unit prerr_real(const sail_string, const real);
+
+void random_real(real *rop, unit);
+
 /* ***** Printing ***** */
 
 void string_of_int(sail_string *str, const sail_int i);

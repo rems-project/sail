@@ -10,14 +10,18 @@
  * Temporary mpzs for use in functions below. To avoid conflicts, only
  * use in functions that do not call other functions in this file.
  */
-static sail_int sail_lib_tmp1, sail_lib_tmp2;
+static sail_int sail_lib_tmp1, sail_lib_tmp2, sail_lib_tmp3;
+static real sail_lib_tmp_real;
 
 #define FLOAT_PRECISION 255
 
 void setup_library(void)
 {
+  srand(0x0);
   mpz_init(sail_lib_tmp1);
   mpz_init(sail_lib_tmp2);
+  mpz_init(sail_lib_tmp3);
+  mpq_init(sail_lib_tmp_real);
   mpf_set_default_prec(FLOAT_PRECISION);
 }
 
@@ -25,6 +29,8 @@ void cleanup_library(void)
 {
   mpz_clear(sail_lib_tmp1);
   mpz_clear(sail_lib_tmp2);
+  mpz_clear(sail_lib_tmp3);
+  mpq_clear(sail_lib_tmp_real);
 }
 
 bool eq_unit(const unit a, const unit b)
@@ -875,11 +881,17 @@ void sqrt_real(real *rop, const real op)
     /* if the difference is small enough, return */
     if (mpq_cmp(tmp, convergence) < 0) {
       mpq_set(*rop, n);
-      return;
+      break;
     }
 
     mpq_swap(n, p);
   }
+
+  mpq_clear(tmp);
+  mpz_clear(tmp_z);
+  mpq_clear(p);
+  mpq_clear(n);
+  mpq_clear(convergence);
 }
 
 void abs_real(real *rop, const real op)
@@ -958,7 +970,39 @@ void real_power(real *rop, const real base, const sail_int exp)
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
 {
   mpq_init(*rop);
-  gmp_sscanf(op, "%Qf", *rop);
+  gmp_sscanf(op, "%Zd.%Zd", sail_lib_tmp1, sail_lib_tmp2);
+
+  unsigned long len = (unsigned long) mpz_sizeinbase(sail_lib_tmp2, 10);
+  mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
+  mpz_set(mpq_numref(*rop), sail_lib_tmp2);
+  mpz_set(mpq_denref(*rop), sail_lib_tmp3);
+  mpq_canonicalize(*rop);
+  mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
+  mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
+  mpq_add(*rop, *rop, sail_lib_tmp_real);
+}
+
+unit print_real(const sail_string str, const real op)
+{
+  gmp_printf("%s%Qd\n", str, op);
+  return UNIT;
+}
+
+unit prerr_real(const sail_string str, const real op)
+{
+  gmp_fprintf(stderr, "%s%Qd\n", str, op);
+  return UNIT;
+}
+
+void random_real(real *rop, const unit u)
+{
+  if (rand() & 1) {
+    mpz_set_si(mpq_numref(*rop), rand());
+  } else {
+    mpz_set_si(mpq_numref(*rop), -rand());
+  }
+  mpz_set_si(mpq_denref(*rop), rand());
+  mpq_canonicalize(*rop);
 }
 
 /* ***** Printing functions ***** */

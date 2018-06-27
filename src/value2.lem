@@ -70,19 +70,6 @@ type vl =
   | V_record of list (string * vl)
   | V_null (* Used for unitialized values and null pointers in C compilation *)
 
-let string_of_value = function
-  | V_bits bs -> show_bitlist bs ^ "ul"
-  | V_int i -> show i ^ "l"
-  | V_bool true -> "true"
-  | V_bool false -> "false"
-  | V_null -> "NULL"
-  | V_unit -> "UNIT"
-  | V_bit B0 -> "0ul"
-  | V_bit B1 -> "1ul"
-  | V_string str -> "\"" ^ str ^ "\""
-  | _ -> failwith "Cannot convert value to string"
-end
-
 let primops extern args =
   match (extern, args) with
   | ("and_bool", [V_bool b1; V_bool b2]) -> V_bool (b1 && b2)

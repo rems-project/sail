@@ -135,14 +135,14 @@ let rec frag_rename from_id to_id = function
 (**************************************************************************)
 
 let string_of_value = function
-  | V_bits bs -> Sail2_values.show_bitlist bs ^ "ul"
+  | V_bits bs -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
   | V_int i -> Big_int.to_string i ^ "l"
   | V_bool true -> "true"
   | V_bool false -> "false"
   | V_null -> "NULL"
   | V_unit -> "UNIT"
-  | V_bit Sail2_values.B0 -> "0ul"
-  | V_bit Sail2_values.B1 -> "1ul"
+  | V_bit Sail2_values.B0 -> "UINT64_C(0)"
+  | V_bit Sail2_values.B1 -> "UINT64_C(1)"
   | V_string str -> "\"" ^ str ^ "\""
   | V_ctor_kind str -> "Kind_" ^ Util.zencode_string str
   | _ -> failwith "Cannot convert value to string"

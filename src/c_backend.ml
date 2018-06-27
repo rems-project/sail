@@ -273,8 +273,8 @@ let mask m =
   if Big_int.less_equal m (Big_int.of_int 64) then
     let n = Big_int.to_int m in
     if n mod 4 == 0
-    then "0x" ^ String.make (16 - n / 4) '0' ^ String.make (n / 4) 'F' ^ "ul"
-    else "0b" ^ String.make (64 - n) '0' ^ String.make n '1' ^ "ul"
+    then "UINT64_C(0x" ^ String.make (16 - n / 4) '0' ^ String.make (n / 4) 'F' ^ ")"
+    else "UINT64_C(" ^ String.make (64 - n) '0' ^ String.make n '1' ^ ")"
   else
     failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
@@ -1872,7 +1872,7 @@ let sgen_cval_param (frag, ctyp) =
   | CT_bits direction ->
      string_of_fragment frag ^ ", " ^ string_of_bool direction
   | CT_bits64 (len, direction) ->
-     string_of_fragment frag ^ ", " ^ string_of_int len ^ "ul , " ^ string_of_bool direction
+     string_of_fragment frag ^ ", UINT64_C(" ^ string_of_int len ^ ") , " ^ string_of_bool direction
   | _ ->
      string_of_fragment frag
 
