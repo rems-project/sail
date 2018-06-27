@@ -969,10 +969,13 @@ void real_power(real *rop, const real base, const sail_int exp)
 
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
 {
-  mpq_init(*rop);
-  gmp_sscanf(op, "%Zd.%Zd", sail_lib_tmp1, sail_lib_tmp2);
+  int decimal;
+  int total;
 
-  unsigned long len = (unsigned long) mpz_sizeinbase(sail_lib_tmp2, 10);
+  mpq_init(*rop);
+  gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total);
+
+  int len = total - decimal;
   mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
   mpz_set(mpq_numref(*rop), sail_lib_tmp2);
   mpz_set(mpq_denref(*rop), sail_lib_tmp3);
