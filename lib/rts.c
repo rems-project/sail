@@ -391,13 +391,19 @@ int process_arguments(int argc, char *argv[])
             // do nothing
         } else {
           fprintf(stderr, "Could not parse argument %s\n", optarg);
+#ifdef HAVE_SETCONFIG
           z__ListConfig(UNIT);
+#endif
           return -1;
         };
+#ifdef HAVE_SETCONFIG
         mpz_t s_value;
         mpz_init_set_ui(s_value, value);
         z__SetConfig(arg, s_value);
         mpz_clear(s_value);
+#else
+        fprintf(stderr, "Ignoring flag -C %s", optarg);
+#endif
       }
       break;
 
