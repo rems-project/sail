@@ -33,7 +33,6 @@ let MEMea_conditional_strong_release addr size
 val write_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
   integer -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b -> monad 'rv unit 'e
 let write_ram addrsize size hexRAM address value =
-  write_mem_ea Write_plain address size >>
   write_mem_val value >>= fun _ ->
   return ()
 
