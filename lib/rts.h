@@ -128,3 +128,4 @@ void setup_rts(void);
 void cleanup_rts(void);
 
 unit z__SetConfig(sail_string, sail_int);
+unit z__ListConfig(const unit u);

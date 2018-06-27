@@ -391,7 +391,7 @@ int process_arguments(int argc, char *argv[])
             // do nothing
         } else {
           fprintf(stderr, "Could not parse argument %s\n", optarg);
-          // z__ListConfig();
+          z__ListConfig(UNIT);
           return -1;
         };
         mpz_t s_value;

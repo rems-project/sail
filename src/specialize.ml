@@ -364,7 +364,7 @@ let specialize_id_overloads instantiations id (Defs defs) =
    valspecs are then re-specialized. This process is iterated until
    the whole spec is specialized. *)
 let remove_unused_valspecs env ast =
-  let calls = ref (IdSet.of_list [mk_id "main"; mk_id "__SetConfig"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"; mk_id "append_64"]) in
+  let calls = ref (IdSet.of_list [mk_id "main"; mk_id "__SetConfig"; mk_id "__ListConfig"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"; mk_id "append_64"]) in
   let vs_ids = Initial_check.val_spec_ids ast in
 
   let inspect_exp = function
