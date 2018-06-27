@@ -773,121 +773,185 @@ void reverse_endianness(sail_bits *rop, const sail_bits op)
 
 void CREATE(real)(real *rop)
 {
-  mpf_init(*rop);
+  mpq_init(*rop);
 }
 
 void RECREATE(real)(real *rop)
 {
-  mpf_set_ui(*rop, 0);
+  mpq_set_ui(*rop, 0, 1);
 }
 
 void KILL(real)(real *rop)
 {
-  mpf_clear(*rop);
+  mpq_clear(*rop);
 }
 
 void COPY(real)(real *rop, const real op)
 {
-  mpf_set(*rop, op);
+  mpq_set(*rop, op);
 }
 
 void UNDEFINED(real)(real *rop, unit u)
 {
-  mpf_set_ui(*rop, 0ul);
+  mpq_set_ui(*rop, 0, 1);
 }
 
 void neg_real(real *rop, const real op)
 {
-  mpf_neg(*rop, op);
+  mpq_neg(*rop, op);
 }
 
 void mult_real(real *rop, const real op1, const real op2) {
-  mpf_mul(*rop, op1, op2);
+  mpq_mul(*rop, op1, op2);
 }
 
 void sub_real(real *rop, const real op1, const real op2)
 {
-  mpf_sub(*rop, op1, op2);
+  mpq_sub(*rop, op1, op2);
 }
 
 void add_real(real *rop, const real op1, const real op2)
 {
-  mpf_add(*rop, op1, op2);
+  mpq_add(*rop, op1, op2);
 }
 
 void div_real(real *rop, const real op1, const real op2)
 {
-  mpf_div(*rop, op1, op2);
+  mpq_div(*rop, op1, op2);
 }
 
+#define SQRT_PRECISION 30
+
+/*
+ * sqrt_real first checks if op has the form n/1 - in which case, if n
+ * is a perfect square (i.e. it's square root is an integer), then it
+ * will return the exact square root using mpz_sqrt. If that's not the
+ * case we use the Babylonian method to calculate the square root to
+ * SQRT_PRECISION decimal places.
+ */
 void sqrt_real(real *rop, const real op)
 {
-  mpf_sqrt(*rop, op);
+  /* First check if op is a perfect square and use mpz_sqrt if so */
+  if (mpz_cmp_ui(mpq_denref(op), 1) == 0 && mpz_perfect_square_p(mpq_numref(op))) {
+    mpz_sqrt(mpq_numref(*rop), mpq_numref(op));
+    mpz_set_ui(mpq_denref(*rop), 1);
+    return;
+  }
+
+  mpq_t tmp;
+  mpz_t tmp_z;
+  mpq_t p; /* previous estimate, p */
+  mpq_t n; /* next estimate, n */
+  /* convergence is the precision (in decimal places) we want to reach as a fraction 1/(10^precision) */
+  mpq_t convergence;
+
+  mpq_init(tmp);
+  mpz_init(tmp_z);
+  mpq_init(p);
+  mpq_init(n);
+  mpq_init(convergence);
+
+  /* calculate an initial guess using mpz_sqrt */
+  mpz_cdiv_q(tmp_z, mpq_numref(op), mpq_denref(op));
+  mpz_sqrt(tmp_z, tmp_z);
+  mpq_set_z(p, tmp_z);
+
+  /* initialise convergence based on SQRT_PRECISION */
+  mpz_set_ui(tmp_z, 10);
+  mpz_pow_ui(tmp_z, tmp_z, SQRT_PRECISION);
+  mpz_set_ui(mpq_numref(convergence), 1);
+  mpq_set_den(convergence, tmp_z);
+
+  while (true) {
+    // n = (p + op / p) / 2
+    mpq_div(tmp, op, p);
+    mpq_add(tmp, tmp, p);
+    mpq_div_2exp(n, tmp, 1);
+
+    /* calculate the difference between n and p */
+    mpq_sub(tmp, p, n);
+    mpq_abs(tmp, tmp);
+
+    /* if the difference is small enough, return */
+    if (mpq_cmp(tmp, convergence) < 0) {
+      mpq_set(*rop, n);
+      return;
+    }
+
+    mpq_swap(n, p);
+  }
 }
 
 void abs_real(real *rop, const real op)
 {
-  mpf_abs(*rop, op);
+  mpq_abs(*rop, op);
 }
 
 void round_up(sail_int *rop, const real op)
 {
-  mpf_t x;
-  mpf_init(x);
-  mpf_ceil(x, op);
-  mpz_set_ui(*rop, mpf_get_ui(x));
-  mpf_clear(x);
+  mpz_cdiv_q(*rop, mpq_numref(op), mpq_denref(op));
 }
 
 void round_down(sail_int *rop, const real op)
 {
-  mpf_t x;
-  mpf_init(x);
-  mpf_floor(x, op);
-  mpz_set_ui(*rop, mpf_get_ui(x));
-  mpf_clear(x);
+  mpz_fdiv_q(*rop, mpq_numref(op), mpq_denref(op));
 }
 
 void to_real(real *rop, const sail_int op)
 {
-  mpf_set_z(*rop, op);
+  mpq_set_z(*rop, op);
+  mpq_canonicalize(*rop);
 }
 
 bool eq_real(const real op1, const real op2)
 {
-  return mpf_cmp(op1, op2) == 0;
+  return mpq_cmp(op1, op2) == 0;
 }
 
 bool lt_real(const real op1, const real op2)
 {
-  return mpf_cmp(op1, op2) < 0;
+  return mpq_cmp(op1, op2) < 0;
 }
 
 bool gt_real(const real op1, const real op2)
 {
-  return mpf_cmp(op1, op2) > 0;
+  return mpq_cmp(op1, op2) > 0;
 }
 
 bool lteq_real(const real op1, const real op2)
 {
-  return mpf_cmp(op1, op2) <= 0;
+  return mpq_cmp(op1, op2) <= 0;
 }
 
 bool gteq_real(const real op1, const real op2)
 {
-  return mpf_cmp(op1, op2) >= 0;
+  return mpq_cmp(op1, op2) >= 0;
 }
 
 void real_power(real *rop, const real base, const sail_int exp)
 {
-  uint64_t exp_ui = mpz_get_ui(exp);
-  mpf_pow_ui(*rop, base, exp_ui);
+  int64_t exp_si = mpz_get_si(exp);
+
+  if (exp_si == 0) {
+    mpz_set_ui(mpq_numref(*rop), 1);
+    mpz_set_ui(mpq_denref(*rop), 1);
+  } else {
+    mpq_set(*rop, base);
+
+    for (int i = 1; i < abs(exp_si); i++) {
+      mpq_mul(*rop, *rop, base);
+    }
+
+    if (exp_si < 0) {
+      mpq_inv(*rop, *rop);
+    }
+  }
 }
 
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
 {
-  mpf_init(*rop);
-  gmp_sscanf(op, "%Ff", *rop);
+  mpq_init(*rop);
+  gmp_sscanf(op, "%Qf", *rop);
 }
 
 /* ***** Printing functions ***** */

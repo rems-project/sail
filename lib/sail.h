@@ -269,7 +269,7 @@ void reverse_endianness(sail_bits*, sail_bits);
 
 /* ***** Sail reals ***** */
 
-typedef mpf_t real;
+typedef mpq_t real;
 
 SAIL_BUILTIN_TYPE(real);
 
