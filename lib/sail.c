@@ -932,20 +932,27 @@ void real_power(real *rop, const real base, const sail_int exp)
 {
   int64_t exp_si = mpz_get_si(exp);
 
-  if (exp_si == 0) {
-    mpz_set_ui(mpq_numref(*rop), 1);
-    mpz_set_ui(mpq_denref(*rop), 1);
-  } else {
-    mpq_set(*rop, base);
+  mpz_set_ui(mpq_numref(*rop), 1);
+  mpz_set_ui(mpq_denref(*rop), 1);
 
-    for (int i = 1; i < abs(exp_si); i++) {
-      mpq_mul(*rop, *rop, base);
-    }
-
-    if (exp_si < 0) {
-      mpq_inv(*rop, *rop);
+  real b;
+  mpq_init(b);
+  mpq_set(b, base);
+  int64_t pexp = llabs(exp_si);
+  while (pexp != 0) {
+    // invariant: rop * b^pexp == base^abs(exp)
+    if (pexp & 1) { // b^(e+1) = b * b^e
+      mpq_mul(*rop, *rop, b);
+      pexp -= 1;
+    } else { // b^(2e) = (b*b)^e
+      mpq_mul(b, b, b);
+      pexp >>= 1;
     }
   }
+  if (exp_si < 0) {
+    mpq_inv(*rop, *rop);
+  }
+  mpq_clear(b);
 }
 
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
