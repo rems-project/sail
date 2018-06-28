@@ -59,8 +59,6 @@ module Big_int = Nat_big_num
 let anf_error ?loc:(l=Parse_ast.Unknown) message =
   raise (Reporting_basic.err_general l ("\nANF translation: " ^ message))
 
-
-  
 (**************************************************************************)
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)

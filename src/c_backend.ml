@@ -60,7 +60,7 @@ open Anf
 
 module Big_int = Nat_big_num
 
-let c_verbosity = ref 1
+let c_verbosity = ref 0
 let opt_ddump_flow_graphs = ref false
 let opt_trace = ref false
 
@@ -1504,7 +1504,6 @@ let rec compile_def ctx = function
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      c_debug (lazy ("Compiling function " ^ string_of_id id));
      let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow (pat_ids pat) (anf exp))) in
-     if string_of_id id = "fetch_and_execute" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      c_debug (lazy "Compiled aexp");
      let fundef_label = label "fundef_fail_" in

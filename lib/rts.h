@@ -57,6 +57,9 @@ void read_ram(sail_bits *data,
 	      const sail_bits hex_ram,
 	      const sail_bits addr_bv);
 
+unit write_tag_bool(const mach_bits, const bool);
+bool read_tag_bool(const mach_bits);
+
 unit load_raw(mach_bits addr, const sail_string file);
 
 void load_image(char *);

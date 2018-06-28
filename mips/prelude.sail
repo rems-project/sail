@@ -71,7 +71,7 @@ val int_power = {ocaml: "int_power", lem: "pow", coq: "Z.pow"} : (int, int) -> i
 
 overload operator ^ = {xor_vec, int_power}
 
-val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range"} : forall 'n 'm 'o 'p.
+val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range", c: "add_int"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
 val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -108,13 +108,13 @@ val modulus = {ocaml: "modulus", lem: "hardware_mod", _ : "tmod_int"} : forall '
 
 overload operator % = {modulus}
 
-val min_nat = {ocaml: "min_int", lem: "min", coq: "Z.min"} : (nat, nat) -> nat
+val min_nat = {lem: "min", coq: "Z.min", _: "min_int"} : (nat, nat) -> nat
 
-val min_int = {ocaml: "min_int", lem: "min", coq: "Z.min"} : (int, int) -> int
+val min_int = {lem: "min", coq: "Z.min", _: "min_int"} : (int, int) -> int
 
-val max_nat = {ocaml: "max_int", lem: "max", coq: "Z.max"} : (nat, nat) -> nat
+val max_nat = {lem: "max", coq: "Z.max", _: "max_int"} : (nat, nat) -> nat
 
-val max_int = {ocaml: "max_int", lem: "max", coq: "Z.max"} : (int, int) -> int
+val max_int = {lem: "max", coq: "Z.max", _: "max_int"} : (int, int) -> int
 
 val min_atom = {ocaml: "min_int", lem: "min", coq: "min_atom"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 

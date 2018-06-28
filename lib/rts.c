@@ -65,6 +65,14 @@ struct block {
 
 struct block *sail_memory = NULL;
 
+struct tag_block {
+  uint64_t block_id;
+  bool *mem;
+  struct tag_block *next;
+};
+
+struct tag_block *sail_tags = NULL;
+
 /*
  * Must be one less than a power of two.
  */
@@ -76,8 +84,6 @@ uint64_t MASK = 0xFFFFFFul;
  */
 void write_mem(uint64_t address, uint64_t byte)
 {
-  //printf("ADDR: %lu, BYTE: %lu\n", address, byte);
-
   uint64_t mask = address & ~MASK;
   uint64_t offset = address & MASK;
 
@@ -123,6 +129,55 @@ uint64_t read_mem(uint64_t address)
   return 0x00;
 }
 
+unit write_tag_bool(const uint64_t address, const bool tag)
+{
+  uint64_t mask = address & ~MASK;
+  uint64_t offset = address & MASK;
+
+  struct tag_block *current = sail_tags;
+
+  while (current != NULL) {
+    if (current->block_id == mask) {
+      current->mem[offset] = tag;
+      return UNIT;
+    } else {
+      current = current->next;
+    }
+  }
+
+  /*
+   * If we couldn't find a block matching the mask, allocate a new
+   * one, write the byte, and put it at the front of the block list.
+   */
+  fprintf(stderr, "[Sail] Allocating new tag block 0x%" PRIx64 "\n", mask);
+  struct tag_block *new_block = malloc(sizeof(struct tag_block));
+  new_block->block_id = mask;
+  new_block->mem = calloc(MASK + 1, sizeof(bool));
+  new_block->mem[offset] = tag;
+  new_block->next = sail_tags;
+  sail_tags = new_block;
+
+  return UNIT;
+}
+
+bool read_tag_bool(const uint64_t address)
+{
+  uint64_t mask = address & ~MASK;
+  uint64_t offset = address & MASK;
+
+  struct tag_block *current = sail_tags;
+
+  while (current != NULL) {
+    if (current->block_id == mask) {
+      return current->mem[offset];
+    } else {
+      current = current->next;
+    }
+  }
+
+  return false;
+}
+
 void kill_mem()
 {
   while (sail_memory != NULL) {
@@ -132,6 +187,15 @@ void kill_mem()
     free(sail_memory);
 
     sail_memory = next;
+  }
+
+  while (sail_tags != NULL) {
+    struct tag_block *next = sail_tags->next;
+
+    free(sail_tags->mem);
+    free(sail_tags);
+
+    sail_tags = next;
   }
 }
 
