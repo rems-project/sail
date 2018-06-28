@@ -467,9 +467,11 @@ int process_arguments(int argc, char *argv[])
     case 'C': {
         char arg[100];
         uint64_t value;
-        if (sscanf(optarg, "%99[a-zA-Z0-9_-.]=%" PRId64, arg, &value)) {
+        if (sscanf(optarg, "%99[a-zA-Z0-9_-.]=0x%" PRIx64, arg, &value) == 2) {
+            // fprintf(stderr, "Got hex flag %s %" PRIx64 "\n", arg, value);
             // do nothing
-        } else if (sscanf(optarg, "%99[a-zA-Z0-9_.]=0x%" PRIx64, arg, &value)) {
+        } else if (sscanf(optarg, "%99[a-zA-Z0-9_-.]=%" PRId64, arg, &value) == 2) {
+            // fprintf(stderr, "Got decimal flag %s %" PRIx64 "\n", arg, value);
             // do nothing
         } else {
           fprintf(stderr, "Could not parse argument %s\n", optarg);
