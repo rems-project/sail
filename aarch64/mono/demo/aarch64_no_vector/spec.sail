@@ -2064,6 +2064,8 @@ val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
 
 function Replicate x = {
   assert('N % 'M == 0, "((N MOD M) == 0)");
+  let 'O = 'N / 'M;
+  assert(constraint('O * 'M = 'N));
   return(replicate_bits(x, 'N / 'M))
 }
 
