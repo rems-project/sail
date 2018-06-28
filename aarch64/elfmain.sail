@@ -67,7 +67,8 @@ function Step_CPU() = {
             ()
           },
           Error_Implementation_Defined(s) => {
-            print(concat_str("Ignoring IMPLEMENTATION_DEFINED ", concat_str(s, "\n")));
+            print(concat_str("IMPLEMENTATION_DEFINED ", concat_str(s, "\n")));
+            exit();
           }
       }
   };
