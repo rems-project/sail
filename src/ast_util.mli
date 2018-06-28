@@ -251,6 +251,12 @@ module BE : sig
   val compare : base_effect -> base_effect -> int
 end
 
+(* NB: the comparison function does not expand synonyms *)
+module Typ : sig
+  type t = typ
+  val compare : typ -> typ -> int
+end
+
 module IdSet : sig
   include Set.S with type elt = id
 end
@@ -277,6 +283,10 @@ end
 
 module Bindings : sig
   include Map.S with type key = id
+end
+
+module TypMap : sig
+  include Map.S with type key = typ
 end
 
 val nexp_frees : nexp -> KidSet.t
