@@ -26,8 +26,14 @@ CHERI_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 cheri: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
 
+cheri_coverage: $(CHERI_SAILS) $(CHERI_MAIN)
+	$(SAIL) -ocaml-coverage -ocaml -o $@ $^
+
 cheri_trace: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml_trace -o $@ $^
+
+coverage_report: bisect*.out
+	bisect-ppx-report -I _sbuild/_build -html $@ $^
 
 cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -memo_z3 -c $^ 1> $@
@@ -86,6 +92,6 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	Holmake $@
 
 clean:
-	rm -rf cheri cheri_trace cheri128 cheri128_trace _sbuild inst_*.sail cheri.c sail_latex sail_latexcc
+	rm -rf cheri cheri_trace cheri_coverage cheri128 cheri128_trace _sbuild inst_*.sail cheri.c sail_latex sail_latexcc coverage_report
 	rm -f cheriScript.sml cheri_typesScript.sml mips_extrasScript.sml
 	-Holmake cleanAll

@@ -60,6 +60,7 @@ module Big_int = Nat_big_num
 let opt_trace_ocaml = ref false
 (* Option to not build generated ocaml by default *)
 let opt_ocaml_nobuild = ref false
+let opt_ocaml_coverage = ref false
 
 type ctx =
   { register_inits : tannot exp list;
@@ -704,8 +705,11 @@ let ocaml_compile spec defs =
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/elf_loader.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/sail_lib.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/util.ml .") in
-  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/_tags .") in
+  let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/" ^ tags_file ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in
+  if !opt_ocaml_coverage then 
+    ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
   ocaml_pp_defs out_chan defs;
   close_out out_chan;
   if IdSet.mem (mk_id "main") (Initial_check.val_spec_ids defs)
@@ -716,7 +720,10 @@ let ocaml_compile spec defs =
       output_string out_chan (ocaml_main spec sail_dir);
       close_out out_chan;
       if not !opt_ocaml_nobuild then (
-        system_checked "ocamlbuild -use-ocamlfind main.native";
+        if !opt_ocaml_coverage then
+          system_checked "BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' main.native"
+        else
+          system_checked "ocamlbuild -use-ocamlfind main.native";
         ignore (Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec))
       )
     end
