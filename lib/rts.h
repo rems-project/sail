@@ -21,6 +21,14 @@ unit sail_assert(bool b, sail_string msg);
 unit sail_exit(unit);
 
 /*
+ * sail_get_verbosity reads a 64-bit value that the C runtime allows you to set
+ * on the command line.
+ * The intention is that you can use individual bits to turn on/off different
+ * pieces of debugging output.
+ */
+mach_bits sail_get_verbosity(const unit u);
+
+/*
  * Put processor to sleep until an external device calls wakeup_request().
  */
 unit sleep_request(const unit u);

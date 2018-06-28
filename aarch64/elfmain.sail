@@ -198,9 +198,13 @@ val main : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 val check_cycle_count = { c: "cycle_count" } : unit -> unit
 
 function main() = {
+  let verbosity = __GetVerbosity();
   init();
   while true do {
     fetch_and_execute();
     check_cycle_count();
+    if verbosity[0] == bitone then {
+        print(concat_str("[SAIL] PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
+    }
   }
 }

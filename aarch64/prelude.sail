@@ -356,3 +356,5 @@ val __WakeupRequest = {ocaml: "wakeup_request", lem: "wakeup_request", smt: "wak
 
 val __Sleeping = {ocaml: "sleeping", lem: "sleeping", smt: "sleeping", interpreter: "sleeping", c: "sleeping"}: unit -> bool effect {escape, rreg, undef}
 
+val __GetVerbosity = {c: "sail_get_verbosity"}: unit -> bits(64) effect {escape, rreg, undef}
+

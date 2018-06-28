@@ -30,6 +30,13 @@ unit sail_exit(unit u)
   return UNIT;
 }
 
+static uint64_t g_verbosity = 0;
+
+mach_bits sail_get_verbosity(const unit u)
+{
+  return g_verbosity;
+}
+
 bool g_sleeping = false;
 
 unit sleep_request(const unit u)
@@ -434,12 +441,13 @@ void get_cycle_count(sail_int *rop, const unit u)
 /* ***** Argument Parsing ***** */
 
 static struct option options[] = {
-  {"elf",        required_argument, 0, 'e'},
-  {"entry",      required_argument, 0, 'n'},
-  {"image",      required_argument, 0, 'i'},
   {"binary",     required_argument, 0, 'b'},
   {"cyclelimit", required_argument, 0, 'l'},
   {"config",     required_argument, 0, 'C'},
+  {"elf",        required_argument, 0, 'e'},
+  {"entry",      required_argument, 0, 'n'},
+  {"image",      required_argument, 0, 'i'},
+  {"verbosity",  required_argument, 0, 'v'},
   {0, 0, 0, 0}
 };
 
@@ -514,6 +522,13 @@ int process_arguments(int argc, char *argv[])
       if (!sscanf(optarg, "%" PRId64, &g_cycle_limit)) {
 	fprintf(stderr, "Could not parse cycle limit %s\n", optarg);
 	return -1;
+      }
+      break;
+
+    case 'v':
+      if (!sscanf(optarg, "0x%" PRIx64, &g_verbosity)) {
+       fprintf(stderr, "Could not parse verbosity flags %s\n", optarg);
+       return -1;
       }
       break;
 
