@@ -1,0 +1,103 @@
+open import Pervasives
+open import Pervasives_extra
+open import Sail2_instr_kinds
+open import Sail2_values
+open import Sail2_operators_mwords
+open import Sail2_prompt_monad
+open import Sail2_prompt
+
+type bitvector 'a = mword 'a
+
+let MEM_fence_rw_rw () = barrier Barrier_RISCV_rw_rw
+let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw
+let MEM_fence_r_r   () = barrier Barrier_RISCV_r_r
+let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
+let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
+let MEM_fence_i     () = barrier Barrier_RISCV_i
+
+val MEMea                            : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_release                    : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_strong_release             : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_conditional                : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_conditional_release        : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+val MEMea_conditional_strong_release : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
+
+let MEMea addr size                      = write_mem_ea Write_plain addr size
+let MEMea_release addr size              = write_mem_ea Write_RISCV_release addr size
+let MEMea_strong_release addr size       = write_mem_ea Write_RISCV_strong_release addr size
+let MEMea_conditional addr size          = write_mem_ea Write_RISCV_conditional addr size
+let MEMea_conditional_release addr size  = write_mem_ea Write_RISCV_conditional_release addr size
+let MEMea_conditional_strong_release addr size
+                                          = write_mem_ea Write_RISCV_conditional_strong_release addr size
+
+val write_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
+  integer -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b -> monad 'rv unit 'e
+let write_ram addrsize size hexRAM address value =
+  write_mem_val value >>= fun _ ->
+  return ()
+
+val read_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
+  integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
+let read_ram addrsize size hexRAM address =
+  read_mem Read_plain address size
+
+let speculate_conditional_success () = excl_result ()
+
+val plat_ram_base : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_ram_base () = wordFromInteger 0
+declare ocaml target_rep function plat_ram_base = `Platform.dram_base`
+
+val plat_ram_size : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_ram_size () = wordFromInteger 0
+declare ocaml target_rep function plat_ram_size = `Platform.dram_size`
+
+val plat_rom_base : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_rom_base () = wordFromInteger 0
+declare ocaml target_rep function plat_rom_base = `Platform.rom_base`
+
+val plat_rom_size : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_rom_size () = wordFromInteger 0
+declare ocaml target_rep function plat_rom_size = `Platform.rom_size`
+
+val plat_clint_base : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_clint_base () = wordFromInteger 0
+declare ocaml target_rep function plat_clint_base = `Platform.clint_base`
+
+val plat_clint_size : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_clint_size () = wordFromInteger 0
+declare ocaml target_rep function plat_clint_size = `Platform.clint_size`
+
+val plat_enable_dirty_update : unit -> bool
+let plat_enable_dirty_update () = false
+declare ocaml target_rep function plat_enable_dirty_update = `Platform.enable_dirty_update`
+
+val plat_enable_misaligned_access : unit -> bool
+let plat_enable_misaligned_access () = false
+declare ocaml target_rep function plat_enable_misaligned_access = `Platform.enable_misaligned_access`
+
+val plat_insns_per_tick : unit -> integer
+let plat_insns_per_tick () = 1
+declare ocaml target_rep function plat_insns_per_tick = `Platform.insns_per_tick`
+
+val plat_htif_tohost : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_htif_tohost () = wordFromInteger 0
+declare ocaml target_rep function plat_htif_tohost = `Platform.htif_tohost`
+
+val plat_term_write : forall 'a. Size 'a => bitvector 'a -> unit
+let plat_term_write _ = ()
+declare ocaml target_rep function plat_term_write = `Platform.term_write`
+
+val plat_term_read : forall 'a. Size 'a => unit -> bitvector 'a
+let plat_term_read () = wordFromInteger 0
+declare ocaml target_rep function plat_term_read = `Platform.term_read`
+
+val shift_bits_right : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
+let shift_bits_right v m = shiftr v (uint m)
+val shift_bits_left : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a
+let shift_bits_left v m = shiftl v (uint m)
+
+val print_string : string -> string -> unit
+let print_string msg s = prerr_endline (msg ^ s)
+
+val prerr_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
+let prerr_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))

@@ -712,6 +712,15 @@ function clause execute (FENCE(pred, succ)) = {
     (0b0010, 0b0010) => MEM_fence_r_r(),
     (0b0011, 0b0001) => MEM_fence_rw_w(),
     (0b0001, 0b0001) => MEM_fence_w_w(),
+
+    (0b1111, 0b1111) => MEM_fence_rw_rw(),
+    (0b1110, 0b1111) => MEM_fence_r_rw(),
+    (0b1110, 0b1110) => MEM_fence_r_r(),
+    (0b1111, 0b1101) => MEM_fence_rw_w(),
+    (0b1101, 0b1101) => MEM_fence_w_w(),
+
+    (0b0000, 0b0000) => (),
+
     _ => { print("FIXME: unsupported fence");
            () }
   };
@@ -1764,6 +1773,15 @@ function clause execute (STOP_FETCHING()) = true
 
 function clause print_insn (STOP_FETCHING()) = "stop_fetching"
 
+union clause ast = THREAD_START : unit
+
+/* RMEM thread start sentinel, using RISCV encoding space custom-0 */
+mapping clause encdec = THREAD_START() <-> 0xc0de @ 0b00000000 @ 0b0 @ 0b00 @ 0b010 @ 0b11
+
+function clause execute (THREAD_START()) = true
+
+function clause print_insn (THREAD_START()) = "thread_start"
+
 
 /* ****************************************************************** */
 
@@ -1920,15 +1938,23 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
                match (pred, succ) {
                  (0b0011, 0b0011) => IK_barrier (Barrier_RISCV_rw_rw),
                  (0b0010, 0b0011) => IK_barrier (Barrier_RISCV_r_rw),
-//                 (0b0001, 0b0011) => IK_barrier (Barrier_RISCV_w_rw),
+                 (0b0010, 0b0010) => IK_barrier (Barrier_RISCV_r_r),
+                 (0b0011, 0b0001) => IK_barrier (Barrier_RISCV_rw_w),
+                 (0b0001, 0b0001) => IK_barrier (Barrier_RISCV_w_w),
 
+                 (0b1111, 0b1111) => IK_barrier (Barrier_RISCV_rw_rw),
+                 (0b1110, 0b1111) => IK_barrier (Barrier_RISCV_r_rw),
+                 (0b1110, 0b1110) => IK_barrier (Barrier_RISCV_r_r),
+                 (0b1111, 0b1101) => IK_barrier (Barrier_RISCV_rw_w),
+                 (0b1101, 0b1101) => IK_barrier (Barrier_RISCV_w_w),
+
+                 // (0b0001, 0b0011) => IK_barrier (Barrier_RISCV_w_rw),
                  // (0b0011, 0b0010) => IK_barrier (Barrier_RISCV_rw_r),
-                 // (0b0010, 0b0010) => IK_barrier (Barrier_RISCV_r_r),
+                 // (0b0010, 0b0001) => IK_barrier (Barrier_RISCV_r_w),
                  // (0b0001, 0b0010) => IK_barrier (Barrier_RISCV_w_r),
 
-                 // (0b0011, 0b0001) => IK_barrier (Barrier_RISCV_rw_w),
-                 // (0b0010, 0b0001) => IK_barrier (Barrier_RISCV_r_w),
-                 // (0b0001, 0b0001) => IK_barrier (Barrier_RISCV_w_w),
+
+                 (0b0000, 0b0000) => IK_simple (),
 
                  _ => internal_error("barrier type not implemented in initial_analysis")
   //               case (FM_NORMAL, _, _) -> exit "not implemented"
@@ -1940,25 +1966,25 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
      FENCEI() => {
               ik = IK_barrier (Barrier_RISCV_i);
      },
-  //    case (LOADRES ( aq, rl, rs1, width, rd)) -> {
-  //           if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-  //           if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-  //           aR := iR;
-  //           ik := switch (aq, rl) {
-  //             case (false, false) -> IK_mem_read (Read_RISCV_reserved)
-  //             case (true,  false) -> IK_mem_read (Read_RISCV_reserved_acquire_RCsc)
-  //             case (true,  true)  -> IK_mem_read (Read_RISCV_reserved_acquire_release)
+  //    LOADRES(aq, rl, rs1, width, rd) => {
+  //           if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+  //           if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+  //           aR = iR;
+  //           ik = match (aq, rl) {
+  //             (false, false) => IK_mem_read (Read_RISCV_reserved)
+  //             (true,  false) => IK_mem_read (Read_RISCV_reserved_acquire_RCsc)
+  //             (true,  true)  => IK_mem_read (Read_RISCV_reserved_acquire_release)
 
-  //             case (false, true)  -> exit "not implemented"
+  //             (false, true)  => exit "not implemented"
   //           };
-  //    }
-  //    case (STORECON( aq, rl, rs2, rs1, width, rd)) -> {
-  //           if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
-  //           if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-  //           if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
-  //           if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+  //    },
+  //    STORECON(aq, rl, rs2, rs1, width, rd) => {
+  //           if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+  //           if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+  //           if (rs1 == 0) then () else aR = RFull(GPRstr[rs1]) :: aR;
+  //           if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
 
-  //           ik := switch (aq, rl) {
+  //           ik = switch (aq, rl) {
   //             case (false, false) -> IK_mem_write (Write_RISCV_conditional)
   //             case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release_RCsc)
   //             case (true,  true)  -> IK_mem_write (Write_RISCV_conditional_acquire_release)
@@ -1966,18 +1992,18 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
   //             case (true,  false) -> exit "not implemented"
   //           };
   //    }
-  //    case (AMO( op, aq, rl, rs2, rs1, width, rd)) -> {
-  //           if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
-  //           if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-  //           if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
-  //           if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+  //    AMO(op, aq, rl, rs2, rs1, width, rd) => {
+  //           if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+  //           if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+  //           if (rs1 == 0) then () else aR = RFull(GPRstr[rs1]) :: aR;
+  //           if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
 
-  //           ik := switch (aq, rl) {
-  //             case (false, false) -> IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional)
-  //             case (false, true)  -> IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional_release_RCsc)
-  //             case (true,  false) -> IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
+  //           ik = switch (aq, rl) {
+  //             (false, false) => IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional)
+  //             (false, true)  => IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional_release_RCsc)
+  //             (true,  false) => IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
   //                                                                     Write_RISCV_conditional)
-  //             case (true,  true)  -> IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
+  //             (true,  true)  => IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
   //                                                                     Write_RISCV_conditional_release_RCsc)
   //           };
   //    }
