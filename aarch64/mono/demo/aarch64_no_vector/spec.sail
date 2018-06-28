@@ -1943,7 +1943,7 @@ function EncodeLDFSC (typ, 'level) = {
   return(result)
 }
 
-val BigEndianReverse : forall ('width : Int), 'width >= 0 & 'width >= 0.
+val BigEndianReverse = {lem: "BigEndianReverse"} : forall ('width : Int), 'width >= 0 & 'width >= 0.
   bits('width) -> bits('width) effect {escape}
 
 function BigEndianReverse value_name = {
@@ -5275,8 +5275,8 @@ val ZeroExtend_slice_append : forall 'n 'm 'o, 'n >= 0 & 'm >= 0 & 'o >= 0.
 function ZeroExtend_slice_append (xs, i, 'l, ys) = {
   assert(constraint('l >= 0));
   let xs = xs & slice_mask(i,l) in
-  let xs : bits('o) = ZeroExtend(xs >> i) << 'm in
-  let ys : bits('o) = ZeroExtend(ys) in
+  let xs : bits('o) = extzv(xs >> i) << 'm in
+  let ys : bits('o) = extzv(ys) in
   xs | ys
 }
 
@@ -5288,6 +5288,14 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
   descaddr : AddressDescriptor = undefined;
   baseregister : bits(64) = undefined;
   inputaddr : bits(64) = undefined;
+  /* Initialise typ field of FaultRecord; otherwise, there might be an
+   * read of the uninitialised value that can lead to an early return with a
+   * fault (when checking the return value of the second stage translation in
+   * the loop below, if second stage translation is disabled).  This looks like
+   * a bug in the ASL specification. */
+  __tmp_17 : FaultRecord = descaddr.fault;
+  __tmp_17.typ = Fault_None;
+  descaddr.fault = __tmp_17;
   __tmp_18 : MemoryAttributes = descaddr.memattrs;
   __tmp_18.typ = MemType_Normal;
   descaddr.memattrs = __tmp_18;

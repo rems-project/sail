@@ -1,4 +1,4 @@
-val BigEndianReverse : forall ('width : Int), 'width >= 0 & 'width >= 0.
+val BigEndianReverse = {lem: "BigEndianReverse"} : forall ('width : Int), 'width >= 0 & 'width >= 0.
   bits('width) -> bits('width) effect {escape}
 
 function BigEndianReverse value_name = {

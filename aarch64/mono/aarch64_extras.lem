@@ -58,6 +58,9 @@ let hex_slice v len lo =
    let bs = ext_list false (len + lo) bs in
    return (of_bools (subrange_list false bs hi lo))
 
+val BigEndianReverse : forall 'rv 'n 'e. Size 'n => mword 'n -> monad 'rv (mword 'n) 'e
+let BigEndianReverse w = return (reverse_endianness w)
+
 let internal_pick vs = return (head vs)
 
 (* Use constants for undefined values for now *)

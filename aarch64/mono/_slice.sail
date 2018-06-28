@@ -21,8 +21,8 @@ val ZeroExtend_slice_append : forall 'n 'm 'o, 'n >= 0 & 'm >= 0 & 'o >= 0.
 function ZeroExtend_slice_append (xs, i, 'l, ys) = {
   assert(constraint('l >= 0));
   let xs = xs & slice_mask(i,l) in
-  let xs : bits('o) = ZeroExtend(xs >> i) << 'm in
-  let ys : bits('o) = ZeroExtend(ys) in
+  let xs : bits('o) = extzv(xs >> i) << 'm in
+  let ys : bits('o) = extzv(ys) in
   xs | ys
 }
 
