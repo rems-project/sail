@@ -25,7 +25,7 @@ unit sail_assert(bool b, sail_string msg)
 
 unit sail_exit(unit u)
 {
-  fprintf(stderr, "[Sail] Exiting after %lld cycles\n", g_cycle_count);
+  fprintf(stderr, "[Sail] Exiting after %" PRIu64 " cycles\n", g_cycle_count);
   exit(EXIT_SUCCESS);
   return UNIT;
 }
