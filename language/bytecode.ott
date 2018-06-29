@@ -102,12 +102,12 @@ cval :: 'CV_' ::=
   {{ lem fragment * ctyp }}
 
 clexp :: 'CL_' ::=
-  | id                :: :: id
-  | id . string       :: :: field
-  | * id              :: :: addr
-  | id -> string      :: :: addr_field
-  | current_exception :: :: current_exception
-  | have_exception    :: :: have_exception
+  | id : ctyp                :: :: id
+  | id . string : ctyp       :: :: field
+  | * id : ctyp              :: :: addr
+  | id -> string : ctyp      :: :: addr_field
+  | current_exception : ctyp :: :: current_exception
+  | have_exception           :: :: have_exception
 
 ctype_def :: 'CTD_' ::=
   {{ com C type definition }}
@@ -128,7 +128,6 @@ instr :: 'I_' ::=
   | jump ( cval ) string                           :: :: jump
   | clexp = bool id ( cval0 , ... , cvaln ) : ctyp :: :: funcall
   | clexp = cval                                   :: :: copy
-  | clexp = ( ctyp ) id : ctyp'                    :: :: convert
   | clear ctyp id                                  :: :: clear
   | return cval                                    :: :: return
   | { instr0 ; ... ; instrn }                      :: :: block

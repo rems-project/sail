@@ -52,7 +52,7 @@ open Ast
 open Ast_util
 
 type ctx =
-  { lookup_id : id -> lvar;
+  { lookup_id : id -> typ lvar;
     enums : IdSet.t Bindings.t;
     variants : IdSet.t Bindings.t
   }

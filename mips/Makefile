@@ -21,7 +21,7 @@ mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile ../sail
 C_WARNINGS=-Wall -Wno-unused-but-set-variable -Wno-unused-label -Wno-maybe-uninitialized -Wno-return-type
 C_OPT=-O2
 GCOV_FLAGS=
-mips_c: mips.c ../lib/sail.h ../lib/*.c Makefile 
+mips_c: mips.c ../lib/sail.h ../lib/*.c Makefile
 	gcc $(C_OPT) $(C_WARNINGS) $(GCOV_FLAGS) -g -I ../lib $< ../lib/*.c -lgmp -lz -o $@
 
 # Note that for coverage purposes O1 appears optimal. O0 means lots of obviously dead code but O2 risks reducing granularity too much.

@@ -58,7 +58,10 @@ type mut = Immutable | Mutable
 (** [lvar] is the type of variables - they can either be registers,
    local mutable or immutable variables, nullary union constructors
    (i.e. None in option), or unbound identifiers *)
-type lvar = Register of effect * effect * typ | Enum of typ | Local of mut * typ | Unbound
+type 'a lvar = Register of effect * effect * 'a | Enum of 'a | Local of mut * 'a | Unbound
+
+(** Note: Partial function -- fails for Unknown lvars *)
+val lvar_typ : 'a lvar -> 'a
 
 val no_annot : unit annot
 val gen_loc : Parse_ast.l -> Parse_ast.l
