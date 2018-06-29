@@ -13,7 +13,7 @@ let CNT_IRQ  = [0x0000_000d,       0x0000_000a,        0x0000_03ff,        0x000
 // SGI Interrupts are 0-15, PPI interrupts are 16-31, so SPI interrupts have an offset of 32.
 let SPI_OFFSET = 32
 
-val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {escape, undef, wreg, rreg, rmem, wmem}
+val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {undef, wreg, rreg, rmem, wmem}
 
 // Advance CPU by one cycle
 val Step_CPU : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
@@ -70,11 +70,11 @@ function Step_CPU() = {
             print(concat_str("IMPLEMENTATION_DEFINED ", concat_str(s, "\n")));
             exit();
           }
-      }
+      };
+      if ~(__PC_changed) then _PC = _PC + __currentInstrLength else ();
+      if ShouldAdvanceIT then AArch32_ITAdvance() else ();
+      SSAdvance();
   };
-  if ~(__PC_changed) then _PC = _PC + __currentInstrLength else ();
-  if ShouldAdvanceIT then AArch32_ITAdvance() else ();
-  SSAdvance();
   __UpdateSystemCounter(); // should this happen even if sleeping?
 }
 
@@ -135,11 +135,17 @@ function Step_Timers() = {
 }
 
 // Simple top level fetch and execute loop.
-val fetch_and_execute : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
+val Step_System : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
-function fetch_and_execute () = {
+function Step_System () = {
     try {
-      Step_Timers();
+      try {
+        Step_Timers();
+      } catch {
+        _ => {
+          print(concat_str("Exception taken during Step_Timers.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+        }
+      };
 
       var prevEL = PSTATE.EL;
       var prevI = PSTATE.I;
@@ -150,12 +156,18 @@ function fetch_and_execute () = {
       var prevCNTHCTL_EL2 = CNTHCTL_EL2;
 
       if ~(__Sleeping()) then {
+        try {
           Step_CPU();
+        } catch {
+          _ => {
+            print(concat_str("Exception taken during Step_CPU.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+          }
+        };
       };
 
       // We want to keep track of what exception level we are in for debugging purposes.
-      if UInt(prevEL) > UInt(PSTATE.EL) then {
-        prerr_bits("[Sail] Exception level dropped to: ", PSTATE.EL)
+      if UInt(prevEL) != UInt(PSTATE.EL) then {
+        prerr_bits(concat_str(concat_str("[Sail] ", DecStr(get_cycle_count())), " Exception level changed to: "), PSTATE.EL)
       };
       if prevI != PSTATE.I then {
 	prerr_bits("[Sail] PSTATE.I changed to: ", PSTATE.I);
@@ -169,9 +181,9 @@ function fetch_and_execute () = {
       }
 
     } catch {
-      Error_See(str) if str == "HINT" => (),
       Error_ExceptionTaken(_) => {
 	// enable_tracing()
+        print(concat_str("Exception taken during Step_System.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
         ()
       },
       _ => {
@@ -179,7 +191,14 @@ function fetch_and_execute () = {
         exit()
       }
     };
-    __EndCycle(); // advance state of non-sleeping parts of the system
+    try {
+        __EndCycle(); // advance state of non-sleeping parts of the system
+    } catch {
+      _ => {
+        print(concat_str("Exception taken during __EndCycle.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+      }
+    };
+
 }
 
 let COLD_RESET : bool = true
@@ -189,7 +208,6 @@ val "load_raw" : (bits(64), string) -> unit
 val init : unit -> unit effect {escape, undef, rreg, wreg}
 
 function init() = {
-  __currentInstrLength = 4;
   TakeReset(COLD_RESET);
 }
 
@@ -201,10 +219,10 @@ function main() = {
   let verbosity = __GetVerbosity();
   init();
   while true do {
-    fetch_and_execute();
-    check_cycle_count();
     if verbosity[0] == bitone then {
-        print(concat_str("[SAIL] PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
-    }
+        print(concat_str("[Sail] PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
+    };
+    Step_System();
+    check_cycle_count();
   }
 }
