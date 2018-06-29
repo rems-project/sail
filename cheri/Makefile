@@ -36,7 +36,7 @@ coverage_report: bisect*.out
 	bisect-ppx-report -I _sbuild/_build -html $@ $^
 
 cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
-	$(SAIL) -memo_z3 -c $^ 1> $@
+	$(SAIL) -memo_z3 -O -c $^ 1> $@
 
 cheri_c: cheri.c ../lib/sail.h Makefile
 	gcc -O2 $< ../lib/*.c -lgmp -lz -I ../lib/ -o $@
