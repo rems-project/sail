@@ -43,7 +43,11 @@ function Step_CPU() = {
       fetch_ok = true;
   } catch {
       Error_ExceptionTaken() => {
-        print(concat_str("Exception taken during IFetch from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+        print(concat_str("Exception taken during IFetch from PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" in cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
       },
       _ => {
         print("Exiting due to unhandled exception during fetch\n");
@@ -62,12 +66,20 @@ function Step_CPU() = {
           Error_See(_)              => try { AArch64_UndefinedFault() } catch { _ => print("Exception during SEE recovery\n") },
           Error_ReservedEncoding(_) => try { AArch64_UndefinedFault() } catch { _ => print("Exception during ReservedEncoding recovery\n") },
           Error_ExceptionTaken() => {
-            print(concat_str("ExceptionTaken during Decode/Execute from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" opcode=", concat_str(HexStr(UInt(__currentInstr)), concat_str(" in cycle ", concat_str(DecStr(get_cycle_count()), "\n")))))));
+            print(concat_str("ExceptionTaken during Decode/Execute from PC=",
+                  concat_str(HexStr(UInt(aget_PC())),
+                  concat_str(" opcode=",
+                  concat_str(HexStr(UInt(__currentInstr)),
+                  concat_str(" in cycle ",
+                  concat_str(DecStr(get_cycle_count()),
+                  "\n")))))));
             // print("  This might just be a HINT like 0xd50320df\n");
             ()
           },
           Error_Implementation_Defined(s) => {
-            print(concat_str("IMPLEMENTATION_DEFINED ", concat_str(s, "\n")));
+            print(concat_str("IMPLEMENTATION_DEFINED ",
+                  concat_str(s,
+                  "\n")));
             exit();
           }
       };
@@ -143,7 +155,11 @@ function Step_System () = {
         Step_Timers();
       } catch {
         _ => {
-          print(concat_str("Exception taken during Step_Timers.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+          print(concat_str("Exception taken during Step_Timers.  PC=",
+                concat_str(HexStr(UInt(aget_PC())),
+                concat_str(" cycle=",
+                concat_str(DecStr(get_cycle_count()),
+                "\n")))));
         }
       };
 
@@ -160,18 +176,29 @@ function Step_System () = {
           Step_CPU();
         } catch {
           _ => {
-            print(concat_str("Exception taken during Step_CPU.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+            print(concat_str("Exception taken during Step_CPU.  PC=",
+                  concat_str(HexStr(UInt(aget_PC())),
+                  concat_str(" cycle=",
+                  concat_str(DecStr(get_cycle_count()),
+                  "\n")))));
           }
         };
       };
 
       // We want to keep track of what exception level we are in for debugging purposes.
       if UInt(prevEL) != UInt(PSTATE.EL) then {
-        prerr_bits(concat_str(concat_str("[Sail] ", DecStr(get_cycle_count())), " Exception level changed to: "), PSTATE.EL)
+        prerr_bits(concat_str("[Sail] ",
+                   concat_str(DecStr(get_cycle_count()),
+                   " Exception level changed to: ")),
+                   PSTATE.EL);
       };
       if prevI != PSTATE.I then {
 	prerr_bits("[Sail] PSTATE.I changed to: ", PSTATE.I);
-        print(concat_str("   at PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+        print(concat_str("   at PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" in cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
       };
       if prevCNTKCTL_EL1 != CNTKCTL_EL1 then {
         prerr_bits("[Clock] CNTKCTL_EL1 changed to ", CNTKCTL_EL1);
@@ -183,7 +210,11 @@ function Step_System () = {
     } catch {
       Error_ExceptionTaken(_) => {
 	// enable_tracing()
-        print(concat_str("Exception taken during Step_System.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+        print(concat_str("Exception taken during Step_System.  PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
         ()
       },
       _ => {
@@ -195,7 +226,11 @@ function Step_System () = {
         __EndCycle(); // advance state of non-sleeping parts of the system
     } catch {
       _ => {
-        print(concat_str("Exception taken during __EndCycle.  PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+        print(concat_str("Exception taken during __EndCycle.  PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
       }
     };
 
@@ -220,7 +255,14 @@ function main() = {
   init();
   while true do {
     if verbosity[0] == bitone then {
-        print(concat_str("[Sail] PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
+        nzcv = (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V);
+        print(concat_str("[Sail] ",
+              concat_str(DecStr(get_cycle_count()),
+              concat_str(" PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" NZCV=",
+              concat_str(HexStr(UInt(nzcv)),
+              "\n")))))));
     };
     Step_System();
     check_cycle_count();
