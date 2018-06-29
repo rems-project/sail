@@ -133,7 +133,7 @@ and 'a aval =
   | AV_C_fragment of fragment * 'a
 
 (* Renaming variables in ANF expressions *)
-
+                   
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   match apat_aux with
   | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)

@@ -73,11 +73,11 @@ let iinit ?loc:(l=Parse_ast.Unknown) ctyp id cval =
 let iif ?loc:(l=Parse_ast.Unknown) cval then_instrs else_instrs ctyp =
   I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (instr_number (), l))
 
-let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals ctyp =
-  I_aux (I_funcall (clexp, false, id, cvals, ctyp), (instr_number (), l))
+let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals =
+  I_aux (I_funcall (clexp, false, id, cvals), (instr_number (), l))
 
-let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals ctyp =
-  I_aux (I_funcall (clexp, true, id, cvals, ctyp), (instr_number (), l))
+let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals =
+  I_aux (I_funcall (clexp, true, id, cvals), (instr_number (), l))
 
 let icopy ?loc:(l=Parse_ast.Unknown) clexp cval =
   I_aux (I_copy (clexp, cval), (instr_number (), l))
@@ -103,6 +103,9 @@ let ilabel ?loc:(l=Parse_ast.Unknown) label =
   I_aux (I_label label, (instr_number (), l))
 let igoto ?loc:(l=Parse_ast.Unknown) label =
   I_aux (I_goto label, (instr_number (), l))
+
+let iundefined ?loc:(l=Parse_ast.Unknown) ctyp =
+  I_aux (I_undefined ctyp, (instr_number (), l))
 
 let imatch_failure ?loc:(l=Parse_ast.Unknown) () =
   I_aux (I_match_failure, (instr_number (), l))
@@ -235,10 +238,9 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
      pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
   | I_reinit (ctyp, id, cval) ->
      pp_keyword "recreate" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
-  | I_funcall (x, _, f, args, ctyp2) ->
+  | I_funcall (x, _, f, args) ->
      separate space [ pp_clexp x; string "=";
-                      string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args);
-                      string ":"; pp_ctyp ctyp2 ]
+                      string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args) ]
   | I_copy (clexp, cval) ->
      separate space [pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
@@ -255,6 +257,8 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
      pp_keyword "goto" ^^ string (str |> Util.blue |> Util.clear)
   | I_match_failure ->
      pp_keyword "match_failure"
+  | I_undefined ctyp ->
+     pp_keyword "undefined" ^^ pp_ctyp ctyp
   | I_raw str ->
      pp_keyword "C" ^^ string (str |> Util.cyan |> Util.clear)
 
@@ -364,7 +368,7 @@ let instr_deps = function
   | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NS.singleton (G_id id)
   | I_if (cval, _, _, _) -> cval_deps cval, NS.empty
   | I_jump (cval, label) -> cval_deps cval, NS.singleton (G_label label)
-  | I_funcall (clexp, _, _, cvals, _) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
+  | I_funcall (clexp, _, _, cvals) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
   | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
   | I_clear (_, id) -> NS.singleton (G_id id), NS.singleton (G_id id)
   | I_throw cval | I_return cval -> cval_deps cval, NS.empty
@@ -372,6 +376,7 @@ let instr_deps = function
   | I_comment _ | I_raw _ -> NS.empty, NS.empty
   | I_label label -> NS.singleton (G_label label), NS.empty
   | I_goto label -> NS.empty, NS.singleton (G_label label)
+  | I_undefined _ -> NS.empty, NS.empty
   | I_match_failure -> NS.empty, NS.empty
 
 let add_link from_node to_node graph =

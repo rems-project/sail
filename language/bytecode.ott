@@ -126,7 +126,7 @@ instr :: 'I_' ::=
   | if ( cval ) { instr0 ; ... ; instrn }
     else { instr0 ; ... ; instrm } : ctyp          :: :: if
   | jump ( cval ) string                           :: :: jump
-  | clexp = bool id ( cval0 , ... , cvaln ) : ctyp :: :: funcall
+  | clexp = bool id ( cval0 , ... , cvaln )        :: :: funcall
   | clexp = cval                                   :: :: copy
   | clear ctyp id                                  :: :: clear
   | return cval                                    :: :: return
@@ -137,6 +137,7 @@ instr :: 'I_' ::=
   | C string                                       :: :: raw % only used for GCC attributes
   | string :                                       :: :: label
   | goto string                                    :: :: goto
+  | undefined ctyp                                 :: :: undefined
   | match_failure                                  :: :: match_failure
 
 % For optimising away allocations.
