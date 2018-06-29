@@ -427,7 +427,7 @@ bool cycle_limit_reached(const unit u)
 unit cycle_count(const unit u)
 {
   if (cycle_limit_reached(UNIT)) {
-    printf("\n[Sail] cycle limit %" PRId64 " reached\n", g_cycle_limit);
+    printf("\n[Sail] TIMEOUT: exceeded %" PRId64 " cycles\n", g_cycle_limit);
     exit(EXIT_SUCCESS);
   }
   return UNIT;
