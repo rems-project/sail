@@ -1,3 +1,4 @@
+#include<assert.h>
 #include<inttypes.h>
 #include<stdbool.h>
 #include<stdio.h>
@@ -419,6 +420,7 @@ void add_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 
 void sub_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_sub(*rop->bits, *op1.bits, *op2.bits);
   normalize_sail_bits(rop);
@@ -440,18 +442,21 @@ void sub_bits_int(sail_bits *rop, const sail_bits op1, const mpz_t op2)
 
 void and_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_and(*rop->bits, *op1.bits, *op2.bits);
 }
 
 void or_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_ior(*rop->bits, *op1.bits, *op2.bits);
 }
 
 void xor_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_xor(*rop->bits, *op1.bits, *op2.bits);
 }
@@ -495,12 +500,14 @@ void zeros(sail_bits *rop, const sail_int op)
 
 void zero_extend(sail_bits *rop, const sail_bits op, const sail_int len)
 {
+  assert(op.len <= mpz_get_ui(len));
   rop->len = mpz_get_ui(len);
   mpz_set(*rop->bits, *op.bits);
 }
 
 void sign_extend(sail_bits *rop, const sail_bits op, const sail_int len)
 {
+  assert(op.len <= mpz_get_ui(len));
   rop->len = mpz_get_ui(len);
   if(mpz_tstbit(*op.bits, op.len - 1)) {
     mpz_set(*rop->bits, *op.bits);
@@ -519,6 +526,7 @@ void length_sail_bits(sail_int *rop, const sail_bits op)
 
 bool eq_bits(const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   for (mp_bitcnt_t i = 0; i < op1.len; i++) {
     if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return false;
   }
@@ -527,6 +535,7 @@ bool eq_bits(const sail_bits op1, const sail_bits op2)
 
 bool neq_bits(const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   for (mp_bitcnt_t i = 0; i < op1.len; i++) {
     if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return true;
   }
@@ -548,6 +557,7 @@ void vector_subrange_sail_bits(sail_bits *rop,
 
 void sail_truncate(sail_bits *rop, const sail_bits op, const sail_int len)
 {
+  assert(op.len >= mpz_get_ui(len));
   rop->len = mpz_get_ui(len);
   mpz_set(*rop->bits, *op.bits);
   normalize_sail_bits(rop);
@@ -683,6 +693,7 @@ void vector_update_subrange_sail_bits(sail_bits *rop,
 
 void slice(sail_bits *rop, const sail_bits op, const sail_int start_mpz, const sail_int len_mpz)
 {
+  assert(mpz_get_ui(start_mpz) + mpz_get_ui(len_mpz) <= op.len);
   uint64_t start = mpz_get_ui(start_mpz);
   uint64_t len = mpz_get_ui(len_mpz);
 
