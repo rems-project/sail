@@ -604,8 +604,8 @@ void replicate_bits(sail_bits *rop, const sail_bits op1, const mpz_t op2)
 {
   uint64_t op2_ui = mpz_get_ui(op2);
   rop->len = op1.len * op2_ui;
-  mpz_set(*rop->bits, *op1.bits);
-  for (int i = 1; i < op2_ui; i++) {
+  mpz_set_ui(*rop->bits, 0);
+  for (int i = 0; i < op2_ui; i++) {
     mpz_mul_2exp(*rop->bits, *rop->bits, op1.len);
     mpz_ior(*rop->bits, *rop->bits, *op1.bits);
   }
