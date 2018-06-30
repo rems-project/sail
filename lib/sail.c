@@ -670,6 +670,7 @@ void vector_update_subrange_sail_bits(sail_bits *rop,
   uint64_t m = mpz_get_ui(m_mpz);
 
   mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
 
   for (uint64_t i = 0; i < n - (m - 1ul); i++) {
     if (mpz_tstbit(*slice.bits, i)) {
@@ -685,7 +686,7 @@ void slice(sail_bits *rop, const sail_bits op, const sail_int start_mpz, const s
   uint64_t start = mpz_get_ui(start_mpz);
   uint64_t len = mpz_get_ui(len_mpz);
 
-  mpz_set_ui(*rop->bits, 0ul);
+  mpz_set_ui(*rop->bits, 0);
   rop->len = len;
 
   for (uint64_t i = 0; i < len; i++) {
