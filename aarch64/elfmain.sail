@@ -38,6 +38,10 @@ function Step_CPU() = {
 
   var fetch_ok = false;
   try {
+      if PSTATE.nRW != bitzero then {
+        print("UNIMPLEMENTED: AArch32 support\n");
+        exit()
+      };
       __currentInstr       = __fetchA64();
       __currentInstrLength = 4;
       fetch_ok = true;
@@ -56,6 +60,46 @@ function Step_CPU() = {
   };
 
   if fetch_ok then {
+      // Detect ASIMD instructions
+      is_asimd : bool = match __currentInstr {
+        // '0x00 110' @ _ : bits(25)   => true,  // ASIMD memory
+        0b0000110     @ (_ : bits(25)) => true,
+        0b0100110     @ (_ : bits(25)) => true,
+
+        // '0xx0111'  @ _ : bits(25)   => true,  // ASIMD
+        // '01x1111'  @ _ : bits(25)   => true,  // ASIMD
+        // 'x0x1111'  @ _ : bits(25)   => false, // FP
+        // '1xx0111'  @ _ : bits(25)   => false, // unallocated
+        // '11xx111'  @ _ : bits(25)   => false, // Crypto
+
+        0b0000111     @ (_ : bits(25)) => true,
+        0b0001111     @ (_ : bits(25)) => false,
+        0b0010111     @ (_ : bits(25)) => true,
+        0b0011111     @ (_ : bits(25)) => false,
+
+        0b0100111     @ (_ : bits(25)) => true,
+        0b0101111     @ (_ : bits(25)) => true,
+        0b0110111     @ (_ : bits(25)) => true,
+        0b0111111     @ (_ : bits(25)) => true,
+
+        0b1000111     @ (_ : bits(25)) => false,
+        0b1001111     @ (_ : bits(25)) => false,
+        0b1010111     @ (_ : bits(25)) => false,
+        0b1011111     @ (_ : bits(25)) => false,
+
+        0b1100111     @ (_ : bits(25)) => false,
+        0b1101111     @ (_ : bits(25)) => false,
+        0b1110111     @ (_ : bits(25)) => false,
+        0b1111111     @ (_ : bits(25)) => false,
+
+        _ => false
+      };
+      if is_asimd then {
+        print(concat_str("UNIMPLEMENTED: ASIMD support ",
+              concat_str(HexStr(UInt(__currentInstr)),
+              "\n")));
+        exit()
+      };
       try {
           __PC_changed = false;
           ShouldAdvanceIT = (PSTATE.nRW == [bitone]) & (PSTATE.T == [bitone]);
