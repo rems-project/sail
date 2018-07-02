@@ -537,9 +537,9 @@ let doc_typquant_items ctx delimit (TypQ_aux (tq,_)) =
 let doc_typquant_items_separate ctx delimit (TypQ_aux (tq,_)) =
   match tq with
   | TypQ_tq qis ->
-     separate_opt space (doc_quant_item_id ctx delimit) qis,
-     separate_opt space (doc_quant_item_constr ctx delimit) qis
-  | TypQ_no_forall -> empty, empty
+     Util.map_filter (doc_quant_item_id ctx delimit) qis,
+     Util.map_filter (doc_quant_item_constr ctx delimit) qis
+  | TypQ_no_forall -> [], []
 
 let doc_typquant ctx (TypQ_aux(tq,_)) typ = match tq with
 | TypQ_tq ((_ :: _) as qs) ->
@@ -1485,14 +1485,6 @@ let merge_kids_atoms pats =
   let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
   gone,map
 
-let doc_binder ctxt (P_aux (p,ann) as pat, typ) =
-  let env = env_of_annot ann in
-  let exp_typ = Env.expand_synonyms env typ in
-  match p with
-  | P_id id
-  | P_typ (_,P_aux (P_id id,_)) when Util.is_none (is_auto_decomposed_exist env exp_typ) ->
-     parens (separate space [doc_id id; colon; doc_typ ctxt typ])
-  | _ -> squote ^^ parens (separate space [doc_pat ctxt true (pat, exp_typ); colon; doc_typ ctxt typ])
 
 let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let (tq,typ) = Env.get_val_spec_orig id (env_of_annot annot) in
@@ -1516,12 +1508,38 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
      been replaced by one of the term-level arguments is bound. *)
   let quantspp, constrspp = doc_typquant_items_separate ctxt braces tq in
   let exp = List.fold_left (fun body f -> f body) (bind exp) binds in
-  let patspp = separate_map space (doc_binder ctxt) pats in
-  let atom_constr_pp = separate_opt space (atom_constraint ctxt) pats in
+  let used_a_pattern = ref false in
+  let doc_binder (P_aux (p,ann) as pat, typ) =
+    let env = env_of_annot ann in
+    let exp_typ = Env.expand_synonyms env typ in
+    match p with
+    | P_id id
+    | P_typ (_,P_aux (P_id id,_)) when Util.is_none (is_auto_decomposed_exist env exp_typ) ->
+       parens (separate space [doc_id id; colon; doc_typ ctxt typ])
+    | _ ->
+       (used_a_pattern := true;
+        squote ^^ parens (separate space [doc_pat ctxt true (pat, exp_typ); colon; doc_typ ctxt typ]))
+  in
+  let patspp = separate_map space doc_binder pats in
+  let atom_constrs = Util.map_filter (atom_constraint ctxt) pats in
+  let atom_constr_pp = separate space atom_constrs in
   let retpp =
     if effectful eff
     then string "M" ^^ space ^^ parens (doc_typ ctxt ret_typ)
     else doc_typ ctxt ret_typ
+  in
+  let idpp = doc_id id in
+  (* Work around Coq bug 7975 about pattern binders followed by implicit arguments *)
+  let implicitargs =
+    if !used_a_pattern && List.length constrspp + List.length atom_constrs > 0 then
+      separate space
+        ([string "Arguments"; idpp;] @
+            List.map (fun _ -> string "{_}") quantspp @
+            List.map (fun _ -> string "_") pats @
+            List.map (fun _ -> string "{_}") constrspp @
+            List.map (fun _ -> string "{_}") atom_constrs)
+      ^^ dot
+    else empty
   in
   let _ = match guard with
     | None -> ()
@@ -1529,9 +1547,9 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        raise (Reporting_basic.err_unreachable l
                 "guarded pattern expression should have been rewritten before pretty-printing") in
   group (prefix 3 1
-    (separate space [doc_id id; quantspp; patspp; constrspp; atom_constr_pp] ^/^
+    (separate space ([idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp]) ^/^
        colon ^^ space ^^ retpp ^^ coloneq)
-    (doc_fun_body ctxt exp ^^ dot))
+    (doc_fun_body ctxt exp ^^ dot)) ^/^ implicitargs
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -1660,7 +1678,8 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
      let arg_typs_pp = separate space (List.map doc_typ' typs) in
      let ret_typ_pp = doc_typ empty_ctxt ret_ty in
      let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt braces tqs in
-     string "forall" ^/^ tyvars_pp ^/^ arg_typs_pp ^/^ constrs_pp ^^ comma ^/^ ret_typ_pp
+     string "forall" ^/^ separate space tyvars_pp ^/^
+       arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt true ts
 
 let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),ann)) =
