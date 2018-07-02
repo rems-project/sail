@@ -861,10 +861,17 @@ Ltac unbool_comparisons :=
   | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
   end.
 (* Split up dependent pairs to get at proofs of properties *)
-(* TODO: simpl is probably too strong here *)
 Ltac extract_properties :=
-  repeat match goal with H := (projT1 ?X) |- _ => destruct X in *; simpl in H; unfold H in * end;
-  repeat match goal with |- context [projT1 ?X] => destruct X in *; simpl end.
+  repeat match goal with H := (projT1 ?X) |- _ =>
+    let x := fresh "x" in
+    let Hx := fresh "Hx" in
+    destruct X as [x Hx] in *;
+    change (projT1 (existT _ x Hx)) with x in *; unfold H in * end;
+  repeat match goal with |- context [projT1 ?X] =>
+    let x := fresh "x" in
+    let Hx := fresh "Hx" in
+    destruct X as [x Hx] in *;
+    change (projT1 (existT _ x Hx)) with x in * end.
 (* TODO: hyps, too? *)
 Ltac reduce_list_lengths :=
   repeat match goal with |- context [length_list ?X] => 
