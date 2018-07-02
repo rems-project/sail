@@ -355,6 +355,7 @@ module Env : sig
   val is_mapping : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
+  val get_record : id -> t -> typquant * (typ * id) list
   val get_accessor_fn : id -> id -> t -> typquant * typ
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
@@ -916,6 +917,8 @@ end = struct
     | Not_found -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
   let is_record id env = Bindings.mem id env.records
+
+  let get_record id env = Bindings.find id env.records
 
   let add_record id typq fields env =
     if bound_typ_id env id

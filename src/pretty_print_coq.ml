@@ -1048,13 +1048,33 @@ let doc_exp_lem, doc_let_lem =
                                           (doc_fexp ctxt recordtyp) fexps)) in
        if aexp_needed then parens epp else epp
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-       let recordtyp = match annot with
+       let recordtyp, env = match annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _)
            when Env.is_record tid env ->
-           tid
+           tid, env
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
-       enclose_record_update (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
+       if List.length fexps > 1 then
+         let _,fields = Env.get_record recordtyp env in
+         let var, let_pp =
+           match e with
+           | E_aux (E_id id,_) -> id, empty
+           | _ -> let v = mk_id "_record" in (* TODO: collision avoid *)
+                  v, separate space [string "let "; doc_id v; coloneq; top_exp ctxt true e; string "in"] ^^ break 1
+         in
+         let doc_field (_,id) =
+           match List.find (fun (FE_aux (FE_Fexp (id',_),_)) -> Id.compare id id' == 0) fexps with
+           | fexp -> doc_fexp ctxt recordtyp fexp
+           | exception Not_found ->
+               let fname =
+                 if prefix_recordtype && string_of_id recordtyp <> "regstate"
+                 then (string (string_of_id recordtyp ^ "_")) ^^ doc_id id
+                 else doc_id id in
+               doc_op coloneq fname (doc_id var ^^ dot ^^ parens fname)
+         in let_pp ^^ enclose_record (align (separate_map (semi_sp ^^ break 1)
+                                               doc_field fields))
+       else
+         enclose_record_update (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let start, (len, order, etyp) =

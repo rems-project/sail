@@ -136,6 +136,9 @@ module Env : sig
 
   val is_record : id -> t -> bool
 
+  (** Returns record quantifiers and fields *)
+  val get_record : id -> t -> typquant * (typ * id) list
+
   (** Return type is: quantifier, argument type, return type, effect *)
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
 
