@@ -86,7 +86,7 @@ let default_cap : CapStruct = struct {
   padding = zeros(),
   otype = zeros(),
   uperms = ones(),
-  perm_reserved11_14 = ones(),
+  perm_reserved11_14 = zeros(),
   access_system_regs = true,
   permit_unseal = true,
   permit_ccall = true,
@@ -178,7 +178,7 @@ function capStructToCapReg(cap) : CapStruct -> CapReg = cap.tag @ capStructToMem
 function setCapPerms(cap, perms) : (CapStruct, bits(31)) -> CapStruct =
     { cap with
       uperms                 = perms[30..15],
-      perm_reserved11_14     = perms[14..11],
+      /* perm_reserved11_14     = perms[14..11], XXX should allow to set? only affects cbuildcap. */
       access_system_regs     = perms[10],
       permit_unseal          = perms[9],
       permit_ccall           = perms[8],
