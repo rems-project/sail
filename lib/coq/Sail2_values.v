@@ -2,6 +2,7 @@
 
 (*Require Import Sail_impl_base*)
 Require Export ZArith.
+Require Import Ascii.
 Require Export String.
 Require Import bbv.Word.
 Require Export List.
@@ -195,6 +196,13 @@ match b with
   | B1 => "I"
   | BU => "U"
 end%string.
+
+Definition bitU_char b :=
+match b with
+| B0 => "0"
+| B1 => "1"
+| BU => "?"
+end%char.
 
 (*instance (Show bitU)
   let show := showBitU
@@ -463,47 +471,52 @@ Definition arith_op_bits (op : Z -> Z -> Z) (sign : bool) l r :=
   end.
 
 
-(*
-Definition char_of_nibble := function
-  | (B0, B0, B0, B0) => Some #'0'
-  | (B0, B0, B0, B1) => Some #'1'
-  | (B0, B0, B1, B0) => Some #'2'
-  | (B0, B0, B1, B1) => Some #'3'
-  | (B0, B1, B0, B0) => Some #'4'
-  | (B0, B1, B0, B1) => Some #'5'
-  | (B0, B1, B1, B0) => Some #'6'
-  | (B0, B1, B1, B1) => Some #'7'
-  | (B1, B0, B0, B0) => Some #'8'
-  | (B1, B0, B0, B1) => Some #'9'
-  | (B1, B0, B1, B0) => Some #'A'
-  | (B1, B0, B1, B1) => Some #'B'
-  | (B1, B1, B0, B0) => Some #'C'
-  | (B1, B1, B0, B1) => Some #'D'
-  | (B1, B1, B1, B0) => Some #'E'
-  | (B1, B1, B1, B1) => Some #'F'
+Definition char_of_nibble x :=
+  match x with
+  | (B0, B0, B0, B0) => Some "0"%char
+  | (B0, B0, B0, B1) => Some "1"%char
+  | (B0, B0, B1, B0) => Some "2"%char
+  | (B0, B0, B1, B1) => Some "3"%char
+  | (B0, B1, B0, B0) => Some "4"%char
+  | (B0, B1, B0, B1) => Some "5"%char
+  | (B0, B1, B1, B0) => Some "6"%char
+  | (B0, B1, B1, B1) => Some "7"%char
+  | (B1, B0, B0, B0) => Some "8"%char
+  | (B1, B0, B0, B1) => Some "9"%char
+  | (B1, B0, B1, B0) => Some "A"%char
+  | (B1, B0, B1, B1) => Some "B"%char
+  | (B1, B1, B0, B0) => Some "C"%char
+  | (B1, B1, B0, B1) => Some "D"%char
+  | (B1, B1, B1, B0) => Some "E"%char
+  | (B1, B1, B1, B1) => Some "F"%char
   | _ => None
-  end
+  end.
 
 Fixpoint hexstring_of_bits bs := match bs with
   | b1 :: b2 :: b3 :: b4 :: bs =>
      let n := char_of_nibble (b1, b2, b3, b4) in
      let s := hexstring_of_bits bs in
      match (n, s) with
-     | (Some n, Some s) => Some (n :: s)
+     | (Some n, Some s) => Some (String n s)
      | _ => None
      end
+  | [] => Some EmptyString
   | _ => None
-  end
-declare {isabelle} termination_argument hexstring_of_bits = automatic
+  end%string.
+
+Fixpoint binstring_of_bits bs := match bs with
+  | b :: bs => String (bitU_char b) (binstring_of_bits bs)
+  | [] => EmptyString
+  end.
 
 Definition show_bitlist bs :=
   match hexstring_of_bits bs with
-  | Some s => toString (#'0' :: #x' :: s)
-  | None => show bs
-  end
+  | Some s => String "0" (String "x" s)
+  | None => String "0" (String "b" (binstring_of_bits bs))
+  end.
 
 (*** List operations *)
-
+(*
 Definition inline (^^) := append_list
 
 val subrange_list_inc : forall a. list a -> Z -> Z -> list a*)
@@ -953,9 +966,9 @@ Definition extz_bv n (v : a) : option b := of_bits (extz_bits n (bits_of v)).
 (*val exts_bv : forall a b. Bitvector a, Bitvector b => Z -> a -> b*)
 Definition exts_bv n (v : a) : option b := of_bits (exts_bits n (bits_of v)).
 
-(*val string_of_bv : forall a. Bitvector a => a -> string
-Definition string_of_bv v := show_bitlist (bits_of v)
-*)
+(*val string_of_bv : forall a. Bitvector a => a -> string *)
+Definition string_of_bv v := show_bitlist (bits_of v).
+
 End Bitvector_defs.
 
 (*** Bytes and addresses *)
