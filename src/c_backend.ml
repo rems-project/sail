@@ -2684,6 +2684,26 @@ let rec get_recursive_functions (Defs defs) =
   match defs with
   | DEF_internal_mutrec fundefs :: defs ->
      IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions (Defs defs))
+
+  | (DEF_fundef fdef as def) :: defs ->
+     let open Rewriter in
+     let ids = ref IdSet.empty in
+     let collect_funcalls e_aux annot =
+       match e_aux with
+       | E_app (id, args) -> (ids := IdSet.add id !ids; E_aux (e_aux, annot))
+       | _ -> E_aux (e_aux, annot)
+     in
+     let map_exp = {
+         id_exp_alg with
+         e_aux = (fun (e_aux, annot) -> collect_funcalls e_aux annot)
+       } in
+     let map_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp map_exp) } in
+     let _ = rewrite_def map_defs def in
+     if IdSet.mem (id_of_fundef fdef) !ids then
+       IdSet.add (id_of_fundef fdef) (get_recursive_functions (Defs defs))
+     else
+       get_recursive_functions (Defs defs)
+
   | _ :: defs -> get_recursive_functions (Defs defs)
   | [] -> IdSet.empty
 
