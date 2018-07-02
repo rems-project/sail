@@ -138,6 +138,16 @@ Definition eq_bit (x : bitU) (y : bitU) : bool :=
   | _,_ => false
   end.
 
+Require Import Zeuclid.
+Definition euclid_modulo (m n : Z) `{ArithFact (n > 0)} : {z : Z & ArithFact (0 <= z <= n-1)}.
+refine (build_ex (ZEuclid.modulo m n)).
+constructor.
+destruct H.
+assert (Zabs n = n). { rewrite Zabs_eq; auto with zarith. }
+rewrite <- H at 3.
+lapply (ZEuclid.mod_always_pos m n); omega.
+Qed.
+
 (* Override the more general version *)
 
 Definition mults_vec {n} (l : mword n) (r : mword n) : mword (2 * n) := mults_vec l r.
