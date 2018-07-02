@@ -1552,7 +1552,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   (* Work around Coq bug 7975 about pattern binders followed by implicit arguments *)
   let implicitargs =
     if !used_a_pattern && List.length constrspp + List.length atom_constrs > 0 then
-      separate space
+      break 1 ^^ separate space
         ([string "Arguments"; idpp;] @
             List.map (fun _ -> string "{_}") quantspp @
             List.map (fun _ -> string "_") pats @
@@ -1568,8 +1568,8 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
                 "guarded pattern expression should have been rewritten before pretty-printing") in
   group (prefix 3 1
     (separate space ([idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp]) ^/^
-       colon ^^ space ^^ retpp ^^ coloneq)
-    (doc_fun_body ctxt exp ^^ dot)) ^/^ implicitargs
+       separate space [colon; retpp; coloneq])
+    (doc_fun_body ctxt exp ^^ dot)) ^^ implicitargs
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
