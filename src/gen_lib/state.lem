@@ -51,6 +51,7 @@ let is_exclusive = function
   | Sail_impl_base.Read_plain -> false
   | Sail_impl_base.Read_reserve -> true
   | Sail_impl_base.Read_acquire -> false
+  | Sail_impl_base.Read_weak_acquire -> false
   | Sail_impl_base.Read_exclusive -> true
   | Sail_impl_base.Read_exclusive_acquire -> true
   | Sail_impl_base.Read_stream -> false

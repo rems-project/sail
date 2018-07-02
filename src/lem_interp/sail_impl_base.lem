@@ -443,6 +443,7 @@ type read_kind =
   | Read_reserve
   (* AArch64 reads *)
   | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
+  | Read_weak_acquire
   (* RISC-V reads *)
   | Read_RISCV_acquire_RCpc
   | Read_RISCV_acquire_RCsc
@@ -459,6 +460,7 @@ instance (Show read_kind)
     | Read_plain -> "Read_plain"
     | Read_reserve -> "Read_reserve"
     | Read_acquire -> "Read_acquire"
+    | Read_weak_acquire -> "Read_weak_acquire"
     | Read_exclusive -> "Read_exclusive"
     | Read_exclusive_acquire -> "Read_exclusive_acquire"
     | Read_stream -> "Read_stream"
@@ -607,16 +609,17 @@ instance (EnumerationType read_kind)
     | Read_plain -> 0
     | Read_reserve -> 1
     | Read_acquire -> 2
-    | Read_exclusive -> 3
-    | Read_exclusive_acquire -> 4
-    | Read_stream -> 5
-    | Read_RISCV_acquire_RCpc -> 6
-    | Read_RISCV_acquire_RCsc -> 7
-    | Read_RISCV_acquire_release -> 8
-    | Read_RISCV_reserved -> 9
-    | Read_RISCV_reserved_acquire_RCpc -> 10
-    | Read_RISCV_reserved_acquire_RCsc -> 11
-    | Read_RISCV_reserved_acquire_release -> 12
+    | Read_weak_acquire -> 3
+    | Read_exclusive -> 4
+    | Read_exclusive_acquire -> 5
+    | Read_stream -> 6
+    | Read_RISCV_acquire_RCpc -> 7
+    | Read_RISCV_acquire_RCsc -> 8
+    | Read_RISCV_acquire_release -> 9
+    | Read_RISCV_reserved -> 10
+    | Read_RISCV_reserved_acquire_RCpc -> 11
+    | Read_RISCV_reserved_acquire_RCsc -> 12
+    | Read_RISCV_reserved_acquire_release -> 13
     | Read_X86_locked -> 13
   end
 end

@@ -387,17 +387,18 @@ let read_kindToInterpValue = function
   | Read_plain -> V_ctor (Id_aux (Id "Read_plain") Unknown) (T_id "read_kind") (C_Enum 0) (toInterpValue ())
   | Read_reserve -> V_ctor (Id_aux (Id "Read_reserve") Unknown) (T_id "read_kind") (C_Enum 1) (toInterpValue ())
   | Read_acquire -> V_ctor (Id_aux (Id "Read_acquire") Unknown) (T_id "read_kind") (C_Enum 2) (toInterpValue ())
-  | Read_exclusive -> V_ctor (Id_aux (Id "Read_exclusive") Unknown) (T_id "read_kind") (C_Enum 3) (toInterpValue ())
-  | Read_exclusive_acquire -> V_ctor (Id_aux (Id "Read_exclusive_acquire") Unknown) (T_id "read_kind") (C_Enum 4) (toInterpValue ())
-  | Read_stream -> V_ctor (Id_aux (Id "Read_stream") Unknown) (T_id "read_kind") (C_Enum 5) (toInterpValue ())
+  | Read_weak_acquire -> V_ctor (Id_aux (Id "Read_weak_acquire") Unknown) (T_id "read_kind") (C_Enum 3) (toInterpValue ())
+  | Read_exclusive -> V_ctor (Id_aux (Id "Read_exclusive") Unknown) (T_id "read_kind") (C_Enum 4) (toInterpValue ())
+  | Read_exclusive_acquire -> V_ctor (Id_aux (Id "Read_exclusive_acquire") Unknown) (T_id "read_kind") (C_Enum 5) (toInterpValue ())
+  | Read_stream -> V_ctor (Id_aux (Id "Read_stream") Unknown) (T_id "read_kind") (C_Enum 6) (toInterpValue ())
 
-  | Read_RISCV_acquire_RCpc             -> V_ctor (Id_aux (Id "Read_RISCV_acquire_RCpc")             Unknown) (T_id "read_kind") (C_Enum 6) (toInterpValue ())
-  | Read_RISCV_acquire_RCsc             -> V_ctor (Id_aux (Id "Read_RISCV_acquire_RCsc")             Unknown) (T_id "read_kind") (C_Enum 7) (toInterpValue ())
-  | Read_RISCV_acquire_release          -> V_ctor (Id_aux (Id "Read_RISCV_acquire_release")          Unknown) (T_id "read_kind") (C_Enum 8) (toInterpValue ())
-  | Read_RISCV_reserved                 -> V_ctor (Id_aux (Id "Read_RISCV_reserved")                 Unknown) (T_id "read_kind") (C_Enum 9) (toInterpValue ())
-  | Read_RISCV_reserved_acquire_RCpc    -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCpc")    Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
-  | Read_RISCV_reserved_acquire_RCsc    -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCsc")    Unknown) (T_id "read_kind") (C_Enum 11) (toInterpValue ())
-  | Read_RISCV_reserved_acquire_release -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_release") Unknown) (T_id "read_kind") (C_Enum 12) (toInterpValue ())
+  | Read_RISCV_acquire_RCpc             -> V_ctor (Id_aux (Id "Read_RISCV_acquire_RCpc")             Unknown) (T_id "read_kind") (C_Enum 7) (toInterpValue ())
+  | Read_RISCV_acquire_RCsc             -> V_ctor (Id_aux (Id "Read_RISCV_acquire_RCsc")             Unknown) (T_id "read_kind") (C_Enum 8) (toInterpValue ())
+  | Read_RISCV_acquire_release          -> V_ctor (Id_aux (Id "Read_RISCV_acquire_release")          Unknown) (T_id "read_kind") (C_Enum 9) (toInterpValue ())
+  | Read_RISCV_reserved                 -> V_ctor (Id_aux (Id "Read_RISCV_reserved")                 Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
+  | Read_RISCV_reserved_acquire_RCpc    -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCpc")    Unknown) (T_id "read_kind") (C_Enum 11) (toInterpValue ())
+  | Read_RISCV_reserved_acquire_RCsc    -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_RCsc")    Unknown) (T_id "read_kind") (C_Enum 12) (toInterpValue ())
+  | Read_RISCV_reserved_acquire_release -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire_release") Unknown) (T_id "read_kind") (C_Enum 13) (toInterpValue ())
 
   | Read_X86_locked -> V_ctor (Id_aux (Id "Read_X86_locked") Unknown) (T_id "read_kind") (C_Enum 13) (toInterpValue ())
   end
@@ -405,6 +406,7 @@ let rec read_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Read_plain") _) _ _ v -> Read_plain
   | V_ctor (Id_aux (Id "Read_reserve") _) _ _ v -> Read_reserve
   | V_ctor (Id_aux (Id "Read_acquire") _) _ _ v -> Read_acquire
+  | V_ctor (Id_aux (Id "Read_weak_acquire") _) _ _ v -> Read_weak_acquire
   | V_ctor (Id_aux (Id "Read_exclusive") _) _ _ v -> Read_exclusive
   | V_ctor (Id_aux (Id "Read_exclusive_acquire") _) _ _ v -> Read_exclusive_acquire
   | V_ctor (Id_aux (Id "Read_stream") _) _ _ v -> Read_stream
