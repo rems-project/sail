@@ -1194,7 +1194,7 @@ let stringFromReg_name r =
     end *)
   in
   match r with
-  | Reg s start size dir -> s
+  | Reg s start size dir -> s ^ "(" ^ (show start) ^ "," ^ (show size) ^ "," ^ (show dir) ^ ")"
   | Reg_slice s start dir sl ->
       let (first,second) = norm_sl start dir sl in
       s ^ "[" ^ show first ^ (if (first = second) then "" else ".." ^ (show second)) ^ "]"
