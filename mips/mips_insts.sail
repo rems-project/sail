@@ -1465,7 +1465,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
                                         @ 0b000    /* DS dcache sets */
                                         @ 0b000    /* DL dcache lines */
                                         @ 0b000    /* DA dcache assoc. */
-			       	 @ bool_to_bits(have_cp2) /* C2 CP2 presence */
+                                        @ bool_to_bits(have_cp2) /* C2 CP2 presence */
                                         @ 0b0      /* MD MDMX implemented */
                                         @ 0b0      /* PC performance counters */
                                         @ 0b0      /* WR watch registers */
