@@ -107,7 +107,7 @@ let cpu_hz = 1000000000;;
 let insns_per_tick = 100;;
 
 let mems = [ { addr = dram_base;
-	       size = dram_size } ];;
+               size = dram_size } ];;
 let dts = spike_dts "rv64imac" cpu_hz insns_per_tick mems;;
 
 let bytes_to_string bytes =

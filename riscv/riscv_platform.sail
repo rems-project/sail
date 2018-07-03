@@ -57,9 +57,8 @@ function within_clint(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
 function within_htif_writable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
     plat_htif_tohost() == addr
 
-/* TODO */
 function within_htif_readable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
-    false
+    plat_htif_tohost() == addr
 
 /* CLINT (Core Local Interruptor), based on Spike. */
 
@@ -158,22 +157,37 @@ bitfield htif_cmd : bits(64) = {
   payload : 47 .. 0
 }
 
-register htif_done : bool
+register htif_tohost : xlenbits
+register htif_done   : bool
 register htif_exit_code : xlenbits
 
-val htif_load : forall 'n, 'n > 0. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n))
-function htif_load(addr, width) = MemValue(EXTZ(0b0))
 
-/* FIXME: The wreg effect is an artifact of using 'register' to implement device state. */
+/* since the htif tohost port is only available at a single address,
+ * we'll assume here that physical memory model has correctly
+ * dispatched the address.
+ */
+
+val htif_load : forall 'n, 'n > 0. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rreg}
+function htif_load(addr, width) = {
+  print("htif[" ^ BitStr(addr) ^ "] -> " ^ BitStr(htif_tohost));
+  /* FIXME: For now, only allow the expected access widths. */
+  if width == 8
+  then MemValue(zero_extend(htif_tohost, 64))  /* FIXME: Redundant zero_extend currently required by Lem backend */
+  else MemException(E_Load_Access_Fault)
+}
+
+/* The wreg effect is an artifact of using 'register' to implement device state. */
 val htif_store: forall 'n, 0 < 'n <= 8. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wreg}
 function htif_store(addr, width, data) = {
-  // since htif is only available at a single address, we'll assume here that physical memory
-  // model has correctly dispatched the address.
+  print("htif[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
+  /* Store the written value so that we can ack it later. */
   let cbits : xlenbits = EXTZ(data);
+  htif_tohost = cbits;
+  /* Process the cmd immediately; this is needed for terminal output. */
   let cmd = Mk_htif_cmd(cbits);
   match cmd.device() {
     0x00 => { /* syscall-proxy */
-      print("htif-syscall-proxy[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
+      print("htif-syscall-proxy cmd: " ^ BitStr(cmd.payload()));
       if cmd.payload()[0] == 0b1
       then {
            htif_done = true;
@@ -182,16 +196,22 @@ function htif_store(addr, width, data) = {
       else ()
     },
     0x01 => { /* terminal */
-      print("htif-term[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
+      print("htif-term cmd: " ^ BitStr(cmd.payload()));
       match cmd.cmd() {
         0x00 => /* TODO: terminal input handling */ (),
         0x01 => plat_term_write(cmd.payload()[7..0]),
         c    => print("Unknown term cmd: " ^ BitStr(c))
       }
     },
-    d => print("htif-????[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data))
+    d => print("htif-???? cmd: " ^ BitStr(data))
   };
   MemValue(())
+}
+
+val htif_tick : unit -> unit effect {rreg, wreg}
+function htif_tick() = {
+  print("htif::tick " ^ BitStr(htif_tohost));
+  htif_tohost = EXTZ(0b0)  /* htif ack */
 }
 
 /* Top-level MMIO dispatch */
@@ -216,9 +236,14 @@ function mmio_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> fo
   then htif_store(addr, width, data)
   else MemException(E_SAMO_Access_Fault)
 
-/* Platform initialization */
+/* Platform initialization and ticking. */
 
 function init_platform() -> unit = {
-  htif_done = false;
-  htif_exit_code = EXTZ(0b0);
+  htif_tohost = EXTZ(0b0);
+  htif_done   = false;
+  htif_exit_code = EXTZ(0b0)
+}
+
+function tick_platform() -> unit = {
+  htif_tick()
 }
