@@ -107,7 +107,12 @@ function Step_CPU() = {
       } catch {
           // note: if supporting AArch32 as well, call _UndefinedFault() instead
           Error_Undefined()         => try { AArch64_UndefinedFault() } catch { _ => print("Exception during Undefined recovery\n") },
-          Error_See(_)              => try { AArch64_UndefinedFault() } catch { _ => print("Exception during SEE recovery\n") },
+          Error_See(_) => {
+            print(concat_str("BROKEN: SEE support ",
+                  concat_str(HexStr(UInt(__currentInstr)),
+                  "\n")));
+            exit()
+          },
           Error_ReservedEncoding(_) => try { AArch64_UndefinedFault() } catch { _ => print("Exception during ReservedEncoding recovery\n") },
           Error_ExceptionTaken() => {
             print(concat_str("ExceptionTaken during Decode/Execute from PC=",
