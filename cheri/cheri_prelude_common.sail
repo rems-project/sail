@@ -374,29 +374,60 @@ function MEMw_conditional_wrapper(addr, size, data) =
     success;
   }
 
+val checkDDCPerms : (CapStruct, MemAccessType) -> unit effect {escape, rreg, wreg}
+function checkDDCPerms(ddc : CapStruct, accessType: MemAccessType) = 
+  {
+    if (not (ddc.tag)) then
+      raise_c2_exception(CapEx_TagViolation, 0b00000)
+    else if (ddc.sealed) then
+      raise_c2_exception(CapEx_SealViolation, 0b00000);
+    match accessType {
+      Instruction  => assert(false), /* Only data accesses use DDC */
+      LoadData     => if (~(ddc.permit_load)) then (raise_c2_exception(CapEx_PermitLoadViolation, 0b00000)),
+      StoreData    => if (~(ddc.permit_store)) then (raise_c2_exception(CapEx_PermitStoreViolation, 0b00000))
+    };
+  }
+
 val addrWrapper : (bits(64), MemAccessType, WordType) -> bits(64) effect {rreg, wreg, escape}
 function addrWrapper(addr, accessType, width) =
   {
-    capno = 0b00000;
-    cap = readCapRegDDC(capno);
-    if (not (cap.tag)) then
-      (raise_c2_exception(CapEx_TagViolation, capno))
-    else if (cap.sealed) then
-        (raise_c2_exception(CapEx_SealViolation, capno));
-    match accessType {
-      Instruction  => if (~(cap.permit_execute)) then (raise_c2_exception(CapEx_PermitExecuteViolation, capno)),
-      LoadData     => if (~(cap.permit_load)) then (raise_c2_exception(CapEx_PermitLoadViolation, capno)),
-      StoreData    => if (~(cap.permit_store)) then (raise_c2_exception(CapEx_PermitStoreViolation, capno))
-    };
-    cursor = getCapCursor(cap);
+    ddc    = capRegToCapStruct(DDC);
+    checkDDCPerms(ddc, accessType);
+    cursor = getCapCursor(ddc);
     vAddr  = (cursor + unsigned(addr)) % pow2(64);
     size   = wordWidthBytes(width);
-    base   = getCapBase(cap);
-    top    = getCapTop(cap);
+    base   = getCapBase(ddc);
+    top    = getCapTop(ddc);
     if ((vAddr + size) > top) then
-      (raise_c2_exception(CapEx_LengthViolation, capno))
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
     else if (vAddr < base) then
-      (raise_c2_exception(CapEx_LengthViolation, capno))
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
+    else
+      to_bits(64, vAddr);
+  }
+
+val addrWrapperUnaligned : (bits(64), MemAccessType, WordTypeUnaligned) -> bits(64) effect {rreg, wreg, escape}
+function addrWrapperUnaligned(addr, accessType, width) =
+  {
+    ddc    = capRegToCapStruct(DDC);
+    checkDDCPerms(ddc, accessType);
+    cursor = getCapCursor(ddc);
+    vAddr  = (cursor + unsigned(addr)) % pow2(64);
+    woffset = vAddr % 4;
+    doffset = vAddr % 8;
+    /* Compute the address and size of the bytes touched -- this depends on alignment. */
+    let (waddr, size) : (int, int) = match width {
+      WL => (vAddr, 4 - woffset),
+      WR => (vAddr - woffset, woffset + 1),
+      DL => (vAddr, 8 - doffset),
+      DR => (vAddr - doffset, doffset + 1)
+    };
+    base   = getCapBase(ddc);
+    top    = getCapTop(ddc);
+    if ((waddr + size) > top) then
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
+    else if (waddr < base) then
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
     else
       to_bits(64, vAddr);
   }

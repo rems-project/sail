@@ -60,6 +60,10 @@ val addrWrapper : (bits(64), MemAccessType, WordType) -> bits(64)
 function addrWrapper(addr, accessType, width) =
     addr
 
+val addrWrapperUnaligned : (bits(64), MemAccessType, WordTypeUnaligned) -> bits(64)
+function addrWrapperUnaligned(addr, accessType, width) =
+    addr
+
 $ifdef _MIPS_TLB_STUB
 val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, escape}
 $else
