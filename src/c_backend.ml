@@ -1215,6 +1215,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      in
 
      let loop_start_label = label "for_start_" in
+     let loop_end_label = label "for_end_" in
      let body_setup, _, body_call, body_cleanup = compile_aexp ctx body in
      let body_gs = gensym () in
 
@@ -1223,17 +1224,15 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      @ variable_init step_gs step_setup step_ctyp step_call step_cleanup
      @ [iblock ([idecl CT_int64 loop_var;
                  icopy (CL_id loop_var) (F_id from_gs, CT_int64);
-                 ilabel loop_start_label;
                  idecl CT_unit body_gs;
-                 iblock (body_setup
+                 iblock ([ilabel loop_start_label]
+                         @ [ijump (F_op (F_id loop_var, (if is_inc then ">" else "<"), F_id to_gs), CT_bool) loop_end_label]
+                         @ body_setup
                          @ [body_call (CL_id body_gs)]
                          @ body_cleanup
-                         @ if is_inc then
-                             [icopy (CL_id loop_var) (F_op (F_id loop_var, "+", F_id step_gs), CT_int64);
-                              ijump (F_op (F_id loop_var, "<=", F_id to_gs), CT_bool) loop_start_label]
-                           else
-                             [icopy (CL_id loop_var) (F_op (F_id loop_var, "-", F_id step_gs), CT_int64);
-                              ijump (F_op (F_id loop_var, ">=", F_id to_gs), CT_bool) loop_start_label])])],
+                         @ [icopy (CL_id loop_var) (F_op (F_id loop_var, (if is_inc then "+" else "-"), F_id step_gs), CT_int64)]
+                         @ [igoto loop_start_label]);
+                 ilabel loop_end_label])],
      CT_unit,
      (fun clexp -> icopy clexp unit_fragment),
      []
