@@ -27,6 +27,10 @@ type tick = {
   time : int64
 }
 
+type htif = {
+  tohost : int64
+}
+
 type line =
   | L_none
   | L_inst of inst
@@ -34,6 +38,7 @@ type line =
   | L_csr_read of csr_read
   | L_csr_write of csr_write
   | L_tick of tick
+  | L_htif of htif
 
 let inst_count = ref 0
 
@@ -123,6 +128,20 @@ let parse_tick l =
 let sprint_tick t =
   Printf.sprintf "clint::tick mtime <- 0x%Lx" t.time
 
+(* htif tick
+   htif::tick 0x1
+ *)
+
+let parse_htif l =
+  try Scanf.sscanf l " htif::tick 0x%Lx"
+                   (fun tohost -> L_htif { tohost })
+  with
+    | Scanf.Scan_failure _ -> L_none
+    | End_of_file -> L_none
+
+let sprint_htif t =
+  Printf.sprintf "htif::tick 0x%Lx" t.tohost
+
 (* scanners *)
 
 let popt p l = function
@@ -131,7 +150,7 @@ let popt p l = function
 
 let parse_line l =
   parse_csr_read l |> popt parse_csr_write l
-  |> popt parse_reg_write l |> popt parse_tick l
+  |> popt parse_reg_write l |> popt parse_tick l |> popt parse_htif l
 
 let parse_sail_line l =
   parse_line l |> popt parse_sail_inst l
@@ -147,6 +166,7 @@ let sprint_line = function
   | L_csr_read  r -> Printf.sprintf "<%d> %s" !inst_count (sprint_csr_read r)
   | L_csr_write r -> Printf.sprintf "<%d> %s" !inst_count (sprint_csr_write r)
   | L_tick t      -> Printf.sprintf "<%d> %s" !inst_count (sprint_tick t)
+  | L_htif t      -> Printf.sprintf "<%d> %s" !inst_count (sprint_htif t)
 
 (* file processing *)
 
