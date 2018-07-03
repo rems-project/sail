@@ -358,3 +358,5 @@ val __Sleeping = {ocaml: "sleeping", lem: "sleeping", smt: "sleeping", interpret
 
 val __GetVerbosity = {c: "sail_get_verbosity"}: unit -> bits(64) effect {rreg, undef}
 
+val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {undef, wreg, rreg, rmem, wmem}
+

@@ -13,8 +13,6 @@ let CNT_IRQ  = [0x0000_000d,       0x0000_000a,        0x0000_03ff,        0x000
 // SGI Interrupts are 0-15, PPI interrupts are 16-31, so SPI interrupts have an offset of 32.
 let SPI_OFFSET = 32
 
-val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {undef, wreg, rreg, rmem, wmem}
-
 // Advance CPU by one cycle
 val Step_CPU : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
