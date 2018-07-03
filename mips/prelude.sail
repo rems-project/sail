@@ -55,7 +55,7 @@ val "prerr_string" : string -> unit
 
 val putchar = {c:"sail_putchar", _:"putchar"} : forall ('a : Type). 'a -> unit
 
-val concat_str = {lem: "stringAppend", _: "concat_str"} : (string, string) -> string
+val concat_str = {lem: "stringAppend", coq: "String.append", _: "concat_str"} : (string, string) -> string
 
 val string_of_int = "string_of_int" : int -> string
 /* Unused?

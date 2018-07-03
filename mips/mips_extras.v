@@ -152,3 +152,11 @@ Qed.
 
 Definition mults_vec {n} (l : mword n) (r : mword n) : mword (2 * n) := mults_vec l r.
 Definition mult_vec {n} (l : mword n) (r : mword n) : mword (2 * n) := mult_vec l r.
+
+
+Definition print_endline (_:string) : unit := tt.
+Definition prerr_endline (_:string) : unit := tt.
+Definition prerr_string (_:string) : unit := tt.
+Definition putchar {T} (_:T) : unit := tt.
+Require DecimalString.
+Definition string_of_int z := DecimalString.NilZero.string_of_int (Z.to_int z).
