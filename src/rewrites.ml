@@ -2606,7 +2606,7 @@ let rewrite_defs_letbind_effects =
     match lexp_aux with
     | LEXP_id _ -> k lexp
     | LEXP_deref exp ->
-       n_exp exp (fun exp ->
+       n_exp_name exp (fun exp ->
        k (fix_eff_lexp (LEXP_aux (LEXP_deref exp, annot))))
     | LEXP_memory (id,es) ->
        n_exp_nameL es (fun es -> 
