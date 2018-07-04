@@ -424,7 +424,7 @@ let doc_typ, doc_atomic_typ =
            List.fold_left add_tyvar tpp kids
         | None ->
            match nc with
-           | NC_aux (NC_true,_) -> List.fold_left add_tyvar (string "Z") (List.tl kids)
+(*           | NC_aux (NC_true,_) -> List.fold_left add_tyvar (string "Z") (List.tl kids)*)
            | _ -> List.fold_left add_tyvar (doc_arithfact ctx nc) kids
       end
     and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
@@ -1838,6 +1838,8 @@ try
         (separate_map hardline)
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) defs_modules;hardline;
         string "Import ListNotations.";
+        hardline;
+        string "Open Scope string.";
         hardline;
         (* Put the body into a Section so that we can define some values with
            Let to put them into the local context, where tactics can see them *)
