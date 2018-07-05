@@ -691,7 +691,7 @@ let rec compile_aval ctx = function
      in
      [idecl vector_ctyp gs;
       iextern (CL_id gs) (mk_id "internal_vector_init") [(F_lit (V_int (Big_int.of_int len)), CT_int64)] vector_ctyp]
-     @ List.concat (List.mapi aval_set avals),
+     @ List.concat (List.mapi aval_set (if direction then List.rev avals else avals)),
      (F_id gs, vector_ctyp),
      [iclear vector_ctyp gs]
 
