@@ -946,6 +946,9 @@ let doc_exp_lem, doc_let_lem =
               (* TODO: more sophisticated check *)
               match destruct_exist env arg_ty, destruct_exist env typ_from_fn with
               | Some _, None -> parens (string "projT1 " ^^ arg_pp)
+              (* Usually existentials have already been built elsewhere, but this
+                 is useful for (e.g.) ranges *)
+              | None, Some _ -> parens (string "build_ex " ^^ arg_pp)
               | _, _ -> arg_pp
             in
             let epp = hang 2 (flow (break 1) (call :: List.map2 doc_arg args arg_typs)) in
