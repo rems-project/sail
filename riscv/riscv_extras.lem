@@ -13,6 +13,10 @@ let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw
 let MEM_fence_r_r   () = barrier Barrier_RISCV_r_r
 let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
 let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
+let MEM_fence_w_rw  () = barrier Barrier_RISCV_w_rw
+let MEM_fence_rw_r  () = barrier Barrier_RISCV_rw_r
+let MEM_fence_r_w   () = barrier Barrier_RISCV_r_w
+let MEM_fence_w_r   () = barrier Barrier_RISCV_w_r
 let MEM_fence_i     () = barrier Barrier_RISCV_i
 
 val MEMea                            : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e

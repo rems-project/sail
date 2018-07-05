@@ -707,19 +707,17 @@ mapping clause encdec = FENCE(pred, succ) <-> 0b0000 @ pred @ succ @ 0b00000 @ 0
 
 function clause execute (FENCE(pred, succ)) = {
   match (pred, succ) {
-    (0b0011, 0b0011) => MEM_fence_rw_rw(),
-    (0b0010, 0b0011) => MEM_fence_r_rw(),
-    (0b0010, 0b0010) => MEM_fence_r_r(),
-    (0b0011, 0b0001) => MEM_fence_rw_w(),
-    (0b0001, 0b0001) => MEM_fence_w_w(),
+    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b11) => MEM_fence_rw_rw(),
+    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b11) => MEM_fence_r_rw(),
+    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b10) => MEM_fence_r_r(),
+    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b01) => MEM_fence_rw_w(),
+    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b01) => MEM_fence_w_w(),
+    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b11) => MEM_fence_w_rw(),
+    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b10) => MEM_fence_rw_r(),
+    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b01) => MEM_fence_r_w(),
+    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b10) => MEM_fence_w_r(),
 
-    (0b1111, 0b1111) => MEM_fence_rw_rw(),
-    (0b1110, 0b1111) => MEM_fence_r_rw(),
-    (0b1110, 0b1110) => MEM_fence_r_r(),
-    (0b1111, 0b1101) => MEM_fence_rw_w(),
-    (0b1101, 0b1101) => MEM_fence_w_w(),
-
-    (0b0000, 0b0000) => (),
+    (_ : bits(2) @ 0b00, _ : bits(2) @ 0b00) => (),
 
     _ => { print("FIXME: unsupported fence");
            () }
@@ -1936,25 +1934,18 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
       FENCE(pred, succ) => {
              ik =
                match (pred, succ) {
-                 (0b0011, 0b0011) => IK_barrier (Barrier_RISCV_rw_rw),
-                 (0b0010, 0b0011) => IK_barrier (Barrier_RISCV_r_rw),
-                 (0b0010, 0b0010) => IK_barrier (Barrier_RISCV_r_r),
-                 (0b0011, 0b0001) => IK_barrier (Barrier_RISCV_rw_w),
-                 (0b0001, 0b0001) => IK_barrier (Barrier_RISCV_w_w),
-
-                 (0b1111, 0b1111) => IK_barrier (Barrier_RISCV_rw_rw),
-                 (0b1110, 0b1111) => IK_barrier (Barrier_RISCV_r_rw),
-                 (0b1110, 0b1110) => IK_barrier (Barrier_RISCV_r_r),
-                 (0b1111, 0b1101) => IK_barrier (Barrier_RISCV_rw_w),
-                 (0b1101, 0b1101) => IK_barrier (Barrier_RISCV_w_w),
-
-                 // (0b0001, 0b0011) => IK_barrier (Barrier_RISCV_w_rw),
-                 // (0b0011, 0b0010) => IK_barrier (Barrier_RISCV_rw_r),
-                 // (0b0010, 0b0001) => IK_barrier (Barrier_RISCV_r_w),
-                 // (0b0001, 0b0010) => IK_barrier (Barrier_RISCV_w_r),
+                 (_ : bits(2) @ 0b11, _ : bits(2) @ 0b11) => IK_barrier (Barrier_RISCV_rw_rw),
+                 (_ : bits(2) @ 0b10, _ : bits(2) @ 0b11) => IK_barrier (Barrier_RISCV_r_rw),
+                 (_ : bits(2) @ 0b10, _ : bits(2) @ 0b10) => IK_barrier (Barrier_RISCV_r_r),
+                 (_ : bits(2) @ 0b11, _ : bits(2) @ 0b01) => IK_barrier (Barrier_RISCV_rw_w),
+                 (_ : bits(2) @ 0b01, _ : bits(2) @ 0b01) => IK_barrier (Barrier_RISCV_w_w),
+                 (_ : bits(2) @ 0b01, _ : bits(2) @ 0b11) => IK_barrier (Barrier_RISCV_w_rw),
+                 (_ : bits(2) @ 0b11, _ : bits(2) @ 0b10) => IK_barrier (Barrier_RISCV_rw_r),
+                 (_ : bits(2) @ 0b10, _ : bits(2) @ 0b01) => IK_barrier (Barrier_RISCV_r_w),
+                 (_ : bits(2) @ 0b01, _ : bits(2) @ 0b10) => IK_barrier (Barrier_RISCV_w_r),
 
 
-                 (0b0000, 0b0000) => IK_simple (),
+                 (_ : bits(2) @ 0b00, _ : bits(2) @ 0b00) => IK_simple (),
 
                  _ => internal_error("barrier type not implemented in initial_analysis")
   //               case (FM_NORMAL, _, _) -> exit "not implemented"

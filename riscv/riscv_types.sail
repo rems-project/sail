@@ -468,7 +468,7 @@ mapping reg_name = {
 }
 
 val sep : unit <-> string
-mapping sep = {
+mapping sep : unit <-> string = {
   () <-> opt_spc() ^ "," ^ def_spc()
 }
 
