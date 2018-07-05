@@ -1236,15 +1236,17 @@ end.
 (*declare {isabelle} termination_argument foreach = automatic
 
 val index_list : Z -> Z -> Z -> list Z*)
-Fixpoint index_list' from step n :=
-  match n with
-  | O => []
-  | S n => from :: index_list' (from + step) step n
-  end.
+Fixpoint index_list' from to step n :=
+  if orb (andb (step >? 0) (from <=? to)) (andb (step <? 0) (to <=? from)) then
+    match n with
+    | O => []
+    | S n => from :: index_list' (from + step) to step n
+    end
+  else [].
 
 Definition index_list from to step :=
   if orb (andb (step >? 0) (from <=? to)) (andb (step <? 0) (to <=? from)) then
-    index_list' from step (S (Z.abs_nat (from - to)))
+    index_list' from to step (S (Z.abs_nat (from - to)))
   else [].
 
 (*val while : forall vars. vars -> (vars -> bool) -> (vars -> vars) -> vars
