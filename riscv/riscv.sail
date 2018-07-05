@@ -890,6 +890,25 @@ function clause print_insn (SFENCE_VMA(rs1, rs2)) =
 mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
+// Some print utils for lr/sc.
+
+function aqrl_str(aq : bool, rl : bool) -> string =
+  match (aq, rl) {
+    (false, false) => "",
+    (false, true)  => ".rl",
+    (true, false)  => ".aq",
+    (true, true)   => ".aqrl"
+  }
+
+function lrsc_width_str(width : word_width) -> string =
+  match (width) {
+    BYTE   => ".b",
+    HALF   => ".h",
+    WORD   => ".w",
+    DOUBLE => ".d"
+  }
+
+/* ****************************************************************** */
 union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
 
 mapping clause encdec = LOADRES(aq, rl, rs1, size, rd) <-> 0b00010 @ bool_bits(aq) @ bool_bits(rl) @ 0b00000 @ rs1 @ 0b0 @ size_bits(size) @ rd @ 0b0101111
@@ -908,15 +927,9 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
       }
   }
 
-/* FIXME */
+
 function clause print_insn (LOADRES(aq, rl, rs1, width, rd)) =
-  let insn : string =
-    match (width) {
-      WORD   => "lr.w  ",
-      DOUBLE => "lr.d  ",
-      _      => "lr.bad "
-    } in
-  insn ^ rd ^ ", " ^ rs1
+  "lr" ^ lrsc_width_str(width) ^ aqrl_str(aq, rl) ^ " " ^ rd ^ ", " ^ rs1
 
 mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
 
@@ -961,15 +974,8 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   }
 }
 
-/* FIXME */
 function clause print_insn (STORECON(aq, rl, rs2, rs1, width, rd)) =
-  let insn : string =
-    match (width) {
-      WORD   => "sc.w  ",
-      DOUBLE => "sc.d  ",
-      _      => "sc.bad "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
+  "sc" ^ lrsc_width_str(width) ^ aqrl_str(aq, rl) ^ " " ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
