@@ -1899,8 +1899,8 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
              ik =
                match (aq, rl) {
                  (false, false) => IK_mem_read (Read_plain),
-                 //(true,  false) -> IK_mem_read (Read_RISCV_acquire_RCpc)
-                 //(true,  true)  -> IK_mem_read (Read_RISCV_acquire_RCsc)
+                 (true,  false) => IK_mem_read (Read_RISCV_acquire),
+                 (true,  true)  => IK_mem_read (Read_RISCV_strong_acquire),
 
                  _  => internal_error("LOAD type not implemented in initial_analysis")
                }
@@ -1912,8 +1912,8 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
              ik =
                match (aq, rl) {
                  (false, false) => IK_mem_write (Write_plain),
-                 //case (false, true)  -> IK_mem_write (Write_RISCV_release_RCpc)
-                 //case (true,  true)  -> IK_mem_write (Write_RISCV_release_RCsc)
+                 (false, true)  => IK_mem_write (Write_RISCV_release),
+                 (true,  true)  => IK_mem_write (Write_RISCV_strong_release),
 
                  _ => internal_error("STORE type not implemented in initial_analysis")
                }
