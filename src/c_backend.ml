@@ -2121,10 +2121,7 @@ let codegen_type_def ctx = function
      in
      let codegen_eq =
        let codegen_eq_test (id, ctyp) =
-         if is_stack_ctyp ctyp then
-           string (Printf.sprintf "op1.%s == op2.%s" (sgen_id id) (sgen_id id))
-         else
-           string (Printf.sprintf "EQUAL(%s)(op1.%s, op2.%s)" (sgen_ctyp_name ctyp) (sgen_id id) (sgen_id id))
+         string (Printf.sprintf "EQUAL(%s)(op1.%s, op2.%s)" (sgen_ctyp_name ctyp) (sgen_id id) (sgen_id id))
        in
        string (Printf.sprintf "static bool EQUAL(%s)(struct %s op1, struct %s op2)" (sgen_id id) (sgen_id id) (sgen_id id))
        ^^ space
@@ -2245,6 +2242,21 @@ let codegen_type_def ctx = function
                     ^^ each_ctor "op." set_field tus)
                    rbrace
      in
+     let codegen_eq =
+       let codegen_eq_test ctor_id ctyp =
+         string (Printf.sprintf "return EQUAL(%s)(op1.%s, op2.%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id) (sgen_id ctor_id))
+       in
+       let rec codegen_eq_tests = function
+         | [] -> string "return false;"
+         | (ctor_id, ctyp) :: ctors ->
+            string (Printf.sprintf "if (op1.kind == Kind_%s && op2.kind == Kind_%s) " (sgen_id ctor_id) (sgen_id ctor_id)) ^^ lbrace ^^ hardline
+            ^^ jump 0 2 (codegen_eq_test ctor_id ctyp)
+            ^^ hardline ^^ rbrace ^^ string " else " ^^ codegen_eq_tests ctors
+       in
+       let n = sgen_id id in
+       string (Printf.sprintf "static bool EQUAL(%s)(struct %s op1, struct %s op2) " n n n)
+       ^^ surround 2 0 lbrace (codegen_eq_tests tus) rbrace
+     in
      string (Printf.sprintf "// union %s" (string_of_id id)) ^^ hardline
      ^^ string "enum" ^^ space
      ^^ string ("kind_" ^ sgen_id id) ^^ space
@@ -2271,6 +2283,8 @@ let codegen_type_def ctx = function
      ^^ codegen_clear
      ^^ twice hardline
      ^^ codegen_setter
+     ^^ twice hardline
+     ^^ codegen_eq
      ^^ twice hardline
      ^^ separate_map (twice hardline) codegen_ctor tus
      (* If this is the exception type, then we setup up some global variables to deal with exceptions. *)

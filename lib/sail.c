@@ -134,6 +134,12 @@ void concat_str(sail_string *stro, const sail_string str1, const sail_string str
 
 /* ***** Sail integers ***** */
 
+inline
+bool EQUAL(mach_int)(const mach_int op1, const mach_int op2)
+{
+  return op1 == op2;
+}
+
 #ifndef USE_INT128
 
 inline
@@ -340,6 +346,11 @@ void pow2(sail_int *rop, const sail_int exp) {
 #endif
 
 /* ***** Sail bitvectors ***** */
+
+bool EQUAL(mach_bits)(const mach_bits op1, const mach_bits op2)
+{
+  return op1 == op2;
+}
 
 void CREATE(sail_bits)(sail_bits *rop)
 {

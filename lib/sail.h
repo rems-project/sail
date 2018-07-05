@@ -82,6 +82,8 @@ void concat_str(sail_string *stro, const sail_string str1, const sail_string str
 
 typedef int64_t mach_int;
 
+bool EQUAL(mach_int)(const mach_int, const mach_int);
+
 /*
  * Integers can be either stack-allocated as 128-bit integers if
  * __int128 is available, or use GMP arbitrary precision
@@ -164,6 +166,8 @@ SAIL_INT_FUNCTION(pow2, sail_int, const sail_int);
 typedef uint64_t mach_bits;
 
 bool eq_bit(const mach_bits a, const mach_bits b);
+
+bool EQUAL(mach_bits)(const mach_bits, const mach_bits);
 
 typedef struct {
   mp_bitcnt_t len;
