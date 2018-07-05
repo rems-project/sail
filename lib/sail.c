@@ -35,7 +35,7 @@ void cleanup_library(void)
   mpq_clear(sail_lib_tmp_real);
 }
 
-bool eq_unit(const unit a, const unit b)
+bool EQUAL(unit)(const unit a, const unit b)
 {
   return true;
 }
@@ -63,7 +63,7 @@ bool not(const bool b) {
   return !b;
 }
 
-bool eq_bool(const bool a, const bool b) {
+bool EQUAL(bool)(const bool a, const bool b) {
   return a == b;
 }
 
@@ -113,6 +113,11 @@ void hex_str(sail_string *str, const mpz_t n)
 }
 
 bool eq_string(const sail_string str1, const sail_string str2)
+{
+  return strcmp(str1, str2) == 0;
+}
+
+bool EQUAL(sail_string)(const sail_string str1, const sail_string str2)
 {
   return strcmp(str1, str2) == 0;
 }
@@ -193,6 +198,12 @@ void CONVERT_OF(sail_int, mach_int)(sail_int *rop, const mach_int op)
 
 inline
 bool eq_int(const sail_int op1, const sail_int op2)
+{
+  return !abs(mpz_cmp(op1, op2));
+}
+
+inline
+bool EQUAL(sail_int)(const sail_int op1, const sail_int op2)
 {
   return !abs(mpz_cmp(op1, op2));
 }
@@ -531,6 +542,11 @@ bool eq_bits(const sail_bits op1, const sail_bits op2)
     if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return false;
   }
   return true;
+}
+
+bool EQUAL(sail_bits)(const sail_bits op1, const sail_bits op2)
+{
+  return eq_bits(op1, op2);
 }
 
 bool neq_bits(const sail_bits op1, const sail_bits op2)
@@ -928,7 +944,7 @@ void to_real(real *rop, const sail_int op)
   mpq_canonicalize(*rop);
 }
 
-bool eq_real(const real op1, const real op2)
+bool EQUAL(real)(const real op1, const real op2)
 {
   return mpq_cmp(op1, op2) == 0;
 }

@@ -2120,7 +2120,19 @@ let codegen_type_def ctx = function
                    rbrace
      in
      let codegen_eq =
-       string (Printf.sprintf "static bool eq_%s(struct %s op1, struct %s op2) { return true; }" (sgen_id id) (sgen_id id) (sgen_id id))
+       let codegen_eq_test (id, ctyp) =
+         if is_stack_ctyp ctyp then
+           string (Printf.sprintf "op1.%s == op2.%s" (sgen_id id) (sgen_id id))
+         else
+           string (Printf.sprintf "EQUAL(%s)(op1.%s, op2.%s)" (sgen_ctyp_name ctyp) (sgen_id id) (sgen_id id))
+       in
+       string (Printf.sprintf "static bool EQUAL(%s)(struct %s op1, struct %s op2)" (sgen_id id) (sgen_id id) (sgen_id id))
+       ^^ space
+       ^^ surround 2 0 lbrace
+            (string "return" ^^ space
+             ^^ separate_map (string " && ") codegen_eq_test ctors
+             ^^ string ";")
+            rbrace
      in
      (* Generate the struct and add the generated functions *)
      let codegen_ctor (id, ctyp) =
