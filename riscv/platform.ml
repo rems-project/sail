@@ -97,7 +97,24 @@ let clint_size () = bits_of_int64 P.clint_size
 
 let insns_per_tick () = Big_int.of_int P.insns_per_tick
 
+(* load reservation *)
+
+let reservation = ref "none"  (* shouldn't match any valid address *)
+
+let load_reservation addr =
+  Printf.eprintf "reservation <- %s\n" (!reservation);
+  reservation := string_of_bits addr
+
+let match_reservation addr =
+  Printf.eprintf "reservation: %s, key=%s\n" (!reservation) (string_of_bits addr);
+  string_of_bits addr = !reservation
+
+let cancel_reservation () =
+  Printf.eprintf "reservation <- none\n";
+  reservation := "none"
+
 (* terminal I/O *)
+
 let term_write char_bits =
   let big_char = Big_int.bitwise_and (uint char_bits) (Big_int.of_int 255) in
   P.term_write (char_of_int (Big_int.to_int big_char))

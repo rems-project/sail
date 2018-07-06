@@ -92,6 +92,7 @@ function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -
   else MemException(E_SAMO_Access_Fault)
 }
 
+// dispatches to MMIO regions or physical memory regions depending on physical memory map
 function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(unit) =
   if   within_mmio_writable(addr, width)
   then mmio_write(addr, width, data)
@@ -132,8 +133,6 @@ function mem_write_value (addr, width, value, aq, rl, con) = {
     (true,  true,  true)  => MEMval_conditional_strong_release(addr, width, value)
   }
 }
-
-val "speculate_conditional_success" : unit -> bool effect {exmem}
 
 val MEM_fence_rw_rw = {ocaml: "skip", lem: "MEM_fence_rw_rw"} : unit -> unit effect {barr}
 val MEM_fence_r_rw  = {ocaml: "skip", lem: "MEM_fence_r_rw"}  : unit -> unit effect {barr}

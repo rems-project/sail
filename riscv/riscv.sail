@@ -328,7 +328,7 @@ function extend_value(is_unsigned, value) = match (value) {
 
 val process_load : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> bool effect {escape, rreg, wreg}
 function process_load(rd, addr, value, is_unsigned) =
-  match (extend_value(is_unsigned, value)) {
+  match extend_value(is_unsigned, value) {
     MemValue(result) => { X(rd) = result; true },
     MemException(e)  => { handle_mem_exception(addr, e); false }
   }
@@ -913,20 +913,43 @@ union clause ast = LOADRES : (bool, bool, regbits, word_width, regbits)
 
 mapping clause encdec = LOADRES(aq, rl, rs1, size, rd) <-> 0b00010 @ bool_bits(aq) @ bool_bits(rl) @ 0b00000 @ rs1 @ 0b0 @ size_bits(size) @ rd @ 0b0101111
 
-val process_loadres : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> unit
+/* We could set load-reservations on physical or virtual addresses.
+ * For now we set them on virtual addresses, since it makes the
+ * sequential model of SC a bit simpler, at the cost of an explicit
+ * call to load_reservation in LR and cancel_reservation in SC.
+ */
+
+val process_loadres : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> bool effect {escape, rreg, wreg}
+function process_loadres(rd, addr, value, is_unsigned) =
+  match extend_value(is_unsigned, value) {
+    MemValue(result) => { X(rd) = result; load_reservation(addr); true },
+    MemException(e)  => { handle_mem_exception(addr, e); false }
+  }
 
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
   let vaddr : xlenbits = X(rs1) in
-  match translateAddr(vaddr, Read, Data) {
-    TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
-    TR_Address(addr) =>
-      match width {
-        WORD   => process_load(rd, addr, mem_read(addr, 4, aq, rl, true), false),
-        DOUBLE => process_load(rd, addr, mem_read(addr, 8, aq, rl, true), false),
-        _      => internal_error("LOADRES expected WORD or DOUBLE")
-      }
-  }
-
+  let aligned : bool =
+    /* BYTE and HALF would only occur due to invalid decodes, but it doesn't hurt
+     * to treat them as valid here; otherwise we'd need to throw an internal_error.
+     * May need to revisit for latex output.
+     */
+    match width {
+      BYTE   => true,
+      HALF   => vaddr[0]    == 0b0,
+      WORD   => vaddr[1..0] == 0b00,
+      DOUBLE => vaddr[2..0] == 0b000
+    } in
+  if (~ (aligned))
+  then { handle_mem_exception(vaddr, E_SAMO_Addr_Align); false }
+  else match translateAddr(vaddr, Read, Data) {
+         TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
+         TR_Address(addr) =>
+           match width {
+             WORD   => process_loadres(rd, vaddr, mem_read(addr, 4, aq, rl, true), false),
+             DOUBLE => process_loadres(rd, vaddr, mem_read(addr, 8, aq, rl, true), false),
+             _      => internal_error("LOADRES expected WORD or DOUBLE")
+           }
+       }
 
 function clause print_insn (LOADRES(aq, rl, rs1, width, rd)) =
   "lr" ^ lrsc_width_str(width) ^ aqrl_str(aq, rl) ^ " " ^ rd ^ ", " ^ rs1
@@ -941,31 +964,51 @@ mapping clause encdec = STORECON(aq, rl, rs2, rs1, size, rd) <-> 0b00011 @ bool_
 /* NOTE: Currently, we only EA if address translation is successful.
    This may need revisiting. */
 function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
-  status : bits(1) = if speculate_conditional_success() then 0b0 else 0b1;
-  X(rd) = EXTZ(status);
-
-  if status == 0b1 then true else {
-    vaddr : xlenbits = X(rs1);
-    match translateAddr(vaddr, Write, Data) {
-      TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
-      TR_Address(addr) => {
-        let eares : MemoryOpResult(unit) = match width {
-          WORD   => mem_write_ea(addr, 4, aq, rl, true),
-          DOUBLE => mem_write_ea(addr, 8, aq, rl, true),
-          _      => internal_error("STORECON expected word or double")
-        };
-        match (eares) {
-          MemException(e)  => { handle_mem_exception(addr, e); false },
-          MemValue(_) => {
-            rs2_val = X(rs2);
-            let res : MemoryOpResult(unit) = match width {
-              WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true),
-              DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true),
-              _      => internal_error("STORECON expected word or double")
-            } in
-            match (res) {
-              MemValue(_)     => true,
-              MemException(e) => { handle_mem_exception(addr, e); false }
+  /* RMEM FIXME:  This definition differs from the Sail1 version:
+   * rs1 is read *before* speculate_conditional_success
+   * (called via match_reservation), partly due to the current api of
+   * match_reservation.  Reverting back to the weaker Sail1 version
+   * will require changes to the API for the ghost reservation state.
+   */
+  vaddr : xlenbits = X(rs1);
+  let aligned : bool =
+    /* BYTE and HALF would only occur due to invalid decodes, but it doesn't hurt
+     * to treat them as valid here; otherwise we'd need to throw an internal_error.
+     * May need to revisit for latex output.
+     */
+    match width {
+      BYTE   => true,
+      HALF   => vaddr[0]    == 0b0,
+      WORD   => vaddr[1..0] == 0b00,
+      DOUBLE => vaddr[2..0] == 0b000
+    } in
+  if (~ (aligned))
+  then { handle_mem_exception(vaddr, E_SAMO_Addr_Align); false }
+  else {
+    if match_reservation(vaddr) == false
+    then { X(rd) = EXTZ(0b1); true }
+    else {
+      match translateAddr(vaddr, Write, Data) {
+        TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
+        TR_Address(addr) => {
+          let eares : MemoryOpResult(unit) = match width {
+            WORD   => mem_write_ea(addr, 4, aq, rl, true),
+            DOUBLE => mem_write_ea(addr, 8, aq, rl, true),
+            _      => internal_error("STORECON expected word or double")
+          };
+          match (eares) {
+            MemException(e)  => { handle_mem_exception(addr, e); false },
+            MemValue(_) => {
+              rs2_val = X(rs2);
+              let res : MemoryOpResult(unit) = match width {
+                WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true),
+                DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true),
+                _      => internal_error("STORECON expected word or double")
+              };
+              match (res) {
+                MemValue(_)     => { X(rd) = EXTZ(0b0); cancel_reservation(); true },
+                MemException(e) => { handle_mem_exception(addr, e); false }
+              }
             }
           }
         }

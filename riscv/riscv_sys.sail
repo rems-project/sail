@@ -363,7 +363,6 @@ function legalize_sedeleg(s : Sedeleg, v : xlenbits) -> Sedeleg = {
   Mk_Sedeleg(EXTZ(v[8..0]))
 }
 
-/* TODO: handle views for interrupt delegation */
 bitfield Sinterrupts : bits(64) = {
   SEI : 9,  /* external interrupts */
   UEI : 8,
@@ -670,6 +669,24 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
   & check_TVM_SATP(csr, p)
   & check_Counteren(csr, p)
 
+/* Reservation handling for LR/SC.
+ *
+ * The reservation state is maintained external to the model since the
+ * reservation behavior is platform-specific anyway and maintaining
+ * this state outside the model simplifies the concurrency analysis.
+ *
+ * These are externs are defined here in the system module since
+ * we currently perform reservation cancellation on privilege level
+ * transition.  Ideally, the platform should get more visibility into
+ * where cancellation can be performed.
+ */
+
+val load_reservation = {ocaml: "Platform.load_reservation", lem: "load_reservation"} : xlenbits -> unit
+
+val match_reservation = {ocaml: "Platform.match_reservation", lem: "speculate_conditional_success"} : xlenbits -> bool effect {exmem}
+
+val cancel_reservation = {ocaml: "Platform.cancel_reservation", lem: "cancel_reservation"} : unit -> unit
+
 /* Exception delegation: given an exception and the privilege at which
  * it occured, returns the privilege at which it should be handled.
  */
@@ -776,6 +793,7 @@ union ctl_result = {
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
   print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
+  cancel_reservation();
   match (del_priv) {
     Machine => {
        mcause->IsInterrupt() = intr;
@@ -840,6 +858,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
 
+      cancel_reservation();
+
       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
       mepc
@@ -850,6 +870,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       mstatus->SPIE() = true;
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
       mstatus->SPP()  = false;
+
+      cancel_reservation();
 
       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);

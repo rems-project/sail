@@ -45,7 +45,12 @@ val read_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
 let read_ram addrsize size hexRAM address =
   read_mem Read_plain address size
 
-let speculate_conditional_success () = excl_result ()
+val load_reservation : forall 'a. Size 'a => bitvector 'a -> unit
+let load_reservation addr = ()
+
+let speculate_conditional_success _ = excl_result ()
+
+let cancel_reservation () = ()
 
 val plat_ram_base : forall 'a. Size 'a => unit -> bitvector 'a
 let plat_ram_base () = wordFromInteger 0
