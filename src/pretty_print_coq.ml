@@ -1152,7 +1152,7 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align epp) else align epp
     | E_exit e -> liftR (separate space [string "exit"; expY e])
     | E_assert (e1,e2) ->
-       let epp = liftR (separate space [string "assert_exp'"; expY e1; expY e2]) in
+       let epp = liftR (separate space [string "assert_exp"; expY e1; expY e2]) in
        if aexp_needed then parens (align epp) else align epp
     | E_app_infix (e1,id,e2) ->
        raise (Reporting_basic.err_unreachable l
@@ -1160,25 +1160,31 @@ let doc_exp_lem, doc_let_lem =
     | E_var(lexp, eq_exp, in_exp) ->
        raise (report l "E_vars should have been removed before pretty-printing")
     | E_internal_plet (pat,e1,e2) ->
-       let epp =
-         let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
-         let middle =
-           match fst (untyp_pat pat) with
-           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)
-             when (match e1 with E_aux (E_assert _,_) -> true | _ -> false) ->
-              string ">>= fun _ =>"
-           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
-              string ">>"
-           | P_aux (P_id id,_) ->
-              separate space [string ">>= fun"; doc_id id; bigarrow]
-           | P_aux (P_typ (typ, P_aux (P_id id,_)),_) ->
-              separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]
-           | _ ->
-              separate space [string ">>= fun"; squote ^^ doc_pat ctxt true (pat, typ_of e1); bigarrow]
-         in
-         infix 0 1 middle (expV b e1) (expN e2)
-       in
-       if aexp_needed then parens (align epp) else epp
+       begin
+         match pat, e1 with
+         | (P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)),
+           (E_aux (E_assert (assert_e1,assert_e2),_)) ->
+            let epp = liftR (separate space [string "assert_exp'"; expY assert_e1; expY assert_e2]) in
+            let epp = infix 0 1 (string ">>= fun _ =>") epp (expN e2) in
+            if aexp_needed then parens (align epp) else align epp
+         | _ ->
+            let epp =
+              let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
+              let middle =
+                match fst (untyp_pat pat) with
+                | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
+                   string ">>"
+                | P_aux (P_id id,_) ->
+                   separate space [string ">>= fun"; doc_id id; bigarrow]
+                | P_aux (P_typ (typ, P_aux (P_id id,_)),_) ->
+                   separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]
+                | _ ->
+                   separate space [string ">>= fun"; squote ^^ doc_pat ctxt true (pat, typ_of e1); bigarrow]
+              in
+              infix 0 1 middle (expV b e1) (expN e2)
+            in
+            if aexp_needed then parens (align epp) else epp
+       end
     | E_internal_return (e1) ->
        wrap_parens (align (separate space [string "returnm"; expY e1]))
     | E_sizeof nexp ->
