@@ -848,6 +848,20 @@ Class ReasonableSize (a : Z) : Prop := {
 Hint Resolve -> Z.gtb_lt Z.geb_le Z.ltb_lt Z.leb_le : zbool.
 Hint Resolve <- Z.ge_le_iff Z.gt_lt_iff : zbool.
 
+(* Omega doesn't know about In, but can handle disjunctions. *)
+Ltac unfold_In :=
+repeat match goal with
+| H:context [In ?x (?y :: ?t)] |- _ => change (In x (y :: t)) with (y = x \/ In x t) in H
+| H:context [In ?x []] |- _ => change (In x []) with False in H
+end.
+
+(* Definitions in the context that involve proof for other constraints can
+   break some of the constraint solving tactics, so prune definition bodies
+   down to integer types. *)
+Ltac not_Z ty := match ty with Z => fail 1 | _ => idtac end.
+Ltac clear_non_Z_defns := 
+  repeat match goal with H := _ : ?X |- _ => not_Z X; clearbody H end.
+
 Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >= 0).
 constructor.
 destruct a.
@@ -856,7 +870,7 @@ auto using Z.le_ge, Zle_0_pos.
 destruct w.
 Qed.
 Ltac unwrap_ArithFacts :=
-  repeat match goal with H:(ArithFact _) |- _ => apply use_ArithFact in H end.
+  repeat match goal with H:(ArithFact _) |- _ => let H' := fresh H in case H as [H'] end.
 Ltac unbool_comparisons :=
   repeat match goal with
   | H:context [Z.geb _ _] |- _ => rewrite Z.geb_leb in H
@@ -901,14 +915,23 @@ Ltac reduce_pow :=
     let r := (eval cbn in (Z.pow X Y)) in
     change (Z.pow X Y) with r
   end.
+Ltac dump_context :=
+  repeat match goal with
+  | H:=?X |- _ => idtac H ":=" X; fail
+  | H:?X |- _ => idtac H ":" X; fail end;
+  match goal with |- ?X => idtac "Goal:" X end.
 Ltac solve_arithfact :=
+(*dump_context;*)
+ clear_non_Z_defns;
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
+ unfold_In;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
  reduce_list_lengths;
  reduce_pow;
+(*dump_context;*)
  solve [apply ArithFact_mword; assumption
        | constructor; omega with Z
          (* The datatypes hints give us some list handling, esp In *)
