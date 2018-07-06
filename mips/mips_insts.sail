@@ -1124,10 +1124,9 @@ function clause execute (Load(width, sign, linked, base, rt, offset)) =
                   CP0LLBit  = 0b1;
                   CP0LLAddr = pAddr;
                   match width {
-                   B => extendLoad(MEMr_reserve_wrapper(pAddr, 1), sign),
-                   H => extendLoad(MEMr_reserve_wrapper(pAddr, 2), sign),
                    W => extendLoad(MEMr_reserve_wrapper(pAddr, 4), sign),
-                   D => extendLoad(MEMr_reserve_wrapper(pAddr, 8), sign)
+                   D => extendLoad(MEMr_reserve_wrapper(pAddr, 8), sign),
+                   _ => throw(Error_internal_error()) /* there is no llbc or llhc */
                   }
                 }
               else
@@ -1173,10 +1172,9 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
                   {
 		    success : bool = if (CP0LLBit[0]) then match width
                     {
-                      B  => MEMw_conditional_wrapper(pAddr, 1, rt_val[7..0]),
-                      H  => MEMw_conditional_wrapper(pAddr, 2, rt_val[15..0]),
                       W  => MEMw_conditional_wrapper(pAddr, 4, rt_val[31..0]),
-                      D  => MEMw_conditional_wrapper(pAddr, 8, rt_val)
+                      D  => MEMw_conditional_wrapper(pAddr, 8, rt_val),
+                      _  => throw(Error_internal_error()) /* there is no sbc or shc */
                     } else false;
 		    wGPR(rt) = zero_extend(success)
                   }
@@ -1382,7 +1380,7 @@ function clause decode (0b101111 @ base : regno @ op : regno @ imm : imm16) =
 function clause execute (CACHE(base, op, imm)) =
   checkCP0Access () /* pretty much a NOP because no caches */
 
-/* PREF - prefetching into (non-existent) caches */
+/* PREF - prefetching into (non-existent) caches 
 
 union clause ast = PREF : (regno, regno, bits(16))
 function clause decode (0b110011 @ base : regno @ op : regno @ imm : imm16) =
@@ -1390,6 +1388,7 @@ function clause decode (0b110011 @ base : regno @ op : regno @ imm : imm16) =
 function clause execute (PREF(base, op, imm)) =
   () /* XXX NOP */
 
+*/
 
 /* SYNC  - Memory barrier */
 union clause ast = SYNC : unit
