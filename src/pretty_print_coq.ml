@@ -987,9 +987,11 @@ let doc_exp_lem, doc_let_lem =
                 | t1, t2 -> false,false,t1,t2
               in
               let autocast =
-                match destruct_vector env in_typ, destruct_vector env out_typ with
-                | Some (n1,_,t1), Some (n2,_,t2) 
-                  when is_bit_typ t1 && is_bit_typ t2 ->
+                (* Avoid using helper functions which simplify the nexps *)
+                is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
+                match in_typ, out_typ with
+                | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
+                  Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
                    not (similar_nexps n1 n2)
                 | _ -> false
               in unpack,build_ex,autocast
