@@ -136,6 +136,7 @@ let rec fix_id remove_tick name = match name with
   | "EQ"
   | "Z"
   | "mod"
+  | "M"
     -> name ^ "'"
   | _ ->
      if String.contains name '#' then
@@ -146,7 +147,7 @@ let rec fix_id remove_tick name = match name with
        fix_id remove_tick (String.concat "__" (Util.split_on_char '^' name))
      else if name.[0] = '\'' then
        let var = String.sub name 1 (String.length name - 1) in
-       if remove_tick then var else (var ^ "'")
+       if remove_tick then fix_id remove_tick var else (var ^ "'")
      else if is_number_char(name.[0]) then
        ("v" ^ name ^ "'")
      else name
