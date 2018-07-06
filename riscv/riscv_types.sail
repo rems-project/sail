@@ -309,7 +309,7 @@ function exceptionType_to_bits(e) =
 val cast exceptionType_to_str : ExceptionType -> string
 function exceptionType_to_str(e) =
   match (e) {
-    E_Fetch_Addr_Align => "fisaligned-fetch",
+    E_Fetch_Addr_Align => "misaligned-fetch",
     E_Fetch_Access_Fault => "fetch-access-fault",
     E_Illegal_Instr => "illegal-instruction",
     E_Breakpoint => "breakpoint",
