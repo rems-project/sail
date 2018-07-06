@@ -708,6 +708,21 @@ let similar_nexps n1 n2 =
     | _ -> false
   in if same_nexp_shape n1 n2 then true else false
 
+let constraint_fns = ["Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"]
+
+let condition_produces_constraint exp =
+  (* Cheat a little - this isn't quite the right environment for subexpressions
+     but will have all of the relevant functions in it. *)
+  let env = env_of exp in
+  Rewriter.fold_exp
+    { (Rewriter.pure_exp_alg false (||)) with
+      Rewriter.e_app = fun (f,bs) ->
+        List.exists (fun x -> x) bs ||
+        (Env.is_extern f env "coq" &&
+           let f' = Env.get_extern f env "coq" in
+           List.exists (fun id -> String.compare f' id == 0) constraint_fns)
+    } exp
+
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
@@ -1191,7 +1206,9 @@ let doc_exp_lem, doc_let_lem =
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
     in
     (prefix 2 1
-      (soft_surround 2 1 if_pp (string "sumbool_of_bool" ^^ space ^^ parens (top_exp ctxt true c)) (string "then"))
+      (soft_surround 2 1 if_pp
+         ((if condition_produces_constraint c then string "sumbool_of_bool" ^^ space else empty)
+          ^^ parens (top_exp ctxt true c)) (string "then"))
       (top_exp ctxt false t)) ^^
     break 1 ^^
     else_pp
