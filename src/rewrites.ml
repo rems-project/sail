@@ -3324,8 +3324,15 @@ let rewrite_defs_mapping_patterns =
   in
   pexp_rewriters rewrite_pexp
 
+let rewrite_lit_lem (L_aux (lit, _)) = match lit with
+  | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ -> true
+  | _ -> false
 
-let rewrite_defs_pat_lits =
+let rewrite_no_strings (L_aux (lit, _)) = match lit with
+  | L_string _ -> false
+  | _ -> true
+
+let rewrite_defs_pat_lits rewrite_lit =
   let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
     let guards = ref [] in
     let counter = ref 0 in
@@ -3333,7 +3340,7 @@ let rewrite_defs_pat_lits =
     let rewrite_pat = function
       (* HACK: ignore strings for now *)
       | P_lit (L_aux (L_string _, _)) as p_aux, p_annot -> P_aux (p_aux, p_annot)
-      | P_lit lit, p_annot ->
+      | P_lit lit, p_annot when rewrite_lit lit ->
          let env = env_of_annot p_annot in
          let typ = typ_of_annot p_annot in
          let id = mk_id ("p" ^ string_of_int !counter ^ "#") in
@@ -4004,7 +4011,7 @@ let rewrite_defs_lem = [
   ("remove_mapping_valspecs", remove_mapping_valspecs);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
-  ("pat_lits", rewrite_defs_pat_lits);
+  ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
@@ -4042,7 +4049,7 @@ let rewrite_defs_ocaml = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
-  ("pat_lits", rewrite_defs_pat_lits);
+  ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
@@ -4064,7 +4071,7 @@ let rewrite_defs_c = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
-  ("pat_lits", rewrite_defs_pat_lits);
+  ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
