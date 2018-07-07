@@ -3539,11 +3539,12 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let eff = union_eff_exps [c;e1;e2] in
          let v = E_aux (E_if (c,e1,e2), (gen_loc el, Some (env, typ, eff))) in
          Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
-    | E_case (e1,ps) ->
-       (* after rewrite_defs_letbind_effects e1 needs no rewriting *)
+    | E_case (e1,ps) | E_try (e1, ps) ->
+       let is_case = match expaux with E_case _ -> true | _ -> false in
        let vars, varpats =
-         ps
-         |> List.map (fun (Pat_aux ((Pat_exp (_,e)|Pat_when (_,_,e)),_)) -> e)
+         (* for E_case, e1 needs no rewriting after rewrite_defs_letbind_effects *)
+         ((if is_case then [] else [e1]) @
+         List.map (fun (Pat_aux ((Pat_exp (_,e)|Pat_when (_,_,e)),_)) -> e) ps)
          |> List.map find_updated_vars
          |> List.fold_left IdSet.union IdSet.empty
          |> IdSet.inter used_vars
@@ -3554,8 +3555,10 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              Pat_aux (Pat_exp (p,rewrite_var_updates e),a)
            | Pat_aux (Pat_when (p,g,e),a) ->
              Pat_aux (Pat_when (p,g,rewrite_var_updates e),a)) ps in
-         Same_vars (E_aux (E_case (e1,ps),annot))
+         let expaux = if is_case then E_case (e1, ps) else E_try (e1, ps) in
+         Same_vars (E_aux (expaux, annot))
        else
+         let e1 = if is_case then e1 else rewrite_var_updates (add_vars overwrite e1 vars) in
          let rewrite_pexp (Pat_aux (pexp, (l, _))) = match pexp with
            | Pat_exp (pat, exp) ->
              let exp = rewrite_var_updates (add_vars overwrite exp vars) in
@@ -3564,10 +3567,12 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
            | Pat_when _ ->
              raise (Reporting_basic.err_unreachable l
                "Guarded patterns should have been rewritten already") in
+         let ps = List.map rewrite_pexp ps in
+         let expaux = if is_case then E_case (e1, ps) else E_try (e1, ps) in
          let typ = match ps with
            | Pat_aux ((Pat_exp (_,first)|Pat_when (_,_,first)),_) :: _ -> typ_of first
            | _ -> unit_typ in
-         let v = fix_eff_exp (annot_exp (E_case (e1, List.map rewrite_pexp ps)) pl env typ) in
+         let v = fix_eff_exp (annot_exp expaux pl env typ) in
          Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
     | E_assign (lexp,vexp) ->
        let mk_id_pat id = match Env.lookup_id id env with
