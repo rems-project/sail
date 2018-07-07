@@ -48,7 +48,7 @@ mips.v: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS)
 mips_types.v: mips.v
 
 MIPS_COQ = mips_types.v mips_extras.v mips.v
-COQ_LIBS = -R ../../bbv bbv -R ../lib/coq Sail
+COQ_LIBS = -R ../../bbv/theories bbv -R ../lib/coq Sail
 
 %.vo: %.v
 	coqc $(COQ_LIBS) $<
