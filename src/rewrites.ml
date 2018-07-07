@@ -1168,6 +1168,25 @@ let case_exp e t cs =
     (* let efr = union_effs (List.map effect_of_pexp ps) in *)
     fix_eff_exp (annot_exp (E_case (e,ps)) l env t)
 
+(* Rewrite guarded patterns into a combination of if-expressions and
+   unguarded pattern matches
+
+   Strategy:
+   - Split clauses into groups where the first pattern subsumes all the
+     following ones
+   - Translate the groups in reverse order, using the next group as a
+     fall-through target, if there is one
+   - Within a group,
+     - translate the sequence of clauses to an if-then-else cascade using the
+       guards as long as the patterns are equivalent modulo substitution, or
+     - recursively translate the remaining clauses to a pattern match if
+       there is a difference in the patterns.
+
+  TODO: Compare this more closely with the algorithm in the CPP'18 paper of
+  Spector-Zabusky et al, who seem to use the opposite grouping and merging
+  strategy to ours: group *mutually exclusive* clauses, and try to merge them
+  into a pattern match first instead of an if-then-else cascade.
+*)
 let rewrite_guarded_clauses l cs =
   let rec group fallthrough clauses =
     let add_clause (pat,cls,annot) c = (pat,cls @ [c],annot) in
