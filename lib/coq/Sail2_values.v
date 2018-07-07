@@ -928,6 +928,7 @@ Ltac unbool_comparisons :=
   | H:context [Z.ltb _ _ = false] |- _ => rewrite Z.ltb_ge in H
   | H:context [Z.eqb _ _ = false] |- _ => rewrite Z.eqb_neq in H
   | H:context [orb _ _ = true] |- _ => rewrite Bool.orb_true_iff in H
+  | H:context [andb _ _ = true] |- _ => apply andb_prop in H
   | H:context [generic_eq _ _ = true] |- _ => apply generic_eq_true in H
   | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
   | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H

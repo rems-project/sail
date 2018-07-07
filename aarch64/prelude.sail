@@ -151,9 +151,9 @@ val __SetSlice_int = "set_slice_int" : forall 'w. (atom('w), int, int, bits('w))
 
 val __raw_SetSlice_int : forall 'w. (atom('w), int, int, bits('w)) -> int
 
-val __raw_GetSlice_int = "get_slice_int" : forall 'w. (atom('w), int, int) -> bits('w)
+val __raw_GetSlice_int = "get_slice_int" : forall 'w, 'w >= 0. (atom('w), int, int) -> bits('w)
 
-val __GetSlice_int : forall 'n. (atom('n), int, int) -> bits('n)
+val __GetSlice_int : forall 'n, 'n >= 0. (atom('n), int, int) -> bits('n)
 
 function __GetSlice_int (n, m, o) = __raw_GetSlice_int(n, m, o)
 
