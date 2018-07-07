@@ -5713,6 +5713,11 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
     outputaddress = (slice(desc, 12, 4) @ slice(desc, asb, negate(asb) + 48)) @ slice(inputaddr, 0, asb)
   else
     outputaddress = ZeroExtend(slice(desc, asb, negate(asb) + 48) @ slice(inputaddr, 0, asb));
+  __tmp_33 : DescriptorUpdate = result.descupdate;
+  __tmp_33.AF = false;
+  __tmp_33.AP = false;
+  __tmp_33.descaddr = descaddr;
+  result.descupdate = __tmp_33;
   if [desc[10]] == 0b0 then
     if ~(update_AF) then {
       __tmp_29 : AddressDescriptor = result.addrdesc;
@@ -5738,9 +5743,6 @@ function AArch64_TranslationTableWalk (ipaddress, vaddress, acctype, iswrite, se
       result.descupdate = __tmp_32
     } else ()
   else ();
-  __tmp_33 : DescriptorUpdate = result.descupdate;
-  __tmp_33.descaddr = descaddr;
-  result.descupdate = __tmp_33;
   xn : bits(1) = undefined;
   pxn : bits(1) = undefined;
   if apply_nvnv1_effect then {
@@ -6715,7 +6717,7 @@ function AArch64_SecondStageTranslate (S1, vaddress, acctype, iswrite, wasaligne
 function AArch64_CheckAndUpdateDescriptor (result, fault, secondstage, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk__arg) = {
   hwupdatewalk = hwupdatewalk__arg;
   hw_update_AF : bool = undefined;
-  if result.AF then if fault.typ == Fault_None then hw_update_AF = true else if ConstrainUnpredictable(Unpredictable_AFUPDATE) == Constraint_TRUE then hw_update_AF = true else hw_update_AF = false else ();
+  if result.AF then if fault.typ == Fault_None then hw_update_AF = true else if ConstrainUnpredictable(Unpredictable_AFUPDATE) == Constraint_TRUE then hw_update_AF = true else hw_update_AF = false else hw_update_AF = false;
   hw_update_AP : bool = undefined;
   write_perm_req : bool = undefined;
   if result.AP & fault.typ == Fault_None then {
