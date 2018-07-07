@@ -8,6 +8,9 @@ begin
   notes returnS_def[simp] and failS_def[simp] and throwS_def[simp] and readS_def[simp] and updateS_def[simp]
 begin*)
 
+notation bindS (infixr "\<bind>\<^sub>S" 54)
+notation seqS (infixr "\<then>\<^sub>S" 54)
+
 lemma bindS_ext_cong[fundef_cong]:
   assumes m: "m1 s = m2 s"
     and f: "\<And>a s'. (Value a, s') \<in> (m2 s) \<Longrightarrow> f1 a s' = f2 a s'"

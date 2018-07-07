@@ -13,7 +13,7 @@ subsection \<open>Hoare triples\<close>
 
 type_synonym 'regs predS = "'regs sequential_state \<Rightarrow> bool"
 
-definition PrePost :: "'regs predS \<Rightarrow> ('regs, 'a, 'e) monadS \<Rightarrow> (('a, 'e) result \<Rightarrow> 'regs predS) \<Rightarrow> bool"
+definition PrePost :: "'regs predS \<Rightarrow> ('regs, 'a, 'e) monadS \<Rightarrow> (('a, 'e) result \<Rightarrow> 'regs predS) \<Rightarrow> bool" ("\<lbrace>_\<rbrace> _ \<lbrace>_\<rbrace>")
   where "PrePost P f Q \<equiv> (\<forall>s. P s \<longrightarrow> (\<forall>(r, s') \<in> f s. Q r s'))"
 
 lemma PrePostI:
@@ -211,7 +211,7 @@ there is an exception.
 [1] D. Cock, G. Klein, and T. Sewell, ‘Secure Microkernels, State Monads and Scalable Refinement’,
 in Theorem Proving in Higher Order Logics, 2008, pp. 167–182.\<close>
 
-definition PrePostE :: "'regs predS \<Rightarrow> ('regs, 'a, 'e) monadS \<Rightarrow> ('a \<Rightarrow> 'regs predS) \<Rightarrow> ('e ex \<Rightarrow> 'regs predS) \<Rightarrow> bool"
+definition PrePostE :: "'regs predS \<Rightarrow> ('regs, 'a, 'e) monadS \<Rightarrow> ('a \<Rightarrow> 'regs predS) \<Rightarrow> ('e ex \<Rightarrow> 'regs predS) \<Rightarrow> bool" ("\<lbrace>_\<rbrace> _ \<lbrace>_ \<bar> _\<rbrace>")
   where "PrePostE P f Q E \<equiv> PrePost P f (\<lambda>v. case v of Value a \<Rightarrow> Q a | Ex e \<Rightarrow> E e)"
 
 lemmas PrePost_defs = PrePost_def PrePostE_def
