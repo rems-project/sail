@@ -22,7 +22,7 @@ val vector_length = {
   ocaml: "length",
   lem: "length_list",
   c: "length",
-  coq: "length_list"
+  coq: "vec_length"
 } : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
 
 overload length = {bitvector_length, vector_length}
@@ -68,7 +68,7 @@ val bitvector_access = {
 val plain_vector_access = {
   ocaml: "access",
   lem: "access_list_dec",
-  coq: "access_list_dec",
+  coq: "vec_access_dec",
   c: "vector_access"
 } : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), atom('m)) -> 'a
 
@@ -84,7 +84,7 @@ val bitvector_update = {
 val plain_vector_update = {
   ocaml: "update",
   lem: "update_list_dec",
-  coq: "update_list_dec",
+  coq: "vec_update_dec",
   c: "vector_update"
 } : forall 'n ('a : Type). (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
 

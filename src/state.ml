@@ -411,7 +411,7 @@ let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
      let size = string_of_nexp (nexp_simp size) in
      let is_inc = if is_order_inc ord then "true" else "false" in
      let etyp_of, of_etyp = regval_convs_coq etyp in
-     "(fun v => vector_of_regval " ^ etyp_of ^ " v)",
+     "(fun v => vector_of_regval " ^ size ^ " " ^ etyp_of ^ " v)",
      "(fun v => regval_of_vector " ^ of_etyp ^ " " ^ size ^ " " ^ is_inc ^ " v)"
   | Typ_app (id, [Typ_arg_aux (Typ_arg_typ etyp, _)])
     when string_of_id id = "list" ->
@@ -430,12 +430,12 @@ let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
 let register_refs_coq registers =
   let generic_convs =
     separate_map hardline string [
-      "Definition vector_of_regval {a} (of_regval : register_value -> option a) (rv : register_value) : option (list a) := match rv with";
-      "  | Regval_vector (_, _, v) => just_list (List.map of_regval v)";
+      "Definition vector_of_regval {a} n (of_regval : register_value -> option a) (rv : register_value) : option (vec a n) := match rv with";
+      "  | Regval_vector (n', _, v) => if n =? n' then map_bind (vec_of_list n) (just_list (List.map of_regval v)) else None";
       "  | _ => None";
       "end.";
       "";
-      "Definition regval_of_vector {a} (regval_of : a -> register_value) (size : Z) (is_inc : bool) (xs : list a) : register_value := Regval_vector (size, is_inc, List.map regval_of xs).";
+      "Definition regval_of_vector {a} (regval_of : a -> register_value) (size : Z) (is_inc : bool) (xs : vec a size) : register_value := Regval_vector (size, is_inc, List.map regval_of (list_of_vec xs)).";
       "";
       "Definition list_of_regval {a} (of_regval : register_value -> option a) (rv : register_value) : option (list a) := match rv with";
       "  | Regval_list v => just_list (List.map of_regval v)";

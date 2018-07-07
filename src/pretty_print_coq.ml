@@ -382,7 +382,7 @@ let doc_typ, doc_atomic_typ =
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
              string "mword " ^^ doc_nexp ctx (nexp_simp m)
-           | _ -> string "list" ^^ space ^^ typ elem_typ in
+           | _ -> string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx (nexp_simp m) in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
@@ -1122,7 +1122,9 @@ let doc_exp_lem, doc_let_lem =
          if is_bit_typ etyp then
            let bepp = string "vec_of_bits" ^^ space ^^ align epp in
            (align (group (prefix 0 1 bepp (doc_tannot_lem ctxt (env_of full_exp) false t))), true)
-         else (epp,aexp_needed) in
+         else
+           let vepp = string "vec_of_list_len" ^^ space ^^ align epp in
+           (vepp,aexp_needed) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update(v,e1,e2) ->
        raise (Reporting_basic.err_unreachable l
