@@ -868,9 +868,7 @@ union clause ast = SFENCE_VMA : (regbits, regbits)
 mapping clause encdec = SFENCE_VMA(rs1, rs2) <-> 0b0001001 @ rs2 @ rs1 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute SFENCE_VMA(rs1, rs2) = {
-  /* FIXME: spec leaves unspecified what happens if this is executed in M-mode.
-     We assume it is the same as S-mode, which is definitely wrong.
-   */
+  /* TODO: handle PMP/TLB synchronization when executed in M-mode. */
   if cur_privilege == User then { handle_illegal(); false }
   else match (architecture(mstatus.SXL()), mstatus.TVM()) {
     (Some(RV64), true)  => { handle_illegal(); false },
@@ -922,7 +920,7 @@ mapping clause encdec = LOADRES(aq, rl, rs1, size, rd) <-> 0b00010 @ bool_bits(a
 val process_loadres : forall 'n, 0 < 'n <= 8. (regbits, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> bool effect {escape, rreg, wreg}
 function process_loadres(rd, addr, value, is_unsigned) =
   match extend_value(is_unsigned, value) {
-    MemValue(result) => { X(rd) = result; load_reservation(addr); true },
+    MemValue(result) => { load_reservation(addr); X(rd) = result; true },
     MemException(e)  => { handle_mem_exception(addr, e); false }
   }
 

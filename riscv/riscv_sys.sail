@@ -793,7 +793,7 @@ union ctl_result = {
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
   print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
-  cancel_reservation();
+
   match (del_priv) {
     Machine => {
        mcause->IsInterrupt() = intr;
@@ -808,6 +808,8 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
        cur_privilege   = del_priv;
 
        print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+
+       cancel_reservation();
 
        match tvec_addr(mtvec, mcause) {
          Some(epc) => epc,
@@ -831,6 +833,8 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
        cur_privilege   = del_priv;
 
        print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+
+       cancel_reservation();
 
        match tvec_addr(stvec, scause) {
          Some(epc) => epc,
@@ -858,10 +862,10 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
 
-      cancel_reservation();
-
       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
+
+      cancel_reservation();
       mepc
     },
     (_, CTL_SRET())  => {
@@ -871,10 +875,10 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
       mstatus->SPP()  = false;
 
-      cancel_reservation();
-
       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
+
+      cancel_reservation();
       sepc
     }
   }

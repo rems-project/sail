@@ -102,7 +102,7 @@ let insns_per_tick () = Big_int.of_int P.insns_per_tick
 let reservation = ref "none"  (* shouldn't match any valid address *)
 
 let load_reservation addr =
-  Printf.eprintf "reservation <- %s\n" (!reservation);
+  Printf.eprintf "reservation <- %s\n" (string_of_bits addr);
   reservation := string_of_bits addr
 
 let match_reservation addr =

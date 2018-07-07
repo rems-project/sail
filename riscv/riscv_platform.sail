@@ -245,5 +245,6 @@ function init_platform() -> unit = {
 }
 
 function tick_platform() -> unit = {
-  htif_tick()
+  cancel_reservation();
+  htif_tick();
 }
