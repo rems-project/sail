@@ -31,6 +31,11 @@ type htif = {
   tohost : int64
 }
 
+type ld_res =
+  | Res_make of int64
+  | Res_match of int64 * int64
+  | Res_cancel
+
 type line =
   | L_none
   | L_inst of inst
@@ -39,6 +44,7 @@ type line =
   | L_csr_write of csr_write
   | L_tick of tick
   | L_htif of htif
+  | L_ld_res of ld_res
 
 let inst_count = ref 0
 
@@ -142,6 +148,43 @@ let parse_htif l =
 let sprint_htif t =
   Printf.sprintf "htif::tick 0x%Lx" t.tohost
 
+(* Load reservations:
+   make:   reservation <- 0x80002008
+   match:  reservation: 0xffffffffffffffff, key=0x80002008
+   cancel: reservation <- none
+
+ *)
+let parse_ldres_match l =
+  try Scanf.sscanf
+        l " reservation: 0x%Lx, key=0x%Lx"
+                   (fun res key -> L_ld_res (Res_match (res, key)))
+  with
+    | Scanf.Scan_failure _ -> L_none
+    | End_of_file -> L_none
+
+let parse_ldres_match_sail l =
+  try Scanf.sscanf
+        l " reservation: none, key=0x%Lx"
+                   (fun key -> L_ld_res (Res_match (Int64.minus_one, key)))
+  with
+    | Scanf.Scan_failure _ -> L_none
+    | End_of_file -> L_none
+
+let parse_ldres_change l =
+  try if l = "reservation <- none"
+      then L_ld_res Res_cancel
+      else Scanf.sscanf
+             l " reservation <- 0x%Lx"
+             (fun res -> L_ld_res (Res_make res))
+  with
+    | Scanf.Scan_failure _ -> L_none
+    | End_of_file -> L_none
+
+let sprint_ldres = function
+  | Res_make res         -> Printf.sprintf "reservation <- 0x%Lx" res
+  | Res_match (res, key) -> Printf.sprintf "reservation: 0x%Lx, key=0x%Lx" res key
+  | Res_cancel           -> Printf.sprintf "reservation <- none"
+
 (* scanners *)
 
 let popt p l = function
@@ -151,9 +194,10 @@ let popt p l = function
 let parse_line l =
   parse_csr_read l |> popt parse_csr_write l
   |> popt parse_reg_write l |> popt parse_tick l |> popt parse_htif l
+  |> popt parse_ldres_change l  |> popt parse_ldres_match l
 
 let parse_sail_line l =
-  parse_line l |> popt parse_sail_inst l
+  parse_line l |> popt parse_sail_inst l  |> popt parse_ldres_match_sail l
 
 let parse_spike_line l =
   parse_line l |> popt parse_spike_inst l
@@ -167,6 +211,7 @@ let sprint_line = function
   | L_csr_write r -> Printf.sprintf "<%d> %s" !inst_count (sprint_csr_write r)
   | L_tick t      -> Printf.sprintf "<%d> %s" !inst_count (sprint_tick t)
   | L_htif t      -> Printf.sprintf "<%d> %s" !inst_count (sprint_htif t)
+  | L_ld_res r    -> Printf.sprintf "<%d> %s" !inst_count (sprint_ldres r)
 
 (* file processing *)
 
