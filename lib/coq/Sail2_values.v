@@ -1368,6 +1368,8 @@ Definition abs_with_eq n   : {o : Z & ArithFact (o = Z.abs n)} := build_ex (Z.ab
 
 (* Similarly, for ranges (currently in MIPS) *)
 
+Definition eq_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)}) : bool :=
+  (projT1 l) =? (projT1 r).
 Definition add_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)})
   : {x & ArithFact (n+o <= x <= m+p)} :=
   build_ex ((projT1 l) + (projT1 r)).
