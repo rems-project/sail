@@ -30,6 +30,27 @@ match l with
   foreachM xs vars body
 end.
 
+Fixpoint foreach_ZM_up' {rv e Vars} from to step off n `{ArithFact (from <= to)} `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
+  if sumbool_of_bool (from + off <=? to) then
+    match n with
+    | O => returnm vars
+    | S n => body (from + off) _ vars >>= fun vars => foreach_ZM_up' from to step (off + step) n vars body
+    end
+  else returnm vars.
+
+Fixpoint foreach_ZM_down' {rv e Vars} from to step off n `{ArithFact (to <= from)} `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
+  if sumbool_of_bool (to <=? from + off) then
+    match n with
+    | O => returnm vars
+    | S n => body (from + off) _ vars >>= fun vars => foreach_ZM_down' from to step (off - step) n vars body
+    end
+  else returnm vars.
+
+Definition foreach_ZM_up {rv e Vars} from to step vars body `{ArithFact (from <= to)} `{ArithFact (0 < step)} :=
+    foreach_ZM_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
+Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (to <= from)} `{ArithFact (0 < step)} :=
+    foreach_ZM_down' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
+
 (*declare {isabelle} termination_argument foreachM = automatic*)
 
 (*val and_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e*)

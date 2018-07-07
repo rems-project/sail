@@ -831,7 +831,7 @@ let doc_exp_lem, doc_let_lem =
        | Id_aux (Id "foreach", _) ->
           begin
             match args with
-            | [exp1; exp2; exp3; ord_exp; vartuple; body] ->
+            | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
                let loopvar, body = match body with
                  | E_aux (E_let (LB_aux (LB_val (_, _), _),
                    E_aux (E_let (LB_aux (LB_val (_, _), _),
@@ -842,13 +842,13 @@ let doc_exp_lem, doc_let_lem =
                      | (P_aux (P_id id, _))), _), _),
                      body), _), _), _)), _)), _) -> id, body
                  | _ -> raise (Reporting_basic.err_unreachable l ("Unable to find loop variable in " ^ string_of_exp body)) in
-               let step = match ord_exp with
-                 | E_aux (E_lit (L_aux (L_false, _)), _) ->
-                    parens (separate space [string "integerNegate"; expY exp3])
-                 | _ -> expY exp3
+               let dir = match ord_exp with
+                 | E_aux (E_lit (L_aux (L_false, _)), _) -> "_down"
+                 | E_aux (E_lit (L_aux (L_true, _)), _) -> "_up"
+                 | _ -> raise (Reporting_basic.err_unreachable l ("Unexpected loop direction " ^ string_of_exp ord_exp))
                in
-               let combinator = if effectful (effect_of body) then "foreachM" else "foreach" in
-               let indices_pp = parens (separate space [string "index_list"; expY exp1; expY exp2; step]) in
+               let combinator = if effectful (effect_of body) then "foreach_ZM" else "foreach_Z" in
+               let combinator = combinator ^ dir in
                let used_vars_body = find_e_ids body in
                let body_lambda =
                  (* Work around indentation issues in Lem when translating
@@ -856,18 +856,20 @@ let doc_exp_lem, doc_let_lem =
                  match fst (uncast_exp vartuple) with
                    | E_aux (E_tuple _, _)
                      when not (IdSet.mem (mk_id "varstup") used_vars_body)->
-                      separate space [string "fun"; doc_id loopvar; string "varstup"; bigarrow]
+                      separate space [string "fun"; doc_id loopvar; string "_"; string "varstup"; bigarrow]
                       ^^ break 1 ^^
                       separate space [string "let"; expY vartuple; string ":= varstup in"]
                    | E_aux (E_lit (L_aux (L_unit, _)), _)
                      when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                      separate space [string "fun"; doc_id loopvar; string "unit_var"; bigarrow]
+                      separate space [string "fun"; doc_id loopvar; string "_"; string "unit_var"; bigarrow]
                    | _ ->
-                      separate space [string "fun"; doc_id loopvar; expY vartuple; bigarrow]
+                      separate space [string "fun"; doc_id loopvar; string "_"; expY vartuple; bigarrow]
                in
                parens (
                    (prefix 2 1)
-                     ((separate space) [string combinator; indices_pp; expY vartuple])
+                     ((separate space) [string combinator;
+                                        expY from_exp; expY to_exp; expY step_exp;
+                                        expY vartuple])
                      (parens
                         (prefix 2 1 (group body_lambda) (expN body))
                      )
