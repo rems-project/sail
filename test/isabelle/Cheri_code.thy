@@ -50,7 +50,7 @@ fun write_char_mem :: "int \<Rightarrow> char \<Rightarrow> (regstate, unit, exc
      bindS (write_mem_valS BC_bitU_list (bits_of_nat 8 (nat_of_char c))) (\<lambda>_.
      returnS ()))"
 
-definition "initial_state \<equiv> init_state initial_regstate (\<lambda>seed. (False, seed)) 0"
+definition "initial_state \<equiv> init_state initial_regstate"
 
 code_printing constant elf_entry \<rightharpoonup> (OCaml) "(Arith.Int'_of'_integer (Elf'_loader.elf'_entry _))"
 code_printing constant get_time_ns \<rightharpoonup> (OCaml) "(Arith.Int'_of'_integer (Big'_int.big'_int'_of'_int (Pervasives.int'_of'_float (1e9 *. Unix.gettimeofday _))))"

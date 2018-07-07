@@ -63,8 +63,8 @@ let usage_msg = "Sail OCaml RTS options:"
 let () =
   Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg
 
-let (>>) = State_monad.bindS
-let liftS = State_lifting.liftState (Cheri_types.get_regval, Cheri_types.set_regval)
+let (>>) = Sail2_state_monad.bindS
+let liftS = Sail2_state_lifting.liftState (Cheri_types.get_regval, Cheri_types.set_regval)
 
 let load_elf_segment seg =
   let open Elf_interpreted_segment in
@@ -78,7 +78,7 @@ let load_elf_segment seg =
   prerr_endline ("Segment base address: " ^ Big_int.string_of_big_int base);
   prerr_endline ("Segment physical address: " ^ Big_int.string_of_big_int paddr);
   print_segment seg;
-  State.iteriS writer (Byte_sequence.char_list_of_byte_sequence bs)
+  Sail2_state.iteriS writer (Byte_sequence.char_list_of_byte_sequence bs)
 
 let _ =
   Random.self_init ();
@@ -88,5 +88,5 @@ let _ =
   in
   (* State_monad.prerr_results *)
     (Cheri_code.initial_state |>
-    (State.iterS load_elf_segment elf_segments >> (fun _ ->
+    (Sail2_state.iterS load_elf_segment elf_segments >> (fun _ ->
     liftS (Cheri.main ()))));
