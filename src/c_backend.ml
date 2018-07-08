@@ -63,6 +63,7 @@ module Big_int = Nat_big_num
 let c_verbosity = ref 0
 let opt_ddump_flow_graphs = ref false
 let opt_trace = ref false
+let opt_static = ref false
 
 (* Optimization flags *)
 let optimize_primops = ref false
@@ -2547,10 +2548,12 @@ let codegen_def' ctx = function
        match ret_arg with
        | None ->
           assert (is_stack_ctyp ret_ctyp);
-          string "static " ^^ string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_id id ^^ parens (string args) ^^ hardline
+          (if !opt_static then string "static " else empty)
+          ^^ string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_id id ^^ parens (string args) ^^ hardline
        | Some gs ->
           assert (not (is_stack_ctyp ret_ctyp));
-          string "static void" ^^ space ^^ codegen_id id
+          (if !opt_static then string "static " else empty)
+          ^^ string "void" ^^ space ^^ codegen_id id
           ^^ parens (string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
           ^^ hardline
      in

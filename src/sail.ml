@@ -121,6 +121,9 @@ let options = Arg.align ([
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " Apply constant folding optimizations");
+  ( "-static",
+    Arg.Set C_backend.opt_static,
+    " Make generated C functions static");
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " Instrument ouput with tracing");
