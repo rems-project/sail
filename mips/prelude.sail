@@ -44,7 +44,7 @@ val cast cast_unit_vec : bit -> bits(1)
 
 function cast_unit_vec b = match b {
   bitzero => 0b0,
-  bitone => 0b1
+  _ => 0b1
 }
 
 val print = "print_endline" : string -> unit
@@ -186,7 +186,7 @@ function bool_to_bits x = if x then 0b1 else 0b0
 val cast bit_to_bool : bit -> bool
 function bit_to_bool b = match b {
   bitone => true,
-  bitzero => false
+  _ => false
 }
 
 val cast bits_to_bool : bits(1) -> bool
