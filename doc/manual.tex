@@ -64,9 +64,15 @@
 
 \title{The Sail instruction-set semantics specification language}
 
+\ifdefined\ANON
+\author{Anonymous}
+\newcommand\anonymise[1]{\emph{redacted}}
+\else
 \author{Alasdair Armstrong \and Thomas Bauereiss \and Brian Campbell \and
   Shaked Flur \and Kathryn E. Gray \and Robert Norton-Wright \and Christopher Pulte \and
   Peter Sewell}
+\newcommand\anonymise[1]{#1}
+\fi
 
 \maketitle
 
@@ -80,7 +86,8 @@
 
 \include{tutorial}
 
-\include{types}
+% Remove for now since incomplete
+%\include{types}
 
 \bibliographystyle{unsrt}
 \bibliography{manual}

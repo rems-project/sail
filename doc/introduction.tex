@@ -114,12 +114,12 @@ except vector, float, and load-multiple instructions, without
 exceptions; for ARMv8 this is for the A64 fragment.
 
 The ARMv8 (hand) model is hand-written based on the ARMv8-A
-specification document~\cite{armarmv8,FGP16}, principally by Flur.
+specification document~\cite{armarmv8,FGP16}, principally by \anonymise{Flur}.
 
 The Power model is based on an automatic extraction of pseudocode and
 decoding data from an XML export of the Framemaker document source of
 the IBM Power manual~\cite{Power2.06,micro2015}, with manual patching
-as necessary, principally by Kerneis and Gray.
+as necessary, principally by \anonymise{Kerneis and Gray}.
 
 The ARMv8 (ASL) model is based on an automatic translation of ARM's
 machine-readable public v8.3 ASL specification\footnote{ARM v8-A
@@ -135,7 +135,7 @@ which in turn drew on MIPS4000 and MIPS32~\cite{MIPS4000,MIPS32-I}.
 %
 The CHERI model is based on that and the CHERI ISA reference manual
 version~5~\cite{UCAM-CL-TR-891}. These two are both principally by
-Norton-Wright; they cover all basic user and kernel mode MIPS features
+\anonymise{Norton-Wright}; they cover all basic user and kernel mode MIPS features
 sufficient to boot FreeBSD, including a TLB, exceptions and a basic
 UART for console interaction. ISA extensions such as floating point
 are not covered. The CHERI model supports either 256-bit capabilities
