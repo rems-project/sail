@@ -94,7 +94,7 @@ function loop () = {
   let insns_per_tick = plat_insns_per_tick();
   i : int = 0;
   step_no : int = 0;
-  while true do {
+  while (~ (htif_done)) do {
     minstret_written = false;     /* see note for minstret */
     let (retired, stepped) = step(step_no);
     PC = nextPC;
@@ -107,16 +107,15 @@ function loop () = {
       let exit_val = unsigned(htif_exit_code);
       if exit_val == 0 then print("SUCCESS")
       else print_int("FAILURE: ", exit_val);
-      exit(());
-    };
-
-    /* update time */
-    i = i + 1;
-    if i == insns_per_tick then {
-      tick_clock();
-      /* for now, we drive the platform i/o at every clock tick. */
-      tick_platform();
-      i = 0;
+    } else {
+      /* update time */
+      i = i + 1;
+      if i == insns_per_tick then {
+        tick_clock();
+        /* for now, we drive the platform i/o at every clock tick. */
+        tick_platform();
+        i = 0;
+      }
     }
   }
 }
