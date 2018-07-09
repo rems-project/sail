@@ -135,47 +135,44 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
      FENCEI() => {
               ik = IK_barrier (Barrier_RISCV_i);
      },
-  //    LOADRES(aq, rl, rs1, width, rd) => {
-  //           if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
-  //           if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
-  //           aR = iR;
-  //           ik = match (aq, rl) {
-  //             (false, false) => IK_mem_read (Read_RISCV_reserved)
-  //             (true,  false) => IK_mem_read (Read_RISCV_reserved_acquire_RCsc)
-  //             (true,  true)  => IK_mem_read (Read_RISCV_reserved_acquire_release)
+     LOADRES(aq, rl, rs1, width, rd) => {
+            if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+            if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+            aR = iR;
+            ik = match (aq, rl) {
+              (false, false) => IK_mem_read (Read_RISCV_reserved),
+              (true,  false) => IK_mem_read (Read_RISCV_reserved_acquire),
+              (true,  true)  => IK_mem_read (Read_RISCV_reserved_strong_acquire),
+              (false, true)  => internal_error("LOADRES type not implemented in initial_analysis")
+            };
+     },
+     STORECON(aq, rl, rs2, rs1, width, rd) => {
+            if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+            if (rs1 == 0) then () else aR = RFull(GPRstr[rs1]) :: aR;
+            if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+             ik = match (aq, rl) {
+               (false, false) => IK_mem_write (Write_RISCV_conditional),
+               (false, true)  => IK_mem_write (Write_RISCV_conditional_release),
+               (true,  true)  => IK_mem_write (Write_RISCV_conditional_strong_release),
 
-  //             (false, true)  => exit "not implemented"
-  //           };
-  //    },
-  //    STORECON(aq, rl, rs2, rs1, width, rd) => {
-  //           if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
-  //           if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
-  //           if (rs1 == 0) then () else aR = RFull(GPRstr[rs1]) :: aR;
-  //           if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
-
-  //           ik = switch (aq, rl) {
-  //             case (false, false) -> IK_mem_write (Write_RISCV_conditional)
-  //             case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release_RCsc)
-  //             case (true,  true)  -> IK_mem_write (Write_RISCV_conditional_acquire_release)
-
-  //             case (true,  false) -> exit "not implemented"
-  //           };
-  //    }
-  //    AMO(op, aq, rl, rs2, rs1, width, rd) => {
-  //           if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
-  //           if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
-  //           if (rs1 == 0) then () else aR = RFull(GPRstr[rs1]) :: aR;
-  //           if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
-
-  //           ik = switch (aq, rl) {
-  //             (false, false) => IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional)
-  //             (false, true)  => IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional_release_RCsc)
-  //             (true,  false) => IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
-  //                                                                     Write_RISCV_conditional)
-  //             (true,  true)  => IK_mem_rmw (Read_RISCV_reserved_acquire_RCsc,
-  //                                                                     Write_RISCV_conditional_release_RCsc)
-  //           };
-  //    }
+               (true,  false) => internal_error("STORECON type not implemented in initial_analysis")
+             };
+      },
+      AMO(op, aq, rl, rs2, rs1, width, rd) => {
+             if (rs2 == 0) then () else iR = RFull(GPRstr[rs2]) :: iR;
+             if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;
+             if (rs1 == 0) then () else aR = RFull(GPRstr[rs1]) :: aR;
+             if (rd == 0) then () else oR = RFull(GPRstr[rd]) :: oR;
+             ik = match (aq, rl) {
+               (false, false) => IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional),
+               (false, true)  => IK_mem_rmw (Read_RISCV_reserved, Write_RISCV_conditional_release),
+               (true,  false) => IK_mem_rmw (Read_RISCV_reserved_acquire,
+                                                                       Write_RISCV_conditional),
+               (true,  true)  => IK_mem_rmw (Read_RISCV_reserved_acquire,
+                                                                       Write_RISCV_conditional_release)
+             };
+      },
         _ => ()
   };
   (iR,oR,aR,Nias,Dia,ik)
