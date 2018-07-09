@@ -54,15 +54,19 @@ apply_header:
 	$(MAKE) -C arm apply_header
 
 anon_dist:
-	$(MAKE) clean
 	headache -c etc/headache_config -h etc/anon_header `ls mips/*.sail`
 	headache -c etc/headache_config -h etc/anon_header `ls cheri/*.sail`
+	headache -c etc/headache_config -h etc/anon_header `ls riscv/*.sail`
+	headache -c etc/headache_config -h etc/anon_header `ls riscv/*.ml`
+	headache -c etc/headache_config -h etc/anon_header `ls lib/*.ml`
+	headache -c etc/headache_config -h etc/anon_header `ls lib/coq/*.v`
 	headache -c etc/headache_config -h etc/anon_header `ls src/Makefile*`
 	headache -c etc/headache_config -h etc/anon_header `ls src/*.ml*`
+	headache -c etc/headache_config -h etc/anon_header `ls src/*.lem`
 	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.ml`
 	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.lem`
 	headache -c etc/headache_config -h etc/anon_header `ls arm/*.sail`
-	tar cvzf sail.tar.gz .
+	tar czf sail.tar.gz aarch64 cheri mips riscv language lib src snapshots
 
 clean:
 	for subdir in src arm ; do\
