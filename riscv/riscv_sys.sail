@@ -40,9 +40,14 @@ bitfield Misa : bits(64) = {
 }
 register misa : Misa
 
-function legalize_misa(m : Misa, v : xlenbits) -> Misa =
-  /* Ignore all writes for now. */
-  m
+function legalize_misa(m : Misa, v : xlenbits) -> Misa = {
+  /* Allow modifications to C. */
+  let v = Mk_Misa(v);
+  // Suppress changing C if nextPC would become misaligned.
+  if v.C() == false & nextPC[1] == true
+  then m
+  else update_C(m, v.C())
+}
 
 bitfield Mstatus : bits(64) = {
   SD   : 63,
@@ -111,6 +116,9 @@ function haveAtomics() -> bool = { misa.A() == true }
 function haveRVC()     -> bool = { misa.C() == true }
 function haveMulDiv()  -> bool = { misa.M() == true }
 function haveFP()      -> bool = { misa.F() == true | misa.D() == true }
+
+function pc_alignment_mask() -> xlenbits =
+  ~(EXTZ(if misa.C() == true then 0b00 else 0b10))
 
 /* interrupt registers */
 
@@ -866,7 +874,7 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
 
       cancel_reservation();
-      mepc
+      mepc & pc_alignment_mask()
     },
     (_, CTL_SRET())  => {
       let prev_priv = cur_privilege;
@@ -879,7 +887,7 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
 
       cancel_reservation();
-      sepc
+      sepc & pc_alignment_mask()
     }
   }
 }
