@@ -688,6 +688,27 @@ let typ_id_of (Typ_aux (typ, l)) = match typ with
   | Typ_app (id, _) -> id
   | _ -> raise (Reporting_basic.err_unreachable l "failed to get type id")
 
+(* TODO: maybe Nexp_exp, division? *)
+(* Evaluation of constant nexp subexpressions, because Coq will be able to do those itself *)
+let rec nexp_const_eval (Nexp_aux (n,l) as nexp) =
+  let binop f re l n1 n2 =
+  match nexp_const_eval n1, nexp_const_eval n2 with
+  | Nexp_aux (Nexp_constant c1,_), Nexp_aux (Nexp_constant c2,_) ->
+     Nexp_aux (Nexp_constant (f c1 c2),l)
+  | n1', n2' -> Nexp_aux (re n1' n2',l)
+  in
+  let unop f re l n1 =
+  match nexp_const_eval n1 with
+  | Nexp_aux (Nexp_constant c1,_) -> Nexp_aux (Nexp_constant (f c1),l)
+  | n1' -> Nexp_aux (re n1',l)
+  in
+  match n with
+  | Nexp_times (n1,n2) -> binop Big_int.mul (fun n1 n2 -> Nexp_times (n1,n2)) l n1 n2
+  | Nexp_sum (n1,n2) -> binop Big_int.add (fun n1 n2 -> Nexp_sum (n1,n2)) l n1 n2
+  | Nexp_minus (n1,n2) -> binop Big_int.sub (fun n1 n2 -> Nexp_minus (n1,n2)) l n1 n2
+  | Nexp_neg n1 -> unop Big_int.negate (fun n -> Nexp_neg n) l n1
+  | _ -> nexp
+
 (* Decide whether two nexps used in a vector size are similar; if not
    a cast will be inserted *)
 let similar_nexps n1 n2 =
@@ -707,7 +728,7 @@ let similar_nexps n1 n2 =
     | Nexp_neg n1, Nexp_neg n2
       -> same_nexp_shape n1 n2
     | _ -> false
-  in if same_nexp_shape n1 n2 then true else false
+  in if same_nexp_shape (nexp_const_eval n1) (nexp_const_eval n2) then true else false
 
 let constraint_fns = ["Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"]
 
