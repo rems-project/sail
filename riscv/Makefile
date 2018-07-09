@@ -17,8 +17,20 @@ _sbuild/platform_main.native: _sbuild/riscv.ml _tags $(PLATFORM_OCAML_SRCS) Make
 	cp _tags $(PLATFORM_OCAML_SRCS) _sbuild
 	cd _sbuild && ocamlbuild -use-ocamlfind platform_main.native
 
+_sbuild/coverage.native: _sbuild/riscv.ml _tags.bisect $(PLATFORM_OCAML_SRCS) Makefile
+	cp $(PLATFORM_OCAML_SRCS) _sbuild
+	cp _tags.bisect _sbuild/_tags
+	cd _sbuild && ocamlbuild -use-ocamlfind platform_main.native && cp -L platform_main.native coverage.native
+
 platform: _sbuild/platform_main.native
 	rm -f $@ && ln -s $^ $@
+
+coverage: _sbuild/coverage.native
+	rm -f platform && ln -s $^ platform # since the test scripts runs this file
+	rm -rf bisect*.out bisect coverage
+	../test/riscv/run_tests.sh # this will generate bisect*.out files in this directory
+	mkdir bisect && mv bisect*.out bisect/
+	mkdir coverage && bisect-ppx-report -html coverage/ -I _sbuild/ bisect/bisect*.out
 
 tracecmp: tracecmp.ml
 	ocamlfind ocamlopt -annot -linkpkg -package unix $^ -o $@
@@ -69,6 +81,6 @@ clean:
 		Riscv_extras.thy
 	-rm -f Riscv_duopod.thy Riscv_duopod_types.thy riscv_duopod.lem riscv_duopod_types.lem
 	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
-	-rm -f platform_main.native platform
+	-rm -f platform_main.native platform coverage.native
 	-Holmake cleanAll
 	ocamlbuild -clean
