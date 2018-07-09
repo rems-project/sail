@@ -87,11 +87,7 @@ let elf_arg =
       | _ -> (prerr_endline "Please provide an ELF file."; exit 0)
   )
 
-let () =
-  Random.self_init ();
-
-  let pc = Platform.init elf_arg in
-
+let run pc =
   sail_call
     (fun r ->
       try ( zinit_platform (); (* devices *)
@@ -105,3 +101,22 @@ let () =
         | ZError_internal_error (_) ->
               prerr_endline "Error: internal error"
     )
+
+let show_times init_s init_e run_e insts =
+  let init_time = init_e.Unix.tms_utime -. init_s.Unix.tms_utime in
+  let exec_time = run_e.Unix.tms_utime -. init_e.Unix.tms_utime in
+  Printf.eprintf "\nInitialization: %g secs\n" init_time;
+  Printf.eprintf "Execution: %g secs\n" exec_time;
+  Printf.eprintf "Instructions retired: %Ld\n" insts;
+  Printf.eprintf "Perf: %g ips\n" ((Int64.to_float insts) /. exec_time)
+
+let () =
+  Random.self_init ();
+
+  let init_start = Unix.times () in
+  let pc = Platform.init elf_arg in
+  let init_end = Unix.times () in
+  let _ = run pc in
+  let run_end = Unix.times () in
+  let insts = Big_int.to_int64 (uint (!Riscv.zminstret)) in
+  show_times init_start init_end run_end insts
