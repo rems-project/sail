@@ -66,7 +66,9 @@ anon_dist:
 	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.ml`
 	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.lem`
 	headache -c etc/headache_config -h etc/anon_header `ls arm/*.sail`
-	tar czf sail.tar.gz aarch64 cheri mips riscv language lib src snapshots
+	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/sail/*.thy`
+	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/lem/*.thy`
+	headache -c etc/headache_config -h etc/anon_header `ls snapshots/hol4/lem/hol-lib/*.sml`
 
 clean:
 	for subdir in src arm ; do\
