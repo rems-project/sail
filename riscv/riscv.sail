@@ -38,12 +38,6 @@ function clause execute UTYPE(imm, rd, op) =
       true
     }
 
-function clause print_insn UTYPE(imm, rd, op) =
-  match (op) {
-    RISCV_LUI   => "lui   " ^ rd ^ ", " ^ BitStr(imm),
-    RISCV_AUIPC => "auipc " ^ rd ^ ", " ^ BitStr(imm)
-  }
-
 mapping utype_mnemonic : uop <-> string = {
   RISCV_LUI   <-> "lui",
   RISCV_AUIPC <-> "auipc"
@@ -77,9 +71,6 @@ function clause execute (RISCV_JAL(imm, rd)) = {
     true
 }
 
-function clause print_insn (RISCV_JAL(imm, rd)) =
-  "jal   " ^ rd ^ ", " ^ BitStr(imm)
-
 /* TODO: handle 2-byte-alignment in mappings */
 
 mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_21(imm)
@@ -96,9 +87,6 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     nextPC = newPC[63..1] @ 0b0;
     true
 }
-
-function clause print_insn (RISCV_JALR(imm, rs1, rd)) =
-  "jalr  " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
 mapping clause assembly = RISCV_JALR(imm, rs1, rd) <-> "jalr" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
@@ -132,17 +120,6 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) =
     true
   }
 
-function clause print_insn (BTYPE(imm, rs2, rs1, op)) =
-  let insn : string =
-    match (op) {
-      RISCV_BEQ  => "beq   ",
-      RISCV_BNE  => "bne   ",
-      RISCV_BLT  => "blt   ",
-      RISCV_BGE  => "bge   ",
-      RISCV_BLTU => "bltu  ",
-      RISCV_BGEU => "bgeu  "
-    } in
-  insn ^ rs1 ^ ", " ^ rs2 ^ ", " ^ BitStr(imm)
 
 mapping btype_mnemonic : bop <-> string = {
   RISCV_BEQ  <-> "beq",
@@ -185,17 +162,6 @@ function clause execute (ITYPE (imm, rs1, rd, op)) =
     true
   }
 
-function clause print_insn (ITYPE(imm, rs1, rd, op)) =
-  let insn : string =
-    match (op) {
-      RISCV_ADDI  => "addi  ",
-      RISCV_SLTI  => "slti  ",
-      RISCV_SLTIU => "sltiu ",
-      RISCV_XORI  => "xori  ",
-      RISCV_ORI   => "ori   ",
-      RISCV_ANDI  => "andi  "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
 mapping itype_mnemonic : iop <-> string = {
   RISCV_ADDI  <-> "addi",
@@ -232,14 +198,6 @@ function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
       true
     }
 
-function clause print_insn (SHIFTIOP(shamt, rs1, rd, op)) =
-  let insn : string =
-    match (op) {
-      RISCV_SLLI => "slli  ",
-      RISCV_SRLI => "srli  ",
-      RISCV_SRAI => "srai  "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(shamt)
 
 mapping shiftiop_mnemonic : sop <-> string = {
   RISCV_SLLI <-> "slli",
@@ -282,21 +240,6 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
     true
   }
 
-function clause print_insn (RTYPE(rs2, rs1, rd, op)) =
-  let insn : string =
-    match (op) {
-      RISCV_ADD  => "add   ",
-      RISCV_SUB  => "sub   ",
-      RISCV_SLL  => "sll   ",
-      RISCV_SLT  => "slt   ",
-      RISCV_SLTU => "sltu  ",
-      RISCV_XOR  => "xor   ",
-      RISCV_SRL  => "srl   ",
-      RISCV_SRA  => "sra   ",
-      RISCV_OR   => "or    ",
-      RISCV_AND  => "and   "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping rtype_mnemonic : rop <-> string = {
   RISCV_ADD  <-> "add",
@@ -357,20 +300,6 @@ function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
         }
     }
 
-/* FIXME: aq/rl are getting dropped */
-function clause print_insn (LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
-  let insn : string =
-    match (width, is_unsigned) {
-      (BYTE,   false) => "lb    ",
-      (BYTE,   true)  => "lbu   ",
-      (HALF,   false) => "lh    ",
-      (HALF,   true)  => "lhu   ",
-      (WORD,   false) => "lw    ",
-      (WORD,   true)  => "lwu   ",
-      (DOUBLE, false) => "ld    ",
-      (DOUBLE, true)  => "ldu   "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
 /* TODO FIXME: is this the actual aq/rl syntax? */
 val maybe_aq : bool <-> string
@@ -433,16 +362,6 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
         }
     }
 
-/* FIXME: aq/rl are getting dropped */
-function clause print_insn (STORE(imm, rs2, rs1, width, aq, rl)) =
-  let insn : string =
-    match (width) {
-      BYTE   => "sb    ",
-      HALF   => "sh    ",
-      WORD   => "sw    ",
-      DOUBLE => "sd    "
-    } in
-  insn ^ rs2 ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
 mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
@@ -458,8 +377,6 @@ function clause execute (ADDIW(imm, rs1, rd)) = {
   true
 }
 
-function clause print_insn (ADDIW(imm, rs1, rd)) =
-  "addiw " ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(imm)
 
 mapping clause assembly = ADDIW(imm, rs1, rd) <-> "addiw" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
@@ -481,14 +398,6 @@ function clause execute (SHIFTW(shamt, rs1, rd, op)) =
       true
     }
 
-function clause print_insn (SHIFTW(shamt, rs1, rd, op)) =
-  let insn : string =
-    match (op) {
-      RISCV_SLLI => "slli  ",
-      RISCV_SRLI => "srli  ",
-      RISCV_SRAI => "srai  "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ BitStr(shamt)
 
 mapping shiftw_mnemonic : sop <-> string = {
   RISCV_SLLI <-> "slli",
@@ -521,16 +430,6 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
     true
   }
 
-function clause print_insn (RTYPEW(rs2, rs1, rd, op)) =
-  let insn : string =
-    match (op) {
-      RISCV_ADDW => "addw  ",
-      RISCV_SUBW => "subw  ",
-      RISCV_SLLW => "sllw  ",
-      RISCV_SRLW => "srlw  ",
-      RISCV_SRAW => "sraw  "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping rtypew_mnemonic : ropw <-> string = {
   RISCV_ADDW <-> "addw",
@@ -567,16 +466,6 @@ function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) =
     true
   }
 
-function clause print_insn (MUL(rs2, rs1, rd, high, signed1, signed2)) =
-  let insn : string =
-    match (high, signed1, signed2) {
-      (false, true, true)  => "mul   ",
-      (true,  true, true)  => "mulh  ",
-      (true,  true, false) => "mulhsu ",
-      (true, false, false) => "mulhu"
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
-
 mapping mul_mnemonic : (bool, bool, bool) <-> string = {
   (false, true, true)  <-> "mul",
   (true, true, true)   <-> "mulh",
@@ -602,9 +491,6 @@ function clause execute (DIV(rs2, rs1, rd, s)) =
     true
   }
 
-function clause print_insn (DIV(rs2, rs1, rd, s)) =
-  let insn : string = if s then "div   " else "divu  " in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping maybe_not_u : bool <-> string = {
   false <-> "u",
@@ -629,10 +515,6 @@ function clause execute (REM(rs2, rs1, rd, s)) =
     true
   }
 
-function clause print_insn (REM(rs2, rs1, rd, s)) =
-  let insn : string = if s then "rem   " else "remu  " in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
-
 mapping clause assembly = REM(rs2, rs1, rd, s) <-> "rem" ^ maybe_not_u(s) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
@@ -651,8 +533,6 @@ function clause execute (MULW(rs2, rs1, rd)) =
     true
   }
 
-function clause print_insn (MULW(rs2, rs1, rd)) =
-  "mulw  " ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping clause assembly = MULW(rs2, rs1, rd) <->  "mulw" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
@@ -672,9 +552,6 @@ function clause execute (DIVW(rs2, rs1, rd, s)) =
     true
   }
 
-function clause print_insn (DIVW(rs2, rs1, rd, s)) =
-  let insn : string = if s then "divw  " else "divuw " in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping clause assembly = DIVW(rs2, rs1, rd, s) <-> "div" ^ maybe_not_u(s) ^ "w" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
@@ -694,9 +571,6 @@ function clause execute (REMW(rs2, rs1, rd, s)) =
     true
   }
 
-function clause print_insn (REMW(rs2, rs1, rd, s)) =
-  let insn : string = if s then "remw  " else "remuw " in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping clause assembly = REMW(rs2, rs1, rd, s) <-> "rem" ^ maybe_not_u(s) ^ "w" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
@@ -724,10 +598,6 @@ function clause execute (FENCE(pred, succ)) = {
   };
   true
 }
-
-/* FIXME */
-function clause print_insn (FENCE(pred, succ)) =
-  "fence"
 
 mapping bit_maybe_r : bits(1) <-> string = {
   0b1 <-> "r",
@@ -762,8 +632,6 @@ mapping clause encdec = FENCEI() <-> 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 
 
 function clause execute FENCEI() = { MEM_fence_i(); true }
 
-function clause print_insn (FENCEI()) =
-  "fence.i"
 
 mapping clause assembly = FENCEI() <-> "fence.i"
 
@@ -784,8 +652,6 @@ function clause execute ECALL() =
     false
   }
 
-function clause print_insn (ECALL()) =
-  "ecall"
 
 mapping clause assembly = ECALL() <-> "ecall"
 
@@ -801,9 +667,6 @@ function clause execute MRET() = {
     handle_illegal();
   false
 }
-
-function clause print_insn (MRET()) =
-  "mret"
 
 mapping clause assembly = MRET() <-> "mret"
 
@@ -823,9 +686,6 @@ function clause execute SRET() = {
   false
 }
 
-function clause print_insn (SRET()) =
-  "sret"
-
 mapping clause assembly = SRET() <-> "sret"
 
 /* ****************************************************************** */
@@ -837,9 +697,6 @@ function clause execute EBREAK() = {
   handle_mem_exception(PC, E_Breakpoint);
   false
 }
-
-function clause print_insn (EBREAK()) =
-  "ebreak"
 
 mapping clause assembly = EBREAK() <-> "ebreak"
 
@@ -856,9 +713,6 @@ function clause execute WFI() =
                   else true,
     User       => { handle_illegal(); false }
   }
-
-function clause print_insn (WFI()) =
-  "wfi"
 
 mapping clause assembly = WFI() <-> "wfi"
 
@@ -881,9 +735,6 @@ function clause execute SFENCE_VMA(rs1, rs2) = {
     (_, _) => internal_error("unimplemented sfence architecture")
   }
 }
-
-function clause print_insn (SFENCE_VMA(rs1, rs2)) =
-  "sfence.vma " ^ rs1 ^ ", " ^ rs2
 
 mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
@@ -949,9 +800,6 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
            }
        }
 
-function clause print_insn (LOADRES(aq, rl, rs1, width, rd)) =
-  "lr" ^ lrsc_width_str(width) ^ aqrl_str(aq, rl) ^ " " ^ rd ^ ", " ^ rs1
-
 mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
 
 /* ****************************************************************** */
@@ -1014,9 +862,6 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
     }
   }
 }
-
-function clause print_insn (STORECON(aq, rl, rs2, rs1, width, rd)) =
-  "sc" ^ lrsc_width_str(width) ^ aqrl_str(aq, rl) ^ " " ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
@@ -1093,30 +938,6 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   }
 }
 
-function clause print_insn (AMO(op, aq, rl, rs2, rs1, width, rd)) =
-  let insn : string =
-    match (op, width) {
-      (AMOSWAP, WORD) => "amoswap.w ",
-      (AMOADD , WORD) => "amoadd.w  ",
-      (AMOXOR , WORD) => "amoxor.w  ",
-      (AMOAND , WORD) => "amoand.w  ",
-      (AMOOR  , WORD) => "amoor.w   ",
-      (AMOMIN , WORD) => "amomin.w  ",
-      (AMOMAX , WORD) => "amomax.w  ",
-      (AMOMINU, WORD) => "amominu.w ",
-      (AMOMAXU, WORD) => "amomaxu.w ",
-      (AMOSWAP, DOUBLE) => "amoswap.d ",
-      (AMOADD , DOUBLE) => "amoadd.d  ",
-      (AMOXOR , DOUBLE) => "amoxor.d  ",
-      (AMOAND , DOUBLE) => "amoand.d  ",
-      (AMOOR  , DOUBLE) => "amoor.d   ",
-      (AMOMIN , DOUBLE) => "amomin.d  ",
-      (AMOMAX , DOUBLE) => "amomax.d  ",
-      (AMOMINU, DOUBLE) => "amominu.d ",
-      (AMOMAXU, DOUBLE) => "amomaxu.d ",
-      (_, _)            => "amo.bad "
-    } in
-  insn ^ rd ^ ", " ^ rs1 ^ ", " ^ rs2
 
 mapping amo_mnemonic : amoop <-> string = {
   AMOSWAP <-> "amoswap",
@@ -1267,18 +1088,6 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) =
     true
   }
 
-function clause print_insn (CSR(csr, rs1, rd, is_imm, op)) =
-  let insn : string =
-    match (op, is_imm) {
-      (CSRRW, true)  => "csrrwi ",
-      (CSRRW, false) => "csrrw  ",
-      (CSRRS, true)  => "csrrsi ",
-      (CSRRS, false) => "csrrs  ",
-      (CSRRC, true)  => "csrrci ",
-      (CSRRC, false) => "csrrc  "
-    } in
-  let rs1_str : string = if is_imm then BitStr(rs1) else reg_name_abi(rs1) in
-  insn ^ rd ^ ", " ^ rs1_str ^ ", " ^ csr_name(csr)
 
 mapping maybe_i : bool <-> string = {
   true  <-> "i",
@@ -1861,8 +1670,11 @@ function clause decodeCompressed _ = None()
 end ast
 end decodeCompressed
 end execute
-end print_insn
 end assembly
 end encdec
+
+function clause print_insn insn = assembly(insn)
+
+end print_insn
 
 function decode bv = Some(encdec(bv))
