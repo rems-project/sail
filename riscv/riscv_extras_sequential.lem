@@ -34,6 +34,20 @@ let MEMea_conditional_release addr size  = write_mem_ea Write_RISCV_conditional_
 let MEMea_conditional_strong_release addr size
                                           = write_mem_ea Write_RISCV_conditional_strong_release addr size
 
+val MEMr                         : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
+val MEMr_acquire                 : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
+val MEMr_strong_acquire          : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
+val MEMr_reserved                : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
+val MEMr_reserved_acquire        : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
+val MEMr_reserved_strong_acquire : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e
+
+let MEMr addrsize size hexRAM addr                         = read_mem Read_plain addr size
+let MEMr_acquire addrsize size hexRAM addr                 = read_mem Read_RISCV_acquire addr size
+let MEMr_strong_acquire addrsize size hexRAM addr          = read_mem Read_RISCV_strong_acquire addr size
+let MEMr_reserved addrsize size hexRAM addr                = read_mem Read_RISCV_reserved addr size
+let MEMr_reserved_acquire addrsize size hexRAM addr        = read_mem Read_RISCV_reserved_acquire addr size
+let MEMr_reserved_strong_acquire addrsize size hexRAM addr = read_mem Read_RISCV_reserved_strong_acquire addr size
+
 val write_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
   integer -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b -> monad 'rv unit 'e
 let write_ram addrsize size hexRAM address value =
@@ -106,7 +120,7 @@ val shift_bits_left : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvecto
 let shift_bits_left v m = shiftl v (uint m)
 
 val print_string : string -> string -> unit
-let print_string msg s = print_endline (msg ^ s)
+let print_string msg s = () (* print_endline (msg ^ s) *)
 
 val prerr_string : string -> string -> unit
 let prerr_string msg s = prerr_endline (msg ^ s)
@@ -115,4 +129,4 @@ val prerr_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
 let prerr_bits msg bs = prerr_endline (msg ^ (show_bitlist (bits_of bs)))
 
 val print_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit
-let print_bits msg bs = print_endline (msg ^ (show_bitlist (bits_of bs)))
+let print_bits msg bs = () (* print_endline (msg ^ (show_bitlist (bits_of bs))) *)

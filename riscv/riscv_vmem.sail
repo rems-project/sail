@@ -144,7 +144,7 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
                                 PTE39_LOG_SIZE);
   let pte_addr = ptb + pt_ofs;
   /* FIXME: we assume here that walks only access memory-backed addresses. */
-  match (phys_mem_read(Data, EXTZ(pte_addr), 8)) {
+  match (phys_mem_read(Data, EXTZ(pte_addr), 8, false, false, false)) {
     MemException(_) => {
       print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
             ^ " pt_base=" ^ BitStr(ptb)

@@ -4,8 +4,8 @@ function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool 
   unsigned(addr) % width == 0
 
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
-  match (t, __RISCV_read(addr, width)) {
+function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : bool, rl: bool, res : bool) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+  match (t, __RISCV_read(addr, width, aq, rl, res)) {
     (Instruction, None()) => MemException(E_Fetch_Access_Fault),
     (Data, None())        => MemException(E_Load_Access_Fault),
     (_, Some(v))          => { print("mem[" ^ t ^ "," ^ BitStr(addr) ^ "] -> " ^ BitStr(v));
@@ -17,7 +17,7 @@ function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> fo
   if   t == Data & within_mmio_readable(addr, width)
   then mmio_read(addr, width)
   else if within_phys_mem(addr, width)
-  then phys_mem_read(t, addr, width)
+  then phys_mem_read(t, addr, width, false, false, false)
   else MemException(E_Load_Access_Fault)
 
 /* FIXME: We assume atomic accesses are only done to memory-backed regions.  MMIO is not modeled. */
@@ -29,12 +29,12 @@ val MEMr_reserved                : forall 'n. (xlenbits, atom('n)) -> MemoryOpRe
 val MEMr_reserved_acquire        : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
 val MEMr_reserved_strong_acquire : forall 'n. (xlenbits, atom('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rmem}
 
-function MEMr                         (addr, width) = phys_mem_read(Data, addr, width)
-function MEMr_acquire                 (addr, width) = phys_mem_read(Data, addr, width)
-function MEMr_strong_acquire          (addr, width) = phys_mem_read(Data, addr, width)
-function MEMr_reserved                (addr, width) = phys_mem_read(Data, addr, width)
-function MEMr_reserved_acquire        (addr, width) = phys_mem_read(Data, addr, width)
-function MEMr_reserved_strong_acquire (addr, width) = phys_mem_read(Data, addr, width)
+function MEMr                         (addr, width) = phys_mem_read(Data, addr, width, false, false, false)
+function MEMr_acquire                 (addr, width) = phys_mem_read(Data, addr, width, true,  false, false)
+function MEMr_strong_acquire          (addr, width) = phys_mem_read(Data, addr, width, true,  true,  false)
+function MEMr_reserved                (addr, width) = phys_mem_read(Data, addr, width, false, false, true)
+function MEMr_reserved_acquire        (addr, width) = phys_mem_read(Data, addr, width, true,  false, true)
+function MEMr_reserved_strong_acquire (addr, width) = phys_mem_read(Data, addr, width, true,  true,  true)
 
 /* NOTE: The rreg effect is due to MMIO. */
 val mem_read : forall 'n, 'n > 0. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n)) effect {rmem, rreg, escape}
