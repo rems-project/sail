@@ -2519,12 +2519,13 @@ let codegen_def' ctx = function
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
 
   | CDEF_spec (id, arg_ctyps, ret_ctyp) ->
+     let static = if !opt_static then "static " else "" in
      if Env.is_extern id ctx.tc_env "c" then
        empty
      else if is_stack_ctyp ret_ctyp then
-       string (Printf.sprintf "static %s %s(%s);" (sgen_ctyp ret_ctyp) (sgen_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%s%s %s(%s);" static (sgen_ctyp ret_ctyp) (sgen_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
      else
-       string (Printf.sprintf "static void %s(%s *rop, %s);" (sgen_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%svoid %s(%s *rop, %s);" static (sgen_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
@@ -2566,7 +2567,8 @@ let codegen_def' ctx = function
      codegen_type_def ctx ctype_def
 
   | CDEF_startup (id, instrs) ->
-     let startup_header = string (Printf.sprintf "static void startup_%s(void)" (sgen_id id)) in
+     let static = if !opt_static then "static " else "" in
+     let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" static (sgen_id id)) in
      separate_map hardline codegen_decl instrs
      ^^ twice hardline
      ^^ startup_header ^^ hardline
@@ -2575,7 +2577,8 @@ let codegen_def' ctx = function
      ^^ string "}"
 
   | CDEF_finish (id, instrs) ->
-     let finish_header = string (Printf.sprintf "static void finish_%s(void)" (sgen_id id)) in
+     let static = if !opt_static then "static " else "" in
+     let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" static (sgen_id id)) in
      separate_map hardline codegen_decl (List.filter is_decl instrs)
      ^^ twice hardline
      ^^ finish_header ^^ hardline
