@@ -84,7 +84,7 @@ function translationException(a : AccessType, f : PTW_Error) -> ExceptionType = 
     (Fetch, PTW_Access)     => E_Fetch_Access_Fault,
     (Fetch, _)              => E_Fetch_Page_Fault
   } in {
-    print("translationException(" ^ a ^ ", " ^ f ^ ") -> " ^ e);
+/*  print("translationException(" ^ a ^ ", " ^ f ^ ") -> " ^ e); */
     e
   }
 }
@@ -146,11 +146,11 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
   /* FIXME: we assume here that walks only access memory-backed addresses. */
   match (phys_mem_read(Data, EXTZ(pte_addr), 8, false, false, false)) {
     MemException(_) => {
-      print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
+/*    print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
             ^ " pt_base=" ^ BitStr(ptb)
             ^ " pt_ofs=" ^ BitStr(pt_ofs)
             ^ " pte_addr=" ^ BitStr(pte_addr)
-            ^ ": invalid pte address");
+            ^ ": invalid pte address"); */
       PTW_Failure(PTW_Access)
     },
     MemValue(v) => {
@@ -191,10 +191,15 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
               } else {
                 /* add the appropriate bits of the VPN to the superpage PPN */
                 let ppn = pte.PPNi() | (EXTZ(va.VPNi()) & mask);
+/*              let res = append(ppn, va.PgOfs());
+                print("walk39: using superpage: pte.ppn=" ^ BitStr(pte.PPNi())
+                      ^ " ppn=" ^ BitStr(ppn) ^ " res=" ^ BitStr(res)); */
                 PTW_Success(append(ppn, va.PgOfs()), pte, pte_addr, level, is_global)
               }
             } else {
               /* normal leaf PTE */
+/*            let res = append(pte.PPNi(), va.PgOfs());
+              print("walk39: pte.ppn=" ^ BitStr(pte.PPNi()) ^ " ppn=" ^ BitStr(pte.PPNi()) ^ " res=" ^ BitStr(res)); */
               PTW_Success(append(pte.PPNi(), va.PgOfs()), pte, pte_addr, level, is_global)
             }
           }
