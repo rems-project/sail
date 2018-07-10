@@ -6715,6 +6715,7 @@ function AArch64_SecondStageTranslate (S1, vaddress, acctype, iswrite, wasaligne
 }
 
 function AArch64_CheckAndUpdateDescriptor (result, fault, secondstage, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk__arg) = {
+  let reversedescriptors = (aget_SCTLR()[25] == bitone);
   hwupdatewalk = hwupdatewalk__arg;
   hw_update_AF : bool = undefined;
   if result.AF then if fault.typ == Fault_None then hw_update_AF = true else if ConstrainUnpredictable(Unpredictable_AFUPDATE) == Constraint_TRUE then hw_update_AF = true else hw_update_AF = false else hw_update_AF = false;
@@ -6735,8 +6736,10 @@ function AArch64_CheckAndUpdateDescriptor (result, fault, secondstage, vaddress,
     };
     accdesc = CreateAccessDescriptor(AccType_ATOMICRW);
     desc = aget__Mem(descaddr2, 8, accdesc);
+    if reversedescriptors then desc = BigEndianReverse(desc) else ();
     if hw_update_AF then desc = __SetSlice_bits(64, 1, desc, 10, 0b1) else ();
     if hw_update_AP then desc = __SetSlice_bits(64, 1, desc, 7, if secondstage then 0b1 else 0b0) else ();
+    if reversedescriptors then desc = BigEndianReverse(desc) else ();
     aset__Mem(descaddr2, 8, accdesc, desc)
   } else ();
   return(fault)
