@@ -8,13 +8,14 @@ imports
 	 "Lem_num" 
 	 "Lem_basic_classes" 
 	 "Lem_show" 
+	 "Lem_function" 
 	 "~~/src/HOL/Word/Word" 
 
 begin 
 
 
 
-(*open import Bool Num Basic_classes Show*)
+(*open import Bool Num Basic_classes Show Function*)
 
 (*open import {isabelle} `~~/src/HOL/Word/Word`*)
 (*open import {hol} `wordsTheory` `wordsLib` `bitstringTheory` `integer_wordTheory`*)

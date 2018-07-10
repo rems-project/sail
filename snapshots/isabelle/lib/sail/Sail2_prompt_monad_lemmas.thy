@@ -1,7 +1,7 @@
-theory Prompt_monad_lemmas
+theory Sail2_prompt_monad_lemmas
   imports
-    Prompt_monad
-    Sail_values_lemmas
+    Sail2_prompt_monad
+    Sail2_values_lemmas
 begin
 
 notation bind (infixr "\<bind>" 54)
@@ -17,6 +17,7 @@ lemmas bind_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Write_e
 
 lemma bind_return[simp]: "bind (return a) f = f a"
   by (auto simp: return_def)
+lemma bind_return_right[simp]: "bind x return = x" by (induction x) (auto simp: return_def)
 
 lemma bind_assoc[simp]: "bind (bind m f) g = bind m (\<lambda>x. bind (f x) g)"
   by (induction m f arbitrary: g rule: bind.induct) auto
@@ -63,7 +64,7 @@ inductive_set T :: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a, '
 | Barrier: "((Barrier bk k), e_barrier bk, k) \<in> T"
 | Read_reg: "((Read_reg r k), e_read_reg r v, k v) \<in> T"
 | Write_reg: "((Write_reg r v k), e_write_reg r v, k) \<in> T"
-| Undefined : "((Undefined k), e_undefined v, k v) \<in> T"
+| Undefined: "((Undefined k), e_undefined v, k v) \<in> T"
 | Print: "((Print msg k), e_print msg, k) \<in> T"
 
 inductive_set Traces :: "(('rv, 'a, 'e) monad \<times> 'rv event list \<times> ('rv, 'a, 'e) monad) set" where
@@ -94,7 +95,7 @@ lemma Traces_cases:
   | (Write_ea) wk addr s k t' where "m = Write_ea wk addr s k" and "t = e_write_ea wk addr s # t'" and "(k, t', m') \<in> Traces"
   | (Footprint) k t' where "m = Footprint k" and "t = e_footprint # t'" and "(k, t', m') \<in> Traces"
   | (Write_reg) reg v k t' where "m = Write_reg reg v k" and "t = e_write_reg reg v # t'" and "(k, t', m') \<in> Traces"
-  | (Undefined) v k t' where "m = Undefined k" and "t = e_undefined v # t'" and "(k v, t', m') \<in> Traces"
+  | (Undefined) xs v k t' where "m = Undefined k" and "t = e_undefined v # t'" and "(k v, t', m') \<in> Traces"
   | (Print) msg k t' where "m = Print msg k" and "t = e_print msg # t'" and "(k, t', m') \<in> Traces"
 proof (use Run in \<open>cases m t m' set: Traces\<close>)
   case Nil
@@ -128,6 +129,16 @@ lemma bind_T_cases:
   | (Bind) m' where "s' = bind m' f" and "(m, e, m') \<in> T"
   using assms by (cases; blast elim: bind.elims)
 
+lemma Run_bindI:
+  fixes m :: "('r, 'a, 'e) monad"
+  assumes "Run m t1 a1"
+    and "Run (f a1) t2 a2"
+  shows "Run (m \<bind> f) (t1 @ t2) a2"
+proof (use assms in \<open>induction m t1 "Done a1 :: ('r, 'a, 'e) monad" rule: Traces.induct\<close>)
+  case (Step s e s'' t)
+  then show ?case by (elim T.cases) auto
+qed auto
+
 lemma Run_bindE:
   fixes m :: "('rv, 'b, 'e) monad" and a :: 'a
   assumes "Run (bind m f) t a"
@@ -160,11 +171,42 @@ lemma Run_DoneE:
 lemma Run_Done_iff_Nil[simp]: "Run (Done a) t a' \<longleftrightarrow> t = [] \<and> a' = a"
   by (auto elim: Run_DoneE)
 
+lemma Run_bindE_ignore_trace:
+  assumes "Run (m \<bind> f) t a"
+  obtains tm tf am where "Run m tm am" and "Run (f am) tf a"
+  using assms by (elim Run_bindE)
+
+lemma Run_letE:
+  assumes "Run (let x = y in f x) t a"
+  obtains "Run (f y) t a"
+  using assms by auto
+
+lemma Run_ifE:
+  assumes "Run (if b then f else g) t a"
+  obtains "b" and "Run f t a" | "\<not>b" and "Run g t a"
+  using assms by (auto split: if_splits)
+
+lemma Run_returnE:
+  assumes "Run (return x) t a"
+  obtains "t = []" and "a = x"
+  using assms by (auto simp: return_def)
+
+lemma Run_early_returnE:
+  assumes "Run (early_return x) t a"
+  shows P
+  using assms by (auto simp: early_return_def throw_def elim: Traces_cases)
+
 lemma bind_cong[fundef_cong]:
   assumes m: "m1 = m2"
     and f: "\<And>t a. Run m2 t a \<Longrightarrow> f1 a = f2 a"
   shows "bind m1 f1 = bind m2 f2"
   unfolding m using f
   by (induction m2 f1 arbitrary: f2 rule: bind.induct; unfold bind.simps; blast)
+
+lemma liftR_read_reg[simp]: "liftR (read_reg reg) = read_reg reg" by (auto simp: read_reg_def liftR_def split: option.splits)
+lemma try_catch_return[simp]: "try_catch (return x) h = return x" by (auto simp: return_def)
+lemma liftR_return[simp]: "liftR (return x) = return x" by (auto simp: liftR_def)
+lemma liftR_undefined_bool[simp]: "liftR (undefined_bool ()) = undefined_bool ()" by (auto simp: undefined_bool_def liftR_def)
+lemma assert_exp_True_return[simp]: "assert_exp True msg = return ()" by (auto simp: assert_exp_def return_def)
 
 end

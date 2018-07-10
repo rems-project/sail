@@ -1,18 +1,135 @@
-theory Sail_values_lemmas
-  imports Sail_values
+theory Sail2_values_lemmas
+  imports Sail2_values
 begin
+
+lemma while_domI:
+  fixes V :: "'vars \<Rightarrow> nat"
+  assumes "\<And>vars. cond vars \<Longrightarrow> V (body vars) < V vars"
+  shows "while_dom (vars, cond, body)"
+  by (induction vars rule: measure_induct_rule[where f = V])
+     (use assms in \<open>auto intro: while.domintros\<close>)
 
 lemma nat_of_int_nat_simps[simp]: "nat_of_int = nat" by (auto simp: nat_of_int_def)
 
 termination reverse_endianness_list by (lexicographic_order simp add: drop_list_def)
+declare reverse_endianness_list.simps[simp del]
+declare take_list_def[simp]
+declare drop_list_def[simp]
+
+function take_chunks :: "nat \<Rightarrow> 'a list \<Rightarrow> 'a list list" where
+  "take_chunks n [] = []"
+| "take_chunks 0 xs = []"
+| "take_chunks n xs = take n xs # take_chunks n (drop n xs)" if "n > 0" and "xs \<noteq> []"
+  by auto blast
+termination by lexicographic_order
+
+lemma take_chunks_length_leq_n: "length xs \<le> n \<Longrightarrow> xs \<noteq> [] \<Longrightarrow> take_chunks n xs = [xs]"
+  by (cases n) auto
+
+lemma take_chunks_append: "n dvd length a \<Longrightarrow> take_chunks n (a @ b) = take_chunks n a @ take_chunks n b"
+  by (induction n a rule: take_chunks.induct) (auto simp: dvd_imp_le)
+
+lemma Suc8_plus8: "Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc x))))))) = 8 + x"
+  by auto
+
+lemma byte_chunks_take_chunks_8:
+  assumes "8 dvd length xs"
+  shows "byte_chunks xs = Some (take_chunks 8 xs)"
+proof -
+  have Suc8_plus8: "Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc x))))))) = 8 + x" for x
+    by auto
+  from assms show ?thesis
+    by (induction xs rule: byte_chunks.induct) (auto simp: Suc8_plus8 nat_dvd_not_less)
+qed
+
+lemma reverse_endianness_list_rev_take_chunks:
+  "reverse_endianness_list bits = List.concat (rev (take_chunks 8 bits))"
+  by (induction "8 :: nat" bits rule: take_chunks.induct)
+     (auto simp: reverse_endianness_list.simps)
+
+lemma reverse_endianness_list_simps:
+  "length bits \<le> 8 \<Longrightarrow> reverse_endianness_list bits = bits"
+  "length bits > 8 \<Longrightarrow> reverse_endianness_list bits = reverse_endianness_list (drop 8 bits) @ take 8 bits"
+  by (cases bits; auto simp: reverse_endianness_list_rev_take_chunks)+
+
+lemma reverse_endianness_list_append:
+  assumes "8 dvd length a"
+  shows "reverse_endianness_list (a @ b) = reverse_endianness_list b @ reverse_endianness_list a"
+  using assms by (auto simp: reverse_endianness_list_rev_take_chunks take_chunks_append)
+
+lemma length_reverse_endianness_list[simp]:
+  "length (reverse_endianness_list l) = length l"
+  by (induction l rule: reverse_endianness_list.induct) (auto simp: reverse_endianness_list.simps)
+
+lemma reverse_endianness_list_take_8[simp]:
+  "reverse_endianness_list (take 8 bits) = take 8 bits"
+  by (auto simp: reverse_endianness_list_simps)
+
+lemma reverse_reverse_endianness_list[simp]:
+  assumes "8 dvd length l"
+  shows "reverse_endianness_list (reverse_endianness_list l) = l"
+proof (use assms in \<open>induction l rule: reverse_endianness_list.induct[case_names Step]\<close>)
+  case (Step bits)
+  then show ?case
+    by (auto simp: reverse_endianness_list.simps[of bits] reverse_endianness_list_append)
+qed
+
+declare repeat.simps[simp del]
+
+lemma length_repeat[simp]: "length (repeat xs n) = nat n * length xs"
+proof (induction xs n rule: repeat.induct[case_names Step])
+  case (Step xs n)
+  then show ?case unfolding repeat.simps[of xs n]
+    by (auto simp del: mult_Suc simp: mult_Suc[symmetric])
+qed
+
+lemma nth_repeat:
+  assumes "i < nat n * length xs"
+  shows "repeat xs n ! i = xs ! (i mod length xs)"
+proof (use assms in \<open>induction xs n arbitrary: i rule: repeat.induct[case_names Step]\<close>)
+  case (Step xs n i)
+  show ?case
+    using Step.prems Step.IH[of "i - length xs"]
+    unfolding repeat.simps[of xs n]
+    by (auto simp: nth_append mod_geq[symmetric] nat_diff_distrib diff_mult_distrib)
+qed
 
 termination index_list
   by (relation "measure (\<lambda>(i, j, step). nat ((j - i + step) * sgn step))") auto
+
+lemma index_list_Zero[simp]: "index_list i j 0 = []"
+  by auto
+
+lemma index_list_singleton[simp]: "n \<noteq> 0 \<Longrightarrow> index_list i i n = [i]"
+  by auto
+
+lemma index_list_simps:
+  "0 < step \<Longrightarrow> from \<le> to \<Longrightarrow> index_list from to step = from # index_list (from + step) to step"
+  "0 < step \<Longrightarrow> from > to \<Longrightarrow> index_list from to step = []"
+  "0 > step \<Longrightarrow> from \<ge> to \<Longrightarrow> index_list from to step = from # index_list (from + step) to step"
+  "0 > step \<Longrightarrow> from < to \<Longrightarrow> index_list from to step = []"
+  by auto
+
+lemma index_list_step1_upto[simp]: "index_list i j 1 = [i..j]"
+  by (induction i j "1 :: int" rule: index_list.induct)
+     (auto simp: index_list_simps upto.simps)
+
+lemma length_upto[simp]: "i \<le> j \<Longrightarrow> length [i..j] = nat (j - i + 1)"
+  by (induction i j rule: upto.induct) (auto simp: upto.simps)
+
+lemma nth_upto[simp]: "i + int n \<le> j \<Longrightarrow> [i..j] ! n = i + int n"
+  by (induction i j arbitrary: n rule: upto.induct)
+     (auto simp: upto.simps nth_Cons split: nat.splits)
+
+declare index_list.simps[simp del]
 
 lemma just_list_map_Some[simp]: "just_list (map Some v) = Some v" by (induction v) auto
 
 lemma just_list_None_iff[simp]: "just_list xs = None \<longleftrightarrow> None \<in> set xs"
   by (induction xs) (auto split: option.splits)
+
+lemma just_list_None_member_None: "None \<in> set xs \<Longrightarrow> just_list xs = None"
+  by auto
 
 lemma just_list_Some_iff[simp]: "just_list xs = Some ys \<longleftrightarrow> xs = map Some ys"
   by (induction xs arbitrary: ys) (auto split: option.splits)
@@ -28,10 +145,10 @@ lemma repeat_singleton_replicate[simp]:
 proof (induction n)
   case (nonneg n)
   have "nat (1 + int m) = Suc m" for m by auto
-  then show ?case by (induction n) auto
+  then show ?case by (induction n) (auto simp: repeat.simps)
 next
   case (neg n)
-  then show ?case by auto
+  then show ?case by (auto simp: repeat.simps)
 qed
 
 lemma bool_of_bitU_simps[simp]:
@@ -57,10 +174,10 @@ lemma bool_of_bitU_bitU_of_bool[simp]:
   "bool_of_bitU (bitU_of_bool x) = Some x"
   by (intro ext, auto simp: bool_of_bitU_def bitU_of_bool_def)+
 
-abbreviation "BC_bitU_list \<equiv> instance_Sail_values_Bitvector_list_dict instance_Sail_values_BitU_Sail_values_bitU_dict"
-lemmas BC_bitU_list_def = instance_Sail_values_Bitvector_list_dict_def instance_Sail_values_BitU_Sail_values_bitU_dict_def
-abbreviation "BC_mword \<equiv> instance_Sail_values_Bitvector_Machine_word_mword_dict"
-lemmas BC_mword_defs = instance_Sail_values_Bitvector_Machine_word_mword_dict_def
+abbreviation "BC_bitU_list \<equiv> instance_Sail2_values_Bitvector_list_dict instance_Sail2_values_BitU_Sail2_values_bitU_dict"
+lemmas BC_bitU_list_def = instance_Sail2_values_Bitvector_list_dict_def instance_Sail2_values_BitU_Sail2_values_bitU_dict_def
+abbreviation "BC_mword \<equiv> instance_Sail2_values_Bitvector_Machine_word_mword_dict"
+lemmas BC_mword_defs = instance_Sail2_values_Bitvector_Machine_word_mword_dict_def
   access_mword_def access_mword_inc_def access_mword_dec_def
   (*update_mword_def update_mword_inc_def update_mword_dec_def*)
   subrange_list_def subrange_list_inc_def subrange_list_dec_def
@@ -101,6 +218,15 @@ lemma nat_of_bits_bl_to_bin[simp]:
 lemma unsigned_bits_of_mword[simp]:
   "unsigned_method BC_bitU_list (bits_of_method BC_mword a) = Some (uint a)"
   by (auto simp: BC_bitU_list_def BC_mword_defs unsigned_of_bits_def unsigned_of_bools_def)
+
+definition mem_bytes_of_word :: "'a::len word \<Rightarrow> bitU list list" where
+  "mem_bytes_of_word w = rev (take_chunks 8 (map bitU_of_bool (to_bl w)))"
+
+lemma mem_bytes_of_bits_mem_bytes_of_word[simp]:
+  assumes "8 dvd LENGTH('a)"
+  shows "mem_bytes_of_bits BC_mword (w :: 'a::len word) = Some (mem_bytes_of_word w)"
+  using assms
+  by (auto simp: mem_bytes_of_bits_def bytes_of_bits_def BC_mword_defs byte_chunks_take_chunks_8 mem_bytes_of_word_def)
 
 lemma bits_of_bitU_list[simp]:
   "bits_of_method BC_bitU_list v = v"
@@ -158,6 +284,14 @@ lemma update_list_dec_update[simp]:
   "update_list_dec xs n x = xs[length xs - nat (n + 1) := x]"
   by (auto simp: update_list_dec_def add.commute diff_diff_add nat_minus_as_int)
 
+lemma update_list_dec_update_rev:
+  "0 \<le> n \<Longrightarrow> nat n < length xs \<Longrightarrow> update_list_dec xs n x = rev ((rev xs)[nat n := x])"
+  by (auto simp: update_list_dec_def add.commute diff_diff_add nat_minus_as_int rev_update)
+
+lemma access_list_dec_update_list_dec[simp]:
+  "0 \<le> n \<Longrightarrow> nat n < length xs \<Longrightarrow> access_list_dec (update_list_dec xs n x) n = x"
+  by (auto simp: access_list_dec_rev_nth update_list_dec_update_rev)
+
 lemma bools_of_nat_aux_simps[simp]:
   "\<And>len. len \<le> 0 \<Longrightarrow> bools_of_nat_aux len x acc = acc"
   "\<And>len. bools_of_nat_aux (int (Suc len)) x acc =
@@ -200,7 +334,7 @@ proof (induction len arbitrary: n acc)
 qed auto
 
 lemma bools_of_int_bin_to_bl[simp]:
-  "bools_of_int (int len) n = bin_to_bl len n"
+  "bools_of_int len n = bin_to_bl (nat len) n"
   by (auto simp: bools_of_int_def Let_def map_Not_bin_to_bl rbl_succ[unfolded bin_to_bl_def])
 
 end

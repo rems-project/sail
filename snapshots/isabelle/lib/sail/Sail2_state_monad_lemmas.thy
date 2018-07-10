@@ -1,12 +1,15 @@
-theory State_monad_lemmas
+theory Sail2_state_monad_lemmas
   imports
-    State_monad
-    Sail_values_lemmas
+    Sail2_state_monad
+    Sail2_values_lemmas
 begin
 
 (*context
   notes returnS_def[simp] and failS_def[simp] and throwS_def[simp] and readS_def[simp] and updateS_def[simp]
 begin*)
+
+notation bindS (infixr "\<bind>\<^sub>S" 54)
+notation seqS (infixr "\<then>\<^sub>S" 54)
 
 lemma bindS_ext_cong[fundef_cong]:
   assumes m: "m1 s = m2 s"
@@ -34,6 +37,9 @@ lemma bindS_updateS: "bindS (updateS f) m = (\<lambda>s. m () (f s))"
 
 lemma bindS_assertS_True[simp]: "bindS (assert_expS True msg) f = f ()"
   by (auto simp: assert_expS_def)
+
+lemma bindS_chooseS_returnS[simp]: "bindS (chooseS xs) (\<lambda>x. returnS (f x)) = chooseS (f ` xs)"
+  by (intro ext) (auto simp: bindS_def chooseS_def returnS_def)
 
 
 lemma result_cases:
