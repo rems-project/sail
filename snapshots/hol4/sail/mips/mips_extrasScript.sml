@@ -136,7 +136,7 @@ val _ = Define `
 
 (*val get_slice_int : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a*)
 val _ = Define `
- ((get_slice_int0:'a Bitvector_class -> int -> int -> int -> 'a)dict_Sail2_values_Bitvector_a len n lo=  (
+ ((get_slice_int:'a Bitvector_class -> int -> int -> int -> 'a)dict_Sail2_values_Bitvector_a len n lo=  (
   dict_Sail2_values_Bitvector_a.of_bools_method (get_slice_int_bl len n lo)))`;
 
 

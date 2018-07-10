@@ -1,5 +1,5 @@
 #!/bin/bash
 
-for d in lem/hol-lib sail/lib/hol sail/cheri sail/riscv; do
+for d in lem/hol-lib sail/lib/hol sail/mips sail/cheri sail/riscv sail/aarch64; do
   (cd $d; Holmake cleanAll)
 done
