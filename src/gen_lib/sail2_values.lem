@@ -53,6 +53,8 @@ val prerr_endline : string -> unit
 let prerr_endline _ = ()
 declare ocaml target_rep function prerr_endline = `prerr_endline`
 
+let prerr x = prerr_endline x
+
 val print_int : string -> integer -> unit
 let print_int msg i = print_endline (msg ^ (stringFromInteger i))
 
