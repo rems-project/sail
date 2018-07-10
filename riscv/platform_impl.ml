@@ -113,10 +113,23 @@ let dts = spike_dts "rv64imac" cpu_hz insns_per_tick mems;;
 let bytes_to_string bytes =
   String.init (List.length bytes) (fun i -> Char.chr (List.nth bytes i))
 
+let dtc_path = ref "/usr/bin/dtc"
+
+let set_dtc path =
+  try let st = Unix.stat path in
+      if st.Unix.st_kind = Unix.S_REG && st.Unix.st_perm != 0
+      then dtc_path := path
+      else ( Printf.eprintf "%s doesn't seem like a valid executable.\n%!" path;
+             exit 1)
+  with Unix.Unix_error (e, _, _) ->
+    ( Printf.eprintf "Error accessing %s: %s\n%!" path (Unix.error_message e);
+      exit 1)
+
 let make_dtb dts = (* Call the dtc compiler, assumed to be at /usr/bin/dtc *)
   try
+    let cmd = Printf.sprintf "%s -I dts" !dtc_path in
     let (cfrom, cto, cerr) =
-      Unix.open_process_full "/usr/bin/dtc -I dts" [||]
+      Unix.open_process_full cmd [||]
     in (
       output_string cto dts;
       (* print_endline " sent dts to dtc ..."; *)
@@ -136,7 +149,7 @@ let make_dtb dts = (* Call the dtc compiler, assumed to be at /usr/bin/dtc *)
       let emsg = bytes_to_string (accum_bytes cerr []) in
       match Unix.close_process_full (cfrom, cto, cerr) with
         | Unix.WEXITED 0 -> dtb
-        | _ -> (Printf.printf "%s\n" ("Error executing dtc: " ^ emsg);
+        | _ -> (Printf.printf "%s\n%!" ("Error executing dtc: " ^ emsg);
                 exit 1)
     )
   with Unix.Unix_error (e, fn, _) ->

@@ -72,7 +72,10 @@ let options = Arg.align ([("-dump-dts",
                            " enable dirty-bit update during page-table walks");
                           ("-enable-misaligned-access",
                            Arg.Set P.config_enable_misaligned_access,
-                           " enable misaligned accesses without M-mode traps")
+                           " enable misaligned accesses without M-mode traps");
+                          ("-with-dtc",
+                           Arg.String PI.set_dtc,
+                           " full path to dtc to use")
                          ])
 
 let usage_msg = "RISC-V platform options:"
