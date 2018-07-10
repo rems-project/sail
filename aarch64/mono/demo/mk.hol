@@ -5,5 +5,7 @@ set -ex
      -no_lexp_bounds_check -memo_z3 -undefined_gen \
      -auto_mono -mono_rewrites -dall_split_errors -dmono_continue \
      -lem -lem_mwords -lem_sequential -lem_lib Aarch64_extras -o aarch64_mono
-lem -hol -outdir . -lib ../../../lib/hol -lib ../../../src/gen_lib/ -lib ../../../src/lem_interp ../aarch64_extras.lem aarch64_mono_types.lem aarch64_mono.lem 
+# Explicitly include replacement prompt files, as Lem's choice of file depends
+# on some internal dependency ordering
+lem -hol -outdir . -lib ../../../lib/hol ../../../lib/hol/sail2_prompt_monad.lem ../../../lib/hol/sail2_prompt.lem -lib ../../../src/gen_lib/ -lib ../../../src/lem_interp ../aarch64_extras.lem aarch64_mono_types.lem aarch64_mono.lem 
 Holmake

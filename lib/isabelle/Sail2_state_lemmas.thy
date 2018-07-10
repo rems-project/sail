@@ -23,21 +23,13 @@ lemma Value_liftState_Run:
 
 lemmas liftState_if_distrib[liftState_simp] = if_distrib[where f = "liftState ra" for ra]
 
-lemma member_set_nth:
-  assumes "x \<in> set xs"
-  obtains n where "x = xs ! n" and "n < length xs"
-proof (use assms in \<open>induction xs arbitrary: thesis\<close>)
-  case (Cons a xs) print_cases
-  show ?case proof cases
-    assume "x = a"
-    then show ?thesis using Cons(2)[where n = 0] Cons(3) by auto
-  next
-    assume "x \<noteq> a"
-    then obtain n where "x = xs ! n" and "n < length xs" using Cons by auto
-    then show ?thesis using Cons(2)[of "Suc n"] by auto
-  qed
-qed auto
+lemma Value_bindS_iff:
+  "(Value b, s'') \<in> bindS m f s \<longleftrightarrow> (\<exists>a s'. (Value a, s') \<in> m s \<and> (Value b, s'') \<in> f a s')"
+  by (auto elim!: bindS_cases intro: bindS_intros)
 
+lemma Ex_bindS_iff:
+  "(Ex e, s'') \<in> bindS m f s \<longleftrightarrow> (Ex e, s'') \<in> m s \<or> (\<exists>a s'. (Value a, s') \<in> m s \<and> (Ex e, s'') \<in> f a s')"
+  by (auto elim!: bindS_cases intro: bindS_intros)
 
 lemma liftState_throw[liftState_simp]: "liftState r (throw e) = throwS e"
   by (auto simp: throw_def)
@@ -67,7 +59,7 @@ lemma liftState_try_catch[liftState_simp]:
   by (induction m h rule: try_catch_induct) (auto simp: try_catchS_bindS_no_throw)
 
 lemma liftState_early_return[liftState_simp]:
-  "liftState r (early_return r) = early_returnS r"
+  "liftState r (early_return x) = early_returnS x"
   by (auto simp: early_return_def early_returnS_def liftState_simp)
 
 lemma liftState_catch_early_return[liftState_simp]:
@@ -157,6 +149,68 @@ lemma liftState_internal_pick[liftState_simp]:
                  option.case_distrib[where h = "liftState r"]
            simp del: repeat.simps
            cong: option.case_cong)
+
+lemma liftRS_returnS[simp]: "liftRS (returnS x) = returnS x"
+  by (auto simp: liftRS_def)
+
+lemma liftRS_bindS:
+  fixes m :: "('regs, 'a, 'e) monadS" and f :: "'a \<Rightarrow> ('regs, 'b, 'e) monadS"
+  shows "(liftRS (bindS m f) :: ('regs, 'b, 'r, 'e) monadRS) = bindS (liftRS m) (liftRS \<circ> f)"
+proof (intro ext set_eqI iffI)
+  fix s and rs' :: "('b, 'r + 'e) result \<times> 'regs sequential_state"
+  assume lhs: "rs' \<in> liftRS (bindS m f) s"
+  then show "rs' \<in> bindS (liftRS m) (liftRS \<circ> f) s"
+    by (cases rs')
+       (fastforce simp: liftRS_def throwS_def elim!: bindS_cases try_catchS_cases
+                  intro: bindS_intros try_catchS_intros)
+next
+  fix s and rs' :: "('b, 'r + 'e) result \<times> 'regs sequential_state"
+  assume "rs' \<in> bindS (liftRS m) (liftRS \<circ> f) s"
+  then show "rs' \<in> liftRS (bindS m f) s"
+    by (cases rs')
+       (fastforce simp: liftRS_def throwS_def elim!: bindS_cases try_catchS_cases
+                  intro: bindS_intros try_catchS_intros)
+qed
+
+lemma liftRS_assert_expS_True[simp]: "liftRS (assert_expS True msg) = returnS ()"
+  by (auto simp: liftRS_def assert_expS_def)
+
+lemma untilM_domI:
+  fixes V :: "'vars \<Rightarrow> nat"
+  assumes "Inv vars"
+    and "\<And>vars t vars' t'. \<lbrakk>Inv vars; Run (body vars) t vars'; Run (cond vars') t' False\<rbrakk> \<Longrightarrow> V vars' < V vars \<and> Inv vars'"
+  shows "untilM_dom (vars, cond, body)"
+  using assms
+  by (induction vars rule: measure_induct_rule[where f = V])
+     (auto intro: untilM.domintros)
+
+lemma untilM_dom_untilS_dom:
+  assumes "untilM_dom (vars, cond, body)"
+  shows "untilS_dom (vars, liftState r \<circ> cond, liftState r \<circ> body, s)"
+  using assms
+  by (induction vars cond body arbitrary: s rule: untilM.pinduct)
+     (rule untilS.domintros, auto elim!: Value_liftState_Run)
+
+lemma measure2_induct:
+  fixes f :: "'a \<Rightarrow> 'b \<Rightarrow> nat"
+  assumes "\<And>x1 y1. (\<And>x2 y2. f x2 y2 < f x1 y1 \<Longrightarrow> P x2 y2) \<Longrightarrow> P x1 y1"
+  shows "P x y"
+proof -
+  have "P (fst x) (snd x)" for x
+    by (induction x rule: measure_induct_rule[where f = "\<lambda>x. f (fst x) (snd x)"]) (auto intro: assms)
+  then show ?thesis by auto
+qed
+
+lemma untilS_domI:
+  fixes V :: "'vars \<Rightarrow> 'regs sequential_state \<Rightarrow> nat"
+  assumes "Inv vars s"
+    and "\<And>vars s vars' s' s''.
+           \<lbrakk>Inv vars s; (Value vars', s') \<in> body vars s; (Value False, s'') \<in> cond vars' s'\<rbrakk>
+            \<Longrightarrow> V vars' s'' < V vars s \<and> Inv vars' s''"
+  shows "untilS_dom (vars, cond, body, s)"
+  using assms
+  by (induction vars s rule: measure2_induct[where f = V])
+     (auto intro: untilS.domintros)
 
 lemma whileS_dom_step:
   assumes "whileS_dom (vars, cond, body, s)"
@@ -262,6 +316,9 @@ lemma and_boolM_return_if:
   "and_boolM (return b) y = (if b then y else return False)"
   by (auto simp: and_boolM_def)
 
+lemma and_boolM_return_return_and[simp]: "and_boolM (return l) (return r) = return (l \<and> r)"
+  by (auto simp: and_boolM_def)
+
 lemmas and_boolM_if_distrib[simp] = if_distrib[where f = "\<lambda>x. and_boolM x y" for y]
 
 lemma or_boolM_simps[simp]:
@@ -273,6 +330,9 @@ lemma or_boolM_simps[simp]:
 
 lemma or_boolM_return_if:
   "or_boolM (return b) y = (if b then return True else y)"
+  by (auto simp: or_boolM_def)
+
+lemma or_boolM_return_return_or[simp]: "or_boolM (return l) (return r) = return (l \<or> r)"
   by (auto simp: or_boolM_def)
 
 lemmas or_boolM_if_distrib[simp] = if_distrib[where f = "\<lambda>x. or_boolM x y" for y]
@@ -292,8 +352,12 @@ lemma and_boolS_returnS_if:
 
 lemmas and_boolS_if_distrib[simp] = if_distrib[where f = "\<lambda>x. and_boolS x y" for y]
 
+lemma and_boolS_returnS_True[simp]: "and_boolS (returnS True) c = c"
+  by (auto simp: and_boolS_def)
+
 lemma or_boolS_simps[simp]:
   "or_boolS (returnS b) (returnS c) = returnS (b \<or> c)"
+  "or_boolS (returnS False) m = m"
   "or_boolS x (returnS True) = bindS x (\<lambda>_. returnS True)"
   "or_boolS x (returnS False) = x"
   "\<And>x y z. or_boolS (bindS x y) z = (bindS x (\<lambda>r. or_boolS (y r) z))"
@@ -304,5 +368,20 @@ lemma or_boolS_returnS_if:
   by (auto simp: or_boolS_def)
 
 lemmas or_boolS_if_distrib[simp] = if_distrib[where f = "\<lambda>x. or_boolS x y" for y]
+
+lemma Run_or_boolM_E:
+  assumes "Run (or_boolM l r) t a"
+  obtains "Run l t True" and "a"
+  | tl tr where "Run l tl False" and "Run r tr a" and "t = tl @ tr"
+  using assms by (auto simp: or_boolM_def elim!: Run_bindE Run_ifE Run_returnE)
+
+lemma Run_and_boolM_E:
+  assumes "Run (and_boolM l r) t a"
+  obtains "Run l t False" and "\<not>a"
+  | tl tr where "Run l tl True" and "Run r tr a" and "t = tl @ tr"
+  using assms by (auto simp: and_boolM_def elim!: Run_bindE Run_ifE Run_returnE)
+
+lemma maybe_failS_Some[simp]: "maybe_failS msg (Some v) = returnS v"
+  by (auto simp: maybe_failS_def)
 
 end

@@ -1,7 +1,7 @@
 open import Pervasives_extra
-open import Sail_instr_kinds
-open import Sail_values
-open import State_monad
+open import Sail2_instr_kinds
+open import Sail2_values
+open import Sail2_state_monad
 
 (* Fake interface of the prompt monad by redirecting to the state monad, since
    the former is not currently supported by HOL4 *)

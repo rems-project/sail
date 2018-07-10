@@ -1,22 +1,25 @@
 LEMSRC =  \
-  ../../src/lem_interp/sail_instr_kinds.lem \
-  ../../src/gen_lib/sail_values.lem \
-  ../../src/gen_lib/sail_operators.lem \
-  ../../src/gen_lib/sail_operators_mwords.lem \
-  ../../src/gen_lib/sail_operators_bitlists.lem \
-  ../../src/gen_lib/state_monad.lem \
-  ../../src/gen_lib/state.lem \
-  prompt_monad.lem \
-  prompt.lem
+  ../../src/lem_interp/sail2_instr_kinds.lem \
+  ../../src/gen_lib/sail2_values.lem \
+  ../../src/gen_lib/sail2_operators.lem \
+  ../../src/gen_lib/sail2_operators_mwords.lem \
+  ../../src/gen_lib/sail2_operators_bitlists.lem \
+  ../../src/gen_lib/sail2_state_monad.lem \
+  ../../src/gen_lib/sail2_state.lem \
+  ../../src/gen_lib/sail2_string.lem \
+  sail2_prompt_monad.lem \
+  sail2_prompt.lem
 
-SCRIPTS = sail_instr_kindsScript.sml sail_valuesScript.sml sail_operatorsScript.sml \
-  sail_operators_mwordsScript.sml sail_operators_bitlistsScript.sml \
-  state_monadScript.sml stateScript.sml \
-  prompt_monadScript.sml promptScript.sml
+SCRIPTS = sail2_instr_kindsScript.sml sail2_valuesScript.sml sail2_operatorsScript.sml \
+  sail2_operators_mwordsScript.sml sail2_operators_bitlistsScript.sml \
+  sail2_state_monadScript.sml sail2_stateScript.sml \
+  sail2_prompt_monadScript.sml sail2_promptScript.sml \
+  sail2_stringScript.sml
 
 THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))
 
 all: sail-heap $(THYS)
+all-scripts: $(SCRIPTS)
 
 $(SCRIPTS): $(LEMSRC)
 	lem -hol -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $(LEMSRC)
@@ -28,4 +31,4 @@ $(THYS) sail-heap: $(SCRIPTS)
 clean:
 	Holmake cleanAll
 
-.PHONY: all clean
+.PHONY: all all-scripts clean
