@@ -47,7 +47,7 @@ let power_real b e = realPowInteger b e*)
 
 val print_endline : string -> unit
 let print_endline _ = ()
-declare ocaml target_rep function print_endline = `print_endline`
+(* declare ocaml target_rep function print_endline = `print_endline` *)
 
 val prerr_endline : string -> unit
 let prerr_endline _ = ()
