@@ -111,7 +111,12 @@ val elf_entry : unit -> integer
 let elf_entry () = 0
 declare ocaml target_rep function elf_entry = `Elf_loader.elf_entry`
 
-let print_bits msg bs = prerr_endline (msg ^ (string_of_bv bs))
+let print_bits msg bs = print_endline (msg ^ (string_of_bv bs))
+let prerr_bits msg bs = prerr_endline (msg ^ (string_of_bv bs))
+
+val prerr_string : string -> unit
+let prerr_string _ = ()
+declare ocaml target_rep function prerr_string = `Pervasives.prerr_string`
 
 val get_time_ns : unit -> integer
 let get_time_ns () = 0

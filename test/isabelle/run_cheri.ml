@@ -64,7 +64,7 @@ let () =
   Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg
 
 let (>>) = Sail2_state_monad.bindS
-let liftS = Sail2_state_lifting.liftState (Cheri_types.get_regval, Cheri_types.set_regval)
+(*let liftS = Sail2_state_lifting.liftState (Cheri_types.get_regval, Cheri_types.set_regval)*)
 
 let load_elf_segment seg =
   let open Elf_interpreted_segment in
@@ -89,4 +89,4 @@ let _ =
   (* State_monad.prerr_results *)
     (Cheri_code.initial_state |>
     (Sail2_state.iterS load_elf_segment elf_segments >> (fun _ ->
-    liftS (Cheri.main ()))));
+    (Cheri_code.mainS ()))));
