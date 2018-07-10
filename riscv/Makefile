@@ -62,7 +62,8 @@ riscv_sequential.lem: $(SAIL_SRCS) Makefile
 	$(SAIL_DIR)/sail -lem -lem_sequential -o riscv_sequential -lem_mwords -lem_lib Riscv_extras_sequential $(SAIL_SRCS)
 
 riscvScript.sml : riscv.lem riscv_extras.lem
-	lem -hol -outdir . -lib ../lib/hol -lib ../src/lem_interp -lib ../src/gen_lib \
+	lem -hol -outdir . -lib ../lib/hol -i ../lib/hol/sail2_prompt_monad.lem -i ../lib/hol/sail2_prompt.lem \
+	    -lib ../src/lem_interp -lib ../src/gen_lib \
 		riscv_extras.lem \
 		riscv_types.lem \
 		riscv.lem

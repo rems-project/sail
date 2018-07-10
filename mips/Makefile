@@ -59,7 +59,7 @@ M%.thy: m%.lem m%_types.lem mips_extras.lem
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' M$*_types.thy
 
 %Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
-	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -i $(SAIL_DIR)/lib/hol/sail2_prompt_monad.lem -i $(SAIL_DIR)/lib/hol/sail2_prompt.lem -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 %Theory.uo: %Script.sml
 	Holmake $@
