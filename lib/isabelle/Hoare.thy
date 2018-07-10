@@ -253,6 +253,27 @@ lemma PrePostE_weaken_post:
 named_theorems PrePostE_compositeI
 named_theorems PrePostE_atomI
 
+lemma PrePostE_conj_conds:
+  assumes "PrePostE P1 m Q1 E1"
+    and "PrePostE P2 m Q2 E2"
+  shows "PrePostE (\<lambda>s. P1 s \<and> P2 s) m (\<lambda>r s. Q1 r s \<and> Q2 r s) (\<lambda>e s. E1 e s \<and> E2 e s)"
+  using assms by (auto intro: PrePostE_I elim: PrePostE_elim)
+
+lemmas PrePostE_conj_conds_consequence = PrePostE_conj_conds[THEN PrePostE_consequence]
+
+lemma PrePostE_post_mp:
+  assumes "PrePostE P m Q' E"
+    and "PrePostE P m (\<lambda>r s. Q' r s \<longrightarrow> Q r s) E"
+  shows "PrePostE P m Q E"
+  using PrePostE_conj_conds[OF assms] by (auto intro: PrePostE_weaken_post)
+
+lemma PrePostE_cong:
+  assumes "\<And>s. P1 s \<longleftrightarrow> P2 s" and "\<And>s. P1 s \<Longrightarrow> m1 s = m2 s" and "\<And>r s. Q1 r s \<longleftrightarrow> Q2 r s"
+    and "\<And>e s. E1 e s \<longleftrightarrow> E2 e s"
+  shows "PrePostE P1 m1 Q1 E1 \<longleftrightarrow> PrePostE P2 m2 Q2 E2"
+  using assms unfolding PrePostE_def PrePost_def
+  by (auto split: result.splits)
+
 lemma PrePostE_True_post[PrePostE_atomI, intro, simp]:
   "PrePostE P m (\<lambda>_ _. True) (\<lambda>_ _. True)"
   unfolding PrePost_defs by (auto split: result.splits)
@@ -320,6 +341,11 @@ lemma PrePostE_option_cases[PrePostE_compositeI]:
   shows "PrePostE (case x of Some a \<Rightarrow> PS a | None \<Rightarrow> PN) (case x of Some a \<Rightarrow> s a | None \<Rightarrow> n) Q E"
   using assms by (auto split: option.splits)
 
+lemma PrePostE_sum_cases[PrePostE_compositeI]:
+  assumes "\<And>a. PrePostE (Pl a) (l a) Q E" and "\<And>b. PrePostE (Pr b) (r b) Q E"
+  shows "PrePostE (case x of Inl a \<Rightarrow> Pl a | Inr b \<Rightarrow> Pr b) (case x of Inl a \<Rightarrow> l a | Inr b \<Rightarrow> r b) Q E"
+  using assms by (auto split: sum.splits)
+
 lemma PrePostE_let[PrePostE_compositeI]:
   assumes "PrePostE P (m y) Q E"
   shows "PrePostE P (let x = y in m x) Q E"
@@ -347,9 +373,50 @@ lemma PrePostE_failS[PrePostE_atomI, intro]:
   "PrePostE (E (Failure msg)) (failS msg) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
+lemma PrePostE_maybe_failS[PrePostE_atomI]:
+  "PrePostE (\<lambda>s. case v of Some v \<Rightarrow> Q v s | None \<Rightarrow> E (Failure msg) s) (maybe_failS msg v) Q E"
+  by (auto simp: maybe_failS_def split: option.splits)
+
+lemma PrePostE_exitS[PrePostE_atomI, intro]: "PrePostE (E (Failure ''exit'')) (exitS msg) Q E"
+  unfolding exitS_def PrePostE_def PrePost_def failS_def by auto
+
 lemma PrePostE_chooseS[intro, PrePostE_atomI]:
   "PrePostE (\<lambda>s. \<forall>x \<in> xs. Q x s) (chooseS xs) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
+
+lemma PrePostE_throwS[PrePostE_atomI]: "PrePostE (E (Throw e)) (throwS e) Q E"
+  by (intro PrePostE_I) (auto simp: throwS_def)
+
+lemma PrePostE_try_catchS[PrePostE_compositeI]:
+  assumes Ph: "\<And>s e s'. (Ex (Throw e), s') \<in> m s \<Longrightarrow> PrePostE (Ph e) (h e) Q E"
+    and m: "PrePostE P m Q (\<lambda>ex. case ex of Throw e \<Rightarrow> Ph e | Failure msg \<Rightarrow> E (Failure msg))"
+  shows "PrePostE P (try_catchS m h) Q E"
+  unfolding PrePostE_def
+proof (intro PrePostI)
+  fix s r s'
+  assume "(r, s') \<in> try_catchS m h s" and P: "P s"
+  then show "(case r of Value a \<Rightarrow> Q a | result.Ex e \<Rightarrow> E e) s'" using m
+  proof (cases rule: try_catchS_cases)
+    case (h e s'')
+    then have "Ph e s''" using P m by (auto elim!: PrePostE_elim)
+    then show ?thesis using Ph[OF h(1)] h(2) by (auto elim!: PrePostE_elim)
+  qed (auto elim!: PrePostE_elim)
+qed
+
+lemma PrePostE_catch_early_returnS[PrePostE_compositeI]:
+  assumes "PrePostE P m Q (\<lambda>ex. case ex of Throw (Inl a) \<Rightarrow> Q a | Throw (Inr e) \<Rightarrow> E (Throw e) | Failure msg \<Rightarrow> E (Failure msg))"
+  shows "PrePostE P (catch_early_returnS m) Q E"
+  unfolding catch_early_returnS_def
+  by (rule PrePostE_try_catchS, rule PrePostE_sum_cases[OF PrePostE_returnS PrePostE_throwS])
+     (auto intro: assms)
+
+lemma PrePostE_early_returnS[PrePostE_atomI]: "PrePostE (E (Throw (Inl r))) (early_returnS r) Q E"
+  by (auto simp: early_returnS_def intro: PrePostE_throwS)
+
+lemma PrePostE_liftRS[PrePostE_compositeI]:
+  assumes "PrePostE P m Q (\<lambda>ex. case ex of Throw e \<Rightarrow> E (Throw (Inr e)) | Failure msg \<Rightarrow> E (Failure msg))"
+  shows "PrePostE P (liftRS m) Q E"
+  using assms unfolding liftRS_def by (intro PrePostE_try_catchS[OF PrePostE_throwS])
 
 lemma PrePostE_foreachS_Cons:
   assumes "\<And>s vars' s'. (Value vars', s') \<in> body x vars s \<Longrightarrow> PrePostE (Q vars') (foreachS xs vars' body) Q E"
@@ -362,6 +429,70 @@ lemma PrePostE_foreachS_invariant:
   shows "PrePostE (Q vars) (foreachS xs vars body) Q E"
   using assms unfolding PrePostE_def
   by (intro PrePost_foreachS_invariant[THEN PrePost_strengthen_pre]) auto
+
+lemma PrePostE_untilS:
+  assumes dom: "\<And>s. Inv Q vars s \<Longrightarrow> untilS_dom (vars, cond, body, s)"
+    and cond: "\<And>vars. PrePostE (Inv' Q vars) (cond vars) (\<lambda>c s'. Inv Q vars s' \<and> (c \<longrightarrow> Q vars s')) E"
+    and body: "\<And>vars. PrePostE (Inv Q vars) (body vars) (Inv' Q) E"
+  shows "PrePostE (Inv Q vars) (untilS vars cond body) Q E"
+proof (unfold PrePostE_def, rule PrePostI)
+  fix s r s'
+  assume Inv_s: "Inv Q vars s" and r: "(r, s') \<in> untilS vars cond body s"
+  with dom[OF Inv_s] cond body
+  show "(case r of Value a \<Rightarrow> Q a | result.Ex e \<Rightarrow> E e) s'"
+  proof (induction vars cond body s rule: untilS.pinduct[case_names Step])
+    case (Step vars cond body s)
+    consider
+        (Value) vars' c sb sc where "(Value vars', sb) \<in> body vars s" and "(Value c, sc) \<in> cond vars' sb"
+                                and "if c then r = Value vars' \<and> s' = sc else (r, s') \<in> untilS vars' cond body sc"
+      | (Ex) e where "(Ex e, s') \<in> bindS (body vars) cond s" and "r = Ex e"
+      using Step(1,6)
+      by (auto simp: untilS.psimps returnS_def Ex_bindS_iff elim!: bindS_cases split: if_splits; fastforce)
+    then show ?case
+    proof cases
+      case Value
+      then show ?thesis using Step.IH[OF Value(1,2) _ Step(3,4)] Step(3,4,5)
+        by (auto split: if_splits elim: PrePostE_elim)
+    next
+      case Ex
+      then show ?thesis using Step(3,4,5) by (auto elim!: bindS_cases PrePostE_elim)
+    qed
+  qed
+qed
+
+lemma PrePostE_untilS_pure_cond:
+  assumes dom: "\<And>s. Inv Q vars s \<Longrightarrow> untilS_dom (vars, returnS \<circ> cond, body, s)"
+    and body: "\<And>vars. PrePostE (Inv Q vars) (body vars) (\<lambda>vars' s'. Inv Q vars' s' \<and> (cond vars' \<longrightarrow> Q vars' s')) E"
+  shows "PrePostE (Inv Q vars) (untilS vars (returnS \<circ> cond) body) Q E"
+  using assms by (intro PrePostE_untilS) (auto simp: comp_def)
+
+lemma PrePostE_liftState_untilM:
+  assumes dom: "\<And>s. Inv Q vars s \<Longrightarrow> untilM_dom (vars, cond, body)"
+    and cond: "\<And>vars. PrePostE (Inv' Q vars) (liftState r (cond vars)) (\<lambda>c s'. Inv Q vars s' \<and> (c \<longrightarrow> Q vars s')) E"
+    and body: "\<And>vars. PrePostE (Inv Q vars) (liftState r (body vars)) (Inv' Q) E"
+  shows "PrePostE (Inv Q vars) (liftState r (untilM vars cond body)) Q E"
+proof -
+  have domS: "untilS_dom (vars, liftState r \<circ> cond, liftState r \<circ> body, s)" if "Inv Q vars s" for s
+    using dom that by (intro untilM_dom_untilS_dom)
+  then have "PrePostE (Inv Q vars) (untilS vars (liftState r \<circ> cond) (liftState r \<circ> body)) Q E"
+    using cond body by (auto intro: PrePostE_untilS simp: comp_def)
+  moreover have "liftState r (untilM vars cond body) s = untilS vars (liftState r \<circ> cond) (liftState r \<circ> body) s"
+    if "Inv Q vars s" for s
+    unfolding liftState_untilM[OF domS[OF that] dom[OF that]] ..
+  ultimately show ?thesis by (auto cong: PrePostE_cong)
+qed
+
+lemma PrePostE_liftState_untilM_pure_cond:
+  assumes dom: "\<And>s. Inv Q vars s \<Longrightarrow> untilM_dom (vars, return \<circ> cond, body)"
+    and body: "\<And>vars. PrePostE (Inv Q vars) (liftState r (body vars)) (\<lambda>vars' s'. Inv Q vars' s' \<and> (cond vars' \<longrightarrow> Q vars' s')) E"
+  shows "PrePostE (Inv Q vars) (liftState r (untilM vars (return \<circ> cond) body)) Q E"
+  using assms by (intro PrePostE_liftState_untilM) (auto simp: comp_def liftState_simp)
+
+lemma PrePostE_undefined_boolS[PrePostE_atomI]:
+  "PrePostE (\<lambda>s. \<forall>b. Q b s)
+            (undefined_boolS unit) Q E"
+  unfolding undefined_boolS_def seqS_def
+  by (auto intro: PrePostE_strengthen_pre PrePostE_chooseS)
 
 lemma PrePostE_bool_of_bitU_nondetS_any:
   "PrePostE (\<lambda>s. \<forall>b. Q b s) (bool_of_bitU_nondetS b) Q E"

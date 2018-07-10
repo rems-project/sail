@@ -78,6 +78,57 @@ lemma len_of_minus_One_minus_nonneg_lt_len_of[simp]:
   "n \<ge> 0 \<Longrightarrow> nat (int LENGTH('a::len) - 1 - n) < LENGTH('a)"
   by (metis diff_mono diff_zero len_gt_0 nat_eq_iff2 nat_less_iff order_refl zle_diff1_eq)
 
+declare subrange_vec_dec_def[simp]
+
+lemma update_subrange_vec_dec_update_subrange_list_dec:
+  assumes "0 \<le> j" and "j \<le> i" and "i < int LENGTH('a)"
+  shows "update_subrange_vec_dec (w :: 'a::len word) i j w' =
+         of_bl (update_subrange_list_dec (to_bl w) i j (to_bl w'))"
+  using assms
+  unfolding update_subrange_vec_dec_def update_subrange_list_dec_def update_subrange_list_inc_def
+  by (auto simp: word_update_def split_at_def Let_def nat_diff_distrib min_def)
+
+lemma subrange_vec_dec_subrange_list_dec:
+  assumes "0 \<le> j" and "j \<le> i" and "i < int LENGTH('a)" and "int LENGTH('b) = i - j + 1"
+  shows "subrange_vec_dec (w :: 'a::len word) i j = (of_bl (subrange_list_dec (to_bl w) i j) :: 'b::len word)"
+  using assms unfolding subrange_vec_dec_def
+  by (auto simp: subrange_list_dec_drop_take slice_take of_bl_drop')
+
+lemma slice_simp[simp]: "slice w lo len = Word.slice (nat lo) w"
+  by (auto simp: slice_def)
+
+declare slice_id[simp]
+
+lemma of_bools_of_bl[simp]: "of_bools_method BC_mword = of_bl"
+  by (auto simp: BC_mword_defs)
+
+lemma of_bl_bin_word_of_int:
+  "len = LENGTH('a) \<Longrightarrow> of_bl (bin_to_bl_aux len n []) = (word_of_int n :: ('a::len) word)"
+  by (auto simp: of_bl_def bin_bl_bin')
+
+lemma get_slice_int_0_bin_to_bl[simp]:
+  "len > 0 \<Longrightarrow> get_slice_int len n 0 = of_bl (bin_to_bl (nat len) n)"
+  unfolding get_slice_int_def get_slice_int_bv_def subrange_list_def
+  by (auto simp: subrange_list_dec_drop_take len_bin_to_bl_aux)
+
+lemma to_bl_of_bl[simp]:
+  fixes bl :: "bool list"
+  defines w: "w \<equiv> of_bl bl :: 'a::len word"
+  assumes len: "length bl = LENGTH('a)"
+  shows "to_bl w = bl"
+  using len unfolding w by (intro word_bl.Abs_inverse) auto
+
+lemma reverse_endianness_byte[simp]:
+  "LENGTH('a) = 8 \<Longrightarrow> reverse_endianness (w :: 'a::len word) = w"
+  unfolding reverse_endianness_def by (auto simp: reverse_endianness_list_simps)
+
+lemma reverse_reverse_endianness[simp]:
+  "8 dvd LENGTH('a) \<Longrightarrow> reverse_endianness (reverse_endianness w) = (w :: 'a::len word)"
+  unfolding reverse_endianness_def by (simp)
+
+lemma replicate_bits_zero[simp]: "replicate_bits 0 n = 0"
+  by (intro word_eqI) (auto simp: replicate_bits_def test_bit_of_bl rev_nth nth_repeat simp del: repeat.simps)
+
 declare extz_vec_def[simp]
 declare exts_vec_def[simp]
 declare concat_vec_def[simp]
@@ -108,5 +159,11 @@ lemma arith_vec_int_simps[simp]:
   "mult_vec_int l r = (ucast l) * (word_of_int r)"
   unfolding add_vec_int_def sub_vec_int_def mult_vec_int_def
   by (auto simp: arith_op_bv_int_def BC_mword_defs word_add_def word_sub_wi word_mult_def)
+
+lemma shiftl_simp[simp]: "shiftl w l = w << (nat l)"
+  by (auto simp: shiftl_def shiftl_mword_def)
+
+lemma shiftr_simp[simp]: "shiftr w l = w >> (nat l)"
+  by (auto simp: shiftr_def shiftr_mword_def)
 
 end
