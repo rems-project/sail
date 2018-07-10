@@ -153,10 +153,11 @@ declare adds_vec_def[simp]
 declare subs_vec_def[simp]
 declare mults_vec_def[simp]
 
-lemma arith_vec_int_simps[simp]:
-  "add_vec_int l r = l + (word_of_int r)"
-  "sub_vec_int l r = l - (word_of_int r)"
-  "mult_vec_int l r = (ucast l) * (word_of_int r)"
+lemma arith_vec_int_simps:
+  fixes l :: "'a::len word"
+  shows "add_vec_int l r = word_of_int (sint l + sint (word_of_int r :: 'a word))"
+    and "sub_vec_int l r = word_of_int (sint l - sint (word_of_int r :: 'a word))"
+    and "(mult_vec_int l r :: 'b::len word) = word_of_int (sint (scast l :: 'b word) * sint (word_of_int r :: 'b word))"
   unfolding add_vec_int_def sub_vec_int_def mult_vec_int_def
   by (auto simp: arith_op_bv_int_def BC_mword_defs word_add_def word_sub_wi word_mult_def)
 

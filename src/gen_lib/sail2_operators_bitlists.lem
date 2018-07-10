@@ -145,31 +145,19 @@ let subs_vec  = arith_op_bv integerMinus true
 let mult_vec  = arith_op_double_bl integerMult false
 let mults_vec = arith_op_double_bl integerMult true
 
-val add_vec_int       : list bitU -> integer -> list bitU
-val adds_vec_int      : list bitU -> integer -> list bitU
-val sub_vec_int       : list bitU -> integer -> list bitU
-val subs_vec_int      : list bitU -> integer -> list bitU
-val mult_vec_int      : list bitU -> integer -> list bitU
-val mults_vec_int     : list bitU -> integer -> list bitU
-let add_vec_int   l r = arith_op_bv_int integerAdd false l r
-let adds_vec_int  l r = arith_op_bv_int integerAdd true l r
-let sub_vec_int   l r = arith_op_bv_int integerMinus false l r
-let subs_vec_int  l r = arith_op_bv_int integerMinus true l r
-let mult_vec_int  l r = arith_op_double_bl integerMult false l (of_int (length l) r)
-let mults_vec_int l r = arith_op_double_bl integerMult true l (of_int (length l) r)
+val add_vec_int      : list bitU -> integer -> list bitU
+val sub_vec_int      : list bitU -> integer -> list bitU
+val mult_vec_int     : list bitU -> integer -> list bitU
+let add_vec_int  l r = arith_op_bv_int integerAdd true l r
+let sub_vec_int  l r = arith_op_bv_int integerMinus true l r
+let mult_vec_int l r = arith_op_double_bl integerMult true l (of_int (length l) r)
 
-val add_int_vec       : integer -> list bitU -> list bitU
-val adds_int_vec      : integer -> list bitU -> list bitU
-val sub_int_vec       : integer -> list bitU -> list bitU
-val subs_int_vec      : integer -> list bitU -> list bitU
-val mult_int_vec      : integer -> list bitU -> list bitU
-val mults_int_vec     : integer -> list bitU -> list bitU
-let add_int_vec   l r = arith_op_int_bv integerAdd false l r
-let adds_int_vec  l r = arith_op_int_bv integerAdd true l r
-let sub_int_vec   l r = arith_op_int_bv integerMinus false l r
-let subs_int_vec  l r = arith_op_int_bv integerMinus true l r
-let mult_int_vec  l r = arith_op_double_bl integerMult false (of_int (length r) l) r
-let mults_int_vec l r = arith_op_double_bl integerMult true (of_int (length r) l) r
+val add_int_vec      : integer -> list bitU -> list bitU
+val sub_int_vec      : integer -> list bitU -> list bitU
+val mult_int_vec     : integer -> list bitU -> list bitU
+let add_int_vec  l r = arith_op_int_bv integerAdd true l r
+let sub_int_vec  l r = arith_op_int_bv integerMinus true l r
+let mult_int_vec l r = arith_op_double_bl integerMult true (of_int (length r) l) r
 
 val add_vec_bit      : list bitU -> bitU -> list bitU
 val adds_vec_bit     : list bitU -> bitU -> list bitU
