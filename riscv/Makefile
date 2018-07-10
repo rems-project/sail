@@ -32,6 +32,9 @@ coverage: _sbuild/coverage.native
 	mkdir bisect && mv bisect*.out bisect/
 	mkdir coverage && bisect-ppx-report -html coverage/ -I _sbuild/ bisect/bisect*.out
 
+riscv.c: $(SAIL_SRCS) Makefile
+	$(SAIL) -O -memo_z3 -c $(SAIL_SRCS) 1> $@
+
 tracecmp: tracecmp.ml
 	ocamlfind ocamlopt -annot -linkpkg -package unix $^ -o $@
 
