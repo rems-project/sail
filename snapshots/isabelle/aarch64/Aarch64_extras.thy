@@ -5,80 +5,24 @@ theory "Aarch64_extras"
 imports 
  	 Main
 	 "Lem_pervasives_extra" 
-	 "Sail_instr_kinds" 
-	 "Sail_values" 
-	 "Sail_operators_mwords" 
-	 "Prompt_monad" 
-	 "Prompt" 
+	 "Sail2_instr_kinds" 
+	 "Sail2_values" 
+	 "Sail2_operators_mwords" 
+	 "Sail2_prompt_monad" 
+	 "Sail2_prompt" 
 
 begin 
 
 (*open import Pervasives_extra*)
-(*open import Sail_instr_kinds*)
-(*open import Sail_values*)
-(*open import Sail_operators_mwords*)
-(*open import Prompt_monad*)
-(*open import Prompt*)
+(*open import Sail2_instr_kinds*)
+(*open import Sail2_values*)
+(*open import Sail2_operators_mwords*)
+(*open import Sail2_prompt_monad*)
+(*open import Sail2_prompt*)
 
 (*type ty512*)
 (*type ty1024*)
 (*type ty2048*)
-
-(*val slice : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b*)
-definition slice0  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow> int \<Rightarrow>('b::len)Word.word "  where 
-     " slice0 v lo len = (
-  subrange_vec_dec v ((lo + len) -( 1 :: int)) lo )"
-
-
-(*val set_slice : forall 'a 'b. Size 'a, Size 'b => integer -> integer -> mword 'a -> integer -> mword 'b -> mword 'a*)
-definition set_slice0  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow> int \<Rightarrow>('b::len)Word.word \<Rightarrow>('a::len)Word.word "  where 
-     " set_slice0 (out_len::ii) (slice_len::ii) out (n::ii) v = (
-  update_subrange_vec_dec out ((n + slice_len) -( 1 :: int)) n v )"
-
-
-definition get_slice_int_bl  :: " int \<Rightarrow> int \<Rightarrow> int \<Rightarrow>(bool)list "  where 
-     " get_slice_int_bl len n lo = (
-  (* TODO: Is this the intended behaviour? *)
-  (let hi = ((lo + len) -( 1 :: int)) in
-  (let bs = (bools_of_int (hi +( 1 :: int)) n) in
-  subrange_list False bs hi lo)))"
-
-
-(*val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> mword 'a*)
-definition get_slice_int0  :: " int \<Rightarrow> int \<Rightarrow> int \<Rightarrow>('a::len)Word.word "  where 
-     " get_slice_int0 len n lo = ( Word.of_bl (get_slice_int_bl len n lo))"
-
-
-(*val set_slice_int :  forall 'a. Size 'a => integer -> integer -> integer -> mword 'a -> integer*)
-definition set_slice_int0  :: " int \<Rightarrow> int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow> int "  where 
-     " set_slice_int0 len n lo v = (
-  (let hi = ((lo + len) -( 1 :: int)) in
-  (let bs = (bools_of_int (hi +( 1 :: int)) n) in
-  (*let len_n = max (hi + 1) (integerFromNat (List.length bs)) in
-  let ext_bs = exts_bools len_n bs in*)
-  signed_of_bools (update_subrange_list False bs hi lo (Word.to_bl v)))))"
-
-
-(*let ext_slice signed v i j =
-  let len = length v in
-  let bits = get_bits false (bits_of v) i j in
-  of_bits (if signed then exts_bits len bits else extz_bits len bits)
-val exts_slice : list bitU -> integer -> integer -> list bitU
-let exts_slice v i j = ext_slice true v i j
-val extz_slice : list bitU -> integer -> integer -> list bitU
-let extz_slice v i j = ext_slice false v i j*)
-
-(*val shr_int : ii -> ii -> ii*)
-function (sequential,domintros)  shr_int0  :: " int \<Rightarrow> int \<Rightarrow> int "  where 
-     " shr_int0 x s = ( if s >( 0 :: int) then shr_int0 (x div( 2 :: int)) (s -( 1 :: int)) else x )" 
-by pat_completeness auto
-
-
-(*val shl_int : integer -> integer -> integer*)
-function (sequential,domintros)  shl_int0  :: " int \<Rightarrow> int \<Rightarrow> int "  where 
-     " shl_int0 i shift = ( if shift >( 0 :: int) then( 2 :: int) * shl_int0 i (shift -( 1 :: int)) else i )" 
-by pat_completeness auto
-
 
 definition hexchar_to_bool_list  :: " char \<Rightarrow>((bool)list)option "  where 
      " hexchar_to_bool_list c = (
@@ -120,20 +64,18 @@ definition hexstring_to_bools  :: " string \<Rightarrow>((bool)list)option "  wh
 (*val hex_slice : forall 'rv 'n 'e. Size 'n => string -> integer -> integer -> monad 'rv (mword 'n) 'e*)
 definition hex_slice  :: " string \<Rightarrow> int \<Rightarrow> int \<Rightarrow>('rv,(('n::len)Word.word),'e)monad "  where 
      " hex_slice v len lo = (
-  (case  hexstring_to_bools v of
-      Some bs =>
-       (let hi = ((len + lo) -( 1 :: int)) in
-       (let bs = (ext_list False (len + lo) bs) in
-       return (Word.of_bl (subrange_list False bs hi lo))))
-    | None => Fail (''hex_slice'')
-  ))"
+  maybe_fail (''hex_slice'') (hexstring_to_bools v) \<bind> (\<lambda> bs . 
+   (let hi = ((len + lo) -( 1 :: int)) in
+   (let bs = (ext_list False (len + lo) bs) in
+   return (Word.of_bl (subrange_list False bs hi lo))))))"
 
 
-definition internal_pick  :: " 'a list \<Rightarrow>('c,'a,'b)monad "  where 
-     " internal_pick vs = ( return (List.hd vs))"
+(*val BigEndianReverse : forall 'rv 'n 'e. Size 'n => mword 'n -> monad 'rv (mword 'n) 'e*)
+definition BigEndianReverse  :: "('n::len)Word.word \<Rightarrow>('rv,(('n::len)Word.word),'e)monad "  where 
+     " BigEndianReverse w = ( return (reverse_endianness w))"
 
 
-(* Use constants for undefined values for now *)
+(* Use constants for some undefined values for now *)
 definition undefined_string  :: " unit \<Rightarrow>('b,(string),'a)monad "  where 
      " undefined_string _ = ( return (''''))"
 
@@ -175,8 +117,8 @@ definition undefined_nat  :: " unit \<Rightarrow>('b,(int),'a)monad "  where
   integer -> integer -> mword 'a -> mword 'b -> mword 'c -> monad 'rv unit 'e*)
 definition write_ram  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('b::len)Word.word \<Rightarrow>('c::len)Word.word \<Rightarrow>('rv,(unit),'e)monad "  where 
      " write_ram addrsize size1 hexRAM address value1 = (
-  (write_mem_ea instance_Sail_values_Bitvector_Machine_word_mword_dict Write_plain address size1 \<then>
-  write_mem_val instance_Sail_values_Bitvector_Machine_word_mword_dict value1) \<bind>  (\<lambda>x .  (case  x of _ => return ()  )) )"
+  (write_mem_ea instance_Sail2_values_Bitvector_Machine_word_mword_dict Write_plain address size1 \<then>
+  write_mem_val instance_Sail2_values_Bitvector_Machine_word_mword_dict value1) \<bind>  (\<lambda>x .  (case  x of _ => return ()  )) )"
 
 
 (*val read_ram : forall 'rv 'a 'b 'c 'e. Size 'b, Size 'c =>
@@ -184,7 +126,7 @@ definition write_ram  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word
 definition read_ram  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('b::len)Word.word \<Rightarrow>('rv,(('c::len)Word.word),'e)monad "  where 
      " read_ram addrsize size1 hexRAM address = (
   (*let _ = prerr_endline (Reading  ^ (stringFromInteger size) ^  bytes from address  ^ (stringFromInteger (unsigned address))) in*)
-  read_mem instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict Read_plain address size1 )"
+  read_mem instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_plain address size1 )"
 
 
 (*val elf_entry : unit -> integer*)

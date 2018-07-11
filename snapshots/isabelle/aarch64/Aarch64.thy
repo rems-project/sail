@@ -5,14 +5,14 @@ theory "Aarch64"
 imports 
  	 Main
 	 "Lem_pervasives_extra" 
-	 "/tmp/sail/src/lem_interp/Sail2_instr_kinds" 
-	 "/tmp/sail/src/gen_lib/Sail2_values" 
-	 "/tmp/sail/src/gen_lib/Sail2_operators_mwords" 
-	 "/tmp/sail/src/gen_lib/Sail2_prompt_monad" 
-	 "/tmp/sail/src/gen_lib/Sail2_prompt" 
-	 "/tmp/sail/src/gen_lib/Sail2_string" 
+	 "Sail2_instr_kinds" 
+	 "Sail2_values" 
+	 "Sail2_operators_mwords" 
+	 "Sail2_prompt_monad" 
+	 "Sail2_prompt" 
+	 "Sail2_string" 
 	 "Aarch64_types" 
-	 "/tmp/sail/aarch64/mono/Aarch64_extras" 
+	 "Aarch64_extras" 
 
 begin 
 
