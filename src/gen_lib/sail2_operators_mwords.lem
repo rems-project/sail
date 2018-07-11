@@ -142,19 +142,19 @@ let subs_vec  l r = arith_op_bv integerMinus true  l r
 let mult_vec  l r = arith_op_bv integerMult  false (zeroExtend l : mword 'b) (zeroExtend r : mword 'b)
 let mults_vec l r = arith_op_bv integerMult  true  (signExtend l : mword 'b) (signExtend r : mword 'b)
 
-val add_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val sub_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val mult_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
-let add_vec_int  l r = arith_op_bv_int integerAdd   true  l r
-let sub_vec_int  l r = arith_op_bv_int integerMinus true  l r
-let mult_vec_int l r = arith_op_bv_int integerMult  true  (signExtend l : mword 'b) r
+val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
+val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
+val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
+let add_vec_int   l r = arith_op_bv_int integerAdd   false l r
+let sub_vec_int   l r = arith_op_bv_int integerMinus false l r
+let mult_vec_int  l r = arith_op_bv_int integerMult  false (zeroExtend l : mword 'b) r
 
-val add_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
-val sub_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
-val mult_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
-let add_int_vec  l r = arith_op_int_bv integerAdd   true  l r
-let sub_int_vec  l r = arith_op_int_bv integerMinus true  l r
-let mult_int_vec l r = arith_op_int_bv integerMult  true  l (signExtend r : mword 'b)
+val add_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
+val sub_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
+val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
+let add_int_vec   l r = arith_op_int_bv integerAdd   false l r
+let sub_int_vec   l r = arith_op_int_bv integerMinus false l r
+let mult_int_vec  l r = arith_op_int_bv integerMult  false l (zeroExtend r : mword 'b)
 
 val add_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
 val adds_vec_bool : forall 'a. Size 'a => mword 'a -> bool -> mword 'a
