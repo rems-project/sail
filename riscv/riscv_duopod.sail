@@ -37,7 +37,7 @@ overload X = {rX, wX}
 
 val MEMr : forall 'n. (xlen_t, atom('n)) -> bits(8 * 'n) effect {rmem}
 function MEMr (addr, width) =
-  match __RISCV_read(addr, width) { Some(v) => v, None() => zeros(8 * width) }
+  match __RISCV_read(addr, width, false, false, false) { Some(v) => v, None() => zeros(8 * width) }
 
 /* Instruction decode and execute */
 enum iop = {RISCV_ADDI, RISCV_SLTI, RISCV_SLTIU, RISCV_XORI, RISCV_ORI, RISCV_ANDI} /* immediate ops */
