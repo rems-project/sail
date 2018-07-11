@@ -65,6 +65,17 @@ else
     red "Building MIPS_C specification" "fail"
 fi
 
+printf "Booting FreeBSD-MIPS...\n"
+
+bunzip2 freebsd-beri-sim-mdroot-smoketest_bootonly-kernel.bz2
+time $SAILDIR/mips/mips_c --cyclelimit 85000000 --binary 0x100000,freebsd-beri-sim-mdroot-smoketest_bootonly-kernel --binary 0x7f010000,sim.dtb  --image simboot_128m.sailbin > freebsd_out.txt
+if  grep -q 'Done booting' freebsd_out.txt;
+then
+    green "Booting FreeBSD MIPS" "ok"
+else
+    red "Booting FreeBSD MIPS" "fail"
+fi
+
 printf "Building CHERI 256 specification...\n"
 
 if make -C $SAILDIR/cheri cheri ;
