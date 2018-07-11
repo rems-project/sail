@@ -8887,25 +8887,16 @@ val _ = Define `
 
 val _ = Define `
  ((translationException:AccessType -> PTW_Error -> ExceptionType) (a : AccessType) (f : PTW_Error)=
-    (let (e : ExceptionType) =
-     ((case (a, f) of
-       (ReadWrite, PTW_Access) => E_SAMO_Access_Fault
-     | (ReadWrite, _) => E_SAMO_Page_Fault
-     | (Read, PTW_Access) => E_Load_Access_Fault
-     | (Read, _) => E_Load_Page_Fault
-     | (Write, PTW_Access) => E_SAMO_Access_Fault
-     | (Write, _) => E_SAMO_Page_Fault
-     | (Fetch, PTW_Access) => E_Fetch_Access_Fault
-     | (Fetch, _) => E_Fetch_Page_Fault
-     )) in
-   let (_ : unit) =
-     (print_endline
-       ((STRCAT "translationException("
-           ((STRCAT ((accessType_to_str a))
-               ((STRCAT ", "
-                   ((STRCAT ((ptw_error_to_str f))
-                       ((STRCAT ") -> " ((exceptionType_to_str e))))))))))))) in
-   e))`;
+    ((case (a, f) of
+     (ReadWrite, PTW_Access) => E_SAMO_Access_Fault
+   | (ReadWrite, _) => E_SAMO_Page_Fault
+   | (Read, PTW_Access) => E_Load_Access_Fault
+   | (Read, _) => E_Load_Page_Fault
+   | (Write, PTW_Access) => E_SAMO_Access_Fault
+   | (Write, _) => E_SAMO_Page_Fault
+   | (Fetch, PTW_Access) => E_Fetch_Access_Fault
+   | (Fetch, _) => E_Fetch_Page_Fault
+   )))`;
 
 
 val _ = Define `
@@ -9296,21 +9287,7 @@ val _ = Define `
    (phys_mem_read Data ((EXTZ (( 64 : int):ii) pte_addr  :  64 words$word)) (( 8 : int):ii) F F F
      : ( ( 64 words$word)MemoryOpResult) M) (\ (w__0 : ( 64 words$word) MemoryOpResult) . 
    (case w__0 of
-     MemException (_) =>
-      let (_ : unit) =
-        (print_endline
-          ((STRCAT "walk39(vaddr="
-              ((STRCAT ((string_of_bits vaddr))
-                  ((STRCAT " level="
-                      ((STRCAT ((stringFromInteger level))
-                          ((STRCAT " pt_base="
-                              ((STRCAT ((string_of_bits ptb))
-                                  ((STRCAT " pt_ofs="
-                                      ((STRCAT ((string_of_bits pt_ofs))
-                                          ((STRCAT " pte_addr="
-                                              ((STRCAT ((string_of_bits pte_addr))
-                                                  ": invalid pte address"))))))))))))))))))))) in
-      sail2_state_monad$returnS (PTW_Failure PTW_Access)
+     MemException (_) => sail2_state_monad$returnS (PTW_Failure PTW_Access)
    | MemValue (v) =>
       let pte = (Mk_SV39_PTE v) in
       let pbits = ((get_SV39_PTE_BITS pte  :  8 words$word)) in

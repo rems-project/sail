@@ -328,76 +328,40 @@ val _ = Define `
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) ( * ) T))`;
 
 
-(*val add_vec_int       : list bitU -> integer -> list bitU*)
-(*val adds_vec_int      : list bitU -> integer -> list bitU*)
-(*val sub_vec_int       : list bitU -> integer -> list bitU*)
-(*val subs_vec_int      : list bitU -> integer -> list bitU*)
-(*val mult_vec_int      : list bitU -> integer -> list bitU*)
-(*val mults_vec_int     : list bitU -> integer -> list bitU*)
+(*val add_vec_int      : list bitU -> integer -> list bitU*)
+(*val sub_vec_int      : list bitU -> integer -> list bitU*)
+(*val mult_vec_int     : list bitU -> integer -> list bitU*)
 val _ = Define `
- ((add_vec_int0:(bitU)list -> int ->(bitU)list)   l r=  (arith_op_bv_int 
-  (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (+) F l r))`;
-
-val _ = Define `
- ((adds_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_bv_int 
+ ((add_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_bv_int 
   (instance_Sail2_values_Bitvector_list_dict
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) (+) T l r))`;
 
 val _ = Define `
- ((sub_vec_int0:(bitU)list -> int ->(bitU)list)   l r=  (arith_op_bv_int 
-  (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (-) F l r))`;
-
-val _ = Define `
- ((subs_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_bv_int 
+ ((sub_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_bv_int 
   (instance_Sail2_values_Bitvector_list_dict
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) (-) T l r))`;
 
 val _ = Define `
- ((mult_vec_int0:(bitU)list -> int ->(bitU)list)  l r=  (arith_op_double_bl 
-  (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) ( * ) F l (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH l)) r))))`;
-
-val _ = Define `
- ((mults_vec_int0:(bitU)list -> int ->(bitU)list) l r=  (arith_op_double_bl 
+ ((mult_vec_int0:(bitU)list -> int ->(bitU)list) l r=  (arith_op_double_bl 
   (instance_Sail2_values_Bitvector_list_dict
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) ( * ) T l (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH l)) r))))`;
 
 
-(*val add_int_vec       : integer -> list bitU -> list bitU*)
-(*val adds_int_vec      : integer -> list bitU -> list bitU*)
-(*val sub_int_vec       : integer -> list bitU -> list bitU*)
-(*val subs_int_vec      : integer -> list bitU -> list bitU*)
-(*val mult_int_vec      : integer -> list bitU -> list bitU*)
-(*val mults_int_vec     : integer -> list bitU -> list bitU*)
+(*val add_int_vec      : integer -> list bitU -> list bitU*)
+(*val sub_int_vec      : integer -> list bitU -> list bitU*)
+(*val mult_int_vec     : integer -> list bitU -> list bitU*)
 val _ = Define `
- ((add_int_vec0:int ->(bitU)list ->(bitU)list)   l r=  (arith_op_int_bv 
-  (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (+) F l r))`;
-
-val _ = Define `
- ((adds_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_int_bv 
+ ((add_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_int_bv 
   (instance_Sail2_values_Bitvector_list_dict
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) (+) T l r))`;
 
 val _ = Define `
- ((sub_int_vec0:int ->(bitU)list ->(bitU)list)   l r=  (arith_op_int_bv 
-  (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (-) F l r))`;
-
-val _ = Define `
- ((subs_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_int_bv 
+ ((sub_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_int_bv 
   (instance_Sail2_values_Bitvector_list_dict
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) (-) T l r))`;
 
 val _ = Define `
- ((mult_int_vec0:int ->(bitU)list ->(bitU)list)  l r=  (arith_op_double_bl 
-  (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) ( * ) F (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH r)) l)) r))`;
-
-val _ = Define `
- ((mults_int_vec0:int ->(bitU)list ->(bitU)list) l r=  (arith_op_double_bl 
+ ((mult_int_vec0:int ->(bitU)list ->(bitU)list) l r=  (arith_op_double_bl 
   (instance_Sail2_values_Bitvector_list_dict
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) ( * ) T (MAP (\ b. b) (bits_of_int (int_of_num (LENGTH r)) l)) r))`;
 

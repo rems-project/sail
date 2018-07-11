@@ -225,8 +225,17 @@ val _ = Define `
 
 
 val _ = Define `
- ((print_bits:'a Bitvector_class -> string -> 'a -> unit)dict_Sail2_values_Bitvector_a msg bs=  (prerr_endline ( STRCAT msg (string_of_bv 
+ ((print_bits:'a Bitvector_class -> string -> 'a -> unit)dict_Sail2_values_Bitvector_a msg bs=  (print_endline ( STRCAT msg (string_of_bv 
   dict_Sail2_values_Bitvector_a bs))))`;
+
+val _ = Define `
+ ((prerr_bits:'a Bitvector_class -> string -> 'a -> unit)dict_Sail2_values_Bitvector_a msg bs=  (prerr_endline ( STRCAT msg (string_of_bv 
+  dict_Sail2_values_Bitvector_a bs))))`;
+
+
+(*val prerr_string : string -> unit*)
+val _ = Define `
+ ((prerr_string:string -> unit) _=  () )`;
 
 
 (*val get_time_ns : unit -> integer*)

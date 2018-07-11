@@ -170,14 +170,17 @@ val _ = Define `
 
 val _ = Define `
  ((is_zero_subrange:'n words$word -> int -> int -> bool) xs i j=
-    (((and_vec xs ((slice_mask ((int_of_num (words$word_len xs))) j ((i - j))  :  'n words$word))  :  'n words$word)) = ((extzv ((int_of_num (words$word_len xs))) (vec_of_bits [B0]  :  1 words$word)  :  'n words$word))))`;
+    (((and_vec xs
+         ((slice_mask ((int_of_num (words$word_len xs))) j ((((i - j)) + (( 1 : int):ii)))  :  'n words$word))
+        :  'n words$word)) = ((extzv ((int_of_num (words$word_len xs))) (vec_of_bits [B0]  :  1 words$word)  :  'n words$word))))`;
 
 
 (*val is_ones_subrange : forall 'n . Size 'n => mword 'n -> ii -> ii -> bool*)
 
 val _ = Define `
  ((is_ones_subrange:'n words$word -> int -> int -> bool) xs i j=
-    (let (m : 'n bits) = ((slice_mask ((int_of_num (words$word_len xs))) j ((j - i))  :  'n words$word)) in
+    (let (m : 'n bits) =
+     ((slice_mask ((int_of_num (words$word_len xs))) j ((((j - i)) + (( 1 : int):ii)))  :  'n words$word)) in
    (((and_vec xs m  :  'n words$word)) = m)))`;
 
 
@@ -209,12 +212,15 @@ val _ = Define `
  ((subrange_subrange_eq:'n words$word -> int -> int -> 'n words$word -> int -> int -> bool) xs i j ys i' j'=
     (let xs =
      ((shiftr
-        ((and_vec xs ((slice_mask ((int_of_num (words$word_len xs))) j ((i - j))  :  'n words$word))  :  'n words$word)) j
+        ((and_vec xs
+            ((slice_mask ((int_of_num (words$word_len xs))) j ((((i - j)) + (( 1 : int):ii)))  :  'n words$word))
+           :  'n words$word)) j
        :  'n words$word)) in
    let ys =
      ((shiftr
-        ((and_vec ys ((slice_mask ((int_of_num (words$word_len xs))) j' ((i' - j'))  :  'n words$word))  :  'n words$word))
-        j'
+        ((and_vec ys
+            ((slice_mask ((int_of_num (words$word_len xs))) j' ((((i' - j')) + (( 1 : int):ii)))  :  'n words$word))
+           :  'n words$word)) j'
        :  'n words$word)) in
    (xs = ys)))`;
 
@@ -225,16 +231,18 @@ val _ = Define `
  ((subrange_subrange_concat:int -> 'n words$word -> int -> int -> 'm words$word -> int -> int -> 's words$word) (s__tv : int) xs i j ys i' j'=
     (let xs =
      ((shiftr
-        ((and_vec xs ((slice_mask ((int_of_num (words$word_len xs))) j ((i - j))  :  'n words$word))  :  'n words$word)) j
+        ((and_vec xs
+            ((slice_mask ((int_of_num (words$word_len xs))) j ((((i - j)) + (( 1 : int):ii)))  :  'n words$word))
+           :  'n words$word)) j
        :  'n words$word)) in
    let ys =
      ((shiftr
-        ((and_vec ys ((slice_mask ((int_of_num (words$word_len ys))) j' ((i' - j'))  :  'm words$word))  :  'm words$word))
-        j'
+        ((and_vec ys
+            ((slice_mask ((int_of_num (words$word_len ys))) j' ((((i' - j')) + (( 1 : int):ii)))  :  'm words$word))
+           :  'm words$word)) j'
        :  'm words$word)) in
    (or_vec
-      ((sub_vec_int ((shiftl ((extzv s__tv xs  :  's words$word)) i'  :  's words$word))
-          ((j' - (( 1 : int):ii)))
+      ((shiftl ((extzv s__tv xs  :  's words$word)) ((((i' - j')) + (( 1 : int):ii)))
          :  's words$word)) ((extzv s__tv ys  :  's words$word))
      :  's words$word)))`;
 
@@ -245,7 +253,9 @@ val _ = Define `
  ((place_subrange:int -> 'n words$word -> int -> int -> int -> 'm words$word) (m__tv : int) xs i j shift=
     (let xs =
      ((shiftr
-        ((and_vec xs ((slice_mask ((int_of_num (words$word_len xs))) j ((i - j))  :  'n words$word))  :  'n words$word)) j
+        ((and_vec xs
+            ((slice_mask ((int_of_num (words$word_len xs))) j ((((i - j)) + (( 1 : int):ii)))  :  'n words$word))
+           :  'n words$word)) j
        :  'n words$word)) in
    (shiftl ((extzv m__tv xs  :  'm words$word)) shift  :  'm words$word)))`;
 
@@ -296,7 +306,9 @@ val _ = Define `
  ((unsigned_subrange:'n words$word -> int -> int -> int) xs i j=
     (let xs =
      ((shiftr
-        ((and_vec xs ((slice_mask ((int_of_num (words$word_len xs))) j ((i - j))  :  'n words$word))  :  'n words$word)) i
+        ((and_vec xs
+            ((slice_mask ((int_of_num (words$word_len xs))) j ((((i - j)) + (( 1 : int):ii)))  :  'n words$word))
+           :  'n words$word)) i
        :  'n words$word)) in
    lem$w2ui xs))`;
 

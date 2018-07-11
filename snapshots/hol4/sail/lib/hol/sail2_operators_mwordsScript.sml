@@ -278,65 +278,35 @@ val _ = Define `
  ((mults_vec:'a words$word -> 'a words$word -> 'b words$word) l r=  (integer_word$i2w ((int_of_mword T (words$sw2sw l :  'b words$word)) * (int_of_mword T (words$sw2sw r :  'b words$word)))))`;
 
 
-(*val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
-(*val adds_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
-(*val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
-(*val subs_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
-(*val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
-(*val mults_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
+(*val add_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val sub_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val mult_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 val _ = Define `
- ((add_vec_int:'a words$word -> int -> 'a words$word)   l r=  (arith_op_bv_int 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (+)   F l r))`;
-
-val _ = Define `
- ((adds_vec_int:'a words$word -> int -> 'a words$word)  l r=  (arith_op_bv_int 
+ ((add_vec_int:'a words$word -> int -> 'a words$word)  l r=  (arith_op_bv_int 
   instance_Sail2_values_Bitvector_Machine_word_mword_dict (+)   T  l r))`;
 
 val _ = Define `
- ((sub_vec_int:'a words$word -> int -> 'a words$word)   l r=  (arith_op_bv_int 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (-) F l r))`;
-
-val _ = Define `
- ((subs_vec_int:'a words$word -> int -> 'a words$word)  l r=  (arith_op_bv_int 
+ ((sub_vec_int:'a words$word -> int -> 'a words$word)  l r=  (arith_op_bv_int 
   instance_Sail2_values_Bitvector_Machine_word_mword_dict (-) T  l r))`;
 
 val _ = Define `
- ((mult_vec_int:'a words$word -> int -> 'b words$word)  l r=  (arith_op_bv_int 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict ( * )  F (words$w2w l :  'b words$word) r))`;
-
-val _ = Define `
- ((mults_vec_int:'a words$word -> int -> 'b words$word) l r=  (arith_op_bv_int 
+ ((mult_vec_int:'a words$word -> int -> 'b words$word) l r=  (arith_op_bv_int 
   instance_Sail2_values_Bitvector_Machine_word_mword_dict ( * )  T  (words$sw2sw l :  'b words$word) r))`;
 
 
-(*val add_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
-(*val adds_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
-(*val sub_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
-(*val subs_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
-(*val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
-(*val mults_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
+(*val add_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val sub_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val mult_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 val _ = Define `
- ((add_int_vec:int -> 'a words$word -> 'a words$word)   l r=  (arith_op_int_bv 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (+)   F l r))`;
-
-val _ = Define `
- ((adds_int_vec:int -> 'a words$word -> 'a words$word)  l r=  (arith_op_int_bv 
+ ((add_int_vec:int -> 'a words$word -> 'a words$word)  l r=  (arith_op_int_bv 
   instance_Sail2_values_Bitvector_Machine_word_mword_dict (+)   T  l r))`;
 
 val _ = Define `
- ((sub_int_vec:int -> 'a words$word -> 'a words$word)   l r=  (arith_op_int_bv 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (-) F l r))`;
-
-val _ = Define `
- ((subs_int_vec:int -> 'a words$word -> 'a words$word)  l r=  (arith_op_int_bv 
+ ((sub_int_vec:int -> 'a words$word -> 'a words$word)  l r=  (arith_op_int_bv 
   instance_Sail2_values_Bitvector_Machine_word_mword_dict (-) T  l r))`;
 
 val _ = Define `
- ((mult_int_vec:int -> 'a words$word -> 'b words$word)  l r=  (arith_op_int_bv 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict ( * )  F l (words$w2w r :  'b words$word)))`;
-
-val _ = Define `
- ((mults_int_vec:int -> 'a words$word -> 'b words$word) l r=  (arith_op_int_bv 
+ ((mult_int_vec:int -> 'a words$word -> 'b words$word) l r=  (arith_op_int_bv 
   instance_Sail2_values_Bitvector_Machine_word_mword_dict ( * )  T  l (words$sw2sw r :  'b words$word)))`;
 
 
