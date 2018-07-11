@@ -283,36 +283,36 @@ definition mults_vec  :: "('a::len)Word.word \<Rightarrow>('a::len)Word.word \<R
      " mults_vec l r = ( Word.word_of_int ((int_of_mword True (Word.scast l :: ( 'b::len)Word.word)) * (int_of_mword True (Word.scast r :: ( 'b::len)Word.word))))"
 
 
-(*val add_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
-(*val sub_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
-(*val mult_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
+(*val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
+(*val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 definition add_vec_int  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('a::len)Word.word "  where 
-     " add_vec_int  l r = ( arith_op_bv_int 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op+)   True  l r )"
+     " add_vec_int   l r = ( arith_op_bv_int 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op+)   False l r )"
 
 definition sub_vec_int  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('a::len)Word.word "  where 
-     " sub_vec_int  l r = ( arith_op_bv_int 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op-) True  l r )"
+     " sub_vec_int   l r = ( arith_op_bv_int 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op-) False l r )"
 
 definition mult_vec_int  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('b::len)Word.word "  where 
-     " mult_vec_int l r = ( arith_op_bv_int 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op*)  True  (Word.scast l :: ( 'b::len)Word.word) r )"
+     " mult_vec_int  l r = ( arith_op_bv_int 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op*)  False (Word.ucast l :: ( 'b::len)Word.word) r )"
 
 
-(*val add_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
-(*val sub_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
-(*val mult_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
+(*val add_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val sub_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a*)
+(*val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 definition add_int_vec  :: " int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word "  where 
-     " add_int_vec  l r = ( arith_op_int_bv 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op+)   True  l r )"
+     " add_int_vec   l r = ( arith_op_int_bv 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op+)   False l r )"
 
 definition sub_int_vec  :: " int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word "  where 
-     " sub_int_vec  l r = ( arith_op_int_bv 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op-) True  l r )"
+     " sub_int_vec   l r = ( arith_op_int_bv 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op-) False l r )"
 
 definition mult_int_vec  :: " int \<Rightarrow>('a::len)Word.word \<Rightarrow>('b::len)Word.word "  where 
-     " mult_int_vec l r = ( arith_op_int_bv 
-  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op*)  True  l (Word.scast r :: ( 'b::len)Word.word))"
+     " mult_int_vec  l r = ( arith_op_int_bv 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict (op*)  False l (Word.ucast r :: ( 'b::len)Word.word))"
 
 
 (*val add_vec_bool  : forall 'a. Size 'a => mword 'a -> bool -> mword 'a*)

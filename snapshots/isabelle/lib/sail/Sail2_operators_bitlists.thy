@@ -333,42 +333,42 @@ definition mults_vec  :: "(bitU)list \<Rightarrow>(bitU)list \<Rightarrow>(bitU)
      instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op*) True )"
 
 
-(*val add_vec_int      : list bitU -> integer -> list bitU*)
-(*val sub_vec_int      : list bitU -> integer -> list bitU*)
-(*val mult_vec_int     : list bitU -> integer -> list bitU*)
+(*val add_vec_int       : list bitU -> integer -> list bitU*)
+(*val sub_vec_int       : list bitU -> integer -> list bitU*)
+(*val mult_vec_int      : list bitU -> integer -> list bitU*)
 definition add_vec_int  :: "(bitU)list \<Rightarrow> int \<Rightarrow>(bitU)list "  where 
-     " add_vec_int  l r = ( arith_op_bv_int 
+     " add_vec_int   l r = ( arith_op_bv_int 
   (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op+) True l r )"
+     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op+) False l r )"
 
 definition sub_vec_int  :: "(bitU)list \<Rightarrow> int \<Rightarrow>(bitU)list "  where 
-     " sub_vec_int  l r = ( arith_op_bv_int 
+     " sub_vec_int   l r = ( arith_op_bv_int 
   (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op-) True l r )"
+     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op-) False l r )"
 
 definition mult_vec_int  :: "(bitU)list \<Rightarrow> int \<Rightarrow>(bitU)list "  where 
-     " mult_vec_int l r = ( arith_op_double_bl 
+     " mult_vec_int  l r = ( arith_op_double_bl 
   (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op*) True l (List.map (\<lambda> b. b) (bits_of_int (int (List.length l)) r)))"
+     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op*) False l (List.map (\<lambda> b. b) (bits_of_int (int (List.length l)) r)))"
 
 
-(*val add_int_vec      : integer -> list bitU -> list bitU*)
-(*val sub_int_vec      : integer -> list bitU -> list bitU*)
-(*val mult_int_vec     : integer -> list bitU -> list bitU*)
+(*val add_int_vec       : integer -> list bitU -> list bitU*)
+(*val sub_int_vec       : integer -> list bitU -> list bitU*)
+(*val mult_int_vec      : integer -> list bitU -> list bitU*)
 definition add_int_vec  :: " int \<Rightarrow>(bitU)list \<Rightarrow>(bitU)list "  where 
-     " add_int_vec  l r = ( arith_op_int_bv 
+     " add_int_vec   l r = ( arith_op_int_bv 
   (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op+) True l r )"
+     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op+) False l r )"
 
 definition sub_int_vec  :: " int \<Rightarrow>(bitU)list \<Rightarrow>(bitU)list "  where 
-     " sub_int_vec  l r = ( arith_op_int_bv 
+     " sub_int_vec   l r = ( arith_op_int_bv 
   (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op-) True l r )"
+     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op-) False l r )"
 
 definition mult_int_vec  :: " int \<Rightarrow>(bitU)list \<Rightarrow>(bitU)list "  where 
-     " mult_int_vec l r = ( arith_op_double_bl 
+     " mult_int_vec  l r = ( arith_op_double_bl 
   (instance_Sail2_values_Bitvector_list_dict
-     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op*) True (List.map (\<lambda> b. b) (bits_of_int (int (List.length r)) l)) r )"
+     instance_Sail2_values_BitU_Sail2_values_bitU_dict) (op*) False (List.map (\<lambda> b. b) (bits_of_int (int (List.length r)) l)) r )"
 
 
 (*val add_vec_bit      : list bitU -> bitU -> list bitU*)
