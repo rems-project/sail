@@ -85,15 +85,15 @@ function mem_write_ea (addr, width, aq, rl, con) = {
 }
 
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(unit) = {
+function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(bool) = {
   print("mem[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
-  if   __RISCV_write(addr, width, data)
-  then MemValue(())
-  else MemException(E_SAMO_Access_Fault)
+//  if   
+  MemValue(__RISCV_write(addr, width, data))
+//  else MemException(E_SAMO_Access_Fault)
 }
 
 // dispatches to MMIO regions or physical memory regions depending on physical memory map
-function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(unit) =
+function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(bool) =
   if   within_mmio_writable(addr, width)
   then mmio_write(addr, width, data)
   else if within_phys_mem(addr, width)
@@ -102,12 +102,12 @@ function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)
 
 /* Atomic accesses can be done to MMIO regions, e.g. in kernel access to device registers. */
 
-val MEMval                            : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv, rreg, wreg}
-val MEMval_release                    : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv, rreg, wreg}
-val MEMval_strong_release             : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv, rreg, wreg}
-val MEMval_conditional                : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv, rreg, wreg}
-val MEMval_conditional_release        : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv, rreg, wreg}
-val MEMval_conditional_strong_release : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wmv, rreg, wreg}
+val MEMval                            : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {wmv, rreg, wreg}
+val MEMval_release                    : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {wmv, rreg, wreg}
+val MEMval_strong_release             : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {wmv, rreg, wreg}
+val MEMval_conditional                : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {wmv, rreg, wreg}
+val MEMval_conditional_release        : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {wmv, rreg, wreg}
+val MEMval_conditional_strong_release : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {wmv, rreg, wreg}
 
 function MEMval                            (addr, width, data) = checked_mem_write(addr, width, data)
 function MEMval_release                    (addr, width, data) = checked_mem_write(addr, width, data)
@@ -117,7 +117,7 @@ function MEMval_conditional_release        (addr, width, data) = checked_mem_wri
 function MEMval_conditional_strong_release (addr, width, data) = checked_mem_write(addr, width, data)
 
 /* NOTE: The wreg effect is due to MMIO, the rreg is due to checking mtime. */
-val mem_write_value : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(unit) effect {wmv, rreg, wreg, escape}
+val mem_write_value : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(bool) effect {wmv, rreg, wreg, escape}
 
 function mem_write_value (addr, width, value, aq, rl, con) = {
   if (rl | con) & (~ (is_aligned_addr(addr, width)))

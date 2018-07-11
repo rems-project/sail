@@ -348,14 +348,15 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
           MemException(e) => { handle_mem_exception(addr, e); false },
           MemValue(_) => {
             let rs2_val = X(rs2) in
-            let res : MemoryOpResult(unit) = match width {
+            let res : MemoryOpResult(bool) = match width {
               BYTE   => mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false),
               HALF   => mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false),
               WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, false),
               DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, false)
             } in
             match (res) {
-              MemValue(_)     => true,
+              MemValue(true)     => true,
+              MemValue(false)    => internal_error("store got false from mem_write_value"),
               MemException(e) => { handle_mem_exception(addr, e); false }
             }
           }
@@ -630,7 +631,8 @@ union clause ast = FENCEI : unit
 
 mapping clause encdec = FENCEI() <-> 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111
 
-function clause execute FENCEI() = { MEM_fence_i(); true }
+/* fence.i is a nop for the memory model */
+function clause execute FENCEI() = { /* MEM_fence_i(); */ true }
 
 
 mapping clause assembly = FENCEI() <-> "fence.i"
@@ -846,13 +848,14 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
             MemException(e)  => { handle_mem_exception(addr, e); false },
             MemValue(_) => {
               rs2_val = X(rs2);
-              let res : MemoryOpResult(unit) = match width {
+              let res : MemoryOpResult(bool) = match width {
                 WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true),
                 DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, true),
                 _      => internal_error("STORECON expected word or double")
               };
               match (res) {
-                MemValue(_)     => { X(rd) = EXTZ(0b0); cancel_reservation(); true },
+                MemValue(true)     => { X(rd) = EXTZ(0b0); cancel_reservation(); true },
+                MemValue(false)    => { X(rd) = EXTZ(0b1); cancel_reservation(); true },
                 MemException(e) => { handle_mem_exception(addr, e); false }
               }
             }
@@ -921,13 +924,14 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
                   AMOMAXU => vector64(max(unsigned(rs2_val), unsigned(loaded)))
                 };
 
-              let wval : MemoryOpResult(unit) = match width {
+              let wval : MemoryOpResult(bool) = match width {
                 WORD   => mem_write_value(addr, 4, result[31..0], aq & rl, rl, true),
                 DOUBLE => mem_write_value(addr, 8, result,        aq & rl, rl, true),
                 _      => internal_error("AMO expected WORD or DOUBLE")
               };
               match (wval) {
-                MemValue(_) => { X(rd) = loaded; true },
+                MemValue(true) => { X(rd) = loaded; true },
+                MemValue(false) => { internal_error("AMO got false from mem_write_value") },
                 MemException(e) => { handle_mem_exception(addr, e); false }
               }
             }

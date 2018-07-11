@@ -2,7 +2,7 @@ $include <regfp.sail>
 
 /* in reverse order because inc vectors don't seem to work (bug) */
 let GPRstr : vector(32, dec, string) = [ "x31", "x30", "x29", "x28", "x27", "x26", "x25", "x24", "x23", "x22", "x21",
-  "x20", "x19", "x18", "x17", "x16", "x15", "x14", "x13", "x12", "x21",
+  "x20", "x19", "x18", "x17", "x16", "x15", "x14", "x13", "x12", "x11",
   "x10", "x9", "x8", "x7", "x6", "x5", "x4", "x3", "x2", "x1", "x0"
   ]
 
@@ -133,7 +133,7 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
                };
       },
      FENCEI() => {
-              ik = IK_barrier (Barrier_RISCV_i);
+              ik = IK_simple (); // for RMEM, should morally be Barrier_RISCV_i
      },
      LOADRES(aq, rl, rs1, width, rd) => {
             if (rs1 == 0) then () else iR = RFull(GPRstr[rs1]) :: iR;

@@ -457,7 +457,7 @@ let write_ram' (data_size, addr, data) =
   end
 
 let write_ram (addr_size, data_size, hex_ram, addr, data) =
-  write_ram' (data_size, uint addr, data)
+  write_ram' (data_size, uint addr, data); true
 
 let wram addr byte =
   let bytes = Bytes.make 1 (char_of_int byte) in

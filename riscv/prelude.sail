@@ -355,12 +355,11 @@ overload min = {min_nat, min_int}
 overload max = {max_nat, max_int}
 
 val __WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
+  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> bool effect {wmv}
 
 val __RISCV_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> bool effect {wmv}
 function __RISCV_write (addr, width, data) = {
-  __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data);
-  true
+  __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
 }
 
 val __TraceMemoryWrite : forall 'n 'm.

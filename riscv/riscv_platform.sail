@@ -118,19 +118,19 @@ function clint_dispatch() -> unit = {
 }
 
 /* The rreg effect is due to checking mtime. */
-val clint_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {rreg,wreg}
+val clint_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {rreg,wreg}
 function clint_store(addr, width, data) = {
   let addr = addr - plat_clint_base ();
   if addr == MSIP_BASE & ('n == 8 | 'n == 4) then {
     print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (mip.MSI <- " ^ BitStr(data[0]) ^ ")");
     mip->MSI() = data[0] == 0b1;
     clint_dispatch();
-    MemValue(())
+    MemValue(true)
   } else if addr == MTIMECMP_BASE & 'n == 8 then {
     print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (mtimecmp)");
     mtimecmp = zero_extend(data, 64); /* FIXME: Redundant zero_extend currently required by Lem backend */
     clint_dispatch();
-    MemValue(())
+    MemValue(true)
   } else {
     print("clint[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data) ^ " (<unmapped>)");
     MemException(E_SAMO_Access_Fault)
@@ -177,7 +177,7 @@ function htif_load(addr, width) = {
 }
 
 /* The wreg effect is an artifact of using 'register' to implement device state. */
-val htif_store: forall 'n, 0 < 'n <= 8. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(unit) effect {wreg}
+val htif_store: forall 'n, 0 < 'n <= 8. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(bool) effect {wreg}
 function htif_store(addr, width, data) = {
   print("htif[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
   /* Store the written value so that we can ack it later. */
@@ -205,7 +205,7 @@ function htif_store(addr, width, data) = {
     },
     d => print("htif-???? cmd: " ^ BitStr(data))
   };
-  MemValue(())
+  MemValue(true)
 }
 
 val htif_tick : unit -> unit effect {rreg, wreg}
@@ -229,7 +229,7 @@ function mmio_read(addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResu
   then htif_load(addr, width)
   else MemException(E_Load_Access_Fault)
 
-function mmio_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(unit) =
+function mmio_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(bool) =
   if   within_clint(addr, width)
   then clint_store(addr, width, data)
   else if within_htif_writable(addr, width) & 'n <= 8
