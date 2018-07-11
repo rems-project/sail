@@ -561,6 +561,7 @@ let primops =
       ("write_ram", value_write_ram);
       ("trace_memory_read", fun _ -> V_unit);
       ("trace_memory_write", fun _ -> V_unit);
+      ("get_time_ns", fun _ -> V_int (Sail_lib.get_time_ns()));
       ("load_raw", value_load_raw);
       ("to_real", value_to_real);
       ("eq_real", value_eq_real);
