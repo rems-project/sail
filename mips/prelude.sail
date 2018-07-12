@@ -125,10 +125,10 @@ overload min = {min_atom, min_nat, min_int}
 overload max = {max_atom, max_nat, max_int}
 
 val __WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
+  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> bool effect {wmv}
 
 val __MIPS_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-function __MIPS_write (addr, width, data) = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
+function __MIPS_write (addr, width, data) = let _ = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data) in ()
 
 val __ReadRAM = "read_ram" : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}

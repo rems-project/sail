@@ -1,6 +1,6 @@
 
 val ___WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmem}
+  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> bool effect {wmem}
 
 val __InitRAM : forall 'm. (atom('m), int, bits('m), bits(8)) -> unit
 
@@ -25,7 +25,7 @@ val __WriteRAM : forall 'n 'm.
 
 function __WriteRAM(addr_length, bytes, hex_ram, addr, data) =
 {
-  ___WriteRAM(addr_length, bytes, hex_ram, addr, data)
+  let _ = ___WriteRAM(addr_length, bytes, hex_ram, addr, data) in ()
 }
 
 function __TraceMemoryWrite(bytes, addr, data) = ()
