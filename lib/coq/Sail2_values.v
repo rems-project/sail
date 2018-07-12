@@ -1330,7 +1330,7 @@ Fixpoint foreach_Z' {Vars} from to step n (vars : Vars) (body : Z -> Vars -> Var
 Definition foreach_Z {Vars} from to step vars body :=
   foreach_Z' (Vars := Vars) from to step (S (Z.abs_nat (from - to))) vars body.
 
-Fixpoint foreach_Z_up' {Vars} from to step off n `{ArithFact (from <= to)} `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> Vars) {struct n} : Vars :=
+Fixpoint foreach_Z_up' {Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> Vars) {struct n} : Vars :=
   if sumbool_of_bool (from + off <=? to) then
     match n with
     | O => vars
@@ -1338,7 +1338,7 @@ Fixpoint foreach_Z_up' {Vars} from to step off n `{ArithFact (from <= to)} `{Ari
     end
   else vars.
 
-Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (to <= from)} `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> Vars) {struct n} : Vars :=
+Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> Vars) {struct n} : Vars :=
   if sumbool_of_bool (to <=? from + off) then
     match n with
     | O => vars
@@ -1346,9 +1346,9 @@ Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (to <= from)} `{A
     end
   else vars.
 
-Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (from <= to)} `{ArithFact (0 < step)} :=
+Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (0 < step)} :=
     foreach_Z_up' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
-Definition foreach_Z_down {Vars} from to step vars body `{ArithFact (to <= from)} `{ArithFact (0 < step)} :=
+Definition foreach_Z_down {Vars} from to step vars body `{ArithFact (0 < step)} :=
     foreach_Z_down' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*val while : forall vars. vars -> (vars -> bool) -> (vars -> vars) -> vars
