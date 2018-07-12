@@ -84,6 +84,14 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     /* write rd before anything else to prevent unintended strength */
     X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
     let newPC : xlenbits = X(rs1) + EXTS(imm);
+/*  RMEM FIXME: For the sequential model, the above definition doesn't work directly
+    if rs1 = rd.  We would effectively have to keep a regfile for reads and another for
+    writes, and swap on instruction fetch.  This could perhaps be optimized in
+    some manner, but for now, we just reorder the previous two lines to improve simulator
+    performance in the sequential model, as below:
+    let newPC : xlenbits = X(rs1) + EXTS(imm);
+    X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR
+*/
     nextPC = newPC[63..1] @ 0b0;
     true
 }
