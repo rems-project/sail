@@ -991,10 +991,21 @@ let doc_exp_lem, doc_let_lem =
               | _, _ -> arg_pp
             in
             let epp = hang 2 (flow (break 1) (call :: List.map2 doc_arg args arg_typs)) in
-            (* Unpack existential result *)
-            let inst = instantiation_of full_exp in
-            let inst = KBindings.fold (fun k u m -> KBindings.add (orig_kid k) u m) inst KBindings.empty in
-            let ret_typ_inst = subst_unifiers inst ret_typ in
+            (* Decide whether to unpack an existential result, pack one, or cast.
+               To do this we compare the expected type stored in the checked expression
+               with the inferred type. *)
+            let ret_typ_inst =
+              match infer_exp (env_of full_exp) (strip_exp full_exp) with
+              | typed_exp -> typ_of typed_exp
+              (* Not all function applications can be inferred, so try falling back to the
+                 type inferred when we know the target type.
+                 TODO: there are probably some edge cases where this won't pick up a need
+                 to cast. *)
+              | exception _ ->
+                 let inst = instantiation_of full_exp in
+                 let inst = KBindings.fold (fun k u m -> KBindings.add (orig_kid k) u m) inst KBindings.empty in
+                 subst_unifiers inst ret_typ
+            in
             let unpack,build_ex,autocast =
               let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
               let ann_typ = expand_range_type ann_typ in
