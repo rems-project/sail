@@ -879,7 +879,7 @@ let doc_exp_lem, doc_let_lem =
                      when not (IdSet.mem (mk_id "varstup") used_vars_body)->
                       separate space [string "fun"; doc_id loopvar; string "_"; string "varstup"; bigarrow]
                       ^^ break 1 ^^
-                      separate space [string "let"; expY vartuple; string ":= varstup in"]
+                      separate space [string "let"; squote ^^ expY vartuple; string ":= varstup in"]
                    | E_aux (E_lit (L_aux (L_unit, _)), _)
                      when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
                       separate space [string "fun"; doc_id loopvar; string "_"; string "unit_var"; bigarrow]
@@ -918,7 +918,7 @@ let doc_exp_lem, doc_let_lem =
                    | E_aux (E_tuple _, _)
                      when not (IdSet.mem (mk_id "varstup") used_vars_body)->
                       separate space [string "fun varstup"; bigarrow] ^^ break 1 ^^
-                      separate space [string "let"; expY varstuple; string ":= varstup in"]
+                      separate space [string "let"; squote ^^ expY varstuple; string ":= varstup in"]
                    | E_aux (E_lit (L_aux (L_unit, _)), _)
                      when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
                       separate space [string "fun unit_var"; bigarrow]
