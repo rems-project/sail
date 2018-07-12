@@ -90,7 +90,7 @@ function clause execute (RISCV_JALR(imm, rs1, rd)) = {
     some manner, but for now, we just reorder the previous two lines to improve simulator
     performance in the sequential model, as below:
     let newPC : xlenbits = X(rs1) + EXTS(imm);
-    X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR
+    X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
 */
     nextPC = newPC[63..1] @ 0b0;
     true
