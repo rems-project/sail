@@ -928,12 +928,17 @@ Ltac unbool_comparisons :=
   | H:context [Z.ltb _ _ = false] |- _ => rewrite Z.ltb_ge in H
   | H:context [Z.eqb _ _ = false] |- _ => rewrite Z.eqb_neq in H
   | H:context [orb _ _ = true] |- _ => rewrite Bool.orb_true_iff in H
-  | H:context [andb _ _ = true] |- _ => apply andb_prop in H
+  | H:context [orb _ _ = false] |- _ => rewrite Bool.orb_false_iff in H
+  | H:context [andb _ _ = true] |- _ => rewrite Bool.andb_true_iff in H
+  | H:context [andb _ _ = false] |- _ => rewrite Bool.andb_false_iff in H
+  | H:context [negb _ = true] |- _ => rewrite Bool.negb_true_iff in H
+  | H:context [negb _ = false] |- _ => rewrite Bool.negb_false_iff in H
   | H:context [generic_eq _ _ = true] |- _ => apply generic_eq_true in H
   | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
   | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H
   | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
   end.
+
 (* Split up dependent pairs to get at proofs of properties *)
 Ltac extract_properties :=
   repeat match goal with H := (projT1 ?X) |- _ =>
@@ -986,6 +991,9 @@ Ltac solve_arithfact :=
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
 
 Hint Unfold length_mword : sail.
+
+Definition neq_atom (x : Z) (y : Z) : bool := negb (Z.eqb x y).
+Hint Unfold neq_atom : sail.
 
 Lemma ReasonableSize_witness (a : Z) (w : mword a) : ReasonableSize a.
 constructor.

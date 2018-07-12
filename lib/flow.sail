@@ -9,7 +9,7 @@ val or_bool = {coq: "orb", _: "or_bool"} : (bool, bool) -> bool
 
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val neq_atom = {lem: "neq", coq: "neq_atom"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 function neq_atom (x, y) = not_bool(eq_atom(x, y))
 

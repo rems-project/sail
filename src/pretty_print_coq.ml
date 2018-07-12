@@ -152,10 +152,12 @@ let rec fix_id remove_tick name = match name with
        ("v" ^ name ^ "'")
      else name
 
-let doc_id (Id_aux(i,_)) =
+let string_id (Id_aux(i,_)) =
   match i with
-  | Id i -> string (fix_id false i)
-  | DeIid x -> string (Util.zencode_string ("op " ^ x))
+  | Id i -> fix_id false i
+  | DeIid x -> Util.zencode_string ("op " ^ x)
+
+let doc_id id = string (string_id id)
 
 let doc_id_type (Id_aux(i,_)) =
   match i with
@@ -729,7 +731,7 @@ let similar_nexps env n1 n2 =
     | _ -> false
   in if same_nexp_shape (nexp_const_eval n1) (nexp_const_eval n2) then true else false
 
-let constraint_fns = ["Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"]
+let constraint_fns = ["Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"; "neq_atom"]
 
 let condition_produces_constraint exp =
   (* Cheat a little - this isn't quite the right environment for subexpressions
@@ -739,9 +741,10 @@ let condition_produces_constraint exp =
     { (Rewriter.pure_exp_alg false (||)) with
       Rewriter.e_app = fun (f,bs) ->
         List.exists (fun x -> x) bs ||
-        (Env.is_extern f env "coq" &&
-           let f' = Env.get_extern f env "coq" in
-           List.exists (fun id -> String.compare f' id == 0) constraint_fns)
+        (let name = if Env.is_extern f env "coq"
+          then Env.get_extern f env "coq"
+          else string_id f in
+         List.exists (fun id -> String.compare name id == 0) constraint_fns)
     } exp
 
 let prefix_recordtype = true
