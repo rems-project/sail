@@ -116,9 +116,9 @@ val max_nat = {lem: "max", coq: "Z.max", _: "max_int"} : (nat, nat) -> nat
 
 val max_int = {lem: "max", coq: "Z.max", _: "max_int"} : (int, int) -> int
 
-val min_atom = {ocaml: "min_int", lem: "min", coq: "min_atom"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
+val min_atom = {ocaml: "min_int", lem: "min", coq: "min_atom", c:"min_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
-val max_atom = {ocaml: "max_int", lem: "max", coq: "max_atom"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
+val max_atom = {ocaml: "max_int", lem: "max", coq: "max_atom", c:"max_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
 
 overload min = {min_atom, min_nat, min_int}
 
