@@ -1179,7 +1179,8 @@ let doc_exp_lem, doc_let_lem =
        if effectful (effect_of e) then
          let try_catch = if ctxt.early_ret then "try_catchR" else "try_catch" in
          let epp =
-           group ((separate space [string try_catch; expY e; string "(function "]) ^/^
+           (* TODO capture avoidance for __catch_val *)
+           group ((separate space [string try_catch; expY e; string "(fun __catch_val => match __catch_val with "]) ^/^
                     (separate_map (break 1) (doc_case ctxt exc_typ) pexps) ^/^
                       (string "end)")) in
          if aexp_needed then parens (align epp) else align epp
