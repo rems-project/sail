@@ -711,12 +711,11 @@ let rec nexp_const_eval (Nexp_aux (n,l) as nexp) =
 
 (* Decide whether two nexps used in a vector size are similar; if not
    a cast will be inserted *)
-let similar_nexps n1 n2 =
+let similar_nexps env n1 n2 =
   let rec same_nexp_shape (Nexp_aux (n1,_)) (Nexp_aux (n2,_)) =
     match n1, n2 with
-    | Nexp_id _, Nexp_id _
-    | Nexp_var _, Nexp_var _
-      -> true
+    | Nexp_id _, Nexp_id _ -> true
+    | Nexp_var k1, Nexp_var k2 -> prove env (nc_eq (nvar k1) (nvar k2))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
     | Nexp_app (f1,args1), Nexp_app (f2,args2) ->
        Id.compare f1 f2 == 0 && List.for_all2 same_nexp_shape args1 args2
@@ -995,7 +994,7 @@ let doc_exp_lem, doc_let_lem =
                To do this we compare the expected type stored in the checked expression
                with the inferred type. *)
             let ret_typ_inst =
-              match infer_exp (env_of full_exp) (strip_exp full_exp) with
+              match infer_exp env (strip_exp full_exp) with
               | typed_exp -> typ_of typed_exp
               (* Not all function applications can be inferred, so try falling back to the
                  type inferred when we know the target type.
@@ -1026,7 +1025,7 @@ let doc_exp_lem, doc_let_lem =
                 match in_typ, out_typ with
                 | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
                   Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
-                   not (similar_nexps n1 n2)
+                   not (similar_nexps env n1 n2)
                 | _ -> false
               in unpack,build_ex,autocast
             in
