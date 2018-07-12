@@ -27,11 +27,11 @@ rigorous models for the allowed architectural envelope of concurrent
 code, for x86, IBM Power, \riscv, and ARM, that have been reasonably
 well validated by experimental testing and by discussion with the
 vendors and
-others~\cite{x86popl,tphols09,cacm,CAV2010,Alglave:2011:LRT:1987389.1987395,pldi105,pldi2012,micro2015,FGP16,mixed17}.
+others\anonymiseomit{~\cite{x86popl,tphols09,cacm,CAV2010,Alglave:2011:LRT:1987389.1987395,pldi105,pldi2012,micro2015,FGP16,mixed17}}.
 In the course of this, we have identified a number of subtle issues
 relating to the interface between the intra-instruction semantics and
 the inter-instruction concurrency
-semantics~\cite{pldi105,pldi2012,micro2015,FGP16,mixed17}. For
+semantics\anonymiseomit{~\cite{pldi105,pldi2012,micro2015,FGP16,mixed17}}. For
 example, the concurrency models, rather than treating each instruction
 execution as an atomic unit, require exposed register and memory
 events, knowledge of the potential register and memory footprints of
@@ -77,7 +77,7 @@ and generate:
 \item An internal representation of the fully type-annotated
   definition (a deep embedding of the definition) in a form that can
   be executed by the Sail interpreter.  These are both expressed in
-  Lem~\cite{Lem-icfp2014,Lemcode}, a language of type, function, and
+  Lem\anonymiseomit{~\cite{Lem-icfp2014,Lemcode}}, a language of type, function, and
   relation definitions that can be compiled into OCaml and various
   theorem provers. The Sail interpreter can also be used to analyse
   instruction definitions (or partially executed instructions) to
@@ -118,7 +118,7 @@ specification document~\cite{armarmv8,FGP16}, principally by \anonymise{Flur}.
 
 The Power model is based on an automatic extraction of pseudocode and
 decoding data from an XML export of the Framemaker document source of
-the IBM Power manual~\cite{Power2.06,micro2015}, with manual patching
+the IBM Power manual\anonymiseomit{~\cite{Power2.06,micro2015}}, with manual patching
 as necessary, principally by \anonymise{Kerneis and Gray}.
 
 The ARMv8 (ASL) model is based on an automatic translation of ARM's
