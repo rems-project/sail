@@ -135,6 +135,8 @@ let rec fix_id remove_tick name = match name with
   | "GT"
   | "EQ"
   | "Z"
+  | "O"
+  | "S"
   | "mod"
   | "M"
     -> name ^ "'"
