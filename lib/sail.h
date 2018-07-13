@@ -273,6 +273,9 @@ void shift_bits_left(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 void shift_bits_right(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 void shift_bits_right_arith(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 
+void shiftl(sail_bits *rop, const sail_bits op1, const sail_int op2);
+void shiftr(sail_bits *rop, const sail_bits op1, const sail_int op2);
+
 void reverse_endianness(sail_bits*, sail_bits);
 
 /* ***** Sail reals ***** */

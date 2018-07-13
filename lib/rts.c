@@ -208,7 +208,7 @@ void kill_mem()
 
 // ***** Memory builtins *****
 
-unit write_ram(const mpz_t addr_size,     // Either 32 or 64
+bool write_ram(const mpz_t addr_size,     // Either 32 or 64
 	       const mpz_t data_size_mpz, // Number of bytes
 	       const sail_bits  hex_ram,       // Currently unused
 	       const sail_bits  addr_bv,
@@ -231,7 +231,7 @@ unit write_ram(const mpz_t addr_size,     // Either 32 or 64
   }
 
   mpz_clear(buf);
-  return UNIT;
+  return true;
 }
 
 void read_ram(sail_bits *data,

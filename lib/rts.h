@@ -53,7 +53,7 @@ uint64_t read_mem(uint64_t);
 // These memory builtins are intended to match the semantics for the
 // __ReadRAM and __WriteRAM functions in ASL.
 
-unit write_ram(const mpz_t addr_size,     // Either 32 or 64
+bool write_ram(const mpz_t addr_size,     // Either 32 or 64
 	       const mpz_t data_size_mpz, // Number of bytes
 	       const sail_bits hex_ram,       // Currently unused
 	       const sail_bits addr_bv,

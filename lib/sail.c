@@ -781,6 +781,19 @@ void shift_bits_right_arith(sail_bits *rop, const sail_bits op1, const sail_bits
   }
 }
 
+void shiftl(sail_bits *rop, const sail_bits op1, const sail_int op2)
+{
+  rop->len = op1.len;
+  mpz_mul_2exp(*rop->bits, *op1.bits, mpz_get_ui(op2));
+  normalize_sail_bits(rop);
+}
+
+void shiftr(sail_bits *rop, const sail_bits op1, const sail_int op2)
+{
+  rop->len = op1.len;
+  mpz_tdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(op2));
+}
+
 void reverse_endianness(sail_bits *rop, const sail_bits op)
 {
   rop->len = op.len;

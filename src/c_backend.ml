@@ -2655,7 +2655,8 @@ let instrument_tracing ctx =
   let module StringSet = Set.Make(String) in
   let traceable = StringSet.of_list ["mach_bits"; "sail_string"; "sail_bits"; "sail_int"; "unit"; "bool"] in
   let rec instrument = function
-    | (I_aux (I_funcall (clexp, _, id, args, ctyp), _) as instr) :: instrs ->
+    | (I_aux (I_funcall (clexp, _, id, args, ctyp), _) as instr) :: instrs when not (Env.is_extern id ctx.tc_env "c") ->
+
        let trace_start =
          iraw (Printf.sprintf "trace_start(\"%s\");" (String.escaped (string_of_id id)))
        in

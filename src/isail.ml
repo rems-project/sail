@@ -127,7 +127,12 @@ let rec run () =
           print_endline ("Result = " ^ Value.string_of_value v);
           current_mode := Normal
        | Step (out, state, _, stack) ->
-          current_mode := Evaluation (eval_frame !interactive_ast frame);
+          begin
+            try
+              current_mode := Evaluation (eval_frame !interactive_ast frame)
+            with
+            | Failure str -> print_endline str; current_mode := Normal
+          end;
           run ()
        | Break frame ->
           print_endline "Breakpoint";
@@ -147,7 +152,12 @@ let rec run_steps n =
           print_endline ("Result = " ^ Value.string_of_value v);
           current_mode := Normal
        | Step (out, state, _, stack) ->
-          current_mode := Evaluation (eval_frame !interactive_ast frame);
+          begin
+            try
+              current_mode := Evaluation (eval_frame !interactive_ast frame)
+            with
+            | Failure str -> print_endline str; current_mode := Normal
+          end;
           run_steps (n - 1)
        | Break frame ->
           print_endline "Breakpoint";
@@ -352,9 +362,14 @@ let handle_input' input =
                print_endline ("Result = " ^ Value.string_of_value v);
                current_mode := Normal
             | Step (out, state, _, stack) ->
-               interactive_state := state;
-               current_mode := Evaluation (eval_frame !interactive_ast frame);
-               print_program ()
+               begin
+                 try
+                   interactive_state := state;
+                   current_mode := Evaluation (eval_frame !interactive_ast frame);
+                   print_program ()
+                 with
+                 | Failure str -> print_endline str; current_mode := Normal
+               end
             | Break frame ->
                print_endline "Breakpoint";
                current_mode := Evaluation frame
