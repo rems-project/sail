@@ -749,6 +749,28 @@ let condition_produces_constraint exp =
          List.exists (fun id -> String.compare name id == 0) constraint_fns)
     } exp
 
+(* For most functions whose return types are non-trivial atoms we return a
+   dependent pair with a proof that the result is the expected integer.  This
+   is redundant for basic arithmetic functions and functions which we unfold
+   in the constraint solver. *)
+let no_Z_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "length_mword"]
+
+let is_no_Z_proof_fn env id =
+  if Env.is_extern id env "coq"
+  then
+    let s = Env.get_extern id env "coq" in
+    List.exists (fun x -> String.compare x s == 0) no_Z_proof_fns
+  else false
+
+let replace_atom_return_type ret_typ =
+  (* TODO: more complex uses of atom *)
+  match ret_typ with
+  | Typ_aux (Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp nexp,_)]),l) ->
+     let kid = mk_kid "_retval" in (* TODO: collision avoidance *)
+     true, Typ_aux (Typ_exist ([kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Generated l)
+  | _ -> false, ret_typ
+
+
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
@@ -1014,6 +1036,9 @@ let doc_exp_lem, doc_let_lem =
               let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
               let ann_typ = expand_range_type ann_typ in
               let ret_typ_inst = expand_range_type (Env.expand_synonyms env ret_typ_inst) in
+              let ret_typ_inst =
+                if is_no_Z_proof_fn env f then ret_typ_inst
+                else snd (replace_atom_return_type ret_typ_inst) in
               let unpack, build_ex, in_typ, out_typ =
                 match ret_typ_inst, ann_typ with
                 | Typ_aux (Typ_exist (_,_,t1),_), Typ_aux (Typ_exist (_,_,t2),_) ->
@@ -1497,17 +1522,23 @@ let demote_as_pattern i (P_aux (_,p_annot) as pat,typ) =
       E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
   else (pat,typ), fun e -> e
 
-(* Ideally we'd remove the duplication between type variables and atom
-   arguments, but for now we just add an equality constraint. *)
+(* Add equality constraints between arguments and nexps, except in the case
+   that they've been merged. *)
 
 let atom_constraint ctxt (pat, typ) =
   let typ = Env.base_typ_of (pat_env_of pat) typ in
   match pat, typ with
   | P_aux (P_id id, _),
       Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                        [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_) ->
-     Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
-                               parens (doc_op equals (doc_id id) (doc_var_lem ctxt kid))))
+                        [Typ_arg_aux (Typ_arg_nexp nexp,_)]),_) ->
+     (match nexp with
+       (* When the kid is mapped to the id, we don't need a constraint *)
+     | Nexp_aux (Nexp_var kid,_)
+         when (try Id.compare (KBindings.find kid ctxt.kid_id_renames) id == 0 with _ -> false) ->
+           None
+     | _ ->
+        Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
+                                  parens (doc_op equals (doc_id id) (doc_nexp ctxt nexp)))))
   | _ -> None
 
 let all_ids pexp =
@@ -1616,6 +1647,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let patspp = separate_map space doc_binder pats in
   let atom_constrs = Util.map_filter (atom_constraint ctxt) pats in
   let atom_constr_pp = separate space atom_constrs in
+  let build_ex, ret_typ = replace_atom_return_type ret_typ in
   let retpp =
     if effectful eff
     then string "M" ^^ space ^^ parens (doc_typ ctxt ret_typ)
@@ -1639,10 +1671,12 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | _ ->
        raise (Reporting_basic.err_unreachable l
                 "guarded pattern expression should have been rewritten before pretty-printing") in
+  let bodypp = doc_fun_body ctxt exp in
+  let bodypp = if build_ex then string "build_ex" ^^ space ^^ parens bodypp else bodypp in
   group (prefix 3 1
     (separate space ([idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp]) ^/^
        separate space [colon; retpp; coloneq])
-    (doc_fun_body ctxt exp ^^ dot)) ^^ implicitargs
+    (bodypp ^^ dot)) ^^ implicitargs
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -1769,6 +1803,7 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
        | _ -> parens (underscore ^^ string " : " ^^ doc_typ empty_ctxt typ)
      in
      let arg_typs_pp = separate space (List.map doc_typ' typs) in
+     let _, ret_ty = replace_atom_return_type ret_ty in
      let ret_typ_pp = doc_typ empty_ctxt ret_ty in
      let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt braces tqs in
      string "forall" ^/^ separate space tyvars_pp ^/^

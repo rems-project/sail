@@ -73,7 +73,13 @@ Definition nn := nat.
 (*val pow : Z -> Z -> Z*)
 Definition pow m n := m ^ n.
 
-Definition pow2 n := pow 2 n.
+Program Definition pow2 n : {z : Z & ArithFact (2 ^ n <= z <= 2 ^ n)} := existT _ (pow 2 n) _.
+Next Obligation.
+constructor.
+unfold pow.
+auto using Z.le_refl.
+Qed.
+
 (*
 Definition inline lt := (<)
 Definition inline gt := (>)
