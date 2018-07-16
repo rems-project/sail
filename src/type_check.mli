@@ -355,6 +355,10 @@ val alpha_equivalent : Env.t -> typ -> typ -> bool
 (** Throws Invalid_argument if the argument is not a E_app expression *)
 val instantiation_of : tannot exp -> uvar KBindings.t
 
+(** Doesn't use the type of the expression when calculating instantiations.
+    May fail if the arguments aren't sufficient to calculate all unifiers. *)
+val instantiation_of_without_type : tannot exp -> uvar KBindings.t
+
 (* Type variable instantiations that inference will extract from constraints *)
 val instantiate_simple_equations : quant_item list -> uvar KBindings.t
 

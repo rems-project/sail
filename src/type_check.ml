@@ -3302,6 +3302,12 @@ and instantiation_of (E_aux (exp_aux, (l, _)) as exp) =
   | E_app (f, xs) -> snd (infer_funapp' l (Env.no_casts env) f (Env.get_val_spec f env) (List.map strip_exp xs) (Some (typ_of exp)))
   | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
+and instantiation_of_without_type (E_aux (exp_aux, (l, _)) as exp) =
+  let env = env_of exp in
+  match exp_aux with
+  | E_app (f, xs) -> snd (infer_funapp' l (Env.no_casts env) f (Env.get_val_spec f env) (List.map strip_exp xs) None)
+  | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
+
 and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let annot_exp exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
   let switch_annot env typ = function
