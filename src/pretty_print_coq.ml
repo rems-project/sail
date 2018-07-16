@@ -753,7 +753,7 @@ let condition_produces_constraint exp =
    dependent pair with a proof that the result is the expected integer.  This
    is redundant for basic arithmetic functions and functions which we unfold
    in the constraint solver. *)
-let no_Z_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "length_mword"]
+let no_Z_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "length_mword"; "length"]
 
 let is_no_Z_proof_fn env id =
   if Env.is_extern id env "coq"
