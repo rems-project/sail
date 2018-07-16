@@ -768,6 +768,9 @@ let replace_atom_return_type ret_typ =
   | Typ_aux (Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp nexp,_)]),l) ->
      let kid = mk_kid "_retval" in (* TODO: collision avoidance *)
      true, Typ_aux (Typ_exist ([kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Generated l)
+  | Typ_aux (Typ_id (Id_aux (Id "nat",_)),l) ->
+     let kid = mk_kid "_retval" in
+     true, Typ_aux (Typ_exist ([kid], nc_gteq (nvar kid) (nconstant Nat_big_num.zero), atom_typ (nvar kid)),Generated l)
   | _ -> false, ret_typ
 
 
@@ -1525,7 +1528,7 @@ let demote_as_pattern i (P_aux (_,p_annot) as pat,typ) =
 (* Add equality constraints between arguments and nexps, except in the case
    that they've been merged. *)
 
-let atom_constraint ctxt (pat, typ) =
+let rec atom_constraint ctxt (pat, typ) =
   let typ = Env.base_typ_of (pat_env_of pat) typ in
   match pat, typ with
   | P_aux (P_id id, _),
@@ -1539,6 +1542,11 @@ let atom_constraint ctxt (pat, typ) =
      | _ ->
         Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
                                   parens (doc_op equals (doc_id id) (doc_nexp ctxt nexp)))))
+  | P_aux (P_id id, _),
+        Typ_aux (Typ_id (Id_aux (Id "nat",_)),_) ->
+     Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
+                                  parens (doc_op (string ">=") (doc_id id) (string "0"))))
+  | P_aux (P_typ (_,p),_), _ -> atom_constraint ctxt (p, typ)
   | _ -> None
 
 let all_ids pexp =
@@ -1609,6 +1617,13 @@ let merge_kids_atoms pats =
   let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
   gone,map
 
+let merge_var_patterns map pats =
+  let map,pats = List.fold_left (fun (map,pats) (pat, typ) ->
+    match pat with
+    | P_aux (P_var (P_aux (P_id id,_), TP_aux (TP_var kid,_)),ann) ->
+       KBindings.add kid id map, (P_aux (P_id id,ann), typ) :: pats
+    | _ -> map, (pat,typ)::pats) (map,[]) pats
+  in map, List.rev pats
 
 let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let (tq,typ) = Env.get_val_spec_orig id (env_of_annot annot) in
@@ -1622,6 +1637,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let pats, bind = untuple_args_pat arg_typ pat in
   let pats, binds = List.split (Util.list_mapi demote_as_pattern pats) in
   let eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
+  let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
   let kids_used = KidSet.diff kids_used eliminated_kids in
   let ctxt =
     { early_ret = contains_early_return exp;
