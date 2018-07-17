@@ -119,6 +119,9 @@ Definition print_int (_ : string) (_ : Z) : unit := tt.
 Definition prerr_int (_ : string) (_ : Z) : unit := tt.
 Definition putchar (_ : Z) : unit := tt.
 
+Definition shl_int := Z.shiftl.
+Definition shr_int := Z.shiftr.
+
 (*
 Definition or_bool l r := (l || r)
 Definition and_bool l r := (l && r)
