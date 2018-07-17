@@ -112,7 +112,12 @@ Definition negate_real r := realNegate r
 Definition abs_real r := realAbs r
 Definition power_real b e := realPowInteger b e*)
 
+Definition print_endline (_ : string) : unit := tt.
+Definition prerr_endline (_ : string) : unit := tt.
+Definition prerr (_ : string) : unit := tt.
 Definition print_int (_ : string) (_ : Z) : unit := tt.
+Definition prerr_int (_ : string) (_ : Z) : unit := tt.
+Definition putchar (_ : Z) : unit := tt.
 
 (*
 Definition or_bool l r := (l || r)
