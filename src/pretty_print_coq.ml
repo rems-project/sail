@@ -96,12 +96,14 @@ type context = {
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames *)
   kid_id_renames : id KBindings.t; (* tyvar -> argument renames *)
   bound_nexps : NexpSet.t;
+  build_ex_return : bool;
 }
 let empty_ctxt = {
   early_ret = false;
   kid_renames = KBindings.empty;
   kid_id_renames = KBindings.empty;
-  bound_nexps = NexpSet.empty
+  bound_nexps = NexpSet.empty;
+  build_ex_return = false;
 }
 
 let langlebar = string "<|"
@@ -1272,7 +1274,11 @@ let doc_exp_lem, doc_let_lem =
             if aexp_needed then parens (align epp) else epp
        end
     | E_internal_return (e1) ->
-       wrap_parens (align (separate space [string "returnm"; expY e1]))
+       let e1pp = expY e1 in
+       let valpp = if ctxt.build_ex_return
+         then parens (string "build_ex" ^^ space ^^ e1pp)
+         else e1pp in
+       wrap_parens (align (separate space [string "returnm"; valpp]))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit (L_aux (L_num i, l))
@@ -1648,6 +1654,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | Typ_aux (Typ_fn (arg_typ, ret_typ, eff),_) -> arg_typ, ret_typ, eff
     | _ -> failwith ("Function " ^ string_of_id id ^ " does not have function type")
   in
+  let build_ex, ret_typ = replace_atom_return_type ret_typ in
   let ids_to_avoid = all_ids pexp in
   let kids_used = tyvars_of_typquant tq in
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
@@ -1660,7 +1667,9 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     { early_ret = contains_early_return exp;
       kid_renames = mk_kid_renames ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
-      bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ) } in
+      bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
+      build_ex_return = effectful eff && build_ex;
+    } in
   (* Put the constraints after pattern matching so that any type variable that's
      been replaced by one of the term-level arguments is bound. *)
   let quantspp, constrspp = doc_typquant_items_separate ctxt braces tq in
@@ -1680,7 +1689,6 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let patspp = separate_map space doc_binder pats in
   let atom_constrs = Util.map_filter (atom_constraint ctxt) pats in
   let atom_constr_pp = separate space atom_constrs in
-  let build_ex, ret_typ = replace_atom_return_type ret_typ in
   let retpp =
     if effectful eff
     then string "M" ^^ space ^^ parens (doc_typ ctxt ret_typ)
@@ -1705,7 +1713,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        raise (Reporting_basic.err_unreachable l
                 "guarded pattern expression should have been rewritten before pretty-printing") in
   let bodypp = doc_fun_body ctxt exp in
-  let bodypp = if build_ex then string "build_ex" ^^ space ^^ parens bodypp else bodypp in
+  let bodypp = if effectful eff || not build_ex then bodypp else string "build_ex" ^^ parens bodypp in
   group (prefix 3 1
     (separate space ([idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp]) ^/^
        separate space [colon; retpp; coloneq])
