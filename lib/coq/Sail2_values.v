@@ -239,6 +239,22 @@ f_equal.
 auto using just_list_length.
 Qed.
 
+Fixpoint member_Z_list (x : Z) (l : list Z) : bool :=
+match l with
+| [] => false
+| h::t => if x =? h then true else member_Z_list x t
+end.
+
+Lemma member_Z_list_In {x l} : member_Z_list x l = true <-> In x l.
+induction l.
+* simpl. split. congruence. tauto.
+* simpl. destruct (x =? a) eqn:H.
+  + rewrite Z.eqb_eq in H. subst. tauto.
+  + rewrite Z.eqb_neq in H. split.
+    - intro Heq. right. apply IHl. assumption.
+    - intros [bad | good]. congruence. apply IHl. assumption.
+Qed.
+
 (*** Bits *)
 Inductive bitU := B0 | B1 | BU.
 

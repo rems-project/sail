@@ -323,7 +323,7 @@ let drop_duplicate_atoms kids ty =
   in aux_typ ty
 
 (* TODO: parens *)
-let rec doc_nc ctx (NC_aux (nc,_)) =
+let rec doc_nc_prop ctx (NC_aux (nc,_)) =
   match nc with
   | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
   | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
@@ -333,10 +333,26 @@ let rec doc_nc ctx (NC_aux (nc,_)) =
      separate space [string "In"; doc_var_lem ctx kid;
                      brackets (separate (string "; ")
                                  (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc ctx nc1) (doc_nc ctx nc2)
-  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc ctx nc1) (doc_nc ctx nc2)
+  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
   | NC_true -> string "True"
   | NC_false -> string "False"
+
+(* TODO: parens *)
+let rec doc_nc_exp ctx (NC_aux (nc,_)) =
+  match nc with
+  | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_not_equal (ne1, ne2) -> string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2))
+  | NC_set (kid, is) -> (* TODO: is this a good translation? *)
+     separate space [string "member_Z_list"; doc_var_lem ctx kid;
+                     brackets (separate (string "; ")
+                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
+  | NC_or (nc1, nc2) -> doc_op (string "||") (doc_nc_exp ctx nc1) (doc_nc_exp ctx nc2)
+  | NC_and (nc1, nc2) -> doc_op (string "&&") (doc_nc_exp ctx nc1) (doc_nc_exp ctx nc2)
+  | NC_true -> string "true"
+  | NC_false -> string "false"
 
 let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
   match typ with
@@ -352,7 +368,7 @@ let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
 let expand_range_type typ = Util.option_default typ (maybe_expand_range_type typ)
 
 let doc_arithfact ctxt nc =
-  string "ArithFact" ^^ space ^^ parens (doc_nc ctxt nc)
+  string "ArithFact" ^^ space ^^ parens (doc_nc_prop ctxt nc)
 
 (* When making changes here, check whether they affect lem_tyvars_of_typ *)
 let doc_typ, doc_atomic_typ =
@@ -1273,7 +1289,7 @@ let doc_exp_lem, doc_let_lem =
           parens (doc_typ ctxt (typ_of full_exp));
           parens (doc_typ ctxt (typ_of r))] in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
-    | E_constraint _ -> string "true"
+    | E_constraint nc -> wrap_parens (doc_nc_exp ctxt nc)
     | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _
     | E_internal_exp_user _ | E_internal_value _ ->
@@ -1964,8 +1980,8 @@ try
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) defs_modules;hardline;
         string "Import ListNotations.";
         hardline;
-        string "Open Scope string.";
-        hardline;
+        string "Open Scope string."; hardline;
+        string "Open Scope bool."; hardline;
         (* Put the body into a Section so that we can define some values with
            Let to put them into the local context, where tactics can see them *)
         string "Section Content.";
