@@ -1846,6 +1846,11 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
      let arg_typs_pp = separate space (List.map doc_typ' typs) in
      let _, ret_ty = replace_atom_return_type ret_ty in
      let ret_typ_pp = doc_typ empty_ctxt ret_ty in
+     let ret_typ_pp =
+       if effectful eff
+       then string "M" ^^ space ^^ parens ret_typ_pp
+       else ret_typ_pp
+     in
      let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt braces tqs in
      string "forall" ^/^ separate space tyvars_pp ^/^
        arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
