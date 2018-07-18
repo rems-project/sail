@@ -10,6 +10,31 @@ Axiom set_slice : forall (n : Z) (m : Z), mword n -> Z -> mword m -> mword n.
 Definition length {n} (x : mword n) := length_mword x.
 Hint Unfold length : sail.
 
+
+Lemma Replicate_lemma1 {N M O x} :
+  O * M = N ->
+  O = Z.quot N M ->
+  x = Z.quot N M -> M * x = N.
+intros. rewrite H1.
+rewrite H0 in H.
+rewrite Z.mul_comm.
+assumption.
+Qed.
+Hint Resolve Replicate_lemma1 : sail.
+
+Lemma Replicate_lemma2 {N M x} :
+ M >= 0 /\ N >= 0 ->
+ x = Z.quot N M ->
+ x >= 0.
+intros; subst.
+destruct M; destruct N; intros; try easy.
+unfold Z.quot, Z.quotrem.
+destruct (N.pos_div_eucl p0 (N.pos p)) as [x y].
+case x; easy.
+Qed.
+Hint Resolve Replicate_lemma2 : sail.
+
+
 (*
 let hexchar_to_bool_list c =
   if c = #'0' then      Just ([false;false;false;false])

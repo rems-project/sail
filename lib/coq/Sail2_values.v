@@ -921,12 +921,10 @@ Class ReasonableSize (a : Z) : Prop := {
   isPositive : a >= 0
 }.
 
-Hint Resolve -> Z.gtb_lt Z.geb_le Z.ltb_lt Z.leb_le : zbool.
-Hint Resolve <- Z.ge_le_iff Z.gt_lt_iff : zbool.
-
 (* Omega doesn't know about In, but can handle disjunctions. *)
 Ltac unfold_In :=
 repeat match goal with
+| H:context [member_Z_list _ _ = true] |- _ => rewrite member_Z_list_In in H
 | H:context [In ?x (?y :: ?t)] |- _ => change (In x (y :: t)) with (y = x \/ In x t) in H
 | H:context [In ?x []] |- _ => change (In x []) with False in H
 end.
@@ -1002,7 +1000,7 @@ Ltac dump_context :=
   | H:=?X |- _ => idtac H ":=" X; fail
   | H:?X |- _ => idtac H ":" X; fail end;
   match goal with |- ?X => idtac "Goal:" X end.
-Ltac solve_arithfact :=
+Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_non_Z_defns;
  extract_properties;
@@ -1012,12 +1010,15 @@ Ltac solve_arithfact :=
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
  reduce_list_lengths;
- reduce_pow;
+ reduce_pow.
+Ltac solve_arithfact :=
+prepare_for_solver;
 (*dump_context;*)
  solve [apply ArithFact_mword; assumption
        | constructor; omega with Z
          (* The datatypes hints give us some list handling, esp In *)
-       | constructor; auto with datatypes zbool zarith sail].
+       | constructor; eauto with datatypes zarith sail
+       | constructor; idtac "Unable to solve constraint"; dump_context; fail].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
 
 Hint Unfold length_mword : sail.
