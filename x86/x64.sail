@@ -851,9 +851,9 @@ function clause execute (X86_MUL (sz,r)) =
       NOP
    ========================================================================== *)
 
-union ast member nat NOP
+union ast member nat X86_NOP
 
-function clause execute (NOP (_)) = ()
+function clause execute (X86_NOP (_)) = ()
 
 (* ==========================================================================
       POP
@@ -1556,7 +1556,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         oR := RFull("RAX") :: RFull("RDX") :: append(oR, all_flags);
         aR := ars;
       }
-    case(NOP     (_)                  ) -> ()
+    case(X86_NOP (_)                  ) -> ()
     case(POP     (r_m)                ) -> 
       let (m, rd, ars) = regfp_rm (r_m) in {
         ik := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);

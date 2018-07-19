@@ -16,7 +16,7 @@
 | `X86MOVSX (sz1, dest_src, sz2) ->  ("MOVSX", [translate_size sz1; translate_dest_src dest_src; translate_size sz2], [])
 | `X86MOVZX (sz1, dest_src, sz2) ->  ("MOVZX", [translate_size sz1; translate_dest_src dest_src; translate_size sz2], [])
 | `X86MUL (sz, rm)               ->  ("MUL", [translate_size sz; translate_rm rm], [])
-| `X86NOP                        ->  ("NOP", [Nat_big_num.of_int 0], [])       
+| `X86NOP                        ->  ("X86_NOP", [Nat_big_num.of_int 0], [])
 | `X86POP (rm)                   ->  ("POP", [translate_rm rm], [])            
 | `X86PUSH (imm_rm)              ->  ("PUSH", [translate_imm_rm imm_rm], [])   
 | `X86RET (imm64)                ->  ("RET", [translate_imm64 imm64], [])
