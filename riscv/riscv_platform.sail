@@ -1,4 +1,4 @@
-/* Platform and devices */
+/* Platform-specific definitions, and basic MMIO devices. */
 
 /* Current constraints on this implementation are:
    - it cannot access memory directly, but instead provides definitions for the physical memory model
@@ -21,8 +21,8 @@ val plat_enable_misaligned_access = {ocaml: "Platform.enable_misaligned_access",
                                      lem: "plat_enable_misaligned_access"} : unit -> bool
 
 /* ROM holding reset vector and device-tree DTB */
-val plat_rom_base = {ocaml: "Platform.rom_base", lem: "plat_rom_base"} : unit -> xlenbits
-val plat_rom_size = {ocaml: "Platform.rom_size", lem: "plat_rom_size"} : unit -> xlenbits
+val plat_rom_base   = {ocaml: "Platform.rom_base", lem: "plat_rom_base"} : unit -> xlenbits
+val plat_rom_size   = {ocaml: "Platform.rom_size", lem: "plat_rom_size"} : unit -> xlenbits
 
 /* Location of clock-interface, which should match with the spec in the DTB */
 val plat_clint_base = {ocaml: "Platform.clint_base", lem: "plat_clint_base"} : unit -> xlenbits
@@ -69,11 +69,9 @@ register mtimecmp : xlenbits  // memory-mapped internal clint register.
 
 /* CLINT memory-mapped IO */
 
-let MSIP_BASE     : xlenbits = 0x0000000000000000
-let MTIMECMP_BASE : xlenbits = 0x0000000000004000
-let MTIME_BASE    : xlenbits = 0x000000000000bff8
-
-/* 0000 msip hart 0         -- memory-mapped software interrupt
+/* relative address map:
+ *
+ * 0000 msip hart 0         -- memory-mapped software interrupt
  * 0004 msip hart 1
  * 4000 mtimecmp hart 0 lo  -- memory-mapped timer thresholds
  * 4004 mtimecmp hart 0 hi
@@ -82,6 +80,10 @@ let MTIME_BASE    : xlenbits = 0x000000000000bff8
  * bff8 mtime lo            -- memory-mapped clocktimer value
  * bffc mtime hi
  */
+
+let MSIP_BASE     : xlenbits = 0x0000000000000000
+let MTIMECMP_BASE : xlenbits = 0x0000000000004000
+let MTIME_BASE    : xlenbits = 0x000000000000bff8
 
 val clint_load : forall 'n. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rreg}
 function clint_load(addr, width) = {
@@ -162,7 +164,7 @@ register htif_done   : bool
 register htif_exit_code : xlenbits
 
 
-/* since the htif tohost port is only available at a single address,
+/* Since the htif tohost port is only available at a single address,
  * we'll assume here that physical memory model has correctly
  * dispatched the address.
  */

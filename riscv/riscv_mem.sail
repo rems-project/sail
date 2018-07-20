@@ -1,4 +1,8 @@
-/* memory */
+/* Physical memory model.
+ *
+ * This assumes that the platform memory map has been defined, so that accesses
+ * to MMIO regions can be dispatched.
+ */
 
 function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool =
   unsigned(addr) % width == 0
@@ -87,9 +91,7 @@ function mem_write_ea (addr, width, aq, rl, con) = {
 // only used for actual memory regions, to avoid MMIO effects
 function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(bool) = {
   print("mem[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
-//  if   
   MemValue(__RISCV_write(addr, width, data))
-//  else MemException(E_SAMO_Access_Fault)
 }
 
 // dispatches to MMIO regions or physical memory regions depending on physical memory map

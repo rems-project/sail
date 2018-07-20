@@ -1,3 +1,5 @@
+/* Supervisor-mode address translation and page-table walks. */
+
 /* PageSize */
 
 let PAGESIZE_BITS = 12
@@ -29,23 +31,23 @@ function isInvalidPTE(p : pteAttribs) -> bool = {
 
 function checkPTEPermission(ac : AccessType, priv : Privilege, mxr : bool, do_sum : bool, p : PTE_Bits) -> bool = {
   match (ac, priv) {
-    (Read, User)      => p.U() == true & (p.R() == true | (p.X() == true & mxr)),
-    (Write, User)     => p.U() == true & p.W() == true,
-    (ReadWrite, User) => p.U() == true & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
-    (Execute, User)   => p.U() == true & p.X() == true,
+    (Read,      User)       => p.U() == true & (p.R() == true | (p.X() == true & mxr)),
+    (Write,     User)       => p.U() == true & p.W() == true,
+    (ReadWrite, User)       => p.U() == true & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
+    (Execute,   User)       => p.U() == true & p.X() == true,
 
-    (Read, Supervisor)      => (p.U() == false | do_sum) & (p.R() == true | (p.X() == true & mxr)),
-    (Write, Supervisor)     => (p.U() == false | do_sum) & p.W() == true,
+    (Read,      Supervisor) => (p.U() == false | do_sum) & (p.R() == true | (p.X() == true & mxr)),
+    (Write,     Supervisor) => (p.U() == false | do_sum) & p.W() == true,
     (ReadWrite, Supervisor) => (p.U() == false | do_sum) & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
-    (Execute, Supervisor)   => p.U() == false & p.X() == true,
+    (Execute,   Supervisor) => p.U() == false & p.X() == true,
 
-    (_, Machine)      => internal_error("m-mode mem perm check")
+    (_,         Machine)    => internal_error("m-mode mem perm check")
   }
 }
 
 function update_PTE_Bits(p : PTE_Bits, a : AccessType) -> option(PTE_Bits) = {
-  let update_d = (a == Write | a == ReadWrite) & p.D() == false;
-  let update_a = p.A() == false;
+  let update_d = (a == Write | a == ReadWrite) & p.D() == false; // dirty-bit
+  let update_a = p.A() == false;                                 // accessed-bit
   if update_d | update_a then {
     let np = update_A(p, true);
     let np = if update_d then update_D(p, true) else np;
@@ -143,7 +145,7 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
   let pt_ofs : paddr39 = shiftl(EXTZ(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[(SV39_LEVEL_BITS - 1) .. 0]),
                                 PTE39_LOG_SIZE);
   let pte_addr = ptb + pt_ofs;
-  /* FIXME: we assume here that walks only access memory-backed addresses. */
+  /* FIXME: we assume here that walks only access physical-memory-backed addresses, and not MMIO regions. */
   match (phys_mem_read(Data, EXTZ(pte_addr), 8, false, false, false)) {
     MemException(_) => {
 /*    print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
@@ -245,7 +247,6 @@ function make_TLB39_Entry(asid, global, vAddr, pAddr, pte, level, pteAddr) = {
 }
 
 /* TODO: make this a vector or array of entries */
-let TLBEntries = 32
 register tlb39 : option(TLB39_Entry)
 
 val lookupTLB39 : (asid64, vaddr39) -> option((int, TLB39_Entry)) effect {rreg}
@@ -262,7 +263,7 @@ function lookupTLB39(asid, vaddr) = {
 val addToTLB39 : (asid64, vaddr39, paddr39, SV39_PTE, paddr39, nat, bool) -> unit effect {wreg, rreg}
 function addToTLB39(asid, vAddr, pAddr, pte, pteAddr, level, global) = {
   let ent = make_TLB39_Entry(asid, global, vAddr, pAddr, pte, level, pteAddr);
-  tlb39 = Some(ent)
+  tlb39   = Some(ent)
 }
 
 function writeTLB39(idx : int, ent : TLB39_Entry) -> unit =
@@ -387,12 +388,12 @@ val translateAddr : (xlenbits, AccessType, ReadType) -> TR_Result effect {escape
 function translateAddr(vAddr, ac, rt) = {
   let effPriv : Privilege = match rt {
     Instruction => cur_privilege,
-    Data => if mstatus.MPRV() == true
-            then privLevel_of_bits(mstatus.MPP())
-            else cur_privilege
+    Data        => if   mstatus.MPRV() == true
+                   then privLevel_of_bits(mstatus.MPP())
+                   else cur_privilege
   };
-  let mxr : bool = mstatus.MXR() == true;
-  let do_sum : bool = mstatus.SUM() == true;
+  let mxr    : bool   = mstatus.MXR() == true;
+  let do_sum : bool   = mstatus.SUM() == true;
   let mode : SATPMode = translationMode(effPriv);
   match mode {
     Sbare => TR_Address(vAddr),

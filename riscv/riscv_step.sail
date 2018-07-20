@@ -1,6 +1,8 @@
+/* The emulator fetch-execute-interrupt dispatch loop. */
+
 union FetchResult = {
-  F_Base : word,                       /* Base ISA */
-  F_RVC : half,                        /* Compressed ISA */
+  F_Base  : word,                      /* Base ISA */
+  F_RVC   : half,                      /* Compressed ISA */
   F_Error : (ExceptionType, xlenbits)  /* exception and PC */
 }
 
@@ -8,7 +10,7 @@ function isRVC(h : half) -> bool =
  ~ (h[1 .. 0] == 0b11)
 
 val fetch : unit -> FetchResult effect {escape, rmem, rreg, wmv, wreg}
-function fetch() -> FetchResult = {
+function fetch() -> FetchResult =
   /* check for legal PC */
   if (PC[0] != 0b0 | (PC[1] != 0b0 & (~ (haveRVC()))))
   then F_Error(E_Fetch_Addr_Align, PC)
@@ -39,11 +41,10 @@ function fetch() -> FetchResult = {
       }
     }
   }
-}
 
 /* returns whether an instruction was retired, and whether to increment the step count in the trace */
 val step : int -> (bool, bool) effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
-function step(step_no) = {
+function step(step_no) =
   match curInterrupt(cur_privilege, mip, mie, mideleg) {
     Some(intr, priv) => {
       print_bits("Handling interrupt: ", intr);
@@ -87,7 +88,6 @@ function step(step_no) = {
       }
     }
   }
-}
 
 val loop : unit -> unit effect {barr, eamem, escape, exmem, rmem, rreg, wmv, wreg}
 function loop () = {

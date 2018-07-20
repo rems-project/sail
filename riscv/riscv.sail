@@ -1,3 +1,8 @@
+/* Instruction definitions.
+ *
+ * This includes decoding, execution, and assembly parsing and printing.
+ */
+
 scattered union ast
 
 val decode : bits(32) -> option(ast) effect pure
@@ -28,22 +33,23 @@ mapping encdec_uop : uop <-> bits(7) = {
 
 mapping clause encdec = UTYPE(imm, rd, op) <-> imm @ rd @ encdec_uop(op)
 
-function clause execute UTYPE(imm, rd, op) =
-    let off : xlenbits = EXTS(imm @ 0x000) in
-    let ret : xlenbits   = match op {
-      RISCV_LUI   => off,
-      RISCV_AUIPC => PC + off
-    } in {
-      X(rd) = ret;
-      true
-    }
+function clause execute UTYPE(imm, rd, op) = {
+  let off : xlenbits = EXTS(imm @ 0x000);
+  let ret : xlenbits = match op {
+    RISCV_LUI   => off,
+    RISCV_AUIPC => PC + off
+  };
+  X(rd) = ret;
+  true
+}
 
 mapping utype_mnemonic : uop <-> string = {
   RISCV_LUI   <-> "lui",
   RISCV_AUIPC <-> "auipc"
 }
 
-mapping clause assembly = UTYPE(imm, rd, op) <-> utype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_20(imm)
+mapping clause assembly = UTYPE(imm, rd, op)
+                      <-> utype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_20(imm)
 
 /* ****************************************************************** */
 union clause ast = RISCV_JAL : (bits(21), regbits)
@@ -64,11 +70,11 @@ but this is difficult
 */
 
 function clause execute (RISCV_JAL(imm, rd)) = {
-    let pc : xlenbits = PC;
-    X(rd) = nextPC;  /* compatible with JAL and C.JAL */
-    let offset : xlenbits = EXTS(imm);
-    nextPC = pc + offset;
-    true
+  let pc : xlenbits = PC;
+  X(rd) = nextPC;  /* compatible with JAL and C.JAL */
+  let offset : xlenbits = EXTS(imm);
+  nextPC = pc + offset;
+  true
 }
 
 /* TODO: handle 2-byte-alignment in mappings */
@@ -81,31 +87,32 @@ union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
 mapping clause encdec = RISCV_JALR(imm, rs1, rd) <-> imm @ rs1 @ 0b000 @ rd @ 0b1100111
 
 function clause execute (RISCV_JALR(imm, rs1, rd)) = {
-    /* write rd before anything else to prevent unintended strength */
-    X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
-    let newPC : xlenbits = X(rs1) + EXTS(imm);
+  /* write rd before anything else to prevent unintended strength */
+  X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
+  let newPC : xlenbits = X(rs1) + EXTS(imm);
 /*  RMEM FIXME: For the sequential model, the above definition doesn't work directly
     if rs1 = rd.  We would effectively have to keep a regfile for reads and another for
     writes, and swap on instruction fetch.  This could perhaps be optimized in
     some manner, but for now, we just reorder the previous two lines to improve simulator
     performance in the sequential model, as below:
-    let newPC : xlenbits = X(rs1) + EXTS(imm);
-    X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
+  let newPC : xlenbits = X(rs1) + EXTS(imm);
+  X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
 */
-    nextPC = newPC[63..1] @ 0b0;
-    true
+  nextPC = newPC[63..1] @ 0b0;
+  true
 }
 
-mapping clause assembly = RISCV_JALR(imm, rs1, rd) <-> "jalr" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
+mapping clause assembly = RISCV_JALR(imm, rs1, rd)
+                      <-> "jalr" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = BTYPE : (bits(13), regbits, regbits, bop)
 
 mapping encdec_bop : bop <-> bits(3) = {
-  RISCV_BEQ <-> 0b000,
-  RISCV_BNE <-> 0b001,
-  RISCV_BLT <-> 0b100,
-  RISCV_BGE <-> 0b101,
+  RISCV_BEQ  <-> 0b000,
+  RISCV_BNE  <-> 0b001,
+  RISCV_BLT  <-> 0b100,
+  RISCV_BGE  <-> 0b101,
   RISCV_BLTU <-> 0b110,
   RISCV_BGEU <-> 0b111
 }
@@ -113,9 +120,9 @@ mapping encdec_bop : bop <-> bits(3) = {
 mapping clause encdec = BTYPE(imm7_6 @ imm5_0 @ imm7_5_0 @ imm5_4_1 @ 0b0, rs2, rs1, op)
                     <-> imm7_6 : bits(1) @ imm7_5_0 : bits(6) @ rs2 @ rs1 @ encdec_bop(op) @ imm5_4_1 : bits(4) @ imm5_0 : bits(1) @ 0b1100011
 
-function clause execute (BTYPE(imm, rs2, rs1, op)) =
-  let rs1_val = X(rs1) in
-  let rs2_val = X(rs2) in
+function clause execute (BTYPE(imm, rs2, rs1, op)) = {
+  let rs1_val = X(rs1);
+  let rs2_val = X(rs2);
   let taken : bool = match op {
     RISCV_BEQ  => rs1_val == rs2_val,
     RISCV_BNE  => rs1_val != rs2_val,
@@ -123,11 +130,10 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) =
     RISCV_BGE  => rs1_val >=_s rs2_val,
     RISCV_BLTU => rs1_val <_u rs2_val,
     RISCV_BGEU => rs1_val >=_u rs2_val
-  } in {
-    if taken then nextPC = PC + EXTS(imm);
-    true
-  }
-
+  };
+  if taken then nextPC = PC + EXTS(imm);
+  true
+}
 
 mapping btype_mnemonic : bop <-> string = {
   RISCV_BEQ  <-> "beq",
@@ -138,8 +144,8 @@ mapping btype_mnemonic : bop <-> string = {
   RISCV_BGEU <-> "bgeu"
 }
 
-mapping clause assembly = BTYPE(imm, rs2, rs1, op) <-> btype_mnemonic(op) ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2) ^ sep() ^ hex_bits_13(imm)
-
+mapping clause assembly = BTYPE(imm, rs2, rs1, op)
+                      <-> btype_mnemonic(op) ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2) ^ sep() ^ hex_bits_13(imm)
 
 /* ****************************************************************** */
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
@@ -155,9 +161,9 @@ mapping encdec_iop : iop <-> bits(3) = {
 
 mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ rs1 @ encdec_iop(op) @ rd @ 0b0010011
 
-function clause execute (ITYPE (imm, rs1, rd, op)) =
-  let rs1_val = X(rs1) in
-  let immext : xlenbits = EXTS(imm) in
+function clause execute (ITYPE (imm, rs1, rd, op)) = {
+  let rs1_val = X(rs1);
+  let immext : xlenbits = EXTS(imm);
   let result : xlenbits = match op {
     RISCV_ADDI  => rs1_val + immext,
     RISCV_SLTI  => EXTZ(rs1_val <_s immext),
@@ -165,11 +171,10 @@ function clause execute (ITYPE (imm, rs1, rd, op)) =
     RISCV_XORI  => rs1_val ^ immext,
     RISCV_ORI   => rs1_val | immext,
     RISCV_ANDI  => rs1_val & immext
-  } in {
-    X(rd) = result;
-    true
-  }
-
+  };
+  X(rd) = result;
+  true
+}
 
 mapping itype_mnemonic : iop <-> string = {
   RISCV_ADDI  <-> "addi",
@@ -180,7 +185,8 @@ mapping itype_mnemonic : iop <-> string = {
   RISCV_ANDI  <-> "andi"
 }
 
-mapping clause assembly = ITYPE(imm, rs1, rd, op) <-> itype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
+mapping clause assembly = ITYPE(imm, rs1, rd, op)
+                      <-> itype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = SHIFTIOP : (bits(6), regbits, regbits, sop)
@@ -195,17 +201,16 @@ mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SLLI) <-> 0b000000 @ sham
 mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRLI) <-> 0b000000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0010011
 mapping clause encdec = SHIFTIOP(shamt, rs1, rd, RISCV_SRAI) <-> 0b010000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0010011
 
-function clause execute (SHIFTIOP(shamt, rs1, rd, op)) =
-    let rs1_val = X(rs1) in
-    let result : xlenbits = match op {
-      RISCV_SLLI => rs1_val << shamt,
-      RISCV_SRLI => rs1_val >> shamt,
-      RISCV_SRAI => shift_right_arith64(rs1_val, shamt)
-    } in {
-      X(rd) = result;
-      true
-    }
-
+function clause execute (SHIFTIOP(shamt, rs1, rd, op)) = {
+  let rs1_val = X(rs1);
+  let result : xlenbits = match op {
+    RISCV_SLLI => rs1_val << shamt,
+    RISCV_SRLI => rs1_val >> shamt,
+    RISCV_SRAI => shift_right_arith64(rs1_val, shamt)
+  };
+  X(rd) = result;
+  true
+}
 
 mapping shiftiop_mnemonic : sop <-> string = {
   RISCV_SLLI <-> "slli",
@@ -213,7 +218,8 @@ mapping shiftiop_mnemonic : sop <-> string = {
   RISCV_SRAI <-> "srai"
 }
 
-mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op) <-> shiftiop_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ hex_bits_6(shamt)
+mapping clause assembly = SHIFTIOP(shamt, rs1, rd, op)
+                      <-> shiftiop_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ hex_bits_6(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPE : (regbits, regbits, regbits, rop)
@@ -229,9 +235,9 @@ mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_SRA)  <-> 0b0100000 @ rs2 @ rs
 mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_OR)   <-> 0b0000000 @ rs2 @ rs1 @ 0b110 @ rd @ 0b0110011
 mapping clause encdec = RTYPE(rs2, rs1, rd, RISCV_AND)  <-> 0b0000000 @ rs2 @ rs1 @ 0b111 @ rd @ 0b0110011
 
-function clause execute (RTYPE(rs2, rs1, rd, op)) =
-  let rs1_val = X(rs1) in
-  let rs2_val = X(rs2) in
+function clause execute (RTYPE(rs2, rs1, rd, op)) = {
+  let rs1_val = X(rs1);
+  let rs2_val = X(rs2);
   let result : xlenbits = match op {
     RISCV_ADD  => rs1_val + rs2_val,
     RISCV_SUB  => rs1_val - rs2_val,
@@ -243,11 +249,10 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
     RISCV_SRA  => shift_right_arith64(rs1_val, rs2_val[5..0]),
     RISCV_OR   => rs1_val | rs2_val,
     RISCV_AND  => rs1_val & rs2_val
-  } in {
-    X(rd) = result;
-    true
-  }
-
+  };
+  X(rd) = result;
+  true
+}
 
 mapping rtype_mnemonic : rop <-> string = {
   RISCV_ADD  <-> "add",
@@ -262,14 +267,16 @@ mapping rtype_mnemonic : rop <-> string = {
   RISCV_AND  <-> "and"
 }
 
-mapping clause assembly = RTYPE(rs2, rs1, rd, op) <-> rtype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = RTYPE(rs2, rs1, rd, op)
+                      <-> rtype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
 
 /* I am assuming that load unsigned double wasn't meant to be missing here? */
 /* TODO: aq/rl */
-mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false) <-> imm @ rs1 @ bool_bits(is_unsigned) @ size_bits(size) @ rd @ 0b0000011
+mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false)
+                    <-> imm @ rs1 @ bool_bits(is_unsigned) @ size_bits(size) @ rd @ 0b0000011
 
 val extend_value : forall 'n, 0 < 'n <= 8. (bool, MemoryOpResult(bits(8 * 'n))) -> MemoryOpResult(xlenbits)
 function extend_value(is_unsigned, value) = match (value) {
@@ -285,7 +292,7 @@ function process_load(rd, addr, value, is_unsigned) =
   }
 
 function check_misaligned(vaddr : xlenbits, width : word_width) -> bool =
-  if plat_enable_misaligned_access() then false
+  if   plat_enable_misaligned_access() then false
   else match width {
          BYTE   => false,
          HALF   => vaddr[0] == true,
@@ -294,20 +301,19 @@ function check_misaligned(vaddr : xlenbits, width : word_width) -> bool =
        }
 
 function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) =
-    let vaddr : xlenbits = X(rs1) + EXTS(imm) in
-    if check_misaligned(vaddr, width)
-    then { handle_mem_exception(vaddr, E_Load_Addr_Align); false }
-    else match translateAddr(vaddr, Read, Data) {
-      TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
-      TR_Address(addr) =>
-        match width {
-          BYTE   => process_load(rd, vaddr, mem_read(addr, 1, aq, rl, false), is_unsigned),
-          HALF   => process_load(rd, vaddr, mem_read(addr, 2, aq, rl, false), is_unsigned),
-          WORD   => process_load(rd, vaddr, mem_read(addr, 4, aq, rl, false), is_unsigned),
-          DOUBLE => process_load(rd, vaddr, mem_read(addr, 8, aq, rl, false), is_unsigned)
-        }
-    }
-
+  let vaddr : xlenbits = X(rs1) + EXTS(imm) in
+  if   check_misaligned(vaddr, width)
+  then { handle_mem_exception(vaddr, E_Load_Addr_Align); false }
+  else match translateAddr(vaddr, Read, Data) {
+    TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
+    TR_Address(addr) =>
+      match width {
+        BYTE   => process_load(rd, vaddr, mem_read(addr, 1, aq, rl, false), is_unsigned),
+        HALF   => process_load(rd, vaddr, mem_read(addr, 2, aq, rl, false), is_unsigned),
+        WORD   => process_load(rd, vaddr, mem_read(addr, 4, aq, rl, false), is_unsigned),
+        DOUBLE => process_load(rd, vaddr, mem_read(addr, 8, aq, rl, false), is_unsigned)
+      }
+  }
 
 /* TODO FIXME: is this the actual aq/rl syntax? */
 val maybe_aq : bool <-> string
@@ -329,50 +335,53 @@ mapping maybe_u = {
 }
 
 
-mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl) <-> "l" ^ size_mnemonic(size) ^ maybe_u(is_unsigned) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
+mapping clause assembly = LOAD(imm, rs1, rd, is_unsigned, size, aq, rl)
+                      <-> "l" ^ size_mnemonic(size) ^ maybe_u(is_unsigned) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 /* ****************************************************************** */
 union clause ast = STORE : (bits(12), regbits, regbits, word_width, bool, bool)
 
 /* TODO: aq/rl */
-mapping clause encdec = STORE(imm7 @ imm5, rs2, rs1, size, false, false) <-> imm7 : bits(7) @ rs2 @ rs1 @ 0b0 @ size_bits(size) @ imm5 : bits(5) @ 0b0100011
+mapping clause encdec = STORE(imm7 @ imm5, rs2, rs1, size, false, false)
+                    <-> imm7 : bits(7) @ rs2 @ rs1 @ 0b0 @ size_bits(size) @ imm5 : bits(5) @ 0b0100011
 
 /* NOTE: Currently, we only EA if address translation is successful.
    This may need revisiting. */
 function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
-    let vaddr : xlenbits = X(rs1) + EXTS(imm) in
-    if check_misaligned(vaddr, width)
-    then { handle_mem_exception(vaddr, E_SAMO_Addr_Align); false }
-    else match translateAddr(vaddr, Write, Data) {
-      TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
-      TR_Address(addr) =>
-        let eares : MemoryOpResult(unit) = match width {
-          BYTE   => mem_write_ea(addr, 1, aq, rl, false),
-          HALF   => mem_write_ea(addr, 2, aq, rl, false),
-          WORD   => mem_write_ea(addr, 4, aq, rl, false),
-          DOUBLE => mem_write_ea(addr, 8, aq, rl, false)
-        } in
-        match (eares) {
-          MemException(e) => { handle_mem_exception(addr, e); false },
-          MemValue(_) => {
-            let rs2_val = X(rs2) in
-            let res : MemoryOpResult(bool) = match width {
-              BYTE   => mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false),
-              HALF   => mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false),
-              WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, false),
-              DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, false)
-            } in
-            match (res) {
-              MemValue(true)     => true,
-              MemValue(false)    => internal_error("store got false from mem_write_value"),
-              MemException(e) => { handle_mem_exception(addr, e); false }
-            }
+  let vaddr : xlenbits = X(rs1) + EXTS(imm) in
+  if   check_misaligned(vaddr, width)
+  then { handle_mem_exception(vaddr, E_SAMO_Addr_Align); false }
+  else match translateAddr(vaddr, Write, Data) {
+    TR_Failure(e) => { handle_mem_exception(vaddr, e); false },
+    TR_Address(addr) => {
+      let eares : MemoryOpResult(unit) = match width {
+        BYTE   => mem_write_ea(addr, 1, aq, rl, false),
+        HALF   => mem_write_ea(addr, 2, aq, rl, false),
+        WORD   => mem_write_ea(addr, 4, aq, rl, false),
+        DOUBLE => mem_write_ea(addr, 8, aq, rl, false)
+      };
+      match (eares) {
+        MemException(e) => { handle_mem_exception(addr, e); false },
+        MemValue(_) => {
+          let rs2_val = X(rs2);
+          let res : MemoryOpResult(bool) = match width {
+            BYTE   => mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false),
+            HALF   => mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false),
+            WORD   => mem_write_value(addr, 4, rs2_val[31..0], aq, rl, false),
+            DOUBLE => mem_write_value(addr, 8, rs2_val,        aq, rl, false)
+          };
+          match (res) {
+            MemValue(true)     => true,
+            MemValue(false)    => internal_error("store got false from mem_write_value"),
+            MemException(e) => { handle_mem_exception(addr, e); false }
           }
         }
+      }
     }
+  }
 
-
-mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl) <-> "s" ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
+mapping clause assembly = STORE(imm, rs1, rd, size, aq, rl)
+                      <-> "s" ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 
 /* ****************************************************************** */
@@ -396,17 +405,16 @@ mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SLLI) <-> 0b0000000 @ shamt
 mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRLI) <-> 0b0000000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
 mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRAI) <-> 0b0100000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
 
-function clause execute (SHIFTW(shamt, rs1, rd, op)) =
-    let rs1_val = (X(rs1))[31..0] in
-    let result : bits(32) = match op {
-      RISCV_SLLI => rs1_val << shamt,
-      RISCV_SRLI => rs1_val >> shamt,
-      RISCV_SRAI => shift_right_arith32(rs1_val, shamt)
-    } in {
-      X(rd) = EXTS(result);
-      true
-    }
-
+function clause execute (SHIFTW(shamt, rs1, rd, op)) = {
+  let rs1_val = (X(rs1))[31..0];
+  let result : bits(32) = match op {
+    RISCV_SLLI => rs1_val << shamt,
+    RISCV_SRLI => rs1_val >> shamt,
+    RISCV_SRAI => shift_right_arith32(rs1_val, shamt)
+  };
+  X(rd) = EXTS(result);
+  true
+}
 
 mapping shiftw_mnemonic : sop <-> string = {
   RISCV_SLLI <-> "slli",
@@ -414,7 +422,8 @@ mapping shiftw_mnemonic : sop <-> string = {
   RISCV_SRAI <-> "srai"
 }
 
-mapping clause assembly = SHIFTW(shamt, rs1, rd, op) <-> shiftw_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_5(shamt)
+mapping clause assembly = SHIFTW(shamt, rs1, rd, op)
+                      <-> shiftw_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_5(shamt)
 
 /* ****************************************************************** */
 union clause ast = RTYPEW : (regbits, regbits, regbits, ropw)
@@ -425,20 +434,19 @@ mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SLLW) <-> 0b0000000 @ rs2 @ r
 mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRLW) <-> 0b0000000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0111011
 mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRAW) <-> 0b0100000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0111011
 
-function clause execute (RTYPEW(rs2, rs1, rd, op)) =
-  let rs1_val = (X(rs1))[31..0] in
-  let rs2_val = (X(rs2))[31..0] in
+function clause execute (RTYPEW(rs2, rs1, rd, op)) = {
+  let rs1_val = (X(rs1))[31..0];
+  let rs2_val = (X(rs2))[31..0];
   let result : bits(32) = match op {
     RISCV_ADDW => rs1_val + rs2_val,
     RISCV_SUBW => rs1_val - rs2_val,
     RISCV_SLLW => rs1_val << (rs2_val[4..0]),
     RISCV_SRLW => rs1_val >> (rs2_val[4..0]),
     RISCV_SRAW => shift_right_arith32(rs1_val, rs2_val[4..0])
-  } in {
-    X(rd) = EXTS(result);
-    true
-  }
-
+  };
+  X(rd) = EXTS(result);
+  true
+}
 
 mapping rtypew_mnemonic : ropw <-> string = {
   RISCV_ADDW <-> "addw",
@@ -448,7 +456,8 @@ mapping rtypew_mnemonic : ropw <-> string = {
   RISCV_SRAW <-> "sraw"
 }
 
-mapping clause assembly = RTYPEW(rs2, rs1, rd, op) <-> rtypew_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = RTYPEW(rs2, rs1, rd, op)
+                      <-> rtypew_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 /* FIXME: separate these out into separate ast variants */
@@ -462,18 +471,19 @@ mapping encdec_mul_op : (bool, bool, bool) <-> bits(3) = {
 }
 
 /* for some reason the : bits(3) here is still necessary - BUG */
-mapping clause encdec = MUL(rs2, rs1, rd, high, signed1, signed2) <-> 0b0000001 @ rs2 @ rs1 @ encdec_mul_op(high, signed1, signed2) : bits(3) @ rd @ 0b0110011
+mapping clause encdec = MUL(rs2, rs1, rd, high, signed1, signed2)
+                    <-> 0b0000001 @ rs2 @ rs1 @ encdec_mul_op(high, signed1, signed2) : bits(3) @ rd @ 0b0110011
 
-function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) =
-  let rs1_val = X(rs1) in
-  let rs2_val = X(rs2) in
-  let rs1_int : int = if signed1 then signed(rs1_val) else unsigned(rs1_val) in
-  let rs2_int : int = if signed2 then signed(rs2_val) else unsigned(rs2_val) in
-  let result128 = to_bits(128, rs1_int * rs2_int) in
-  let result = if high then result128[127..64] else result128[63..0] in {
-    X(rd) = result;
-    true
-  }
+function clause execute (MUL(rs2, rs1, rd, high, signed1, signed2)) = {
+  let rs1_val = X(rs1);
+  let rs2_val = X(rs2);
+  let rs1_int : int = if signed1 then signed(rs1_val) else unsigned(rs1_val);
+  let rs2_int : int = if signed2 then signed(rs2_val) else unsigned(rs2_val);
+  let result128 = to_bits(128, rs1_int * rs2_int);
+  let result = if high then result128[127..64] else result128[63..0];
+  X(rd) = result;
+  true
+}
 
 mapping mul_mnemonic : (bool, bool, bool) <-> string = {
   (false, true, true)  <-> "mul",
@@ -489,40 +499,40 @@ union clause ast = DIV : (regbits, regbits, regbits, bool)
 
 mapping clause encdec = DIV(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b10 @ bool_not_bits(s) @ rd @ 0b0110011
 
-function clause execute (DIV(rs2, rs1, rd, s)) =
-  let rs1_val = X(rs1) in
-  let rs2_val = X(rs2) in
-  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
-  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
-  let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int) in
-  let q': int = if s & q > xlen_max_signed then xlen_min_signed else q in /* check for signed overflow */ {
-    X(rd) = to_bits(xlen, q');
-    true
-  }
-
+function clause execute (DIV(rs2, rs1, rd, s)) = {
+  let rs1_val = X(rs1);
+  let rs2_val = X(rs2);
+  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val);
+  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val);
+  let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int);
+  let q': int = if s & q > xlen_max_signed then xlen_min_signed else q; /* check for signed overflow */
+  X(rd) = to_bits(xlen, q');
+  true
+}
 
 mapping maybe_not_u : bool <-> string = {
   false <-> "u",
-  true <-> ""
+  true  <-> ""
 }
 
-mapping clause assembly = DIV(rs2, rs1, rd, s) <-> "div" ^ maybe_not_u(s) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = DIV(rs2, rs1, rd, s)
+                      <-> "div" ^ maybe_not_u(s) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = REM : (regbits, regbits, regbits, bool)
 
 mapping clause encdec = REM(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b11 @ bool_not_bits(s) @ rd @ 0b0110011
 
-function clause execute (REM(rs2, rs1, rd, s)) =
-  let rs1_val = X(rs1) in
-  let rs2_val = X(rs2) in
-  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
-  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
-  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in {
+function clause execute (REM(rs2, rs1, rd, s)) = {
+  let rs1_val = X(rs1);
+  let rs2_val = X(rs2);
+  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val);
+  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val);
+  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int);
   /* signed overflow case returns zero naturally as required due to -1 divisor */
-    X(rd) = to_bits(xlen, r);
-    true
-  }
+  X(rd) = to_bits(xlen, r);
+  true
+}
 
 mapping clause assembly = REM(rs2, rs1, rd, s) <-> "rem" ^ maybe_not_u(s) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
@@ -531,55 +541,54 @@ union clause ast = MULW : (regbits, regbits, regbits)
 
 mapping clause encdec = MULW(rs2, rs1, rd) <-> 0b0000001 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0111011
 
-function clause execute (MULW(rs2, rs1, rd)) =
-  let rs1_val = X(rs1)[31..0] in
-  let rs2_val = X(rs2)[31..0] in
-  let rs1_int : int = signed(rs1_val) in
-  let rs2_int : int = signed(rs2_val) in
-  let result32 = to_bits(64, rs1_int * rs2_int)[31..0] in /* XXX surprising behaviour of to_bits requires exapnsion to 64 bits followed by truncation... */
-  let result : xlenbits = EXTS(result32) in {
-    X(rd) = result;
-    true
-  }
+function clause execute (MULW(rs2, rs1, rd)) = {
+  let rs1_val = X(rs1)[31..0];
+  let rs2_val = X(rs2)[31..0];
+  let rs1_int : int = signed(rs1_val);
+  let rs2_int : int = signed(rs2_val);
+  let result32 = to_bits(64, rs1_int * rs2_int)[31..0]; /* XXX surprising behaviour of to_bits requires expansion to 64 bits followed by truncation... */
+  let result : xlenbits = EXTS(result32);
+  X(rd) = result;
+  true
+}
 
-
-mapping clause assembly = MULW(rs2, rs1, rd) <->  "mulw" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = MULW(rs2, rs1, rd)
+                      <-> "mulw" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = DIVW : (regbits, regbits, regbits, bool)
 
 mapping clause encdec = DIVW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b10 @ bool_not_bits(s) @ rd @ 0b0111011
 
-function clause execute (DIVW(rs2, rs1, rd, s)) =
-  let rs1_val = X(rs1)[31..0] in
-  let rs2_val = X(rs2)[31..0] in
-  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
-  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
-  let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int) in
-  let q': int = if s & q > (2 ^ 31 - 1) then  (0 - 2^31) else q in /* check for signed overflow */ {
-    X(rd) = EXTS(to_bits(32, q'));
-    true
-  }
+function clause execute (DIVW(rs2, rs1, rd, s)) = {
+  let rs1_val = X(rs1)[31..0];
+  let rs2_val = X(rs2)[31..0];
+  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val);
+  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val);
+  let q : int = if rs2_int == 0 then -1 else quot_round_zero(rs1_int, rs2_int);
+  let q': int = if s & q > (2 ^ 31 - 1) then  (0 - 2^31) else q; /* check for signed overflow */
+  X(rd) = EXTS(to_bits(32, q'));
+  true
+}
 
-
-mapping clause assembly = DIVW(rs2, rs1, rd, s) <-> "div" ^ maybe_not_u(s) ^ "w" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = DIVW(rs2, rs1, rd, s)
+                      <-> "div" ^ maybe_not_u(s) ^ "w" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = REMW : (regbits, regbits, regbits, bool)
 
 mapping clause encdec = REMW(rs2, rs1, rd, s) <-> 0b0000001 @ rs2 @ rs1 @ 0b11 @ bool_not_bits(s) @ rd @ 0b0111011
 
-function clause execute (REMW(rs2, rs1, rd, s)) =
-  let rs1_val = X(rs1)[31..0] in
-  let rs2_val = X(rs2)[31..0] in
-  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val) in
-  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val) in
-  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int) in {
-    /* signed overflow case returns zero naturally as required due to -1 divisor */
-    X(rd) = EXTS(to_bits(32, r));
-    true
-  }
-
+function clause execute (REMW(rs2, rs1, rd, s)) = {
+  let rs1_val = X(rs1)[31..0];
+  let rs2_val = X(rs2)[31..0];
+  let rs1_int : int = if s then signed(rs1_val) else unsigned(rs1_val);
+  let rs2_int : int = if s then signed(rs2_val) else unsigned(rs2_val);
+  let r : int = if rs2_int == 0 then rs1_int else rem_round_zero(rs1_int, rs2_int);
+  /* signed overflow case returns zero naturally as required due to -1 divisor */
+  X(rd) = EXTS(to_bits(32, r));
+  true
+}
 
 mapping clause assembly = REMW(rs2, rs1, rd, s) <-> "rem" ^ maybe_not_u(s) ^ "w" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
@@ -650,18 +659,17 @@ union clause ast = ECALL : unit
 
 mapping clause encdec = ECALL() <-> 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
-function clause execute ECALL() =
+function clause execute ECALL() = {
   let t : sync_exception =
     struct { trap = match (cur_privilege) {
-                      User => E_U_EnvCall,
+                      User       => E_U_EnvCall,
                       Supervisor => E_S_EnvCall,
-                      Machine => E_M_EnvCall
+                      Machine    => E_M_EnvCall
                     },
-             excinfo = (None() : option(xlenbits)) } in {
-    nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC);
-    false
-  }
-
+             excinfo = (None() : option(xlenbits)) };
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC);
+  false
+}
 
 mapping clause assembly = ECALL() <-> "ecall"
 
@@ -671,10 +679,9 @@ union clause ast = MRET : unit
 mapping clause encdec = MRET() <-> 0b0011000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute MRET() = {
-  if cur_privilege == Machine then
-    nextPC = handle_exception(cur_privilege, CTL_MRET(), PC)
-  else
-    handle_illegal();
+  if   cur_privilege == Machine
+  then nextPC = handle_exception(cur_privilege, CTL_MRET(), PC)
+  else handle_illegal();
   false
 }
 
@@ -688,7 +695,7 @@ mapping clause encdec = SRET() <-> 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b000
 function clause execute SRET() = {
   match cur_privilege {
     User       => handle_illegal(),
-    Supervisor => if mstatus.TSR() == true
+    Supervisor => if   mstatus.TSR() == true
                   then handle_illegal()
                   else nextPC = handle_exception(cur_privilege, CTL_SRET(), PC),
     Machine    => nextPC = handle_exception(cur_privilege, CTL_SRET(), PC)
@@ -718,7 +725,7 @@ mapping clause encdec = WFI() <-> 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0
 function clause execute WFI() =
   match cur_privilege {
     Machine    => true,
-    Supervisor => if mstatus.TW() == true
+    Supervisor => if   mstatus.TW() == true
                   then { handle_illegal(); false }
                   else true,
     User       => { handle_illegal(); false }
@@ -733,7 +740,8 @@ mapping clause encdec = SFENCE_VMA(rs1, rs2) <-> 0b0001001 @ rs2 @ rs1 @ 0b000 @
 
 function clause execute SFENCE_VMA(rs1, rs2) = {
   /* TODO: handle PMP/TLB synchronization when executed in M-mode. */
-  if cur_privilege == User then { handle_illegal(); false }
+  if   cur_privilege == User
+  then { handle_illegal(); false }
   else match (architecture(mstatus.SXL()), mstatus.TVM()) {
     (Some(RV64), true)  => { handle_illegal(); false },
     (Some(RV64), false) => {
@@ -746,7 +754,8 @@ function clause execute SFENCE_VMA(rs1, rs2) = {
   }
 }
 
-mapping clause assembly = SFENCE_VMA(rs1, rs2) <-> "sfence.vma" ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = SFENCE_VMA(rs1, rs2)
+                      <-> "sfence.vma" ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 // Some print utils for lr/sc.
@@ -813,12 +822,14 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
            }
        }
 
-mapping clause assembly = LOADRES(aq, rl, rs1, size, rd) <-> "lr." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
+mapping clause assembly = LOADRES(aq, rl, rs1, size, rd)
+                      <-> "lr." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
 
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
 
-mapping clause encdec = STORECON(aq, rl, rs2, rs1, size, rd) <-> 0b00011 @ bool_bits(aq) @ bool_bits(rl) @ rs2 @ rs1 @ 0b0 @ size_bits(size) @ rd @ 0b0101111
+mapping clause encdec = STORECON(aq, rl, rs2, rs1, size, rd)
+                    <-> 0b00011 @ bool_bits(aq) @ bool_bits(rl) @ rs2 @ rs1 @ 0b0 @ size_bits(size) @ rd @ 0b0101111
 
 /* NOTE: Currently, we only EA if address translation is successful.
    This may need revisiting. */
@@ -844,7 +855,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   if (~ (aligned))
   then { handle_mem_exception(vaddr, E_SAMO_Addr_Align); false }
   else {
-    if match_reservation(vaddr) == false
+    if   match_reservation(vaddr) == false
     then { X(rd) = EXTZ(0b1); true }
     else {
       match translateAddr(vaddr, Write, Data) {
@@ -867,7 +878,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
               match (res) {
                 MemValue(true)     => { X(rd) = EXTZ(0b0); cancel_reservation(); true },
                 MemValue(false)    => { X(rd) = EXTZ(0b1); cancel_reservation(); true },
-                MemException(e) => { handle_mem_exception(addr, e); false }
+                MemException(e)    => { handle_mem_exception(addr, e); false }
               }
             }
           }
@@ -917,10 +928,10 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
           _        => internal_error ("AMO expected WORD or DOUBLE")
           };
           match (rval) {
-            MemException(e) => { handle_mem_exception(addr, e); false },
+            MemException(e)  => { handle_mem_exception(addr, e); false },
             MemValue(loaded) => {
               rs2_val : xlenbits = X(rs2);
-              result : xlenbits =
+              result  : xlenbits =
                 match op {
                   AMOSWAP => rs2_val,
                   AMOADD  => rs2_val + loaded,
@@ -941,7 +952,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
                 _      => internal_error("AMO expected WORD or DOUBLE")
               };
               match (wval) {
-                MemValue(true) => { X(rd) = loaded; true },
+                MemValue(true)  => { X(rd) = loaded; true },
                 MemValue(false) => { internal_error("AMO got false from mem_write_value") },
                 MemException(e) => { handle_mem_exception(addr, e); false }
               }
@@ -966,7 +977,8 @@ mapping amo_mnemonic : amoop <-> string = {
   AMOMAXU <-> "amomaxu"
 }
 
-mapping clause assembly = AMO(op, aq, rl, rs2, rs1, width, rd) <-> amo_mnemonic(op) ^ "." ^ size_mnemonic(width) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = AMO(op, aq, rl, rs2, rs1, width, rd)
+                      <-> amo_mnemonic(op) ^ "." ^ size_mnemonic(width) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = CSR  : (bits(12), regbits, regbits, bool, csrop)
@@ -1121,10 +1133,10 @@ mapping clause assembly = CSR(csr, rs1, rd, false, op) <-> csr_mnemonic(op) ^ sp
 /* ****************************************************************** */
 union clause ast = NOP : unit
 
-function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bits(5)) @ 0b01) : bits(16) = {
-  if (nzi1 == 0b0) & (nzi0 == 0b00000) then Some(NOP())
+function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bits(5)) @ 0b01) : bits(16) =
+  if   (nzi1 == 0b0) & (nzi0 == 0b00000)
+  then Some(NOP())
   else None()
-}
 
 function clause execute NOP() = true
 
@@ -1135,17 +1147,16 @@ function clause print_insn (NOP()) =
 
 union clause ast = C_ADDI4SPN : (cregbits, bits(8))
 
-function clause decodeCompressed (0b000 @ nz54 : bits(2) @ nz96 : bits(4) @ nz2 : bits(1) @ nz3 : bits(1) @ rd : cregbits @ 0b00) : bits(16) = {
-  let nzimm = (nz96 @ nz54 @ nz3 @ nz2) : bits(8) in
-  if nzimm == 0b00000000 then None()
+function clause decodeCompressed (0b000 @ nz54 : bits(2) @ nz96 : bits(4) @ nz2 : bits(1) @ nz3 : bits(1) @ rd : cregbits @ 0b00) : bits(16) =
+  let  nzimm = (nz96 @ nz54 @ nz3 @ nz2) : bits(8) in
+  if   nzimm == 0b00000000
+  then None()
   else Some(C_ADDI4SPN(rd, nzimm))
-}
 
-function clause execute (C_ADDI4SPN(rdc, nzimm)) = {
+function clause execute (C_ADDI4SPN(rdc, nzimm)) =
   let imm : bits(12) = (0b00 @ nzimm @ 0b00) in
   let rd = creg2reg_bits(rdc) in
   execute(ITYPE(imm, sp, rd, RISCV_ADDI))
-}
 
 function clause print_insn (C_ADDI4SPN(rdc, nzimm)) =
   "c.addi4spn " ^ creg2reg_bits(rdc) ^ ", " ^ BitStr(nzimm)
@@ -1153,17 +1164,15 @@ function clause print_insn (C_ADDI4SPN(rdc, nzimm)) =
 /* ****************************************************************** */
 union clause ast = C_LW : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b010 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rd : cregbits @ 0b00) : bits(16) = {
+function clause decodeCompressed (0b010 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rd : cregbits @ 0b00) : bits(16) =
   let uimm = (ui6 @ ui53 @ ui2) : bits(5) in
   Some(C_LW(uimm, rs1, rd))
-}
 
-function clause execute (C_LW(uimm, rsc, rdc)) = {
+function clause execute (C_LW(uimm, rsc, rdc)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   let rd = creg2reg_bits(rdc) in
   let rs = creg2reg_bits(rsc) in
   execute(LOAD(imm, rs, rd, false, WORD, false, false))
-}
 
 function clause print_insn (C_LW(uimm, rsc, rdc)) =
   "c.lw   " ^ creg2reg_bits(rdc) ^ ", " ^ creg2reg_bits(rsc) ^ ", " ^ BitStr(uimm)
@@ -1171,17 +1180,15 @@ function clause print_insn (C_LW(uimm, rsc, rdc)) =
 /* ****************************************************************** */
 union clause ast = C_LD : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b011 @ ui53 : bits(3) @ rs1 : cregbits @ ui76 : bits(2) @ rd : cregbits @ 0b00) : bits(16) = {
+function clause decodeCompressed (0b011 @ ui53 : bits(3) @ rs1 : cregbits @ ui76 : bits(2) @ rd : cregbits @ 0b00) : bits(16) =
   let uimm = (ui76 @ ui53) : bits(5) in
   Some(C_LD(uimm, rs1, rd))
-}
 
-function clause execute (C_LD(uimm, rsc, rdc)) = {
+function clause execute (C_LD(uimm, rsc, rdc)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
   let rd = creg2reg_bits(rdc) in
   let rs = creg2reg_bits(rsc) in
   execute(LOAD(imm, rs, rd, false, DOUBLE, false, false))
-}
 
 function clause print_insn (C_LD(uimm, rsc, rdc)) =
   "c.ld   " ^ creg2reg_bits(rdc) ^ ", " ^ creg2reg_bits(rsc) ^ ", " ^ BitStr(uimm)
@@ -1189,17 +1196,15 @@ function clause print_insn (C_LD(uimm, rsc, rdc)) =
 /* ****************************************************************** */
 union clause ast = C_SW : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b110 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rs2 : cregbits @ 0b00) : bits(16) = {
+function clause decodeCompressed (0b110 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rs2 : cregbits @ 0b00) : bits(16) =
   let uimm = (ui6 @ ui53 @ ui2) : bits(5) in
   Some(C_SW(uimm, rs1, rs2))
-}
 
-function clause execute (C_SW(uimm, rsc1, rsc2)) = {
+function clause execute (C_SW(uimm, rsc1, rsc2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   let rs1 = creg2reg_bits(rsc1) in
   let rs2 = creg2reg_bits(rsc2) in
   execute(STORE(imm, rs2, rs1, WORD, false, false))
-}
 
 function clause print_insn (C_SW(uimm, rsc1, rsc2)) =
   "c.sw   " ^ creg2reg_bits(rsc1) ^ ", " ^ creg2reg_bits(rsc2) ^ ", " ^ BitStr(uimm)
@@ -1207,17 +1212,15 @@ function clause print_insn (C_SW(uimm, rsc1, rsc2)) =
 /* ****************************************************************** */
 union clause ast = C_SD : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b111 @ ui53 : bits(3) @ rs1 : bits(3) @ ui76 : bits(2) @ rs2 : bits(3) @ 0b00): bits(16) = {
+function clause decodeCompressed (0b111 @ ui53 : bits(3) @ rs1 : bits(3) @ ui76 : bits(2) @ rs2 : bits(3) @ 0b00): bits(16) =
   let uimm = (ui76 @ ui53) : bits(5) in
   Some(C_SD(uimm, rs1, rs2))
-}
 
-function clause execute (C_SD(uimm, rsc1, rsc2)) = {
+function clause execute (C_SD(uimm, rsc1, rsc2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
   let rs1 = creg2reg_bits(rsc1) in
   let rs2 = creg2reg_bits(rsc2) in
   execute(STORE(imm, rs2, rs1, DOUBLE, false, false))
-}
 
 function clause print_insn (C_SD(uimm, rsc1, rsc2)) =
   "c.sd   " ^ creg2reg_bits(rsc1) ^ ", " ^ creg2reg_bits(rsc2) ^ ", " ^ BitStr(uimm)
@@ -1225,16 +1228,14 @@ function clause print_insn (C_SD(uimm, rsc1, rsc2)) =
 /* ****************************************************************** */
 union clause ast = C_ADDI : (bits(6), regbits)
 
-function clause decodeCompressed (0b000 @ nzi5 : bits(1) @ rsd : regbits @ nzi40 : bits(5) @ 0b01) : bits(16) = {
+function clause decodeCompressed (0b000 @ nzi5 : bits(1) @ rsd : regbits @ nzi40 : bits(5) @ 0b01) : bits(16) =
   let nzi = (nzi5 @ nzi40) : bits(6) in
   if (nzi == 0b000000) | (rsd == zreg) then None()
   else Some(C_ADDI(nzi, rsd))
-}
 
-function clause execute (C_ADDI(nzi, rsd)) = {
+function clause execute (C_ADDI(nzi, rsd)) =
   let imm : bits(12) = EXTS(nzi) in
   execute(ITYPE(imm, rsd, rsd, RISCV_ADDI))
-}
 
 function clause print_insn (C_ADDI(nzi, rsd)) =
   "c.addi   " ^ rsd ^ ", " ^ BitStr(nzi)
@@ -1249,9 +1250,8 @@ union clause ast = C_ADDIW : (bits(6), regbits)
 function clause decodeCompressed (0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01) =
   Some (C_ADDIW((imm5 @ imm40), rsd))
 
-function clause execute (C_JAL(imm)) = {
+function clause execute (C_JAL(imm)) =
   execute(RISCV_JAL(EXTS(imm @ 0b0), ra))
-}
 
 function clause execute (C_ADDIW(imm, rsd)) = {
   let imm : bits(32) = EXTS(imm);
@@ -1270,15 +1270,14 @@ function clause print_insn (C_ADDIW(imm, rsd)) =
 /* ****************************************************************** */
 union clause ast = C_LI : (bits(6), regbits)
 
-function clause decodeCompressed (0b010 @ imm5 : bits(1) @ rd : regbits @ imm40 : bits(5) @ 0b01) = {
-  if (rd == zreg) then None()
+function clause decodeCompressed (0b010 @ imm5 : bits(1) @ rd : regbits @ imm40 : bits(5) @ 0b01) =
+  if   rd == zreg
+  then None()
   else Some(C_LI(imm5 @ imm40, rd))
-}
 
-function clause execute (C_LI(imm, rd)) = {
+function clause execute (C_LI(imm, rd)) =
   let imm : bits(12) = EXTS(imm) in
   execute(ITYPE(imm, zreg, rd, RISCV_ADDI))
-}
 
 function clause print_insn (C_LI(imm, rd)) =
   "c.li  " ^ rd ^ ", " ^ BitStr(imm)
@@ -1286,16 +1285,15 @@ function clause print_insn (C_LI(imm, rd)) =
 /* ****************************************************************** */
 union clause ast = C_ADDI16SP : (bits(6))
 
-function clause decodeCompressed (0b011 @ nzi9 : bits(1) @ /* x2 */ 0b00010 @ nzi4 : bits(1) @ nzi6 : bits(1) @ nzi87 : bits(2) @ nzi5 : bits(1) @ 0b01) = {
-  let nzimm = nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4 in
-  if (nzimm == 0b000000) then None()
+function clause decodeCompressed (0b011 @ nzi9 : bits(1) @ /* x2 */ 0b00010 @ nzi4 : bits(1) @ nzi6 : bits(1) @ nzi87 : bits(2) @ nzi5 : bits(1) @ 0b01) =
+  let  nzimm = nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4 in
+  if   nzimm == 0b000000
+  then None()
   else Some(C_ADDI16SP(nzimm))
-}
 
-function clause execute (C_ADDI16SP(imm)) = {
+function clause execute (C_ADDI16SP(imm)) =
   let imm : bits(12) = EXTS(imm @ 0x0) in
   execute(ITYPE(imm, sp, sp, RISCV_ADDI))
-}
 
 function clause print_insn (C_ADDI16SP(imm)) =
   "c.addi16sp  " ^ BitStr(imm)
@@ -1303,15 +1301,14 @@ function clause print_insn (C_ADDI16SP(imm)) =
 /* ****************************************************************** */
 union clause ast = C_LUI : (bits(6), regbits)
 
-function clause decodeCompressed (0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01) = {
-  if (rd == zreg) | (rd == sp) then None()
+function clause decodeCompressed (0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01) =
+  if   (rd == zreg) | (rd == sp)
+  then None()
   else Some(C_LUI(imm17 @ imm1612, rd))
-}
 
-function clause execute (C_LUI(imm, rd)) = {
+function clause execute (C_LUI(imm, rd)) =
   let res : bits(20) = EXTS(imm) in
   execute(UTYPE(res, rd, RISCV_LUI))
-}
 
 function clause print_insn (C_LUI(imm, rd)) =
   "c.lui  " ^ rd ^ ", " ^ BitStr(imm)
@@ -1319,17 +1316,15 @@ function clause print_insn (C_LUI(imm, rd)) =
 /* ****************************************************************** */
 union clause ast = C_SRLI : (bits(6), cregbits)
 
-function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b00 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
-  let shamt : bits(6) = nzui5 @ nzui40 in
-  if shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
+function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b00 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) =
+  let  shamt : bits(6) = nzui5 @ nzui40 in
+  if   shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
   then None()
   else Some(C_SRLI(shamt, rsd))
-}
 
-function clause execute (C_SRLI(shamt, rsd)) = {
+function clause execute (C_SRLI(shamt, rsd)) =
   let rsd = creg2reg_bits(rsd)  in
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRLI))
-}
 
 function clause print_insn (C_SRLI(shamt, rsd)) =
   "c.srli  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(shamt)
@@ -1337,17 +1332,15 @@ function clause print_insn (C_SRLI(shamt, rsd)) =
 /* ****************************************************************** */
 union clause ast = C_SRAI : (bits(6), cregbits)
 
-function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b01 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) = {
-  let shamt : bits(6) = nzui5 @ nzui40 in
-  if shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
+function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b01 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) =
+  let  shamt : bits(6) = nzui5 @ nzui40 in
+  if   shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
   then None()
   else Some(C_SRAI(shamt, rsd))
-}
 
-function clause execute (C_SRAI(shamt, rsd)) = {
+function clause execute (C_SRAI(shamt, rsd)) =
   let rsd = creg2reg_bits(rsd)  in
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRAI))
-}
 
 function clause print_insn (C_SRAI(shamt, rsd)) =
   "c.srai  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(shamt)
@@ -1357,10 +1350,9 @@ union clause ast = C_ANDI : (bits(6), cregbits)
 
 function clause decodeCompressed (0b100 @ i5 : bits(1) @ 0b10 @ rsd : cregbits @ i40 : bits(5) @ 0b01) = Some(C_ANDI(i5 @ i40, rsd))
 
-function clause execute (C_ANDI(imm, rsd)) = {
+function clause execute (C_ANDI(imm, rsd)) =
   let rsd = creg2reg_bits(rsd) in
   execute(ITYPE(EXTS(imm), rsd, rsd, RISCV_ANDI))
-}
 
 function clause print_insn (C_ANDI(imm, rsd)) =
   "c.andi  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(imm)
@@ -1370,11 +1362,10 @@ union clause ast = C_SUB : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01) = Some(C_SUB(rsd, rs2))
 
-function clause execute (C_SUB(rsd, rs2)) = {
+function clause execute (C_SUB(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_SUB))
-}
 
 function clause print_insn (C_SUB(rsd, rs2)) =
   "c.sub  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
@@ -1384,11 +1375,10 @@ union clause ast = C_XOR : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_XOR(rsd, rs2))
 
-function clause execute (C_XOR(rsd, rs2)) = {
+function clause execute (C_XOR(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_XOR))
-}
 
 function clause print_insn (C_XOR(rsd, rs2)) =
   "c.xor  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
@@ -1398,11 +1388,10 @@ union clause ast = C_OR : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b10 @ rs2 : cregbits @ 0b01) = Some(C_OR(rsd, rs2))
 
-function clause execute (C_OR(rsd, rs2)) = {
+function clause execute (C_OR(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_OR))
-}
 
 function clause print_insn (C_OR(rsd, rs2)) =
   "c.or   " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
@@ -1412,11 +1401,10 @@ union clause ast = C_AND : (cregbits, cregbits)
 
 function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b11 @ rs2 : cregbits @ 0b01) = Some(C_AND(rsd, rs2))
 
-function clause execute (C_AND(rsd, rs2)) = {
+function clause execute (C_AND(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_AND))
-}
 
 function clause print_insn (C_AND(rsd, rs2)) =
   "c.and  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
@@ -1427,11 +1415,10 @@ union clause ast = C_SUBW : (cregbits, cregbits)
 /* TODO: invalid on RV32 */
 function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01) = Some(C_SUBW(rsd, rs2))
 
-function clause execute (C_SUBW(rsd, rs2)) = {
+function clause execute (C_SUBW(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPEW(rs2, rsd, rsd, RISCV_SUBW))
-}
 
 function clause print_insn (C_SUBW(rsd, rs2)) =
   "c.subw " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
@@ -1442,11 +1429,10 @@ union clause ast = C_ADDW : (cregbits, cregbits)
 /* TODO: invalid on RV32 */
 function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_ADDW(rsd, rs2))
 
-function clause execute (C_ADDW(rsd, rs2)) = {
+function clause execute (C_ADDW(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPEW(rs2, rsd, rsd, RISCV_ADDW))
-}
 
 function clause print_insn (C_ADDW(rsd, rs2)) =
   "c.addw " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
@@ -1490,12 +1476,11 @@ function clause print_insn (C_BNEZ(imm, rs)) =
 /* ****************************************************************** */
 union clause ast = C_SLLI : (bits(6), regbits)
 
-function clause decodeCompressed (0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui40 : bits(5) @ 0b10) = {
-  let shamt : bits(6) = nzui5 @ nzui40 in
-  if shamt == 0b000000 | rsd == zreg /* TODO: On RV32, also need shamt[5] == 0 */
+function clause decodeCompressed (0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui40 : bits(5) @ 0b10) =
+  let  shamt : bits(6) = nzui5 @ nzui40 in
+  if   shamt == 0b000000 | rsd == zreg /* TODO: On RV32, also need shamt[5] == 0 */
   then None()
   else Some(C_SLLI(shamt, rsd))
-}
 
 function clause execute (C_SLLI(shamt, rsd)) =
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SLLI))
@@ -1506,17 +1491,15 @@ function clause print_insn (C_SLLI(shamt, rsd)) =
 /* ****************************************************************** */
 union clause ast = C_LWSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10) = {
-  let uimm : bits(6) = ui76 @ ui5 @ ui42 in
-  if  rd == zreg
+function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10) =
+  let  uimm : bits(6) = ui76 @ ui5 @ ui42 in
+  if   rd == zreg
   then None()
   else Some(C_LWSP(uimm, rd))
-}
 
-function clause execute (C_LWSP(uimm, rd)) = {
+function clause execute (C_LWSP(uimm, rd)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   execute(LOAD(imm, sp, rd, false, WORD, false, false))
-}
 
 function clause print_insn (C_LWSP(uimm, rd)) =
   "c.lwsp " ^ rd ^ ", " ^ BitStr(uimm)
@@ -1524,17 +1507,15 @@ function clause print_insn (C_LWSP(uimm, rd)) =
 /* ****************************************************************** */
 union clause ast = C_LDSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b011 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) = {
-  let uimm : bits(6) = ui86 @ ui5 @ ui43 in
-  if  rd == zreg
+function clause decodeCompressed (0b011 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) =
+  let  uimm : bits(6) = ui86 @ ui5 @ ui43 in
+  if   rd == zreg
   then None()
   else Some(C_LDSP(uimm, rd))
-}
 
-function clause execute (C_LDSP(uimm, rd)) = {
+function clause execute (C_LDSP(uimm, rd)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
   execute(LOAD(imm, sp, rd, false, DOUBLE, false, false))
-}
 
 function clause print_insn (C_LDSP(uimm, rd)) =
   "c.ldsp " ^ rd ^ ", " ^ BitStr(uimm)
@@ -1542,15 +1523,13 @@ function clause print_insn (C_LDSP(uimm, rd)) =
 /* ****************************************************************** */
 union clause ast = C_SWSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ rs2 : regbits @ 0b10) = {
+function clause decodeCompressed (0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ rs2 : regbits @ 0b10) =
   let uimm : bits(6) = ui76 @ ui52 in
   Some(C_SWSP(uimm, rs2))
-}
 
-function clause execute (C_SWSP(uimm, rs2)) = {
+function clause execute (C_SWSP(uimm, rs2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   execute(STORE(imm, rs2, sp, WORD, false, false))
-}
 
 function clause print_insn (C_SWSP(uimm, rd)) =
   "c.swsp " ^ rd ^ ", " ^ BitStr(uimm)
@@ -1558,15 +1537,13 @@ function clause print_insn (C_SWSP(uimm, rd)) =
 /* ****************************************************************** */
 union clause ast = C_SDSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b111 @ ui53 : bits(3) @ ui86 : bits(3) @ rs2 : regbits @ 0b10) = {
+function clause decodeCompressed (0b111 @ ui53 : bits(3) @ ui86 : bits(3) @ rs2 : regbits @ 0b10) =
   let uimm : bits(6) = ui86 @ ui53 in
   Some(C_SDSP(uimm, rs2))
-}
 
-function clause execute (C_SDSP(uimm, rs2)) = {
+function clause execute (C_SDSP(uimm, rs2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
   execute(STORE(imm, rs2, sp, DOUBLE, false, false))
-}
 
 function clause print_insn (C_SDSP(uimm, rd)) =
   "c.sdsp " ^ rd ^ ", " ^ BitStr(uimm)
@@ -1574,11 +1551,10 @@ function clause print_insn (C_SDSP(uimm, rd)) =
 /* ****************************************************************** */
 union clause ast = C_JR : (regbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10) = {
-  if rs1 == zreg
+function clause decodeCompressed (0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10) =
+  if   rs1 == zreg
   then None()
   else Some(C_JR(rs1))
-}
 
 function clause execute (C_JR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, zreg))
@@ -1589,11 +1565,10 @@ function clause print_insn (C_JR(rs1)) =
 /* ****************************************************************** */
 union clause ast = C_JALR : (regbits)
 
-function clause decodeCompressed (0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10) = {
-  if rs1 == zreg
+function clause decodeCompressed (0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10) =
+  if   rs1 == zreg
   then None()
   else Some(C_JALR(rs1))
-}
 
 function clause execute (C_JALR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, ra))
@@ -1604,11 +1579,10 @@ function clause print_insn (C_JALR(rs1)) =
 /* ****************************************************************** */
 union clause ast = C_MV : (regbits, regbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0b10) = {
-  if rs2 == zreg | rd == zreg
+function clause decodeCompressed (0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0b10) =
+  if   rs2 == zreg | rd == zreg
   then None()
   else Some(C_MV(rd, rs2))
-}
 
 function clause execute (C_MV(rd, rs2)) =
   execute(RTYPE(rs2, zreg, rd, RISCV_ADD))
@@ -1619,11 +1593,10 @@ function clause print_insn (C_MV(rd, rs2)) =
 /* ****************************************************************** */
 union clause ast = C_ADD : (regbits, regbits)
 
-function clause decodeCompressed (0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10) = {
-  if rsd == zreg | rs2 == zreg
+function clause decodeCompressed (0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10) =
+  if   rsd == zreg | rs2 == zreg
   then None()
   else Some(C_ADD(rsd, rs2))
-}
 
 function clause execute (C_ADD(rsd, rs2)) =
   execute(RTYPE(rs2, rsd, rsd, RISCV_ADD))
