@@ -98,6 +98,13 @@ function Step_CPU() = {
               "\n")));
         exit()
       };
+      // test for ERET instruction from EL3_Secure - only supported in v8.4
+      if (__currentInstr == 0xd69f_03e0) & (PSTATE.EL == EL3) & (SCR_EL3[0] == bitzero) then {
+        print(concat_str("UNIMPLEMENTED: EL2_Secure support (v8.4 feature) ",
+              concat_str(HexStr(UInt(__currentInstr)),
+              "\n")));
+        exit()
+      };
       try {
           __PC_changed = false;
           ShouldAdvanceIT = (PSTATE.nRW == [bitone]) & (PSTATE.T == [bitone]);
