@@ -4027,7 +4027,7 @@ function FPRoundBase (op, fpcr, rounding) = {
   };
   let 'F = F_mut;
   let 'E = E_mut;
-  assert(constraint('F in {10, 23, 52} & 'E in {5, 8, 11}));
+  assert(constraint('F in {10, 23, 52} & 'E in {5, 8, 11} & 'N > 'F));
   mantissa : real = undefined;
   sign : bits(1) = undefined;
   if op < 0.0 then {
