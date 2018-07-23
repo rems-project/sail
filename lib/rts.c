@@ -7,7 +7,7 @@
 #include"elf.h"
 
 static uint64_t g_elf_entry;
-static uint64_t g_cycle_count = 0;
+uint64_t g_cycle_count = 0;
 static uint64_t g_cycle_limit;
 
 void sail_match_failure(sail_string msg)
