@@ -140,7 +140,7 @@ Definition eq_bit (x : bitU) (y : bitU) : bool :=
 
 Require Import Zeuclid.
 Definition euclid_modulo (m n : Z) `{ArithFact (n > 0)} : {z : Z & ArithFact (0 <= z <= n-1)}.
-refine (build_ex (ZEuclid.modulo m n)).
+refine (existT _ (ZEuclid.modulo m n) _).
 constructor.
 destruct H.
 assert (Zabs n = n). { rewrite Zabs_eq; auto with zarith. }
