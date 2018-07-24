@@ -18,7 +18,7 @@ mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) ../sail
 mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile ../sail
 	$(SAIL) -O -memo_z3 -c $(filter %.sail, $^) 1> $@
 
-C_WARNINGS=-Wall -Wno-unused-but-set-variable -Wno-unused-label -Wno-maybe-uninitialized -Wno-return-type
+C_WARNINGS=-Wall -Wno-unused-but-set-variable -Wno-unused-label -Wno-maybe-uninitialized
 C_OPT=-O2
 GCOV_FLAGS=
 mips_c: mips.c ../lib/sail.h ../lib/*.c Makefile

@@ -1951,7 +1951,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
          string (Printf.sprintf "  COPY(%s)(%s, %s);" (sgen_ctyp_name lctyp) (sgen_clexp clexp) (sgen_cval cval))
      else
        if pointer_assign lctyp rctyp then
-         string (Printf.sprintf "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval))         
+         string (Printf.sprintf "  %s = &%s;" (sgen_clexp_pure clexp) (sgen_cval cval))         
        else if is_stack_ctyp lctyp then
          string (Printf.sprintf "  %s = CONVERT_OF(%s, %s)(%s);"
                                 (sgen_clexp_pure clexp) (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_cval cval))
@@ -2077,6 +2077,17 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | CT_int64 -> "INT64_C(0xdeadc0de)", []
        | CT_bits64 _ -> "UINT64_C(0xdeadc0de)", []
        | CT_bool -> "false", []
+       | CT_enum (_, ctor :: _) -> sgen_id ctor, [] 
+       | CT_tup ctyps when is_stack_ctyp ctyp ->
+          let gs = gensym () in
+          let fold (inits, prev) (n, ctyp) =
+            let init, prev' = codegen_exn_return ctyp in
+            Printf.sprintf ".ztup%d = %s" n init :: inits, prev @ prev'
+          in
+          let inits, prev = List.fold_left fold ([], []) (List.mapi (fun i x -> (i, x)) ctyps) in
+          sgen_id gs,
+          [Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_id gs)
+           ^ Util.string_of_list ", " (fun x -> x) inits ^ " };"] @ prev
        | CT_struct (id, ctors) when is_stack_ctyp ctyp ->
           let gs = gensym () in
           let fold (inits, prev) (id, ctyp) =
@@ -2087,7 +2098,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
           sgen_id gs,
           [Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_id gs)
            ^ Util.string_of_list ", " (fun x -> x) inits ^ " };"] @ prev
-       | _ -> assert false
+       | ctyp -> c_error ("Cannot create undefined value for type: " ^ string_of_ctyp ctyp)
      in
      let ret, prev = codegen_exn_return ctyp in
      separate_map hardline (fun str -> string ("  " ^ str)) (List.rev prev)
@@ -2242,7 +2253,10 @@ let codegen_type_def ctx = function
          | CT_tup ctyps ->
             String.concat ", " (List.mapi (fun i ctyp -> Printf.sprintf "%s op%d" (sgen_ctyp ctyp) i) ctyps),
             string (Printf.sprintf "%s op;" (sgen_ctyp ctyp)) ^^ hardline
-            ^^ string (Printf.sprintf "CREATE(%s)(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
+            ^^ if not (is_stack_ctyp ctyp) then
+                 string (Printf.sprintf "CREATE(%s)(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
+               else
+                 empty
             ^^ separate hardline (List.mapi tuple_set ctyps) ^^ hardline
          | ctyp -> Printf.sprintf "%s op" (sgen_ctyp ctyp), empty
        in
