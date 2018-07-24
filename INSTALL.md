@@ -32,7 +32,7 @@ We now need ocamlbuild, zarith, and menhir from OPAM.
 ```
 opam install ocamlbuild
 opam install zarith
-opem install menhir
+opam install menhir
 ```
 
 Ott
