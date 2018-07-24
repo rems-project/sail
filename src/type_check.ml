@@ -127,27 +127,10 @@ let is_unknown_type = function
   | (Typ_aux (Typ_internal_unknown, _)) -> true
   | _ -> false
 
-(* An index_sort is a more general form of range type: it can either
-   be IS_int, which represents every natural number, or some set of
-   natural numbers given by an IS_prop expression of the form
-   {'n. f('n) <= g('n) /\ ...} *)
-type index_sort =
-  | IS_int
-  | IS_prop of kid * (nexp * nexp) list
-
-let string_of_index_sort = function
-  | IS_int -> "INT"
-  | IS_prop (kid, constraints) ->
-     "{" ^ string_of_kid kid ^ " | "
-     ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
-     ^ "}"
-
 let is_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [_]) when string_of_id f = "atom" -> true
   | _ -> false
-
-
 
 let rec strip_id = function
   | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
@@ -367,6 +350,7 @@ module Env : sig
   val is_mapping : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
+  val get_record : id -> t -> typquant * (typ * id) list
   val get_accessor_fn : id -> id -> t -> typquant * typ
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
@@ -928,6 +912,8 @@ end = struct
     | Not_found -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
   let is_record id env = Bindings.mem id env.records
+
+  let get_record id env = Bindings.find id env.records
 
   let add_record id typq fields env =
     if bound_typ_id env id
@@ -3309,6 +3295,12 @@ and instantiation_of (E_aux (exp_aux, (l, _)) as exp) =
   let env = env_of exp in
   match exp_aux with
   | E_app (f, xs) -> snd (infer_funapp' l (Env.no_casts env) f (Env.get_val_spec f env) (List.map strip_exp xs) (Some (typ_of exp)))
+  | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
+
+and instantiation_of_without_type (E_aux (exp_aux, (l, _)) as exp) =
+  let env = env_of exp in
+  match exp_aux with
+  | E_app (f, xs) -> snd (infer_funapp' l (Env.no_casts env) f (Env.get_val_spec f env) (List.map strip_exp xs) None)
   | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
 and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =

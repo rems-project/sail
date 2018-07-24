@@ -9,7 +9,7 @@ val or_bool = {coq: "orb", _: "or_bool"} : (bool, bool) -> bool
 
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val neq_atom = {lem: "neq", coq: "neq_atom"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 function neq_atom (x, y) = not_bool(eq_atom(x, y))
 
@@ -27,7 +27,7 @@ val lteq_atom_range = {coq: "leb_range_r", _: "lteq"} : forall 'n 'm 'o. (atom('
 val gt_atom_range = {coq: "gtb_range_r", _: "gt"}     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 val gteq_atom_range = {coq: "geb_range_r", _: "gteq"} : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
 
-val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
+val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "eq_range"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
 val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : (int, int) -> bool
 val eq_bool = {ocaml: "eq_bool", lem: "eq", c: "eq_bool", coq: "Bool.eqb"} : (bool, bool) -> bool
 

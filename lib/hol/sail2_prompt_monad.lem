@@ -1,0 +1,49 @@
+open import Pervasives_extra
+open import Sail2_instr_kinds
+open import Sail2_values
+open import Sail2_state_monad
+
+(* Fake interface of the prompt monad by redirecting to the state monad, since
+   the former is not currently supported by HOL4 *)
+
+type monad 'rv 'a 'e = monadS 'rv 'a 'e
+type monadR 'rv 'a 'e 'r = monadRS 'rv 'a 'e 'r
+
+(* We need to use a target_rep for these because HOL doesn't handle unused
+   type parameters well. *)
+
+type base_monad 'regval 'regstate 'a 'e = monad 'regstate 'a 'e
+declare hol target_rep type base_monad 'regval 'regstate 'a 'e = `monad` 'regstate 'a 'e
+type base_monadR 'regval 'regstate 'a 'r 'e = monadR 'regstate 'a 'r 'e
+declare hol target_rep type base_monadR 'regval 'regstate 'a 'r 'e = `monadR` 'regstate 'a 'r 'e
+
+let inline return = returnS
+let inline bind = bindS
+let inline (>>=) = (>>$=)
+let inline (>>) = (>>$)
+
+let inline exit = exitS
+
+let inline throw = throwS
+let inline try_catch = try_catchS
+
+let inline catch_early_return = catch_early_returnS
+let inline early_return = early_returnS
+let inline liftR = liftRS
+let inline try_catchR = try_catchRS
+
+let inline maybe_fail = maybe_failS
+
+let inline read_mem_bytes = read_mem_bytesS
+let inline read_reg = read_regS
+let inline reg_deref = read_regS
+let inline read_mem = read_memS
+let inline read_tag = read_tagS
+let inline excl_result = excl_resultS
+let inline write_reg = write_regS
+let inline write_tag = write_tagS
+let inline write_mem_ea wk addr sz = write_mem_eaS wk addr (nat_of_int sz)
+let inline write_mem_val = write_mem_valS
+let barrier _ = return ()
+
+let inline assert_exp = assert_expS

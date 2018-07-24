@@ -565,6 +565,7 @@ function compare (cmp, valA, valB) =
     LTU  => valA <_u  valB
   }
 enum WordType = { B, H, W, D}
+enum WordTypeUnaligned = { WL, WR, DL, DR }
 
 val wordWidthBytes : WordType -> range(1, 8)
 function wordWidthBytes(w) =

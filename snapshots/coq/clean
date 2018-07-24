@@ -1,0 +1,11 @@
+#!/bin/bash
+
+if [ ! -d mips ]; then
+  echo Run clean from the coq directory
+  exit 1
+fi
+
+set -ex 
+rm -f mips/*.vo
+cd lib/coq
+make clean

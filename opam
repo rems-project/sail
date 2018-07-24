@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "sail"
-version: "0.2"
+version: "0.3"
 maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
 authors: [
   "Alasdair Armstrong"
@@ -29,6 +29,6 @@ depends: [
   "linenoise"
   "ott" {>= "0.28"}
   "lem"
-  "linksem" {>= "0.2"}
+  "linksem" {>= "0.3"}
 ]
 available: [ocaml-version >= "4.02.3"]

@@ -1,12 +1,14 @@
 # Snapshot of HOL4 output for Sail CHERI and RISC-V models
 
 These theories are a snapshot of the generated files for the Sail
-CHERI and RISC-V models, translated to HOL4 via Lem.
+MIPS, CHERI, RISC-V, and Aarch64 models, translated to HOL4 via Lem.
+They only require HOL4; the necessary Lem library files are included.
 
-Generated using the following repository versions:
-HOL4: (master) bb9eaf3448d2c44c84c5d06849d0dc73db23670c, 17 May 2018
-Lem:  (master) 55cb119f5b9e9feae8ed02c1b63ef38360eff3a1, 17 May 2018
-Sail: (sail2)  b08f0e8538081d8efbbbd6431e739a0b83307678, 17 May 2018
+A recent checkout of HOL4 from the repository at
+<https://github.com/HOL-Theorem-Prover/HOL/> is required.  This snapshot was
+successfully built with commit `7ed3f12`, for example.  Some older versions
+will fail with a Holdep error due to a lexer bug in HOL that has now been
+fixed.
 
-The theories are accepted by HOL4, but we have not done any
-further testing of them yet.
+Note that HOL4 takes a substantial amount of time to process the definition of
+the `regstate` record.  In particular, allow over an hour for the MIPS model.

@@ -1,3 +1,5 @@
+/* Supervisor-mode address translation and page-table walks. */
+
 /* PageSize */
 
 let PAGESIZE_BITS = 12
@@ -29,23 +31,23 @@ function isInvalidPTE(p : pteAttribs) -> bool = {
 
 function checkPTEPermission(ac : AccessType, priv : Privilege, mxr : bool, do_sum : bool, p : PTE_Bits) -> bool = {
   match (ac, priv) {
-    (Read, User)      => p.U() == true & (p.R() == true | (p.X() == true & mxr)),
-    (Write, User)     => p.U() == true & p.W() == true,
-    (ReadWrite, User) => p.U() == true & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
-    (Execute, User)   => p.U() == true & p.X() == true,
+    (Read,      User)       => p.U() == true & (p.R() == true | (p.X() == true & mxr)),
+    (Write,     User)       => p.U() == true & p.W() == true,
+    (ReadWrite, User)       => p.U() == true & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
+    (Execute,   User)       => p.U() == true & p.X() == true,
 
-    (Read, Supervisor)      => (p.U() == false | do_sum) & (p.R() == true | (p.X() == true & mxr)),
-    (Write, Supervisor)     => (p.U() == false | do_sum) & p.W() == true,
+    (Read,      Supervisor) => (p.U() == false | do_sum) & (p.R() == true | (p.X() == true & mxr)),
+    (Write,     Supervisor) => (p.U() == false | do_sum) & p.W() == true,
     (ReadWrite, Supervisor) => (p.U() == false | do_sum) & p.W() == true & (p.R() == true | (p.X() == true & mxr)),
-    (Execute, Supervisor)   => p.U() == false & p.X() == true,
+    (Execute,   Supervisor) => p.U() == false & p.X() == true,
 
-    (_, Machine)      => internal_error("m-mode mem perm check")
+    (_,         Machine)    => internal_error("m-mode mem perm check")
   }
 }
 
 function update_PTE_Bits(p : PTE_Bits, a : AccessType) -> option(PTE_Bits) = {
-  let update_d = (a == Write | a == ReadWrite) & p.D() == false;
-  let update_a = p.A() == false;
+  let update_d = (a == Write | a == ReadWrite) & p.D() == false; // dirty-bit
+  let update_a = p.A() == false;                                 // accessed-bit
   if update_d | update_a then {
     let np = update_A(p, true);
     let np = if update_d then update_D(p, true) else np;
@@ -61,21 +63,33 @@ enum PTW_Error = {
   PTW_Misaligned,   /* misaligned superpage */
   PTW_PTE_Update    /* PTE update needed but not enabled */
 }
-
-/* conversion of these translation/PTW failures into architectural exceptions */
-function translationException(a : AccessType, f : PTW_Error) -> ExceptionType =
-  match (a, f) {
-    (Read, PTW_Access)  => E_Load_Access_Fault,
-    (Read, _)           => E_Load_Page_Fault,
-    (Write, PTW_Access) => E_SAMO_Access_Fault,
-    (Write, _)          => E_SAMO_Page_Fault,
-    (Fetch, PTW_Access) => E_Fetch_Access_Fault,
-    (Fetch, _)          => E_Fetch_Page_Fault,
-    /* atomics never raise Load exceptions */
-    (ReadWrite, PTW_Access) => E_SAMO_Access_Fault,
-    (ReadWrite, _)          => E_SAMO_Page_Fault
+val cast ptw_error_to_str : PTW_Error -> string
+function ptw_error_to_str(e) =
+  match (e) {
+    PTW_Access        => "mem-access-error",
+    PTW_Invalid_PTE   => "invalid-pte",
+    PTW_No_Permission => "no-permission",
+    PTW_Misaligned    => "misaligned-superpage",
+    PTW_PTE_Update    => "pte-update-needed"
   }
 
+/* conversion of these translation/PTW failures into architectural exceptions */
+function translationException(a : AccessType, f : PTW_Error) -> ExceptionType = {
+  let e : ExceptionType =
+  match (a, f) {
+    (ReadWrite, PTW_Access) => E_SAMO_Access_Fault,
+    (ReadWrite, _)          => E_SAMO_Page_Fault,
+    (Read, PTW_Access)      => E_Load_Access_Fault,
+    (Read, _)               => E_Load_Page_Fault,
+    (Write, PTW_Access)     => E_SAMO_Access_Fault,
+    (Write, _)              => E_SAMO_Page_Fault,
+    (Fetch, PTW_Access)     => E_Fetch_Access_Fault,
+    (Fetch, _)              => E_Fetch_Page_Fault
+  } in {
+/*  print("translationException(" ^ a ^ ", " ^ f ^ ") -> " ^ e); */
+    e
+  }
+}
 /* address translation: Sv39 */
 
 let SV39_LEVEL_BITS = 9
@@ -131,20 +145,34 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
   let pt_ofs : paddr39 = shiftl(EXTZ(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[(SV39_LEVEL_BITS - 1) .. 0]),
                                 PTE39_LOG_SIZE);
   let pte_addr = ptb + pt_ofs;
-  /* FIXME: we assume here that walks only access memory-backed addresses. */
-  match (phys_mem_read(Data, EXTZ(pte_addr), 8)) {
-    MemException(_) => PTW_Failure(PTW_Access),
+  /* FIXME: we assume here that walks only access physical-memory-backed addresses, and not MMIO regions. */
+  match (phys_mem_read(Data, EXTZ(pte_addr), 8, false, false, false)) {
+    MemException(_) => {
+/*    print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
+            ^ " pt_base=" ^ BitStr(ptb)
+            ^ " pt_ofs=" ^ BitStr(pt_ofs)
+            ^ " pte_addr=" ^ BitStr(pte_addr)
+            ^ ": invalid pte address"); */
+      PTW_Failure(PTW_Access)
+    },
     MemValue(v) => {
       let pte = Mk_SV39_PTE(v);
       let pbits = pte.BITS();
       let pattr = Mk_PTE_Bits(pbits);
       let is_global = global | (pattr.G() == true);
+/*    print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
+            ^ " pt_base=" ^ BitStr(ptb)
+            ^ " pt_ofs=" ^ BitStr(pt_ofs)
+            ^ " pte_addr=" ^ BitStr(pte_addr)
+            ^ " pte=" ^ BitStr(v)); */
       if isInvalidPTE(pbits) then {
+/*      print("walk39: invalid pte"); */
         PTW_Failure(PTW_Invalid_PTE)
       } else {
         if isPTEPtr(pbits) then {
           if level == 0 then {
             /* last-level PTE contains a pointer instead of a leaf */
+/*          print("walk39: last-level pte contains a ptr"); */
             PTW_Failure(PTW_Invalid_PTE)
           } else {
             /* walk down the pointer to the next level */
@@ -152,6 +180,7 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
           }
         } else { /* leaf PTE */
           if ~ (checkPTEPermission(ac, priv, mxr, do_sum, pattr)) then {
+/*          print("walk39: pte permission check failure"); */
             PTW_Failure(PTW_No_Permission)
           } else {
             if level > 0 then { /* superpage */
@@ -159,14 +188,20 @@ function walk39(vaddr, ac, priv, mxr, do_sum, ptb, level, global) -> PTW_Result 
               let mask = shiftl(pte.PPNi() ^ pte.PPNi() ^ EXTZ(0b1), level * SV39_LEVEL_BITS) - 1;
               if (pte.PPNi() & mask) != EXTZ(0b0) then {
                 /* misaligned superpage mapping */
+/*              print("walk39: misaligned superpage mapping"); */
                 PTW_Failure(PTW_Misaligned)
               } else {
                 /* add the appropriate bits of the VPN to the superpage PPN */
                 let ppn = pte.PPNi() | (EXTZ(va.VPNi()) & mask);
+/*              let res = append(ppn, va.PgOfs());
+                print("walk39: using superpage: pte.ppn=" ^ BitStr(pte.PPNi())
+                      ^ " ppn=" ^ BitStr(ppn) ^ " res=" ^ BitStr(res)); */
                 PTW_Success(append(ppn, va.PgOfs()), pte, pte_addr, level, is_global)
               }
             } else {
               /* normal leaf PTE */
+/*            let res = append(pte.PPNi(), va.PgOfs());
+              print("walk39: pte.ppn=" ^ BitStr(pte.PPNi()) ^ " ppn=" ^ BitStr(pte.PPNi()) ^ " res=" ^ BitStr(res)); */
               PTW_Success(append(pte.PPNi(), va.PgOfs()), pte, pte_addr, level, is_global)
             }
           }
@@ -212,7 +247,6 @@ function make_TLB39_Entry(asid, global, vAddr, pAddr, pte, level, pteAddr) = {
 }
 
 /* TODO: make this a vector or array of entries */
-let TLBEntries = 32
 register tlb39 : option(TLB39_Entry)
 
 val lookupTLB39 : (asid64, vaddr39) -> option((int, TLB39_Entry)) effect {rreg}
@@ -229,7 +263,7 @@ function lookupTLB39(asid, vaddr) = {
 val addToTLB39 : (asid64, vaddr39, paddr39, SV39_PTE, paddr39, nat, bool) -> unit effect {wreg, rreg}
 function addToTLB39(asid, vAddr, pAddr, pte, pteAddr, level, global) = {
   let ent = make_TLB39_Entry(asid, global, vAddr, pAddr, pte, level, pteAddr);
-  tlb39 = Some(ent)
+  tlb39   = Some(ent)
 }
 
 function writeTLB39(idx : int, ent : TLB39_Entry) -> unit =
@@ -354,12 +388,12 @@ val translateAddr : (xlenbits, AccessType, ReadType) -> TR_Result effect {escape
 function translateAddr(vAddr, ac, rt) = {
   let effPriv : Privilege = match rt {
     Instruction => cur_privilege,
-    Data => if mstatus.MPRV() == true
-            then privLevel_of_bits(mstatus.MPP())
-            else cur_privilege
+    Data        => if   mstatus.MPRV() == true
+                   then privLevel_of_bits(mstatus.MPP())
+                   else cur_privilege
   };
-  let mxr : bool = mstatus.MXR() == true;
-  let do_sum : bool = mstatus.SUM() == true;
+  let mxr    : bool   = mstatus.MXR() == true;
+  let do_sum : bool   = mstatus.SUM() == true;
   let mode : SATPMode = translationMode(effPriv);
   match mode {
     Sbare => TR_Address(vAddr),

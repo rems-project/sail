@@ -36,10 +36,20 @@ coverage_report: bisect*.out
 	bisect-ppx-report -I _sbuild/_build -html $@ $^
 
 cheri.c: $(CHERI_SAILS) $(CHERI_MAIN)
-	$(SAIL) -memo_z3 -c $^ 1> $@
+	$(SAIL) -memo_z3 -O -c $^ 1> $@
 
+C_OPT=-O2
+GCOV_FLAGS=
 cheri_c: cheri.c ../lib/sail.h Makefile
-	gcc -O2 $< ../lib/*.c -lgmp -lz -I ../lib/ -o $@
+	gcc $(C_OPT) $(GCOV_FLAGS) $< ../lib/*.c -lgmp -lz -I ../lib/ -o $@
+
+# Note that for coverage purposes O1 appears optimal. O0 means lots of obviously dead code but O2 risks reducing granularity too much.
+cheri_c_gcov: C_OPT=-O1
+cheri_c_gcov: GCOV_FLAGS=-fprofile-arcs -ftest-coverage
+cheri_c_gcov: cheri_c
+
+gcovr:
+	gcovr -r . --html --html-detail -o index.html
 
 latex_128: $(MIPS_SAIL_DIR)/prelude.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_128.sail
 	rm -rf sail_latexcc
@@ -56,6 +66,17 @@ cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 
 cheri128_trace: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml_trace -o $@ $^
+
+cheri128.c: $(CHERI128_SAILS) $(CHERI_MAIN)
+	$(SAIL) -memo_z3 -O -c $^ 1> $@
+
+cheri128_c: cheri128.c ../lib/sail.h Makefile
+	gcc $(C_OPT) $(GCOV_FLAGS) $< ../lib/*.c -lgmp -lz -I ../lib/ -o $@
+
+# Note that for coverage purposes O1 appears optimal. O0 means lots of obviously dead code but O2 risks reducing granularity too much.
+cheri128_c_gcov: C_OPT=-O1
+cheri128_c_gcov: GCOV_FLAGS=-fprofile-arcs -ftest-coverage
+cheri128_c_gcov: cheri128_c
 
 LOC_FILES:=$(CHERI_SAILS) $(CHERI_MAIN)
 include ../etc/loc.mk
@@ -86,7 +107,7 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' C$*_types.thy
 
 %Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
-	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -i $(SAIL_DIR)/lib/hol/sail2_prompt_monad.lem -i $(SAIL_DIR)/lib/hol/sail2_prompt.lem -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 %Theory.uo: %Script.sml
 	Holmake $@

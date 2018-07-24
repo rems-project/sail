@@ -21,27 +21,27 @@ pseudocode, which has recently become machine-processed~\cite{Reid16}.
 For MIPS~\cite{MIPS64-II,MIPS64-III} there is also reasonably detailed
 pseudocode.
 
-The behaviour of concurrent code is often described less well.  In a
-line of research from 2007--2018 we have developed mathematically
-rigorous models for the allowed architectural envelope of concurrent
-code, for x86, IBM Power, \riscv, and ARM, that have been reasonably
-well validated by experimental testing and by discussion with the
-vendors and
-others~\cite{x86popl,tphols09,cacm,CAV2010,Alglave:2011:LRT:1987389.1987395,pldi105,pldi2012,micro2015,FGP16,mixed17}.
-In the course of this, we have identified a number of subtle issues
-relating to the interface between the intra-instruction semantics and
-the inter-instruction concurrency
-semantics~\cite{pldi105,pldi2012,micro2015,FGP16,mixed17}. For
-example, the concurrency models, rather than treating each instruction
-execution as an atomic unit, require exposed register and memory
-events, knowledge of the potential register and memory footprints of
-instructions, and knowledge of changes to those during execution.  Our
-early work in this area had hand-coded instruction semantics for quite
-small fragments of the instruction sets, just enough for concurrency
-litmus tests and expressed in various ad hoc ways. As our models have
-matured, we have switched to modelling the intra-instruction semantics
-more completely and in a style closer to the vendor-documentation
-pseudocode, and Sail was developed for this.
+%% The behaviour of concurrent code is often described less well.  In a
+%% line of research from 2007--2018 we have developed mathematically
+%% rigorous models for the allowed architectural envelope of concurrent
+%% code, for x86, IBM Power, \riscv, and ARM, that have been reasonably
+%% well validated by experimental testing and by discussion with the
+%% vendors and
+%% others\anonymiseomit{~\cite{x86popl,tphols09,cacm,CAV2010,Alglave:2011:LRT:1987389.1987395,pldi105,pldi2012,micro2015,FGP16,mixed17}}.
+%% In the course of this, we have identified a number of subtle issues
+%% relating to the interface between the intra-instruction semantics and
+%% the inter-instruction concurrency
+%% semantics\anonymiseomit{~\cite{pldi105,pldi2012,micro2015,FGP16,mixed17}}. For
+%% example, the concurrency models, rather than treating each instruction
+%% execution as an atomic unit, require exposed register and memory
+%% events, knowledge of the potential register and memory footprints of
+%% instructions, and knowledge of changes to those during execution.  Our
+%% early work in this area had hand-coded instruction semantics for quite
+%% small fragments of the instruction sets, just enough for concurrency
+%% litmus tests and expressed in various ad hoc ways. As our models have
+%% matured, we have switched to modelling the intra-instruction semantics
+%% more completely and in a style closer to the vendor-documentation
+%% pseudocode, and Sail was developed for this.
 
 
 Sail is intended:
@@ -77,7 +77,7 @@ and generate:
 \item An internal representation of the fully type-annotated
   definition (a deep embedding of the definition) in a form that can
   be executed by the Sail interpreter.  These are both expressed in
-  Lem~\cite{Lem-icfp2014,Lemcode}, a language of type, function, and
+  Lem\anonymiseomit{~\cite{Lem-icfp2014,Lemcode}}, a language of type, function, and
   relation definitions that can be compiled into OCaml and various
   theorem provers. The Sail interpreter can also be used to analyse
   instruction definitions (or partially executed instructions) to
@@ -101,25 +101,26 @@ binary descriptions, although this is something we plan to add.
 Sail has been used to develop models of parts of several architectures:
 \begin{center}
 \begin{tabular}{|l|l|} \hline
-ARMv8 (hand) & hand-written \\ \hline
+% ARMv8 (hand) & hand-written \\ \hline
 ARMv8 (ASL)  & generated from ARM's v8.3 public ASL spec \\ \hline
-IBM Power    & extracted/patched from IBM Framemaker XML \\ \hline
+% IBM Power    & extracted/patched from IBM Framemaker XML \\ \hline
 MIPS         & hand-written \\ \hline
 CHERI        & hand-written \\ \hline
 \riscv       & hand-written \\ \hline
 \end{tabular}
 \end{center}
-The ARMv8 (hand) and IBM Power models cover all user-mode instructions
-except vector, float, and load-multiple instructions, without
-exceptions; for ARMv8 this is for the A64 fragment.
+%% The ARMv8 (hand) and IBM Power models cover all user-mode instructions
+%% except vector, float, and load-multiple instructions, without
+%% exceptions; for ARMv8 this is for the A64 fragment.
 
-The ARMv8 (hand) model is hand-written based on the ARMv8-A
-specification document~\cite{armarmv8,FGP16}, principally by Flur.
+%% The ARMv8 (hand) model is hand-written based on the ARMv8-A
+%% specification document\anonymiseomit{~\cite{armarmv8,FGP16}},
+%% principally by \anonymise{Flur}.
 
-The Power model is based on an automatic extraction of pseudocode and
-decoding data from an XML export of the Framemaker document source of
-the IBM Power manual~\cite{Power2.06,micro2015}, with manual patching
-as necessary, principally by Kerneis and Gray.
+%% The Power model is based on an automatic extraction of pseudocode and
+%% decoding data from an XML export of the Framemaker document source of
+%% the IBM Power manual\anonymiseomit{~\cite{Power2.06,micro2015}}, with manual patching
+%% as necessary, principally by \anonymise{Kerneis and Gray}.
 
 The ARMv8 (ASL) model is based on an automatic translation of ARM's
 machine-readable public v8.3 ASL specification\footnote{ARM v8-A
@@ -135,7 +136,7 @@ which in turn drew on MIPS4000 and MIPS32~\cite{MIPS4000,MIPS32-I}.
 %
 The CHERI model is based on that and the CHERI ISA reference manual
 version~5~\cite{UCAM-CL-TR-891}. These two are both principally by
-Norton-Wright; they cover all basic user and kernel mode MIPS features
+\anonymise{Norton-Wright}; they cover all basic user and kernel mode MIPS features
 sufficient to boot FreeBSD, including a TLB, exceptions and a basic
 UART for console interaction. ISA extensions such as floating point
 are not covered. The CHERI model supports either 256-bit capabilities

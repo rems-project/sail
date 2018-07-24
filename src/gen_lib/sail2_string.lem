@@ -31,7 +31,7 @@ let string_append = stringAppend
 
 val maybeIntegerOfString : string -> maybe integer
 let maybeIntegerOfString _ = Nothing (* TODO FIXME *)
-declare ocaml target_rep function maybeIntegerOfString = `(fun s -> match int_of_string_opt s with None -> None | Some i -> Some (Nat_big_num.of_int i))`
+declare ocaml target_rep function maybeIntegerOfString = `(fun s -> match int_of_string s with i -> Some (Nat_big_num.of_int i) | exception Failure _ -> None )`
 
 (***********************************************
  * end stuff that should be in Lem Num_extra   *

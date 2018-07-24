@@ -406,8 +406,8 @@ let value_read_ram = function
 
 let value_write_ram = function
   | [v1; v2; v3; v4; v5] ->
-     Sail_lib.write_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4, coerce_bv v5);
-     V_unit
+     let b = Sail_lib.write_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4, coerce_bv v5) in
+     V_bool(b)
   | _ -> failwith "value write_ram"
 
 let value_load_raw = function
@@ -561,6 +561,7 @@ let primops =
       ("write_ram", value_write_ram);
       ("trace_memory_read", fun _ -> V_unit);
       ("trace_memory_write", fun _ -> V_unit);
+      ("get_time_ns", fun _ -> V_int (Sail_lib.get_time_ns()));
       ("load_raw", value_load_raw);
       ("to_real", value_to_real);
       ("eq_real", value_eq_real);

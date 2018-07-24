@@ -1005,19 +1005,7 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
 /* SYSCALL/BREAK/WAIT/Trap                                                            */
 /**************************************************************************************/
 
-/* Co-opt syscall 0xfffff for use as thread start in pccmem  */
-union clause ast = SYSCALL_THREAD_START : unit
-function clause decode (0b000000 @ 0xfffff @ 0b001100) =
-  Some(SYSCALL_THREAD_START())
-function clause execute (SYSCALL_THREAD_START()) = ()
-
-
-/* fake stop fetching instruction for ppcmem, execute doesn't do anything,
-   decode never produces it */
-
-union clause ast = ImplementationDefinedStopFetching : unit
-function clause execute (ImplementationDefinedStopFetching()) = ()
-
+/* $include mips_rmem.sail */
 
 union clause ast = SYSCALL : unit
 function clause decode (0b000000 @ code : bits(20) @ 0b001100) =
@@ -1136,10 +1124,9 @@ function clause execute (Load(width, sign, linked, base, rt, offset)) =
                   CP0LLBit  = 0b1;
                   CP0LLAddr = pAddr;
                   match width {
-                   B => extendLoad(MEMr_reserve_wrapper(pAddr, 1), sign),
-                   H => extendLoad(MEMr_reserve_wrapper(pAddr, 2), sign),
                    W => extendLoad(MEMr_reserve_wrapper(pAddr, 4), sign),
-                   D => extendLoad(MEMr_reserve_wrapper(pAddr, 8), sign)
+                   D => extendLoad(MEMr_reserve_wrapper(pAddr, 8), sign),
+                   _ => throw(Error_internal_error()) /* there is no llbc or llhc */
                   }
                 }
               else
@@ -1185,10 +1172,9 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
                   {
 		    success : bool = if (CP0LLBit[0]) then match width
                     {
-                      B  => MEMw_conditional_wrapper(pAddr, 1, rt_val[7..0]),
-                      H  => MEMw_conditional_wrapper(pAddr, 2, rt_val[15..0]),
                       W  => MEMw_conditional_wrapper(pAddr, 4, rt_val[31..0]),
-                      D  => MEMw_conditional_wrapper(pAddr, 8, rt_val)
+                      D  => MEMw_conditional_wrapper(pAddr, 8, rt_val),
+                      _  => throw(Error_internal_error()) /* there is no sbc or shc */
                     } else false;
 		    wGPR(rt) = zero_extend(success)
                   }
@@ -1210,8 +1196,7 @@ function clause decode(0b100010 @ base : regno @ rt : regno @ offset : imm16) =
       Some(LWL(base, rt, offset))
 function clause execute(LWL(base, rt, offset)) =
       {
-        /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, W);
+        vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), LoadData, WL);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             mem_val = MEMr_wrapper (pAddr[63..2] @ 0b00, 4); /* read word of interest */
@@ -1231,8 +1216,7 @@ function clause decode(0b100110 @ base : regno @ rt : regno @ offset : imm16) =
       Some(LWR(base, rt, offset))
 function clause execute(LWR(base, rt, offset)) =
       {
-        /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, W);
+        vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), LoadData, WR);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             mem_val = MEMr_wrapper(pAddr[63..2] @ 0b00, 4); /* read word of interest */
@@ -1254,8 +1238,7 @@ function clause decode(0b101010 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SWL(base, rt, offset))
 function clause execute(SWL(base, rt, offset)) =
       {
-        /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, W);
+        vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), StoreData, WL);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             reg_val = rGPR(rt);
@@ -1274,8 +1257,7 @@ function clause decode(0b101110 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SWR(base, rt, offset))
 function clause execute(SWR(base, rt, offset)) =
       {
-        /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, W);
+        vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), StoreData, WR);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             wordAddr = pAddr[63..2] @ 0b00;
@@ -1296,8 +1278,7 @@ function clause decode(0b011010 @ base : regno @ rt : regno @ offset : imm16) =
   Some(LDL(base, rt, offset))
 function clause execute(LDL(base, rt, offset)) =
   {
-    /* XXX length check not quite right, but conservative */
-    vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, D);
+    vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), LoadData, DL);
     let pAddr = TLBTranslate(vAddr, LoadData) in
       {
         mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
@@ -1322,8 +1303,7 @@ function clause decode(0b011011 @ base : regno @ rt : regno @ offset : imm16) =
   Some(LDR(base, rt, offset))
 function clause execute(LDR(base, rt, offset)) =
   {
-    /* XXX length check not quite right, but conservative */
-    vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, D);
+    vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), LoadData, DR);
     let pAddr = TLBTranslate(vAddr, LoadData) in
       {
         mem_val = MEMr_wrapper(pAddr[63..3] @ 0b000, 8); /* read double of interest */
@@ -1348,8 +1328,7 @@ function clause decode(0b101100 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SDL(base, rt, offset))
 function clause execute(SDL(base, rt, offset)) =
       {
-        /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, D);
+        vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), StoreData, DL);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             reg_val = rGPR(rt);
@@ -1374,8 +1353,7 @@ function clause decode(0b101101 @ base : regno @ rt : regno @ offset : imm16) =
       Some(SDR(base, rt, offset))
 function clause execute(SDR(base, rt, offset)) =
   {
-        /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, D);
+        vAddr = addrWrapperUnaligned(sign_extend(offset) + rGPR(base), StoreData, DR);
         let pAddr = TLBTranslate(vAddr, StoreData) in
           {
             reg_val = rGPR(rt);
@@ -1402,7 +1380,7 @@ function clause decode (0b101111 @ base : regno @ op : regno @ imm : imm16) =
 function clause execute (CACHE(base, op, imm)) =
   checkCP0Access () /* pretty much a NOP because no caches */
 
-/* PREF - prefetching into (non-existent) caches */
+/* PREF - prefetching into (non-existent) caches 
 
 union clause ast = PREF : (regno, regno, bits(16))
 function clause decode (0b110011 @ base : regno @ op : regno @ imm : imm16) =
@@ -1410,6 +1388,7 @@ function clause decode (0b110011 @ base : regno @ op : regno @ imm : imm16) =
 function clause execute (PREF(base, op, imm)) =
   () /* XXX NOP */
 
+*/
 
 /* SYNC  - Memory barrier */
 union clause ast = SYNC : unit
@@ -1465,7 +1444,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
                                         @ 0b000    /* DS dcache sets */
                                         @ 0b000    /* DL dcache lines */
                                         @ 0b000    /* DA dcache assoc. */
-			       	 @ bool_to_bits(have_cp2) /* C2 CP2 presence */
+                                        @ bool_to_bits(have_cp2) /* C2 CP2 presence */
                                         @ 0b0      /* MD MDMX implemented */
                                         @ 0b0      /* PC performance counters */
                                         @ 0b0      /* WR watch registers */

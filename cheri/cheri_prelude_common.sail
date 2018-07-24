@@ -45,7 +45,7 @@ register PCC        : CapReg
 register nextPCC    : CapReg
 register delayedPCC : CapReg
 register inCCallDelay : bits(1)
-register C00 : CapReg /* aka default data capability, DDC */
+register DDC : CapReg
 register C01 : CapReg
 register C02 : CapReg
 register C03 : CapReg
@@ -72,22 +72,28 @@ register C23 : CapReg
 register C24 : CapReg /* aka return code capability, RCC */
 register C25 : CapReg
 register C26 : CapReg /* aka invoked data capability, IDC */
-register C27 : CapReg /* aka kernel reserved capability 1, KR1C */
-register C28 : CapReg /* aka kernel reserved capability 2, KR2C */
-register C29 : CapReg /* aka kernel code capability, KCC */
-register C30 : CapReg /* aka kernel data capability, KDC */
-register C31 : CapReg /* aka exception program counter capability, EPCC */
+register C27 : CapReg
+register C28 : CapReg
+register C29 : CapReg
+register C30 : CapReg
+register C31 : CapReg
 
 register CTLSU : CapReg /* User thread local storage capabiltiy */
 register CTLSP : CapReg /* Privileged thread local storage capabiltiy */
+register KR1C  : CapReg /* kernel reserved capability 1 */
+register KR2C  : CapReg /* kernel reserved capability 2 */
+register KCC   : CapReg /* kernel code capability */
+register KDC   : CapReg /* kernel data capability */
+register EPCC  : CapReg /* exception program counter capability */
 
-let DDC  : regno = 0b00000 /* C0  */
-let IDC  : regno = 0b11010 /* C26 */
-let KR1C : regno = 0b11011 /* C27 */
-let KR2C : regno = 0b11100 /* C28 */
-let KCC  : regno = 0b11101 /* C29 */
-let KDC  : regno = 0b11110 /* C30 */
-let EPCC : regno = 0b11111 /* C31 */
+let IDCNO  : regno = 0b11010 /* C26, invoked data capability used be CCall */
+
+/* Special register used to have these numbers -- here for transition purposes */
+let KR1CNO : regno = 0b11011 /* C27 */
+let KR2CNO : regno = 0b11100 /* C28 */
+let KCCNO  : regno = 0b11101 /* C29 */
+let KDCNO  : regno = 0b11110 /* C30 */
+let EPCCNO : regno = 0b11111 /* C31 */
 
 let CapRegs : vector(32, dec, register(CapReg)) =
   [
@@ -122,7 +128,7 @@ let CapRegs : vector(32, dec, register(CapReg)) =
     ref C03,
     ref C02,
     ref C01,
-    ref C00
+    ref DDC
   ]
 
 let max_otype = MAX(24) /*0xffffff*/
@@ -130,15 +136,32 @@ let have_cp2 = true
 
 /*!
 This function reads a given capability register and returns its contents converted to a CapStruct.
+If the argument is zero then the null capability is returned.
 */
 val readCapReg : regno -> CapStruct effect {rreg}
 function readCapReg(n) =
-  let 'i = unsigned(n) in
-  capRegToCapStruct(reg_deref(CapRegs[i]))
+  if (n == 0b00000) then
+    null_cap
+  else
+    let i = unsigned(n) in
+    capRegToCapStruct(reg_deref(CapRegs[i]))
+
+/*!
+This is the same as readCapReg except that when the argument is zero the value of DDC is returned 
+instead of the null capability. This is used for instructions that expect an address, where using
+null would always generate an exception.
+*/
+val readCapRegDDC : regno -> CapStruct effect {rreg}
+function readCapRegDDC(n) =
+  let i = unsigned(n) in
+  capRegToCapStruct(reg_deref(CapRegs[i])) /* NB CapRegs[0] is points to DDC */
 
 function writeCapReg(n, cap) : (regno, CapStruct) -> unit =
-  let 'i = unsigned(n) in
-  (*CapRegs[i]) = capStructToCapReg(cap) 
+  if (n == 0b00000) then
+    ()
+  else
+    let i = unsigned(n) in
+    (*CapRegs[i]) = capStructToCapReg(cap) 
 
 enum CapEx = {
   CapEx_None, 
@@ -214,22 +237,22 @@ function SignalException (ex) =
       let pcc = capRegToCapStruct(PCC) in
       let (success, epcc) = setCapOffset(pcc, pc) in
       if (success) then
-        C31 = capStructToCapReg(epcc)
+        EPCC = capStructToCapReg(epcc)
       else
-        C31 = capStructToCapReg(int_to_cap(to_bits(64, getCapBase(pcc)) + unsigned(pc)));
+        EPCC = capStructToCapReg(int_to_cap(to_bits(64, getCapBase(pcc)) + unsigned(pc)));
     };
 
-    nextPCC    = C29; /* KCC */
-    delayedPCC = C29; /* always write delayedPCC together with nextPCC so 
+    nextPCC    = KCC;
+    delayedPCC = KCC; /* always write delayedPCC together with nextPCC so 
                           that non-capability branches don't override PCC */
-    let base = getCapBase(capRegToCapStruct(C29)) in
+    let base = getCapBase(capRegToCapStruct(KCC)) in
     SignalExceptionMIPS(ex, to_bits(64, base));
   }
 
 function ERETHook() : unit -> unit =
   {
-    nextPCC    = C31;
-    delayedPCC = C31; /* always write delayedPCC together with nextPCC so 
+    nextPCC    = EPCC;
+    delayedPCC = EPCC; /* always write delayedPCC together with nextPCC so 
                           that non-capability branches don't override PCC */
   }
 
@@ -247,7 +270,7 @@ function raise_c2_exception8(capEx, regnum) =
 val raise_c2_exception : forall ('o : Type) . (CapEx, regno) -> 'o effect {escape, rreg, wreg}
 function raise_c2_exception(capEx, regnum) =
   let reg8 = 0b000 @ regnum in
-  if ((capEx == CapEx_AccessSystemRegsViolation) & (regnum == IDC)) then
+  if ((capEx == CapEx_AccessSystemRegsViolation) & (regnum == IDCNO)) then
      raise_c2_exception8(CapEx_AccessCCallIDCViolation, reg8)
   else
      raise_c2_exception8(capEx, reg8)
@@ -266,12 +289,12 @@ The following function should be called before reading or writing any capability
  */
 val register_inaccessible : regno -> bool effect {rreg}
 function register_inaccessible(r) =
-  ((r == IDC) & inCCallDelay) |
-  ((r == KR1C |
-    r == KR2C |
-    r == KDC  |
-    r == KCC  |
-    r == EPCC) & not (pcc_access_system_regs ()))
+  ((r == IDCNO) & inCCallDelay) |
+  ((r == KR1CNO |
+    r == KR2CNO |
+    r == KDCNO  |
+    r == KCCNO  |
+    r == EPCCNO) & not (pcc_access_system_regs ()))
 
 val MEMr_tag = "read_tag_bool"  : bits(64) -> bool effect { rmemt }
 val MEMw_tag = "write_tag_bool" : (bits(64) , bool) -> unit effect { wmvt }
@@ -351,29 +374,60 @@ function MEMw_conditional_wrapper(addr, size, data) =
     success;
   }
 
+val checkDDCPerms : (CapStruct, MemAccessType) -> unit effect {escape, rreg, wreg}
+function checkDDCPerms(ddc : CapStruct, accessType: MemAccessType) = 
+  {
+    if (not (ddc.tag)) then
+      raise_c2_exception(CapEx_TagViolation, 0b00000)
+    else if (ddc.sealed) then
+      raise_c2_exception(CapEx_SealViolation, 0b00000);
+    match accessType {
+      Instruction  => assert(false), /* Only data accesses use DDC */
+      LoadData     => if (~(ddc.permit_load)) then (raise_c2_exception(CapEx_PermitLoadViolation, 0b00000)),
+      StoreData    => if (~(ddc.permit_store)) then (raise_c2_exception(CapEx_PermitStoreViolation, 0b00000))
+    };
+  }
+
 val addrWrapper : (bits(64), MemAccessType, WordType) -> bits(64) effect {rreg, wreg, escape}
 function addrWrapper(addr, accessType, width) =
   {
-    capno = 0b00000;
-    cap = readCapReg(capno);
-    if (not (cap.tag)) then
-      (raise_c2_exception(CapEx_TagViolation, capno))
-    else if (cap.sealed) then
-        (raise_c2_exception(CapEx_SealViolation, capno));
-    match accessType {
-      Instruction  => if (~(cap.permit_execute)) then (raise_c2_exception(CapEx_PermitExecuteViolation, capno)),
-      LoadData     => if (~(cap.permit_load)) then (raise_c2_exception(CapEx_PermitLoadViolation, capno)),
-      StoreData    => if (~(cap.permit_store)) then (raise_c2_exception(CapEx_PermitStoreViolation, capno))
-    };
-    cursor = getCapCursor(cap);
+    ddc    = capRegToCapStruct(DDC);
+    checkDDCPerms(ddc, accessType);
+    cursor = getCapCursor(ddc);
     vAddr  = (cursor + unsigned(addr)) % pow2(64);
     size   = wordWidthBytes(width);
-    base   = getCapBase(cap);
-    top    = getCapTop(cap);
+    base   = getCapBase(ddc);
+    top    = getCapTop(ddc);
     if ((vAddr + size) > top) then
-      (raise_c2_exception(CapEx_LengthViolation, capno))
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
     else if (vAddr < base) then
-      (raise_c2_exception(CapEx_LengthViolation, capno))
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
+    else
+      to_bits(64, vAddr);
+  }
+
+val addrWrapperUnaligned : (bits(64), MemAccessType, WordTypeUnaligned) -> bits(64) effect {rreg, wreg, escape}
+function addrWrapperUnaligned(addr, accessType, width) =
+  {
+    ddc    = capRegToCapStruct(DDC);
+    checkDDCPerms(ddc, accessType);
+    cursor = getCapCursor(ddc);
+    vAddr  = (cursor + unsigned(addr)) % pow2(64);
+    woffset = vAddr % 4;
+    doffset = vAddr % 8;
+    /* Compute the address and size of the bytes touched -- this depends on alignment. */
+    let (waddr, size) : (int, int) = match width {
+      WL => (vAddr, 4 - woffset),
+      WR => (vAddr - woffset, woffset + 1),
+      DL => (vAddr, 8 - doffset),
+      DR => (vAddr - doffset, doffset + 1)
+    };
+    base   = getCapBase(ddc);
+    top    = getCapTop(ddc);
+    if ((waddr + size) > top) then
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
+    else if (waddr < base) then
+      (raise_c2_exception(CapEx_LengthViolation, 0b00000))
     else
       to_bits(64, vAddr);
   }
@@ -416,12 +470,21 @@ function checkCP2usable ()  =
 
 function init_cp2_state () = {
   let defaultBits = capStructToCapReg(default_cap);
+  let nullBits = capStructToCapReg(null_cap);
   PCC = defaultBits;
   nextPCC = defaultBits;
   delayedPCC = defaultBits;
-  foreach(i from 0 to 31) {
+  DDC  = defaultBits;
+  KCC  = defaultBits;
+  EPCC = defaultBits;
+  KDC  = nullBits;
+  KR1C = nullBits;
+  KR2C = nullBits;
+  CTLSP = nullBits;
+  CTLSU = nullBits;
+  foreach(i from 1 to 31) {
     let idx = to_bits(5, i) in
-    writeCapReg(idx, default_cap);
+    writeCapReg(idx, null_cap)
   }
 }
 
@@ -457,15 +520,15 @@ function dump_cp2_state () = {
   foreach(i from 0 to 31) {
     print(concat_str("DEBUG CAP REG ", concat_str(string_of_int(i), capToString(readCapReg(to_bits(5, i))))))
   };
-  print(concat_str("DEBUG CAP HWREG 00", capToString(capRegToCapStruct(C00))));
+  print(concat_str("DEBUG CAP HWREG 00", capToString(capRegToCapStruct(DDC))));
   print(concat_str("DEBUG CAP HWREG 01", capToString(capRegToCapStruct(CTLSU))));
   print(concat_str("DEBUG CAP HWREG 08", capToString(capRegToCapStruct(CTLSP))));
   /* TODO: these two should not be mirrored to match the FPGA */
-  print(concat_str("DEBUG CAP HWREG 22", capToString(capRegToCapStruct(C27))));
-  print(concat_str("DEBUG CAP HWREG 23", capToString(capRegToCapStruct(C28))));
+  print(concat_str("DEBUG CAP HWREG 22", capToString(capRegToCapStruct(KR1C))));
+  print(concat_str("DEBUG CAP HWREG 23", capToString(capRegToCapStruct(KR2C))));
   /* KCC, KDC, EPCC */
-  print(concat_str("DEBUG CAP HWREG 29", capToString(capRegToCapStruct(C29))));
-  print(concat_str("DEBUG CAP HWREG 30", capToString(capRegToCapStruct(C30))));
-  print(concat_str("DEBUG CAP HWREG 31", capToString(capRegToCapStruct(C31))));
+  print(concat_str("DEBUG CAP HWREG 29", capToString(capRegToCapStruct(KCC))));
+  print(concat_str("DEBUG CAP HWREG 30", capToString(capRegToCapStruct(KDC))));
+  print(concat_str("DEBUG CAP HWREG 31", capToString(capRegToCapStruct(EPCC))));
 
 }

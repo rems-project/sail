@@ -29,6 +29,7 @@ type monad 'regval 'a 'e =
   | Read_reg of register_name * ('regval -> monad 'regval 'a 'e)
   (* Request to write register *)
   | Write_reg of register_name * 'regval * monad 'regval 'a 'e
+  (* Request to choose a Boolean, e.g. to resolve an undefined bit *)
   | Undefined of (bool -> monad 'regval 'a 'e)
   (* Print debugging or tracing information *)
   | Print of string * monad 'regval 'a 'e

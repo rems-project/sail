@@ -18,7 +18,7 @@ mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) ../sail
 mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN) Makefile ../sail
 	$(SAIL) -O -memo_z3 -c $(filter %.sail, $^) 1> $@
 
-C_WARNINGS=-Wall -Wno-unused-but-set-variable -Wno-unused-label -Wno-maybe-uninitialized
+C_WARNINGS=-Wall -Wno-unused-but-set-variable -Wno-unused-label -Wno-unused-function -Wno-maybe-uninitialized
 C_OPT=-O2
 GCOV_FLAGS=
 mips_c: mips.c ../lib/sail.h ../lib/*.c Makefile
@@ -47,12 +47,19 @@ mips.v: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS)
 	$(SAIL) -coq -dcoq_undef_axioms -o mips -coq_lib mips_extras -undefined_gen -memo_z3 $^
 mips_types.v: mips.v
 
+MIPS_COQ = mips_types.v mips_extras.v mips.v
+COQ_LIBS = -R ../../bbv/theories bbv -R ../lib/coq Sail
+
+%.vo: %.v
+	coqc $(COQ_LIBS) $<
+mips.vo: mips_types.vo mips_extras.vo
+
 M%.thy: m%.lem m%_types.lem mips_extras.lem
 	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' M$*_types.thy
 
 %Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
-	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+	lem -hol -outdir . -lib $(SAIL_DIR)/lib/hol -i $(SAIL_DIR)/lib/hol/sail2_prompt_monad.lem -i $(SAIL_DIR)/lib/hol/sail2_prompt.lem -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 %Theory.uo: %Script.sml
 	Holmake $@
@@ -63,5 +70,5 @@ include ../etc/loc.mk
 clean:
 	rm -rf mips Mips.thy mips.lem mips_types.lem _sbuild mips.c mips_c
 	rm -f mipsScript.sml mips_typesScript.sml mips_extrasScript.sml
-	rm -f mips.v mips_types.v
+	rm -f mips.v mips_types.v $(MIPS_COQ:%.v=%.vo) $(MIPS_COQ:%.v=%.glob) $(MIPS_COQ:%.v=.%.aux)
 	-Holmake cleanAll

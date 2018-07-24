@@ -17,9 +17,13 @@ val operator >> = {
 
 val "or_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
+val zero_extend = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+
 overload operator | = {or_vec}
 
 val my_replicate_bits : forall 'n 'm, 'm >= 1 & 'n >= 1. (int('n), bits('m)) -> bits('n * 'm)
+
+val zeros = "zeros" : forall 'n. atom('n) -> bits('n)
 
 function my_replicate_bits(n, xs) = {
   ys = zeros(n * length(xs));

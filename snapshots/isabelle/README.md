@@ -9,11 +9,12 @@ up-to-date.
 In order to open a theory of one of the specifications in Isabelle, use the `-l
 Sail` command-line flag to load the session containing the Sail library.
 Snapshots of the Sail and Lem libraries are in the [lib/sail](lib/sail/) and
-[lib/lem](lib/lem/) directories, respectively.  You can tell Isabelle where to
-find them using the `-d` flag, as in
+[lib/lem](lib/lem/) directories, respectively.  The ROOTS file in this directory
+contains pointers to them; you can tell Isabelle to use it with the `-d` flag,
+as in
 
 ```
-isabelle jedit -l Sail -d lib/lem -d lib/sail riscv/Riscv.thy
+isabelle jedit -l Sail -d . riscv/Riscv.thy
 ```
 
 This will open the RISC-V specification.

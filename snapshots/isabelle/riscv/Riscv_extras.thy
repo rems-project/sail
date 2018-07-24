@@ -6,21 +6,21 @@ imports
  	 Main
 	 "Lem_pervasives" 
 	 "Lem_pervasives_extra" 
-	 "Sail_instr_kinds" 
-	 "Sail_values" 
-	 "Sail_operators_mwords" 
-	 "Prompt_monad" 
-	 "Prompt" 
+	 "Sail2_instr_kinds" 
+	 "Sail2_values" 
+	 "Sail2_operators_mwords" 
+	 "Sail2_prompt_monad" 
+	 "Sail2_prompt" 
 
 begin 
 
 (*open import Pervasives*)
 (*open import Pervasives_extra*)
-(*open import Sail_instr_kinds*)
-(*open import Sail_values*)
-(*open import Sail_operators_mwords*)
-(*open import Prompt_monad*)
-(*open import Prompt*)
+(*open import Sail2_instr_kinds*)
+(*open import Sail2_values*)
+(*open import Sail2_operators_mwords*)
+(*open import Sail2_prompt_monad*)
+(*open import Sail2_prompt*)
 
 type_synonym 'a bitvector =" ( 'a::len)Word.word "
 
@@ -39,6 +39,18 @@ definition MEM_fence_rw_w  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where
 definition MEM_fence_w_w  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where 
      " MEM_fence_w_w   _ = ( barrier Barrier_RISCV_w_w )"
 
+definition MEM_fence_w_rw  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where 
+     " MEM_fence_w_rw  _ = ( barrier Barrier_RISCV_w_rw )"
+
+definition MEM_fence_rw_r  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where 
+     " MEM_fence_rw_r  _ = ( barrier Barrier_RISCV_rw_r )"
+
+definition MEM_fence_r_w  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where 
+     " MEM_fence_r_w   _ = ( barrier Barrier_RISCV_r_w )"
+
+definition MEM_fence_w_r  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where 
+     " MEM_fence_w_r   _ = ( barrier Barrier_RISCV_w_r )"
+
 definition MEM_fence_i  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where 
      " MEM_fence_i     _ = ( barrier Barrier_RISCV_i )"
 
@@ -52,57 +64,148 @@ definition MEM_fence_i  :: " unit \<Rightarrow>('b,(unit),'a)monad "  where
 
 definition MEMea  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('rv,(unit),'e)monad "                       where 
      " MEMea addr size1                      = ( write_mem_ea 
-  instance_Sail_values_Bitvector_Machine_word_mword_dict Write_plain addr size1 )"
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict Write_plain addr size1 )"
 
 definition MEMea_release  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('rv,(unit),'e)monad "               where 
      " MEMea_release addr size1              = ( write_mem_ea 
-  instance_Sail_values_Bitvector_Machine_word_mword_dict Write_RISCV_release addr size1 )"
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict Write_RISCV_release addr size1 )"
 
 definition MEMea_strong_release  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('rv,(unit),'e)monad "        where 
      " MEMea_strong_release addr size1       = ( write_mem_ea 
-  instance_Sail_values_Bitvector_Machine_word_mword_dict Write_RISCV_strong_release addr size1 )"
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict Write_RISCV_strong_release addr size1 )"
 
 definition MEMea_conditional  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('rv,(unit),'e)monad "           where 
      " MEMea_conditional addr size1          = ( write_mem_ea 
-  instance_Sail_values_Bitvector_Machine_word_mword_dict Write_RISCV_conditional addr size1 )"
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict Write_RISCV_conditional addr size1 )"
 
 definition MEMea_conditional_release  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('rv,(unit),'e)monad "   where 
      " MEMea_conditional_release addr size1  = ( write_mem_ea 
-  instance_Sail_values_Bitvector_Machine_word_mword_dict Write_RISCV_conditional_release addr size1 )"
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict Write_RISCV_conditional_release addr size1 )"
 
 definition MEMea_conditional_strong_release  :: "('a::len)Word.word \<Rightarrow> int \<Rightarrow>('rv,(unit),'e)monad " 
                                           where 
      " MEMea_conditional_strong_release addr size1
                                           = ( write_mem_ea 
-  instance_Sail_values_Bitvector_Machine_word_mword_dict Write_RISCV_conditional_strong_release addr size1 )"
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict Write_RISCV_conditional_strong_release addr size1 )"
+
+
+(*val MEMr                         : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e*)
+(*val MEMr_acquire                 : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e*)
+(*val MEMr_strong_acquire          : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e*)
+(*val MEMr_reserved                : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e*)
+(*val MEMr_reserved_acquire        : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e*)
+(*val MEMr_reserved_strong_acquire : forall 'rv 'a 'b 'e. Size 'a, Size 'b => integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e*)
+
+definition MEMr  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('rv,(('b::len)Word.word),'e)monad "                          where 
+     " MEMr addrsize size1 hexRAM addr                         = ( read_mem 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_plain addr size1 )"
+
+definition MEMr_acquire  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('rv,(('b::len)Word.word),'e)monad "                  where 
+     " MEMr_acquire addrsize size1 hexRAM addr                 = ( read_mem 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_RISCV_acquire addr size1 )"
+
+definition MEMr_strong_acquire  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('rv,(('b::len)Word.word),'e)monad "           where 
+     " MEMr_strong_acquire addrsize size1 hexRAM addr          = ( read_mem 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_RISCV_strong_acquire addr size1 )"
+
+definition MEMr_reserved  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('rv,(('b::len)Word.word),'e)monad "                 where 
+     " MEMr_reserved addrsize size1 hexRAM addr                = ( read_mem 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_RISCV_reserved addr size1 )"
+
+definition MEMr_reserved_acquire  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('rv,(('b::len)Word.word),'e)monad "         where 
+     " MEMr_reserved_acquire addrsize size1 hexRAM addr        = ( read_mem 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_RISCV_reserved_acquire addr size1 )"
+
+definition MEMr_reserved_strong_acquire  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('rv,(('b::len)Word.word),'e)monad "  where 
+     " MEMr_reserved_strong_acquire addrsize size1 hexRAM addr = ( read_mem 
+  instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_RISCV_reserved_strong_acquire addr size1 )"
 
 
 (*val write_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
   integer -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b -> monad 'rv unit 'e*)
 definition write_ram  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('b::len)Word.word \<Rightarrow>('rv,(unit),'e)monad "  where 
      " write_ram addrsize size1 hexRAM address value1 = (
-  (write_mem_ea instance_Sail_values_Bitvector_Machine_word_mword_dict Write_plain address size1 \<then>
-  write_mem_val instance_Sail_values_Bitvector_Machine_word_mword_dict value1) \<bind>  (\<lambda>x .  (case  x of _ => return ()  )) )"
+  write_mem_val instance_Sail2_values_Bitvector_Machine_word_mword_dict value1 \<bind>  (\<lambda>x .  (case  x of _ => return ()  )) )"
 
 
 (*val read_ram : forall 'rv 'a 'b 'e. Size 'a, Size 'b =>
   integer -> integer -> bitvector 'a -> bitvector 'a -> monad 'rv (bitvector 'b) 'e*)
 definition read_ram  :: " int \<Rightarrow> int \<Rightarrow>('a::len)Word.word \<Rightarrow>('a::len)Word.word \<Rightarrow>('rv,(('b::len)Word.word),'e)monad "  where 
      " read_ram addrsize size1 hexRAM address = (
-  read_mem instance_Sail_values_Bitvector_Machine_word_mword_dict instance_Sail_values_Bitvector_Machine_word_mword_dict Read_plain address size1 )"
+  read_mem instance_Sail2_values_Bitvector_Machine_word_mword_dict instance_Sail2_values_Bitvector_Machine_word_mword_dict Read_plain address size1 )"
 
 
-definition speculate_conditional_success  :: " unit \<Rightarrow>('b,(bool),'a)monad "  where 
+(*val load_reservation : forall 'a. Size 'a => bitvector 'a -> unit*)
+definition load_reservation  :: "('a::len)Word.word \<Rightarrow> unit "  where 
+     " load_reservation addr = ( ()  )"
+
+
+definition speculate_conditional_success  :: " 'c \<Rightarrow>('b,(bool),'a)monad "  where 
      " speculate_conditional_success _ = ( excl_result ()  )"
 
 
-(*val get_slice_int : forall 'a. Size 'a => integer -> integer -> integer -> bitvector 'a*)
-definition get_slice_int0  :: " int \<Rightarrow> int \<Rightarrow> int \<Rightarrow>('a::len)Word.word "  where 
-     " get_slice_int0 len n lo = (
-  (* TODO: Is this the intended behaviour? *)
-  (let hi = ((lo + len) -( 1 :: int)) in
-  (let bits = (bits_of_int (hi +( 1 :: int)) n) in
-  of_bits_failwith instance_Sail_values_Bitvector_Machine_word_mword_dict (subrange_list False bits hi lo))))"
+definition cancel_reservation  :: " unit \<Rightarrow> unit "  where 
+     " cancel_reservation _ = ( ()  )"
+
+
+(*val plat_ram_base : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_ram_base  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_ram_base _ = ( Word.word_of_int(( 0 :: int)))"
+
+
+(*val plat_ram_size : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_ram_size  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_ram_size _ = ( Word.word_of_int(( 0 :: int)))"
+
+
+(*val plat_rom_base : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_rom_base  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_rom_base _ = ( Word.word_of_int(( 0 :: int)))"
+
+
+(*val plat_rom_size : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_rom_size  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_rom_size _ = ( Word.word_of_int(( 0 :: int)))"
+
+
+(*val plat_clint_base : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_clint_base  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_clint_base _ = ( Word.word_of_int(( 0 :: int)))"
+
+
+(*val plat_clint_size : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_clint_size  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_clint_size _ = ( Word.word_of_int(( 0 :: int)))"
+
+
+(*val plat_enable_dirty_update : unit -> bool*)
+definition plat_enable_dirty_update  :: " unit \<Rightarrow> bool "  where 
+     " plat_enable_dirty_update _ = ( False )"
+
+
+(*val plat_enable_misaligned_access : unit -> bool*)
+definition plat_enable_misaligned_access  :: " unit \<Rightarrow> bool "  where 
+     " plat_enable_misaligned_access _ = ( False )"
+
+
+(*val plat_insns_per_tick : unit -> integer*)
+definition plat_insns_per_tick  :: " unit \<Rightarrow> int "  where 
+     " plat_insns_per_tick _ = (( 1 :: int))"
+
+
+(*val plat_htif_tohost : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_htif_tohost  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_htif_tohost _ = ( Word.word_of_int(( 0 :: int)))"
+
+
+(*val plat_term_write : forall 'a. Size 'a => bitvector 'a -> unit*)
+definition plat_term_write  :: "('a::len)Word.word \<Rightarrow> unit "  where 
+     " plat_term_write _ = ( ()  )"
+
+
+(*val plat_term_read : forall 'a. Size 'a => unit -> bitvector 'a*)
+definition plat_term_read  :: " unit \<Rightarrow>('a::len)Word.word "  where 
+     " plat_term_read _ = ( Word.word_of_int(( 0 :: int)))"
 
 
 (*val shift_bits_right : forall 'a 'b. Size 'a, Size 'b => bitvector 'a -> bitvector 'b -> bitvector 'a*)
@@ -116,11 +219,21 @@ definition shift_bits_left  :: "('a::len)Word.word \<Rightarrow>('b::len)Word.wo
 
 (*val print_string : string -> string -> unit*)
 definition print_string  :: " string \<Rightarrow> string \<Rightarrow> unit "  where 
-     " print_string msg s = ( prerr_endline (msg @ s))"
+     " print_string msg s = ( ()  )"
+ (* print_endline (msg ^ s) *)
+
+(*val prerr_string : string -> string -> unit*)
+definition prerr_string  :: " string \<Rightarrow> string \<Rightarrow> unit "  where 
+     " prerr_string msg s = ( prerr_endline (msg @ s))"
+
+
+(*val prerr_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit*)
+definition prerr_bits  :: " string \<Rightarrow>('a::len)Word.word \<Rightarrow> unit "  where 
+     " prerr_bits msg bs = ( prerr_endline (msg @ (show_bitlist (List.map bitU_of_bool (Word.to_bl bs)))))"
 
 
 (*val print_bits : forall 'a. Size 'a => string -> bitvector 'a -> unit*)
 definition print_bits  :: " string \<Rightarrow>('a::len)Word.word \<Rightarrow> unit "  where 
-     " print_bits msg bs = ( prerr_endline (msg @ (show_bitlist (List.map bitU_of_bool (Word.to_bl bs)))))"
-
+     " print_bits msg bs = ( ()  )"
+ (* print_endline (msg ^ (show_bitlist (bits_of bs))) *)
 end

@@ -65,11 +65,15 @@ code_myreplicatebits.tex: examples/my_replicate_bits.sail
 grammar.tex: ../language/sail.ott
 	ott -pp_grammar -tex_wrap false -tex_suppress_category I -tex_suppress_category D -tex_suppress_ntr terminals -tex_suppress_ntr formula -tex_suppress_ntr judgement -tex_suppress_ntr user_syntax -tex_suppress_ntr dec_comm -sort false -generate_aux_rules false  -picky_multiple_parses true -i ../language/sail.ott -o grammar.tex
 
+LATEXARG=manual.tex
 manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex riscv.tex manual.tex manual.bib tutorial.tex code_myreplicatebits.tex
-	pdflatex manual.tex
+	pdflatex ${LATEXARG}
 	bibtex manual
-	pdflatex manual.tex
-	pdflatex manual.tex
+	pdflatex ${LATEXARG}
+	pdflatex ${LATEXARG}
+
+anon_man: LATEXARG='\def\ANON{}\input{manual.tex}'
+anon_man: manual.pdf
 
 clean:
 	-rm manual.pdf

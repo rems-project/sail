@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if [ ! -d mips ]; then
+  echo Run clean from the coq directory
+  exit 1
+fi
+
+if [ ! -d ../bbv ]; then
+  echo 'Check out a copy of https://github.com/mit-plv/bbv in the parent directory and build it.'
+  exit 1
+fi
+
+set -ex
+cd lib/coq
+make
+cd ../../mips
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail mips_extras.v
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail mips_types.v
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail mips.v

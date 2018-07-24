@@ -1,6 +1,7 @@
 
 // Prelude
 $include "prelude.sail"
+$include "no_devices.sail"
 
 // Specification
 $include "full/spec.sail"

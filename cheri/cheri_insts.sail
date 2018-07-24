@@ -363,14 +363,14 @@ function clause execute (CReadHwr(cd, sel)) =
      raise_c2_exception(CapEx_AccessSystemRegsViolation, sel)
   else {
     capVal : CapStruct = match unsigned(sel) {
-      0 => readCapReg(DDC),
-      1 => capRegToCapStruct(CTLSU),
-      8 => capRegToCapStruct(CTLSP),
-      22 => readCapReg(KR1C),
-      23 => readCapReg(KR2C),
-      29 => readCapReg(KCC),
-      30 => readCapReg(KDC),
-      31 => readCapReg(EPCC),
+      0  => capRegToCapStruct(DDC),
+      1  => capRegToCapStruct(CTLSU),
+      8  => capRegToCapStruct(CTLSP),
+      22 => capRegToCapStruct(KR1C),
+      23 => capRegToCapStruct(KR2C),
+      29 => capRegToCapStruct(KCC),
+      30 => capRegToCapStruct(KDC),
+      31 => capRegToCapStruct(EPCC),
       _  => {assert(false, "should be unreachable code"); undefined}
     };
     writeCapReg(cd, capVal);
@@ -401,14 +401,14 @@ function clause execute (CWriteHwr(cb, sel)) =
   else {
     capVal = readCapReg(cb);
     match unsigned(sel) {
-      0 => writeCapReg(DDC, capVal),
-      1 => CTLSU = capStructToCapReg(capVal),
-      8 => CTLSP = capStructToCapReg(capVal),
-      22 => writeCapReg(KR1C, capVal),
-      23 => writeCapReg(KR2C, capVal),
-      29 => writeCapReg(KCC, capVal),
-      30 => writeCapReg(KDC, capVal),
-      31 => writeCapReg(EPCC, capVal),
+      0  => DDC   = capStructToCapReg(capVal),
+      1  => CTLSU = capStructToCapReg(capVal),
+      8  => CTLSP = capStructToCapReg(capVal),
+      22 => KR1C  = capStructToCapReg(capVal),
+      23 => KR2C  = capStructToCapReg(capVal),
+      29 => KCC   = capStructToCapReg(capVal),
+      30 => KDC   = capStructToCapReg(capVal),
+      31 => EPCC  = capStructToCapReg(capVal),
       _  => assert(false, "should be unreachable code")
     };
   };
@@ -440,7 +440,7 @@ union clause ast = CToPtr : (regno, regno, regno)
 function clause execute(CToPtr(rd, cb, ct)) = 
 {
   checkCP2usable();
-  let ct_val = readCapReg(ct);
+  let ct_val = readCapRegDDC(ct);
   let cb_val = readCapReg(cb);
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
@@ -714,7 +714,10 @@ function clause execute (ClearRegs(regset, m)) =
       match regset {
         GPLo  => wGPR(to_bits(5, i)) = zeros(),
         GPHi  => wGPR(to_bits(5, i+16)) = zeros(),
-        CLo   => writeCapReg(to_bits(5, i)) = null_cap,
+        CLo   => if i == 0 then
+                   DDC = capStructToCapReg(null_cap)
+                 else
+                   writeCapReg(to_bits(5, i)) = null_cap,
         CHi   => writeCapReg(to_bits(5, i+16)) = null_cap
       }
 }
@@ -723,7 +726,7 @@ union clause ast = CFromPtr : (regno, regno, regno)
 function clause execute (CFromPtr(cd, cb, rt)) =
 {
   checkCP2usable();
-  cb_val = readCapReg(cb);
+  cb_val = readCapRegDDC(cb);
   rt_val = rGPR(rt);
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
@@ -747,7 +750,7 @@ union clause ast = CBuildCap : (regno, regno, regno)
 function clause execute (CBuildCap(cd, cb, ct)) =
 {
   checkCP2usable();
-  cb_val = readCapReg(cb);
+  cb_val = readCapRegDDC(cb);
   ct_val = readCapReg(ct);
   cb_base = getCapBase(cb_val);
   ct_base = getCapBase(ct_val);
@@ -859,7 +862,7 @@ union clause ast = CTestSubset : (regno, regno, regno)
 function clause execute (CTestSubset(rd, cb, ct)) =
 {
   checkCP2usable();
-  cb_val = readCapReg(cb);
+  cb_val = readCapRegDDC(cb);
   ct_val = readCapReg(ct);
   ct_top    = getCapTop(ct_val);
   ct_base   = getCapBase(ct_val);
@@ -1156,7 +1159,7 @@ union clause ast = CLoad : (regno, regno, regno, bits(8), bool, WordType, bool)
 function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
 {
   checkCP2usable();
-  cb_val = readCapReg(cb);
+  cb_val = readCapRegDDC(cb);
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else if not (cb_val.tag) then
@@ -1198,7 +1201,7 @@ union clause ast = CStore : (regno, regno, regno, regno, bits(8), WordType, bool
 function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
 {
   checkCP2usable();
-  cb_val = readCapReg(cb);
+  cb_val = readCapRegDDC(cb);
   if (register_inaccessible(cb)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else if not (cb_val.tag) then
@@ -1254,7 +1257,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
 {
   checkCP2usable();
   cs_val = readCapReg(cs);
-  cb_val = readCapReg(cb);
+  cb_val = readCapRegDDC(cb);
   if (register_inaccessible(cs)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cs)
   else if (register_inaccessible(cb)) then
@@ -1303,7 +1306,7 @@ union clause ast = CLC : (regno, regno, regno, bits(16), bool)
 function clause execute (CLC(cd, cb, rt, offset, linked)) =  
 {
   checkCP2usable();
-  cb_val = readCapReg(cb);
+  cb_val = readCapRegDDC(cb);
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then

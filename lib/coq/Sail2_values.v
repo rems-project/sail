@@ -2,6 +2,7 @@
 
 (*Require Import Sail_impl_base*)
 Require Export ZArith.
+Require Import Ascii.
 Require Export String.
 Require Import bbv.Word.
 Require Export List.
@@ -72,7 +73,13 @@ Definition nn := nat.
 (*val pow : Z -> Z -> Z*)
 Definition pow m n := m ^ n.
 
-Definition pow2 n := pow 2 n.
+Program Definition pow2 n : {z : Z & ArithFact (2 ^ n <= z <= 2 ^ n)} := existT _ (pow 2 n) _.
+Next Obligation.
+constructor.
+unfold pow.
+auto using Z.le_refl.
+Qed.
+
 (*
 Definition inline lt := (<)
 Definition inline gt := (>)
@@ -105,7 +112,15 @@ Definition negate_real r := realNegate r
 Definition abs_real r := realAbs r
 Definition power_real b e := realPowInteger b e*)
 
+Definition print_endline (_ : string) : unit := tt.
+Definition prerr_endline (_ : string) : unit := tt.
+Definition prerr (_ : string) : unit := tt.
 Definition print_int (_ : string) (_ : Z) : unit := tt.
+Definition prerr_int (_ : string) (_ : Z) : unit := tt.
+Definition putchar (_ : Z) : unit := tt.
+
+Definition shl_int := Z.shiftl.
+Definition shr_int := Z.shiftr.
 
 (*
 Definition or_bool l r := (l || r)
@@ -123,9 +138,29 @@ Fixpoint repeat' {a} (xs : list a) n :=
   | O => []
   | S n => xs ++ repeat' xs n
   end.
+Lemma repeat'_length {a} {xs : list a} {n : nat} : List.length (repeat' xs n) = (n * List.length xs)%nat.
+induction n.
+* reflexivity.
+* simpl.
+  rewrite app_length.
+  auto with arith.
+Qed.
 Definition repeat {a} (xs : list a) (n : Z) :=
   if n <=? 0 then []
   else repeat' xs (Z.to_nat n).
+Lemma repeat_length {a} {xs : list a} {n : Z} (H : n >= 0) : length_list (repeat xs n) = n * length_list xs.
+unfold length_list, repeat.
+destruct n.
++ reflexivity. 
++ simpl (List.length _).
+  rewrite repeat'_length.
+  rewrite Nat2Z.inj_mul.
+  rewrite positive_nat_Z.
+  reflexivity.  
++ exfalso.
+  auto with zarith.
+Qed.
+
 (*declare {isabelle} termination_argument repeat = automatic
 
 Definition duplicate_to_list bit length := repeat [bit] length
@@ -186,6 +221,48 @@ lemma just_list_spec:
   ((forall xs. (just_list xs = None) <-> List.elem None xs) &&
    (forall xs es. (just_list xs = Some es) <-> (xs = List.map Some es)))*)
 
+Lemma just_list_length {A} : forall (l : list (option A)) (l' : list A),
+  Some l' = just_list l -> List.length l = List.length l'.
+induction l.
+* intros.
+  simpl in H.
+  inversion H.
+  reflexivity.
+* intros.
+  destruct a; simplify_eq H.
+  simpl in *.
+  destruct (just_list l); simplify_eq H.
+  intros.
+  subst.
+  simpl.
+  f_equal.
+  apply IHl.
+  reflexivity.
+Qed.
+
+Lemma just_list_length_Z {A} : forall (l : list (option A)) l', Some l' = just_list l -> length_list l = length_list l'.
+unfold length_list.
+intros.
+f_equal.
+auto using just_list_length.
+Qed.
+
+Fixpoint member_Z_list (x : Z) (l : list Z) : bool :=
+match l with
+| [] => false
+| h::t => if x =? h then true else member_Z_list x t
+end.
+
+Lemma member_Z_list_In {x l} : member_Z_list x l = true <-> In x l.
+induction l.
+* simpl. split. congruence. tauto.
+* simpl. destruct (x =? a) eqn:H.
+  + rewrite Z.eqb_eq in H. subst. tauto.
+  + rewrite Z.eqb_neq in H. split.
+    - intro Heq. right. apply IHl. assumption.
+    - intros [bad | good]. congruence. apply IHl. assumption.
+Qed.
+
 (*** Bits *)
 Inductive bitU := B0 | B1 | BU.
 
@@ -195,6 +272,13 @@ match b with
   | B1 => "I"
   | BU => "U"
 end%string.
+
+Definition bitU_char b :=
+match b with
+| B0 => "0"
+| B1 => "1"
+| BU => "?"
+end%char.
 
 (*instance (Show bitU)
   let show := showBitU
@@ -463,47 +547,52 @@ Definition arith_op_bits (op : Z -> Z -> Z) (sign : bool) l r :=
   end.
 
 
-(*
-Definition char_of_nibble := function
-  | (B0, B0, B0, B0) => Some #'0'
-  | (B0, B0, B0, B1) => Some #'1'
-  | (B0, B0, B1, B0) => Some #'2'
-  | (B0, B0, B1, B1) => Some #'3'
-  | (B0, B1, B0, B0) => Some #'4'
-  | (B0, B1, B0, B1) => Some #'5'
-  | (B0, B1, B1, B0) => Some #'6'
-  | (B0, B1, B1, B1) => Some #'7'
-  | (B1, B0, B0, B0) => Some #'8'
-  | (B1, B0, B0, B1) => Some #'9'
-  | (B1, B0, B1, B0) => Some #'A'
-  | (B1, B0, B1, B1) => Some #'B'
-  | (B1, B1, B0, B0) => Some #'C'
-  | (B1, B1, B0, B1) => Some #'D'
-  | (B1, B1, B1, B0) => Some #'E'
-  | (B1, B1, B1, B1) => Some #'F'
+Definition char_of_nibble x :=
+  match x with
+  | (B0, B0, B0, B0) => Some "0"%char
+  | (B0, B0, B0, B1) => Some "1"%char
+  | (B0, B0, B1, B0) => Some "2"%char
+  | (B0, B0, B1, B1) => Some "3"%char
+  | (B0, B1, B0, B0) => Some "4"%char
+  | (B0, B1, B0, B1) => Some "5"%char
+  | (B0, B1, B1, B0) => Some "6"%char
+  | (B0, B1, B1, B1) => Some "7"%char
+  | (B1, B0, B0, B0) => Some "8"%char
+  | (B1, B0, B0, B1) => Some "9"%char
+  | (B1, B0, B1, B0) => Some "A"%char
+  | (B1, B0, B1, B1) => Some "B"%char
+  | (B1, B1, B0, B0) => Some "C"%char
+  | (B1, B1, B0, B1) => Some "D"%char
+  | (B1, B1, B1, B0) => Some "E"%char
+  | (B1, B1, B1, B1) => Some "F"%char
   | _ => None
-  end
+  end.
 
 Fixpoint hexstring_of_bits bs := match bs with
   | b1 :: b2 :: b3 :: b4 :: bs =>
      let n := char_of_nibble (b1, b2, b3, b4) in
      let s := hexstring_of_bits bs in
      match (n, s) with
-     | (Some n, Some s) => Some (n :: s)
+     | (Some n, Some s) => Some (String n s)
      | _ => None
      end
+  | [] => Some EmptyString
   | _ => None
-  end
-declare {isabelle} termination_argument hexstring_of_bits = automatic
+  end%string.
+
+Fixpoint binstring_of_bits bs := match bs with
+  | b :: bs => String (bitU_char b) (binstring_of_bits bs)
+  | [] => EmptyString
+  end.
 
 Definition show_bitlist bs :=
   match hexstring_of_bits bs with
-  | Some s => toString (#'0' :: #x' :: s)
-  | None => show bs
-  end
+  | Some s => String "0" (String "x" s)
+  | None => String "0" (String "b" (binstring_of_bits bs))
+  end.
 
 (*** List operations *)
-
+(*
 Definition inline (^^) := append_list
 
 val subrange_list_inc : forall a. list a -> Z -> Z -> list a*)
@@ -628,10 +717,10 @@ Definition update_list {A} (is_inc : bool) (xs : list A) n x :=
   | [] => failwith "extract_only_element called for empty list"
   | [e] => e
   | _ => failwith "extract_only_element called for list with more elements"
-end
+end*)
 
 (*** Machine words *)
-*)
+
 Definition mword (n : Z) :=
   match n with
   | Zneg _ => False
@@ -832,8 +921,20 @@ Class ReasonableSize (a : Z) : Prop := {
   isPositive : a >= 0
 }.
 
-Hint Resolve -> Z.gtb_lt Z.geb_le Z.ltb_lt Z.leb_le : zbool.
-Hint Resolve <- Z.ge_le_iff Z.gt_lt_iff : zbool.
+(* Omega doesn't know about In, but can handle disjunctions. *)
+Ltac unfold_In :=
+repeat match goal with
+| H:context [member_Z_list _ _ = true] |- _ => rewrite member_Z_list_In in H
+| H:context [In ?x (?y :: ?t)] |- _ => change (In x (y :: t)) with (y = x \/ In x t) in H
+| H:context [In ?x []] |- _ => change (In x []) with False in H
+end.
+
+(* Definitions in the context that involve proof for other constraints can
+   break some of the constraint solving tactics, so prune definition bodies
+   down to integer types. *)
+Ltac not_Z ty := match ty with Z => fail 1 | _ => idtac end.
+Ltac clear_non_Z_defns := 
+  repeat match goal with H := _ : ?X |- _ => not_Z X; clearbody H end.
 
 Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >= 0).
 constructor.
@@ -843,7 +944,7 @@ auto using Z.le_ge, Zle_0_pos.
 destruct w.
 Qed.
 Ltac unwrap_ArithFacts :=
-  repeat match goal with H:(ArithFact _) |- _ => apply use_ArithFact in H end.
+  repeat match goal with H:(ArithFact _) |- _ => let H' := fresh H in case H as [H'] end.
 Ltac unbool_comparisons :=
   repeat match goal with
   | H:context [Z.geb _ _] |- _ => rewrite Z.geb_leb in H
@@ -855,16 +956,29 @@ Ltac unbool_comparisons :=
   | H:context [Z.ltb _ _ = false] |- _ => rewrite Z.ltb_ge in H
   | H:context [Z.eqb _ _ = false] |- _ => rewrite Z.eqb_neq in H
   | H:context [orb _ _ = true] |- _ => rewrite Bool.orb_true_iff in H
+  | H:context [orb _ _ = false] |- _ => rewrite Bool.orb_false_iff in H
+  | H:context [andb _ _ = true] |- _ => rewrite Bool.andb_true_iff in H
+  | H:context [andb _ _ = false] |- _ => rewrite Bool.andb_false_iff in H
+  | H:context [negb _ = true] |- _ => rewrite Bool.negb_true_iff in H
+  | H:context [negb _ = false] |- _ => rewrite Bool.negb_false_iff in H
   | H:context [generic_eq _ _ = true] |- _ => apply generic_eq_true in H
   | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
   | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H
   | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
   end.
+
 (* Split up dependent pairs to get at proofs of properties *)
-(* TODO: simpl is probably too strong here *)
 Ltac extract_properties :=
-  repeat match goal with H := (projT1 ?X) |- _ => destruct X in *; simpl in H; unfold H in * end;
-  repeat match goal with |- context [projT1 ?X] => destruct X in *; simpl end.
+  repeat match goal with H := (projT1 ?X) |- _ =>
+    let x := fresh "x" in
+    let Hx := fresh "Hx" in
+    destruct X as [x Hx] in *;
+    change (projT1 (existT _ x Hx)) with x in *; unfold H in * end;
+  repeat match goal with |- context [projT1 ?X] =>
+    let x := fresh "x" in
+    let Hx := fresh "Hx" in
+    destruct X as [x Hx] in *;
+    change (projT1 (existT _ x Hx)) with x in * end.
 (* TODO: hyps, too? *)
 Ltac reduce_list_lengths :=
   repeat match goal with |- context [length_list ?X] => 
@@ -881,21 +995,36 @@ Ltac reduce_pow :=
     let r := (eval cbn in (Z.pow X Y)) in
     change (Z.pow X Y) with r
   end.
-Ltac solve_arithfact :=
+Ltac dump_context :=
+  repeat match goal with
+  | H:=?X |- _ => idtac H ":=" X; fail
+  | H:?X |- _ => idtac H ":" X; fail end;
+  match goal with |- ?X => idtac "Goal:" X end.
+Ltac prepare_for_solver :=
+(*dump_context;*)
+ clear_non_Z_defns;
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
+ unfold_In;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
  reduce_list_lengths;
- reduce_pow;
+ reduce_pow.
+Ltac solve_arithfact :=
+prepare_for_solver;
+(*dump_context;*)
  solve [apply ArithFact_mword; assumption
        | constructor; omega with Z
          (* The datatypes hints give us some list handling, esp In *)
-       | constructor; auto with datatypes zbool zarith sail].
+       | constructor; eauto with datatypes zarith sail
+       | constructor; idtac "Unable to solve constraint"; dump_context; fail].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
 
 Hint Unfold length_mword : sail.
+
+Definition neq_atom (x : Z) (y : Z) : bool := negb (Z.eqb x y).
+Hint Unfold neq_atom : sail.
 
 Lemma ReasonableSize_witness (a : Z) (w : mword a) : ReasonableSize a.
 constructor.
@@ -946,9 +1075,9 @@ Definition extz_bv n (v : a) : option b := of_bits (extz_bits n (bits_of v)).
 (*val exts_bv : forall a b. Bitvector a, Bitvector b => Z -> a -> b*)
 Definition exts_bv n (v : a) : option b := of_bits (exts_bits n (bits_of v)).
 
-(*val string_of_bv : forall a. Bitvector a => a -> string
-Definition string_of_bv v := show_bitlist (bits_of v)
-*)
+(*val string_of_bv : forall a. Bitvector a => a -> string *)
+Definition string_of_bv v := show_bitlist (bits_of v).
+
 End Bitvector_defs.
 
 (*** Bytes and addresses *)
@@ -1216,16 +1345,50 @@ end.
 (*declare {isabelle} termination_argument foreach = automatic
 
 val index_list : Z -> Z -> Z -> list Z*)
-Fixpoint index_list' from step n :=
-  match n with
-  | O => []
-  | S n => from :: index_list' (from + step) step n
-  end.
+Fixpoint index_list' from to step n :=
+  if orb (andb (step >? 0) (from <=? to)) (andb (step <? 0) (to <=? from)) then
+    match n with
+    | O => []
+    | S n => from :: index_list' (from + step) to step n
+    end
+  else [].
 
 Definition index_list from to step :=
   if orb (andb (step >? 0) (from <=? to)) (andb (step <? 0) (to <=? from)) then
-    index_list' from step (S (Z.abs_nat (from - to)))
+    index_list' from to step (S (Z.abs_nat (from - to)))
   else [].
+
+Fixpoint foreach_Z' {Vars} from to step n (vars : Vars) (body : Z -> Vars -> Vars) : Vars :=
+  if orb (andb (step >? 0) (from <=? to)) (andb (step <? 0) (to <=? from)) then
+    match n with
+    | O => vars
+    | S n => let vars := body from vars in foreach_Z' (from + step) to step n vars body
+    end
+  else vars.
+
+Definition foreach_Z {Vars} from to step vars body :=
+  foreach_Z' (Vars := Vars) from to step (S (Z.abs_nat (from - to))) vars body.
+
+Fixpoint foreach_Z_up' {Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> Vars) {struct n} : Vars :=
+  if sumbool_of_bool (from + off <=? to) then
+    match n with
+    | O => vars
+    | S n => let vars := body (from + off) _ vars in foreach_Z_up' from to step (off + step) n vars body
+    end
+  else vars.
+
+Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> Vars) {struct n} : Vars :=
+  if sumbool_of_bool (to <=? from + off) then
+    match n with
+    | O => vars
+    | S n => let vars := body (from + off) _ vars in foreach_Z_down' from to step (off - step) n vars body
+    end
+  else vars.
+
+Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (0 < step)} :=
+    foreach_Z_up' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
+Definition foreach_Z_down {Vars} from to step vars body `{ArithFact (0 < step)} :=
+    foreach_Z_down' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*val while : forall vars. vars -> (vars -> bool) -> (vars -> vars) -> vars
 Fixpoint while vars cond body :=
@@ -1323,6 +1486,8 @@ Definition abs_with_eq n   : {o : Z & ArithFact (o = Z.abs n)} := build_ex (Z.ab
 
 (* Similarly, for ranges (currently in MIPS) *)
 
+Definition eq_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)}) : bool :=
+  (projT1 l) =? (projT1 r).
 Definition add_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)})
   : {x & ArithFact (n+o <= x <= m+p)} :=
   build_ex ((projT1 l) + (projT1 r)).
@@ -1338,3 +1503,108 @@ Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c <=
 Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c >= a /\ c >= b)} :=
   build_ex (Z.max a b).
 
+
+(*** Generic vectors *)
+
+Definition vec (T:Type) (n:Z) := { l : list T & length_list l = n }.
+Definition vec_length {T n} (v : vec T n) := n.
+Definition vec_access_dec {T n} (v : vec T n) m `{ArithFact (0 <= m < n)} : T :=
+  access_list_dec (projT1 v) m.
+Definition vec_access_inc {T n} (v : vec T n) m `{ArithFact (0 <= m < n)} : T :=
+  access_list_inc (projT1 v) m.
+
+Program Definition vec_init {T} (t : T) (n : Z) `{ArithFact (n >= 0)} : vec T n :=
+  existT _ (repeat [t] n) _.
+Next Obligation.
+rewrite repeat_length; auto using fact.
+unfold length_list.
+simpl.
+auto with zarith.
+Qed.
+
+Lemma skipn_length {A n} {l: list A} : (n <= List.length l -> List.length (skipn n l) = List.length l - n)%nat.
+revert l.
+induction n.
+* simpl. auto with arith.
+* intros l H.
+  destruct l.
+  + inversion H.
+  + simpl in H.
+    simpl.
+    rewrite IHn; auto with arith.
+Qed.
+Lemma update_list_inc_length {T} {l:list T} {m x} : 0 <= m < length_list l -> length_list (update_list_inc l m x) = length_list l.
+unfold update_list_inc, list_update, length_list.
+intro H.
+f_equal.
+assert ((0 <= Z.to_nat m < Datatypes.length l)%nat).
+{ destruct H as [H1 H2].
+  split.
+  + change 0%nat with (Z.to_nat 0).
+    apply Z2Nat.inj_le; auto with zarith.
+  + rewrite <- Nat2Z.id.
+    apply Z2Nat.inj_lt; auto with zarith.
+}
+rewrite app_length.
+rewrite firstn_length_le; only 2:omega.
+cbn -[skipn].
+rewrite skipn_length;
+omega.
+Qed.
+
+Program Definition vec_update_dec {T n} (v : vec T n) m t `{ArithFact (0 <= m < n)} : vec T n := existT _ (update_list_dec (projT1 v) m t) _.
+Next Obligation.
+unfold update_list_dec.
+rewrite update_list_inc_length.
++ destruct v. apply e.
++ destruct H.
+  destruct v. simpl (projT1 _). rewrite e.
+  omega.
+Qed.
+
+Program Definition vec_update_inc {T n} (v : vec T n) m t `{ArithFact (0 <= m < n)} : vec T n := existT _ (update_list_inc (projT1 v) m t) _.
+Next Obligation.
+rewrite update_list_inc_length.
++ destruct v. apply e.
++ destruct H.
+  destruct v. simpl (projT1 _). rewrite e.
+  omega.
+Qed.
+
+Program Definition vec_map {S T} (f : S -> T) {n} (v : vec S n) : vec T n := existT _ (List.map f (projT1 v)) _.
+Next Obligation.
+destruct v as [l H].
+cbn.
+unfold length_list.
+rewrite map_length.
+apply H.
+Qed.
+
+Program Definition just_vec {A n} (v : vec (option A) n) : option (vec A n) :=
+  match just_list (projT1 v) with
+  | None => None
+  | Some v' => Some (existT _ v' _)
+  end.
+Next Obligation.
+rewrite <- (just_list_length_Z _ _ Heq_anonymous).
+destruct v.
+assumption.
+Qed.
+
+Definition list_of_vec {A n} (v : vec A n) : list A := projT1 v.
+
+Program Definition vec_of_list {A} n (l : list A) : option (vec A n) :=
+  if sumbool_of_bool (n =? length_list l) then Some (existT _ l _) else None.
+Next Obligation.
+symmetry.
+apply Z.eqb_eq.
+assumption.
+Qed.
+
+Definition vec_of_list_len {A} (l : list A) : vec A (length_list l) := existT _ l (eq_refl _).
+
+Definition map_bind {A B} (f : A -> option B) (a : option A) : option B :=
+match a with
+| Some a' => f a'
+| None => None
+end.

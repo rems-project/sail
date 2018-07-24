@@ -1,3 +1,4 @@
+#include<assert.h>
 #include<inttypes.h>
 #include<stdbool.h>
 #include<stdio.h>
@@ -34,7 +35,7 @@ void cleanup_library(void)
   mpq_clear(sail_lib_tmp_real);
 }
 
-bool eq_unit(const unit a, const unit b)
+bool EQUAL(unit)(const unit a, const unit b)
 {
   return true;
 }
@@ -62,7 +63,7 @@ bool not(const bool b) {
   return !b;
 }
 
-bool eq_bool(const bool a, const bool b) {
+bool EQUAL(bool)(const bool a, const bool b) {
   return a == b;
 }
 
@@ -116,6 +117,11 @@ bool eq_string(const sail_string str1, const sail_string str2)
   return strcmp(str1, str2) == 0;
 }
 
+bool EQUAL(sail_string)(const sail_string str1, const sail_string str2)
+{
+  return strcmp(str1, str2) == 0;
+}
+
 void undefined_string(sail_string *str, const unit u) {}
 
 void concat_str(sail_string *stro, const sail_string str1, const sail_string str2)
@@ -127,6 +133,12 @@ void concat_str(sail_string *stro, const sail_string str1, const sail_string str
 }
 
 /* ***** Sail integers ***** */
+
+inline
+bool EQUAL(mach_int)(const mach_int op1, const mach_int op2)
+{
+  return op1 == op2;
+}
 
 #ifndef USE_INT128
 
@@ -192,6 +204,12 @@ void CONVERT_OF(sail_int, mach_int)(sail_int *rop, const mach_int op)
 
 inline
 bool eq_int(const sail_int op1, const sail_int op2)
+{
+  return !abs(mpz_cmp(op1, op2));
+}
+
+inline
+bool EQUAL(sail_int)(const sail_int op1, const sail_int op2)
 {
   return !abs(mpz_cmp(op1, op2));
 }
@@ -329,6 +347,11 @@ void pow2(sail_int *rop, const sail_int exp) {
 
 /* ***** Sail bitvectors ***** */
 
+bool EQUAL(mach_bits)(const mach_bits op1, const mach_bits op2)
+{
+  return op1 == op2;
+}
+
 void CREATE(sail_bits)(sail_bits *rop)
 {
   rop->bits = malloc(sizeof(mpz_t));
@@ -419,6 +442,7 @@ void add_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 
 void sub_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_sub(*rop->bits, *op1.bits, *op2.bits);
   normalize_sail_bits(rop);
@@ -440,18 +464,21 @@ void sub_bits_int(sail_bits *rop, const sail_bits op1, const mpz_t op2)
 
 void and_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_and(*rop->bits, *op1.bits, *op2.bits);
 }
 
 void or_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_ior(*rop->bits, *op1.bits, *op2.bits);
 }
 
 void xor_bits(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   rop->len = op1.len;
   mpz_xor(*rop->bits, *op1.bits, *op2.bits);
 }
@@ -495,12 +522,14 @@ void zeros(sail_bits *rop, const sail_int op)
 
 void zero_extend(sail_bits *rop, const sail_bits op, const sail_int len)
 {
+  assert(op.len <= mpz_get_ui(len));
   rop->len = mpz_get_ui(len);
   mpz_set(*rop->bits, *op.bits);
 }
 
 void sign_extend(sail_bits *rop, const sail_bits op, const sail_int len)
 {
+  assert(op.len <= mpz_get_ui(len));
   rop->len = mpz_get_ui(len);
   if(mpz_tstbit(*op.bits, op.len - 1)) {
     mpz_set(*rop->bits, *op.bits);
@@ -519,14 +548,21 @@ void length_sail_bits(sail_int *rop, const sail_bits op)
 
 bool eq_bits(const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   for (mp_bitcnt_t i = 0; i < op1.len; i++) {
     if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return false;
   }
   return true;
 }
 
+bool EQUAL(sail_bits)(const sail_bits op1, const sail_bits op2)
+{
+  return eq_bits(op1, op2);
+}
+
 bool neq_bits(const sail_bits op1, const sail_bits op2)
 {
+  assert(op1.len == op2.len);
   for (mp_bitcnt_t i = 0; i < op1.len; i++) {
     if (mpz_tstbit(*op1.bits, i) != mpz_tstbit(*op2.bits, i)) return true;
   }
@@ -548,6 +584,7 @@ void vector_subrange_sail_bits(sail_bits *rop,
 
 void sail_truncate(sail_bits *rop, const sail_bits op, const sail_int len)
 {
+  assert(op.len >= mpz_get_ui(len));
   rop->len = mpz_get_ui(len);
   mpz_set(*rop->bits, *op.bits);
   normalize_sail_bits(rop);
@@ -594,8 +631,8 @@ void replicate_bits(sail_bits *rop, const sail_bits op1, const mpz_t op2)
 {
   uint64_t op2_ui = mpz_get_ui(op2);
   rop->len = op1.len * op2_ui;
-  mpz_set(*rop->bits, *op1.bits);
-  for (int i = 1; i < op2_ui; i++) {
+  mpz_set_ui(*rop->bits, 0);
+  for (int i = 0; i < op2_ui; i++) {
     mpz_mul_2exp(*rop->bits, *rop->bits, op1.len);
     mpz_ior(*rop->bits, *rop->bits, *op1.bits);
   }
@@ -670,6 +707,7 @@ void vector_update_subrange_sail_bits(sail_bits *rop,
   uint64_t m = mpz_get_ui(m_mpz);
 
   mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
 
   for (uint64_t i = 0; i < n - (m - 1ul); i++) {
     if (mpz_tstbit(*slice.bits, i)) {
@@ -682,10 +720,11 @@ void vector_update_subrange_sail_bits(sail_bits *rop,
 
 void slice(sail_bits *rop, const sail_bits op, const sail_int start_mpz, const sail_int len_mpz)
 {
+  assert(mpz_get_ui(start_mpz) + mpz_get_ui(len_mpz) <= op.len);
   uint64_t start = mpz_get_ui(start_mpz);
   uint64_t len = mpz_get_ui(len_mpz);
 
-  mpz_set_ui(*rop->bits, 0ul);
+  mpz_set_ui(*rop->bits, 0);
   rop->len = len;
 
   for (uint64_t i = 0; i < len; i++) {
@@ -740,6 +779,19 @@ void shift_bits_right_arith(sail_bits *rop, const sail_bits op1, const sail_bits
       mpz_setbit(*rop->bits, sign_bit - shift_amt + 1);
     }
   }
+}
+
+void shiftl(sail_bits *rop, const sail_bits op1, const sail_int op2)
+{
+  rop->len = op1.len;
+  mpz_mul_2exp(*rop->bits, *op1.bits, mpz_get_ui(op2));
+  normalize_sail_bits(rop);
+}
+
+void shiftr(sail_bits *rop, const sail_bits op1, const sail_int op2)
+{
+  rop->len = op1.len;
+  mpz_tdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(op2));
 }
 
 void reverse_endianness(sail_bits *rop, const sail_bits op)
@@ -916,7 +968,7 @@ void to_real(real *rop, const sail_int op)
   mpq_canonicalize(*rop);
 }
 
-bool eq_real(const real op1, const real op2)
+bool EQUAL(real)(const real op1, const real op2)
 {
   return mpq_cmp(op1, op2) == 0;
 }

@@ -1,3 +1,5 @@
+/* Machine-mode and supervisor-mode state definitions and operations. */
+
 /* privilege level */
 
 register cur_privilege : Privilege
@@ -5,6 +7,34 @@ register cur_privilege : Privilege
 /* current instruction bits, used for illegal instruction exceptions */
 
 register cur_inst : xlenbits
+
+/* State projections
+ *
+ * Some machine state is processed via projections from machine-mode views to
+ * views from lower privilege levels.  So, for e.g. when mstatus is read from
+ * lower privilege levels, we use 'lowering_' projections:
+ *
+ *   mstatus  ->  sstatus  ->  ustatus
+ *
+ * Similarly, when machine state is written from lower privileges, that state is
+ * lifted into the appropriate value for the machine-mode state.
+ *
+ *   ustatus  ->  sstatus  ->  mstatus
+ *
+ * In addition, several fields in machine state registers are WARL or WLRL,
+ * requiring that values written to the registers be legalized.  For each such
+ * register, there will be an associated 'legalize_' function.  These functions
+ * will need to be supplied externally, and will depend on the legal values
+ * supported by a platform/implementation (or misa).  The legalize_ functions
+ * generate a legal value from the current value and the written value.  In more
+ * complex cases, they will also implicitly read the current values of misa,
+ * mstatus, etc.
+ *
+ * Each register definition below is followed by custom projections
+ * and choice of legalizations if needed.  For now, we typically
+ * implement the simplest legalize_ alternatives.
+ */
+
 
 /* M-mode registers */
 
@@ -40,9 +70,14 @@ bitfield Misa : bits(64) = {
 }
 register misa : Misa
 
-function legalize_misa(m : Misa, v : xlenbits) -> Misa =
-  /* Ignore all writes for now. */
-  m
+function legalize_misa(m : Misa, v : xlenbits) -> Misa = {
+  /* Allow modifications to C. */
+  let v = Mk_Misa(v);
+  // Suppress changing C if nextPC would become misaligned.
+  if   v.C() == false & nextPC[1] == true
+  then m
+  else update_C(m, v.C())
+}
 
 bitfield Mstatus : bits(64) = {
   SD   : 63,
@@ -88,14 +123,14 @@ function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   m
 }
 
-/* machine state utilities */
+/* architecture and extension checks */
 
 function cur_Architecture() -> Architecture = {
   let a : arch_xlen =
     match (cur_privilege) {
-      Machine => misa.MXL(),
+      Machine    => misa.MXL(),
       Supervisor => mstatus.SXL(),
-      User => mstatus.UXL()
+      User       => mstatus.UXL()
     };
   match architecture(a) {
     Some(a) => a,
@@ -112,7 +147,7 @@ function haveRVC()     -> bool = { misa.C() == true }
 function haveMulDiv()  -> bool = { misa.M() == true }
 function haveFP()      -> bool = { misa.F() == true | misa.D() == true }
 
-/* interrupt registers */
+/* interrupt processing state */
 
 bitfield Minterrupts : bits(64) = {
   MEI : 11, /* external interrupts */
@@ -163,7 +198,7 @@ function legalize_mideleg(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   m
 }
 
-/* exception registers */
+/* exception processing state */
 
 bitfield Medeleg : bits(64) = {
   SAMO_Page_Fault   : 15,
@@ -225,14 +260,22 @@ function tvec_addr(m : Mtvec, c : Mcause) -> option(xlenbits) = {
   }
 }
 
-/* auxiliary exception registers */
+/* Exception PC */
+
 register mepc : xlenbits
 
+// legalizing writes to xepc
 function legalize_xepc(v : xlenbits) -> xlenbits = {
   v & EXTS(if haveRVC() then 0b110 else 0b100)
 }
 
-register mtval : xlenbits
+// masking for reads to xepc
+function pc_alignment_mask() -> xlenbits =
+  ~(EXTZ(if misa.C() == true then 0b00 else 0b10))
+
+/* auxiliary exception registers */
+
+register mtval    : xlenbits
 register mscratch : xlenbits
 
 /* counters */
@@ -266,15 +309,17 @@ function legalize_scounteren(c : Counteren, v : xlenbits) -> Counteren = {
 register mcycle : xlenbits
 register mtime : xlenbits
 
-/* minstret is an architectural register, and can be written to.  The
-   spec says that minstret increments on instruction retires need to
-   occur before any explicit writes to instret.  However, in our
-   simulation loop, we need to execute an instruction to find out
-   whether it retired, and hence can only increment instret after
-   execution.  To avoid doing this in the case minstret was explicitly
-   written to, we track writes to it in a separate model-internal
-   register.
-*/
+/* minstret
+ *
+ * minstret is an architectural register, and can be written to.  The
+ * spec says that minstret increments on instruction retires need to
+ * occur before any explicit writes to instret.  However, in our
+ * simulation loop, we need to execute an instruction to find out
+ * whether it retired, and hence can only increment instret after
+ * execution.  To avoid doing this in the case minstret was explicitly
+ * written to, we track writes to it in a separate model-internal
+ * register.
+ */
 register minstret : xlenbits
 register minstret_written : bool
 
@@ -295,8 +340,10 @@ register mhartid : xlenbits
 register pmpaddr0 : xlenbits
 register pmpcfg0 : xlenbits
 
-/* supervisor mode registers */
 
+/* S-mode registers */
+
+/* sstatus reveals a subset of mstatus */
 bitfield Sstatus : bits(64) = {
   SD   : 63,
   UXL  : 33 .. 32,
@@ -329,7 +376,8 @@ function lower_mstatus(m : Mstatus) -> Sstatus = {
 
 function lift_sstatus(m : Mstatus, s : Sstatus) -> Mstatus = {
   let m = update_SD(m, s.SD());
-  // let m = update_UXL(m, s.UXL());  FIXME: This should be parameterized by a platform setting.  For now, match spike.
+  // FIXME: This should be parameterized by a platform setting.  For now, match spike.
+  // let m = update_UXL(m, s.UXL());
   let m = update_MXR(m, s.MXR());
   let m = update_SUM(m, s.SUM());
   let m = update_XS(m, s.XS());
@@ -363,7 +411,6 @@ function legalize_sedeleg(s : Sedeleg, v : xlenbits) -> Sedeleg = {
   Mk_Sedeleg(EXTZ(v[8..0]))
 }
 
-/* TODO: handle views for interrupt delegation */
 bitfield Sinterrupts : bits(64) = {
   SEI : 9,  /* external interrupts */
   UEI : 8,
@@ -426,6 +473,7 @@ function legalize_sie(m : Minterrupts, d : Minterrupts, v : xlenbits) -> Minterr
 
 register sideleg : Sinterrupts
 
+/* s-mode address translation and protection (satp) */
 bitfield Satp64 : bits(64) = {
   Mode : 63 .. 60,
   Asid : 59 .. 44,
@@ -442,16 +490,17 @@ function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits
   }
 }
 
-register stvec : Mtvec
+/* other supervisor state */
+register stvec    : Mtvec
 register sscratch : xlenbits
-register sepc : xlenbits
-register scause : Mcause
-register stval : xlenbits
+register sepc     : xlenbits
+register scause   : Mcause
+register stval    : xlenbits
 
 /* disabled trigger/debug module */
 register tselect : xlenbits
 
-/* csr name printer */
+/* CSR names */
 
 val cast csr_name : csreg -> string
 function csr_name(csr) = {
@@ -527,6 +576,12 @@ mapping csr_name_map : csreg <-> string = {
     0x000  <-> "ustatus",
     0x004  <-> "uie",
     0x005  <-> "utvec",
+    /* user trap handling */
+    0x040  <-> "uscratch",
+    0x041  <-> "uepc",
+    0x042  <-> "ucause",
+    0x043  <-> "utval",
+    0x044  <-> "uip",
     /* user floating-point context */
     0x001  <-> "fflags",
     0x002  <-> "frm",
@@ -573,7 +628,27 @@ mapping csr_name_map : csreg <-> string = {
     0x342  <-> "mcause",
     0x343  <-> "mtval",
     0x344  <-> "mip",
-    /* TODO: machine protection and translation */
+    /* machine protection and translation */
+    0x3A0  <-> "pmpcfg0",
+    0x3A1  <-> "pmpcfg1",
+    0x3A2  <-> "pmpcfg2",
+    0x3A3  <-> "pmpcfg3",
+    0x3B0  <-> "pmpaddr0",
+    0x3B1  <-> "pmpaddr1",
+    0x3B2  <-> "pmpaddr2",
+    0x3B3  <-> "pmpaddr3",
+    0x3B4  <-> "pmpaddr4",
+    0x3B5  <-> "pmpaddr5",
+    0x3B6  <-> "pmpaddr6",
+    0x3B7  <-> "pmpaddr7",
+    0x3B8  <-> "pmpaddr8",
+    0x3B9  <-> "pmpaddr9",
+    0x3BA  <-> "pmpaddr10",
+    0x3BB  <-> "pmpaddr11",
+    0x3BC  <-> "pmpaddr12",
+    0x3BD  <-> "pmpaddr13",
+    0x3BE  <-> "pmpaddr14",
+    0x3BF  <-> "pmpaddr15",
     /* machine counters/timers */
     0xB00  <-> "mcycle",
     0xB02  <-> "minstret",
@@ -581,11 +656,17 @@ mapping csr_name_map : csreg <-> string = {
     0xB82  <-> "minstreth",
     /* TODO: other hpm counters and events */
     /* trigger/debug */
-    0x7a0  <-> "tselect"
+    0x7a0  <-> "tselect",
+    0x7a1  <-> "tdata1",
+    0x7a2  <-> "tdata2",
+    0x7a3  <-> "tdata3"
+
+    /* numeric fallback */
+    /* reg    <-> hex_bits_12(reg) */
  }
 
 
-/* csr access control */
+/* CSR access control */
 
 function csrAccess(csr : csreg) -> csrRW = csr[11..10]
 function csrPriv(csr : csreg) -> priv_level = csr[9..8]
@@ -670,6 +751,24 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
   & check_TVM_SATP(csr, p)
   & check_Counteren(csr, p)
 
+/* Reservation handling for LR/SC.
+ *
+ * The reservation state is maintained external to the model since the
+ * reservation behavior is platform-specific anyway and maintaining
+ * this state outside the model simplifies the concurrency analysis.
+ *
+ * These are externs are defined here in the system module since
+ * we currently perform reservation cancellation on privilege level
+ * transition.  Ideally, the platform should get more visibility into
+ * where cancellation can be performed.
+ */
+
+val load_reservation = {ocaml: "Platform.load_reservation", lem: "load_reservation"} : xlenbits -> unit
+
+val match_reservation = {ocaml: "Platform.match_reservation", lem: "speculate_conditional_success"} : xlenbits -> bool effect {exmem}
+
+val cancel_reservation = {ocaml: "Platform.cancel_reservation", lem: "cancel_reservation"} : unit -> unit
+
 /* Exception delegation: given an exception and the privilege at which
  * it occured, returns the privilege at which it should be handled.
  */
@@ -750,10 +849,10 @@ function curInterrupt(priv : Privilege, pend : Minterrupts, enbl : Minterrupts, 
   }
 }
 
-/* instruction control flow */
+/* privilege transitions due to exceptions and interrupts */
 
 struct sync_exception = {
-  trap : ExceptionType,
+  trap    : ExceptionType,
   excinfo : option(xlenbits)
 }
 
@@ -776,6 +875,7 @@ union ctl_result = {
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
   print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
+
   match (del_priv) {
     Machine => {
        mcause->IsInterrupt() = intr;
@@ -790,6 +890,8 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
        cur_privilege   = del_priv;
 
        print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+
+       cancel_reservation();
 
        match tvec_addr(mtvec, mcause) {
          Some(epc) => epc,
@@ -814,6 +916,8 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
 
+       cancel_reservation();
+
        match tvec_addr(stvec, scause) {
          Some(epc) => epc,
          None()    => internal_error("Invalid stvec mode")
@@ -834,7 +938,7 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       handle_trap(del_priv, false, e.trap, pc, e.excinfo)
     },
     (_, CTL_MRET())  => {
-      let prev_priv = cur_privilege;
+      let prev_priv   = cur_privilege;
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = true;
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
@@ -842,10 +946,12 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
 
       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
-      mepc
+
+      cancel_reservation();
+      mepc & pc_alignment_mask()
     },
     (_, CTL_SRET())  => {
-      let prev_priv = cur_privilege;
+      let prev_priv   = cur_privilege;
       mstatus->SIE()  = mstatus.SPIE();
       mstatus->SPIE() = true;
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
@@ -853,7 +959,9 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
 
       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
       print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
-      sepc
+
+      cancel_reservation();
+      sepc & pc_alignment_mask()
     }
   }
 }
@@ -879,10 +987,12 @@ function handle_illegal() -> unit = {
   nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 }
 
+/* state state initialization */
+
 function init_sys() -> unit = {
   cur_privilege = Machine;
 
-  mhartid = EXTZ(0b0);
+  mhartid     = EXTZ(0b0);
 
   misa->MXL() = arch_to_bits(RV64);
   misa->A()   = true; /* atomics */
@@ -893,9 +1003,9 @@ function init_sys() -> unit = {
   misa->S()   = true; /* supervisor-mode */
 
   /* 64-bit only mode with no extensions */
-  mstatus->SXL() = misa.MXL();
-  mstatus->UXL() = misa.MXL();
-  mstatus->SD()  = false;
+  mstatus->SXL()  = misa.MXL();
+  mstatus->UXL()  = misa.MXL();
+  mstatus->SD()   = false;
 
   mip->bits()     = EXTZ(0b0);
   mie->bits()     = EXTZ(0b0);
@@ -911,8 +1021,9 @@ function init_sys() -> unit = {
   mtime           = EXTZ(0b0);
 
   mcounteren->bits() = EXTZ(0b0);
-  minstret = EXTZ(0b0);
-  minstret_written = false;
+
+  minstret           = EXTZ(0b0);
+  minstret_written   = false;
 
   // log compatibility with spike
   print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(EXTZ(0b0) : xlenbits) ^ ")")
@@ -921,6 +1032,6 @@ function init_sys() -> unit = {
 /* memory access exceptions, defined here for use by the platform model. */
 
 union MemoryOpResult ('a : Type) = {
-  MemValue : 'a,
-  MemException: ExceptionType
+  MemValue     : 'a,
+  MemException : ExceptionType
 }

@@ -118,6 +118,9 @@ let options = Arg.align ([
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " Apply constant folding optimizations");
+  ( "-static",
+    Arg.Set C_backend.opt_static,
+    " Make generated C functions static");
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " Instrument ouput with tracing");
@@ -145,6 +148,9 @@ let options = Arg.align ([
   ( "-dcoq_undef_axioms",
     Arg.Set Pretty_print_coq.opt_undef_axioms,
     "Generate axioms for functions that are declared but not defined");
+  ( "-dcoq_warn_nonex",
+    Arg.Set Rewrites.opt_coq_warn_nonexhaustive,
+    "Generate warnings for non-exhaustive pattern matches in the Coq backend");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
     " set a custom prefix for generated latex command (default sail)");

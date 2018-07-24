@@ -1,4 +1,4 @@
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail
+SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail riscv_analysis.sail
 PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
@@ -17,8 +17,23 @@ _sbuild/platform_main.native: _sbuild/riscv.ml _tags $(PLATFORM_OCAML_SRCS) Make
 	cp _tags $(PLATFORM_OCAML_SRCS) _sbuild
 	cd _sbuild && ocamlbuild -use-ocamlfind platform_main.native
 
+_sbuild/coverage.native: _sbuild/riscv.ml _tags.bisect $(PLATFORM_OCAML_SRCS) Makefile
+	cp $(PLATFORM_OCAML_SRCS) _sbuild
+	cp _tags.bisect _sbuild/_tags
+	cd _sbuild && ocamlbuild -use-ocamlfind platform_main.native && cp -L platform_main.native coverage.native
+
 platform: _sbuild/platform_main.native
 	rm -f $@ && ln -s $^ $@
+
+coverage: _sbuild/coverage.native
+	rm -f platform && ln -s $^ platform # since the test scripts runs this file
+	rm -rf bisect*.out bisect coverage
+	../test/riscv/run_tests.sh # this will generate bisect*.out files in this directory
+	mkdir bisect && mv bisect*.out bisect/
+	mkdir coverage && bisect-ppx-report -html coverage/ -I _sbuild/ bisect/bisect*.out
+
+riscv.c: $(SAIL_SRCS) Makefile
+	$(SAIL) -O -memo_z3 -c $(SAIL_SRCS) 1> $@
 
 tracecmp: tracecmp.ml
 	ocamlfind ocamlopt -annot -linkpkg -package unix $^ -o $@
@@ -50,7 +65,8 @@ riscv_sequential.lem: $(SAIL_SRCS) Makefile
 	$(SAIL_DIR)/sail -lem -lem_sequential -o riscv_sequential -lem_mwords -lem_lib Riscv_extras_sequential $(SAIL_SRCS)
 
 riscvScript.sml : riscv.lem riscv_extras.lem
-	lem -hol -outdir . -lib ../lib/hol -lib ../src/lem_interp -lib ../src/gen_lib \
+	lem -hol -outdir . -lib ../lib/hol -i ../lib/hol/sail2_prompt_monad.lem -i ../lib/hol/sail2_prompt.lem \
+	    -lib ../src/lem_interp -lib ../src/gen_lib \
 		riscv_extras.lem \
 		riscv_types.lem \
 		riscv.lem
@@ -69,6 +85,6 @@ clean:
 		Riscv_extras.thy
 	-rm -f Riscv_duopod.thy Riscv_duopod_types.thy riscv_duopod.lem riscv_duopod_types.lem
 	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
-	-rm -f platform_main.native platform
+	-rm -f platform_main.native platform coverage.native
 	-Holmake cleanAll
 	ocamlbuild -clean

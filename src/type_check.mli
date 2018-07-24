@@ -133,6 +133,9 @@ module Env : sig
 
   val is_record : id -> t -> bool
 
+  (** Returns record quantifiers and fields *)
+  val get_record : id -> t -> typquant * (typ * id) list
+
   (** Return type is: quantifier, argument type, return type, effect *)
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
 
@@ -191,6 +194,7 @@ module Env : sig
 
   val empty : t
 
+  val pattern_completeness_ctx : t -> Pattern_completeness.ctx
 end
 
 (** Push all the type variables and constraints from a typquant into
@@ -348,6 +352,10 @@ val alpha_equivalent : Env.t -> typ -> typ -> bool
 
 (** Throws Invalid_argument if the argument is not a E_app expression *)
 val instantiation_of : tannot exp -> uvar KBindings.t
+
+(** Doesn't use the type of the expression when calculating instantiations.
+    May fail if the arguments aren't sufficient to calculate all unifiers. *)
+val instantiation_of_without_type : tannot exp -> uvar KBindings.t
 
 (* Type variable instantiations that inference will extract from constraints *)
 val instantiate_simple_equations : quant_item list -> uvar KBindings.t

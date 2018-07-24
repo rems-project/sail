@@ -5,7 +5,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAILDIR="$DIR/../.."
 TYPECHECKTESTSDIR="$DIR/../typecheck/pass"
 EXTRATESTSDIR="$DIR/pass"
-BBVDIR="$DIR/../../../bbv"
+BBVDIR="$DIR/../../../bbv/theories"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

@@ -167,10 +167,13 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
-  | L_num n -> if Big_int.equal n Big_int.zero
-               then string "Big_int.zero"
-               else parens (string "Big_int.of_int" ^^ space
-                            ^^ string "(" ^^ string (Big_int.to_string n) ^^ string ")")
+  | L_num n ->
+     if Big_int.equal n Big_int.zero then
+       string "Big_int.zero"
+     else if Big_int.less_equal (Big_int.of_int min_int) n && Big_int.less_equal n (Big_int.of_int max_int) then
+       parens (string "Big_int.of_int" ^^ space ^^ parens (string (Big_int.to_string n)))
+     else
+       parens (string "Big_int.of_string" ^^ space ^^ dquotes (string (Big_int.to_string n)))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
   | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
@@ -389,6 +392,10 @@ let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
      separate space [string "let"; zencode ctx id; colon;
                      parens (ocaml_typ ctx typ); string "ref"; equals;
                      string "ref"; parens (ocaml_exp ctx (initial_value_for id ctx.register_inits))]
+  | DEC_config (id, typ, exp) ->
+     separate space [string "let"; zencode ctx id; colon;
+                     parens (ocaml_typ ctx typ); string "ref"; equals;
+                     string "ref"; parens (ocaml_exp ctx exp)]
   | _ -> failwith "Unsupported register declaration"
 
 let first_function = ref true

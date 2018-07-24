@@ -783,7 +783,7 @@ val () = computeLib.extend_compset [
   ]
 ]  cs;
 
-val empty_state = ``init_state initial_regstate bool_oracle seed``;
+val empty_state = ``init_state initial_regstate``;
 
 val init_registers_result =
   ``init_registers vinitPC s``
@@ -927,7 +927,7 @@ install_code_result
 
 val test_raw_add_thm = Q.store_thm("test_raw_add_thm",
   `PrePost
-      (λs. s = init_state initial_regstate bool_oracle seed)
+      (λs. s = init_state initial_regstate)
       (install_and_run test_raw_add_insts 40)
       (λ_ s.  test_raw_add_post s)`,
   rw[PrePost_def]
@@ -1378,7 +1378,7 @@ computeLib.CBV_CONV cs ``decode (EL 1 test_raw_add_insts)``
 
 val th1 = EVAL ``THE (decode (EL 1 test_raw_add_insts))``
 
-val s1 = EVAL ``init_cp0_state () (init_state (regs:regstate) o1 seed)``
+val s1 = EVAL ``init_cp0_state () (init_state (regs:regstate))``
 
 val th2 = ``execute ^(rhs(concl th1)) ^s1``
   |> SIMP_CONV(srw_ss())[execute_def]

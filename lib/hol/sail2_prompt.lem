@@ -1,0 +1,19 @@
+open import Sail2_prompt_monad
+open import Sail2_state_monad
+open import Sail2_state
+
+let inline undefined_bool = undefined_boolS
+let inline bool_of_bitU_nondet = bool_of_bitU_nondetS
+let inline bool_of_bitU_fail = bool_of_bitU_fail
+let inline bools_of_bits_nondet = bools_of_bits_nondetS
+let inline of_bits_nondet = of_bits_nondetS
+let inline of_bits_fail = of_bits_failS
+let inline mword_nondet = mword_nondetS
+let inline reg_deref = read_regS
+let inline internal_pick = internal_pickS
+
+let inline foreachM = foreachS
+let inline whileM = whileS
+let inline untilM = untilS
+let inline and_boolM = and_boolS
+let inline or_boolM = or_boolS

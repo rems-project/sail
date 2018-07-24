@@ -15,6 +15,7 @@ begin
 (*open import Bool*) 
 
 (*open import {coq} `Coq.Strings.Ascii`*)
+(*open import {hol} `ternaryComparisonsTheory`*)
 
 (* ========================================================================== *)
 (* Equality                                                                   *)

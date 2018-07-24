@@ -107,7 +107,7 @@ Definition undefined_string {rv e} (_:unit) : monad rv string e := returnm ""%st
 Definition undefined_unit {rv e} (_:unit) : monad rv unit e := returnm tt.
 Definition undefined_int {rv e} (_:unit) : monad rv Z e := returnm (0:ii).
 (*val undefined_vector : forall 'rv 'a 'e. integer -> 'a -> monad 'rv (list 'a) 'e*)
-Definition undefined_vector {rv a e} len (u : a) : monad rv (list a) e := returnm (repeat u len).
+Definition undefined_vector {rv a e} len (u : a) `{ArithFact (len >= 0)} : monad rv (vec a len) e := returnm (vec_init u len).
 (*val undefined_bitvector : forall 'rv 'a 'e. Bitvector 'a => integer -> monad 'rv 'a 'e*)
 Definition undefined_bitvector {rv e} len `{ArithFact (len >= 0)} : monad rv (mword len) e := returnm (mword_of_int 0).
 (*val undefined_bits : forall 'rv 'a 'e. Bitvector 'a => integer -> monad 'rv 'a 'e*)
@@ -138,7 +138,25 @@ Definition eq_bit (x : bitU) (y : bitU) : bool :=
   | _,_ => false
   end.
 
+Require Import Zeuclid.
+Definition euclid_modulo (m n : Z) `{ArithFact (n > 0)} : {z : Z & ArithFact (0 <= z <= n-1)}.
+refine (existT _ (ZEuclid.modulo m n) _).
+constructor.
+destruct H.
+assert (Zabs n = n). { rewrite Zabs_eq; auto with zarith. }
+rewrite <- H at 3.
+lapply (ZEuclid.mod_always_pos m n); omega.
+Qed.
+
 (* Override the more general version *)
 
 Definition mults_vec {n} (l : mword n) (r : mword n) : mword (2 * n) := mults_vec l r.
 Definition mult_vec {n} (l : mword n) (r : mword n) : mword (2 * n) := mult_vec l r.
+
+
+Definition print_endline (_:string) : unit := tt.
+Definition prerr_endline (_:string) : unit := tt.
+Definition prerr_string (_:string) : unit := tt.
+Definition putchar {T} (_:T) : unit := tt.
+Require DecimalString.
+Definition string_of_int z := DecimalString.NilZero.string_of_int (Z.to_int z).

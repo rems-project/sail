@@ -44,7 +44,7 @@ val cast cast_unit_vec : bit -> bits(1)
 
 function cast_unit_vec b = match b {
   bitzero => 0b0,
-  bitone => 0b1
+  _ => 0b1
 }
 
 val print = "print_endline" : string -> unit
@@ -55,7 +55,7 @@ val "prerr_string" : string -> unit
 
 val putchar = {c:"sail_putchar", _:"putchar"} : int -> unit
 
-val concat_str = {lem: "stringAppend", _: "concat_str"} : (string, string) -> string
+val concat_str = {lem: "stringAppend", coq: "String.append", _: "concat_str"} : (string, string) -> string
 
 val string_of_int = "string_of_int" : int -> string
 /* Unused?
@@ -104,7 +104,7 @@ overload operator / = {quotient_nat, quotient}
 val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot", coq: "Z.quot", _ : "tdiv_int"} : (int, int) -> int
 val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod", coq: "Z.rem", _ : "tmod_int"} : (int, int) -> int
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod", _ : "tmod_int"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
+val modulus = {ocaml: "modulus", lem: "hardware_mod", coq: "euclid_modulo", _ : "tmod_int"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
 
 overload operator % = {modulus}
 
@@ -116,19 +116,19 @@ val max_nat = {lem: "max", coq: "Z.max", _: "max_int"} : (nat, nat) -> nat
 
 val max_int = {lem: "max", coq: "Z.max", _: "max_int"} : (int, int) -> int
 
-val min_atom = {ocaml: "min_int", lem: "min", coq: "min_atom"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
+val min_atom = {ocaml: "min_int", lem: "min", coq: "min_atom", c:"min_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
-val max_atom = {ocaml: "max_int", lem: "max", coq: "max_atom"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
+val max_atom = {ocaml: "max_int", lem: "max", coq: "max_atom", c:"max_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
 
 overload min = {min_atom, min_nat, min_int}
 
 overload max = {max_atom, max_nat, max_int}
 
 val __WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
+  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> bool effect {wmv}
 
 val __MIPS_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-function __MIPS_write (addr, width, data) = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
+function __MIPS_write (addr, width, data) = let _ = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data) in ()
 
 val __ReadRAM = "read_ram" : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
@@ -186,7 +186,7 @@ function bool_to_bits x = if x then 0b1 else 0b0
 val cast bit_to_bool : bit -> bool
 function bit_to_bool b = match b {
   bitone => true,
-  bitzero => false
+  _ => false
 }
 
 val cast bits_to_bool : bits(1) -> bool

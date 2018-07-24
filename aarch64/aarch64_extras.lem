@@ -58,8 +58,6 @@ let hex_slice v len lo =
     | Nothing -> Fail "hex_slice"
   end
 
-let internal_pick vs = return (head vs)
-
 (* Use constants for undefined values for now *)
 let undefined_string () = return ""
 let undefined_unit () = return ()

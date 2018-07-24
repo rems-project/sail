@@ -1,4 +1,4 @@
-(**************************************************************************)
+(*========================================================================*)
 (*     Sail                                                               *)
 (*                                                                        *)
 (*  Copyright (c) 2013-2017                                               *)
@@ -46,7 +46,7 @@
 (*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
 (*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
 (*  SUCH DAMAGE.                                                          *)
-(**************************************************************************)
+(*========================================================================*)
 
 open import Pervasives
 open import Assert_extra
@@ -70,17 +70,13 @@ type vl =
   | V_record of list (string * vl)
   | V_null (* Used for unitialized values and null pointers in C compilation *)
 
-let primops extern args =
-  match (extern, args) with
-  | ("and_bool", [V_bool b1; V_bool b2]) -> V_bool (b1 && b2)
-  | ("and_bool", [V_nondet; V_bool false]) -> V_bool false
-  | ("and_bool", [V_bool false; V_nondet]) -> V_bool false
-  | ("and_bool", _) -> V_nondet
 
-  | ("or_bool", [V_bool b1; V_bool b2]) -> V_bool (b1 || b2)
-  | ("or_bool", [V_nondet; V_bool true]) -> V_bool true
-  | ("or_bool", [V_bool true; V_nondet]) -> V_bool true
-  | ("or_bool", _) -> V_nondet
+let value_int_op_int op = function
+  | [V_int v1; V_int v2] -> V_int (op v1 v2)
+  | _ -> V_null
+end
 
-  | _ -> failwith ("Unimplemented primitive operation " ^ extern)
-  end
+let value_bool_op_int op = function
+  | [V_int v1; V_int v2] -> V_bool (op v1 v2)
+  | _ -> V_null
+end

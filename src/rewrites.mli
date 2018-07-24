@@ -66,6 +66,13 @@ val rewrite_defs_interpreter : (string * (tannot defs -> tannot defs)) list
 (* Perform rewrites to exclude AST nodes not supported for lem out*)
 val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list
 
+(* Perform rewrites to exclude AST nodes not supported for coq out*)
+val rewrite_defs_coq : (string * (tannot defs -> tannot defs)) list
+
+(* Warn about matches where we add a default case for Coq because they're not
+   exhaustive *)
+val opt_coq_warn_nonexhaustive : bool ref
+
 (* Perform rewrites to exclude AST nodes not supported for C compilation *)
 val rewrite_defs_c : (string * (tannot defs -> tannot defs)) list
 

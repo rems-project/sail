@@ -151,9 +151,9 @@ val __SetSlice_int = "set_slice_int" : forall 'w. (atom('w), int, int, bits('w))
 
 val __raw_SetSlice_int : forall 'w. (atom('w), int, int, bits('w)) -> int
 
-val __raw_GetSlice_int = "get_slice_int" : forall 'w. (atom('w), int, int) -> bits('w)
+val __raw_GetSlice_int = "get_slice_int" : forall 'w /*, 'w >= 0*/. (atom('w), int, int) -> bits('w)
 
-val __GetSlice_int : forall 'n. (atom('n), int, int) -> bits('n)
+val __GetSlice_int : forall 'n /*, 'n >= 0*/. (atom('n), int, int) -> bits('n)
 
 function __GetSlice_int (n, m, o) = __raw_GetSlice_int(n, m, o)
 
@@ -350,11 +350,13 @@ union option ('a : Type) = {
 }
 */
 
-val __SleepRequest = {ocaml: "sleep_request", lem: "sleep_request", smt: "sleep_request", interpreter: "sleep_request", c: "sleep_request"}: unit -> unit effect {escape, rreg, undef}
+val __SleepRequest = {ocaml: "sleep_request", lem: "sleep_request", smt: "sleep_request", interpreter: "sleep_request", c: "sleep_request"}: unit -> unit effect {rreg, undef}
 
-val __WakeupRequest = {ocaml: "wakeup_request", lem: "wakeup_request", smt: "wakeup_request", interpreter: "wakeup_request", c: "wakeup_request"}: unit -> unit effect {escape, rreg, undef}
+val __WakeupRequest = {ocaml: "wakeup_request", lem: "wakeup_request", smt: "wakeup_request", interpreter: "wakeup_request", c: "wakeup_request"}: unit -> unit effect {rreg, undef}
 
-val __Sleeping = {ocaml: "sleeping", lem: "sleeping", smt: "sleeping", interpreter: "sleeping", c: "sleeping"}: unit -> bool effect {escape, rreg, undef}
+val __Sleeping = {ocaml: "sleeping", lem: "sleeping", smt: "sleeping", interpreter: "sleeping", c: "sleeping"}: unit -> bool effect {rreg, undef}
 
-val __GetVerbosity = {c: "sail_get_verbosity"}: unit -> bits(64) effect {escape, rreg, undef}
+val __GetVerbosity = {c: "sail_get_verbosity"}: unit -> bits(64) effect {rreg, undef}
+
+val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {undef, wreg, rreg, rmem, wmem}
 

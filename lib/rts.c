@@ -7,7 +7,7 @@
 #include"elf.h"
 
 static uint64_t g_elf_entry;
-static uint64_t g_cycle_count = 0;
+uint64_t g_cycle_count = 0;
 static uint64_t g_cycle_limit;
 
 void sail_match_failure(sail_string msg)
@@ -208,7 +208,7 @@ void kill_mem()
 
 // ***** Memory builtins *****
 
-unit write_ram(const mpz_t addr_size,     // Either 32 or 64
+bool write_ram(const mpz_t addr_size,     // Either 32 or 64
 	       const mpz_t data_size_mpz, // Number of bytes
 	       const sail_bits  hex_ram,       // Currently unused
 	       const sail_bits  addr_bv,
@@ -231,7 +231,7 @@ unit write_ram(const mpz_t addr_size,     // Either 32 or 64
   }
 
   mpz_clear(buf);
-  return UNIT;
+  return true;
 }
 
 void read_ram(sail_bits *data,
@@ -427,7 +427,7 @@ bool cycle_limit_reached(const unit u)
 unit cycle_count(const unit u)
 {
   if (cycle_limit_reached(UNIT)) {
-    printf("\n[Sail] cycle limit %" PRId64 " reached\n", g_cycle_limit);
+    printf("\n[Sail] TIMEOUT: exceeded %" PRId64 " cycles\n", g_cycle_limit);
     exit(EXIT_SUCCESS);
   }
   return UNIT;

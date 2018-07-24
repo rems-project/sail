@@ -419,7 +419,7 @@ let get_mem_page p =
   try
     Mem.find p !mem_pages
   with Not_found -> 
-    let new_page = Bytes.create page_size_bytes in
+    let new_page = Bytes.make page_size_bytes '\000' in
     mem_pages := Mem.add p new_page !mem_pages;
     new_page
 
@@ -457,7 +457,7 @@ let write_ram' (data_size, addr, data) =
   end
 
 let write_ram (addr_size, data_size, hex_ram, addr, data) =
-  write_ram' (data_size, uint addr, data)
+  write_ram' (data_size, uint addr, data); true
 
 let wram addr byte =
   let bytes = Bytes.make 1 (char_of_int byte) in

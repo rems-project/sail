@@ -53,6 +53,24 @@ apply_header:
 	headache -c etc/headache_config -h LICENCE `ls src/lem_interp/*.lem`
 	$(MAKE) -C arm apply_header
 
+anon_dist:
+	headache -c etc/headache_config -h etc/anon_header `ls mips/*.sail`
+	headache -c etc/headache_config -h etc/anon_header `ls cheri/*.sail`
+	headache -c etc/headache_config -h etc/anon_header `ls riscv/*.sail`
+	headache -c etc/headache_config -h etc/anon_header `ls riscv/*.ml`
+	headache -c etc/headache_config -h etc/anon_header `ls lib/*.ml`
+	headache -c etc/headache_config -h etc/anon_header `ls lib/coq/*.v`
+	headache -c etc/headache_config -h etc/anon_header `ls src/Makefile*`
+	headache -c etc/headache_config -h etc/anon_header `ls src/*.ml*`
+	headache -c etc/headache_config -h etc/anon_header `ls src/*.lem`
+	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.ml`
+	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.lem`
+	headache -c etc/headache_config -h etc/anon_header `ls arm/*.sail`
+	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/sail/*.thy`
+	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/lem/*.thy`
+	headache -c etc/headache_config -h etc/anon_header `ls snapshots/hol4/lem/hol-lib/*.sml`
+	rm mips/sim.dts
+
 clean:
 	for subdir in src arm ; do\
 	  $(MAKE) -C "$$subdir" clean;\

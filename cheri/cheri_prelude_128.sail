@@ -291,11 +291,11 @@ function incCapOffset(c, delta) : (CapStruct, bits(64)) -> (bool, CapStruct) =
 
 /** FUNCTION:integer HighestSetBit(bits(N) x) */
 
-val HighestSetBit : forall 'N , 'N >= 2. bits('N) -> {'n, 0 <= 'n < 'N . option(atom('n))}
+val HighestSetBit : forall 'N , 'N >= 2. bits('N) -> {'n, 0 <= 'n < 'N . (bool, atom('n))}
 function HighestSetBit x = {
   foreach (i from ('N - 1) to 0 by 1 in dec)
-    if [x[i]] == 0b1 then return Some(i);
-  return None() : option(atom(0))
+    if [x[i]] == 0b1 then return (true, i);
+  return (false, 0)
 }
 
 /* hw rounds up E to multiple of 4 */
@@ -306,12 +306,12 @@ function roundUp(e) : range(0, 45) -> range(0, 48) =
     else (e - r + 4)
 
 function computeE (rlength) : bits(65) -> range(0, 48) =
-    let 'msb = HighestSetBit((rlength + (rlength >> 6)) >> 19) in
-    match msb {
-      None()   => 0,
+    let (nonzero, 'msb) = HighestSetBit((rlength + (rlength >> 6)) >> 19) in
+    if nonzero then 
       /* above will always return <= 45 because 19 bits of zero are shifted in from right */
-      Some('b) => {assert(0 <= b & b <= 45); roundUp (min(b,45)) }
-      }
+      {assert(0 <= msb & msb <= 45); roundUp (min(msb,45)) }
+    else 
+      0
 
 function setCapBounds(cap, base, top) : (CapStruct, bits(64), bits(65)) -> (bool, CapStruct) =
     /* {cap with base=base; length=(bits(64)) length; offset=0} */

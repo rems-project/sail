@@ -30,6 +30,7 @@ void cleanup_library(void);
 #define COPY(type) copy_ ## type
 #define KILL(type) kill_ ## type
 #define UNDEFINED(type) undefined_ ## type
+#define EQUAL(type) eq_ ## type
 
 #define SAIL_BUILTIN_TYPE(type)\
   void create_ ## type(type *);\
@@ -44,7 +45,7 @@ typedef int unit;
 #define UNIT 0
 
 unit UNDEFINED(unit)(const unit);
-bool eq_unit(const unit, const unit);
+bool EQUAL(unit)(const unit, const unit);
 
 unit skip(const unit);
 
@@ -55,7 +56,7 @@ unit skip(const unit);
  * short-circuiting evaluation.
  */
 bool not(const bool);
-bool eq_bool(const bool, const bool);
+bool EQUAL(bool)(const bool, const bool);
 bool UNDEFINED(bool)(const unit);
 
 /* ***** Sail strings ***** */
@@ -73,12 +74,15 @@ void hex_str(sail_string *str, const mpz_t n);
 void undefined_string(sail_string *str, const unit u);
 
 bool eq_string(const sail_string, const sail_string);
+bool EQUAL(sail_string)(const sail_string, const sail_string);
 
 void concat_str(sail_string *stro, const sail_string str1, const sail_string str2);
 
 /* ***** Sail integers ***** */
 
 typedef int64_t mach_int;
+
+bool EQUAL(mach_int)(const mach_int, const mach_int);
 
 /*
  * Integers can be either stack-allocated as 128-bit integers if
@@ -114,6 +118,7 @@ typedef __int128 sail_int;
  * Comparison operators for integers
  */
 bool eq_int(const sail_int, const sail_int);
+bool EQUAL(sail_int)(const sail_int, const sail_int);
 
 bool lt(const sail_int, const sail_int);
 bool gt(const sail_int, const sail_int);
@@ -161,6 +166,8 @@ SAIL_INT_FUNCTION(pow2, sail_int, const sail_int);
 typedef uint64_t mach_bits;
 
 bool eq_bit(const mach_bits a, const mach_bits b);
+
+bool EQUAL(mach_bits)(const mach_bits, const mach_bits);
 
 typedef struct {
   mp_bitcnt_t len;
@@ -218,6 +225,7 @@ void sign_extend(sail_bits *rop, const sail_bits op, const sail_int len);
 void length_sail_bits(sail_int *rop, const sail_bits op);
 
 bool eq_bits(const sail_bits op1, const sail_bits op2);
+bool EQUAL(sail_bits)(const sail_bits op1, const sail_bits op2);
 bool neq_bits(const sail_bits op1, const sail_bits op2);
 
 void vector_subrange_sail_bits(sail_bits *rop,
@@ -265,6 +273,9 @@ void shift_bits_left(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 void shift_bits_right(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 void shift_bits_right_arith(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 
+void shiftl(sail_bits *rop, const sail_bits op1, const sail_int op2);
+void shiftr(sail_bits *rop, const sail_bits op1, const sail_int op2);
+
 void reverse_endianness(sail_bits*, sail_bits);
 
 /* ***** Sail reals ***** */
@@ -292,7 +303,7 @@ void round_down(sail_int *rop, const real op);
 
 void to_real(real *rop, const sail_int op);
 
-bool eq_real(const real op1, const real op2);
+bool EQUAL(real)(const real op1, const real op2);
 
 bool lt_real(const real op1, const real op2);
 bool gt_real(const real op1, const real op2);

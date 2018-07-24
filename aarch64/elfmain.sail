@@ -13,8 +13,6 @@ let CNT_IRQ  = [0x0000_000d,       0x0000_000a,        0x0000_03ff,        0x000
 // SGI Interrupts are 0-15, PPI interrupts are 16-31, so SPI interrupts have an offset of 32.
 let SPI_OFFSET = 32
 
-val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {escape, undef, wreg, rreg, rmem, wmem}
-
 // Advance CPU by one cycle
 val Step_CPU : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
@@ -38,12 +36,20 @@ function Step_CPU() = {
 
   var fetch_ok = false;
   try {
+      if PSTATE.nRW != bitzero then {
+        print("UNIMPLEMENTED: AArch32 support\n");
+        exit()
+      };
       __currentInstr       = __fetchA64();
       __currentInstrLength = 4;
       fetch_ok = true;
   } catch {
       Error_ExceptionTaken() => {
-        print(concat_str("Exception taken during IFetch from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+        print(concat_str("Exception taken during IFetch from PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" in cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
       },
       _ => {
         print("Exiting due to unhandled exception during fetch\n");
@@ -52,6 +58,53 @@ function Step_CPU() = {
   };
 
   if fetch_ok then {
+      // Detect ASIMD instructions
+      is_asimd : bool = match __currentInstr {
+        // '0x00 110' @ _ : bits(25)   => true,  // ASIMD memory
+        0b0000110     @ (_ : bits(25)) => true,
+        0b0100110     @ (_ : bits(25)) => true,
+
+        // '0xx0111'  @ _ : bits(25)   => true,  // ASIMD
+        // '01x1111'  @ _ : bits(25)   => true,  // ASIMD
+        // 'x0x1111'  @ _ : bits(25)   => false, // FP
+        // '1xx0111'  @ _ : bits(25)   => false, // unallocated
+        // '11xx111'  @ _ : bits(25)   => false, // Crypto
+
+        0b0000111     @ (_ : bits(25)) => true,
+        0b0001111     @ (_ : bits(25)) => false,
+        0b0010111     @ (_ : bits(25)) => true,
+        0b0011111     @ (_ : bits(25)) => false,
+
+        0b0100111     @ (_ : bits(25)) => true,
+        0b0101111     @ (_ : bits(25)) => true,
+        0b0110111     @ (_ : bits(25)) => true,
+        0b0111111     @ (_ : bits(25)) => true,
+
+        0b1000111     @ (_ : bits(25)) => false,
+        0b1001111     @ (_ : bits(25)) => false,
+        0b1010111     @ (_ : bits(25)) => false,
+        0b1011111     @ (_ : bits(25)) => false,
+
+        0b1100111     @ (_ : bits(25)) => false,
+        0b1101111     @ (_ : bits(25)) => false,
+        0b1110111     @ (_ : bits(25)) => false,
+        0b1111111     @ (_ : bits(25)) => false,
+
+        _ => false
+      };
+      if is_asimd then {
+        print(concat_str("UNIMPLEMENTED: ASIMD support ",
+              concat_str(HexStr(UInt(__currentInstr)),
+              "\n")));
+        exit()
+      };
+      // test for ERET instruction from EL3_Secure - only supported in v8.4
+      if (__currentInstr == 0xd69f_03e0) & (PSTATE.EL == EL3) & (SCR_EL3[0] == bitzero) then {
+        print(concat_str("UNIMPLEMENTED: EL2_Secure support (v8.4 feature) ",
+              concat_str(HexStr(UInt(__currentInstr)),
+              "\n")));
+        exit()
+      };
       try {
           __PC_changed = false;
           ShouldAdvanceIT = (PSTATE.nRW == [bitone]) & (PSTATE.T == [bitone]);
@@ -59,22 +112,35 @@ function Step_CPU() = {
       } catch {
           // note: if supporting AArch32 as well, call _UndefinedFault() instead
           Error_Undefined()         => try { AArch64_UndefinedFault() } catch { _ => print("Exception during Undefined recovery\n") },
-          Error_See(_)              => try { AArch64_UndefinedFault() } catch { _ => print("Exception during SEE recovery\n") },
+          Error_See(_) => {
+            print(concat_str("BROKEN: SEE support ",
+                  concat_str(HexStr(UInt(__currentInstr)),
+                  "\n")));
+            exit()
+          },
           Error_ReservedEncoding(_) => try { AArch64_UndefinedFault() } catch { _ => print("Exception during ReservedEncoding recovery\n") },
           Error_ExceptionTaken() => {
-            print(concat_str("ExceptionTaken during Decode/Execute from PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" opcode=", concat_str(HexStr(UInt(__currentInstr)), concat_str(" in cycle ", concat_str(DecStr(get_cycle_count()), "\n")))))));
+            print(concat_str("ExceptionTaken during Decode/Execute from PC=",
+                  concat_str(HexStr(UInt(aget_PC())),
+                  concat_str(" opcode=",
+                  concat_str(HexStr(UInt(__currentInstr)),
+                  concat_str(" in cycle ",
+                  concat_str(DecStr(get_cycle_count()),
+                  "\n")))))));
             // print("  This might just be a HINT like 0xd50320df\n");
             ()
           },
           Error_Implementation_Defined(s) => {
-            print(concat_str("IMPLEMENTATION_DEFINED ", concat_str(s, "\n")));
+            print(concat_str("IMPLEMENTATION_DEFINED ",
+                  concat_str(s,
+                  "\n")));
             exit();
           }
-      }
+      };
+      if ~(__PC_changed) then _PC = _PC + __currentInstrLength else ();
+      if ShouldAdvanceIT then AArch32_ITAdvance() else ();
+      SSAdvance();
   };
-  if ~(__PC_changed) then _PC = _PC + __currentInstrLength else ();
-  if ShouldAdvanceIT then AArch32_ITAdvance() else ();
-  SSAdvance();
   __UpdateSystemCounter(); // should this happen even if sleeping?
 }
 
@@ -135,11 +201,21 @@ function Step_Timers() = {
 }
 
 // Simple top level fetch and execute loop.
-val fetch_and_execute : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
+val Step_System : unit -> unit effect {escape, undef, wreg, rreg, rmem, wmem}
 
-function fetch_and_execute () = {
+function Step_System () = {
     try {
-      Step_Timers();
+      try {
+        Step_Timers();
+      } catch {
+        _ => {
+          print(concat_str("Exception taken during Step_Timers.  PC=",
+                concat_str(HexStr(UInt(aget_PC())),
+                concat_str(" cycle=",
+                concat_str(DecStr(get_cycle_count()),
+                "\n")))));
+        }
+      };
 
       var prevEL = PSTATE.EL;
       var prevI = PSTATE.I;
@@ -150,16 +226,33 @@ function fetch_and_execute () = {
       var prevCNTHCTL_EL2 = CNTHCTL_EL2;
 
       if ~(__Sleeping()) then {
+        try {
           Step_CPU();
+        } catch {
+          _ => {
+            print(concat_str("Exception taken during Step_CPU.  PC=",
+                  concat_str(HexStr(UInt(aget_PC())),
+                  concat_str(" cycle=",
+                  concat_str(DecStr(get_cycle_count()),
+                  "\n")))));
+          }
+        };
       };
 
       // We want to keep track of what exception level we are in for debugging purposes.
-      if UInt(prevEL) > UInt(PSTATE.EL) then {
-        prerr_bits("[Sail] Exception level dropped to: ", PSTATE.EL)
+      if UInt(prevEL) != UInt(PSTATE.EL) then {
+        prerr_bits(concat_str("[Sail] ",
+                   concat_str(DecStr(get_cycle_count()),
+                   " Exception level changed to: ")),
+                   PSTATE.EL);
       };
       if prevI != PSTATE.I then {
 	prerr_bits("[Sail] PSTATE.I changed to: ", PSTATE.I);
-        print(concat_str("   at PC=", concat_str(HexStr(UInt(aget_PC())), concat_str(" in cycle=", concat_str(DecStr(get_cycle_count()), "\n")))));
+        print(concat_str("   at PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" in cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
       };
       if prevCNTKCTL_EL1 != CNTKCTL_EL1 then {
         prerr_bits("[Clock] CNTKCTL_EL1 changed to ", CNTKCTL_EL1);
@@ -169,9 +262,13 @@ function fetch_and_execute () = {
       }
 
     } catch {
-      Error_See(str) if str == "HINT" => (),
       Error_ExceptionTaken(_) => {
 	// enable_tracing()
+        print(concat_str("Exception taken during Step_System.  PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
         ()
       },
       _ => {
@@ -179,7 +276,18 @@ function fetch_and_execute () = {
         exit()
       }
     };
-    __EndCycle(); // advance state of non-sleeping parts of the system
+    try {
+        __EndCycle(); // advance state of non-sleeping parts of the system
+    } catch {
+      _ => {
+        print(concat_str("Exception taken during __EndCycle.  PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" cycle=",
+              concat_str(DecStr(get_cycle_count()),
+              "\n")))));
+      }
+    };
+
 }
 
 let COLD_RESET : bool = true
@@ -189,7 +297,6 @@ val "load_raw" : (bits(64), string) -> unit
 val init : unit -> unit effect {escape, undef, rreg, wreg}
 
 function init() = {
-  __currentInstrLength = 4;
   TakeReset(COLD_RESET);
 }
 
@@ -201,10 +308,17 @@ function main() = {
   let verbosity = __GetVerbosity();
   init();
   while true do {
-    fetch_and_execute();
-    check_cycle_count();
     if verbosity[0] == bitone then {
-        print(concat_str("[SAIL] PC=", concat_str(HexStr(UInt(aget_PC())), "\n")));
-    }
+        nzcv = (PSTATE.N @ PSTATE.Z @ PSTATE.C @ PSTATE.V);
+        print(concat_str("[Sail] ",
+              concat_str(DecStr(get_cycle_count()),
+              concat_str(" PC=",
+              concat_str(HexStr(UInt(aget_PC())),
+              concat_str(" NZCV=",
+              concat_str(HexStr(UInt(nzcv)),
+              "\n")))))));
+    };
+    Step_System();
+    check_cycle_count();
   }
 }

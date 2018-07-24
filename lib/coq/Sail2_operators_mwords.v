@@ -3,6 +3,7 @@ Require Import Sail2_operators.
 Require Import Sail2_prompt_monad.
 Require Import Sail2_prompt.
 Require Import bbv.Word.
+Require bbv.BinNotation.
 Require Import Arith.
 Require Import ZArith.
 Require Import Omega.
@@ -267,8 +268,8 @@ Definition msb := most_significant
 val int_of_vec : forall 'a. Size 'a => bool -> mword 'a -> integer
 Definition int_of_vec := int_of_bv
 
-val string_of_vec : forall 'a. Size 'a => mword 'a -> string
-Definition string_of_vec := string_of_bv*)
+val string_of_vec : forall 'a. Size 'a => mword 'a -> string*)
+Definition string_of_bits {n} (w : mword n) : string := string_of_bv w.
 Definition with_word' {n} (P : Type -> Type) : (forall n, Word.word n -> P (Word.word n)) -> mword n -> P (mword n) := fun f w => @with_word n _ (f (Z.to_nat n)) w.
 Definition word_binop {n} (f : forall n, Word.word n -> Word.word n -> Word.word n) : mword n -> mword n -> mword n := with_word' (fun x => x -> x) f.
 Definition word_unop {n} (f : forall n, Word.word n -> Word.word n) : mword n -> mword n := with_word' (fun x => x) f.
