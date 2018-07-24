@@ -53,7 +53,7 @@ val "prerr_endline" : string -> unit
 
 val "prerr_string" : string -> unit
 
-val putchar = {c:"sail_putchar", _:"putchar"} : forall ('a : Type). 'a -> unit
+val putchar = {c:"sail_putchar", _:"putchar"} : int -> unit
 
 val concat_str = {lem: "stringAppend", coq: "String.append", _: "concat_str"} : (string, string) -> string
 

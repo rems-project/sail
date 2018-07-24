@@ -54,7 +54,7 @@ open Bytecode
 open Type_check
 
 (* The A-normal form (ANF) grammar *)
-   
+
 type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
 
 and 'a aexp_aux =
@@ -62,7 +62,7 @@ and 'a aexp_aux =
   | AE_app of id * ('a aval) list * 'a
   | AE_cast of 'a aexp * 'a
   | AE_assign of id * 'a * 'a aexp
-  | AE_let of id * 'a * 'a aexp * 'a aexp * 'a
+  | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of ('a aexp) list * 'a aexp * 'a
   | AE_return of 'a aval * 'a
   | AE_throw of 'a aval * 'a
@@ -90,8 +90,8 @@ and 'a apat_aux =
 
 and 'a aval =
   | AV_lit of lit * 'a
-  | AV_id of id * lvar
-  | AV_ref of id * lvar
+  | AV_id of id * 'a lvar
+  | AV_ref of id * 'a lvar
   | AV_tuple of ('a aval) list
   | AV_list of ('a aval) list * 'a
   | AV_vector of ('a aval) list * 'a
@@ -109,7 +109,9 @@ val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux
 val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
 
 val apat_globals : 'a apat -> (id * 'a) list
-  
+
+val apat_types : 'a apat -> 'a Bindings.t
+
 (* Compiling to ANF expressions *)
 
 val anf_pat : ?global:bool -> tannot pat -> typ apat

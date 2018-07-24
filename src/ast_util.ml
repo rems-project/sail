@@ -54,7 +54,12 @@ module Big_int = Nat_big_num
 
 type mut = Immutable | Mutable
 
-type lvar = Register of effect * effect * typ | Enum of typ | Local of mut * typ | Unbound
+type 'a lvar = Register of effect * effect * 'a | Enum of 'a | Local of mut * 'a | Unbound
+
+let lvar_typ = function
+  | Local (_, typ) -> typ
+  | Register (_, _, typ) -> typ
+  | Enum typ -> typ
 
 let no_annot = (Parse_ast.Unknown, ())
 

@@ -114,9 +114,6 @@ let options = Arg.align ([
                Arg.Set Type_check.opt_no_effects;
                Arg.Set C_backend.optimize_struct_updates ],
     " turn on optimizations for C compilation");
-  ( "-Oz3",
-    Arg.Set C_backend.optimize_z3,
-    " use z3 analysis for optimization (experimental)");
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " Apply constant folding optimizations");

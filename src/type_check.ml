@@ -80,11 +80,6 @@ let typ_debug m = if !opt_tc_debug > 1 then prerr_endline (indent !depth ^ Lazy.
 
 let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ Lazy.force m) else ()
 
-let lvar_typ = function
-  | Local (_, typ) -> typ
-  | Register (_, _, typ) -> typ
-  | Enum typ -> typ
-
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
@@ -401,7 +396,7 @@ module Env : sig
   val add_cast : id -> t -> t
   val allow_polymorphic_undefineds : t -> t
   val polymorphic_undefineds : t -> bool
-  val lookup_id : ?raw:bool -> id -> t -> lvar
+  val lookup_id : ?raw:bool -> id -> t -> typ lvar
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
   val canonicalize : t -> typ -> typ
@@ -2543,7 +2538,7 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   begin
     try
       typ_debug (lazy ("PERFORMING TYPE COERCION: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
-      subtyp l env (typ_of annotated_exp) typ; switch_typ annotated_exp typ
+      subtyp l env (typ_of annotated_exp) typ; annotated_exp (* ; switch_typ annotated_exp typ *)
     with
     | Type_error (_, trigger) when Env.allow_casts env ->
        let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in

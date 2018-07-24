@@ -244,7 +244,7 @@ function main() = {
   print_bits("C01 = ", C01);
   print_bits("DDC = ", DDC);
   foreach(i from 1 to 3) {
-    let idx = to_bits(2, i) in
+    let idx = to_bits(2, i);
     writeCapReg(idx, null_cap)
   };
   print_bits("C03 = ", C03);

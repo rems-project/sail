@@ -466,7 +466,7 @@ function SignalExceptionTLB(ex, badAddr) = {
 enum MemAccessType = {Instruction, LoadData, StoreData}
 enum AccessLevel = {User, Supervisor, Kernel} 
 
-val int_of_AccessLevel : AccessLevel -> int effect pure
+val int_of_AccessLevel : AccessLevel -> {|0, 1, 2|} effect pure
 function int_of_AccessLevel level =
   match level {
     User        => 0,
@@ -620,8 +620,8 @@ function rec forall Nat 'W, 'W >= 1. bits(8 * 'W) reverse_endianness ((bits(8 * 
     reverse_endianness'(sizeof 'W, value)
 }*/
 
-val MEMr_wrapper : forall 'n, 1 <= 'n <=8 . (bits(64), atom('n)) -> bits(8*'n) effect {rmem, rreg, wreg}
-function MEMr_wrapper (addr, size) = 
+val MEMr_wrapper : forall 'n, 1 <= 'n <= 8 . (bits(64), atom('n)) -> bits(8*'n) effect {rmem, rreg, wreg}
+function MEMr_wrapper (addr, size) =
     if (addr == 0x000000007f000000) then
       {
         let rvalid = UART_RVALID in

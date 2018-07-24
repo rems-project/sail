@@ -53,7 +53,7 @@ open Ast_util
 module Big_int = Nat_big_num
 
 type ctx =
-  { lookup_id : id -> lvar;
+  { lookup_id : id -> typ lvar;
     enums : IdSet.t Bindings.t;
     variants : IdSet.t Bindings.t
   }

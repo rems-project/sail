@@ -67,9 +67,6 @@ val opt_no_effects : bool ref
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
-(** Note: Partial function -- fails for Unknown lvars *)
-val lvar_typ : lvar -> typ
-  
 (** {2 Type errors} *)
 
 type type_error =
@@ -163,7 +160,7 @@ module Env : sig
      lvar type. Returns Unbound if the identifier is unbound, and
      won't throw any exceptions. If the raw option is true, then look
      up the type without any flow typing modifiers. *)
-  val lookup_id : ?raw:bool -> id -> t -> lvar
+  val lookup_id : ?raw:bool -> id -> t -> typ lvar
 
   val is_union_constructor : id -> t -> bool
 
