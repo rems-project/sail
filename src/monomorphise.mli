@@ -51,17 +51,24 @@
 type options = {
   auto : bool;                    (* Analyse ast to find splits for monomorphisation *)
   debug_analysis : int;           (* Debug output level for the automatic analysis *)
-  rewrites : bool;                (* Experimental rewrites for variable-sized operations *)
-  rewrite_toplevel_nexps : bool;  (* Move complex nexps in function signatures into constraints *)
-  rewrite_size_parameters : bool; (* Make implicit type parameters explicit for (e.g.) lem *)
   all_split_errors : bool;
-  continue_anyway : bool;
-  dump_raw: bool
+  continue_anyway : bool
 }
 
 val monomorphise :
   options ->
   ((string * int) * string) list -> (* List of splits from the command line *)
-  Type_check.Env.t ->
   Type_check.tannot Ast.defs ->
-  Type_check.tannot Ast.defs * Type_check.Env.t
+  Type_check.tannot Ast.defs
+
+(* Rewrite (combinations of) variable-sized operations into fixed-sized operations *)
+val mono_rewrites : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+
+(* Move complex nexps in function signatures into constraints *)
+val rewrite_toplevel_nexps : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+
+(* Add casts across case splits *)
+val add_bitvector_casts : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+
+(* Replace atom arguments which are fixed by a type parameter for a size with a singleton type *)
+val rewrite_atoms_to_singletons : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs

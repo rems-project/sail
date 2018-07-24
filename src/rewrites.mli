@@ -51,6 +51,15 @@
 open Ast
 open Type_check
 
+(* Monomorphisation options *)
+val opt_mono_rewrites : bool ref
+val opt_mono_complex_nexps : bool ref
+val opt_mono_split : ((string * int) * string) list ref
+val opt_dmono_analysis : int ref
+val opt_auto_mono : bool ref
+val opt_dall_split_errors : bool ref
+val opt_dmono_continue : bool ref
+
 (* Generate a fresh id with the given prefix *)
 val fresh_id : string -> l -> id
 

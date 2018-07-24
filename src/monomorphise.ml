@@ -1591,6 +1591,31 @@ let split_defs all_errors splits defs =
             (Reporting_basic.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
        in findpat_generic checkpat "literal" assigns cases
+    | E_vector es when List.for_all (function (E_aux (E_lit _,_)) -> true | _ -> false) es ->
+       let checkpat = function
+         | P_aux (P_vector ps,_) ->
+            let matches = List.map2 (fun e p ->
+              match e, p with
+              | E_aux (E_lit (L_aux (lit,_)),_), P_aux (P_lit (L_aux (lit',_)),_) ->
+                 if lit_match (lit,lit') then DoesMatch ([],[]) else DoesNotMatch
+              | E_aux (E_lit l,_), P_aux (P_id var,_) when pat_id_is_variable env var ->
+                 DoesMatch ([var, e],[])
+              | _ -> GiveUp) es ps in
+            let final = List.fold_left (fun acc m -> match acc, m with
+              | _, GiveUp -> GiveUp
+              | GiveUp, _ -> GiveUp
+              | DoesMatch (sub,ksub), DoesMatch(sub',ksub') -> DoesMatch(sub@sub',ksub@ksub')
+              | _ -> DoesNotMatch) (DoesMatch ([],[])) matches in
+            (match final with
+            | GiveUp ->
+               (Reporting_basic.print_err false true l "Monomorphisation"
+                  "Unexpected kind of pattern for vector literal"; GiveUp)
+            | _ -> final)
+         | _ ->
+            (Reporting_basic.print_err false true l "Monomorphisation"
+               "Unexpected kind of pattern for vector literal"; GiveUp)
+       in findpat_generic checkpat "vector literal" assigns cases
+
     | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)) ->
        let checkpat = function
          | P_aux (P_lit (L_aux (lit_p, _)),_) -> DoesNotMatch
@@ -1780,21 +1805,31 @@ let split_defs all_errors splits defs =
               otherwise *)
            | Some (Some (pats,l)) ->
               let max = List.length pats - 1 in
+              let lit_like = function
+                | P_lit _ -> true
+                | P_vector ps -> List.for_all (function P_aux (P_lit _,_) -> true | _ -> false) ps
+                | _ -> false
+              in
+              let rec to_exp = function
+                | P_aux (P_lit lit,(l,ann)) -> E_aux (E_lit lit,(Generated l,ann))
+                | P_aux (P_vector ps,(l,ann)) -> E_aux (E_vector (List.map to_exp ps),(Generated l,ann))
+                | _ -> assert false
+              in
               Some (List.mapi (fun i p ->
                 match p with
-                | P_aux (P_lit lit,(pl,pannot))
-                    when (match lit with L_aux (L_undef,_) -> false | _ -> true) ->
+                | P_aux (P_lit (L_aux (L_num j,_) as lit),(pl,pannot)) ->
                    let orig_typ = Env.base_typ_of (env_of_annot (l,annot)) (typ_of_annot (l,annot)) in
-                   let kid_subst = match lit, orig_typ with
-                     | L_aux (L_num i,_),
-                       Typ_aux
+                   let kid_subst = match orig_typ with
+                     | Typ_aux
                          (Typ_app (Id_aux (Id "atom",_),
                                    [Typ_arg_aux (Typ_arg_nexp
                                                    (Nexp_aux (Nexp_var var,_)),_)]),_) ->
-                        [var,nconstant i]
+                        [var,nconstant j]
                      | _ -> []
                    in
                    p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,max,[])],kid_subst
+                | P_aux (p',(pl,pannot)) when lit_like p' ->
+                   p,[id,to_exp p],[l,(i,max,[])],[]
                 | _ ->
                    let p',subst = freshen_pat_bindings p in
                    match p' with
@@ -4193,12 +4228,8 @@ let rewrite_toplevel_nexps (Defs defs) =
 type options = {
   auto : bool;
   debug_analysis : int;
-  rewrites : bool;
-  rewrite_toplevel_nexps : bool;
-  rewrite_size_parameters : bool;
   all_split_errors : bool;
-  continue_anyway : bool;
-  dump_raw: bool
+  continue_anyway : bool
 }
 
 let recheck defs =
@@ -4208,18 +4239,10 @@ let recheck defs =
   let () = Util.opt_warnings := w in
   r
 
-let monomorphise opts splits env defs =
-  let (defs,env) =
-    if opts.rewrites then
-      let defs = MonoRewrites.mono_rewrite defs in
-      recheck defs
-    else defs,env
-  in
-  let defs,env =
-    if opts.rewrite_toplevel_nexps
-      then recheck (rewrite_toplevel_nexps defs)
-      else defs,env
-  in
+let mono_rewrites = MonoRewrites.mono_rewrite
+
+let monomorphise opts splits defs =
+  let defs, env = Type_check.check Type_check.initial_env defs in
   let ok_analysis, new_splits, extra_splits =
     if opts.auto
     then
@@ -4239,18 +4262,9 @@ let monomorphise opts splits env defs =
   let () = if (ok_analysis && ok_extras && ok_split) || opts.continue_anyway
       then ()
       else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
-  in
-  let defs,env = recheck defs in
-  let defs = BitvectorSizeCasts.add_bitvector_casts defs in
-  (* TODO: currently doing this because constant propagation leaves numeric literals as
-     int, try to avoid this later; also use final env for DEF_spec case above, because the
-     type checker doesn't store the env at that point :( *)
-  let defs = if opts.rewrite_size_parameters then
-      let (defs,env) = recheck defs in
-      let defs = AtomToItself.rewrite_size_parameters env defs in
-      defs
-    else
-      defs
-  in
-  let () = if opts.dump_raw then Pretty_print_sail.pp_defs stdout defs else () in
-  recheck defs
+  in defs
+
+let add_bitvector_casts = BitvectorSizeCasts.add_bitvector_casts
+let rewrite_atoms_to_singletons defs =
+  let defs, env = Type_check.check Type_check.initial_env defs in
+  AtomToItself.rewrite_size_parameters env defs

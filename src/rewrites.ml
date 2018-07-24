@@ -2336,6 +2336,11 @@ let rewrite_undefined mwords =
   let rewrite_exp_undefined = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp_undefined) }
 
+let rewrite_undefined_if_gen always_bitvector defs =
+  if !Initial_check.opt_undefined_gen
+  then rewrite_undefined (always_bitvector || !Pretty_print_lem.opt_mwords) defs
+  else defs
+
 let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
 and simple_typ_aux = function
   | Typ_id id -> Typ_id id
@@ -4269,11 +4274,54 @@ let remove_mapping_valspecs (Defs defs) =
   Defs (List.filter allowed_def defs)
 
 
+let opt_mono_rewrites = ref false
+let opt_mono_complex_nexps = ref true
+
+let mono_rewrites defs =
+  if !opt_mono_rewrites then
+    Monomorphise.mono_rewrites defs
+  else defs
+
+let rewrite_toplevel_nexps defs =
+  if !opt_mono_complex_nexps then
+    Monomorphise.rewrite_toplevel_nexps defs
+  else defs
+
+let opt_mono_split = ref ([]:((string * int) * string) list)
+let opt_dmono_analysis = ref 0
+let opt_auto_mono = ref false
+let opt_dall_split_errors = ref false
+let opt_dmono_continue = ref false
+
+let monomorphise defs =
+  let open Monomorphise in
+  monomorphise
+    { auto = !opt_auto_mono;
+      debug_analysis = !opt_dmono_analysis;
+      all_split_errors = !opt_dall_split_errors;
+      continue_anyway = !opt_dmono_continue }
+    !opt_mono_split
+    defs
+
+let if_mono f defs =
+  match !opt_mono_split, !opt_auto_mono with
+  | [], false -> defs
+  | _, _ -> f defs
+
 let rewrite_defs_lem = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("remove_mapping_valspecs", remove_mapping_valspecs);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
+  ("mono_rewrites", mono_rewrites);
+  ("recheck_defs", if_mono recheck_defs);
+  ("rewrite_toplevel_nexps", if_mono rewrite_toplevel_nexps);
+  ("monomorphise", if_mono monomorphise);
+  ("recheck_defs", if_mono recheck_defs);
+  ("add_bitvector_casts", if_mono Monomorphise.add_bitvector_casts);
+  ("rewrite_atoms_to_singletons", if_mono Monomorphise.rewrite_atoms_to_singletons);
+  ("recheck_defs", if_mono recheck_defs);
+  ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -4311,6 +4359,7 @@ let rewrite_defs_coq = [
   ("remove_mapping_valspecs", remove_mapping_valspecs);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
+  ("rewrite_undefined", rewrite_undefined_if_gen true);
   ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -4351,6 +4400,7 @@ let rewrite_defs_ocaml = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
+  ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -4373,6 +4423,7 @@ let rewrite_defs_c = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
+  ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -4393,6 +4444,7 @@ let rewrite_defs_interpreter = [
     ("realise_mappings", rewrite_defs_realise_mappings);
     ("pat_string_append", rewrite_defs_pat_string_append);
     ("mapping_builtins", rewrite_defs_mapping_patterns);
+    ("rewrite_undefined", rewrite_undefined_if_gen false);
     ("vector_concat_assignments", rewrite_vector_concat_assignments);
     ("tuple_assignments", rewrite_tuple_assignments);
     ("simple_assignments", rewrite_simple_assignments);

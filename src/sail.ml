@@ -70,7 +70,6 @@ let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
-let opt_mono_split = ref ([]:((string * int) * string) list)
 let opt_process_elf : string option ref = ref None
 
 let options = Arg.align ([
@@ -161,19 +160,10 @@ let options = Arg.align ([
     Arg.String (fun s ->
       let l = Util.split_on_char ':' s in
       match l with
-      | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
+      | [fname;line;var] ->
+         Rewrites.opt_mono_split := ((fname,int_of_string line),var)::!Rewrites.opt_mono_split
       | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
       "<filename>:<line>:<variable> to case split for monomorphisation");
-  (* AA: Should use _ to be consistent with other options, but I keep
-     this case to make sure nothing breaks immediately. *)
-  ( "-mono-split",
-    Arg.String (fun s ->
-      prerr_endline (("Warning" |> Util.yellow |> Util.clear) ^ ": use -mono_split instead");
-      let l = Util.split_on_char ':' s in
-      match l with
-      | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
-      | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
-    "<filename>:<line>:<variable> to case split for monomorphisation");
   ( "-memo_z3",
     Arg.Set opt_memo_z3,
     " memoize calls to z3, improving performance when typechecking repeatedly");
@@ -192,26 +182,23 @@ let options = Arg.align ([
   ( "-just_check",
     Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking");
-  ( "-ddump_raw_mono_ast",
-    Arg.Set opt_ddump_raw_mono_ast,
-    " (debug) dump the monomorphised ast before type-checking");
   ( "-dmono_analysis",
-    Arg.Set_int opt_dmono_analysis,
+    Arg.Set_int Rewrites.opt_dmono_analysis,
     " (debug) dump information about monomorphisation analysis: 0 silent, 3 max");
   ( "-auto_mono",
-    Arg.Set opt_auto_mono,
+    Arg.Set Rewrites.opt_auto_mono,
     " automatically infer how to monomorphise code");
   ( "-mono_rewrites",
-    Arg.Set Process_file.opt_mono_rewrites,
+    Arg.Set Rewrites.opt_mono_rewrites,
     " turn on rewrites for combining bitvector operations");
   ( "-dno_complex_nexps_rewrite",
-    Arg.Clear Process_file.opt_mono_complex_nexps,
+    Arg.Clear Rewrites.opt_mono_complex_nexps,
     " do not move complex size expressions in function signatures into constraints (monomorphisation)");
   ( "-dall_split_errors",
-    Arg.Set Process_file.opt_dall_split_errors,
+    Arg.Set Rewrites.opt_dall_split_errors,
     " display all case split errors from monomorphisation, rather than one");
   ( "-dmono_continue",
-    Arg.Set Process_file.opt_dmono_continue,
+    Arg.Set Rewrites.opt_dmono_continue,
     " continue despite monomorphisation errors");
   ( "-verbose",
     Arg.Set opt_print_verbose,
@@ -268,16 +255,7 @@ let load_files type_envs files =
 
   let (ast, type_envs) = check_ast type_envs ast in
 
-  let (ast, type_envs) =
-    match !opt_mono_split, !opt_auto_mono with
-    | [], false -> ast, type_envs
-    | locs, _ -> monomorphise_ast locs type_envs ast
-  in
-
-  let ast =
-    if !Initial_check.opt_undefined_gen then
-      rewrite_undefined (!Pretty_print_lem.opt_mwords || !opt_print_coq) (rewrite_ast ast)
-    else rewrite_ast ast in
+  let ast = rewrite_ast ast in
 
   let out_name = match !opt_file_out with
     | None when parsed = [] -> "out.sail"

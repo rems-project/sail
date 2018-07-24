@@ -232,27 +232,6 @@ let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tanno
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 
-let opt_ddump_raw_mono_ast = ref false
-let opt_dmono_analysis = ref 0
-let opt_auto_mono = ref false
-let opt_mono_rewrites = ref false
-let opt_mono_complex_nexps = ref true
-let opt_dall_split_errors = ref false
-let opt_dmono_continue = ref false
-
-let monomorphise_ast locs type_env ast =
-  let open Monomorphise in
-  let opts = {
-    auto = !opt_auto_mono;
-    debug_analysis = !opt_dmono_analysis;
-    rewrites = !opt_mono_rewrites;
-    rewrite_toplevel_nexps = !opt_mono_complex_nexps;
-    rewrite_size_parameters = !Pretty_print_lem.opt_mwords;
-    all_split_errors = !opt_dall_split_errors;
-    continue_anyway = !opt_dmono_continue;
-    dump_raw = !opt_ddump_raw_mono_ast
-  } in
-  monomorphise opts locs type_env ast
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in

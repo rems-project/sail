@@ -52,7 +52,6 @@ val parse_file : string -> Parse_ast.defs
 val convert_ast : Ast.order -> Parse_ast.defs -> unit Ast.defs
 val preprocess_ast : Parse_ast.defs -> Parse_ast.defs
 val check_ast: Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
-val monomorphise_ast : ((string * int) * string) list -> Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_undefined: bool -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
@@ -69,13 +68,6 @@ val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
-val opt_ddump_raw_mono_ast : bool ref
-val opt_dmono_analysis : int ref
-val opt_dmono_continue : bool ref
-val opt_auto_mono : bool ref
-val opt_mono_rewrites : bool ref
-val opt_mono_complex_nexps : bool ref
-val opt_dall_split_errors : bool ref
 
 type out_type =
   | Lem_ast_out
