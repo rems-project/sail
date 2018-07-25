@@ -1296,9 +1296,7 @@ let doc_exp_lem, doc_let_lem =
           parens (doc_typ ctxt (typ_of r))] in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint nc -> wrap_parens (doc_nc_exp ctxt nc)
-    | E_comment _ | E_comment_struc _ -> empty
-    | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _
-    | E_internal_exp_user _ | E_internal_value _ ->
+    | E_internal_value _ ->
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
   and if_exp ctxt (elseif : bool) c t e =
@@ -1917,10 +1915,6 @@ let rec doc_def unimplemented def =
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
 
   | DEF_kind _ -> empty
-
-  | DEF_comm (DC_comm s) -> comment (string s)
-  | DEF_comm (DC_comm_struct d) -> comment (doc_def unimplemented d)
-
 
 let find_exc_typ defs =
   let is_exc_typ_def = function

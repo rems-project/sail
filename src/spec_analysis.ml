@@ -470,7 +470,6 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      List.fold_left Nameset.union Nameset.empty (List.map snd fvs)
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
-  | DEF_comm _ -> mt,mt
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs

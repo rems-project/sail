@@ -52,7 +52,6 @@ open PPrint
 open Pretty_print_common
 
 type out_type =
-  | Lem_ast_out
   | Lem_out of string list
   | Coq_out of string list
 
@@ -330,28 +329,16 @@ let rec iterate (f : int -> unit) (n : int) : unit =
 
 let output1 libpath out_arg filename defs  =
   let f' = Filename.basename (Filename.chop_extension filename) in
-    match out_arg with
-      | Lem_ast_out ->
-	begin
-	  let (o, ext_o) = open_output_with_check (f' ^ ".lem") in
-	  Format.fprintf o "(* %s *)@\n" (generated_line filename);
-          Format.fprintf o "open import Interp_ast@\n";
-	  Format.fprintf o "open import Pervasives@\n";
-          Format.fprintf o "(*Supply common numeric constants at the right type to alleviate repeated calls to typeclass macro*)\n";
-          iterate (fun n -> Format.fprintf o "let int%i : integer = integerFromNat %i\n" (n - 1) (n - 1)) 129;
-          Format.fprintf o "let defs = ";
-	  Pretty_print.pp_lem_defs o defs;
-	  close_output_with_check ext_o
-	end
-      | Lem_out libs ->
-        output_lem f' libs defs
-      | Coq_out libs ->
-         output_coq f' libs defs
+  match out_arg with
+  | Lem_out libs ->
+     output_lem f' libs defs
+  | Coq_out libs ->
+     output_coq f' libs defs
 
 let output libpath out_arg files =
   List.iter
     (fun (f, defs) ->
-       output1 libpath out_arg f defs)
+      output1 libpath out_arg f defs)
     files
 
 let rewrite_step defs (name,rewriter) =

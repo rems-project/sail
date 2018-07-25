@@ -483,12 +483,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_throw = (fun (e1,e1') -> (E_throw (e1), E_throw (e1')))
     ; e_return = (fun (e1,e1') -> (E_return e1, E_return e1'))
     ; e_assert = (fun ((e1,e1'),(e2,e2')) -> (E_assert(e1,e2), E_assert(e1',e2')) )
-    ; e_internal_cast = (fun (a,(e1,e1')) -> (E_internal_cast (a,e1), E_internal_cast (a,e1')))
-    ; e_internal_exp = (fun a -> (E_internal_exp a, E_internal_exp a))
-    ; e_internal_exp_user = (fun (a1,a2) -> (E_internal_exp_user (a1,a2), E_internal_exp_user (a1,a2)))
-    ; e_comment = (fun c -> (E_comment c, E_comment c))
-    ; e_comment_struc = (fun (e,e') -> (E_comment_struc e, E_comment_struc e'))
-    ; e_internal_let = (fun ((lexp,lexp'), (e2,e2'), (e3,e3')) -> (E_var (lexp,e2,e3), E_var (lexp',e2',e3')))
+    ; e_var = (fun ((lexp,lexp'), (e2,e2'), (e3,e3')) -> (E_var (lexp,e2,e3), E_var (lexp',e2',e3')))
     ; e_internal_plet = (fun (pat, (e1,e1'), (e2,e2')) -> (E_internal_plet (pat,e1,e2), E_internal_plet (pat,e1',e2')))
     ; e_internal_return = (fun (e,e') -> (E_internal_return e, E_internal_return e'))
     ; e_internal_value = (fun v -> (E_internal_value v, E_internal_value v))
@@ -1908,7 +1903,7 @@ let rewrite_defs_early_return (Defs defs) =
     if is_return exp then E_return (E_aux (E_let (lb, ret_exp), annot))
     else E_let (lb, exp) in
 
-  let e_internal_let (lexp, exp1, exp2) =
+  let e_var (lexp, exp1, exp2) =
     let (E_aux (_, annot) as ret_exp2) = get_return exp2 in
     if is_return exp2 then
       E_return (E_aux (E_var (lexp, exp1, ret_exp2), annot))
@@ -1968,7 +1963,7 @@ let rewrite_defs_early_return (Defs defs) =
         let exp' =
           fold_exp
             { id_exp_alg with e_block = e_block; e_if = e_if; e_case = e_case;
-              e_let = e_let; e_internal_let = e_internal_let; e_app = e_app }
+              e_let = e_let; e_var = e_var; e_app = e_app }
             (add_final_return false exp) in
         (* Remove early return if we can pull it out completely, and rewrite
            remaining early returns to "early_return" calls *)
@@ -2785,8 +2780,6 @@ let rewrite_defs_letbind_effects =
        k (rewrap (E_sizeof nexp))
     | E_constraint nc ->
        k (rewrap (E_constraint nc))
-    | E_sizeof_internal annot ->
-       k (rewrap (E_sizeof_internal annot))
     | E_assign (lexp,exp1) ->
        n_lexp lexp (fun lexp ->
        n_exp_name exp1 (fun exp1 ->
@@ -2796,11 +2789,6 @@ let rewrite_defs_letbind_effects =
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
        k (rewrap (E_assert (exp1,exp2)))))
-    | E_internal_cast (annot',exp') ->
-       n_exp_name exp' (fun exp' ->
-       k (rewrap (E_internal_cast (annot',exp'))))
-    | E_internal_exp _ -> k exp
-    | E_internal_exp_user _ -> k exp
     | E_var (lexp,exp1,exp2) ->
        n_lexp lexp (fun lexp ->
        n_exp exp1 (fun exp1 ->
@@ -2810,11 +2798,6 @@ let rewrite_defs_letbind_effects =
        k (rewrap (E_internal_return exp1)))
     | E_internal_value v ->
        k (rewrap (E_internal_value v))
-    | E_comment str ->
-       k (rewrap (E_comment str))
-    | E_comment_struc exp' ->
-       n_exp exp' (fun exp' ->
-       k (rewrap (E_comment_struc exp')))
     | E_return exp' ->
        n_exp_name exp' (fun exp' ->
        k (rewrap (E_return exp')))
@@ -2886,7 +2869,7 @@ let rewrite_defs_internal_lets =
        then E_internal_plet (pat,exp',body)
        else E_let (lb,body) in
 
-  let e_internal_let = fun (lexp,exp1,exp2) ->
+  let e_var = fun (lexp,exp1,exp2) ->
     let paux, annot = match lexp with
     | LEXP_aux (LEXP_id id, annot) ->
        (P_id id, annot)
@@ -2898,7 +2881,7 @@ let rewrite_defs_internal_lets =
     else
       E_let (LB_aux (LB_val (P_aux (paux, annot), exp1), annot), exp2) in
 
-  let alg = { id_exp_alg with e_let = e_let; e_internal_let = e_internal_let } in
+  let alg = { id_exp_alg with e_let = e_let; e_var = e_var } in
   rewrite_defs_base
     { rewrite_exp = (fun _ exp -> fold_exp alg (propagate_exp_effect exp))
     ; rewrite_pat = rewrite_pat

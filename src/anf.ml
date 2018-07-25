@@ -696,9 +696,5 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      (* We don't compile E_nondet nodes *)
      failwith "encountered E_nondet node when converting to ANF"
 
-  | E_comment _ | E_comment_struc _ ->
-     (* comment AST nodes not-supported *)
-     failwith "encountered E_comment or E_comment_struc node when converting to ANF"
-
-  | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_plet _ | E_internal_return _ | E_internal_exp_user _ ->
+  | E_internal_return _ | E_internal_plet _ ->
      failwith "encountered unexpected internal node when converting to ANF"

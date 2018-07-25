@@ -2538,7 +2538,7 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   begin
     try
       typ_debug (lazy ("PERFORMING TYPE COERCION: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
-      subtyp l env (typ_of annotated_exp) typ; annotated_exp (* ; switch_typ annotated_exp typ *)
+      subtyp l env (typ_of annotated_exp) typ; annotated_exp
     with
     | Type_error (_, trigger) when Env.allow_casts env ->
        let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
@@ -4454,10 +4454,6 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
-  | DEF_comm (DC_comm str) -> [DEF_comm (DC_comm str)], env
-  | DEF_comm (DC_comm_struct def) ->
-     let defs, env = check_def env def
-     in List.map (fun def -> DEF_comm (DC_comm_struct def)) defs, env
 
 and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
   fun env (Defs defs) ->

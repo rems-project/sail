@@ -419,12 +419,6 @@ and map_exp_annot_aux f = function
   | E_throw exp -> E_throw (map_exp_annot f exp)
   | E_return exp -> E_return (map_exp_annot f exp)
   | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
-  | E_internal_cast (annot, exp) -> E_internal_cast (f annot, map_exp_annot f exp)
-  | E_internal_exp annot -> E_internal_exp (f annot)
-  | E_sizeof_internal annot -> E_sizeof_internal (f annot)
-  | E_internal_exp_user (annot1, annot2) -> E_internal_exp_user (f annot1, f annot2)
-  | E_comment str -> E_comment str
-  | E_comment_struc exp -> E_comment_struc (map_exp_annot f exp)
   | E_internal_value v -> E_internal_value v
   | E_var (lexp, exp1, exp2) -> E_var (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (map_pat_annot f pat, map_exp_annot f exp1, map_exp_annot f exp2)
@@ -524,9 +518,7 @@ let def_loc = function
   | DEF_fixity (_, _, Id_aux (_, l))
   | DEF_overload (Id_aux (_, l), _) ->
     l
-  | DEF_internal_mutrec _
-  | DEF_comm _ ->
-    Parse_ast.Unknown
+  | DEF_internal_mutrec _ -> Parse_ast.Unknown
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v
@@ -720,12 +712,6 @@ let rec string_of_exp (E_aux (exp, _)) =
      "{ " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
      "{ " ^ string_of_list "; " string_of_fexp fexps ^ " }"
-  | E_internal_cast _ -> "INTERNAL CAST"
-  | E_internal_exp _ -> "INTERNAL EXP"
-  | E_sizeof_internal _ -> "INTERNAL SIZEOF"
-  | E_internal_exp_user _ -> "INTERNAL EXP USER"
-  | E_comment _ -> "INTERNAL COMMENT"
-  | E_comment_struc _ -> "INTERNAL COMMENT STRUC"
   | E_var _ -> "INTERNAL LET"
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body

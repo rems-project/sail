@@ -70,7 +70,6 @@ val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
 
 type out_type =
-  | Lem_ast_out
   | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
   | Coq_out of string list (* If present, the strings are files to open in the coq backend*)
 

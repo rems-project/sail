@@ -171,12 +171,8 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_let (lb,e) -> union_effects (effect_of_lb lb) (effect_of e)
     | E_assign (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
     | E_exit e | E_return e | E_throw e -> union_effects eff (effect_of e)
-    | E_sizeof _ | E_sizeof_internal _ | E_constraint _ -> no_effect
+    | E_sizeof _ | E_constraint _ -> no_effect
     | E_assert (c,m) -> union_effects eff (union_eff_exps [c; m])
-    | E_comment _ | E_comment_struc _ -> no_effect
-    | E_internal_cast (_,e) -> effect_of e
-    | E_internal_exp _ -> no_effect
-    | E_internal_exp_user _ -> no_effect
     | E_var (lexp,e1,e2) ->
       union_effects (effect_of_lexp lexp)
         (union_effects (effect_of e1) (effect_of e2))
@@ -312,7 +308,6 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   let rewrap e = E_aux (e,(l,annot)) in
   let rewrite = rewriters.rewrite_exp rewriters in
   match exp with
-  | E_comment _ | E_comment_struc _ -> rewrap exp
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
   | E_nondet exps -> rewrap (E_nondet (List.map rewrite exps))
   | E_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
@@ -359,8 +354,6 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_exit e -> rewrap (E_exit (rewrite e))
   | E_return e -> rewrap (E_return (rewrite e))
   | E_assert(e1,e2) -> rewrap (E_assert(rewrite e1,rewrite e2))
-  | E_internal_cast (casted_annot,exp) ->
-    rewrap (E_internal_cast (casted_annot, rewrite exp))
   | E_var (lexp, e1, e2) ->
      rewrap (E_var (rewriters.rewrite_lexp rewriters lexp, rewriters.rewrite_exp rewriters e1, rewriters.rewrite_exp rewriters e2))
   | E_internal_return _ -> raise (Reporting_basic.err_unreachable l "Internal return found before it should have been introduced")
@@ -398,7 +391,7 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
 let rewrite_def rewriters d = match d with
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
      DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewriters.rewrite_exp rewriters exp), annot))
-  | DEF_type _ | DEF_mapdef _ | DEF_kind _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_comm _ | DEF_overload _ | DEF_fixity _ -> d
+  | DEF_type _ | DEF_mapdef _ | DEF_kind _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
@@ -548,12 +541,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_throw                  : 'exp -> 'exp_aux
   ; e_return                 : 'exp -> 'exp_aux
   ; e_assert                 : 'exp * 'exp -> 'exp_aux
-  ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
-  ; e_internal_exp           : 'a annot -> 'exp_aux
-  ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
-  ; e_comment                : string -> 'exp_aux
-  ; e_comment_struc          : 'exp -> 'exp_aux
-  ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
+  ; e_var           : 'lexp * 'exp * 'exp -> 'exp_aux
   ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
   ; e_internal_return        : 'exp -> 'exp_aux
   ; e_internal_value         : Value.value -> 'exp_aux
@@ -622,15 +610,8 @@ let rec fold_exp_aux alg = function
   | E_throw e -> alg.e_throw (fold_exp alg e)
   | E_return e -> alg.e_return (fold_exp alg e)
   | E_assert(e1,e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
-  | E_internal_cast (annot,e) -> alg.e_internal_cast (annot, fold_exp alg e)
-  | E_internal_exp annot -> alg.e_internal_exp annot
-  | E_sizeof_internal a -> raise (Reporting_basic.err_unreachable (Parse_ast.Unknown)
-      "E_sizeof_internal encountered during rewriting")
-  | E_internal_exp_user (annot1,annot2) -> alg.e_internal_exp_user (annot1,annot2)
-  | E_comment c -> alg.e_comment c
-  | E_comment_struc e -> alg.e_comment_struc (fold_exp alg e)
   | E_var (lexp,e1,e2) ->
-     alg.e_internal_let (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
+     alg.e_var (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
   | E_internal_plet (pat,e1,e2) ->
      alg.e_internal_plet (fold_pat alg.pat_alg pat, fold_exp alg e1, fold_exp alg e2)
   | E_internal_return e -> alg.e_internal_return (fold_exp alg e)
@@ -700,12 +681,7 @@ let id_exp_alg =
   ; e_throw = (fun e1 -> E_throw (e1))
   ; e_return = (fun e1 -> E_return e1)
   ; e_assert = (fun (e1,e2) -> E_assert(e1,e2)) 
-  ; e_internal_cast = (fun (a,e1) -> E_internal_cast (a,e1))
-  ; e_internal_exp = (fun a -> E_internal_exp a)
-  ; e_internal_exp_user = (fun (a1,a2) -> E_internal_exp_user (a1,a2))
-  ; e_comment = (fun c -> E_comment c)
-  ; e_comment_struc = (fun e -> E_comment_struc e)
-  ; e_internal_let = (fun (lexp, e2, e3) -> E_var (lexp,e2,e3))
+  ; e_var = (fun (lexp, e2, e3) -> E_var (lexp,e2,e3))
   ; e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat,e1,e2))
   ; e_internal_return = (fun e -> E_internal_return e)
   ; e_internal_value = (fun v -> E_internal_value v)
@@ -804,12 +780,7 @@ let compute_exp_alg bot join =
   ; e_throw = (fun (v1,e1) -> (v1, E_throw (e1)))
   ; e_return = (fun (v1,e1) -> (v1, E_return e1))
   ; e_assert = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_assert(e1,e2)) )
-  ; e_internal_cast = (fun (a,(v1,e1)) -> (v1, E_internal_cast (a,e1)))
-  ; e_internal_exp = (fun a -> (bot, E_internal_exp a))
-  ; e_internal_exp_user = (fun (a1,a2) -> (bot, E_internal_exp_user (a1,a2)))
-  ; e_comment = (fun c -> (bot, E_comment c))
-  ; e_comment_struc = (fun (v,e) -> (bot, E_comment_struc e)) (* ignore value by default, since it is comes from a comment *)
-  ; e_internal_let = (fun ((vl, lexp), (v2,e2), (v3,e3)) ->
+  ; e_var = (fun ((vl, lexp), (v2,e2), (v3,e3)) ->
     (join_list [vl;v2;v3], E_var (lexp,e2,e3)))
   ; e_internal_plet = (fun ((vp,pat), (v1,e1), (v2,e2)) ->
     (join_list [vp;v1;v2], E_internal_plet (pat,e1,e2)))
@@ -904,12 +875,7 @@ let pure_exp_alg bot join =
   ; e_throw = (fun v1 -> v1)
   ; e_return = (fun v1 -> v1)
   ; e_assert = (fun (v1,v2) -> join v1 v2)
-  ; e_internal_cast = (fun (a,v1) -> v1)
-  ; e_internal_exp = (fun a -> bot)
-  ; e_internal_exp_user = (fun (a1,a2) -> bot)
-  ; e_comment = (fun c -> bot)
-  ; e_comment_struc = (fun v -> bot)
-  ; e_internal_let = (fun (vl, v2, v3) -> join_list [vl;v2;v3])
+  ; e_var = (fun (vl, v2, v3) -> join_list [vl;v2;v3])
   ; e_internal_plet = (fun (vp, v1, v2) -> join_list [vp;v1;v2])
   ; e_internal_return = (fun v -> v)
   ; e_internal_value = (fun v -> bot)

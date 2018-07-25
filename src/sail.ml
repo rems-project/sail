@@ -59,7 +59,6 @@ let opt_interactive_script : string option ref = ref None
 let opt_print_version = ref false
 let opt_print_initial_env = ref false
 let opt_print_verbose = ref false
-let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
@@ -123,9 +122,6 @@ let options = Arg.align ([
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " Instrument ouput with tracing");
-  ( "-lem_ast",
-    Arg.Set opt_print_lem_ast,
-    " output a Lem AST representation of the input");
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
@@ -300,9 +296,6 @@ let main() =
        else ());
       (if !(opt_print_verbose)
        then ((Pretty_print_sail.pp_defs stdout) ast)
-       else ());
-      (if !(opt_print_lem_ast)
-       then output "" Lem_ast_out [out_name,ast]
        else ());
       (if !(opt_print_ocaml)
        then

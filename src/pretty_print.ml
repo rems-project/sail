@@ -48,5 +48,4 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-include Pretty_print_lem_ast
 include Pretty_print_lem

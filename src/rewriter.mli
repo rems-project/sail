@@ -139,12 +139,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; e_throw                  : 'exp -> 'exp_aux
  ; e_return                 : 'exp -> 'exp_aux
  ; e_assert                 : 'exp * 'exp -> 'exp_aux
- ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
- ; e_internal_exp           : 'a annot -> 'exp_aux
- ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
- ; e_comment                : string -> 'exp_aux
- ; e_comment_struc          : 'exp -> 'exp_aux
- ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
+ ; e_var                    : 'lexp * 'exp * 'exp -> 'exp_aux
  ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
  ; e_internal_return        : 'exp -> 'exp_aux
  ; e_internal_value         : Value.value -> 'exp_aux

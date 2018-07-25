@@ -570,7 +570,6 @@ let nexp_subst_fns substs =
       | E_id _
       | E_ref _
       | E_lit _
-      | E_comment _
       | E_internal_value _
         -> re e
       | E_sizeof ne -> begin
@@ -580,10 +579,6 @@ let nexp_subst_fns substs =
          | _ -> re (E_sizeof ne')
       end
       | E_constraint nc -> re (E_constraint (subst_nc substs nc))
-      | E_internal_exp (l,annot) -> re (E_internal_exp (l, s_tannot annot))
-      | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, s_tannot annot))
-      | E_internal_exp_user ((l1,annot1),(l2,annot2)) ->
-         re (E_internal_exp_user ((l1, s_tannot annot1),(l2, s_tannot annot2)))
       | E_cast (t,e') -> re (E_cast (s_t t, s_exp e'))
       | E_app (id,es) -> re (E_app (id, List.map s_exp es))
       | E_app_infix (e1,id,e2) -> re (E_app_infix (s_exp e1,id,s_exp e2))
@@ -608,8 +603,6 @@ let nexp_subst_fns substs =
       | E_exit e -> re (E_exit (s_exp e))
       | E_return e -> re (E_return (s_exp e))
       | E_assert (e1,e2) -> re (E_assert (s_exp e1,s_exp e2))
-      | E_internal_cast ((l,ann),e) -> re (E_internal_cast ((l,s_tannot ann),s_exp e))
-      | E_comment_struc e -> re (E_comment_struc e)
       | E_var (le,e1,e2) -> re (E_var (s_lexp le, s_exp e1, s_exp e2))
       | E_internal_plet (p,e1,e2) -> re (E_internal_plet (s_pat p, s_exp e1, s_exp e2))
       | E_internal_return e -> re (E_internal_return (s_exp e))
@@ -1247,10 +1240,6 @@ let split_defs all_errors splits defs =
        with Not_found -> exp),assigns
     | E_lit _
     | E_sizeof _
-    | E_internal_exp _
-    | E_sizeof_internal _
-    | E_internal_exp_user _
-    | E_comment _
     | E_constraint _
       -> exp,assigns
     | E_cast (t,e') ->
@@ -1433,11 +1422,6 @@ let split_defs all_errors splits defs =
     | E_assert (e1,e2) ->
        let e1',e2',assigns = non_det_exp_2 e1 e2 in
        re (E_assert (e1',e2')) assigns
-    | E_internal_cast (ann,e) ->
-       let e',assigns = const_prop_exp ref_vars substs assigns e in
-       re (E_internal_cast (ann,e')) assigns
-    (* TODO: should I substitute or anything here?  Is it even used? *)
-    | E_comment_struc e -> re (E_comment_struc e) assigns
 
     | E_app_infix _
     | E_var _
@@ -1943,10 +1927,6 @@ let split_defs all_errors splits defs =
         | E_id _
         | E_lit _
         | E_sizeof _
-        | E_internal_exp _
-        | E_sizeof_internal _
-        | E_internal_exp_user _
-        | E_comment _
         | E_constraint _
         | E_ref _
         | E_internal_value _
@@ -1984,8 +1964,6 @@ let split_defs all_errors splits defs =
         | E_try (e,cases) -> re (E_try (map_exp e, List.concat (List.map map_pexp cases)))
         | E_return e -> re (E_return (map_exp e))
         | E_assert (e1,e2) -> re (E_assert (map_exp e1,map_exp e2))
-        | E_internal_cast (ann,e) -> re (E_internal_cast (ann,map_exp e))
-        | E_comment_struc e -> re (E_comment_struc e)
         | E_var (le,e1,e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
         | E_internal_plet (p,e1,e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
         | E_internal_return e -> re (E_internal_return (map_exp e))
@@ -2091,7 +2069,6 @@ let split_defs all_errors splits defs =
       | DEF_spec _
       | DEF_default _
       | DEF_reg_dec _
-      | DEF_comm _
       | DEF_overload _
       | DEF_fixity _
       | DEF_internal_mutrec _
@@ -3140,18 +3117,12 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_assert (e1,_) -> analyse_exp fn_id env assigns e1
 
     | E_app_infix _
-    | E_internal_cast _
-    | E_internal_exp _
-    | E_sizeof_internal _
-    | E_internal_exp_user _
-    | E_comment _
-    | E_comment_struc _
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _
       -> raise (Reporting_basic.err_unreachable l
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
-       
+
     | E_var (lexp,e1,e2) ->
        (* Really we ought to remove the assignment after e2 *)
        let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in

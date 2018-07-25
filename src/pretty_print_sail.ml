@@ -573,8 +573,6 @@ let rec doc_def def = group (match def with
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
-  | DEF_comm (DC_comm s) -> string "TOPLEVEL"
-  | DEF_comm (DC_comm_struct d) -> string "TOPLEVEL"
   ) ^^ hardline
 
 let doc_defs (Defs(defs)) =

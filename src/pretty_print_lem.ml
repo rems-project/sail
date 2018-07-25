@@ -164,6 +164,13 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | Typ_app(id, _) when string_of_id id = "register" -> true
   | _ -> false
 
+let lemnum default n =
+  if Big_int.less_equal Big_int.zero n && Big_int.less_equal n (Big_int.of_int 128) then
+    "int" ^ Big_int.to_string n
+  else if Big_int.greater_equal n Big_int.zero then
+    default n
+  else ("(int0 - " ^ (default (Big_int.abs n)) ^ ")")
+
 let doc_nexp_lem nexp =
   let nice_kid kid =
     let (Kid_aux (Var kid,l)) = orig_kid kid in
@@ -178,7 +185,7 @@ let doc_nexp_lem nexp =
        match nexp with
        | Nexp_id id -> string_of_id id
        | Nexp_var kid -> string_of_id (id_of_kid (nice_kid kid))
-       | Nexp_constant i -> Pretty_print_lem_ast.lemnum Big_int.to_string i
+       | Nexp_constant i -> lemnum Big_int.to_string i
        | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
        | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
        | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
@@ -917,9 +924,7 @@ let doc_exp_lem, doc_let_lem =
           parens (doc_typ_lem (typ_of r))] in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ -> string "true"
-    | E_comment _ | E_comment_struc _ -> empty
-    | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _
-    | E_internal_exp_user _ | E_internal_value _ ->
+    | E_internal_value _ ->
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
   and if_exp ctxt (elseif : bool) c t e =
@@ -1385,10 +1390,6 @@ let rec doc_def_lem def =
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
   | DEF_kind _ -> empty
-
-  | DEF_comm (DC_comm s) -> comment (string s)
-  | DEF_comm (DC_comm_struct d) -> comment (doc_def_lem d)
-
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
