@@ -437,6 +437,8 @@ and map_pat_annot f (P_aux (pat, annot)) = P_aux (map_pat_annot_aux f pat, f ann
 and map_pat_annot_aux f = function
   | P_lit lit -> P_lit lit
   | P_wild -> P_wild
+  | P_or (pat1, pat2) -> P_or  (map_pat_annot f pat1, map_pat_annot f pat2)
+  | P_not pat         -> P_not (map_pat_annot f pat)
   | P_as (pat, id) -> P_as (map_pat_annot f pat, id)
   | P_typ (typ, pat) -> P_typ (typ, map_pat_annot f pat)
   | P_id id -> P_id id
@@ -733,6 +735,9 @@ and string_of_pat (P_aux (pat, l)) =
   match pat with
   | P_lit lit -> string_of_lit lit
   | P_wild -> "_"
+  | P_or (pat1, pat2) -> "(" ^ string_of_pat pat1 ^ " | " ^ string_of_pat pat2
+  ^ ")"
+  | P_not pat         -> "(!" ^ string_of_pat pat ^ ")"
   | P_id v -> string_of_id v
   | P_var (pat, tpat) -> string_of_pat pat ^ " as " ^ string_of_typ_pat tpat
   | P_typ (typ, pat) -> string_of_pat pat ^ " : " ^ string_of_typ typ
@@ -790,6 +795,8 @@ let rec pat_ids (P_aux (pat_aux, _)) =
   | P_lit _ | P_wild -> IdSet.empty
   | P_id id -> IdSet.singleton id
   | P_as (pat, id) -> IdSet.add id (pat_ids pat)
+  | P_or (pat1, pat2) -> IdSet.union (pat_ids pat1) (pat_ids pat2)
+  | P_not (pat)       -> pat_ids pat
   | P_var (pat, _) | P_typ (_, pat) -> pat_ids pat
   | P_app (_, pats) | P_tup pats | P_vector pats | P_vector_concat pats | P_list pats ->
      List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty

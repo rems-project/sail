@@ -710,6 +710,8 @@ atomic_pat:
     { mk_pat (P_lit $1) $startpos $endpos }
   | id
     { mk_pat (P_id $1) $startpos $endpos }
+  | pat Bar pat
+    { mk_pat (P_or ($1, $3)) $startpos $endpos }
   | kid
     { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos,
 		     mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }

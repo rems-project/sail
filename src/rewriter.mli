@@ -84,6 +84,8 @@ val rewrite_fun : tannot rewriters -> tannot fundef -> tannot fundef
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
   ; p_wild           : 'pat_aux
+  ; p_or             : 'pat * 'pat -> 'pat_aux
+  ; p_not            : 'pat        -> 'pat_aux
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux

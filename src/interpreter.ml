@@ -593,6 +593,15 @@ and pattern_match env (P_aux (p_aux, _) as pat) value =
   match p_aux with
   | P_lit lit -> eq_value (value_of_lit lit) value, Bindings.empty
   | P_wild -> true, Bindings.empty
+  | P_or(pat1, pat2) ->
+     let (m1, b1) = pattern_match env pat1 value in
+     let (m2, b2) = pattern_match env pat2 value in
+     (* todo: maybe add assertion that bindings are consistent or empty? *)
+     (m1 || m2, Bindings.merge combine b1 b2)
+  | P_not(pat) ->
+     let (m, b) = pattern_match env pat value in
+     (* todo: maybe add assertion that binding is empty *)
+     (not m, b)
   | P_as (pat, id) ->
      let matched, bindings = pattern_match env pat value in
      matched, Bindings.add id value bindings

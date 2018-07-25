@@ -675,7 +675,13 @@ let remove_vector_concat_pat pat =
     { p_lit = (fun lit -> P_lit lit)
     ; p_typ = (fun (typ,p) -> P_typ (typ,p false)) (* cannot happen *)
     ; p_wild = P_wild
-    ; p_as = (fun (pat,id) -> P_as (pat true,id))
+      (* ToDo: I have no idea what the boolean parameter means so guessed that
+       * "true" was a good value to use.
+       * (Adding a comment explaining the boolean might be useful?)
+       *)
+    ; p_or  = (fun (pat1, pat2) -> P_or (pat1 true, pat2 true))
+    ; p_not = (fun pat -> P_not (pat true))
+    ; p_as  = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
     ; p_var = (fun (pat,kid) -> P_var (pat true,kid))
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
@@ -817,6 +823,8 @@ let remove_vector_concat_pat pat =
 
     { p_lit            = (fun lit -> (P_lit lit,[]))
     ; p_wild           = (P_wild,[])
+    ; p_or             = (fun ((pat1, ds1), (pat2, ds2)) -> (P_or(pat1, pat2), ds1 @ ds2))
+    ; p_not            = (fun (pat, ds) -> (P_not(pat), ds))
     ; p_as             = (fun ((pat,decls),id) -> (P_as (pat,id),decls))
     ; p_typ            = (fun (typ,(pat,decls)) -> (P_typ (typ,pat),decls))
     ; p_id             = (fun id -> (P_id id,[]))
@@ -1007,6 +1015,8 @@ let rec is_irrefutable_pattern (P_aux (p,ann)) =
   | P_lit (L_aux (L_unit,_))
   | P_wild
     -> true
+  | P_or(pat1, pat2) -> is_irrefutable_pattern pat1 && is_irrefutable_pattern pat2
+  | P_not(pat) -> is_irrefutable_pattern pat
   | P_lit _ -> false
   | P_as (p1,_)
   | P_typ (_,p1)
@@ -1056,6 +1066,10 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   match p1, p2 with
   | P_lit (L_aux (lit1,_)), P_lit (L_aux (lit2,_)) ->
       if lit1 = lit2 then Some [] else None
+  | P_or(pat1, pat2), _ -> (* todo: possibly not the right answer *) None
+  | _, P_or(pat1, pat2) -> (* todo: possibly not the right answer *) None
+  | P_not(pat), _ -> (* todo: possibly not the right answer *) None
+  | _, P_not(pat) -> (* todo: possibly not the right answer *) None
   | P_as (pat1,_), _ -> subsumes_pat pat1 pat2
   | _, P_as (pat2,_) -> subsumes_pat pat1 pat2
   | P_typ (_,pat1), _ -> subsumes_pat pat1 pat2
@@ -1130,6 +1144,8 @@ let rec pat_to_exp (P_aux (pat,(l,annot))) =
   | P_lit lit -> rewrap (E_lit lit)
   | P_wild -> raise (Reporting_basic.err_unreachable l
       "pat_to_exp given wildcard pattern")
+  | P_or(pat1, pat2) -> (* todo: insert boolean or *) pat_to_exp pat1 
+  | P_not(pat) -> (* todo: insert boolean not *) pat_to_exp pat
   | P_as (pat,id) -> rewrap (E_id id)
   | P_var (pat, _) -> pat_to_exp pat
   | P_typ (_,pat) -> pat_to_exp pat
@@ -1259,6 +1275,8 @@ let compose_guard_opt g1 g2 = match g1, g2 with
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_lit _ | P_wild | P_id _ -> false
 | P_as (pat,_) | P_typ (_,pat) | P_var (pat,_) -> contains_bitvector_pat pat
+| P_or(pat1, pat2) -> contains_bitvector_pat pat1 || contains_bitvector_pat pat2
+| P_not(pat) -> contains_bitvector_pat pat
 | P_vector _ | P_vector_concat _ ->
     let typ = Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) in
     is_bitvector_typ typ
@@ -1284,7 +1302,12 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     { p_lit = (fun lit -> P_lit lit)
     ; p_typ = (fun (typ,p) -> P_typ (typ,p false))
     ; p_wild = P_wild
-    ; p_as = (fun (pat,id) -> P_as (pat true,id))
+    (* todo: I have no idea what the boolean parameter means - so I randomly
+     * passed "true".  A comment to explain the bool might be a good idea?
+     *)
+    ; p_or  = (fun (pat1, pat2) -> P_or (pat1 true, pat2 true))
+    ; p_not = (fun pat -> P_not (pat true))
+    ; p_as  = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
     ; p_var = (fun (pat,kid) -> P_var (pat true,kid))
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
@@ -1431,6 +1454,9 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
 
     { p_lit            = (fun lit -> (P_lit lit, (None, (fun b -> b), [])))
     ; p_wild           = (P_wild, (None, (fun b -> b), []))
+    ; p_or             = (fun ((pat1, gdl1), (pat2, gdl2)) ->
+                              (P_or(pat1, pat2), flatten_guards_decls [gdl1; gdl2]))
+    ; p_not            = (fun (pat, gdl) -> (P_not(pat), gdl))
     ; p_as             = (fun ((pat,gdls),id) -> (P_as (pat,id), gdls))
     ; p_typ            = (fun (typ,(pat,gdls)) -> (P_typ (typ,pat), gdls))
     ; p_id             = (fun id -> (P_id id, (None, (fun b -> b), [])))
@@ -3117,6 +3143,16 @@ let rec rewrite_defs_pat_string_append =
 
     | P_aux (P_string_append _, _) ->
        failwith ("encountered a variety of string append pattern that is not yet implemented: " ^ string_of_pat pat)
+
+    | P_aux (P_or(pat1, pat2), p_annot) ->
+       (* todo: this is wrong - no idea what is happening here *)
+       let (pat1', guards1, expr1) = rewrite_pat env (pat1, guards, expr) in
+       let (pat2', guards2, expr2) = rewrite_pat env (pat2, guards, expr) in
+       (P_aux (P_or(pat1', pat2'), p_annot), guards1 @ guards2, expr2)
+
+    | P_aux (P_not(pat), p_annot) ->
+       let (pat', guards, expr) = rewrite_pat env (pat, guards, expr) in
+       (P_aux (P_not(pat'), p_annot), guards, expr)
 
     | P_aux (P_as (inner_pat, inner_id), p_annot) ->
        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in

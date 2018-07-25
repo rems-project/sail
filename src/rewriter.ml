@@ -291,6 +291,8 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
         (vector_string_to_bit_list l lit) in
     rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
+  | P_or(pat1, pat2) -> rewrap (P_or(rewrite pat1, rewrite pat2))
+  | P_not(pat)       -> rewrap (P_not(rewrite pat))
   | P_as(pat,id) -> rewrap (P_as(rewrite pat, id))
   | P_typ(typ,pat) -> rewrap (P_typ(typ, rewrite pat))
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
@@ -440,6 +442,8 @@ and introduced_vars_le (LEXP_aux(lexp,annot)) exp =
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
   ; p_wild           : 'pat_aux
+  ; p_or             : 'pat * 'pat -> 'pat_aux
+  ; p_not            : 'pat        -> 'pat_aux
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux
@@ -461,6 +465,8 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   function
   | P_lit lit           -> alg.p_lit lit
   | P_wild              -> alg.p_wild
+  | P_or(p1, p2)        -> alg.p_or (fold_pat alg p1, fold_pat alg p2)
+  | P_not(p)            -> alg.p_not (fold_pat alg p)
   | P_id id             -> alg.p_id id
   | P_var (p,tpat)      -> alg.p_var (fold_pat alg p, tpat)
   | P_as (p,id)         -> alg.p_as (fold_pat alg p, id)
@@ -488,6 +494,8 @@ and fold_fpat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat -> 'f
 let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   { p_lit            = (fun lit -> P_lit lit)
   ; p_wild           = P_wild
+  ; p_or             = (fun (pat1, pat2) -> P_or(pat1, pat2))
+  ; p_not            = (fun pat -> P_not(pat))
   ; p_as             = (fun (pat,id) -> P_as (pat,id))
   ; p_typ            = (fun (typ,pat) -> P_typ (typ,pat))
   ; p_id             = (fun id -> P_id id)
@@ -721,6 +729,9 @@ let compute_pat_alg bot join =
   let split_join f ps = let (vs,ps) = List.split ps in (join_list vs, f ps) in
   { p_lit            = (fun lit -> (bot, P_lit lit))
   ; p_wild           = (bot, P_wild)
+  (* todo: I have no idea how to combine v1 and v2 in the following *)
+  ; p_or             = (fun ((v1, pat1), (v2, pat2)) -> (v1, P_or(pat1, pat2)))
+  ; p_not            = (fun (v, pat) -> (v, P_not(pat)))
   ; p_as             = (fun ((v,pat),id) -> (v, P_as (pat,id)))
   ; p_typ            = (fun (typ,(v,pat)) -> (v, P_typ (typ,pat)))
   ; p_id             = (fun id -> (bot, P_id id))
@@ -823,6 +834,8 @@ let pure_pat_alg bot join =
   let join_list vs = List.fold_left join bot vs in
   { p_lit            = (fun lit -> bot)
   ; p_wild           = bot
+  ; p_or             = (fun (pat1, pat2) -> bot) (* todo: this is wrong *)
+  ; p_not            = (fun pat -> bot)          (* todo: this is wrong *)
   ; p_as             = (fun (v,id) -> v)
   ; p_typ            = (fun (typ,v) -> v)
   ; p_id             = (fun id -> bot)

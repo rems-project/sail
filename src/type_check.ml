@@ -2618,6 +2618,16 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      let typed_pat, env, guards = bind_pat env pat typ in
      annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
   | P_wild -> annot_pat P_wild typ, env, []
+  | P_or(pat1, pat2) ->
+     let tpat1, env1, guards1 = bind_pat env pat1 typ in
+     let tpat2, env2, guards2 = bind_pat env pat2 typ in
+     (* todo: report error if env != env1 or env != env2 *)
+     (* todo: not sure I am doing the right thing with guards1 @ guards2 *)
+     (annot_pat (P_or(tpat1, tpat2)) typ, env, guards1 @ guards2)
+  | P_not(pat) ->
+     let tpat, env', guards = bind_pat env pat typ in
+     (* todo: report error if env != env' *)
+     (annot_pat (P_not(tpat)) typ, env, guards)
   | P_cons (hd_pat, tl_pat) ->
      begin
        match Env.expand_synonyms env typ with
@@ -3979,6 +3989,13 @@ and propagate_pat_effect (P_aux (pat, annot)) =
 and propagate_pat_effect_aux = function
   | P_lit lit -> P_lit lit, no_effect
   | P_wild -> P_wild, no_effect
+  | P_or(pat1, pat2) ->
+     let pat1' = propagate_pat_effect pat1 in
+     let pat2' = propagate_pat_effect pat2 in
+     (P_or (pat1', pat2'), union_effects (effect_of_pat pat1') (effect_of_pat pat2'))
+  | P_not(pat) ->
+     let pat' = propagate_pat_effect pat in
+     (P_not(pat'), effect_of_pat pat')
   | P_cons (pat1, pat2) ->
      let p_pat1 = propagate_pat_effect pat1 in
      let p_pat2 = propagate_pat_effect pat2 in

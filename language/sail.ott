@@ -522,6 +522,10 @@ pat :: 'P_' ::=
     {{ com literal constant pattern }}
   | _                                                   :: :: wild  
     {{ com wildcard }}
+  | pat1 | pat2                                         :: :: or
+    {{ com pattern disjunction }}
+  | ~ pat                                               :: :: not
+    {{ com pattern negation }}
   | ( pat as id )                                      :: :: as
     {{ com named pattern }}
 % ML-style

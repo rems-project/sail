@@ -133,6 +133,8 @@ let string_of_parse_id_aux = function
   | Parse_ast.Id v -> v
   | Parse_ast.DeIid v -> v
 
+let string_of_parse_id (Parse_ast.Id_aux(id, l)) = string_of_parse_id_aux id
+
 let string_contains str char =
   try (ignore (String.index str char); true) with
   | Not_found -> false
@@ -453,15 +455,18 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
     (match pat with
     | Parse_ast.P_lit(lit) -> P_lit(to_ast_lit lit)
     | Parse_ast.P_wild -> P_wild
+    | Parse_ast.P_or(pat1, pat2) ->
+       P_or (to_ast_pat k_env def_ord pat1, to_ast_pat k_env def_ord pat2)
     | Parse_ast.P_var (pat, Parse_ast.ATyp_aux (Parse_ast.ATyp_id id, _)) ->
        P_as (to_ast_pat k_env def_ord pat, to_ast_id id)
     | Parse_ast.P_typ(typ,pat) -> P_typ(to_ast_typ k_env def_ord typ,to_ast_pat k_env def_ord pat)
     | Parse_ast.P_id(id) -> P_id(to_ast_id id)
     | Parse_ast.P_var (pat, typ) -> P_var (to_ast_pat k_env def_ord pat, to_ast_typ_pat typ)
-    | Parse_ast.P_app(id,pats) ->
-      if pats = []
-      then P_id (to_ast_id id)
-      else P_app(to_ast_id id, List.map (to_ast_pat k_env def_ord) pats)
+    | Parse_ast.P_app(id, []) -> P_id (to_ast_id id)
+    | Parse_ast.P_app(id, pats) ->
+       if List.length pats == 1 && string_of_parse_id id = "~"
+       then P_not (to_ast_pat k_env def_ord (List.hd pats))
+       else P_app(to_ast_id id, List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_record(fpats,_) ->
       P_record(List.map
                  (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) ->

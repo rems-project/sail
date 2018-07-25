@@ -92,6 +92,10 @@ let rec generalize ctx (P_aux (p_aux, _) as pat) =
   match p_aux with
   | P_lit lit -> GP_lit lit
   | P_wild -> GP_wild
+  (* todo: define GP_or/GP_not? or desugar at this stage?
+  | P_or(pat1, pat2) -> P_or(generalize ctx pat1, generalize ctx pat2)
+  | P_not(pat)       -> P_not(generalize ctx pat)
+  *)
   | P_as (pat, _) -> generalize ctx pat
   | P_typ (_, pat) -> generalize ctx pat (* This will possibly overapproximate how general P_typ is *)
   | P_id id ->
