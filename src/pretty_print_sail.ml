@@ -224,8 +224,8 @@ let doc_lit (L_aux(l,_)) =
 let rec doc_pat (P_aux (p_aux, _) as pat) =
   match p_aux with
   | P_id id -> doc_id id
-  | P_or(pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
-  | P_not(pat)       -> parens (doc_pat pat)
+  | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
+  | P_not pat -> string "~" ^^ parens (doc_pat pat)
   | P_tup pats -> lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
   | P_typ (typ, pat) -> separate space [doc_pat pat; colon; doc_typ typ]
   | P_lit lit -> doc_lit lit

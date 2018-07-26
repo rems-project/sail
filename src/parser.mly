@@ -676,6 +676,8 @@ pat_string_append:
 pat1:
   | atomic_pat
     { $1 }
+  | atomic_pat Bar pat1
+    { mk_pat (P_or ($1, $3)) $startpos $endpos }
   | atomic_pat At pat_concat
     { mk_pat (P_vector_concat ($1 :: $3)) $startpos $endpos }
   | atomic_pat ColonColon pat1
@@ -710,8 +712,6 @@ atomic_pat:
     { mk_pat (P_lit $1) $startpos $endpos }
   | id
     { mk_pat (P_id $1) $startpos $endpos }
-  | pat Bar pat
-    { mk_pat (P_or ($1, $3)) $startpos $endpos }
   | kid
     { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos,
 		     mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }

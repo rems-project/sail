@@ -549,8 +549,8 @@ let nexp_subst_fns substs =
     let re p = P_aux (p,(l,s_tannot annot)) in
     match p with
     | P_lit _ | P_wild | P_id _ -> re p
-    | P_or(p1, p2) -> re (P_or(s_pat p1, s_pat p2))
-    | P_not(p) -> re (P_not(s_pat p))
+    | P_or (p1, p2) -> re (P_or (s_pat p1, s_pat p2))
+    | P_not (p) -> re (P_not (s_pat p))
     | P_var (p',tpat) -> re (P_var (s_pat p',tpat))
     | P_as (p',id) -> re (P_as (s_pat p', id))
     | P_typ (ty,p') -> re (P_typ (s_t ty,s_pat p'))
@@ -645,8 +645,8 @@ let bindings_from_pat p =
     | P_lit _
     | P_wild
       -> []
-    | P_or(p1, p2) -> aux_pat p1 @ aux_pat p2
-    | P_not(p) -> aux_pat p
+    | P_or (p1, p2) -> aux_pat p1 @ aux_pat p2
+    | P_not (p) -> aux_pat p
     | P_as (p,id) -> id::(aux_pat p)
     | P_typ (_,p) -> aux_pat p
     | P_id id ->
@@ -987,13 +987,13 @@ let rec freshen_pat_bindings p =
     match p with
     | P_lit _
     | P_wild -> pat, []
-    | P_or(p1, p2) ->
+    | P_or (p1, p2) ->
        let (r1, vs1) = aux p1 in
        let (r2, vs2) = aux p2 in
-       (mkp (P_or(r1, r2)), vs1 @ vs2)
-    | P_not(p) ->
+       (mkp (P_or (r1, r2)), vs1 @ vs2)
+    | P_not p ->
        let (r, vs) = aux p in
-       (mkp (P_not(r)), vs)
+       (mkp (P_not r), vs)
     | P_as (p,_) -> aux p
     | P_typ (typ,p) -> let p',vs = aux p in mkp (P_typ (typ,p')),vs
     | P_id id -> let id' = freshen_id id in mkp (P_id id'),[id,E_aux (E_id id',(Generated Unknown,None))]
@@ -1772,12 +1772,12 @@ let split_defs all_errors splits defs =
         | P_lit _
         | P_wild
           -> None
-        | P_or(p1, p2) ->
+        | P_or (p1, p2) ->
            (* Todo: I am not proud of this abuse of relist - but creating a special
             * version of re just for two entries did not seem worth it
             *)
-           relist spl (fun [p1'; p2'] -> P_or(p1', p2')) [p1; p2]
-        | P_not(p) ->
+           relist spl (fun [p1'; p2'] -> P_or (p1', p2')) [p1; p2]
+        | P_not p ->
            (* todo: not sure that I can't split - but can't figure out how at
             * the moment *)
            raise (Reporting_basic.err_general l
@@ -2471,12 +2471,12 @@ let rec typ_pat_eq (TP_aux (tp1, _)) (TP_aux (tp2, _)) =
   | TP_app (f1, args1), TP_app (f2, args2) when List.length args1 = List.length args2 ->
      Id.compare f1 f2 = 0 && List.for_all2 typ_pat_eq args1 args2
   | _, _ -> false
-                                           
+
 let rec pat_eq (P_aux (p1,_)) (P_aux (p2,_)) =
   match p1, p2 with
   | P_lit lit1, P_lit lit2 -> lit_eq' lit1 lit2
   | P_wild, P_wild -> true
-  | P_or(p1, q1), P_or(p2, q2) ->
+  | P_or (p1, q1), P_or (p2, q2) ->
      (* ToDo: A case could be made for flattening trees of P_or nodes and
       * comparing the lists so that we treat P_or as associative
       *)
@@ -3287,11 +3287,11 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
       | P_lit _
       | P_wild
         -> ArgSplits.empty,Bindings.empty,KBindings.empty
-      | P_or(p1, p2) ->
+      | P_or (p1, p2) ->
          let (s1, v1, k1) = aux p1 in
          let (s2, v2, k2) = aux p2 in
          (ArgSplits.merge merge_detail s1 s2, dep_bindings_merge v1 v2, dep_kbindings_merge k1 k2)
-      | P_not(p) -> aux p
+      | P_not p -> aux p
       | P_as (pat,id) ->
          begin
            let s,v,k = aux pat in

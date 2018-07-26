@@ -66,6 +66,7 @@ type gpat =
   | GP_tup of gpat list
   | GP_list of gpat list
   | GP_cons of gpat * gpat
+  | GP_or of gpat * gpat
   | GP_app of (gpat Bindings.t)
   | GP_record of (gpat Bindings.t)
   | GP_string_append of gpat list
@@ -78,6 +79,7 @@ let rec string_of_gpat = function
   | GP_tup gpats -> "(" ^ Util.string_of_list ", " string_of_gpat gpats ^ ")"
   | GP_list gpats -> "[|" ^ Util.string_of_list ", " string_of_gpat gpats ^ "|]"
   | GP_cons (gpat1, gpat2) -> string_of_gpat gpat1 ^ " :: " ^ string_of_gpat gpat2
+  | GP_or (gpat1, gpat2) -> string_of_gpat gpat1 ^ " | " ^ string_of_gpat gpat2
   | GP_app app ->
      Util.string_of_list "|" (fun (id, gpat) -> string_of_id id ^ string_of_gpat gpat) (Bindings.bindings app)
   | GP_record _ -> "GP RECORD"
@@ -88,14 +90,11 @@ let is_wild = function
   | _ -> false
 
 let rec generalize ctx (P_aux (p_aux, _) as pat) =
-
   match p_aux with
   | P_lit lit -> GP_lit lit
   | P_wild -> GP_wild
-  (* todo: define GP_or/GP_not? or desugar at this stage?
-  | P_or(pat1, pat2) -> P_or(generalize ctx pat1, generalize ctx pat2)
-  | P_not(pat)       -> P_not(generalize ctx pat)
-  *)
+  | P_or (pat1, pat2) -> GP_or (generalize ctx pat1, generalize ctx pat2)
+  | P_not(pat)       -> GP_wild (* TODO: How to generalize negated patterns? *)
   | P_as (pat, _) -> generalize ctx pat
   | P_typ (_, pat) -> generalize ctx pat (* This will possibly overapproximate how general P_typ is *)
   | P_id id ->
@@ -255,6 +254,9 @@ let rec join ctx gpat1 gpat2 =
          GP_app ctors
      else
        GP_app ctors
+
+  | GP_or (gpat1, gpat2), gpat3 -> join ctx (join ctx gpat1 gpat2) gpat3
+  | gpat1, GP_or (gpat2, gpat3) -> join ctx gpat1 (join ctx gpat2 gpat3)
 
   | _, _ -> GP_wild
 

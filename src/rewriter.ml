@@ -292,7 +292,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
     rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
   | P_or(pat1, pat2) -> rewrap (P_or(rewrite pat1, rewrite pat2))
-  | P_not(pat)       -> rewrap (P_not(rewrite pat))
+  | P_not(pat) -> rewrap (P_not(rewrite pat))
   | P_as(pat,id) -> rewrap (P_as(rewrite pat, id))
   | P_typ(typ,pat) -> rewrap (P_typ(typ, rewrite pat))
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))

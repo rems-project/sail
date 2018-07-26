@@ -242,7 +242,7 @@ type
 pat_aux =  (* Pattern *)
    P_lit of lit (* literal constant pattern *)
  | P_wild                (* wildcard        - always matches *)
- | P_or  of ( pat * pat) (* choice pattern  - P|Q matches if P matches or Q matches *)
+ | P_or of pat * pat (* choice pattern  - P|Q matches if P matches or Q matches *)
  | P_typ of atyp * pat (* typed pattern *)
  | P_id of id (* identifier *)
  | P_var of pat * atyp (* bind pat to type variable *)

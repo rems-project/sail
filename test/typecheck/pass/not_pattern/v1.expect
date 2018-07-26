@@ -1,0 +1,5 @@
+Type error at file "not_pattern/v1.sail", line 12, character 7 to line 12, character 7
+
+    ~([41my[0m) => (),
+
+Bindings are not allowed in this context

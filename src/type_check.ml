@@ -406,6 +406,9 @@ module Env : sig
   val have_smt_op : id -> t -> bool
   val allow_unknowns : t -> bool
   val set_allow_unknowns : bool -> t -> t
+
+  val no_bindings : t -> t
+
   (* Well formedness-checks *)
   val wf_typ : ?exs:KidSet.t -> t -> typ -> unit
   val wf_nexp : ?exs:KidSet.t -> t -> nexp -> unit
@@ -443,6 +446,7 @@ end = struct
       smt_ops : string Bindings.t;
       casts : id list;
       allow_casts : bool;
+      allow_bindings : bool;
       constraints : n_constraint list;
       default_order : order option;
       ret_typ : typ option;
@@ -470,6 +474,7 @@ end = struct
       externs = Bindings.empty;
       smt_ops = Bindings.empty;
       casts = [];
+      allow_bindings = true;
       allow_casts = true;
       constraints = [];
       default_order = None;
@@ -971,6 +976,7 @@ end = struct
 
   let add_local id mtyp env =
     begin
+      if not env.allow_bindings then typ_error (id_loc id) "Bindings are not allowed in this context" else ();
       wf_typ env (snd mtyp);
       if Bindings.mem id env.top_val_specs then
         typ_error (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
@@ -1098,6 +1104,8 @@ end = struct
 
   let no_casts env = { env with allow_casts = false }
   let enable_casts env = { env with allow_casts = true }
+
+  let no_bindings env = { env with allow_bindings = false }
 
   let add_cast cast env =
     typ_print (lazy ("Adding cast " ^ string_of_id cast));
@@ -2618,16 +2626,13 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      let typed_pat, env, guards = bind_pat env pat typ in
      annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
   | P_wild -> annot_pat P_wild typ, env, []
-  | P_or(pat1, pat2) ->
-     let tpat1, env1, guards1 = bind_pat env pat1 typ in
-     let tpat2, env2, guards2 = bind_pat env pat2 typ in
-     (* todo: report error if env != env1 or env != env2 *)
-     (* todo: not sure I am doing the right thing with guards1 @ guards2 *)
-     (annot_pat (P_or(tpat1, tpat2)) typ, env, guards1 @ guards2)
-  | P_not(pat) ->
-     let tpat, env', guards = bind_pat env pat typ in
-     (* todo: report error if env != env' *)
-     (annot_pat (P_not(tpat)) typ, env, guards)
+  | P_or (pat1, pat2) ->
+     let tpat1, env1, guards1 = bind_pat (Env.no_bindings env) pat1 typ in
+     let tpat2, env2, guards2 = bind_pat (Env.no_bindings env) pat2 typ in
+     annot_pat (P_or (tpat1, tpat2)) typ, env, guards1 @ guards2
+  | P_not pat ->
+     let tpat, env', guards = bind_pat (Env.no_bindings env) pat typ in
+     annot_pat (P_not(tpat)) typ, env, guards
   | P_cons (hd_pat, tl_pat) ->
      begin
        match Env.expand_synonyms env typ with
