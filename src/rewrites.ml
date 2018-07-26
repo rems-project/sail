@@ -4036,6 +4036,8 @@ struct
 
 type rlit =
   | RL_unit
+  (* TODO: zero and one are currently replaced by RL_inf to deal with BU;
+     needs more careful thought about semantics of BU *)
   | RL_zero
   | RL_one
   | RL_true
@@ -4053,8 +4055,8 @@ let string_of_rlit = function
 let rlit_of_lit (L_aux (l,_)) =
   match l with
   | L_unit -> RL_unit
-  | L_zero -> RL_zero
-  | L_one -> RL_one
+  | L_zero -> (*RL_zero*) RL_inf
+  | L_one -> (*RL_one*) RL_inf
   | L_true -> RL_true
   | L_false -> RL_false
   | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> RL_inf
@@ -4063,8 +4065,8 @@ let rlit_of_lit (L_aux (l,_)) =
 let inv_rlit_of_lit (L_aux (l,_)) =
   match l with
   | L_unit -> []
-  | L_zero -> [RL_one]
-  | L_one -> [RL_zero]
+  | L_zero -> (*[RL_one]*) [RL_inf]
+  | L_one -> (*[RL_zero]*) [RL_inf]
   | L_true -> [RL_false]
   | L_false -> [RL_true]
   | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> [RL_inf]
