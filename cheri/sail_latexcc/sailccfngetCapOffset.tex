@@ -1,3 +1,0 @@
-function #\hyperref[zgetCapOffset]{getCapOffset}#(c) : CapStruct -> uint64 = 
-    let base = #\hyperref[zgetCapBase]{getCapBase}#(c) in
-    (#\hyperref[zunsigned]{unsigned}#(c.address) - base) % #\hyperref[zpowtwo]{pow2}#(64)
