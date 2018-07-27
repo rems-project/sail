@@ -1,0 +1,10 @@
+function CPtrCmpOp_of_num arg# = match arg# {
+  0 => CEQ,
+  1 => CNE,
+  2 => CLT,
+  3 => CLE,
+  4 => CLTU,
+  5 => CLEU,
+  6 => CEXEQ,
+  _ => CNEXEQ
+}

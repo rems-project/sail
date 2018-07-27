@@ -1,0 +1,2 @@
+val __ReadRAM = "read_ram" : forall 'n 'm, 'n >= 0.
+  (atom('m), atom('n), #\hyperref[zbits]{bits}#('m), #\hyperref[zbits]{bits}#('m)) -> #\hyperref[zbits]{bits}#(8 * 'n) effect {rmem}

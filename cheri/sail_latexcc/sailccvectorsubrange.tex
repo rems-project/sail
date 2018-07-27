@@ -1,0 +1,7 @@
+val vector_subrange = {
+  ocaml: "subrange",
+  lem: "subrange_vec_dec",
+  c: "vector_subrange",
+  coq: "subrange_vec_dec"
+} : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n.
+  (#\hyperref[zbits]{bits}#('n), atom('m), atom('o)) -> #\hyperref[zbits]{bits}#('m - 'o + 1)

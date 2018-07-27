@@ -1,0 +1,5 @@
+function #\hyperref[zincCapOffset]{incCapOffset}#(c, delta) : (CapStruct, #\hyperref[zbits]{bits}#(64)) -> (bool, CapStruct) =
+    let newAddress : #\hyperref[zbits]{bits}#(64) = c.address + delta in
+    let newCap     = { c with address = newAddress } in
+    let representable = #\hyperref[zfastRepCheck]{fastRepCheck}#(c, delta) in
+    (representable, newCap)
