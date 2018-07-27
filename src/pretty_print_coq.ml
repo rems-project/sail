@@ -48,34 +48,6 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(* TODO:
-  | DEF_reg_dec dec -> group (doc_dec_lem dec)
-  | DEF_fundef fdef -> group (doc_fundef_lem fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec_lem fundefs ^/^ hardline
-
-  fix_id
-  doc_quant_item on constraints
-  type quantifiers in records, unions
-  multiple update notation for records
-  register_refs?
-  should I control the nexps somewhat?
-  L_real
-  should P_var produce an "as"?
-  does doc_pat detuple too much?
-  Import ListNotations
-  P_record?
-  type quantifiers and constraints in definitions
-  should atom types be specially treated?  (probably not in doc_typ, but elsewhere)
-  ordering of kids in existential types is fragile!
-  doc_nexp needs precedence fixed (i.e., parens inserted)
-  doc_exp_lem assignments, foreach (etc), early_return (supress type when it's not ASTable?),
-    application (do we need to bother printing types so much?), casts (probably ought to print type),
-    record update
-  lem/isabelle formatting hacks
-  move List imports
-  renaming kids bound in fn bodies as well as top-level funcl pattern
-*)
-
 open Type_check
 open Ast
 open Ast_util
