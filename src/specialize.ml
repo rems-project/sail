@@ -162,7 +162,6 @@ let string_of_instantiation instantiation =
   let string_of_uvar = function
     | U_nexp n -> string_of_nexp n
     | U_order o -> string_of_order o
-    | U_effect eff -> string_of_effect eff
     | U_typ typ -> string_of_typ typ
   in
 

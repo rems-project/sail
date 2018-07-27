@@ -1544,25 +1544,21 @@ let typ_identical env typ1 typ2 =
 type uvar =
   | U_nexp of nexp
   | U_order of order
-  | U_effect of effect
   | U_typ of typ
 
 let uvar_subst_nexp sv subst = function
   | U_nexp nexp -> U_nexp (nexp_subst sv subst nexp)
   | U_typ typ -> U_typ (typ_subst_nexp sv subst typ)
-  | U_effect eff -> U_effect eff
   | U_order ord -> U_order ord
 
 let uvar_subst_typ sv subst = function
   | U_nexp nexp -> U_nexp nexp
   | U_typ typ -> U_typ (typ_subst_typ sv subst typ)
-  | U_effect eff -> U_effect eff
   | U_order ord -> U_order ord
 
 let uvar_subst_order sv subst = function
   | U_nexp nexp -> U_nexp nexp
   | U_typ typ -> U_typ (typ_subst_order sv subst typ)
-  | U_effect eff -> U_effect eff
   | U_order ord -> U_order (order_subst sv subst ord)
 
 exception Unification_error of l * string;;
@@ -1641,7 +1637,6 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
 let string_of_uvar = function
   | U_nexp n -> string_of_nexp n
   | U_order o -> string_of_order o
-  | U_effect eff -> string_of_effect eff
   | U_typ typ -> string_of_typ typ
 
 let unify_order l (Ord_aux (ord_aux1, _) as ord1) (Ord_aux (ord_aux2, _) as ord2) =

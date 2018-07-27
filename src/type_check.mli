@@ -350,7 +350,6 @@ val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 type uvar =
   | U_nexp of nexp
   | U_order of order
-  | U_effect of effect
   | U_typ of typ
 
 val string_of_uvar : uvar -> string
