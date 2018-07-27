@@ -135,7 +135,7 @@ let is_false = function
   | (E_aux (E_internal_value (V_bool b), _)) -> b == false
   | _ -> false
 
-let exp_of_value v = (E_aux (E_internal_value v, (Parse_ast.Unknown, None)))
+let exp_of_value v = (E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot)))
 let value_of_exp = function
   | (E_aux (E_internal_value v, _)) -> v
   | _ -> failwith "value_of_exp coerction failed"
@@ -589,7 +589,6 @@ and exp_of_lexp (LEXP_aux (lexp_aux, _) as lexp) =
   | LEXP_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
 
 and pattern_match env (P_aux (p_aux, _) as pat) value =
-  (* print_endline ("Matching: " ^ string_of_pat pat ^ " with " ^ string_of_value value |> Util.yellow |> Util.clear); *)
   match p_aux with
   | P_lit lit -> eq_value (value_of_lit lit) value, Bindings.empty
   | P_wild -> true, Bindings.empty

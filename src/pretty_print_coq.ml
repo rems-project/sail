@@ -1066,7 +1066,7 @@ let doc_exp_lem, doc_let_lem =
       raise (Reporting_basic.err_unreachable l
         "E_vector_subrange should have been rewritten before pretty-printing")
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
-       (match fannot with
+       (match destruct_tannot fannot with
         | Some(env, (Typ_aux (Typ_id tid, _)), _)
         | Some(env, (Typ_aux (Typ_app (tid, _), _)), _)
           when Env.is_record tid env ->
@@ -1115,23 +1115,23 @@ let doc_exp_lem, doc_let_lem =
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
-       let recordtyp = match annot with
+       let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _) ->
            (* when Env.is_record tid env -> *)
            tid
-         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
+         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
        let epp = enclose_record (align (separate_map
                                           (semi_sp ^^ break 1)
                                           (doc_fexp ctxt recordtyp) fexps)) in
        if aexp_needed then parens epp else epp
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-       let recordtyp, env = match annot with
+       let recordtyp, env = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _)
            when Env.is_record tid env ->
            tid, env
-         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
+         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
        if List.length fexps > 1 then
          let _,fields = Env.get_record recordtyp env in
          let var, let_pp =
@@ -1464,8 +1464,8 @@ let doc_typdef (TD_aux(td, (l, annot))) = match td with
 let args_of_typ l env typs =
   let arg i typ =
     let id = mk_id ("arg" ^ string_of_int i) in
-    (P_aux (P_id id, (l, Some (env, typ, no_effect))), typ),
-    E_aux (E_id id, (l, Some (env, typ, no_effect))) in
+    (P_aux (P_id id, (l, mk_tannot env typ no_effect)), typ),
+    E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
   List.split (List.mapi arg typs)
 
 let rec untuple_args_pat typ (P_aux (paux, ((l, _) as annot)) as pat) =
@@ -1479,12 +1479,12 @@ let rec untuple_args_pat typ (P_aux (paux, ((l, _) as annot)) as pat) =
   let identity = (fun body -> body) in
   match paux, tup_typs with
   | P_tup [], _ ->
-     let annot = (l, Some (Env.empty, unit_typ, no_effect)) in
+     let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
      [P_aux (P_lit (mk_lit L_unit), annot), unit_typ], identity
   | P_tup pats, Some typs -> List.combine pats typs, identity
   | P_tup pats, _ -> raise (Reporting_basic.err_unreachable l "Tuple pattern against non-tuple type")
   | P_wild, Some typs ->
-     let wild typ = P_aux (P_wild, (l, Some (env, typ, no_effect))), typ in
+     let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)), typ in
      List.map wild typs, identity
   | P_typ (_, pat), _ -> untuple_args_pat typ pat
   | P_as _, Some typs | P_id _, Some typs ->

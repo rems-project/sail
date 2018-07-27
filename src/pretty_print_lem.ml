@@ -740,7 +740,7 @@ let doc_exp_lem, doc_let_lem =
                "Unexpected number of arguments for early_return builtin")
           end
        | _ ->
-          begin match annot with
+          begin match destruct_tannot annot with
           | Some (env, _, _) when Env.is_union_constructor f env ->
              let epp =
                match args with
@@ -751,7 +751,7 @@ let doc_exp_lem, doc_let_lem =
                     parens (separate_map comma (expV false) args) in
              wrap_parens (align epp)
           | _ ->
-             let call, is_extern = match annot with
+             let call, is_extern = match destruct_tannot annot with
                | Some (env, _, _) when Env.is_extern f env "lem" ->
                  string (Env.get_extern f env "lem"), true
                | _ -> doc_id_lem f, false in
@@ -774,7 +774,7 @@ let doc_exp_lem, doc_let_lem =
         "E_vector_subrange should have been rewritten before pretty-printing")
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
        let ft = typ_of_annot (l,fannot) in
-       (match fannot with
+       (match destruct_tannot fannot with
         | Some(env, (Typ_aux (Typ_id tid, _)), _)
         | Some(env, (Typ_aux (Typ_app (tid, _), _)), _)
           when Env.is_record tid env ->
@@ -806,22 +806,22 @@ let doc_exp_lem, doc_let_lem =
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
-       let recordtyp = match annot with
+       let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _) ->
            (* when Env.is_record tid env -> *)
            tid
-         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
+         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
        wrap_parens (anglebars (space ^^ (align (separate_map
                                         (semi_sp ^^ break 1)
                                         (doc_fexp ctxt recordtyp) fexps)) ^^ space))
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-       let recordtyp = match annot with
+       let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _)
            when Env.is_record tid env ->
            tid
-         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
+         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
        anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
@@ -1211,8 +1211,8 @@ let args_of_typ l env typ =
     | typ -> [typ] in
   let arg i typ =
     let id = mk_id ("arg" ^ string_of_int i) in
-    P_aux (P_id id, (l, Some (env, typ, no_effect))),
-    E_aux (E_id id, (l, Some (env, typ, no_effect))) in
+    P_aux (P_id id, (l, mk_tannot env typ no_effect)),
+    E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
   List.split (List.mapi arg typs)
 
 let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
@@ -1221,11 +1221,11 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
   let identity = (fun body -> body) in
   match paux, taux with
   | P_tup [], _ ->
-     let annot = (l, Some (Env.empty, unit_typ, no_effect)) in
+     let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
      [P_aux (P_lit (mk_lit L_unit), annot)], identity
   | P_tup pats, _ -> pats, identity
   | P_wild, Typ_tup typs ->
-     let wild typ = P_aux (P_wild, (l, Some (env, typ, no_effect))) in
+     let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)) in
      List.map wild typs, identity
   | P_typ (_, pat), _ -> untuple_args_pat pat
   | P_as _, Typ_tup _ | P_id _, Typ_tup _ ->

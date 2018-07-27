@@ -633,11 +633,6 @@ and string_of_n_constraint = function
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
-let string_of_annot = function
-  | Some (_, typ, eff) ->
-     "Some (_, " ^ string_of_typ typ ^ ", " ^ string_of_effect eff ^ ")"
-  | None -> "None"
-
 let string_of_quant_item_aux = function
   | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid
   | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> "(" ^ string_of_kid kid ^ " :: " ^ string_of_kind k ^ ")"

@@ -660,7 +660,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      failwith ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
 
   | E_let (LB_aux (LB_val (pat, binding), _), body) ->
-     anf (E_aux (E_case (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, None))]), exp_annot))
+     anf (E_aux (E_case (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), exp_annot))
 
   | E_tuple exps ->
      let aexps = List.map anf exps in

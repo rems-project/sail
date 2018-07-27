@@ -81,7 +81,7 @@ let effect_of_pexp (Pat_aux (pexp,(_,a))) =
   union_effects eff (effect_of_annot a)
 let effect_of_lb (LB_aux (_,(_,a))) = effect_of_annot a
 
-let simple_annot l typ = (gen_loc l, Some (initial_env, typ, no_effect))
+let simple_annot l typ = (gen_loc l, mk_tannot initial_env typ no_effect)
 
 
 let lookup_generated_kid env kid =
@@ -138,7 +138,7 @@ let fun_app_effects id env =
   with
   | _ -> no_effect
 
-let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
+let fix_eff_exp (E_aux (e,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
   let effsum = match e with
     | E_block es -> union_eff_exps es
@@ -180,11 +180,11 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_internal_return e1 -> effect_of e1
     | E_internal_value v -> no_effect
   in
-  E_aux (e, (l, Some (env, typ, effsum)))
+  E_aux (e, (l, mk_tannot env typ effsum))
 | None ->
-  E_aux (e, (l, None))
+  E_aux (e, (l, empty_tannot))
 
-let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match snd annot with
+let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
   let effsum = union_effects eff (match lexp with
     | LEXP_id _ -> no_effect
@@ -200,45 +200,45 @@ let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match snd annot with
       union_effects (effect_of_lexp lexp)
         (union_effects (effect_of e1) (effect_of e2))
     | LEXP_field (lexp,_) -> effect_of_lexp lexp) in
-  LEXP_aux (lexp, (l, Some (env, typ, effsum)))
+  LEXP_aux (lexp, (l, mk_tannot env typ effsum))
 | None ->
-  LEXP_aux (lexp, (l, None))
+  LEXP_aux (lexp, (l, empty_tannot))
 
-let fix_eff_fexp (FE_aux (fexp,((l,_) as annot))) = match snd annot with
+let fix_eff_fexp (FE_aux (fexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
   let effsum = union_effects eff (match fexp with
     | FE_Fexp (_,e) -> effect_of e) in
-  FE_aux (fexp, (l, Some (env, typ, effsum)))
+  FE_aux (fexp, (l, mk_tannot env typ effsum))
 | None ->
-  FE_aux (fexp, (l, None))
+  FE_aux (fexp, (l, empty_tannot))
 
 let fix_eff_fexps fexps = fexps (* FES_aux have no effect information *)
 
-let fix_eff_opt_default (Def_val_aux (opt_default,((l,_) as annot))) = match snd annot with
+let fix_eff_opt_default (Def_val_aux (opt_default,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
   let effsum = union_effects eff (match opt_default with
     | Def_val_empty -> no_effect
     | Def_val_dec e -> effect_of e) in
-  Def_val_aux (opt_default, (l, Some (env, typ, effsum)))
+  Def_val_aux (opt_default, (l, mk_tannot env typ effsum))
 | None ->
-  Def_val_aux (opt_default, (l, None))
+  Def_val_aux (opt_default, (l, empty_tannot))
 
-let fix_eff_pexp (Pat_aux (pexp,((l,_) as annot))) = match snd annot with
+let fix_eff_pexp (Pat_aux (pexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
   let effsum = match pexp with
     | Pat_exp (_,e) -> effect_of e
     | Pat_when (_,e,e') -> union_effects (effect_of e) (effect_of e') in
-  Pat_aux (pexp, (l, Some (env, typ, effsum)))
+  Pat_aux (pexp, (l, mk_tannot env typ effsum))
 | None ->
-  Pat_aux (pexp, (l, None))
+  Pat_aux (pexp, (l, empty_tannot))
 
-let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match snd annot with
+let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
   let effsum = match lb with
     | LB_val (_,e) -> effect_of e in
-  LB_aux (lb, (l, Some (env, typ, effsum)))
+  LB_aux (lb, (l, mk_tannot env typ effsum))
 | None ->
-  LB_aux (lb, (l, None))
+  LB_aux (lb, (l, empty_tannot))
 
 let explode s =
   let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
@@ -287,7 +287,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
   let rewrite = rewriters.rewrite_pat rewriters in
   match pat with
   | P_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-    let ps =  List.map (fun p -> P_aux (P_lit p, (l, Some (pat_env_of orig_pat, bit_typ, no_effect))))
+    let ps =  List.map (fun p -> P_aux (P_lit p, (l, mk_tannot (pat_env_of orig_pat) bit_typ no_effect)))
         (vector_string_to_bit_list l lit) in
     rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
@@ -313,7 +313,7 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
   | E_nondet exps -> rewrap (E_nondet (List.map rewrite exps))
   | E_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-    let es = List.map (fun p -> E_aux (E_lit p, (l, Some (env_of orig_exp, bit_typ, no_effect))))
+    let es = List.map (fun p -> E_aux (E_lit p, (l, mk_tannot (env_of orig_exp) bit_typ no_effect)))
         (vector_string_to_bit_list l lit) in
     rewrap (E_vector es)
   | E_id _ | E_lit _  -> rewrap exp
