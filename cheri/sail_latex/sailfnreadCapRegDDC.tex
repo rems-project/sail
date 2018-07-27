@@ -1,0 +1,3 @@
+function #\hyperref[zreadCapRegDDC]{readCapRegDDC}#(n) =
+  let i = #\hyperref[zunsigned]{unsigned}#(n) in
+  #\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(#\hyperref[zregzyderef]{reg\_deref}#(CapRegs[i])) /* NB CapRegs[0] is points to DDC */

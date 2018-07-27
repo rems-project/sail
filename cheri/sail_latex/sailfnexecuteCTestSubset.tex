@@ -1,0 +1,29 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCTestSubset]{CTestSubset}#(rd, cb, ct)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cb_val = #\hyperref[zreadCapRegDDC]{readCapRegDDC}#(cb);
+  ct_val = #\hyperref[zreadCapReg]{readCapReg}#(ct);
+  ct_top    = #\hyperref[zgetCapTop]{getCapTop}#(ct_val);
+  ct_base   = #\hyperref[zgetCapBase]{getCapBase}#(ct_val);
+  ct_perms  = #\hyperref[zgetCapPerms]{getCapPerms}#(ct_val);
+  cb_top    = #\hyperref[zgetCapTop]{getCapTop}#(cb_val);
+  cb_base   = #\hyperref[zgetCapBase]{getCapBase}#(cb_val);
+  cb_perms  = #\hyperref[zgetCapPerms]{getCapPerms}#(cb_val);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(ct)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, ct)
+  else {
+     result : #\hyperref[zbits]{bits}#(1) = if (cb_val.tag != ct_val.tag) then
+             0b0
+        else if (ct_base < cb_base) then
+             0b0
+        else if (ct_top > cb_top) then
+             0b0
+        else if ((ct_perms & cb_perms) != ct_perms) then
+             0b0
+        else
+             0b1;
+     #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zzzerozyextend]{zero\_extend}#(result);
+  }
+}

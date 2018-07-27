@@ -1,0 +1,16 @@
+function capToString cap = {
+         #\hyperref[zskipzyescape]{skip\_escape}#(); /* because cheri128 getCapX functions contain asserts but cheri256 ones do not */
+         #\hyperref[zconcatzystr]{concat\_str}#(" t:",
+         #\hyperref[zconcatzystr]{concat\_str}#(if cap.tag then "1" else "0",
+         #\hyperref[zconcatzystr]{concat\_str}#(" s:",
+         #\hyperref[zconcatzystr]{concat\_str}#(if cap.sealed then "1" else "0",
+         #\hyperref[zconcatzystr]{concat\_str}#(" perms:",
+         #\hyperref[zconcatzystr]{concat\_str}#(#\hyperref[zBitStr]{BitStr}#(0b0 @ #\hyperref[zgetCapPerms]{getCapPerms}#(cap)),
+         #\hyperref[zconcatzystr]{concat\_str}#(" type:",
+         #\hyperref[zconcatzystr]{concat\_str}#(#\hyperref[zBitStr]{BitStr}#(cap.otype),
+         #\hyperref[zconcatzystr]{concat\_str}#(" offset:",
+         #\hyperref[zconcatzystr]{concat\_str}#(#\hyperref[zBitStr]{BitStr}#(#\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapOffset]{getCapOffset}#(cap))),
+         #\hyperref[zconcatzystr]{concat\_str}#(" base:",
+         #\hyperref[zconcatzystr]{concat\_str}#(#\hyperref[zBitStr]{BitStr}#(#\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapBase]{getCapBase}#(cap))),
+         #\hyperref[zconcatzystr]{concat\_str}#(" length:", #\hyperref[zBitStr]{BitStr}#(#\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zmin]{min}#(#\hyperref[zgetCapLength]{getCapLength}#(cap), #\hyperref[zMAX]{MAX}#(64)))))))))))))))))
+         }

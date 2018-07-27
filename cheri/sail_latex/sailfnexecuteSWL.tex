@@ -1,0 +1,15 @@
+function clause #\hyperref[zexecute]{execute}#(#\hyperref[zSWL]{SWL}#(base, rt, offset)) =
+      {
+        vAddr = #\hyperref[zaddrWrapperUnaligned]{addrWrapperUnaligned}#(#\hyperref[zsignzyextend]{sign\_extend}#(offset) + #\hyperref[zrGPR]{rGPR}#(base), StoreData, WL);
+        let pAddr = #\hyperref[zTLBTranslate]{TLBTranslate}#(vAddr, StoreData) in
+          {
+            reg_val = #\hyperref[zrGPR]{rGPR}#(rt);
+            match vAddr[1..0]
+            {
+              0b00  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 4) = reg_val[31..0]),
+              0b01  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 3) = reg_val[31..8]),
+              0b10  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 2) = reg_val[31..16]),
+              0b11  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 1) = reg_val[31..24])
+            }
+          }
+      }

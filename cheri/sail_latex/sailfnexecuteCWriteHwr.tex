@@ -1,0 +1,35 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCWriteHwr]{CWriteHwr}#(cb, sel)) = 
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  let (needSup, needAccessSys) : (bool, bool) = match #\hyperref[zunsigned]{unsigned}#(sel) {
+    0  => (false, false), /* DDC   -- no access control */
+    1  => (false, false), /* CTLSU -- no access control */
+    8  => (false, true),  /* CTLSP -- privileged TLS */
+    22 => (true, false),  /* KR1C */
+    23 => (true, false),  /* KR2C */
+    29 => (true, true),   /* KCC */
+    30 => (true, true),   /* KDC */
+    31 => (true, true),   /* EPCC */
+    _  => #\hyperref[zSignalException]{SignalException}#(ResI)
+  };
+  if #\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb) then
+     #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if needAccessSys & #\hyperref[znot]{not}#(#\hyperref[zpcczyaccesszysystemzyregs]{pcc\_access\_system\_regs}#()) then
+     #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, sel)
+  else if needSup & #\hyperref[znot]{not}#(#\hyperref[zgrantsAccess]{grantsAccess}#(#\hyperref[zgetAccessLevel]{getAccessLevel}#(), Supervisor)) then
+     #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, sel)
+  else {
+    capVal = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+    match #\hyperref[zunsigned]{unsigned}#(sel) {
+      0  => DDC   = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      1  => CTLSU = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      8  => CTLSP = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      22 => KR1C  = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      23 => KR2C  = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      29 => KCC   = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      30 => KDC   = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      31 => EPCC  = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(capVal),
+      _  => assert(false, "should be unreachable code")
+    };
+  };
+}

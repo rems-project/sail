@@ -1,0 +1,9 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCGetOffset]{CGetOffset}#(rd, cb)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else
+    let capVal = #\hyperref[zreadCapReg]{readCapReg}#(cb) in
+    #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapOffset]{getCapOffset}#(capVal));
+}

@@ -1,0 +1,23 @@
+function #\hyperref[zExceptionCode]{ExceptionCode}# (ex) : Exception -> #\hyperref[zbits]{bits}#(5)=
+   let x : #\hyperref[zbits]{bits}#(8) = match ex
+   {
+      Interrupt    => 0x00, /* Interrupt */
+      TLBMod       => 0x01, /* TLB modification exception */
+      TLBL         => 0x02, /* TLB #\hyperref[zexception]{exception}# (load or fetch) */
+      TLBS         => 0x03, /* TLB #\hyperref[zexception]{exception}# (store) */
+      AdEL         => 0x04, /* Address #\hyperref[zerror]{error}# (load or fetch) */
+      AdES         => 0x05, /* Address #\hyperref[zerror]{error}# (store) */
+      Sys          => 0x08, /* Syscall */
+      Bp           => 0x09, /* Breakpoint */
+      ResI         => 0x0a, /* Reserved instruction */
+      CpU          => 0x0b, /* Coprocessor Unusable */
+      Ov           => 0x0c, /* Arithmetic overflow */
+      Tr           => 0x0d, /* Trap */
+      C2E          => 0x12, /* C2E coprocessor 2 exception */
+      C2Trap       => 0x12, /* C2Trap maps to same exception code, different vector */
+      XTLBRefillL  => 0x02,
+      XTLBRefillS  => 0x03,
+      XTLBInvL     => 0x02,
+      XTLBInvS     => 0x03,
+      MCheck       => 0x18
+   } in x[4..0]

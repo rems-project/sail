@@ -1,0 +1,13 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zBEQ]{BEQ}#(rs, rd, imm, ne, likely)) =
+  {
+    if ((#\hyperref[zrGPR]{rGPR}#(rs) == #\hyperref[zrGPR]{rGPR}#(rd)) ^ ne) then
+      {
+        let offset : #\hyperref[zbits]{bits}#(64) = (#\hyperref[zsignzyextend]{sign\_extend}#(imm @ 0b00) + 4) in
+        #\hyperref[zexecutezybranch]{execute\_branch}#(PC + offset);
+      }
+    else
+      {
+        if (likely) then
+          nextPC = PC + 8; /* skip branch delay */
+      }
+  }

@@ -1,0 +1,6 @@
+val eq_bits = {
+  ocaml: "eq_list",
+  lem: "eq_vec",
+  c: "eq_bits",
+  coq: "eq_vec"
+} : forall 'n. (vector('n, dec, bit), vector('n, dec, bit)) -> bool

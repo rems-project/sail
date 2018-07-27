@@ -1,0 +1,15 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zMUL]{MUL}#(rs, rt, rd)) =
+  {
+    rsVal = #\hyperref[zrGPR]{rGPR}#(rs);
+    rtVal = #\hyperref[zrGPR]{rGPR}#(rt);
+    result : #\hyperref[zbits]{bits}#(64) = #\hyperref[zsignzyextend]{sign\_extend}#((rsVal[31..0]) *#\hyperref[zzys]{\_s}# (rtVal[31..0]));
+    #\hyperref[zwGPR]{wGPR}#(rd) = if (#\hyperref[zNotWordVal]{NotWordVal}#(rsVal) | #\hyperref[zNotWordVal]{NotWordVal}#(rtVal)) then
+        undefined
+      else
+        #\hyperref[zsignzyextend]{sign\_extend}#(result[31..0]);
+    /* HI and LO are technically undefined after MUL, but this causes problems with tests and
+       (potentially) context switch so just leave them alone
+    HI = undefined;
+    LO = undefined;
+    */
+  }

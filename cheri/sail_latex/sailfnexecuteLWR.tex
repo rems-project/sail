@@ -1,0 +1,17 @@
+function clause #\hyperref[zexecute]{execute}#(#\hyperref[zLWR]{LWR}#(base, rt, offset)) =
+      {
+        vAddr = #\hyperref[zaddrWrapperUnaligned]{addrWrapperUnaligned}#(#\hyperref[zsignzyextend]{sign\_extend}#(offset) + #\hyperref[zrGPR]{rGPR}#(base), LoadData, WR);
+        let pAddr = (#\hyperref[zTLBTranslate]{TLBTranslate}#(vAddr, LoadData)) in
+          {
+            mem_val = #\hyperref[zMEMrzywrapper]{MEMr\_wrapper}#(pAddr[63..2] @ 0b00, 4); /* read word of interest */
+            reg_val = #\hyperref[zrGPR]{rGPR}#(rt);
+            result : #\hyperref[zbits]{bits}#(32) = match vAddr[1..0]
+              {
+                0b00  => reg_val[31..8]  @ mem_val[31..24],
+                0b01  => reg_val[31..16] @ mem_val[31..16],
+                0b10  => reg_val[31..24] @ mem_val[31..8],
+                0b11  => mem_val
+              };
+	    #\hyperref[zwGPR]{wGPR}#(rt) = #\hyperref[zsignzyextend]{sign\_extend}#(result)
+          }
+      }

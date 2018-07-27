@@ -1,0 +1,10 @@
+function #\hyperref[zMEMwzytaggedzyconditional]{MEMw\_tagged\_conditional}#(addr, tag, data) =
+{
+  /* assumes addr is cap. aligned */
+  assert(#\hyperref[zunsigned]{unsigned}#(addr) % cap_size == 0);
+  #\hyperref[zMEMeazyconditional]{MEMea\_conditional}#(addr, cap_size);
+  success = #\hyperref[zMEMvalzyconditional]{MEMval\_conditional}#(addr, cap_size, #\hyperref[zreversezyendianness]{reverse\_endianness}#(data));
+  if success then
+     #\hyperref[zMEMwzytag]{MEMw\_tag}#(addr, tag);
+  success;
+}

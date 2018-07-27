@@ -1,0 +1,5 @@
+function #\hyperref[zexecutezybranchzypcc]{execute\_branch\_pcc}#(newPCC) = {
+  delayedPC = #\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapOffset]{getCapOffset}#(newPCC));
+  delayedPCC = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(newPCC);
+  branchPending = 0b1;
+}

@@ -1,0 +1,11 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCGetPCC]{CGetPCC}#(cd)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cd)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cd)
+  else
+    let pcc = (#\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(PCC)) in
+    let (success, pcc2) = #\hyperref[zsetCapOffset]{setCapOffset}#(pcc, PC) in
+    {assert (success, ""); /* guaranteed to be in-bounds */
+    #\hyperref[zwriteCapReg]{writeCapReg}#(cd, pcc2)};
+}

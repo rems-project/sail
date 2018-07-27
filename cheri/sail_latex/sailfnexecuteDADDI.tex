@@ -1,0 +1,10 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zDADDI]{DADDI}# (rs, rt, imm)) =
+  {
+    let sum65 : #\hyperref[zbits]{bits}#(65) = #\hyperref[zsignzyextend]{sign\_extend}#(#\hyperref[zrGPR]{rGPR}#(rs)) + #\hyperref[zsignzyextend]{sign\_extend}#(imm) in
+    {
+      if (sum65[64] != sum65[63]) then
+        (#\hyperref[zSignalException]{SignalException}#(Ov))
+      else
+        #\hyperref[zwGPR]{wGPR}#(rt) = sum65[63..0]
+    }
+  }

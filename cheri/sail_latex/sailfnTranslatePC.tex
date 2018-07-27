@@ -1,0 +1,15 @@
+function #\hyperref[zTranslatePC]{TranslatePC}# (vAddr) = {
+  #\hyperref[zincrementCPzeroCount]{incrementCP0Count}#();
+  let pcc = #\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(PCC);
+  let base  = #\hyperref[zgetCapBase]{getCapBase}#(pcc);
+  let top   = #\hyperref[zgetCapTop]{getCapTop}#(pcc);
+  let absPC = base + #\hyperref[zunsigned]{unsigned}#(vAddr);
+  if ((absPC % 4)  != 0) then /* bad PC alignment */
+    (#\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(AdEL, #\hyperref[ztozybits]{to\_bits}#(64, absPC))) /* XXX absPC may be truncated */
+  else if #\hyperref[znot]{not}# (pcc.tag) then
+    (#\hyperref[zraisezyctwozyexceptionzynoreg]{raise\_c2\_exception\_noreg}#(CapEx_TagViolation))
+  else if ((absPC + 4) > top) then
+    (#\hyperref[zraisezyctwozyexceptionzynoreg]{raise\_c2\_exception\_noreg}#(CapEx_LengthViolation))
+  else
+    #\hyperref[zTLBTranslate]{TLBTranslate}#(#\hyperref[ztozybits]{to\_bits}#(64, absPC), Instruction) /* XXX assert absPC never gets truncated due to above check and top <= 2^64 for valid caps */
+}

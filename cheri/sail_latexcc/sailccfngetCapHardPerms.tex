@@ -1,0 +1,12 @@
+function #\hyperref[zgetCapHardPerms]{getCapHardPerms}#(cap) : CapStruct -> #\hyperref[zbits]{bits}#(11) =
+   (cap.access_system_regs
+  @ cap.permit_unseal
+  @ cap.permit_ccall
+  @ cap.permit_seal
+  @ cap.permit_store_local_cap
+  @ cap.permit_store_cap
+  @ cap.permit_load_cap
+  @ cap.permit_store
+  @ cap.permit_load
+  @ cap.permit_execute
+  @ cap.global)

@@ -1,0 +1,35 @@
+function clause #\hyperref[zexecute]{execute}#(#\hyperref[zCJALR]{CJALR}#(cd, cb, link)) = 
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cb_val = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+  cb_ptr = #\hyperref[zgetCapCursor]{getCapCursor}#(cb_val);
+  cb_top = #\hyperref[zgetCapTop]{getCapTop}#(cb_val);
+  cb_base= #\hyperref[zgetCapBase]{getCapBase}#(cb_val);
+  if (link & #\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cd)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cd)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.permit_execute) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitExecuteViolation, cb)
+  else if (cb_ptr < cb_base) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+  else if ((cb_ptr + 4) > cb_top) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+  else if ((cb_ptr % 4) != 0) then
+    #\hyperref[zSignalException]{SignalException}#(AdEL)
+  else
+    {
+      if (link) then
+        let pcc = #\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(PCC) in
+        let (success, linkCap) = #\hyperref[zsetCapOffset]{setCapOffset}#(pcc, PC+8) in
+        if (success) then
+            #\hyperref[zwriteCapReg]{writeCapReg}#(cd, linkCap)
+        else
+            assert(false, "");
+      #\hyperref[zexecutezybranchzypcc]{execute\_branch\_pcc}#(cb_val);
+    }
+}

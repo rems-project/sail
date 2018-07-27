@@ -1,0 +1,53 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCStore]{CStore}#(rs, cb, rt, rd, offset, width, conditional)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cb_val = #\hyperref[zreadCapRegDDC]{readCapRegDDC}#(cb);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.permit_store) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitStoreViolation, cb)
+  else
+    {
+      size   = #\hyperref[zwordWidthBytes]{wordWidthBytes}#(width);
+      cursor = #\hyperref[zgetCapCursor]{getCapCursor}#(cb_val);
+      vAddr  = (cursor + #\hyperref[zunsigned]{unsigned}#(#\hyperref[zrGPR]{rGPR}#(rt)) + size * #\hyperref[zsigned]{signed}#(offset)) % #\hyperref[zpowtwo]{pow2}#(64);
+      vAddr64= #\hyperref[ztozybits]{to\_bits}#(64, vAddr);
+      if ((vAddr + size) > #\hyperref[zgetCapTop]{getCapTop}#(cb_val)) then
+        #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+      else if (vAddr < #\hyperref[zgetCapBase]{getCapBase}#(cb_val)) then
+        #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+      else if #\hyperref[znot]{not}# (#\hyperref[zisAddressAligned]{isAddressAligned}#(vAddr64, width)) then
+        #\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(AdES, vAddr64)
+      else
+        {
+          pAddr  = (#\hyperref[zTLBTranslate]{TLBTranslate}#(vAddr64, StoreData));
+          rs_val = #\hyperref[zrGPR]{rGPR}#(rs);
+          if (conditional) then
+            {
+              success : bool = if (CP0LLBit[0]) then
+                  match width
+                    {
+                      B  => #\hyperref[zMEMwzyconditionalzywrapper]{MEMw\_conditional\_wrapper}#(pAddr, 1, rs_val[7..0]),
+                      H  => #\hyperref[zMEMwzyconditionalzywrapper]{MEMw\_conditional\_wrapper}#(pAddr, 2, rs_val[15..0]),
+                      W  => #\hyperref[zMEMwzyconditionalzywrapper]{MEMw\_conditional\_wrapper}#(pAddr, 4, rs_val[31..0]),
+                      D  => #\hyperref[zMEMwzyconditionalzywrapper]{MEMw\_conditional\_wrapper}#(pAddr, 8, rs_val)
+                    }
+                else
+                  false;
+              #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zzzerozyextend]{zero\_extend}#(success);
+            }
+            else
+          match width
+            {
+              B  => #\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 1) = rs_val[7..0],
+              H  => #\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 2) = rs_val[15..0],
+              W  => #\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 4) = rs_val[31..0],
+              D  => #\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(pAddr, 8) = rs_val
+            }
+        }
+    }
+}

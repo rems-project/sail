@@ -1,0 +1,26 @@
+function #\hyperref[zCapExCode]{CapExCode}#(ex) : CapEx -> #\hyperref[zbits]{bits}#(8)=
+  match ex {
+    CapEx_None                          => 0x00,
+    CapEx_LengthViolation               => 0x01,
+    CapEx_TagViolation                  => 0x02,
+    CapEx_SealViolation                 => 0x03,
+    CapEx_TypeViolation                 => 0x04,
+    CapEx_CallTrap                      => 0x05,
+    CapEx_ReturnTrap                    => 0x06,
+    CapEx_TSSUnderFlow                  => 0x07,
+    CapEx_UserDefViolation              => 0x08,
+    CapEx_TLBNoStoreCap                 => 0x09,
+    CapEx_InexactBounds                 => 0x0a,
+    CapEx_GlobalViolation               => 0x10,
+    CapEx_PermitExecuteViolation        => 0x11,
+    CapEx_PermitLoadViolation           => 0x12,
+    CapEx_PermitStoreViolation          => 0x13,
+    CapEx_PermitLoadCapViolation        => 0x14,
+    CapEx_PermitStoreCapViolation       => 0x15,
+    CapEx_PermitStoreLocalCapViolation  => 0x16,
+    CapEx_PermitSealViolation           => 0x17,
+    CapEx_AccessSystemRegsViolation     => 0x18,
+    CapEx_PermitCCallViolation          => 0x19,
+    CapEx_AccessCCallIDCViolation       => 0x1a,
+    CapEx_PermitUnsealViolation         => 0x1b
+  }

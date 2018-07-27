@@ -1,0 +1,21 @@
+function Exception_of_num arg# = match arg# {
+  0 => Interrupt,
+  1 => TLBMod,
+  2 => TLBL,
+  3 => TLBS,
+  4 => AdEL,
+  5 => AdES,
+  6 => Sys,
+  7 => Bp,
+  8 => ResI,
+  9 => CpU,
+  10 => Ov,
+  11 => Tr,
+  12 => C2E,
+  13 => C2Trap,
+  14 => XTLBRefillL,
+  15 => XTLBRefillS,
+  16 => XTLBInvL,
+  17 => XTLBInvS,
+  _ => MCheck
+}

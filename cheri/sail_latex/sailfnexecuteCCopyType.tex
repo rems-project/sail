@@ -1,0 +1,31 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCCopyType]{CCopyType}#(cd, cb, ct)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cb_val = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+  ct_val = #\hyperref[zreadCapReg]{readCapReg}#(ct);
+  cb_base = #\hyperref[zgetCapBase]{getCapBase}#(cb_val);
+  cb_top  = #\hyperref[zgetCapTop]{getCapTop}#(cb_val);
+  ct_otype = #\hyperref[zunsigned]{unsigned}#(ct_val.otype);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cd)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cd)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(ct)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, ct)
+  else if #\hyperref[znot]{not}# (cb_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cb)
+  else if (ct_val.sealed) then {
+    if ct_otype < cb_base then
+      #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+    else if ct_otype >= cb_top then
+      #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+    else
+      let (success, cap) = #\hyperref[zsetCapOffset]{setCapOffset}#(cb_val, #\hyperref[ztozybits]{to\_bits}#(64, ct_otype - cb_base)) in {
+        assert(success, ""); /* offset is in bounds so must succeed */
+        #\hyperref[zwriteCapReg]{writeCapReg}#(cd, cap);
+      }
+  } else
+    #\hyperref[zwriteCapReg]{writeCapReg}#(cd, #\hyperref[zintzytozycap]{int\_to\_cap}#(bitone ^^ 64))
+}

@@ -1,0 +1,16 @@
+function #\hyperref[zaddrWrapper]{addrWrapper}#(addr, accessType, width) =
+  {
+    ddc    = #\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(DDC);
+    #\hyperref[zcheckDDCPerms]{checkDDCPerms}#(ddc, accessType);
+    cursor = #\hyperref[zgetCapCursor]{getCapCursor}#(ddc);
+    vAddr  = (cursor + #\hyperref[zunsigned]{unsigned}#(addr)) % #\hyperref[zpowtwo]{pow2}#(64);
+    size   = #\hyperref[zwordWidthBytes]{wordWidthBytes}#(width);
+    base   = #\hyperref[zgetCapBase]{getCapBase}#(ddc);
+    top    = #\hyperref[zgetCapTop]{getCapTop}#(ddc);
+    if ((vAddr + size) > top) then
+      (#\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, 0b00000))
+    else if (vAddr < base) then
+      (#\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, 0b00000))
+    else
+      #\hyperref[ztozybits]{to\_bits}#(64, vAddr);
+  }

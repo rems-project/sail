@@ -1,0 +1,31 @@
+function #\hyperref[zTLBTranslateC]{TLBTranslateC}# (vAddr, accessType) = 
+  {
+    let currentAccessLevel = #\hyperref[zgetAccessLevel]{getAccessLevel}#() in
+    let compat32 = (vAddr[61..31] == 0b1111111111111111111111111111111) in
+    let (requiredLevel, addr) : (AccessLevel, #\hyperref[zoption]{option}#(#\hyperref[zbits]{bits}#(64))) = match (vAddr[63..62]) {
+      0b11  => match (compat32, vAddr[30..29]) { /* xkseg */
+	(true, 0b11)  => (Kernel, #\hyperref[zNone]{None}#() : #\hyperref[zoption]{option}#(#\hyperref[zbits]{bits}#(64))),               /* kseg3 mapped 32-bit compat */
+	(true, 0b10)  => (Supervisor, #\hyperref[zNone]{None}#() : #\hyperref[zoption]{option}#(#\hyperref[zbits]{bits}#(64))),           /* sseg  mapped 32-bit compat */
+	(true, 0b01)  => (Kernel, #\hyperref[zSome]{Some}#(0x00000000 @ 0b000 @ vAddr[28..0])), /* kseg1 unmapped uncached 32-bit compat */
+	(true, 0b00)  => (Kernel, #\hyperref[zSome]{Some}#(0x00000000 @ 0b000 @ vAddr[28..0])), /* kseg0 unmapped cached 32-bit compat */
+	(_, _)        => (Kernel, #\hyperref[zNone]{None}#() : #\hyperref[zoption]{option}#(#\hyperref[zbits]{bits}#(64))) /* xkseg mapped */
+      },
+      0b10  => (Kernel, #\hyperref[zSome]{Some}#(0b00000 @ vAddr[58..0])), /* xkphys bits 61-59 are cache #\hyperref[zmode]{mode}# (ignored) */
+      0b01  => (Supervisor, #\hyperref[zNone]{None}#() : #\hyperref[zoption]{option}#(#\hyperref[zbits]{bits}#(64))),  /* xsseg - supervisor mapped */
+      0b00  => (User, #\hyperref[zNone]{None}#() : #\hyperref[zoption]{option}#(#\hyperref[zbits]{bits}#(64)))         /* xuseg - user mapped */
+    } in
+    if #\hyperref[znot]{not}#(#\hyperref[zgrantsAccess]{grantsAccess}#(currentAccessLevel, requiredLevel)) then
+      #\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(if (accessType == StoreData) then AdES else AdEL, vAddr)
+    else
+      let (pa, c) : (#\hyperref[zbits]{bits}#(64), bool) = match addr {
+        #\hyperref[zSome]{Some}#(a) => (a, false),
+        #\hyperref[zNone]{None}#()  => if ((~(compat32)) & (#\hyperref[zunsigned]{unsigned}#(vAddr[61..0]) > MAX_VA)) then
+            #\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(if (accessType == StoreData) then AdES else AdEL, vAddr)
+          else
+            #\hyperref[zTLBTranslatetwo]{TLBTranslate2}#(vAddr, accessType)
+      }
+      in if (#\hyperref[zunsigned]{unsigned}#(pa) > MAX_PA) then
+          #\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(if (accessType == StoreData) then AdES else AdEL, vAddr)
+        else
+          (pa, c)
+  }

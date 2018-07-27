@@ -1,0 +1,6 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zSLTU]{SLTU}#(rs, rt, rd)) =
+  {
+    let rs_val = #\hyperref[zrGPR]{rGPR}#(rs) in
+    let rt_val = #\hyperref[zrGPR]{rGPR}#(rt) in
+    #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zzzerozyextend]{zero\_extend}#(if (rs_val <_u rt_val) then 0b1 else 0b0)
+  }

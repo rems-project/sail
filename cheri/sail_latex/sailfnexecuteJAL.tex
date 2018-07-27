@@ -1,0 +1,5 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zJAL]{JAL}#(offset)) =
+  {
+    #\hyperref[zexecutezybranch]{execute\_branch}#((PC + 4)[63..28] @ offset @ 0b00);
+    #\hyperref[zwGPR]{wGPR}#(0b11111) = PC + 8;
+  }

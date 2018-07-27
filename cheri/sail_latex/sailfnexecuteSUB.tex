@@ -1,0 +1,13 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zSUB]{SUB}#(rs, rt, rd)) =
+  {
+    opA = #\hyperref[zrGPR]{rGPR}#(rs);
+    opB = #\hyperref[zrGPR]{rGPR}#(rt);
+    if #\hyperref[zNotWordVal]{NotWordVal}#(opA) | #\hyperref[zNotWordVal]{NotWordVal}#(opB) then
+      #\hyperref[zwGPR]{wGPR}#(rd) = undefined /* XXX could instead */
+    else
+      let temp33 : #\hyperref[zbits]{bits}#(33) = #\hyperref[zsignzyextend]{sign\_extend}#(opA[31..0]) - #\hyperref[zsignzyextend]{sign\_extend}#(opB[31..0]) in
+      if temp33[32] != temp33[31] then
+        (#\hyperref[zSignalException]{SignalException}#(Ov))
+      else
+        #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zsignzyextend]{sign\_extend}#(temp33[31..0])
+  }

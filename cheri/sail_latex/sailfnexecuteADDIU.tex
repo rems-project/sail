@@ -1,0 +1,8 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zADDIU]{ADDIU}#(rs, rt, imm)) =
+  {
+    opA = #\hyperref[zrGPR]{rGPR}#(rs);
+    if #\hyperref[zNotWordVal]{NotWordVal}#(opA) then
+      #\hyperref[zwGPR]{wGPR}#(rt) = undefined /* XXX could exit instead */
+    else
+      #\hyperref[zwGPR]{wGPR}#(rt) = #\hyperref[zsignzyextend]{sign\_extend}#((opA[31 .. 0]) + #\hyperref[zsignzyextend]{sign\_extend}#(imm))
+  }

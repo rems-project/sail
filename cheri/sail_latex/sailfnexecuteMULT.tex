@@ -1,0 +1,11 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zMULT]{MULT}#(rs, rt)) =
+  {
+    rsVal = #\hyperref[zrGPR]{rGPR}#(rs);
+    rtVal = #\hyperref[zrGPR]{rGPR}#(rt);
+    result : #\hyperref[zbits]{bits}#(64) = if (#\hyperref[zNotWordVal]{NotWordVal}#(rsVal) | #\hyperref[zNotWordVal]{NotWordVal}#(rtVal)) then
+        undefined
+      else
+	(rsVal[31..0]) *#\hyperref[zzys]{\_s}# (rtVal[31..0]);
+    HI = #\hyperref[zsignzyextend]{sign\_extend}#(result[63..32]);
+    LO = #\hyperref[zsignzyextend]{sign\_extend}#(result[31..0]);
+  }

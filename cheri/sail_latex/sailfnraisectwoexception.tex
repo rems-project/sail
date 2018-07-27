@@ -1,0 +1,6 @@
+function #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(capEx, regnum) =
+  let reg8 = 0b000 @ regnum in
+  if ((capEx == CapEx_AccessSystemRegsViolation) & (regnum == IDCNO)) then
+     #\hyperref[zraisezyctwozyexceptioneight]{raise\_c2\_exception8}#(CapEx_AccessCCallIDCViolation, reg8)
+  else
+     #\hyperref[zraisezyctwozyexceptioneight]{raise\_c2\_exception8}#(capEx, reg8)

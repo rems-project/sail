@@ -1,0 +1,36 @@
+function #\hyperref[zTLBTranslatetwo]{TLBTranslate2}# (vAddr, accessType) = {
+  let idx = #\hyperref[ztlbSearch]{tlbSearch}#(vAddr) in
+  match idx {
+    #\hyperref[zSome]{Some}#(idx) =>
+      let i as atom(_) = #\hyperref[zunsigned]{unsigned}#(idx) in
+      let entry = #\hyperref[zregzyderef]{reg\_deref}#(TLBEntries[i]) in
+      let entryMask = entry.#\hyperref[zpagemask]{pagemask}#() in
+      let 'evenOddBit : range(12,28) = match (entryMask) {
+        0x0000  => 12,
+        0x0003  => 14,
+        0x000f  => 16,
+        0x003f  => 18,
+        0x00ff  => 20,
+        0x03ff  => 22,
+        0x0fff  => 24,
+        0x3fff  => 26,
+        0xffff  => 28,
+        _       => undefined
+      } in
+      let isOdd = (vAddr[evenOddBit]) in
+      let (caps : #\hyperref[zbits]{bits}#(1), capl : #\hyperref[zbits]{bits}#(1), pfn : #\hyperref[zbits]{bits}#(24), d : #\hyperref[zbits]{bits}#(1), v : #\hyperref[zbits]{bits}#(1))  =
+        if (isOdd) then
+          (entry.#\hyperref[zcapsone]{caps1}#(), entry.#\hyperref[zcaplone]{capl1}#(), entry.#\hyperref[zpfnone]{pfn1}#(), entry.#\hyperref[zdone]{d1}#(), entry.#\hyperref[zvone]{v1}#())
+        else
+          (entry.#\hyperref[zcapszero]{caps0}#(), entry.#\hyperref[zcaplzero]{capl0}#(), entry.#\hyperref[zpfnzero]{pfn0}#(), entry.#\hyperref[zdzero]{d0}#(), entry.#\hyperref[zvzero]{v0}#()) in
+      if (~(v)) then
+        #\hyperref[zSignalExceptionTLB]{SignalExceptionTLB}#(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr)
+      else if ((accessType == StoreData) & ~(d)) then
+        #\hyperref[zSignalExceptionTLB]{SignalExceptionTLB}#(TLBMod, vAddr)
+      else
+        let res : #\hyperref[zbits]{bits}#(64) = #\hyperref[zzzerozyextend]{zero\_extend}#(pfn[23..(evenOddBit - 12)] @ vAddr[(evenOddBit - 1) .. 0]) in
+        (res,  #\hyperref[zbitszytozybool]{bits\_to\_bool}#(if (accessType == StoreData) then caps else capl)),
+    #\hyperref[zNone]{None}#()  =>  #\hyperref[zSignalExceptionTLB]{SignalExceptionTLB}#(
+      if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr)
+  }
+}

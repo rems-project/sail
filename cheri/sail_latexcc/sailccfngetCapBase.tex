@@ -1,0 +1,10 @@
+function #\hyperref[zgetCapBase]{getCapBase}#(c) : CapStruct -> uint64 =
+    let E = #\hyperref[zmin]{min}#(#\hyperref[zunsigned]{unsigned}#(c.E), 48) in
+    let Bc : #\hyperref[zbits]{bits}#(20) = c.B in
+    let a : #\hyperref[zbits]{bits}#(65) = #\hyperref[zzzerozyextend]{zero\_extend}#(c.address) in
+    let R : #\hyperref[zbits]{bits}#(20) = Bc - 0x01000 in /* wraps */
+    let a_mid : #\hyperref[zbits]{bits}#(20) = #\hyperref[zmask]{mask}#(a >> E) in
+    let correction = #\hyperref[zazytopzycorrection]{a\_top\_correction}#(a_mid, R, Bc) in
+    let a_top = a >> E+20 in
+    let base : #\hyperref[zbits]{bits}#(64) = #\hyperref[zmask]{mask}#(((a_top + correction) @ Bc) << E) in
+    #\hyperref[zunsigned]{unsigned}#(base)

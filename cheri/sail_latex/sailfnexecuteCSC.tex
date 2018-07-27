@@ -1,0 +1,48 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCSC]{CSC}#(cs, cb, rt, rd, offset, conditional)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cs_val = #\hyperref[zreadCapReg]{readCapReg}#(cs);
+  cb_val = #\hyperref[zreadCapRegDDC]{readCapRegDDC}#(cb);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cs)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cs)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.permit_store) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitStoreViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.permit_store_cap) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitStoreCapViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.permit_store_local_cap) & (cs_val.tag) & #\hyperref[znot]{not}# (cs_val.global) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitStoreLocalCapViolation, cb)
+  else
+    {
+      cursor = #\hyperref[zgetCapCursor]{getCapCursor}#(cb_val);
+      vAddr  = (cursor + #\hyperref[zunsigned]{unsigned}#(#\hyperref[zrGPR]{rGPR}#(rt)) + 16 * #\hyperref[zsigned]{signed}#(offset)) % #\hyperref[zpowtwo]{pow2}#(64);
+      vAddr64= #\hyperref[ztozybits]{to\_bits}#(64, vAddr);
+      if ((vAddr + cap_size) > #\hyperref[zgetCapTop]{getCapTop}#(cb_val)) then
+        #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+      else if (vAddr < #\hyperref[zgetCapBase]{getCapBase}#(cb_val)) then
+        #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+      else if ((vAddr % cap_size) != 0) then
+        #\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(AdES, vAddr64)
+      else
+        {
+          let (pAddr, noStoreCap) = #\hyperref[zTLBTranslateC]{TLBTranslateC}#(vAddr64, StoreData) in
+          if (cs_val.tag & noStoreCap) then
+            #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TLBNoStoreCap, cs)
+          else if (conditional) then
+            {
+              success = if (CP0LLBit[0]) then
+                  #\hyperref[zMEMwzytaggedzyconditional]{MEMw\_tagged\_conditional}#(pAddr, cs_val.tag, #\hyperref[zcapStructToMemBits]{capStructToMemBits}#(cs_val))
+                else
+                  false;
+              #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zzzerozyextend]{zero\_extend}#(success);
+            }
+          else
+            #\hyperref[zMEMwzytagged]{MEMw\_tagged}#(pAddr, cs_val.tag, #\hyperref[zcapStructToMemBits]{capStructToMemBits}#(cs_val));
+        }
+    }
+}

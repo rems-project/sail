@@ -1,0 +1,4 @@
+function is_none opt = match opt {
+  #\hyperref[zSome]{Some}#(_) => false,
+  #\hyperref[zNone]{None}#()  => true
+}

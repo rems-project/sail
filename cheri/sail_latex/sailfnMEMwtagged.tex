@@ -1,0 +1,8 @@
+function #\hyperref[zMEMwzytagged]{MEMw\_tagged}#(addr, tag, data) =
+{
+  /* assumes addr is cap. aligned */
+  assert(#\hyperref[zunsigned]{unsigned}#(addr) % cap_size == 0);
+  #\hyperref[zMEMea]{MEMea}#(addr, cap_size);
+  #\hyperref[zMEMval]{MEMval}#(addr, cap_size, #\hyperref[zreversezyendianness]{reverse\_endianness}#(data));
+  #\hyperref[zMEMwzytag]{MEMw\_tag}#(addr, tag);
+}

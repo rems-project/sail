@@ -1,0 +1,12 @@
+function #\hyperref[zcheckDDCPerms]{checkDDCPerms}#(ddc : CapStruct, accessType: MemAccessType) = 
+  {
+    if (#\hyperref[znot]{not}# (ddc.tag)) then
+      #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, 0b00000)
+    else if (ddc.sealed) then
+      #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, 0b00000);
+    match accessType {
+      Instruction  => assert(false), /* Only data accesses use DDC */
+      LoadData     => if (~(ddc.permit_load)) then (#\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitLoadViolation, 0b00000)),
+      StoreData    => if (~(ddc.permit_store)) then (#\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitStoreViolation, 0b00000))
+    };
+  }

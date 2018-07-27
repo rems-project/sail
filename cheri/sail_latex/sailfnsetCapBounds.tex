@@ -1,0 +1,3 @@
+function #\hyperref[zsetCapBounds]{setCapBounds}#(cap, base, top) =
+    let length : #\hyperref[zbits]{bits}#(65) = top - (0b0 @ base) in
+    (true, {cap with base = base, length = length[63..0], address = base})

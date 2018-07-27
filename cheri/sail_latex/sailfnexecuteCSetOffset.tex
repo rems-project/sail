@@ -1,0 +1,18 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCSetOffset]{CSetOffset}#(cd, cb, rt)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  let cb_val = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+  let rt_val = #\hyperref[zrGPR]{rGPR}#(rt);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cd)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cd)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if ((cb_val.tag) & (cb_val.sealed)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cb)
+  else
+    let (success, newCap) = #\hyperref[zsetCapOffset]{setCapOffset}#(cb_val, rt_val) in
+    if (success) then
+        #\hyperref[zwriteCapReg]{writeCapReg}#(cd, newCap)
+    else
+        #\hyperref[zwriteCapReg]{writeCapReg}#(cd, #\hyperref[zintzytozycap]{int\_to\_cap}#(#\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapBase]{getCapBase}#(cb_val)) + rt_val))
+}

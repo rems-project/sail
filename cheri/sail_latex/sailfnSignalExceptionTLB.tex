@@ -1,0 +1,9 @@
+function #\hyperref[zSignalExceptionTLB]{SignalExceptionTLB}#(ex, badAddr) = {
+  CP0BadVAddr = badAddr;
+  TLBContext->#\hyperref[zBadVPNtwo]{BadVPN2}#()  = (badAddr[31..13]);
+  TLBXContext->#\hyperref[zXBadVPNtwo]{XBadVPN2}#()= (badAddr[39..13]);
+  TLBXContext->#\hyperref[zXR]{XR}#()      = (badAddr[63..62]);
+  TLBEntryHi->#\hyperref[zR]{R}#()        = (badAddr[63..62]);
+  TLBEntryHi->#\hyperref[zVPNtwo]{VPN2}#()     = (badAddr[39..13]);
+  #\hyperref[zSignalException]{SignalException}#(ex);
+}

@@ -1,0 +1,18 @@
+function #\hyperref[zSignalException]{SignalException}# (ex) = 
+  {
+    if (#\hyperref[znot]{not}# (CP0Status.#\hyperref[zEXL]{EXL}#())) then {
+      let pc  = PC in 
+      let pcc = #\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(PCC) in
+      let (success, epcc) = #\hyperref[zsetCapOffset]{setCapOffset}#(pcc, pc) in
+      if (success) then
+        EPCC = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(epcc)
+      else
+        EPCC = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(#\hyperref[zintzytozycap]{int\_to\_cap}#(#\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapBase]{getCapBase}#(pcc)) + #\hyperref[zunsigned]{unsigned}#(pc)));
+    };
+
+    nextPCC    = KCC;
+    delayedPCC = KCC; /* always write delayedPCC together with nextPCC so 
+                          that non-capability branches don't override PCC */
+    let base = #\hyperref[zgetCapBase]{getCapBase}#(#\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(KCC)) in
+    #\hyperref[zSignalExceptionMIPS]{SignalExceptionMIPS}#(ex, #\hyperref[ztozybits]{to\_bits}#(64, base));
+  }

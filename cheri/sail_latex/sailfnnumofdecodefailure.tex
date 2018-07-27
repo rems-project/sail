@@ -1,0 +1,6 @@
+function num_of_decode_failure arg# = match arg# {
+  no_matching_pattern => 0,
+  unsupported_instruction => 1,
+  illegal_instruction => 2,
+  internal_error => 3
+}

@@ -1,0 +1,24 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zTLBR]{TLBR}#()) = {
+  #\hyperref[zcheckCPzeroAccess]{checkCP0Access}#();
+  let i as atom(_) = #\hyperref[zunsigned]{unsigned}#(TLBIndex) in
+  let entry = #\hyperref[zregzyderef]{reg\_deref}#(TLBEntries[i]) in {
+    TLBPageMask        = entry.#\hyperref[zpagemask]{pagemask}#();
+    TLBEntryHi->#\hyperref[zR]{R}#()    = entry.#\hyperref[zr]{r}#();
+    TLBEntryHi->#\hyperref[zVPNtwo]{VPN2}#() = entry.#\hyperref[zvpntwo]{vpn2}#();
+    TLBEntryHi->#\hyperref[zASID]{ASID}#() = entry.#\hyperref[zasid]{asid}#();
+    TLBEntryLo0->#\hyperref[zCapS]{CapS}#()= entry.#\hyperref[zcapszero]{caps0}#();
+    TLBEntryLo0->#\hyperref[zCapL]{CapL}#()= entry.#\hyperref[zcaplzero]{capl0}#();
+    TLBEntryLo0->#\hyperref[zPFN]{PFN}#() = entry.#\hyperref[zpfnzero]{pfn0}#();
+    TLBEntryLo0->#\hyperref[zC]{C}#()   = entry.#\hyperref[zczero]{c0}#();
+    TLBEntryLo0->#\hyperref[zD]{D}#()   = entry.#\hyperref[zdzero]{d0}#();
+    TLBEntryLo0->#\hyperref[zV]{V}#()   = entry.#\hyperref[zvzero]{v0}#();
+    TLBEntryLo0->#\hyperref[zG]{G}#()   = entry.#\hyperref[zg]{g}#();
+    TLBEntryLo1->#\hyperref[zCapS]{CapS}#()= entry.#\hyperref[zcapsone]{caps1}#();
+    TLBEntryLo1->#\hyperref[zCapL]{CapL}#()= entry.#\hyperref[zcaplone]{capl1}#();
+    TLBEntryLo1->#\hyperref[zPFN]{PFN}#() = entry.#\hyperref[zpfnone]{pfn1}#();
+    TLBEntryLo1->#\hyperref[zC]{C}#()   = entry.#\hyperref[zcone]{c1}#();
+    TLBEntryLo1->#\hyperref[zD]{D}#()   = entry.#\hyperref[zdone]{d1}#();
+    TLBEntryLo1->#\hyperref[zV]{V}#()   = entry.#\hyperref[zvone]{v1}#();
+    TLBEntryLo1->#\hyperref[zG]{G}#()   = entry.#\hyperref[zg]{g}#();
+  }
+}

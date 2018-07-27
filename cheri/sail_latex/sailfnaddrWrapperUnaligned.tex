@@ -1,0 +1,24 @@
+function #\hyperref[zaddrWrapperUnaligned]{addrWrapperUnaligned}#(addr, accessType, width) =
+  {
+    ddc    = #\hyperref[zcapRegToCapStruct]{capRegToCapStruct}#(DDC);
+    #\hyperref[zcheckDDCPerms]{checkDDCPerms}#(ddc, accessType);
+    cursor = #\hyperref[zgetCapCursor]{getCapCursor}#(ddc);
+    vAddr  = (cursor + #\hyperref[zunsigned]{unsigned}#(addr)) % #\hyperref[zpowtwo]{pow2}#(64);
+    woffset = vAddr % 4;
+    doffset = vAddr % 8;
+    /* Compute the address and size of the bytes touched -- this depends on alignment. */
+    let (waddr, size) : (int, int) = match width {
+      WL => (vAddr, 4 - woffset),
+      WR => (vAddr - woffset, woffset + 1),
+      DL => (vAddr, 8 - doffset),
+      DR => (vAddr - doffset, doffset + 1)
+    };
+    base   = #\hyperref[zgetCapBase]{getCapBase}#(ddc);
+    top    = #\hyperref[zgetCapTop]{getCapTop}#(ddc);
+    if ((waddr + size) > top) then
+      (#\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, 0b00000))
+    else if (waddr < base) then
+      (#\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, 0b00000))
+    else
+      #\hyperref[ztozybits]{to\_bits}#(64, vAddr);
+  }

@@ -1,0 +1,16 @@
+function #\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(addr, size, data) =
+  let ledata = #\hyperref[zreversezyendianness]{reverse\_endianness}#(data) in
+  if (addr == 0x000000007f000000) then
+  {
+    UART_WDATA   = ledata[7..0];
+    UART_WRITTEN = 0b1;
+  }
+  else
+  {
+    /* require that writes don't cross capability #\hyperref[zboundaries]{boundaries}# (should be true due to mips alignment requirements) */  
+    assert((addr & cap_addr_mask) == ((addr + #\hyperref[ztozybits]{to\_bits}#(64, size - 1)) & cap_addr_mask));
+    #\hyperref[zMEMea]{MEMea}#(addr, size);
+    #\hyperref[zMEMval]{MEMval}#(addr, size, ledata);
+    /* On cheri non-capability writes must clear the corresponding tag*/
+    #\hyperref[zMEMwzytag]{MEMw\_tag}#(addr & cap_addr_mask, false);
+  }

@@ -1,0 +1,43 @@
+function clause #\hyperref[zexecute]{execute}#(#\hyperref[zCPtrCmp]{CPtrCmp}#(rd, cb, ct, op)) = 
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(ct)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, ct)
+  else 
+    {
+      let cb_val = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+      let ct_val = #\hyperref[zreadCapReg]{readCapReg}#(ct);
+      equal  = false;
+      ltu    = false;
+      lts    = false;
+      if (cb_val.tag != ct_val.tag) then
+        {
+          if #\hyperref[znot]{not}# (cb_val.tag) then
+            {
+              ltu = true;
+              lts = true;
+            }
+        }
+      else
+        {
+          cursor1 = #\hyperref[zgetCapCursor]{getCapCursor}#(cb_val);
+          cursor2 = #\hyperref[zgetCapCursor]{getCapCursor}#(ct_val);
+          equal   = (cursor1 == cursor2);
+          ltu     = (cursor1 < cursor2);
+          lts     = #\hyperref[ztozybits]{to\_bits}#(64, cursor1) <_s #\hyperref[ztozybits]{to\_bits}#(64, cursor2);
+        };
+      let cmp : bool = match op {
+        CEQ    => equal,
+        CNE    => #\hyperref[znot]{not}# (equal),
+        CLT    => lts,
+        CLE    => lts | equal,
+        CLTU   => ltu,
+        CLEU   => ltu | equal,
+        CEXEQ  => cb_val == ct_val,
+        CNEXEQ => cb_val != ct_val
+      };
+      #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zzzerozyextend]{zero\_extend}# (cmp)
+    }
+}

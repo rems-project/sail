@@ -1,0 +1,35 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCUnseal]{CUnseal}#(cd, cs, ct)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cs_val = #\hyperref[zreadCapReg]{readCapReg}#(cs);
+  ct_val = #\hyperref[zreadCapReg]{readCapReg}#(ct);
+  ct_cursor = #\hyperref[zgetCapCursor]{getCapCursor}#(ct_val);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cd)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cd)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cs)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cs)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(ct)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, ct)
+  else if #\hyperref[znot]{not}# (cs_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, cs)
+  else if #\hyperref[znot]{not}# (ct_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, ct)
+  else if #\hyperref[znot]{not}# (cs_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cs)
+  else if (ct_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, ct)
+  else if (ct_cursor != #\hyperref[zunsigned]{unsigned}#(cs_val.otype)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TypeViolation, ct)
+  else if #\hyperref[znot]{not}# (ct_val.permit_unseal) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitUnsealViolation, ct)
+  else if (ct_cursor <  #\hyperref[zgetCapBase]{getCapBase}#(ct_val)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, ct)
+  else if (ct_cursor >= #\hyperref[zgetCapTop]{getCapTop}#(ct_val)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, ct)
+  else
+    #\hyperref[zwriteCapReg]{writeCapReg}#(cd, {cs_val with 
+      sealed=false,
+      otype=#\hyperref[zzzeros]{zeros}#(),
+      global=(cs_val.global & ct_val.global)
+    })
+}

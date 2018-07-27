@@ -1,0 +1,6 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zDMULTU]{DMULTU}#(rs, rt)) =
+  {
+    result = #\hyperref[zrGPR]{rGPR}#(rs) *_u #\hyperref[zrGPR]{rGPR}#(rt);
+    HI = (result[127..64]);
+    LO = (result[63..0]);
+  }

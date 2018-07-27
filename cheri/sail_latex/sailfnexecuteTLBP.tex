@@ -1,0 +1,14 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zTLBP]{TLBP}#()) = {
+  #\hyperref[zcheckCPzeroAccess]{checkCP0Access}#();
+  let result = #\hyperref[ztlbSearch]{tlbSearch}#(TLBEntryHi.#\hyperref[zbits]{bits}#()) in
+  match result {
+    (#\hyperref[zSome]{Some}#(idx))  => {
+      TLBProbe = [bitzero];
+      TLBIndex = idx;
+    },
+    #\hyperref[zNone]{None}#()  => {
+      TLBProbe = [bitone];
+      TLBIndex = 0b000000;
+    }
+  }
+}

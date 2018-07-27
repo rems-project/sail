@@ -1,0 +1,16 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zDDIV]{DDIV}#(rs, rt)) =
+  {
+    rsVal = #\hyperref[zsigned]{signed}#(#\hyperref[zrGPR]{rGPR}#(rs));
+    rtVal = #\hyperref[zsigned]{signed}#(#\hyperref[zrGPR]{rGPR}#(rt));
+    let (q , r) =
+      if (rtVal == 0)
+        then (undefined : #\hyperref[zbits]{bits}#(64), undefined : #\hyperref[zbits]{bits}#(64))
+      else
+        let qi = #\hyperref[zquotzyroundzyzzero]{quot\_round\_zero}#(rsVal, rtVal) in
+        let ri = (rsVal - (qi * rtVal)) in
+	(#\hyperref[ztozybits]{to\_bits}#(64, qi), #\hyperref[ztozybits]{to\_bits}#(64, ri)) in
+    {
+      LO    = q;
+      HI    = r;
+    }
+  }

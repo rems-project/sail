@@ -1,0 +1,39 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCLoad]{CLoad}#(rd, cb, rt, offset, signext, width, linked)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cb_val = #\hyperref[zreadCapRegDDC]{readCapRegDDC}#(cb);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.permit_load) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_PermitLoadViolation, cb)
+  else
+    {
+      let 'size   = #\hyperref[zwordWidthBytes]{wordWidthBytes}#(width);
+      let cursor  = #\hyperref[zgetCapCursor]{getCapCursor}#(cb_val);
+      let vAddr   = (cursor + #\hyperref[zunsigned]{unsigned}#(#\hyperref[zrGPR]{rGPR}#(rt)) + size*#\hyperref[zsigned]{signed}#(offset)) % #\hyperref[zpowtwo]{pow2}#(64);
+      let vAddr64 = #\hyperref[ztozybits]{to\_bits}#(64, vAddr);
+      if ((vAddr + size) > #\hyperref[zgetCapTop]{getCapTop}#(cb_val)) then
+        #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+      else if (vAddr < #\hyperref[zgetCapBase]{getCapBase}#(cb_val)) then
+        #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+      else if #\hyperref[znot]{not}# (#\hyperref[zisAddressAligned]{isAddressAligned}#(vAddr64, width)) then
+        #\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(AdEL, vAddr64)
+      else
+        {
+          pAddr      = (#\hyperref[zTLBTranslate]{TLBTranslate}#(vAddr64, LoadData));
+          memResult : #\hyperref[zbits]{bits}#(64) = if (linked) then
+              {
+                CP0LLBit  = 0b1;
+                CP0LLAddr = pAddr;
+                #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzyreservezywrapper]{MEMr\_reserve\_wrapper}#(pAddr, size), signext)
+              }
+            else
+              #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzywrapper]{MEMr\_wrapper}#(pAddr, size), signext);
+          #\hyperref[zwGPR]{wGPR}#(rd) = memResult;
+        }
+    }
+}

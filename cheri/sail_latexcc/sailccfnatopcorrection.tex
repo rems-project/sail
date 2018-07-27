@@ -1,0 +1,7 @@
+function #\hyperref[zazytopzycorrection]{a\_top\_correction}#(a_mid, R, bound) : (#\hyperref[zbits]{bits}#(20), #\hyperref[zbits]{bits}#(20), #\hyperref[zbits]{bits}#(20)) -> #\hyperref[zbits]{bits}#(65) =
+    match (a_mid <_u R, bound <_u R) {
+      (false, false)  => #\hyperref[zzzeros]{zeros}#(),
+      (false, true)   => #\hyperref[zzzerozyextend]{zero\_extend}#(0b1),
+      (true, false)   => #\hyperref[zones]{ones}#(),
+      (true, true)    => #\hyperref[zzzeros]{zeros}#()
+    }

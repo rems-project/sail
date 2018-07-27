@@ -1,0 +1,70 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zMFCzero]{MFC0}#(rt, rd, sel, double)) = {
+  #\hyperref[zcheckCPzeroAccess]{checkCP0Access}#();
+  let result : #\hyperref[zbits]{bits}#(64) = match (rd, sel)
+        {
+          (0b00000,0b000) => let idx : #\hyperref[zbits]{bits}#(31) = #\hyperref[zzzerozyextend]{zero\_extend}#(TLBIndex) in
+			         (0x00000000 @ TLBProbe @ idx),  /* 0, TLB Index */
+          (0b00001,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(TLBRandom),    /* 1, TLB Random */
+          (0b00010,0b000) => TLBEntryLo0.#\hyperref[zbits]{bits}#(), /* 2, TLB EntryLo0 */
+          (0b00011,0b000) => TLBEntryLo1.#\hyperref[zbits]{bits}#(), /* 3, TLB EntryLo1 */
+          (0b00100,0b000) => TLBContext.#\hyperref[zbits]{bits}#(),  /* 4, TLB Context */
+          (0b00100,0b010) => CP0UserLocal,
+          (0b00101,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(TLBPageMask @ 0x000), /* 5, TLB PageMask */
+          (0b00110,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(TLBWired),   /* 6, TLB Wired */
+          (0b00111,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(CP0HWREna),  /* 7, HWREna */
+          (0b01000,0b000) => CP0BadVAddr,      /* 8, BadVAddr reg */
+          (0b01000,0b001) => #\hyperref[zzzerozyextend]{zero\_extend}#(0b0),        /* 8, BadInstr reg XXX TODO */
+          (0b01001,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(CP0Count),   /* 9, Count reg */
+          (0b01010,0b000) => TLBEntryHi.#\hyperref[zbits]{bits}#(),/* 10, TLB EntryHi */
+          (0b01011,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(CP0Compare), /* 11, Compare reg */
+          (0b01100,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(CP0Status.#\hyperref[zbits]{bits}#()),  /* 12, Status reg */
+          (0b01101,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(CP0Cause.#\hyperref[zbits]{bits}#()),   /* 13, Cause reg */
+          (0b01110,0b000) => CP0EPC,           /* 14, EPC */
+          (0b01111,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(0x00000400), /* 15, sel 0: PrID processor ID */
+          (0b01111,0b110) => #\hyperref[zzzerozyextend]{zero\_extend}#(0b0),        /* 15, sel 6: CHERI core ID */
+          (0b01111,0b111) => #\hyperref[zzzerozyextend]{zero\_extend}#(0b0),        /* 15, sel 7: CHERI thread ID */
+          (0b10000,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(0b1 /* M */      /* 16, sel 0: Config0 */
+                                 @ 0b000000000000000 /* Impl */
+                                 @ 0b1               /* BE */
+                                 @ 0b10              /* AT */
+                                 @ 0b000             /* AR */
+                                 @ 0b001             /* MT standard TLB */
+                                 @ 0b0000            /* zero */
+                                 @ CP0ConfigK0),
+          (0b10000,0b001) => #\hyperref[zzzerozyextend]{zero\_extend}#( /* 16, sel 1: Config1 */
+                                          0b1      /* M */
+                                        @ TLBIndexMax /* MMU size-1 */
+                                        @ 0b000    /* IS icache sets */
+                                        @ 0b000    /* IL icache lines */
+                                        @ 0b000    /* IA icache assoc. */
+                                        @ 0b000    /* DS dcache sets */
+                                        @ 0b000    /* DL dcache lines */
+                                        @ 0b000    /* DA dcache assoc. */
+                                        @ #\hyperref[zboolzytozybits]{bool\_to\_bits}#(have_cp2) /* C2 CP2 presence */
+                                        @ 0b0      /* MD MDMX implemented */
+                                        @ 0b0      /* PC performance counters */
+                                        @ 0b0      /* WR watch registers */
+                                        @ 0b0      /* CA 16e code compression */
+                                        @ 0b0      /* EP EJTAG */
+                                        @ 0b0),     /* FP FPU present */
+          (0b10000,0b010) => #\hyperref[zzzerozyextend]{zero\_extend}#( /* 16, sel 2: Config2 */
+                                          0b1     /* M */
+                                        @ 0b000   /* TU L3 control  */
+                                        @ 0b0000  /* TS L3 sets */
+                                        @ 0b0000  /* TL L3 lines */
+                                        @ 0b0000  /* TA L3 assoc. */
+                                        @ 0b0000  /* SU L2 control */
+                                        @ 0b0000  /* SS L2 sets */
+                                        @ 0b0000  /* SL L2 lines */
+                                        @ 0b0000), /* SA L2 assoc. */
+          (0b10000,0b011) => 0x0000000000002000, /* 16, sel 3: Config3 zero except for bit 13 == ulri */
+          (0b10000,0b101) => 0x0000000000000000, /* 16, sel 5: Config5 beri specific -- no extended TLB */
+          (0b10001,0b000) => CP0LLAddr,        /* 17, sel 0: LLAddr */
+          (0b10010,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(0b0),        /* 18, WatchLo */
+          (0b10011,0b000) => #\hyperref[zzzerozyextend]{zero\_extend}#(0b0),        /* 19, WatchHi */
+          (0b10100,0b000) => TLBXContext.#\hyperref[zbits]{bits}#(), /* 20, XContext */
+          (0b11110,0b000) => CP0ErrorEPC,      /* 30, ErrorEPC */
+          _               => (#\hyperref[zSignalException]{SignalException}#(ResI))
+        } in
+  #\hyperref[zwGPR]{wGPR}#(rt) = if (double) then result else #\hyperref[zsignzyextend]{sign\_extend}#(result[31..0])
+}

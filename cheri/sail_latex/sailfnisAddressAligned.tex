@@ -1,0 +1,3 @@
+function #\hyperref[zisAddressAligned]{isAddressAligned}# (addr, wordType) =
+  let a = #\hyperref[zunsigned]{unsigned}#(addr) in
+  a / alignment_width == (a + #\hyperref[zwordWidthBytes]{wordWidthBytes}#(wordType) - 1) / alignment_width

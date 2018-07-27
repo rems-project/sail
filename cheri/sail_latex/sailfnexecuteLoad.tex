@@ -1,0 +1,30 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zLoad]{Load}#(width, sign, linked, base, rt, offset)) =
+  {
+    vAddr : #\hyperref[zbits]{bits}#(64) = #\hyperref[zaddrWrapper]{addrWrapper}#(#\hyperref[zsignzyextend]{sign\_extend}#(offset) + #\hyperref[zrGPR]{rGPR}#(base), LoadData, width);
+    if ~ (#\hyperref[zisAddressAligned]{isAddressAligned}#(vAddr, width)) then
+      (#\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(AdEL, vAddr)) /* unaligned access */
+    else
+      let pAddr = (#\hyperref[zTLBTranslate]{TLBTranslate}#(vAddr, LoadData)) in
+          {
+            memResult : #\hyperref[zbits]{bits}#(64) = if (linked) then
+                {
+                  CP0LLBit  = 0b1;
+                  CP0LLAddr = pAddr;
+                  match width {
+                   W => #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzyreservezywrapper]{MEMr\_reserve\_wrapper}#(pAddr, 4), sign),
+                   D => #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzyreservezywrapper]{MEMr\_reserve\_wrapper}#(pAddr, 8), sign),
+                   _ => throw(#\hyperref[zErrorzyinternalzyerror]{Error\_internal\_error}#()) /* there is no llbc or llhc */
+                  }
+                }
+              else
+                {
+                  match width {
+                   B => #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzywrapper]{MEMr\_wrapper}#(pAddr, 1), sign),
+                   H => #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzywrapper]{MEMr\_wrapper}#(pAddr, 2), sign),
+                   W => #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzywrapper]{MEMr\_wrapper}#(pAddr, 4), sign),
+                   D => #\hyperref[zextendLoad]{extendLoad}#(#\hyperref[zMEMrzywrapper]{MEMr\_wrapper}#(pAddr, 8), sign)
+                  }
+                };
+            #\hyperref[zwGPR]{wGPR}#(rt) = memResult
+          }
+  }

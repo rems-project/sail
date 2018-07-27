@@ -1,0 +1,6 @@
+function #\hyperref[zgetCapLength]{getCapLength}#(c) : CapStruct -> CapLen =
+         let 'top = #\hyperref[zgetCapTop]{getCapTop}#(c) in
+         let 'base = #\hyperref[zgetCapBase]{getCapBase}#(c) in {
+             assert (top >= base);
+             top - base
+         }

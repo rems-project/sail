@@ -1,0 +1,5 @@
+function  #\hyperref[zSignalExceptionBadAddr]{SignalExceptionBadAddr}#(ex, badAddr) =
+  {
+    CP0BadVAddr = badAddr;
+    #\hyperref[zSignalException]{SignalException}#(ex);
+  }

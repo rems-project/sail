@@ -1,0 +1,25 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCSetBoundsImmediate]{CSetBoundsImmediate}#(cd, cb, imm)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  cb_val = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+  immU   = #\hyperref[zunsigned]{unsigned}#(imm);
+  cursor = #\hyperref[zgetCapCursor]{getCapCursor}#(cb_val);
+  base   = #\hyperref[zgetCapBase]{getCapBase}#(cb_val);
+  top    = #\hyperref[zgetCapTop]{getCapTop}#(cb_val);
+  newTop = cursor + immU;
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cd)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cd)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if #\hyperref[znot]{not}# (cb_val.tag) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_SealViolation, cb)
+  else if (cursor < base) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+  else if (newTop > top) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_LengthViolation, cb)
+  else
+    let (_, newCap) = #\hyperref[zsetCapBounds]{setCapBounds}#(cb_val, #\hyperref[ztozybits]{to\_bits}#(64, cursor), #\hyperref[ztozybits]{to\_bits}#(65, newTop)) in
+    #\hyperref[zwriteCapReg]{writeCapReg}#(cd, newCap) /* ignore exact */
+}

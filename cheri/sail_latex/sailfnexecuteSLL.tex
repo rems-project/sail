@@ -1,0 +1,5 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zSLL]{SLL}#(rt, rd, sa)) =
+  {
+    rt32     = #\hyperref[zrGPR]{rGPR}#(rt)[31..0];
+    #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zsignzyextend]{sign\_extend}#(rt32 << sa);
+  }

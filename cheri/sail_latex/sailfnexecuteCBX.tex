@@ -1,0 +1,11 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCBX]{CBX}#(cb, imm, notset)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if (((#\hyperref[zreadCapReg]{readCapReg}#(cb)).tag) ^ notset) then
+    {
+      let offset : #\hyperref[zbits]{bits}#(64) = (#\hyperref[zsignzyextend]{sign\_extend}#(imm @ 0b00) + 4) in
+      #\hyperref[zexecutezybranch]{execute\_branch}#(PC + offset);
+    }
+}

@@ -1,0 +1,6 @@
+val plain_vector_access = {
+  ocaml: "access",
+  lem: "access_list_dec",
+  coq: "vec_access_dec",
+  c: "vector_access"
+} : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), atom('m)) -> 'a

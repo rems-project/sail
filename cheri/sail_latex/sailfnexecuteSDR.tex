@@ -1,0 +1,20 @@
+function clause #\hyperref[zexecute]{execute}#(#\hyperref[zSDR]{SDR}#(base, rt, offset)) =
+  {
+        vAddr = #\hyperref[zaddrWrapperUnaligned]{addrWrapperUnaligned}#(#\hyperref[zsignzyextend]{sign\_extend}#(offset) + #\hyperref[zrGPR]{rGPR}#(base), StoreData, DR);
+        let pAddr = #\hyperref[zTLBTranslate]{TLBTranslate}#(vAddr, StoreData) in
+          {
+            reg_val = #\hyperref[zrGPR]{rGPR}#(rt);
+            wordAddr = pAddr[63..3] @ 0b000;
+            match vAddr[2..0]
+            {
+              0b000  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 1) = reg_val[07..0]),
+              0b001  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 2) = reg_val[15..0]),
+              0b010  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 3) = reg_val[23..0]),
+              0b011  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 4) = reg_val[31..0]),
+              0b100  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 5) = reg_val[39..0]),
+              0b101  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 6) = reg_val[47..0]),
+              0b110  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 7) = reg_val[55..0]),
+              0b111  => (#\hyperref[zMEMwzywrapper]{MEMw\_wrapper}#(wordAddr, 8) = reg_val[63..0])
+            }
+          }
+      }

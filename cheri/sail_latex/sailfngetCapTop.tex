@@ -1,0 +1,1 @@
+function #\hyperref[zgetCapTop]{getCapTop}#(c)    : CapStruct -> CapLen = #\hyperref[zunsigned]{unsigned}#(c.base) + #\hyperref[zunsigned]{unsigned}#(c.length) /* XXX bug here? -- should be mod 2^64 */

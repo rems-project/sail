@@ -1,0 +1,13 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCClearTag]{CClearTag}#(cd, cb)) =
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cd)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cd)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else
+    {
+      cb_val = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+      #\hyperref[zwriteCapReg]{writeCapReg}#(cd, {cb_val with tag=false});
+    }
+}

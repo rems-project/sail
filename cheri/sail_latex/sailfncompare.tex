@@ -1,0 +1,11 @@
+function #\hyperref[zcompare]{compare}# (cmp, valA, valB) =
+  match cmp {
+    EQ   => valA ==   valB,
+    NE   => valA !=   valB,
+    GE   => valA >=_s valB,
+    GEU  => valA >=_u valB,
+    GT   => valB <_s  valA,
+    LE   => valB >=_s valA,
+    LT   => valA <_s  valB,
+    LTU  => valA <_u  valB
+  }

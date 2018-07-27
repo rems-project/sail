@@ -1,0 +1,14 @@
+function clause #\hyperref[zexecute]{execute}#(#\hyperref[zCSub]{CSub}#(rd, cb, ct)) = 
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  let ct_val = #\hyperref[zreadCapReg]{readCapReg}#(ct);
+  let cb_val = #\hyperref[zreadCapReg]{readCapReg}#(cb);
+  if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(cb)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, cb)
+  else if (#\hyperref[zregisterzyinaccessible]{register\_inaccessible}#(ct)) then
+    #\hyperref[zraisezyctwozyexception]{raise\_c2\_exception}#(CapEx_AccessSystemRegsViolation, ct)
+  else 
+    {
+      #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapCursor]{getCapCursor}#(cb_val) - #\hyperref[zgetCapCursor]{getCapCursor}#(ct_val))
+    }
+}

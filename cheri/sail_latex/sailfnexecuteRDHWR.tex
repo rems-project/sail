@@ -1,0 +1,18 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zRDHWR]{RDHWR}#(rt, rd)) = {
+  let accessLevel = #\hyperref[zgetAccessLevel]{getAccessLevel}#() in
+  let haveAccessLevel : bool = accessLevel == Kernel in
+  let haveCU0 : bool = bitone == (CP0Status.#\hyperref[zCU]{CU}#()[0]) in
+  let rdi as atom(_) = #\hyperref[zunsigned]{unsigned}#(rd) in
+  let haveHWREna : bool = bitone == (CP0HWREna[rdi]) in
+  if ~(haveAccessLevel | haveCU0 | haveHWREna) then
+    (#\hyperref[zSignalException]{SignalException}#(ResI));
+  let temp : #\hyperref[zbits]{bits}#(64) = match rd {
+    0b00000  => #\hyperref[zzzerozyextend]{zero\_extend}#([bitzero]),  /* CPUNum */
+    0b00001  => #\hyperref[zzzerozyextend]{zero\_extend}#([bitzero]),  /* SYNCI_step */
+    0b00010  => #\hyperref[zzzerozyextend]{zero\_extend}#(CP0Count), /* Count */
+    0b00011  => #\hyperref[zzzerozyextend]{zero\_extend}#([bitone]),   /* Count resolution */
+    0b11101  => CP0UserLocal,   /* User local register */
+    _        => (#\hyperref[zSignalException]{SignalException}#(ResI))
+  } in
+  #\hyperref[zwGPR]{wGPR}#(rt) = temp;
+}

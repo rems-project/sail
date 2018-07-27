@@ -1,0 +1,8 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zCGetCause]{CGetCause}#(rd)) = 
+{
+  #\hyperref[zcheckCPtwousable]{checkCP2usable}#();
+  if #\hyperref[znot]{not}# (#\hyperref[zpcczyaccesszysystemzyregs]{pcc\_access\_system\_regs}# ()) then
+    #\hyperref[zraisezyctwozyexceptionzynoreg]{raise\_c2\_exception\_noreg}#(CapEx_AccessSystemRegsViolation)
+  else
+    #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zzzerozyextend]{zero\_extend}#(CapCause.#\hyperref[zbits]{bits}#())
+}

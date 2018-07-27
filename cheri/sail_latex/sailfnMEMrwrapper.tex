@@ -1,0 +1,13 @@
+function #\hyperref[zMEMrzywrapper]{MEMr\_wrapper}# (addr, size) =
+    if (addr == 0x000000007f000000) then
+      {
+        let rvalid = UART_RVALID in
+        {
+          UART_RVALID = [bitzero];
+          #\hyperref[zmask]{mask}#(0x00000000 @ UART_RDATA @ rvalid @ 0b0000000 @ 0x0000)
+        }
+      }
+    else if (addr == 0x000000007f000004) then
+      #\hyperref[zmask]{mask}#(0x000000000004ffff) /* Always plenty of write space available and jtag activity */
+    else
+      #\hyperref[zreversezyendianness]{reverse\_endianness}#(#\hyperref[zMEMr]{MEMr}#(addr, size)) /* MEMr assumes little endian */

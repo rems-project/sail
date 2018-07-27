@@ -1,0 +1,5 @@
+function clause #\hyperref[zexecute]{execute}# (#\hyperref[zMOVZ]{MOVZ}#(rs, rt, rd)) =
+  {
+    if (#\hyperref[zrGPR]{rGPR}#(rt) == 0x0000000000000000) then
+      #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zrGPR]{rGPR}#(rs)
+  }

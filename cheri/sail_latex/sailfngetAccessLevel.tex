@@ -1,0 +1,10 @@
+function #\hyperref[zgetAccessLevel]{getAccessLevel}#() =
+  if ((CP0Status.#\hyperref[zEXL]{EXL}#()) | (CP0Status.#\hyperref[zERL]{ERL}#())) then
+    Kernel
+  else match CP0Status.#\hyperref[zKSU]{KSU}#()
+    {
+      0b00  => Kernel,
+      0b01  => Supervisor,
+      0b10  => User,
+      _     => User /* behaviour undefined, assume user */
+    }

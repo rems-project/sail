@@ -1,0 +1,9 @@
+function #\hyperref[zraisezyctwozyexceptioneight]{raise\_c2\_exception8}#(capEx, regnum) =
+  {
+    CapCause->#\hyperref[zExcCode]{ExcCode}#() = #\hyperref[zCapExCode]{CapExCode}#(capEx);
+    CapCause->#\hyperref[zRegNum]{RegNum}#()  = regnum;
+    let mipsEx = 
+      if ((capEx == CapEx_CallTrap) | (capEx == CapEx_ReturnTrap)) 
+      then C2Trap else C2E in
+    #\hyperref[zSignalException]{SignalException}#(mipsEx);
+  }
