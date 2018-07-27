@@ -1953,6 +1953,25 @@ let subtype_check env typ1 typ2 =
    of these type annotations. *)
 type tannot = (Env.t * typ * effect) option
 
+let mk_tannot env typ effect = Some (env, typ, effect)
+
+let empty_tannot = None
+let is_empty_tannot = function
+  | None -> true
+  | Some _ -> false
+
+let destruct_tannot tannot = tannot
+
+let string_of_tannot tannot =
+  match destruct_tannot tannot with
+  | Some (_, typ, eff) ->
+     "Some (_, " ^ string_of_typ typ ^ ", " ^ string_of_effect eff ^ ")"
+  | None -> "None"
+
+let replace_typ typ = function
+  | Some (env, _, eff) -> Some (env, typ, eff)
+  | None -> None
+
 let infer_lit env (L_aux (lit_aux, l) as lit) =
   match lit_aux with
   | L_unit -> unit_typ

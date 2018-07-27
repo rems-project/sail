@@ -220,7 +220,23 @@ val dvector_typ : Env.t -> nexp -> typ -> typ
 val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
 
 (** The type of type annotations *)
-type tannot = (Env.t * typ * effect) option
+type tannot
+
+(** The canonical view of a type annotation is that it is a tuple
+   containing an environment (env), a type (typ), and an effect such
+   that check_X env (strip_X X) typ succeeds, where X is typically exp
+   (i.e an expression). Note that it is specifically not guaranteed
+   that calling destruct_tannot followed by mk_tannot returns an
+   identical type annotation. *)
+val destruct_tannot : tannot -> (Env.t * typ * effect) option
+val mk_tannot : Env.t -> typ -> effect -> tannot
+
+val empty_tannot : tannot
+val is_empty_tannot : tannot -> bool
+
+val destruct_tannot : tannot -> (Env.t * typ * effect) option
+val string_of_tannot : tannot -> string (* For debugging only *)
+val replace_typ : typ -> tannot -> tannot
 
 (** {2 Removing type annotations} *)
 
@@ -270,7 +286,7 @@ val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
 val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 
-val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t  
+val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
 
 val prove : Env.t -> n_constraint -> bool
 

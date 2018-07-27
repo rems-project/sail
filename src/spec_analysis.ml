@@ -105,7 +105,8 @@ and free_type_names_t_args consider_var targs =
   nameset_bigunion (List.map (free_type_names_t_arg consider_var) targs)
 
 
-let rec free_type_names_tannot consider_var = function
+let rec free_type_names_tannot consider_var tannot =
+  match Type_check.destruct_tannot tannot with
   | None -> mt
   | Some (_, t, _) -> free_type_names_t consider_var t
 
