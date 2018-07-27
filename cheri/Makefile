@@ -61,6 +61,14 @@ latex_256: $(CHERI_SAILS)
 
 latex: latex_128 latex_256
 
+# to install latex in the right place - specific to PS checkouts
+CHERI_ARCH_PATH=/home/pes20/repos/ctsrd/reports/cheri-architecture
+install_latex: 
+	rm -rf $(CHERI_ARCH_PATH)/sail_latex/*.tex
+	cp sail_latex/*.tex $(CHERI_ARCH_PATH)/sail_latex
+	rm -rf $(CHERI_ARCH_PATH)/sail_latexcc/*.tex
+	cp sail_latexcc/*.tex $(CHERI_ARCH_PATH)/sail_latexcc
+
 cheri128: $(CHERI128_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml -o $@ $^
 
