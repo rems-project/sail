@@ -35,6 +35,9 @@ coverage: _sbuild/coverage.native
 riscv.c: $(SAIL_SRCS) Makefile
 	$(SAIL) -O -memo_z3 -c $(SAIL_SRCS) 1> $@
 
+latex: $(SAIL_SRCS) Makefile
+	$(SAIL) -latex -latex_prefix sail -o sail_ltx $(SAIL_SRCS)
+
 tracecmp: tracecmp.ml
 	ocamlfind ocamlopt -annot -linkpkg -package unix $^ -o $@
 
