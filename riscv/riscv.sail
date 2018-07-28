@@ -460,6 +460,33 @@ mapping clause assembly = RTYPEW(rs2, rs1, rd, op)
                       <-> rtypew_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
+union clause ast = SHIFTIWOP : (bits(5), regbits, regbits, sopw)
+
+mapping clause encdec = SHIFTIWOP(shamt, rs1, rd, RISCV_SLLIW) <-> 0b0000000 @ shamt @ rs1 @ 0b001 @ rd @ 0b0011011
+mapping clause encdec = SHIFTIWOP(shamt, rs1, rd, RISCV_SRLIW) <-> 0b0000000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
+mapping clause encdec = SHIFTIWOP(shamt, rs1, rd, RISCV_SRAIW) <-> 0b0100000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
+
+function clause execute (SHIFTIWOP(shamt, rs1, rd, op)) = {
+  let rs1_val = X(rs1);
+  let result : xlenbits = match op {
+    RISCV_SLLIW => EXTS(rs1_val[31..0] << shamt),
+    RISCV_SRLIW => EXTS(rs1_val[31..0] >> shamt),
+    RISCV_SRAIW => EXTS(shift_right_arith32(rs1_val[31..0], shamt))
+  };
+  X(rd) = result;
+  true
+}
+
+mapping shiftiwop_mnemonic : sopw <-> string = {
+  RISCV_SLLIW <-> "slliw",
+  RISCV_SRLIW <-> "srliw",
+  RISCV_SRAIW <-> "sraiw"
+}
+
+mapping clause assembly = SHIFTIWOP(shamt, rs1, rd, op)
+                      <-> shiftiwop_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ hex_bits_5(shamt)
+
+/* ****************************************************************** */
 /* FIXME: separate these out into separate ast variants */
 union clause ast = MUL : (regbits, regbits, regbits, bool, bool, bool)
 
