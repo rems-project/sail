@@ -58,6 +58,7 @@ open Pretty_print_common
 module StringSet = Set.Make(String)
 
 let opt_undef_axioms = ref false
+let opt_debug_on : string list ref = ref []
 
 (****************************************************************************
  * PPrint-based sail-to-coq pprinter
@@ -69,6 +70,7 @@ type context = {
   kid_id_renames : id KBindings.t; (* tyvar -> argument renames *)
   bound_nexps : NexpSet.t;
   build_ex_return : bool;
+  debug : bool;
 }
 let empty_ctxt = {
   early_ret = false;
@@ -76,7 +78,19 @@ let empty_ctxt = {
   kid_id_renames = KBindings.empty;
   bound_nexps = NexpSet.empty;
   build_ex_return = false;
+  debug = false;
 }
+
+let debug_depth = ref 0
+
+let rec indent n = match n with
+  | 0 -> ""
+  | n -> "|   " ^ indent (n - 1)
+
+let debug ctxt m =
+  if ctxt.debug
+  then print_endline (indent !debug_depth ^ Lazy.force m)
+  else ()
 
 let langlebar = string "<|"
 let ranglebar = string "|>"
@@ -763,12 +777,29 @@ let replace_atom_return_type ret_typ =
      true, Typ_aux (Typ_exist ([kid], nc_gteq (nvar kid) (nconstant Nat_big_num.zero), atom_typ (nvar kid)),Generated l)
   | _ -> false, ret_typ
 
+let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
+  match argty, fnty with
+  | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux (Typ_arg_nexp nexp,_)]),
+    Typ_app(Id_aux (Id "range", _), [Typ_arg_aux(Typ_arg_nexp low,_);
+                                     Typ_arg_aux(Typ_arg_nexp high,_)]) ->
+     Type_check.prove env (nc_and (nc_eq nexp low) (nc_eq nexp high))
+  | Typ_exist (_, _, Typ_aux (Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux (Typ_arg_nexp _,_)]), _)),
+    Typ_app(Id_aux (Id "range", _), [Typ_arg_aux(Typ_arg_nexp low,_);
+                                     Typ_arg_aux(Typ_arg_nexp high,_)]) ->
+     Type_check.prove env (nc_eq low high)
+  | _ -> false
 
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
   let rec top_exp (ctxt : context) (aexp_needed : bool)
     (E_aux (e, (l,annot)) as full_exp) =
+    let top_exp c a e = 
+      let () = debug_depth := !debug_depth + 1 in
+      let r = top_exp c a e in
+      let () = debug_depth := !debug_depth - 1 in
+      r
+    in
     let expY = top_exp ctxt true in
     let expN = top_exp ctxt false in
     let expV = top_exp ctxt in
@@ -984,6 +1015,7 @@ let doc_exp_lem, doc_let_lem =
                    parens (separate_map comma (expV false) args) in
             if aexp_needed then parens (align epp) else epp
           else
+            let () = debug ctxt (lazy ("Function application " ^ string_of_id f)) in
             let call, is_extern =
               if Env.is_extern f env "coq"
               then string (Env.get_extern f env "coq"), true
@@ -996,23 +1028,6 @@ let doc_exp_lem, doc_let_lem =
                  | _ -> [arg_typ], ret_typ, eff)
               | _ -> raise (Reporting_basic.err_unreachable l "Function not a function type")
             in
-            (* Insert existential unpacking of arguments where necessary *)
-            let doc_arg arg typ_from_fn =
-              let arg_pp = expY arg in
-              let arg_ty = expand_range_type (Env.expand_synonyms (env_of arg) (typ_of arg)) in
-              let typ_from_fn = expand_range_type (Env.expand_synonyms (env_of arg) typ_from_fn) in
-              (* TODO: more sophisticated check *)
-              match destruct_exist env arg_ty, destruct_exist env typ_from_fn with
-              | Some _, None -> parens (string "projT1 " ^^ arg_pp)
-              (* Usually existentials have already been built elsewhere, but this
-                 is useful for (e.g.) ranges *)
-              | None, Some _ -> parens (string "build_ex " ^^ arg_pp)
-              | _, _ -> arg_pp
-            in
-            let epp = hang 2 (flow (break 1) (call :: List.map2 doc_arg args arg_typs)) in
-            (* Decide whether to unpack an existential result, pack one, or cast.
-               To do this we compare the expected type stored in the checked expression
-               with the inferred type. *)
             let inst =
               match instantiation_of_without_type full_exp with
               | x -> x
@@ -1023,6 +1038,34 @@ let doc_exp_lem, doc_let_lem =
               | exception _ -> instantiation_of full_exp
             in
             let inst = KBindings.fold (fun k u m -> KBindings.add (orig_kid k) u m) inst KBindings.empty in
+
+            (* Insert existential unpacking of arguments where necessary *)
+            let doc_arg arg typ_from_fn =
+              let arg_pp = expY arg in
+              let arg_ty_plain = Env.expand_synonyms (env_of arg) (typ_of arg) in
+              let arg_ty = expand_range_type arg_ty_plain in
+              let typ_from_fn_plain = subst_unifiers inst typ_from_fn in
+              let typ_from_fn_plain = Env.expand_synonyms (env_of arg) typ_from_fn_plain in
+              let typ_from_fn = expand_range_type typ_from_fn_plain in
+              (* TODO: more sophisticated check *)
+              let () =
+                debug ctxt (lazy ("arg type found    " ^ string_of_typ arg_ty_plain));
+                debug ctxt (lazy ("arg type expected " ^ string_of_typ typ_from_fn_plain))
+              in
+              match destruct_exist env arg_ty, destruct_exist env typ_from_fn with
+              | Some _, None -> parens (string "projT1 " ^^ arg_pp)
+              (* Usually existentials have already been built elsewhere, but this
+                 is useful for (e.g.) ranges *)
+              | None, Some _ -> parens (string "build_ex " ^^ arg_pp)
+              | Some _, Some _ when is_range_from_atom (env_of arg) arg_ty_plain typ_from_fn_plain ->
+                 parens (string "to_range " ^^ parens (string "projT1 " ^^ arg_pp))
+              | _, _ -> arg_pp
+            in
+            let epp = hang 2 (flow (break 1) (call :: List.map2 doc_arg args arg_typs)) in
+
+            (* Decide whether to unpack an existential result, pack one, or cast.
+               To do this we compare the expected type stored in the checked expression
+               with the inferred type. *)
             let ret_typ_inst =
                  subst_unifiers inst ret_typ
             in
@@ -1033,6 +1076,10 @@ let doc_exp_lem, doc_let_lem =
               let ret_typ_inst =
                 if is_no_Z_proof_fn env f then ret_typ_inst
                 else snd (replace_atom_return_type ret_typ_inst) in
+              let () = 
+                debug ctxt (lazy ("  type returned " ^ string_of_typ ret_typ_inst));
+                debug ctxt (lazy ("  type expected " ^ string_of_typ ann_typ))
+              in
               let unpack, build_ex, in_typ, out_typ =
                 match ret_typ_inst, ann_typ with
                 | Typ_aux (Typ_exist (_,_,t1),_), Typ_aux (Typ_exist (_,_,t2),_) ->
@@ -1639,6 +1686,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
       kid_id_renames = kid_to_arg_rename;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
       build_ex_return = effectful eff && build_ex;
+      debug = List.mem (string_of_id id) (!opt_debug_on)
     } in
   (* Put the constraints after pattern matching so that any type variable that's
      been replaced by one of the term-level arguments is bound. *)

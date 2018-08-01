@@ -146,6 +146,9 @@ let options = Arg.align ([
   ( "-dcoq_warn_nonex",
     Arg.Set Rewrites.opt_coq_warn_nonexhaustive,
     "Generate warnings for non-exhaustive pattern matches in the Coq backend");
+  ( "-dcoq_debug_on",
+    Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f::!Pretty_print_coq.opt_debug_on),
+    "<function> Produce debug messages for Coq output on given function");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
     " set a custom prefix for generated latex command (default sail)");

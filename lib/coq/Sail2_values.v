@@ -1036,6 +1036,10 @@ Qed.
 
 Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; omega]) : typeclass_instances.
 
+Definition to_range (x : Z) : {y : Z & ArithFact (x <= y <= x)} := build_ex x.
+
+
+
 Instance mword_Bitvector {a : Z} `{ArithFact (a >= 0)} : (Bitvector (mword a)) := {
   bits_of v := List.map bitU_of_bool (bitlistFromWord (get_word v));
   of_bits v := option_map (fun bl => to_word isPositive (fit_bbv_word (wordFromBitlist bl))) (just_list (List.map bool_of_bitU v));
