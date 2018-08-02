@@ -10,7 +10,7 @@ val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anythi
 
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec", c: "eq_bits", coq: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
-val eq_string = {ocaml: "eq_string", lem: "eq", c: "eq_string"} : (string, string) -> bool
+val eq_string = {ocaml: "eq_string", lem: "eq", c: "eq_string", coq: "generic_eq"} : (string, string) -> bool
 
 val eq_real = {ocaml: "eq_real", lem: "eq", c: "eq_real"} : (real, real) -> bool
 
@@ -24,7 +24,7 @@ val eq_anything = {
 
 val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
 val vector_length = {ocaml: "length", lem: "length_list", c: "length", coq: "vec_length"} : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
-val list_length = {ocaml: "length", lem: "length_list", c: "length"} : forall ('a : Type). list('a) -> int
+val list_length = {ocaml: "length", lem: "length_list", c: "length", coq: "length_list"} : forall ('a : Type). list('a) -> int
 
 overload length = {bitvector_length, vector_length, list_length}
 
@@ -97,7 +97,7 @@ val vcons : forall ('n : Int) ('a : Type).
 val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append", coq: "concat_vec"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
 
-val vector_concat = {ocaml: "append", lem: "append_list"} : forall ('n : Int) ('m : Int) ('a : Type).
+val vector_concat = {ocaml: "append", lem: "append_list", coq: "append_list"} : forall ('n : Int) ('m : Int) ('a : Type).
   (vector('n, dec, 'a), vector('m, dec, 'a)) -> vector('n + 'm, dec, 'a)
 
 overload append = {bitvector_concat, vector_concat}
@@ -105,7 +105,8 @@ overload append = {bitvector_concat, vector_concat}
 val not_vec = {
   ocaml: "not_vec",
   lem: "not_vec",
-  c: "not_bits"
+  c: "not_bits",
+  coq: "not_vec"
 } : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
@@ -122,7 +123,7 @@ overload operator != = {neq_vec, neq_anything}
 
 val builtin_and_vec = {ocaml: "and_vec", c: "and_bits"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val and_vec = {lem: "and_vec", c: "and_bits"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val and_vec = {lem: "and_vec", c: "and_bits", coq: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
@@ -130,7 +131,7 @@ overload operator & = {and_bool, and_vec}
 
 val builtin_or_vec = {ocaml: "or_vec", c: "or_bits"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val or_vec = {lem: "or_vec", c: "or_bits"}: forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {lem: "or_vec", c: "or_bits", coq: "or_vec"}: forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
@@ -191,10 +192,11 @@ val putchar = {
   ocaml: "putchar",
   lem: "putchar",
   interpreter: "putchar",
-  c: "sail_putchar"
+  c: "sail_putchar",
+  coq: "putchar"
 } : int -> unit
 
-val concat_str = {ocaml: "concat_str", lem: "stringAppend", c: "concat_str"} : (string, string) -> string
+val concat_str = {ocaml: "concat_str", lem: "stringAppend", c: "concat_str", coq: "String.append"} : (string, string) -> string
 
 val DecStr = "dec_str" : int -> string
 

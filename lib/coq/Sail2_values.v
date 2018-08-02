@@ -54,7 +54,10 @@ Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> 
   Decidable_witness := proj1_sig (bool_of_sumbool (eqdec x y))
 }.
 destruct (eqdec x y); simpl; split; congruence.
-Qed.
+Defined.
+
+Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
+  Decidable_eq_from_dec String.string_dec.
 
 
 (* Project away range constraints in comparisons *)
