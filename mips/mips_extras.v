@@ -143,7 +143,7 @@ Definition euclid_modulo (m n : Z) `{ArithFact (n > 0)} : {z : Z & ArithFact (0 
 refine (existT _ (ZEuclid.modulo m n) _).
 constructor.
 destruct H.
-assert (Zabs n = n). { rewrite Zabs_eq; auto with zarith. }
+assert (Z.abs n = n). { rewrite Z.abs_eq; auto with zarith. }
 rewrite <- H at 3.
 lapply (ZEuclid.mod_always_pos m n); omega.
 Qed.
