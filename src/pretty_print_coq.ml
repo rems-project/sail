@@ -310,37 +310,70 @@ let drop_duplicate_atoms kids ty =
     | Typ_app _ -> Some full_typ
   in aux_typ ty
 
-(* TODO: parens *)
-let rec doc_nc_prop ctx (NC_aux (nc,_)) =
+(* Follows Coq precedence levels *)
+let rec doc_nc_prop ctx nc =
+  let rec l85 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | _ -> l80 nc_full
+  and l80 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | _ -> l70 nc_full
+  and l70 (NC_aux (nc,_) as nc_full) =
   match nc with
   | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
   | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
   | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
   | NC_not_equal (ne1, ne2) -> doc_op (string "<>") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_set (kid, is) -> (* TODO: is this a good translation? *)
+  | _ -> l10 nc_full
+  and l10 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_set (kid, is) ->
      separate space [string "In"; doc_var_lem ctx kid;
                      brackets (separate (string "; ")
                                  (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
-  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
   | NC_true -> string "True"
   | NC_false -> string "False"
+  | NC_or _
+  | NC_and _
+  | NC_equal _
+  | NC_bounded_ge _
+  | NC_bounded_le _
+  | NC_not_equal _ -> parens (l85 nc_full)
+  in l85 nc
 
-(* TODO: parens *)
-let rec doc_nc_exp ctx (NC_aux (nc,_)) =
-  match nc with
-  | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_not_equal (ne1, ne2) -> string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2))
-  | NC_set (kid, is) -> (* TODO: is this a good translation? *)
-     separate space [string "member_Z_list"; doc_var_lem ctx kid;
-                     brackets (separate (string "; ")
-                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-  | NC_or (nc1, nc2) -> doc_op (string "||") (doc_nc_exp ctx nc1) (doc_nc_exp ctx nc2)
-  | NC_and (nc1, nc2) -> doc_op (string "&&") (doc_nc_exp ctx nc1) (doc_nc_exp ctx nc2)
-  | NC_true -> string "true"
-  | NC_false -> string "false"
+(* Follows Coq precedence levels *)
+let doc_nc_exp ctx nc =
+  let rec l70 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+    | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+    | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+    | _ -> l50 nc_full
+  and l50 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_or (nc1, nc2) -> doc_op (string "||") (l50 nc1) (l40 nc2)
+    | _ -> l40 nc_full
+  and l40 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_and (nc1, nc2) -> doc_op (string "&&") (l40 nc1) (l10 nc2)
+    | _ -> l10 nc_full
+  and l10 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_not_equal (ne1, ne2) -> string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2))
+    | NC_set (kid, is) ->
+       separate space [string "member_Z_list"; doc_var_lem ctx kid;
+                       brackets (separate (string "; ")
+                                   (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
+    | NC_true -> string "true"
+    | NC_false -> string "false"
+    | NC_equal _
+    | NC_bounded_ge _
+    | NC_bounded_le _
+    | NC_or _
+    | NC_and _ -> parens (l70 nc_full)
+  in l70 nc
 
 let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
   match typ with
