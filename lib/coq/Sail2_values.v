@@ -1020,7 +1020,7 @@ prepare_for_solver;
  solve [apply ArithFact_mword; assumption
        | constructor; omega with Z
          (* The datatypes hints give us some list handling, esp In *)
-       | constructor; eauto with datatypes zarith sail
+       | constructor; eauto 3 with datatypes zarith sail
        | constructor; idtac "Unable to solve constraint"; dump_context; fail].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
 
