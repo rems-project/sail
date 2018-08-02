@@ -210,6 +210,8 @@ let rec ctyp_of_typ ctx typ =
 
   | Typ_exist (_, _, typ) -> ctyp_of_typ ctx typ
 
+  | Typ_var kid -> CT_poly (* c_error ~loc:l ("Polymorphic type encountered " ^ string_of_kid kid) *)
+
   | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
 
 let rec is_stack_ctyp ctyp = match ctyp with
@@ -219,6 +221,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (*FIXME*)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> true
+  | CT_poly -> true
 
 let is_stack_typ ctx typ = is_stack_ctyp (ctyp_of_typ ctx typ)
 
@@ -538,18 +541,6 @@ let clexp_ctyp = function
   | CL_have_exception -> CT_bool
   | CL_current_exception ctyp -> ctyp
 
-let rec map_instrs f (I_aux (instr, aux)) =
-  let instr = match instr with
-    | I_decl _ | I_init _ | I_reset _ | I_reinit _ -> instr
-    | I_if (cval, instrs1, instrs2, ctyp) ->
-       I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
-    | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
-    | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
-    | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
-  in
-  I_aux (instr, aux)
-
 let cval_rename from_id to_id (frag, ctyp) = (frag_rename from_id to_id frag, ctyp)
 
 let rec instr_ctyps (I_aux (instr, aux)) =
@@ -821,10 +812,12 @@ let compile_funcall l ctx id args typ =
 
   let setup_arg ctyp aval =
     let arg_setup, cval, arg_cleanup = compile_aval ctx aval in
-    setup := List.rev arg_setup @ [icomment (string_of_ctyp (cval_ctyp cval))] @ !setup;
+    setup := List.rev arg_setup @ [icomment (string_of_ctyp ctyp ^ " <- " ^ string_of_ctyp (cval_ctyp cval))] @ !setup;
     cleanup := arg_cleanup @ !cleanup;
     let have_ctyp = cval_ctyp cval in
-    if ctyp_equal ctyp have_ctyp then
+    if is_polymorphic ctyp then
+      (F_poly (fst cval), have_ctyp)
+    else if ctyp_equal ctyp have_ctyp then
       cval
     else
       let gs = gensym () in
@@ -873,7 +866,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      let id_ctyp = ctyp_of_typ ctx typ in
      c_debug (lazy ("Adding local " ^ string_of_id pid ^ " : " ^ string_of_ctyp id_ctyp));
      let ctx = { ctx with locals = Bindings.add pid (Immutable, id_ctyp) ctx.locals } in
-     [idecl ctyp pid; icopy (CL_id (pid, id_ctyp)) cval], [iclear id_ctyp pid], ctx
+     [idecl id_ctyp pid; icopy (CL_id (pid, id_ctyp)) cval], [iclear id_ctyp pid], ctx
 
   | AP_tup apats, (frag, ctyp) ->
      begin
@@ -1799,6 +1792,36 @@ let flatten_instrs ctx =
 
   | cdef -> [cdef]
 
+let rec specialize_variants ctx =
+  let specialize_constructor ctx ctor_id ctyp =
+    let ctyps = match ctyp with
+    | CT_tup ctyps -> ctyps
+    | ctyp -> [ctyp]
+    in
+    function
+    | I_aux (I_funcall (clexp, extern, id, cvals), aux) as instr when Id.compare id ctor_id = 0 ->
+       assert (List.length ctyps = List.length cvals);
+       List.iter2 (fun cval ctyp -> print_endline (Pretty_print_sail.to_string (pp_cval cval) ^ " -> " ^ string_of_ctyp ctyp)) cvals ctyps;
+       instr
+    | instr -> instr
+  in
+
+  function
+  | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
+     let polymorphic_ctors = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) ctors in
+     List.iter (fun (id, ctyp) -> prerr_endline (Printf.sprintf "%s : %s" (string_of_id id) (string_of_ctyp ctyp))) polymorphic_ctors;
+     let cdefs =
+       List.fold_left (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
+                      cdefs
+                      polymorphic_ctors
+     in
+     cdef :: specialize_variants ctx cdefs
+
+  | cdef :: cdefs ->
+     cdef :: specialize_variants ctx cdefs
+
+  | [] -> []
+
               (*
 (* When this optimization fires we know we have bytecode of the form
 
@@ -1867,6 +1890,7 @@ let optimize ctx cdefs =
   let nothing cdefs = cdefs in
   cdefs
   |> (if !optimize_hoist_allocations then concatMap (hoist_allocations ctx) else nothing)
+  |> specialize_variants ctx
 (* |> (if !optimize_struct_updates then concatMap (fix_struct_updates ctx) else nothing) *)
 
 (**************************************************************************)
@@ -1896,6 +1920,7 @@ let rec sgen_ctyp = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
+  | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
@@ -1914,6 +1939,7 @@ let rec sgen_ctyp_name = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
+  | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
 let sgen_cval_param (frag, ctyp) =
   match ctyp with
@@ -2120,7 +2146,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      separate_map hardline (fun str -> string ("  " ^ str)) (List.rev prev)
      ^^ hardline
      ^^ string (Printf.sprintf "  return %s;" ret)
-        
+
   | I_comment str ->
      string ("  /* " ^ str ^ " */")
 

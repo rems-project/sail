@@ -164,6 +164,7 @@ let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_have_exception -> "have_exception"
   | F_current_exception -> "(*current_exception)"
   | F_raw raw -> raw
+  | F_poly f -> "POLY(" ^ string_of_fragment ~zencode:zencode f ^ ")"
 and string_of_fragment' ?zencode:(zencode=true) f =
   match f with
   | F_op _ | F_unary _ -> "(" ^ string_of_fragment ~zencode:zencode f ^ ")"
@@ -171,7 +172,7 @@ and string_of_fragment' ?zencode:(zencode=true) f =
 
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
-let rec string_of_ctyp = function
+and string_of_ctyp = function
   | CT_int -> "mpz_t"
   | CT_bits true -> "bv_t(dec)"
   | CT_bits false -> "bv_t(inc)"
@@ -189,6 +190,15 @@ let rec string_of_ctyp = function
   | CT_vector (false, ctyp) -> "vector(inc, " ^ string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "list(" ^ string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "ref(" ^ string_of_ctyp ctyp ^ ")"
+  | CT_poly -> "*"
+
+let rec is_polymorphic = function
+  | CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string -> false
+  | CT_tup ctyps -> List.exists is_polymorphic ctyps
+  | CT_enum _ -> false
+  | CT_struct (_, ctors) | CT_variant (_, ctors) -> List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors
+  | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> is_polymorphic ctyp
+  | CT_poly -> true
 
 let pp_id id =
   string (string_of_id id)
@@ -475,3 +485,41 @@ let make_dot id graph =
   output_string out_chan "}\n";
   Util.opt_colors := true;
   close_out out_chan
+
+(** Map over each instruction within an instruction, bottom-up *)
+let rec map_instr f (I_aux (instr, aux)) =
+  let instr = match instr with
+    | I_decl _ | I_init _ | I_reset _ | I_reinit _
+      | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
+      | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
+    | I_if (cval, instrs1, instrs2, ctyp) ->
+       I_if (cval, List.map (map_instr f) instrs1, List.map (map_instr f) instrs2, ctyp)
+    | I_block instrs ->
+       I_block (List.map (map_instr f) instrs)
+    | I_try_block instrs ->
+       I_try_block (List.map (map_instr f) instrs)
+  in
+  f (I_aux (instr, aux))
+
+(** Map over each instruction in a cdef using map_instr *)
+let cdef_map_instr f = function
+  | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, List.map (map_instr f) instrs)
+  | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr f) instrs)
+  | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr f) instrs)
+  | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr f) instrs)
+  | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr f) instrs)
+  | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
+  | CDEF_type tdef -> CDEF_type tdef
+
+(* Map over all sequences of instructions contained within an instruction *)
+let rec map_instrs f (I_aux (instr, aux)) =
+  let instr = match instr with
+    | I_decl _ | I_init _ | I_reset _ | I_reinit _ -> instr
+    | I_if (cval, instrs1, instrs2, ctyp) ->
+       I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
+    | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
+    | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
+    | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
+  in
+  I_aux (instr, aux)

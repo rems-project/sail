@@ -494,6 +494,7 @@ let specialize_variants ((Defs defs) as ast) env =
          let specialize_tu (Tu_aux (Tu_ty_id (typ, id), annot)) =
            ctors := id :: !ctors;
            let is = instantiations_of id ast in
+           List.iter (fun i -> print_endline (string_of_instantiation i)) is;
            let is = List.sort_uniq (fun i1 i2 -> String.compare (string_of_instantiation i1) (string_of_instantiation i2)) is in
            List.map (fun i ->
                let i = fix_instantiation i in
@@ -525,7 +526,10 @@ let specialize_variants ((Defs defs) as ast) env =
 let rec specialize ast env =
   let ids = polymorphic_functions (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) ast in
   if IdSet.is_empty ids then
+    ast, env
+           (*
     specialize_variants ast env
+            *)
   else
     let ast, env = specialize_ids ids ast in
     specialize ast env

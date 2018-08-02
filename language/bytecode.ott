@@ -60,6 +60,7 @@ fragment :: 'F_' ::=
   | string ( fragment0 , ... , fragmentn ) :: :: call
   | fragment . string                      :: :: field
   | string                                 :: :: raw
+  | poly fragment                          :: :: poly
 
 % init / clear -> create / kill
 
@@ -96,6 +97,7 @@ ctyp :: 'CT_' ::=
   | list ( ctyp )                  :: :: list
 % A vector type for non-bit vectors, and a list type.
   | ref ( ctyp )                   :: :: ref
+  | poly                           :: :: poly
 
 cval :: 'CV_' ::=
   {{ ocaml fragment * ctyp }}
