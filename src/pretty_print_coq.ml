@@ -1311,7 +1311,7 @@ let doc_exp_lem, doc_let_lem =
             let epp =
               let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
               let middle =
-                match fst (untyp_pat pat) with
+                match pat with
                 | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
                    string ">>"
                 | P_aux (P_id id,_) ->
