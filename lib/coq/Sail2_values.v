@@ -1017,7 +1017,8 @@ Ltac prepare_for_solver :=
 Ltac solve_arithfact :=
 prepare_for_solver;
 (*dump_context;*)
- solve [apply ArithFact_mword; assumption
+ solve [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; instantiate (1 := fun _ => True); constructor; constructor end
+       | apply ArithFact_mword; assumption
        | constructor; omega with Z
          (* The datatypes hints give us some list handling, esp In *)
        | constructor; eauto 3 with datatypes zarith sail
