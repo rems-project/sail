@@ -1541,7 +1541,7 @@ let rec compile_def ctx = function
        List.fold_left2 (fun ctx (id, _) (_, ctyp) -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args compiled_args'
      in
 
-     if string_of_id id = "TLBTranslateC" then c_verbosity := 1 else ();
+     if string_of_id id = "main" then c_verbosity := 1 else ();
 
      (* Optimize and compile the expression *)
      let aexp = no_shadow (pat_ids pat) (anf exp) in
@@ -1792,6 +1792,23 @@ let flatten_instrs ctx =
 
   | cdef -> [cdef]
 
+let rec ctyp_unify ctyp1 ctyp2 =
+  match ctyp1, ctyp2 with
+  | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 ->
+     List.concat (List.map2 ctyp_unify ctyps1 ctyps2)
+
+  | CT_vector (b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 ->
+     ctyp_unify ctyp1 ctyp2
+
+  | CT_list ctyp1, CT_list ctyp2 -> ctyp_unify ctyp1 ctyp2
+
+  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_unify ctyp1 ctyp2
+
+  | CT_poly, _ -> [ctyp2]
+
+  | _, _ when ctyp_equal ctyp1 ctyp2 -> []
+  | _, _ -> c_error "Unification failed"
+
 let rec specialize_variants ctx =
   let specialize_constructor ctx ctor_id ctyp =
     let ctyps = match ctyp with
@@ -1802,6 +1819,8 @@ let rec specialize_variants ctx =
     | I_aux (I_funcall (clexp, extern, id, cvals), aux) as instr when Id.compare id ctor_id = 0 ->
        assert (List.length ctyps = List.length cvals);
        List.iter2 (fun cval ctyp -> print_endline (Pretty_print_sail.to_string (pp_cval cval) ^ " -> " ^ string_of_ctyp ctyp)) cvals ctyps;
+       let unification = List.concat (List.map2 (fun cval ctyp -> ctyp_unify ctyp (cval_ctyp cval)) cvals ctyps) in
+       List.iter (fun ctyp -> print_endline (string_of_ctyp ctyp)) unification;
        instr
     | instr -> instr
   in
@@ -1810,6 +1829,7 @@ let rec specialize_variants ctx =
   | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
      let polymorphic_ctors = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) ctors in
      List.iter (fun (id, ctyp) -> prerr_endline (Printf.sprintf "%s : %s" (string_of_id id) (string_of_ctyp ctyp))) polymorphic_ctors;
+     print_endline "=== CONSTRUCTORS ===";
      let cdefs =
        List.fold_left (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
                       cdefs
@@ -2846,6 +2866,8 @@ let compile_ast ctx (Defs defs) =
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
+
+    print_endline (Pretty_print_sail.to_string (separate_map (hardline ^^ hardline) pp_cdef cdefs));
 
     let cdefs = optimize ctx cdefs in
     (*
