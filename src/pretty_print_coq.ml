@@ -1133,10 +1133,13 @@ let doc_exp_lem, doc_let_lem =
                 | _ -> false
               in unpack,build_ex,autocast
             in
-            let autocast_id = if effectful eff then "autocast_m" else "autocast" in
-            let epp = if unpack then string "projT1" ^^ space ^^ parens epp else epp in
+            let autocast_id, proj_id, build_id =
+              if effectful eff
+              then "autocast_m", "projT1_m", "build_ex_m"
+              else "autocast",   "projT1",   "build_ex" in
+            let epp = if unpack then string proj_id ^^ space ^^ parens epp else epp in
             let epp = if autocast then string autocast_id ^^ space ^^ parens epp else epp in
-            let epp = if build_ex then string "build_ex" ^^ space ^^ parens epp else epp in
+            let epp = if build_ex then string build_id ^^ space ^^ parens epp else epp in
             liftR (if aexp_needed then parens (align epp) else epp)
        end
     | E_vector_access (v,e) ->

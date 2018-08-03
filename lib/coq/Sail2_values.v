@@ -21,7 +21,7 @@ Lemma use_ArithFact {P} `(ArithFact P) : P.
 apply fact.
 Defined.
 
-Definition build_ex (n:Z) {P:Z -> Prop} `{H:ArithFact (P n)} : {x : Z & ArithFact (P x)} :=
+Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
   existT _ n H.
 
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.

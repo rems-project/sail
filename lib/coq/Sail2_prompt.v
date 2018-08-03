@@ -115,3 +115,13 @@ let rec untilM vars cond body =
   write_reg r1 r1_v >> write_reg r2 r2_v*)
 
 *)
+
+(* If we need to build an existential after a monadic operation, assume that
+   we can do it entirely from the type. *)
+
+Definition build_ex_m {rv e} {T:Type} (x:monad rv T e) {P:T -> Prop} `{H:forall x, ArithFact (P x)} : monad rv {x : T & ArithFact (P x)} e :=
+  x >>= fun y => returnm (existT _ y (H y)).
+
+Definition projT1_m {rv e} {P:Z -> Prop} (x: monad rv {x : Z & P x} e) : monad rv Z e :=
+  x >>= fun y => returnm (projT1 y).
+
