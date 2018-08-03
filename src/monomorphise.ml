@@ -3167,13 +3167,15 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | None -> r
     | Some (tenv,typ,_) ->
        let typ = Env.base_typ_of tenv typ in
-       let env, typ =
+       let env, tenv, typ =
          match destruct_exist tenv typ with
-         | None -> env, typ
+         | None -> env, tenv, typ
          | Some (kids, nc, typ) ->
             { env with kid_deps =
                 List.fold_left (fun kds kid -> KBindings.add kid deps kds) env.kid_deps kids },
-            typ
+           Env.add_constraint nc
+             (List.fold_left (fun tenv kid -> Env.add_typ_var l kid BK_int tenv) tenv kids),
+           typ
        in
        if is_bitvector_typ typ then
          let size,_,_ = vector_typ_args_of typ in
@@ -3644,6 +3646,14 @@ let is_constant_vec_typ env typ =
 
 let rewrite_app env typ (id,args) =
   let is_append = is_id env (Id "append") in
+  let try_cast_to_typ (E_aux (e,_) as exp) =
+    let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+    match size with
+    | Nexp_aux (Nexp_constant _,_) -> E_cast (typ,exp)
+    | _ -> match solve env size with
+      | Some c -> E_cast (vector_typ (nconstant c) order bittyp, exp)
+      | None -> e
+  in
   if is_append id then
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
@@ -3661,14 +3671,23 @@ let rewrite_app env typ (id,args) =
           not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
-       let midsize = nminus size size1 in
-       let midtyp = vector_typ midsize order bittyp in
-       E_app (append,
-              [e1;
-               E_aux (E_cast (midtyp,
-                              E_aux (E_app (mk_id "subrange_subrange_concat",
-                                            [vector1; start1; end1; vector2; start2; end2]),
-                                     (Unknown,empty_tannot))),(Unknown,empty_tannot))])
+       let midsize = nminus size size1 in begin
+         match solve env midsize with
+         | Some c ->
+            let midtyp = vector_typ (nconstant c) order bittyp in
+            E_app (append,
+                   [e1;
+                    E_aux (E_cast (midtyp,
+                                   E_aux (E_app (mk_id "subrange_subrange_concat",
+                                                 [vector1; start1; end1; vector2; start2; end2]),
+                                          (Unknown,empty_tannot))),(Unknown,empty_tannot))])
+         | _ ->
+            E_app (append,
+                   [e1;
+                    E_aux (E_app (mk_id "subrange_subrange_concat",
+                                  [vector1; start1; end1; vector2; start2; end2]),
+                           (Unknown,empty_tannot))])
+       end
     | [E_aux (E_app (append,
               [e1;
                E_aux (E_app (slice1,
@@ -3680,14 +3699,23 @@ let rewrite_app env typ (id,args) =
           not (is_constant length1 || is_constant length2) ->
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
-       let midsize = nminus size size1 in
-       let midtyp = vector_typ midsize order bittyp in
-       E_app (append,
-              [e1;
-               E_aux (E_cast (midtyp,
-                              E_aux (E_app (mk_id "slice_slice_concat",
-                                            [vector1; start1; length1; vector2; start2; length2]),
-                                     (Unknown,empty_tannot))),(Unknown,empty_tannot))])
+       let midsize = nminus size size1 in begin
+         match solve env midsize with
+         | Some c ->
+            let midtyp = vector_typ (nconstant c) order bittyp in
+            E_app (append,
+                   [e1;
+                    E_aux (E_cast (midtyp,
+                                   E_aux (E_app (mk_id "slice_slice_concat",
+                                                 [vector1; start1; length1; vector2; start2; length2]),
+                                          (Unknown,empty_tannot))),(Unknown,empty_tannot))])
+         | _ ->
+            E_app (append,
+                   [e1;
+                    E_aux (E_app (mk_id "slice_slice_concat",
+                                  [vector1; start1; length1; vector2; start2; length2]),
+                           (Unknown,empty_tannot))])
+       end
 
     (* variable-range @ variable-range *)
     | [E_aux (E_app (subrange1,
@@ -3696,10 +3724,10 @@ let rewrite_app env typ (id,args) =
                      [vector2; start2; end2]),_)]
         when is_subrange subrange1 && is_subrange subrange2 &&
           not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
-       E_cast (typ,
-               E_aux (E_app (mk_id "subrange_subrange_concat",
-                             [vector1; start1; end1; vector2; start2; end2]),
-                      (Unknown,empty_tannot)))
+       try_cast_to_typ
+         (E_aux (E_app (mk_id "subrange_subrange_concat",
+                        [vector1; start1; end1; vector2; start2; end2]),
+                 (Unknown,empty_tannot)))
 
     (* variable-slice @ variable-slice *)
     | [E_aux (E_app (slice1,
@@ -3708,9 +3736,9 @@ let rewrite_app env typ (id,args) =
                      [vector2; start2; length2]),_)]
         when is_slice slice1 && is_slice slice2 &&
           not (is_constant length1 || is_constant length2) ->
-       E_cast (typ,
-               E_aux (E_app (mk_id "slice_slice_concat",
-                             [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
+       try_cast_to_typ
+         (E_aux (E_app (mk_id "slice_slice_concat",
+                        [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
 
     | [E_aux (E_app (append1,
                      [e1;
@@ -3721,16 +3749,25 @@ let rewrite_app env typ (id,args) =
           not (is_constant length1 || is_constant length2) ->
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
-       let midsize = nminus size size1 in
-       let midtyp = vector_typ midsize order bittyp in
-       E_cast (typ,
-               E_aux (E_app (mk_id "append",
+       let midsize = nminus size size1 in begin
+         match solve env midsize with
+         | Some c ->
+            let midtyp = vector_typ (nconstant c) order bittyp in
+            try_cast_to_typ
+              (E_aux (E_app (mk_id "append",
                              [e1;
                               E_aux (E_cast (midtyp,
                                              E_aux (E_app (mk_id "slice_zeros_concat",
                                                            [vector1; start1; length1; length2]),(Unknown,empty_tannot))),(Unknown,empty_tannot))]),
                       (Unknown,empty_tannot)))
-
+         | _ ->
+            try_cast_to_typ
+              (E_aux (E_app (mk_id "append",
+                             [e1;
+                              E_aux (E_app (mk_id "slice_zeros_concat",
+                                            [vector1; start1; length1; length2]),(Unknown,empty_tannot))]),
+                      (Unknown,empty_tannot)))
+       end
     | _ -> E_app (id,args)
 
   else if is_id env (Id "eq_vec") id then
