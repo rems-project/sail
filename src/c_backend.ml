@@ -875,7 +875,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
         let ctor_ctyp = Bindings.find ctor (ctor_bindings ctors) in
         let ctor_c_id =
           if is_polymorphic ctor_ctyp then
-            let unification = ctyp_unify ctor_ctyp (apat_ctyp ctx apat) in
+            let unification = List.map ctyp_suprema (ctyp_unify ctor_ctyp (apat_ctyp ctx apat)) in
             ctor_c_id ^ "_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification
           else
             ctor_c_id
@@ -1441,7 +1441,7 @@ let fix_exception_block ?return:(return=None) ctx instrs =
      rewrite_exception [] instrs @ [ilabel end_block_label]
   | Some ctyp ->
      rewrite_exception [] instrs @ [ilabel end_block_label; iundefined ctyp]
-    
+
 let rec map_try_block f (I_aux (instr, aux)) =
   let instr = match instr with
     | I_decl _ | I_reset _ | I_init _ | I_reinit _ -> instr
@@ -1805,14 +1805,40 @@ let rec specialize_variants ctx =
        List.iter2 (fun cval ctyp -> prerr_endline (Pretty_print_sail.to_string (pp_cval cval) ^ " -> " ^ string_of_ctyp ctyp)) cvals ctyps;
 
        (* Work out how each call to a constructor in instantiated and add that to unifications *)
-       let unification = List.concat (List.map2 (fun cval ctyp -> ctyp_unify ctyp (cval_ctyp cval)) cvals ctyps) in
+       let unification = List.concat (List.map2 (fun cval ctyp -> List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval))) cvals ctyps) in
        let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification) in
-       unifications := Bindings.add mono_id (mk_tuple (List.map cval_ctyp cvals)) !unifications;
+       unifications := Bindings.add mono_id (ctyp_suprema (mk_tuple (List.map cval_ctyp cvals))) !unifications;
 
        List.iter (fun ctyp -> prerr_endline (string_of_ctyp ctyp)) unification;
        prerr_endline (string_of_id mono_id);
 
-       I_aux (I_funcall (clexp, extern, mono_id, List.map (fun (frag, ctyp) -> (unpoly frag, ctyp)) cvals), aux)
+       (* We need to case each cval to it's ctyp_suprema in order to put it in the most general constructor *)
+       let casts =
+         let cast_to_suprema (frag, ctyp) =
+           let suprema = ctyp_suprema ctyp in
+           if ctyp_equal ctyp suprema then
+             [], (unpoly frag, ctyp), []
+           else
+             let gs = gensym () in
+             [idecl suprema gs;
+              icopy (CL_id (gs, suprema)) (unpoly frag, ctyp)],
+             (F_id gs, suprema),
+             [iclear suprema gs]
+         in
+         List.map cast_to_suprema cvals
+       in
+       let setup = List.concat (List.map (fun (setup, _, _) -> setup) casts) in
+       let cvals = List.map (fun (_, cval, _) -> cval) casts in
+       let cleanup = List.concat (List.map (fun (_, _, cleanup) -> cleanup) casts) in
+
+       let mk_funcall instr =
+         if List.length setup = 0 then
+           instr
+         else
+           iblock (setup @ [instr] @ cleanup)
+       in
+
+       mk_funcall (I_aux (I_funcall (clexp, extern, mono_id, cvals), aux))
     | instr -> instr
   in
 
@@ -1841,7 +1867,7 @@ let rec specialize_variants ctx =
      let remove_poly (I_aux (instr, aux)) =
        match instr with
        | I_copy (clexp, (frag, ctyp)) when is_polymorphic ctyp ->
-          I_aux (I_copy (clexp, (frag, clexp_ctyp clexp)), aux)
+          I_aux (I_copy (clexp, (frag, ctyp_suprema (clexp_ctyp clexp))), aux)
        | instr -> I_aux (instr, aux)
      in
      let cdef = cdef_map_instr remove_poly cdef in
@@ -2023,10 +2049,10 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      else
        if is_stack_ctyp lctyp then
          string (Printf.sprintf "  %s = CONVERT_OF(%s, %s)(%s);"
-                                (sgen_clexp_pure clexp) (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_cval cval))
+                                (sgen_clexp_pure clexp) (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_cval_param cval))
        else
          string (Printf.sprintf "  CONVERT_OF(%s, %s)(%s, %s);"
-                                (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_clexp clexp) (sgen_cval cval))
+                                (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_clexp clexp) (sgen_cval_param cval))
 
   | I_jump (cval, label) ->
      string (Printf.sprintf "  if (%s) goto %s;" (sgen_cval cval) label)

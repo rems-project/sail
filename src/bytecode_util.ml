@@ -231,6 +231,25 @@ let rec ctyp_unify ctyp1 ctyp2 =
   | _, _ when ctyp_equal ctyp1 ctyp2 -> []
   | _, _ -> raise (Invalid_argument "ctyp_unify")
 
+let rec ctyp_suprema = function
+  | CT_int -> CT_int
+  | CT_bits d -> CT_bits d
+  | CT_bits64 (_, d) -> CT_bits d
+  | CT_int64 -> CT_int
+  | CT_unit -> CT_unit
+  | CT_bool -> CT_bool
+  | CT_real -> CT_real
+  | CT_bit -> CT_bit
+  | CT_tup ctyps -> CT_tup (List.map ctyp_suprema ctyps)
+  | CT_string -> CT_string
+  | CT_enum (id, ids) -> CT_enum (id, ids)
+  | CT_struct (id, ctors) -> CT_struct (id, List.map (fun (id, ctyp) -> (id, ctyp_suprema ctyp)) ctors)
+  | CT_variant (id, ctors) -> CT_variant (id, List.map (fun (id, ctyp) -> (id, ctyp_suprema ctyp)) ctors)
+  | CT_vector (d, ctyp) -> CT_vector (d, ctyp_suprema ctyp)
+  | CT_list ctyp -> CT_list (ctyp_suprema ctyp)
+  | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
+  | CT_poly -> CT_poly
+
 let rec unpoly = function
   | F_poly f -> unpoly f
   | F_call (call, fs) -> F_call (call, List.map unpoly fs)

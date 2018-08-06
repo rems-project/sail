@@ -186,8 +186,8 @@ void RECREATE_OF(sail_bits, mach_bits)(sail_bits *,
 				       const mach_bits len,
 				       const bool direction);
 
-mach_bits CONVERT_OF(mach_bits, sail_bits)(const sail_bits);
-void CONVERT_OF(sail_bits, mach_bits)(sail_bits *, const mach_bits, const uint64_t);
+mach_bits CONVERT_OF(mach_bits, sail_bits)(const sail_bits, const bool);
+void CONVERT_OF(sail_bits, mach_bits)(sail_bits *, const mach_bits, const uint64_t, const bool);
 
 void UNDEFINED(sail_bits)(sail_bits *, const sail_int len, const mach_bits bit);
 mach_bits UNDEFINED(mach_bits)(const unit);
