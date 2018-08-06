@@ -1795,6 +1795,10 @@ let rec specialize_variants ctx =
     | CT_tup ctyps -> ctyps
     | ctyp -> [ctyp]
     in
+    let mk_tuple = function
+      | [ctyp] -> ctyp
+      | ctyps -> CT_tup ctyps
+    in
     function
     | I_aux (I_funcall (clexp, extern, id, cvals), aux) as instr when Id.compare id ctor_id = 0 ->
        assert (List.length ctyps = List.length cvals);
@@ -1803,7 +1807,7 @@ let rec specialize_variants ctx =
        (* Work out how each call to a constructor in instantiated and add that to unifications *)
        let unification = List.concat (List.map2 (fun cval ctyp -> ctyp_unify ctyp (cval_ctyp cval)) cvals ctyps) in
        let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification) in
-       unifications := Bindings.add mono_id (CT_tup (List.map cval_ctyp cvals)) !unifications;
+       unifications := Bindings.add mono_id (mk_tuple (List.map cval_ctyp cvals)) !unifications;
 
        List.iter (fun ctyp -> prerr_endline (string_of_ctyp ctyp)) unification;
        prerr_endline (string_of_id mono_id);
@@ -1830,6 +1834,13 @@ let rec specialize_variants ctx =
      CDEF_type (CTD_variant (var_id, (Bindings.bindings !unifications))) :: cdefs, ctx
 
   | cdef :: cdefs ->
+     let remove_poly (I_aux (instr, aux)) =
+       match instr with
+       | I_copy (clexp, (frag, ctyp)) when is_polymorphic ctyp ->
+          I_aux (I_copy (clexp, (frag, clexp_ctyp clexp)), aux)
+       | instr -> I_aux (instr, aux)
+     in
+     let cdef = cdef_map_instr remove_poly cdef in
      let cdefs, ctx = specialize_variants ctx cdefs in
      cdef :: cdefs, ctx
 
