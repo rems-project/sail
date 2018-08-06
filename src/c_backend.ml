@@ -1828,10 +1828,14 @@ let rec specialize_variants ctx =
                       polymorphic_ctors
      in
 
-     let ctx = { ctx with variants = Bindings.add var_id !unifications ctx.variants } in
+     let monomorphic_ctors = List.filter (fun (_, ctyp) -> not (is_polymorphic ctyp)) ctors in
+
+     let ctx = { ctx with variants = Bindings.add var_id
+                                                  (List.fold_left (fun m (id, ctyp) -> Bindings.add id ctyp m) !unifications monomorphic_ctors)
+                                                  ctx.variants } in
 
      let cdefs, ctx = specialize_variants ctx cdefs in
-     CDEF_type (CTD_variant (var_id, (Bindings.bindings !unifications))) :: cdefs, ctx
+     CDEF_type (CTD_variant (var_id, monomorphic_ctors @ Bindings.bindings !unifications)) :: cdefs, ctx
 
   | cdef :: cdefs ->
      let remove_poly (I_aux (instr, aux)) =
