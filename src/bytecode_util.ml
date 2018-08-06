@@ -129,6 +129,7 @@ let rec frag_rename from_id to_id = function
   | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
   | F_field (f, field) -> F_field (frag_rename from_id to_id f, field)
   | F_raw raw -> F_raw raw
+  | F_poly f -> F_poly (frag_rename from_id to_id f)
 
 (**************************************************************************)
 (* 1. Instruction pretty printer                                          *)
@@ -191,6 +192,52 @@ and string_of_ctyp = function
   | CT_list ctyp -> "list(" ^ string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "ref(" ^ string_of_ctyp ctyp ^ ")"
   | CT_poly -> "*"
+
+let rec ctyp_equal ctyp1 ctyp2 =
+  match ctyp1, ctyp2 with
+  | CT_int, CT_int -> true
+  | CT_bits d1, CT_bits d2 -> d1 = d2
+  | CT_bits64 (m1, d1), CT_bits64 (m2, d2) -> m1 = m2 && d1 = d2
+  | CT_bit, CT_bit -> true
+  | CT_int64, CT_int64 -> true
+  | CT_unit, CT_unit -> true
+  | CT_bool, CT_bool -> true
+  | CT_struct (id1, _), CT_struct (id2, _) -> Id.compare id1 id2 = 0
+  | CT_enum (id1, _), CT_enum (id2, _) -> Id.compare id1 id2 = 0
+  | CT_variant (id1, _), CT_variant (id2, _) -> Id.compare id1 id2 = 0
+  | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 ->
+     List.for_all2 ctyp_equal ctyps1 ctyps2
+  | CT_string, CT_string -> true
+  | CT_real, CT_real -> true
+  | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) -> d1 = d2 && ctyp_equal ctyp1 ctyp2
+  | CT_list ctyp1, CT_list ctyp2 -> ctyp_equal ctyp1 ctyp2
+  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
+  | _, _ -> false
+
+let rec ctyp_unify ctyp1 ctyp2 =
+  match ctyp1, ctyp2 with
+  | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 ->
+     List.concat (List.map2 ctyp_unify ctyps1 ctyps2)
+
+  | CT_vector (b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 ->
+     ctyp_unify ctyp1 ctyp2
+
+  | CT_list ctyp1, CT_list ctyp2 -> ctyp_unify ctyp1 ctyp2
+
+  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_unify ctyp1 ctyp2
+
+  | CT_poly, _ -> [ctyp2]
+
+  | _, _ when ctyp_equal ctyp1 ctyp2 -> []
+  | _, _ -> raise (Invalid_argument "ctyp_unify")
+
+let rec unpoly = function
+  | F_poly f -> unpoly f
+  | F_call (call, fs) -> F_call (call, List.map unpoly fs)
+  | F_field (f, field) -> F_field (unpoly f, field)
+  | F_op (f1, op, f2) -> F_op (unpoly f1, op, unpoly f2)
+  | F_unary (op, f) -> F_unary (op, unpoly f)
+  | f -> f
 
 let rec is_polymorphic = function
   | CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string -> false
@@ -353,7 +400,7 @@ type dep_graph = NS.t NM.t
 let rec fragment_deps = function
   | F_id id | F_ref id -> NS.singleton (G_id id)
   | F_lit _ -> NS.empty
-  | F_field (frag, _) | F_unary (_, frag) -> fragment_deps frag
+  | F_field (frag, _) | F_unary (_, frag) | F_poly frag -> fragment_deps frag
   | F_call (_, frags) -> List.fold_left NS.union NS.empty (List.map fragment_deps frags)
   | F_op (frag1, _, frag2) -> NS.union (fragment_deps frag1) (fragment_deps frag2)
   | F_current_exception -> NS.empty

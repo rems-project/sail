@@ -85,8 +85,8 @@ and 'a apat_aux =
   | AP_global of id * 'a
   | AP_app of id * 'a apat
   | AP_cons of 'a apat * 'a apat
-  | AP_nil
-  | AP_wild
+  | AP_nil of 'a
+  | AP_wild of 'a
 
 and 'a aval =
   | AV_lit of lit * 'a

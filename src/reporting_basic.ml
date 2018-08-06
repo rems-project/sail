@@ -120,7 +120,8 @@ let print_code1 ff fname lnum1 cnum1 cnum2 =
                        Util.(Str.string_before (Str.string_after line cnum1) (cnum2 - cnum1) |> red_bg |> clear)
                        (Str.string_after line cnum2);
         close_in in_chan
-      with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
+      with e -> (close_in_noerr in_chan;
+                 prerr_endline (Printf.sprintf "print_code1: %s %d %d %d %s" fname lnum1 cnum1 cnum2 (Printexc.to_string e)))
     end
   with _ -> ()
 

@@ -113,27 +113,6 @@ let initial_ctx env =
     optimize_z3 = true;
   }
 
-let rec ctyp_equal ctyp1 ctyp2 =
-  match ctyp1, ctyp2 with
-  | CT_int, CT_int -> true
-  | CT_bits d1, CT_bits d2 -> d1 = d2
-  | CT_bits64 (m1, d1), CT_bits64 (m2, d2) -> m1 = m2 && d1 = d2
-  | CT_bit, CT_bit -> true
-  | CT_int64, CT_int64 -> true
-  | CT_unit, CT_unit -> true
-  | CT_bool, CT_bool -> true
-  | CT_struct (id1, _), CT_struct (id2, _) -> Id.compare id1 id2 = 0
-  | CT_enum (id1, _), CT_enum (id2, _) -> Id.compare id1 id2 = 0
-  | CT_variant (id1, _), CT_variant (id2, _) -> Id.compare id1 id2 = 0
-  | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 ->
-     List.for_all2 ctyp_equal ctyps1 ctyps2
-  | CT_string, CT_string -> true
-  | CT_real, CT_real -> true
-  | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) -> d1 = d2 && ctyp_equal ctyp1 ctyp2
-  | CT_list ctyp1, CT_list ctyp2 -> ctyp_equal ctyp1 ctyp2
-  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
-  | _, _ -> false
-
 (** Convert a sail type into a C-type **)
 let rec ctyp_of_typ ctx typ =
   let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
@@ -843,6 +822,13 @@ let compile_funcall l ctx id args typ =
   end,
   !cleanup
 
+let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
+  match apat with
+  | AP_tup apats -> CT_tup (List.map (apat_ctyp ctx) apats)
+  | AP_global (_, typ) -> ctyp_of_typ ctx typ
+  | AP_cons (apat, _) -> CT_list (apat_ctyp ctx apat)
+  | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
+
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
   match apat_aux, cval with
@@ -887,15 +873,23 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      | CT_variant (_, ctors) ->
         let ctor_c_id = string_of_id ctor in
         let ctor_ctyp = Bindings.find ctor (ctor_bindings ctors) in
+        let ctor_c_id =
+          if is_polymorphic ctor_ctyp then
+            let unification = ctyp_unify ctor_ctyp (apat_ctyp ctx apat) in
+            ctor_c_id ^ "_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification
+          else
+            ctor_c_id
+        in
         let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), ctor_ctyp)) case_label in
-        [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
-        @ instrs,
+        [icomment (string_of_ctyp (apat_ctyp ctx apat)); ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
+        @ instrs
+        @ [icomment (string_of_ctyp ctor_ctyp)],
         cleanup,
         ctx
      | _ -> failwith "AP_app constructor with non-variant type"
      end
 
-  | AP_wild, _ -> [], [], ctx
+  | AP_wild _, _ -> [], [], ctx
 
   | AP_cons (hd_apat, tl_apat), (frag, CT_list ctyp) ->
      let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (F_field (F_unary ("*", frag), "hd"), ctyp) case_label in
@@ -904,7 +898,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_cons _, (_, _) -> c_error "Tried to pattern match cons on non list type"
 
-  | AP_nil, (frag, _) -> [ijump (F_op (frag, "!=", F_lit V_null), CT_bool) case_label], [], ctx
+  | AP_nil _, (frag, _) -> [ijump (F_op (frag, "!=", F_lit V_null), CT_bool) case_label], [], ctx
 
 let unit_fragment = (F_lit V_unit, CT_unit)
 
@@ -1792,24 +1786,10 @@ let flatten_instrs ctx =
 
   | cdef -> [cdef]
 
-let rec ctyp_unify ctyp1 ctyp2 =
-  match ctyp1, ctyp2 with
-  | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 ->
-     List.concat (List.map2 ctyp_unify ctyps1 ctyps2)
-
-  | CT_vector (b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 ->
-     ctyp_unify ctyp1 ctyp2
-
-  | CT_list ctyp1, CT_list ctyp2 -> ctyp_unify ctyp1 ctyp2
-
-  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_unify ctyp1 ctyp2
-
-  | CT_poly, _ -> [ctyp2]
-
-  | _, _ when ctyp_equal ctyp1 ctyp2 -> []
-  | _, _ -> c_error "Unification failed"
-
 let rec specialize_variants ctx =
+
+  let unifications = ref (Bindings.empty) in
+
   let specialize_constructor ctx ctor_id ctyp =
     let ctyps = match ctyp with
     | CT_tup ctyps -> ctyps
@@ -1818,10 +1798,17 @@ let rec specialize_variants ctx =
     function
     | I_aux (I_funcall (clexp, extern, id, cvals), aux) as instr when Id.compare id ctor_id = 0 ->
        assert (List.length ctyps = List.length cvals);
-       List.iter2 (fun cval ctyp -> print_endline (Pretty_print_sail.to_string (pp_cval cval) ^ " -> " ^ string_of_ctyp ctyp)) cvals ctyps;
+       List.iter2 (fun cval ctyp -> prerr_endline (Pretty_print_sail.to_string (pp_cval cval) ^ " -> " ^ string_of_ctyp ctyp)) cvals ctyps;
+
+       (* Work out how each call to a constructor in instantiated and add that to unifications *)
        let unification = List.concat (List.map2 (fun cval ctyp -> ctyp_unify ctyp (cval_ctyp cval)) cvals ctyps) in
-       List.iter (fun ctyp -> print_endline (string_of_ctyp ctyp)) unification;
-       instr
+       let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification) in
+       unifications := Bindings.add mono_id (CT_tup (List.map cval_ctyp cvals)) !unifications;
+
+       List.iter (fun ctyp -> prerr_endline (string_of_ctyp ctyp)) unification;
+       prerr_endline (string_of_id mono_id);
+
+       I_aux (I_funcall (clexp, extern, mono_id, List.map (fun (frag, ctyp) -> (unpoly frag, ctyp)) cvals), aux)
     | instr -> instr
   in
 
@@ -1829,18 +1816,24 @@ let rec specialize_variants ctx =
   | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
      let polymorphic_ctors = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) ctors in
      List.iter (fun (id, ctyp) -> prerr_endline (Printf.sprintf "%s : %s" (string_of_id id) (string_of_ctyp ctyp))) polymorphic_ctors;
-     print_endline "=== CONSTRUCTORS ===";
+     prerr_endline "=== CONSTRUCTORS ===";
+
      let cdefs =
        List.fold_left (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
                       cdefs
                       polymorphic_ctors
      in
-     cdef :: specialize_variants ctx cdefs
+
+     let ctx = { ctx with variants = Bindings.add var_id !unifications ctx.variants } in
+
+     let cdefs, ctx = specialize_variants ctx cdefs in
+     CDEF_type (CTD_variant (var_id, (Bindings.bindings !unifications))) :: cdefs, ctx
 
   | cdef :: cdefs ->
-     cdef :: specialize_variants ctx cdefs
+     let cdefs, ctx = specialize_variants ctx cdefs in
+     cdef :: cdefs, ctx
 
-  | [] -> []
+  | [] -> [], ctx
 
               (*
 (* When this optimization fires we know we have bytecode of the form
@@ -1910,7 +1903,6 @@ let optimize ctx cdefs =
   let nothing cdefs = cdefs in
   cdefs
   |> (if !optimize_hoist_allocations then concatMap (hoist_allocations ctx) else nothing)
-  |> specialize_variants ctx
 (* |> (if !optimize_struct_updates then concatMap (fix_struct_updates ctx) else nothing) *)
 
 (**************************************************************************)
@@ -2739,9 +2731,9 @@ let codegen_def ctx def =
   let vectors = List.filter is_ct_vector (cdef_ctyps ctx def) in
   let vectors = List.map (fun ctyp -> codegen_vector ctx (unvector ctyp)) vectors in
   (* prerr_endline (Pretty_print_sail.to_string (pp_cdef def)); *)
-  concat tups
+  concat vectors
   ^^ concat lists
-  ^^ concat vectors
+  ^^ concat tups
   ^^ codegen_def' ctx def
 
 let is_cdef_startup = function
@@ -2866,10 +2858,9 @@ let compile_ast ctx (Defs defs) =
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
-
-    print_endline (Pretty_print_sail.to_string (separate_map (hardline ^^ hardline) pp_cdef cdefs));
-
+    let cdefs, ctx = specialize_variants ctx cdefs in
     let cdefs = optimize ctx cdefs in
+    prerr_endline (Pretty_print_sail.to_string (separate_map (hardline ^^ hardline) pp_cdef cdefs));
     (*
     let cdefs = if !opt_trace then List.map (instrument_tracing ctx) cdefs else cdefs in
      *)

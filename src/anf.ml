@@ -119,8 +119,8 @@ and 'a apat_aux =
   | AP_global of id * 'a
   | AP_app of id * 'a apat
   | AP_cons of 'a apat * 'a apat
-  | AP_nil
-  | AP_wild
+  | AP_nil of 'a
+  | AP_wild of 'a
 
 and 'a aval =
   | AV_lit of lit * 'a
@@ -133,7 +133,7 @@ and 'a aval =
   | AV_C_fragment of fragment * 'a
 
 (* Renaming variables in ANF expressions *)
-                   
+
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   match apat_aux with
   | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
@@ -141,8 +141,8 @@ let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   | AP_global (id, _) -> IdSet.empty
   | AP_app (id, apat) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
-  | AP_nil -> IdSet.empty
-  | AP_wild -> IdSet.empty
+  | AP_nil _ -> IdSet.empty
+  | AP_wild _ -> IdSet.empty
 
 let rec apat_types (AP_aux (apat_aux, _, _)) =
   let merge id b1 b2 =
@@ -158,8 +158,8 @@ let rec apat_types (AP_aux (apat_aux, _, _)) =
   | AP_global (id, _) -> Bindings.empty
   | AP_app (id, apat) -> apat_types apat
   | AP_cons (apat1, apat2) -> (Bindings.merge merge) (apat_types apat1) (apat_types apat2)
-  | AP_nil -> Bindings.empty
-  | AP_wild -> Bindings.empty
+  | AP_nil _ -> Bindings.empty
+  | AP_wild _ -> Bindings.empty
 
 let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
   let apat_aux = match apat_aux with
@@ -169,8 +169,8 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
     | AP_global (id, typ) -> AP_global (id, typ)
     | AP_app (ctor, apat) -> AP_app (ctor, apat_rename from_id to_id apat)
     | AP_cons (apat1, apat2) -> AP_cons (apat_rename from_id to_id apat1, apat_rename from_id to_id apat2)
-    | AP_nil -> AP_nil
-    | AP_wild -> AP_wild
+    | AP_nil typ -> AP_nil typ
+    | AP_wild typ -> AP_wild typ
   in
   AP_aux (apat_aux, env, l)
 
@@ -401,12 +401,12 @@ let rec pp_aexp (AE_aux (aexp, _, _)) =
 
 and pp_apat (AP_aux (apat_aux, _, _)) =
   match apat_aux with
-  | AP_wild -> string "_"
+  | AP_wild _ -> string "_"
   | AP_id (id, typ) -> pp_annot typ (pp_id id)
   | AP_global (id, _) -> pp_id id
   | AP_tup apats -> parens (separate_map (comma ^^ space) pp_apat apats)
   | AP_app (id, apat) -> pp_id id ^^ parens (pp_apat apat)
-  | AP_nil -> string "[||]"
+  | AP_nil _ -> string "[||]"
   | AP_cons (hd_apat, tl_apat) -> pp_apat hd_apat ^^ string " :: " ^^ pp_apat tl_apat
 
 and pp_cases cases = surround 2 0 lbrace (separate_map (comma ^^ hardline) pp_case cases) rbrace
@@ -458,19 +458,19 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   match p_aux with
   | P_id id when global -> mk_apat (AP_global (id, pat_typ_of pat))
   | P_id id -> mk_apat (AP_id (id, pat_typ_of pat))
-  | P_wild -> mk_apat AP_wild
+  | P_wild -> mk_apat (AP_wild (pat_typ_of pat))
   | P_tup pats -> mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats))
   | P_app (id, [pat]) -> mk_apat (AP_app (id, anf_pat ~global:global pat))
   | P_app (id, pats) -> mk_apat (AP_app (id, mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats))))
   | P_typ (_, pat) -> anf_pat ~global:global pat
   | P_var (pat, _) -> anf_pat ~global:global pat
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global:global hd_pat, anf_pat ~global:global tl_pat))
-  | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat AP_nil)
+  | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (pat_typ_of pat)))
   | _ -> anf_error ~loc:(fst annot) ("Could not convert pattern to ANF: " ^ string_of_pat pat)
 
 let rec apat_globals (AP_aux (aux, _, _)) =
   match aux with
-  | AP_nil | AP_wild | AP_id _ -> []
+  | AP_nil _ | AP_wild _ | AP_id _ -> []
   | AP_global (id, typ) -> [(id, typ)]
   | AP_tup apats -> List.concat (List.map apat_globals apats)
   | AP_app (_, apat) -> apat_globals apat
