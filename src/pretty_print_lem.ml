@@ -352,18 +352,21 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
      end
   | _ -> None
 
-let doc_tannot_lem ctxt env eff typ =
-  let of_typ typ =
-    let ta = doc_typ_lem typ in
-    if eff then string " : M " ^^ parens ta
-    else string " : " ^^ ta
-  in
+let make_printable_type ctxt env typ =
   if contains_t_pp_var ctxt typ
   then
     match replace_typ_size ctxt env typ with
-    | None -> empty
-    | Some typ -> of_typ typ
-  else of_typ typ
+    | None -> None
+    | Some typ -> Some typ
+  else Some typ
+
+let doc_tannot_lem ctxt env eff typ =
+  match make_printable_type ctxt env typ with
+  | None -> empty
+  | Some typ ->
+     let ta = doc_typ_lem typ in
+     if eff then string " : M " ^^ parens ta
+     else string " : " ^^ ta
 
 let doc_lit_lem (L_aux(lit,l)) =
   match lit with
@@ -495,8 +498,9 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
      parens (separate comma_sp (List.map2 doc_elem typs pats))
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem ctxt true p in
-    if contains_t_pp_var ctxt typ then doc_p
-    else parens (doc_op colon doc_p (doc_typ_lem typ))
+    (match make_printable_type ctxt (env_of_annot (l,annot)) typ with
+    | None -> doc_p
+    | Some typ -> parens (doc_op colon doc_p (doc_typ_lem typ)))
   | P_vector pats ->
      let ppp = brackets (separate_map semi (doc_pat_lem ctxt true) pats) in
      if apat_needed then parens ppp else ppp
@@ -727,14 +731,16 @@ let doc_exp_lem, doc_let_lem =
             | [exp] ->
                let epp = separate space [string "early_return"; expY exp] in
                let aexp_needed, tepp =
-                 if contains_t_pp_var ctxt (typ_of exp) ||
-                    contains_t_pp_var ctxt (typ_of full_exp) then
-                   aexp_needed, epp
-                 else
-                   let tannot = separate space [string "MR";
-                     doc_atomic_typ_lem false (typ_of full_exp);
-                     doc_atomic_typ_lem false (typ_of exp)] in
-                   true, doc_op colon epp tannot in
+                 match Util.option_bind (make_printable_type ctxt ctxt.top_env)
+                                        (Env.get_ret_typ (env_of exp)),
+                       make_printable_type ctxt (env_of full_exp) (typ_of full_exp) with
+                   | Some typ, Some full_typ ->
+                     let tannot = separate space [string "MR";
+                       doc_atomic_typ_lem false full_typ;
+                       doc_atomic_typ_lem false typ] in
+                     true, doc_op colon epp tannot
+                   | _ -> aexp_needed, epp
+               in
                if aexp_needed then parens tepp else tepp
             | _ -> raise (Reporting_basic.err_unreachable l
                "Unexpected number of arguments for early_return builtin")
@@ -920,12 +926,15 @@ let doc_exp_lem, doc_let_lem =
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
       let ta =
-        if contains_t_pp_var ctxt (typ_of full_exp) || contains_t_pp_var ctxt (typ_of r)
-        then empty
-        else separate space
-          [string ": MR";
-          parens (doc_typ_lem (typ_of full_exp));
-          parens (doc_typ_lem (typ_of r))] in
+        match Util.option_bind (make_printable_type ctxt ctxt.top_env) (Env.get_ret_typ (env_of full_exp)),
+              make_printable_type ctxt (env_of r) (typ_of r) with
+       | Some full_typ, Some r_typ ->
+          separate space
+            [string ": MR";
+            parens (doc_typ_lem full_typ);
+            parens (doc_typ_lem r_typ)]
+       | _ -> empty
+      in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ -> string "true"
     | E_internal_value _ ->
