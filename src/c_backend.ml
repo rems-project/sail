@@ -1812,7 +1812,7 @@ let rec specialize_variants ctx =
        List.iter (fun ctyp -> prerr_endline (string_of_ctyp ctyp)) unification;
        prerr_endline (string_of_id mono_id);
 
-       (* We need to case each cval to it's ctyp_suprema in order to put it in the most general constructor *)
+       (* We need to cast each cval to it's ctyp_suprema in order to put it in the most general constructor *)
        let casts =
          let cast_to_suprema (frag, ctyp) =
            let suprema = ctyp_suprema ctyp in
