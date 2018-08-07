@@ -4381,6 +4381,8 @@ let rewrite_defs_lem = [
   ("sizeof", rewrite_sizeof);
   ("early_return", rewrite_defs_early_return);
   ("fix_val_specs", rewrite_fix_val_specs);
+  (* early_return currently breaks the types *)
+  ("recheck_defs", recheck_defs);
   ("remove_blocks", rewrite_defs_remove_blocks);
   ("letbind_effects", rewrite_defs_letbind_effects);
   ("remove_e_assign", rewrite_defs_remove_e_assign);
