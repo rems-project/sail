@@ -481,7 +481,7 @@ let rec instr_parms_to_string ps =
 let pad n s = if String.length s < n then s ^ String.make (n-String.length s) ' ' else s
 
 let instruction_to_string (name, parms) = 
-  ((*pad 5*) (String.lowercase_ascii name)) ^ " " ^ instr_parms_to_string parms 
+  ((*pad 5*) (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
 
 let print_backtrace_compact printer (IState(stack,_)) =
   List.iter (fun (e,(env,mem)) -> print_exp printer env mem true e) (compact_stack stack)
