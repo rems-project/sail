@@ -193,6 +193,15 @@ and string_of_ctyp = function
   | CT_ref ctyp -> "ref(" ^ string_of_ctyp ctyp ^ ")"
   | CT_poly -> "*"
 
+let rec map_ctyp f = function
+  | (CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly | CT_enum _) as ctyp -> f ctyp
+  | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
+  | CT_ref ctyp -> f (CT_ref (map_ctyp f ctyp))
+  | CT_vector (direction, ctyp) -> f (CT_vector (direction, map_ctyp f ctyp))
+  | CT_list ctyp -> f (CT_list (map_ctyp f ctyp))
+  | CT_struct (id, ctors) -> f (CT_struct (id, List.map (fun (id, ctyp) -> id, map_ctyp f ctyp) ctors))
+  | CT_variant (id, ctors) -> f (CT_variant (id, List.map (fun (id, ctyp) -> id, map_ctyp f ctyp) ctors))
+
 let rec ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
   | CT_int, CT_int -> true
@@ -283,7 +292,7 @@ let rec pp_clexp = function
   | CL_field (id, field, ctyp) -> pp_id id ^^ string "." ^^ string field ^^ string " : " ^^ pp_ctyp ctyp
   | CL_addr (id, ctyp) -> string "*" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | CL_addr_field (id, field, ctyp) -> pp_id id ^^ string "->" ^^ string field ^^ string " : " ^^ pp_ctyp ctyp
-  | CL_current_exception _ -> string "current_exception"
+  | CL_current_exception ctyp -> string "current_exception : " ^^ pp_ctyp ctyp
   | CL_have_exception -> string "have_exception"
 
 let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
@@ -552,6 +561,36 @@ let make_dot id graph =
   Util.opt_colors := true;
   close_out out_chan
 
+let rec map_clexp_ctyp f = function
+  | CL_id (id, ctyp) -> CL_id (id, f ctyp)
+  | CL_field (id, field, ctyp) -> CL_field (id, field, f ctyp)
+  | CL_addr (id, ctyp) -> CL_addr (id, f ctyp)
+  | CL_addr_field (id, field, ctyp) -> CL_addr_field (id, field, f ctyp)
+  | CL_current_exception ctyp -> CL_current_exception (f ctyp)
+  | CL_have_exception -> CL_have_exception
+
+let rec map_instr_ctyp f (I_aux (instr, aux)) =
+  let instr = match instr with
+    | I_decl (ctyp, id) -> I_decl (f ctyp, id)
+    | I_init (ctyp1, id, (frag, ctyp2)) -> I_init (f ctyp1, id, (frag, f ctyp2))
+    | I_if ((frag, ctyp1), then_instrs, else_instrs, ctyp2) ->
+       I_if ((frag, f ctyp1), List.map (map_instr_ctyp f) then_instrs, List.map (map_instr_ctyp f) else_instrs, f ctyp2)
+    | I_jump ((frag, ctyp), label) -> I_jump ((frag, f ctyp), label)
+    | I_funcall (clexp, extern, id, cvals) ->
+       I_funcall (map_clexp_ctyp f clexp, extern, id, List.map (fun (frag, ctyp) -> frag, f ctyp) cvals)
+    | I_copy (clexp, (frag, ctyp)) -> I_copy (map_clexp_ctyp f clexp, (frag, f ctyp))
+    | I_clear (ctyp, id) -> I_clear (f ctyp, id)
+    | I_return (frag, ctyp) -> I_return (frag, f ctyp)
+    | I_block instrs -> I_block (List.map (map_instr_ctyp f) instrs)
+    | I_try_block instrs -> I_try_block (List.map (map_instr_ctyp f) instrs)
+    | I_throw (frag, ctyp) -> I_throw (frag, f ctyp)
+    | I_undefined ctyp -> I_undefined (f ctyp)
+    | I_reset (ctyp, id) -> I_reset (f ctyp, id)
+    | I_reinit (ctyp1, id, (frag, ctyp2)) -> I_reinit (f ctyp1, id, (frag, f ctyp2))
+    | (I_comment _ | I_raw _ | I_label _ | I_goto _ | I_match_failure) as instr -> instr
+  in
+  I_aux (instr, aux)
+
 (** Map over each instruction within an instruction, bottom-up *)
 let rec map_instr f (I_aux (instr, aux)) =
   let instr = match instr with
@@ -576,6 +615,16 @@ let cdef_map_instr f = function
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr f) instrs)
   | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
+
+(** Map over each ctyp in a cdef using map_instr_ctyp *)
+let cdef_map_ctyp f = function
+  | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, f ctyp, List.map (map_instr_ctyp f) instrs)
+  | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr_ctyp f) instrs)
+  | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr_ctyp f) instrs)
+  | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr_ctyp f) instrs)
+  | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr_ctyp f) instrs)
+  | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, List.map f ctyps, f ctyp)
+  | CDEF_type tdef -> CDEF_type tdef (* FIXME *)
 
 (* Map over all sequences of instructions contained within an instruction *)
 let rec map_instrs f (I_aux (instr, aux)) =

@@ -1790,6 +1790,11 @@ let rec specialize_variants ctx =
 
   let unifications = ref (Bindings.empty) in
 
+  let fix_variant_ctyp var_id new_ctors = function
+    | CT_variant (id, ctors) when Id.compare id var_id = 0 -> CT_variant (id, new_ctors)
+    | ctyp -> ctyp
+  in
+
   let specialize_constructor ctx ctor_id ctyp =
     let ctyps = match ctyp with
     | CT_tup ctyps -> ctyps
@@ -1845,8 +1850,7 @@ let rec specialize_variants ctx =
   function
   | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
      let polymorphic_ctors = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) ctors in
-     List.iter (fun (id, ctyp) -> prerr_endline (Printf.sprintf "%s : %s" (string_of_id id) (string_of_ctyp ctyp))) polymorphic_ctors;
-     prerr_endline "=== CONSTRUCTORS ===";
+     (* List.iter (fun (id, ctyp) -> prerr_endline (Printf.sprintf "%s : %s" (string_of_id id) (string_of_ctyp ctyp))) polymorphic_ctors; *)
 
      let cdefs =
        List.fold_left (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
@@ -1855,13 +1859,16 @@ let rec specialize_variants ctx =
      in
 
      let monomorphic_ctors = List.filter (fun (_, ctyp) -> not (is_polymorphic ctyp)) ctors in
+     let specialized_ctors = Bindings.bindings !unifications in
+     let new_ctors = monomorphic_ctors @ specialized_ctors in
 
      let ctx = { ctx with variants = Bindings.add var_id
                                                   (List.fold_left (fun m (id, ctyp) -> Bindings.add id ctyp m) !unifications monomorphic_ctors)
                                                   ctx.variants } in
 
+     let cdefs = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) cdefs in
      let cdefs, ctx = specialize_variants ctx cdefs in
-     CDEF_type (CTD_variant (var_id, monomorphic_ctors @ Bindings.bindings !unifications)) :: cdefs, ctx
+     CDEF_type (CTD_variant (var_id, new_ctors)) :: cdefs, ctx
 
   | cdef :: cdefs ->
      let remove_poly (I_aux (instr, aux)) =
@@ -2752,30 +2759,45 @@ let codegen_def' ctx = function
      ^^ jump 0 2 (separate_map hardline (codegen_instr (mk_id "let") ctx) cleanup) ^^ hardline
      ^^ string "}"
 
+(** As we generate C we need to generate specialized version of tuple,
+   list, and vector type. These must be generated in the correct
+   order. The ctyp_dependencies function generates a list of
+   c_gen_typs in the order they must be generated. Types may be
+   repeated in ctyp_dependencies so it's up to the code-generator not
+   to repeat definitions pointlessly (using the !generated variable)
+   *)
+type c_gen_typ =
+  | CTG_tup of ctyp list
+  | CTG_list of ctyp
+  | CTG_vector of bool * ctyp
+
+let rec ctyp_dependencies = function
+  | CT_tup ctyps -> List.concat (List.map ctyp_dependencies ctyps) @ [CTG_tup ctyps]
+  | CT_list ctyp -> ctyp_dependencies ctyp @ [CTG_list ctyp]
+  | CT_vector (direction, ctyp) -> ctyp_dependencies ctyp @ [CTG_vector (direction, ctyp)]
+  | CT_ref ctyp -> ctyp_dependencies ctyp
+  | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
+  | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
+  | CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly -> []
+
+let codegen_ctg ctx = function
+  | CTG_vector (direction, ctyp) -> codegen_vector ctx (direction, ctyp)
+  | CTG_tup ctyps -> codegen_tup ctx ctyps
+  | CTG_list ctyp -> codegen_list ctx ctyp
+
+(** When we generate code for a definition, we need to first generate
+   any auxillary type definitions that are required. *)
 let codegen_def ctx def =
-  let untup = function
-    | CT_tup ctyps -> ctyps
-    | _ -> assert false
-  in
-  let unlist = function
-    | CT_list ctyp -> ctyp
-    | _ -> assert false
-  in
-  let unvector = function
-    | CT_vector (direction, ctyp) -> (direction, ctyp)
-    | _ -> assert false
-  in
-  let tups = List.filter is_ct_tup (cdef_ctyps ctx def) in
-  let tups = List.map (fun ctyp -> codegen_tup ctx (untup ctyp)) tups in
-  let lists = List.filter is_ct_list (cdef_ctyps ctx def) in
-  let lists = List.map (fun ctyp -> codegen_list ctx (unlist ctyp)) lists in
-  let vectors = List.filter is_ct_vector (cdef_ctyps ctx def) in
-  let vectors = List.map (fun ctyp -> codegen_vector ctx (unvector ctyp)) vectors in
-  (* prerr_endline (Pretty_print_sail.to_string (pp_cdef def)); *)
-  concat vectors
-  ^^ concat lists
-  ^^ concat tups
-  ^^ codegen_def' ctx def
+  let ctyps = cdef_ctyps ctx def in
+  (* We should have erased only polymorphism introduced by variants at this point! *)
+  if List.exists is_polymorphic ctyps then
+    let polymorphic_ctyps = List.filter is_polymorphic ctyps in
+    c_error (Printf.sprintf "Found polymorphic types:\n%s\nwhile generating definition."
+                            (Util.string_of_list "\n" string_of_ctyp polymorphic_ctyps))
+  else
+    let deps = List.concat (List.map ctyp_dependencies ctyps) in
+    separate_map hardline (codegen_ctg ctx) deps
+    ^^ codegen_def' ctx def
 
 let is_cdef_startup = function
   | CDEF_startup _ -> true
