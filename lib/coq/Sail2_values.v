@@ -1017,12 +1017,20 @@ Ltac prepare_for_solver :=
 Ltac solve_arithfact :=
 prepare_for_solver;
 (*dump_context;*)
- solve [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; instantiate (1 := fun _ => True); constructor; constructor end
-       | apply ArithFact_mword; assumption
-       | constructor; omega with Z
-         (* The datatypes hints give us some list handling, esp In *)
-       | constructor; eauto 3 with datatypes zarith sail
-       | constructor; idtac "Unable to solve constraint"; dump_context; fail].
+ solve
+ [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; constructor; exact (I : (fun _ => True) _) end
+ | match goal with |- ArithFact (?x = ?y) =>
+   (is_evar x || is_evar y);
+   (* compute to allow projections to remove proofs that might not be allowed in the evar *)
+   let x := eval cbn in x in
+   let y := eval cbn in y in
+   idtac "Warning: unknown equality constraint"; constructor; exact (eq_refl _ : x = y) end
+ | apply ArithFact_mword; assumption
+ | constructor; omega with Z
+   (* The datatypes hints give us some list handling, esp In *)
+ | constructor; eauto 3 with datatypes zarith sail
+ | constructor; idtac "Unable to solve constraint"; dump_context; fail
+ ].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
 
 Hint Unfold length_mword : sail.
