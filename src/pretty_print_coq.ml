@@ -1315,9 +1315,11 @@ let doc_exp_lem, doc_let_lem =
                 match pat with
                 | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
                    string ">>"
-                | P_aux (P_id id,_) ->
+                | P_aux (P_id id,_)
+                   when Util.is_none (is_auto_decomposed_exist (env_of e1) (typ_of e1)) ->
                    separate space [string ">>= fun"; doc_id id; bigarrow]
-                | P_aux (P_typ (typ, P_aux (P_id id,_)),_) ->
+                | P_aux (P_typ (typ, P_aux (P_id id,_)),_)
+                   when Util.is_none (is_auto_decomposed_exist (env_of e1) typ) ->
                    separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true (pat, typ_of e1); bigarrow]
