@@ -1080,8 +1080,8 @@ let doc_exp_lem, doc_let_lem =
               let typ_from_fn = expand_range_type typ_from_fn_plain in
               (* TODO: more sophisticated check *)
               let () =
-                debug ctxt (lazy ("arg type found    " ^ string_of_typ arg_ty_plain));
-                debug ctxt (lazy ("arg type expected " ^ string_of_typ typ_from_fn_plain))
+                debug ctxt (lazy (" arg type found    " ^ string_of_typ arg_ty_plain));
+                debug ctxt (lazy (" arg type expected " ^ string_of_typ typ_from_fn_plain))
               in
               match destruct_exist env arg_ty, destruct_exist env typ_from_fn with
               | Some _, None -> parens (string "projT1 " ^^ arg_pp)
@@ -1108,8 +1108,8 @@ let doc_exp_lem, doc_let_lem =
                 if is_no_Z_proof_fn env f then ret_typ_inst
                 else snd (replace_atom_return_type ret_typ_inst) in
               let () = 
-                debug ctxt (lazy ("  type returned " ^ string_of_typ ret_typ_inst));
-                debug ctxt (lazy ("  type expected " ^ string_of_typ ann_typ))
+                debug ctxt (lazy (" type returned " ^ string_of_typ ret_typ_inst));
+                debug ctxt (lazy (" type expected " ^ string_of_typ ann_typ))
               in
               let unpack, build_ex, in_typ, out_typ =
                 match ret_typ_inst, ann_typ with
