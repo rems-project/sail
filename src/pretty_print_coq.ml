@@ -152,7 +152,6 @@ let doc_id id = string (string_id id)
 let doc_id_type (Id_aux(i,_)) =
   match i with
   | Id("int") -> string "Z"
-  | Id("nat") -> string "Z"
   | Id i -> string (fix_id false i)
   | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
@@ -384,6 +383,11 @@ let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
      let var = nvar kid in
      let nc = nc_and (nc_lteq low var) (nc_lteq var high) in
      Some (Typ_aux (Typ_exist ([kid], nc, atom_typ var),Parse_ast.Generated l))
+  | Typ_id (Id_aux (Id "nat",_)) ->
+     let kid = mk_kid "n" in
+     let var = nvar kid in
+     Some (Typ_aux (Typ_exist ([kid], nc_gteq var (nconstant Nat_big_num.zero), atom_typ var),
+                    Generated l))
   | _ -> None
 
 let expand_range_type typ = Util.option_default typ (maybe_expand_range_type typ)
@@ -428,7 +432,8 @@ let doc_typ, doc_atomic_typ =
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
          if atyp_needed then parens tpp else tpp
-      | Typ_app(Id_aux (Id "range", _), _) ->
+      | Typ_app(Id_aux (Id "range", _), _)
+      | Typ_id (Id_aux (Id "nat", _)) ->
          (match maybe_expand_range_type ty with
          | Some typ -> atomic_typ atyp_needed typ
          | None -> raise (Reporting_basic.err_unreachable l "Bad range type"))
@@ -805,9 +810,6 @@ let replace_atom_return_type ret_typ =
   | Typ_aux (Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp nexp,_)]),l) ->
      let kid = mk_kid "_retval" in (* TODO: collision avoidance *)
      true, Typ_aux (Typ_exist ([kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Generated l)
-  | Typ_aux (Typ_id (Id_aux (Id "nat",_)),l) ->
-     let kid = mk_kid "_retval" in
-     true, Typ_aux (Typ_exist ([kid], nc_gteq (nvar kid) (nconstant Nat_big_num.zero), atom_typ (nvar kid)),Generated l)
   | _ -> false, ret_typ
 
 let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
@@ -816,10 +818,6 @@ let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
     Typ_app(Id_aux (Id "range", _), [Typ_arg_aux(Typ_arg_nexp low,_);
                                      Typ_arg_aux(Typ_arg_nexp high,_)]) ->
      Type_check.prove env (nc_and (nc_eq nexp low) (nc_eq nexp high))
-  | Typ_exist (_, _, Typ_aux (Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux (Typ_arg_nexp _,_)]), _)),
-    Typ_app(Id_aux (Id "range", _), [Typ_arg_aux(Typ_arg_nexp low,_);
-                                     Typ_arg_aux(Typ_arg_nexp high,_)]) ->
-     Type_check.prove env (nc_eq low high)
   | _ -> false
 
 let prefix_recordtype = true
@@ -1618,10 +1616,6 @@ let rec atom_constraint ctxt (pat, typ) =
      | _ ->
         Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
                                   parens (doc_op equals (doc_id id) (doc_nexp ctxt nexp)))))
-  | P_aux (P_id id, _),
-        Typ_aux (Typ_id (Id_aux (Id "nat",_)),_) ->
-     Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
-                                  parens (doc_op (string ">=") (doc_id id) (string "0"))))
   | P_aux (P_typ (_,p),_), _ -> atom_constraint ctxt (p, typ)
   | _ -> None
 
