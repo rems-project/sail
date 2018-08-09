@@ -828,6 +828,7 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
   | AP_global (_, typ) -> ctyp_of_typ ctx typ
   | AP_cons (apat, _) -> CT_list (apat_ctyp ctx apat)
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
+  | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
 
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
@@ -868,11 +869,15 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        | _ -> failwith ("AP_tup with ctyp " ^ string_of_ctyp ctyp)
      end
 
-  | AP_app (ctor, apat), (frag, ctyp) ->
+  | AP_app (ctor, apat, variant_typ), (frag, ctyp) ->
      begin match ctyp with
      | CT_variant (_, ctors) ->
         let ctor_c_id = string_of_id ctor in
         let ctor_ctyp = Bindings.find ctor (ctor_bindings ctors) in
+        (* These should really be the same, something has gone wrong if they are not. *)
+        if ctyp_equal ctor_ctyp (ctyp_of_typ ctx variant_typ) then
+          c_error ~loc:l (Printf.sprintf "%s is not the same type as %s" (string_of_ctyp ctor_ctyp) (string_of_ctyp (ctyp_of_typ ctx variant_typ)))
+        else ();
         let ctor_c_id =
           if is_polymorphic ctor_ctyp then
             let unification = List.map ctyp_suprema (ctyp_unify ctor_ctyp (apat_ctyp ctx apat)) in
@@ -880,13 +885,18 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
           else
             ctor_c_id
         in
-        let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), ctor_ctyp)) case_label in
+        let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), apat_ctyp ctx apat)) case_label in
         [icomment (string_of_ctyp (apat_ctyp ctx apat)); ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
         @ instrs
         @ [icomment (string_of_ctyp ctor_ctyp)],
         cleanup,
         ctx
-     | _ -> failwith "AP_app constructor with non-variant type"
+     | ctyp ->
+        c_error ~loc:l (Printf.sprintf "Variant constructor %s : %s matching against non-variant type %s : %s"
+                                       (string_of_id ctor)
+                                       (string_of_typ variant_typ)
+                                       (string_of_fragment ~zencode:false frag)
+                                       (string_of_ctyp ctyp))
      end
 
   | AP_wild _, _ -> [], [], ctx

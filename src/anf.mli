@@ -83,7 +83,7 @@ and 'a apat_aux =
   | AP_tup of ('a apat) list
   | AP_id of id * 'a
   | AP_global of id * 'a
-  | AP_app of id * 'a apat
+  | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_nil of 'a
   | AP_wild of 'a
