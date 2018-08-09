@@ -1929,6 +1929,7 @@ let doc_val pat exp =
   in
   let env = env_of exp in
   let typ = expand_range_type (Env.expand_synonyms env (typ_of exp)) in
+  let ctxt = { empty_ctxt with debug  = List.mem (string_of_id id) (!opt_debug_on) } in
   let id, opt_unpack =
     match destruct_exist env typ with
     | None -> id, None
@@ -1943,7 +1944,7 @@ let doc_val pat exp =
   let idpp = doc_id id in
   let basepp =
     group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^
-             doc_exp_lem empty_ctxt false exp ^^ dot) ^^ hardline
+             doc_exp_lem ctxt false exp ^^ dot) ^^ hardline
   in
   match opt_unpack with
   | None -> basepp ^^ hardline
