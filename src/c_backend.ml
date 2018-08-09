@@ -878,14 +878,15 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
         if ctyp_equal ctor_ctyp (ctyp_of_typ ctx variant_typ) then
           c_error ~loc:l (Printf.sprintf "%s is not the same type as %s" (string_of_ctyp ctor_ctyp) (string_of_ctyp (ctyp_of_typ ctx variant_typ)))
         else ();
-        let ctor_c_id =
+        let ctor_c_id, ctor_ctyp =
           if is_polymorphic ctor_ctyp then
             let unification = List.map ctyp_suprema (ctyp_unify ctor_ctyp (apat_ctyp ctx apat)) in
-            ctor_c_id ^ "_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification
+            ctor_c_id ^ "_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification,
+            ctyp_suprema (apat_ctyp ctx apat)
           else
-            ctor_c_id
+            ctor_c_id, ctor_ctyp
         in
-        let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), apat_ctyp ctx apat)) case_label in
+        let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), ctor_ctyp)) case_label in
         [icomment (string_of_ctyp (apat_ctyp ctx apat)); ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
         @ instrs
         @ [icomment (string_of_ctyp ctor_ctyp)],
