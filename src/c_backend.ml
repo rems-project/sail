@@ -2349,23 +2349,24 @@ let codegen_type_def ctx = function
                    rbrace
      in
      let codegen_ctor (ctor_id, ctyp) =
-       let ctor_args, tuple =
+       let ctor_args, tuple, tuple_cleanup =
          let tuple_set i ctyp =
            if is_stack_ctyp ctyp then
              string (Printf.sprintf "op.ztup%d = op%d;" i i)
            else
-             string (Printf.sprintf "set_%s(&op.ztup%d, op%d);" (sgen_ctyp_name ctyp) i i)
+             string (Printf.sprintf "COPY(%s)(&op.ztup%d, op%d);" (sgen_ctyp_name ctyp) i i)
          in
          match ctyp with
          | CT_tup ctyps ->
             String.concat ", " (List.mapi (fun i ctyp -> Printf.sprintf "%s op%d" (sgen_ctyp ctyp) i) ctyps),
             string (Printf.sprintf "%s op;" (sgen_ctyp ctyp)) ^^ hardline
-            ^^ if not (is_stack_ctyp ctyp) then
-                 string (Printf.sprintf "CREATE(%s)(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
-               else
-                 empty
-            ^^ separate hardline (List.mapi tuple_set ctyps) ^^ hardline
-         | ctyp -> Printf.sprintf "%s op" (sgen_ctyp ctyp), empty
+            ^^ (if not (is_stack_ctyp ctyp) then
+                  string (Printf.sprintf "CREATE(%s)(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
+                else
+                  empty)
+            ^^ separate hardline (List.mapi tuple_set ctyps) ^^ hardline,
+            string (Printf.sprintf "KILL(%s)(&op);" (sgen_ctyp_name ctyp))
+         | ctyp -> Printf.sprintf "%s op" (sgen_ctyp ctyp), empty, empty
        in
        string (Printf.sprintf "static void %s(struct %s *rop, %s)" (sgen_id ctor_id) (sgen_id id) ctor_args) ^^ hardline
        ^^ surround 2 0 lbrace
@@ -2376,7 +2377,8 @@ let codegen_type_def ctx = function
                          string (Printf.sprintf "rop->%s = op;" (sgen_id ctor_id))
                        else
                          string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)) ^^ hardline
-                         ^^ string (Printf.sprintf "COPY(%s)(&rop->%s, op);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)))
+                         ^^ string (Printf.sprintf "COPY(%s)(&rop->%s, op);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)) ^^ hardline
+                         ^^ tuple_cleanup)
                    rbrace
      in
      let codegen_setter =
