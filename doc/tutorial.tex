@@ -751,7 +751,7 @@ operator names. Operators may be left, right, or non-associative, and
 there are 10 different precedence levels, ranging from 0 to 9, with 9
 binding the tightest. To declare the precedence of an operator, we use a fixity declaration like:
 \begin{lstlisting}
-infix <=_u 4
+infix 4 <=_u
 \end{lstlisting}
 For left or right associative operators, we'd use the keywords
 \ll{infixl} or \ll{infixr} respectively. An operator can be used
