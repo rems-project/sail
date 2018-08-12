@@ -4043,7 +4043,10 @@ let rewrite_defs_realise_mappings (Defs defs) =
 
 
 (* Rewrite to make all pattern matches in Coq output exhaustive.
-   Assumes that guards, vector patterns, etc have been rewritten already. *)
+   Assumes that guards, vector patterns, etc have been rewritten already,
+   and the scattered functions have been merged.
+   Will add escape effect where a default is needed, so effects will
+   need recalculated afterwards. *)
 
 let opt_coq_warn_nonexhaustive = ref false
 
@@ -4284,6 +4287,37 @@ let rewrite_case (e,ann) =
         E_aux (E_case (e1,cases@[Pat_aux (Pat_exp (p,b),(l,empty_tannot))]),ann)
      end
   | _ -> E_aux (e,ann)
+
+let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
+  let id,fcl_ann =
+    match fcls with
+    | FCL_aux (FCL_Funcl (id,_),ann) :: _ -> id,ann
+    | [] -> raise (Reporting_basic.err_unreachable (fst f_ann)
+                 "Empty function")
+  in
+  let env = env_of_annot fcl_ann in
+  let process_funcl rps (FCL_aux (FCL_Funcl (_,pexp),_)) = process_pexp env rps pexp in
+  let rps = List.fold_left process_funcl [RP_any] fcls in
+  let fcls' = List.map (function FCL_aux (FCL_Funcl (id,pexp),ann) ->
+                                  FCL_aux (FCL_Funcl (id, rewrite_pexp rewriters pexp),ann))
+                fcls in
+  match rps with
+  | [] -> FD_aux (FD_function (r,t,e,fcls'),f_ann)
+  | (example::_) ->
+     let _ =
+       if !opt_coq_warn_nonexhaustive
+       then Reporting_basic.print_err false false
+              (fst f_ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example) in
+
+     let l = Parse_ast.Generated Parse_ast.Unknown in
+     let p = P_aux (P_wild, (l, empty_tannot)) in
+     let ann' = mk_tannot env (typ_of_annot fcl_ann) (mk_effect [BE_escape]) in
+     (* TODO: use an expression that specifically indicates a failed pattern match *)
+     let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,empty_tannot))),(l,ann')) in
+     let default = FCL_aux (FCL_Funcl (id,Pat_aux (Pat_exp (p,b),(l,empty_tannot))),fcl_ann) in
+
+     FD_aux (FD_function (r,t,e,fcls'@[default]),f_ann)
+  
 
 let rewrite =
   let alg = { id_exp_alg with e_aux = rewrite_case } in

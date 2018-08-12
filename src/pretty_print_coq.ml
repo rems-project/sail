@@ -105,6 +105,11 @@ let is_number_char c =
   c = '0' || c = '1' || c = '2' || c = '3' || c = '4' || c = '5' ||
   c = '6' || c = '7' || c = '8' || c = '9'
 
+let is_enum env id =
+  match Env.lookup_id id env with
+  | Enum _ -> true
+  | _ -> false
+
 let rec fix_id remove_tick name = match name with
   | "assert"
   | "lsl"
@@ -1316,10 +1321,12 @@ let doc_exp_lem, doc_let_lem =
                 | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
                    string ">>"
                 | P_aux (P_id id,_)
-                   when Util.is_none (is_auto_decomposed_exist (env_of e1) (typ_of e1)) ->
+                   when Util.is_none (is_auto_decomposed_exist (env_of e1) (typ_of e1)) &&
+                        not (is_enum (env_of e1) id) ->
                    separate space [string ">>= fun"; doc_id id; bigarrow]
                 | P_aux (P_typ (typ, P_aux (P_id id,_)),_)
-                   when Util.is_none (is_auto_decomposed_exist (env_of e1) typ) ->
+                   when Util.is_none (is_auto_decomposed_exist (env_of e1) typ) &&
+                        not (is_enum (env_of e1) id) ->
                    separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true (pat, typ_of e1); bigarrow]
@@ -1373,12 +1380,14 @@ let doc_exp_lem, doc_let_lem =
     (* Prefer simple lets over patterns, because I've found Coq can struggle to
        work out return types otherwise *)
     | LB_val(P_aux (P_id id,_),e)
-      when Util.is_none (is_auto_decomposed_exist (env_of e) (typ_of e)) ->
+      when Util.is_none (is_auto_decomposed_exist (env_of e) (typ_of e)) &&
+           not (is_enum (env_of e) id) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
     | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e)
-      when Util.is_none (is_auto_decomposed_exist (env_of e) typ) ->
+      when Util.is_none (is_auto_decomposed_exist (env_of e) typ) &&
+           not (is_enum (env_of e) id) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; colon; doc_typ ctxt typ; coloneq])
               (top_exp ctxt false e)
@@ -1730,7 +1739,9 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     let exp_typ = Env.expand_synonyms env typ in
     match p with
     | P_id id
-    | P_typ (_,P_aux (P_id id,_)) when Util.is_none (is_auto_decomposed_exist env exp_typ) ->
+    | P_typ (_,P_aux (P_id id,_))
+         when Util.is_none (is_auto_decomposed_exist env exp_typ) &&
+              not (is_enum env id) ->
        parens (separate space [doc_id id; colon; doc_typ ctxt typ])
     | _ ->
        (used_a_pattern := true;

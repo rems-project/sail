@@ -74,6 +74,8 @@ val rewrite_lexp : tannot rewriters -> tannot lexp -> tannot lexp
 
 val rewrite_pat : tannot rewriters -> tannot pat -> tannot pat
 
+val rewrite_pexp : tannot rewriters -> tannot pexp -> tannot pexp
+
 val rewrite_let : tannot rewriters -> tannot letbind -> tannot letbind
 
 val rewrite_def : tannot rewriters -> tannot def -> tannot def
