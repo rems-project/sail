@@ -64,11 +64,11 @@ function def_spc_backwards s = ()
 val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
 
 
-val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lt_atom = "lt" : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gt_atom = "gt" : forall 'n 'm. (atom('n), atom('m)) -> bool
+val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lteq_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lt_atom = {coq: "Z.ltb", _: "lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gt_atom = {coq: "Z.gtb", _: "gt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
 val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit"} : (bit, bit) -> bool

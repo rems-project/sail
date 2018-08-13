@@ -85,7 +85,7 @@ let MSIP_BASE     : xlenbits = 0x0000000000000000
 let MTIMECMP_BASE : xlenbits = 0x0000000000004000
 let MTIME_BASE    : xlenbits = 0x000000000000bff8
 
-val clint_load : forall 'n. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rreg}
+val clint_load : forall 'n, 'n > 0. (xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n)) effect {rreg}
 function clint_load(addr, width) = {
   let addr = addr - plat_clint_base ();
   /* FIXME: For now, only allow exact aligned access. */
@@ -224,7 +224,7 @@ function within_mmio_readable(addr : xlenbits, width : atom('n)) -> forall 'n. b
 function within_mmio_writable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
   within_clint(addr, width) | (within_htif_writable(addr, width) & 'n <= 8)
 
-function mmio_read(addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+function mmio_read(addr : xlenbits, width : atom('n)) -> forall 'n, 'n > 0. MemoryOpResult(bits(8 * 'n)) =
   if   within_clint(addr, width)
   then clint_load(addr, width)
   else if within_htif_readable(addr, width) & (1 <= 'n)

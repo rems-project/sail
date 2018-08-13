@@ -16,7 +16,7 @@ function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : boo
                                MemValue(v) }
   }
 
-function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n, 'n >= 0. MemoryOpResult(bits(8 * 'n)) =
+function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n, 'n > 0. MemoryOpResult(bits(8 * 'n)) =
   /* treat MMIO regions as not executable for now. TODO: this should actually come from PMP/PMA. */
   if   t == Data & within_mmio_readable(addr, width)
   then mmio_read(addr, width)
