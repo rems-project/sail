@@ -81,9 +81,12 @@ COQ_LIBS = -R ../../bbv/theories bbv -R ../lib/coq Sail
 
 riscv.v riscv_types.v: $(SAIL_SRCS)
 	$(SAIL) $(SAIL_FLAGS) -dcoq_undef_axioms -coq -o riscv -coq_lib riscv_extras $(SAIL_SRCS)
+riscv_duopod.v riscv_duopod_types.v:  prelude.sail riscv_duopod.sail
+	$(SAIL) $(SAIL_FLAGS) -dcoq_undef_axioms -coq -o riscv_duopod -coq_lib riscv_extras $^
 %.vo: %.v
 	coqc $(COQ_LIBS) $<
 riscv.vo: riscv_types.vo riscv_extras.vo
+riscv_duopod.vo: riscv_duopod_types.vo riscv_extras.vo
 
 # we exclude prelude.sail here, most code there should move to sail lib
 LOC_FILES:=$(SAIL_SRCS) main.sail
@@ -98,5 +101,6 @@ clean:
 	-rm -f riscvScript.sml riscv_typesScript.sml riscv_extrasScript.sml
 	-rm -f platform_main.native platform coverage.native
 	-rm -f riscv.vo riscv_types.vo riscv_extras.vo riscv.v riscv_types.v
+	-rm -f riscv_duopod.vo riscv_duopod_types.vo riscv_duopod.v riscv_duopod_types.v
 	-Holmake cleanAll
 	ocamlbuild -clean
