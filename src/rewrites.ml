@@ -1084,9 +1084,11 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   | _, P_typ (_,pat2) -> subsumes_pat pat1 pat2
   | P_id (Id_aux (id1,_) as aid1), P_id (Id_aux (id2,_) as aid2) ->
     if id1 = id2 then Some []
-    else if Env.lookup_id aid1 (env_of_annot annot1) = Unbound &&
-            Env.lookup_id aid2 (env_of_annot annot2) = Unbound
-           then Some [(id2,id1)] else None
+    else if Env.lookup_id aid1 (env_of_annot annot1) = Unbound
+    then if Env.lookup_id aid2 (env_of_annot annot2) = Unbound
+      then Some [(id2,id1)]
+      else Some []
+    else None
   | P_id id1, _ ->
     if Env.lookup_id id1 (env_of_annot annot1) = Unbound then Some [] else None
   | P_var (pat1,_), P_var (pat2,_) -> subsumes_pat pat1 pat2
