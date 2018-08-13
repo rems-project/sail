@@ -124,9 +124,9 @@ Definition skip {rv e} (_:unit) : monad rv unit e := returnm tt.
 Definition elf_entry (_:unit) : Z := 0.
 (*declare ocaml target_rep function elf_entry := `Elf_loader.elf_entry`*)
 
-(*Definition print_bits msg bs := prerr_endline (msg ^ (string_of_bits bs))
+Definition print_bits {n} msg (bs : mword n) := prerr_endline (msg ++ (string_of_bits bs)).
 
-val get_time_ns : unit -> integer*)
+(*val get_time_ns : unit -> integer*)
 Definition get_time_ns (_:unit) : Z := 0.
 (*declare ocaml target_rep function get_time_ns := `(fun () -> Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ())))`*)
 
