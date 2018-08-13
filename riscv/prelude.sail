@@ -276,14 +276,14 @@ overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
 
 overload negate = {negate_range, negate_int, negate_real}
 
-val mult_range = {ocaml: "mult", lem: "integerMult"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
+val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n * 'm)
 
 val mult_int = {ocaml: "mult", lem: "integerMult", coq: "Z.mul"} : (int, int) -> int
 
 val mult_real = {ocaml: "mult_real", lem: "realMult"} : (real, real) -> real
 
-overload operator * = {mult_range, mult_int, mult_real}
+overload operator * = {mult_atom, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
@@ -496,7 +496,3 @@ function shift_right_arith64 (v : bits(64), shift : bits(6)) -> bits(64) =
 function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
     let v64 : bits(64) = EXTS(v) in
     (v64 >> shift)[31..0]
-
-/* Copied from arith.sail. */
-val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int"} : forall 'n 'm.
-  (atom('n), atom('m)) -> atom('n * 'm)
