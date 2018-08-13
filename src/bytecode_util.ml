@@ -259,6 +259,15 @@ let rec ctyp_suprema = function
   | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
   | CT_poly -> CT_poly
 
+let rec ctyp_ids = function
+  | CT_enum (id, _) -> IdSet.singleton id
+  | CT_struct (id, ctors) | CT_variant (id, ctors) ->
+     IdSet.add id (List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors)
+  | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctyps
+  | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
+  | CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_unit
+    | CT_bool | CT_real | CT_bit | CT_string | CT_poly -> IdSet.empty
+    
 let rec unpoly = function
   | F_poly f -> unpoly f
   | F_call (call, fs) -> F_call (call, List.map unpoly fs)

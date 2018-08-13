@@ -1873,10 +1873,12 @@ let rec specialize_variants ctx =
      let specialized_ctors = Bindings.bindings !unifications in
      let new_ctors = monomorphic_ctors @ specialized_ctors in
 
-     let ctx = { ctx with variants = Bindings.add var_id
-                                                  (List.fold_left (fun m (id, ctyp) -> Bindings.add id ctyp m) !unifications monomorphic_ctors)
-                                                  ctx.variants } in
-
+     let ctx = {
+         ctx with variants = Bindings.add var_id
+                               (List.fold_left (fun m (id, ctyp) -> Bindings.add id ctyp m) !unifications monomorphic_ctors)
+                               ctx.variants
+       } in
+     
      let cdefs = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) cdefs in
      let cdefs, ctx = specialize_variants ctx cdefs in
      CDEF_type (CTD_variant (var_id, new_ctors)) :: cdefs, ctx
@@ -1893,6 +1895,41 @@ let rec specialize_variants ctx =
      cdef :: cdefs, ctx
 
   | [] -> [], ctx
+
+(** Once we specialize variants, there may be additional type
+   dependencies which could be in the wrong order. As such we need to
+   sort the type definitions in the list of cdefs. *)
+let sort_ctype_defs cdefs =
+  (* Split the cdefs into type definitions and non type definitions *)
+  let is_ctype_def = function CDEF_type _ -> true | _ -> false in
+  let ctype_defs = List.filter is_ctype_def cdefs in
+  let cdefs = List.filter (fun cdef -> not (is_ctype_def cdef)) cdefs in
+
+  let ctdef_id = function
+    | CTD_enum (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id
+  in
+
+  let ctdef_ids = function
+    | CTD_enum _ -> IdSet.empty
+    | CTD_struct (_, ctors) | CTD_variant (_, ctors) ->
+       List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors
+  in
+
+  let depends_on cdef1 cdef2 =
+    match cdef1, cdef2 with
+    | CDEF_type ctdef1, CDEF_type ctdef2 ->
+       let ctdef1_ids = ctdef_ids ctdef1 in
+       let ctdef2_ids = ctdef_ids ctdef2 in
+       if IdSet.mem (ctdef_id ctdef1) ctdef2_ids && IdSet.mem (ctdef_id ctdef2) ctdef1_ids then
+         c_error (Printf.sprintf "Post specialization circular dependency between %s and %s found"
+                    (string_of_id (ctdef_id ctdef1))
+                    (string_of_id (ctdef_id ctdef2)))
+       else if IdSet.mem (ctdef_id ctdef1) ctdef2_ids then -1
+       else 1
+
+    | _, _ -> assert false (* We only use this on ctype_defs *)
+  in
+  List.sort depends_on ctype_defs @ cdefs
 
               (*
 (* When this optimization fires we know we have bytecode of the form
@@ -2935,6 +2972,7 @@ let compile_ast ctx (Defs defs) =
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
     let cdefs, ctx = specialize_variants ctx cdefs in
+    let cdefs = sort_ctype_defs cdefs in
     let cdefs = optimize ctx cdefs in
     prerr_endline (Pretty_print_sail.to_string (separate_map (hardline ^^ hardline) pp_cdef cdefs));
     (*
