@@ -134,7 +134,7 @@ val vector_concat = {ocaml: "append", lem: "append_list"} : forall ('n : Int) ('
 
 overload append = {bitvector_concat, vector_concat}
 
-val not_bool = "not" : bool -> bool
+val not_bool = {coq: "negb", _: "not"} : bool -> bool
 
 val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
@@ -158,7 +158,7 @@ function neq_anything (x, y) = not_bool(x == y)
 
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
-val and_bool = "and_bool" : (bool, bool) -> bool
+val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
 
 val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -168,7 +168,7 @@ function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
 overload operator & = {and_bool, and_vec}
 
-val or_bool = "or_bool" : (bool, bool) -> bool
+val or_bool = {coq: "orb", _:"or_bool"} : (bool, bool) -> bool
 
 val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -182,7 +182,7 @@ val unsigned = {ocaml: "uint", lem: "uint"} : forall 'n. bits('n) -> range(0, 2 
 
 val signed = {ocaml: "sint", lem: "sint"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
-val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm)
+val hex_slice = "hex_slice" : forall 'n 'm, 'n >= 'm. (string, atom('n), atom('m)) -> bits('n - 'm)
 
 val __SetSlice_bits = "set_slice" : forall 'n 'm.
   (atom('n), atom('m), bits('n), int, bits('m)) -> bits('n)
@@ -191,16 +191,16 @@ val __SetSlice_int = "set_slice_int" : forall 'w. (atom('w), int, int, bits('w))
 
 val __raw_SetSlice_int : forall 'w. (atom('w), int, int, bits('w)) -> int
 
-val __raw_GetSlice_int = "get_slice_int" : forall 'w. (atom('w), int, int) -> bits('w)
+val __raw_GetSlice_int = "get_slice_int" : forall 'w, 'w >= 0. (atom('w), int, int) -> bits('w)
 
-val __GetSlice_int : forall 'n. (atom('n), int, int) -> bits('n)
+val __GetSlice_int : forall 'n, 'n >= 0. (atom('n), int, int) -> bits('n)
 
 function __GetSlice_int (n, m, o) = __raw_GetSlice_int(n, m, o)
 
 val __raw_SetSlice_bits : forall 'n 'w.
   (atom('n), atom('w), bits('n), int, bits('w)) -> bits('n)
 
-val __raw_GetSlice_bits : forall 'n 'w.
+val __raw_GetSlice_bits : forall 'n 'w, 'w >= 0.
   (atom('n), atom('w), bits('n), int) -> bits('w)
 
 val "shiftl" : forall 'm. (bits('m), int) -> bits('m)
@@ -239,10 +239,10 @@ val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> r
 
 overload operator ^ = {xor_vec, int_power, real_power, concat_str}
 
-val add_range = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm 'o 'p.
+val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val add_int = {ocaml: "add_int", lem: "integerAdd"} : (int, int) -> int
+val add_int = {ocaml: "add_int", lem: "integerAdd", coq: "Z.add"} : (int, int) -> int
 
 val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -252,10 +252,10 @@ val add_real = {ocaml: "add_real", lem: "realAdd"} : (real, real) -> real
 
 overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
 
-val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
+val sub_range = {ocaml: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
-val sub_int = {ocaml: "sub_int", lem: "integerMinus"} : (int, int) -> int
+val sub_int = {ocaml: "sub_int", lem: "integerMinus", coq: "Z.sub"} : (int, int) -> int
 val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
                lem: "integerMinus"}
             : (nat, nat) -> nat
@@ -266,9 +266,9 @@ val "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 val sub_real = {ocaml: "sub_real", lem: "realMinus"} : (real, real) -> real
 
-val negate_range = {ocaml: "minus_big_int", lem: "integerNegate"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
+val negate_range = {ocaml: "minus_big_int", lem: "integerNegate", coq: "negate_range"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
 
-val negate_int = {ocaml: "minus_big_int", lem: "integerNegate"} : int -> int
+val negate_int = {ocaml: "minus_big_int", lem: "integerNegate", coq: "Z.opp"} : int -> int
 
 val negate_real = {ocaml: "Num.minus_num", lem: "realNegate"} : real -> real
 
@@ -279,7 +279,7 @@ overload negate = {negate_range, negate_int, negate_real}
 val mult_range = {ocaml: "mult", lem: "integerMult"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
 
-val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
+val mult_int = {ocaml: "mult", lem: "integerMult", coq: "Z.mul"} : (int, int) -> int
 
 val mult_real = {ocaml: "mult_real", lem: "realMult"} : (real, real) -> real
 
@@ -287,25 +287,25 @@ overload operator * = {mult_range, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
-val gteq_int = "gteq" : (int, int) -> bool
+val gteq_int = {coq: "Z.geb", _: "gteq"} : (int, int) -> bool
 
 val gteq_real = {ocaml: "gteq_real", lem: "gteq"} : (real, real) -> bool
 
 overload operator >= = {gteq_atom, gteq_int, gteq_real}
 
-val lteq_int = "lteq" : (int, int) -> bool
+val lteq_int = {coq: "Z.leb", _: "lteq"} : (int, int) -> bool
 
 val lteq_real = {ocaml: "lteq_real", lem: "lteq"} : (real, real) -> bool
 
 overload operator <= = {lteq_atom, lteq_int, lteq_real}
 
-val gt_int = "gt" : (int, int) -> bool
+val gt_int = {coq: "Z.gtb", _: "gt"} : (int, int) -> bool
 
 val gt_real = {ocaml: "gt_real", lem: "gt"} : (real, real) -> bool
 
 overload operator > = {gt_atom, gt_int, gt_real}
 
-val lt_int = "lt" : (int, int) -> bool
+val lt_int = {coq: "Z.ltb", _: "lt"} : (int, int) -> bool
 
 val lt_real = {ocaml: "lt_real", lem: "lt"} : (real, real) -> bool
 
@@ -315,7 +315,7 @@ val RoundDown = {ocaml: "round_down", lem: "realFloor"} : real -> int
 
 val RoundUp = {ocaml: "round_up", lem: "realCeiling"} : real -> int
 
-val abs_int = {ocaml: "abs_int", lem: "abs"} : int -> int
+val abs_int = {ocaml: "abs_int", lem: "abs", coq: "Z.abs"} : int -> int
 
 val abs_real = {ocaml: "abs_real", lem: "abs"} : real -> real
 
@@ -365,25 +365,25 @@ function __RISCV_write (addr, width, data) = {
 val __TraceMemoryWrite : forall 'n 'm.
   (atom('n), bits('m), bits(8 * 'n)) -> unit
 
-val __ReadRAM = { lem: "MEMr", _ : "read_ram" } : forall 'n 'm.
+val __ReadRAM = { lem: "MEMr", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __ReadRAM_acquire = { lem: "MEMr_acquire", _ : "read_ram" } : forall 'n 'm.
+val __ReadRAM_acquire = { lem: "MEMr_acquire", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __ReadRAM_strong_acquire = { lem: "MEMr_strong_acquire", _ : "read_ram" } : forall 'n 'm.
+val __ReadRAM_strong_acquire = { lem: "MEMr_strong_acquire", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __ReadRAM_reserved = { lem: "MEMr_reserved", _ : "read_ram" } : forall 'n 'm.
+val __ReadRAM_reserved = { lem: "MEMr_reserved", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __ReadRAM_reserved_acquire = { lem: "MEMr_reserved_acquire", _ : "read_ram" } : forall 'n 'm.
+val __ReadRAM_reserved_acquire = { lem: "MEMr_reserved_acquire", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __ReadRAM_reserved_strong_acquire = { lem: "MEMr_reserved_strong_acquire", _ : "read_ram" } : forall 'n 'm.
+val __ReadRAM_reserved_strong_acquire = { lem: "MEMr_reserved_strong_acquire", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __RISCV_read : forall 'n. (bits(64), atom('n), bool, bool, bool) -> option(bits(8 * 'n)) effect {rmem}
+val __RISCV_read : forall 'n, 'n >= 0. (bits(64), atom('n), bool, bool, bool) -> option(bits(8 * 'n)) effect {rmem}
 function __RISCV_read (addr, width, aq, rl, res) =
   match (aq, rl, res) {
     (false, false, false) => Some(__ReadRAM(64, width, 0x0000_0000_0000_0000, addr)),
@@ -398,7 +398,7 @@ function __RISCV_read (addr, width, aq, rl, res) =
 
 val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
 
-val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
+val replicate_bits = "replicate_bits" : forall 'n 'm, 'm >= 0. (bits('n), atom('m)) -> bits('n * 'm)
 
 val cast ex_nat : nat -> {'n, 'n >= 0. atom('n)}
 
@@ -476,7 +476,7 @@ val vector64 : int -> bits(64)
 
 function vector64 n = __raw_GetSlice_int(64, n, 0)
 
-val to_bits : forall 'l.(atom('l), int) -> bits('l)
+val to_bits : forall 'l, 'l >= 0.(atom('l), int) -> bits('l)
 function to_bits (l, n) = __raw_GetSlice_int(l, n, 0)
 
 val vector_update_subrange_dec = {ocaml: "update_subrange", lem: "update_subrange_vec_dec"} : forall 'n 'm 'o.

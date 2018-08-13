@@ -8,7 +8,7 @@ function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool 
   unsigned(addr) % width == 0
 
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : bool, rl: bool, res : bool) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : bool, rl: bool, res : bool) -> forall 'n, 'n >= 0. MemoryOpResult(bits(8 * 'n)) =
   match (t, __RISCV_read(addr, width, aq, rl, res)) {
     (Instruction, None()) => MemException(E_Fetch_Access_Fault),
     (Data, None())        => MemException(E_Load_Access_Fault),
@@ -16,7 +16,7 @@ function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : boo
                                MemValue(v) }
   }
 
-function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n. MemoryOpResult(bits(8 * 'n)) =
+function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n)) -> forall 'n, 'n >= 0. MemoryOpResult(bits(8 * 'n)) =
   /* treat MMIO regions as not executable for now. TODO: this should actually come from PMP/PMA. */
   if   t == Data & within_mmio_readable(addr, width)
   then mmio_read(addr, width)
