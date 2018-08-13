@@ -938,6 +938,11 @@ end.
 Ltac not_Z ty := match ty with Z => fail 1 | _ => idtac end.
 Ltac clear_non_Z_defns := 
   repeat match goal with H := _ : ?X |- _ => not_Z X; clearbody H end.
+Ltac clear_irrelevant_defns :=
+repeat match goal with X := _ |- _ =>
+  match goal with |- context[X] => idtac end ||
+  match goal with _ : context[X] |- _ => idtac end || clear X
+end.
 
 Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >= 0).
 constructor.
@@ -1005,6 +1010,7 @@ Ltac dump_context :=
   match goal with |- ?X => idtac "Goal:" X end.
 Ltac prepare_for_solver :=
 (*dump_context;*)
+ clear_irrelevant_defns;
  clear_non_Z_defns;
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
