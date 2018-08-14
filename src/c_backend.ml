@@ -299,8 +299,7 @@ let rec c_aval ctx = function
               if is_stack_ctyp ctyp then
                 AV_C_fragment (F_id id, typ)
               else
-                (prerr_endline (string_of_id id ^ " : " ^ string_of_ctyp ctyp ^ " -> " ^ string_of_ctyp (ctyp_of_typ ctx typ));
-                v) (* id's type went from heap -> stack due to flow typing, so it's really still heap allocated! *)
+                v (* id's type went from heap -> stack due to flow typing, so it's really still heap allocated! *)
             with
               Not_found -> failwith ("could not find " ^ string_of_id id ^ " in local variables")
           end
@@ -449,7 +448,6 @@ let analyze_primop' ctx id args typ =
      begin match destruct_vector ctx.tc_env vtyp with
      | Some (Nexp_aux (Nexp_constant n, _), _, _)
           when Big_int.less_equal n (Big_int.of_int 63) && is_stack_typ ctx typ ->
-        prerr_endline "Optimizing uint"; (* TODO: Not sure this ever fires *)
         AE_val (AV_C_fragment (frag, typ))
      | _ -> no_change
      end
@@ -791,7 +789,7 @@ let compile_funcall l ctx id args typ =
 
   let setup_arg ctyp aval =
     let arg_setup, cval, arg_cleanup = compile_aval ctx aval in
-    setup := List.rev arg_setup @ [icomment (string_of_ctyp ctyp ^ " <- " ^ string_of_ctyp (cval_ctyp cval))] @ !setup;
+    setup := List.rev arg_setup @ !setup;
     cleanup := arg_cleanup @ !cleanup;
     let have_ctyp = cval_ctyp cval in
     if is_polymorphic ctyp then
@@ -887,9 +885,8 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
             ctor_c_id, ctor_ctyp
         in
         let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), ctor_ctyp)) case_label in
-        [icomment (string_of_ctyp (apat_ctyp ctx apat)); ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
-        @ instrs
-        @ [icomment (string_of_ctyp ctor_ctyp)],
+        [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
+        @ instrs,
         cleanup,
         ctx
      | ctyp ->
@@ -1060,7 +1057,6 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval ctx aval in
        field_setup
-       @ [icomment (string_of_ctyp ctyp)]
        @ [icopy (CL_field (gs, string_of_id id, Bindings.find id ctors)) cval]
        @ field_cleanup
      in
@@ -1605,12 +1601,9 @@ let rec compile_def ctx = function
      let n = !letdef_count in
      incr letdef_count;
      let instrs =
-       [icomment "gs_setup"] @ gs_setup @ [icomment "setup"] @ setup
-       @ [icomment "call"]
+       gs_setup @ setup
        @ [call (CL_id (gs, ctyp))]
-       @ [icomment "cleanup"]
        @ cleanup
-       @ [icomment "destructure"]
        @ destructure
        @ destructure_cleanup @ gs_cleanup
        @ [ilabel end_label]
@@ -1818,15 +1811,11 @@ let rec specialize_variants ctx =
     function
     | I_aux (I_funcall (clexp, extern, id, cvals), aux) as instr when Id.compare id ctor_id = 0 ->
        assert (List.length ctyps = List.length cvals);
-       List.iter2 (fun cval ctyp -> prerr_endline (Pretty_print_sail.to_string (pp_cval cval) ^ " -> " ^ string_of_ctyp ctyp)) cvals ctyps;
 
        (* Work out how each call to a constructor in instantiated and add that to unifications *)
        let unification = List.concat (List.map2 (fun cval ctyp -> List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval))) cvals ctyps) in
        let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification) in
        unifications := Bindings.add mono_id (ctyp_suprema (mk_tuple (List.map cval_ctyp cvals))) !unifications;
-
-       List.iter (fun ctyp -> prerr_endline (string_of_ctyp ctyp)) unification;
-       prerr_endline (string_of_id mono_id);
 
        (* We need to cast each cval to it's ctyp_suprema in order to put it in the most general constructor *)
        let casts =
@@ -1861,7 +1850,6 @@ let rec specialize_variants ctx =
   function
   | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
      let polymorphic_ctors = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) ctors in
-     (* List.iter (fun (id, ctyp) -> prerr_endline (Printf.sprintf "%s : %s" (string_of_id id) (string_of_ctyp ctyp))) polymorphic_ctors; *)
 
      let cdefs =
        List.fold_left (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
@@ -1878,7 +1866,7 @@ let rec specialize_variants ctx =
                                (List.fold_left (fun m (id, ctyp) -> Bindings.add id ctyp m) !unifications monomorphic_ctors)
                                ctx.variants
        } in
-     
+
      let cdefs = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) cdefs in
      let cdefs, ctx = specialize_variants ctx cdefs in
      CDEF_type (CTD_variant (var_id, new_ctors)) :: cdefs, ctx
@@ -1918,7 +1906,7 @@ let sort_ctype_defs cdefs =
 
   (* Create a reverse id graph of dependencies between types *)
   let module IdGraph = Graph.Make(Id) in
-  
+
   let graph =
     List.fold_left (fun g ctdef ->
         List.fold_left (fun g id -> IdGraph.add_edge id (ctdef_id ctdef) g)
@@ -1935,7 +1923,7 @@ let sort_ctype_defs cdefs =
   in
 
   ctype_defs @ cdefs
-         
+
               (*
 (* When this optimization fires we know we have bytecode of the form
 
@@ -2979,7 +2967,6 @@ let compile_ast ctx (Defs defs) =
     let cdefs, ctx = specialize_variants ctx cdefs in
     let cdefs = sort_ctype_defs cdefs in
     let cdefs = optimize ctx cdefs in
-    prerr_endline (Pretty_print_sail.to_string (separate_map (hardline ^^ hardline) pp_cdef cdefs));
     (*
     let cdefs = if !opt_trace then List.map (instrument_tracing ctx) cdefs else cdefs in
      *)
