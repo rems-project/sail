@@ -1,18 +1,26 @@
-Installing Sail on Ubuntu
+Installing Sail on Ubuntu and macOS
 =========================
 
 This note lists the commands needed to get Sail and all dependencies
-working on a new Ubuntu install. I recently (2018-02-17) tested these
-on Xubuntu 16.04 LTS in a virtual machine, so they should
+working on a new Ubuntu install or macOS. We have recently (2018-02-17) tested these
+on Xubuntu 16.04 LTS in a virtual machine and on macOS Sierre 10.12.6, so they should
 work. Hopefully this will be useful as a reference.
 
 Basics
 ------
 
 First we need some basic packages if they're not already installed.
+
+For Ubuntu:
 ```
 sudo apt-get install build-essential git
 ```
+
+For macOS: compilers and supporting utilities are called Xcode instead of build-essential. First, download Xcode from the Mac App Store, and then run the following in the terminal:
+```
+xcode-select --install
+```
+git can be installed using ```brew install git```
 
 OCaml and sail expect some packages. m4 is for OPAM, libgmp-dev is for
 zarith which most of our tools rely on. Sail uses Z3 as a constraint
@@ -20,13 +28,15 @@ solver.
 ```
 sudo apt-get install m4 libgmp-dev z3
 ```
+For macOS: ```brew install m4 gmp z3``` 
 
 OCaml and OPAM
 --------------
 
 Install OPAM. Either directly from [https://opam.ocaml.org] or from
-the package manager - both should work, but I used the install script
-from the website. This should install OCaml 4.05.
+the package manager - both should work, but we used the install script
+from the website. This should install OCaml 4.05. Don't forget to run
+```opam init``` after installing OPAM.
 
 We now need ocamlbuild, zarith, and menhir from OPAM.
 ```
@@ -47,6 +57,8 @@ cd ott
 make
 cd ..
 ```
+Sail depends on ott, so add the ott executable (``` path-to-ott/bin```) in the $PATH.
+
 
 Lem
 ---
@@ -65,7 +77,7 @@ cd ../..
 Linksem
 -------
 
-Make sure the LEMLIB environment variable is set correctly before building linksem. This should be the library directory within the checked-out lem directory.
+Before installing linksem, we are required to set the LEMLIB environment variable and to put the lem executable in $PATH. LEMLIB should be the library directory within the checked-out lem directory (i.e. ```path-to-lem/library/```). Next, install linksem as
 
 ```
 git clone git@github.com:rems-project/linksem.git

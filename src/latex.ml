@@ -126,7 +126,7 @@ let rec latex_command ?prefix:(prefix="") ?label:(label=None) dir cmd no_loc ((l
     | Some l -> Printf.sprintf "\\label{%s}" l
   in
   let cmd = !opt_prefix_latex ^ prefix ^ cmd in
-  let lcmd = String.lowercase_ascii cmd in  (* lowercase to avoid file names differing only by case *)
+  let lcmd = String.lowercase cmd in  (* lowercase to avoid file names differing only by case *)
   if StringSet.mem lcmd !commands then
     latex_command ~label:label dir (cmd ^ "v") no_loc annot
   else

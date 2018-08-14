@@ -271,14 +271,14 @@ let output_lem filename libs defs =
       operators_module
     ] @ monad_modules
   in
-  let isa_thy_name = String.capitalize_ascii filename ^ "_lemmas" in
+  let isa_thy_name = String.capitalize filename ^ "_lemmas" in
   let isa_lemmas =
     separate hardline [
       string ("theory " ^ isa_thy_name);
       string  "  imports";
       string  "    Sail.Sail2_values_lemmas";
       string  "    Sail.Sail2_state_lemmas";
-      string ("    " ^ String.capitalize_ascii filename);
+      string ("    " ^ String.capitalize filename);
       string  "begin";
       string  "";
       State.generate_isa_lemmas !Pretty_print_lem.opt_mwords defs;
@@ -292,7 +292,7 @@ let output_lem filename libs defs =
     open_output_with_check_unformatted (filename ^ ".lem") in
   (Pretty_print.pp_defs_lem
      (ot, base_imports)
-     (o, base_imports @ (String.capitalize_ascii types_module :: libs))
+     (o, base_imports @ (String.capitalize types_module :: libs))
      defs generated_line);
   close_output_with_check ext_ot;
   close_output_with_check ext_o;
@@ -309,6 +309,7 @@ let output_coq filename libs defs =
   let base_imports = [
       "Sail2_instr_kinds";
       "Sail2_values";
+      "Sail2_string";
       operators_module
     ] @ monad_modules
   in

@@ -6,6 +6,9 @@ Require Import Sail2_prompt.
 Require Import String.
 Require Import List.
 Import List.ListNotations.
+
+Axiom real : Type.
+
 (*
 val MEMr             : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b => 'a -> integer -> monad 'regval 'b 'e
 val MEMr_reserve     : forall 'regval 'a 'b 'e. Bitvector 'a, Bitvector 'b => 'a -> integer -> monad 'regval 'b 'e
@@ -73,11 +76,11 @@ Definition get_slice_int_bl len n lo :=
 val get_slice_int : forall 'a. Bitvector 'a => integer -> integer -> integer -> 'a
 Definition get_slice_int len n lo := of_bools (get_slice_int_bl len n lo)
 *)
-Definition write_ram {rv e} m size (_ : mword m) (addr : mword m) (data : mword (8 * size)) : monad rv unit e :=
-  MEMea addr size >>
-  MEMval addr size data.
+Definition write_ram {rv e} m size (hexRAM : mword m) (addr : mword m) (data : mword (8 * size)) : monad rv bool e :=
+  write_mem_val data.
 
-Definition read_ram {rv e} m size `{ArithFact (size >= 0)} (_ : mword m) (addr : mword m) : monad rv (mword (8 * size)) e := MEMr addr size.
+Definition read_ram {rv e} m size `{ArithFact (size >= 0)} (_ : mword m) (addr : mword m) : monad rv (mword (8 * size)) e :=
+ read_mem Read_plain addr size.
 (*
 Definition string_of_bits bs := string_of_bv (bits_of bs).
 Definition string_of_int := show
@@ -85,17 +88,14 @@ Definition string_of_int := show
 Definition _sign_extend bits len := maybe_failwith (of_bits (exts_bv len bits))
 Definition _zero_extend bits len := maybe_failwith (of_bits (extz_bv len bits))
 *)
-Definition shift_bits_left {rv e a b} (v : mword a) (n : mword b) : monad rv (mword a) e :=
-  maybe_fail "shift_bits_left" (unsigned n) >>= fun n =>
-  returnm (shiftl v n).
+Definition shift_bits_left {a b} (v : mword a) (n : mword b) : mword a :=
+  shiftl v (int_of_mword false n).
 
-Definition shift_bits_right {rv e a b} (v : mword a) (n : mword b) : monad rv (mword a) e :=
-  maybe_fail "shift_bits_right" (unsigned n) >>= fun n =>
-  returnm (shiftr v n).
+Definition shift_bits_right {a b} (v : mword a) (n : mword b) : mword a :=
+  shiftr v (int_of_mword false n).
 
-Definition shift_bits_right_arith {rv e a b} (v : mword a) (n : mword b) : monad rv (mword a) e :=
-  maybe_fail "shift_bits_right" (unsigned n) >>= fun n =>
-  returnm (arith_shiftr v n).
+Definition shift_bits_right_arith {a b} (v : mword a) (n : mword b) : mword a :=
+  arith_shiftr v (int_of_mword false n).
 
 (* Use constants for undefined values for now *)
 Definition internal_pick {rv a e} (vs : list a) : monad rv a e :=
@@ -124,9 +124,9 @@ Definition skip {rv e} (_:unit) : monad rv unit e := returnm tt.
 Definition elf_entry (_:unit) : Z := 0.
 (*declare ocaml target_rep function elf_entry := `Elf_loader.elf_entry`*)
 
-(*Definition print_bits msg bs := prerr_endline (msg ^ (string_of_bits bs))
+Definition print_bits {n} msg (bs : mword n) := prerr_endline (msg ++ (string_of_bits bs)).
 
-val get_time_ns : unit -> integer*)
+(*val get_time_ns : unit -> integer*)
 Definition get_time_ns (_:unit) : Z := 0.
 (*declare ocaml target_rep function get_time_ns := `(fun () -> Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ())))`*)
 
@@ -140,7 +140,7 @@ Definition eq_bit (x : bitU) (y : bitU) : bool :=
 
 Require Import Zeuclid.
 Definition euclid_modulo (m n : Z) `{ArithFact (n > 0)} : {z : Z & ArithFact (0 <= z <= n-1)}.
-refine (existT _ (ZEuclid.modulo m n) _).
+apply existT with (x := ZEuclid.modulo m n).
 constructor.
 destruct H.
 assert (Z.abs n = n). { rewrite Z.abs_eq; auto with zarith. }
@@ -160,12 +160,3 @@ Definition prerr_string (_:string) : unit := tt.
 Definition putchar {T} (_:T) : unit := tt.
 Require DecimalString.
 Definition string_of_int z := DecimalString.NilZero.string_of_int (Z.to_int z).
-
-
-Lemma MEMr_wrapper_lemma : forall size : Z, 8 * size = 8 * (8 * size ÷ 8).
-intros.
-rewrite Z.mul_comm.
-rewrite Z.quot_mul; auto with zarith.
-Qed.
-Hint Resolve MEMr_wrapper_lemma : sail.
-

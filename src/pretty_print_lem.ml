@@ -65,8 +65,9 @@ let opt_mwords = ref false
 type context = {
   early_ret : bool;
   bound_nexps : NexpSet.t;
+  top_env : Env.t
 }
-let empty_ctxt = { early_ret = false; bound_nexps = NexpSet.empty }
+let empty_ctxt = { early_ret = false; bound_nexps = NexpSet.empty; top_env = Env.empty }
 
 let print_to_from_interp_value = ref false
 let langlebar = string "<|"
@@ -128,7 +129,7 @@ let doc_id_lem_ctor (Id_aux(i,_)) =
   | Id("nat") -> string "integer"
   | Id("Some") -> string "Just"
   | Id("None") -> string "Nothing"
-  | Id i -> string (fix_id false (String.capitalize_ascii i))
+  | Id i -> string (fix_id false (String.capitalize i))
   | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
 let deinfix = function
@@ -328,10 +329,9 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_arg_order o -> empty
   in typ', atomic_typ
 
-(* Check for variables in types that would be pretty-printed and are not
-   bound in the val spec of the function. *)
+(* Check for variables in types that would be pretty-printed. *)
 let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
-  NexpSet.diff (lem_nexps_of_typ typ) ctxt.bound_nexps
+  lem_nexps_of_typ typ
   |> NexpSet.exists (fun nexp -> not (is_nexp_constant nexp))
 
 let replace_typ_size ctxt env (Typ_aux (t,a)) =
@@ -341,29 +341,32 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
        let mk_typ nexp = 
          Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
        in
-       let is_equal nexp =
-         prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
-       in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
-       | nexp -> mk_typ nexp
-       | exception Not_found ->
-          match Type_check.solve env size with
-          | Some n -> mk_typ (nconstant n)
-          | None -> None
+       match Type_check.solve env size with
+       | Some n -> mk_typ (nconstant n)
+       | None ->
+          let is_equal nexp =
+            prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
+          | nexp -> mk_typ nexp
+          | exception Not_found -> None
      end
   | _ -> None
 
-let doc_tannot_lem ctxt env eff typ =
-  let of_typ typ =
-    let ta = doc_typ_lem typ in
-    if eff then string " : M " ^^ parens ta
-    else string " : " ^^ ta
-  in
+let make_printable_type ctxt env typ =
   if contains_t_pp_var ctxt typ
   then
     match replace_typ_size ctxt env typ with
-    | None -> empty
-    | Some typ -> of_typ typ
-  else of_typ typ
+    | None -> None
+    | Some typ -> Some typ
+  else Some typ
+
+let doc_tannot_lem ctxt env eff typ =
+  match make_printable_type ctxt env typ with
+  | None -> empty
+  | Some typ ->
+     let ta = doc_typ_lem typ in
+     if eff then string " : M " ^^ parens ta
+     else string " : " ^^ ta
 
 let doc_lit_lem (L_aux(lit,l)) =
   match lit with
@@ -495,8 +498,9 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
      parens (separate comma_sp (List.map2 doc_elem typs pats))
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem ctxt true p in
-    if contains_t_pp_var ctxt typ then doc_p
-    else parens (doc_op colon doc_p (doc_typ_lem typ))
+    (match make_printable_type ctxt (env_of_annot (l,annot)) typ with
+    | None -> doc_p
+    | Some typ -> parens (doc_op colon doc_p (doc_typ_lem typ)))
   | P_vector pats ->
      let ppp = brackets (separate_map semi (doc_pat_lem ctxt true) pats) in
      if apat_needed then parens ppp else ppp
@@ -727,14 +731,16 @@ let doc_exp_lem, doc_let_lem =
             | [exp] ->
                let epp = separate space [string "early_return"; expY exp] in
                let aexp_needed, tepp =
-                 if contains_t_pp_var ctxt (typ_of exp) ||
-                    contains_t_pp_var ctxt (typ_of full_exp) then
-                   aexp_needed, epp
-                 else
-                   let tannot = separate space [string "MR";
-                     doc_atomic_typ_lem false (typ_of full_exp);
-                     doc_atomic_typ_lem false (typ_of exp)] in
-                   true, doc_op colon epp tannot in
+                 match Util.option_bind (make_printable_type ctxt ctxt.top_env)
+                                        (Env.get_ret_typ (env_of exp)),
+                       make_printable_type ctxt (env_of full_exp) (typ_of full_exp) with
+                   | Some typ, Some full_typ ->
+                     let tannot = separate space [string "MR";
+                       doc_atomic_typ_lem false full_typ;
+                       doc_atomic_typ_lem false typ] in
+                     true, doc_op colon epp tannot
+                   | _ -> aexp_needed, epp
+               in
                if aexp_needed then parens tepp else tepp
             | _ -> raise (Reporting_basic.err_unreachable l
                "Unexpected number of arguments for early_return builtin")
@@ -760,8 +766,12 @@ let doc_exp_lem, doc_let_lem =
                let env = env_of full_exp in
                let t = Env.expand_synonyms env (typ_of full_exp) in
                let eff = effect_of full_exp in
-               if typ_needs_printed t
-               then (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env (effectful eff) t))), true)
+               if typ_needs_printed t then
+                 if Id.compare f (mk_id "bitvector_cast_out") <> 0
+                 then (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env (effectful eff) t))), true)
+                 (* TODO: coordinate with the code in monomorphise.ml to find the correct
+                    typing environment to use *)
+                 else (align (group (prefix 0 1 epp (doc_tannot_lem ctxt ctxt.top_env (effectful eff) t))), true)
                else (epp, aexp_needed) in
              liftR (if aexp_needed then parens (align taepp) else taepp)
           end
@@ -916,12 +926,15 @@ let doc_exp_lem, doc_let_lem =
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
       let ta =
-        if contains_t_pp_var ctxt (typ_of full_exp) || contains_t_pp_var ctxt (typ_of r)
-        then empty
-        else separate space
-          [string ": MR";
-          parens (doc_typ_lem (typ_of full_exp));
-          parens (doc_typ_lem (typ_of r))] in
+        match Util.option_bind (make_printable_type ctxt ctxt.top_env) (Env.get_ret_typ (env_of full_exp)),
+              make_printable_type ctxt (env_of r) (typ_of r) with
+       | Some full_typ, Some r_typ ->
+          separate space
+            [string ": MR";
+            parens (doc_typ_lem full_typ);
+            parens (doc_typ_lem r_typ)]
+       | _ -> empty
+      in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
     | E_constraint _ -> string "true"
     | E_internal_value _ ->
@@ -1255,7 +1268,8 @@ let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
   let ctxt =
     { early_ret = contains_early_return exp;
-      bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ) } in
+      bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
+      top_env = env_of_annot annot } in
   let pats, bind = untuple_args_pat pat in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
   let _ = match guard with

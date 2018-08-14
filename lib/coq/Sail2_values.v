@@ -21,7 +21,7 @@ Lemma use_ArithFact {P} `(ArithFact P) : P.
 apply fact.
 Defined.
 
-Definition build_ex (n:Z) {P:Z -> Prop} `{H:ArithFact (P n)} : {x : Z & ArithFact (P x)} :=
+Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
   existT _ n H.
 
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
@@ -54,7 +54,10 @@ Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> 
   Decidable_witness := proj1_sig (bool_of_sumbool (eqdec x y))
 }.
 destruct (eqdec x y); simpl; split; congruence.
-Qed.
+Defined.
+
+Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
+  Decidable_eq_from_dec String.string_dec.
 
 
 (* Project away range constraints in comparisons *)
@@ -935,6 +938,11 @@ end.
 Ltac not_Z ty := match ty with Z => fail 1 | _ => idtac end.
 Ltac clear_non_Z_defns := 
   repeat match goal with H := _ : ?X |- _ => not_Z X; clearbody H end.
+Ltac clear_irrelevant_defns :=
+repeat match goal with X := _ |- _ =>
+  match goal with |- context[X] => idtac end ||
+  match goal with _ : context[X] |- _ => idtac end || clear X
+end.
 
 Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >= 0).
 constructor.
@@ -1002,6 +1010,7 @@ Ltac dump_context :=
   match goal with |- ?X => idtac "Goal:" X end.
 Ltac prepare_for_solver :=
 (*dump_context;*)
+ clear_irrelevant_defns;
  clear_non_Z_defns;
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
@@ -1014,11 +1023,20 @@ Ltac prepare_for_solver :=
 Ltac solve_arithfact :=
 prepare_for_solver;
 (*dump_context;*)
- solve [apply ArithFact_mword; assumption
-       | constructor; omega with Z
-         (* The datatypes hints give us some list handling, esp In *)
-       | constructor; eauto with datatypes zarith sail
-       | constructor; idtac "Unable to solve constraint"; dump_context; fail].
+ solve
+ [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; constructor; exact (I : (fun _ => True) _) end
+ | match goal with |- ArithFact (?x = ?y) =>
+   (is_evar x || is_evar y);
+   (* compute to allow projections to remove proofs that might not be allowed in the evar *)
+   let x := eval cbn in x in
+   let y := eval cbn in y in
+   idtac "Warning: unknown equality constraint"; constructor; exact (eq_refl _ : x = y) end
+ | apply ArithFact_mword; assumption
+ | constructor; omega with Z
+   (* The datatypes hints give us some list handling, esp In *)
+ | constructor; eauto 3 with datatypes zarith sail
+ | constructor; idtac "Unable to solve constraint"; dump_context; fail
+ ].
 Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
 
 Hint Unfold length_mword : sail.
@@ -1035,6 +1053,10 @@ destruct w.
 Qed.
 
 Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; omega]) : typeclass_instances.
+
+Definition to_range (x : Z) : {y : Z & ArithFact (x <= y <= x)} := build_ex x.
+
+
 
 Instance mword_Bitvector {a : Z} `{ArithFact (a >= 0)} : (Bitvector (mword a)) := {
   bits_of v := List.map bitU_of_bool (bitlistFromWord (get_word v));

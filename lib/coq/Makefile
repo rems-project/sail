@@ -1,6 +1,6 @@
 BBV_DIR=../../../bbv/theories
 
-SRC=Sail2_prompt_monad.v  Sail2_prompt.v  Sail2_impl_base.v  Sail2_instr_kinds.v  Sail2_operators_bitlists.v  Sail2_operators_mwords.v  Sail2_operators.v  Sail2_values.v  Sail2_state_monad.v  Sail2_state.v
+SRC=Sail2_prompt_monad.v  Sail2_prompt.v  Sail2_impl_base.v  Sail2_instr_kinds.v  Sail2_operators_bitlists.v  Sail2_operators_mwords.v  Sail2_operators.v  Sail2_values.v  Sail2_state_monad.v  Sail2_state.v  Sail2_string.v
 
 COQ_LIBS = -R . Sail -R "$(BBV_DIR)" bbv
 

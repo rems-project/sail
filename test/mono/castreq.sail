@@ -15,7 +15,8 @@ function extzv(v) = extz_vec(sizeof('m),v)
 val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
 overload append = {bitvector_concat}
-val bitvector_cast = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
+val bitvector_cast_in = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
+val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
 overload length = {bitvector_length}
 

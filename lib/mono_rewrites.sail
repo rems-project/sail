@@ -29,7 +29,8 @@ function extsv(v) = exts_vec(sizeof('m),v)
 
 /* This is generated internally to deal with case splits which reveal the size
    of a bitvector */
-val bitvector_cast = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
+val bitvector_cast_in = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
+val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 
 /* Definitions for the rewrites */
 

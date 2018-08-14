@@ -69,7 +69,7 @@ defined in the Sail library. These declarations work much like FFI
 bindings in many programming languages---in Sail we provide the
 \ll{val} declaration, except rather than giving a function body we
 supply a string used to identify the external operator in each
-backend. For example, we could link the \ll{>>} operator with the
+backend. For example, we could link the \ll{<<} operator with the
 \verb|shiftl| primitive as \mrbzeightoperatorzzerozIzIznine If the
 external function has the same name as the sail function, such as
 \ll{shiftl = "shiftl"}, then we can use the shorthand syntax
@@ -419,7 +419,7 @@ match ys {
 
 Like OCaml, Sail also supports naming parts of patterns using the
 \ll{as} keyword. For example, in the above list pattern we could bind
-the entire list as ys as follows:
+the entire list as zs as follows:
 \begin{lstlisting}
 match ys {
   x :: xs as zs => print("cons with as pattern"),
@@ -751,7 +751,7 @@ operator names. Operators may be left, right, or non-associative, and
 there are 10 different precedence levels, ranging from 0 to 9, with 9
 binding the tightest. To declare the precedence of an operator, we use a fixity declaration like:
 \begin{lstlisting}
-infix <=_u 4
+infix 4 <=_u
 \end{lstlisting}
 For left or right associative operators, we'd use the keywords
 \ll{infixl} or \ll{infixr} respectively. An operator can be used
@@ -869,7 +869,7 @@ val div2 : (int, int) -> option(int)
 \end{lstlisting}
 The first guarantees that if the first argument is greater than or
 equal to zero, and the second argument is greater than zero, then the
-result will be greater than or not equal to zero. If we overload these
+result will be greater than or equal to zero. If we overload these
 definitions as
 \begin{lstlisting}
 overload operator / = {div1, div2}
