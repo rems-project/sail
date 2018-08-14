@@ -1021,6 +1021,9 @@ Ltac prepare_for_solver :=
  reduce_list_lengths;
  reduce_pow.
 Ltac solve_arithfact :=
+(* Attempt a simple proof first to avoid lengthy preparation steps (especially
+   as the large proof terms can upset subsequent proofs). *)
+try (constructor; omega);
 prepare_for_solver;
 (*dump_context;*)
  solve
@@ -1037,7 +1040,10 @@ prepare_for_solver;
  | constructor; eauto 3 with datatypes zarith sail
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
  ].
-Hint Extern 0 (ArithFact _) => solve_arithfact : typeclass_instances.
+(* Add an indirection so that you can redefine run_solver to fail to get
+   slow running constraints into proof mode. *)
+Ltac run_solver := solve_arithfact.
+Hint Extern 0 (ArithFact _) => run_solver : typeclass_instances.
 
 Hint Unfold length_mword : sail.
 
