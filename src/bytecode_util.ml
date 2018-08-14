@@ -79,7 +79,7 @@ let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals =
 let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals =
   I_aux (I_funcall (clexp, true, id, cvals), (instr_number (), l))
 
-let icopy ?loc:(l=Parse_ast.Unknown) clexp cval =
+let icopy l clexp cval =
   I_aux (I_copy (clexp, cval), (instr_number (), l))
 
 let iclear ?loc:(l=Parse_ast.Unknown) ctyp id =
@@ -267,7 +267,7 @@ let rec ctyp_ids = function
   | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
   | CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_unit
     | CT_bool | CT_real | CT_bit | CT_string | CT_poly -> IdSet.empty
-    
+
 let rec unpoly = function
   | F_poly f -> unpoly f
   | F_call (call, fs) -> F_call (call, List.map unpoly fs)
