@@ -153,6 +153,10 @@ Inductive barrier_kind :=
   | Barrier_RISCV_r_r
   | Barrier_RISCV_rw_w
   | Barrier_RISCV_w_w
+  | Barrier_RISCV_w_rw
+  | Barrier_RISCV_rw_r
+  | Barrier_RISCV_r_w
+  | Barrier_RISCV_w_r
   | Barrier_RISCV_i
   (* X86 *)
   | Barrier_x86_MFENCE.

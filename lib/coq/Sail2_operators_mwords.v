@@ -15,21 +15,21 @@ Definition eq_dec := Z.eq_dec.
 End Z_eq_dec.
 Module ZEqdep := DecidableEqDep (Z_eq_dec).
 
-Definition cast_mword {m n} (x : mword m) (eq : m = n) : mword n.
+Definition cast_T {T : Z -> Type} {m n} (x : T m) (eq : m = n) : T n.
 rewrite <- eq.
 exact x.
 Defined.
 
-Lemma cast_mword_refl {m} {H:m = m} (x : mword m) : cast_mword x H = x.
+Lemma cast_T_refl {T : Z -> Type} {m} {H:m = m} (x : T m) : cast_T x H = x.
 rewrite (ZEqdep.UIP _ _ H eq_refl).
 reflexivity.
 Qed.
 
-Definition autocast {m n} (x : mword m) `{H:ArithFact (m = n)} : mword n :=
-  cast_mword x (use_ArithFact H).
+Definition autocast {T : Z -> Type} {m n} (x : T m) `{H:ArithFact (m = n)} : T n :=
+  cast_T x (use_ArithFact H).
 
 Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m = n)} : monad rv (mword n) e :=
-  x >>= fun x => returnm (cast_mword x (use_ArithFact H)).
+  x >>= fun x => returnm (cast_T x (use_ArithFact H)).
 
 Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n.
 rewrite <- eq.

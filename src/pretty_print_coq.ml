@@ -1954,13 +1954,12 @@ let doc_val pat exp =
   in
   let idpp = doc_id id in
   let basepp =
-    group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^
-             doc_exp_lem ctxt false exp ^^ dot) ^^ hardline
+    idpp ^^ typpp ^^ space ^^ coloneq ^/^ doc_exp_lem ctxt false exp ^^ dot
   in
   match opt_unpack with
-  | None -> basepp ^^ hardline
+  | None -> group (string "Let" ^^ space ^^ basepp) ^^ hardline
   | Some (orig_id, hyp_id) ->
-     basepp ^^
+     group (string "Definition" ^^ space ^^ basepp) ^^ hardline ^^
        group (separate space [string "Let"; doc_id orig_id; coloneq; string "projT1"; idpp; dot]) ^^ hardline ^^ hardline
 
 let rec doc_def unimplemented def =
