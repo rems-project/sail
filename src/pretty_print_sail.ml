@@ -443,10 +443,7 @@ let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
   | Pat_when (pat,wh,exp) ->
      group (separate space [doc_id id; parens (separate space [doc_pat pat; string "if"; doc_exp wh]); string "="; doc_exp exp])
 
-let doc_default (DT_aux(df,_)) = match df with
-  | DT_kind(bk,v) -> string "DT_kind" (* separate space [string "default"; doc_bkind bk; doc_var v] *)
-  | DT_typ(ts,id) -> separate space [string "default"; doc_typschm ts; doc_id id]
-  | DT_order(ord) -> separate space [string "default"; string "Order"; doc_ord ord]
+let doc_default (DT_aux (DT_order ord, _)) = separate space [string "default"; string "Order"; doc_ord ord]
 
 let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), _)) =
   match funcls with

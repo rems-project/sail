@@ -1248,10 +1248,6 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (fun clexp -> icopy l clexp unit_fragment),
      []
 
-(*
-  | aexp -> failwith ("Cannot compile ANF expression: " ^ Pretty_print_sail.to_string (pp_aexp aexp))
- *)
-
 and compile_block ctx = function
   | [] -> []
   | exp :: exps ->
@@ -1750,7 +1746,7 @@ let flat_id () =
   incr flat_counter;
   id
 
-let flatten_instrs ctx =
+let flatten_instrs =
   let rec flatten = function
     | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
        let fid = flat_id () in
@@ -1778,13 +1774,13 @@ let flatten_instrs ctx =
   function
   | CDEF_fundef (function_id, heap_return, args, body) ->
      flat_counter := 0;
-     [CDEF_fundef (function_id, heap_return, args, flatten body)]
+     CDEF_fundef (function_id, heap_return, args, flatten body)
 
   | CDEF_let (n, bindings, instrs) ->
     flat_counter := 0;
-    [CDEF_let (n, bindings, flatten instrs)]
+    CDEF_let (n, bindings, flatten instrs)
 
-  | cdef -> [cdef]
+  | cdef -> cdef
 
 let rec specialize_variants ctx =
 

@@ -424,9 +424,7 @@ name_scm_opt =
 
 type 
 default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
-   DT_kind of base_kind * kid
- | DT_order of base_kind * atyp
- | DT_typ of typschm * id
+   DT_order of base_kind * atyp
 
 
 type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only constructible parts *)

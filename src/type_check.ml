@@ -1653,7 +1653,6 @@ let subst_unifiers unifiers typ =
     | U_nexp nexp -> typ_subst_nexp kid (unaux_nexp nexp) typ
     | U_order ord -> typ_subst_order kid (unaux_order ord) typ
     | U_typ subst -> typ_subst_typ kid (unaux_typ subst) typ
-    | _ -> typ_error Parse_ast.Unknown "Cannot subst unifier"
   in
   List.fold_left subst_unifier typ (KBindings.bindings unifiers)
 
@@ -1663,7 +1662,6 @@ let subst_args_unifiers unifiers typ_args =
     | U_nexp nexp -> List.map (typ_subst_arg_nexp kid (unaux_nexp nexp)) typ_args
     | U_order ord -> List.map (typ_subst_arg_order kid (unaux_order ord)) typ_args
     | U_typ subst -> List.map (typ_subst_arg_typ kid (unaux_typ subst)) typ_args
-    | _ -> typ_error Parse_ast.Unknown "Cannot subst unifier"
   in
   List.fold_left subst_unifier typ_args (KBindings.bindings unifiers)
 
@@ -1673,7 +1671,6 @@ let subst_uvar_unifiers unifiers uvar =
     | U_nexp nexp -> uvar_subst_nexp kid (unaux_nexp nexp) uvar'
     | U_order ord -> uvar_subst_order kid (unaux_order ord) uvar'
     | U_typ subst -> uvar_subst_typ kid (unaux_typ subst) uvar'
-    | _ -> typ_error Parse_ast.Unknown "Cannot subst unifier"
   in
   List.fold_left subst_unifier uvar (KBindings.bindings unifiers)
 
@@ -2233,6 +2230,7 @@ let crule r env exp typ =
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
   try
     let checked_exp = r env exp typ in
+    Env.wf_typ env (typ_of checked_exp);
     decr depth; checked_exp
   with
   | Type_error (l, err) -> decr depth; typ_raise l err
@@ -2242,6 +2240,7 @@ let irule r env exp =
   try
     let inferred_exp = r env exp in
     typ_print (lazy (Util.("Infer " |> blue |> clear) ^ string_of_exp exp ^ " => " ^ string_of_typ (typ_of inferred_exp)));
+    Env.wf_typ env (typ_of inferred_exp);
     decr depth;
     inferred_exp
   with
@@ -4355,12 +4354,9 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
 
 let check_default env (DT_aux (ds, l)) =
   match ds with
-  | DT_kind _ -> [DEF_default (DT_aux (ds,l))], env (* Check: Is this supposed to do nothing? *)
   | DT_order (Ord_aux (Ord_inc, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_inc env
   | DT_order (Ord_aux (Ord_dec, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_dec env
   | DT_order (Ord_aux (Ord_var _, _)) -> typ_error l "Cannot have variable default order"
-  (* This branch allows us to write something like: default forall Nat 'n. [|'n|] name... what does this even mean?! *)
-  | DT_typ (typschm, id) -> typ_error l ("Unsupported default construct")
 
 let kinded_id_arg kind_id =
   let typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown) in

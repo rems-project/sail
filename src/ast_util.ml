@@ -60,6 +60,7 @@ let lvar_typ = function
   | Local (_, typ) -> typ
   | Register (_, _, typ) -> typ
   | Enum typ -> typ
+  | Unbound -> failwith "No type for unbound variable"
 
 let no_annot = (Parse_ast.Unknown, ())
 
@@ -962,6 +963,9 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   | LEXP_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
   | LEXP_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
   | LEXP_memory (id, exps) -> rewrap (E_app (id, exps))
+  | LEXP_vector_concat [] -> rewrap (E_vector [])
+  | LEXP_vector_concat (lexp :: lexps) ->
+     List.fold_left (fun exp lexp -> rewrap (E_vector_append (exp, lexp_to_exp lexp))) (lexp_to_exp lexp) lexps
   | LEXP_deref exp -> rewrap (E_app (mk_id "reg_deref", [exp]))
 
 let is_unit_typ = function
@@ -1274,6 +1278,8 @@ and subst_lexp id value (LEXP_aux (lexp_aux, annot) as lexp) =
     | LEXP_tup lexps -> LEXP_tup (List.map (subst_lexp id value) lexps)
     | LEXP_vector (lexp, exp) -> LEXP_vector (subst_lexp id value lexp, subst id value exp)
     | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
+    | LEXP_vector_concat lexps ->
+       LEXP_vector_concat (List.map (subst_lexp id value) lexps)
     | LEXP_field (lexp, id') -> LEXP_field (subst_lexp id value lexp, id')
   in
   wrap lexp_aux

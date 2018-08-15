@@ -151,29 +151,21 @@ id :: '' ::=
 % We don't enforce a lexical convention on infix operators, as some of the 
 % targets use alphabetical infix operators.
 
-% Vector builtins 
+% Vector builtins
   | vector_access          :: M :: vector_access  {{ ichlo (Id "vector_access") }} 
   | vector_update          :: M :: vector_update  {{ ichlo (Id "vector_update") }}
   | vector_update_subrange :: M :: vector_update_subrange {{ ichlo (Id "vector_update_subrange") }}
   | vector_subrange        :: M :: vector_subrange {{ ichlo (Id "vector_subrange") }}
-  | vector_append        :: M :: vector_append {{ ichlo (Id "vector_append") }}
+  | vector_append          :: M :: vector_append {{ ichlo (Id "vector_append") }}
 
-% Comparison builtins
-  | lteq_atom_atom :: M :: lteq_atom_atom {{ ichlo (Id "lteq_atom_atom") }}
-  | gteq_atom_atom :: M :: gteq_atom_atom {{ ichlo (Id "gteq_atom_atom") }}
-  | lt_atom_atom :: M :: lt_atom_atom {{ ichlo (Id "lt_atom_atom") }}
-  | gt_atom_atom :: M :: gt_atom_atom {{ ichlo (Id "gt_atom_atom") }}
-  
 kid :: '' ::=
-  {{ com kinded IDs: $[[Type]]$, $[[Nat]]$, $[[Order]]$, and $[[Effect]]$ variables }}
+  {{ com kinded IDs: Type, Int, and Order variables }}
   {{ aux _ l }}
-  | ' x                       :: :: var
- 
+  | ' x :: :: var
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Kinds and Types                                              %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 
 grammar
 
@@ -191,7 +183,7 @@ kind :: 'K_' ::=
 % we'll never use  ...-> Nat , .. Order , .. or Effects
 
 nexp :: 'Nexp_' ::=
-  {{ com numeric expression, of kind $[[Nat]]$ }}
+  {{ com numeric expression, of kind Int }}
   {{ aux _ l }}
   | id                                  :: :: id       {{ com abbreviation identifier }}
   | kid                                 :: :: var      {{ com variable }}
@@ -199,33 +191,33 @@ nexp :: 'Nexp_' ::=
   | id ( nexp1 , ... , nexpn )          :: :: app      {{ com app }}
   | nexp1 * nexp2                       :: :: times    {{ com product }}
   | nexp1 + nexp2                       :: :: sum      {{ com sum }}
-  | nexp1 - nexp2			:: :: minus    {{ com subtraction }}
+  | nexp1 - nexp2                       :: :: minus    {{ com subtraction }}
   | 2** nexp                            :: :: exp      {{ com exponential }}
-  | neg nexp				:: I :: neg    {{ com for internal use only}}
+  | neg nexp                            :: I :: neg    {{ com for internal use only}}
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
-order :: 'Ord_' ::=  
-  {{ com vector order specifications, of kind $[[Order]]$}}
-  {{ aux _ l }} 
+order :: 'Ord_' ::=
+  {{ com vector order specifications, of kind Order }}
+  {{ aux _ l }}
   | kid                                 :: :: var {{ com variable }} 
   | inc                                 :: :: inc  {{ com increasing }}
   | dec                                 :: :: dec  {{ com decreasing }}
-  | ( order )                             :: S :: paren {{ ichlo [[order]] }}
+  | ( order )                           :: S :: paren {{ ichlo [[order]] }}
 
 base_effect :: 'BE_' ::=
   {{ com effect }}
-  {{ aux _ l }}  
+  {{ aux _ l }}
   | rreg                                :: :: rreg {{ com read register }}
   | wreg                                :: :: wreg {{ com write register }}
   | rmem                                :: :: rmem {{ com read memory }}
   | rmemt                               :: :: rmemt {{ com read memory and tag }}
   | wmem                                :: :: wmem {{ com write memory }}
-  | wmea				                :: :: eamem {{ com signal effective address for writing memory }}
+  | wmea                                :: :: eamem {{ com signal effective address for writing memory }}
   | exmem                               :: :: exmem {{ com determine if a store-exclusive (ARM) is going to succeed }}
-  | wmv					                :: :: wmv   {{ com write memory, sending only value }}
+  | wmv                                 :: :: wmv   {{ com write memory, sending only value }}
   | wmvt                                :: :: wmvt  {{ com write memory, sending only value and tag }}
   | barr                                :: :: barr {{ com memory barrier }}
-  | depend				                :: :: depend {{ com dynamic footprint }}
+  | depend                              :: :: depend {{ com dynamic footprint }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism, from $[[nondet]]$ }}
@@ -233,18 +225,13 @@ base_effect :: 'BE_' ::=
   | config                              :: :: config {{ com configuration option }}
 
 effect :: 'Effect_' ::=
-  {{ com effect set, of kind $[[Effect]]$ }}
   {{ aux _ l }}
- | { base_effect1 , .. , base_effectn }           :: :: set {{ com effect set }}
- | pure                                 :: M :: pure {{ com sugar for empty effect set }} 
-   {{ lem (Effect_set [])  }} {{icho [[{}]] }}
- | effect1 u+ .. u+ effectn                   :: M :: union {{ com union of sets of effects }} {{ icho [] }}
-   {{ lem (List.foldr effect_union (Effect_aux (Effect_set []) Unknown) [[effect1..effectn]]) }}
-
-% TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
+  | { base_effect1 , .. , base_effectn }           :: :: set {{ com effect set }}
+  | pure                                           :: M :: pure {{ com sugar for empty effect set }}
+    {{ lem (Effect_set []) }}
 
 typ :: 'Typ_' ::=
-  {{ com type expressions, of kind $[[Type]]$ }}
+  {{ com type expressions, of kind Type }}
   {{ aux _ l }}
   |                                            :: :: internal_unknown
   | id                                         :: :: id
@@ -289,40 +276,15 @@ typ :: 'Typ_' ::=
 % not sure how first-class it should be, though
 % use "reg word32" etc for the types of vanilla registers 
 
- 
 typ_arg :: 'Typ_arg_' ::=
   {{ com type constructor arguments of all kinds }}
-  {{ aux _ l }} 
+  {{ aux _ l }}
   | nexp       :: :: nexp
   | typ        :: :: typ
   | order      :: :: order
 
-% plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
-
-%typ_lib :: 'Typ_lib_' ::=
-%  {{ com library types and syntactic sugar for them }}
-%  {{ aux _ l }} {{ auxparam 'a }}
-% boring base types:
-%%  | unit :: :: unit {{ com unit type with value $()$ }}
-%  | bool :: :: bool {{ com booleans $[[true]]$ and $[[false]]$ }}
-%  | bit :: :: bit  {{ com pure bit values (not mutable bits) }}
-% experimentally trying with two distinct types of bool and bit ...
-%  | nat :: :: nat {{ com natural numbers 0,1,2,... }}
-%  | string :: :: string {{ com UTF8 strings }}
-% finite subranges of nat
-
-parsing
-
-Typ_tup <= Typ_tup
-Typ_fn right Typ_fn
-Typ_fn <= Typ_tup
-%Typ_fn right Typ_app1
-%Typ_tup right Typ_app1
-
-grammar
-
 n_constraint :: 'NC_' ::=
-  {{ com constraint over kind $[[Nat]]$ }}
+  {{ com constraint over kind Int }}
   {{ aux _ l }}
   | nexp = nexp'                                :: :: equal
   | nexp >= nexp'                               :: :: bounded_ge
@@ -344,24 +306,21 @@ kinded_id :: 'KOpt_' ::=
   | kind kid				      :: :: kind {{ com kind-annotated variable }}
 
 quant_item :: 'QI_' ::=
-  {{ com kinded identifier or $[[Nat]]$ constraint }}
+  {{ com kinded identifier or Int constraint }}
   {{ aux _ l }}
   | kinded_id 	  	 	       	      :: :: id {{ com optionally kinded identifier }}
-  | n_constraint			      :: :: const {{ com $[[Nat]]$ constraint }}
+  | n_constraint			      :: :: const {{ com Int constraint }}
 
-typquant :: 'TypQ_' ::= 
+typquant :: 'TypQ_' ::=
   {{ com type quantifiers and constraints}}
   {{ aux _ l }}
   | forall quant_item1 , ... , quant_itemn . :: :: tq %{{ texlong }}
-% WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
-  |                           ::  ::  no_forall     {{ com empty }}
+  |                                          :: ::  no_forall     {{ com empty }}
 
 typschm :: 'TypSchm_' ::=
   {{ com type scheme  }}
   {{ aux _ l }}
-  |  typquant typ                                                       :: :: ts
-
-
+  |  typquant typ                            :: :: ts
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Type definitions                                             %
@@ -431,21 +390,6 @@ kind_def :: 'KD_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
   | Def kind id name_scm_opt = nexp                                           :: :: nabbrev
     {{ com $[[Nat]]$-expression abbreviation }}
-%  | Def kind id name_scm_opt = typschm                                        :: D :: abbrev
-%    {{ com type abbreviation }} {{ texlong }}
-%  | Def kind id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: D :: record
-%    {{ com struct type definition }} {{ texlong }}
-%  | Def kind id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: D :: variant
-%    {{ com union type definition}} {{ texlong }}
-%  | Def kind id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: D :: enum
-%    {{ com enumeration type definition}} {{ texlong }}
-%
-%  | Def kind id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
-%:: D :: register {{ com register mutable bitfield type definition }} {{ texlong }}
-
-
-
-% also sugar [  nexp ] 
 
 type_union :: 'Tu_' ::=
   {{ com type union constructors }}
@@ -458,41 +402,31 @@ index_range :: 'BF_' ::= {{ com index specification, for bitfields in register t
   | num1 '..' num2 :: :: range {{ com index range }}
   | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
 
-% 
-
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Literals                                                     %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-grammar
-
 lit :: 'L_' ::=
   {{ com literal constant }}
   {{ aux _ l }}
-  | ( )                                                 :: :: unit  {{ com $() : [[unit]]$ }}
-%Presumably we want to remove bitzero and bitone ?
-  | bitzero                                             :: :: zero {{ com $[[bitzero]] : [[bit]]$ }}
-  | bitone                                              :: :: one {{ com $[[bitone]] : [[bit]]$ }}
-  | true                                                :: :: true  {{ com $[[true]] : [[bool]]$ }}
-  | false                                               :: :: false {{ com $[[false]] : [[bool]]$ }}
-  | num                                         :: :: num  {{ com natural number constant }}
-  | hex                                         :: :: hex  {{ com bit vector constant, C-style }}
-  {{ com hex and bin are constant bit vectors, C-style }}
-  | bin                                         :: :: bin  {{ com bit vector constant, C-style }}
-% Should undefined be of type bit[alpha] or alpha[beta] or just alpha?
-  | string                                              :: :: string {{ com string constant }}
-  | undefined					:: :: undef {{ com undefined-value constant }}
-  | real :: :: real
-  
+  | ( )       :: :: unit
+  | bitzero   :: :: zero
+  | bitone    :: :: one
+  | true      :: :: true
+  | false     :: :: false
+  | num       :: :: num {{ com natural number constant }}
+  | hex       :: :: hex {{ com bit vector constant, C-style }}
+  | bin       :: :: bin  {{ com bit vector constant, C-style }}
+  | string    :: :: string {{ com string constant }}
+  | undefined :: :: undef {{ com undefined-value constant }}
+  | real      :: :: real
+
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
                                                         {{ lem bool }}
                                                         {{ hol bool }}
   {{ com optional semi-colon }}
-  |                                                     :: :: no  
+  |                                                     :: :: no
     {{ hol F }}
     {{ ocaml false }}
     {{ lem false }}
@@ -500,7 +434,6 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
     {{ hol T }}
     {{ ocaml true }}
     {{ lem true }}
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Patterns                                                     %
@@ -513,32 +446,26 @@ typ_pat :: 'TP_' ::=
   | kid                             :: :: var
   | id ( typ_pat1 , .. , typ_patn ) :: :: app
 
-
-
-pat :: 'P_' ::= 
+pat :: 'P_' ::=
   {{ com pattern }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | lit                                                 :: :: lit
+  | lit                                     :: :: lit
     {{ com literal constant pattern }}
-  | _                                                   :: :: wild  
+  | _                                       :: :: wild
     {{ com wildcard }}
-  | pat1 | pat2                                         :: :: or
+  | pat1 | pat2                             :: :: or
     {{ com pattern disjunction }}
-  | ~ pat                                               :: :: not
+  | ~ pat                                   :: :: not
     {{ com pattern negation }}
-  | ( pat as id )                                      :: :: as
+  | ( pat as id )                           :: :: as
     {{ com named pattern }}
-% ML-style
-%  | ( pat : typ )                                       :: :: typ
-%    {{ com Typed patterns }}
-% C-style
-  | ( typ ) pat                                       :: :: typ
+  | ( typ ) pat                             :: :: typ
     {{ com typed pattern }}
   | id                                      :: :: id
     {{ com identifier  }}
   | pat typ_pat :: :: var
     {{ com bind pattern to type variable }}
-  | id ( pat1 , .. , patn )                                     :: :: app
+  | id ( pat1 , .. , patn )                 :: :: app
     {{ com union constructor pattern }}
 
 % OR?  do we invent something ghastly including a union keyword?  Perhaps not...
@@ -813,29 +740,10 @@ exp :: 'E_' ::=
   | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
   | constraint n_constraint :: :: constraint
 
-%i_direction :: 'I' ::=
-%  | IInc :: :: Inc
-%  | IDec :: :: Dec
-
-%ctor_kind :: 'C_' ::=
-%  | C_Enum nat :: :: Enum
-%  | C_Union    :: :: Union
-
-%reg_form :: 'Form_' ::=
-%  | Reg id tannot i_direction :: :: Reg
-%  | SubReg id reg_form index_range :: :: SubReg
-
-%reg_form_set :: '' ::= {{ phantom }} {{ lem set reg_form }}
-
-%alias_spec_tannot :: '' ::= {{ phantom }} {{ lem alias_spec tannot }} {{ ocaml tannot alias_spec }}
-
-
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
-    | id                                                  :: :: id
-%    | ref id                                              :: :: ref
+    | id                                                  :: :: id {{ com identifier }}
     | deref exp                                           :: :: deref
-    {{ com identifier }}
     | id ( exp1 , .. , expn )				  :: :: memory {{ com memory or register write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
 {{ com sugared form of above for explicit tuple $[[exp]]$ }}
@@ -843,11 +751,9 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
 {{ com cast }}
     | ( lexp0 , .. , lexpn )                              :: :: tup {{ com multiple (non-memory) assignment }}
     | lexp1 @ ... @ lexpn                                 :: :: vector_concat {{ com vector concatenation L-exp }}
-    | lexp [ exp ]  :: ::                                 vector  {{ com vector element }}
-    | lexp [ exp1 '..' exp2 ]  :: ::                         vector_range {{ com subvector }}
-    % maybe comma-sep such lists too
-    | lexp . id :: :: field                        {{ com struct field }}
-
+    | lexp [ exp ]                                        :: :: vector  {{ com vector element }}
+    | lexp [ exp1 '..' exp2 ]                             :: :: vector_range {{ com subvector }}
+    | lexp . id                                           :: :: field {{ com struct field }}
 
 fexp :: 'FE_' ::=
   {{ com field expression }}
@@ -1052,14 +958,6 @@ default_spec :: 'DT_' ::=
   {{ com default kinding or typing assumption }}
   {{ aux _ l }}
   | default Order order      :: :: order
-  | default base_kind kid    :: :: kind
-  | default typschm id      :: :: typ
-% The intended semantics of these is that if an id in binding position
-% doesn't have a kind or type annotation, then we look through the
-% default regexps (in order from the beginning) and pick the first
-% assumption for which id matches the regexp, if there is one.
-% Otherwise we try to infer.  Perhaps warn if there are multiple matches.
-% For example, we might often have default Type ['alphanum]
 
 scattered_def :: 'SD_' ::=
   {{ com scattered function and union type definitions }}

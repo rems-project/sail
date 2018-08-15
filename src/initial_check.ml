@@ -627,26 +627,16 @@ and to_ast_record_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp
 
 let to_ast_default (names, k_env, default_order) (default : Parse_ast.default_typing_spec) : default_spec envs_out =
   match default with
-  | Parse_ast.DT_aux(df,l) ->
-    (match df with
-    | Parse_ast.DT_kind(bk,v) ->
-      let k,k_typ = to_ast_base_kind bk in
-      let v = to_ast_var v in
-      let key = var_to_string v in
-      DT_aux(DT_kind(k,v),l),(names,(Envmap.insert k_env (key,k_typ)),default_order)
-    | Parse_ast.DT_typ(typschm,id) ->
-      let tps,_,_ = to_ast_typschm k_env default_order typschm in
-      DT_aux(DT_typ(tps,to_ast_id id),l),(names,k_env,default_order)
-    | Parse_ast.DT_order(bk,o) ->
-      let k,k_typ = to_ast_base_kind bk in
-      (match (k,o) with
-	| (BK_aux(BK_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_inc,lo)) ->
-	  let default_order = Ord_aux(Ord_inc,lo) in
-	  DT_aux(DT_order default_order,l),(names,k_env,default_order)
-	| (BK_aux(BK_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_dec,lo)) ->
-	  let default_order = Ord_aux(Ord_dec,lo) in
-	  DT_aux(DT_order default_order,l),(names,k_env,default_order)
-	| _ -> typ_error l "Inc and Dec must have kind Order" None None None))
+  | Parse_ast.DT_aux(Parse_ast.DT_order(bk,o),l) ->
+     let k,k_typ = to_ast_base_kind bk in
+     (match (k,o) with
+      | (BK_aux(BK_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_inc,lo)) ->
+         let default_order = Ord_aux(Ord_inc,lo) in
+         DT_aux(DT_order default_order,l),(names,k_env,default_order)
+      | (BK_aux(BK_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_dec,lo)) ->
+         let default_order = Ord_aux(Ord_dec,lo) in
+         DT_aux(DT_order default_order,l),(names,k_env,default_order)
+      | _ -> typ_error l "Inc and Dec must have kind Order" None None None)
 
 let to_ast_spec (names,k_env,default_order) (val_:Parse_ast.val_spec) : (unit val_spec) envs_out =
   match val_ with

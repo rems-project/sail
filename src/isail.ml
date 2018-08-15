@@ -282,7 +282,7 @@ let handle_input' input =
             let ast = Process_file.rewrite_ast_c !interactive_ast in
             let ast, env = Specialize.specialize ast !interactive_env in
             let ctx = initial_ctx env in
-            let byte_ast = bytecode_ast ctx (fun cdefs -> List.concat (List.map (flatten_instrs ctx) cdefs)) ast in
+            let byte_ast = bytecode_ast ctx (List.map flatten_instrs) ast in
             let chan = open_out arg in
             Util.opt_colors := false;
             Pretty_print_sail.pretty_sail chan (separate_map hardline Bytecode_util.pp_cdef byte_ast);

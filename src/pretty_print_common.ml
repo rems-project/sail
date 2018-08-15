@@ -111,7 +111,8 @@ let doc_effect (BE_aux (e,_)) =
   | BE_escape -> "escape"
   | BE_undef -> "undef"
   | BE_unspec -> "unspec"
-  | BE_nondet -> "nondet")
+  | BE_nondet -> "nondet"
+  | BE_config -> "config")
 
 let doc_effects (Effect_aux(e,_)) = match e with
   | Effect_set [] -> string "pure"
