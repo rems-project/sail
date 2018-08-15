@@ -92,17 +92,17 @@ function clint_load(addr, width) = {
   if addr == MSIP_BASE & ('n == 8 | 'n == 4)
   then {
     print("clint[" ^ BitStr(addr) ^ "] -> " ^ BitStr(mip.MSI()));
-    MemValue(zero_extend(mip.MSI(), sizeof(8 * 'n)))
+    MemValue(zero_extend_type_hack(mip.MSI(), sizeof(8 * 'n)))
   }
   else if addr == MTIMECMP_BASE & ('n == 8)
   then {
     print("clint[" ^ BitStr(addr) ^ "] -> " ^ BitStr(mtimecmp));
-    MemValue(zero_extend(mtimecmp, 64)) /* FIXME: Redundant zero_extend currently required by Lem backend */
+    MemValue(zero_extend_type_hack(mtimecmp, 64)) /* FIXME: Redundant zero_extend currently required by Lem backend */
   }
   else if addr == MTIME_BASE & ('n == 8)
   then {
     print("clint[" ^ BitStr(addr) ^ "] -> " ^ BitStr(mtime));
-    MemValue(zero_extend(mtime, 64))
+    MemValue(zero_extend_type_hack(mtime, 64))
   }
   else {
     print("clint[" ^ BitStr(addr) ^ "] -> <not-mapped>");
@@ -174,7 +174,7 @@ function htif_load(addr, width) = {
   print("htif[" ^ BitStr(addr) ^ "] -> " ^ BitStr(htif_tohost));
   /* FIXME: For now, only allow the expected access widths. */
   if width == 8
-  then MemValue(zero_extend(htif_tohost, 64))  /* FIXME: Redundant zero_extend currently required by Lem backend */
+  then MemValue(zero_extend_type_hack(htif_tohost, 64))  /* FIXME: Redundant zero_extend currently required by Lem backend */
   else MemException(E_Load_Access_Fault)
 }
 

@@ -767,7 +767,8 @@ let doc_exp_lem, doc_let_lem =
                let t = Env.expand_synonyms env (typ_of full_exp) in
                let eff = effect_of full_exp in
                if typ_needs_printed t then
-                 if Id.compare f (mk_id "bitvector_cast_out") <> 0
+                 if Id.compare f (mk_id "bitvector_cast_out") <> 0 &&
+                    Id.compare f (mk_id "zero_extend_type_hack") <> 0
                  then (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env (effectful eff) t))), true)
                  (* TODO: coordinate with the code in monomorphise.ml to find the correct
                     typing environment to use *)

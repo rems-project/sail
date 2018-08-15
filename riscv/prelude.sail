@@ -496,3 +496,7 @@ function shift_right_arith64 (v : bits(64), shift : bits(6)) -> bits(64) =
 function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
     let v64 : bits(64) = EXTS(v) in
     (v64 >> shift)[31..0]
+
+/* Special version of zero_extend that the Lem back-end knows will be at a
+   case split on 'm and uses a more generic type for.  (Temporary hack, honest) */
+val zero_extend_type_hack = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
