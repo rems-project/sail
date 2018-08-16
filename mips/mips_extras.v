@@ -162,9 +162,11 @@ Require DecimalString.
 Definition string_of_int z := DecimalString.NilZero.string_of_int (Z.to_int z).
 
 
-Lemma MEMr_wrapper_lemma : forall size : Z, 8 * size = 8 * (8 * size ÷ 8).
+Lemma MEMr_wrapper_lemma : forall size : Z, 8 * size = 8 * (8 * (8 * size ÷ 8) ÷ 8).
 intros.
 rewrite Z.mul_comm.
+rewrite Z.quot_mul; auto with zarith.
+rewrite Z.mul_comm with (m := size).
 rewrite Z.quot_mul; auto with zarith.
 Qed.
 Hint Resolve MEMr_wrapper_lemma : sail.

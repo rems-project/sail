@@ -1963,7 +1963,9 @@ let rewrite_defs_early_return (Defs defs) =
        let env = env_of_annot (l, tannot) in
        let eff = effect_of_annot tannot in
        let tannot' = mk_tannot env typ (union_effects eff (mk_effect [BE_escape])) in
-       let exp' = add_e_cast (typ_of exp) exp in
+       let exp' = match Env.get_ret_typ env with
+         | Some typ -> add_e_cast typ exp
+         | None -> exp in
        E_aux (E_app (mk_id "early_return", [exp']), (l, tannot'))
     | _ -> full_exp in
 

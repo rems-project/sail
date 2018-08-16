@@ -825,6 +825,15 @@ let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
      Type_check.prove env (nc_and (nc_eq nexp low) (nc_eq nexp high))
   | _ -> false
 
+(* Get a more general type for an annotation/expression - i.e.,
+   like typ_of but using the expected type if there was one *)
+let general_typ_of_annot annot =
+  match expected_typ_of annot with
+  | None -> typ_of_annot annot
+  | Some typ -> typ
+
+let general_typ_of (E_aux (_,annot)) = general_typ_of_annot annot
+
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
@@ -842,7 +851,11 @@ let doc_exp_lem, doc_let_lem =
     let wrap_parens doc = if aexp_needed then parens (doc) else doc in
     let maybe_add_exist epp =
       let env = env_of full_exp in
-      let typ = Env.expand_synonyms env (typ_of full_exp) in
+      let typ = Env.expand_synonyms env (general_typ_of full_exp) in
+      let () =
+        debug ctxt (lazy ("Considering build_ex for " ^ string_of_exp full_exp));
+        debug ctxt (lazy (" at type " ^ string_of_typ typ))
+      in
       let typ = expand_range_type typ in
       match destruct_exist env typ with
       | None -> epp
@@ -1078,7 +1091,7 @@ let doc_exp_lem, doc_let_lem =
             (* Insert existential unpacking of arguments where necessary *)
             let doc_arg arg typ_from_fn =
               let arg_pp = expY arg in
-              let arg_ty_plain = Env.expand_synonyms (env_of arg) (typ_of arg) in
+              let arg_ty_plain = Env.expand_synonyms (env_of arg) (general_typ_of arg) in
               let arg_ty = expand_range_type arg_ty_plain in
               let typ_from_fn_plain = subst_unifiers inst typ_from_fn in
               let typ_from_fn_plain = Env.expand_synonyms (env_of arg) typ_from_fn_plain in
@@ -1106,7 +1119,7 @@ let doc_exp_lem, doc_let_lem =
                  subst_unifiers inst ret_typ
             in
             let unpack,build_ex,autocast =
-              let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
+              let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
               let ann_typ = expand_range_type ann_typ in
               let ret_typ_inst = expand_range_type (Env.expand_synonyms env ret_typ_inst) in
               let ret_typ_inst =
@@ -1185,7 +1198,7 @@ let doc_exp_lem, doc_let_lem =
        let epp = epp ^/^ doc_tannot_lem ctxt (env_of e) (effectful (effect_of e)) typ in
        let env = env_of_annot (l,annot) in
        let unpack,build_ex =
-         let ann_typ = Env.expand_synonyms env (typ_of_annot (l,annot)) in
+         let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
          let ann_typ = expand_range_type ann_typ in
          let cast_typ = expand_range_type (Env.expand_synonyms env typ) in
          match cast_typ, ann_typ with
@@ -1939,7 +1952,7 @@ let doc_val pat exp =
                     "Top-level value definition with complex pattern not supported for Coq yet")
   in
   let env = env_of exp in
-  let typ = expand_range_type (Env.expand_synonyms env (typ_of exp)) in
+  let typ = expand_range_type (Env.expand_synonyms env (general_typ_of exp)) in
   let ctxt = { empty_ctxt with debug  = List.mem (string_of_id id) (!opt_debug_on) } in
   let id, opt_unpack =
     match destruct_exist env typ with

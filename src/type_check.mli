@@ -332,6 +332,10 @@ val effect_of_pat : tannot pat -> effect
 val effect_of_annot : tannot -> effect
 val add_effect_annot : tannot -> effect -> tannot
 
+(* Returns the type that an expression was checked against, if any.
+   Note that these may be removed if an expression is rewritten. *)
+val expected_typ_of : Ast.l * tannot -> typ option
+
 (** {2 Utilities } *)
 
 val destruct_atom_nexp : Env.t -> typ -> nexp option

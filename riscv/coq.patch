@@ -1,6 +1,6 @@
---- riscv.v.orig	2018-08-15 11:35:48.766557392 +0100
-+++ riscv.v	2018-08-15 11:36:59.395492502 +0100
-@@ -7712,14 +7712,13 @@
+--- riscv.v.orig	2018-08-16 12:28:27.055298575 +0100
++++ riscv.v	2018-08-16 13:23:19.684380827 +0100
+@@ -7706,14 +7706,13 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
@@ -17,14 +17,14 @@
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
     phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false >>= fun w__0 : MemoryOpResult (mword 64) =>
-@@ -7732,26 +7731,26 @@
+@@ -7726,26 +7725,26 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
-        (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure PTW_Invalid_PTE)  : PTW_Result)
+        (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure PTW_Invalid_PTE)  : PTW_Result )
          else if ((isPTEPtr pbits)) then
 -          (if sumbool_of_bool ((Z.eqb level 0)) then
-+          (match level with | O =>
++          (match level with O =>
               returnm ((PTW_Failure PTW_Invalid_PTE)
-               : PTW_Result)
+               : PTW_Result )
 -           else
 +           | S level' =>
               (walk39 vaddr ac priv mxr do_sum
@@ -50,7 +50,7 @@
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
                          PTW_Failure PTW_Misaligned
-@@ -7760,15 +7759,18 @@
+@@ -7754,15 +7753,18 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
                          PTW_Success (concat_vec ppn (_get_SV39_Vaddr_PgOfs va),pte,pte_addr,build_ex
@@ -71,17 +71,17 @@
  Definition make_TLB39_Entry (asid : mword 16) (global : bool) (vAddr : mword 39) (pAddr : mword 56) (pte : SV39_PTE) '((existT _ level _) : {n : Z & ArithFact (n >=
    0)}) (pteAddr : mword 56) 
  : M (TLB39_Entry) :=
-@@ -7884,7 +7886,7 @@
+@@ -7878,7 +7880,7 @@
          : M (TR39_Result)
      | None =>
         curPTB39 tt >>= fun w__6 : mword 56 =>
 -       walk39 vAddr ac priv mxr do_sum w__6 (build_ex level) false >>= fun w__7 : PTW_Result =>
 +       walk39 vAddr ac priv mxr do_sum w__6 (Z.to_nat level) false >>= fun w__7 : PTW_Result =>
         (match w__7 with
-         | PTW_Failure (f) => returnm ((TR39_Failure f)  : TR39_Result)
+         | PTW_Failure (f) => returnm ((TR39_Failure f)  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -7961,7 +7963,7 @@
-     | Sbare => returnm ((TR_Address vAddr)  : TR_Result)
+@@ -7955,7 +7957,7 @@
+     | Sbare => returnm ((TR_Address vAddr)  : TR_Result )
      | SV39 =>
         translate39 (subrange_vec_dec vAddr 38 0) ac effPriv mxr do_sum
 -         (build_ex (projT1 (sub_range (build_ex SV39_LEVELS) (build_ex 1)))) >>= fun w__7 : TR39_Result =>
@@ -89,7 +89,7 @@
         returnm ((match w__7 with
                   | TR39_Address (pa) => TR_Address (EXTZ 64 pa)
                   | TR39_Failure (f) => TR_Failure (translationException ac f)
-@@ -10867,11 +10869,11 @@
+@@ -10861,11 +10863,11 @@
            (match width with
             | WORD =>
                mem_read addr 4 aq rl true >>= fun w__2 : MemoryOpResult (mword 32) =>
@@ -103,7 +103,7 @@
                 : M (bool)
             | _ => (internal_error "LOADRES expected WORD or DOUBLE")  : M (bool)
             end)
-@@ -10894,19 +10896,19 @@
+@@ -10888,19 +10890,19 @@
            (match width with
             | BYTE =>
                mem_read addr 1 aq rl false >>= fun w__3 : MemoryOpResult (mword 8) =>
@@ -127,7 +127,7 @@
                 : M (bool)
             end)
             : M (bool)
-@@ -11023,7 +11025,7 @@
+@@ -11017,7 +11019,7 @@
       if sumbool_of_bool ((andb s
                              (Z.gtb q (projT1 (sub_range (build_ex (projT1 (pow2 31))) (build_ex 1))))))
       then
@@ -136,21 +136,21 @@
       else q in
     wX (projT1 ((regbits_to_regno rd)  : {n : Z & ArithFact (0 <= n /\ (n + 1) <= 32)}))
       (EXTS 64 (to_bits 32 q')) >>
-@@ -11127,11 +11129,11 @@
+@@ -11121,11 +11123,11 @@
             match width with
             | WORD =>
                mem_read addr 4 aq (andb aq rl) true >>= fun w__4 : MemoryOpResult (mword 32) =>
 -              returnm ((extend_value false w__4)
 +              returnm ((extend_value (n := 4) false w__4)
-                : MemoryOpResult xlenbits)
+                : MemoryOpResult (mword 64))
             | DOUBLE =>
                mem_read addr 8 aq (andb aq rl) true >>= fun w__5 : MemoryOpResult (mword 64) =>
 -              returnm ((extend_value false w__5)
 +              returnm ((extend_value (n := 8) false w__5)
-                : MemoryOpResult xlenbits)
-            | _ => (internal_error "AMO expected WORD or DOUBLE")  : M (MemoryOpResult xlenbits)
+                : MemoryOpResult (mword 64))
+            | _ => (internal_error "AMO expected WORD or DOUBLE")  : M (MemoryOpResult (mword 64))
             end >>= fun rval : MemoryOpResult xlenbits =>
-@@ -11193,134 +11195,140 @@
+@@ -11187,134 +11189,140 @@
     returnm (true
      : bool).
  
@@ -350,7 +350,7 @@
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -11360,6 +11368,7 @@
+@@ -11354,6 +11362,7 @@
     | THREAD_START (g__29) => returnm ((execute_THREAD_START g__29)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
     | C_ILLEGAL (g__30) => (execute_C_ILLEGAL g__30)  : M (bool)
@@ -358,7 +358,7 @@
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -11622,7 +11631,7 @@
+@@ -11616,7 +11625,7 @@
      | _ => exit tt  : M (string)
      end)
      : M (string).
@@ -367,7 +367,7 @@
  Definition assembly_backwards (arg_ : string) 
  : M (ast) :=
     let _stringappend_1112_ := arg_ in
-@@ -29689,7 +29698,7 @@
+@@ -29684,7 +29693,7 @@
            : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
         : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
      : M (option ((ast * {n : Z & ArithFact (n >= 0)}))).
@@ -376,7 +376,7 @@
  Definition encdec_forwards (arg_ : ast) 
  : M (mword 32) :=
     (match arg_ with
-@@ -31899,7 +31908,7 @@
+@@ -31894,7 +31903,7 @@
          : M ((bool * bool))
      end)
      : M ((bool * bool)).
@@ -385,7 +385,7 @@
  Definition loop '(tt : unit) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -31938,7 +31947,7 @@
+@@ -31936,7 +31945,7 @@
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
      : unit).
@@ -394,7 +394,7 @@
  Definition read_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 11)} 
  : read_kind :=
     let p0_ := arg_ in
-@@ -32029,7 +32038,7 @@
+@@ -32027,7 +32036,7 @@
     else if sumbool_of_bool ((Z.eqb p0_ 20)) then Barrier_RISCV_w_r
     else if sumbool_of_bool ((Z.eqb p0_ 21)) then Barrier_RISCV_i
     else Barrier_x86_MFENCE.
@@ -403,7 +403,7 @@
  Definition num_of_barrier_kind (arg_ : barrier_kind) 
  : {e : Z & ArithFact (0 <= e /\ e <= 22)} :=
     match arg_ with
-@@ -32057,7 +32066,7 @@
+@@ -32055,7 +32064,7 @@
     | Barrier_RISCV_i => build_ex 21
     | Barrier_x86_MFENCE => build_ex 22
     end.
@@ -412,7 +412,7 @@
  Definition trans_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 2)} 
  : trans_kind :=
     let p0_ := arg_ in
-@@ -32078,6 +32087,7 @@
+@@ -32076,6 +32085,7 @@
                   "x10";"x9";"x8";"x7";"x6";"x5";"x4";"x3";"x2";"x1";"x0"].
  Let CIA_fp := RFull "CIA".
  Let NIA_fp := RFull "NIA".
@@ -420,7 +420,7 @@
  Definition initial_analysis (instr : ast) 
  : M ((list regfp * list regfp * list regfp * list niafp * diafp * instruction_kind)) :=
     let iR := []  : regfps in
-@@ -32602,7 +32612,7 @@
+@@ -32600,7 +32610,7 @@
     end >>= fun '(Nias, aR, iR, ik, oR) =>
     returnm ((iR, oR, aR, Nias, Dia, ik)
      : (list regfp * list regfp * list regfp * list niafp * diafp * instruction_kind)).
