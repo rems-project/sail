@@ -9,7 +9,7 @@ function fetch_and_execute () =
       let instr = aget_Mem(_PC, 4, AccType_IFETCH);
       decode(instr);
     } catch {
-      Error_See("HINT") => (),
+      Error_See(h) if h == "HINT" => (),
       _ => exit(())
     };
     if __BranchTaken then __BranchTaken = false else _PC = _PC + 4

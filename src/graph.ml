@@ -59,7 +59,7 @@ module type S =
     type node
     type graph
     type node_set
-       
+
     val leaves : graph -> node_set
 
     val empty : graph
@@ -68,6 +68,8 @@ module type S =
        the nodes if they do not exist. *)
     val add_edge : node -> node -> graph -> graph
     val add_edges : node -> node list -> graph -> graph
+
+    val children : graph -> node -> node list
 
     (** Return the set of nodes that are reachable from the first set
        of nodes (roots), without passing through the second set of
@@ -102,9 +104,15 @@ module Make(Ord: OrderedType) = struct
   type node_set = NS.t
 
   let empty = NM.empty
-                
+
   let leaves cg =
     List.fold_left (fun acc (fn, callees) -> NS.filter (fun callee -> callee <> fn) (NS.union acc callees)) NS.empty (NM.bindings cg)
+
+  let children cg caller =
+    try
+      NS.elements (NM.find caller cg)
+    with
+    | Not_found -> []
 
   let fix_leaves cg =
     NS.fold (fun leaf cg -> if NM.mem leaf cg then cg else NM.add leaf NS.empty cg) (leaves cg) cg
@@ -122,7 +130,7 @@ module Make(Ord: OrderedType) = struct
       fix_leaves (NM.add caller (NS.union callees (NM.find caller cg)) cg)
     with
     | Not_found -> fix_leaves (NM.add caller callees cg)
-                 
+
   let reachable roots cuts cg =
     let visited = ref NS.empty in
 
@@ -164,16 +172,16 @@ module Make(Ord: OrderedType) = struct
     reverse up
 
   let topsort cg =
-    let marked = Hashtbl.create (NM.cardinal cg) in
+    let marked = ref NS.empty in
     let temp_marked = ref NS.empty in
     let list = ref [] in
     let keys = NM.bindings cg |> List.map fst in
-    let find_unmarked keys = List.find (fun node -> not (Hashtbl.mem marked node)) keys in
+    let find_unmarked keys = List.find (fun node -> not (NS.mem node !marked)) keys in
 
     let rec visit node =
       if NS.mem node !temp_marked
       then raise (let lcg = prune_loop node cg in Not_a_DAG (node, lcg))
-      else if Hashtbl.mem marked node
+      else if NS.mem node !marked
       then ()
       else
         begin
@@ -183,7 +191,7 @@ module Make(Ord: OrderedType) = struct
           in
           temp_marked := NS.add node !temp_marked;
           NS.iter (fun child -> visit child) children;
-          Hashtbl.add marked node ();
+          marked := NS.add node !marked;
           temp_marked := NS.remove node !temp_marked;
           list := node :: !list
         end

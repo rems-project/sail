@@ -61,7 +61,7 @@ module type S =
     type node
     type graph
     type node_set
-       
+
     val leaves : graph -> node_set
 
     val empty : graph
@@ -70,6 +70,8 @@ module type S =
        the nodes if they do not exist. *)
     val add_edge : node -> node -> graph -> graph
     val add_edges : node -> node list -> graph -> graph
+
+    val children : graph -> node -> node list
 
     (** Return the set of nodes that are reachable from the first set
        of nodes (roots), without passing through the second set of
