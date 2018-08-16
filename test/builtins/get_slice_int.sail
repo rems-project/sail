@@ -4,12 +4,6 @@ $include <exception_basic.sail>
 $include <flow.sail>
 $include <vector_dec.sail>
 
-val int_of_string = {
-  ocaml: "Nat_big_num.of_string",
-  lem: "integerOfString",
-  c: "reinit_mpz_t_of_sail_string"
-} : string -> int
-
 function main (() : unit) -> unit = {
   assert(get_slice_int(1, -10, 6) == 1^0x1, "get_slice_int(1, -10, 6) == 1^0x1");
   assert(get_slice_int(1, -1, 6) == 1^0x1, "get_slice_int(1, -1, 6) == 1^0x1");
@@ -257,20 +251,20 @@ function main (() : unit) -> unit = {
   assert(get_slice_int(64, 173015152, 0) == 64^0xa500070, "get_slice_int(64, 173015152, 0) == 64^0xa500070");
   assert(get_slice_int(64, 173015156, 0) == 64^0xa500074, "get_slice_int(64, 173015156, 0) == 64^0xa500074");
   assert(get_slice_int(64, 180224, 0) == 64^0x2c000, "get_slice_int(64, 180224, 0) == 64^0x2c000");
-  assert(get_slice_int(64, int_of_string("18446708893632421888"), 0) == 64^0xffffe000ffffe000, "get_slice_int(64, 18446708893632421888, 0) == 64^0xffffe000ffffe000");
-  assert(get_slice_int(64, int_of_string("18446744073658712064"), 0) == 64^0xfffffffffcf84000, "get_slice_int(64, 18446744073658712064, 0) == 64^0xfffffffffcf84000");
-  assert(get_slice_int(64, int_of_string("18446744073658777600"), 0) == 64^0xfffffffffcf94000, "get_slice_int(64, 18446744073658777600, 0) == 64^0xfffffffffcf94000");
-  assert(get_slice_int(64, int_of_string("18446744073658843136"), 0) == 64^0xfffffffffcfa4000, "get_slice_int(64, 18446744073658843136, 0) == 64^0xfffffffffcfa4000");
-  assert(get_slice_int(64, int_of_string("18446744073660252160"), 0) == 64^0xfffffffffd0fc000, "get_slice_int(64, 18446744073660252160, 0) == 64^0xfffffffffd0fc000");
-  assert(get_slice_int(64, int_of_string("18446744073660317696"), 0) == 64^0xfffffffffd10c000, "get_slice_int(64, 18446744073660317696, 0) == 64^0xfffffffffd10c000");
-  assert(get_slice_int(64, int_of_string("18446744073660465152"), 0) == 64^0xfffffffffd130000, "get_slice_int(64, 18446744073660465152, 0) == 64^0xfffffffffd130000");
-  assert(get_slice_int(64, int_of_string("18446744073660530688"), 0) == 64^0xfffffffffd140000, "get_slice_int(64, 18446744073660530688, 0) == 64^0xfffffffffd140000");
-  assert(get_slice_int(64, int_of_string("18446744073660727296"), 0) == 64^0xfffffffffd170000, "get_slice_int(64, 18446744073660727296, 0) == 64^0xfffffffffd170000");
-  assert(get_slice_int(64, int_of_string("18446744073660841984"), 0) == 64^0xfffffffffd18c000, "get_slice_int(64, 18446744073660841984, 0) == 64^0xfffffffffd18c000");
-  assert(get_slice_int(64, int_of_string("18446744073708961792"), 0) == 64^0xfffffffffff70000, "get_slice_int(64, 18446744073708961792, 0) == 64^0xfffffffffff70000");
-  assert(get_slice_int(64, int_of_string("18446744073709027328"), 0) == 64^0xfffffffffff80000, "get_slice_int(64, 18446744073709027328, 0) == 64^0xfffffffffff80000");
-  assert(get_slice_int(64, int_of_string("18446744073709289472"), 0) == 64^0xfffffffffffc0000, "get_slice_int(64, 18446744073709289472, 0) == 64^0xfffffffffffc0000");
-  assert(get_slice_int(64, int_of_string("18446744073709355008"), 0) == 64^0xfffffffffffd0000, "get_slice_int(64, 18446744073709355008, 0) == 64^0xfffffffffffd0000");
+  assert(get_slice_int(64, 18446708893632421888, 0) == 64^0xffffe000ffffe000, "get_slice_int(64, 18446708893632421888, 0) == 64^0xffffe000ffffe000");
+  assert(get_slice_int(64, 18446744073658712064, 0) == 64^0xfffffffffcf84000, "get_slice_int(64, 18446744073658712064, 0) == 64^0xfffffffffcf84000");
+  assert(get_slice_int(64, 18446744073658777600, 0) == 64^0xfffffffffcf94000, "get_slice_int(64, 18446744073658777600, 0) == 64^0xfffffffffcf94000");
+  assert(get_slice_int(64, 18446744073658843136, 0) == 64^0xfffffffffcfa4000, "get_slice_int(64, 18446744073658843136, 0) == 64^0xfffffffffcfa4000");
+  assert(get_slice_int(64, 18446744073660252160, 0) == 64^0xfffffffffd0fc000, "get_slice_int(64, 18446744073660252160, 0) == 64^0xfffffffffd0fc000");
+  assert(get_slice_int(64, 18446744073660317696, 0) == 64^0xfffffffffd10c000, "get_slice_int(64, 18446744073660317696, 0) == 64^0xfffffffffd10c000");
+  assert(get_slice_int(64, 18446744073660465152, 0) == 64^0xfffffffffd130000, "get_slice_int(64, 18446744073660465152, 0) == 64^0xfffffffffd130000");
+  assert(get_slice_int(64, 18446744073660530688, 0) == 64^0xfffffffffd140000, "get_slice_int(64, 18446744073660530688, 0) == 64^0xfffffffffd140000");
+  assert(get_slice_int(64, 18446744073660727296, 0) == 64^0xfffffffffd170000, "get_slice_int(64, 18446744073660727296, 0) == 64^0xfffffffffd170000");
+  assert(get_slice_int(64, 18446744073660841984, 0) == 64^0xfffffffffd18c000, "get_slice_int(64, 18446744073660841984, 0) == 64^0xfffffffffd18c000");
+  assert(get_slice_int(64, 18446744073708961792, 0) == 64^0xfffffffffff70000, "get_slice_int(64, 18446744073708961792, 0) == 64^0xfffffffffff70000");
+  assert(get_slice_int(64, 18446744073709027328, 0) == 64^0xfffffffffff80000, "get_slice_int(64, 18446744073709027328, 0) == 64^0xfffffffffff80000");
+  assert(get_slice_int(64, 18446744073709289472, 0) == 64^0xfffffffffffc0000, "get_slice_int(64, 18446744073709289472, 0) == 64^0xfffffffffffc0000");
+  assert(get_slice_int(64, 18446744073709355008, 0) == 64^0xfffffffffffd0000, "get_slice_int(64, 18446744073709355008, 0) == 64^0xfffffffffffd0000");
   assert(get_slice_int(64, 75248, 0) == 64^0x125f0, "get_slice_int(64, 75248, 0) == 64^0x125f0");
   assert(get_slice_int(64, 75252, 0) == 64^0x125f4, "get_slice_int(64, 75252, 0) == 64^0x125f4");
   assert(get_slice_int(64, 75256, 0) == 64^0x125f8, "get_slice_int(64, 75256, 0) == 64^0x125f8");

@@ -3,6 +3,8 @@ default Order dec
 $include <exception_basic.sail>
 $include <vector_dec.sail>
 
+overload zero_extend = {sail_zero_extend}
+
 function main (() : unit) -> unit = {
   assert(unsigned(zero_extend(0x104ef4, 64)) == 1068788);
   assert(unsigned(zero_extend(0x104ef8, 64)) == 1068792);

@@ -4,6 +4,8 @@ $include <exception_basic.sail>
 $include <flow.sail>
 $include <vector_dec.sail>
 
+overload zeros = {sail_zeros}
+
 function main (() : unit) -> unit = {
   assert(zeros(1)   == 1^0b0);
   assert(zeros(10)  == 10^0x0);
