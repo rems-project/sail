@@ -286,7 +286,6 @@ let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
 let real_typ = mk_id_typ (mk_id "real")
 let app_typ id args = mk_typ (Typ_app (id, args))
-let ref_typ typ = mk_typ (Typ_app (mk_id "ref", [mk_typ_arg (Typ_arg_typ typ)]))
 let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (Typ_arg_typ typ)]))
 let atom_typ nexp =
   mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))

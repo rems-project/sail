@@ -124,7 +124,6 @@ val range_typ : nexp -> nexp -> typ
 val bit_typ : typ
 val bool_typ : typ
 val app_typ : id -> typ_arg list -> typ
-val ref_typ : typ -> typ
 val register_typ : typ -> typ
 val unit_typ : typ
 val string_typ : typ

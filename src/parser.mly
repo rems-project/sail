@@ -549,9 +549,6 @@ atomic_typ:
   | Register Lparen typ Rparen
     { let register_id = mk_id (Id "register") $startpos($1) $endpos($1) in
       mk_typ (ATyp_app (register_id, [$3])) $startpos $endpos }
-  | Ref Lparen typ Rparen
-    { let ref_id = mk_id (Id "ref") $startpos($1) $endpos($1) in
-      mk_typ (ATyp_app (ref_id, [$3])) $startpos $endpos }
   | Lparen typ Rparen
     { $2 }
   | Lparen typ Comma typ_list Rparen

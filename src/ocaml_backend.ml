@@ -131,7 +131,6 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "real") = 0 -> string "Rational.t"
   | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
-  | id when Id.compare id (mk_id "ref") = 0 -> string "ref"
   | id -> zencode ctx id
 
 let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =

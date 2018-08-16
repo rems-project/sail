@@ -1044,7 +1044,6 @@ let initial_kind_env =
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
-    ("ref", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
     ("vector", {k = K_Lam( [{k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
     ("atom", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});

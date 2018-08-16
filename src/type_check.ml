@@ -511,7 +511,6 @@ end = struct
         ("atom", [BK_int]);
         ("vector", [BK_int; BK_order; BK_type]);
         ("register", [BK_type]);
-        ("ref", [BK_type]);
         ("bit", []);
         ("unit", []);
         ("int", []);
@@ -1143,8 +1142,7 @@ end = struct
         rewrap (Typ_fn (aux t1, aux t2, eff))
       | Typ_tup ts ->
         rewrap (Typ_tup (List.map aux ts))
-      | Typ_app (r, [Typ_arg_aux (Typ_arg_typ rtyp,_)])
-        when string_of_id r = "register" || string_of_id r = "ref" ->
+      | Typ_app (r, [Typ_arg_aux (Typ_arg_typ rtyp,_)]) when string_of_id r = "register" ->
         aux rtyp
       | Typ_app (id, targs) ->
         rewrap (Typ_app (id, List.map aux_arg targs))
@@ -2788,7 +2786,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           end
        | _ -> typ_error l ("Mal-formed mapping " ^ string_of_id f)
      end
-    
+
   | P_app (f, _) when (not (Env.is_union_constructor f env) && not (Env.is_mapping f env)) ->
      typ_error l (string_of_id f ^ " is not a union constructor or mapping in pattern " ^ string_of_pat pat)
   | P_as (pat, id) ->
@@ -3011,12 +3009,10 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   | LEXP_deref exp ->
      let inferred_exp = infer_exp env exp in
      begin match typ_of inferred_exp with
-     | Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ vtyp, _)]), _) when string_of_id r = "ref" ->
-        subtyp l env typ vtyp; annot_lexp (LEXP_deref inferred_exp) typ, env
      | Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ vtyp, _)]), _) when string_of_id r = "register" ->
         subtyp l env typ vtyp; annot_lexp_effect (LEXP_deref inferred_exp) typ (mk_effect [BE_wreg]), env
      | _ ->
-        typ_error l (string_of_typ typ  ^ " must be a ref or register type in " ^ string_of_exp exp ^ ")")
+        typ_error l (string_of_typ typ  ^ " must be a register type in " ^ string_of_exp exp ^ ")")
      end
   | LEXP_id v ->
      begin match Env.lookup_id ~raw:true v env with
@@ -3309,9 +3305,6 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let tpat, env = bind_pat_no_guard env pat ptyp in
      let inferred_exp = irule infer_exp env exp in
      annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp)) (typ_of inferred_exp)
-  | E_ref id when Env.is_mutable id env ->
-     let (_, typ) = Bindings.find id (Env.get_locals env) in
-     annot_exp (E_ref id) (ref_typ typ)
   | E_ref id when Env.is_register id env ->
      let _, _, typ = Env.get_register id env in
      annot_exp (E_ref id) (register_typ typ)

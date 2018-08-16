@@ -168,7 +168,7 @@ let rec ctyp_of_typ ctx typ =
   | Typ_id id when string_of_id id = "string" -> CT_string
   | Typ_id id when string_of_id id = "real" -> CT_real
 
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "register" || string_of_id id = "ref" ->
+  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "register" ->
      CT_ref (ctyp_of_typ ctx typ)
 
   | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> Bindings.bindings)
@@ -1534,8 +1534,6 @@ let rec compile_def ctx = function
        List.fold_left2 (fun ctx (id, _) (_, ctyp) -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args compiled_args'
      in
 
-     if string_of_id id = "main" then c_verbosity := 1 else ();
-
      (* Optimize and compile the expression *)
      let aexp = no_shadow (pat_ids pat) (anf exp) in
      c_debug (lazy (Pretty_print_sail.to_string (pp_aexp aexp)));
@@ -1547,8 +1545,6 @@ let rec compile_def ctx = function
      let destructure, destructure_cleanup =
        compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label
      in
-
-     c_verbosity := 0;
 
      (* This better be true or something has gone badly wrong. *)
      let ret_ctyp = ctyp_of_typ ctx ret_typ in
