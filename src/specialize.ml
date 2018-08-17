@@ -325,6 +325,27 @@ let specialize_id_valspec instantiations id ast =
 
      append_ast pre_ast (append_ast (Defs (vs :: specializations)) post_ast)
 
+(* When we specialize a function definition we also need to specialize
+   all the types that appear as annotations within the function
+   body. *)
+let specialize_annotations instantiation =
+  let open Type_check in
+  let rw_pat = {
+      id_pat_alg with
+      p_typ = (fun (typ, pat) -> P_typ (subst_unifiers instantiation typ, pat))
+    } in
+  let rw_exp = {
+      id_exp_alg with
+      e_cast = (fun (typ, exp) -> E_cast (subst_unifiers instantiation typ, exp));
+      lEXP_cast = (fun (typ, lexp) -> LEXP_cast (subst_unifiers instantiation typ, lexp));
+      pat_alg = rw_pat
+    } in
+  rewrite_fun {
+      rewriters_base with
+      rewrite_exp = (fun _ -> fold_exp rw_exp);
+      rewrite_pat = (fun _ -> fold_pat rw_pat)
+    }
+     
 let specialize_id_fundef instantiations id ast =
   match split_defs (is_fundef id) ast with
   | None -> ast
@@ -335,7 +356,7 @@ let specialize_id_fundef instantiations id ast =
        if IdSet.mem spec_id !spec_ids then [] else
          begin
            spec_ids := IdSet.add spec_id !spec_ids;
-           [DEF_fundef (rename_fundef spec_id fundef)]
+           [DEF_fundef (specialize_annotations instantiation (rename_fundef spec_id fundef))]
          end
      in
      let fundefs = List.map specialize_fundef instantiations |> List.concat in
