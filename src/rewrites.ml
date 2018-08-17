@@ -1621,8 +1621,8 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
       (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
     let clauses = rewrite_guarded_clauses l (List.map clause ps) in
+    let e = rewrite_rec e in
     if (effectful e) then
-      let e = rewrite_rec e in
       let (E_aux (_,(el,eannot))) = e in
       let pat_e' = fresh_id_pat "p__" (el, mk_tannot (env_of e) (typ_of e) no_effect) in
       let exp_e' = pat_to_exp pat_e' in
@@ -1630,6 +1630,18 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       let exp' = case_exp exp_e' (typ_of full_exp) clauses in
       rewrap (E_let (letbind_e, exp'))
     else case_exp e (typ_of full_exp) clauses
+  | E_try (e,ps)
+    when List.exists is_guarded_pexp ps ->
+    let e = rewrite_rec e in
+    let clause = function
+    | Pat_aux (Pat_exp (pat, body), annot) ->
+      (pat, None, rewrite_rec body, annot)
+    | Pat_aux (Pat_when (pat, guard, body), annot) ->
+      (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
+    let clauses = rewrite_guarded_clauses l (List.map clause ps) in
+    let pexp (pat,body,annot) = Pat_aux (Pat_exp (pat,body),annot) in
+    let ps = List.map pexp clauses in
+    fix_eff_exp (annot_exp (E_try (e,ps)) l (env_of full_exp) (typ_of full_exp))
   | _ -> rewrite_base full_exp
 
 let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r,t,e,funcls),(l,fdannot))) =

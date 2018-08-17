@@ -354,6 +354,7 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_assign (lexp,exp) -> rewrap (E_assign(rewriters.rewrite_lexp rewriters lexp,rewrite exp))
   | E_sizeof n -> rewrap (E_sizeof n)
   | E_exit e -> rewrap (E_exit (rewrite e))
+  | E_throw e -> rewrap (E_throw (rewrite e))
   | E_return e -> rewrap (E_return (rewrite e))
   | E_assert(e1,e2) -> rewrap (E_assert(rewrite e1,rewrite e2))
   | E_var (lexp, e1, e2) ->
