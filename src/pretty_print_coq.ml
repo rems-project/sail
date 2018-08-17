@@ -1195,21 +1195,37 @@ let doc_exp_lem, doc_let_lem =
     | E_lit lit -> maybe_add_exist (doc_lit lit)
     | E_cast(typ,e) ->
        let epp = expV true e in
-       let epp = epp ^/^ doc_tannot_lem ctxt (env_of e) (effectful (effect_of e)) typ in
        let env = env_of_annot (l,annot) in
-       let unpack,build_ex =
+       let unpack,build_ex, in_typ, out_typ =
          let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
          let ann_typ = expand_range_type ann_typ in
          let cast_typ = expand_range_type (Env.expand_synonyms env typ) in
          match cast_typ, ann_typ with
-         | Typ_aux (Typ_exist _,_), Typ_aux (Typ_exist _,_) ->
-            if alpha_equivalent env cast_typ ann_typ then false,false else true,true
-         | Typ_aux (Typ_exist _,_), _ -> true,false
-         | _, Typ_aux (Typ_exist _,_) -> false,true
-         | _, _ -> false,false
+         | Typ_aux (Typ_exist (_,_,t1),_), Typ_aux (Typ_exist (_,_,t2),_) ->
+            if alpha_equivalent env cast_typ ann_typ
+            then false,false,t1,t2
+            else true,true,t1,t2
+         | Typ_aux (Typ_exist (_,_,t1),_), t2 -> true,false,t1,t2
+         | t1, Typ_aux (Typ_exist (_,_,t2),_) -> false,true,t1,t2
+         | t1, t2 -> false,false,t1,t2
        in
-       let epp = if unpack then string "projT1" ^^ space ^^ parens epp else epp in
-       let epp = if build_ex then string "build_ex" ^^ space ^^ parens epp else epp in
+       let autocast =
+                (* Avoid using helper functions which simplify the nexps *)
+         is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
+           match in_typ, out_typ with
+           | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
+         Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
+              not (similar_nexps env n1 n2)
+           | _ -> false
+       in
+       let autocast_id, proj_id, build_id =
+         if effectful (effect_of e)
+         then "autocast_m", "projT1_m", "build_ex_m"
+         else "autocast",   "projT1",   "build_ex" in
+       let epp = if unpack then string proj_id ^^ space ^^ parens epp else epp in
+       let epp = if autocast then string autocast_id ^^ space ^^ parens epp else epp in
+       let epp = epp ^/^ doc_tannot_lem ctxt (env_of e) (effectful (effect_of e)) typ in
+       let epp = if build_ex then string build_id ^^ space ^^ parens epp else epp in
        if aexp_needed then parens epp else epp
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
