@@ -261,9 +261,12 @@ let c_literals ctx =
 let mask m =
   if Big_int.less_equal m (Big_int.of_int 64) then
     let n = Big_int.to_int m in
-    if n mod 4 == 0
-    then "UINT64_C(0x" ^ String.make (16 - n / 4) '0' ^ String.make (n / 4) 'F' ^ ")"
-    else "UINT64_C(" ^ String.make (64 - n) '0' ^ String.make n '1' ^ ")"
+    if n = 0 then
+      "UINT64_C(0)"
+    else if n mod 4 = 0 then
+      "UINT64_C(0x" ^ String.make (16 - n / 4) '0' ^ String.make (n / 4) 'F' ^ ")"
+    else
+      "UINT64_C(" ^ String.make (64 - n) '0' ^ String.make n '1' ^ ")"
   else
     failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
@@ -1892,7 +1895,8 @@ let sort_ctype_defs cdefs =
        List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors
   in
 
-  (* Create a reverse id graph of dependencies between types *)
+  (* Create a reverse (i.e. from types to the types that are dependent
+     upon them) id graph of dependencies between types *)
   let module IdGraph = Graph.Make(Id) in
 
   let graph =
@@ -1988,9 +1992,6 @@ let optimize ctx cdefs =
 
 let sgen_id id = Util.zencode_string (string_of_id id)
 let codegen_id id = string (sgen_id id)
-
-let upper_sgen_id id = Util.zencode_string (string_of_id id)
-let upper_codegen_id id = string (upper_sgen_id id)
 
 let rec sgen_ctyp = function
   | CT_unit -> "unit"
@@ -2268,10 +2269,10 @@ let codegen_type_def ctx = function
      in
      let codegen_undefined =
        let name = sgen_id id in
-       string (Printf.sprintf "enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (upper_sgen_id first_id))
+       string (Printf.sprintf "enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
      in
      string (Printf.sprintf "// enum %s" (string_of_id id)) ^^ hardline
-     ^^ separate space [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) upper_codegen_id ids; rbrace ^^ semi]
+     ^^ separate space [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) codegen_id ids; rbrace ^^ semi]
      ^^ twice hardline
      ^^ codegen_eq
      ^^ twice hardline
@@ -2664,6 +2665,11 @@ let codegen_vector ctx (direction, ctyp) =
       string (Printf.sprintf "static void internal_vector_init_%s(%s *rop, const int64_t len) {\n" (sgen_id id) (sgen_id id))
       ^^ string "  rop->len = len;\n"
       ^^ string (Printf.sprintf "  rop->data = malloc(len * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ (if not (is_stack_ctyp ctyp) then
+            string "  for (int i = 0; i < len; i++) {\n"
+            ^^ string (Printf.sprintf "    CREATE(%s)((rop->data) + i);\n" (sgen_ctyp ctyp))
+            ^^ string "  }\n"
+          else empty)
       ^^ string "}"
     in
     let vector_undefined =

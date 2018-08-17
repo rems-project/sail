@@ -94,6 +94,9 @@ let options = Arg.align ([
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
+  ( "-ocaml_build_dir",
+    Arg.String (fun dir -> Ocaml_backend.opt_ocaml_build_dir := dir),
+    " set a custom directory to build generated OCaml");
   ( "-ocaml-coverage",
     Arg.Set Ocaml_backend.opt_ocaml_coverage,
     "Build ocaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");

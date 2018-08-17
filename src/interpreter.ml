@@ -660,7 +660,6 @@ let rec eval_frame' ast = function
      match (m, stack) with
      | Pure v, [] when is_value v -> Done (state, value_of_exp v)
      | Pure v, (head :: stack') when is_value v ->
-        (* print_endline ("Returning value: " ^ string_of_value (value_of_exp v) |> Util.cyan |> Util.clear); *)
         Step (stack_string head, (stack_state head, snd state), stack_cont head (value_of_exp v), stack')
      | Pure exp', _ ->
         let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp')) in
@@ -670,7 +669,6 @@ let rec eval_frame' ast = function
         let body = exp_of_fundef (get_fundef id ast) arg in
         Break (Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack))
      | Yield (Call(id, vals, cont)), _ ->
-        (* print_endline ("Calling " ^ string_of_id id |> Util.cyan |> Util.clear); *)
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
         let body = exp_of_fundef (get_fundef id ast) arg in
         Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack)
@@ -680,7 +678,6 @@ let rec eval_frame' ast = function
         eval_frame' ast (Step (out, state', cont (), stack))
      | Yield (Early_return v), [] -> Done (state, v)
      | Yield (Early_return v), (head :: stack') ->
-        (* print_endline ("Returning value: " ^ string_of_value v |> Util.cyan |> Util.clear); *)
         Step (stack_string head, (stack_state head, snd state), stack_cont head v, stack')
      | Yield (Assertion_failed msg), _ ->
         failwith msg

@@ -61,6 +61,7 @@ let opt_trace_ocaml = ref false
 (* Option to not build generated ocaml by default *)
 let opt_ocaml_nobuild = ref false
 let opt_ocaml_coverage = ref false
+let opt_ocaml_build_dir = ref "_sbuild"
 
 type ctx =
   { register_inits : tannot exp list;
@@ -705,9 +706,9 @@ let ocaml_compile spec defs =
        else
          failwith "Could not find sail share directory, " ^ share_dir ^ ". Make sure sail is installed or try setting environment variable SAIL_DIR."
   in
-  if Sys.file_exists "_sbuild" then () else Unix.mkdir "_sbuild" 0o775;
+  if Sys.file_exists !opt_ocaml_build_dir then () else Unix.mkdir !opt_ocaml_build_dir 0o775;
   let cwd = Unix.getcwd () in
-  Unix.chdir "_sbuild";
+  Unix.chdir !opt_ocaml_build_dir;
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/elf_loader.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/sail_lib.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/util.ml .") in

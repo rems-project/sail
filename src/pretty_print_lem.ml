@@ -338,7 +338,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
   match t with
   | Typ_app (Id_aux (Id "vector",_) as id, [Typ_arg_aux (Typ_arg_nexp size,_);ord;typ']) ->
      begin
-       let mk_typ nexp = 
+       let mk_typ nexp =
          Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
        in
        match Type_check.solve env size with
@@ -368,6 +368,9 @@ let doc_tannot_lem ctxt env eff typ =
      if eff then string " : M " ^^ parens ta
      else string " : " ^^ ta
 
+let min_int32 = Big_int.of_int64 (Int64.of_int32 Int32.min_int)
+let max_int32 = Big_int.of_int64 (Int64.of_int32 Int32.max_int)
+
 let doc_lit_lem (L_aux(lit,l)) =
   match lit with
   | L_unit  -> utf8string "()"
@@ -375,11 +378,13 @@ let doc_lit_lem (L_aux(lit,l)) =
   | L_one   -> utf8string "B1"
   | L_false -> utf8string "false"
   | L_true  -> utf8string "true"
-  | L_num i ->
+  | L_num i when Big_int.less_equal min_int32 i && Big_int.less_equal i max_int32 ->
      let ipp = Big_int.to_string i in
      utf8string (
        if Big_int.less i Big_int.zero then "((0"^ipp^"):ii)"
        else "("^ipp^":ii)")
+  | L_num i ->
+     utf8string (Printf.sprintf "(integerOfString \"%s\")" (Big_int.to_string i))
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->

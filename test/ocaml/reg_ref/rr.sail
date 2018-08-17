@@ -1,6 +1,5 @@
 
 val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
-val deref = "reg_deref" : forall ('a : Type). ref('a) -> 'a
 
 /* *** Register reference list example *** */
 
@@ -54,16 +53,16 @@ function slice_slice (MkSlice(start, v), to, from) = MkSlice(from, v[to - start 
 
 /* We can update a bitvector from another bitvector or a slice */
 val _set_slice : forall 'n 'm 'o, 0 <= 'm <= 'o <= 'n.
-  (ref(bits('n)), atom('o), atom('m), bits('o - ('m - 1))) -> unit
+  (register(bits('n)), atom('o), atom('m), bits('o - ('m - 1))) -> unit effect {wreg, rreg}
 
 function _set_slice (v, stop, start, update) = {
-  v2 = deref(v);
+  v2 = reg_deref(v);
   v2[stop .. start] = update;
   (*v) = v2;
 }
 
 val _set_slice2 : forall 'n 'm 'o 'p, 0 <= 'm <= 'o <= 'n.
-  (ref(bits('n)), atom('o), atom('m), slice('p, 'o - ('m - 1))) -> unit
+  (register(bits('n)), atom('o), atom('m), slice('p, 'o - ('m - 1))) -> unit effect {wreg, rreg}
 
 function _set_slice2 (v, stop, start, MkSlice(_, update)) = _set_slice(v, stop, start, update)
 
@@ -111,6 +110,8 @@ function print_regs () = {
   print_bits("2 = ", rGPR(2));
   print_bits("3 = ", rGPR(3));
 }
+
+register b : bits(5)
 
 function main () = {
   print("Testing register references");

@@ -136,6 +136,7 @@ let rec frag_rename from_id to_id = function
 (**************************************************************************)
 
 let string_of_value = function
+  | V_bits [] -> "UINT64_C(0)"
   | V_bits bs -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
   | V_int i -> Big_int.to_string i ^ "l"
   | V_bool true -> "true"

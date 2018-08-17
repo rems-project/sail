@@ -61,7 +61,7 @@ let optimize_constant_fold = ref false
 
 let rec fexp_of_ctor (field, value) =
   FE_aux (FE_Fexp (mk_id field, exp_of_value value), no_annot)
-  
+
 and exp_of_value =
   let open Value in
   function
@@ -90,12 +90,16 @@ let safe_primops =
     [ "print_endline";
       "prerr_endline";
       "putchar";
+      "print";
+      "prerr";
       "print_bits";
       "print_int";
       "print_string";
       "prerr_bits";
       "prerr_int";
       "prerr_string";
+      "read_ram";
+      "write_ram";
       "Elf_loader.elf_entry";
       "Elf_loader.elf_tohost"
     ]
@@ -116,7 +120,6 @@ let rec run ast frame =
   match frame with
   | Interpreter.Done (state, v) -> v
   | Interpreter.Step (lazy_str, _, _, _) ->
-     prerr_endline (Lazy.force lazy_str);
      run ast (Interpreter.eval_frame ast frame)
   | Interpreter.Break frame ->
      run ast (Interpreter.eval_frame ast frame)
@@ -142,7 +145,7 @@ let rec rewrite_constant_function_calls' ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
-  
+
   let lstate, gstate =
     Interpreter.initial_state ast safe_primops
   in
@@ -168,14 +171,14 @@ let rec rewrite_constant_function_calls' ast =
        fold, just continue without optimising. *)
     | _ -> E_aux (e_aux, annot)
   in
-    
+
   let rw_funcall e_aux annot =
     match e_aux with
     | E_app (id, args) when List.for_all is_constant args ->
        evaluate e_aux annot
 
     | E_field (exp, id) when is_constant exp ->
-       evaluate e_aux annot      
+       evaluate e_aux annot
 
     | E_if (E_aux (E_lit (L_aux (L_true, _)), _), then_exp, _) -> ok (); then_exp
     | E_if (E_aux (E_lit (L_aux (L_false, _)), _), _, else_exp) -> ok (); else_exp
@@ -188,7 +191,7 @@ let rec rewrite_constant_function_calls' ast =
          when is_constant bind ->
        ok ();
        subst id (E_aux (E_cast (typ, bind), annot)) exp
-       
+
     | _ -> E_aux (e_aux, annot)
   in
   let rw_exp = {

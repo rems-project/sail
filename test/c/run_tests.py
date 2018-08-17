@@ -24,7 +24,7 @@ def test_c(name, c_opts, sail_opts, valgrind):
                 step('./{} 1> {}.result'.format(basename, basename))
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if valgrind:
-                    step("valgrind --leak-check=full --errors-for-leak-kinds=all --error-exitcode=1 ./{}".format(basename))
+                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=1 ./{}".format(basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
     return collect_results(name, tests)
@@ -33,6 +33,7 @@ xml = '<testsuites>\n'
 
 xml += test_c('unoptimized C', '', '', True)
 xml += test_c('optimized C', '-O2', '-O', True)
+xml += test_c('constant folding', '', '-Oconstant_fold', True)
 xml += test_c('address sanitised', '-O2 -fsanitize=undefined', '-O', False)
 
 xml += '</testsuites>\n'

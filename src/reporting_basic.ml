@@ -152,7 +152,7 @@ let print_code2 ff fname lnum1 cnum1 lnum2 cnum2 =
                        Util.(Str.string_before line cnum2 |> red_bg |> clear)
                        (Str.string_after line cnum2);
         close_in in_chan
-      with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
+      with e -> (close_in_noerr in_chan; prerr_endline (Printexc.to_string e))
     end
   with _ -> ()
 

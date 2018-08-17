@@ -3,54 +3,52 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-cd $DIR/..
+cd $DIR
 
-printf "******************************************\n"
-printf "* Typechecking tests                     *\n"
-printf "******************************************\n\n"
+printf "\n==========================================\n"
+printf "Typechecking tests\n"
+printf "==========================================\n"
 
-./test/typecheck/run_tests.sh
+./typecheck/run_tests.sh
 
-printf "******************************************\n"
-printf "* Ocaml tests                            *\n"
-printf "******************************************\n\n"
+printf "\n==========================================\n"
+printf "Ocaml tests\n"
+printf "==========================================\n"
 
-./test/ocaml/run_tests.sh
+./ocaml/run_tests.sh
 
-printf "******************************************\n"
-printf "* C tests                                *\n"
-printf "******************************************\n\n"
+printf "\n==========================================\n"
+printf "C tests\n"
+printf "==========================================\n"
 
-./test/c/run_tests.sh
+./c/run_tests.py
 
-printf "******************************************\n"
-printf "* Lem tests                              *\n"
-printf "******************************************\n\n"
+printf "\n==========================================\n"
+printf "Lem tests\n"
+printf "==========================================\n"
 
-./test/lem/run_tests.sh
+./lem/run_tests.sh
 
-# Need to work on these tests some more
+printf "\n==========================================\n"
+printf "Builtins tests\n"
+printf "==========================================\n"
 
-# printf "******************************************\n"
-# printf "* Builtins tests                         *\n"
-# printf "******************************************\n\n"
+./builtins/run_tests.py
 
-# ./test/builtins/run_tests.sh
+printf "\n==========================================\n"
+printf "ARM spec tests\n"
+printf "==========================================\n"
 
-printf "******************************************\n"
-printf "* ARM spec tests                         *\n"
-printf "******************************************\n\n"
+./arm/run_tests.sh
 
-./test/arm/run_tests.sh
+printf "\n==========================================\n"
+printf "RISCV spec tests\n"
+printf "==========================================\n"
 
-printf "******************************************\n"
-printf "* RISCV spec tests                       *\n"
-printf "******************************************\n\n"
+./riscv/run_tests.sh
 
-./test/riscv/run_tests.sh
+printf "\n==========================================\n"
+printf "CHERI spec tests\n"
+printf "==========================================\n"
 
-printf "******************************************\n"
-printf "* CHERI spec tests                       *\n"
-printf "******************************************\n\n"
-
-./test/cheri/run_tests.sh
+./cheri/run_tests.sh

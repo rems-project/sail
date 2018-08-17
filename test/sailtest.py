@@ -25,9 +25,9 @@ def step(string):
         sys.exit(1)
 
 def banner(string):
-    print '=' * len(string)
+    print '-' * len(string)
     print string
-    print '=' * len(string)
+    print '-' * len(string)
 
 def collect_results(name, tests):
     passes = 0

@@ -709,7 +709,7 @@ let rec string_of_exp (E_aux (exp, _)) =
      "{ " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
      "{ " ^ string_of_list "; " string_of_fexp fexps ^ " }"
-  | E_var _ -> "INTERNAL LET"
+  | E_var (lexp, binding, exp) -> "var " ^ string_of_lexp lexp ^ " = " ^ string_of_exp binding ^ " in " ^ string_of_exp exp
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
   | E_nondet _ -> "NONDET"
@@ -1237,7 +1237,8 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
 
     | E_return exp -> E_return (subst id value exp)
     | E_exit exp -> E_exit (subst id value exp)
-    (* Not sure about this, but id should always be immutable while id' must be mutable so should be ok. *)
+
+    (* id should always be immutable while id' must be mutable register name so should be ok to never substitute here *)
     | E_ref id' -> E_ref id'
     | E_throw exp -> E_throw (subst id value exp)
 
@@ -1247,7 +1248,10 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_assert (exp1, exp2) -> E_assert (subst id value exp1, subst id value exp2)
 
     | E_internal_value v -> E_internal_value v
-    | _ -> failwith ("subst " ^ string_of_exp exp)
+
+    | E_var (lexp, exp1, exp2) -> E_var (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
+
+    | E_internal_plet _ | E_internal_return _ -> failwith ("subst " ^ string_of_exp exp)
   in
   wrap e_aux
 
