@@ -626,6 +626,11 @@ let cdef_map_instr f = function
   | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
 
+let ctype_def_map_ctyp f = function
+  | CTD_enum (id, ids) -> CTD_enum (id, ids)
+  | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (field, ctyp) -> (field, f ctyp)) ctors)
+  | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (field, ctyp) -> (field, f ctyp)) ctors)
+                    
 (** Map over each ctyp in a cdef using map_instr_ctyp *)
 let cdef_map_ctyp f = function
   | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, f ctyp, List.map (map_instr_ctyp f) instrs)
@@ -634,7 +639,7 @@ let cdef_map_ctyp f = function
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr_ctyp f) instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr_ctyp f) instrs)
   | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, List.map f ctyps, f ctyp)
-  | CDEF_type tdef -> CDEF_type tdef (* FIXME *)
+  | CDEF_type tdef -> CDEF_type (ctype_def_map_ctyp f tdef)
 
 (* Map over all sequences of instructions contained within an instruction *)
 let rec map_instrs f (I_aux (instr, aux)) =

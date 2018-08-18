@@ -1781,7 +1781,7 @@ let flatten_instrs =
 
   | cdef -> cdef
 
-let rec specialize_variants ctx =
+let rec specialize_variants ctx prior =
 
   let unifications = ref (Bindings.empty) in
 
@@ -1859,8 +1859,8 @@ let rec specialize_variants ctx =
        } in
 
      let cdefs = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) cdefs in
-     let cdefs, ctx = specialize_variants ctx cdefs in
-     CDEF_type (CTD_variant (var_id, new_ctors)) :: cdefs, ctx
+     let prior = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) prior in
+     specialize_variants ctx (CDEF_type (CTD_variant (var_id, new_ctors)) :: prior) cdefs
 
   | cdef :: cdefs ->
      let remove_poly (I_aux (instr, aux)) =
@@ -1870,10 +1870,9 @@ let rec specialize_variants ctx =
        | instr -> I_aux (instr, aux)
      in
      let cdef = cdef_map_instr remove_poly cdef in
-     let cdefs, ctx = specialize_variants ctx cdefs in
-     cdef :: cdefs, ctx
+     specialize_variants ctx (cdef :: prior) cdefs
 
-  | [] -> [], ctx
+  | [] -> List.rev prior, ctx
 
 (** Once we specialize variants, there may be additional type
    dependencies which could be in the wrong order. As such we need to
@@ -2834,9 +2833,10 @@ let codegen_ctg ctx = function
    any auxillary type definitions that are required. *)
 let codegen_def ctx def =
   let ctyps = cdef_ctyps ctx def in
-  (* We should have erased only polymorphism introduced by variants at this point! *)
+  (* We should have erased any polymorphism introduced by variants at this point! *)
   if List.exists is_polymorphic ctyps then
     let polymorphic_ctyps = List.filter is_polymorphic ctyps in
+    prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
     c_error (Printf.sprintf "Found polymorphic types:\n%s\nwhile generating definition."
                             (Util.string_of_list "\n" string_of_ctyp polymorphic_ctyps))
   else
@@ -2966,7 +2966,7 @@ let compile_ast ctx (Defs defs) =
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
-    let cdefs, ctx = specialize_variants ctx cdefs in
+    let cdefs, ctx = specialize_variants ctx [] cdefs in
     let cdefs = sort_ctype_defs cdefs in
     let cdefs = optimize ctx cdefs in
     (*
