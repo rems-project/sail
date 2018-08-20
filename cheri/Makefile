@@ -120,7 +120,18 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 %Theory.uo: %Script.sml
 	Holmake $@
 
+cheri.v cheri_types.v: $(CHERI_SAILS)
+	$(SAIL) -coq -o cheri -coq_lib mips_extras -undefined_gen -memo_z3 -dcoq_undef_axioms $^
+
+CHERI_COQ = cheri_types.v mips_extras.v cheri.v
+COQ_LIBS = -R ../../bbv/theories bbv -R ../lib/coq Sail
+
+%.vo: %.v
+	coqc $(COQ_LIBS) $<
+cheri.vo: cheri_types.vo mips_extras.vo
+
 clean:
 	rm -rf cheri cheri_trace cheri_coverage cheri128 cheri128_trace _sbuild inst_*.sail cheri.c sail_latex sail_latexcc coverage_report
 	rm -f cheriScript.sml cheri_typesScript.sml mips_extrasScript.sml
+	rm -f cheri.v cheri_types.v $(CHERI_COQ:%.v=%.vo) $(CHERI_COQ:%.v=%.glob) $(CHERI_COQ:%.v=.%.aux)
 	-Holmake cleanAll
