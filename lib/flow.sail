@@ -1,6 +1,10 @@
 $ifndef _FLOW
 $define _FLOW
 
+val eq_unit : (unit, unit) -> bool
+
+function eq_unit(_, _) = true
+
 val not_bool = {coq: "negb", _: "not"} : bool -> bool
 /* NB: There are special cases in Sail for effectful uses of and_bool and
    or_bool that are not shown here. */
@@ -45,7 +49,7 @@ val gteq_int = {coq: "Z.geb", _:"gteq"} : (int, int) -> bool
 val lt_int = {coq: "Z.ltb", _:"lt"} : (int, int) -> bool
 val gt_int = {coq: "Z.gtb", _:"gt"} : (int, int) -> bool
 
-overload operator == = {eq_atom, eq_range, eq_int, eq_bool}
+overload operator == = {eq_atom, eq_range, eq_int, eq_bool, eq_unit}
 overload operator != = {neq_atom, neq_range, neq_int, neq_bool}
 overload operator | = {or_bool}
 overload operator & = {and_bool}
