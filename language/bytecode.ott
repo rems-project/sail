@@ -105,9 +105,9 @@ cval :: 'CV_' ::=
 
 clexp :: 'CL_' ::=
   | id : ctyp                :: :: id
-  | id . string : ctyp       :: :: field
-  | * id : ctyp              :: :: addr
-  | id -> string : ctyp      :: :: addr_field
+  | clexp . string           :: :: field
+  | * clexp                  :: :: addr
+  | clexp . nat              :: :: tuple
   | current_exception : ctyp :: :: current_exception
   | have_exception           :: :: have_exception
 

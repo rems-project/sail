@@ -513,11 +513,31 @@ let ctype_def_ctyps = function
 
 let cval_ctyp = function (_, ctyp) -> ctyp
 
-let clexp_ctyp = function
+let rec clexp_ctyp = function
   | CL_id (_, ctyp) -> ctyp
-  | CL_field (_, _, ctyp) -> ctyp
-  | CL_addr (_, ctyp) -> ctyp
-  | CL_addr_field (_, _, ctyp) -> ctyp
+  | CL_field (clexp, field) ->
+     begin match clexp_ctyp clexp with
+     | CT_struct (id, ctors) ->
+        begin
+          try snd (List.find (fun (id, ctyp) -> string_of_id id = field) ctors) with
+          | Not_found -> c_error ("Struct type " ^ string_of_id id ^ " does not have a constructor " ^ field)
+        end
+     | ctyp -> c_error ("Bad ctyp for CL_field " ^ string_of_ctyp ctyp)
+     end
+  | CL_addr clexp ->
+     begin match clexp_ctyp clexp with
+     | CT_ref ctyp -> ctyp
+     | ctyp -> c_error ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+     end
+  | CL_tuple (clexp, n) ->
+     begin match clexp_ctyp clexp with
+     | CT_tup typs ->
+        begin
+          try List.nth typs n with
+          | _ -> c_error "Tuple assignment index out of bounds"
+        end
+     | ctyp -> c_error ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+     end
   | CL_have_exception -> CT_bool
   | CL_current_exception ctyp -> ctyp
 
@@ -649,7 +669,7 @@ let rec compile_aval l ctx = function
      let gs = gensym () in
      setup
      @ [idecl tup_ctyp gs]
-     @ List.mapi (fun n cval -> icopy l (CL_field (gs, "tup" ^ string_of_int n, cval_ctyp cval)) cval) cvals,
+     @ List.mapi (fun n cval -> icopy l (CL_tuple (CL_id (gs, tup_ctyp), n)) cval) cvals,
      (F_id gs, CT_tup (List.map cval_ctyp cvals)),
      [iclear tup_ctyp gs]
      @ cleanup
@@ -660,7 +680,7 @@ let rec compile_aval l ctx = function
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (gs, string_of_id id, cval_ctyp cval)) cval]
+       @ [icopy l (CL_field (CL_id (gs, ctyp), string_of_id id)) cval]
        @ field_cleanup
      in
      [idecl ctyp gs]
@@ -1056,7 +1076,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (gs, string_of_id id, Bindings.find id ctors)) cval]
+       @ [icopy l (CL_field (CL_id (gs, ctyp), string_of_id id)) cval]
        @ field_cleanup
      in
      let setup, cval, cleanup = compile_aval l ctx aval in
@@ -1103,7 +1123,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_fields (field_id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (id, string_of_id field_id, cval_ctyp cval)) cval]
+       @ [icopy l (CL_field (CL_id (id, ctyp_of_typ ctx typ), string_of_id field_id)) cval]
        @ field_cleanup
      in
      List.concat (List.map compile_fields (Bindings.bindings fields)),
@@ -1558,8 +1578,8 @@ let rec compile_def ctx = function
        let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
        [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
      else
-       let instrs = destructure @ setup @ [call (CL_addr (gs, ret_ctyp))] @ cleanup @ destructure_cleanup in
-       let instrs = fix_early_return (CL_addr (gs, ret_ctyp)) ctx instrs in
+       let instrs = destructure @ setup @ [call (CL_addr (CL_id (gs, CT_ref ret_ctyp)))] @ cleanup @ destructure_cleanup in
+       let instrs = fix_early_return (CL_addr (CL_id (gs, CT_ref ret_ctyp))) ctx instrs in
        let instrs = fix_exception ctx instrs in
        [CDEF_fundef (id, Some gs, List.map fst compiled_args, instrs)], orig_ctx
 
@@ -1648,13 +1668,13 @@ let add_local_labels instrs =
 (* 5. Optimizations                                                       *)
 (**************************************************************************)
 
-let clexp_rename from_id to_id =
+let rec clexp_rename from_id to_id =
   let rename id = if Id.compare id from_id = 0 then to_id else id in
   function
   | CL_id (id, ctyp) -> CL_id (rename id, ctyp)
-  | CL_field (id, field, ctyp) -> CL_field (rename id, field, ctyp)
-  | CL_addr (id, ctyp) -> CL_addr (rename id, ctyp)
-  | CL_addr_field (id, field, ctyp) -> CL_addr_field (rename id, field, ctyp)
+  | CL_field (clexp, field) -> CL_field (clexp_rename from_id to_id clexp, field)
+  | CL_tuple (clexp, n) -> CL_tuple (clexp_rename from_id to_id clexp, n)
+  | CL_addr clexp -> CL_addr (clexp_rename from_id to_id clexp)
   | CL_current_exception ctyp -> CL_current_exception ctyp
   | CL_have_exception -> CL_have_exception
 
@@ -2041,67 +2061,72 @@ let sgen_cval_param (frag, ctyp) =
 
 let sgen_cval = function (frag, _) -> string_of_fragment frag
 
-let sgen_clexp = function
+let rec sgen_clexp = function
   | CL_id (id, _) -> "&" ^ sgen_id id
-  | CL_field (id, field, _) -> "&(" ^ sgen_id id ^ "." ^ Util.zencode_string field ^ ")"
-  | CL_addr (id, _) -> sgen_id id
-  | CL_addr_field (id, field, _) -> "&(" ^ sgen_id id ^ "->" ^ Util.zencode_string field ^ ")"
+  | CL_field (clexp, field) -> "&((" ^ sgen_clexp clexp ^ ")->" ^ Util.zencode_string field ^ ")"
+  | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp clexp ^ ")->ztup" ^ string_of_int n ^ ")"
+  | CL_addr clexp -> "*(" ^ sgen_clexp clexp ^ ")"
   | CL_have_exception -> "have_exception"
   | CL_current_exception _ -> "current_exception"
 
-let sgen_clexp_pure = function
+let rec sgen_clexp_pure = function
   | CL_id (id, _) -> sgen_id id
-  | CL_field (id, field, _) -> sgen_id id ^ "." ^ Util.zencode_string field
-  | CL_addr (id, _) -> "*" ^ sgen_id id
-  | CL_addr_field (id, field, _) -> sgen_id id ^ "->" ^ Util.zencode_string field
+  | CL_field (clexp, field) -> sgen_clexp_pure clexp ^ "." ^ Util.zencode_string field
+  | CL_tuple (clexp, n) -> sgen_clexp_pure clexp ^ ".ztup" ^ string_of_int n
+  | CL_addr clexp -> "*(" ^ sgen_clexp_pure clexp ^ ")"
   | CL_have_exception -> "have_exception"
   | CL_current_exception _ -> "current_exception"
+
+(** Generate instructions to copy from a cval to a clexp. This will
+   insert any needed type conversions from big integers to small
+   integers (or vice versa), or from arbitrary-length bitvectors to
+   and from uint64 bitvectors as needed. *)
+let rec codegen_conversion clexp cval =
+  let open Printf in
+  let ctyp_to = clexp_ctyp clexp in
+  let ctyp_from = cval_ctyp cval in
+  match ctyp_to, ctyp_from with
+  (* When both types are equal, we don't need any conversion. *)
+  | _, _ when ctyp_equal ctyp_to ctyp_from ->
+     if is_stack_ctyp ctyp_to then
+       ksprintf string "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval)
+     else
+       ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) (sgen_cval cval)
+
+  | CT_ref ctyp_to, ctyp_from ->
+     codegen_conversion (CL_addr clexp) cval
+
+  (* If we have to convert between tuple types, convert the fields individually. *)
+  | CT_tup ctyps_to, CT_tup ctyps_from when List.length ctyps_to = List.length ctyps_from ->
+     let conversions =
+       List.mapi (fun i ctyp -> codegen_conversion (CL_tuple (clexp, i)) (F_field (fst cval, "ztup" ^ string_of_int i), ctyp)) ctyps_from
+     in
+     separate hardline conversions
+
+  (* For anything not special cased, just try to call a appropriate CONVERT_OF function. *)
+  | _, _ when is_stack_ctyp (clexp_ctyp clexp) ->
+     ksprintf string "  %s = CONVERT_OF(%s, %s)(%s);"
+              (sgen_clexp_pure clexp) (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_cval_param cval)
+  | _, _ ->
+     ksprintf string "  CONVERT_OF(%s, %s)(%s, %s);"
+              (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_clexp clexp) (sgen_cval_param cval)
 
 let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
+  let open Printf in
   match instr with
   | I_decl (ctyp, id) when is_stack_ctyp ctyp ->
-     string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_id id))
+     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_id id)
   | I_decl (ctyp, id) ->
-     string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_id id)) ^^ hardline
-     ^^ string (Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
+     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_id id) ^^ hardline
+     ^^ ksprintf string "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)
 
-  | I_copy (clexp, cval) ->
-     let lctyp = clexp_ctyp clexp in
-     let rctyp = cval_ctyp cval in
-     if ctyp_equal lctyp rctyp then
-       if is_stack_ctyp lctyp then
-         string (Printf.sprintf "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval))
-       else
-         string (Printf.sprintf "  COPY(%s)(%s, %s);" (sgen_ctyp_name lctyp) (sgen_clexp clexp) (sgen_cval cval))
-     else if pointer_assign lctyp rctyp then
-       let lctyp = match lctyp with
-         | CT_ref lctyp -> lctyp
-         | _ -> assert false
-       in
-       if ctyp_equal lctyp rctyp then
-         if is_stack_ctyp lctyp then
-           string (Printf.sprintf "  *(%s) = %s;" (sgen_clexp_pure clexp) (sgen_cval cval))
-         else
-           string (Printf.sprintf "  COPY(%s)(*(%s), %s);" (sgen_ctyp_name lctyp) (sgen_clexp clexp) (sgen_cval cval))
-       else
-         if is_stack_ctyp lctyp then
-           string (Printf.sprintf "  *(%s) = CONVERT_OF(%s, %s)(%s);"
-                                  (sgen_clexp_pure clexp) (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_cval_param cval))
-         else
-           string (Printf.sprintf "  CONVERT_OF(%s, %s)(*(%s), %s);"
-                                  (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_clexp clexp) (sgen_cval_param cval))
-     else
-       if is_stack_ctyp lctyp then
-         string (Printf.sprintf "  %s = CONVERT_OF(%s, %s)(%s);"
-                                (sgen_clexp_pure clexp) (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_cval_param cval))
-       else
-         string (Printf.sprintf "  CONVERT_OF(%s, %s)(%s, %s);"
-                                (sgen_ctyp_name lctyp) (sgen_ctyp_name rctyp) (sgen_clexp clexp) (sgen_cval_param cval))
+  | I_copy (clexp, cval) -> codegen_conversion clexp cval
 
   | I_jump (cval, label) ->
-     string (Printf.sprintf "  if (%s) goto %s;" (sgen_cval cval) label)
+     ksprintf string "  if (%s) goto %s;" (sgen_cval cval) label
+
   | I_if (cval, [then_instr], [], ctyp) ->
-     string (Printf.sprintf "  if (%s)" (sgen_cval cval)) ^^ hardline
+     ksprintf string "  if (%s)" (sgen_cval cval) ^^ hardline
      ^^ twice space ^^ codegen_instr fid ctx then_instr
   | I_if (cval, then_instrs, [], ctyp) ->
      string "  if" ^^ space ^^ parens (string (sgen_cval cval)) ^^ space
@@ -2111,14 +2136,17 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
      ^^ space ^^ string "else" ^^ space
      ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) else_instrs) (twice space ^^ rbrace)
+
   | I_block instrs ->
      string "  {"
      ^^ jump 2 2 (separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
      ^^ string "  }"
+
   | I_try_block instrs ->
      string "  { /* try */"
      ^^ jump 2 2 (separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
      ^^ string "  }"
+
   | I_funcall (x, extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_cval args in
      let ctyp = clexp_ctyp x in

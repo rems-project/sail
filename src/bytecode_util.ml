@@ -299,9 +299,9 @@ let pp_cval (frag, ctyp) =
 
 let rec pp_clexp = function
   | CL_id (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp
-  | CL_field (id, field, ctyp) -> pp_id id ^^ string "." ^^ string field ^^ string " : " ^^ pp_ctyp ctyp
-  | CL_addr (id, ctyp) -> string "*" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
-  | CL_addr_field (id, field, ctyp) -> pp_id id ^^ string "->" ^^ string field ^^ string " : " ^^ pp_ctyp ctyp
+  | CL_field (clexp, field) -> parens (pp_clexp clexp) ^^ string "." ^^ string field
+  | CL_tuple (clexp, n) -> parens (pp_clexp clexp) ^^ string "." ^^ string (string_of_int n)
+  | CL_addr clexp -> string "*" ^^ pp_clexp clexp
   | CL_current_exception ctyp -> string "current_exception : " ^^ pp_ctyp ctyp
   | CL_have_exception -> string "have_exception"
 
@@ -449,9 +449,9 @@ let cval_deps = function (frag, _) -> fragment_deps frag
 
 let rec clexp_deps = function
   | CL_id (id, _) -> NS.singleton (G_id id)
-  | CL_field (id, _, _) -> NS.singleton (G_id id)
-  | CL_addr (id, _) -> NS.singleton (G_id id)
-  | CL_addr_field (id, _, _) -> NS.singleton (G_id id)
+  | CL_field (clexp, _) -> clexp_deps clexp
+  | CL_tuple (clexp, _) -> clexp_deps clexp
+  | CL_addr clexp -> clexp_deps clexp
   | CL_have_exception -> NS.empty
   | CL_current_exception _ -> NS.empty
 
@@ -573,9 +573,9 @@ let make_dot id graph =
 
 let rec map_clexp_ctyp f = function
   | CL_id (id, ctyp) -> CL_id (id, f ctyp)
-  | CL_field (id, field, ctyp) -> CL_field (id, field, f ctyp)
-  | CL_addr (id, ctyp) -> CL_addr (id, f ctyp)
-  | CL_addr_field (id, field, ctyp) -> CL_addr_field (id, field, f ctyp)
+  | CL_field (clexp, field) -> CL_field (map_clexp_ctyp f clexp, field)
+  | CL_tuple (clexp, n) -> CL_tuple (map_clexp_ctyp f clexp, n)
+  | CL_addr clexp -> CL_addr (map_clexp_ctyp f clexp)
   | CL_current_exception ctyp -> CL_current_exception (f ctyp)
   | CL_have_exception -> CL_have_exception
 
