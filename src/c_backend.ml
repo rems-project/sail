@@ -1480,26 +1480,36 @@ let fix_exception ?return:(return=None) ctx instrs =
   let instrs = List.map (map_try_block (fix_exception_block ctx)) instrs in
   fix_exception_block ~return:return ctx instrs
 
-let rec arg_pats ctx (Typ_aux (arg_typ_aux, _) as arg_typ) (P_aux (p_aux, (l, _)) as pat) =
-  match p_aux, arg_typ_aux with
-  | P_typ (_, pat), _ -> arg_pats ctx arg_typ pat
-  | P_tup pats, Typ_tup arg_typs when List.length pats = List.length arg_typs ->
-     List.map2 (fun pat arg_typ -> pat, ctyp_of_typ ctx arg_typ) pats arg_typs
-  | P_wild, Typ_tup arg_typs -> List.map (fun arg_typ -> pat, ctyp_of_typ ctx arg_typ) arg_typs
-  | _, _ -> [(pat, ctyp_of_typ ctx arg_typ)]
-
-let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat, ctyp) =
+let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat) ctyp =
   match p_aux with
   | P_id id -> (id, ([], []))
   | P_wild -> let gs = gensym () in (gs, ([], []))
   | P_tup [] | P_lit (L_aux (L_unit, _)) -> let gs = gensym () in (gs, ([], []))
-  | P_var (pat, _) -> compile_arg_pat ctx label (pat, ctyp)
-  | P_typ (_, pat) -> compile_arg_pat ctx label (pat, ctyp)
+  | P_var (pat, _) -> compile_arg_pat ctx label pat ctyp
+  | P_typ (_, pat) -> compile_arg_pat ctx label pat ctyp
   | _ ->
      let apat = anf_pat pat in
      let gs = gensym () in
      let destructure, cleanup, _ = compile_match ctx apat (F_id gs, ctyp) label in
      (gs, (destructure, cleanup))
+
+let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
+  match p_aux with
+  | P_typ (_, pat) -> compile_arg_pats ctx label pat ctyps
+  | P_tup pats when List.length pats = List.length ctyps ->
+     [], List.map2 (fun pat ctyp -> compile_arg_pat ctx label pat ctyp) pats ctyps, []
+  | _ when List.length ctyps = 1 ->
+     [], [compile_arg_pat ctx label pat (List.nth ctyps 0)], []
+
+  | _ ->
+     let arg_id, (destructure, cleanup) = compile_arg_pat ctx label pat (CT_tup ctyps) in
+     let new_ids = List.map (fun ctyp -> gensym (), ctyp) ctyps in
+     destructure
+     @ [idecl (CT_tup ctyps) arg_id]
+     @ List.mapi (fun i (id, ctyp) -> icopy l (CL_tuple (CL_id (arg_id, CT_tup ctyps), i)) (F_id id, ctyp)) new_ids,
+     List.map (fun (id, _) -> id, ([], [])) new_ids,
+     [iclear (CT_tup ctyps) arg_id]
+     @ cleanup
 
 let combine_destructure_cleanup xs = List.concat (List.map fst xs), List.concat (List.rev (List.map snd xs))
 
@@ -1535,7 +1545,7 @@ let rec compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      c_debug (lazy ("Compiling function " ^ string_of_id id));
-     (* Find the function's type *)
+     (* Find the function's type. *)
      let quant, Typ_aux (fn_typ, _) =
        try Env.get_val_spec id ctx.local_env
        with Type_error _ ->
@@ -1546,18 +1556,32 @@ let rec compile_def ctx = function
        | _ -> assert false
      in
 
-     (* Handle the argument pattern *)
+     (* Handle the argument pattern. *)
      let fundef_label = label "fundef_fail_" in
      let orig_ctx = ctx in
+     (* The context must be updated before we call ctyp_of_typ on the argument types. *)
      let ctx = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
-     let compiled_args' = arg_pats ctx arg_typ pat in
-     let compiled_args = List.map (compile_arg_pat ctx fundef_label) compiled_args' in
+
+     let arg_ctyps = match arg_typ with
+       | Typ_aux (Typ_tup arg_typs, _) -> List.map (ctyp_of_typ ctx) arg_typs
+       | _ -> [ctyp_of_typ ctx arg_typ]
+     in
+     let ret_ctyp = ctyp_of_typ ctx ret_typ in
+
+     (* Optimize and compile the expression to ANF. *)
+     let aexp = no_shadow (pat_ids pat) (anf exp) in
+     c_debug (lazy (Pretty_print_sail.to_string (pp_aexp aexp)));
+     let aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp) in
+     c_debug (lazy (Pretty_print_sail.to_string (pp_aexp aexp)));
+
+     (* Compile the function arguments as patterns. *)
+     let arg_setup, compiled_args, arg_cleanup = compile_arg_pats ctx fundef_label pat arg_ctyps in
      let ctx =
        (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
-       List.fold_left2 (fun ctx (id, _) (_, ctyp) -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args compiled_args'
+       List.fold_left2 (fun ctx (id, _) ctyp -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args arg_ctyps
      in
 
-     (* Optimize and compile the expression *)
+     (* Optimize and compile the expression from ANF to C. *)
      let aexp = no_shadow (pat_ids pat) (anf exp) in
      c_debug (lazy (Pretty_print_sail.to_string (pp_aexp aexp)));
      let aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp) in
@@ -1569,16 +1593,13 @@ let rec compile_def ctx = function
        compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label
      in
 
-     (* This better be true or something has gone badly wrong. *)
-     let ret_ctyp = ctyp_of_typ ctx ret_typ in
-
      if is_stack_ctyp ret_ctyp then
-       let instrs = destructure @ [idecl ret_ctyp gs] @ setup @ [call (CL_id (gs, ret_ctyp))] @ cleanup @ destructure_cleanup @ [ireturn (F_id gs, ret_ctyp)] in
+       let instrs = arg_setup @ destructure @ [idecl ret_ctyp gs] @ setup @ [call (CL_id (gs, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup @ [ireturn (F_id gs, ret_ctyp)] in
        let instrs = fix_early_stack_return ctx instrs in
        let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
        [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
      else
-       let instrs = destructure @ setup @ [call (CL_addr (CL_id (gs, CT_ref ret_ctyp)))] @ cleanup @ destructure_cleanup in
+       let instrs = arg_setup @ destructure @ setup @ [call (CL_addr (CL_id (gs, CT_ref ret_ctyp)))] @ cleanup @ destructure_cleanup @ arg_cleanup in
        let instrs = fix_early_return (CL_addr (CL_id (gs, CT_ref ret_ctyp))) ctx instrs in
        let instrs = fix_exception ctx instrs in
        [CDEF_fundef (id, Some gs, List.map fst compiled_args, instrs)], orig_ctx
@@ -2755,7 +2776,8 @@ let codegen_def' ctx = function
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
-     let instrs = add_local_labels instrs in
+
+     (* Extract type information about the function from the environment. *)
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
        | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
@@ -2764,12 +2786,16 @@ let codegen_def' ctx = function
      in
      let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
-     if (List.length arg_ctyps <> List.length args) then
+
+     (* Check that the function has the correct arity at this point. *)
+     if List.length arg_ctyps <> List.length args then
        c_error ~loc:(id_loc id) ("function arguments "
                                  ^ Util.string_of_list ", " string_of_id args
                                  ^ " matched against type "
                                  ^ Util.string_of_list ", " string_of_ctyp arg_ctyps)
      else ();
+
+     let instrs = add_local_labels instrs in
      let args = Util.string_of_list ", " (fun x -> x) (List.map2 (fun ctyp arg -> sgen_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args) in
      let function_header =
        match ret_arg with
