@@ -3405,7 +3405,7 @@ let rewrite_defs_pat_lits rewrite_lit =
          let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
          guards := guard :: !guards;
          incr counter;
-         P_aux (P_id id, p_annot)
+         P_aux (P_typ (typ, (P_aux (P_id id, p_annot))), p_annot)
       | p_aux, p_annot -> P_aux (p_aux, p_annot)
     in
 
