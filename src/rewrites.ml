@@ -3319,7 +3319,9 @@ let rewrite_defs_mapping_patterns =
     let env = pat_env_of pat in
     match pat with
       (*
-          mapping(args) => expr ----> s# if mapping_matches(s#) => let args = mapping(s#) in expr
+          mapping(args) if g => expr ----> s# if mapping_matches(s#)
+                                                 & (if mapping_matches(s#) then let args = mapping(s#) in g)
+                                             => let args = mapping(s#) in expr
 
           (plus 'infer the mapping type' shenanigans)
        *)
@@ -3367,7 +3369,12 @@ let rewrite_defs_mapping_patterns =
 
        let new_let = annot_exp (E_let (new_letbind, expr)) unk env (typ_of expr) in
 
-       annot_pat (P_id s_id) unk env mapping_in_typ, new_guard :: guards, new_let
+       let false_exp = annot_exp (E_lit (L_aux (L_false, unk))) unk env bool_typ in
+       let new_other_guards = annot_exp (E_if (new_guard,
+                                               (annot_exp (E_let (new_letbind, fold_typed_guards env guards)) unk env bool_typ),
+                                               false_exp)) unk env bool_typ in
+
+       annot_pat (P_id s_id) unk env mapping_in_typ, [new_guard; new_other_guards], new_let
 
     | P_aux (P_as (inner_pat, inner_id), p_annot) ->
        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
