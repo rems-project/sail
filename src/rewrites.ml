@@ -3430,6 +3430,10 @@ let rewrite_no_strings (L_aux (lit, _)) = match lit with
   | L_string _ -> false
   | _ -> true
 
+let rewrite_lit_ocaml (L_aux (lit, _)) = match lit with
+  | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ | L_unit -> false
+  | _ -> true
+
 let rewrite_defs_pat_lits rewrite_lit =
   let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
     let guards = ref [] in
@@ -4568,7 +4572,7 @@ let rewrite_defs_ocaml = [
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
-  ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
+  ("pat_lits", rewrite_defs_pat_lits rewrite_lit_ocaml);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
