@@ -3409,6 +3409,13 @@ let rewrite_defs_mapping_patterns =
        let pat1, guards, expr = rewrite_pat env (pat1, guards, expr) in
        let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
        P_aux (P_cons (pat1, pat2), p_annot), guards, expr
+    | P_aux (P_or (pat1, pat2), p_annot) ->
+       let pat1, guards, expr = rewrite_pat env (pat1, guards, expr) in
+       let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
+       P_aux (P_or (pat1, pat2), p_annot), guards, expr
+    | P_aux (P_not p, p_annot) ->
+       let p', guards, expr = rewrite_pat env (p, guards, expr) in
+       P_aux (P_not p', p_annot), guards, expr
     | P_aux (P_id _, _)
     | P_aux (P_lit _, _)
     | P_aux (P_wild, _) -> pat, guards, expr
