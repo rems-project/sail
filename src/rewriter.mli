@@ -239,6 +239,3 @@ val fix_eff_fexp : tannot fexp -> tannot fexp
 val fix_eff_fexps : tannot fexps -> tannot fexps
 
 val fix_eff_opt_default : tannot opt_default -> tannot opt_default
-
-(* AA: How this is used in rewrite_pat seems suspect to me *)
-val vector_string_to_bit_list : Parse_ast.l -> lit_aux -> lit list

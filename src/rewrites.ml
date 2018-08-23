@@ -145,6 +145,40 @@ let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match destruct_tannot annot w
   | Some (_, _, eff) -> effectful_effs eff
   | _ -> false
 
+let explode s =
+  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+  exp (String.length s - 1) []
+
+let vector_string_to_bit_list l lit =
+
+  let hexchar_to_binlist = function
+    | '0' -> ['0';'0';'0';'0']
+    | '1' -> ['0';'0';'0';'1']
+    | '2' -> ['0';'0';'1';'0']
+    | '3' -> ['0';'0';'1';'1']
+    | '4' -> ['0';'1';'0';'0']
+    | '5' -> ['0';'1';'0';'1']
+    | '6' -> ['0';'1';'1';'0']
+    | '7' -> ['0';'1';'1';'1']
+    | '8' -> ['1';'0';'0';'0']
+    | '9' -> ['1';'0';'0';'1']
+    | 'A' -> ['1';'0';'1';'0']
+    | 'B' -> ['1';'0';'1';'1']
+    | 'C' -> ['1';'1';'0';'0']
+    | 'D' -> ['1';'1';'0';'1']
+    | 'E' -> ['1';'1';'1';'0']
+    | 'F' -> ['1';'1';'1';'1']
+    | _ -> raise (Reporting_basic.err_unreachable l "hexchar_to_binlist given unrecognized character") in
+
+  let s_bin = match lit with
+    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase s_hex)))
+    | L_bin s_bin -> explode s_bin
+    | _ -> raise (Reporting_basic.err_unreachable l "s_bin given non vector literal") in
+
+  List.map (function '0' -> L_aux (L_zero, gen_loc l)
+                   | '1' -> L_aux (L_one, gen_loc l)
+                   | _ -> raise (Reporting_basic.err_unreachable (gen_loc l) "binary had non-zero or one")) s_bin
+
 let find_used_vars exp =
   (* Overapproximates the set of used identifiers, but for the use cases below
      this is acceptable. *)
@@ -1579,6 +1613,36 @@ let rewrite_defs_remove_numeral_pats =
     FD_aux (FD_function (r_o, t_o, e_o, List.map rewrite_funcl funcls), a) in
   rewrite_defs_base
     { rewriters_base with rewrite_exp = rewrite_exp; rewrite_fun = rewrite_fun }
+
+let rewrite_defs_vector_string_pats_to_bit_list =
+  let rewrite_p_aux (pat, (annot : tannot annot)) =
+    let env = env_of_annot annot in
+    match pat with
+    | P_lit (L_aux (lit, l) as l_aux) ->
+       begin match lit with
+       | L_hex _ | L_bin _ -> P_aux (P_vector (List.map (fun p -> P_aux (P_lit p, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l lit)), annot)
+       | lit -> P_aux (P_lit l_aux, annot)
+       end
+    | pat -> (P_aux (pat, annot))
+  in
+  let rewrite_e_aux (exp, (annot : tannot annot)) =
+    let env = env_of_annot annot in
+    match exp with
+    | E_lit (L_aux (lit, l) as l_aux) ->
+       begin match lit with
+       | L_hex _ | L_bin _ -> E_aux (E_vector (List.map (fun e -> E_aux (E_lit e, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l lit)), annot)
+       | lit -> E_aux (E_lit l_aux, annot)
+       end
+    | exp -> (E_aux (exp, annot))
+  in
+  let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
+  let rewrite_pat rw pat =
+    fold_pat pat_alg pat
+  in
+  let rewrite_exp rw exp =
+    fold_exp { id_exp_alg with e_aux = rewrite_e_aux; pat_alg = pat_alg } exp
+  in
+  rewrite_defs_base { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp }
 
 (* Remove pattern guards by rewriting them to if-expressions within the
    pattern expression. *)
@@ -4420,6 +4484,7 @@ let rewrite_defs_lem = [
   ("rewrite_atoms_to_singletons", if_mono Monomorphise.rewrite_atoms_to_singletons);
   ("recheck_defs", if_mono recheck_defs);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
+  ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -4460,6 +4525,7 @@ let rewrite_defs_coq = [
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen true);
+  ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -4501,6 +4567,7 @@ let rewrite_defs_ocaml = [
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
+  ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -4524,6 +4591,7 @@ let rewrite_defs_c = [
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
+  ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);

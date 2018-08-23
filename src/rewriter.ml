@@ -240,40 +240,6 @@ let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match destruct_tannot (snd annot
 | None ->
   LB_aux (lb, (l, empty_tannot))
 
-let explode s =
-  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-  exp (String.length s - 1) []
-
-let vector_string_to_bit_list l lit = 
-
-  let hexchar_to_binlist = function
-    | '0' -> ['0';'0';'0';'0']
-    | '1' -> ['0';'0';'0';'1']
-    | '2' -> ['0';'0';'1';'0']
-    | '3' -> ['0';'0';'1';'1']
-    | '4' -> ['0';'1';'0';'0']
-    | '5' -> ['0';'1';'0';'1']
-    | '6' -> ['0';'1';'1';'0']
-    | '7' -> ['0';'1';'1';'1']
-    | '8' -> ['1';'0';'0';'0']
-    | '9' -> ['1';'0';'0';'1']
-    | 'A' -> ['1';'0';'1';'0']
-    | 'B' -> ['1';'0';'1';'1']
-    | 'C' -> ['1';'1';'0';'0']
-    | 'D' -> ['1';'1';'0';'1']
-    | 'E' -> ['1';'1';'1';'0']
-    | 'F' -> ['1';'1';'1';'1']
-    | _ -> raise (Reporting_basic.err_unreachable l "hexchar_to_binlist given unrecognized character") in
-
-  let s_bin = match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase s_hex)))
-    | L_bin s_bin -> explode s_bin
-    | _ -> raise (Reporting_basic.err_unreachable l "s_bin given non vector literal") in
-
-  List.map (function '0' -> L_aux (L_zero, gen_loc l)
-                   | '1' -> L_aux (L_one, gen_loc l)
-                   | _ -> raise (Reporting_basic.err_unreachable (gen_loc l) "binary had non-zero or one")) s_bin
-
 let rewrite_pexp rewriters =
   let rewrite = rewriters.rewrite_exp rewriters in
   function
@@ -286,10 +252,6 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
   let rewrap p = P_aux (p,(l,annot)) in
   let rewrite = rewriters.rewrite_pat rewriters in
   match pat with
-  | P_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-    let ps =  List.map (fun p -> P_aux (P_lit p, (l, mk_tannot (pat_env_of orig_pat) bit_typ no_effect)))
-        (vector_string_to_bit_list l lit) in
-    rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
   | P_or(pat1, pat2) -> rewrap (P_or(rewrite pat1, rewrite pat2))
   | P_not(pat) -> rewrap (P_not(rewrite pat))
@@ -312,10 +274,6 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   match exp with
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
   | E_nondet exps -> rewrap (E_nondet (List.map rewrite exps))
-  | E_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-    let es = List.map (fun p -> E_aux (E_lit p, (l, mk_tannot (env_of orig_exp) bit_typ no_effect)))
-        (vector_string_to_bit_list l lit) in
-    rewrap (E_vector es)
   | E_id _ | E_lit _  -> rewrap exp
   | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite exp))
   | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite exps))
