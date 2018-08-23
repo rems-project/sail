@@ -58,6 +58,7 @@ type gstate =
     boxes : value StringMap.t;
     primops : (value list -> value) StringMap.t;
     letbinds : (Type_check.tannot letbind) list;
+    fundefs : (Type_check.tannot fundef) Bindings.t;
   }
 
 let box_count = ref 0
@@ -75,25 +76,6 @@ type lstate =
   { locals : variable Bindings.t }
 
 type state = lstate * gstate
-
-let rec ast_letbinds (Defs defs) =
-  match defs with
-  | [] -> []
-  | DEF_val lb :: defs -> lb :: ast_letbinds (Defs defs)
-  | _ :: defs -> ast_letbinds (Defs defs)
-
-let initial_gstate ast primops =
-  { registers = Bindings.empty;
-    allow_registers = true;
-    boxes = StringMap.empty;
-    primops = primops;
-    letbinds = ast_letbinds ast;
-  }
-
-let initial_lstate =
-  { locals = Bindings.empty }
-
-let initial_state ast primops = initial_lstate, initial_gstate ast primops
 
 let value_of_lit (L_aux (l_aux, _)) =
   match l_aux with
@@ -144,11 +126,15 @@ let value_of_exp = function
 (* 1. Interpreter Monad                                                   *)
 (**************************************************************************)
 
+type return_value =
+  | Return_ok of value
+  | Return_exception of value
+
 type 'a response =
   | Early_return of value
   | Exception of value
   | Assertion_failed of string
-  | Call of id * value list * (value -> 'a)
+  | Call of id * value list * (return_value -> 'a)
   | Gets of (state -> 'a)
   | Puts of state * (unit -> 'a)
 
@@ -191,10 +177,10 @@ let catch m =
   | Yield (Exception v) -> Pure (Left v)
   | Yield resp -> Yield (map_response (fun m -> liftM (fun r -> Right r) m) resp)
 
-let call (f : id) (args : value list) : value monad =
-  Yield (Call (f, args, fun v -> Pure v))
-
 let throw v = Yield (Exception v)
+
+let call (f : id) (args : value list) : return_value monad =
+  Yield (Call (f, args, fun v -> Pure v))
 
 let gets : state monad =
   Yield (Gets (fun s -> Pure s))
@@ -348,10 +334,15 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
               let primop = try StringMap.find extern gstate.primops with Not_found -> failwith ("No primop " ^ extern) in
               return (exp_of_value (primop (List.map value_of_exp evaluated)))
           end
-       | [] -> liftM exp_of_value (call id (List.map value_of_exp evaluated))
+       | [] ->
+          call id (List.map value_of_exp evaluated) >>=
+            (function Return_ok v -> return (exp_of_value v)
+                    | Return_exception v -> wrap (E_throw (exp_of_value v)))
      end
   | E_app_infix (x, id, y) when is_value x && is_value y ->
-     liftM exp_of_value (call id [value_of_exp x; value_of_exp y])
+     call id [value_of_exp x; value_of_exp y] >>=
+       (function Return_ok v -> return (exp_of_value v)
+               | Return_exception v -> wrap (E_throw (exp_of_value v)))
   | E_app_infix (x, id, y) when is_value x ->
      step y >>= fun y' -> wrap (E_app_infix (x, id, y'))
   | E_app_infix (x, id, y) ->
@@ -588,7 +579,7 @@ and exp_of_lexp (LEXP_aux (lexp_aux, _) as lexp) =
   | LEXP_vector_concat (lexp :: lexps) -> mk_exp (E_vector_append (exp_of_lexp lexp, exp_of_lexp (mk_lexp (LEXP_vector_concat lexps))))
   | LEXP_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
 
-and pattern_match env (P_aux (p_aux, _) as pat) value =
+and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
   match p_aux with
   | P_lit lit -> eq_value (value_of_lit lit) value, Bindings.empty
   | P_wild -> true, Bindings.empty
@@ -627,22 +618,47 @@ and pattern_match env (P_aux (p_aux, _) as pat) value =
   | P_vector pats ->
      let matches = List.map2 (pattern_match env) pats (coerce_gv value) in
      List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
-  | P_vector_concat _ -> assert false (* TODO *)
+  | P_vector_concat [] -> eq_value (V_vector []) value, Bindings.empty
+  | P_vector_concat (pat :: pats) ->
+     (* We have to use the annotation on each member of the
+        vector_concat pattern to figure out it's length. Due to the
+        recursive call that has an empty_tannot we must not use the
+        annotation in the whole vector_concat pattern. *)
+     let open Type_check in
+     begin match destruct_vector (pat_env_of pat) (pat_typ_of pat) with
+     | Some (Nexp_aux (Nexp_constant n, _), _, _) ->
+        let init, rest = Util.take (Big_int.to_int n) (coerce_gv value), Util.drop (Big_int.to_int n) (coerce_gv value) in
+        let init_match, init_bind = pattern_match env pat (V_vector init) in
+        let rest_match, rest_bind = pattern_match env (P_aux (P_vector_concat pats, (l, empty_tannot))) (V_vector rest) in
+        init_match && rest_match, Bindings.merge combine init_bind rest_bind
+     | _ -> failwith ("Bad vector annotation " ^ string_of_typ (Type_check.pat_typ_of pat))
+     end
   | P_tup [pat] -> pattern_match env pat value
   | P_tup pats | P_list pats ->
      let matches = List.map2 (pattern_match env) pats (coerce_listlike value) in
      List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
-  | P_cons _ -> assert false (* TODO *)
+  | P_cons (hd_pat, tl_pat) ->
+     begin match coerce_cons value with
+     | Some (hd_value, tl_values) ->
+        let hd_match, hd_bind = pattern_match env hd_pat hd_value in
+        let tl_match, tl_bind = pattern_match env tl_pat (V_list tl_values) in
+        hd_match && tl_match, Bindings.merge combine hd_bind tl_bind
+     | None -> failwith "Cannot match cons pattern against non-list"
+     end
+  | P_string_append _ -> assert false (* TODO *)
 
 let exp_of_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_Funcl (_, pexp), _)) = pexp in
   E_aux (E_case (exp_of_value value, List.map pexp_of_funcl funcls), annot)
 
-let rec get_fundef id (Defs defs) =
+let rec ast_letbinds (Defs defs) =
   match defs with
-  | [] -> failwith (string_of_id id ^ " definition not found")
-  | (DEF_fundef fdef) :: _ when Id.compare id (id_of_fundef fdef) = 0 -> fdef
-  | _ :: defs -> get_fundef id (Defs defs)
+  | [] -> []
+  | DEF_val lb :: defs -> lb :: ast_letbinds (Defs defs)
+  | _ :: defs -> ast_letbinds (Defs defs)
+
+let initial_lstate =
+  { locals = Bindings.empty }
 
 let stack_cont (_, _, cont) = cont
 let stack_string (str, _, _) = str
@@ -650,41 +666,78 @@ let stack_state (_, lstate, _) = lstate
 
 type frame =
   | Done of state * value
-  | Step of string Lazy.t * state * (Type_check.tannot exp) monad * (string Lazy.t * lstate * (value -> (Type_check.tannot exp) monad)) list
+  | Step of string Lazy.t * state * (Type_check.tannot exp) monad * (string Lazy.t * lstate * (return_value -> (Type_check.tannot exp) monad)) list
   | Break of frame
 
-let rec eval_frame' ast = function
+let rec eval_frame' = function
   | Done (state, v) -> Done (state, v)
   | Break frame -> Break frame
   | Step (out, state, m, stack) ->
      match (m, stack) with
      | Pure v, [] when is_value v -> Done (state, value_of_exp v)
      | Pure v, (head :: stack') when is_value v ->
-        Step (stack_string head, (stack_state head, snd state), stack_cont head (value_of_exp v), stack')
+        Step (stack_string head, (stack_state head, snd state), stack_cont head (Return_ok (value_of_exp v)), stack')
      | Pure exp', _ ->
         let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp')) in
         Step (out', state, step exp', stack)
      | Yield (Call(id, vals, cont)), _ when string_of_id id = "break" ->
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-        let body = exp_of_fundef (get_fundef id ast) arg in
+        let body = exp_of_fundef (Bindings.find id (snd state).fundefs) arg in
         Break (Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack))
      | Yield (Call(id, vals, cont)), _ ->
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-        let body = exp_of_fundef (get_fundef id ast) arg in
+        let body = exp_of_fundef (Bindings.find id (snd state).fundefs) arg in
         Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack)
      | Yield (Gets cont), _ ->
-        eval_frame' ast (Step (out, state, cont state, stack))
+        eval_frame' (Step (out, state, cont state, stack))
      | Yield (Puts (state', cont)), _ ->
-        eval_frame' ast (Step (out, state', cont (), stack))
+        eval_frame' (Step (out, state', cont (), stack))
      | Yield (Early_return v), [] -> Done (state, v)
      | Yield (Early_return v), (head :: stack') ->
-        Step (stack_string head, (stack_state head, snd state), stack_cont head v, stack')
+        Step (stack_string head, (stack_state head, snd state), stack_cont head (Return_ok v), stack')
      | Yield (Assertion_failed msg), _ ->
         failwith msg
-     | Yield (Exception v), _ ->
+     | Yield (Exception v), [] ->
         failwith ("Uncaught Exception" |> Util.cyan |> Util.clear)
+     | Yield (Exception v), (head :: stack') ->
+        Step (stack_string head, (stack_state head, snd state), stack_cont head (Return_exception v), stack')
 
-let eval_frame ast frame =
-  try eval_frame' ast frame with
+let eval_frame frame =
+  try eval_frame' frame with
   | Type_check.Type_error (l, err) ->
      raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
+
+let rec run_frame frame =
+  match frame with
+  | Done (state, v) -> v
+  | Step (lazy_str, _, _, _) ->
+     run_frame (eval_frame frame)
+  | Break frame ->
+     run_frame (eval_frame frame)
+
+let eval_exp state exp =
+  run_frame (Step (lazy "", state, return exp, []))
+
+let initial_gstate primops ast =
+  { registers = Bindings.empty;
+    allow_registers = true;
+    boxes = StringMap.empty;
+    primops = primops;
+    letbinds = ast_letbinds ast;
+    fundefs = Bindings.empty;
+  }
+
+let rec initialize_registers gstate =
+  let process_def = function
+    | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
+       { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
+    | DEF_fundef fdef ->
+       { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+    | _ -> gstate
+  in
+  function
+  | Defs (def :: defs) ->
+     initialize_registers (process_def def) (Defs defs)
+  | Defs [] -> gstate
+
+let initial_state ast primops = initial_lstate, initialize_registers (initial_gstate primops ast) ast

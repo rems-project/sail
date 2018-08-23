@@ -1,0 +1,5 @@
+initialize_registers()
+:run
+main()
+:run
+:quit

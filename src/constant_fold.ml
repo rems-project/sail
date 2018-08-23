@@ -116,13 +116,13 @@ let rec is_constant (E_aux (e_aux, _)) =
 and is_constant_fexp (FE_aux (FE_Fexp (_, exp), _)) = is_constant exp
 
 (* Wrapper around interpreter that repeatedly steps until done. *)
-let rec run ast frame =
+let rec run frame =
   match frame with
   | Interpreter.Done (state, v) -> v
   | Interpreter.Step (lazy_str, _, _, _) ->
-     run ast (Interpreter.eval_frame ast frame)
+     run (Interpreter.eval_frame frame)
   | Interpreter.Break frame ->
-     run ast (Interpreter.eval_frame ast frame)
+     run (Interpreter.eval_frame frame)
 
 (** This rewriting pass looks for function applications (E_app)
    expressions where every argument is a literal. It passes these
@@ -155,7 +155,7 @@ let rec rewrite_constant_function_calls' ast =
     let initial_monad = Interpreter.return (E_aux (e_aux, annot)) in
     try
       begin
-        let v = run ast (Interpreter.Step (lazy "", (lstate, gstate), initial_monad, [])) in
+        let v = run (Interpreter.Step (lazy "", (lstate, gstate), initial_monad, [])) in
         let exp = exp_of_value v in
         try (ok (); Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)) with
         | Type_error (l, err) ->

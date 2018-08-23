@@ -129,7 +129,7 @@ let rec run () =
        | Step (out, state, _, stack) ->
           begin
             try
-              current_mode := Evaluation (eval_frame !interactive_ast frame)
+              current_mode := Evaluation (eval_frame frame)
             with
             | Failure str -> print_endline str; current_mode := Normal
           end;
@@ -154,7 +154,7 @@ let rec run_steps n =
        | Step (out, state, _, stack) ->
           begin
             try
-              current_mode := Evaluation (eval_frame !interactive_ast frame)
+              current_mode := Evaluation (eval_frame frame)
             with
             | Failure str -> print_endline str; current_mode := Normal
           end;
@@ -331,7 +331,7 @@ let handle_input' input =
           (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
           let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord str) in
-          current_mode := Evaluation (eval_frame !interactive_ast (Step (lazy "", !interactive_state, return exp, [])));
+          current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
           print_program ()
        | Empty -> ()
      end
@@ -365,7 +365,7 @@ let handle_input' input =
                begin
                  try
                    interactive_state := state;
-                   current_mode := Evaluation (eval_frame !interactive_ast frame);
+                   current_mode := Evaluation (eval_frame frame);
                    print_program ()
                  with
                  | Failure str -> print_endline str; current_mode := Normal

@@ -12,7 +12,7 @@ let STATUS_2 = 0x0000_0004
 
 val read_register = "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 
-val "or_bits" : forall 'n, 'n >= 0. (bits('n), bits('n)) -> bits('n)
+val or_bits = { c: "or_bits", _: "or_vec" } : forall 'n, 'n >= 0. (bits('n), bits('n)) -> bits('n)
 
 overload operator | = {or_bits}
 

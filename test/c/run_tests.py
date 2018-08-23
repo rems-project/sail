@@ -29,12 +29,28 @@ def test_c(name, c_opts, sail_opts, valgrind):
                 sys.exit()
     return collect_results(name, tests)
 
+def test_interpreter(name):
+    banner('Testing {}'.format(name))
+    tests = {}
+    for filename in os.listdir('.'):
+        if re.match('.+\.sail', filename):
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('sail -is execute.isail -iout {}.iresult {}'.format(basename, filename))
+                step('diff {}.iresult {}.expect'.format(basename, basename))
+                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                sys.exit()
+    return collect_results(name, tests)
+
 xml = '<testsuites>\n'
 
 xml += test_c('unoptimized C', '', '', True)
 xml += test_c('optimized C', '-O2', '-O', True)
 xml += test_c('constant folding', '', '-Oconstant_fold', True)
 xml += test_c('address sanitised', '-O2 -fsanitize=undefined', '-O', False)
+
+xml += test_interpreter('interpreter')
 
 xml += '</testsuites>\n'
 

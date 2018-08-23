@@ -65,6 +65,10 @@ let output_close () =
   else
     ()
 
+let output str =
+  output_string !print_chan str;
+  flush !print_chan
+
 let output_endline str =
   output_string !print_chan (str ^ "\n");
   flush !print_chan
@@ -82,6 +86,24 @@ type value =
   | V_ref of string
   | V_ctor of string * value list
   | V_record of value StringMap.t
+
+let rec eq_value v1 v2 =
+  match v1, v2 with
+  | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
+  | V_list v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
+  | V_int n, V_int m -> Big_int.equal n m
+  | V_real n, V_real m -> Rational.equal n m
+  | V_bool b1, V_bool b2 -> b1 = b2
+  | V_bit b1, V_bit b2 -> b1 = b2
+  | V_tuple v1s, V_tuple v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
+  | V_unit, V_unit -> true
+  | V_string str1, V_string str2 -> str1 = str2
+  | V_ref str1, V_ref str2 -> str1 = str2
+  | V_ctor (name1, fields1), V_ctor (name2, fields2) when List.length fields1 = List.length fields2 ->
+     name1 = name2 && List.for_all2 eq_value fields1 fields2
+  | V_record fields1, V_record fields2 ->
+     StringMap.equal eq_value fields1 fields2
+  | _, _ -> false
 
 let coerce_bit = function
   | V_bit b -> b
@@ -338,7 +360,6 @@ let is_bit = function
   | V_bit _ -> true
   | _ -> false
 
-
 let is_ctor = function
   | V_ctor _ -> true
   | _ -> false
@@ -385,13 +406,16 @@ let value_vector_truncate = function
   | [v1; v2] -> mk_vector (Sail_lib.vector_truncate (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value vector_truncate"
 
-let eq_value v1 v2 = string_of_value v1 = string_of_value v2
-
 let value_eq_anything = function
   | [v1; v2] -> V_bool (eq_value v1 v2)
   | _ -> failwith "value eq_anything"
 
 let value_print = function
+  | [V_string str] -> output str; V_unit
+  | [v] -> output (string_of_value v |> Util.red |> Util.clear); V_unit
+  | _ -> assert false
+
+let value_print_endline = function
   | [V_string str] -> output_endline str; V_unit
   | [v] -> output_endline (string_of_value v |> Util.red |> Util.clear); V_unit
   | _ -> assert false
@@ -496,9 +520,9 @@ let primops =
     [ ("and_bool", and_bool);
       ("or_bool", or_bool);
       ("print", value_print);
-      ("prerr", fun vs -> (prerr_endline (string_of_value (List.hd vs)); V_unit));
+      ("prerr", fun vs -> (prerr_string (string_of_value (List.hd vs)); V_unit));
       ("dec_str", fun _ -> V_string "X");
-      ("print_endline", value_print);
+      ("print_endline", value_print_endline);
       ("prerr_endline", fun vs -> (prerr_endline (string_of_value (List.hd vs)); V_unit));
       ("putchar", value_putchar);
       ("string_of_int", fun vs -> V_string (string_of_value (List.hd vs)));
