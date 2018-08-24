@@ -688,7 +688,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_vector_update (v, n, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " = " ^ string_of_exp exp ^ "]"
   | E_vector_update_subrange (v, n, m, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " .. " ^ string_of_exp m ^ " = " ^ string_of_exp exp ^ "]"
   | E_vector_subrange (v, n1, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " .. " ^ string_of_exp n2 ^ "]"
-  | E_vector_append (v1, v2) -> string_of_exp v1 ^ " : " ^ string_of_exp v2
+  | E_vector_append (v1, v2) -> string_of_exp v1 ^ " @ " ^ string_of_exp v2
   | E_if (cond, then_branch, else_branch) ->
      "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
   | E_field (exp, id) -> string_of_exp exp ^ "." ^ string_of_id id
@@ -743,7 +743,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_vector_concat pats -> string_of_list " @ " string_of_pat pats
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
-  | P_string_append pats -> string_of_list " ^^ " string_of_pat pats
+  | P_string_append pats -> string_of_list " ^ " string_of_pat pats
   | _ -> "PAT"
 
 and string_of_mpat (MP_aux (pat, l)) =
@@ -754,9 +754,9 @@ and string_of_mpat (MP_aux (pat, l)) =
   | MP_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
   | MP_cons (pat1, pat2) -> string_of_mpat pat1 ^ " :: " ^ string_of_mpat pat2
   | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
-  | MP_vector_concat pats -> string_of_list " : " string_of_mpat pats
+  | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
-  | MP_string_append pats -> string_of_list " ^^ " string_of_mpat pats
+  | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
   | _ -> "MPAT"
