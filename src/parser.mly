@@ -713,7 +713,7 @@ atomic_pat:
     { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos,
 		     mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }
   | id Unit
-    { mk_pat (P_app ($1, [mk_pat P_wild $startpos $endpos])) $startpos $endpos }
+    { mk_pat (P_app ($1, [mk_pat (P_lit (mk_lit L_unit $startpos $endpos)) $startpos $endpos])) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | atomic_pat Colon typ
