@@ -468,6 +468,7 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_var (pat, _) -> anf_pat ~global:global pat
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global:global hd_pat, anf_pat ~global:global tl_pat))
   | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (pat_typ_of pat)))
+  | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (pat_typ_of pat))
   | _ -> anf_error ~loc:(fst annot) ("Could not convert pattern to ANF: " ^ string_of_pat pat)
 
 let rec apat_globals (AP_aux (aux, _, _)) =
@@ -497,10 +498,11 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
       | AE_field (_, _, typ)
       | AE_case (_, _, typ)
       | AE_try (_, _, typ)
-      | AE_record_update (_, _, typ) ->
+      | AE_record_update (_, _, typ)
+      | AE_block (_, _, typ) ->
        let id = gensym () in
        (AV_id (id, Local (Immutable, typ)), fun x -> mk_aexp (AE_let (Immutable, id, typ, aexp, x, typ_of exp)))
-    | AE_assign _ | AE_block _ | AE_for _ | AE_loop _ ->
+    | AE_assign _ | AE_for _ | AE_loop _ ->
        let id = gensym () in
        (AV_id (id, Local (Immutable, unit_typ)), fun x -> mk_aexp (AE_let (Immutable, id, unit_typ, aexp, x, typ_of exp)))
   in

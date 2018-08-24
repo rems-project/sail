@@ -308,6 +308,8 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_field(exp,id) -> rewrap (E_field(rewrite exp,id))
   | E_case (exp,pexps) ->
     rewrap (E_case (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
+  | E_try (exp,pexps) ->
+    rewrap (E_try (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
   | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters letbind,rewrite body))
   | E_assign (lexp,exp) -> rewrap (E_assign(rewriters.rewrite_lexp rewriters lexp,rewrite exp))
   | E_sizeof n -> rewrap (E_sizeof n)
@@ -613,6 +615,12 @@ and fold_pexp alg (Pat_aux (pexp_aux,annot)) = alg.pat_aux (fold_pexp_aux alg pe
 and fold_letbind_aux alg = function
   | LB_val (pat,e) -> alg.lB_val (fold_pat alg.pat_alg pat, fold_exp alg e)
 and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux alg letbind_aux, annot)
+
+let fold_funcl alg (FCL_aux (FCL_Funcl (id, pexp), annot)) =
+  FCL_aux (FCL_Funcl (id, fold_pexp alg pexp), annot)
+
+let fold_function alg (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), annot)) =
+  FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, List.map (fold_funcl alg) funcls), annot)
 
 let id_exp_alg =
   { e_block = (fun es -> E_block es)

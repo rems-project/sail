@@ -1,5 +1,7 @@
 default Order dec
 
+$include <flow.sail>
+
 val print = "print_endline" : string -> unit
 
 union ast = {

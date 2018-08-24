@@ -86,7 +86,8 @@ xml += test_c_builtins('C, Constant folding', '-Oconstant_fold')
 
 xml += test_ocaml_builtins('OCaml', '')
 
-xml += test_lem_builtins('Lem to OCaml')
+# Comment this out for most runs because it's really slow
+# xml += test_lem_builtins('Lem to OCaml')
 
 xml += '</testsuites>\n'
 

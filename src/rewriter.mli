@@ -189,6 +189,18 @@ val fold_pexp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a pexp -> 'pexp
 
+val fold_pexp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a pexp -> 'pexp
+
+val fold_funcl : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default,'a pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a funcl -> 'a funcl
+
+val fold_function : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default, 'a pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a fundef -> 'a fundef
+
 val id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg
 val id_exp_alg :
   ('a,'a exp,'a exp_aux,'a lexp,'a lexp_aux,'a fexp,

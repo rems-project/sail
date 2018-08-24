@@ -815,7 +815,7 @@ let compile_funcall l ctx id args typ =
     setup := List.rev arg_setup @ !setup;
     cleanup := arg_cleanup @ !cleanup;
     let have_ctyp = cval_ctyp cval in
-    if is_polymorphic ctyp then
+    if ctyp_equal CT_poly ctyp then
       (F_poly (fst cval), have_ctyp)
     else if ctyp_equal ctyp have_ctyp then
       cval
@@ -2102,7 +2102,7 @@ let rec sgen_clexp_pure = function
    insert any needed type conversions from big integers to small
    integers (or vice versa), or from arbitrary-length bitvectors to
    and from uint64 bitvectors as needed. *)
-let rec codegen_conversion clexp cval =
+let rec codegen_conversion l clexp cval =
   let open Printf in
   let ctyp_to = clexp_ctyp clexp in
   let ctyp_from = cval_ctyp cval in
@@ -2115,12 +2115,12 @@ let rec codegen_conversion clexp cval =
        ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) (sgen_cval cval)
 
   | CT_ref ctyp_to, ctyp_from ->
-     codegen_conversion (CL_addr clexp) cval
+     codegen_conversion l (CL_addr clexp) cval
 
   (* If we have to convert between tuple types, convert the fields individually. *)
   | CT_tup ctyps_to, CT_tup ctyps_from when List.length ctyps_to = List.length ctyps_from ->
      let conversions =
-       List.mapi (fun i ctyp -> codegen_conversion (CL_tuple (clexp, i)) (F_field (fst cval, "ztup" ^ string_of_int i), ctyp)) ctyps_from
+       List.mapi (fun i ctyp -> codegen_conversion l (CL_tuple (clexp, i)) (F_field (fst cval, "ztup" ^ string_of_int i), ctyp)) ctyps_from
      in
      separate hardline conversions
 
@@ -2141,7 +2141,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_id id) ^^ hardline
      ^^ ksprintf string "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)
 
-  | I_copy (clexp, cval) -> codegen_conversion clexp cval
+  | I_copy (clexp, cval) -> codegen_conversion l clexp cval
 
   | I_jump (cval, label) ->
      ksprintf string "  if (%s) goto %s;" (sgen_cval cval) label

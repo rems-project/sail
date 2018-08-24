@@ -3467,6 +3467,9 @@ let rewrite_defs_pat_lits rewrite_lit =
     let rewrite_pat = function
       (* HACK: ignore strings for now *)
       | P_lit (L_aux (L_string _, _)) as p_aux, p_annot -> P_aux (p_aux, p_annot)
+      (* Matching on unit is always the same as matching on wildcard *)
+      | P_lit (L_aux (L_unit, _) as lit), p_annot when rewrite_lit lit ->
+         P_aux (P_wild, p_annot)
       | P_lit lit, p_annot when rewrite_lit lit ->
          let env = env_of_annot p_annot in
          let typ = typ_of_annot p_annot in
@@ -3476,7 +3479,8 @@ let rewrite_defs_pat_lits rewrite_lit =
          guards := guard :: !guards;
          incr counter;
          P_aux (P_id id, p_annot)
-      | p_aux, p_annot -> P_aux (p_aux, p_annot)
+      | p_aux, p_annot ->
+         P_aux (p_aux, p_annot)
     in
 
     match pexp_aux with
@@ -3484,7 +3488,7 @@ let rewrite_defs_pat_lits rewrite_lit =
        begin
          let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat } pat in
          match !guards with
-         | [] -> pexp
+         | [] -> Pat_aux (Pat_exp (pat, exp), annot)
          | (g :: gs) ->
             let guard_annot = (fst annot, mk_tannot (env_of exp) bool_typ no_effect) in
             Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) g gs, exp), annot)
@@ -4632,7 +4636,7 @@ let rewrite_defs_c = [
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
   ("sizeof", rewrite_sizeof);
-  ("merge function clauses", merge_funcls);
+  ("merge_function_clauses", merge_funcls);
   ("recheck_defs", recheck_defs)
   ]
 

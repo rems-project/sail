@@ -222,6 +222,7 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) -> d1 = d2 && ctyp_equal ctyp1 ctyp2
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
+  | CT_poly, CT_poly -> true
   | _, _ -> false
 
 let rec ctyp_unify ctyp1 ctyp2 =

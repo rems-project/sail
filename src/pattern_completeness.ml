@@ -91,6 +91,9 @@ let is_wild = function
 
 let rec generalize ctx (P_aux (p_aux, _) as pat) =
   match p_aux with
+  | P_lit (L_aux (L_unit, _)) ->
+     (* Unit pattern always matches on unit, so generalize to wildcard *)
+     GP_wild
   | P_lit lit -> GP_lit lit
   | P_wild -> GP_wild
   | P_or (pat1, pat2) -> GP_or (generalize ctx pat1, generalize ctx pat2)
