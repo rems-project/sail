@@ -111,7 +111,7 @@ cheri128.lem: $(CHERI128_SAILS)
 cheri128_types.lem: cheri128.lem
 
 C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
-	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+	lem -isa -outdir . -lib Sail=$(SAIL_DIR)/src/gen_lib -lib Sail=$(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' C$*_types.thy
 
 %Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem

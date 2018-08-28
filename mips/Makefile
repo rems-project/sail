@@ -55,7 +55,7 @@ COQ_LIBS = -R ../../bbv/theories bbv -R ../lib/coq Sail
 mips.vo: mips_types.vo mips_extras.vo
 
 M%.thy: m%.lem m%_types.lem mips_extras.lem
-	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
+	lem -isa -outdir . -lib Sail=$(SAIL_DIR)/src/gen_lib -lib Sail=$(SAIL_DIR)/src/lem_interp $^
 	sed -i 's/datatype ast/datatype (plugins only: size) ast/' M$*_types.thy
 
 %Script.sml: %.lem %_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem

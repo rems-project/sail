@@ -47,7 +47,7 @@ riscv_duopod_ocaml: prelude.sail riscv_duopod.sail
 riscv_duopod.lem: prelude.sail riscv_duopod.sail
 	$(SAIL) $(SAIL_FLAGS) -lem -lem_mwords -lem_lib Riscv_extras -o riscv_duopod $^
 Riscv_duopod.thy: riscv_duopod.lem riscv_extras.lem
-	lem -isa -outdir . -lib ../src/lem_interp -lib ../src/gen_lib \
+	lem -isa -outdir . -lib Sail=../src/lem_interp -lib Sail=../src/gen_lib \
 		riscv_extras.lem \
 		riscv_duopod_types.lem \
 		riscv_duopod.lem
@@ -55,7 +55,7 @@ Riscv_duopod.thy: riscv_duopod.lem riscv_extras.lem
 riscv_duopod: riscv_duopod_ocaml Riscv_duopod.thy
 
 Riscv.thy: riscv.lem riscv_extras.lem
-	lem -isa -outdir . -lib ../src/lem_interp -lib ../src/gen_lib \
+	lem -isa -outdir . -lib Sail=../src/lem_interp -lib Sail=../src/gen_lib \
 		riscv_extras.lem \
 		riscv_types.lem \
 		riscv.lem
