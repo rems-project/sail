@@ -665,7 +665,7 @@ mapping bit_maybe_o : bits(1) <-> string = {
 }
 
 mapping fence_bits : bits(4) <-> string = {
-  r : bits(1) @ w : bits(1) @ i : bits(1) @ o : bits(1) <-> bit_maybe_r(r) ^ bit_maybe_w(w) ^ bit_maybe_i(i) ^ bit_maybe_o(o)
+  i : bits(1) @ o : bits(1) @ r : bits(1) @ w : bits(1) <-> bit_maybe_i(i) ^ bit_maybe_o(o) ^ bit_maybe_r(r) ^ bit_maybe_w(w)
 }
 
 mapping clause assembly = FENCE(pred, succ) <-> "fence" ^ spc() ^ fence_bits(pred) ^ sep() ^ fence_bits(succ)
