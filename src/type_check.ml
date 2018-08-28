@@ -52,6 +52,8 @@ open Ast
 open Util
 open Ast_util
 open Lazy
+open Extra_pervasives
+
 module Big_int = Nat_big_num
 
 (* opt_tc_debug controls the verbosity of the type checker. 0 is
@@ -707,6 +709,7 @@ end = struct
            | Typ_tup _ | Typ_app _ -> Typ_exist (existentials, List.fold_left nc_and (List.hd constrs) (List.tl constrs), typ)
            | Typ_exist (kids, nc, typ) -> Typ_exist (kids @ existentials, List.fold_left nc_and nc constrs, typ)
            | Typ_fn _ | Typ_bidir _ | Typ_id _ | Typ_var _ -> assert false (* These must be simple *)
+           | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
          in
          Typ_aux (typ_aux, l)
 
@@ -744,6 +747,7 @@ end = struct
        wf_constraint ~exs:(KidSet.of_list kids) env nc;
        wf_typ ~exs:(KidSet.of_list kids) { env with constraints = nc :: env.constraints } typ
     | Typ_exist (_, _, _) -> typ_error l ("Nested existentials are not allowed")
+    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   and wf_typ_arg ?exs:(exs=KidSet.empty) env (Typ_arg_aux (typ_arg_aux, _)) =
     match typ_arg_aux with
     | Typ_arg_nexp nexp -> wf_nexp ~exs:exs env nexp
@@ -1277,7 +1281,7 @@ let destruct_vector env typ =
   in
   destruct_vector' (Env.expand_synonyms env typ)
 
-let rec is_typ_monomorphic (Typ_aux (typ, _)) =
+let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   match typ with
   | Typ_id _ -> true
   | Typ_tup typs -> List.for_all is_typ_monomorphic typs
@@ -1285,6 +1289,7 @@ let rec is_typ_monomorphic (Typ_aux (typ, _)) =
   | Typ_fn (typ1, typ2, _) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
   | Typ_bidir (typ1, typ2) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
   | Typ_exist _ | Typ_var _ -> false
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and is_typ_arg_monomorphic (Typ_arg_aux (arg, _)) =
   match arg with
   | Typ_arg_nexp _ -> true
@@ -1827,6 +1832,7 @@ let rec kid_order kids (Typ_aux (aux, l) as typ) =
   | Typ_app (_, args) ->
      List.fold_left (fun (ord, kids) arg -> let (ord', kids) = kid_order_arg kids arg in (ord @ ord', kids)) ([], kids) args
   | Typ_fn _ | Typ_bidir _ | Typ_exist _ -> typ_error l ("Existential or function type cannot appear within existential type: " ^ string_of_typ typ)
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and kid_order_arg kids (Typ_arg_aux (aux, l) as arg) =
   match aux with
   | Typ_arg_typ typ -> kid_order kids typ

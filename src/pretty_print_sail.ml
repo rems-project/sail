@@ -135,7 +135,7 @@ let doc_nc =
   in
   nc0
 
-let rec doc_typ (Typ_aux (typ_aux, _)) =
+let rec doc_typ (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
@@ -161,6 +161,7 @@ let rec doc_typ (Typ_aux (typ_aux, _)) =
      separate space [doc_typ typ1; string "->"; doc_typ typ2; string "effect"; ocaml_eff]
   | Typ_bidir (typ1, typ2) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
+  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and doc_typ_arg (Typ_arg_aux (ta_aux, _)) =
   match ta_aux with
   | Typ_arg_typ typ -> doc_typ typ

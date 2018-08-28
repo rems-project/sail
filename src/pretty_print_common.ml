@@ -54,6 +54,7 @@ open PPrint
 
 let pipe = string "|"
 let arrow = string "->"
+let bidir = string "<->"
 let dotdot = string ".."
 let coloncolon = string "::"
 let coloneq = string ":="
@@ -128,7 +129,9 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   let rec typ ty = fn_typ ty
   and fn_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_fn(arg,ret,efct) ->
-      separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
+     separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
+  | Typ_bidir (t1, t2) ->
+     separate space [tup_typ t1; bidir; tup_typ t2]
   | _ -> tup_typ ty
   and tup_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_exist (kids, nc, ty) ->
@@ -149,10 +152,12 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
   | Typ_var v  -> doc_var v
-  | Typ_app _ | Typ_tup _ | Typ_fn _ | Typ_exist _ ->
+  | Typ_app _ | Typ_tup _ | Typ_fn _ | Typ_bidir _ | Typ_exist _ ->
       (* exhaustiveness matters here to avoid infinite loops
        * if we add a new Typ constructor *)
-      group (parens (typ ty))
+     group (parens (typ ty))
+  | Typ_internal_unknown -> string "UNKNOWN"
+
   and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
   (* Be careful here because typ_arg is implemented as nexp in the
    * parser - in practice falling through app_typ after all the proper nexp

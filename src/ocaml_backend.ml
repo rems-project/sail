@@ -98,7 +98,7 @@ let ocaml_string_parens inside = string "\"(\" ^ " ^^ inside ^^ string " ^ \")\"
 
 let ocaml_string_comma = string " ^ \", \" ^ "
 
-let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
+let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   match typ_aux with
   | Typ_id id when string_of_id id = "exception" -> string "Printexc.to_string" ^^ space ^^ arg
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
@@ -118,8 +118,10 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
      parens (separate space [string "fun"; parens (separate (comma ^^ space) args); string "->"; body])
      ^^ space ^^ arg
   | Typ_fn (typ1, typ2, _) -> string "\"FN\""
+  | Typ_bidir (t1, t2) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
+  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
@@ -134,15 +136,17 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
   | id -> zencode ctx id
 
-let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
+let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> ocaml_typ_id ctx id
   | Typ_app (id, []) -> ocaml_typ_id ctx id
   | Typ_app (id, typs) -> parens (separate_map (string " * ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
+  | Typ_bidir (t1, t2) -> raise (Reporting_basic.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
+  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and ocaml_typ_arg ctx (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_typ typ -> ocaml_typ ctx typ

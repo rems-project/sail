@@ -51,6 +51,7 @@
 open Ast
 open Util
 open Ast_util
+open Extra_pervasives
 
 module Nameset = Set.Make(String)
 
@@ -84,7 +85,7 @@ let conditional_add_exp = conditional_add false
 let nameset_bigunion = List.fold_left Nameset.union mt
 
 
-let rec free_type_names_t consider_var (Typ_aux (t, _)) = match t with
+let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
   | Typ_var name -> if consider_var then Nameset.add (string_of_kid name) mt else mt
   | Typ_id name -> Nameset.add (string_of_id name) mt
   | Typ_fn (t1,t2,_) -> Nameset.union (free_type_names_t consider_var t1)
@@ -94,6 +95,7 @@ let rec free_type_names_t consider_var (Typ_aux (t, _)) = match t with
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kids,_,t') -> List.fold_left (fun s kid -> Nameset.remove (string_of_kid kid) s) (free_type_names_t consider_var t') kids
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
 and free_type_names_maybe_t consider_var = function
   | Some t -> free_type_names_t consider_var t
@@ -111,7 +113,7 @@ let rec free_type_names_tannot consider_var tannot =
   | Some (_, t, _) -> free_type_names_t consider_var t
 
 
-let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
+let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
   match t with
   | Typ_var (Kid_aux (Var v,l)) ->
     if consider_var
@@ -124,6 +126,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
   | Typ_exist (kids,_,t') -> fv_of_typ consider_var (List.fold_left (fun b (Kid_aux (Var v,_)) -> Nameset.add v b) bound kids) used t'
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 
 and fv_of_targ consider_var bound used (Ast.Typ_arg_aux(targ,_)) : Nameset.t = match targ with
   | Typ_arg_typ t -> fv_of_typ consider_var bound used t

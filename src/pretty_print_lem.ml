@@ -54,6 +54,7 @@ open Ast_util
 open Rewriter
 open PPrint
 open Pretty_print_common
+open Extra_pervasives
 
 (****************************************************************************
  * PPrint-based sail-to-lem pprinter
@@ -213,7 +214,7 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
    updated with doc_typ_lem *)
-let rec lem_nexps_of_typ (Typ_aux (t,_)) =
+let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   let trec = lem_nexps_of_typ in
   match t with
   | Typ_id _ -> NexpSet.empty
@@ -239,6 +240,8 @@ let rec lem_nexps_of_typ (Typ_aux (t,_)) =
      List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg ta))
        NexpSet.empty tas
   | Typ_exist (kids,_,t) -> trec t
+  | Typ_bidir _ -> raise (Reporting_basic.err_unreachable l __POS__ "Lem doesn't support bidir types")
+  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and lem_nexps_of_typ_arg (Typ_arg_aux (ta,_)) =
   match ta with
   | Typ_arg_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
@@ -322,7 +325,9 @@ let doc_typ_lem, doc_atomic_typ_lem =
                            ("Existential type variable(s) " ^
                                String.concat ", " (List.map string_of_kid bad) ^
                                " escape into Lem"))
-      end
+        end
+      | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
+      | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
     and doc_typ_arg_lem (Typ_arg_aux(t,_)) = match t with
       | Typ_arg_typ t -> app_typ true t
       | Typ_arg_nexp n -> doc_nexp_lem (nexp_simp n)
@@ -433,7 +438,7 @@ let doc_typquant_lem (TypQ_aux(tq,_)) vars_included typ = match tq with
    machine words.  Often these will be unnecessary, but this simple
    approach will do for now. *)
 
-let rec typeclass_nexps (Typ_aux(t,_)) =
+let rec typeclass_nexps (Typ_aux(t,l)) =
   if !opt_mwords then
     match t with
     | Typ_id _
@@ -457,6 +462,8 @@ let rec typeclass_nexps (Typ_aux(t,_)) =
        in
        List.fold_left add_arg_nexps NexpSet.empty args
     | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
+    | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
+    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   else NexpSet.empty
 
 let doc_typclasses_lem t =

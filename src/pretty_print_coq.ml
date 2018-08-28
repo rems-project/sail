@@ -54,6 +54,7 @@ open Ast_util
 open Rewriter
 open PPrint
 open Pretty_print_common
+open Extra_pervasives
 
 module StringSet = Set.Make(String)
 
@@ -255,7 +256,7 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
    updated with doc_typ_lem *)
-let rec lem_nexps_of_typ (Typ_aux (t,_)) =
+let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   let trec = lem_nexps_of_typ in
   match t with
   | Typ_id _ -> NexpSet.empty
@@ -281,6 +282,8 @@ let rec lem_nexps_of_typ (Typ_aux (t,_)) =
      List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg ta))
        NexpSet.empty tas
   | Typ_exist (kids,_,t) -> trec t
+  | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and lem_nexps_of_typ_arg (Typ_arg_aux (ta,_)) =
   match ta with
   | Typ_arg_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
@@ -312,6 +315,8 @@ let drop_duplicate_atoms kids ty =
     (* Don't recurse into type arguments, removing stuff there
        would be weird (and difficult) *)
     | Typ_app _ -> Some full_typ
+    | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
+    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   in aux_typ ty
 
 (* Follows Coq precedence levels *)
@@ -478,7 +483,9 @@ let doc_typ, doc_atomic_typ =
            match nc with
 (*           | NC_aux (NC_true,_) -> List.fold_left add_tyvar (string "Z") (List.tl kids)*)
            | _ -> List.fold_left add_tyvar (doc_arithfact ctx nc) kids
-      end
+        end
+      | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
+      | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
     and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
       | Typ_arg_typ t -> app_typ true t
       | Typ_arg_nexp n -> doc_nexp ctx n
@@ -603,7 +610,7 @@ let doc_typquant ctx (TypQ_aux(tq,_)) typ = match tq with
    machine words.  Often these will be unnecessary, but this simple
    approach will do for now. *)
 
-let rec typeclass_nexps (Typ_aux(t,_)) =
+let rec typeclass_nexps (Typ_aux(t,l)) =
   match t with
   | Typ_id _
   | Typ_var _
@@ -620,6 +627,8 @@ let rec typeclass_nexps (Typ_aux(t,_)) =
        NexpSet.singleton (orig_nexp size_nexp)
   | Typ_app _ -> NexpSet.empty
   | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
+  | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 
 let doc_typschm ctx quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   let pt = doc_typ ctx t in

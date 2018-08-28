@@ -59,6 +59,7 @@ open Ast
 open Ast_util
 module Big_int = Nat_big_num
 open Type_check
+open Extra_pervasives
 
 let size_set_limit = 64
 
@@ -135,11 +136,13 @@ let subst_src_typ substs t =
     | Typ_var _
       -> ty
     | Typ_fn (t1,t2,e) -> re (Typ_fn (s_styp substs t1, s_styp substs t2,e))
+    | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
     | Typ_exist (kids,nc,t) ->
        let substs = List.fold_left (fun sub v -> KBindings.remove v sub) substs kids in
        re (Typ_exist (kids,nc,s_styp substs t))
+    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   and s_starg substs (Typ_arg_aux (ta,l) as targ) =
     match ta with
     | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (subst_nexp substs ne),l)
@@ -313,6 +316,8 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
     -> insts,typ
   | Typ_fn _ ->
      raise (Reporting_basic.err_general l "Function type in constructor")
+  | Typ_bidir _ ->
+     raise (Reporting_basic.err_general l "Mapping type in constructor")
   | Typ_tup ts ->
      let insts,ts = 
        List.fold_right
@@ -325,13 +330,15 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
          (fun arg (insts,args) -> let insts,arg = inst_src_typ_arg insts arg in insts,arg::args)
          args (insts,[])
      in insts, Typ_aux (Typ_app (id,ts),l)
-  | Typ_exist (kids, nc, t) ->
+  | Typ_exist (kids, nc, t) -> begin
      let kid_insts, insts' = peel (kids,insts) in
      let kids', t' = apply_kid_insts kid_insts t in
      (* TODO: subst in nc *)
      match kids' with
      | [] -> insts', t'
      | _ -> insts', Typ_aux (Typ_exist (kids', nc, t'), l)
+    end
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and inst_src_typ_arg insts (Typ_arg_aux (ta,l) as tyarg) =
   match ta with
   | Typ_arg_nexp _
@@ -341,15 +348,17 @@ and inst_src_typ_arg insts (Typ_arg_aux (ta,l) as tyarg) =
      let insts', typ' = inst_src_type insts typ in
      insts', Typ_arg_aux (Typ_arg_typ typ',l)
 
-let rec contains_exist (Typ_aux (ty,_)) =
+let rec contains_exist (Typ_aux (ty,l)) =
   match ty with
   | Typ_id _
   | Typ_var _
     -> false
   | Typ_fn (t1,t2,_) -> contains_exist t1 || contains_exist t2
+  | Typ_bidir (t1, t2) -> contains_exist t1 || contains_exist t2
   | Typ_tup ts -> List.exists contains_exist ts
   | Typ_app (_,args) -> List.exists contains_exist_arg args
   | Typ_exist _ -> true
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and contains_exist_arg (Typ_arg_aux (arg,_)) =
   match arg with
   | Typ_arg_nexp _
@@ -385,6 +394,8 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
       -> (KidSet.empty,[[],typ])
     | Typ_fn _ ->
        raise (Reporting_basic.err_general l ("Function type in constructor " ^ i))
+    | Typ_bidir _ ->
+       raise (Reporting_basic.err_general l ("Mapping type in constructor " ^ i))
     | Typ_tup ts ->
        let (vars,tys) = List.split (List.map size_nvars_ty ts) in
        let insttys = List.map (fun x -> let (insts,tys) = List.split x in
@@ -421,6 +432,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
        let tys = List.concat (List.map (fun instty -> List.map (ty_and_inst instty) insts) tys) in
        let free = List.fold_left (fun vars k -> KidSet.remove k vars) vars kids in
        (free,tys)
+    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   in
   (* Only single-variable prenex-form for now *)
   let size_nvars_ty (Typ_aux (ty,l) as typ) =
@@ -2164,7 +2176,8 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
   | Typ_var _
     -> KidSet.empty
   | Typ_fn _ -> raise (Reporting_basic.err_general l
-                         "Function type on expressinon")
+                         "Function type on expression")
+  | Typ_bidir _ -> raise (Reporting_basic.err_general l "Mapping type on expression")
   | Typ_tup typs -> kidset_bigunion (List.map sizes_of_typ typs)
   | Typ_exist (kids,_,typ) ->
      List.fold_left (fun s k -> KidSet.remove k s) (sizes_of_typ typ) kids
@@ -2174,6 +2187,7 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
      KidSet.of_list (size_nvars_nexp size)
   | Typ_app (_,tas) ->
      kidset_bigunion (List.map sizes_of_typarg tas)
+  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and sizes_of_typarg (Typ_arg_aux (ta,_)) =
   match ta with
     Typ_arg_nexp _
@@ -4148,6 +4162,10 @@ let replace_nexp_in_typ env typ orig new_nexp =
        let f1, arg = aux arg in
        let f2, res = aux res in
        f1 || f2, Typ_aux (Typ_fn (arg, res, eff),l)
+    | Typ_bidir (t1, t2) ->
+       let f1, t1 = aux t1 in
+       let f2, t2 = aux t2 in
+       f1 || f2, Typ_aux (Typ_bidir (t1, t2), l)
     | Typ_tup typs ->
        let fs, typs = List.split (List.map aux typs) in
        List.exists (fun x -> x) fs, Typ_aux (Typ_tup typs,l)
@@ -4157,6 +4175,7 @@ let replace_nexp_in_typ env typ orig new_nexp =
     | Typ_app (id, targs) ->
        let fs, targs = List.split (List.map aux_targ targs) in
        List.exists (fun x -> x) fs, Typ_aux (Typ_app (id, targs),l)
+    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   and aux_targ (Typ_arg_aux (ta,l) as typ_arg) =
     match ta with
     | Typ_arg_nexp nexp ->
