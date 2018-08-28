@@ -870,29 +870,25 @@ match l with
 end.
 
 Local Open Scope nat.
-Program Definition fit_bbv_word {n m} (w : word n) : word m :=
-match Nat.compare m n with
-| Gt => extz w (m - n)
-| Eq => w
-| Lt => split2 (n - m) m w
-end.
-Next Obligation.
-symmetry in Heq_anonymous.
-apply nat_compare_gt in Heq_anonymous.
-omega.
-Defined.
-Next Obligation.
 
-symmetry in Heq_anonymous.
-apply nat_compare_eq in Heq_anonymous.
-omega.
-Defined.
-Next Obligation.
+Fixpoint nat_diff {T : nat -> Type} n m {struct n} :
+forall
+ (lt : forall p, T n -> T (n + p))
+ (eq : T m -> T m)
+ (gt : forall p, T (m + p) -> T m), T n -> T m :=
+(match n, m return (forall p, T n -> T (n + p)) -> (T m -> T m) -> (forall p, T (m + p) -> T m) -> T n -> T m with
+| O, O => fun lt eq gt => eq
+| S n', O => fun lt eq gt => gt _
+| O, S m' => fun lt eq gt => lt _
+| S n', S m' => @nat_diff (fun x => T (S x)) n' m'
+end).
 
-symmetry in Heq_anonymous.
-apply nat_compare_lt in Heq_anonymous.
-omega.
-Defined.
+Definition fit_bbv_word {n m} : word n -> word m :=
+nat_diff n m
+ (fun p w => nat_cast _ (Nat.add_comm _ _) (extz w p))
+ (fun w => w)
+ (fun p w => split2 _ _ (nat_cast _ (Nat.add_comm _ _) w)).
+
 Local Close Scope nat.
 
 (*** Bitvectors *)

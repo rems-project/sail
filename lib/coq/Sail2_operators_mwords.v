@@ -15,14 +15,38 @@ Definition eq_dec := Z.eq_dec.
 End Z_eq_dec.
 Module ZEqdep := DecidableEqDep (Z_eq_dec).
 
-Definition cast_T {T : Z -> Type} {m n} (x : T m) (eq : m = n) : T n.
-rewrite <- eq.
-exact x.
+Fixpoint cast_positive (T : positive -> Type) (p q : positive) : T p -> p = q -> T q.
+refine (
+match p, q with
+| xH, xH => fun x _ => x
+| xO p', xO q' => fun x e => cast_positive (fun x => T (xO x)) p' q' x _
+| xI p', xI q' => fun x e => cast_positive (fun x => T (xI x)) p' q' x _
+| _, _ => _
+end); congruence.
 Defined.
 
+Definition cast_T {T : Z -> Type} {m n} : forall (x : T m) (eq : m = n), T n.
+refine (match m,n with
+| Z0, Z0 => fun x _ => x
+| Zneg p1, Zneg p2 => fun x e => cast_positive (fun p => T (Zneg p)) p1 p2 x _
+| Zpos p1, Zpos p2 => fun x e => cast_positive (fun p => T (Zpos p)) p1 p2 x _
+| _,_ => _
+end); congruence.
+Defined.
+
+Lemma cast_positive_refl : forall p T x (e : p = p),
+  cast_positive T p p x e = x.
+induction p.
+* intros. simpl. rewrite IHp; auto.
+* intros. simpl. rewrite IHp; auto.
+* reflexivity.
+Qed.
+
 Lemma cast_T_refl {T : Z -> Type} {m} {H:m = m} (x : T m) : cast_T x H = x.
-rewrite (ZEqdep.UIP _ _ H eq_refl).
-reflexivity.
+destruct m.
+* reflexivity.
+* simpl. rewrite cast_positive_refl. reflexivity.
+* simpl. rewrite cast_positive_refl. reflexivity.
 Qed.
 
 Definition autocast {T : Z -> Type} {m n} (x : T m) `{H:ArithFact (m = n)} : T n :=
@@ -31,27 +55,31 @@ Definition autocast {T : Z -> Type} {m n} (x : T m) `{H:ArithFact (m = n)} : T n
 Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m = n)} : monad rv (mword n) e :=
   x >>= fun x => returnm (cast_T x (use_ArithFact H)).
 
-Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n.
-rewrite <- eq.
-exact x.
-Defined.
+Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n :=
+  DepEqNat.nat_cast _ eq x.
 
 Lemma cast_word_refl {m} {H:m = m} (x : word m) : cast_word x H = x.
 rewrite (UIP_refl_nat _ H).
-reflexivity.
+apply nat_cast_same.
 Qed.
 
-Definition mword_of_nat {m} (x : Word.word m) : mword (Z.of_nat m).
-destruct m.
-- exact x.
-- simpl. rewrite SuccNat2Pos.id_succ. exact x.
+Definition mword_of_nat {m} : Word.word m -> mword (Z.of_nat m).
+refine (match m return word m -> mword (Z.of_nat m) with
+| O => fun x => x
+| S m' => fun x => nat_cast _ _ x
+end).
+rewrite SuccNat2Pos.id_succ.
+reflexivity.
 Defined.
 
-Definition cast_to_mword {m n} (x : Word.word m) (eq : Z.of_nat m = n) : mword n.
-destruct n.
-- constructor.
-- rewrite <- eq. exact (mword_of_nat x).
-- exfalso. destruct m; simpl in *; congruence.
+Definition cast_to_mword {m n} (x : Word.word m) : Z.of_nat m = n -> mword n.
+refine (match n return Z.of_nat m = n -> mword n with
+| Z0 => fun _ => WO
+| Zpos p => fun eq => cast_T (mword_of_nat x) eq
+| Zneg p => _
+end).
+intro eq.
+exfalso. destruct m; simpl in *; congruence.
 Defined.
 
 (*
