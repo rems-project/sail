@@ -257,7 +257,7 @@ let print_err fatal verb_loc l m1 m2 =
 
 type error =
   | Err_general of Parse_ast.l * string
-  | Err_unreachable of Parse_ast.l * string
+  | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
   | Err_todo of Parse_ast.l * string
   | Err_syntax of Lexing.position * string
   | Err_syntax_locn of Parse_ast.l * string
@@ -267,7 +267,7 @@ type error =
 
 let dest_err = function
   | Err_general (l, m) -> ("Error", false, Loc l, m)
-  | Err_unreachable (l, m) -> ("Internal error: Unreachable code", false, Loc l, m)
+  | Err_unreachable (l, (file, line, _, _), m) -> ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m)
   | Err_todo (l, m) -> ("Todo" ^ m, false, Loc l, "")
   | Err_syntax (p, m) -> ("Syntax error", false, Pos p, m)
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)
@@ -279,7 +279,7 @@ exception Fatal_error of error
 
 (* Abbreviations for the very common cases *)
 let err_todo l m = Fatal_error (Err_todo (l, m))
-let err_unreachable l m = Fatal_error (Err_unreachable (l, m))
+let err_unreachable l ocaml_pos m = Fatal_error (Err_unreachable (l, ocaml_pos, m))
 let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l,m))
 let err_typ_dual l1 l2 m = Fatal_error (Err_type_dual (l1,l2,m))

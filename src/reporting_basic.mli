@@ -80,7 +80,7 @@ type error =
 
   (** Unreachable errors should never be thrown. It means that some
       code was excuted that the programmer thought of as unreachable *)
-  | Err_unreachable of Parse_ast.l * string
+  | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
 
   (** [Err_todo] indicates that some feature is unimplemented; it should be built using [err_todo]. *)
   | Err_todo of Parse_ast.l * string
@@ -99,8 +99,8 @@ val err_todo : Parse_ast.l -> string -> exn
 (** [err_general l m] is an abreviatiation for [Fatal_error (Err_general (b, l, m))] *)
 val err_general : Parse_ast.l -> string -> exn
 
-(** [err_unreachable l m] is an abreviatiation for [Fatal_error (Err_unreachable (b, l, m))] *)
-val err_unreachable : Parse_ast.l -> string -> exn
+(** [err_unreachable l __POS__ m] is an abreviatiation for [Fatal_error (Err_unreachable (l, __POS__, m))] *)
+val err_unreachable : Parse_ast.l -> (string * int * int * int) -> string -> exn
 
 (** [err_typ l m] is an abreviatiation for [Fatal_error (Err_type (l, m))] *)
 val err_typ : Parse_ast.l -> string -> exn

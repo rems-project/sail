@@ -2073,17 +2073,17 @@ let destruct_vec_typ l env typ =
 
 let env_of_annot (l, tannot) = match tannot with
   | Some ((env, _, _),_) -> env
-  | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
+  | None -> raise (Reporting_basic.err_unreachable l __POS__ "no type annotation")
 
 let env_of (E_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
 let typ_of_annot (l, tannot) = match tannot with
   | Some ((_, typ, _), _) -> typ
-  | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
+  | None -> raise (Reporting_basic.err_unreachable l __POS__ "no type annotation")
 
 let env_of_annot (l, tannot) = match tannot with
   | Some ((env, _, _), _) -> env
-  | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
+  | None -> raise (Reporting_basic.err_unreachable l __POS__ "no type annotation")
 
 let typ_of (E_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
@@ -2111,7 +2111,7 @@ let lexp_env_of (LEXP_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
 let expected_typ_of (l, tannot) = match tannot with
   | Some ((_, _, _), exp_typ) -> exp_typ
-  | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
+  | None -> raise (Reporting_basic.err_unreachable l __POS__ "no type annotation")
 
 (* Flow typing *)
 
@@ -4414,7 +4414,7 @@ let mk_synonym typq typ =
                                       ^ " with " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env))
 
 let check_kinddef env (KD_aux (kdef, (l, _))) =
-  let kd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented kind def") in
+  let kd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented kind def") in
   match kdef with
   | KD_nabbrev ((K_aux(K_kind([BK_aux (BK_int, _)]),_) as kind), id, nmscm, nexp) ->
      [DEF_kind (KD_aux (KD_nabbrev (kind, id, nmscm, nexp), (l, None)))],
@@ -4423,7 +4423,7 @@ let check_kinddef env (KD_aux (kdef, (l, _))) =
 
 let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
   fun env (TD_aux (tdef, (l, _))) ->
-  let td_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Typedef") in
+  let td_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Typedef") in
   match tdef with
   | TD_abbrev (id, nmscm, (TypSchm_aux (TypSchm_ts (typq, typ), _))) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (mk_synonym typq typ) env
@@ -4456,7 +4456,7 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
 
 and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   fun env def ->
-  let cd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Case") in
+  let cd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Case") in
   match def with
   | DEF_kind kdef -> check_kinddef env kdef
   | DEF_type tdef -> check_typedef env tdef
@@ -4483,7 +4483,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
      [DEF_reg_dec (DEC_aux (DEC_config (id, typ, checked_exp), (l, Some ((env, typ, no_effect), Some typ))))], env
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
-  | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
+  | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown __POS__ "Scattered given to type checker")
 
 and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
   fun env (Defs defs) ->

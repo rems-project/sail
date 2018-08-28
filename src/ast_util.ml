@@ -955,8 +955,8 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
     let get_id (LEXP_aux(lexp,((l,_) as annot)) as le) = match lexp with
       | LEXP_id id | LEXP_cast (_, id) -> E_aux (E_id id, annot)
       | _ ->
-        raise (Reporting_basic.err_unreachable l
-          ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple")) in
+        raise (Reporting_basic.err_unreachable l __POS__
+         ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple")) in
     rewrap (E_tuple (List.map get_id les))
   | LEXP_vector (lexp, e) -> rewrap (E_vector_access (lexp_to_exp lexp, e))
   | LEXP_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
@@ -1016,7 +1016,7 @@ let is_order_inc = function
   | Ord_aux (Ord_inc, _) -> true
   | Ord_aux (Ord_dec, _) -> false
   | Ord_aux (Ord_var _, l) ->
-    raise (Reporting_basic.err_unreachable l "is_order_inc called on vector with variable ordering")
+    raise (Reporting_basic.err_unreachable l __POS__ "is_order_inc called on vector with variable ordering")
 
 let is_bit_typ = function
   | Typ_aux (Typ_id (Id_aux (Id "bit", _)), _) -> true

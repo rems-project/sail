@@ -738,7 +738,7 @@ let reduce_cast typ exp l annot =
      let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
-     else raise (Reporting_basic.err_unreachable l
+     else raise (Reporting_basic.err_unreachable l __POS__
                    ("Constant propagation error: literal " ^ Big_int.to_string n ^
                        " does not satisfy constraint " ^ string_of_n_constraint nc))
   | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
@@ -1136,10 +1136,10 @@ let apply_pat_choices choices =
           List.fold_left (fun e (id,e') ->
             E_let (LB_aux (LB_val (P_aux (P_id id, dummyannot),e'),dummyannot),E_aux (e,dummyannot))) e subst
        | Pat_aux (Pat_when _,(l,_)) ->
-          raise (Reporting_basic.err_unreachable l
+          raise (Reporting_basic.err_unreachable l __POS__
                    "Pattern acquired a guard after analysis!")
        | exception Not_found ->
-          raise (Reporting_basic.err_unreachable (exp_loc e)
+          raise (Reporting_basic.err_unreachable (exp_loc e) __POS__
                    "Unable to find case I found earlier!"))
     | exception Not_found -> E_case (e,cases)
   in
@@ -1440,7 +1440,7 @@ let split_defs all_errors splits defs =
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _
-      -> raise (Reporting_basic.err_unreachable l
+      -> raise (Reporting_basic.err_unreachable l __POS__
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
   and const_prop_fexps ref_vars substs assigns (FES_aux (FES_Fexps (fes,flag), annot)) =
     FES_aux (FES_Fexps (List.map (const_prop_fexp ref_vars substs assigns) fes, flag), annot)
@@ -2198,7 +2198,7 @@ let change_parameter_pat i = function
                            mk_id "==",
                            E_aux (E_lit lit,annot)), annot) in
      P_aux (P_id var, (l,empty_tannot)), ([],[test])
-  | P_aux (_,(l,_)) -> raise (Reporting_basic.err_unreachable l
+  | P_aux (_,(l,_)) -> raise (Reporting_basic.err_unreachable l __POS__
                                 "Expected variable pattern")
 
 (* TODO: make more precise, preferably with a proper free variables function
@@ -2254,7 +2254,7 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),_) ->
      mk_exp nexp l l'
-  | _ -> raise (Reporting_basic.err_unreachable l
+  | _ -> raise (Reporting_basic.err_unreachable l __POS__
                   "atom stopped being an atom?")
 
 let replace_type env typ =
@@ -2268,7 +2268,7 @@ let replace_type env typ =
                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]) ->
      Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
                        [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
-  | _ -> raise (Reporting_basic.err_unreachable l
+  | _ -> raise (Reporting_basic.err_unreachable l __POS__
                   "atom stopped being an atom?")
 
 
@@ -3149,7 +3149,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _
-      -> raise (Reporting_basic.err_unreachable l
+      -> raise (Reporting_basic.err_unreachable l __POS__
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
 
     | E_var (lexp,e1,e2) ->
@@ -4117,7 +4117,7 @@ let add_bitvector_casts (Defs defs) =
       match typ with
       | Typ_aux (Typ_fn (_,ret,_),_) -> ret
       | Typ_aux (_,l) as typ ->
-         raise (Reporting_basic.err_unreachable l
+         raise (Reporting_basic.err_unreachable l __POS__
                   ("Function clause must have function type: " ^ string_of_typ typ ^
                       " is not a function type"))
     in
