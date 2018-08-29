@@ -1,9 +1,4 @@
-session "Riscv_duopod" in "../../../riscv" = "Sail" +
-  options [document = false]
-  theories
-    Riscv_duopod_lemmas
-
-session "Sail-Manual" = "Riscv_duopod" +
+session "Sail-Manual" = "Sail-RISC-V-Duopod" +
   options [document = pdf, document_output = "output"]
   theories
     Manual

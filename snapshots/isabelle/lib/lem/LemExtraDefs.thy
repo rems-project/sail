@@ -56,9 +56,9 @@ chapter \<open>Auxiliary Definitions needed by Lem\<close>
 theory "LemExtraDefs"
 
 imports
- 	 Main
-   "~~/src/HOL/Library/Permutation"
-   "~~/src/HOL/Library/While_Combinator"
+   Main
+   "HOL-Library.Permutation"
+   "HOL-Library.While_Combinator"
 begin
 
 subsection \<open>General\<close>
@@ -109,7 +109,7 @@ by (induct l) auto
 
 lemma sorted_map_suc :
   "sorted l \<Longrightarrow> sorted (map Suc l)"
-by (induct l) (simp_all add: sorted_Cons)
+by (induct l) (simp_all)
 
 lemma sorted_find_indices :
   "sorted (find_indices P xs)"
@@ -119,7 +119,7 @@ next
   case (Cons x xs)
   from sorted_map_suc[OF this]
   show ?case
-    by (simp add: sorted_Cons)
+    by (simp)
 qed
 
 lemma find_indices_set [simp] :
@@ -159,7 +159,7 @@ next
 
   from sorted_find_indices[of P xs] find_indices_eq
   have "sorted (i # il)" by simp
-  hence i_leq: "\<And>i'. i' \<in> set (i # il) \<Longrightarrow> i \<le> i'" unfolding sorted_Cons by auto
+  hence i_leq: "\<And>i'. i' \<in> set (i # il) \<Longrightarrow> i \<le> i'" by auto
 
   from find_indices_set[of P xs, unfolded find_indices_eq]
   have set_i_il_eq:"\<And>i'. i' \<in> set (i # il) = (i' < length xs \<and> P (xs ! i'))"
@@ -342,15 +342,15 @@ fun sorted_by  :: "('a \<Rightarrow> 'a \<Rightarrow> bool)\<Rightarrow> 'a list
  | "sorted_by cmp (x1 # x2 # xs) = ((cmp x1 x2) \<and> sorted_by cmp (x2 # xs))"
 
 lemma sorted_by_lesseq [simp] :
-  "sorted_by ((op \<le>) :: ('a::{linorder}) => 'a => bool) = sorted"
+  "sorted_by ((\<le>) :: ('a::{linorder}) => 'a => bool) = sorted"
 proof (rule ext)
   fix l :: "'a list"
-  show "sorted_by (op \<le>) l = sorted l"
+  show "sorted_by (\<le>) l = sorted l"
   proof (induct l)
     case Nil thus ?case by simp
   next
     case (Cons x xs)
-    thus ?case by (cases xs) (simp_all)
+    thus ?case by (cases xs) (simp_all del: sorted.simps(2) add: sorted2_simps)
   qed
 qed
 
@@ -688,7 +688,7 @@ next
       thus ?thesis by blast
     next
       case False
-      with xyl_in have "xyl \<in> op # y ` insert_in_list_at_arbitrary_pos x l" by simp
+      with xyl_in have "xyl \<in> (#) y ` insert_in_list_at_arbitrary_pos x l" by simp
       with ind_hyp obtain l1 l2 where "l = l1 @ l2 \<and> xyl = y # l1 @ x # l2"
          by (auto simp add: image_def Bex_def)
       hence "y # l = (y # l1) @ l2 \<and> xyl = (y # l1) @ [x] @ l2" by simp
@@ -857,16 +857,12 @@ subsection \<open>sorting\<close>
 
 subsection \<open>Strings\<close>
 
-lemma explode_str_simp [simp] :
-  "String.explode (STR l) = l"
-by (metis STR_inverse UNIV_I)
-
 declare String.literal.explode_inverse [simp]
 
 subsection \<open>num to string conversions\<close>
 
 definition nat_list_to_string :: "nat list \<Rightarrow> string" where
-  "nat_list_to_string nl = map char_of_nat nl"
+  "nat_list_to_string nl = map char_of nl"
 
 definition is_digit where
   "is_digit (n::nat) = (n < 10)"

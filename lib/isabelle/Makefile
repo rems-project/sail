@@ -25,7 +25,7 @@ heap-img: thys $(EXTRA_THYS) ROOT
 manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	cp output/document/session_graph.pdf manual/document/Sail_session_graph.pdf
 	make -C $(RISCV_DIR) Riscv_duopod.thy
-	isabelle build -d manual Sail-Manual
+	isabelle build -d manual -d $(RISCV_DIR) Sail-Manual
 
 Sail2_instr_kinds.thy: ../../src/lem_interp/sail2_instr_kinds.lem
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<

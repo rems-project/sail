@@ -1,10 +1,10 @@
 (*<*)
 theory Manual
   imports
-    Sail.Sail2_state_lemmas
-    Sail.Sail2_operators_mwords_lemmas
-    Sail.Hoare
-    Riscv_duopod.Riscv_duopod_lemmas
+    "Sail.Sail2_state_lemmas"
+    "Sail.Sail2_operators_mwords_lemmas"
+    "Sail.Hoare"
+    "Sail-RISC-V-Duopod.Riscv_duopod_lemmas"
 begin
 
 declare [[show_question_marks = false]]
