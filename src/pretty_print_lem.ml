@@ -421,8 +421,7 @@ let doc_quant_item vars_included (QI_aux (qi, _)) = match qi with
      None -> doc_var kid
    | Some set -> (*when KidSet.mem kid set -> doc_var kid*)
       let nexps = NexpSet.filter (fun nexp -> KidSet.mem (orig_kid kid) (nexp_frees nexp)) set in
-      separate_map space doc_nexp_lem (NexpSet.elements nexps)
-   | _ -> empty)
+      separate_map space doc_nexp_lem (NexpSet.elements nexps))
 | _ -> empty
 
 let doc_typquant_items_lem vars_included (TypQ_aux(tq,_)) = match tq with
@@ -525,7 +524,8 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
       | _ -> parens (separate_map comma_sp (doc_pat_lem ctxt false) pats))
   | P_list pats -> brackets (separate_map semi (doc_pat_lem ctxt false) pats) (*Never seen but easy in lem*)
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem ctxt true p) (doc_pat_lem ctxt true p')
-  | P_record (_,_) -> empty (* TODO *)
+  | P_string_append _ -> unreachable l __POS__ "Lem doesn't support string append patterns"
+  | P_not _ -> unreachable l __POS__ "Lem doesn't support not patterns"
 
 let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
   | Typ_tup ts -> List.exists typ_needs_printed ts
@@ -1269,6 +1269,7 @@ let doc_rec_lem force_rec (Rec_aux(r,_)) = match r with
 
 let doc_tannot_opt_lem (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem typ)
+  | Typ_annot_opt_none -> empty
 
 let doc_fun_body_lem ctxt exp =
   let doc_exp = doc_exp_lem ctxt false exp in
@@ -1417,6 +1418,7 @@ let rec doc_def_lem def =
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
   | DEF_kind _ -> empty
+  | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
 
 let find_exc_typ defs =
   let is_exc_typ_def = function

@@ -397,7 +397,7 @@ let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
      let kid = mk_kid "n" in
      let var = nvar kid in
      Some (Typ_aux (Typ_exist ([kid], nc_gteq var (nconstant Nat_big_num.zero), atom_typ var),
-                    Generated l))
+                    Parse_ast.Generated l))
   | _ -> None
 
 let expand_range_type typ = Util.option_default typ (maybe_expand_range_type typ)
@@ -725,7 +725,8 @@ let rec doc_pat ctxt apat_needed (P_aux (p,(l,annot)) as pat, typ) =
           | _ -> raise (Reporting_basic.err_unreachable l __POS__ "list pattern not a list")
         in
         doc_op (string "::") (doc_pat ctxt true (p, el_typ)) (doc_pat ctxt true (p', typ))
-     | P_record (_,_) -> empty (* TODO *)
+     | P_string_append _ -> unreachable l __POS__ "Coq doesn't support string append patterns"
+     | P_not _ -> unreachable l __POS__ "Coq doesn't support not patterns"
 
 let contains_early_return exp =
   let e_app (f, args) =
@@ -823,7 +824,7 @@ let replace_atom_return_type ret_typ =
   match ret_typ with
   | Typ_aux (Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp nexp,_)]),l) ->
      let kid = mk_kid "_retval" in (* TODO: collision avoidance *)
-     true, Typ_aux (Typ_exist ([kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Generated l)
+     true, Typ_aux (Typ_exist ([kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Parse_ast.Generated l)
   | _ -> false, ret_typ
 
 let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
@@ -2014,7 +2015,7 @@ let rec doc_def unimplemented def =
   | DEF_internal_mutrec fundefs -> doc_mutrec_lem fundefs ^/^ hardline
   | DEF_val (LB_aux (LB_val (pat, exp), _)) -> doc_val pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
-
+  | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"
   | DEF_kind _ -> empty
 
 let find_exc_typ defs =

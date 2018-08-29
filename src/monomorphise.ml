@@ -575,6 +575,7 @@ let nexp_subst_fns substs =
     | P_record (fps,flag) -> re (P_record (List.map s_fpat fps, flag))
     | P_vector ps -> re (P_vector (List.map s_pat ps))
     | P_vector_concat ps -> re (P_vector_concat (List.map s_pat ps))
+    | P_string_append ps -> re (P_string_append (List.map s_pat ps))
     | P_tup ps -> re (P_tup (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
     | P_cons (p1,p2) -> re (P_cons (s_pat p1, s_pat p2))
@@ -671,6 +672,7 @@ let bindings_from_pat p =
     | P_var (p,kid) -> aux_pat p
     | P_vector ps
     | P_vector_concat ps
+    | P_string_append ps
     | P_app (_,ps)
     | P_tup ps
     | P_list ps
@@ -1023,6 +1025,9 @@ let rec freshen_pat_bindings p =
     | P_vector_concat ps ->
        let ps,vs = List.split (List.map aux ps) in
        mkp (P_vector_concat ps),List.concat vs
+    | P_string_append ps ->
+       let ps,vs = List.split (List.map aux ps) in
+       mkp (P_string_append ps),List.concat vs
     | P_tup ps ->
        let ps,vs = List.split (List.map aux ps) in
        mkp (P_tup ps),List.concat vs
@@ -1865,6 +1870,8 @@ let split_defs all_errors splits defs =
            relist spl (fun ps -> P_vector ps) ps
         | P_vector_concat ps ->
            relist spl (fun ps -> P_vector_concat ps) ps
+        | P_string_append ps ->
+           relist spl (fun ps -> P_string_append ps) ps
         | P_tup ps ->
            relist spl (fun ps -> P_tup ps) ps
         | P_list ps ->
@@ -2108,6 +2115,7 @@ let split_defs all_errors splits defs =
       | DEF_internal_mutrec _
         -> [d]
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
+      | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "mappings should be gone by now"
       | DEF_val lb -> [DEF_val (map_letbind lb)]
       | DEF_scattered sd -> List.map (fun x -> DEF_scattered x) (map_scattered_def sd)
     in
@@ -3350,6 +3358,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
       | P_record (fpats,_) -> of_list (List.map (fun (FP_aux (FP_Fpat (_,p),_)) -> p) fpats)
       | P_vector pats
       | P_vector_concat pats
+      | P_string_append pats
       | P_tup pats
       | P_list pats
         -> of_list pats
