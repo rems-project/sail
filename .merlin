@@ -1,3 +1,4 @@
+FLG -w -3
 FLG -w -26
 FLG -w -32
 
@@ -8,4 +9,4 @@ S src/lem_interp/**
 S src/pprint/**
 S src/test/**
 B src/_build/**
-PKG num str unix uint zarith
+PKG num str unix uint zarith linksem lem
