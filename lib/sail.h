@@ -320,7 +320,8 @@ void random_real(real *rop, unit);
 /* ***** Printing ***** */
 
 void string_of_int(sail_string *str, const sail_int i);
-void string_of_bits(sail_string *str, const sail_bits op);
+void string_of_sail_bits(sail_string *str, const sail_bits op);
+void string_of_mach_bits(sail_string *str, const mach_bits op);
 
 /*
  * Utility function not callable from Sail!

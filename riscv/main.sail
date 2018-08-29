@@ -14,8 +14,9 @@ function main () = {
 
   PC = __GetSlice_int(64, elf_entry(), 0);
   try {
-    init_sys ();
-    loop (elf_tohost())
+    init_platform();
+    init_sys();
+    loop()
   } catch {
     Error_not_implemented(s) => print_string("Error: Not implemented: ", s),
     Error_internal_error() => print("Error: internal error")

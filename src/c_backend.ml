@@ -802,7 +802,7 @@ let compile_funcall l ctx id args typ =
       c_debug (lazy ("Falling back to global env for " ^ string_of_id id)); Env.get_val_spec id ctx.tc_env
   in
   let arg_typs, ret_typ = match fn_typ with
-    | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
+    | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) when not (Env.is_union_constructor id ctx.local_env) -> arg_typs, ret_typ
     | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
     | _ -> assert false
   in
@@ -815,7 +815,7 @@ let compile_funcall l ctx id args typ =
     setup := List.rev arg_setup @ !setup;
     cleanup := arg_cleanup @ !cleanup;
     let have_ctyp = cval_ctyp cval in
-    if ctyp_equal CT_poly ctyp then
+    if is_polymorphic ctyp then
       (F_poly (fst cval), have_ctyp)
     else if ctyp_equal ctyp have_ctyp then
       cval
@@ -836,7 +836,8 @@ let compile_funcall l ctx id args typ =
     ifuncall clexp id setup_args
   else
     let gs = gensym () in
-    iblock [idecl ret_ctyp gs;
+    iblock [icomment "copy call";
+            idecl ret_ctyp gs;
             ifuncall (CL_id (gs, ret_ctyp)) id setup_args;
             icopy l clexp (F_id gs, ret_ctyp);
             iclear ret_ctyp gs]
@@ -902,7 +903,10 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
         let ctor_c_id, ctor_ctyp =
           if is_polymorphic ctor_ctyp then
             let unification = List.map ctyp_suprema (ctyp_unify ctor_ctyp (apat_ctyp ctx apat)) in
-            ctor_c_id ^ "_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification,
+            (if List.length unification > 0 then
+               ctor_c_id ^ "_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification
+             else
+               ctor_c_id),
             ctyp_suprema (apat_ctyp ctx apat)
           else
             ctor_c_id, ctor_ctyp
@@ -1823,7 +1827,6 @@ let flatten_instrs =
   | cdef -> cdef
 
 let rec specialize_variants ctx prior =
-
   let unifications = ref (Bindings.empty) in
 
   let fix_variant_ctyp var_id new_ctors = function
@@ -1832,22 +1835,12 @@ let rec specialize_variants ctx prior =
   in
 
   let specialize_constructor ctx ctor_id ctyp =
-    let ctyps = match ctyp with
-    | CT_tup ctyps -> ctyps
-    | ctyp -> [ctyp]
-    in
-    let mk_tuple = function
-      | [ctyp] -> ctyp
-      | ctyps -> CT_tup ctyps
-    in
     function
-    | I_aux (I_funcall (clexp, extern, id, cvals), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
-       assert (List.length ctyps = List.length cvals);
-
+    | I_aux (I_funcall (clexp, extern, id, [cval]), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
        (* Work out how each call to a constructor in instantiated and add that to unifications *)
-       let unification = List.concat (List.map2 (fun cval ctyp -> List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval))) cvals ctyps) in
+       let unification = List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval)) in
        let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification) in
-       unifications := Bindings.add mono_id (ctyp_suprema (mk_tuple (List.map cval_ctyp cvals))) !unifications;
+       unifications := Bindings.add mono_id (ctyp_suprema (cval_ctyp cval)) !unifications;
 
        (* We need to cast each cval to it's ctyp_suprema in order to put it in the most general constructor *)
        let casts =
@@ -1862,7 +1855,7 @@ let rec specialize_variants ctx prior =
              (F_id gs, suprema),
              [iclear suprema gs]
          in
-         List.map cast_to_suprema cvals
+         List.map cast_to_suprema [cval]
        in
        let setup = List.concat (List.map (fun (setup, _, _) -> setup) casts) in
        let cvals = List.map (fun (_, cval, _) -> cval) casts in
@@ -1876,6 +1869,10 @@ let rec specialize_variants ctx prior =
        in
 
        mk_funcall (I_aux (I_funcall (clexp, extern, mono_id, cvals), aux))
+
+    | I_aux (I_funcall (clexp, extern, id, cvals), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
+       c_error ~loc:l "Multiple argument constructor found"
+
     | instr -> instr
   in
 
@@ -2122,7 +2119,11 @@ let rec codegen_conversion l clexp cval =
      let conversions =
        List.mapi (fun i ctyp -> codegen_conversion l (CL_tuple (clexp, i)) (F_field (fst cval, "ztup" ^ string_of_int i), ctyp)) ctyps_from
      in
-     separate hardline conversions
+     string "  /* conversions */"
+     ^^ hardline
+     ^^ separate hardline conversions
+     ^^ hardline
+     ^^ string "  /* end conversions */"
 
   (* For anything not special cased, just try to call a appropriate CONVERT_OF function. *)
   | _, _ when is_stack_ctyp (clexp_ctyp clexp) ->
@@ -2203,6 +2204,12 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "vector_update", CT_bits64 _ -> "update_mach_bits"
        | "vector_update", CT_bits _ -> "update_sail_bits"
        | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
+       | "string_of_bits", _ ->
+          begin match cval_ctyp (List.nth args 0) with
+          | CT_bits64 _ -> "string_of_mach_bits"
+          | CT_bits _ -> "string_of_sail_bits"
+          | _ -> assert false
+          end
        | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
        | "undefined_vector", CT_bits64 _ -> "UNDEFINED(mach_bits)"
@@ -2442,17 +2449,7 @@ let codegen_type_def ctx = function
            else
              string (Printf.sprintf "COPY(%s)(&op.ztup%d, op%d);" (sgen_ctyp_name ctyp) i i)
          in
-         match ctyp with
-         | CT_tup ctyps ->
-            String.concat ", " (List.mapi (fun i ctyp -> Printf.sprintf "%s op%d" (sgen_ctyp ctyp) i) ctyps),
-            string (Printf.sprintf "%s op;" (sgen_ctyp ctyp)) ^^ hardline
-            ^^ (if not (is_stack_ctyp ctyp) then
-                  string (Printf.sprintf "CREATE(%s)(&op);" (sgen_ctyp_name ctyp)) ^^ hardline
-                else
-                  empty)
-            ^^ separate hardline (List.mapi tuple_set ctyps) ^^ hardline,
-            string (Printf.sprintf "KILL(%s)(&op);" (sgen_ctyp_name ctyp))
-         | ctyp -> Printf.sprintf "%s op" (sgen_ctyp ctyp), empty, empty
+         Printf.sprintf "%s op" (sgen_ctyp ctyp), empty, empty
        in
        string (Printf.sprintf "static void %s(struct %s *rop, %s)" (sgen_id ctor_id) (sgen_id id) ctor_args) ^^ hardline
        ^^ surround 2 0 lbrace
@@ -2776,6 +2773,8 @@ let codegen_def' ctx = function
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
+
+     c_debug (lazy (Pretty_print_sail.to_string (separate_map hardline pp_instr instrs)));
 
      (* Extract type information about the function from the environment. *)
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in

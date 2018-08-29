@@ -166,7 +166,7 @@ let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_have_exception -> "have_exception"
   | F_current_exception -> "(*current_exception)"
   | F_raw raw -> raw
-  | F_poly f -> "POLY(" ^ string_of_fragment ~zencode:zencode f ^ ")"
+  | F_poly f -> string_of_fragment ~zencode:zencode f
 and string_of_fragment' ?zencode:(zencode=true) f =
   match f with
   | F_op _ | F_unary _ -> "(" ^ string_of_fragment ~zencode:zencode f ^ ")"

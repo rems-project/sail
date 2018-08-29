@@ -32,8 +32,11 @@ coverage: _sbuild/coverage.native
 	mkdir bisect && mv bisect*.out bisect/
 	mkdir coverage && bisect-ppx-report -html coverage/ -I _sbuild/ bisect/bisect*.out
 
-riscv.c: $(SAIL_SRCS) Makefile
-	$(SAIL) -O -memo_z3 -c $(SAIL_SRCS) 1> $@
+riscv.c: $(SAIL_SRCS) main.sail Makefile
+	$(SAIL) -O -memo_z3 -c $(SAIL_SRCS) main.sail 1> $@
+
+riscv_c: riscv.c
+	gcc -O2 riscv.c ../lib/*.c -lgmp -lz -I ../lib -o riscv_c
 
 latex: $(SAIL_SRCS) Makefile
 	$(SAIL) -latex -latex_prefix sail -o sail_ltx $(SAIL_SRCS)
@@ -102,5 +105,6 @@ clean:
 	-rm -f platform_main.native platform coverage.native
 	-rm -f riscv.vo riscv_types.vo riscv_extras.vo riscv.v riscv_types.v
 	-rm -f riscv_duopod.vo riscv_duopod_types.vo riscv_duopod.v riscv_duopod_types.v
+	-rm -f riscv.c
 	-Holmake cleanAll
 	ocamlbuild -clean

@@ -586,6 +586,21 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let aval1, wrap = to_aval aexp1 in
      wrap (mk_aexp (AE_short_circuit (SC_or, aval1, aexp2)))
 
+  (* We compile regular Sail functions to C/ANF functions that take
+     mutiple arguments, but constructors are different because they
+     can be destructured, so we pass their arguments as a tuple if
+     there are multiple arguments. *)
+  | E_app (id, exps) when Env.is_union_constructor id (env_of exp) ->
+     let aexps = List.map anf exps in
+     let avals = List.map to_aval aexps in
+     let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
+     begin match avals with
+     | [(aval, _)] ->
+        wrap (mk_aexp (AE_app (id, [aval], typ_of exp)))
+     | _ ->
+        wrap (mk_aexp (AE_app (id, [AV_tuple (List.map fst avals)], typ_of exp)))
+     end
+
   | E_app (id, exps) ->
      let aexps = List.map anf exps in
      let avals = List.map to_aval aexps in

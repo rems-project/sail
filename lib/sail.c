@@ -1068,7 +1068,12 @@ void string_of_int(sail_string *str, const sail_int i)
   gmp_asprintf(str, "%Zd", i);
 }
 
-void string_of_bits(sail_string *str, const sail_bits op)
+void string_of_mach_bits(sail_string *str, const mach_bits op)
+{
+  exit(EXIT_FAILURE);
+}
+
+void string_of_sail_bits(sail_string *str, const sail_bits op)
 {
   if ((op.len % 4) == 0) {
     gmp_asprintf(str, "0x%*0Zx", op.len / 4, *op.bits);
