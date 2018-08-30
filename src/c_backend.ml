@@ -3009,7 +3009,7 @@ let rec get_recursive_functions (Defs defs) =
   | _ :: defs -> get_recursive_functions (Defs defs)
   | [] -> IdSet.empty
 
-let compile_ast ctx (Defs defs) =
+let compile_ast ctx c_includes (Defs defs) =
   try
     c_debug (lazy (Util.log_line __MODULE__ __LINE__ "Identifying recursive functions"));
     let recursive_functions = Spec_analysis.top_sort_defs (Defs defs) |> get_recursive_functions in
@@ -3030,9 +3030,10 @@ let compile_ast ctx (Defs defs) =
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
-                     [ string "#include \"sail.h\"";
-                       string "#include \"rts.h\"";
-                       string "#include \"elf.h\"" ]
+                     ([ string "#include \"sail.h\"";
+                        string "#include \"rts.h\"";
+                        string "#include \"elf.h\"" ]
+                      @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes))
     in
 
     let exn_boilerplate =

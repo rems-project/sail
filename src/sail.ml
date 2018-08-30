@@ -66,6 +66,7 @@ let opt_print_latex = ref false
 let opt_print_coq = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
+let opt_includes_c = ref ([]:string list)
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -109,6 +110,9 @@ let options = Arg.align ([
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
+  ( "-c_include",
+    Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
+    " <filename> provide additional include for C output");
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an elf file so that it can be executed by compiled C code");
@@ -317,7 +321,7 @@ let main() =
          let ast_c = rewrite_ast_c ast in
          let ast_c, type_envs = Specialize.specialize ast_c type_envs in
          let ast_c = Spec_analysis.top_sort_defs ast_c in
-         C_backend.compile_ast (C_backend.initial_ctx type_envs) ast_c
+         C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
        else ());
       (if !(opt_print_lem)
        then

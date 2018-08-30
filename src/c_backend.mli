@@ -70,7 +70,7 @@ type ctx
    should be the environment returned by typechecking the full AST. *)
 val initial_ctx : Env.t -> ctx
 
-val compile_ast : ctx -> tannot Ast.defs -> unit
+val compile_ast : ctx -> string list -> tannot Ast.defs -> unit
 
 val bytecode_ast : ctx -> (cdef list -> cdef list) -> tannot Ast.defs -> cdef list
 
