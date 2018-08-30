@@ -32,10 +32,10 @@ coverage: _sbuild/coverage.native
 	mkdir bisect && mv bisect*.out bisect/
 	mkdir coverage && bisect-ppx-report -html coverage/ -I _sbuild/ bisect/bisect*.out
 
-riscv.c: $(SAIL_SRCS) main.sail Makefile
-	$(SAIL) -O -memo_z3 -c $(SAIL_SRCS) main.sail 1> $@
+riscv.c: $(SAIL_SRCS) main.sail Makefile riscv_prelude.h
+	$(SAIL) -O -memo_z3 -c -c_include "riscv_prelude.h" $(SAIL_SRCS) main.sail 1> $@
 
-riscv_c: riscv.c
+riscv_c: riscv.c Makefile
 	gcc -O2 riscv.c ../lib/*.c -lgmp -lz -I ../lib -o riscv_c
 
 latex: $(SAIL_SRCS) Makefile
