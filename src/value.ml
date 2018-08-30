@@ -110,6 +110,7 @@ let coerce_bit = function
   | _ -> assert false
 
 let coerce_ctor = function
+  | V_ctor (str, [V_tuple vals]) -> (str, vals)
   | V_ctor (str, vals) -> (str, vals)
   | _ -> assert false
 

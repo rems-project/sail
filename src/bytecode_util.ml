@@ -194,6 +194,33 @@ and string_of_ctyp = function
   | CT_ref ctyp -> "ref(" ^ string_of_ctyp ctyp ^ ")"
   | CT_poly -> "*"
 
+(** This function is like string_of_ctyp, but recursively prints all
+   constructors in variants and structs. Used for debug output. *)
+and full_string_of_ctyp = function
+  | CT_int -> "mpz_t"
+  | CT_bits true -> "bv_t(dec)"
+  | CT_bits false -> "bv_t(inc)"
+  | CT_bits64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
+  | CT_bits64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
+  | CT_int64 -> "int64_t"
+  | CT_bit -> "bit"
+  | CT_unit -> "unit"
+  | CT_bool -> "bool"
+  | CT_real -> "real"
+  | CT_tup ctyps -> "(" ^ Util.string_of_list ", " full_string_of_ctyp ctyps ^ ")"
+  | CT_enum (id, _) -> string_of_id id
+  | CT_struct (id, ctors) | CT_variant (id, ctors) ->
+     "struct " ^ string_of_id id
+     ^ "{ "
+     ^ Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ full_string_of_ctyp ctyp) ctors
+     ^ "}"
+  | CT_string -> "string"
+  | CT_vector (true, ctyp) -> "vector(dec, " ^ full_string_of_ctyp ctyp ^ ")"
+  | CT_vector (false, ctyp) -> "vector(inc, " ^ full_string_of_ctyp ctyp ^ ")"
+  | CT_list ctyp -> "list(" ^ full_string_of_ctyp ctyp ^ ")"
+  | CT_ref ctyp -> "ref(" ^ full_string_of_ctyp ctyp ^ ")"
+  | CT_poly -> "*"
+
 let rec map_ctyp f = function
   | (CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly | CT_enum _) as ctyp -> f ctyp
   | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
@@ -254,8 +281,12 @@ let rec ctyp_suprema = function
   | CT_tup ctyps -> CT_tup (List.map ctyp_suprema ctyps)
   | CT_string -> CT_string
   | CT_enum (id, ids) -> CT_enum (id, ids)
-  | CT_struct (id, ctors) -> CT_struct (id, List.map (fun (id, ctyp) -> (id, ctyp_suprema ctyp)) ctors)
-  | CT_variant (id, ctors) -> CT_variant (id, List.map (fun (id, ctyp) -> (id, ctyp_suprema ctyp)) ctors)
+  (* Do we really never want to never call ctyp_suprema on constructor
+     fields?  Doing it causes issues for structs (see
+     test/c/stack_struct.sail) but it might be wrong to not call it
+     for nested variants... *)
+  | CT_struct (id, ctors) -> CT_struct (id, ctors)
+  | CT_variant (id, ctors) -> CT_variant (id, ctors)
   | CT_vector (d, ctyp) -> CT_vector (d, ctyp_suprema ctyp)
   | CT_list ctyp -> CT_list (ctyp_suprema ctyp)
   | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
@@ -631,7 +662,7 @@ let ctype_def_map_ctyp f = function
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (field, ctyp) -> (field, f ctyp)) ctors)
   | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (field, ctyp) -> (field, f ctyp)) ctors)
-                    
+
 (** Map over each ctyp in a cdef using map_instr_ctyp *)
 let cdef_map_ctyp f = function
   | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, f ctyp, List.map (map_instr_ctyp f) instrs)

@@ -2337,6 +2337,8 @@ let codegen_type_def ctx = function
 
   | CTD_struct (id, ctors) ->
      let struct_ctyp = CT_struct (id, ctors) in
+     c_debug (lazy (Printf.sprintf "Generating struct for %s" (full_string_of_ctyp struct_ctyp)));
+
      (* Generate a set_T function for every struct T *)
      let codegen_set (id, ctyp) =
        if is_stack_ctyp ctyp then
