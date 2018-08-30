@@ -857,17 +857,21 @@ val make_the_value : forall n. Z -> itself n
 Definition inline make_the_value x := the_value
 *)
 
-Fixpoint bitlistFromWord {n} w :=
+Fixpoint bitlistFromWord_rev {n} w :=
 match w with
 | WO => []
-| WS b w => b :: bitlistFromWord w
+| WS b w => b :: bitlistFromWord_rev w
 end.
+Definition bitlistFromWord {n} w :=
+  List.rev (@bitlistFromWord_rev n w).
 
-Fixpoint wordFromBitlist l : word (length l) :=
+Fixpoint wordFromBitlist_rev l : word (length l) :=
 match l with
 | [] => WO
-| b::t => WS b (wordFromBitlist t)
+| b::t => WS b (wordFromBitlist_rev t)
 end.
+Definition wordFromBitlist l : word (length l) :=
+  nat_cast _ (List.rev_length l) (wordFromBitlist_rev (List.rev l)).
 
 Local Open Scope nat.
 
