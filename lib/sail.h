@@ -101,6 +101,8 @@ SAIL_BUILTIN_TYPE(sail_int);
 void CREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
 void RECREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
 
+mach_int CREATE_OF(mach_int, sail_int)(const sail_int);
+
 void CREATE_OF(sail_int, sail_string)(sail_int *, const sail_string);
 void RECREATE_OF(sail_int, sail_string)(mpz_t *, const sail_string);
 

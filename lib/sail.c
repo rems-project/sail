@@ -173,6 +173,12 @@ void CREATE_OF(sail_int, mach_int)(sail_int *rop, mach_int op)
 }
 
 inline
+mach_int CREATE_OF(mach_int, sail_int)(const sail_int op)
+{
+  return mpz_get_ui(op);
+}
+
+inline
 void RECREATE_OF(sail_int, mach_int)(sail_int *rop, mach_int op)
 {
   mpz_set_si(*rop, op);

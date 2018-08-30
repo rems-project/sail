@@ -2235,23 +2235,25 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      string (Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
 
   | I_init (ctyp, id, cval) when is_stack_ctyp ctyp ->
-     string (Printf.sprintf "  %s %s = %s;" (sgen_ctyp ctyp) (sgen_id id) (sgen_cval cval))
+     if ctyp_equal ctyp (cval_ctyp cval) then
+       ksprintf string "  %s %s = %s;" (sgen_ctyp ctyp) (sgen_id id) (sgen_cval cval)
+     else
+       ksprintf string "  %s %s = CREATE_OF(%s, %s)(%s);"
+                (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_cval cval)
   | I_init (ctyp, id, cval) ->
-     string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_id id)) ^^ hardline
-     ^^ string (Printf.sprintf "  CREATE_OF(%s, %s)(&%s, %s);"
-                               (sgen_ctyp_name ctyp)
-                               (sgen_ctyp_name (cval_ctyp cval))
-                               (sgen_id id)
-                               (sgen_cval_param cval))
+     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_id id) ^^ hardline
+     ^^ ksprintf string "  CREATE_OF(%s, %s)(&%s, %s);"
+                 (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_id id) (sgen_cval_param cval)
 
   | I_reinit (ctyp, id, cval) when is_stack_ctyp ctyp ->
-     string (Printf.sprintf "  %s %s = %s;" (sgen_ctyp ctyp) (sgen_id id) (sgen_cval cval))
+     if ctyp_equal ctyp (cval_ctyp cval) then
+       ksprintf string "  %s %s = %s;" (sgen_ctyp ctyp) (sgen_id id) (sgen_cval cval)
+     else
+       ksprintf string "  %s %s = CREATE_OF(%s, %s)(%s);"
+                (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_cval cval)
   | I_reinit (ctyp, id, cval) ->
-     string (Printf.sprintf "  RECREATE_OF(%s, %s)(&%s, %s);"
-                            (sgen_ctyp_name ctyp)
-                            (sgen_ctyp_name (cval_ctyp cval))
-                            (sgen_id id)
-                            (sgen_cval_param cval))
+     ksprintf string "  RECREATE_OF(%s, %s)(&%s, %s);"
+              (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_id id) (sgen_cval_param cval)
 
   | I_reset (ctyp, id) when is_stack_ctyp ctyp ->
      string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_id id))
@@ -2262,7 +2264,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      string (Printf.sprintf "  return %s;" (sgen_cval cval))
 
   | I_throw cval ->
-     c_error "I_throw reached code generator"
+     c_error ~loc:l "I_throw reached code generator"
 
   | I_undefined ctyp ->
      let rec codegen_exn_return ctyp =
@@ -3078,7 +3080,7 @@ let compile_ast ctx c_includes (Defs defs) =
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
        @ (if regs = [] then [] else [ "  zinitializze_registers(UNIT);" ])
        @ letbind_initializers
-       @ [  "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);" ]
+       @ [ "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);" ]
        @ [ "  zmain(UNIT);" ]
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
