@@ -132,6 +132,27 @@ void concat_str(sail_string *stro, const sail_string str1, const sail_string str
   strcat(*stro, str2);
 }
 
+bool string_startswith(sail_string s, sail_string prefix)
+{
+  return strstr(s, prefix) == s;
+}
+
+void string_length(sail_int *len, sail_string s)
+{
+  mpz_set_ui(*len, strlen(s));
+}
+
+void string_drop(sail_string *dst, sail_string s, sail_int ns)
+{
+  size_t len = strlen(s);
+  mach_int n = CREATE_OF(mach_int, sail_int)(ns);
+  if (len >= n) {
+    *dst = realloc(*dst, (len - n) + 1);
+    memcpy(*dst, s + n, len - n);
+    (*dst)[len - n] = '\0';
+  }
+}
+
 /* ***** Sail integers ***** */
 
 inline

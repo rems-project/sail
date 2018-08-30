@@ -70,20 +70,19 @@ val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -
 val lt_atom = {coq: "Z.ltb", _: "lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = {coq: "Z.gtb", _: "gt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val eq_int = {ocaml: "eq_int", lem: "eq", coq: "Z.eqb"} : (int, int) -> bool
+val eq_int = {ocaml: "eq_int", lem: "eq", coq: "Z.eqb", c: "eq_int"} : (int, int) -> bool
 val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit", coq: "eq_bit"} : (bit, bit) -> bool
 
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec", coq: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+val eq_vec = {ocaml: "eq_list", lem: "eq_vec", coq: "eq_vec", c: "eq_bits"} : forall 'n. (bits('n), bits('n)) -> bool
 
-val eq_string = {ocaml: "eq_string", lem: "eq", coq: "generic_eq"} : (string, string) -> bool
+val eq_string = {c: "eq_string", ocaml: "eq_string", lem: "eq", coq: "generic_eq"} : (string, string) -> bool
 val string_startswith = "string_startswith" : (string, string) -> bool
 val string_drop = "string_drop" : (string, nat) -> string
 val string_length = "string_length" : string -> nat
-val string_append = "string_append" : (string, string) -> string
+val string_append = {c: "concat_str", _: "string_append"} : (string, string) -> string
 val maybe_int_of_prefix = "maybe_int_of_prefix" : string -> option((int, nat))
 val maybe_nat_of_prefix = "maybe_nat_of_prefix" : string -> option((nat, nat))
 val maybe_int_of_string = "maybe_int_of_string" : string -> option(int)
-
 
 val eq_real = {ocaml: "eq_real", lem: "eq"} : (real, real) -> bool
 
@@ -104,7 +103,7 @@ overload operator == = {eq_atom, eq_int, eq_bit, eq_vec, eq_string, eq_real, eq_
 val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec", coq: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
-val bitvector_access = {ocaml: "access", lem: "access_vec_dec", coq: "access_vec_dec"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
+val bitvector_access = {c: "bitvector_access", ocaml: "access", lem: "access_vec_dec", coq: "access_vec_dec"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
   (bits('n), atom('m)) -> bit
 
 val any_vector_access = {ocaml: "access", lem: "access_list_dec", coq: "vec_access_dec"} : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
@@ -136,7 +135,7 @@ overload append = {bitvector_concat, vector_concat}
 
 val not_bool = {coq: "negb", _: "not"} : bool -> bool
 
-val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
+val not_vec = {c: "not_bits", _: "not_vec"} : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
@@ -160,7 +159,7 @@ overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
 val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
 
-val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_and_vec = {c: "and_bits", ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val and_vec = {lem: "and_vec", coq: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -178,9 +177,9 @@ function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
 overload operator | = {or_bool, or_vec}
 
-val unsigned = {ocaml: "uint", lem: "uint", coq: "uint"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+val unsigned = {ocaml: "uint", lem: "uint", coq: "uint", c: "sail_unsigned"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
-val signed = {ocaml: "sint", lem: "sint", coq: "sint"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+val signed = {ocaml: "sint", lem: "sint", coq: "sint", c: "sail_signed"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 val hex_slice = "hex_slice" : forall 'n 'm, 'n >= 'm. (string, atom('n), atom('m)) -> bits('n - 'm)
 
@@ -231,7 +230,7 @@ val HexStr : int -> string
 
 val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
 
-val xor_vec = "xor_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
+val xor_vec = {c: "xor_bits", _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val int_power = {ocaml: "int_power", lem: "pow", coq: "pow"} : (int, int) -> int
 
@@ -244,9 +243,9 @@ val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range"} : forall
 
 val add_int = {ocaml: "add_int", lem: "integerAdd", coq: "Z.add"} : (int, int) -> int
 
-val add_vec = "add_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
+val add_vec = {c: "add_bits", _: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val add_vec_int = "add_vec_int" : forall 'n. (bits('n), int) -> bits('n)
+val add_vec_int = {c: "add_bits_int", _: "add_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
 
 val add_real = {ocaml: "add_real", lem: "realAdd"} : (real, real) -> real
 
@@ -260,9 +259,9 @@ val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_eq
                lem: "integerMinus", coq: "sub_nat"}
             : (nat, nat) -> nat
 
-val "sub_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
+val sub_vec = {c: "sub_bits", _: "sub_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
+val sub_vec_int = {c: "sub_bits_int", _: "sub_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
 
 val sub_real = {ocaml: "sub_real", lem: "realMinus"} : (real, real) -> real
 
