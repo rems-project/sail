@@ -7,29 +7,31 @@
 */
 
 /* Main memory */
-val plat_ram_base = {ocaml: "Platform.dram_base", lem: "plat_ram_base"} : unit -> xlenbits
-val plat_ram_size = {ocaml: "Platform.dram_size", lem: "plat_ram_size"} : unit -> xlenbits
+val plat_ram_base = {c: "plat_ram_base", ocaml: "Platform.dram_base", lem: "plat_ram_base"} : unit -> xlenbits
+val plat_ram_size = {c: "plat_ram_size", ocaml: "Platform.dram_size", lem: "plat_ram_size"} : unit -> xlenbits
 
 /* whether the MMU should update dirty bits in PTEs */
 val plat_enable_dirty_update = {ocaml: "Platform.enable_dirty_update",
+                                c: "plat_enable_dirty_update",
                                 lem: "plat_enable_dirty_update"} : unit -> bool
 
 /* whether the platform supports misaligned accesses without trapping to M-mode. if false,
  * misaligned loads/stores are trapped to Machine mode.
  */
 val plat_enable_misaligned_access = {ocaml: "Platform.enable_misaligned_access",
+                                     c: "plat_enable_misaligned_access",
                                      lem: "plat_enable_misaligned_access"} : unit -> bool
 
 /* ROM holding reset vector and device-tree DTB */
-val plat_rom_base   = {ocaml: "Platform.rom_base", lem: "plat_rom_base"} : unit -> xlenbits
-val plat_rom_size   = {ocaml: "Platform.rom_size", lem: "plat_rom_size"} : unit -> xlenbits
+val plat_rom_base   = {ocaml: "Platform.rom_base", c: "plat_rom_base", lem: "plat_rom_base"} : unit -> xlenbits
+val plat_rom_size   = {ocaml: "Platform.rom_size", c: "plat_rom_size", lem: "plat_rom_size"} : unit -> xlenbits
 
 /* Location of clock-interface, which should match with the spec in the DTB */
-val plat_clint_base = {ocaml: "Platform.clint_base", lem: "plat_clint_base"} : unit -> xlenbits
-val plat_clint_size = {ocaml: "Platform.clint_size", lem: "plat_clint_size"} : unit -> xlenbits
+val plat_clint_base = {ocaml: "Platform.clint_base", c: "plat_clint_base", lem: "plat_clint_base"} : unit -> xlenbits
+val plat_clint_size = {ocaml: "Platform.clint_size", c: "plat_clint_size", lem: "plat_clint_size"} : unit -> xlenbits
 
 /* Location of HTIF ports */
-val plat_htif_tohost = {ocaml: "Platform.htif_tohost", lem: "plat_htif_tohost"} : unit -> xlenbits
+val plat_htif_tohost = {ocaml: "Platform.htif_tohost", c: "plat_htif_tohost", lem: "plat_htif_tohost"} : unit -> xlenbits
 // todo: fromhost
 
 val phys_mem_segments : unit -> list((xlenbits, xlenbits))
@@ -62,7 +64,7 @@ function within_htif_readable(addr : xlenbits, width : atom('n)) -> forall 'n. b
 
 /* CLINT (Core Local Interruptor), based on Spike. */
 
-val plat_insns_per_tick = {ocaml: "Platform.insns_per_tick", lem: "plat_insns_per_tick"} : unit -> int
+val plat_insns_per_tick = {ocaml: "Platform.insns_per_tick", c: "plat_insns_per_tick", lem: "plat_insns_per_tick"} : unit -> int
 
 // assumes a single hart, since this typically is a vector of per-hart registers.
 register mtimecmp : xlenbits  // memory-mapped internal clint register.
@@ -148,8 +150,8 @@ function tick_clock() = {
 
 /* Basic terminal character I/O. */
 
-val plat_term_write = {ocaml: "Platform.term_write", lem: "plat_term_write"} : bits(8) -> unit
-val plat_term_read  = {ocaml: "Platform.term_read",  lem: "plat_term_read"}  : unit -> bits(8)
+val plat_term_write = {ocaml: "Platform.term_write", c: "plat_term_write", lem: "plat_term_write"} : bits(8) -> unit
+val plat_term_read  = {ocaml: "Platform.term_read",  c: "plat_term_read", lem: "plat_term_read"}  : unit -> bits(8)
 
 /* Spike's HTIF device interface, which multiplexes the above MMIO devices. */
 

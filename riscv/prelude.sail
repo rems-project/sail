@@ -169,7 +169,7 @@ val update_subrange = {ocaml: "update_subrange", lem: "update_subrange_vec_dec",
 val vcons = {lem: "cons_vec"} : forall ('n : Int) ('a : Type).
   ('a, vector('n, dec, 'a)) -> vector('n + 1, dec, 'a)
 
-val bitvector_concat = {ocaml: "append", lem: "concat_vec", coq: "concat_vec"} : forall ('n : Int) ('m : Int).
+val bitvector_concat = {c: "append", ocaml: "append", lem: "concat_vec", coq: "concat_vec"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
 
 val vector_concat = {ocaml: "append", lem: "append_list"} : forall ('n : Int) ('m : Int) ('a : Type).
@@ -264,9 +264,9 @@ val print = "print_endline" : string -> unit
 
 val putchar = "putchar" : forall ('a : Type). 'a -> unit
 
-val concat_str = {ocaml: "concat_str", lem: "stringAppend", coq: "String.append"} : (string, string) -> string
+val concat_str = {c: "concat_str", ocaml: "concat_str", lem: "stringAppend", coq: "String.append"} : (string, string) -> string
 
-val string_of_int = {ocaml: "string_of_int", lem: "stringFromInteger"} : int -> string
+val string_of_int = {c: "string_of_int", ocaml: "string_of_int", lem: "stringFromInteger"} : int -> string
 
 val DecStr : int -> string
 

@@ -2,6 +2,8 @@ SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail ris
 PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
+C_WARNINGS ?= -Wall -Wextra -Wno-unused-label -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
+C_SRCS = riscv_prelude.c riscv_platform.c
 
 export SAIL_DIR
 
@@ -33,10 +35,10 @@ coverage: _sbuild/coverage.native
 	mkdir coverage && bisect-ppx-report -html coverage/ -I _sbuild/ bisect/bisect*.out
 
 riscv.c: $(SAIL_SRCS) main.sail Makefile
-	$(SAIL) -O -memo_z3 -c -c_include riscv_prelude.h $(SAIL_SRCS) main.sail 1> $@
+	$(SAIL) -O -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h $(SAIL_SRCS) main.sail 1> $@
 
-riscv_c: riscv.c riscv_prelude.h riscv_prelude.c Makefile
-	gcc -O2 riscv.c riscv_prelude.c ../lib/*.c -lgmp -lz -I ../lib -o riscv_c
+riscv_c: riscv.c riscv_prelude.h $(C_SRCS) Makefile
+	gcc $(C_WARNINGS) -O2 riscv.c $(C_SRCS) ../lib/*.c -lgmp -lz -I ../lib -o riscv_c
 
 latex: $(SAIL_SRCS) Makefile
 	$(SAIL) -latex -latex_prefix sail -o sail_ltx $(SAIL_SRCS)
