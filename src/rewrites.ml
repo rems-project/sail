@@ -54,6 +54,7 @@ open Ast_util
 open Type_check
 open Spec_analysis
 open Rewriter
+open Extra_pervasives
 
 let (>>) f g = fun x -> g(f(x))
 
@@ -1188,11 +1189,11 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   | P_list pats -> rewrap (E_list (List.map pat_to_exp pats))
   | P_cons (p,ps) -> rewrap (E_cons (pat_to_exp p, pat_to_exp ps))
   | P_string_append (pats) -> begin
-      let empty_string = E_aux (E_lit (L_aux (L_string "", l)), (l, ())) in
+      let empty_string = annot_exp (E_lit (L_aux (L_string "", l))) l env string_typ in
       let string_append str1 str2 =
-        E_aux (E_app (mk_id "string_append", [str1; str2]), (l, ()))
+        annot_exp (E_app (mk_id "string_append", [str1; str2])) l env string_typ
       in
-      check_exp env (List.fold_right string_append (List.map (fun p -> strip_exp (pat_to_exp p)) pats) empty_string) typ
+      (List.fold_right string_append (List.map pat_to_exp pats) empty_string)
     end
 
 and fpat_to_fexp (FP_aux (FP_Fpat (id,pat),(l,annot))) =
@@ -3113,7 +3114,7 @@ let rec rewrite_defs_pat_string_append =
        let new_expr = annot_exp (E_case (drop_exp, [new_pat2_pexp])) unk env (typ_of expr) in
 
        (* construct final result *)
-       annot_pat (P_id id) unk env string_typ, guard1 :: guard2 :: guards, new_expr
+       annot_pat (P_id id) unk env string_typ, [guard1; guard2], new_expr
 
     (*
         (builtin x) ^^ pat2 => expr ---> s# if match maybe_atoi s# {
@@ -3124,7 +3125,7 @@ let rec rewrite_defs_pat_string_append =
                                                  None => false
                                                }
                                          => let (x, len#) = match maybe_int_of_prefix s# {
-                                                              Some (n#, len#) => (n#, len#)
+                                                              Some (x, len#) => (x, len#)
                                                             } in
                                             match string_drop(s#, len#) {
                                               pat2 => expr
@@ -3136,7 +3137,6 @@ let rec rewrite_defs_pat_string_append =
                  :: pats
                ), psa_annot)
          when Env.is_mapping mapping_id env ->
-
        (* common things *)
        let mapping_prefix_func =
          match mapping_id with
@@ -3150,7 +3150,6 @@ let rec rewrite_defs_pat_string_append =
        in
 
        let s_id = fresh_stringappend_id () in
-       let n_id = fresh_stringappend_id () in
        let len_id = fresh_stringappend_id () in
 
        (* construct drop expression -- string_drop(s#, len#) *)
@@ -3163,11 +3162,22 @@ let rec rewrite_defs_pat_string_append =
                                         [annot_exp (E_id s_id) unk env string_typ]))
                         unk env mapping_inner_typ in
        (* construct some pattern -- Some (n#, len#) *)
-       let opt_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [mapping_inner_typ; nat_typ]), unk)] in
+       let opt_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ mapping_inner_typ, unk)] in
+       let tup_arg_pat = match arg_pats with
+         | [] -> assert false
+         | [arg_pat] -> arg_pat
+         | arg_pats -> annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map pat_typ_of arg_pats))
+       in
+
        let some_pat = annot_pat (P_app (mk_id "Some",
-                                        [annot_pat (P_id n_id) unk env mapping_inner_typ;
+                                        [tup_arg_pat;
                                          annot_pat (P_id len_id) unk env nat_typ]))
                         unk env opt_typ in
+       let some_pat, some_pat_env, _ = bind_pat env (strip_pat some_pat) opt_typ in
+
+       (* need to add the Some(...) env to tup_arg_pats for pat_to_exp below as it calls the typechecker *)
+       let tup_arg_pat = map_pat_annot (fun (l, tannot) -> (l, replace_env some_pat_env tannot)) tup_arg_pat in
+
        (* construct None pattern *)
        let none_pat = annot_pat (P_app (mk_id "None", [annot_pat (P_lit (mk_lit L_unit)) unk env unit_typ])) unk env opt_typ in
 
@@ -3193,11 +3203,11 @@ let rec rewrite_defs_pat_string_append =
                                             annot_exp (E_case (func_exp, [
                                                              Pat_aux (Pat_exp (some_pat,
                                                                                annot_exp (E_tuple [
-                                                                                           annot_exp (E_id n_id) unk env mapping_inner_typ;
+                                                                                           pat_to_exp tup_arg_pat;
                                                                                            annot_exp (E_id len_id) unk env nat_typ
-                                                                                 ]) unk env (tuple_typ [mapping_inner_typ; nat_typ])
+                                                                                 ]) unk env mapping_inner_typ
                                                                         ), unkt)
-                                              ])) unk env (tuple_typ [mapping_inner_typ; nat_typ])
+                                              ])) unk env mapping_inner_typ
                            )) unk env mapping_inner_typ in
        let new_letbind =
          match arg_pats with
@@ -3216,7 +3226,7 @@ let rec rewrite_defs_pat_string_append =
 
        (* construct final result *)
        annot_pat (P_id s_id) unk env string_typ,
-       new_guard :: guards,
+       [new_guard],
        new_let
 
     | P_aux (P_string_append [pat], _) ->

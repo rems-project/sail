@@ -1969,6 +1969,10 @@ let replace_typ typ = function
   | Some ((env, _, eff), _) -> Some ((env, typ, eff), None)
   | None -> None
 
+let replace_env env = function
+  | Some ((_, typ, eff), _) -> Some ((env, typ, eff), None)
+  | None -> None
+
 let infer_lit env (L_aux (lit_aux, l) as lit) =
   match lit_aux with
   | L_unit -> unit_typ

@@ -237,6 +237,7 @@ val is_empty_tannot : tannot -> bool
 val destruct_tannot : tannot -> (Env.t * typ * effect) option
 val string_of_tannot : tannot -> string (* For debugging only *)
 val replace_typ : typ -> tannot -> tannot
+val replace_env : Env.t -> tannot -> tannot
 
 (** {2 Removing type annotations} *)
 
