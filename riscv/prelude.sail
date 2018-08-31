@@ -9,6 +9,10 @@ val def_spc : unit <-> string
 
 val hex_bits : forall 'n . (atom('n), bits('n)) <-> string
 
+val hex_bits_3 : bits(3) <-> string
+val hex_bits_3_forwards = "string_of_bits" : bits(3) -> string
+val "hex_bits_3_matches_prefix" : string -> option((bits(3), nat))
+
 val hex_bits_4 : bits(4) <-> string
 val hex_bits_4_forwards = "string_of_bits" : bits(4) -> string
 val "hex_bits_4_matches_prefix" : string -> option((bits(4), nat))
@@ -21,6 +25,26 @@ val hex_bits_6 : bits(6) <-> string
 val hex_bits_6_forwards = "string_of_bits" : bits(6) -> string
 val "hex_bits_6_matches_prefix" : string -> option((bits(6), nat))
 
+val hex_bits_7 : bits(7) <-> string
+val hex_bits_7_forwards = "string_of_bits" : bits(7) -> string
+val "hex_bits_7_matches_prefix" : string -> option((bits(7), nat))
+
+val hex_bits_8 : bits(8) <-> string
+val hex_bits_8_forwards = "string_of_bits" : bits(8) -> string
+val "hex_bits_8_matches_prefix" : string -> option((bits(8), nat))
+
+val hex_bits_9 : bits(9) <-> string
+val hex_bits_9_forwards = "string_of_bits" : bits(9) -> string
+val "hex_bits_9_matches_prefix" : string -> option((bits(9), nat))
+
+val hex_bits_10 : bits(10) <-> string
+val hex_bits_10_forwards = "string_of_bits" : bits(10) -> string
+val "hex_bits_10_matches_prefix" : string -> option((bits(10), nat))
+
+val hex_bits_11 : bits(11) <-> string
+val hex_bits_11_forwards = "string_of_bits" : bits(11) -> string
+val "hex_bits_11_matches_prefix" : string -> option((bits(11), nat))
+
 val hex_bits_12 : bits(12) <-> string
 val hex_bits_12_forwards = "string_of_bits" : bits(12) -> string
 val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
@@ -28,6 +52,18 @@ val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
 val hex_bits_13 : bits(13) <-> string
 val hex_bits_13_forwards = "string_of_bits" : bits(13) -> string
 val "hex_bits_13_matches_prefix" : string -> option((bits(13), nat))
+
+val hex_bits_14 : bits(14) <-> string
+val hex_bits_14_forwards = "string_of_bits" : bits(14) -> string
+val "hex_bits_14_matches_prefix" : string -> option((bits(14), nat))
+
+val hex_bits_15 : bits(15) <-> string
+val hex_bits_15_forwards = "string_of_bits" : bits(15) -> string
+val "hex_bits_15_matches_prefix" : string -> option((bits(15), nat))
+
+val hex_bits_16 : bits(16) <-> string
+val hex_bits_16_forwards = "string_of_bits" : bits(16) -> string
+val "hex_bits_16_matches_prefix" : string -> option((bits(16), nat))
 
 val hex_bits_20 : bits(20) <-> string
 val hex_bits_20_forwards = "string_of_bits" : bits(20) -> string
@@ -37,9 +73,17 @@ val hex_bits_21 : bits(21) <-> string
 val hex_bits_21_forwards = "string_of_bits" : bits(21) -> string
 val "hex_bits_21_matches_prefix" : string -> option((bits(21), nat))
 
+val hex_bits_28 : bits(28) <-> string
+val hex_bits_28_forwards = "string_of_bits" : bits(28) -> string
+val "hex_bits_28_matches_prefix" : string -> option((bits(28), nat))
+
 val hex_bits_32 : bits(32) <-> string
 val hex_bits_32_forwards = "string_of_bits" : bits(32) -> string
 val "hex_bits_32_matches_prefix" : string -> option((bits(32), nat))
+
+val hex_bits_33 : bits(33) <-> string
+val hex_bits_33_forwards = "string_of_bits" : bits(33) -> string
+val "hex_bits_33_matches_prefix" : string -> option((bits(33), nat))
 
 
 val spc_forwards : unit -> string
