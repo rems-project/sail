@@ -810,7 +810,9 @@ let to_ast_mpexp (names,k_env,def_ord) (Parse_ast.MPat_aux(mpexp, l)) =
 
 let to_ast_mapcl (names,k_env,def_ord) (Parse_ast.MCL_aux(mapcl, l)) =
   match mapcl with
-  | Parse_ast.MCL_mapcl (mpexp1, mpexp2) -> MCL_aux (MCL_mapcl (to_ast_mpexp (names,k_env,def_ord) mpexp1, to_ast_mpexp (names,k_env,def_ord) mpexp2), (l, ()))
+  | Parse_ast.MCL_bidir (mpexp1, mpexp2) -> MCL_aux (MCL_bidir (to_ast_mpexp (names,k_env,def_ord) mpexp1, to_ast_mpexp (names,k_env,def_ord) mpexp2), (l, ()))
+  | Parse_ast.MCL_forwards (mpexp, exp) -> MCL_aux (MCL_forwards (to_ast_mpexp (names,k_env,def_ord) mpexp, to_ast_exp k_env def_ord exp), (l, ()))
+  | Parse_ast.MCL_backwards (mpexp, exp) -> MCL_aux (MCL_backwards (to_ast_mpexp (names,k_env,def_ord) mpexp, to_ast_exp k_env def_ord exp), (l, ()))
 
 let to_ast_mapdef (names,k_env,def_ord) (Parse_ast.MD_aux(md,l):Parse_ast.mapdef) : (unit mapdef) envs_out =
   match md with

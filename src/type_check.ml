@@ -4180,22 +4180,39 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
 
 
 let check_mapcl : 'a. Env.t -> 'a mapcl -> typ -> tannot mapcl =
-  fun env (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, _))) typ ->
-        match typ with
-        | Typ_aux (Typ_bidir (typ1, typ2), _) ->
-           begin
-             let testing_env = Env.set_allow_unknowns true env in
-             let left_mpat, _, _ = destruct_mpexp mpexp1 in
-             let _, left_id_env, _ = bind_mpat true Env.empty testing_env (strip_mpat left_mpat) typ1 in
-             let right_mpat, _, _ = destruct_mpexp mpexp2 in
-             let _, right_id_env, _ = bind_mpat true Env.empty testing_env (strip_mpat right_mpat) typ2 in
+  fun env (MCL_aux (cl, (l, _))) typ ->
+    match typ with
+    | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
+        match cl with
+        | MCL_bidir (mpexp1, mpexp2) -> begin
+            let testing_env = Env.set_allow_unknowns true env in
+            let left_mpat, _, _ = destruct_mpexp mpexp1 in
+            let _, left_id_env, _ = bind_mpat true Env.empty testing_env (strip_mpat left_mpat) typ1 in
+            let right_mpat, _, _ = destruct_mpexp mpexp2 in
+            let _, right_id_env, _ = bind_mpat true Env.empty testing_env (strip_mpat right_mpat) typ2 in
 
-             let typed_mpexp1, prop_eff1 = propagate_mpexp_effect (check_mpexp right_id_env env (strip_mpexp mpexp1) typ1) in
-             let typed_mpexp2, prop_eff2 = propagate_mpexp_effect (check_mpexp left_id_env env (strip_mpexp mpexp2) typ2) in
-             MCL_aux (MCL_mapcl (typed_mpexp1, typed_mpexp2), (l, Some ((env, typ, union_effects prop_eff1 prop_eff2), Some typ)))
-           end
-        | _ -> typ_error l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
-
+            let typed_mpexp1, prop_eff1 = propagate_mpexp_effect (check_mpexp right_id_env env (strip_mpexp mpexp1) typ1) in
+            let typed_mpexp2, prop_eff2 = propagate_mpexp_effect (check_mpexp left_id_env env (strip_mpexp mpexp2) typ2) in
+            MCL_aux (MCL_bidir (typed_mpexp1, typed_mpexp2), (l, Some ((env, typ, union_effects prop_eff1 prop_eff2), Some typ)))
+          end
+        | MCL_forwards (mpexp, exp) -> begin
+            let mpat, _, _ = destruct_mpexp mpexp in
+            let _, mpat_env, _ = bind_mpat false Env.empty env (strip_mpat mpat) typ1 in
+            let typed_mpexp, prop_eff1 = propagate_mpexp_effect (check_mpexp Env.empty env (strip_mpexp mpexp) typ1) in
+            let typed_exp = propagate_exp_effect (check_exp mpat_env (strip_exp exp) typ2) in
+            let prop_effs = union_effects prop_eff1 (effect_of typed_exp) in
+            MCL_aux (MCL_forwards (typed_mpexp, typed_exp), (l, Some ((env, typ, prop_effs), Some typ)))
+          end
+        | MCL_backwards (mpexp, exp) -> begin
+            let mpat, _, _ = destruct_mpexp mpexp in
+            let _, mpat_env, _ = bind_mpat false Env.empty env (strip_mpat mpat) typ2 in
+            let typed_mpexp, prop_eff1 = propagate_mpexp_effect (check_mpexp Env.empty env (strip_mpexp mpexp) typ2) in
+            let typed_exp = propagate_exp_effect (check_exp mpat_env (strip_exp exp) typ1) in
+            let prop_effs = union_effects prop_eff1 (effect_of typed_exp) in
+            MCL_aux (MCL_backwards (typed_mpexp, typed_exp), (l, Some ((env, typ, prop_effs), Some typ)))
+          end
+      end
+    | _ -> typ_error l ("Mapping clause must have mapping type: " ^ string_of_typ typ ^ " is not a mapping type")        
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   match annot with
@@ -4203,7 +4220,7 @@ let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   | None -> no_effect (* Maybe could be assert false. This should never happen *)
 
 
-let mapcl_effect (MCL_aux (MCL_mapcl _, (l, annot))) =
+let mapcl_effect (MCL_aux (_, (l, annot))) =
   match annot with
   | Some ((_, _, eff), _) -> eff
   | None -> no_effect (* Maybe could be assert false. This should never happen *)

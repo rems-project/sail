@@ -250,6 +250,7 @@ rule token = parse
   | ">="				{ (GtEq(r">=")) }
   | "->"                                { MinusGt }
   | "<->"                               { Bidir }
+  | "<-"                                { LtMinus }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
   | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf) }

@@ -919,7 +919,10 @@ mpexp :: 'MPat_' ::=
 mapcl :: 'MCL_' ::=
   {{ com mapping clause (bidirectional pattern-match) }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | mpexp1 <-> mpexp2 :: :: mapcl
+  | mpexp1 <-> mpexp2 :: :: bidir
+  | mpexp   => exp    :: :: forwards
+  | mpexp  <-  exp     :: :: backwards
+
 
 mapdef :: 'MD_' ::=
   {{ com mapping definition (bidirectional pattern-match function) }}

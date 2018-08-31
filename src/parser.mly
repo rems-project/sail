@@ -117,7 +117,9 @@ let mk_default d n m = DT_aux (d, loc n m)
 
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
-let mk_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_mapcl (mpexp1, mpexp2), loc n m)
+let mk_bidir_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_bidir (mpexp1, mpexp2), loc n m)
+let mk_forwards_mapcl mpexp exp n m = MCL_aux (MCL_forwards (mpexp, exp), loc n m)
+let mk_backwards_mapcl mpexp exp n m = MCL_aux (MCL_backwards (mpexp, exp), loc n m)
 let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n m)
 
 let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
@@ -185,7 +187,7 @@ let rec desugar_rchain chain s e =
 
 %token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
-%token MinusGt Bidir
+%token MinusGt Bidir LtMinus
 
 /*Terminals with content*/
 
@@ -1275,15 +1277,24 @@ atomic_mpat:
 
 
 
-mpexp:
+%inline mpexp:
   | mpat
     { mk_mpexp (MPat_pat $1) $startpos $endpos }
   | mpat If_ exp
     { mk_mpexp (MPat_when ($1, $3)) $startpos $endpos }
 
+
 mapcl:
   | mpexp Bidir mpexp
-    { mk_mapcl $1 $3 $startpos $endpos }
+    { mk_bidir_mapcl $1 $3 $startpos $endpos }
+  | mpexp EqGt exp
+      { mk_forwards_mapcl $1 $3 $startpos $endpos }
+  | mpexp LtMinus exp
+      { mk_backwards_mapcl $1 $3 $startpos $endpos }
+  (* | exp LtMinus pat
+   *   { mk_backwards_mapcl (mk_pexp (Pat_exp ($3, $1)) $startpos $endpos) $startpos $endpos }
+   * | exp LtMinus pat If_ exp
+   *   { mk_backwards_mapcl (mk_pexp (Pat_when ($3, $5, $1)) $startpos $endpos) $startpos $endpos } *)
 
 mapcl_list:
   | mapcl

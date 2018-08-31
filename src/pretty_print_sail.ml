@@ -471,10 +471,21 @@ let doc_mpexp (MPat_aux (mpexp, _)) =
   | MPat_pat mpat -> doc_mpat mpat
   | MPat_when (mpat, guard) -> doc_mpat mpat ^^ space ^^ string "if" ^^ space ^^ doc_exp guard
 
-let doc_mapcl (MCL_aux (MCL_mapcl (mpexp1, mpexp2), _)) =
-  let left = doc_mpexp mpexp1 in
-  let right = doc_mpexp mpexp2 in
-  left ^^ space ^^ string "<->" ^^ space ^^ right
+let doc_mapcl (MCL_aux (cl, _)) =
+  match cl with
+  | MCL_bidir (mpexp1, mpexp2) ->
+     let left = doc_mpexp mpexp1 in
+     let right = doc_mpexp mpexp2 in
+     separate space [left; string "<->"; right]
+  | MCL_forwards (mpexp, exp) ->
+     let left = doc_mpexp mpexp in
+     let right = doc_exp exp in
+     separate space [left; string "=>"; right]
+  | MCL_backwards (mpexp, exp) ->
+     let left = doc_mpexp mpexp in
+     let right = doc_exp exp in
+     separate space [left; string "<-"; right]
+
 
 let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
   match mapcls with

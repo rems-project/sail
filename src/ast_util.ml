@@ -457,8 +457,13 @@ and map_mpexp_annot_aux f = function
   | MPat_pat mpat -> MPat_pat (map_mpat_annot f mpat)
   | MPat_when (mpat, guard) -> MPat_when (map_mpat_annot f mpat, map_exp_annot f guard)
 
-and map_mapcl_annot f (MCL_aux (MCL_mapcl (mpexp1, mpexp2), annot)) =
-  MCL_aux (MCL_mapcl (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), f annot)
+and map_mapcl_annot f = function
+  | (MCL_aux (MCL_bidir (mpexp1, mpexp2), annot)) ->
+     MCL_aux (MCL_bidir (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), f annot)
+  | (MCL_aux (MCL_forwards (mpexp, exp), annot)) ->
+     MCL_aux (MCL_forwards (map_mpexp_annot f mpexp, map_exp_annot f exp), f annot)
+  | (MCL_aux (MCL_backwards (mpexp, exp), annot)) ->
+     MCL_aux (MCL_backwards (map_mpexp_annot f mpexp, map_exp_annot f exp), f annot)
 
 and map_mpat_annot f (MP_aux (mpat, annot)) = MP_aux (map_mpat_annot_aux f mpat, f annot)
 and map_mpat_annot_aux f = function

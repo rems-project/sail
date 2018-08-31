@@ -3996,12 +3996,43 @@ let rewrite_defs_realise_mappings (Defs defs) =
     | MPat_aux (MPat_pat mpat, annot) -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
     | MPat_aux (MPat_when (mpat, guard), annot) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
   in
-  let realise_mapcl forwards id (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, ()))) =
-    realise_mpexps forwards mpexp1 mpexp2
+  let realise_single_mpexp mpexp exp =
+    match mpexp with
+    | MPat_aux (MPat_pat mpat, annot) ->
+       Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
+    | MPat_aux (MPat_when (mpat, guard), annot) ->
+       Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
   in
-  let realise_bool_mapcl forwards id (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, ()))) =
-    let mpexp = if forwards then mpexp1 else mpexp2 in
-    realise_mpexps true mpexp (mk_mpexp (MPat_pat (mk_mpat (MP_lit (mk_lit L_true)))))
+  let realise_mapcl forwards id mapcl =
+    match mapcl with
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, ()))) ->
+       [realise_mpexps forwards mpexp1 mpexp2]
+    | (MCL_aux (MCL_forwards (mpexp, exp), (l, ()))) ->
+       if forwards then
+         [realise_single_mpexp mpexp exp]
+       else
+         []
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) ->
+       if forwards then
+         []
+       else
+         [realise_single_mpexp mpexp exp]
+  in
+  let realise_bool_mapcl forwards id mapcl =
+    match mapcl with
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, ()))) ->
+       let mpexp = if forwards then mpexp1 else mpexp2 in
+       [realise_mpexps true mpexp (mk_mpexp (MPat_pat (mk_mpat (MP_lit (mk_lit L_true)))))]
+    | (MCL_aux (MCL_forwards (mpexp, exp), (l, ()))) ->
+       if forwards then
+         [realise_single_mpexp mpexp (mk_lit_exp L_true)]
+       else
+         []
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) ->
+       if forwards then
+         []
+       else
+         [realise_single_mpexp mpexp (mk_lit_exp L_true)]
   in
   let arg_id = mk_id "arg#" in
   let arg_exp = (mk_exp (E_id arg_id)) in
@@ -4017,21 +4048,36 @@ let rewrite_defs_realise_mappings (Defs defs) =
     | MPat_aux (MPat_when (mpat, guard), aux_annot) ->
        MPat_aux (MPat_when (mk_mpat (MP_string_append [mpat; mk_mpat (MP_id placeholder_id)]), guard), aux_annot)
   in
-  let realise_prefix_mapcl forwards id (MCL_aux (MCL_mapcl (mpexp1, mpexp2), (l, ()))) =
-    let mpexp = if forwards then mpexp1 else mpexp2 in
-    let other = if forwards then mpexp2 else mpexp1 in
+  let realise_prefix_mapcl forwards id mapcl =
     let strlen = (
         mk_mpat (MP_app ( mk_id "sub_nat",
-                     [
-                       mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id arg_id        )]));
-                       mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id placeholder_id)]));
-                     ]
+                          [
+                            mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id arg_id        )]));
+                            mk_mpat (MP_app ( mk_id "string_length" , [mk_mpat (MP_id placeholder_id)]));
+                          ]
           ))
       ) in
-    match other with
-    | MPat_aux (MPat_pat mpat2, _)
-      | MPat_aux (MPat_when (mpat2, _), _)->
-       realise_mpexps true (append_placeholder mpexp) (mk_mpexp (MPat_pat (mk_mpat (MP_app ((mk_id "Some"), [ mk_mpat (MP_tup [mpat2; strlen]) ])))))
+    match mapcl with
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, ()))) -> begin
+       let mpexp = if forwards then mpexp1 else mpexp2 in
+       let other = if forwards then mpexp2 else mpexp1 in
+       match other with
+       | MPat_aux (MPat_pat mpat2, _)
+         | MPat_aux (MPat_when (mpat2, _), _)->
+          [realise_mpexps true (append_placeholder mpexp) (mk_mpexp (MPat_pat (mk_mpat (MP_app ((mk_id "Some"), [ mk_mpat (MP_tup [mpat2; strlen]) ])))))]
+      end
+    | (MCL_aux (MCL_forwards (mpexp, exp), (l, ()))) -> begin
+        if forwards then
+          [realise_single_mpexp (append_placeholder mpexp) (mk_exp (E_app ((mk_id "Some"), [mk_exp (E_tuple [exp; exp_of_mpat strlen])])))]
+        else
+          []
+      end
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) -> begin
+        if forwards then
+          []
+        else
+          [realise_single_mpexp (append_placeholder mpexp) (mk_exp (E_app ((mk_id "Some"), [mk_exp (E_tuple [exp; exp_of_mpat strlen])])))]
+      end
   in
   let realise_mapdef (MD_aux (MD_mapping (id, _, mapcls), ((l, (tannot:tannot)) as annot))) =
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
@@ -4066,12 +4112,12 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let backwards_matches_spec, env = Type_check.check_val_spec env backwards_matches_spec in
 
     let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
-    let forwards_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls))) in
-    let backwards_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl false backwards_id) mapcls))) in
+    let forwards_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls) |> List.flatten))) in
+    let backwards_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl false backwards_id) mapcls) |> List.flatten))) in
 
     let wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_lit (mk_lit L_false)))) in
-    let forwards_matches_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_bool_mapcl true forwards_matches_id) mapcls) @ [wildcard])) in
-    let backwards_matches_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_bool_mapcl false backwards_matches_id) mapcls) @ [wildcard])) in
+    let forwards_matches_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_bool_mapcl true forwards_matches_id) mapcls) |> List.flatten) @ [wildcard])) in
+    let backwards_matches_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_bool_mapcl false backwards_matches_id) mapcls) |> List.flatten) @ [wildcard])) in
 
     let forwards_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl forwards_id arg_pat forwards_match]), (l, ()))) in
     let backwards_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl backwards_id arg_pat backwards_match]), (l, ()))) in
@@ -4094,7 +4140,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
               let forwards_prefix_typ = Typ_aux (Typ_fn (typ1, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
               let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
               let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
-              let forwards_prefix_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) @ [prefix_wildcard])) in
+              let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
               let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
               typ_debug (lazy (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)));
               let forwards_prefix_fun, _ = Type_check.check_fundef env forwards_prefix_fun in
@@ -4104,7 +4150,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
                 let backwards_prefix_typ = Typ_aux (Typ_fn (typ2, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
                 let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
                 let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
-                let backwards_prefix_match = mk_exp (E_case (arg_exp, (List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) @ [prefix_wildcard])) in
+                let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
                 let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
                 typ_debug (lazy (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)));
                 let backwards_prefix_fun, _ = Type_check.check_fundef env backwards_prefix_fun in
