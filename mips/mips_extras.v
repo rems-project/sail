@@ -161,6 +161,12 @@ Definition putchar {T} (_:T) : unit := tt.
 Require DecimalString.
 Definition string_of_int z := DecimalString.NilZero.string_of_int (Z.to_int z).
 
+Lemma __MIPS_read_lemma : forall width, 8 * width = 8 * (8 * width ÷ 8).
+intros.
+rewrite Z.mul_comm.
+rewrite Z.quot_mul; auto with zarith.
+Qed.
+Hint Resolve __MIPS_read_lemma : sail.
 
 Lemma MEMr_wrapper_lemma : forall size : Z, 8 * size = 8 * (8 * (8 * size ÷ 8) ÷ 8).
 intros.

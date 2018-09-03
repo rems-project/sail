@@ -1,11 +1,14 @@
---- riscv.v.orig	2018-08-16 12:28:27.055298575 +0100
-+++ riscv.v	2018-08-16 13:23:19.684380827 +0100
-@@ -7706,14 +7706,13 @@
+--- riscv.v.plain	2018-08-29 16:46:33.534052809 +0100
++++ riscv.v	2018-08-29 16:48:44.854865657 +0100
+@@ -8409,14 +8409,16 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
--Fixpoint walk39 (vaddr : mword 39) (ac : AccessType) (priv : Privilege) (mxr : bool) (do_sum : bool) (ptb : mword 56) '((existT _ level _) : {n : Z & ArithFact (n >=
+-Fixpoint walk39 (vaddr : mword 39) (ac : AccessType) (priv : Privilege) (mxr : bool) (do_sum : bool) (ptb : mword 56) '(existT _ level _ : {n : Z & ArithFact (n >=
 -  0)}) (global : bool) 
++Hint Unfold PAGESIZE_BITS : sail.
++Hint Unfold SV39_LEVEL_BITS : sail.
++
 +Fixpoint walk39 (vaddr : mword 39) (ac : AccessType) (priv : Privilege) (mxr : bool) (do_sum : bool) (ptb : mword 56) (level : nat) (global : bool) 
  : M (PTW_Result) :=
     let va := Mk_SV39_Vaddr vaddr in
@@ -17,13 +20,14 @@
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
     phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false >>= fun w__0 : MemoryOpResult (mword 64) =>
-@@ -7726,26 +7725,26 @@
+@@ -8429,27 +8431,27 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
-        (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure PTW_Invalid_PTE)  : PTW_Result )
+        (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure (PTW_Invalid_PTE))  : PTW_Result )
          else if ((isPTEPtr pbits)) then
 -          (if sumbool_of_bool ((Z.eqb level 0)) then
 +          (match level with O =>
-              returnm ((PTW_Failure PTW_Invalid_PTE)
+              returnm ((PTW_Failure
+                          (PTW_Invalid_PTE))
                : PTW_Result )
 -           else
 +           | S level' =>
@@ -36,7 +40,7 @@
             : M (PTW_Result)
          else
            checkPTEPermission ac priv mxr do_sum pattr >>= fun w__3 : bool =>
-           returnm ((if ((negb w__3)) then PTW_Failure PTW_No_Permission
+           returnm ((if ((negb w__3)) then PTW_Failure (PTW_No_Permission)
 -                    else if sumbool_of_bool ((Z.gtb level 0)) then
 +                    else if sumbool_of_bool (Nat.ltb O level) then
                        let mask :=
@@ -49,39 +53,33 @@
 +                             (Z.mul (Z.of_nat level) SV39_LEVEL_BITS)) 1 in
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
-                         PTW_Failure PTW_Misaligned
-@@ -7754,15 +7753,18 @@
+                         PTW_Failure
+@@ -8459,12 +8461,12 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
-                         PTW_Success (concat_vec ppn (_get_SV39_Vaddr_PgOfs va),pte,pte_addr,build_ex
--                        level,is_global)
-+                        (Z.of_nat level),is_global)
+                         PTW_Success
+-                          (concat_vec ppn (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex level,
++                          (concat_vec ppn (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex (Z.of_nat level),
+                           is_global)
                      else
-                       PTW_Success (concat_vec (_get_SV39_PTE_PPNi pte) (_get_SV39_Vaddr_PgOfs va),pte,pte_addr,build_ex
--                      level,is_global))
-+                      (Z.of_nat level),is_global))
+                       PTW_Success
+                         (concat_vec (_get_SV39_PTE_PPNi pte) (_get_SV39_Vaddr_PgOfs va), pte,
+-                        pte_addr, build_ex level, is_global))
++                        pte_addr, build_ex (Z.of_nat level), is_global))
             : PTW_Result))
          : M (PTW_Result)
      end)
-     : M (PTW_Result).
- 
-+Hint Unfold PAGESIZE_BITS : sail.
-+Hint Unfold SV39_LEVEL_BITS : sail.
-+
- Definition make_TLB39_Entry (asid : mword 16) (global : bool) (vAddr : mword 39) (pAddr : mword 56) (pte : SV39_PTE) '((existT _ level _) : {n : Z & ArithFact (n >=
-   0)}) (pteAddr : mword 56) 
- : M (TLB39_Entry) :=
-@@ -7878,7 +7880,7 @@
+@@ -8590,7 +8592,7 @@
          : M (TR39_Result)
      | None =>
         curPTB39 tt >>= fun w__6 : mword 56 =>
 -       walk39 vAddr ac priv mxr do_sum w__6 (build_ex level) false >>= fun w__7 : PTW_Result =>
 +       walk39 vAddr ac priv mxr do_sum w__6 (Z.to_nat level) false >>= fun w__7 : PTW_Result =>
         (match w__7 with
-         | PTW_Failure (f) => returnm ((TR39_Failure f)  : TR39_Result )
+         | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -7955,7 +7957,7 @@
-     | Sbare => returnm ((TR_Address vAddr)  : TR_Result )
+@@ -8670,7 +8672,7 @@
+     | Sbare => returnm ((TR_Address (vAddr))  : TR_Result )
      | SV39 =>
         translate39 (subrange_vec_dec vAddr 38 0) ac effPriv mxr do_sum
 -         (build_ex (projT1 (sub_range (build_ex SV39_LEVELS) (build_ex 1)))) >>= fun w__7 : TR39_Result =>
@@ -89,7 +87,55 @@
         returnm ((match w__7 with
                   | TR39_Address (pa) => TR_Address (EXTZ 64 pa)
                   | TR39_Failure (f) => TR_Failure (translationException ac f)
-@@ -10861,11 +10863,11 @@
+@@ -11523,7 +11525,7 @@
+           (tt))
+    else None.
+ 
+-Fixpoint execute_WFI '(tt : unit) 
++Definition execute_WFI '(tt : unit) 
+ : M (bool) :=
+    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
+    (match w__0 with
+@@ -11555,7 +11557,7 @@
+    returnm (true
+     : bool).
+ 
+-Fixpoint execute_THREAD_START '(tt : unit)  : bool := true.
++Definition execute_THREAD_START '(tt : unit)  : bool := true.
+ 
+ Fixpoint execute_STORECON (aq : bool) (rl : bool) (rs2 : mword 5) (rs1 : mword 5) (width : word_width) (rd : mword 5) 
+ : M (bool) :=
+@@ -11684,9 +11686,9 @@
+        : M (bool))
+     : M (bool).
+ 
+-Fixpoint execute_STOP_FETCHING '(tt : unit)  : bool := true.
++Definition execute_STOP_FETCHING '(tt : unit)  : bool := true.
+ 
+-Fixpoint execute_SRET '(tt : unit) 
++Definition execute_SRET '(tt : unit) 
+ : M (bool) :=
+    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
+    match w__0 with
+@@ -11930,7 +11932,7 @@
+    returnm (true
+     : bool).
+ 
+-Fixpoint execute_NOP '(tt : unit)  : bool := true.
++Definition execute_NOP '(tt : unit)  : bool := true.
+ 
+ Fixpoint execute_MULW (rs2 : mword 5) (rs1 : mword 5) (rd : mword 5) 
+ : M (bool) :=
+@@ -11972,7 +11974,7 @@
+    returnm (true
+     : bool).
+ 
+-Fixpoint execute_MRET '(tt : unit) 
++Definition execute_MRET '(tt : unit) 
+ : M (bool) :=
+    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
+    (if ((eq_vec ((privLevel_to_bits w__0)  : mword 2) ((privLevel_to_bits Machine)  : mword 2)))
+@@ -12011,11 +12013,11 @@
            (match width with
             | WORD =>
                mem_read addr 4 aq rl true >>= fun w__2 : MemoryOpResult (mword 32) =>
@@ -103,7 +149,7 @@
                 : M (bool)
             | _ => (internal_error "LOADRES expected WORD or DOUBLE")  : M (bool)
             end)
-@@ -10888,19 +10890,19 @@
+@@ -12040,19 +12042,19 @@
            (match width with
             | BYTE =>
                mem_read addr 1 aq rl false >>= fun w__3 : MemoryOpResult (mword 8) =>
@@ -127,16 +173,54 @@
                 : M (bool)
             end)
             : M (bool)
-@@ -11017,7 +11019,7 @@
+@@ -12083,7 +12085,7 @@
+ 
+ Fixpoint execute_ILLEGAL (s : mword 32)  : M (bool) := handle_illegal tt >> returnm (false  : bool).
+ 
+-Fixpoint execute_FENCEI '(tt : unit)  : bool := true.
++Definition execute_FENCEI '(tt : unit)  : bool := true.
+ 
+ Fixpoint execute_FENCE (pred : mword 4) (succ : mword 4) 
+ : M (bool) :=
+@@ -12139,7 +12141,7 @@
+    returnm (true
+     : bool).
+ 
+-Fixpoint execute_ECALL '(tt : unit) 
++Definition execute_ECALL '(tt : unit) 
+ : M (bool) :=
+    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
+    let t : sync_exception :=
+@@ -12155,7 +12157,7 @@
+    handle_exception w__1 (CTL_TRAP (t)) w__2 >>= fun w__3 : mword 64 =>
+    write_reg nextPC_ref w__3 >> returnm (false  : bool).
+ 
+-Fixpoint execute_EBREAK '(tt : unit) 
++Definition execute_EBREAK '(tt : unit) 
+ : M (bool) :=
+    (read_reg PC_ref  : M (mword 64)) >>= fun w__0 : xlenbits =>
+    handle_mem_exception w__0 E_Breakpoint >> returnm (false  : bool).
+@@ -12177,8 +12179,8 @@
       if sumbool_of_bool ((andb s
                              (Z.gtb q (projT1 (sub_range (build_ex (projT1 (pow2 31))) (build_ex 1))))))
       then
--       projT1 (sub_range (build_ex 0) ((ex_int (pow 2 31))  : {n : Z & ArithFact (True)}))
-+        (Z.sub ( 0) ((pow 2 31)))
+-       projT1 (sub_range (build_ex 0)
+-                 (build_ex (projT1 ((build_ex (projT1 (ex_int (pow 2 31))))
++        (Z.sub ( 0)
++                 ( (projT1 ((build_ex (projT1 (ex_int (pow 2 31))))
+                   : {n : Z & ArithFact (True)}))))
       else q in
-    wX (projT1 ((regbits_to_regno rd)  : {n : Z & ArithFact (0 <= n /\ (n + 1) <= 32)}))
-      (EXTS 64 (to_bits 32 q')) >>
-@@ -11121,11 +11123,11 @@
+    wX
+@@ -12205,7 +12207,7 @@
+    returnm (true
+     : bool).
+ 
+-Fixpoint execute_C_ILLEGAL '(tt : unit)  : M (bool) := handle_illegal tt >> returnm (false  : bool).
++Definition execute_C_ILLEGAL '(tt : unit)  : M (bool) := handle_illegal tt >> returnm (false  : bool).
+ 
+ Fixpoint execute_C_ADDIW (imm : mword 6) (rsd : mword 5) 
+ : M (bool) :=
+@@ -12300,11 +12302,11 @@
             match width with
             | WORD =>
                mem_read addr 4 aq (andb aq rl) true >>= fun w__4 : MemoryOpResult (mword 32) =>
@@ -150,7 +234,7 @@
                 : MemoryOpResult (mword 64))
             | _ => (internal_error "AMO expected WORD or DOUBLE")  : M (MemoryOpResult (mword 64))
             end >>= fun rval : MemoryOpResult xlenbits =>
-@@ -11187,134 +11189,140 @@
+@@ -12371,138 +12373,144 @@
     returnm (true
      : bool).
  
@@ -164,183 +248,187 @@
          concat_vec (vec_of_bits [B0;B0]  : mword 2)
            (concat_vec nzimm (vec_of_bits [B0;B0]  : mword 2)) in
        let rd := creg2reg_bits rdc in
--      (execute (ITYPE (imm,sp,rd,RISCV_ADDI)))
+-      (execute (ITYPE (imm, sp, rd, RISCV_ADDI)))
 -       : M (bool)
-+      ( (ITYPE (imm,sp,rd,RISCV_ADDI)))
++      ( (ITYPE (imm, sp, rd, RISCV_ADDI)))
 +       
     | C_LW (uimm,rsc,rdc) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
        let rd := creg2reg_bits rdc in
        let rs := creg2reg_bits rsc in
--      (execute (LOAD (imm,rs,rd,false,WORD,false,false)))
+-      (execute (LOAD (imm, rs, rd, false, WORD, false, false)))
 -       : M (bool)
-+      ( (LOAD (imm,rs,rd,false,WORD,false,false)))
++      ( (LOAD (imm, rs, rd, false, WORD, false, false)))
 +       
     | C_LD (uimm,rsc,rdc) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
        let rd := creg2reg_bits rdc in
        let rs := creg2reg_bits rsc in
--      (execute (LOAD (imm,rs,rd,false,DOUBLE,false,false)))
+-      (execute (LOAD (imm, rs, rd, false, DOUBLE, false, false)))
 -       : M (bool)
-+      ( (LOAD (imm,rs,rd,false,DOUBLE,false,false)))
++      ( (LOAD (imm, rs, rd, false, DOUBLE, false, false)))
 +       
     | C_SW (uimm,rsc1,rsc2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
        let rs1 := creg2reg_bits rsc1 in
        let rs2 := creg2reg_bits rsc2 in
--      (execute (STORE (imm,rs2,rs1,WORD,false,false)))
+-      (execute (STORE (imm, rs2, rs1, WORD, false, false)))
 -       : M (bool)
-+      ( (STORE (imm,rs2,rs1,WORD,false,false)))
++      ( (STORE (imm, rs2, rs1, WORD, false, false)))
 +       
     | C_SD (uimm,rsc1,rsc2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
        let rs1 := creg2reg_bits rsc1 in
        let rs2 := creg2reg_bits rsc2 in
--      (execute (STORE (imm,rs2,rs1,DOUBLE,false,false)))
+-      (execute (STORE (imm, rs2, rs1, DOUBLE, false, false)))
 -       : M (bool)
-+      ( (STORE (imm,rs2,rs1,DOUBLE,false,false)))
++      ( (STORE (imm, rs2, rs1, DOUBLE, false, false)))
 +       
     | C_ADDI (nzi,rsd) =>
        let imm : bits 12 := EXTS 12 nzi in
--      (execute (ITYPE (imm,rsd,rsd,RISCV_ADDI)))
+-      (execute (ITYPE (imm, rsd, rsd, RISCV_ADDI)))
 -       : M (bool)
-+      ( (ITYPE (imm,rsd,rsd,RISCV_ADDI)))
++      ( (ITYPE (imm, rsd, rsd, RISCV_ADDI)))
 +       
     | C_JAL (imm) =>
--      (execute (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)),ra)))  : M (bool)
-+      ( (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)),ra)))  
+-      (execute (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), ra)))  : M (bool)
++      ( (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), ra)))  
     | C_LI (imm,rd) =>
        let imm : bits 12 := EXTS 12 imm in
--      (execute (ITYPE (imm,zreg,rd,RISCV_ADDI)))
+-      (execute (ITYPE (imm, zreg, rd, RISCV_ADDI)))
 -       : M (bool)
-+      ( (ITYPE (imm,zreg,rd,RISCV_ADDI)))
++      ( (ITYPE (imm, zreg, rd, RISCV_ADDI)))
 +       
     | C_ADDI16SP (imm) =>
        let imm : bits 12 := EXTS 12 (concat_vec imm (vec_of_bits [B0;B0;B0;B0]  : mword 4)) in
--      (execute (ITYPE (imm,sp,sp,RISCV_ADDI)))
+-      (execute (ITYPE (imm, sp, sp, RISCV_ADDI)))
 -       : M (bool)
-+      ( (ITYPE (imm,sp,sp,RISCV_ADDI)))
++      ( (ITYPE (imm, sp, sp, RISCV_ADDI)))
 +       
     | C_LUI (imm,rd) =>
        let res : bits 20 := EXTS 20 imm in
--      (execute (UTYPE (res,rd,RISCV_LUI)))
+-      (execute (UTYPE (res, rd, RISCV_LUI)))
 -       : M (bool)
-+      ( (UTYPE (res,rd,RISCV_LUI)))
++      ( (UTYPE (res, rd, RISCV_LUI)))
 +       
     | C_SRLI (shamt,rsd) =>
        let rsd := creg2reg_bits rsd in
--      (execute (SHIFTIOP (shamt,rsd,rsd,RISCV_SRLI)))
+-      (execute (SHIFTIOP (shamt, rsd, rsd, RISCV_SRLI)))
 -       : M (bool)
-+      ( (SHIFTIOP (shamt,rsd,rsd,RISCV_SRLI)))
++      ( (SHIFTIOP (shamt, rsd, rsd, RISCV_SRLI)))
 +       
     | C_SRAI (shamt,rsd) =>
        let rsd := creg2reg_bits rsd in
--      (execute (SHIFTIOP (shamt,rsd,rsd,RISCV_SRAI)))
+-      (execute (SHIFTIOP (shamt, rsd, rsd, RISCV_SRAI)))
 -       : M (bool)
-+      ( (SHIFTIOP (shamt,rsd,rsd,RISCV_SRAI)))
++      ( (SHIFTIOP (shamt, rsd, rsd, RISCV_SRAI)))
 +       
     | C_ANDI (imm,rsd) =>
        let rsd := creg2reg_bits rsd in
--      (execute (ITYPE (EXTS 12 imm,rsd,rsd,RISCV_ANDI)))
+-      (execute (ITYPE (EXTS 12 imm, rsd, rsd, RISCV_ANDI)))
 -       : M (bool)
-+      ( (ITYPE (EXTS 12 imm,rsd,rsd,RISCV_ANDI)))
++      ( (ITYPE (EXTS 12 imm, rsd, rsd, RISCV_ANDI)))
 +       
     | C_SUB (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2,rsd,rsd,RISCV_SUB)))
+-      (execute (RTYPE (rs2, rsd, rsd, RISCV_SUB)))
 -       : M (bool)
-+      ( (RTYPE (rs2,rsd,rsd,RISCV_SUB)))
++      ( (RTYPE (rs2, rsd, rsd, RISCV_SUB)))
 +       
     | C_XOR (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2,rsd,rsd,RISCV_XOR)))
+-      (execute (RTYPE (rs2, rsd, rsd, RISCV_XOR)))
 -       : M (bool)
-+      ( (RTYPE (rs2,rsd,rsd,RISCV_XOR)))
++      ( (RTYPE (rs2, rsd, rsd, RISCV_XOR)))
 +       
     | C_OR (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2,rsd,rsd,RISCV_OR)))
+-      (execute (RTYPE (rs2, rsd, rsd, RISCV_OR)))
 -       : M (bool)
-+      ( (RTYPE (rs2,rsd,rsd,RISCV_OR)))
++      ( (RTYPE (rs2, rsd, rsd, RISCV_OR)))
 +       
     | C_AND (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2,rsd,rsd,RISCV_AND)))
+-      (execute (RTYPE (rs2, rsd, rsd, RISCV_AND)))
 -       : M (bool)
-+      ( (RTYPE (rs2,rsd,rsd,RISCV_AND)))
++      ( (RTYPE (rs2, rsd, rsd, RISCV_AND)))
 +       
     | C_SUBW (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPEW (rs2,rsd,rsd,RISCV_SUBW)))
+-      (execute (RTYPEW (rs2, rsd, rsd, RISCV_SUBW)))
 -       : M (bool)
-+      ( (RTYPEW (rs2,rsd,rsd,RISCV_SUBW)))
++      ( (RTYPEW (rs2, rsd, rsd, RISCV_SUBW)))
 +       
     | C_ADDW (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPEW (rs2,rsd,rsd,RISCV_ADDW)))
+-      (execute (RTYPEW (rs2, rsd, rsd, RISCV_ADDW)))
 -       : M (bool)
-+      ( (RTYPEW (rs2,rsd,rsd,RISCV_ADDW)))
++      ( (RTYPEW (rs2, rsd, rsd, RISCV_ADDW)))
 +       
     | C_J (imm) =>
--      (execute (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)),zreg)))
+-      (execute (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg)))
 -       : M (bool)
-+      ( (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)),zreg)))
++      ( (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg)))
 +       
     | C_BEQZ (imm,rs) =>
 -      (execute
 +      (
-          (BTYPE (EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)),zreg,creg2reg_bits rs,RISCV_BEQ)))
+          (BTYPE
+             (EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg, creg2reg_bits rs,
+             RISCV_BEQ)))
 -       : M (bool)
 +       
     | C_BNEZ (imm,rs) =>
 -      (execute
 +      (
-          (BTYPE (EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)),zreg,creg2reg_bits rs,RISCV_BNE)))
+          (BTYPE
+             (EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg, creg2reg_bits rs,
+             RISCV_BNE)))
 -       : M (bool)
--   | C_SLLI (shamt,rsd) => (execute (SHIFTIOP (shamt,rsd,rsd,RISCV_SLLI)))  : M (bool)
+-   | C_SLLI (shamt,rsd) => (execute (SHIFTIOP (shamt, rsd, rsd, RISCV_SLLI)))  : M (bool)
 +       
-+   | C_SLLI (shamt,rsd) => ( (SHIFTIOP (shamt,rsd,rsd,RISCV_SLLI)))  
++   | C_SLLI (shamt,rsd) => ( (SHIFTIOP (shamt, rsd, rsd, RISCV_SLLI)))  
     | C_LWSP (uimm,rd) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
--      (execute (LOAD (imm,sp,rd,false,WORD,false,false)))
+-      (execute (LOAD (imm, sp, rd, false, WORD, false, false)))
 -       : M (bool)
-+      ( (LOAD (imm,sp,rd,false,WORD,false,false)))
++      ( (LOAD (imm, sp, rd, false, WORD, false, false)))
 +       
     | C_LDSP (uimm,rd) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
--      (execute (LOAD (imm,sp,rd,false,DOUBLE,false,false)))
+-      (execute (LOAD (imm, sp, rd, false, DOUBLE, false, false)))
 -       : M (bool)
-+      ( (LOAD (imm,sp,rd,false,DOUBLE,false,false)))
++      ( (LOAD (imm, sp, rd, false, DOUBLE, false, false)))
 +       
     | C_SWSP (uimm,rs2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
--      (execute (STORE (imm,rs2,sp,WORD,false,false)))
+-      (execute (STORE (imm, rs2, sp, WORD, false, false)))
 -       : M (bool)
-+      ( (STORE (imm,rs2,sp,WORD,false,false)))
++      ( (STORE (imm, rs2, sp, WORD, false, false)))
 +       
     | C_SDSP (uimm,rs2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
--      (execute (STORE (imm,rs2,sp,DOUBLE,false,false)))
+-      (execute (STORE (imm, rs2, sp, DOUBLE, false, false)))
 -       : M (bool)
-+      ( (STORE (imm,rs2,sp,DOUBLE,false,false)))
++      ( (STORE (imm, rs2, sp, DOUBLE, false, false)))
 +       
     | C_JR (rs1) =>
--      (execute (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1),rs1,zreg)))  : M (bool)
-+      ( (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1),rs1,zreg)))  
+-      (execute (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, zreg)))  : M (bool)
++      ( (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, zreg)))  
     | C_JALR (rs1) =>
--      (execute (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1),rs1,ra)))  : M (bool)
--   | C_MV (rd,rs2) => (execute (RTYPE (rs2,zreg,rd,RISCV_ADD)))  : M (bool)
--   | C_ADD (rsd,rs2) => (execute (RTYPE (rs2,rsd,rsd,RISCV_ADD)))  : M (bool)
-+      ( (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1),rs1,ra)))  
-+   | C_MV (rd,rs2) => ( (RTYPE (rs2,zreg,rd,RISCV_ADD)))  
-+   | C_ADD (rsd,rs2) => ( (RTYPE (rs2,rsd,rsd,RISCV_ADD)))  
-+| _ => i
+-      (execute (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra)))  : M (bool)
+-   | C_MV (rd,rs2) => (execute (RTYPE (rs2, zreg, rd, RISCV_ADD)))  : M (bool)
+-   | C_ADD (rsd,rs2) => (execute (RTYPE (rs2, rsd, rsd, RISCV_ADD)))  : M (bool)
++      ( (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra)))  
++   | C_MV (rd,rs2) => ( (RTYPE (rs2, zreg, rd, RISCV_ADD)))  
++   | C_ADD (rsd,rs2) => ( (RTYPE (rs2, rsd, rsd, RISCV_ADD)))  
++| i => i
 +end.
 +
 +Fixpoint execute (merge_var : ast) 
@@ -350,15 +438,15 @@
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -11354,6 +11362,7 @@
-    | THREAD_START (g__29) => returnm ((execute_THREAD_START g__29)  : bool)
+@@ -12542,6 +12550,7 @@
+    | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
-    | C_ILLEGAL (g__30) => (execute_C_ILLEGAL g__30)  : M (bool)
+    | C_ILLEGAL (arg0) => (execute_C_ILLEGAL arg0)  : M (bool)
 +| _ => Fail "Unexpanded instruction"
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -11616,7 +11625,7 @@
+@@ -12804,7 +12813,7 @@
      | _ => exit tt  : M (string)
      end)
      : M (string).
@@ -367,7 +455,7 @@
  Definition assembly_backwards (arg_ : string) 
  : M (ast) :=
     let _stringappend_1112_ := arg_ in
-@@ -29684,7 +29693,7 @@
+@@ -27322,7 +27331,7 @@
            : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
         : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
      : M (option ((ast * {n : Z & ArithFact (n >= 0)}))).
@@ -376,7 +464,7 @@
  Definition encdec_forwards (arg_ : ast) 
  : M (mword 32) :=
     (match arg_ with
-@@ -31894,7 +31903,7 @@
+@@ -29410,7 +29419,7 @@
          : M ((bool * bool))
      end)
      : M ((bool * bool)).
@@ -385,7 +473,7 @@
  Definition loop '(tt : unit) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -31936,7 +31945,7 @@
+@@ -29457,7 +29466,7 @@
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
      : unit).
@@ -394,7 +482,7 @@
  Definition read_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 11)} 
  : read_kind :=
     let p0_ := arg_ in
-@@ -32027,7 +32036,7 @@
+@@ -29548,7 +29557,7 @@
     else if sumbool_of_bool ((Z.eqb p0_ 20)) then Barrier_RISCV_w_r
     else if sumbool_of_bool ((Z.eqb p0_ 21)) then Barrier_RISCV_i
     else Barrier_x86_MFENCE.
@@ -402,30 +490,11 @@
 +(*
  Definition num_of_barrier_kind (arg_ : barrier_kind) 
  : {e : Z & ArithFact (0 <= e /\ e <= 22)} :=
-    match arg_ with
-@@ -32055,7 +32064,7 @@
-    | Barrier_RISCV_i => build_ex 21
-    | Barrier_x86_MFENCE => build_ex 22
-    end.
+    build_ex(match arg_ with
+@@ -30722,5 +30731,5 @@
+                    B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;
+                    B0]
+        : mword 64) |}.
 -
 +*)
- Definition trans_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 2)} 
- : trans_kind :=
-    let p0_ := arg_ in
-@@ -32076,6 +32085,7 @@
-                  "x10";"x9";"x8";"x7";"x6";"x5";"x4";"x3";"x2";"x1";"x0"].
- Let CIA_fp := RFull "CIA".
- Let NIA_fp := RFull "NIA".
-+(*
- Definition initial_analysis (instr : ast) 
- : M ((list regfp * list regfp * list regfp * list niafp * diafp * instruction_kind)) :=
-    let iR := []  : regfps in
-@@ -32600,7 +32610,7 @@
-    end >>= fun '(Nias, aR, iR, ik, oR) =>
-    returnm ((iR, oR, aR, Nias, Dia, ik)
-     : (list regfp * list regfp * list regfp * list niafp * diafp * instruction_kind)).
--
-+*)
- Let initial_regstate : regstate :=
- {| tlb39 := None; 
-    htif_exit_code :=
+ End Content.

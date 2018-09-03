@@ -125,3 +125,6 @@ Definition build_ex_m {rv e} {T:Type} (x:monad rv T e) {P:T -> Prop} `{H:forall 
 Definition projT1_m {rv e} {P:Z -> Prop} (x: monad rv {x : Z & P x} e) : monad rv Z e :=
   x >>= fun y => returnm (projT1 y).
 
+Definition derive_m {rv e} {P Q:Z -> Prop} (x : monad rv {x : Z & P x} e) `{forall x, ArithFact (P x) -> ArithFact (Q x)} : monad rv {x : Z & (ArithFact (Q x))} e :=
+  x >>= fun y => returnm (build_ex (projT1 y)).
+

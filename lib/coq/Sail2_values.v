@@ -61,14 +61,14 @@ Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
 
 
 (* Project away range constraints in comparisons *)
-Definition ltb_range_l {P} (l : sigT P) r := Z.ltb (projT1 l) r.
-Definition leb_range_l {P} (l : sigT P) r := Z.leb (projT1 l) r.
-Definition gtb_range_l {P} (l : sigT P) r := Z.gtb (projT1 l) r.
-Definition geb_range_l {P} (l : sigT P) r := Z.geb (projT1 l) r.
-Definition ltb_range_r {P} l (r : sigT P) := Z.ltb l (projT1 r).
-Definition leb_range_r {P} l (r : sigT P) := Z.leb l (projT1 r).
-Definition gtb_range_r {P} l (r : sigT P) := Z.gtb l (projT1 r).
-Definition geb_range_r {P} l (r : sigT P) := Z.geb l (projT1 r).
+Definition ltb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.ltb (projT1 l) r.
+Definition leb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.leb (projT1 l) r.
+Definition gtb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.gtb (projT1 l) r.
+Definition geb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.geb (projT1 l) r.
+Definition ltb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.ltb l (projT1 r).
+Definition leb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.leb l (projT1 r).
+Definition gtb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.gtb l (projT1 r).
+Definition geb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.geb l (projT1 r).
 
 Definition ii := Z.
 Definition nn := nat.
@@ -977,11 +977,28 @@ Ltac unbool_comparisons :=
 
 (* Split up dependent pairs to get at proofs of properties *)
 Ltac extract_properties :=
+  (* Properties of local definitions *)
   repeat match goal with H := (projT1 ?X) |- _ =>
     let x := fresh "x" in
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
     change (projT1 (existT _ x Hx)) with x in *; unfold H in * end;
+  (* Properties with proofs embedded by build_ex; uses revert/generalize
+     rather than destruct because it seemed to be more efficient, but
+     some experimentation would be needed to be sure. *)
+  repeat (
+     match goal with H:context [@build_ex ?T ?n ?P ?prf] |- _ =>
+     let x := fresh "x" in
+     let zz := constr:(@build_ex T n P prf) in
+     revert dependent H(*; generalize zz; intros*)
+     end;
+     match goal with |- context [@build_ex ?T ?n ?P ?prf] =>
+     let x := fresh "x" in
+     let zz := constr:(@build_ex T n P prf) in
+     generalize zz as x
+     end;
+    intros);
+  (* Other properties in the goal *)
   repeat match goal with |- context [projT1 ?X] =>
     let x := fresh "x" in
     let Hx := fresh "Hx" in
@@ -1008,6 +1025,10 @@ Ltac dump_context :=
   | H:=?X |- _ => idtac H ":=" X; fail
   | H:?X |- _ => idtac H ":" X; fail end;
   match goal with |- ?X => idtac "Goal:" X end.
+Ltac split_cases :=
+  repeat match goal with
+  |- context [match ?X with _ => _ end] => destruct X
+  end.
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
@@ -1019,21 +1040,39 @@ Ltac prepare_for_solver :=
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
  reduce_list_lengths;
- reduce_pow.
+ reduce_pow;
+ split_cases.
+
+Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
+constructor.
+auto with zarith.
+Qed.
+
+Lemma ArithFact_self_proof {P} : forall x : {y : Z & ArithFact (P y)}, ArithFact (P (projT1 x)).
+intros [x H].
+exact H.
+Qed.
+
+Ltac fill_in_evar_eq :=
+ match goal with |- ArithFact (?x = ?y) =>
+   (is_evar x || is_evar y);
+   (* compute to allow projections to remove proofs that might not be allowed in the evar *)
+(* Disabled because cbn may reduce definitions, even after clearbody
+   let x := eval cbn in x in
+   let y := eval cbn in y in*)
+   idtac "Warning: unknown equality constraint"; constructor; exact (eq_refl _ : x = y) end.
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
+intros; (* To solve implications for derive_m *)
+try fill_in_evar_eq;
+try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
 try (constructor; omega);
 prepare_for_solver;
 (*dump_context;*)
  solve
  [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; constructor; exact (I : (fun _ => True) _) end
- | match goal with |- ArithFact (?x = ?y) =>
-   (is_evar x || is_evar y);
-   (* compute to allow projections to remove proofs that might not be allowed in the evar *)
-   let x := eval cbn in x in
-   let y := eval cbn in y in
-   idtac "Warning: unknown equality constraint"; constructor; exact (eq_refl _ : x = y) end
  | apply ArithFact_mword; assumption
  | constructor; omega with Z
    (* The datatypes hints give us some list handling, esp In *)

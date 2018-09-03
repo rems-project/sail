@@ -134,3 +134,11 @@ Definition read_ram {rv e} addrsize size `{ArithFact (size >= 0)} (hexRAM : mwor
 Definition elf_entry (_:unit) := 0.
 (*declare ocaml target_rep function elf_entry = `Elf_loader.elf_entry`
 *)
+
+Lemma mul_quot_8_helper : forall x, 8 * x = 8 * (Z.quot (8 * x) 8).
+intro.
+rewrite Z.mul_comm.
+rewrite Z.quot_mul; auto with zarith.
+Qed.
+Hint Resolve mul_quot_8_helper : sail.
+
