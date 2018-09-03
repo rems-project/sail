@@ -1039,14 +1039,14 @@ Ltac prepare_for_solver :=
  clear_irrelevant_defns;
  clear_non_Z_defns;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
+ split_cases;
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
  unfold_In;
  unbool_comparisons;
  reduce_list_lengths;
- reduce_pow;
- split_cases.
+ reduce_pow.
 
 Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
 constructor.
