@@ -1,6 +1,6 @@
---- riscv.v.plain	2018-08-29 16:46:33.534052809 +0100
-+++ riscv.v	2018-08-29 16:48:44.854865657 +0100
-@@ -8409,14 +8409,16 @@
+--- riscv.v.orig	2018-09-03 12:15:42.629947208 +0100
++++ riscv.v	2018-09-03 12:16:05.170089474 +0100
+@@ -8405,14 +8405,16 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
@@ -19,8 +19,8 @@
 +          (subrange_vec_dec (shiftr (_get_SV39_Vaddr_VPNi va) (Z.mul (Z.of_nat level) SV39_LEVEL_BITS))
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
-    phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false >>= fun w__0 : MemoryOpResult (mword 64) =>
-@@ -8429,27 +8431,27 @@
+    phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false >>= fun w__0 : MemoryOpResult (mword (8 * 8)) =>
+@@ -8425,27 +8427,27 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
         (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure (PTW_Invalid_PTE))  : PTW_Result )
          else if ((isPTEPtr pbits)) then
@@ -54,7 +54,7 @@
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
                          PTW_Failure
-@@ -8459,12 +8461,12 @@
+@@ -8455,12 +8457,12 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
                          PTW_Success
@@ -69,7 +69,7 @@
             : PTW_Result))
          : M (PTW_Result)
      end)
-@@ -8590,7 +8592,7 @@
+@@ -8586,7 +8588,7 @@
          : M (TR39_Result)
      | None =>
         curPTB39 tt >>= fun w__6 : mword 56 =>
@@ -78,7 +78,7 @@
         (match w__7 with
          | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -8670,7 +8672,7 @@
+@@ -8666,7 +8668,7 @@
      | Sbare => returnm ((TR_Address (vAddr))  : TR_Result )
      | SV39 =>
         translate39 (subrange_vec_dec vAddr 38 0) ac effPriv mxr do_sum
@@ -87,7 +87,7 @@
         returnm ((match w__7 with
                   | TR39_Address (pa) => TR_Address (EXTZ 64 pa)
                   | TR39_Failure (f) => TR_Failure (translationException ac f)
-@@ -11523,7 +11525,7 @@
+@@ -11507,7 +11509,7 @@
            (tt))
     else None.
  
@@ -96,7 +96,7 @@
  : M (bool) :=
     read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
     (match w__0 with
-@@ -11555,7 +11557,7 @@
+@@ -11539,7 +11541,7 @@
     returnm (true
      : bool).
  
@@ -105,7 +105,7 @@
  
  Fixpoint execute_STORECON (aq : bool) (rl : bool) (rs2 : mword 5) (rs1 : mword 5) (width : word_width) (rd : mword 5) 
  : M (bool) :=
-@@ -11684,9 +11686,9 @@
+@@ -11668,9 +11670,9 @@
         : M (bool))
      : M (bool).
  
@@ -117,7 +117,7 @@
  : M (bool) :=
     read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
     match w__0 with
-@@ -11930,7 +11932,7 @@
+@@ -11914,7 +11916,7 @@
     returnm (true
      : bool).
  
@@ -126,7 +126,7 @@
  
  Fixpoint execute_MULW (rs2 : mword 5) (rs1 : mword 5) (rd : mword 5) 
  : M (bool) :=
-@@ -11972,7 +11974,7 @@
+@@ -11956,7 +11958,7 @@
     returnm (true
      : bool).
  
@@ -135,45 +135,7 @@
  : M (bool) :=
     read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
     (if ((eq_vec ((privLevel_to_bits w__0)  : mword 2) ((privLevel_to_bits Machine)  : mword 2)))
-@@ -12011,11 +12013,11 @@
-           (match width with
-            | WORD =>
-               mem_read addr 4 aq rl true >>= fun w__2 : MemoryOpResult (mword 32) =>
--              (process_loadres rd vaddr w__2 false)
-+              (process_loadres (n := 4) rd vaddr w__2 false)
-                : M (bool)
-            | DOUBLE =>
-               mem_read addr 8 aq rl true >>= fun w__4 : MemoryOpResult (mword 64) =>
--              (process_loadres rd vaddr w__4 false)
-+              (process_loadres (n := 8) rd vaddr w__4 false)
-                : M (bool)
-            | _ => (internal_error "LOADRES expected WORD or DOUBLE")  : M (bool)
-            end)
-@@ -12040,19 +12042,19 @@
-           (match width with
-            | BYTE =>
-               mem_read addr 1 aq rl false >>= fun w__3 : MemoryOpResult (mword 8) =>
--              (process_load rd vaddr w__3 is_unsigned)
-+              (process_load (n := 1) rd vaddr w__3 is_unsigned)
-                : M (bool)
-            | HALF =>
-               mem_read addr 2 aq rl false >>= fun w__5 : MemoryOpResult (mword 16) =>
--              (process_load rd vaddr w__5 is_unsigned)
-+              (process_load (n := 2) rd vaddr w__5 is_unsigned)
-                : M (bool)
-            | WORD =>
-               mem_read addr 4 aq rl false >>= fun w__7 : MemoryOpResult (mword 32) =>
--              (process_load rd vaddr w__7 is_unsigned)
-+              (process_load (n := 4) rd vaddr w__7 is_unsigned)
-                : M (bool)
-            | DOUBLE =>
-               mem_read addr 8 aq rl false >>= fun w__9 : MemoryOpResult (mword 64) =>
--              (process_load rd vaddr w__9 is_unsigned)
-+              (process_load (n := 8) rd vaddr w__9 is_unsigned)
-                : M (bool)
-            end)
-            : M (bool)
-@@ -12083,7 +12085,7 @@
+@@ -12067,7 +12069,7 @@
  
  Fixpoint execute_ILLEGAL (s : mword 32)  : M (bool) := handle_illegal tt >> returnm (false  : bool).
  
@@ -182,7 +144,7 @@
  
  Fixpoint execute_FENCE (pred : mword 4) (succ : mword 4) 
  : M (bool) :=
-@@ -12139,7 +12141,7 @@
+@@ -12123,7 +12125,7 @@
     returnm (true
      : bool).
  
@@ -191,7 +153,7 @@
  : M (bool) :=
     read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
     let t : sync_exception :=
-@@ -12155,7 +12157,7 @@
+@@ -12139,7 +12141,7 @@
     handle_exception w__1 (CTL_TRAP (t)) w__2 >>= fun w__3 : mword 64 =>
     write_reg nextPC_ref w__3 >> returnm (false  : bool).
  
@@ -200,7 +162,7 @@
  : M (bool) :=
     (read_reg PC_ref  : M (mword 64)) >>= fun w__0 : xlenbits =>
     handle_mem_exception w__0 E_Breakpoint >> returnm (false  : bool).
-@@ -12177,8 +12179,8 @@
+@@ -12161,8 +12163,8 @@
       if sumbool_of_bool ((andb s
                              (Z.gtb q (projT1 (sub_range (build_ex (projT1 (pow2 31))) (build_ex 1))))))
       then
@@ -211,7 +173,7 @@
                    : {n : Z & ArithFact (True)}))))
       else q in
     wX
-@@ -12205,7 +12207,7 @@
+@@ -12189,7 +12191,7 @@
     returnm (true
      : bool).
  
@@ -220,21 +182,7 @@
  
  Fixpoint execute_C_ADDIW (imm : mword 6) (rsd : mword 5) 
  : M (bool) :=
-@@ -12300,11 +12302,11 @@
-            match width with
-            | WORD =>
-               mem_read addr 4 aq (andb aq rl) true >>= fun w__4 : MemoryOpResult (mword 32) =>
--              returnm ((extend_value false w__4)
-+              returnm ((extend_value (n := 4) false w__4)
-                : MemoryOpResult (mword 64))
-            | DOUBLE =>
-               mem_read addr 8 aq (andb aq rl) true >>= fun w__5 : MemoryOpResult (mword 64) =>
--              returnm ((extend_value false w__5)
-+              returnm ((extend_value (n := 8) false w__5)
-                : MemoryOpResult (mword 64))
-            | _ => (internal_error "AMO expected WORD or DOUBLE")  : M (MemoryOpResult (mword 64))
-            end >>= fun rval : MemoryOpResult xlenbits =>
-@@ -12371,138 +12373,144 @@
+@@ -12355,138 +12357,144 @@
     returnm (true
      : bool).
  
@@ -438,7 +386,7 @@
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -12542,6 +12550,7 @@
+@@ -12526,6 +12534,7 @@
     | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
     | C_ILLEGAL (arg0) => (execute_C_ILLEGAL arg0)  : M (bool)
@@ -446,7 +394,7 @@
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -12804,7 +12813,7 @@
+@@ -12788,7 +12797,7 @@
      | _ => exit tt  : M (string)
      end)
      : M (string).
@@ -454,8 +402,8 @@
 +(*
  Definition assembly_backwards (arg_ : string) 
  : M (ast) :=
-    let _stringappend_1112_ := arg_ in
-@@ -27322,7 +27331,7 @@
+    let _stringappend_756_ := arg_ in
+@@ -27054,7 +27063,7 @@
            : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
         : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
      : M (option ((ast * {n : Z & ArithFact (n >= 0)}))).
@@ -464,7 +412,7 @@
  Definition encdec_forwards (arg_ : ast) 
  : M (mword 32) :=
     (match arg_ with
-@@ -29410,7 +29419,7 @@
+@@ -29142,7 +29151,7 @@
          : M ((bool * bool))
      end)
      : M ((bool * bool)).
@@ -473,7 +421,7 @@
  Definition loop '(tt : unit) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -29457,7 +29466,7 @@
+@@ -29189,7 +29198,7 @@
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
      : unit).
@@ -482,7 +430,7 @@
  Definition read_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 11)} 
  : read_kind :=
     let p0_ := arg_ in
-@@ -29548,7 +29557,7 @@
+@@ -29280,7 +29289,7 @@
     else if sumbool_of_bool ((Z.eqb p0_ 20)) then Barrier_RISCV_w_r
     else if sumbool_of_bool ((Z.eqb p0_ 21)) then Barrier_RISCV_i
     else Barrier_x86_MFENCE.
@@ -491,7 +439,7 @@
  Definition num_of_barrier_kind (arg_ : barrier_kind) 
  : {e : Z & ArithFact (0 <= e /\ e <= 22)} :=
     build_ex(match arg_ with
-@@ -30722,5 +30731,5 @@
+@@ -30454,5 +30463,5 @@
                     B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;B0;
                     B0]
         : mword 64) |}.
