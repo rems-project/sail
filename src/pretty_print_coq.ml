@@ -1225,8 +1225,12 @@ let doc_exp_lem, doc_let_lem =
        else begin
          match Env.lookup_id id env with
          | Local (_,typ) ->
-            let typ = expand_range_type (Env.expand_synonyms env typ) in
-            let proj = match typ with
+            let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
+            let () =
+              debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ));
+              debug ctxt (lazy ("  expands to " ^ string_of_typ exp_typ))
+            in
+            let proj = match exp_typ with
               | Typ_aux (Typ_exist _,_) -> true
               | _ -> false
             in if proj then string "projT1" ^^ doc_id id else doc_id id
@@ -2071,44 +2075,41 @@ let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),ann)) =
              [string "Axiom"; doc_id id; colon; doc_axiom_typschm typ_env tys] ^^ dot) ^/^ hardline
   else empty (* Type signatures appear in definitions *)
 
-(* If a top-level value is an existential type, we define the dependent pair of
-   the value and the proof, then just the value with Let so that it appears in
-   the local context when constraint solving and the ltac can find the proof. *)
+(* If a top-level value is declared with an existential type, we turn it into
+   a type annotation expression instead (unless it duplicates an existing one). *)
 let doc_val pat exp =
-  let (id,typpp) = match pat with
-    | P_aux (P_typ (typ, P_aux (P_id id,_)),_) -> id, space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
-    | P_aux (P_id id, _) -> id, empty
+  let (id,pat_typ) = match pat with
+    | P_aux (P_typ (typ, P_aux (P_id id,_)),_) -> id, Some typ
+    | P_aux (P_id id, _) -> id, None
     | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)),_) when Id.compare id (id_of_kid kid) == 0 ->
-       id, empty
+       id, None
     | P_aux (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)),_)),_) when Id.compare id (id_of_kid kid) == 0 ->
-       id, space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
+       id, Some typ
     | _ -> raise (Reporting_basic.err_todo (pat_loc pat)
                     "Top-level value definition with complex pattern not supported for Coq yet")
   in
-  let env = env_of exp in
-  let typ = expand_range_type (Env.expand_synonyms env (general_typ_of exp)) in
-  let ctxt = { empty_ctxt with debug  = List.mem (string_of_id id) (!opt_debug_on) } in
-  let id, opt_unpack = id, None in
-(* TODO: Hacked out until I decide what to do ...
-    match destruct_exist env typ with
-    | None -> id, None
-    | Some (kids,nc,typ) ->
-       match drop_duplicate_atoms kids typ, nc with
-       | None, NC_aux (NC_true,_) -> id, None
-       | _ ->
-          (* TODO: name collisions *)
-          mk_id (string_of_id id ^ "_spec"),
-          Some (id, string_of_id id ^ "_prop")
-  in*)
-  let idpp = doc_id id in
-  let basepp =
-    idpp ^^ typpp ^^ space ^^ coloneq ^/^ doc_exp_lem ctxt false exp ^^ dot
+  let typpp = match pat_typ with
+    | None -> empty
+    | Some typ -> space ^^ colon ^^ space ^^ doc_typ empty_ctxt typ
   in
-  match opt_unpack with
-  | None -> group (string "Definition" ^^ space ^^ basepp) ^^ hardline
-  | Some (orig_id, hyp_id) ->
-     group (string "Definition" ^^ space ^^ basepp) ^^ hardline ^^
-       group (separate space [string "Let"; doc_id orig_id; coloneq; string "projT1"; idpp; dot]) ^^ hardline ^^ hardline
+  let env = env_of exp in
+  let ctxt = { empty_ctxt with debug  = List.mem (string_of_id id) (!opt_debug_on) } in
+  let typpp, exp =
+    match pat_typ with
+    | None -> typpp, exp
+    | Some typ ->
+       let typ = expand_range_type (Env.expand_synonyms env typ) in
+       match destruct_exist env typ with
+       | None -> typpp, exp
+       | Some _ ->
+          empty, match exp with
+          | E_aux (E_cast (typ',_),_) when alpha_equivalent env typ typ' -> exp
+          | _ -> E_aux (E_cast (typ,exp), (Parse_ast.Unknown, mk_tannot env typ (effect_of exp)))
+  in
+  let idpp = doc_id id in
+  let base_pp = doc_exp_lem ctxt false exp ^^ dot in
+  group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
+  group (separate space [string "Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
 let rec doc_def unimplemented def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)

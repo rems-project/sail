@@ -952,7 +952,7 @@ auto using Z.le_ge, Zle_0_pos.
 destruct w.
 Qed.
 Ltac unwrap_ArithFacts :=
-  repeat match goal with H:(ArithFact _) |- _ => let H' := fresh H in case H as [H'] end.
+  repeat match goal with H:(ArithFact _) |- _ => let H' := fresh H in case H as [H']; clear H end.
 Ltac unbool_comparisons :=
   repeat match goal with
   | H:context [Z.geb _ _] |- _ => rewrite Z.geb_leb in H
@@ -983,9 +983,15 @@ Ltac extract_properties :=
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
     change (projT1 (existT _ x Hx)) with x in *; unfold H in * end;
+  (* Properties in the goal *)
+  repeat match goal with |- context [projT1 ?X] =>
+    let x := fresh "x" in
+    let Hx := fresh "Hx" in
+    destruct X as [x Hx] in *;
+    change (projT1 (existT _ x Hx)) with x in * end;
   (* Properties with proofs embedded by build_ex; uses revert/generalize
      rather than destruct because it seemed to be more efficient, but
-     some experimentation would be needed to be sure. *)
+     some experimentation would be needed to be sure. 
   repeat (
      match goal with H:context [@build_ex ?T ?n ?P ?prf] |- _ =>
      let x := fresh "x" in
@@ -997,9 +1003,8 @@ Ltac extract_properties :=
      let zz := constr:(@build_ex T n P prf) in
      generalize zz as x
      end;
-    intros);
-  (* Other properties in the goal *)
-  repeat match goal with |- context [projT1 ?X] =>
+    intros).*)
+  repeat match goal with _:context [projT1 ?X] |- _ =>
     let x := fresh "x" in
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
@@ -1033,11 +1038,11 @@ Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
  clear_non_Z_defns;
+ autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
  unfold_In;
- autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  unbool_comparisons;
  reduce_list_lengths;
  reduce_pow;
