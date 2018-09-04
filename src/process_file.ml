@@ -64,24 +64,30 @@ let get_lexbuf f =
                                 Lexing.pos_cnum = 0; };
   lexbuf, in_chan
 
-let parse_file (f : string) : Parse_ast.defs =
-  let lexbuf, in_chan = get_lexbuf f in
-    try
-      let ast = Parser.file Lexer.token lexbuf in
-      close_in in_chan; ast
-    with
-    | Parser.Error ->
-       let pos = Lexing.lexeme_start_p lexbuf in
-       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "no information")))
-    | Lexer.LexError(s,p) ->
-       raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
+let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : Parse_ast.defs =
+  let open Reporting_basic in
+  try
+    let lexbuf, in_chan = get_lexbuf f in
+    begin
+      try
+        let ast = Parser.file Lexer.token lexbuf in
+        close_in in_chan; ast
+      with
+      | Parser.Error ->
+         let pos = Lexing.lexeme_start_p lexbuf in
+         raise (Fatal_error (Err_syntax (pos, "no information")))
+      | Lexer.LexError(s,p) ->
+         raise (Fatal_error (Err_lex (p, s)))
+    end
+  with
+  | Sys_error err -> raise (err_general l err)
 
 (* Simple preprocessor features for conditional file loading *)
 module StringSet = Set.Make(String)
 
 let symbols = ref StringSet.empty
 
-let cond_pragma defs =
+let cond_pragma l defs =
   let depth = ref 0 in
   let in_then = ref true in
   let then_defs = ref [] in
@@ -105,7 +111,7 @@ let cond_pragma defs =
        decr depth; push_def def; scan defs
     | def :: defs ->
        push_def def; scan defs
-    | [] -> failwith "$ifdef or $ifndef never ended"
+    | [] -> raise (Reporting_basic.err_general l "$ifdef or $ifndef never ended by $endif")
   in
   scan defs
 
@@ -137,15 +143,15 @@ let rec preprocess = function
      symbols := StringSet.add symbol !symbols;
      preprocess defs
 
-  | Parse_ast.DEF_pragma ("ifndef", symbol, _) :: defs ->
-     let then_defs, else_defs, defs = cond_pragma defs in
+  | Parse_ast.DEF_pragma ("ifndef", symbol, l) :: defs ->
+     let then_defs, else_defs, defs = cond_pragma l defs in
      if not (StringSet.mem symbol !symbols) then
        preprocess (then_defs @ defs)
      else
        preprocess (else_defs @ defs)
 
-  | Parse_ast.DEF_pragma ("ifdef", symbol, _) :: defs ->
-     let then_defs, else_defs, defs = cond_pragma defs in
+  | Parse_ast.DEF_pragma ("ifdef", symbol, l) :: defs ->
+     let then_defs, else_defs, defs = cond_pragma l defs in
      if StringSet.mem symbol !symbols then
        preprocess (then_defs @ defs)
      else
@@ -161,7 +167,7 @@ let rec preprocess = function
          | _ -> failwith "Couldn't figure out relative path for $include. This really shouldn't ever happen."
        in
        let file = String.sub file 1 (len - 2) in
-       let (Parse_ast.Defs include_defs) = parse_file (Filename.concat relative file) in
+       let (Parse_ast.Defs include_defs) = parse_file ~loc:l (Filename.concat relative file) in
        let include_defs = preprocess include_defs in
        include_defs @ preprocess defs
      else if file.[0] = '<' && file.[len - 1] = '>' then
@@ -176,7 +182,7 @@ let rec preprocess = function
               (failwith ("Library directory " ^ share_dir ^ " does not exist. Make sure sail is installed or try setting environment variable SAIL_DIR so that I can find $include " ^ file))
        in
        let file = Filename.concat sail_dir ("lib/" ^ file) in
-       let (Parse_ast.Defs include_defs) = parse_file file in
+       let (Parse_ast.Defs include_defs) = parse_file ~loc:l file in
        let include_defs = preprocess include_defs in
        include_defs @ preprocess defs
      else

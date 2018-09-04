@@ -48,7 +48,10 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-val parse_file : string -> Parse_ast.defs
+(** Parse a file. The optional loc argument is the location of the
+   $include directive that is importing the file, if applicable. *)
+val parse_file : ?loc:Parse_ast.l -> string -> Parse_ast.defs
+
 val convert_ast : Ast.order -> Parse_ast.defs -> unit Ast.defs
 val preprocess_ast : Parse_ast.defs -> Parse_ast.defs
 val check_ast: Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
