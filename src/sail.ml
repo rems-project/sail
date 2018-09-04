@@ -103,7 +103,7 @@ let options = Arg.align ([
     " set a custom directory to build generated OCaml");
   ( "-ocaml-coverage",
     Arg.Set Ocaml_backend.opt_ocaml_coverage,
-    "Build ocaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
+    " Build ocaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
   ( "-latex",
     Arg.Set opt_print_latex,
     " pretty print the input to latex");
@@ -113,6 +113,9 @@ let options = Arg.align ([
   ( "-c_include",
     Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
     " <filename> provide additional include for C output");
+  ( "-c_no_main",
+    Arg.Set C_backend.opt_no_main,
+    " do not generate the main() function" );
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an elf file so that it can be executed by compiled C code");

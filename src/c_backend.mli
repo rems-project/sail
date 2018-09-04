@@ -56,6 +56,7 @@ open Type_check
 val opt_ddump_flow_graphs : bool ref
 val opt_trace : bool ref
 val opt_static : bool ref
+val opt_no_main : bool ref
 
 (** Optimization flags *)
 

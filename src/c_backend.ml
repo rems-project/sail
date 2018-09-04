@@ -64,6 +64,7 @@ let c_verbosity = ref 0
 let opt_ddump_flow_graphs = ref false
 let opt_trace = ref false
 let opt_static = ref false
+let opt_no_main = ref false
 
 (* Optimization flags *)
 let optimize_primops = ref false
@@ -3094,8 +3095,8 @@ let compile_ast ctx c_includes (Defs defs) =
            "}" ] ))
     in
 
-    let model_main = separate hardline (List.map string
-         [ "int main(int argc, char *argv[])";
+    let model_default_main = separate hardline (List.map string
+         [ "int model_main(int argc, char *argv[])";
            "{";
            "  model_init();";
            "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
@@ -3105,11 +3106,19 @@ let compile_ast ctx c_includes (Defs defs) =
            "}" ] )
     in
 
+    let model_main = separate hardline (if (!opt_no_main) then [] else List.map string
+         [ "int main(int argc, char *argv[])";
+           "{";
+           "  return model_main(argc, argv);";
+           "}" ] )
+    in
+
     let hlhl = hardline ^^ hardline in
 
     Pretty_print_sail.to_string (preamble ^^ hlhl ^^ separate hlhl docs ^^ hlhl
                                  ^^ model_init ^^ hlhl
                                  ^^ model_fini ^^ hlhl
+                                 ^^ model_default_main ^^ hlhl
                                  ^^ model_main)
     |> print_endline
   with
