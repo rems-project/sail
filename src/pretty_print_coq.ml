@@ -1066,7 +1066,12 @@ let doc_exp_lem, doc_let_lem =
           begin
             match args with
             | [exp] ->
-               let epp = separate space [string "early_return"; expY exp] in
+               let exp_pp =
+                 if ctxt.build_ex_return
+                 then parens (string "build_ex" ^/^ expY exp)
+                 else expY exp
+               in
+               let epp = separate space [string "early_return"; exp_pp] in
                let aexp_needed, tepp =
                  if contains_t_pp_var ctxt (typ_of exp) ||
                     contains_t_pp_var ctxt (typ_of full_exp) then
@@ -1463,6 +1468,11 @@ let doc_exp_lem, doc_let_lem =
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
       let ret_monad = " : MR" in
+      let exp_pp =
+        if ctxt.build_ex_return
+        then parens (string "build_ex" ^/^ expY r)
+        else expY r
+      in
       let ta =
         if contains_t_pp_var ctxt (typ_of full_exp) || contains_t_pp_var ctxt (typ_of r)
         then empty
@@ -1470,7 +1480,7 @@ let doc_exp_lem, doc_let_lem =
           [string ret_monad;
           parens (doc_typ ctxt (typ_of full_exp));
           parens (doc_typ ctxt (typ_of r))] in
-      align (parens (string "early_return" ^//^ expV true r ^//^ ta))
+      align (parens (string "early_return" ^//^ exp_pp ^//^ ta))
     | E_constraint nc -> wrap_parens (doc_nc_exp ctxt nc)
     | E_internal_value _ ->
       raise (Reporting_basic.err_unreachable l __POS__
@@ -1849,6 +1859,12 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
       build_ex_return = effectful eff && build_ex;
       debug = List.mem (string_of_id id) (!opt_debug_on)
     } in
+  let () =
+    debug ctxt (lazy ("Function " ^ string_of_id id));
+    debug ctxt (lazy (" return type " ^ string_of_typ ret_typ));
+    debug ctxt (lazy (" build_ex " ^ if build_ex then "needed" else "not needed"));
+    debug ctxt (lazy (if effectful eff then " effectful" else " pure"))
+  in
   (* Put the constraints after pattern matching so that any type variable that's
      been replaced by one of the term-level arguments is bound. *)
   let quantspp, constrspp = doc_typquant_items_separate ctxt braces tq in
