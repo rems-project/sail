@@ -6,7 +6,7 @@ $include <flow.sail>
 // ***** Addition *****
 
 val add_atom = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
-  (atom('n), atom('m)) -> atom('n + 'm)
+  (int('n), int('m)) -> int('n + 'm)
 
 val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : (int, int) -> int
 
@@ -15,15 +15,21 @@ overload operator + = {add_atom, add_int}
 // ***** Subtraction *****
 
 val sub_atom = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
-  (atom('n), atom('m)) -> atom('n - 'm)
+  (int('n), int('m)) -> int('n - 'm)
 
 val sub_int = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
+val sub_nat = {
+  ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
+  lem: "integerMinus",
+  _: "sub_nat"
+} : (nat, nat) -> nat
+
 // ***** Negation *****
 
-val negate_atom = {ocaml: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. atom('n) -> atom(- 'n)
+val negate_atom = {ocaml: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. int('n) -> int(- 'n)
 
 val negate_int = {ocaml: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : int -> int
 
@@ -32,7 +38,7 @@ overload negate = {negate_atom, negate_int}
 // ***** Multiplication *****
 
 val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
-  (atom('n), atom('m)) -> atom('n * 'm)
+  (int('n), int('m)) -> int('n * 'm)
 
 val mult_int = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : (int, int) -> int
 

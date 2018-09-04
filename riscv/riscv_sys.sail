@@ -765,7 +765,7 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
 
 val load_reservation = {ocaml: "Platform.load_reservation", c: "load_reservation", lem: "load_reservation"} : xlenbits -> unit
 
-val match_reservation = {ocaml: "Platform.match_reservation", lem: "speculate_conditional_success"} : xlenbits -> bool effect {exmem}
+val match_reservation = {ocaml: "Platform.match_reservation", lem: "speculate_conditional_success", c: "match_reservation"} : xlenbits -> bool effect {exmem}
 
 val cancel_reservation = {ocaml: "Platform.cancel_reservation", c: "cancel_reservation", lem: "cancel_reservation"} : unit -> unit
 

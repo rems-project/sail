@@ -1,5 +1,7 @@
 default Order dec
 
+$include <flow.sail>
+
 type bits ('n : Int) = vector('n, dec, bit)
 union option ('a : Type) = {None : unit, Some : 'a}
 
@@ -144,8 +146,17 @@ val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 overload operator == = {eq_atom, eq_int, eq_bit, eq_vec, eq_string, eq_real, eq_anything}
 
+val vector_subrange = {
+  ocaml: "subrange",
+  lem: "subrange_vec_dec",
+  c: "vector_subrange",
+  coq: "subrange_vec_dec"
+} : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n.
+  (bits('n), atom('m), atom('o)) -> bits('m - 'o + 1)
+/*
 val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec", coq: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
+*/
 
 val bitvector_access = {c: "bitvector_access", ocaml: "access", lem: "access_vec_dec", coq: "access_vec_dec"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
   (bits('n), atom('m)) -> bit
@@ -183,14 +194,6 @@ val not_vec = {c: "not_bits", _: "not_vec"} : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-
-function neq_atom (x, y) = not_bool(eq_atom(x, y))
-
-val neq_int = {lem: "neq"} : (int, int) -> bool
-
-function neq_int (x, y) = not_bool(eq_int(x, y))
-
 val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
@@ -199,27 +202,15 @@ val neq_anything = {lem: "neq", coq: "generic_neq"} : forall ('a : Type). ('a, '
 
 function neq_anything (x, y) = not_bool(x == y)
 
-overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
+overload operator != = {neq_vec, neq_anything}
 
-val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
+val and_vec = {lem: "and_vec", c: "and_bits", coq: "and_vec", ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val builtin_and_vec = {c: "and_bits", ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+overload operator & = {and_vec}
 
-val and_vec = {lem: "and_vec", coq: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {lem: "or_vec", c: "or_bits", coq: "or_vec", ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-function and_vec (xs, ys) = builtin_and_vec(xs, ys)
-
-overload operator & = {and_bool, and_vec}
-
-val or_bool = {coq: "orb", _:"or_bool"} : (bool, bool) -> bool
-
-val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
-val or_vec = {lem: "or_vec", coq: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
-function or_vec (xs, ys) = builtin_or_vec(xs, ys)
-
-overload operator | = {or_bool, or_vec}
+overload operator | = {or_vec}
 
 val unsigned = {ocaml: "uint", lem: "uint", coq: "uint", c: "sail_unsigned"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
@@ -276,16 +267,16 @@ val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
 
 val xor_vec = {c: "xor_bits", _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val int_power = {ocaml: "int_power", lem: "pow", coq: "pow"} : (int, int) -> int
+val int_power = {ocaml: "int_power", lem: "pow", coq: "pow", c: "pow_int"} : (int, int) -> int
 
 val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> real
 
 overload operator ^ = {xor_vec, int_power, real_power, concat_str}
 
-val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range"} : forall 'n 'm 'o 'p.
+val add_range = {ocaml: "add_int", c: "add_int", lem: "integerAdd", coq: "add_range"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val add_int = {ocaml: "add_int", lem: "integerAdd", coq: "Z.add"} : (int, int) -> int
+val add_int = {ocaml: "add_int", c: "add_int", lem: "integerAdd", coq: "Z.add"} : (int, int) -> int
 
 val add_vec = {c: "add_bits", _: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -295,12 +286,12 @@ val add_real = {ocaml: "add_real", lem: "realAdd"} : (real, real) -> real
 
 overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
 
-val sub_range = {ocaml: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm 'o 'p.
+val sub_range = {ocaml: "sub_int", c: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
-val sub_int = {ocaml: "sub_int", lem: "integerMinus", coq: "Z.sub"} : (int, int) -> int
+val sub_int = {ocaml: "sub_int", c: "sub_int", lem: "integerMinus", coq: "Z.sub"} : (int, int) -> int
 val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
-               lem: "integerMinus", coq: "sub_nat"}
+	       lem: "integerMinus", coq: "sub_nat", c: "sub_nat"}
             : (nat, nat) -> nat
 
 val sub_vec = {c: "sub_bits", _: "sub_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -372,10 +363,10 @@ val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
 overload operator / = {quotient_nat, quotient, quotient_real}
 
-val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot"} : (int, int) -> int
-val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod"} : (int, int) -> int
+val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot", c: "tdiv_int"} : (int, int) -> int
+val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod", c: "tmod_int"} : (int, int) -> int
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
+val modulus = {ocaml: "modulus", lem: "hardware_mod", c: "tmod_int"} : (int, int) -> int
 
 overload operator % = {modulus}
 
@@ -385,13 +376,13 @@ val shl_int = "shl_int" : (int, int) -> int
 
 val shr_int = "shr_int" : (int, int) -> int
 
-val min_nat = {ocaml: "min_int", lem: "min"} : (nat, nat) -> nat
+val min_nat = {ocaml: "min_int", lem: "min", c: "min_int"} : (nat, nat) -> nat
 
-val min_int = {ocaml: "min_int", lem: "min", coq: "Z.min"} : (int, int) -> int
+val min_int = {ocaml: "min_int", lem: "min", coq: "Z.min", c: "min_int"} : (int, int) -> int
 
-val max_nat = {ocaml: "max_int", lem: "max"} : (nat, nat) -> nat
+val max_nat = {ocaml: "max_int", lem: "max", c: "max_int"} : (nat, nat) -> nat
 
-val max_int = {ocaml: "max_int", lem: "max", coq: "Z.max"} : (int, int) -> int
+val max_int = {ocaml: "max_int", lem: "max", coq: "Z.max", c: "max_int"} : (int, int) -> int
 
 overload min = {min_nat, min_int}
 
@@ -522,7 +513,7 @@ function vector64 n = __raw_GetSlice_int(64, n, 0)
 val to_bits : forall 'l, 'l >= 0.(atom('l), int) -> bits('l)
 function to_bits (l, n) = __raw_GetSlice_int(l, n, 0)
 
-val vector_update_subrange_dec = {ocaml: "update_subrange", lem: "update_subrange_vec_dec", coq: "update_subrange_vec_dec"} : forall 'n 'm 'o.
+val vector_update_subrange_dec = {ocaml: "update_subrange", c: "vector_update_subrange", lem: "update_subrange_vec_dec", coq: "update_subrange_vec_dec"} : forall 'n 'm 'o.
   (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
 val vector_update_subrange_inc = {ocaml: "update_subrange", lem: "update_subrange_vec_inc"} : forall 'n 'm 'o.

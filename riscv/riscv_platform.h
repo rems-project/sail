@@ -22,3 +22,6 @@ void plat_insns_per_tick(sail_int *rop, unit);
 
 unit plat_term_write(mach_bits);
 mach_bits plat_htif_tohost(unit);
+
+unit memea(mach_bits, sail_int);
+

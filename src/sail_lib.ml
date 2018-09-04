@@ -373,9 +373,9 @@ let string_of_hex = function
   | _ -> failwith "Cannot convert binary sequence to hex"
 
 let string_of_bits bits =
-  (* if List.length bits mod 4 == 0
-   * then "0x" ^ String.concat "" (List.map string_of_hex (break 4 bits)) *)
-  string_of_int (int_of_string ("0b" ^ String.concat "" (List.map string_of_bit bits)))
+  if List.length bits mod 4 == 0
+  then "0x" ^ String.concat "" (List.map string_of_hex (break 4 bits))
+  else "0b" ^ String.concat "" (List.map string_of_bit bits)
 
 let hex_slice (str, n, m) =
   let bits = List.concat (List.map hex_char (list_of_string (String.sub str 2 (String.length str - 2)))) in

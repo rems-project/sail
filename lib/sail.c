@@ -301,6 +301,14 @@ void sub_int(sail_int *rop, const sail_int op1, const sail_int op2)
   mpz_sub(*rop, op1, op2);
 }
 
+void sub_nat(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  mpz_sub(*rop, op1, op2);
+  if (mpz_cmp_ui(*rop, 0) < 0ul) {
+    mpz_set_ui(*rop, 0ul);
+  }
+}
+
 inline
 void mult_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
@@ -361,7 +369,15 @@ void abs_int(sail_int *rop, const sail_int op)
   mpz_abs(*rop, op);
 }
 
-void pow2(sail_int *rop, const sail_int exp) {
+inline
+void pow_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  uint64_t n = mpz_get_ui(op2);
+  mpz_pow_ui(*rop, op1, n);
+}
+
+void pow2(sail_int *rop, const sail_int exp)
+{
   /* Assume exponent is never more than 2^64... */
   uint64_t exp_ui = mpz_get_ui(exp);
   mpz_t base;

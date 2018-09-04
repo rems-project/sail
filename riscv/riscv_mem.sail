@@ -58,17 +58,17 @@ function mem_read (addr, width, aq, rl, res) = {
   }
 }
 
-val MEMea = {ocaml: "memea", lem: "MEMea"} : forall 'n.
+val MEMea = {lem: "MEMea", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_release = {ocaml: "memea", lem: "MEMea_release"} : forall 'n.
+val MEMea_release = {lem: "MEMea_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_strong_release = {ocaml: "memea", lem: "MEMea_strong_release"} : forall 'n.
+val MEMea_strong_release = {lem: "MEMea_strong_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_conditional = {ocaml: "memea", lem: "MEMea_conditional"} : forall 'n.
+val MEMea_conditional = {lem: "MEMea_conditional", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_conditional_release = {ocaml: "memea", lem: "MEMea_conditional_release"} : forall 'n.
+val MEMea_conditional_release = {lem: "MEMea_conditional_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_conditional_strong_release = {ocaml: "memea", lem: "MEMea_conditional_strong_release"} : forall 'n.
+val MEMea_conditional_strong_release = {lem: "MEMea_conditional_strong_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
 
 val mem_write_ea : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(unit) effect {eamem, escape}
@@ -136,13 +136,13 @@ function mem_write_value (addr, width, value, aq, rl, con) = {
   }
 }
 
-val MEM_fence_rw_rw = {ocaml: "skip", lem: "MEM_fence_rw_rw"} : unit -> unit effect {barr}
-val MEM_fence_r_rw  = {ocaml: "skip", lem: "MEM_fence_r_rw"}  : unit -> unit effect {barr}
-val MEM_fence_r_r   = {ocaml: "skip", lem: "MEM_fence_r_r"}   : unit -> unit effect {barr}
-val MEM_fence_rw_w  = {ocaml: "skip", lem: "MEM_fence_rw_w"}  : unit -> unit effect {barr}
-val MEM_fence_w_w   = {ocaml: "skip", lem: "MEM_fence_w_w"}   : unit -> unit effect {barr}
-val MEM_fence_w_rw  = {ocaml: "skip", lem: "MEM_fence_w_rw"}  : unit -> unit effect {barr}
-val MEM_fence_rw_r  = {ocaml: "skip", lem: "MEM_fence_rw_r"}  : unit -> unit effect {barr}
-val MEM_fence_r_w   = {ocaml: "skip", lem: "MEM_fence_r_w"}   : unit -> unit effect {barr}
-val MEM_fence_w_r   = {ocaml: "skip", lem: "MEM_fence_w_r"}   : unit -> unit effect {barr}
-val MEM_fence_i     = {ocaml: "skip", lem: "MEM_fence_i"}     : unit -> unit effect {barr}
+val MEM_fence_rw_rw = {lem: "MEM_fence_rw_rw", _: "skip"} : unit -> unit effect {barr}
+val MEM_fence_r_rw  = {lem: "MEM_fence_r_rw", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_r_r   = {lem: "MEM_fence_r_r", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_rw_w  = {lem: "MEM_fence_rw_w", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_w_w   = {lem: "MEM_fence_w_w", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_w_rw  = {lem: "MEM_fence_w_rw", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_rw_r  = {lem: "MEM_fence_rw_r", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_r_w   = {lem: "MEM_fence_r_w", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_w_r   = {lem: "MEM_fence_w_r", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_i     = {lem: "MEM_fence_i", _: "skip"}     : unit -> unit effect {barr}

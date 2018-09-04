@@ -2,7 +2,8 @@ SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail ris
 PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
-C_WARNINGS ?= -Wall -Wextra -Wno-unused-label -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
+C_WARNINGS ?=
+#-Wall -Wextra -Wno-unused-label -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
 C_SRCS = riscv_prelude.c riscv_platform.c
 
 export SAIL_DIR

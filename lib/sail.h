@@ -150,6 +150,7 @@ SAIL_INT_FUNCTION(undefined_range, sail_int, const sail_int, const sail_int);
  */
 SAIL_INT_FUNCTION(add_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(sub_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(sub_nat, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(mult_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(tdiv_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(tmod_int, sail_int, const sail_int, const sail_int);
@@ -161,6 +162,8 @@ SAIL_INT_FUNCTION(min_int, sail_int, const sail_int, const sail_int);
 
 SAIL_INT_FUNCTION(neg_int, sail_int, const sail_int);
 SAIL_INT_FUNCTION(abs_int, sail_int, const sail_int);
+
+SAIL_INT_FUNCTION(pow_int, sail_int, const sail_int, const sail_int);
 
 SAIL_INT_FUNCTION(pow2, sail_int, const sail_int);
 
