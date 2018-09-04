@@ -3071,8 +3071,8 @@ let compile_ast ctx c_includes (Defs defs) =
         [ Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ]
     in
 
-    let postamble = separate hardline (List.map string
-       ( [ "int main(int argc, char *argv[])";
+    let model_init = separate hardline (List.map string
+       ( [ "void model_init(void)";
            "{";
            "  setup_rts();" ]
        @ fst exn_boilerplate
@@ -3080,20 +3080,37 @@ let compile_ast ctx c_includes (Defs defs) =
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
        @ (if regs = [] then [] else [ "  zinitializze_registers(UNIT);" ])
        @ letbind_initializers
-       @ [ "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);" ]
-       @ [ "  zmain(UNIT);" ]
+       @ [ "}" ] ))
+    in
+
+    let model_fini = separate hardline (List.map string
+       ( [ "void model_fini(void)";
+           "{" ]
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
        @ finish cdefs
        @ snd exn_boilerplate
        @ [ "  cleanup_rts();";
-           "  return EXIT_SUCCESS;";
            "}" ] ))
+    in
+
+    let model_main = separate hardline (List.map string
+         [ "int main(int argc, char *argv[])";
+           "{";
+           "  model_init();";
+           "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
+           "  zmain(UNIT);";
+           "  model_fini();";
+           "  return EXIT_SUCCESS;";
+           "}" ] )
     in
 
     let hlhl = hardline ^^ hardline in
 
-    Pretty_print_sail.to_string (preamble ^^ hlhl ^^ separate hlhl docs ^^ hlhl ^^ postamble)
+    Pretty_print_sail.to_string (preamble ^^ hlhl ^^ separate hlhl docs ^^ hlhl
+                                 ^^ model_init ^^ hlhl
+                                 ^^ model_fini ^^ hlhl
+                                 ^^ model_main)
     |> print_endline
   with
     Type_error (l, err) -> c_error ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)
