@@ -2785,7 +2785,9 @@ let rewrite_defs_letbind_effects =
     let rewrap e = fix_eff_exp (E_aux (e,annot)) in
 
     match exp_aux with
-    | E_block es -> failwith "E_block should have been removed till now"
+    | E_block es ->
+       n_exp_nameL es (fun es ->
+       k (rewrap (E_block es)))
     | E_nondet _ -> failwith "E_nondet not supported"
     | E_id id -> k exp
     | E_ref id -> k exp
@@ -3459,6 +3461,10 @@ let rewrite_defs_mapping_patterns =
 
 let rewrite_lit_lem (L_aux (lit, _)) = match lit with
   | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ -> true
+  | _ -> false
+
+let rewrite_lit_bsv (L_aux (lit, _)) = match lit with
+  | L_num _ | L_string _ | L_real _ -> true
   | _ -> false
 
 let rewrite_no_strings (L_aux (lit, _)) = match lit with
@@ -4629,6 +4635,52 @@ let rewrite_defs_lem = [
   ("letbind_effects", rewrite_defs_letbind_effects);
   ("remove_e_assign", rewrite_defs_remove_e_assign);
   ("internal_lets", rewrite_defs_internal_lets);
+  ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
+  ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
+  ("merge function clauses", merge_funcls);
+  ("recheck_defs", recheck_defs)
+  ]
+
+let rewrite_defs_bsv = [
+  ("realise_mappings", rewrite_defs_realise_mappings);
+  ("remove_mapping_valspecs", remove_mapping_valspecs);
+  ("pat_string_append", rewrite_defs_pat_string_append);
+  ("mapping_builtins", rewrite_defs_mapping_patterns);
+  ("mono_rewrites", mono_rewrites);
+  ("recheck_defs", if_mono recheck_defs);
+  ("rewrite_toplevel_nexps", if_mono rewrite_toplevel_nexps);
+  ("monomorphise", if_mono monomorphise);
+  ("recheck_defs", if_mono recheck_defs);
+  ("add_bitvector_casts", if_mono Monomorphise.add_bitvector_casts);
+  ("rewrite_atoms_to_singletons", if_mono Monomorphise.rewrite_atoms_to_singletons);
+  ("recheck_defs", if_mono recheck_defs);
+  ("rewrite_undefined", rewrite_undefined_if_gen false);
+  ("pat_lits", rewrite_defs_pat_lits rewrite_lit_bsv);
+  ("vector_concat_assignments", rewrite_vector_concat_assignments);
+  ("tuple_assignments", rewrite_tuple_assignments);
+  ("simple_assignments", rewrite_simple_assignments);
+  (* ("remove_vector_concat", rewrite_defs_remove_vector_concat); *)
+  (* ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats); *)
+  ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
+  ("guarded_pats", rewrite_defs_guarded_pats);
+  (* ("bitvector_exps", rewrite_bitvector_exps); *)
+  (* ("register_ref_writes", rewrite_register_ref_writes); *)
+  ("nexp_ids", rewrite_defs_nexp_ids);
+  ("fix_val_specs", rewrite_fix_val_specs);
+  ("split_execute", rewrite_split_fun_constr_pats "execute");
+  ("recheck_defs", recheck_defs);
+  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
+  (* ("constraint", rewrite_constraint); *)
+  (* ("remove_assert", rewrite_defs_remove_assert); *)
+  ("top_sort_defs", top_sort_defs);
+  ("trivial_sizeof", rewrite_trivial_sizeof);
+  ("sizeof", rewrite_sizeof);
+  (* ("early_return", rewrite_defs_early_return); *)
+  ("fix_val_specs", rewrite_fix_val_specs);
+  (* ("remove_blocks", rewrite_defs_remove_blocks); *)
+  (* ("letbind_effects", rewrite_defs_letbind_effects); *)
+  (* ("remove_e_assign", rewrite_defs_remove_e_assign); *)
+  (* ("internal_lets", rewrite_defs_internal_lets); *)
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
   ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
   ("merge function clauses", merge_funcls);

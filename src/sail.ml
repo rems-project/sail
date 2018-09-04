@@ -62,6 +62,7 @@ let opt_print_verbose = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
+let opt_print_bsv = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
 let opt_memo_z3 = ref false
@@ -116,7 +117,9 @@ let options = Arg.align ([
   ( "-c_no_main",
     Arg.Set C_backend.opt_no_main,
     " do not generate the main() function" );
-  ( "-elf",
+  ( "-bsv",
+    Arg.Tuple [Arg.Set opt_print_bsv; Arg.Set Initial_check.opt_undefined_gen],
+    " output a Bluespec translated version of the input");  ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an elf file so that it can be executed by compiled C code");
   ( "-O",
@@ -325,6 +328,11 @@ let main() =
          let ast_c, type_envs = Specialize.specialize ast_c type_envs in
          let ast_c = Spec_analysis.top_sort_defs ast_c in
          C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
+       else ());
+      (if !(opt_print_bsv)
+       then
+        let ast_bsv = rewrite_ast_bsv ast in
+        Pretty_print_bsv.pp_defs stdout ast_bsv
        else ());
       (if !(opt_print_lem)
        then

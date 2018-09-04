@@ -48,48 +48,34 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Ast
 open Type_check
+open Ast
+open Ast_util
+open Rewriter
+open PPrint
+open Pretty_print_common
 
-(* Monomorphisation options *)
-val opt_mono_rewrites : bool ref
-val opt_mono_complex_nexps : bool ref
-val opt_mono_split : ((string * int) * string) list ref
-val opt_dmono_analysis : int ref
-val opt_auto_mono : bool ref
-val opt_dall_split_errors : bool ref
-val opt_dmono_continue : bool ref
+let doc_id (Id_aux(i,_)) =
+  match i with
+  | Id i -> string i
+  | DeIid x -> string (Util.zencode_string ("op " ^ x))
 
-(* Generate a fresh id with the given prefix *)
-val fresh_id : string -> l -> id
+let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
+  match funcls with
+  | [] -> failwith "Empty function list"
+  | [FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), annot)] ->
+     begin
+       match pexp, typ_of_annot annot with
+       | Pat_exp (pat, exp), Typ_aux (Typ_fn (targs, tret, _), _) ->
+          separate space [string "function"; doc_id id; semi]
+       | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Unsupported function clause")
+     end
+  | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Multiple function clauses should have been merged")
 
-(* Re-write undefined to functions created by -undefined_gen flag *)
-val rewrite_undefined : bool -> tannot defs -> tannot defs
+let doc_def = function
+  | DEF_fundef fd -> doc_fundef fd
+  | _ -> empty
 
-(* Perform rewrites to exclude AST nodes not supported for ocaml out*)
-val rewrite_defs_ocaml : (string * (tannot defs -> tannot defs)) list
+let doc_defs (Defs defs) = separate_map hardline doc_def defs
 
-(* Perform rewrites to exclude AST nodes not supported for interpreter *)
-val rewrite_defs_interpreter : (string * (tannot defs -> tannot defs)) list
-
-(* Perform rewrites to exclude AST nodes not supported for lem out*)
-val rewrite_defs_lem : (string * (tannot defs -> tannot defs)) list
-
-(* Perform rewrites to exclude AST nodes not supported for coq out*)
-val rewrite_defs_coq : (string * (tannot defs -> tannot defs)) list
-
-(* Warn about matches where we add a default case for Coq because they're not
-   exhaustive *)
-val opt_coq_warn_nonexhaustive : bool ref
-
-(* Perform rewrites to exclude AST nodes not supported for C compilation *)
-val rewrite_defs_c : (string * (tannot defs -> tannot defs)) list
-
-(* Perform rewrites to exclude AST nodes not supported for Bluespec output *)
-val rewrite_defs_bsv : (string * (tannot defs -> tannot defs)) list
-
-(* This is a special rewriter pass that checks AST invariants without
-   actually doing any re-writing *)
-val rewrite_defs_check : (string * (tannot defs -> tannot defs)) list
-
-val simple_typ : typ -> typ
+let pp_defs out defs = ToChannel.pretty 1. 80 out (doc_defs defs)
