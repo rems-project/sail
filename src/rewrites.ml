@@ -4514,6 +4514,33 @@ let rewrite =
 
 end
 
+(* Splitting a function (e.g., an execute function on an AST) can produce
+   new functions that appear to be recursive but are not.  This checks to
+   see if the flag can be turned off.  Doesn't handle mutual recursion
+   for now. *)
+let minimise_recursive_functions (Defs defs) =
+  let funcl_is_rec (FCL_aux (FCL_Funcl (id,pexp),_)) =
+    fold_pexp
+      { (pure_exp_alg false (||)) with
+        e_app = (fun (id',args) ->
+          Id.compare id id' == 0 || List.exists (fun x -> x) args);
+        e_app_infix = (fun (arg1,id',arg2) ->
+          arg1 || arg2 || Id.compare id id' == 0)
+      } pexp
+  in
+  let rewrite_function (FD_aux (FD_function (recopt,topt,effopt,funcls),ann) as fd) =
+    match recopt with
+    | Rec_aux (Rec_nonrec, _) -> fd
+    | Rec_aux (Rec_rec, l) ->
+       if List.exists funcl_is_rec funcls
+       then fd
+       else FD_aux (FD_function (Rec_aux (Rec_nonrec, Generated l),topt,effopt,funcls),ann)
+  in
+  let rewrite_def = function
+    | DEF_fundef fd -> DEF_fundef (rewrite_function fd)
+    | d -> d
+  in Defs (List.map rewrite_def defs)
+
 let recheck_defs defs = fst (Type_error.check initial_env defs)
 
 let remove_mapping_valspecs (Defs defs) =
@@ -4628,6 +4655,7 @@ let rewrite_defs_coq = [
   ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);
   ("split_execute", rewrite_split_fun_constr_pats "execute");
+  ("minimise_recursive_functions", minimise_recursive_functions);
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("constraint", rewrite_constraint); *)

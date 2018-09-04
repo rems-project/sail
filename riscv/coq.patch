@@ -1,5 +1,5 @@
---- riscv.v.plain	2018-09-03 18:49:16.824340711 +0100
-+++ riscv.v	2018-09-03 18:49:31.420452869 +0100
+--- riscv.v.plain	2018-09-04 18:33:52.864300968 +0100
++++ riscv.v	2018-09-04 18:33:58.984334844 +0100
 @@ -8420,14 +8420,16 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
@@ -87,82 +87,7 @@
         returnm ((match w__7 with
                   | TR39_Address (pa) => TR_Address (EXTZ 64 pa)
                   | TR39_Failure (f) => TR_Failure (translationException ac f)
-@@ -11522,7 +11524,7 @@
-           (tt))
-    else None.
- 
--Fixpoint execute_WFI '(tt : unit) 
-+Definition execute_WFI '(tt : unit) 
- : M (bool) :=
-    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
-    (match w__0 with
-@@ -11554,7 +11556,7 @@
-    returnm (true
-     : bool).
- 
--Fixpoint execute_THREAD_START '(tt : unit)  : bool := true.
-+Definition execute_THREAD_START '(tt : unit)  : bool := true.
- 
- Fixpoint execute_STORECON (aq : bool) (rl : bool) (rs2 : mword 5) (rs1 : mword 5) (width : word_width) (rd : mword 5) 
- : M (bool) :=
-@@ -11683,9 +11685,9 @@
-        : M (bool))
-     : M (bool).
- 
--Fixpoint execute_STOP_FETCHING '(tt : unit)  : bool := true.
-+Definition execute_STOP_FETCHING '(tt : unit)  : bool := true.
- 
--Fixpoint execute_SRET '(tt : unit) 
-+Definition execute_SRET '(tt : unit) 
- : M (bool) :=
-    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
-    match w__0 with
-@@ -11929,7 +11931,7 @@
-    returnm (true
-     : bool).
- 
--Fixpoint execute_NOP '(tt : unit)  : bool := true.
-+Definition execute_NOP '(tt : unit)  : bool := true.
- 
- Fixpoint execute_MULW (rs2 : mword 5) (rs1 : mword 5) (rd : mword 5) 
- : M (bool) :=
-@@ -11971,7 +11973,7 @@
-    returnm (true
-     : bool).
- 
--Fixpoint execute_MRET '(tt : unit) 
-+Definition execute_MRET '(tt : unit) 
- : M (bool) :=
-    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
-    (if ((eq_vec ((privLevel_to_bits w__0)  : mword 2) ((privLevel_to_bits Machine)  : mword 2)))
-@@ -12082,7 +12084,7 @@
- 
- Fixpoint execute_ILLEGAL (s : mword 32)  : M (bool) := handle_illegal tt >> returnm (false  : bool).
- 
--Fixpoint execute_FENCEI '(tt : unit)  : bool := true.
-+Definition execute_FENCEI '(tt : unit)  : bool := true.
- 
- Fixpoint execute_FENCE (pred : mword 4) (succ : mword 4) 
- : M (bool) :=
-@@ -12138,7 +12140,7 @@
-    returnm (true
-     : bool).
- 
--Fixpoint execute_ECALL '(tt : unit) 
-+Definition execute_ECALL '(tt : unit) 
- : M (bool) :=
-    read_reg cur_privilege_ref >>= fun w__0 : Privilege =>
-    let t : sync_exception :=
-@@ -12154,7 +12156,7 @@
-    handle_exception w__1 (CTL_TRAP (t)) w__2 >>= fun w__3 : mword 64 =>
-    write_reg nextPC_ref w__3 >> returnm (false  : bool).
- 
--Fixpoint execute_EBREAK '(tt : unit) 
-+Definition execute_EBREAK '(tt : unit) 
- : M (bool) :=
-    (read_reg PC_ref  : M (mword 64)) >>= fun w__0 : xlenbits =>
-    handle_mem_exception w__0 E_Breakpoint >> returnm (false  : bool).
-@@ -12176,8 +12178,8 @@
+@@ -12178,8 +12180,8 @@
       if sumbool_of_bool ((andb s
                              (Z.gtb q (projT1 (sub_range (build_ex (projT1 (pow2 31))) (build_ex 1))))))
       then
@@ -173,16 +98,7 @@
                    : {n : Z & ArithFact (True)}))))
       else q in
     wX
-@@ -12204,7 +12206,7 @@
-    returnm (true
-     : bool).
- 
--Fixpoint execute_C_ILLEGAL '(tt : unit)  : M (bool) := handle_illegal tt >> returnm (false  : bool).
-+Definition execute_C_ILLEGAL '(tt : unit)  : M (bool) := handle_illegal tt >> returnm (false  : bool).
- 
- Fixpoint execute_C_ADDIW (imm : mword 6) (rsd : mword 5) 
- : M (bool) :=
-@@ -12370,138 +12372,144 @@
+@@ -12374,138 +12376,144 @@
     returnm (true
      : bool).
  
@@ -386,7 +302,7 @@
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -12541,6 +12549,7 @@
+@@ -12545,6 +12553,7 @@
     | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
     | C_ILLEGAL (arg0) => (execute_C_ILLEGAL arg0)  : M (bool)
@@ -394,7 +310,7 @@
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -12803,7 +12812,7 @@
+@@ -12807,7 +12816,7 @@
      | _ => exit tt  : M (string)
      end)
      : M (string).
@@ -403,7 +319,7 @@
  Definition assembly_backwards (arg_ : string) 
  : M (ast) :=
     let _stringappend_756_ := arg_ in
-@@ -27069,7 +27078,7 @@
+@@ -27073,7 +27082,7 @@
            : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
         : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
      : M (option ((ast * {n : Z & ArithFact (n >= 0)}))).
@@ -412,7 +328,7 @@
  Definition encdec_forwards (arg_ : ast) 
  : M (mword 32) :=
     (match arg_ with
-@@ -29157,7 +29166,7 @@
+@@ -29161,7 +29170,7 @@
          : M ((bool * bool))
      end)
      : M ((bool * bool)).
@@ -421,7 +337,7 @@
  Definition loop '(tt : unit) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -29204,7 +29213,7 @@
+@@ -29208,7 +29217,7 @@
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
      : unit).
@@ -430,7 +346,7 @@
  Definition read_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 11)} 
  : read_kind :=
     let p0_ := arg_ in
-@@ -29295,7 +29304,7 @@
+@@ -29299,7 +29308,7 @@
     else if sumbool_of_bool ((Z.eqb p0_ 20)) then Barrier_RISCV_w_r
     else if sumbool_of_bool ((Z.eqb p0_ 21)) then Barrier_RISCV_i
     else Barrier_x86_MFENCE.
@@ -439,7 +355,7 @@
  Definition num_of_barrier_kind (arg_ : barrier_kind) 
  : {e : Z & ArithFact (0 <= e /\ e <= 22)} :=
     build_ex(match arg_ with
-@@ -30473,5 +30482,5 @@
+@@ -30477,5 +30486,5 @@
                     B0]
         : mword 64) |}.
  Hint Unfold initial_regstate : sail.
