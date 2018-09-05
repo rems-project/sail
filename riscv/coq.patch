@@ -78,26 +78,6 @@
         (match w__7 with
          | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -8681,7 +8683,7 @@
-     | Sbare => returnm ((TR_Address (vAddr))  : TR_Result )
-     | SV39 =>
-        translate39 (subrange_vec_dec vAddr 38 0) ac effPriv mxr do_sum
--         (build_ex (projT1 (sub_range (build_ex SV39_LEVELS) (build_ex 1)))) >>= fun w__7 : TR39_Result =>
-+         (build_ex ( (Z.sub ( SV39_LEVELS) ( 1)))) >>= fun w__7 : TR39_Result =>
-        returnm ((match w__7 with
-                  | TR39_Address (pa) => TR_Address (EXTZ 64 pa)
-                  | TR39_Failure (f) => TR_Failure (translationException ac f)
-@@ -12178,8 +12180,8 @@
-      if sumbool_of_bool ((andb s
-                             (Z.gtb q (projT1 (sub_range (build_ex (projT1 (pow2 31))) (build_ex 1))))))
-      then
--       projT1 (sub_range (build_ex 0)
--                 (build_ex (projT1 ((build_ex (projT1 (ex_int (pow 2 31))))
-+        (Z.sub ( 0)
-+                 ( (projT1 ((build_ex (projT1 (ex_int (pow 2 31))))
-                   : {n : Z & ArithFact (True)}))))
-      else q in
-    wX
 @@ -12374,138 +12376,144 @@
     returnm (true
      : bool).

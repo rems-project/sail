@@ -1071,6 +1071,7 @@ Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
 intros; (* To solve implications for derive_m *)
+try (exact trivial_range);
 try fill_in_evar_eq;
 try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
 try (constructor; omega);
