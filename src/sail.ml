@@ -118,7 +118,7 @@ let options = Arg.align ([
     Arg.Set C_backend.opt_no_main,
     " do not generate the main() function" );
   ( "-bsv",
-    Arg.Tuple [Arg.Set opt_print_bsv; Arg.Set Initial_check.opt_undefined_gen],
+    Arg.Set opt_print_bsv,
     " output a Bluespec translated version of the input");  ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an elf file so that it can be executed by compiled C code");
