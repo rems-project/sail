@@ -1,6 +1,6 @@
---- riscv.v.plain	2018-09-04 18:33:52.864300968 +0100
-+++ riscv.v	2018-09-04 18:33:58.984334844 +0100
-@@ -8420,14 +8420,16 @@
+--- riscv.v.plain	2018-09-05 16:42:05.798948328 +0100
++++ riscv.v	2018-09-05 16:43:04.035671001 +0100
+@@ -8379,14 +8379,16 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
@@ -20,7 +20,7 @@
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
     phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false >>= fun w__0 : MemoryOpResult (mword (8 * 8)) =>
-@@ -8440,27 +8442,27 @@
+@@ -8399,27 +8401,27 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
         (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure (PTW_Invalid_PTE))  : PTW_Result )
          else if ((isPTEPtr pbits)) then
@@ -54,7 +54,7 @@
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
                          PTW_Failure
-@@ -8470,12 +8472,12 @@
+@@ -8429,12 +8431,12 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
                          PTW_Success
@@ -69,7 +69,7 @@
             : PTW_Result))
          : M (PTW_Result)
      end)
-@@ -8601,7 +8603,7 @@
+@@ -8560,7 +8562,7 @@
          : M (TR39_Result)
      | None =>
         curPTB39 tt >>= fun w__6 : mword 56 =>
@@ -78,7 +78,7 @@
         (match w__7 with
          | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -12374,138 +12376,144 @@
+@@ -12335,138 +12337,144 @@
     returnm (true
      : bool).
  
@@ -282,7 +282,7 @@
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -12545,6 +12553,7 @@
+@@ -12506,6 +12514,7 @@
     | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
     | C_ILLEGAL (arg0) => (execute_C_ILLEGAL arg0)  : M (bool)
@@ -290,7 +290,7 @@
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -12807,7 +12816,7 @@
+@@ -12768,7 +12777,7 @@
      | _ => exit tt  : M (string)
      end)
      : M (string).
@@ -299,7 +299,7 @@
  Definition assembly_backwards (arg_ : string) 
  : M (ast) :=
     let _stringappend_756_ := arg_ in
-@@ -27073,7 +27082,7 @@
+@@ -27034,7 +27043,7 @@
            : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
         : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
      : M (option ((ast * {n : Z & ArithFact (n >= 0)}))).
@@ -308,7 +308,7 @@
  Definition encdec_forwards (arg_ : ast) 
  : M (mword 32) :=
     (match arg_ with
-@@ -29161,7 +29170,7 @@
+@@ -29122,7 +29131,7 @@
          : M ((bool * bool))
      end)
      : M ((bool * bool)).
@@ -317,7 +317,7 @@
  Definition loop '(tt : unit) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -29208,7 +29217,7 @@
+@@ -29169,7 +29178,7 @@
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
      : unit).
@@ -326,19 +326,3 @@
  Definition read_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 11)} 
  : read_kind :=
     let p0_ := arg_ in
-@@ -29299,7 +29308,7 @@
-    else if sumbool_of_bool ((Z.eqb p0_ 20)) then Barrier_RISCV_w_r
-    else if sumbool_of_bool ((Z.eqb p0_ 21)) then Barrier_RISCV_i
-    else Barrier_x86_MFENCE.
--
-+(*
- Definition num_of_barrier_kind (arg_ : barrier_kind) 
- : {e : Z & ArithFact (0 <= e /\ e <= 22)} :=
-    build_ex(match arg_ with
-@@ -30477,5 +30486,5 @@
-                    B0]
-        : mword 64) |}.
- Hint Unfold initial_regstate : sail.
--
-+*)
- End Content.

@@ -144,7 +144,7 @@ Inductive barrier_kind :=
   (* AArch64 barriers *)
   | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
   | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB
-  | Barrier_TM_COMMIT
+ (* | Barrier_TM_COMMIT*)
   (* MIPS barriers *)
   | Barrier_MIPS_SYNC
   (* RISC-V barriers *)
@@ -204,11 +204,11 @@ Inductive instruction_kind :=
   | IK_mem_read  : read_kind -> instruction_kind
   | IK_mem_write : write_kind -> instruction_kind
   | IK_mem_rmw   : (read_kind * write_kind) -> instruction_kind
-  | IK_branch (* this includes conditional-branch (multiple nias, none of which is NIA_indirect_address),
+  | IK_branch    : unit -> instruction_kind (* this includes conditional-branch (multiple nias, none of which is NIA_indirect_address),
   indirect/computed-branch (single nia of kind NIA_indirect_address)
   and branch/jump (single nia of kind NIA_concrete_address) *)
   | IK_trans     : trans_kind -> instruction_kind
-  | IK_simple    : instruction_kind.
+  | IK_simple    : unit -> instruction_kind.
 
 (*
 instance (Show instruction_kind)
