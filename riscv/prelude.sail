@@ -257,7 +257,7 @@ val putchar = "putchar" : forall ('a : Type). 'a -> unit
 
 val concat_str = {c: "concat_str", ocaml: "concat_str", lem: "stringAppend", coq: "String.append"} : (string, string) -> string
 
-val string_of_int = {c: "string_of_int", ocaml: "string_of_int", lem: "stringFromInteger"} : int -> string
+val string_of_int = {c: "string_of_int", ocaml: "string_of_int", lem: "stringFromInteger", coq: "string_of_int"} : int -> string
 
 val DecStr : int -> string
 

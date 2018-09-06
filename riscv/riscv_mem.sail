@@ -58,17 +58,17 @@ function mem_read (addr, width, aq, rl, res) = {
   }
 }
 
-val MEMea = {lem: "MEMea", _: "memea"} : forall 'n.
+val MEMea = {lem: "MEMea", coq: "MEMea", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_release = {lem: "MEMea_release", _: "memea"} : forall 'n.
+val MEMea_release = {lem: "MEMea_release", coq: "MEMea_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_strong_release = {lem: "MEMea_strong_release", _: "memea"} : forall 'n.
+val MEMea_strong_release = {lem: "MEMea_strong_release", coq: "MEMea_strong_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_conditional = {lem: "MEMea_conditional", _: "memea"} : forall 'n.
+val MEMea_conditional = {lem: "MEMea_conditional", coq: "MEMea_conditional", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_conditional_release = {lem: "MEMea_conditional_release", _: "memea"} : forall 'n.
+val MEMea_conditional_release = {lem: "MEMea_conditional_release", coq: "MEMea_conditional_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
-val MEMea_conditional_strong_release = {lem: "MEMea_conditional_strong_release", _: "memea"} : forall 'n.
+val MEMea_conditional_strong_release = {lem: "MEMea_conditional_strong_release", coq: "MEMea_conditional_strong_release", _: "memea"} : forall 'n.
   (xlenbits, atom('n)) -> unit effect {eamem}
 
 val mem_write_ea : forall 'n. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(unit) effect {eamem, escape}
@@ -136,13 +136,13 @@ function mem_write_value (addr, width, value, aq, rl, con) = {
   }
 }
 
-val MEM_fence_rw_rw = {lem: "MEM_fence_rw_rw", _: "skip"} : unit -> unit effect {barr}
-val MEM_fence_r_rw  = {lem: "MEM_fence_r_rw", _: "skip"}  : unit -> unit effect {barr}
-val MEM_fence_r_r   = {lem: "MEM_fence_r_r", _: "skip"}   : unit -> unit effect {barr}
-val MEM_fence_rw_w  = {lem: "MEM_fence_rw_w", _: "skip"}  : unit -> unit effect {barr}
-val MEM_fence_w_w   = {lem: "MEM_fence_w_w", _: "skip"}   : unit -> unit effect {barr}
-val MEM_fence_w_rw  = {lem: "MEM_fence_w_rw", _: "skip"}  : unit -> unit effect {barr}
-val MEM_fence_rw_r  = {lem: "MEM_fence_rw_r", _: "skip"}  : unit -> unit effect {barr}
-val MEM_fence_r_w   = {lem: "MEM_fence_r_w", _: "skip"}   : unit -> unit effect {barr}
-val MEM_fence_w_r   = {lem: "MEM_fence_w_r", _: "skip"}   : unit -> unit effect {barr}
-val MEM_fence_i     = {lem: "MEM_fence_i", _: "skip"}     : unit -> unit effect {barr}
+val MEM_fence_rw_rw = {lem: "MEM_fence_rw_rw", coq: "MEM_fence_rw_rw", _: "skip"} : unit -> unit effect {barr}
+val MEM_fence_r_rw  = {lem: "MEM_fence_r_rw", coq: "MEM_fence_r_rw", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_r_r   = {lem: "MEM_fence_r_r", coq: "MEM_fence_r_r", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_rw_w  = {lem: "MEM_fence_rw_w", coq: "MEM_fence_rw_w", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_w_w   = {lem: "MEM_fence_w_w", coq: "MEM_fence_w_w", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_w_rw  = {lem: "MEM_fence_w_rw", coq: "MEM_fence_w_rw", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_rw_r  = {lem: "MEM_fence_rw_r", coq: "MEM_fence_rw_r", _: "skip"}  : unit -> unit effect {barr}
+val MEM_fence_r_w   = {lem: "MEM_fence_r_w", coq: "MEM_fence_r_w", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_w_r   = {lem: "MEM_fence_w_r", coq: "MEM_fence_w_r", _: "skip"}   : unit -> unit effect {barr}
+val MEM_fence_i     = {lem: "MEM_fence_i", coq: "MEM_fence_i", _: "skip"}     : unit -> unit effect {barr}

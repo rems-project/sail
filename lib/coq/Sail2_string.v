@@ -138,3 +138,25 @@ Definition hex_bits_28_matches_prefix s := hex_bits_n_matches_prefix 28 s.
 Definition hex_bits_32_matches_prefix s := hex_bits_n_matches_prefix 32 s.
 Definition hex_bits_33_matches_prefix s := hex_bits_n_matches_prefix 33 s.
 
+Local Definition zero : N := Ascii.N_of_ascii "0".
+Local Fixpoint string_of_N (limit : nat) (n : N) (acc : string) : string :=
+match limit with
+| O => acc
+| S limit' =>
+  let (d,m) := N.div_eucl n 10 in
+  let acc := String (Ascii.ascii_of_N (m + zero)) acc in
+  if N.ltb 0 d then string_of_N limit' d acc else acc
+end.
+Local Fixpoint pos_limit p :=
+match p with
+| xH => S O
+| xI p | xO p => S (pos_limit p)
+end.
+Definition string_of_int (z : Z) : string :=
+match z with
+| Z0 => "0"
+| Zpos p => string_of_N (pos_limit p) (Npos p) ""
+| Zneg p => String "-" (string_of_N (pos_limit p) (Npos p) "")
+end.
+
+
