@@ -9,25 +9,41 @@ bool plat_enable_misaligned_access(unit u)
 { return false; }
 
 mach_bits plat_ram_base(unit u)
-{ return 0; }
+{
+  return UINT64_C(0x80000000);
+}
 
 mach_bits plat_ram_size(unit u)
-{ return 0; }
+{
+  return UINT64_C(0x80000000);
+}
 
 mach_bits plat_rom_base(unit u)
-{ return 0; }
+{
+  return UINT64_C(0x1000);
+}
 
 mach_bits plat_rom_size(unit u)
-{ return 0; }
+{
+  return UINT64_C(0x100);
+}
 
 mach_bits plat_clint_base(unit u)
-{ return 0; }
+{
+  return UINT64_C(0x2000000);
+}
 
 mach_bits plat_clint_size(unit u)
-{ return 0; }
+{
+  return UINT64_C(0xc0000);
+}
 
 bool within_phys_mem(mach_bits addr, sail_int len)
-{ return 0; }
+{
+  printf("within_phys_mem\n");
+  exit(EXIT_FAILURE);
+  return 0;
+}
 
 unit load_reservation(mach_bits addr)
 { return UNIT; }
@@ -45,7 +61,9 @@ void plat_insns_per_tick(sail_int *rop, unit u)
 { }
 
 mach_bits plat_htif_tohost(unit u)
-{ return 0; }
+{
+  return UINT64_C(0x2000000);
+}
 
 unit memea(mach_bits len, sail_int n)
 {

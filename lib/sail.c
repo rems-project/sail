@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include<assert.h>
 #include<inttypes.h>
 #include<stdbool.h>
@@ -1111,9 +1112,13 @@ void string_of_int(sail_string *str, const sail_int i)
   gmp_asprintf(str, "%Zd", i);
 }
 
+/* asprinf is a GNU extension, but it should exist on BSD */
 void string_of_mach_bits(sail_string *str, const mach_bits op)
 {
-  exit(EXIT_FAILURE);
+  int bytes = asprintf(str, "0x%" PRIx64, op);
+  if (bytes == -1) {
+    fprintf(stderr, "Could not print bits 0x%" PRIx64 "\n", op);
+  }
 }
 
 void string_of_sail_bits(sail_string *str, const sail_bits op)
