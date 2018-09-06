@@ -614,83 +614,84 @@ Notation "{[ r 'with' 'PC' := e ]}" := ({| PC := e; tlb39 := tlb39 r; htif_exit_
 
 Definition Counteren_of_regval (merge_var : register_value) 
 : option Counteren :=
-   match merge_var with | Regval_Counteren (v) => Some v | g__12 => None end.
+   match merge_var with | Regval_Counteren (v) => Some (v) | g__12 => None end.
 
-Definition regval_of_Counteren (v : Counteren)  : register_value := Regval_Counteren v.
+Definition regval_of_Counteren (v : Counteren)  : register_value := Regval_Counteren (v).
 
 Definition Mcause_of_regval (merge_var : register_value) 
 : option Mcause :=
-   match merge_var with | Regval_Mcause (v) => Some v | g__11 => None end.
+   match merge_var with | Regval_Mcause (v) => Some (v) | g__11 => None end.
 
-Definition regval_of_Mcause (v : Mcause)  : register_value := Regval_Mcause v.
+Definition regval_of_Mcause (v : Mcause)  : register_value := Regval_Mcause (v).
 
 Definition Medeleg_of_regval (merge_var : register_value) 
 : option Medeleg :=
-   match merge_var with | Regval_Medeleg (v) => Some v | g__10 => None end.
+   match merge_var with | Regval_Medeleg (v) => Some (v) | g__10 => None end.
 
-Definition regval_of_Medeleg (v : Medeleg)  : register_value := Regval_Medeleg v.
+Definition regval_of_Medeleg (v : Medeleg)  : register_value := Regval_Medeleg (v).
 
 Definition Minterrupts_of_regval (merge_var : register_value) 
 : option Minterrupts :=
-   match merge_var with | Regval_Minterrupts (v) => Some v | g__9 => None end.
+   match merge_var with | Regval_Minterrupts (v) => Some (v) | g__9 => None end.
 
-Definition regval_of_Minterrupts (v : Minterrupts)  : register_value := Regval_Minterrupts v.
+Definition regval_of_Minterrupts (v : Minterrupts)  : register_value := Regval_Minterrupts (v).
 
 Definition Misa_of_regval (merge_var : register_value) 
 : option Misa :=
-   match merge_var with | Regval_Misa (v) => Some v | g__8 => None end.
+   match merge_var with | Regval_Misa (v) => Some (v) | g__8 => None end.
 
-Definition regval_of_Misa (v : Misa)  : register_value := Regval_Misa v.
+Definition regval_of_Misa (v : Misa)  : register_value := Regval_Misa (v).
 
 Definition Mstatus_of_regval (merge_var : register_value) 
 : option Mstatus :=
-   match merge_var with | Regval_Mstatus (v) => Some v | g__7 => None end.
+   match merge_var with | Regval_Mstatus (v) => Some (v) | g__7 => None end.
 
-Definition regval_of_Mstatus (v : Mstatus)  : register_value := Regval_Mstatus v.
+Definition regval_of_Mstatus (v : Mstatus)  : register_value := Regval_Mstatus (v).
 
 Definition Mtvec_of_regval (merge_var : register_value) 
 : option Mtvec :=
-   match merge_var with | Regval_Mtvec (v) => Some v | g__6 => None end.
+   match merge_var with | Regval_Mtvec (v) => Some (v) | g__6 => None end.
 
-Definition regval_of_Mtvec (v : Mtvec)  : register_value := Regval_Mtvec v.
+Definition regval_of_Mtvec (v : Mtvec)  : register_value := Regval_Mtvec (v).
 
 Definition Privilege_of_regval (merge_var : register_value) 
 : option Privilege :=
-   match merge_var with | Regval_Privilege (v) => Some v | g__5 => None end.
+   match merge_var with | Regval_Privilege (v) => Some (v) | g__5 => None end.
 
-Definition regval_of_Privilege (v : Privilege)  : register_value := Regval_Privilege v.
+Definition regval_of_Privilege (v : Privilege)  : register_value := Regval_Privilege (v).
 
 Definition Sedeleg_of_regval (merge_var : register_value) 
 : option Sedeleg :=
-   match merge_var with | Regval_Sedeleg (v) => Some v | g__4 => None end.
+   match merge_var with | Regval_Sedeleg (v) => Some (v) | g__4 => None end.
 
-Definition regval_of_Sedeleg (v : Sedeleg)  : register_value := Regval_Sedeleg v.
+Definition regval_of_Sedeleg (v : Sedeleg)  : register_value := Regval_Sedeleg (v).
 
 Definition Sinterrupts_of_regval (merge_var : register_value) 
 : option Sinterrupts :=
-   match merge_var with | Regval_Sinterrupts (v) => Some v | g__3 => None end.
+   match merge_var with | Regval_Sinterrupts (v) => Some (v) | g__3 => None end.
 
-Definition regval_of_Sinterrupts (v : Sinterrupts)  : register_value := Regval_Sinterrupts v.
+Definition regval_of_Sinterrupts (v : Sinterrupts)  : register_value := Regval_Sinterrupts (v).
 
 Definition TLB39_Entry_of_regval (merge_var : register_value) 
 : option TLB39_Entry :=
-   match merge_var with | Regval_TLB39_Entry (v) => Some v | g__2 => None end.
+   match merge_var with | Regval_TLB39_Entry (v) => Some (v) | g__2 => None end.
 
-Definition regval_of_TLB39_Entry (v : TLB39_Entry)  : register_value := Regval_TLB39_Entry v.
+Definition regval_of_TLB39_Entry (v : TLB39_Entry)  : register_value := Regval_TLB39_Entry (v).
 
 Definition bool_of_regval (merge_var : register_value) 
 : option bool :=
-   match merge_var with | Regval_bool (v) => Some v | g__1 => None end.
+   match merge_var with | Regval_bool (v) => Some (v) | g__1 => None end.
 
-Definition regval_of_bool (v : bool)  : register_value := Regval_bool v.
+Definition regval_of_bool (v : bool)  : register_value := Regval_bool (v).
 
 Definition vector_64_dec_bit_of_regval (merge_var : register_value) 
 : option (mword 64) :=
-   match merge_var with | Regval_vector_64_dec_bit (v) => Some v | g__0 => None end.
+   match merge_var with | Regval_vector_64_dec_bit (v) => Some (v) | g__0 => None end.
 
 Definition regval_of_vector_64_dec_bit (v : mword 64) 
 : register_value :=
-   Regval_vector_64_dec_bit v.
+   Regval_vector_64_dec_bit
+     (v).
 
 
 
