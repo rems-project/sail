@@ -194,6 +194,8 @@ let help = function
      "(:u | :unload) - Unload all loaded files."
   | ":output" ->
      ":output <file> - Redirect evaluating expression output to a file."
+  | ":option" ->
+     ":option string - Parse string as if it was an option passed on the command line. Try :option -help."
   | cmd ->
      "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
 
@@ -253,7 +255,7 @@ let handle_input' input =
             else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
          | ":commands" ->
             let commands =
-              [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output";
+              [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output :option";
                 "Normal mode commands - :elf :(l)oad :(u)nload";
                 "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
                 "";
@@ -269,6 +271,14 @@ let handle_input' input =
             in
             let ids = Specialize.polymorphic_functions is_kopt !interactive_ast in
             List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements ids)
+         | ":option" ->
+            begin
+              try
+                let args = Str.split (Str.regexp " +") arg in
+                Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) Sail.options (fun _ -> ()) "";
+              with
+              | Arg.Bad message | Arg.Help message -> print_endline message
+            end;
          | ":spec" ->
             let ast, env = Specialize.specialize !interactive_ast !interactive_env in
             interactive_ast := ast;

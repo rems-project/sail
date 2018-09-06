@@ -259,7 +259,7 @@ let load_files type_envs files =
   let ast =
     List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
-  let ast = Process_file.preprocess_ast ast in
+  let ast = Process_file.preprocess_ast options ast in
   let ast = convert_ast Ast_util.inc_ord ast in
 
   let (ast, type_envs) = check_ast type_envs ast in

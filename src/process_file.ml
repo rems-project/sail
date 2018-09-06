@@ -137,30 +137,41 @@ let rec realise_union_anon_rec_types (Parse_ast.TD_variant (union_id, name_scm_o
         let new_rec_def = DEF_type (TD_aux (TD_record (record_id, name_scm_opt, typq, fields, flag), Generated l)) in
         (Some new_rec_def, new_arm) :: (realise_union_anon_rec_types orig_union arms)
 
-let rec preprocess = function
+let rec preprocess opts = function
   | [] -> []
   | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
      symbols := StringSet.add symbol !symbols;
-     preprocess defs
+     preprocess opts defs
+
+  | Parse_ast.DEF_pragma ("option", command, l) :: defs ->
+     begin
+       try
+         let args = Str.split (Str.regexp " +") command in
+         Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) opts (fun _ -> ()) "";
+       with
+       | Arg.Bad message | Arg.Help message -> raise (Reporting_basic.err_general l message)
+     end;
+     preprocess opts defs
+
 
   | Parse_ast.DEF_pragma ("ifndef", symbol, l) :: defs ->
      let then_defs, else_defs, defs = cond_pragma l defs in
      if not (StringSet.mem symbol !symbols) then
-       preprocess (then_defs @ defs)
+       preprocess opts (then_defs @ defs)
      else
-       preprocess (else_defs @ defs)
+       preprocess opts (else_defs @ defs)
 
   | Parse_ast.DEF_pragma ("ifdef", symbol, l) :: defs ->
      let then_defs, else_defs, defs = cond_pragma l defs in
      if StringSet.mem symbol !symbols then
-       preprocess (then_defs @ defs)
+       preprocess opts (then_defs @ defs)
      else
-       preprocess (else_defs @ defs)
+       preprocess opts (else_defs @ defs)
 
   | Parse_ast.DEF_pragma ("include", file, l) :: defs ->
      let len = String.length file in
      if len = 0 then
-       (Util.warn "Skipping bad $include. No file argument."; preprocess defs)
+       (Util.warn "Skipping bad $include. No file argument."; preprocess opts defs)
      else if file.[0] = '"' && file.[len - 1] = '"' then
        let relative = match l with
          | Parse_ast.Range (pos, _) -> Filename.dirname (Lexing.(pos.pos_fname))
@@ -168,8 +179,8 @@ let rec preprocess = function
        in
        let file = String.sub file 1 (len - 2) in
        let (Parse_ast.Defs include_defs) = parse_file ~loc:l (Filename.concat relative file) in
-       let include_defs = preprocess include_defs in
-       include_defs @ preprocess defs
+       let include_defs = preprocess opts include_defs in
+       include_defs @ preprocess opts defs
      else if file.[0] = '<' && file.[len - 1] = '>' then
        let file = String.sub file 1 (len - 2) in
        let sail_dir =
@@ -183,14 +194,14 @@ let rec preprocess = function
        in
        let file = Filename.concat sail_dir ("lib/" ^ file) in
        let (Parse_ast.Defs include_defs) = parse_file ~loc:l file in
-       let include_defs = preprocess include_defs in
-       include_defs @ preprocess defs
+       let include_defs = preprocess opts include_defs in
+       include_defs @ preprocess opts defs
      else
        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
-       (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess defs)
+       (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess opts defs)
 
   | Parse_ast.DEF_pragma (p, arg, _) :: defs ->
-     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess defs)
+     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess opts defs)
 
   (* realise any anonymous record arms of variants *)
   | Parse_ast.DEF_type (Parse_ast.TD_aux
@@ -204,25 +215,25 @@ let rec preprocess = function
      let generated_records = filter_records (List.map fst records_and_arms) in
      let rewritten_arms = List.map snd records_and_arms in
      let rewritten_union = Parse_ast.TD_variant (id, name_scm_opt, typq, rewritten_arms, flag) in
-     generated_records @ (Parse_ast.DEF_type (Parse_ast.TD_aux (rewritten_union, l))) :: preprocess defs
+     generated_records @ (Parse_ast.DEF_type (Parse_ast.TD_aux (rewritten_union, l))) :: preprocess opts defs
 
   | (Parse_ast.DEF_default (Parse_ast.DT_aux (Parse_ast.DT_order (_, Parse_ast.ATyp_aux (atyp, _)), _)) as def) :: defs ->
      begin match atyp with
-     | Parse_ast.ATyp_inc -> symbols := StringSet.add "_DEFAULT_INC" !symbols; def :: preprocess defs
-     | Parse_ast.ATyp_dec -> symbols := StringSet.add "_DEFAULT_DEC" !symbols; def :: preprocess defs
-     | _ -> def :: preprocess defs
+     | Parse_ast.ATyp_inc -> symbols := StringSet.add "_DEFAULT_INC" !symbols; def :: preprocess opts defs
+     | Parse_ast.ATyp_dec -> symbols := StringSet.add "_DEFAULT_DEC" !symbols; def :: preprocess opts defs
+     | _ -> def :: preprocess opts defs
      end
 
-  | def :: defs -> def :: preprocess defs
+  | def :: defs -> def :: preprocess opts defs
 
-let preprocess_ast (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess defs)
+let preprocess_ast opts (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess opts defs)
 
 let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
-let load_file_no_check order f = convert_ast order (preprocess_ast (parse_file f))
+let load_file_no_check opts order f = convert_ast order (preprocess_ast opts (parse_file f))
 
-let load_file order env f =
-  let ast = convert_ast order (preprocess_ast (parse_file f)) in
+let load_file opts order env f =
+  let ast = convert_ast order (preprocess_ast opts (parse_file f)) in
   Type_error.check env ast
 
 let opt_just_check = ref false
