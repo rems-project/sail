@@ -196,7 +196,7 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
     | AE_cast (aexp, typ) -> AE_cast (recur aexp, typ)
     | AE_assign (id, typ, aexp) when Id.compare from_id id = 0 -> AE_assign (to_id, typ, aexp_rename from_id to_id aexp)
     | AE_assign (id, typ, aexp) -> AE_assign (id, typ, aexp_rename from_id to_id aexp)
-    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 -> AE_let (mut, id, typ1, aexp1, aexp2, typ2)
+    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 -> AE_let (mut, id, typ1, recur aexp1, aexp2, typ2)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, recur aexp1, recur aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map recur aexps, recur aexp, typ)
     | AE_return (aval, typ) -> AE_return (aval_rename from_id to_id aval, typ)
