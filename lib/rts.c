@@ -448,18 +448,30 @@ static struct option options[] = {
   {"entry",      required_argument, 0, 'n'},
   {"image",      required_argument, 0, 'i'},
   {"verbosity",  required_argument, 0, 'v'},
+  {"help",       no_argument,       0, 'h'},
   {0, 0, 0, 0}
 };
+
+static void print_usage()
+{
+  struct option *opt = options;
+  while (opt->name) {
+    printf("\t -%c\t %s\n", (char)opt->val, opt->name);
+    opt++;
+  }
+  exit(EXIT_SUCCESS);
+}
 
 int process_arguments(int argc, char *argv[])
 {
   int c;
+  bool     exe_loaded = false;
   bool     elf_entry_set = false;
   uint64_t elf_entry;
 
   while (true) {
     int option_index = 0;
-    c = getopt_long(argc, argv, "e:n:i:b:l:C:", options, &option_index);
+    c = getopt_long(argc, argv, "e:n:i:b:l:C:h", options, &option_index);
 
     if (c == -1) break;
 
@@ -502,14 +514,17 @@ int process_arguments(int argc, char *argv[])
 
       load_raw(addr, file);
       free(file);
+      exe_loaded = true;
       break;
 
     case 'i':
       load_image(optarg);
+      exe_loaded = true;
       break;
 
     case 'e':
       load_elf(optarg);
+      exe_loaded = true;
       break;
 
     case 'n':
@@ -534,11 +549,18 @@ int process_arguments(int argc, char *argv[])
       }
       break;
 
+    case 'h':
+      print_usage();
+      break;
+
     default:
       fprintf(stderr, "Unrecognized option %s\n", optarg);
+      print_usage();
       return -1;
     }
   }
+
+  if (!exe_loaded) print_usage();
 
   // assignment to g_elf_entry is deferred until the end of file so that an
   // explicit command line flag will override the address read from the ELF
