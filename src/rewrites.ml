@@ -3464,7 +3464,7 @@ let rewrite_lit_lem (L_aux (lit, _)) = match lit with
   | _ -> false
 
 let rewrite_lit_bsv (L_aux (lit, _)) = match lit with
-  | L_num _ | L_string _ | L_real _ -> true
+  | L_string _ | L_real _ -> true
   | _ -> false
 
 let rewrite_no_strings (L_aux (lit, _)) = match lit with
@@ -3923,26 +3923,64 @@ let rewrite_defs_remove_e_assign (Defs defs) =
     ; rewrite_defs = rewrite_defs_base
     } (Defs (loop_specs @ defs))
 
-let merge_funcls (Defs defs) =
-  let merge_function (FD_aux (FD_function (r,t,e,fcls),ann) as f) =
+let normalise_funcl_pats select (Defs defs) =
+  let rewrite_function (FD_aux (FD_function (r,t,e,fcls),ann) as f) =
     match fcls with
-    | [] | [_] -> f
-    | (FCL_aux (FCL_Funcl (id,_),(l,_)))::_ ->
-       let var = mk_id "merge#var" in
+    | (FCL_aux (FCL_Funcl (id,_),(l,annot)))::_ when select fcls ->
        let l_g = Parse_ast.Generated l in
        let ann_g : _ * tannot = (l_g,empty_tannot) in
+       let pevar i =
+         let id = mk_id ("var#" ^ string_of_int i) in
+         P_aux (P_id id, ann_g), E_aux (E_id id, ann_g)
+       in
+       let pvar, evar = match destruct_tannot annot with
+         | Some (env, _, _) ->
+            begin
+              try
+                match Env.get_val_spec id env with
+                | _, Typ_aux (Typ_fn (Typ_aux (Typ_tup ts, _), _, _), _) ->
+                   let ps, es = List.split (List.mapi (fun i _ -> pevar i) ts) in
+                   P_aux (P_tup ps, ann_g), E_aux (E_tuple es, ann_g)
+                | _ -> pevar 0
+              with
+              | _ -> pevar 0
+            end
+         | _ -> pevar 0
+       in
        let clauses = List.map (fun (FCL_aux (FCL_Funcl (_,pexp),_)) -> pexp) fcls in
        FD_aux (FD_function (r,t,e,[
-         FCL_aux (FCL_Funcl (id,Pat_aux (Pat_exp (P_aux (P_id var,ann_g),
-                                                  E_aux (E_case (E_aux (E_id var,ann_g),clauses),ann_g)),ann_g)),
+         FCL_aux (FCL_Funcl (id,Pat_aux (Pat_exp (pvar,
+                                                  E_aux (E_case (evar,clauses),ann_g)),ann_g)),
                   (l,empty_tannot))]),ann)
+    | _ -> f
   in
-  let merge_in_def = function
-    | DEF_fundef f -> DEF_fundef (merge_function f)
-    | DEF_internal_mutrec fs -> DEF_internal_mutrec (List.map merge_function fs)
+  let rewrite_def = function
+    | DEF_fundef f -> DEF_fundef (rewrite_function f)
+    | DEF_internal_mutrec fs -> DEF_internal_mutrec (List.map rewrite_function fs)
     | d -> d
-  in Defs (List.map merge_in_def defs)
+  in Defs (List.map rewrite_def defs)
 
+let merge_funcls = normalise_funcl_pats (fun funcls -> List.length funcls > 1)
+let normalise_funcl_pats_bsv =
+  (* Normalise patterns that can not be readily transformed to a plain list of
+     formal arguments *)
+  let select funcls =
+    let plain (FCL_aux (FCL_Funcl (_,pexp),(l,annot))) =
+      let pat, _, _, _ = destruct_pexp pexp in
+      match fst (untyp_pat pat) with
+      | P_aux (P_tup ps, _) ->
+         let is_var p =
+           match fst (untyp_pat p) with
+           | P_aux (P_id id, _) when Env.lookup_id id (pat_env_of p) = Unbound -> true
+           | _ -> false
+         in
+         List.for_all is_var ps
+      | P_aux (P_id id, _) when Env.lookup_id id (pat_env_of pat) = Unbound -> true
+      | _ -> is_unit_typ (pat_typ_of pat)
+    in
+    List.length funcls > 1 || not (List.for_all plain funcls)
+  in
+  normalise_funcl_pats select
 
 let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   let empty_vec = E_aux (E_vector [], (l,())) in
@@ -4659,10 +4697,10 @@ let rewrite_defs_bsv = [
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
-  (* ("remove_vector_concat", rewrite_defs_remove_vector_concat); *)
-  (* ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats); *)
-  ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
-  ("guarded_pats", rewrite_defs_guarded_pats);
+  ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+  ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  (* ("remove_numeral_pats", rewrite_defs_remove_numeral_pats); *)
+  (* ("guarded_pats", rewrite_defs_guarded_pats); *)
   (* ("bitvector_exps", rewrite_bitvector_exps); *)
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("nexp_ids", rewrite_defs_nexp_ids);
@@ -4683,7 +4721,7 @@ let rewrite_defs_bsv = [
   (* ("internal_lets", rewrite_defs_internal_lets); *)
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
   ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
-  ("merge function clauses", merge_funcls);
+  ("normalise function clauses", normalise_funcl_pats_bsv);
   ("recheck_defs", recheck_defs)
   ]
 
