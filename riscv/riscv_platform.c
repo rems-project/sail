@@ -62,7 +62,7 @@ void plat_insns_per_tick(sail_int *rop, unit u)
 
 mach_bits plat_htif_tohost(unit u)
 {
-  return UINT64_C(0x2000000);
+  return UINT64_C(0x80001000);
 }
 
 unit memea(mach_bits len, sail_int n)
