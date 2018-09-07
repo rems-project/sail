@@ -886,14 +886,11 @@ let remove_vector_concat_pat pat =
   let module G = Graph.Make(String) in
   let root_graph = List.fold_left (fun g (_, (root_id, child_id)) -> G.add_edge root_id child_id g) G.empty decls in
   let root_order = G.topsort root_graph in
-  let find_root root_id =
-    try List.find (fun (_, (root_id', _)) -> root_id = root_id') decls with
-    | Not_found ->
-    (* If it's not a root the it's a leaf node in the graph, so search for child_id *)
-    try List.find (fun (_, (_, child_id)) -> root_id = child_id) decls with
-    | Not_found -> assert false (* Should never happen *)
+  let add_child child_id cdecls =
+    try List.find (fun (_, (_, child_id')) -> child_id = child_id') decls :: cdecls with
+    | Not_found -> cdecls
   in
-  let decls = List.map find_root root_order in
+  let decls = List.fold_right add_child root_order [] in
 
   let (letbinds,decls) =
     let decls = List.map fst decls in
@@ -931,6 +928,13 @@ let remove_vector_concat_pat pat =
         if is_vector_typ typ then
           match p, vector_typ_args_of typ with
           | P_vector ps,_ -> acc @ ps
+          | P_lit (L_aux (L_hex _ as lit, _)), _
+          | P_lit (L_aux (L_bin _ as lit, _)), _ ->
+             let bits =
+               List.map
+                 (fun lit -> P_aux (P_lit lit, (gen_loc l, mk_tannot env bit_typ eff)))
+                 (vector_string_to_bit_list l lit)
+             in acc @ bits
           | _, (Nexp_aux (Nexp_constant length,_),_,_) ->
              acc @ (List.map wild (range Big_int.zero (Big_int.sub length (Big_int.of_int 1))))
           | _, _ ->
