@@ -98,6 +98,7 @@ uint64_t rev64(uint64_t x) {
 
 #define EM_ARM     0x0028  /* 32-bit ARM */
 #define EM_AARCH64 0x00B7  /* 64-bit ARM */
+#define EM_RISCV   0x00F3  /* RISC-V */
 
 #define PT_LOAD         1  /* Loadable segment */
 
@@ -323,7 +324,8 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
         if (rdHalf32(le, ehdr->e_type) != ET_EXEC ||
-            rdHalf32(le, ehdr->e_machine) != EM_ARM) {
+            (rdHalf32(le, ehdr->e_machine) != EM_ARM &&
+             rdHalf64(le, ehdr->e_machine) != EM_RISCV)) {
             fprintf(stderr, "Invalid ELF type or machine for class (32-bit)\n");
             exit(EXIT_FAILURE);
         }
@@ -341,7 +343,8 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf64_Ehdr *ehdr = (Elf64_Ehdr*) &buffer[0];
         if (rdHalf64(le, ehdr->e_type) != ET_EXEC ||
-            rdHalf64(le, ehdr->e_machine) != EM_AARCH64) {
+            (rdHalf64(le, ehdr->e_machine) != EM_AARCH64 &&
+             rdHalf64(le, ehdr->e_machine) != EM_RISCV)) {
             fprintf(stderr, "Invalid ELF type or machine for class (64-bit)\n");
             exit(EXIT_FAILURE);
         }
