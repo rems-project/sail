@@ -81,9 +81,71 @@ There is also an \verb+-ocaml_trace+ option which is the same as
 \verb+-ocaml+ except it instruments the generated OCaml code with
 tracing information.
 
-%% \subsection{C compilation}
+\subsection{C compilation}
 
-%% WIP but basically like OCaml
+To compile Sail into C, the \verb+-c+ option is used, like so:
+\begin{verbatim}
+sail -c FILES 1> out.c
+\end{verbatim}
+The transated C is currently printed to stdout, so this should be
+redirected to a file as above. To produce an executable this needs to
+be compiled and linked with the C files in the \verb+sail/lib+
+directory:
+\begin{verbatim}
+gcc out.c $SAIL_DIR/lib/*.c -lgmp -lz -I $SAIL_DIR/lib/ -o out
+\end{verbatim}
+The C output requires the GMP library for arbitrary precision
+arithmetic, as well as zlib for working with compressed ELF binaries.
+
+There are several Sail options that affect the C output:
+\begin{itemize}
+  \item \verb+-O+ turns on optimisations. The generated C code will be
+    quite slow unless this flag is set.
+  \item \verb+-Oconstant_fold+ apply constant folding optimisations.
+  \item \verb+-c_include+ Supply additional header files to be
+    included in the generated C.
+  \item \verb+-c_no_main+ Do not generate a \verb+main()+ function.
+  \item \verb+-static+ Mark generated C functions as static where
+    possible. This is useful for measuring code coverage.
+\end{itemize}
+
+The generated executable for the Sail specification (provided a main
+function is generated) supports several options for loading ELF files
+and binary data into the specification memory.
+\begin{itemize}
+\item \verb+-e/--elf+ Loads an ELF file into memory. Currently only
+  AArch64 and RISC-V ELF files are supported.
+
+\item \verb+-b/--binary+ Loads raw binary data into the
+  specification's memory. It is used like so:
+\begin{verbatim}
+./out --binary=0xADDRESS,FILE
+./out -b 0xADDRESS,FILE
+\end{verbatim}
+The contents of the supplied file will be placed in memory starting at
+the given address, which must be given as a hexadecimal number.
+
+\item \verb+-i/--image+ For ELF files that are not loadable via the
+  \verb+--elf+ flag, they can be pre-processed by Sail using linksem
+  into a special image file that can be loaded via this flag. This is
+  done like so:
+\begin{verbatim}
+sail -elf ELF_FILE -o image.bin
+./out --image=image.bin
+\end{verbatim}
+The advantage of this flag is that it uses Linksem to process the ELF
+file, so it can handle any ELF file that linksem is able to
+understand. This also guarantees that the contents of the ELF binary
+loaded into memory is exactly the same as for the OCaml backend and
+the interpreter as they both also use Linksem internally to load ELF
+files.
+\item \verb+-n/--entry+ sets a custom entry point returned by the
+  \ll{elf_entry} function. Must be a hexadecimal address prefixed by
+  \verb+0x+.
+\item \verb+-l/--cyclelimit+ run the simulation until a set number of
+  cycles have been reached. The main loop of the specification must
+  call the \ll{cycle_count} function for this to work.
+\end{itemize}
 
 \subsection{Lem and Isabelle}
 
