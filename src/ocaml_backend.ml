@@ -140,7 +140,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> ocaml_typ_id ctx id
   | Typ_app (id, []) -> ocaml_typ_id ctx id
-  | Typ_app (id, typs) -> parens (separate_map (string " * ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
+  | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
   | Typ_bidir (t1, t2) -> raise (Reporting_basic.err_general l "Ocaml doesn't support bidir types")
@@ -160,7 +160,7 @@ let ocaml_typquant typq =
   match quant_items typq with
   | [] -> empty
   | [qi] -> ocaml_qi qi
-  | qis -> parens (separate_map (string " * ") ocaml_qi qis)
+  | qis -> parens (separate_map (string ", ") ocaml_qi qis)
 
 let string_lit str = dquotes (string (String.escaped str))
 
@@ -199,6 +199,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   | P_wild -> string "_"
   | P_as (pat, id) -> separate space [ocaml_pat ctx pat; string "as"; zencode ctx id]
   | P_app (id, pats) -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
+  | P_cons (hd_pat, tl_pat) -> ocaml_pat ctx hd_pat ^^ string " :: " ^^ ocaml_pat ctx tl_pat
   | _ -> string ("PAT<" ^ string_of_pat pat ^ ">")
 
 let begin_end doc = group (string "begin" ^^ nest 2 (break 1 ^^ doc) ^/^ string "end")
@@ -681,7 +682,7 @@ let ocaml_main spec sail_dir =
    @ [ "  zinitializze_registers ();";
        if !opt_trace_ocaml then "  Sail_lib.opt_trace := true;" else "  ();";
        "  Printexc.record_backtrace true;";
-       "  zmain ()\n";])
+       "  try zmain () with _ -> prerr_endline(\"Exiting due to uncaught exception\")\n";])
   |> String.concat "\n"
 
 let ocaml_pp_defs f defs =

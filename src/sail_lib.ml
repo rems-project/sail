@@ -51,6 +51,8 @@ let trace_call str =
 
 type bit = B0 | B1
 
+let eq_anything (a, b) = a = b
+
 let eq_bit (a, b) = a = b
 
 let and_bit = function
@@ -539,6 +541,9 @@ let lteq_real (x, y) = Rational.leq x y
 let gteq_real (x, y) = Rational.geq x y
 let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
 let negate_real x = Rational.neg x
+
+let print_real (str, r) = print_string "REAL\n"
+let prerr_real (str, r) = prerr_string "REAL\n"
 
 let round_down x = Rational.floor x (* Num.big_int_of_num (Num.floor_num x) *)
 let round_up x = Rational.ceiling x (* Num.big_int_of_num (Num.ceiling_num x) *)

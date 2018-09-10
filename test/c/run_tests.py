@@ -43,6 +43,21 @@ def test_interpreter(name):
                 sys.exit()
     return collect_results(name, tests)
 
+def test_ocaml(name):
+    banner('Testing {}'.format(name))
+    tests = {}
+    for filename in os.listdir('.'):
+        if re.match('.+\.sail', filename):
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('sail -ocaml -ocaml_build_dir _sbuild_{} -o {} {}'.format(basename, basename, filename))
+                step('./{} 1> {}.oresult'.format(basename, basename))
+                step('diff {}.oresult {}.expect'.format(basename, basename))
+                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                sys.exit()
+    return collect_results(name, tests)
+
 xml = '<testsuites>\n'
 
 xml += test_c('unoptimized C', '', '', True)
@@ -51,6 +66,8 @@ xml += test_c('constant folding', '', '-Oconstant_fold', True)
 xml += test_c('address sanitised', '-O2 -fsanitize=undefined', '-O', False)
 
 xml += test_interpreter('interpreter')
+
+xml += test_ocaml('OCaml')
 
 xml += '</testsuites>\n'
 

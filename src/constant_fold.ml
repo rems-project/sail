@@ -183,14 +183,14 @@ let rec rewrite_constant_function_calls' ast =
     | E_if (E_aux (E_lit (L_aux (L_true, _)), _), then_exp, _) -> ok (); then_exp
     | E_if (E_aux (E_lit (L_aux (L_false, _)), _), _, else_exp) -> ok (); else_exp
 
+    (* We only propagate lets in the simple case where we know that
+       the id will have the inferred type of the argument. For more
+       complex let bindings trying to propagate them may result in
+       type errors due to how type variables are bound by let bindings
+       *)
     | E_let (LB_aux (LB_val (P_aux (P_id id, _), bind), _), exp) when is_constant bind ->
        ok ();
        subst id bind exp
-
-    | E_let (LB_aux (LB_val (P_aux (P_typ (typ, P_aux (P_id id, _)), annot), bind), _), exp)
-         when is_constant bind ->
-       ok ();
-       subst id (E_aux (E_cast (typ, bind), annot)) exp
 
     | _ -> E_aux (e_aux, annot)
   in

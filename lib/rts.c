@@ -465,7 +465,6 @@ static void print_usage()
 int process_arguments(int argc, char *argv[])
 {
   int c;
-  bool     exe_loaded = false;
   bool     elf_entry_set = false;
   uint64_t elf_entry;
 
@@ -514,17 +513,14 @@ int process_arguments(int argc, char *argv[])
 
       load_raw(addr, file);
       free(file);
-      exe_loaded = true;
       break;
 
     case 'i':
       load_image(optarg);
-      exe_loaded = true;
       break;
 
     case 'e':
       load_elf(optarg);
-      exe_loaded = true;
       break;
 
     case 'n':
@@ -559,8 +555,6 @@ int process_arguments(int argc, char *argv[])
       return -1;
     }
   }
-
-  if (!exe_loaded) print_usage();
 
   // assignment to g_elf_entry is deferred until the end of file so that an
   // explicit command line flag will override the address read from the ELF
