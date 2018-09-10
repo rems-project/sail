@@ -4,7 +4,8 @@ SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
 C_WARNINGS ?=
 #-Wall -Wextra -Wno-unused-label -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
-C_SRCS = riscv_prelude.c riscv_platform.c
+C_INCS = riscv_prelude.h riscv_platform_impl.h riscv_platform.h
+C_SRCS = riscv_prelude.c riscv_platform_impl.c riscv_platform.c
 
 export SAIL_DIR
 
@@ -38,7 +39,7 @@ coverage: _sbuild/coverage.native
 riscv.c: $(SAIL_SRCS) main.sail Makefile
 	$(SAIL) -O -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h $(SAIL_SRCS) main.sail 1> $@
 
-riscv_c: riscv.c riscv_prelude.h $(C_SRCS) Makefile
+riscv_c: riscv.c $(C_INCS) $(C_SRCS) Makefile
 	gcc $(C_WARNINGS) -O2 riscv.c $(C_SRCS) ../lib/*.c -lgmp -lz -I ../lib -o riscv_c
 
 latex: $(SAIL_SRCS) Makefile
