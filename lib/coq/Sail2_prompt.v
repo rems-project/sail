@@ -122,8 +122,8 @@ let rec untilM vars cond body =
 Definition build_ex_m {rv e} {T:Type} (x:monad rv T e) {P:T -> Prop} `{H:forall x, ArithFact (P x)} : monad rv {x : T & ArithFact (P x)} e :=
   x >>= fun y => returnm (existT _ y (H y)).
 
-Definition projT1_m {rv e} {P:Z -> Prop} (x: monad rv {x : Z & P x} e) : monad rv Z e :=
+Definition projT1_m {rv e} {T:Type} {P:T -> Prop} (x: monad rv {x : T & P x} e) : monad rv T e :=
   x >>= fun y => returnm (projT1 y).
 
-Definition derive_m {rv e} {P Q:Z -> Prop} (x : monad rv {x : Z & P x} e) `{forall x, ArithFact (P x) -> ArithFact (Q x)} : monad rv {x : Z & (ArithFact (Q x))} e :=
+Definition derive_m {rv e} {T:Type} {P Q:T -> Prop} (x : monad rv {x : T & P x} e) `{forall x, ArithFact (P x) -> ArithFact (Q x)} : monad rv {x : T & (ArithFact (Q x))} e :=
   x >>= fun y => returnm (build_ex (projT1 y)).
