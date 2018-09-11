@@ -331,8 +331,9 @@ let main() =
        else ());
       (if !(opt_print_bsv)
        then
-        let ast_bsv = rewrite_ast_bsv ast in
-        Pretty_print_bsv.pp_defs stdout ast_bsv
+         let type_envs, ast_bsv = State.add_regstate_defs true type_envs ast in
+         let ast_bsv = rewrite_ast_bsv ast_bsv in
+         Pretty_print_bsv.pp_defs stdout ast_bsv
        else ());
       (if !(opt_print_lem)
        then
