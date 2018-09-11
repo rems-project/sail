@@ -306,7 +306,7 @@ void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int total_f
     }
 }
 
-void loadELFHdr(const char* buffer, const int total_file_size) {
+void loadELFHdr(const char* buffer, const int total_file_size, bool *is32bit_p, uint64_t *entry) {
     if (total_file_size < sizeof(Elf32_Ehdr)) {
         fprintf(stderr, "File too small, not big enough even for 32-bit ELF header\n");
         exit(EXIT_FAILURE);
@@ -333,7 +333,8 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
 	for(int i = 0; i < rdHalf32(le, ehdr->e_phnum); ++i) {
 	  loadProgHdr32(le, buffer, rdOff32(le, ehdr->e_phoff) + i * rdHalf32(le, ehdr->e_phentsize), total_file_size);
 	}
-
+        if (is32bit_p) *is32bit_p = true;
+        if (entry) *entry = (uint64_t) ehdr->e_entry;
 	return;
     } else if (hdr->e_ident[EI_CLASS] == ELFCLASS64) {
         if (total_file_size < sizeof(Elf64_Ehdr)) {
@@ -352,7 +353,8 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
 	for(int i = 0; i < rdHalf64(le, ehdr->e_phnum); ++i) {
 	  loadProgHdr64(le, buffer, rdOff64(le, ehdr->e_phoff) + i * rdHalf64(le, ehdr->e_phentsize), total_file_size);
 	}
-
+        if (is32bit_p) *is32bit_p = false;
+        if (entry) *entry = ehdr->e_entry;
 	return;
     } else {
         fprintf(stderr, "Unrecognized ELF file format\n");
@@ -360,7 +362,7 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
     }
 }
 
-void load_elf(char *filename) {
+void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
     // Read input file into memory
     char* buffer = NULL;
     int   size   = 0;
@@ -377,8 +379,7 @@ void load_elf(char *filename) {
         if (s < 0) { goto fail; }
         read += s;
     }
-
-    loadELFHdr(buffer, read);
+    loadELFHdr(buffer, read, is32bit_p, entry);
     free(buffer);
     return;
 
