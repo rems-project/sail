@@ -7,6 +7,12 @@ C_WARNINGS ?=
 C_INCS = riscv_prelude.h riscv_platform_impl.h riscv_platform.h
 C_SRCS = riscv_prelude.c riscv_platform_impl.c riscv_platform.c
 
+TV_SPIKE_DIR = /home/mundkur/src/hw/l3/l3riscv
+C_FLAGS = -I $(TV_SPIKE_DIR)/src/cpp -I ../lib
+C_LIBS  = -L $(TV_SPIKE_DIR) -ltv_spike -Wl,-rpath=$(TV_SPIKE_DIR)
+C_LIBS += -L $(RISCV)/lib -lfesvr -lriscv -Wl,-rpath=$(RISCV)/lib
+C_LIBS += -lgmp -lz
+
 export SAIL_DIR
 
 all: platform Riscv.thy
@@ -41,6 +47,12 @@ riscv.c: $(SAIL_SRCS) main.sail Makefile
 
 riscv_c: riscv.c $(C_INCS) $(C_SRCS) Makefile
 	gcc $(C_WARNINGS) -O2 riscv.c $(C_SRCS) ../lib/*.c -lgmp -lz -I ../lib -o riscv_c
+
+riscv_model.c: $(SAIL_SRCS) main.sail Makefile
+	$(SAIL) -O -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h -c_no_main $(SAIL_SRCS) main.sail 1> $@
+
+riscv_sim: riscv_model.c riscv_sim.c $(C_INCS) $(C_SRCS) $(CPP_SRCS) Makefile
+	gcc -g $(C_WARNINGS) $(C_FLAGS) -O2 riscv_model.c riscv_sim.c $(C_SRCS) ../lib/*.c $(C_LIBS) -o $@
 
 latex: $(SAIL_SRCS) Makefile
 	$(SAIL) -latex -latex_prefix sail -o sail_ltx $(SAIL_SRCS)
