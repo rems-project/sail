@@ -1,18 +1,6 @@
-$include <flow.sail>
-
 default Order dec
 
-type bits ('n : Int) = vector('n, dec, bit)
-
-val eq_anything = "eq" : forall ('a : Type). ('a, 'a) -> bool
-
-overload operator == = {eq_anything}
-
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
-  (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
-
-val vector_access = {ocaml: "access", lem: "access_vec_dec"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
-  (bits('n), atom('m)) -> bit
+$include <prelude.sail>
 
 val decode : vector(16, dec, bit) -> unit
 

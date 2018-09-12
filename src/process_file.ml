@@ -288,14 +288,14 @@ let output_lem filename libs defs =
       operators_module
     ] @ monad_modules
   in
-  let isa_thy_name = String.capitalize filename ^ "_lemmas" in
+  let isa_thy_name = String.capitalize_ascii filename ^ "_lemmas" in
   let isa_lemmas =
     separate hardline [
       string ("theory " ^ isa_thy_name);
       string  "  imports";
       string  "    Sail.Sail2_values_lemmas";
       string  "    Sail.Sail2_state_lemmas";
-      string ("    " ^ String.capitalize filename);
+      string ("    " ^ String.capitalize_ascii filename);
       string  "begin";
       string  "";
       State.generate_isa_lemmas !Pretty_print_lem.opt_mwords defs;

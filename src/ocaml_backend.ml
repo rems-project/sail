@@ -678,7 +678,7 @@ let ocaml_main spec sail_dir =
     with
     | End_of_file -> close_in chan; lines := List.rev !lines
   end;
-  (("open " ^ String.capitalize spec ^ ";;\n\n") :: !lines
+  (("open " ^ String.capitalize_ascii spec ^ ";;\n\n") :: !lines
    @ [ "  zinitializze_registers ();";
        if !opt_trace_ocaml then "  Sail_lib.opt_trace := true;" else "  ();";
        "  Printexc.record_backtrace true;";

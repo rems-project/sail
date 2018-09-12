@@ -172,7 +172,7 @@ let vector_string_to_bit_list l lit =
     | _ -> raise (Reporting_basic.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character") in
 
   let s_bin = match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase s_hex)))
+    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
     | L_bin s_bin -> explode s_bin
     | _ -> raise (Reporting_basic.err_unreachable l __POS__ "s_bin given non vector literal") in
 
