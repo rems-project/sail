@@ -1470,7 +1470,18 @@ let doc_exp, doc_let =
             let e1_pp = parens (separate space [expN e1; colon;
                                                 string (if ctxt.early_ret then "MR" else "M");
                                                 parens (doc_typ ctxt typ')]) in
-            let middle = separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat', typ'); bigarrow] in
+            let middle =
+              match pat' with
+              | P_aux (P_id id,_)
+                   when Util.is_none (is_auto_decomposed_exist (env_of e1) (typ_of e1)) &&
+                          not (is_enum (env_of e1) id) ->
+                 separate space [string ">>= fun"; doc_id id; bigarrow]
+              | P_aux (P_typ (typ, P_aux (P_id id,_)),_)
+                   when Util.is_none (is_auto_decomposed_exist (env_of e1) typ) &&
+                          not (is_enum (env_of e1) id) ->
+                 separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]              | _ ->
+                 separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat', typ'); bigarrow]
+            in
             infix 0 1 middle e1_pp (expN e2')
          | _ ->
             let epp =
