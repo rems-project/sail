@@ -1260,7 +1260,7 @@ let doc_exp, doc_let =
        if has_effect eff BE_rreg then
          let epp = separate space [string "read_reg";doc_id (append_id id "_ref")] in
          if is_bitvector_typ base_typ
-         then liftR (parens (align (group (prefix 0 1 epp (doc_tannot ctxt env true base_typ)))))
+         then wrap_parens (align (group (prefix 0 1 (parens (liftR epp)) (doc_tannot ctxt env true base_typ))))
          else liftR epp
        else if Env.is_register id env then doc_id (append_id id "_ref")
        else if is_ctor env id then doc_id_ctor id
@@ -1467,9 +1467,10 @@ let doc_exp, doc_let =
            _,
            (E_aux (E_let (LB_aux (LB_val (pat', E_aux (E_cast (typ', E_aux (E_id id2,_)),_)),_), e2'),_))
              when Id.compare id1 id2 == 0 ->
-            let e1_pp = parens (separate space [expN e1; colon;
-                                                string (if ctxt.early_ret then "MR" else "M");
-                                                parens (doc_typ ctxt typ')]) in
+            let m_str, tail_pp = if ctxt.early_ret then "MR",[string "_"] else "M",[] in
+            let e1_pp = parens (separate space ([expY e1; colon;
+                                                string m_str;
+                                                parens (doc_typ ctxt typ')]@tail_pp)) in
             let middle =
               match pat' with
               | P_aux (P_id id,_)
@@ -1485,7 +1486,6 @@ let doc_exp, doc_let =
             infix 0 1 middle e1_pp (expN e2')
          | _ ->
             let epp =
-              let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
               let middle =
                 match pat with
                 | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
@@ -1520,7 +1520,7 @@ let doc_exp, doc_let =
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat, typ_of e1); bigarrow]
               in
-              infix 0 1 middle (expV b e1) (expN e2)
+              infix 0 1 middle (expY e1) (expN e2)
             in
             if aexp_needed then parens (align epp) else epp
        end
