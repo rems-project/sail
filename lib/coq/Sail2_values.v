@@ -71,6 +71,28 @@ Defined.
 Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
   Decidable_eq_from_dec String.string_dec.
 
+Instance Decidable_eq_pair {A B : Type} `(DA : forall x y : A, Decidable (x = y), DB : forall x y : B, Decidable (x = y)) : forall x y : A*B, Decidable (x = y) :=
+{ Decidable_witness := andb (@Decidable_witness _ (DA (fst x) (fst y)))
+(@Decidable_witness _ (DB (snd x) (snd y))) }.
+destruct x as [x1 x2].
+destruct y as [y1 y2].
+simpl.
+destruct (DA x1 y1) as [b1 H1];
+destruct (DB x2 y2) as [b2 H2];
+simpl.
+split.
+* intro H.
+  apply Bool.andb_true_iff in H.
+  destruct H as [H1b H2b].
+  apply H1 in H1b.
+  apply H2 in H2b.
+  congruence.
+* intro. inversion H.
+  subst.
+  apply Bool.andb_true_iff.
+  tauto.
+Qed.
+
 
 (* Project away range constraints in comparisons *)
 Definition ltb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.ltb (projT1 l) r.
@@ -280,6 +302,10 @@ Qed.
 
 (*** Bits *)
 Inductive bitU := B0 | B1 | BU.
+
+Scheme Equality for bitU.
+Instance Decidable_eq_bit : forall (x y : bitU), Decidable (x = y) :=
+  Decidable_eq_from_dec bitU_eq_dec.
 
 Definition showBitU b :=
 match b with
