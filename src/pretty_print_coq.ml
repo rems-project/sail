@@ -199,7 +199,7 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | Typ_app(id, _) when string_of_id id = "register" -> true
   | _ -> false
 
-let doc_nexp ctx nexp =
+let doc_nexp ctx ?(skip_vars=KidSet.empty) nexp =
   (* Print according to Coq's precedence rules *)
   let rec plussub (Nexp_aux (n,l) as nexp) =
     match n with
@@ -230,6 +230,7 @@ let doc_nexp ctx nexp =
   and atomic (Nexp_aux (n,l) as nexp) =
     match n with
     | Nexp_constant i -> string (Big_int.to_string i)
+    | Nexp_var v when KidSet.mem v skip_vars -> string "_"
     | Nexp_var v -> doc_var ctx v
     | Nexp_id id -> doc_id id
     | Nexp_sum _ | Nexp_minus _ | Nexp_times _ | Nexp_neg _ | Nexp_exp _
@@ -474,18 +475,22 @@ let doc_typ, doc_atomic_typ =
                                Typ_arg_aux (Typ_arg_typ elem_typ, _)]),_) ->
              (* TODO: proper handling of m, complex elem type, dedup with above *)
              let var = mk_kid "_vec" in (* TODO collision avoid *)
+             let kid_set = KidSet.of_list kids in
+             let m_pp = doc_nexp ctx ~skip_vars:kid_set m in
              let tpp, len_pp = match elem_typ with
                | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
-                  string "mword " ^^ underscore, string "length_mword"
-               | _ -> string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ underscore,
+                  string "mword " ^^ m_pp, string "length_mword"
+               | _ -> string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ m_pp,
                       string "vec_length" in
              let length_constraint_pp =
-               separate space [len_pp; doc_var ctx var; equals; doc_nexp ctx m]
+               if KidSet.is_empty (KidSet.inter kid_set (nexp_frees m))
+               then None
+               else Some (separate space [len_pp; doc_var ctx var; equals; doc_nexp ctx m])
              in
              braces (separate space
                        [doc_var ctx var; colon; tpp;
                         ampersand;
-                        doc_arithfact ctx ~exists:kids ~extra:length_constraint_pp nc])
+                        doc_arithfact ctx ~exists:kids ?extra:length_constraint_pp nc])
           | _ ->
              raise (Reporting_basic.err_todo l
                   ("Non-atom existential type not yet supported in Coq: " ^
