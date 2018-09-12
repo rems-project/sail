@@ -95,6 +95,14 @@ let simple_num l n = E_aux (
   simple_annot (gen_loc l)
     (atom_typ (Nexp_aux (Nexp_constant n, gen_loc l))))
 
+let has_mem_eff (Effect_aux (Effect_set effs, _)) =
+  let mem_eff (BE_aux (be, _)) = match be with
+    | BE_rmem | BE_rmemt | BE_wmem | BE_eamem | BE_exmem
+    | BE_wmv | BE_wmvt | BE_barr -> true
+    | _ -> false
+  in
+  List.exists mem_eff effs
+
 let effectful_effs = function
   | Effect_aux (Effect_set effs, _) -> not (effs = [])
     (*List.exists
@@ -2678,16 +2686,18 @@ let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list 
   | [] -> k []
   | exp :: exps -> f exp (fun exp -> mapCont f exps (fun exps -> k (exp :: exps)))
 
-let rewrite_defs_letbind_effects =
+let rewrite_defs_letbind_effects (value : tannot exp -> bool) (newreturn : tannot exp -> bool) =
 
-  let rec value ((E_aux (exp_aux,_)) as exp) =
-    not (effectful exp || updates_vars exp)
-  and value_optdefault (Def_val_aux (o,_)) = match o with
+  let value_optdefault (Def_val_aux (o,_)) = match o with
     | Def_val_empty -> true
     | Def_val_dec e -> value e
   and value_fexps (FES_aux (FES_Fexps (fexps,_),_)) =
     List.fold_left (fun b (FE_aux (FE_Fexp (_,e),_)) -> b && value e) true fexps in
 
+  let newreturn_pexp pexp = match destruct_pexp pexp with
+    | _, Some guard, exp, _ -> newreturn guard || newreturn exp
+    | _, None, exp, _ -> newreturn exp
+  in
 
   let rec n_exp_name (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
     n_exp exp (fun exp -> if value exp then k exp else letbind exp k)
@@ -2790,8 +2800,7 @@ let rewrite_defs_letbind_effects =
 
     match exp_aux with
     | E_block es ->
-       n_exp_nameL es (fun es ->
-       k (rewrap (E_block es)))
+       k (rewrap (E_block (List.map (fun exp -> n_exp_term (newreturn exp) exp) es)))
     | E_nondet _ -> failwith "E_nondet not supported"
     | E_id id -> k exp
     | E_ref id -> k exp
@@ -2803,7 +2812,7 @@ let rewrite_defs_letbind_effects =
       when string_of_id op_bool = "and_bool" || string_of_id op_bool = "or_bool" ->
        (* Leave effectful operands of Boolean "and"/"or" in place to allow
           short-circuiting. *)
-       let newreturn = effectful l || effectful r in
+       let newreturn = newreturn l || newreturn r in
        let l = n_exp_term newreturn l in
        let r = n_exp_term newreturn r in
        k (rewrap (E_app (op_bool, [l; r])))
@@ -2821,7 +2830,7 @@ let rewrite_defs_letbind_effects =
        let e_if exp1 =
          let (E_aux (_,annot2)) = exp2 in
          let (E_aux (_,annot3)) = exp3 in
-         let newreturn = effectful exp2 || effectful exp3 in
+         let newreturn = newreturn exp2 || newreturn exp3 in
          let exp2 = n_exp_term newreturn exp2 in
          let exp3 = n_exp_term newreturn exp3 in
          k (rewrap (E_if (exp1,exp2,exp3))) in
@@ -2881,12 +2890,12 @@ let rewrite_defs_letbind_effects =
        n_exp_name exp1 (fun exp1 ->
        k (rewrap (E_field (exp1,id))))
     | E_case (exp1,pexps) ->
-       let newreturn = List.exists effectful_pexp pexps in
+       let newreturn = List.exists newreturn_pexp pexps in
        n_exp_name exp1 (fun exp1 ->
        n_pexpL newreturn pexps (fun pexps ->
        k (rewrap (E_case (exp1,pexps)))))
     | E_try (exp1,pexps) ->
-       let newreturn = effectful exp1 || List.exists effectful_pexp pexps in
+       let newreturn = newreturn exp1 || List.exists newreturn_pexp pexps in
        let exp1 = n_exp_term newreturn exp1 in
        n_pexpL newreturn pexps (fun pexps ->
        k (rewrap (E_try (exp1,pexps))))
@@ -2929,8 +2938,8 @@ let rewrite_defs_letbind_effects =
       FCL_aux (FCL_Funcl(id, pexp), (l, add_effect_annot a eff))
     in
     let funcls = List.map propagate_funcl_effect funcls in *)
-    let effectful_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = effectful_pexp pexp in
-    let newreturn = List.exists effectful_funcl funcls in
+    let newreturn_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = newreturn_pexp pexp in
+    let newreturn = List.exists newreturn_funcl funcls in
     let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),annot)) =
       let _ = reset_fresh_name_counter () in
       FCL_aux (FCL_Funcl (id,n_pexp newreturn pexp (fun x -> x)),annot)
@@ -2961,6 +2970,16 @@ let rewrite_defs_letbind_effects =
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }
+
+let rewrite_defs_letbind_all_effects_and_var_updates =
+  rewrite_defs_letbind_effects
+    (fun exp -> not (effectful exp || updates_vars exp))
+    effectful
+
+let rewrite_defs_letbind_mem_effects =
+  rewrite_defs_letbind_effects
+    (fun exp -> not (has_mem_eff (effect_of exp)))
+    (fun _ -> false)
 
 let rewrite_defs_internal_lets =
 
@@ -3836,6 +3855,10 @@ let rewrite_defs_remove_superfluous_letbinds =
        (* "let _ = () in exp" can be replaced with exp *)
        | (P_aux (P_wild, _), _), (E_aux (E_lit (L_aux (L_unit, _)), _), _), _ ->
           exp2
+       (* "let p = exp in ()" can be replaced with exp, if it has unit type *)
+       | _, _, (E_aux (E_lit (L_aux (L_unit, _)), _), _)
+         when is_unit_typ (typ_of exp1) ->
+          exp1
        (* "let x = EXP1 in return x" can be replaced with 'return (EXP1)', at
           least when EXP1 is 'small' enough *)
        | (P_aux (P_id id, _), _), _, (E_aux (E_internal_return (E_aux (E_id id', _)), _), _)
@@ -4674,7 +4697,7 @@ let rewrite_defs_lem = [
   (* early_return currently breaks the types *)
   ("recheck_defs", recheck_defs);
   ("remove_blocks", rewrite_defs_remove_blocks);
-  ("letbind_effects", rewrite_defs_letbind_effects);
+  ("letbind_effects", rewrite_defs_letbind_all_effects_and_var_updates);
   ("remove_e_assign", rewrite_defs_remove_e_assign);
   ("internal_lets", rewrite_defs_internal_lets);
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
@@ -4720,7 +4743,7 @@ let rewrite_defs_bsv = [
   (* ("early_return", rewrite_defs_early_return); *)
   ("fix_val_specs", rewrite_fix_val_specs);
   (* ("remove_blocks", rewrite_defs_remove_blocks); *)
-  (* ("letbind_effects", rewrite_defs_letbind_effects); *)
+  ("letbind_effects", rewrite_defs_letbind_mem_effects);
   (* ("remove_e_assign", rewrite_defs_remove_e_assign); *)
   (* ("internal_lets", rewrite_defs_internal_lets); *)
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
@@ -4762,7 +4785,7 @@ let rewrite_defs_coq = [
   ("fix_val_specs", rewrite_fix_val_specs);
   ("recheck_defs", recheck_defs);
   ("remove_blocks", rewrite_defs_remove_blocks);
-  ("letbind_effects", rewrite_defs_letbind_effects);
+  ("letbind_effects", rewrite_defs_letbind_all_effects_and_var_updates);
   ("remove_e_assign", rewrite_defs_remove_e_assign);
   ("internal_lets", rewrite_defs_internal_lets);
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
