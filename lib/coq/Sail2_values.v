@@ -21,6 +21,18 @@ Lemma use_ArithFact {P} `(ArithFact P) : P.
 apply fact.
 Defined.
 
+(* Allow setoid rewriting through ArithFact *)
+Require Import Coq.Classes.Morphisms.
+Require Import Coq.Program.Basics.
+Require Import Coq.Program.Tactics.
+Section Morphism.
+Local Obligation Tactic := try solve [simpl_relation | firstorder auto].
+
+Global Program Instance ArithFact_iff_morphism :
+  Proper (iff ==> iff) ArithFact.
+End Morphism.
+
+
 Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
   existT _ n H.
 
@@ -1034,6 +1046,13 @@ Ltac split_cases :=
   repeat match goal with
   |- context [match ?X with _ => _ end] => destruct X
   end.
+Lemma True_left {P:Prop} : (True /\ P) <-> P.
+tauto.
+Qed.
+Lemma True_right {P:Prop} : (P /\ True) <-> P.
+tauto.
+Qed.
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
@@ -1046,7 +1065,10 @@ Ltac prepare_for_solver :=
  unfold_In;
  unbool_comparisons;
  reduce_list_lengths;
- reduce_pow.
+ reduce_pow;
+ (* omega doesn't cope well with extra "True"s in the goal *)
+ repeat setoid_rewrite True_left;
+ repeat setoid_rewrite True_right.
 
 Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
 constructor.
