@@ -55,6 +55,11 @@ open Rewriter
 open PPrint
 open Pretty_print_common
 
+type ctxt = {
+  stmt : bool;
+  fsm : bool;
+}
+
 let bsv_id cap id =
   let is_num_char c = let c = Char.code c in (c >= 48 && c <= 57) in
   let is_upper c = let c = Char.code c in (c >= 65 && c <= 90) in
@@ -187,81 +192,89 @@ let enclose_block tannot doc =
   surround 2 1 (string dopen) doc (string dclose)
 
 let assign_op lhs rhs =
-  if has_eff BE_wreg (effect_of_lexp lhs) then string "<="
-  else if effectful rhs then string "<-" else string "="
+  if effectful rhs && not (is_unit_typ (typ_of rhs)) then string "<-"
+  else if has_eff BE_wreg (effect_of_lexp lhs) then string "<="
+  else string "="
 
-let rec doc_exp stmt (E_aux (eaux, (l, annot)) as exp) =
-  let stmt_semi = if stmt then semi else empty in
+let rec doc_exp ctxt (E_aux (eaux, (l, annot)) as exp) =
+  let stmt_semi = if ctxt.stmt then semi else empty in
+  let exp_ctxt = { ctxt with stmt = false } in
+  let stmt_ctxt = { ctxt with stmt = true } in
   match eaux with
   | E_block es ->
-     enclose_block annot (separate_map (break 1) (doc_exp true) es)
+     enclose_block annot (separate_map (break 1) (doc_exp stmt_ctxt) es)
   | E_id id ->
      (if Env.is_register id (env_of exp) then string "z." else empty) ^^
      doc_id (is_enum id (env_of exp)) id ^^ stmt_semi
   | E_lit lit -> doc_lit lit ^^ stmt_semi
-  | E_cast (t, e) -> separate space [doc_typ t; string "\'"; parens (doc_exp false e)] ^^ stmt_semi
+  | E_cast (t, e) -> separate space [doc_typ t; string "\'"; parens (doc_exp exp_ctxt e)] ^^ stmt_semi
   | E_app (id, es) ->
      let union = Env.is_union_constructor id (env_of exp) in
-     let state_arg =
+     let fun_effs =
        try
          match unaux_typ (snd (Env.get_val_spec_orig id (env_of exp))) with
-         | Typ_fn (_, _, eff) when effectful_effs eff -> [string "z"]
-         | _ -> []
-       with _ -> []
+         | Typ_fn (_, _, eff) -> eff
+         | _ -> no_effect
+       with _ -> no_effect
      in
-     let args =
+     let state_arg = if effectful_effs fun_effs then [string "z"] else [] in
+     let argstup = doc_exp exp_ctxt (E_aux (E_tuple es, (l, empty_tannot))) in
+     let argslist =
        match state_arg, es with
        | [], [] -> []
        | [], [e] when is_unit_typ (typ_of e) -> []
-       | [], es when union ->
-          [parens (doc_exp false (E_aux (E_tuple es, (l, empty_tannot))))]
        | _, _ ->
-          let doc_es = List.map (doc_exp false) es in
-          [parens (separate comma_sp (state_arg @ doc_es))]
+          if union then
+            [parens (doc_exp exp_ctxt (E_aux (E_tuple es, (l, empty_tannot))))]
+          else
+            let doc_es = List.map (doc_exp exp_ctxt) es in
+            [parens (separate comma_sp (state_arg @ doc_es))]
      in
-     if union then
-       separate space (string "tagged" :: doc_constr_id id :: args) ^^ stmt_semi
+     if has_mem_eff fun_effs then
+       string "callServ" ^^ parens (doc_id false (append_id id "_ifc") ^^ comma_sp ^^ argstup) ^^ stmt_semi
+     else if union then
+       separate space (string "tagged" :: doc_constr_id id :: argslist) ^^ stmt_semi
      else
-       concat (doc_id false id :: args) ^^ stmt_semi
+       concat (doc_id false id :: argslist) ^^ stmt_semi
   | E_tuple [] -> string "?" ^^ stmt_semi
-  | E_tuple [e] -> doc_exp false e ^^ stmt_semi
+  | E_tuple [e] -> doc_exp exp_ctxt e ^^ stmt_semi
   | E_tuple es ->
      string ("tuple" ^ string_of_int (List.length es)) ^^ space ^^
-     parens (separate_map comma_sp (doc_exp false) es) ^^ stmt_semi
-  | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _)) when stmt ->
-     prefix 2 1 (string "if " ^^ parens (doc_exp false i)) (doc_exp true t)
+     parens (separate_map comma_sp (doc_exp exp_ctxt) es) ^^ stmt_semi
+  | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _)) when ctxt.stmt ->
+     prefix 2 1 (string "if " ^^ parens (doc_exp exp_ctxt i)) (doc_exp ctxt t)
   | E_if (i, t, e) ->
-     if stmt then
+     if ctxt.stmt then
        prefix 0 1
-         (prefix 2 1 (string "if " ^^ parens (doc_exp false i)) (doc_exp true t))
-         (prefix 2 1 (string "else") (doc_exp true e))
+         (prefix 2 1 (string "if " ^^ parens (doc_exp exp_ctxt i)) (doc_exp ctxt t))
+         (prefix 2 1 (string "else") (doc_exp ctxt e))
      else
-       separate space [doc_exp false i; string "?"; doc_exp false t; string ":"; doc_exp false e]
+       separate space [doc_exp ctxt i; string "?"; doc_exp ctxt t; string ":"; doc_exp ctxt e]
   | E_vector es when is_bitvector_typ (typ_of exp) ->
-     braces (separate_map comma_sp (doc_exp false) es) ^^ stmt_semi
-  | E_list es -> braces (separate_map comma_sp (doc_exp false) es) ^^ stmt_semi
+     braces (separate_map comma_sp (doc_exp exp_ctxt) es) ^^ stmt_semi
+  | E_list es -> braces (separate_map comma_sp (doc_exp exp_ctxt) es) ^^ stmt_semi
   | E_case (e, ps) ->
      surround 2 1
-       (surround 2 1 (string "case") (parens (doc_exp false e)) (string "matches"))
-       (separate_map hardline (doc_pexp stmt) ps)
+       (surround 2 1 (string "case") (parens (doc_exp exp_ctxt e)) (string "matches"))
+       (separate_map hardline (doc_pexp ctxt) ps)
        (string "endcase")
   | E_let (lb, e) ->
      enclose_block annot
        (prefix 0 1
-         (doc_letbind lb ^^ semi)
-         (doc_exp true e))
+         (doc_letbind ctxt lb ^^ semi)
+         (doc_exp stmt_ctxt e))
   | E_assign (LEXP_aux (LEXP_id id, _) as lhs, rhs)
-    when Env.lookup_id id (env_of exp) = Unbound ->
-     separate space [string "let"; doc_id false id; assign_op lhs rhs; doc_exp false rhs] ^^ stmt_semi
+    when Env.lookup_id id (env_of exp) = Unbound && not ctxt.fsm ->
+     separate space [string "let"; doc_id false id; assign_op lhs rhs; doc_exp exp_ctxt rhs] ^^ stmt_semi
   | E_assign (LEXP_aux (LEXP_cast (typ, id), _) as lhs, rhs)
-    when Env.lookup_id id (env_of exp) = Unbound ->
-     separate space [doc_typ typ; doc_id false id; assign_op lhs rhs; doc_exp false rhs] ^^ stmt_semi
+    when Env.lookup_id id (env_of exp) = Unbound && not ctxt.fsm ->
+     separate space [doc_typ typ; doc_id false id; assign_op lhs rhs; doc_exp exp_ctxt rhs] ^^ stmt_semi
   | E_assign (lhs, rhs) ->
-     separate space [doc_lexp lhs; assign_op lhs rhs; doc_exp false rhs] ^^ stmt_semi
+     separate space [doc_lexp lhs; assign_op lhs rhs; doc_exp exp_ctxt rhs] ^^ stmt_semi
   | E_assert (E_aux (E_constraint nc, _), msg) ->
-     string "staticAssert" ^^ parens (separate comma_sp [Pretty_print_sail.doc_nc nc; doc_exp false msg]) ^^ stmt_semi
+     string "staticAssert" ^^ parens (separate comma_sp [Pretty_print_sail.doc_nc nc; doc_exp exp_ctxt msg]) ^^ stmt_semi
   | E_assert (c, msg) ->
-     string "dynamicAssert" ^^ parens (separate comma_sp [doc_exp false c; doc_exp false msg]) ^^ stmt_semi
+     string "dynamicAssert" ^^ parens (separate comma_sp [doc_exp exp_ctxt c; doc_exp exp_ctxt msg]) ^^ stmt_semi
   (* TODO *)
   | _ -> Pretty_print_sail.doc_exp exp
 and doc_pat (P_aux (p_aux, (l, annot)) as pat) =
@@ -283,24 +296,27 @@ and doc_pat (P_aux (p_aux, (l, annot)) as pat) =
   | P_var (pat, _) | P_typ (_, pat) -> doc_pat pat
   (* TODO *)
   | _ -> Pretty_print_sail.doc_pat pat
-and doc_pexp stmt pexp =
+and doc_pexp ctxt pexp =
   let pat, guard, exp, _ = destruct_pexp pexp in
   let gdoc = match guard with
-    | Some wh -> [string "&&&"; doc_exp false wh]
+    | Some wh -> [string "&&&"; doc_exp ctxt wh]
     | None -> []
   in
   prefix 2 1
     (separate space (doc_pat pat :: gdoc @ [string ":"]))
-    (doc_exp stmt exp)
-and doc_letbind (LB_aux (LB_val (p, e), _)) =
+    (doc_exp ctxt exp)
+and doc_letbind ctxt (LB_aux (LB_val (p, e), _)) =
   match untyp_pat p with
-  | P_aux (P_id id, _), Some typ ->
-     separate space [doc_typ typ; doc_id false id; string "="; doc_exp false e]
-  | P_aux (P_id id, _), None ->
-     let assign = if effectful e then "<-" else "=" in
-     separate space [string "let"; doc_id false id; string assign; doc_exp false e]
+  | P_aux (P_id id, _), Some typ when not (effectful e || ctxt.fsm) ->
+     separate space [doc_typ typ; doc_id false id; string "="; doc_exp ctxt e]
+  | P_aux (P_id id, _), _ ->
+     (if ctxt.fsm then empty else string "let ") ^^
+     separate space
+       [doc_id false id;
+        string (if effectful e then "<-" else if ctxt.fsm then "<=" else "=");
+        doc_exp ctxt e]
   | _, _ ->
-     separate space [string "match"; doc_pat p; string "="; doc_exp false e]
+     separate space [string "match"; doc_pat p; string "="; doc_exp ctxt e]
 and doc_lexp (LEXP_aux (l_aux, (l, a)) as lexp) =
   match l_aux with
   | LEXP_cast (_, id) | LEXP_id id ->
@@ -317,14 +333,19 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
        match pexp, destruct_tannot annot with
        | Pat_exp (pat, exp), Some (env, funcl_typ, _) ->
           let typ = try snd (Env.get_val_spec_orig id env) with | _ -> funcl_typ in
-          let state_arg = match unaux_typ typ with
-            | Typ_fn (_, _, eff) when effectful_effs eff -> [string "Regstate z"]
-            | _ -> []
+          let targ, tret, eff = match unaux_typ typ with
+            | Typ_fn (targ, tret, eff) -> targ, tret, eff
+            | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Unexpected function clause type")
           in
-          let formals =
+          let state_arg =
+            if effectful_effs eff && not (has_mem_eff eff)
+            then [string "Regstate z"]
+            else []
+          in
+          let formals, typs =
             (* TODO Map constraints to provisos *)
-            match unaux_pat (fst (untyp_pat pat)), unaux_typ typ with
-            | P_tup ps, Typ_fn (Typ_aux (Typ_tup ts, _), _, _) ->
+            match unaux_pat (fst (untyp_pat pat)), unaux_typ targ with
+            | P_tup ps, Typ_tup ts ->
                let doc p t =
                  match fst (untyp_pat p) with
                  | P_aux (P_id id, _) when Env.lookup_id id env = Unbound ->
@@ -332,29 +353,100 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
                  | _ ->
                     raise (Reporting_basic.err_unreachable l __POS__ "Unsupported function parameter")
                in
-               List.map2 doc ps ts
-            | P_id id, Typ_fn (t, _, _) when Env.lookup_id id env = Unbound ->
-               [doc_typ t ^^ space ^^ doc_id false id]
-            | _, Typ_fn (t, _, _) when is_unit_typ t ->
-               []
+               List.map2 doc ps ts, ts
+            | P_id id, _ when Env.lookup_id id env = Unbound ->
+               [doc_typ targ ^^ space ^^ doc_id false id], [targ]
+            | _, _ when is_unit_typ targ ->
+               [], []
             | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Unsupported function parameters")
           in
-          let formals_list = parens (separate comma_sp (state_arg @ formals)) in
-          let ret_typ =
-            match unaux_typ typ with
-            | Typ_fn (_, tret, eff) ->
-               if has_mem_eff eff then string "RStmt#" ^^ parens (doc_typ tret)
-               else if effectful_effs eff then
-                 if is_unit_typ tret
-                 then string "Action"
-                 else string "ActionValue#" ^^ parens (doc_typ tret)
-               else doc_typ tret
-            | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Unsupported function type")
+          let formals_doc = parens (separate comma_sp (state_arg @ formals)) in
+          let tret_doc =
+            if has_mem_eff eff then string "RStmt#" ^^ parens (doc_typ tret)
+            else if effectful_effs eff then
+              if is_unit_typ tret
+              then string "Action"
+              else string "ActionValue#" ^^ parens (doc_typ tret)
+            else doc_typ tret
           in
-          surround 2 1
-            (separate space [string "function"; ret_typ; doc_id false id; formals_list] ^^ semi)
-            (doc_exp true exp)
-            (string "endfunction")
+          let fun_doc =
+            surround 2 1
+              (separate space [string "function"; tret_doc; doc_id false id; formals_doc] ^^ semi)
+              (doc_exp { stmt = true; fsm = has_mem_eff eff; } exp)
+              (string "endfunction")
+          in
+          if has_mem_eff eff then
+            let called_ifcs = fst (fold_exp
+              { (compute_exp_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with
+                e_aux = (fun ((v, e), annot) ->
+                  match e with
+                  | E_app (id, es) ->
+                     let fun_eff =
+                       try
+                         match unaux_typ (snd (Env.get_val_spec_orig id (env_of_annot annot))) with
+                         | Typ_fn (_, _, eff) -> eff
+                         | _ -> no_effect
+                       with
+                       | _ -> no_effect
+                     in
+                     if has_mem_eff fun_eff then
+                       (* TODO Distinguish different type instantiations of function *)
+                       let targ = mk_typ (Typ_tup (List.map typ_of es)) in
+                       let tret = typ_of_annot annot in
+                       Bindings.add id (targ, tret) v, E_aux (e, annot)
+                     else v, E_aux (e, annot)
+                  | _ -> v, E_aux (e, annot))
+              } exp)
+            in
+            let doc_ifc (id, (targ, tret)) =
+              separate space
+                [string "FSMServer#" ^^ parens (separate comma_sp [doc_typ targ; doc_typ tret]);
+                 doc_id false (append_id id "_ifc"); string "=";
+                 doc_id false (prepend_id "mk_" id) ^^ parens (string "z") ^^ semi]
+            in
+            let doc_ifcs = separate_map hardline doc_ifc (Bindings.bindings called_ifcs) in
+            let lvars_pat pat = fst (fold_pat
+              { (compute_pat_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with
+                p_aux = (fun ((v, p), annot) ->
+                  match p with
+                  | P_id id when Env.lookup_id id (env_of_annot annot) = Unbound ->
+                     Bindings.add id (typ_of_annot annot) v, P_aux (p, annot)
+                  | _ -> v, P_aux (p, annot))
+              } pat)
+            in
+            let lvars = fst (fold_exp
+              { (compute_exp_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with
+                lEXP_aux = (fun ((v, le), annot) ->
+                  match le with
+                  | LEXP_id id when Env.lookup_id id (env_of_annot annot) = Unbound ->
+                     Bindings.add id (typ_of_annot annot) v, LEXP_aux (le, annot)
+                  | _ -> v, LEXP_aux (le, annot));
+                e_let = (fun ((v1, lb), (v2, e)) ->
+                  let (LB_aux (LB_val (pat, _), _)) = lb in
+                  Bindings.union (fun _ _ r -> Some r)
+                    (Bindings.union (fun _ _ r -> Some r) v1 (lvars_pat pat))
+                    v2,
+                  E_let (lb, e))
+              } exp)
+            in
+            let doc_lvar (id, typ) =
+              separate space [string "Reg#" ^^ parens (doc_typ typ);
+              doc_id false id; string "<- mkReg(?)" ^^ semi]
+            in
+            let doc_lvars = separate_map hardline doc_lvar (Bindings.bindings lvars) in
+            let indent doc = string "  " ^^ align doc in
+            separate hardline
+              [string "module " ^^ doc_id false (prepend_id "mk_" id) ^^
+                 string " (Regstate z, FSMServer#(" ^^
+                 doc_typ targ ^^ comma_sp ^^ doc_typ tret ^^
+                 string ") ifc);";
+               indent doc_lvars; empty;
+               indent doc_ifcs; empty;
+               indent fun_doc; empty;
+               indent (string "return (mkFSMServer(" ^^ doc_id false id ^^ string "));");
+               string "endmodule;"]
+          else
+            fun_doc
        | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Unsupported function clause")
      end
   | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Multiple function clauses should have been merged")
