@@ -1,6 +1,11 @@
 Require Export Rbase.
 Require Import Reals.
 Require Export ROrderedType.
+Require Import Sail2_values.
+
+(* "Decidable" in a classical sense... *)
+Instance Decidable_eq_real : forall (x y : R), Decidable (x = y) :=
+  Decidable_eq_from_dec Req_dec.
 
 Definition realFromFrac (num denom : Z) : R := Rdiv (IZR num) (IZR denom).
 
