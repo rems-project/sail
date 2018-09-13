@@ -1505,11 +1505,6 @@ let doc_exp, doc_let =
                     when not (is_enum (env_of e1) id) ->
                       let full_typ = (expand_range_type typ) in
                       let binder = match destruct_exist (env_of e1) full_typ with
-                        | Some ([kid], NC_aux (NC_true,_),
-                                Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                                                  [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
-                            when Kid.compare kid kid' == 0 ->
-                           parens (separate space [doc_id id; colon; string "Z"])
                         | Some ([kid], nc,
                                 Typ_aux (Typ_app (Id_aux (Id "atom",_),
                                                   [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
