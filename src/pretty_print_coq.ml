@@ -158,6 +158,7 @@ let doc_id id = string (string_id id)
 let doc_id_type (Id_aux(i,_)) =
   match i with
   | Id("int") -> string "Z"
+  | Id("real") -> string "R"
   | Id i -> string (fix_id false i)
   | DeIid x -> string (Util.zencode_string ("op " ^ x))
 

@@ -327,6 +327,7 @@ let output_coq filename libs defs =
       "Sail2_instr_kinds";
       "Sail2_values";
       "Sail2_string";
+      "Sail2_real";
       operators_module
     ] @ monad_modules
   in

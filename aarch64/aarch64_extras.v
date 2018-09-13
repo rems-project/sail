@@ -3,8 +3,8 @@ Require Import Sail2_values.
 Require Import Sail2_operators_bitlists.
 Require Import Sail2_prompt_monad.
 Require Import Sail2_prompt.
+Require Import Sail2_real.
 
-Axiom real : Type.
 Axiom slice : forall {m} (_ : mword m) (_ : Z) (n : Z) `{ArithFact (m >= 0)} `{ArithFact (n >= 0)}, mword n.
 Axiom set_slice : forall (n : Z) (m : Z), mword n -> Z -> mword m -> mword n.
 Definition length {n} (x : mword n) := length_mword x.
@@ -96,7 +96,7 @@ Definition undefined_bitvector {rv e} len `{ArithFact (len >= 0)} : monad rv (mw
 (*val undefined_bits : forall 'rv 'a 'e. Bitvector 'a => integer -> monad 'rv 'a 'e*)
 Definition undefined_bits {rv e} := @undefined_bitvector rv e.
 Definition undefined_bit {rv e} (_:unit) : monad rv bitU e := returnm BU.
-(*Definition undefined_real {rv e} (_:unit) : monad rv real e := returnm (realFromFrac 0 1).*)
+Definition undefined_real {rv e} (_:unit) : monad rv R e := returnm (realFromFrac 0 1).
 Definition undefined_range {rv e} i j `{ArithFact (i <= j)} : monad rv {z : Z & ArithFact (i <= z /\ z <= j)} e := returnm (build_ex i).
 Definition undefined_atom {rv e} i : monad rv Z e := returnm i.
 Definition undefined_nat {rv e} (_:unit) : monad rv Z e := returnm (0:ii).
