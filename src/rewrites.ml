@@ -1763,7 +1763,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
          let e' = re' (rewrite_base e) in
          let exps' = walker exps in
          let effects = union_eff_exps exps' in
-         let block = E_aux (E_block exps', (l, mk_tannot env unit_typ effects)) in
+         let block = E_aux (E_block exps', (gen_loc l, mk_tannot env unit_typ effects)) in
          [fix_eff_exp (E_aux (E_var(le', e', block), annot))]
       (*| ((E_aux(E_if(c,t,e),(l,annot))) as exp)::exps ->
         let vars_t = introduced_variables t in
@@ -1815,7 +1815,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
     when lexp_is_local_intro le (env_of full_exp) && not (lexp_is_effectful le) ->
     let (le', re') = rewrite_lexp_to_rhs le in
     let e' = re' (rewrite_base e) in
-    let block = annot_exp (E_block []) l (env_of full_exp) unit_typ in
+    let block = annot_exp (E_block []) (gen_loc l) (env_of full_exp) unit_typ in
     check_exp (env_of full_exp)
       (strip_exp (E_aux (E_var(le', e', block), annot))) (typ_of full_exp)
   | _ -> rewrite_base full_exp

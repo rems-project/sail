@@ -509,6 +509,10 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   match e_aux with
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
 
+  | E_block [] ->
+     Util.warn (Reporting_basic.loc_to_string l
+                ^ "\n\nTranslating empty block (possibly assigning to an uninitialized variable at the end of a block?)");
+     mk_aexp (ae_lit (L_aux (L_unit, l)) (typ_of exp))
   | E_block exps ->
      let exps, last = split_block l exps in
      let aexps = List.map anf exps in
