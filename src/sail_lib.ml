@@ -355,6 +355,12 @@ let char_of_bit = function
   | B0 -> '0'
   | B1 -> '1'
 
+let int_of_bit = function
+  | B0 -> 0
+  | B1 -> 1
+
+let bigint_of_bit b = Big_int.of_int (int_of_bit b)
+
 let string_of_hex = function
   | [B0; B0; B0; B0] -> "0"
   | [B0; B0; B0; B1] -> "1"
@@ -374,10 +380,19 @@ let string_of_hex = function
   | [B1; B1; B1; B1] -> "F"
   | _ -> failwith "Cannot convert binary sequence to hex"
 
+
 let string_of_bits bits =
   if List.length bits mod 4 == 0
   then "0x" ^ String.concat "" (List.map string_of_hex (break 4 bits))
-  else "0b" ^ String.concat "" (List.map string_of_bit bits)
+  else
+    let place_values =
+      List.mapi
+        (fun i b -> (Big_int.mul (bigint_of_bit b) (Big_int.pow_int_positive 2 i)))
+        (List.rev bits)
+    in
+    let sum = List.fold_left Big_int.add Big_int.zero place_values in
+    Big_int.to_string sum
+
 
 let hex_slice (str, n, m) =
   let bits = List.concat (List.map hex_char (list_of_string (String.sub str 2 (String.length str - 2)))) in
