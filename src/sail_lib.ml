@@ -701,24 +701,39 @@ let spc_matches_prefix s =
   | 0 -> ZNone ()
   | n -> ZSome ((), Big_int.of_int n)
 
+(* Python:
+f = """let hex_bits_{0}_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 {0}) then
+       ZSome ((bits_of_big_int {0} n, len))
+     else
+       ZNone ()
+"""
+
+for i in list(range(1, 34)) + [48, 64]:
+  print(f.format(i))
+
+*)
 let hex_bits_1_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 2 then
-       ZSome ((bits_of_int 1 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 1) then
+       ZSome ((bits_of_big_int 1 n, len))
      else
        ZNone ()
-
 
 let hex_bits_2_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 4 then
-       ZSome ((bits_of_int 2 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 2) then
+       ZSome ((bits_of_big_int 2 n, len))
      else
        ZNone ()
 
@@ -726,9 +741,9 @@ let hex_bits_3_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 8 then
-       ZSome ((bits_of_int 4 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 3) then
+       ZSome ((bits_of_big_int 3 n, len))
      else
        ZNone ()
 
@@ -736,9 +751,9 @@ let hex_bits_4_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 16 then
-       ZSome ((bits_of_int 8 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 4) then
+       ZSome ((bits_of_big_int 4 n, len))
      else
        ZNone ()
 
@@ -746,9 +761,9 @@ let hex_bits_5_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 32 then
-       ZSome ((bits_of_int 16 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 5) then
+       ZSome ((bits_of_big_int 5 n, len))
      else
        ZNone ()
 
@@ -756,9 +771,9 @@ let hex_bits_6_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 64 then
-       ZSome ((bits_of_int 32 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 6) then
+       ZSome ((bits_of_big_int 6 n, len))
      else
        ZNone ()
 
@@ -766,9 +781,9 @@ let hex_bits_7_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 128 then
-       ZSome ((bits_of_int 64 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 7) then
+       ZSome ((bits_of_big_int 7 n, len))
      else
        ZNone ()
 
@@ -776,9 +791,9 @@ let hex_bits_8_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 256 then
-       ZSome ((bits_of_int 128 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 8) then
+       ZSome ((bits_of_big_int 8 n, len))
      else
        ZNone ()
 
@@ -786,9 +801,9 @@ let hex_bits_9_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 512 then
-       ZSome ((bits_of_int 256 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 9) then
+       ZSome ((bits_of_big_int 9 n, len))
      else
        ZNone ()
 
@@ -796,9 +811,9 @@ let hex_bits_10_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 1024 then
-       ZSome ((bits_of_int 512 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 10) then
+       ZSome ((bits_of_big_int 10 n, len))
      else
        ZNone ()
 
@@ -806,9 +821,9 @@ let hex_bits_11_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 2048 then
-       ZSome ((bits_of_int 1024 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 11) then
+       ZSome ((bits_of_big_int 11 n, len))
      else
        ZNone ()
 
@@ -816,9 +831,9 @@ let hex_bits_12_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 4096 then
-       ZSome ((bits_of_int 2048 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 12) then
+       ZSome ((bits_of_big_int 12 n, len))
      else
        ZNone ()
 
@@ -826,9 +841,9 @@ let hex_bits_13_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 8192 then
-       ZSome ((bits_of_int 4096 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 13) then
+       ZSome ((bits_of_big_int 13 n, len))
      else
        ZNone ()
 
@@ -836,9 +851,9 @@ let hex_bits_14_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 16384 then
-       ZSome ((bits_of_int 8192 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 14) then
+       ZSome ((bits_of_big_int 14 n, len))
      else
        ZNone ()
 
@@ -846,9 +861,9 @@ let hex_bits_15_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 32768 then
-       ZSome ((bits_of_int 16384 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 15) then
+       ZSome ((bits_of_big_int 15 n, len))
      else
        ZNone ()
 
@@ -856,9 +871,39 @@ let hex_bits_16_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 65536 then
-       ZSome ((bits_of_int 32768 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 16) then
+       ZSome ((bits_of_big_int 16 n, len))
+     else
+       ZNone ()
+
+let hex_bits_17_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 17) then
+       ZSome ((bits_of_big_int 17 n, len))
+     else
+       ZNone ()
+
+let hex_bits_18_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 18) then
+       ZSome ((bits_of_big_int 18 n, len))
+     else
+       ZNone ()
+
+let hex_bits_19_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 19) then
+       ZSome ((bits_of_big_int 19 n, len))
      else
        ZNone ()
 
@@ -866,9 +911,9 @@ let hex_bits_20_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 1048576 then
-       ZSome ((bits_of_int 524288 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 20) then
+       ZSome ((bits_of_big_int 20 n, len))
      else
        ZNone ()
 
@@ -876,9 +921,69 @@ let hex_bits_21_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 2097152 then
-       ZSome ((bits_of_int 1048576 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 21) then
+       ZSome ((bits_of_big_int 21 n, len))
+     else
+       ZNone ()
+
+let hex_bits_22_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 22) then
+       ZSome ((bits_of_big_int 22 n, len))
+     else
+       ZNone ()
+
+let hex_bits_23_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 23) then
+       ZSome ((bits_of_big_int 23 n, len))
+     else
+       ZNone ()
+
+let hex_bits_24_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 24) then
+       ZSome ((bits_of_big_int 24 n, len))
+     else
+       ZNone ()
+
+let hex_bits_25_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 25) then
+       ZSome ((bits_of_big_int 25 n, len))
+     else
+       ZNone ()
+
+let hex_bits_26_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 26) then
+       ZSome ((bits_of_big_int 26 n, len))
+     else
+       ZNone ()
+
+let hex_bits_27_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 27) then
+       ZSome ((bits_of_big_int 27 n, len))
      else
        ZNone ()
 
@@ -886,9 +991,39 @@ let hex_bits_28_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 268435456 then
-       ZSome ((bits_of_int 134217728 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 28) then
+       ZSome ((bits_of_big_int 28 n, len))
+     else
+       ZNone ()
+
+let hex_bits_29_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 29) then
+       ZSome ((bits_of_big_int 29 n, len))
+     else
+       ZNone ()
+
+let hex_bits_30_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 30) then
+       ZSome ((bits_of_big_int 30 n, len))
+     else
+       ZNone ()
+
+let hex_bits_31_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 31) then
+       ZSome ((bits_of_big_int 31 n, len))
      else
        ZNone ()
 
@@ -896,9 +1031,9 @@ let hex_bits_32_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 4294967296 then
-       ZSome ((bits_of_int 2147483648 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 32) then
+       ZSome ((bits_of_big_int 32 n, len))
      else
        ZNone ()
 
@@ -906,11 +1041,32 @@ let hex_bits_33_matches_prefix s =
   match maybe_int_of_prefix s with
   | ZNone () -> ZNone ()
   | ZSome (n, len) ->
-     let n = Big_int.to_int n in
-     if 0 <= n && n < 8589934592 then
-       ZSome ((bits_of_int 4294967296 n, len))
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 33) then
+       ZSome ((bits_of_big_int 33 n, len))
      else
        ZNone ()
+
+let hex_bits_48_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 48) then
+       ZSome ((bits_of_big_int 48 n, len))
+     else
+       ZNone ()
+
+let hex_bits_64_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | ZNone () -> ZNone ()
+  | ZSome (n, len) ->
+     if Big_int.less_equal Big_int.zero n
+        && Big_int.less n (Big_int.pow_int_positive 2 64) then
+       ZSome ((bits_of_big_int 64 n, len))
+     else
+       ZNone ()
+
 
 let string_of_bool = function
   | true -> "true"
