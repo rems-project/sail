@@ -373,8 +373,10 @@ overload operator % = {modulus}
 val Real = {ocaml: "Num.num_of_big_int", lem: "realFromInteger"} : int -> real
 
 val shl_int = "shl_int" : (int, int) -> int
-
 val shr_int = "shr_int" : (int, int) -> int
+val lor_int = "lor_int" : (int, int) -> int
+val land_int = "land_int" : (int, int) -> int
+val lxor_int = "lxor_int" : (int, int) -> int
 
 val min_nat = {ocaml: "min_int", lem: "min", c: "min_int"} : (nat, nat) -> nat
 

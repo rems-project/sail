@@ -491,6 +491,10 @@ let zcast_unit_vec x = [x]
 
 let shl_int (n, m) = Big_int.shift_left n (Big_int.to_int m)
 let shr_int (n, m) = Big_int.shift_right n (Big_int.to_int m)
+let lor_int (n, m) = Big_int.bitwise_or n m
+let land_int (n, m) = Big_int.bitwise_and n m
+let lxor_int (n, m) = Big_int.bitwise_xor n m
+
 
 let debug (str1, n, str2, v) = prerr_endline (str1 ^ Big_int.to_string n ^ str2 ^ string_of_bits v)
 
