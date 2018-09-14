@@ -2933,11 +2933,6 @@ let rewrite_defs_letbind_effects (value : tannot exp -> bool) (newreturn : tanno
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot)) =
-    (* let propagate_funcl_effect (FCL_aux (FCL_Funcl(id, pexp), (l, a))) =
-      let pexp, eff = propagate_pexp_effect pexp in
-      FCL_aux (FCL_Funcl(id, pexp), (l, add_effect_annot a eff))
-    in
-    let funcls = List.map propagate_funcl_effect funcls in *)
     let newreturn_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = newreturn_pexp pexp in
     let newreturn = List.exists newreturn_funcl funcls in
     let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),annot)) =
@@ -2947,7 +2942,6 @@ let rewrite_defs_letbind_effects (value : tannot exp -> bool) (newreturn : tanno
     FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),fdannot)
   in
   let rewrite_def rewriters def =
-    (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
     match def with
     | DEF_val (LB_aux (lb, annot)) ->
       let rewrap lb = DEF_val (LB_aux (lb, annot)) in
@@ -2976,10 +2970,22 @@ let rewrite_defs_letbind_all_effects_and_var_updates =
     (fun exp -> not (effectful exp || updates_vars exp))
     effectful
 
-let rewrite_defs_letbind_mem_effects =
-  rewrite_defs_letbind_effects
-    (fun exp -> not (has_mem_eff (effect_of exp)))
-    (fun _ -> false)
+let rewrite_defs_letbind_effectful_fun_apps =
+  (* Values here are expressions that do not contain effectful function calls;
+     hence, expressions *with* effectful function calls get rewritten. *)
+  let value exp =
+    let fun_effectful id =
+      try
+        match Env.get_val_spec id (env_of exp) with
+        | _, Typ_aux (Typ_fn (_, _, eff), _) -> effectful_effs eff
+        | _, _ -> false
+      with _ -> false
+    in
+    fold_exp
+      { (pure_exp_alg true (&&)) with e_app = (fun (id, _) -> not (fun_effectful id)); }
+      exp
+  in
+  rewrite_defs_letbind_effects value (fun _ -> false)
 
 let rewrite_defs_internal_lets =
 
@@ -3950,18 +3956,24 @@ let rewrite_defs_remove_e_assign (Defs defs) =
     ; rewrite_defs = rewrite_defs_base
     } (Defs (loop_specs @ defs))
 
-let normalise_funcl_pats select (Defs defs) =
+(* Merge function clauses and normalise the argument patterns either to a
+   single variable (useful for treating argument lists as tuples) or to a
+   list of variables.  The function select_op is called for each function to
+   decide which rewrite to perform (if any). *)
+type funcl_pat_op = Rewrite_to_single_var | Rewrite_to_multiple_vars | Keep
+
+let normalise_funcl_pats select_op (Defs defs) =
   let rewrite_function (FD_aux (FD_function (r,t,e,fcls),ann) as f) =
     match fcls with
-    | (FCL_aux (FCL_Funcl (id,_),(l,annot)))::_ when select fcls ->
+    | (FCL_aux (FCL_Funcl (id,_),(l,annot)))::_ when select_op fcls <> Keep ->
        let l_g = Parse_ast.Generated l in
        let ann_g : _ * tannot = (l_g,empty_tannot) in
        let pevar i =
          let id = mk_id ("var#" ^ string_of_int i) in
          P_aux (P_id id, ann_g), E_aux (E_id id, ann_g)
        in
-       let pvar, evar = match destruct_tannot annot with
-         | Some (env, _, _) ->
+       let pvar, evar = match destruct_tannot annot, select_op fcls with
+         | Some (env, _, _), Rewrite_to_multiple_vars ->
             begin
               try
                 match Env.get_val_spec id env with
@@ -3972,7 +3984,7 @@ let normalise_funcl_pats select (Defs defs) =
               with
               | _ -> pevar 0
             end
-         | _ -> pevar 0
+         | _, _ -> pevar 0
        in
        let clauses = List.map (fun (FCL_aux (FCL_Funcl (_,pexp),_)) -> pexp) fcls in
        FD_aux (FD_function (r,t,e,[
@@ -3987,12 +3999,17 @@ let normalise_funcl_pats select (Defs defs) =
     | d -> d
   in Defs (List.map rewrite_def defs)
 
-let merge_funcls = normalise_funcl_pats (fun funcls -> List.length funcls > 1)
+let merge_funcls =
+  let op funcls = if List.length funcls > 1 then Rewrite_to_single_var else Keep in
+  normalise_funcl_pats op
 let normalise_funcl_pats_bsv =
   (* Normalise patterns that can not be readily transformed to a plain list of
-     formal arguments *)
-  let select funcls =
-    let plain (FCL_aux (FCL_Funcl (_,pexp),(l,annot))) =
+     formal arguments.  For functions with memory effects, which will have to
+     be wrapped in a module in the Bluespec output, merge the parameters into
+     a single tuple as required by the Server interface. *)
+  let op funcls =
+    let mem_eff_funcl (FCL_aux (_, (_, a))) = has_mem_eff (effect_of_annot a) in
+    let plain (FCL_aux (FCL_Funcl (_,pexp),(l,annot)) as funcl) =
       let pat, _, _, _ = destruct_pexp pexp in
       match fst (untyp_pat pat) with
       | P_aux (P_tup ps, _) ->
@@ -4001,13 +4018,17 @@ let normalise_funcl_pats_bsv =
            | P_aux (P_id id, _) when Env.lookup_id id (pat_env_of p) = Unbound -> true
            | _ -> false
          in
-         List.for_all is_var ps
+         List.for_all is_var ps && not (mem_eff_funcl funcl)
       | P_aux (P_id id, _) when Env.lookup_id id (pat_env_of pat) = Unbound -> true
       | _ -> is_unit_typ (pat_typ_of pat)
     in
-    List.length funcls > 1 || not (List.for_all plain funcls)
+    if List.length funcls > 1 || not (List.for_all plain funcls) then
+      if List.exists mem_eff_funcl funcls
+      then Rewrite_to_single_var
+      else Rewrite_to_multiple_vars
+    else Keep
   in
-  normalise_funcl_pats select
+  normalise_funcl_pats op
 
 let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   let empty_vec = E_aux (E_vector [], (l,())) in
@@ -4735,7 +4756,7 @@ let rewrite_defs_bsv = [
   ("split_execute", rewrite_split_fun_constr_pats "execute");
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
-  (* ("constraint", rewrite_constraint); *)
+  ("constraint", rewrite_constraint);
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", top_sort_defs);
   ("trivial_sizeof", rewrite_trivial_sizeof);
@@ -4743,7 +4764,7 @@ let rewrite_defs_bsv = [
   (* ("early_return", rewrite_defs_early_return); *)
   ("fix_val_specs", rewrite_fix_val_specs);
   (* ("remove_blocks", rewrite_defs_remove_blocks); *)
-  ("letbind_effects", rewrite_defs_letbind_mem_effects);
+  ("letbind_effects", rewrite_defs_letbind_effectful_fun_apps);
   (* ("remove_e_assign", rewrite_defs_remove_e_assign); *)
   (* ("internal_lets", rewrite_defs_internal_lets); *)
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
