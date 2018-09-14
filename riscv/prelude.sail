@@ -300,9 +300,9 @@ val sub_vec_int = {c: "sub_bits_int", _: "sub_vec_int"} : forall 'n. (bits('n), 
 
 val sub_real = {ocaml: "sub_real", lem: "realMinus"} : (real, real) -> real
 
-val negate_range = {ocaml: "minus_big_int", lem: "integerNegate", coq: "negate_range"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
+val negate_range = {ocaml: "negate", lem: "integerNegate", coq: "negate_range"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
 
-val negate_int = {ocaml: "minus_big_int", lem: "integerNegate", coq: "Z.opp"} : int -> int
+val negate_int = {ocaml: "negate", lem: "integerNegate", coq: "Z.opp"} : int -> int
 
 val negate_real = {ocaml: "Num.minus_num", lem: "realNegate"} : real -> real
 
