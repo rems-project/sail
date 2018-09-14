@@ -400,6 +400,16 @@ let rec bits_of_int bit n =
     end
   else []
 
+let rec bits_of_big_int pow n =
+  if pow < 1 then []
+  else begin
+      let bit = (Big_int.pow_int_positive 2 (pow - 1)) in
+      if Big_int.greater (Big_int.div n bit) Big_int.zero then
+        B1 :: bits_of_big_int (pow - 1) (Big_int.sub n bit)
+      else
+        B0 :: bits_of_big_int (pow - 1) n
+    end
+
 let byte_of_int n = bits_of_int 128 n
 
 module Mem = struct
