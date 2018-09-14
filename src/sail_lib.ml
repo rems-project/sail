@@ -508,12 +508,11 @@ let string_length str = Big_int.of_int (String.length str)
 
 let string_append (s1, s2) = s1 ^ s2
 
-(* int_of_string_opt is in Ocaml stdlib but not in older versions *)
 let int_of_string_opt s =
   try
-    Some (int_of_string s)
+    Some (Big_int.of_string s)
   with
-  | Failure _ -> None
+  | Invalid_argument _ -> None
 
 (* highly inefficient recursive implementation *)
 let rec maybe_int_of_prefix = function
@@ -521,13 +520,13 @@ let rec maybe_int_of_prefix = function
   | str ->
      let len = String.length str in
      match int_of_string_opt str with
-     | Some n -> ZSome (Big_int.of_int n, Big_int.of_int len)
+     | Some n -> ZSome (n, Big_int.of_int len)
      | None -> maybe_int_of_prefix (String.sub str 0 (len - 1))
 
 let maybe_int_of_string str =
   match int_of_string_opt str with
   | None -> ZNone ()
-  | Some n -> ZSome (Big_int.of_int n)
+  | Some n -> ZSome n
 
 let lt_int (x, y) = Big_int.less x y
 
