@@ -4341,10 +4341,10 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
   let env = Env.define_val_spec id env in
-  if equal_effects eff no_effect then
+  if equal_effects eff no_effect || equal_effects eff (mk_effect [BE_escape]) || !opt_no_effects then
     vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, None)))], env
   else
-    typ_error l ("Mapping not pure: " ^ string_of_effect eff ^ " found")
+    typ_error l ("Mapping not pure (or escape only): " ^ string_of_effect eff ^ " found")
 
 
 (* Checking a val spec simply adds the type as a binding in the
