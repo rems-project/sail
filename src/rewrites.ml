@@ -3384,7 +3384,7 @@ let rewrite_defs_mapping_patterns =
                                                (annot_exp (E_let (new_letbind, fold_typed_guards env guards)) unk env bool_typ),
                                                false_exp)) unk env bool_typ in
 
-       annot_pat (P_id s_id) unk env mapping_in_typ, [new_guard; new_other_guards], new_let
+       annot_pat (P_typ (mapping_in_typ, annot_pat (P_id s_id) unk env mapping_in_typ)) unk env mapping_in_typ, [new_guard; new_other_guards], new_let
 
     | P_aux (P_as (inner_pat, inner_id), p_annot) ->
        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
