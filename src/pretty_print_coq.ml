@@ -666,7 +666,7 @@ let is_ctor env id = match Env.lookup_id id env with
 let is_auto_decomposed_exist env typ =
   let typ = expand_range_type typ in
   match destruct_exist env typ with
-  | Some (kids, nc, (Typ_aux (Typ_app (id, _),_) as typ')) when string_of_id id = "atom" -> Some typ'
+  | Some (_, _, typ') -> Some typ'
   | _ -> None
 
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
@@ -1270,13 +1270,8 @@ let doc_exp, doc_let =
          | Local (_,typ) ->
             let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
             let () =
-              debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ));
-              debug ctxt (lazy ("  expands to " ^ string_of_typ exp_typ))
-            in
-            let proj = match exp_typ with
-              | Typ_aux (Typ_exist _,_) -> true
-              | _ -> false
-            in if proj then string "projT1" ^^ doc_id id else doc_id id
+              debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ))
+            in doc_id id
          | _ -> doc_id id
        end
     | E_lit lit -> doc_lit lit
@@ -1456,6 +1451,10 @@ let doc_exp, doc_let =
        raise (report l __POS__ "E_vars should have been removed before pretty-printing")
     | E_internal_plet (pat,e1,e2) ->
        begin
+         let () =
+           debug ctxt (lazy ("Internal plet, pattern " ^ string_of_pat pat));
+           debug ctxt (lazy (" type of e1 " ^ string_of_typ (typ_of e1)))
+         in
          match pat, e1, e2 with
          | (P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)),
            (E_aux (E_assert (assert_e1,assert_e2),_)), _ ->
@@ -1505,10 +1504,7 @@ let doc_exp, doc_let =
                     when not (is_enum (env_of e1) id) ->
                       let full_typ = (expand_range_type typ) in
                       let binder = match destruct_exist (env_of e1) full_typ with
-                        | Some ([kid], nc,
-                                Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                                                  [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
-                            when Kid.compare kid kid' == 0 ->
+                        | Some _ ->
                            squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ])
                         | _ ->
                            parens (separate space [doc_id id; colon; doc_typ ctxt typ])

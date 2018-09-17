@@ -1079,6 +1079,28 @@ Lemma True_right {P:Prop} : (P /\ True) <-> P.
 tauto.
 Qed.
 
+(* Turn exists into metavariables like eexists, except put in dummy values when
+   the variable is unused.  This is used so that we can use eauto with a low
+   search bound that doesn't include the exists.  (Not terribly happy with
+   how this works...) *)
+Ltac drop_exists :=
+repeat
+  match goal with |- @ex Z ?p =>
+   let a := eval hnf in (p 0) in
+   let b := eval hnf in (p 1) in
+   match a with b => exists 0 | _ => eexists end
+  end.
+(*
+  match goal with |- @ex Z (fun x => @?p x) =>
+   let xx := fresh "x" in
+   evar (xx : Z);
+   let a := eval hnf in (p xx) in
+   match a with context [xx] => eexists | _ => exists 0 end;
+   instantiate (xx := 0);
+   clear xx
+  end.
+*)
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
@@ -1130,7 +1152,7 @@ prepare_for_solver;
  | apply ArithFact_mword; assumption
  | constructor; omega with Z
    (* The datatypes hints give us some list handling, esp In *)
- | constructor; eauto 3 with datatypes zarith sail
+ | constructor; drop_exists; eauto 3 with datatypes zarith sail
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
  ].
 (* Add an indirection so that you can redefine run_solver to fail to get

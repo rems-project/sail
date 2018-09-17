@@ -142,3 +142,32 @@ rewrite Z.quot_mul; auto with zarith.
 Qed.
 Hint Resolve mul_quot_8_helper : sail.
 
+(* For aarch64_vector_arithmetic_binary_uniform_mul_int_dotp *)
+Lemma quot4_ge {esize x} : 4 <= esize -> x = Z.quot esize 4 -> x >= 0.
+intros.
+apply Z.le_ge.
+subst.
+apply Z.quot_pos; omega.
+Qed.
+(* except that only proving the hard bit leads to an anomaly...
+Hint Resolve quot4_ge : sail.*)
+Lemma dotp_lemma {datasize esize x} :
+ 8 = datasize \/ 16 = datasize \/ 32 = datasize \/ 64 = datasize \/ 128 = datasize \/ False ->
+ 4 <= esize -> x = Z.quot esize 4 -> datasize >= 0 /\ x >= 0.
+intros.
+split.
+* omega.
+* eauto using quot4_ge.
+Qed.
+Hint Resolve dotp_lemma : sail.
+
+
+Lemma quot4_gt {esize x} : 4 <= esize -> x = Z.quot esize 4 -> x > 0.
+intros.
+apply Z.lt_gt.
+subst.
+apply Z.quot_str_pos.
+omega.
+Qed.
+Hint Resolve quot4_gt : sail.
+
