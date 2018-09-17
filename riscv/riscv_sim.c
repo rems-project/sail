@@ -182,6 +182,14 @@ int compare_states(struct tv_spike_t *s)
   return passed;
 }
 
+void flush_logs(void)
+{
+  fprintf(stderr, "\n");
+  fflush(stderr);
+  fprintf(stdout, "\n");
+  fflush(stdout);
+}
+
 void run_sail(void)
 {
   bool spike_done;
@@ -198,12 +206,14 @@ void run_sail(void)
       CONVERT_OF(sail_int, mach_int)(&sail_step, step_no);
       stepped = zstep(sail_step);
       if (have_exception) goto step_exception;
+      flush_logs();
     }
     if (stepped) step_no++;
 
     { /* run a Spike step */
       tv_step(s);
       spike_done = tv_is_done(s);
+      flush_logs();
     }
 
     if (zhtif_done) {
