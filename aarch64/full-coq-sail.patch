@@ -1,0 +1,786 @@
+diff --git a/aarch64/full/spec.sail b/aarch64/full/spec.sail
+index 897fa56e..2fcbf0d7 100644
+--- a/aarch64/full/spec.sail
++++ b/aarch64/full/spec.sail
+@@ -818,7 +818,7 @@ val InterruptPending : unit -> bool effect {rreg}
+ 
+ function InterruptPending () = return(__PendingInterrupt)
+ 
+-val asl_Int : forall ('N : Int), 'N >= 0. (bits('N), bool) -> int
++val asl_Int : forall ('N : Int), 'N > 0. (bits('N), bool) -> int
+ 
+ function asl_Int (x, unsigned) = {
+   result : int = if unsigned then UInt(x) else SInt(x);
+@@ -1825,7 +1825,7 @@ function aget_V 'n = {
+   return(slice(_V[n], 0, 'width))
+ }
+ 
+-val LookUpRIndex : (int, bits(5)) -> int effect {escape, undef}
++val LookUpRIndex : (int, bits(5)) -> range(0,30) effect {escape, undef}
+ 
+ function LookUpRIndex ('n, mode) = {
+   assert(n >= 0 & n <= 14, "((n >= 0) && (n <= 14))");
+@@ -1840,7 +1840,9 @@ function LookUpRIndex ('n, mode) = {
+     14 => result = RBankSelect(mode, 14, 30, 16, 18, 20, 22, 14),
+     _ => result = n
+   };
+-  return(result)
++  let 'result2 = result;
++  assert(result2 >= 0 & result2 <= 30);
++  return(result2)
+ }
+ 
+ val LowestSetBit : forall ('N : Int), 'N >= 0. bits('N) -> int
+@@ -2325,7 +2327,7 @@ val IsZeroBit : forall ('N : Int), 'N >= 0 & 1 >= 0. bits('N) -> bits(1)
+ 
+ function IsZeroBit x = return(if IsZero(x) then 0b1 else 0b0)
+ 
+-val AddWithCarry : forall ('N : Int), 'N >= 0 & 'N >= 0 & 1 >= 0 & 'N >= 0 & 4 >= 0.
++val AddWithCarry : forall ('N : Int), 'N > 0 & 'N >= 0 & 1 >= 0 & 'N >= 0 & 4 >= 0.
+   (bits('N), bits('N), bits(1)) -> (bits('N), bits(4))
+ 
+ function AddWithCarry (x, y, carry_in) = {
+@@ -6131,7 +6133,7 @@ function AddPAC (ptr, modifier, K, data) = {
+       selbit = if (HaveEL(EL2) & [TCR_EL2[38]] == 0b1) & [TCR_EL1[52]] == 0b0 | (HaveEL(EL2) & [TCR_EL2[37]] == 0b1) & [TCR_EL1[51]] == 0b0 then [ptr[55]] else [ptr[63]]
+   else selbit = if tbi then [ptr[55]] else [ptr[63]];
+   let 'bottom_PAC_bit : {'n, true. atom('n)} = ex_int(CalculateBottomPACBit(ptr, selbit));
+-  assert(constraint('bottom_PAC_bit <= 55));
++  assert(constraint(0 <= 'bottom_PAC_bit <= 55));
+   extfield = replicate_bits(selbit, 64);
+   if tbi then
+     ext_ptr = (ptr[63 .. 56] @ extfield[(negate(bottom_PAC_bit) + 56) - 1 .. 0]) @ ptr[bottom_PAC_bit - 1 .. 0]
+@@ -6975,6 +6977,7 @@ function AArch64_MaybeZeroRegisterUppers () = {
+   };
+   foreach (n from first to last by 1 in inc)
+     if (n != 15 | include_R15_name) & ConstrainUnpredictableBool(Unpredictable_ZEROUPPER) then {
++      assert(0 <= n & n <= 30);
+       __tmp_3 : bits(64) = _R[n];
+       __tmp_3 = __SetSlice_bits(64, 32, __tmp_3, 32, Zeros());
+       _R[n] = __tmp_3
+@@ -7710,10 +7713,10 @@ function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isb
+   priv_match : bool = undefined;
+   if ~(ispriv) & ~(isbreakpnt) then priv_match = EL0_match
+   else match PSTATE.EL {
+-    EL3 => priv_match = EL3_match,
+-    EL2 => priv_match = EL2_match,
+-    EL1 => priv_match = EL1_match,
+-    EL0 => priv_match = EL0_match
++    ? if ? == EL3 => priv_match = EL3_match,
++    ? if ? == EL2 => priv_match = EL2_match,
++    ? if ? == EL1 => priv_match = EL1_match,
++    ? if ? == EL0 => priv_match = EL0_match
+   };
+   security_state_match : bool = undefined;
+   match SSC {
+@@ -8017,20 +8020,20 @@ function Strip (A, data) = {
+   else
+     original_ptr = slice(extfield, 0, negate(bottom_PAC_bit) + 64) @ slice(A, 0, bottom_PAC_bit);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       TrapEL2 = false;
+       TrapEL3 = false
+     }
+@@ -8065,23 +8068,23 @@ function AuthIB (X, Y) = {
+   Enable : bits(1) = undefined;
+   APIBKey_EL1 : bits(128) = slice(APIBKeyHi_EL1, 0, 64) @ slice(APIBKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[30]] else [SCTLR_EL2[30]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[30]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[30]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[30]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -8139,23 +8142,23 @@ function AuthIA (X, Y) = {
+   Enable : bits(1) = undefined;
+   APIAKey_EL1 : bits(128) = slice(APIAKeyHi_EL1, 0, 64) @ slice(APIAKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[31]] else [SCTLR_EL2[31]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[31]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[31]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[31]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -8226,23 +8229,23 @@ function AuthDB (X, Y) = {
+   Enable : bits(1) = undefined;
+   APDBKey_EL1 : bits(128) = slice(APDBKeyHi_EL1, 0, 64) @ slice(APDBKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[13]] else [SCTLR_EL2[13]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[13]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[13]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[13]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -8269,23 +8272,23 @@ function AuthDA (X, Y) = {
+   Enable : bits(1) = undefined;
+   APDAKey_EL1 : bits(128) = slice(APDAKeyHi_EL1, 0, 64) @ slice(APDAKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[27]] else [SCTLR_EL2[27]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[27]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[27]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[27]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -8312,23 +8315,23 @@ function AddPACIB (X, Y) = {
+   Enable : bits(1) = undefined;
+   APIBKey_EL1 : bits(128) = slice(APIBKeyHi_EL1, 0, 64) @ slice(APIBKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[30]] else [SCTLR_EL2[30]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[30]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[30]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[30]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -8386,23 +8389,23 @@ function AddPACIA (X, Y) = {
+   Enable : bits(1) = undefined;
+   APIAKey_EL1 : bits(128) = slice(APIAKeyHi_EL1, 0, 64) @ slice(APIAKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[31]] else [SCTLR_EL2[31]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[31]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[31]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[31]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -8459,20 +8462,20 @@ function AddPACGA (X, Y) = {
+   TrapEL3 : bool = undefined;
+   APGAKey_EL1 : bits(128) = slice(APGAKeyHi_EL1, 0, 64) @ slice(APGAKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       TrapEL2 = false;
+       TrapEL3 = false
+     }
+@@ -8498,23 +8501,23 @@ function AddPACDB (X, Y) = {
+   Enable : bits(1) = undefined;
+   APDBKey_EL1 : bits(128) = slice(APDBKeyHi_EL1, 0, 64) @ slice(APDBKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[13]] else [SCTLR_EL2[13]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[13]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[13]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[13]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -8541,23 +8544,23 @@ function AddPACDA (X, Y) = {
+   Enable : bits(1) = undefined;
+   APDAKey_EL1 : bits(128) = slice(APDAKeyHi_EL1, 0, 64) @ slice(APDAKeyLo_EL1, 0, 64);
+   match PSTATE.EL {
+-    EL0 => {
++    ? if ? == EL0 => {
+       IsEL1Regime : bool = (~(HaveEL(EL2)) | [HCR_EL2[27]] == 0b0) | [HCR_EL2[34]] == 0b0;
+       Enable = if IsEL1Regime then [SCTLR_EL1[27]] else [SCTLR_EL2[27]];
+       TrapEL2 = ((HaveEL(EL2) & IsEL1Regime) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL1 => {
++    ? if ? == EL1 => {
+       Enable = [SCTLR_EL1[27]];
+       TrapEL2 = (HaveEL(EL2) & ~(IsSecure())) & [HCR_EL2[41]] == 0b0;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL2 => {
++    ? if ? == EL2 => {
+       Enable = [SCTLR_EL2[27]];
+       TrapEL2 = false;
+       TrapEL3 = HaveEL(EL3) & [SCR_EL3[17]] == 0b0
+     },
+-    EL3 => {
++    ? if ? == EL3 => {
+       Enable = [SCTLR_EL3[27]];
+       TrapEL2 = false;
+       TrapEL3 = false
+@@ -9194,7 +9197,7 @@ function aarch64_vector_transfer_integer_dup ('d, 'datasize, 'elements, 'esize,
+ val aarch64_vector_shift_right_sisd : (bool, int, int, int, int, int, bool, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_shift_right_sisd (accumulate, 'd, 'datasize, 'elements, 'esize, 'n, round, 'shift, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -9216,7 +9219,7 @@ function aarch64_vector_shift_right_sisd (accumulate, 'd, 'datasize, 'elements,
+ val aarch64_vector_shift_rightnarrow_uniform_sisd : (int, int, int, int, int, int, bool, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_shift_rightnarrow_uniform_sisd ('d, 'datasize, 'elements, 'esize, 'n, 'part, round, 'shift, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -9240,7 +9243,7 @@ function aarch64_vector_shift_rightnarrow_uniform_sisd ('d, 'datasize, 'elements
+ val aarch64_vector_shift_rightnarrow_nonuniform_sisd : (int, int, int, int, int, int, bool, int) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_shift_rightnarrow_nonuniform_sisd ('d, 'datasize, 'elements, 'esize, 'n, 'part, round, 'shift) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -9321,7 +9324,7 @@ function aarch64_vector_shift_left_sisd ('d, 'datasize, 'elements, 'esize, 'n, '
+ val aarch64_vector_shift_leftsat_sisd : (int, int, bool, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_shift_leftsat_sisd ('d, 'datasize, dst_unsigned, 'elements, 'esize, 'n, 'shift, src_unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -9344,7 +9347,7 @@ function aarch64_vector_shift_leftsat_sisd ('d, 'datasize, dst_unsigned, 'elemen
+ val aarch64_vector_shift_leftlong : (int, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_shift_leftlong ('d, 'datasize, 'elements, 'esize, 'n, 'part, 'shift, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -9422,7 +9425,7 @@ function aarch64_vector_shift_conv_float_sisd ('d, 'datasize, 'elements, 'esize,
+ val aarch64_vector_reduce_intmax : (int, int, int, int, bool, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_reduce_intmax ('d, 'datasize, 'elements, 'esize, min, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -9565,7 +9568,7 @@ function aarch64_vector_reduce_add_simd ('d, 'datasize, 'esize, 'n, op) = {
+ val aarch64_vector_reduce_addlong : (int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_reduce_addlong ('d, 'datasize, 'elements, 'esize, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -9763,7 +9766,7 @@ function vector_arithmetic_unary_special_frecpx_decode (U, sz, Rn, Rd) = {
+ val aarch64_vector_arithmetic_unary_shift : (int, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_shift ('d, 'datasize, 'elements, 'esize, 'n, 'part, 'shift, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10062,7 +10065,7 @@ function vector_arithmetic_unary_float_narrow_decode (Q, U, sz, Rn, Rd) = {
+ val aarch64_vector_arithmetic_unary_extract_sqxtun_sisd : (int, int, int, int, int, int) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_extract_sqxtun_sisd ('d, 'datasize, 'elements, 'esize, 'n, 'part) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10085,7 +10088,7 @@ function aarch64_vector_arithmetic_unary_extract_sqxtun_sisd ('d, 'datasize, 'el
+ val aarch64_vector_arithmetic_unary_extract_sat_sisd : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_extract_sat_sisd ('d, 'datasize, 'elements, 'esize, 'n, 'part, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10127,7 +10130,7 @@ function aarch64_vector_arithmetic_unary_extract_nosat ('d, 'datasize, 'elements
+ val aarch64_vector_arithmetic_unary_diffneg_sat_sisd : (int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_diffneg_sat_sisd ('d, 'datasize, 'elements, 'esize, 'n, neg) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10164,7 +10167,7 @@ function vector_arithmetic_unary_diffneg_sat_sisd_decode (U, size, Rn, Rd) = {
+ val aarch64_vector_arithmetic_unary_diffneg_int_sisd : (int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_diffneg_int_sisd ('d, 'datasize, 'elements, 'esize, 'n, neg) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10221,7 +10224,7 @@ function aarch64_vector_arithmetic_unary_cnt ('d, 'datasize, 'elements, 'esize,
+ val aarch64_vector_arithmetic_unary_cmp_int_lessthan_sisd : (CompareOp, int, int, int, int, int) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_cmp_int_lessthan_sisd (comparison, 'd, 'datasize, 'elements, 'esize, 'n) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10248,7 +10251,7 @@ function aarch64_vector_arithmetic_unary_cmp_int_lessthan_sisd (comparison, 'd,
+ val aarch64_vector_arithmetic_unary_cmp_int_bulk_sisd : (CompareOp, int, int, int, int, int) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_cmp_int_bulk_sisd (comparison, 'd, 'datasize, 'elements, 'esize, 'n) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10382,7 +10385,7 @@ function aarch64_vector_arithmetic_unary_clsz (countop, 'd, 'datasize, 'elements
+ val aarch64_vector_arithmetic_unary_add_saturating_sisd : (int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_add_saturating_sisd ('d, 'datasize, 'elements, 'esize, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10421,7 +10424,7 @@ function vector_arithmetic_unary_add_saturating_sisd_decode (U, size, Rn, Rd) =
+ val aarch64_vector_arithmetic_unary_add_pairwise : (bool, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_unary_add_pairwise (acc, 'd, 'datasize, 'elements, 'esize, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10445,7 +10448,7 @@ function aarch64_vector_arithmetic_unary_add_pairwise (acc, 'd, 'datasize, 'elem
+ val aarch64_vector_arithmetic_binary_uniform_sub_saturating_sisd : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_sub_saturating_sisd ('d, 'datasize, 'elements, 'esize, 'm, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10487,7 +10490,7 @@ function vector_arithmetic_binary_uniform_sub_saturating_sisd_decode (U, size, R
+ val aarch64_vector_arithmetic_binary_uniform_sub_int : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_sub_int ('d, 'datasize, 'elements, 'esize, 'm, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10573,7 +10576,7 @@ function aarch64_vector_arithmetic_binary_uniform_sub_fp16_simd (abs, 'd, 'datas
+ val aarch64_vector_arithmetic_binary_uniform_shift_sisd : (int, int, int, int, int, int, bool, bool, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_shift_sisd ('d, 'datasize, 'elements, 'esize, 'm, 'n, rounding, saturating, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10696,7 +10699,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_int_product ('d, 'datasize
+ val aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_sisd : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_sisd ('d, 'datasize, 'elements, 'esize, 'm, 'n, rounding) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10725,7 +10728,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_sisd ('d, 'da
+ val aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_accum_sisd : (int, int, int, int, int, int, bool, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_accum_sisd ('d, 'datasize, 'elements, 'esize, 'm, 'n, rounding, sub_op) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10758,7 +10761,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_accum_sisd ('
+ val aarch64_vector_arithmetic_binary_uniform_mul_int_dotp : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_mul_int_dotp ('d, 'datasize, 'elements, 'esize, 'm, 'n, signed) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize >= 4), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10945,7 +10948,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_fp_complex ('d, 'datasize,
+ val aarch64_vector_arithmetic_binary_uniform_maxmin_single : (int, int, int, int, int, bool, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_maxmin_single ('d, 'datasize, 'elements, 'esize, 'm, minimum, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -10969,7 +10972,7 @@ function aarch64_vector_arithmetic_binary_uniform_maxmin_single ('d, 'datasize,
+ val aarch64_vector_arithmetic_binary_uniform_maxmin_pair : (int, int, int, int, int, bool, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_maxmin_pair ('d, 'datasize, 'elements, 'esize, 'm, minimum, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11159,7 +11162,7 @@ function aarch64_vector_arithmetic_binary_uniform_divfp16 ('d, 'datasize, 'eleme
+ val aarch64_vector_arithmetic_binary_uniform_diff : (bool, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_diff (accumulate, 'd, 'datasize, 'elements, 'esize, 'm, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11184,7 +11187,7 @@ function aarch64_vector_arithmetic_binary_uniform_diff (accumulate, 'd, 'datasiz
+ val aarch64_vector_arithmetic_binary_uniform_cmp_int_sisd : (bool, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_cmp_int_sisd (cmp_eq, 'd, 'datasize, 'elements, 'esize, 'm, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11309,7 +11312,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_wrapping_pair ('d, 'datasi
+ val aarch64_vector_arithmetic_binary_uniform_add_saturating_sisd : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_add_saturating_sisd ('d, 'datasize, 'elements, 'esize, 'm, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11351,7 +11354,7 @@ function vector_arithmetic_binary_uniform_add_saturating_sisd_decode (U, size, R
+ val aarch64_vector_arithmetic_binary_uniform_add_halving_truncating : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_add_halving_truncating ('d, 'datasize, 'elements, 'esize, 'm, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11375,7 +11378,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_halving_truncating ('d, 'd
+ val aarch64_vector_arithmetic_binary_uniform_add_halving_rounding : (int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_uniform_add_halving_rounding ('d, 'datasize, 'elements, 'esize, 'm, 'n, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11458,7 +11461,7 @@ val aarch64_vector_arithmetic_binary_element_mul_long : (int, int, int, int, int
+ 
+ function aarch64_vector_arithmetic_binary_element_mul_long ('d, 'datasize, 'elements, 'esize, 'idxdsize, 'index, 'm, 'n, 'part, unsigned) = {
+   assert(constraint('idxdsize >= 0), "idxdsize constraint");
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11508,7 +11511,7 @@ val aarch64_vector_arithmetic_binary_element_mul_high_sisd : (int, int, int, int
+ 
+ function aarch64_vector_arithmetic_binary_element_mul_high_sisd ('d, 'datasize, 'elements, 'esize, 'idxdsize, 'index, 'm, 'n, round) = {
+   assert(constraint('idxdsize >= 0), "idxdsize constraint");
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11538,7 +11541,7 @@ val aarch64_vector_arithmetic_binary_element_mul_fp16_sisd : (int, int, int, int
+ 
+ function aarch64_vector_arithmetic_binary_element_mul_fp16_sisd ('d, 'datasize, 'elements, 'esize, 'idxdsize, 'index, 'm, mulx_op, 'n) = {
+   assert(constraint('idxdsize >= 0), "idxdsize constraint");
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11560,7 +11563,7 @@ val aarch64_vector_arithmetic_binary_element_mul_double_sisd : (int, int, int, i
+ 
+ function aarch64_vector_arithmetic_binary_element_mul_double_sisd ('d, 'datasize, 'elements, 'esize, 'idxdsize, 'index, 'm, 'n, 'part) = {
+   assert(constraint('idxdsize >= 0), "idxdsize constraint");
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11587,7 +11590,7 @@ val aarch64_vector_arithmetic_binary_element_mulacc_long : (int, int, int, int,
+ 
+ function aarch64_vector_arithmetic_binary_element_mulacc_long ('d, 'datasize, 'elements, 'esize, 'idxdsize, 'index, 'm, 'n, 'part, sub_op, unsigned) = {
+   assert(constraint('idxdsize >= 0), "idxdsize constraint");
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11639,7 +11642,7 @@ val aarch64_vector_arithmetic_binary_element_mulacc_high_sisd : (int, int, int,
+ 
+ function aarch64_vector_arithmetic_binary_element_mulacc_high_sisd ('d, 'datasize, 'elements, 'esize, 'idxdsize, 'index, 'm, 'n, rounding, sub_op) = {
+   assert(constraint('idxdsize >= 0), "idxdsize constraint");
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11697,7 +11700,7 @@ val aarch64_vector_arithmetic_binary_element_mulacc_double_sisd : (int, int, int
+ 
+ function aarch64_vector_arithmetic_binary_element_mulacc_double_sisd ('d, 'datasize, 'elements, 'esize, 'idxdsize, 'index, 'm, 'n, 'part, sub_op) = {
+   assert(constraint('idxdsize >= 0), "idxdsize constraint");
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11779,7 +11782,7 @@ function aarch64_vector_arithmetic_binary_element_mulacc_complex ('d, 'datasize,
+ val aarch64_vector_arithmetic_binary_element_dotp : (int, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_element_dotp ('d, 'datasize, 'elements, 'esize, 'index, 'm, 'n, signed) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize >= 4), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11810,7 +11813,7 @@ function aarch64_vector_arithmetic_binary_element_dotp ('d, 'datasize, 'elements
+ val aarch64_vector_arithmetic_binary_disparate_mul_product : (int, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_disparate_mul_product ('d, 'datasize, 'elements, 'esize, 'm, 'n, 'part, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11854,7 +11857,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_poly ('d, 'datasize, 'el
+ val aarch64_vector_arithmetic_binary_disparate_mul_double_sisd : (int, int, int, int, int, int, int) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_disparate_mul_double_sisd ('d, 'datasize, 'elements, 'esize, 'm, 'n, 'part) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11880,7 +11883,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_double_sisd ('d, 'datasi
+ val aarch64_vector_arithmetic_binary_disparate_mul_dmacc_sisd : (int, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_disparate_mul_dmacc_sisd ('d, 'datasize, 'elements, 'esize, 'm, 'n, 'part, sub_op) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11912,7 +11915,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_dmacc_sisd ('d, 'datasiz
+ val aarch64_vector_arithmetic_binary_disparate_mul_accum : (int, int, int, int, int, int, int, bool, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_disparate_mul_accum ('d, 'datasize, 'elements, 'esize, 'm, 'n, 'part, sub_op, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11939,7 +11942,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_accum ('d, 'datasize, 'e
+ val aarch64_vector_arithmetic_binary_disparate_diff : (bool, int, int, int, int, int, int, int, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_disparate_diff (accumulate, 'd, 'datasize, 'elements, 'esize, 'm, 'n, 'part, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -11964,7 +11967,7 @@ function aarch64_vector_arithmetic_binary_disparate_diff (accumulate, 'd, 'datas
+ val aarch64_vector_arithmetic_binary_disparate_addsub_wide : (int, int, int, int, int, int, int, bool, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_disparate_addsub_wide ('d, 'datasize, 'elements, 'esize, 'm, 'n, 'part, sub_op, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+@@ -12014,7 +12017,7 @@ function aarch64_vector_arithmetic_binary_disparate_addsub_narrow ('d, 'datasize
+ val aarch64_vector_arithmetic_binary_disparate_addsub_long : (int, int, int, int, int, int, int, bool, bool) -> unit effect {escape, rreg, undef, wreg}
+ 
+ function aarch64_vector_arithmetic_binary_disparate_addsub_long ('d, 'datasize, 'elements, 'esize, 'm, 'n, 'part, sub_op, unsigned) = {
+-  assert(constraint('esize >= 0), "esize constraint");
++  assert(constraint('esize > 0), "esize constraint");
+   assert(constraint('elements >= 1), "elements constraint");
+   let 'dbytes = ex_int(datasize / 8);
+   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
+diff --git a/aarch64/no_devices.sail b/aarch64/no_devices.sail
+index 57dad4e2..b25cb6c5 100644
+--- a/aarch64/no_devices.sail
++++ b/aarch64/no_devices.sail
+@@ -6,10 +6,10 @@ val __InitRAM : forall 'm. (atom('m), int, bits('m), bits(8)) -> unit
+ 
+ function __InitRAM (_, _, _, _) = ()
+ 
+-val ___ReadRAM = "read_ram" : forall 'n 'm.
++val ___ReadRAM = "read_ram" : forall 'n 'm, 'n >= 0.
+   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
+ 
+-val __ReadRAM : forall 'n 'm.
++val __ReadRAM : forall 'n 'm, 'n >= 0.
+   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
+ 
+ function __ReadRAM(addr_length, bytes, hex_ram, addr) =
+diff --git a/aarch64/prelude.sail b/aarch64/prelude.sail
+index 8cd18fac..3e8c3399 100755
+--- a/aarch64/prelude.sail
++++ b/aarch64/prelude.sail
+@@ -148,7 +148,7 @@ val UInt = {
+ val SInt = {
+   c: "sail_signed",
+   _: "sint"
+-} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
++} : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+ 
+ val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm) effect {escape}
+ 
+@@ -159,9 +159,9 @@ val __SetSlice_int = "set_slice_int" : forall 'w. (atom('w), int, int, bits('w))
+ 
+ val __raw_SetSlice_int : forall 'w. (atom('w), int, int, bits('w)) -> int
+ 
+-val __raw_GetSlice_int = "get_slice_int" : forall 'w /*, 'w >= 0*/. (atom('w), int, int) -> bits('w)
++val __raw_GetSlice_int = "get_slice_int" : forall 'w, 'w >= 0. (atom('w), int, int) -> bits('w)
+ 
+-val __GetSlice_int : forall 'n /*, 'n >= 0*/. (atom('n), int, int) -> bits('n)
++val __GetSlice_int : forall 'n, 'n >= 0. (atom('n), int, int) -> bits('n)
+ 
+ function __GetSlice_int (n, m, o) = __raw_GetSlice_int(n, m, o)
+ 
