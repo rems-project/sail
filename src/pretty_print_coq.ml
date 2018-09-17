@@ -1152,10 +1152,10 @@ let doc_exp, doc_let =
             let typ_from_fn = Env.expand_synonyms env typ_from_fn in
             (* TODO: more sophisticated check *)
             let () =
-              debug ctxt (lazy (" arg type found    " ^ string_of_typ (general_typ_of arg)));
+              debug ctxt (lazy (" arg type found    " ^ string_of_typ (typ_of arg)));
               debug ctxt (lazy (" arg type expected " ^ string_of_typ typ_from_fn))
             in
-            let typ_of_arg = Env.expand_synonyms env (general_typ_of arg) in
+            let typ_of_arg = Env.expand_synonyms env (typ_of arg) in
             let typ_of_arg = expand_range_type typ_of_arg in
             let typ_of_arg' = match typ_of_arg with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
             let typ_from_fn' = match typ_from_fn with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in

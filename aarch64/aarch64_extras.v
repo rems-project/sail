@@ -90,7 +90,7 @@ Definition undefined_string {rv e} (_:unit) : monad rv string e := returnm ""%st
 Definition undefined_unit {rv e} (_:unit) : monad rv unit e := returnm tt.
 Definition undefined_int {rv e} (_:unit) : monad rv Z e := returnm (0:ii).
 (*val undefined_vector : forall 'rv 'a 'e. integer -> 'a -> monad 'rv (list 'a) 'e*)
-Definition undefined_vector {rv a e} len (u : a) : monad rv (list a) e := returnm (repeat (cons u nil) len).
+Definition undefined_vector {rv a e} len `{ArithFact (len >= 0)} (u : a) : monad rv (vec a len) e := returnm (vec_init u len).
 (*val undefined_bitvector : forall 'rv 'a 'e. Bitvector 'a => integer -> monad 'rv 'a 'e*)
 Definition undefined_bitvector {rv e} len `{ArithFact (len >= 0)} : monad rv (mword len) e := returnm (mword_of_int 0).
 (*val undefined_bits : forall 'rv 'a 'e. Bitvector 'a => integer -> monad 'rv 'a 'e*)
