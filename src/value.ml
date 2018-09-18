@@ -514,6 +514,10 @@ let value_gteq_real = function
   | [v1; v2] -> V_bool (Sail_lib.gteq_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value gteq_real"
 
+let value_string_append = function
+  | [v1; v2] -> V_string (Sail_lib.string_append (coerce_string v1, coerce_string v2))
+  | _ -> failwith "value string_append"
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -612,4 +616,8 @@ let primops =
       ("replicate_bits", value_replicate_bits);
       ("Elf_loader.elf_entry", fun _ -> V_int (!Elf_loader.opt_elf_entry));
       ("Elf_loader.elf_tohost", fun _ -> V_int (!Elf_loader.opt_elf_tohost));
+      ("string_append", value_string_append);
+      ("string_length", value_string_length);
+      ("string_startswith", value_string_startswith);
+      ("string_drop", value_string_drop);
     ]
