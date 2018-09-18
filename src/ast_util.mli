@@ -71,7 +71,7 @@ val mk_kid : string -> kid
 val mk_ord : order_aux -> order
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
-val mk_exp : unit exp_aux -> unit exp
+val mk_exp : ?loc:l -> unit exp_aux -> unit exp
 val mk_pat : unit pat_aux -> unit pat
 val mk_mpat : unit mpat_aux -> unit mpat
 val mk_pexp : unit pexp_aux -> unit pexp

@@ -803,7 +803,7 @@ let compile_funcall l ctx id args typ =
       c_debug (lazy ("Falling back to global env for " ^ string_of_id id)); Env.get_val_spec id ctx.tc_env
   in
   let arg_typs, ret_typ = match fn_typ with
-    | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) when not (Env.is_union_constructor id ctx.local_env) -> arg_typs, ret_typ
+    | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
     | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
     | _ -> assert false
   in

@@ -75,7 +75,7 @@ let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
 
 let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
 
-let mk_exp exp_aux = E_aux (exp_aux, no_annot)
+let mk_exp ?loc:(l=Parse_ast.Unknown) exp_aux = E_aux (exp_aux, (l, ()))
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
 let uncast_exp = function
   | E_aux (E_internal_return (E_aux (E_cast (typ, exp), _)), a) ->

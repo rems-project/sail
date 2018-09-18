@@ -2394,6 +2394,11 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         print_endline ("Solved " ^ string_of_nexp nexp ^ " = " ^ Big_int.to_string n);
         annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      end
+  (* All constructors are treated as having one argument so Ctor(x, y)
+     is checked as Ctor((x, y)) *)
+  | E_app (ctor, x :: y :: zs), _ when Env.is_union_constructor ctor env ->
+     typ_print (lazy ("Checking multiple argument constructor: " ^ string_of_id ctor));
+     crule check_exp env (mk_exp ~loc:l (E_app (ctor, [mk_exp ~loc:l (E_tuple (x :: y :: zs))]))) typ
   | E_app (mapping, xs), _ when Env.is_mapping mapping env ->
      let forwards_id = mk_id (string_of_id mapping ^ "_forwards") in
      let backwards_id = mk_id (string_of_id mapping ^ "_backwards") in
@@ -2727,6 +2732,10 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        match Env.expand_synonyms env ctor_typ with
        | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
           begin
+            let arg_typ = match arg_typ with
+              | Typ_aux (Typ_tup [arg_typ], _) -> arg_typ
+              | _ -> arg_typ
+            in
             try
               typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
@@ -2745,7 +2754,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             with
             | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
           end
-       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f)
+       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
      end
 
   | P_app (f, pats) when Env.is_mapping f env ->
@@ -3207,6 +3216,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
   | E_app_infix (x, op, y) -> infer_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ())))
+  (* Treat a multiple argument constructor as a single argument constructor taking a tuple, Ctor(x, y) -> Ctor((x, y)). *)
+  | E_app (ctor, x :: y :: zs) when Env.is_union_constructor ctor env ->
+     typ_print (lazy ("Inferring multiple argument constructor: " ^ string_of_id ctor));
+     irule infer_exp env (mk_exp ~loc:l (E_app (ctor, [mk_exp ~loc:l (E_tuple (x :: y :: zs))])))
   | E_app (mapping, xs) when Env.is_mapping mapping env ->
      let forwards_id = mk_id (string_of_id mapping ^ "_forwards") in
      let backwards_id = mk_id (string_of_id mapping ^ "_backwards") in
@@ -3593,6 +3606,10 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
        match Env.expand_synonyms env ctor_typ with
        | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
           begin
+            let arg_typ = match arg_typ with
+              | Typ_aux (Typ_tup [arg_typ], _) -> arg_typ
+              | _ -> arg_typ
+            in
             try
               typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
@@ -3611,7 +3628,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
             with
             | Unification_error (l, m) -> typ_error l ("Unification error when mapping-pattern matching against union constructor: " ^ m)
           end
-       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f)
+       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
      end
   | MP_app (other, mpats) when Env.is_mapping other env ->
      begin
@@ -4092,7 +4109,6 @@ and propagate_mpat_effect_aux = function
      MP_as (p_mpat, id), effect_of_mpat mpat
   | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in mpat"
 
-       
 and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
   let p_lb, eff = propagate_letbind_effect_aux lb in
   match annot with
@@ -4408,7 +4424,14 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
      |> Env.add_union_id v (typq, typ)
      |> Env.add_val_spec v (typq, typ)
   | Tu_ty_id (typ, v) ->
-     let typ' = mk_typ (Typ_fn (typ, ret_typ, no_effect)) in
+     (* If a constructor type is a tuple we need to wrap it again in a
+        dummy tuple constructor so that it actually gets treated as a
+        tuple and not a multiple argument function! *)
+     let tuple = match typ with
+       | Typ_aux (Typ_tup _, _) -> mk_typ (Typ_tup [typ])
+       | _ -> typ
+     in
+     let typ' = mk_typ (Typ_fn (tuple, ret_typ, no_effect)) in
      env
      |> Env.add_union_id v (typq, typ')
      |> Env.add_val_spec v (typq, typ')
