@@ -4282,7 +4282,9 @@ let make_cstr_mappings env ids m =
     (fun id ->
       let _,ty = Env.get_val_spec id env in
       let args = match ty with
-        | Typ_aux (Typ_fn (Typ_aux (Typ_tup tys,_),_,_),_) -> List.map (fun _ -> RP_any) tys
+        | Typ_aux (Typ_fn (Typ_aux (Typ_tup [Typ_aux (Typ_tup tys,_)],_),_,_),_)
+        | Typ_aux (Typ_fn (Typ_aux (Typ_tup tys,_),_,_),_)
+          -> List.map (fun _ -> RP_any) tys
         | _ -> [RP_any]
       in RP_app (id,args)) ids in
   let rec aux ids acc l =
@@ -4431,8 +4433,15 @@ let check_cases process is_wild loc_of cases =
   let cases, rps = aux [RP_any] [] cases in
   List.rev cases, rps
 
+let not_enum env id =
+  match Env.lookup_id id env with
+  | Enum _ -> false
+  | _ -> true
+
 let pexp_is_wild = function
   | (Pat_aux (Pat_exp (P_aux (P_wild,_),_),_)) -> true
+  | (Pat_aux (Pat_exp (P_aux (P_id id,ann),_),_))
+       when not_enum (env_of_annot ann) id -> true
   | _ -> false
 
 let pexp_loc = function

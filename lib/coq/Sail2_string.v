@@ -118,6 +118,8 @@ Definition hex_bits_n_matches_prefix sz `{ArithFact (sz >= 0)} s : option (mword
     else None
   end.
 
+Definition hex_bits_1_matches_prefix s := hex_bits_n_matches_prefix 1 s.
+Definition hex_bits_2_matches_prefix s := hex_bits_n_matches_prefix 2 s.
 Definition hex_bits_3_matches_prefix s := hex_bits_n_matches_prefix 3 s.
 Definition hex_bits_4_matches_prefix s := hex_bits_n_matches_prefix 4 s.
 Definition hex_bits_5_matches_prefix s := hex_bits_n_matches_prefix 5 s.
@@ -132,11 +134,25 @@ Definition hex_bits_13_matches_prefix s := hex_bits_n_matches_prefix 13 s.
 Definition hex_bits_14_matches_prefix s := hex_bits_n_matches_prefix 14 s.
 Definition hex_bits_15_matches_prefix s := hex_bits_n_matches_prefix 15 s.
 Definition hex_bits_16_matches_prefix s := hex_bits_n_matches_prefix 16 s.
+Definition hex_bits_17_matches_prefix s := hex_bits_n_matches_prefix 17 s.
+Definition hex_bits_18_matches_prefix s := hex_bits_n_matches_prefix 18 s.
+Definition hex_bits_19_matches_prefix s := hex_bits_n_matches_prefix 19 s.
 Definition hex_bits_20_matches_prefix s := hex_bits_n_matches_prefix 20 s.
 Definition hex_bits_21_matches_prefix s := hex_bits_n_matches_prefix 21 s.
+Definition hex_bits_22_matches_prefix s := hex_bits_n_matches_prefix 22 s.
+Definition hex_bits_23_matches_prefix s := hex_bits_n_matches_prefix 23 s.
+Definition hex_bits_24_matches_prefix s := hex_bits_n_matches_prefix 24 s.
+Definition hex_bits_25_matches_prefix s := hex_bits_n_matches_prefix 25 s.
+Definition hex_bits_26_matches_prefix s := hex_bits_n_matches_prefix 26 s.
+Definition hex_bits_27_matches_prefix s := hex_bits_n_matches_prefix 27 s.
 Definition hex_bits_28_matches_prefix s := hex_bits_n_matches_prefix 28 s.
+Definition hex_bits_29_matches_prefix s := hex_bits_n_matches_prefix 29 s.
+Definition hex_bits_30_matches_prefix s := hex_bits_n_matches_prefix 30 s.
+Definition hex_bits_31_matches_prefix s := hex_bits_n_matches_prefix 31 s.
 Definition hex_bits_32_matches_prefix s := hex_bits_n_matches_prefix 32 s.
 Definition hex_bits_33_matches_prefix s := hex_bits_n_matches_prefix 33 s.
+Definition hex_bits_48_matches_prefix s := hex_bits_n_matches_prefix 48 s.
+Definition hex_bits_64_matches_prefix s := hex_bits_n_matches_prefix 64 s.
 
 Local Definition zero : N := Ascii.N_of_ascii "0".
 Local Fixpoint string_of_N (limit : nat) (n : N) (acc : string) : string :=
@@ -158,5 +174,13 @@ match z with
 | Zpos p => string_of_N (pos_limit p) (Npos p) ""
 | Zneg p => String "-" (string_of_N (pos_limit p) (Npos p) "")
 end.
+
+Definition decimal_string_of_bv {a} `{Bitvector a} (bv : a) : string :=
+  match unsigned bv with
+  | None => "?"
+  | Some i => string_of_int i
+  end.
+
+Definition decimal_string_of_bits {n} (bv : mword n) : string := decimal_string_of_bv bv.
 
 

@@ -689,6 +689,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
            to persuade the type checker to output these somehow. *)
        let (typq, ctor_typ) = Env.get_val_spec id env in
        let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
+         | Typ_tup [Typ_aux (Typ_tup typs,_)] -> typs
          | Typ_tup typs -> typs
          | _ -> [typ]
        in

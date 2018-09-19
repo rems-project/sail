@@ -1,6 +1,6 @@
---- riscv.v.plain	2018-09-12 17:53:51.151611265 +0100
-+++ riscv.v	2018-09-12 17:57:47.097406204 +0100
-@@ -8336,14 +8336,13 @@
+--- riscv.v	2018-09-19 17:32:43.499275014 +0100
++++ riscv.v.good	2018-09-19 17:32:18.231802489 +0100
+@@ -9352,14 +9352,13 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
@@ -17,7 +17,7 @@
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
     (phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false) >>= fun w__0 : MemoryOpResult (mword (8 * 8)) =>
-@@ -8356,27 +8355,27 @@
+@@ -9372,27 +9371,27 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
         (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure (PTW_Invalid_PTE))  : PTW_Result )
          else if ((isPTEPtr pbits)) then
@@ -51,22 +51,20 @@
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
                          PTW_Failure
-@@ -8386,12 +8385,12 @@
+@@ -9402,10 +9401,10 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
                          PTW_Success
--                          (concat_vec ppn (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex level,
-+                          (concat_vec ppn (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex (Z.of_nat level),
-                           is_global)
+-                          ((concat_vec ppn (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex level, is_global))
++                          ((concat_vec ppn (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex (Z.of_nat level), is_global))
                      else
                        PTW_Success
-                         (concat_vec (_get_SV39_PTE_PPNi pte) (_get_SV39_Vaddr_PgOfs va), pte,
--                        pte_addr, build_ex level, is_global))
-+                        pte_addr, build_ex (Z.of_nat level), is_global))
+-                        ((concat_vec (_get_SV39_PTE_PPNi pte) (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex level, is_global)))
++                        ((concat_vec (_get_SV39_PTE_PPNi pte) (_get_SV39_Vaddr_PgOfs va), pte, pte_addr, build_ex (Z.of_nat level), is_global)))
             : PTW_Result))
          : M (PTW_Result)
      end)
-@@ -8517,7 +8516,7 @@
+@@ -9531,7 +9530,7 @@
          : M (TR39_Result)
      | None =>
         (curPTB39 tt) >>= fun w__6 : mword 56 =>
@@ -75,7 +73,7 @@
         (match w__7 with
          | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -12279,138 +12278,144 @@
+@@ -13293,137 +13292,143 @@
     returnm (true
      : bool).
  
@@ -89,186 +87,186 @@
          concat_vec (vec_of_bits [B0;B0]  : mword 2)
            (concat_vec nzimm (vec_of_bits [B0;B0]  : mword 2)) in
        let rd := creg2reg_bits rdc in
--      (execute (ITYPE (imm, sp, rd, RISCV_ADDI)))
+-      (execute (ITYPE ((imm, sp, rd, RISCV_ADDI))))
 -       : M (bool)
-+      ( (ITYPE (imm, sp, rd, RISCV_ADDI)))
++      ((ITYPE ((imm, sp, rd, RISCV_ADDI))))
 +       
     | C_LW (uimm,rsc,rdc) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
        let rd := creg2reg_bits rdc in
        let rs := creg2reg_bits rsc in
--      (execute (LOAD (imm, rs, rd, false, WORD, false, false)))
+-      (execute (LOAD ((imm, rs, rd, false, WORD, false, false))))
 -       : M (bool)
-+      ( (LOAD (imm, rs, rd, false, WORD, false, false)))
++      ((LOAD ((imm, rs, rd, false, WORD, false, false))))
 +       
     | C_LD (uimm,rsc,rdc) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
        let rd := creg2reg_bits rdc in
        let rs := creg2reg_bits rsc in
--      (execute (LOAD (imm, rs, rd, false, DOUBLE, false, false)))
+-      (execute (LOAD ((imm, rs, rd, false, DOUBLE, false, false))))
 -       : M (bool)
-+      ( (LOAD (imm, rs, rd, false, DOUBLE, false, false)))
++      ((LOAD ((imm, rs, rd, false, DOUBLE, false, false))))
 +       
     | C_SW (uimm,rsc1,rsc2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
        let rs1 := creg2reg_bits rsc1 in
        let rs2 := creg2reg_bits rsc2 in
--      (execute (STORE (imm, rs2, rs1, WORD, false, false)))
+-      (execute (STORE ((imm, rs2, rs1, WORD, false, false))))
 -       : M (bool)
-+      ( (STORE (imm, rs2, rs1, WORD, false, false)))
++      ((STORE ((imm, rs2, rs1, WORD, false, false))))
 +       
     | C_SD (uimm,rsc1,rsc2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
        let rs1 := creg2reg_bits rsc1 in
        let rs2 := creg2reg_bits rsc2 in
--      (execute (STORE (imm, rs2, rs1, DOUBLE, false, false)))
+-      (execute (STORE ((imm, rs2, rs1, DOUBLE, false, false))))
 -       : M (bool)
-+      ( (STORE (imm, rs2, rs1, DOUBLE, false, false)))
++      ((STORE ((imm, rs2, rs1, DOUBLE, false, false))))
 +       
     | C_ADDI (nzi,rsd) =>
        let imm : bits 12 := EXTS 12 nzi in
--      (execute (ITYPE (imm, rsd, rsd, RISCV_ADDI)))
+-      (execute (ITYPE ((imm, rsd, rsd, RISCV_ADDI))))
 -       : M (bool)
-+      ( (ITYPE (imm, rsd, rsd, RISCV_ADDI)))
++      ((ITYPE ((imm, rsd, rsd, RISCV_ADDI))))
 +       
     | C_JAL (imm) =>
--      (execute (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), ra)))  : M (bool)
-+      ( (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), ra)))  
+-      (execute (RISCV_JAL ((EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), ra))))
+-       : M (bool)
++      ((RISCV_JAL ((EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), ra))))
++       
     | C_LI (imm,rd) =>
        let imm : bits 12 := EXTS 12 imm in
--      (execute (ITYPE (imm, zreg, rd, RISCV_ADDI)))
+-      (execute (ITYPE ((imm, zreg, rd, RISCV_ADDI))))
 -       : M (bool)
-+      ( (ITYPE (imm, zreg, rd, RISCV_ADDI)))
++      ((ITYPE ((imm, zreg, rd, RISCV_ADDI))))
 +       
     | C_ADDI16SP (imm) =>
        let imm : bits 12 := EXTS 12 (concat_vec imm (vec_of_bits [B0;B0;B0;B0]  : mword 4)) in
--      (execute (ITYPE (imm, sp, sp, RISCV_ADDI)))
+-      (execute (ITYPE ((imm, sp, sp, RISCV_ADDI))))
 -       : M (bool)
-+      ( (ITYPE (imm, sp, sp, RISCV_ADDI)))
++      ((ITYPE ((imm, sp, sp, RISCV_ADDI))))
 +       
     | C_LUI (imm,rd) =>
        let res : bits 20 := EXTS 20 imm in
--      (execute (UTYPE (res, rd, RISCV_LUI)))
+-      (execute (UTYPE ((res, rd, RISCV_LUI))))
 -       : M (bool)
-+      ( (UTYPE (res, rd, RISCV_LUI)))
++      ((UTYPE ((res, rd, RISCV_LUI))))
 +       
     | C_SRLI (shamt,rsd) =>
        let rsd := creg2reg_bits rsd in
--      (execute (SHIFTIOP (shamt, rsd, rsd, RISCV_SRLI)))
+-      (execute (SHIFTIOP ((shamt, rsd, rsd, RISCV_SRLI))))
 -       : M (bool)
-+      ( (SHIFTIOP (shamt, rsd, rsd, RISCV_SRLI)))
++      ((SHIFTIOP ((shamt, rsd, rsd, RISCV_SRLI))))
 +       
     | C_SRAI (shamt,rsd) =>
        let rsd := creg2reg_bits rsd in
--      (execute (SHIFTIOP (shamt, rsd, rsd, RISCV_SRAI)))
+-      (execute (SHIFTIOP ((shamt, rsd, rsd, RISCV_SRAI))))
 -       : M (bool)
-+      ( (SHIFTIOP (shamt, rsd, rsd, RISCV_SRAI)))
++      ((SHIFTIOP ((shamt, rsd, rsd, RISCV_SRAI))))
 +       
     | C_ANDI (imm,rsd) =>
        let rsd := creg2reg_bits rsd in
--      (execute (ITYPE (EXTS 12 imm, rsd, rsd, RISCV_ANDI)))
+-      (execute (ITYPE ((EXTS 12 imm, rsd, rsd, RISCV_ANDI))))
 -       : M (bool)
-+      ( (ITYPE (EXTS 12 imm, rsd, rsd, RISCV_ANDI)))
++      ((ITYPE ((EXTS 12 imm, rsd, rsd, RISCV_ANDI))))
 +       
     | C_SUB (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2, rsd, rsd, RISCV_SUB)))
+-      (execute (RTYPE ((rs2, rsd, rsd, RISCV_SUB))))
 -       : M (bool)
-+      ( (RTYPE (rs2, rsd, rsd, RISCV_SUB)))
++      ((RTYPE ((rs2, rsd, rsd, RISCV_SUB))))
 +       
     | C_XOR (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2, rsd, rsd, RISCV_XOR)))
+-      (execute (RTYPE ((rs2, rsd, rsd, RISCV_XOR))))
 -       : M (bool)
-+      ( (RTYPE (rs2, rsd, rsd, RISCV_XOR)))
++      ((RTYPE ((rs2, rsd, rsd, RISCV_XOR))))
 +       
     | C_OR (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2, rsd, rsd, RISCV_OR)))
+-      (execute (RTYPE ((rs2, rsd, rsd, RISCV_OR))))
 -       : M (bool)
-+      ( (RTYPE (rs2, rsd, rsd, RISCV_OR)))
++      ((RTYPE ((rs2, rsd, rsd, RISCV_OR))))
 +       
     | C_AND (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPE (rs2, rsd, rsd, RISCV_AND)))
+-      (execute (RTYPE ((rs2, rsd, rsd, RISCV_AND))))
 -       : M (bool)
-+      ( (RTYPE (rs2, rsd, rsd, RISCV_AND)))
++      ((RTYPE ((rs2, rsd, rsd, RISCV_AND))))
 +       
     | C_SUBW (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPEW (rs2, rsd, rsd, RISCV_SUBW)))
+-      (execute (RTYPEW ((rs2, rsd, rsd, RISCV_SUBW))))
 -       : M (bool)
-+      ( (RTYPEW (rs2, rsd, rsd, RISCV_SUBW)))
++      ((RTYPEW ((rs2, rsd, rsd, RISCV_SUBW))))
 +       
     | C_ADDW (rsd,rs2) =>
        let rsd := creg2reg_bits rsd in
        let rs2 := creg2reg_bits rs2 in
--      (execute (RTYPEW (rs2, rsd, rsd, RISCV_ADDW)))
+-      (execute (RTYPEW ((rs2, rsd, rsd, RISCV_ADDW))))
 -       : M (bool)
-+      ( (RTYPEW (rs2, rsd, rsd, RISCV_ADDW)))
++      ((RTYPEW ((rs2, rsd, rsd, RISCV_ADDW))))
 +       
     | C_J (imm) =>
--      (execute (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg)))
+-      (execute (RISCV_JAL ((EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg))))
 -       : M (bool)
-+      ( (RISCV_JAL (EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg)))
++      ((RISCV_JAL ((EXTS 21 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg))))
 +       
     | C_BEQZ (imm,rs) =>
 -      (execute
 +      (
           (BTYPE
-             (EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg, creg2reg_bits rs,
-             RISCV_BEQ)))
+             ((EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg, creg2reg_bits rs, RISCV_BEQ))))
 -       : M (bool)
 +       
     | C_BNEZ (imm,rs) =>
 -      (execute
 +      (
           (BTYPE
-             (EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg, creg2reg_bits rs,
-             RISCV_BNE)))
+             ((EXTS 13 (concat_vec imm (vec_of_bits [B0]  : mword 1)), zreg, creg2reg_bits rs, RISCV_BNE))))
 -       : M (bool)
--   | C_SLLI (shamt,rsd) => (execute (SHIFTIOP (shamt, rsd, rsd, RISCV_SLLI)))  : M (bool)
+-   | C_SLLI (shamt,rsd) => (execute (SHIFTIOP ((shamt, rsd, rsd, RISCV_SLLI))))  : M (bool)
 +       
-+   | C_SLLI (shamt,rsd) => ( (SHIFTIOP (shamt, rsd, rsd, RISCV_SLLI)))  
++   | C_SLLI (shamt,rsd) => ((SHIFTIOP ((shamt, rsd, rsd, RISCV_SLLI))))  
     | C_LWSP (uimm,rd) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
--      (execute (LOAD (imm, sp, rd, false, WORD, false, false)))
+-      (execute (LOAD ((imm, sp, rd, false, WORD, false, false))))
 -       : M (bool)
-+      ( (LOAD (imm, sp, rd, false, WORD, false, false)))
++      ((LOAD ((imm, sp, rd, false, WORD, false, false))))
 +       
     | C_LDSP (uimm,rd) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
--      (execute (LOAD (imm, sp, rd, false, DOUBLE, false, false)))
+-      (execute (LOAD ((imm, sp, rd, false, DOUBLE, false, false))))
 -       : M (bool)
-+      ( (LOAD (imm, sp, rd, false, DOUBLE, false, false)))
++      ((LOAD ((imm, sp, rd, false, DOUBLE, false, false))))
 +       
     | C_SWSP (uimm,rs2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0]  : mword 2)) in
--      (execute (STORE (imm, rs2, sp, WORD, false, false)))
+-      (execute (STORE ((imm, rs2, sp, WORD, false, false))))
 -       : M (bool)
-+      ( (STORE (imm, rs2, sp, WORD, false, false)))
++      ((STORE ((imm, rs2, sp, WORD, false, false))))
 +       
     | C_SDSP (uimm,rs2) =>
        let imm : bits 12 := EXTZ 12 (concat_vec uimm (vec_of_bits [B0;B0;B0]  : mword 3)) in
--      (execute (STORE (imm, rs2, sp, DOUBLE, false, false)))
+-      (execute (STORE ((imm, rs2, sp, DOUBLE, false, false))))
 -       : M (bool)
-+      ( (STORE (imm, rs2, sp, DOUBLE, false, false)))
++      ((STORE ((imm, rs2, sp, DOUBLE, false, false))))
 +       
     | C_JR (rs1) =>
--      (execute (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, zreg)))  : M (bool)
-+      ( (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, zreg)))  
+-      (execute (RISCV_JALR ((EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, zreg))))  : M (bool)
++      ((RISCV_JALR ((EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, zreg))))  
     | C_JALR (rs1) =>
--      (execute (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra)))  : M (bool)
--   | C_MV (rd,rs2) => (execute (RTYPE (rs2, zreg, rd, RISCV_ADD)))  : M (bool)
--   | C_ADD (rsd,rs2) => (execute (RTYPE (rs2, rsd, rsd, RISCV_ADD)))  : M (bool)
-+      ( (RISCV_JALR (EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra)))  
-+   | C_MV (rd,rs2) => ( (RTYPE (rs2, zreg, rd, RISCV_ADD)))  
-+   | C_ADD (rsd,rs2) => ( (RTYPE (rs2, rsd, rsd, RISCV_ADD)))  
+-      (execute (RISCV_JALR ((EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra))))  : M (bool)
+-   | C_MV (rd,rs2) => (execute (RTYPE ((rs2, zreg, rd, RISCV_ADD))))  : M (bool)
+-   | C_ADD (rsd,rs2) => (execute (RTYPE ((rs2, rsd, rsd, RISCV_ADD))))  : M (bool)
++      ((RISCV_JALR ((EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra))))  
++   | C_MV (rd,rs2) => ((RTYPE ((rs2, zreg, rd, RISCV_ADD))))  
++   | C_ADD (rsd,rs2) => ((RTYPE ((rs2, rsd, rsd, RISCV_ADD))))  
 +| i => i
 +end.
 +
@@ -279,7 +277,7 @@
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -12450,6 +12455,7 @@
+@@ -13463,6 +13468,7 @@
     | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
     | C_ILLEGAL (arg0) => (execute_C_ILLEGAL arg0)  : M (bool)
@@ -287,7 +285,7 @@
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -12712,7 +12718,7 @@
+@@ -13727,7 +13733,7 @@
      | _ => exit tt  : M (string)
      end)
      : M (string).
@@ -296,7 +294,7 @@
  Definition assembly_backwards (arg_ : string) 
  : M (ast) :=
     let _stringappend_756_ := arg_ in
-@@ -27199,7 +27205,7 @@
+@@ -28163,7 +28169,7 @@
            : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
         : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
      : M (option ((ast * {n : Z & ArithFact (n >= 0)}))).
@@ -305,7 +303,7 @@
  Definition encdec_forwards (arg_ : ast) 
  : M (mword 32) :=
     (match arg_ with
-@@ -29293,7 +29299,7 @@
+@@ -30257,7 +30263,7 @@
      else returnm (tt  : unit)) >>
     returnm (stepped
      : bool).
@@ -314,7 +312,7 @@
  Definition loop '(tt : unit) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -29335,7 +29341,7 @@
+@@ -30299,7 +30305,7 @@
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
      : unit).
