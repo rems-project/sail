@@ -3179,7 +3179,7 @@ let rec rewrite_defs_pat_string_append =
        let tup_arg_pat = map_pat_annot (fun (l, tannot) -> (l, replace_env some_pat_env tannot)) tup_arg_pat in
 
        (* construct None pattern *)
-       let none_pat = annot_pat (P_app (mk_id "None", [annot_pat (P_lit (mk_lit L_unit)) unk env unit_typ])) unk env opt_typ in
+       let none_pat = annot_pat P_wild unk env opt_typ in
 
        (* recurse into pat2 *)
        let new_pat2_pexp =
