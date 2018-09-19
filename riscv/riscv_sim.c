@@ -8,7 +8,12 @@
 #include "riscv_platform.h"
 #include "riscv_platform_impl.h"
 #include "riscv_sail.h"
+
+#ifdef SPIKE
 #include "tv_spike_intf.h"
+#else
+struct tv_spike_t;
+#endif
 
 /* Selected CSRs from riscv-isa-sim/riscv/encoding.h */
 #define CSR_STVEC 0x105
@@ -27,9 +32,8 @@
 #define CSR_MTVAL 0x343
 #define CSR_MIP 0x344
 
-struct tv_spike_t *s = NULL;
-
 static bool do_dump_dts = false;
+struct tv_spike_t *s = NULL;
 
 static struct option options[] = {
   {"enable-dirty",      no_argument,       0, 'd'},
@@ -96,12 +100,17 @@ uint64_t load_sail(char *f)
 /* for now, override the reset-vector using the elf entry */
 void init_spike(const char *f, uint64_t entry)
 {
+#ifdef SPIKE
   s = tv_init("RV64IMAC");
   tv_set_verbose(s, 1);
   tv_load_elf(s, f);
   tv_reset(s);
   tv_set_pc(s, entry);
+#else
+  s = NULL;
+#endif
 }
+
 
 void init_sail(uint64_t entry)
 {
@@ -114,14 +123,18 @@ void init_sail(uint64_t entry)
 int init_check(struct tv_spike_t *s)
 {
   int passed = 1;
+#ifdef SPIKE
   passed &= tv_check_csr(s, CSR_MISA, zmisa.zMisa_chunk_0);
+#endif
   return passed;
 }
 
 void finish(int ec)
 {
   model_fini();
+#ifdef SPIKE
   tv_free(s);
+#endif
   exit(ec);
 }
 
@@ -129,6 +142,7 @@ int compare_states(struct tv_spike_t *s)
 {
   int passed = 1;
 
+#ifdef SPIKE
   // fix default C enum map for cur_privilege
   uint8_t priv = (zcur_privilege == 2) ? 3 : zcur_privilege;
   passed &= tv_check_priv(s, priv);
@@ -178,6 +192,7 @@ int compare_states(struct tv_spike_t *s)
   passed &= tv_check_csr(s, CSR_SCAUSE, zscause.zMcause_chunk_0);
   passed &= tv_check_csr(s, CSR_SEPC, zsepc);
   passed &= tv_check_csr(s, CSR_STVAL, zstval);
+#endif
 
   return passed;
 }
@@ -210,6 +225,7 @@ void run_sail(void)
     }
     if (stepped) step_no++;
 
+#ifdef SPIKE
     { /* run a Spike step */
       tv_step(s);
       spike_done = tv_is_done(s);
@@ -236,9 +252,10 @@ void run_sail(void)
         diverged = true;
         break;
       }
-
-      /* TODO: update time */
     }
+#endif
+
+    /* TODO: update time */
   }
 
  dump_state:

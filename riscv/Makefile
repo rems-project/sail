@@ -4,14 +4,22 @@ SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
 C_WARNINGS ?=
 #-Wall -Wextra -Wno-unused-label -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
+C_FLAGS = -I ../lib
 C_INCS = riscv_prelude.h riscv_platform_impl.h riscv_platform.h
 C_SRCS = riscv_prelude.c riscv_platform_impl.c riscv_platform.c
 
+ENABLE_SPIKE = 0
 TV_SPIKE_DIR = /home/mundkur/src/hw/l3/l3riscv
-C_FLAGS = -I $(TV_SPIKE_DIR)/src/cpp -I ../lib
-C_LIBS  = -L $(TV_SPIKE_DIR) -ltv_spike -Wl,-rpath=$(TV_SPIKE_DIR)
-C_LIBS += -L $(RISCV)/lib -lfesvr -lriscv -Wl,-rpath=$(RISCV)/lib
-C_LIBS += -lgmp -lz
+SPIKE_FLAGS = -I $(TV_SPIKE_DIR)/src/cpp
+SPIKE_LIBS  = -L $(TV_SPIKE_DIR) -ltv_spike -Wl,-rpath=$(TV_SPIKE_DIR)
+SPIKE_LIBS += -L $(RISCV)/lib -lfesvr -lriscv -Wl,-rpath=$(RISCV)/lib
+
+C_LIBS = -lgmp -lz
+
+ifeq ($(ENABLE_SPIKE),1)
+C_FLAGS += $(SPIKE_FLAGS)
+C_LIBS  += $(SPIKE_LIBS)
+endif
 
 export SAIL_DIR
 
@@ -121,6 +129,6 @@ clean:
 	-rm -f platform_main.native platform coverage.native
 	-rm -f riscv.vo riscv_types.vo riscv_extras.vo riscv.v riscv_types.v
 	-rm -f riscv_duopod.vo riscv_duopod_types.vo riscv_duopod.v riscv_duopod_types.v
-	-rm -f riscv.c
+	-rm -f riscv.c riscv_model.c riscv_sim
 	-Holmake cleanAll
 	ocamlbuild -clean
