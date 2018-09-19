@@ -384,15 +384,16 @@ let string_of_hex = function
 let string_of_bits bits =
   if List.length bits mod 4 == 0
   then "0x" ^ String.concat "" (List.map string_of_hex (break 4 bits))
-  else
-    let place_values =
-      List.mapi
-        (fun i b -> (Big_int.mul (bigint_of_bit b) (Big_int.pow_int_positive 2 i)))
-        (List.rev bits)
-    in
-    let sum = List.fold_left Big_int.add Big_int.zero place_values in
-    Big_int.to_string sum
+  else "0b" ^ String.concat "" (List.map string_of_bit bits)
 
+let decimal_string_of_bits bits =
+  let place_values =
+    List.mapi
+      (fun i b -> (Big_int.mul (bigint_of_bit b) (Big_int.pow_int_positive 2 i)))
+      (List.rev bits)
+  in
+  let sum = List.fold_left Big_int.add Big_int.zero place_values in
+  Big_int.to_string sum
 
 let hex_slice (str, n, m) =
   let bits = List.concat (List.map hex_char (list_of_string (String.sub str 2 (String.length str - 2)))) in

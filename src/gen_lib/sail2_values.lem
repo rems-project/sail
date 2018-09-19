@@ -628,6 +628,24 @@ let exts_bv n v = exts_bits n (bits_of v)
 val string_of_bv : forall 'a. Bitvector 'a => 'a -> string
 let string_of_bv v = show_bitlist (bits_of v)
 
+val int_of_bit : bitU -> integer
+let int_of_bit b =
+  match b with
+  | B0 -> 0
+  | B1 -> 1
+  | _ -> failwith "int_of_bit saw unknown"
+  end
+
+val decimal_string_of_bv : forall 'a. Bitvector 'a => 'a -> string
+let decimal_string_of_bv bv =
+  let place_values =
+    List.mapi
+      (fun i b -> (int_of_bit b) * (2 ** i))
+      (List.reverse (bits_of bv))
+  in
+  let sum = List.foldl (+) 0 place_values in
+  show sum
+
 (*** Bytes and addresses *)
 
 type memory_byte = list bitU

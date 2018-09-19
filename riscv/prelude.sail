@@ -21,7 +21,7 @@ val maybe_int_of_string = "maybe_int_of_string" : string -> option(int)
 
 /* Python:
 f = """val hex_bits_{0} : bits({0}) <-> string
-val hex_bits_{0}_forwards = "string_of_bits" : bits({0}) -> string
+val hex_bits_{0}_forwards = "decimal_string_of_bits" : bits({0}) -> string
 val hex_bits_{0}_forwards_matches : bits({0}) -> bool
 function hex_bits_{0}_forwards_matches bv = true
 val "hex_bits_{0}_matches_prefix" : string -> option((bits({0}), nat))
@@ -45,7 +45,7 @@ for i in list(range(1, 34)) + [48, 64]:
 
 */
 val hex_bits_1 : bits(1) <-> string
-val hex_bits_1_forwards = "string_of_bits" : bits(1) -> string
+val hex_bits_1_forwards = "decimal_string_of_bits" : bits(1) -> string
 val hex_bits_1_forwards_matches : bits(1) -> bool
 function hex_bits_1_forwards_matches bv = true
 val "hex_bits_1_matches_prefix" : string -> option((bits(1), nat))
@@ -64,7 +64,7 @@ function hex_bits_1_backwards s =
   }
 
 val hex_bits_2 : bits(2) <-> string
-val hex_bits_2_forwards = "string_of_bits" : bits(2) -> string
+val hex_bits_2_forwards = "decimal_string_of_bits" : bits(2) -> string
 val hex_bits_2_forwards_matches : bits(2) -> bool
 function hex_bits_2_forwards_matches bv = true
 val "hex_bits_2_matches_prefix" : string -> option((bits(2), nat))
@@ -83,7 +83,7 @@ function hex_bits_2_backwards s =
   }
 
 val hex_bits_3 : bits(3) <-> string
-val hex_bits_3_forwards = "string_of_bits" : bits(3) -> string
+val hex_bits_3_forwards = "decimal_string_of_bits" : bits(3) -> string
 val hex_bits_3_forwards_matches : bits(3) -> bool
 function hex_bits_3_forwards_matches bv = true
 val "hex_bits_3_matches_prefix" : string -> option((bits(3), nat))
@@ -102,7 +102,7 @@ function hex_bits_3_backwards s =
   }
 
 val hex_bits_4 : bits(4) <-> string
-val hex_bits_4_forwards = "string_of_bits" : bits(4) -> string
+val hex_bits_4_forwards = "decimal_string_of_bits" : bits(4) -> string
 val hex_bits_4_forwards_matches : bits(4) -> bool
 function hex_bits_4_forwards_matches bv = true
 val "hex_bits_4_matches_prefix" : string -> option((bits(4), nat))
@@ -121,7 +121,7 @@ function hex_bits_4_backwards s =
   }
 
 val hex_bits_5 : bits(5) <-> string
-val hex_bits_5_forwards = "string_of_bits" : bits(5) -> string
+val hex_bits_5_forwards = "decimal_string_of_bits" : bits(5) -> string
 val hex_bits_5_forwards_matches : bits(5) -> bool
 function hex_bits_5_forwards_matches bv = true
 val "hex_bits_5_matches_prefix" : string -> option((bits(5), nat))
@@ -140,7 +140,7 @@ function hex_bits_5_backwards s =
   }
 
 val hex_bits_6 : bits(6) <-> string
-val hex_bits_6_forwards = "string_of_bits" : bits(6) -> string
+val hex_bits_6_forwards = "decimal_string_of_bits" : bits(6) -> string
 val hex_bits_6_forwards_matches : bits(6) -> bool
 function hex_bits_6_forwards_matches bv = true
 val "hex_bits_6_matches_prefix" : string -> option((bits(6), nat))
@@ -159,7 +159,7 @@ function hex_bits_6_backwards s =
   }
 
 val hex_bits_7 : bits(7) <-> string
-val hex_bits_7_forwards = "string_of_bits" : bits(7) -> string
+val hex_bits_7_forwards = "decimal_string_of_bits" : bits(7) -> string
 val hex_bits_7_forwards_matches : bits(7) -> bool
 function hex_bits_7_forwards_matches bv = true
 val "hex_bits_7_matches_prefix" : string -> option((bits(7), nat))
@@ -178,7 +178,7 @@ function hex_bits_7_backwards s =
   }
 
 val hex_bits_8 : bits(8) <-> string
-val hex_bits_8_forwards = "string_of_bits" : bits(8) -> string
+val hex_bits_8_forwards = "decimal_string_of_bits" : bits(8) -> string
 val hex_bits_8_forwards_matches : bits(8) -> bool
 function hex_bits_8_forwards_matches bv = true
 val "hex_bits_8_matches_prefix" : string -> option((bits(8), nat))
@@ -197,7 +197,7 @@ function hex_bits_8_backwards s =
   }
 
 val hex_bits_9 : bits(9) <-> string
-val hex_bits_9_forwards = "string_of_bits" : bits(9) -> string
+val hex_bits_9_forwards = "decimal_string_of_bits" : bits(9) -> string
 val hex_bits_9_forwards_matches : bits(9) -> bool
 function hex_bits_9_forwards_matches bv = true
 val "hex_bits_9_matches_prefix" : string -> option((bits(9), nat))
@@ -216,7 +216,7 @@ function hex_bits_9_backwards s =
   }
 
 val hex_bits_10 : bits(10) <-> string
-val hex_bits_10_forwards = "string_of_bits" : bits(10) -> string
+val hex_bits_10_forwards = "decimal_string_of_bits" : bits(10) -> string
 val hex_bits_10_forwards_matches : bits(10) -> bool
 function hex_bits_10_forwards_matches bv = true
 val "hex_bits_10_matches_prefix" : string -> option((bits(10), nat))
@@ -235,7 +235,7 @@ function hex_bits_10_backwards s =
   }
 
 val hex_bits_11 : bits(11) <-> string
-val hex_bits_11_forwards = "string_of_bits" : bits(11) -> string
+val hex_bits_11_forwards = "decimal_string_of_bits" : bits(11) -> string
 val hex_bits_11_forwards_matches : bits(11) -> bool
 function hex_bits_11_forwards_matches bv = true
 val "hex_bits_11_matches_prefix" : string -> option((bits(11), nat))
@@ -254,7 +254,7 @@ function hex_bits_11_backwards s =
   }
 
 val hex_bits_12 : bits(12) <-> string
-val hex_bits_12_forwards = "string_of_bits" : bits(12) -> string
+val hex_bits_12_forwards = "decimal_string_of_bits" : bits(12) -> string
 val hex_bits_12_forwards_matches : bits(12) -> bool
 function hex_bits_12_forwards_matches bv = true
 val "hex_bits_12_matches_prefix" : string -> option((bits(12), nat))
@@ -273,7 +273,7 @@ function hex_bits_12_backwards s =
   }
 
 val hex_bits_13 : bits(13) <-> string
-val hex_bits_13_forwards = "string_of_bits" : bits(13) -> string
+val hex_bits_13_forwards = "decimal_string_of_bits" : bits(13) -> string
 val hex_bits_13_forwards_matches : bits(13) -> bool
 function hex_bits_13_forwards_matches bv = true
 val "hex_bits_13_matches_prefix" : string -> option((bits(13), nat))
@@ -292,7 +292,7 @@ function hex_bits_13_backwards s =
   }
 
 val hex_bits_14 : bits(14) <-> string
-val hex_bits_14_forwards = "string_of_bits" : bits(14) -> string
+val hex_bits_14_forwards = "decimal_string_of_bits" : bits(14) -> string
 val hex_bits_14_forwards_matches : bits(14) -> bool
 function hex_bits_14_forwards_matches bv = true
 val "hex_bits_14_matches_prefix" : string -> option((bits(14), nat))
@@ -311,7 +311,7 @@ function hex_bits_14_backwards s =
   }
 
 val hex_bits_15 : bits(15) <-> string
-val hex_bits_15_forwards = "string_of_bits" : bits(15) -> string
+val hex_bits_15_forwards = "decimal_string_of_bits" : bits(15) -> string
 val hex_bits_15_forwards_matches : bits(15) -> bool
 function hex_bits_15_forwards_matches bv = true
 val "hex_bits_15_matches_prefix" : string -> option((bits(15), nat))
@@ -330,7 +330,7 @@ function hex_bits_15_backwards s =
   }
 
 val hex_bits_16 : bits(16) <-> string
-val hex_bits_16_forwards = "string_of_bits" : bits(16) -> string
+val hex_bits_16_forwards = "decimal_string_of_bits" : bits(16) -> string
 val hex_bits_16_forwards_matches : bits(16) -> bool
 function hex_bits_16_forwards_matches bv = true
 val "hex_bits_16_matches_prefix" : string -> option((bits(16), nat))
@@ -349,7 +349,7 @@ function hex_bits_16_backwards s =
   }
 
 val hex_bits_17 : bits(17) <-> string
-val hex_bits_17_forwards = "string_of_bits" : bits(17) -> string
+val hex_bits_17_forwards = "decimal_string_of_bits" : bits(17) -> string
 val hex_bits_17_forwards_matches : bits(17) -> bool
 function hex_bits_17_forwards_matches bv = true
 val "hex_bits_17_matches_prefix" : string -> option((bits(17), nat))
@@ -368,7 +368,7 @@ function hex_bits_17_backwards s =
   }
 
 val hex_bits_18 : bits(18) <-> string
-val hex_bits_18_forwards = "string_of_bits" : bits(18) -> string
+val hex_bits_18_forwards = "decimal_string_of_bits" : bits(18) -> string
 val hex_bits_18_forwards_matches : bits(18) -> bool
 function hex_bits_18_forwards_matches bv = true
 val "hex_bits_18_matches_prefix" : string -> option((bits(18), nat))
@@ -387,7 +387,7 @@ function hex_bits_18_backwards s =
   }
 
 val hex_bits_19 : bits(19) <-> string
-val hex_bits_19_forwards = "string_of_bits" : bits(19) -> string
+val hex_bits_19_forwards = "decimal_string_of_bits" : bits(19) -> string
 val hex_bits_19_forwards_matches : bits(19) -> bool
 function hex_bits_19_forwards_matches bv = true
 val "hex_bits_19_matches_prefix" : string -> option((bits(19), nat))
@@ -406,7 +406,7 @@ function hex_bits_19_backwards s =
   }
 
 val hex_bits_20 : bits(20) <-> string
-val hex_bits_20_forwards = "string_of_bits" : bits(20) -> string
+val hex_bits_20_forwards = "decimal_string_of_bits" : bits(20) -> string
 val hex_bits_20_forwards_matches : bits(20) -> bool
 function hex_bits_20_forwards_matches bv = true
 val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))
@@ -425,7 +425,7 @@ function hex_bits_20_backwards s =
   }
 
 val hex_bits_21 : bits(21) <-> string
-val hex_bits_21_forwards = "string_of_bits" : bits(21) -> string
+val hex_bits_21_forwards = "decimal_string_of_bits" : bits(21) -> string
 val hex_bits_21_forwards_matches : bits(21) -> bool
 function hex_bits_21_forwards_matches bv = true
 val "hex_bits_21_matches_prefix" : string -> option((bits(21), nat))
@@ -444,7 +444,7 @@ function hex_bits_21_backwards s =
   }
 
 val hex_bits_22 : bits(22) <-> string
-val hex_bits_22_forwards = "string_of_bits" : bits(22) -> string
+val hex_bits_22_forwards = "decimal_string_of_bits" : bits(22) -> string
 val hex_bits_22_forwards_matches : bits(22) -> bool
 function hex_bits_22_forwards_matches bv = true
 val "hex_bits_22_matches_prefix" : string -> option((bits(22), nat))
@@ -463,7 +463,7 @@ function hex_bits_22_backwards s =
   }
 
 val hex_bits_23 : bits(23) <-> string
-val hex_bits_23_forwards = "string_of_bits" : bits(23) -> string
+val hex_bits_23_forwards = "decimal_string_of_bits" : bits(23) -> string
 val hex_bits_23_forwards_matches : bits(23) -> bool
 function hex_bits_23_forwards_matches bv = true
 val "hex_bits_23_matches_prefix" : string -> option((bits(23), nat))
@@ -482,7 +482,7 @@ function hex_bits_23_backwards s =
   }
 
 val hex_bits_24 : bits(24) <-> string
-val hex_bits_24_forwards = "string_of_bits" : bits(24) -> string
+val hex_bits_24_forwards = "decimal_string_of_bits" : bits(24) -> string
 val hex_bits_24_forwards_matches : bits(24) -> bool
 function hex_bits_24_forwards_matches bv = true
 val "hex_bits_24_matches_prefix" : string -> option((bits(24), nat))
@@ -501,7 +501,7 @@ function hex_bits_24_backwards s =
   }
 
 val hex_bits_25 : bits(25) <-> string
-val hex_bits_25_forwards = "string_of_bits" : bits(25) -> string
+val hex_bits_25_forwards = "decimal_string_of_bits" : bits(25) -> string
 val hex_bits_25_forwards_matches : bits(25) -> bool
 function hex_bits_25_forwards_matches bv = true
 val "hex_bits_25_matches_prefix" : string -> option((bits(25), nat))
@@ -520,7 +520,7 @@ function hex_bits_25_backwards s =
   }
 
 val hex_bits_26 : bits(26) <-> string
-val hex_bits_26_forwards = "string_of_bits" : bits(26) -> string
+val hex_bits_26_forwards = "decimal_string_of_bits" : bits(26) -> string
 val hex_bits_26_forwards_matches : bits(26) -> bool
 function hex_bits_26_forwards_matches bv = true
 val "hex_bits_26_matches_prefix" : string -> option((bits(26), nat))
@@ -539,7 +539,7 @@ function hex_bits_26_backwards s =
   }
 
 val hex_bits_27 : bits(27) <-> string
-val hex_bits_27_forwards = "string_of_bits" : bits(27) -> string
+val hex_bits_27_forwards = "decimal_string_of_bits" : bits(27) -> string
 val hex_bits_27_forwards_matches : bits(27) -> bool
 function hex_bits_27_forwards_matches bv = true
 val "hex_bits_27_matches_prefix" : string -> option((bits(27), nat))
@@ -558,7 +558,7 @@ function hex_bits_27_backwards s =
   }
 
 val hex_bits_28 : bits(28) <-> string
-val hex_bits_28_forwards = "string_of_bits" : bits(28) -> string
+val hex_bits_28_forwards = "decimal_string_of_bits" : bits(28) -> string
 val hex_bits_28_forwards_matches : bits(28) -> bool
 function hex_bits_28_forwards_matches bv = true
 val "hex_bits_28_matches_prefix" : string -> option((bits(28), nat))
@@ -577,7 +577,7 @@ function hex_bits_28_backwards s =
   }
 
 val hex_bits_29 : bits(29) <-> string
-val hex_bits_29_forwards = "string_of_bits" : bits(29) -> string
+val hex_bits_29_forwards = "decimal_string_of_bits" : bits(29) -> string
 val hex_bits_29_forwards_matches : bits(29) -> bool
 function hex_bits_29_forwards_matches bv = true
 val "hex_bits_29_matches_prefix" : string -> option((bits(29), nat))
@@ -596,7 +596,7 @@ function hex_bits_29_backwards s =
   }
 
 val hex_bits_30 : bits(30) <-> string
-val hex_bits_30_forwards = "string_of_bits" : bits(30) -> string
+val hex_bits_30_forwards = "decimal_string_of_bits" : bits(30) -> string
 val hex_bits_30_forwards_matches : bits(30) -> bool
 function hex_bits_30_forwards_matches bv = true
 val "hex_bits_30_matches_prefix" : string -> option((bits(30), nat))
@@ -615,7 +615,7 @@ function hex_bits_30_backwards s =
   }
 
 val hex_bits_31 : bits(31) <-> string
-val hex_bits_31_forwards = "string_of_bits" : bits(31) -> string
+val hex_bits_31_forwards = "decimal_string_of_bits" : bits(31) -> string
 val hex_bits_31_forwards_matches : bits(31) -> bool
 function hex_bits_31_forwards_matches bv = true
 val "hex_bits_31_matches_prefix" : string -> option((bits(31), nat))
@@ -634,7 +634,7 @@ function hex_bits_31_backwards s =
   }
 
 val hex_bits_32 : bits(32) <-> string
-val hex_bits_32_forwards = "string_of_bits" : bits(32) -> string
+val hex_bits_32_forwards = "decimal_string_of_bits" : bits(32) -> string
 val hex_bits_32_forwards_matches : bits(32) -> bool
 function hex_bits_32_forwards_matches bv = true
 val "hex_bits_32_matches_prefix" : string -> option((bits(32), nat))
@@ -653,7 +653,7 @@ function hex_bits_32_backwards s =
   }
 
 val hex_bits_33 : bits(33) <-> string
-val hex_bits_33_forwards = "string_of_bits" : bits(33) -> string
+val hex_bits_33_forwards = "decimal_string_of_bits" : bits(33) -> string
 val hex_bits_33_forwards_matches : bits(33) -> bool
 function hex_bits_33_forwards_matches bv = true
 val "hex_bits_33_matches_prefix" : string -> option((bits(33), nat))
@@ -672,7 +672,7 @@ function hex_bits_33_backwards s =
   }
 
 val hex_bits_48 : bits(48) <-> string
-val hex_bits_48_forwards = "string_of_bits" : bits(48) -> string
+val hex_bits_48_forwards = "decimal_string_of_bits" : bits(48) -> string
 val hex_bits_48_forwards_matches : bits(48) -> bool
 function hex_bits_48_forwards_matches bv = true
 val "hex_bits_48_matches_prefix" : string -> option((bits(48), nat))
@@ -691,7 +691,7 @@ function hex_bits_48_backwards s =
   }
 
 val hex_bits_64 : bits(64) <-> string
-val hex_bits_64_forwards = "string_of_bits" : bits(64) -> string
+val hex_bits_64_forwards = "decimal_string_of_bits" : bits(64) -> string
 val hex_bits_64_forwards_matches : bits(64) -> bool
 function hex_bits_64_forwards_matches bv = true
 val "hex_bits_64_matches_prefix" : string -> option((bits(64), nat))
@@ -708,6 +708,7 @@ function hex_bits_64_backwards s =
   match hex_bits_64_matches_prefix(s) {
       Some (bv, n) if n == string_length(s) => bv
   }
+
 
 
 val spc_forwards : unit -> string
@@ -879,6 +880,7 @@ val DecStr : int -> string
 val HexStr : int -> string
 
 val BitStr = "string_of_bits" : forall 'n. bits('n) -> string
+val "decimal_string_of_bits" : forall 'n. bits('n) -> string
 
 val xor_vec = {c: "xor_bits", _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
