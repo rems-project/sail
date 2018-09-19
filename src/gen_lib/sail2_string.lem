@@ -82,83 +82,367 @@ let spc_matches_prefix s =
   (* | n -> *) Just ((), n)
   (* end *)
 
+(* Python:
+f = """let hex_bits_{0}_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** {0}) then
+      Just ((of_int {0} n, len))
+    else
+      Nothing
+  end
+"""
+
+for i in list(range(1, 34)) + [48, 64]:
+  print(f.format(i))
+*)
+let hex_bits_1_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 1) then
+      Just ((of_int 1 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_2_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 2) then
+      Just ((of_int 2 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_3_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 3) then
+      Just ((of_int 3 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_4_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 4) then
+      Just ((of_int 4 n, len))
+    else
+      Nothing
+  end
+
 let hex_bits_5_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 32 then
-       Just ((of_int 5 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 5) then
+      Just ((of_int 5 n, len))
+    else
+      Nothing
   end
 
 let hex_bits_6_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 64 then
-       Just ((of_int 6 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 6) then
+      Just ((of_int 6 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_7_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 7) then
+      Just ((of_int 7 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_8_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 8) then
+      Just ((of_int 8 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_9_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 9) then
+      Just ((of_int 9 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_10_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 10) then
+      Just ((of_int 10 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_11_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 11) then
+      Just ((of_int 11 n, len))
+    else
+      Nothing
   end
 
 let hex_bits_12_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 4096 then
-       Just ((of_int 12 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 12) then
+      Just ((of_int 12 n, len))
+    else
+      Nothing
   end
 
 let hex_bits_13_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 8192 then
-       Just ((of_int 13 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 13) then
+      Just ((of_int 13 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_14_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 14) then
+      Just ((of_int 14 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_15_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 15) then
+      Just ((of_int 15 n, len))
+    else
+      Nothing
   end
 
 let hex_bits_16_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 65536 then
-       Just ((of_int 16 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 16) then
+      Just ((of_int 16 n, len))
+    else
+      Nothing
   end
 
+let hex_bits_17_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 17) then
+      Just ((of_int 17 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_18_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 18) then
+      Just ((of_int 18 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_19_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 19) then
+      Just ((of_int 19 n, len))
+    else
+      Nothing
+  end
 
 let hex_bits_20_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 1048576 then
-       Just ((of_int 20 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 20) then
+      Just ((of_int 20 n, len))
+    else
+      Nothing
   end
 
 let hex_bits_21_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 2097152 then
-       Just ((of_int 21 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 21) then
+      Just ((of_int 21 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_22_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 22) then
+      Just ((of_int 22 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_23_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 23) then
+      Just ((of_int 23 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_24_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 24) then
+      Just ((of_int 24 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_25_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 25) then
+      Just ((of_int 25 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_26_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 26) then
+      Just ((of_int 26 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_27_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 27) then
+      Just ((of_int 27 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_28_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 28) then
+      Just ((of_int 28 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_29_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 29) then
+      Just ((of_int 29 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_30_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 30) then
+      Just ((of_int 30 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_31_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 31) then
+      Just ((of_int 31 n, len))
+    else
+      Nothing
   end
 
 let hex_bits_32_matches_prefix s =
   match maybe_int_of_prefix s with
   | Nothing -> Nothing
   | Just (n, len) ->
-     if 0 <= n && n < 4294967296 then
-       Just ((of_int 2147483648 n, len))
-     else
-       Nothing
+    if 0 <= n && n < (2 ** 32) then
+      Just ((of_int 32 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_33_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 33) then
+      Just ((of_int 33 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_48_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 48) then
+      Just ((of_int 48 n, len))
+    else
+      Nothing
+  end
+
+let hex_bits_64_matches_prefix s =
+  match maybe_int_of_prefix s with
+  | Nothing -> Nothing
+  | Just (n, len) ->
+    if 0 <= n && n < (2 ** 64) then
+      Just ((of_int 64 n, len))
+    else
+      Nothing
   end
