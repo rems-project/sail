@@ -1110,8 +1110,8 @@ Ltac prepare_for_solver :=
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
- unfold_In;
  unbool_comparisons;
+ unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
  (* omega doesn't cope well with extra "True"s in the goal *)

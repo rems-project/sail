@@ -459,3 +459,15 @@ Qed.
 Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) reverse_endianness_word bits.
 
 Definition get_slice_int {a} `{ArithFact (a >= 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
+
+Definition set_slice n m (v : mword n) x (w : mword m) : mword n :=
+  update_subrange_vec_dec v (x + m - 1) x v.
+
+Definition set_slice_int len n lo (v : mword len) : Z :=
+  let hi := lo + len - 1 in
+  (* We don't currently have a constraint on lo in the sail prelude, so let's
+     avoid one here. *)
+  if sumbool_of_bool (Z.gtb hi 0) then
+    let bs : mword (hi + 1) := mword_of_int n in
+    (int_of_mword true (update_subrange_vec_dec bs hi lo v))
+  else n.

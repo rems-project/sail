@@ -6,7 +6,6 @@ Require Import Sail2_prompt.
 Require Import Sail2_real.
 
 Axiom slice : forall {m} (_ : mword m) (_ : Z) (n : Z) `{ArithFact (m >= 0)} `{ArithFact (n >= 0)}, mword n.
-Axiom set_slice : forall (n : Z) (m : Z), mword n -> Z -> mword m -> mword n.
 Definition length {n} (x : mword n) := length_mword x.
 Hint Unfold length : sail.
 
@@ -142,6 +141,12 @@ rewrite Z.quot_mul; auto with zarith.
 Qed.
 Hint Resolve mul_quot_8_helper : sail.
 
+Lemma mul_quot_8_helper2 : forall x y, 8 * x = y -> 8 * x = 8 * (Z.quot y 8).
+intros. subst.
+apply mul_quot_8_helper.
+Qed.
+Hint Resolve mul_quot_8_helper2 : sail.
+
 (* For aarch64_vector_arithmetic_binary_uniform_mul_int_dotp *)
 Lemma quot4_ge {esize x} : 4 <= esize -> x = Z.quot esize 4 -> x >= 0.
 intros.
@@ -170,4 +175,12 @@ apply Z.quot_str_pos.
 omega.
 Qed.
 Hint Resolve quot4_gt : sail.
+
+Lemma vector_single_nowb_lemma {x y} : 0 <= x -> 0 <= y ->
+  y * x >= 0.
+intros.
+apply Z.le_ge.
+apply Z.mul_nonneg_nonneg; auto.
+Qed.
+Hint Resolve vector_single_nowb_lemma : sail.
 

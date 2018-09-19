@@ -17,6 +17,7 @@ Definition lt_real (x y : R) : bool := if Rlt_dec x y then true else false.
 (* Export select definitions from outside of Rbase *)
 Definition powerRZ := powerRZ.
 Definition Rabs := Rabs.
+Definition sqrt := sqrt.
 
 (* Use flocq definitions, but without making the whole library a dependency. *)
 Definition Zfloor (x : R) := (up x - 1)%Z.
