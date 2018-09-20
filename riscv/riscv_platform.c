@@ -20,7 +20,7 @@ mach_bits plat_ram_base(unit u)
 mach_bits plat_ram_size(unit u)
 {
   fprintf(stderr, "plat_ram_size: -> %0" PRIx64 "\n", rv_ram_size);
-  return rv_rom_base;
+  return rv_ram_size;
 }
 
 mach_bits plat_rom_base(unit u)
