@@ -902,7 +902,7 @@ let doc_exp, doc_let =
          let epp = string "build_ex" ^/^ epp in
          if aexp_needed then parens epp else epp
     in
-    let rec construct_dep_pairs env print_types =
+    let rec construct_dep_pairs env =
       let rec aux want_parens (E_aux (e,_) as exp) (Typ_aux (t,_) as typ) =
         match e,t with
         | E_tuple exps, Typ_tup typs
@@ -910,19 +910,33 @@ let doc_exp, doc_let =
           ->
            parens (separate (string ", ") (List.map2 (aux false) exps typs))
         | _ ->
-           let typ' = expand_range_type typ in
-           match destruct_exist env typ' with
-           | Some _ -> let arg_pp = string "build_ex " ^^ expY exp in
-                       let arg_pp = if print_types
-                         then arg_pp ^/^ doc_tannot ctxt env false typ
-                         else arg_pp
-                       in
-                       if want_parens then parens arg_pp else arg_pp
-           | None ->
-              if print_types
-              then let arg_pp = expV true exp ^/^ doc_tannot ctxt env false typ in
-                   if want_parens then parens arg_pp else arg_pp
-              else expV want_parens exp
+           let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
+           let build_ex, out_typ =
+             match destruct_exist env typ' with
+             | Some (_,_,t) -> true, t
+             | None -> false, typ'
+           in
+           let in_typ = expand_range_type (Env.expand_synonyms (env_of exp) (typ_of exp)) in
+           let in_typ = match destruct_exist env in_typ with Some (_,_,t) -> t | None -> in_typ in
+           let autocast =
+             (* Avoid using helper functions which simplify the nexps *)
+             is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
+               match in_typ, out_typ with
+               | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
+                 Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
+                  not (similar_nexps (env_of exp) n1 n2)
+               | _ -> false
+           in
+           let exp_pp = expV (want_parens || autocast || build_ex) exp in
+           let exp_pp =
+             if autocast then
+               let exp_pp = string "autocast" ^^ space ^^ exp_pp in
+               if want_parens || build_ex then parens exp_pp else exp_pp
+             else exp_pp
+           in if build_ex then
+                let exp_pp = string "build_ex" ^^ space ^^ exp_pp in
+                if want_parens then parens exp_pp else exp_pp
+              else exp_pp
       in aux
     in
     let liftR doc =
@@ -1171,9 +1185,9 @@ let doc_exp, doc_let =
             in
             let want_parens1 = want_parens || autocast in
             let arg_pp =
-              construct_dep_pairs env false want_parens1 arg typ_from_fn
+              construct_dep_pairs env want_parens1 arg typ_from_fn
             in
-            if autocast
+            if autocast && false
             then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
                  if want_parens then parens arg_pp else arg_pp
             else arg_pp
@@ -1270,9 +1284,13 @@ let doc_exp, doc_let =
          match Env.lookup_id id env with
          | Local (_,typ) ->
             let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
+            let ann_typ = general_typ_of full_exp in
+            let ann_typ = expand_range_type (Env.expand_synonyms env ann_typ) in
             let () =
-              debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ))
-            in doc_id id
+              debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ));
+              debug ctxt (lazy (" expected type " ^ string_of_typ ann_typ))
+            in
+            doc_id id
          | _ -> doc_id id
        end
     | E_lit lit -> doc_lit lit
@@ -1518,14 +1536,16 @@ let doc_exp, doc_let =
             if aexp_needed then parens (align epp) else epp
        end
     | E_internal_return (e1) ->
-       let typ = general_typ_of e1 in
+       let exp_typ = typ_of e1 in
+       let ret_typ = general_typ_of full_exp in
        let () =
          debug ctxt (lazy ("Monad return of " ^ string_of_exp e1));
-         debug ctxt (lazy (" with type " ^ string_of_typ typ))
+         debug ctxt (lazy (" with type " ^ string_of_typ exp_typ));
+         debug ctxt (lazy (" at type " ^ string_of_typ ret_typ))
        in
        let valpp =
          let env = env_of e1 in
-         construct_dep_pairs env false (*!!*) true e1 typ
+         construct_dep_pairs env true e1 ret_typ
        in
        wrap_parens (align (separate space [string "returnm"; valpp]))
     | E_sizeof nexp ->
