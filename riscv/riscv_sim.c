@@ -94,6 +94,12 @@ uint64_t load_sail(char *f)
     exit(1);
   }
   fprintf(stdout, "ELF Entry @ %lx\n", entry);
+  /* locate htif ports */
+  if (lookup_sym(f, "tohost", &rv_htif_tohost) < 0) {
+    fprintf(stderr, "Unable to locate htif tohost port.\n");
+    exit(1);
+  }
+  fprintf(stderr, "tohost located at %0" PRIx64 "\n", rv_htif_tohost);
   return entry;
 }
 
