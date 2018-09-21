@@ -1,6 +1,0 @@
-function #\hyperref[zwriteCapReg]{writeCapReg}#(n, cap) : (regno, CapStruct) -> unit =
-  if (n == 0b00000) then
-    ()
-  else
-    let i = #\hyperref[zunsigned]{unsigned}#(n) in
-    (*CapRegs[i]) = #\hyperref[zcapStructToCapReg]{capStructToCapReg}#(cap) 

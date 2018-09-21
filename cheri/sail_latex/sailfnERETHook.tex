@@ -1,6 +1,0 @@
-function #\hyperref[zERETHook]{ERETHook}#() : unit -> unit =
-  {
-    nextPCC    = EPCC;
-    delayedPCC = EPCC; /* always write delayedPCC together with nextPCC so 
-                          that non-capability branches don't override PCC */
-  }

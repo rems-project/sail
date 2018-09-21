@@ -1,9 +1,0 @@
-function clause #\hyperref[zexecute]{execute}# (#\hyperref[zSUBU]{SUBU}#(rs, rt, rd)) =
-  {
-    opA = #\hyperref[zrGPR]{rGPR}#(rs);
-    opB = #\hyperref[zrGPR]{rGPR}#(rt);
-    if #\hyperref[zNotWordVal]{NotWordVal}#(opA) | #\hyperref[zNotWordVal]{NotWordVal}#(opB) then
-      #\hyperref[zwGPR]{wGPR}#(rd) = undefined
-    else
-      #\hyperref[zwGPR]{wGPR}#(rd) = #\hyperref[zsignzyextend]{sign\_extend}#(opA[31..0] - opB[31..0])
-  }

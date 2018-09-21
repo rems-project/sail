@@ -46,9 +46,3 @@ printf "RISCV spec tests\n"
 printf "==========================================\n"
 
 ./riscv/run_tests.sh
-
-printf "\n==========================================\n"
-printf "CHERI spec tests\n"
-printf "==========================================\n"
-
-./cheri/run_tests.sh

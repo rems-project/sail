@@ -1,8 +1,0 @@
-function clause #\hyperref[zexecute]{execute}# (#\hyperref[zTRAPREG]{TRAPREG}#(rs, rt, cmp)) =
-  {
-    rs_val = #\hyperref[zrGPR]{rGPR}#(rs);
-    rt_val = #\hyperref[zrGPR]{rGPR}#(rt);
-    condition = #\hyperref[zcompare]{compare}#(cmp, rs_val, rt_val);
-    if (condition) then
-      (#\hyperref[zSignalException]{SignalException}#(Tr))
-  }

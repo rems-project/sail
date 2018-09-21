@@ -1,5 +1,0 @@
-function #\hyperref[zsealCap]{sealCap}#(cap, otype) : (CapStruct, #\hyperref[zbits]{bits}#(24)) -> (bool, CapStruct) =
-    if (((cap.T)[11..0] == #\hyperref[zzzeros]{zeros}#()) & ((cap.B)[11..0] == #\hyperref[zzzeros]{zeros}#())) then
-        (true, {cap with sealed=true, otype=otype})
-    else
-        (false, cap /* XXX should be undefined? */ )

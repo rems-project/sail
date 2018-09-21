@@ -1,6 +1,0 @@
-function #\hyperref[zsetCapOffset]{setCapOffset}#(c, offset) : (CapStruct, #\hyperref[zbits]{bits}#(64)) -> (bool, CapStruct) =
-    let base : #\hyperref[zbits]{bits}#(64)       = #\hyperref[ztozybits]{to\_bits}#(64, #\hyperref[zgetCapBase]{getCapBase}#(c)) in
-    let newAddress : #\hyperref[zbits]{bits}#(64) = base + offset in
-    let newCap     = { c with address = newAddress } in
-    let representable = #\hyperref[zfastRepCheck]{fastRepCheck}#(c, (newAddress - c.address)) in
-    (representable, newCap)

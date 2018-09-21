@@ -1,5 +1,0 @@
-function #\hyperref[zgetCapPerms]{getCapPerms}#(cap) : CapStruct -> #\hyperref[zbits]{bits}#(31) = 
-    let perms : #\hyperref[zbits]{bits}#(15) = #\hyperref[zzzerozyextend]{zero\_extend}#(#\hyperref[zgetCapHardPerms]{getCapHardPerms}#(cap)) in
-    (0x000 /* uperms 30-19 */
-  @ cap.uperms
-  @ perms)

@@ -19,10 +19,6 @@ some Sail specifications and related tools.
 
 * The Sail source code (in [src/](src/))
 
-* A Sail specification of a MIPS ISA (in [mips/](mips/))
-
-* A Sail specification of the CHERI MIPS ISA (in [cheri/](cheri/))
-
 * A Sail specification of ARMv8.3-A generated from ARM's publically
   released ASL specification (in [aarch64/](aarch64/))
 
@@ -39,6 +35,9 @@ We also have versions of IBM POWER, a fragment of x86, and a
 hand-written fragment of ARMv8-A, but these are currently not up-to-date
 with the latest version of Sail, which is the (default) sail2 branch
 on Github.
+
+The mips and cheri-mips specifications that used to be here have moved to
+https://github.com/CTSRD-CHERI/sail-cheri-mips .
 
 OPAM Installation
 =================

@@ -1,6 +1,0 @@
-function clause #\hyperref[zexecute]{execute}# (#\hyperref[zSLTIU]{SLTIU}#(rs, rt, imm)) =
-  {
-    let rs_val = #\hyperref[zrGPR]{rGPR}#(rs) in
-    let immext : #\hyperref[zbits]{bits}#(64) = #\hyperref[zsignzyextend]{sign\_extend}#(imm) in /* NB defined to sign extend here even though comparison is unsigned! */
-    #\hyperref[zwGPR]{wGPR}#(rt) = #\hyperref[zzzerozyextend]{zero\_extend}#(if (rs_val <_u immext) then 0b1 else 0b0)
-  }

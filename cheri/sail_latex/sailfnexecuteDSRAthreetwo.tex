@@ -1,6 +1,0 @@
-function clause #\hyperref[zexecute]{execute}# (#\hyperref[zDSRAthreetwo]{DSRA32}# (rt, rd, sa)) =
-  {
-    temp     = #\hyperref[zrGPR]{rGPR}#(rt);
-    sa32 = 0b1 @ sa; /* sa+32 */
-    #\hyperref[zwGPR]{wGPR}#(rd) = temp >>_s sa32
-  }
