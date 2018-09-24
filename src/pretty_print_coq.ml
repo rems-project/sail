@@ -133,6 +133,7 @@ let rec fix_id remove_tick name = match name with
   | "S"
   | "mod"
   | "M"
+  | "tt"
     -> name ^ "'"
   | _ ->
      if String.contains name '#' then
