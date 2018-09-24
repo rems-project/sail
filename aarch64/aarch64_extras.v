@@ -184,3 +184,33 @@ apply Z.mul_nonneg_nonneg; auto.
 Qed.
 Hint Resolve vector_single_nowb_lemma : sail.
 
+Lemma vector_single_nowb_lemma2 {x esize} : 8 * x = esize -> 8 * (Z.quot esize 8) = esize.
+intro H.
+rewrite <- H.
+rewrite (Z.mul_comm 8 x).
+rewrite Z.quot_mul; auto with zarith.
+Qed.
+Hint Resolve vector_single_nowb_lemma2 : sail.
+
+Lemma simdfp_register_lemma {datasize x0} :
+  8 = datasize \/ 16 = datasize \/ 32 = datasize \/ 64 = datasize \/ 128 = datasize \/ False ->
+  x0 = datasize ÷ 8 ->
+  64 >= 0 /\ 8 * x0 >= 0.
+intros.
+split.
+* omega.
+* apply Z.le_ge.
+  apply Z.mul_nonneg_nonneg; auto with zarith.
+  subst.
+  apply Z.quot_pos; omega.
+Qed.
+Hint Resolve simdfp_register_lemma : sail.
+
+Lemma simdfp_register_lemma2 {datasize x0} :
+  8 = datasize \/ 16 = datasize \/ 32 = datasize \/ 64 = datasize \/ 128 = datasize \/ False ->
+  x0 = datasize ÷ 8 ->
+  datasize = 8 * x0.
+intros [H|[H|[H|[H|[H|[]]]]]] H'; subst;
+reflexivity.
+Qed.
+Hint Resolve simdfp_register_lemma2 : sail.
