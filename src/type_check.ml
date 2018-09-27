@@ -2828,7 +2828,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
         match pat_aux with
         | P_lit lit ->
            let var = fresh_var () in
-           let guard = mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit))) in
+           let guard = locate l (mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit)))) in
            let (typed_pat, env, guards) = bind_pat env (mk_pat (P_id var)) typ in
            typed_pat, env, guard::guards
         | _ -> raise typ_exn
