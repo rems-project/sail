@@ -2211,6 +2211,12 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
           | CT_bits _ -> "string_of_sail_bits"
           | _ -> assert false
           end
+       | "decimal_string_of_bits", _ ->
+          begin match cval_ctyp (List.nth args 0) with
+          | CT_bits64 _ -> "decimal_string_of_mach_bits"
+          | CT_bits _ -> "decimal_string_of_sail_bits"
+          | _ -> assert false
+          end
        | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
        | "undefined_vector", CT_bits64 _ -> "UNDEFINED(mach_bits)"

@@ -298,7 +298,7 @@ val lexp_to_exp : 'a lexp -> 'a exp
 
 val is_unit_typ : typ -> bool
 val is_number : typ -> bool
-val is_reftyp : typ -> bool
+val is_ref_typ : typ -> bool
 val is_vector_typ : typ -> bool
 val is_bit_typ : typ -> bool
 val is_bitvector_typ : typ -> bool

@@ -1855,7 +1855,7 @@ let rewrite_register_ref_writes (Defs defs) =
   let lexp_ref_exp (LEXP_aux (_, annot) as lexp) =
     try
       let exp = infer_exp (env_of_annot annot) (strip_exp (lexp_to_exp lexp)) in
-      if is_reftyp (typ_of exp) then Some exp else None
+      if is_ref_typ (typ_of exp) then Some exp else None
     with | _ -> None in
   let e_assign (lexp, exp) =
     let (lhs, rhs) = rewrite_lexp_to_rhs lexp in

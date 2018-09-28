@@ -2197,6 +2197,10 @@ let rec add_opt_constraint constr env =
 let rec add_constraints constrs env =
   List.fold_left (fun env constr -> Env.add_constraint constr env) env constrs
 
+let solve_quant env = function
+  | QI_aux (QI_id _, _) -> false
+  | QI_aux (QI_const nc, _) -> prove env nc
+
 (* When doing implicit type coercion, for performance reasons we want
    to filter out the possible casts to only those that could
    reasonably apply. We don't mind if we try some coercions that are

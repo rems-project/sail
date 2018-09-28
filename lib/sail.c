@@ -1130,6 +1130,19 @@ void string_of_sail_bits(sail_string *str, const sail_bits op)
   }
 }
 
+void decimal_string_of_mach_bits(sail_string *str, const mach_bits op)
+{
+  int bytes = asprintf(str, "%" PRId64, op);
+  if (bytes == -1) {
+    fprintf(stderr, "Could not print bits %" PRId64 "\n", op);
+  }
+}
+
+void decimal_string_of_sail_bits(sail_string *str, const sail_bits op)
+{
+  gmp_asprintf(str, "%Z", *op.bits);
+}
+
 void fprint_bits(const sail_string pre,
 		 const sail_bits op,
 		 const sail_string post,

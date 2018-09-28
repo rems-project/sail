@@ -544,7 +544,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let cond_val, wrap = to_aval (anf cond) in
      let then_aexp = anf then_exp in
      let else_aexp = anf else_exp in
-     wrap (mk_aexp (AE_if (cond_val, then_aexp, else_aexp, typ_of then_exp)))
+     wrap (mk_aexp (AE_if (cond_val, then_aexp, else_aexp, typ_of exp)))
 
   | E_app_infix (x, Id_aux (Id op, l), y) ->
      anf (E_aux (E_app (Id_aux (DeIid op, l), [x; y]), exp_annot))

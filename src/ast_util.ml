@@ -985,7 +985,7 @@ let rec is_number (Typ_aux (t,_)) =
   | Typ_app (Id_aux (Id "atom", _),_) -> true
   | _ -> false
 
-let is_reftyp (Typ_aux (typ_aux, _)) = match typ_aux with
+let is_ref_typ (Typ_aux (typ_aux, _)) = match typ_aux with
   | Typ_app (id, _) -> string_of_id id = "register" || string_of_id id = "reg"
   | _ -> false
 

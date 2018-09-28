@@ -333,6 +333,8 @@ void string_drop(sail_string *dst, sail_string s, sail_int len);
 void string_of_int(sail_string *str, const sail_int i);
 void string_of_sail_bits(sail_string *str, const sail_bits op);
 void string_of_mach_bits(sail_string *str, const mach_bits op);
+void decimal_string_of_sail_bits(sail_string *str, const sail_bits op);
+void decimal_string_of_mach_bits(sail_string *str, const mach_bits op);
 
 /*
  * Utility function not callable from Sail!
