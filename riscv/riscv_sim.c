@@ -103,7 +103,6 @@ uint64_t load_sail(char *f)
   return entry;
 }
 
-/* for now, override the reset-vector using the elf entry */
 void init_spike(const char *f, uint64_t entry)
 {
 #ifdef SPIKE
@@ -111,19 +110,51 @@ void init_spike(const char *f, uint64_t entry)
   tv_set_verbose(s, 1);
   tv_load_elf(s, f);
   tv_reset(s);
-  tv_set_pc(s, entry);
 #else
   s = NULL;
 #endif
 }
 
+void init_sail_reset_vector(uint64_t entry)
+{
+#define RST_VEC_SIZE 8
+  uint32_t reset_vec[RST_VEC_SIZE] = {
+    0x297,                                      // auipc  t0,0x0
+    0x28593 + (RST_VEC_SIZE * 4 << 20),         // addi   a1, t0, &dtb
+    0xf1402573,                                 // csrr   a0, mhartid
+    SAIL_XLEN == 32 ?
+      0x0182a283u :                             // lw     t0,24(t0)
+      0x0182b283u,                              // ld     t0,24(t0)
+    0x28067,                                    // jr     t0
+    0,
+    (uint32_t) (entry & 0xffffffff),
+    (uint32_t) (entry >> 32)
+  };
 
-void init_sail(uint64_t entry)
+  rv_rom_base = DEFAULT_RSTVEC;
+  uint64_t addr = rv_rom_base;
+  for (int i = 0; i < sizeof(reset_vec); i++)
+    write_mem(addr++, (uint64_t)((char *)reset_vec)[i]);
+  /* TODO: write DTB */
+
+  /* zero-fill to page boundary */
+  const int align = 0x1000;
+  uint64_t rom_end = (addr + align -1)/align + align;
+  for (int i = addr; i < rom_end; i++)
+    write_mem(addr++, 0);
+
+  /* set rom size */
+  rv_rom_size = addr - rv_rom_base;
+  /* boot at reset vector */
+  zPC = rv_rom_base;
+}
+
+void init_sail(uint64_t elf_entry)
 {
   model_init();
   zinit_platform(UNIT);
   zinit_sys(UNIT);
-  zPC = entry;
+  init_sail_reset_vector(elf_entry);
 }
 
 int init_check(struct tv_spike_t *s)

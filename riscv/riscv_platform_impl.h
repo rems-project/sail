@@ -5,6 +5,9 @@
 
 /* Settings of the platform implementation. */
 
+#define DEFAULT_RSTVEC     0x00001000
+#define SAIL_XLEN          64
+
 extern bool rv_enable_dirty_update;
 extern bool rv_enable_misaligned;
 
