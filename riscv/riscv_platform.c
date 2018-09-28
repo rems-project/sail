@@ -5,6 +5,9 @@
 
 /* This file contains the definitions of the C externs of Sail model. */
 
+static mach_bits reservation = 0;
+static bool reservation_valid = false;
+
 bool plat_enable_dirty_update(unit u)
 { return rv_enable_dirty_update; }
 
@@ -30,13 +33,20 @@ mach_bits plat_clint_size(unit u)
 { return rv_clint_size; }
 
 unit load_reservation(mach_bits addr)
-{ return UNIT; }
+{
+  reservation = addr;
+  reservation_valid = true;
+  return UNIT;
+}
 
 bool match_reservation(mach_bits addr)
-{ return false; }
+{ return reservation_valid && reservation == addr; }
 
 unit cancel_reservation(unit u)
-{ return UNIT; }
+{
+  reservation_valid = false;
+  return UNIT;
+}
 
 unit plat_term_write(mach_bits c)
 { return UNIT; }
