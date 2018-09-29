@@ -12,6 +12,8 @@ void model_fini(void);
 unit zinit_platform(unit);
 unit zinit_sys(unit);
 bool zstep(sail_int);
+unit ztick_clock(unit);
+unit ztick_platform(unit);
 
 extern bool zhtif_done;
 extern mach_bits zhtif_exit_code;

@@ -111,6 +111,8 @@ void init_spike(const char *f, uint64_t entry)
   tv_set_dtb_in_rom(s, 1);
   tv_load_elf(s, f);
   tv_reset(s);
+  /* sync the insns per tick */
+  rv_insns_per_tick = tv_get_insns_per_tick(s);
 #else
   s = NULL;
 #endif
@@ -261,6 +263,7 @@ void run_sail(void)
 
   /* initialize the step number */
   mach_int step_no = 0;
+  int insn_cnt = 0;
 
   while (!zhtif_done) {
     { /* run a Sail step */
@@ -271,7 +274,10 @@ void run_sail(void)
       if (have_exception) goto step_exception;
       flush_logs();
     }
-    if (stepped) step_no++;
+    if (stepped) {
+      step_no++;
+      insn_cnt++;
+    }
 
 #ifdef SPIKE
     { /* run a Spike step */
@@ -303,7 +309,15 @@ void run_sail(void)
     }
 #endif
 
-    /* TODO: update time */
+    if (insn_cnt == rv_insns_per_tick) {
+      insn_cnt = 0;
+      ztick_clock(UNIT);
+      ztick_platform(UNIT);
+#ifdef SPIKE
+      tv_tick_clock(s);
+      tv_step_io(s);
+#endif
+    }
   }
 
  dump_state:

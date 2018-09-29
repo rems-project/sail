@@ -15,3 +15,4 @@ uint64_t rv_clint_base = UINT64_C(0x2000000);
 uint64_t rv_clint_size = UINT64_C(0xc0000);
 
 uint64_t rv_htif_tohost = UINT64_C(0x80001000);
+uint64_t rv_insns_per_tick = UINT64_C(100);
