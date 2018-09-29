@@ -108,6 +108,7 @@ void init_spike(const char *f, uint64_t entry)
 #ifdef SPIKE
   s = tv_init("RV64IMAC");
   tv_set_verbose(s, 1);
+  tv_set_dtb_in_rom(s, 1);
   tv_load_elf(s, f);
   tv_reset(s);
 #else
@@ -135,16 +136,26 @@ void init_sail_reset_vector(uint64_t entry)
   uint64_t addr = rv_rom_base;
   for (int i = 0; i < sizeof(reset_vec); i++)
     write_mem(addr++, (uint64_t)((char *)reset_vec)[i]);
+#ifdef SPIKE
+  const unsigned char *dtb = NULL;
+  int dtb_len;
+  tv_get_dtb(s, &dtb, &dtb_len);
+  fprintf(stderr, "Got %d bytes of dtb at %p\n", dtb_len, dtb);
+  for (int i = 0; i < dtb_len; i++)
+    write_mem(addr++, dtb[i]);
+#else
+  fprintf(stdout, "Running without rom device tree.\n");
   /* TODO: write DTB */
+#endif
 
   /* zero-fill to page boundary */
   const int align = 0x1000;
-  uint64_t rom_end = (addr + align -1)/align + align;
+  uint64_t rom_end = (addr + align -1)/align * align;
   for (int i = addr; i < rom_end; i++)
     write_mem(addr++, 0);
 
   /* set rom size */
-  rv_rom_size = addr - rv_rom_base;
+  rv_rom_size = rom_end - rv_rom_base;
   /* boot at reset vector */
   zPC = rv_rom_base;
 }
@@ -311,8 +322,11 @@ int main(int argc, char **argv)
   char *file = process_args(argc, argv);
   uint64_t entry = load_sail(file);
 
-  init_sail(entry);
+  /* initialize spike before sail so that we can access the device-tree blob,
+   * until we roll our own.
+   */
   init_spike(file, entry);
+  init_sail(entry);
 
   if (!init_check(s)) finish(1);
 
