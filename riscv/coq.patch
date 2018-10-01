@@ -1,6 +1,6 @@
---- riscv.v	2018-09-19 17:32:43.499275014 +0100
-+++ riscv.v.good	2018-09-19 17:32:18.231802489 +0100
-@@ -9352,14 +9352,13 @@
+--- riscv.v	2018-10-01 18:21:50.121189040 +0100
++++ riscv.v.good	2018-10-01 18:21:24.485040512 +0100
+@@ -10537,14 +10537,13 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
@@ -17,7 +17,7 @@
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
     (phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false) >>= fun w__0 : MemoryOpResult (mword (8 * 8)) =>
-@@ -9372,27 +9371,27 @@
+@@ -10557,27 +10556,27 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
         (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure (PTW_Invalid_PTE))  : PTW_Result )
          else if ((isPTEPtr pbits)) then
@@ -51,7 +51,7 @@
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
                          PTW_Failure
-@@ -9402,10 +9401,10 @@
+@@ -10587,10 +10586,10 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
                          PTW_Success
@@ -64,7 +64,7 @@
             : PTW_Result))
          : M (PTW_Result)
      end)
-@@ -9531,7 +9530,7 @@
+@@ -10716,7 +10715,7 @@
          : M (TR39_Result)
      | None =>
         (curPTB39 tt) >>= fun w__6 : mword 56 =>
@@ -73,7 +73,7 @@
         (match w__7 with
          | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -13293,137 +13292,143 @@
+@@ -15425,137 +15424,143 @@
     returnm (true
      : bool).
  
@@ -277,7 +277,7 @@
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -13463,6 +13468,7 @@
+@@ -15595,6 +15600,7 @@
     | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
     | C_ILLEGAL (arg0) => (execute_C_ILLEGAL arg0)  : M (bool)
@@ -285,25 +285,7 @@
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -13727,7 +13733,7 @@
-     | _ => exit tt  : M (string)
-     end)
-     : M (string).
--
-+(*
- Definition assembly_backwards (arg_ : string) 
- : M (ast) :=
-    let _stringappend_756_ := arg_ in
-@@ -28163,7 +28169,7 @@
-           : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
-        : M (option ((ast * {n : Z & ArithFact (n >= 0)}))))
-     : M (option ((ast * {n : Z & ArithFact (n >= 0)}))).
--
-+*)
- Definition encdec_forwards (arg_ : ast) 
- : M (mword 32) :=
-    (match arg_ with
-@@ -30257,7 +30263,7 @@
+@@ -27093,7 +27099,7 @@
      else returnm (tt  : unit)) >>
     returnm (stepped
      : bool).
@@ -312,7 +294,7 @@
  Definition loop '(tt : unit) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -30299,7 +30305,7 @@
+@@ -27135,7 +27141,7 @@
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
      : unit).
