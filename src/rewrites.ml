@@ -4706,6 +4706,26 @@ let rewrite_case (e,ann) =
         let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,empty_tannot))),(l,ann')) in
         E_aux (E_case (e1,cases@[Pat_aux (Pat_exp (p,b),(l,empty_tannot))]),ann)
      end
+  | E_let (LB_aux (LB_val (pat,e1),lb_ann),e2) ->
+     begin
+     let env = env_of_annot ann in
+     let ctx = ctx_from_pattern_completeness_ctx env in
+     let rps = remove_clause_from_pattern ctx pat RP_any in
+     match rps with
+     | [] -> E_aux (e,ann)
+     | (example::_) ->
+        let _ =
+          if !opt_coq_warn_nonexhaustive
+          then Reporting_basic.print_err false false
+            (fst ann) "Non-exhaustive let" ("Example: " ^ string_of_rp example) in
+        let l = Parse_ast.Generated Parse_ast.Unknown in
+        let p = P_aux (P_wild, (l, empty_tannot)) in
+        let ann' = mk_tannot env (typ_of_annot ann) (mk_effect [BE_escape]) in
+        (* TODO: use an expression that specifically indicates a failed pattern match *)
+        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,empty_tannot))),(l,ann')) in
+        E_aux (E_case (e1,[Pat_aux (Pat_exp(pat,e2),ann);
+                           Pat_aux (Pat_exp (p,b),(l,empty_tannot))]),ann)
+     end
   | _ -> E_aux (e,ann)
 
 let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
