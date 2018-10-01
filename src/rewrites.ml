@@ -3064,6 +3064,237 @@ let construct_bool_match env (match_on : tannot exp) (pexp : tannot pexp) : tann
     let false_pexp = Pat_aux (Pat_exp (annot_pat P_wild unk env (typ_of match_on), false_exp), unkt) in
     annot_exp (E_case (match_on, [true_pexp; false_pexp])) unk env bool_typ
 
+let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
+  match p_aux with
+  | P_lit _ | P_wild -> []
+  | P_id id -> [pat]
+  | P_record _ -> failwith "record patterns not yet implemented"
+  (* we assume the type-checker has already checked the two sides have the same bindings *)
+  | P_or (left, right) -> bindings_of_pat left
+  | P_as (p, id) -> [annot_pat (P_id id) unk (pat_env_of p) (pat_typ_of p)]
+  | P_cons (left, right) -> bindings_of_pat left @ bindings_of_pat right
+  (* todo: is this right for negated patterns? *)
+  | P_not p
+    | P_typ (_, p)
+    | P_var (p, _) -> bindings_of_pat p
+  | P_app (_, ps)
+    | P_vector ps
+    | P_vector_concat ps
+    | P_tup ps
+    | P_list ps
+    | P_string_append ps -> List.map bindings_of_pat ps |> List.flatten
+
+let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
+  match p_aux with
+  | P_lit _ | P_wild -> []
+  | P_id id -> [pat_typ_of pat]
+  | P_record _ -> failwith "record patterns not yet implemented"
+  (* we assume the type-checker has already checked the two sides have the same bindings *)
+  | P_or (left, right) -> binding_typs_of_pat left
+  | P_as (p, id) -> [pat_typ_of p]
+  | P_cons (left, right) -> binding_typs_of_pat left @ binding_typs_of_pat right
+  (* todo: is this right for negated patterns? *)
+  | P_not p
+    | P_typ (_, p)
+    | P_var (p, _) -> binding_typs_of_pat p
+  | P_app (_, ps)
+    | P_vector ps
+    | P_vector_concat ps
+    | P_tup ps
+    | P_list ps
+    | P_string_append ps -> List.map binding_typs_of_pat ps |> List.flatten
+
+let construct_toplevel_string_append_call env f_id bindings binding_typs guard expr =
+  (* s# if match f#(s#) { Some (bindings) => guard, _ => false) } => let Some(bindings) = f#(s#) in expr *)
+  let s_id = fresh_stringappend_id () in
+  let option_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (match binding_typs with
+                                                                         | [] -> unit_typ
+                                                                         | [typ] -> typ
+                                                                         | typs -> tuple_typ typs
+                                                              ), unk)]
+  in
+  let bindings = if bindings = [] then
+                   [annot_pat (P_lit (mk_lit L_unit)) unk env unit_typ]
+                 else
+                   bindings
+  in
+  let new_pat = annot_pat (P_id s_id) unk env string_typ in
+  let new_guard = annot_exp (
+                      E_case (annot_exp (E_app (f_id, [annot_exp (E_id s_id) unk env string_typ])) unk env option_typ,
+                              [
+                                Pat_aux (Pat_exp (annot_pat (P_app (mk_id "Some", bindings)) unk env option_typ, guard), unkt);
+                                Pat_aux (Pat_exp (annot_pat P_wild unk env option_typ, annot_exp (E_lit (mk_lit L_false)) unk env bool_typ), unkt)
+                              ]
+                        )
+                    ) unk env bool_typ in
+  let new_letbind = annot_letbind (P_app (mk_id "Some", bindings), annot_exp (E_app (f_id, [annot_exp (E_id s_id) unk env string_typ])) unk env option_typ) unk env option_typ in
+  let new_expr = annot_exp (E_let (new_letbind, expr)) unk env (typ_of expr) in
+  (new_pat, [new_guard], new_expr)
+
+let construct_toplevel_string_append_func env f_id pat =
+  let binding_typs = binding_typs_of_pat pat in
+  let bindings = bindings_of_pat pat in
+  let bindings = if bindings = [] then
+                   [annot_pat (P_lit (mk_lit L_unit)) unk env unit_typ]
+                 else
+                   bindings
+  in
+  let option_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (match binding_typs with
+                                                                       | [] -> unit_typ
+                                                                       | [typ] -> typ
+                                                                       | typs -> tuple_typ typs
+                                                            ), unk)]
+  in
+  let fun_typ = (mk_typ (Typ_fn (string_typ, option_typ, no_effect))) in
+  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, (fun _ -> None), false), unkt) in
+  let new_val_spec, env = Type_check.check_val_spec env new_val_spec in
+  let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
+  let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
+  let effect_pure = (Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown)) in
+  let s_id = fresh_stringappend_id () in
+  let arg_pat = mk_pat (P_id s_id) in
+  (* We can ignore guards here because we've already removed them *)
+  let rec rewrite_pat env (pat, guards, expr) =
+    match pat with
+      (* "lit" ^ pat2 ^ ... ^ patn => Some(...) ---> s# if startswith(s#, "lit") => match string_drop(s#, strlen("lit")) {
+                                                                                      pat2 => Some(...)
+                                                                                      _ => None()
+                                                                                    }
+       *)
+    | P_aux (P_string_append (
+                 P_aux (P_lit (L_aux (L_string s, _) as lit), _)
+                 :: pats
+               ), psa_annot) ->
+       let s_id = fresh_stringappend_id () in
+       let drop_exp = annot_exp (E_app (mk_id "string_drop", [annot_exp (E_id s_id) unk env string_typ; annot_exp (E_app (mk_id "string_length", [annot_exp (E_lit lit) unk env string_typ])) unk env nat_typ])) unk env string_typ in
+       (* recurse into pat2 .. patn *)
+       let new_pat2_pexp =
+         match rewrite_pat env (P_aux (P_string_append pats, psa_annot), guards, expr) with
+         | pat, [], expr -> Pat_aux (Pat_exp (pat, expr), unkt)
+         | pat, gs, expr -> Pat_aux (Pat_when (pat, fold_typed_guards env gs, expr), unkt)
+       in
+       let new_guard = annot_exp (E_app (mk_id "string_startswith", [annot_exp (E_id s_id) unk env string_typ;
+                                                                     annot_exp (E_lit lit) unk env string_typ]
+                         )) unk env bool_typ in
+       let new_wildcard = Pat_aux (Pat_exp (annot_pat P_wild unk env string_typ, annot_exp (E_app (mk_id "None", [annot_exp (E_lit (mk_lit L_unit)) unk env unit_typ])) unk env option_typ), unkt) in
+       let new_expr = annot_exp (E_case (drop_exp, [new_pat2_pexp; new_wildcard])) unk env (typ_of expr) in
+       (annot_pat (P_id s_id) unk env string_typ, [new_guard], new_expr)
+    (* mapping(x) ^ pat2 ^ .. ^ patn => Some(...) ---> s# => match map_matches_prefix(s#) {
+                                                               Some(x, n#) => match string_drop(s#, n#) {
+                                                                                pat2 ^ .. ^ patn => Some(...)
+                                                                                _ => None()
+                                                                              }
+                                                             }
+     *)
+    | P_aux (P_string_append (
+                 P_aux (P_app (mapping_id, arg_pats) , _)
+                 :: pats
+               ), psa_annot)
+         when Env.is_mapping mapping_id env ->
+       (* common things *)
+       let mapping_prefix_func =
+         match mapping_id with
+         | Id_aux (Id id, _)
+         | Id_aux (DeIid id, _) -> id ^ "_matches_prefix"
+       in
+       let mapping_inner_typ =
+         match Env.get_val_spec (mk_id mapping_prefix_func) env with
+         | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [Typ_arg_aux (Typ_arg_typ typ, _)]), _), _), _)) -> typ
+         | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
+       in
+
+       let s_id = fresh_stringappend_id () in
+       let len_id = fresh_stringappend_id () in
+
+       (* construct drop expression -- string_drop(s#, len#) *)
+       let drop_exp = annot_exp (E_app (mk_id "string_drop",
+                                        [annot_exp (E_id s_id) unk env string_typ;
+                                         annot_exp (E_id len_id) unk env nat_typ]))
+                        unk env string_typ in
+       (* construct func expression -- maybe_atoi s# *)
+       let func_exp = annot_exp (E_app (mk_id mapping_prefix_func,
+                                        [annot_exp (E_id s_id) unk env string_typ]))
+                        unk env mapping_inner_typ in
+       (* construct some pattern -- Some (n#, len#) *)
+       let opt_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ mapping_inner_typ, unk)] in
+       let tup_arg_pat = match arg_pats with
+         | [] -> assert false
+         | [arg_pat] -> arg_pat
+         | arg_pats -> annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map pat_typ_of arg_pats))
+       in
+
+       let some_pat = annot_pat (P_app (mk_id "Some",
+                                        [tup_arg_pat;
+                                         annot_pat (P_id len_id) unk env nat_typ]))
+                        unk env opt_typ in
+       let some_pat, some_pat_env, _ = bind_pat env (strip_pat some_pat) opt_typ in
+
+       (* need to add the Some(...) env to tup_arg_pats for pat_to_exp below as it calls the typechecker *)
+       let tup_arg_pat = map_pat_annot (fun (l, tannot) -> (l, replace_env some_pat_env tannot)) tup_arg_pat in
+
+       let new_wildcard = Pat_aux (Pat_exp (annot_pat P_wild unk env string_typ, annot_exp (E_app (mk_id "None", [annot_exp (E_lit (mk_lit L_unit)) unk env unit_typ])) unk env option_typ), unkt) in
+
+       (* recurse into pat2 .. patn *)
+       let new_pat2_pexp =
+         match rewrite_pat env (P_aux (P_string_append (pats), psa_annot), guards, expr) with
+         | pat, [], expr -> Pat_aux (Pat_exp (pat, expr), unkt)
+         | pat, gs, expr -> Pat_aux (Pat_when (pat, fold_typed_guards env gs, expr), unkt)
+       in
+
+       let inner_match = annot_exp (E_case (drop_exp, [new_pat2_pexp; new_wildcard])) unk env option_typ in
+
+       let outer_match = annot_exp (E_case (func_exp, [Pat_aux (Pat_exp (some_pat, inner_match), unkt); new_wildcard])) unk env option_typ in
+
+       (annot_pat (P_id s_id) unk env string_typ, [], outer_match)
+    | _ -> (pat, guards, expr)
+  in
+  let new_pat, new_guards, new_expr = rewrite_pat env (pat, [], annot_exp (E_app (mk_id "Some", List.map (fun p -> pat_to_exp p) bindings)) unk env option_typ) in
+  let new_pexp = match new_guards with
+    | [] -> Pat_aux (Pat_exp (new_pat, new_expr), unkt)
+    | gs -> Pat_aux (Pat_when (new_pat, fold_typed_guards env gs, new_expr), unkt)
+  in
+  let wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit])))) in
+  let new_match = mk_exp (E_case (mk_exp (E_id s_id), [strip_pexp new_pexp; wildcard])) in
+  let new_fun_def = FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl f_id arg_pat new_match]), (unk,())) in
+  let new_fun_def, env = Type_check.check_fundef env new_fun_def in
+  List.flatten [new_val_spec; new_fun_def]
+
+let rewrite_defs_toplevel_string_append (Defs defs) =
+  let new_defs = ref ([] : tannot def list) in
+  let rec rewrite_pexp (Pat_aux (pexp_aux, pexp_annot) as pexp) =
+    (* merge cases of Pat_exp and Pat_when *)
+    let (P_aux (p_aux, p_annot) as pat, guards, expr) =
+      match pexp_aux with
+      | Pat_exp (pat, expr) -> (pat, [], expr)
+      | Pat_when (pat, guard, expr) -> (pat, [guard], expr)
+    in
+
+    let env = env_of_annot p_annot in
+
+    let (new_pat, new_guards, new_expr) =
+      match pat with
+      | P_aux (P_string_append appends, psa_annot) ->
+         let f_id = fresh_stringappend_id () in
+         new_defs := (construct_toplevel_string_append_func env f_id pat) @ !new_defs;
+         construct_toplevel_string_append_call env f_id (bindings_of_pat pat) (binding_typs_of_pat pat) (fold_typed_guards env guards) expr
+      | _ -> (pat, guards, expr)
+    in
+
+    (* un-merge Pat_exp and Pat_when cases *)
+    let new_pexp = match new_guards with
+      | [] -> Pat_aux (Pat_exp (new_pat, new_expr), pexp_annot)
+      | gs -> Pat_aux (Pat_when (new_pat, fold_typed_guards env gs, new_expr), pexp_annot)
+    in
+    new_pexp
+  in
+  let rewrite def =
+    new_defs := [];
+    let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
+    let rewritten = rewrite_def { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } def in
+    !new_defs @ [rewritten]
+  in
+  Defs (List.map rewrite defs |> List.flatten)
+
 
 let rec rewrite_defs_pat_string_append =
   let rec rewrite_pat env ((pat : tannot pat), (guards : tannot exp list), (expr : tannot exp)) =
@@ -4598,6 +4829,7 @@ let if_mono f defs =
 let rewrite_defs_lem = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("remove_mapping_valspecs", remove_mapping_valspecs);
+  ("toplevel_string_append", rewrite_defs_toplevel_string_append);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("mono_rewrites", mono_rewrites);
@@ -4647,6 +4879,7 @@ let rewrite_defs_lem = [
 let rewrite_defs_coq = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("remove_mapping_valspecs", remove_mapping_valspecs);
+  ("toplevel_string_append", rewrite_defs_toplevel_string_append);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen true);
@@ -4690,6 +4923,7 @@ let rewrite_defs_ocaml = [
     (* ("undefined", rewrite_undefined); *)
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("realise_mappings", rewrite_defs_realise_mappings);
+  ("toplevel_string_append", rewrite_defs_toplevel_string_append);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
@@ -4714,6 +4948,7 @@ let rewrite_defs_ocaml = [
 let rewrite_defs_c = [
   ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
   ("realise_mappings", rewrite_defs_realise_mappings);
+  ("toplevel_string_append", rewrite_defs_toplevel_string_append);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
@@ -4736,6 +4971,7 @@ let rewrite_defs_c = [
 let rewrite_defs_interpreter = [
     ("no_effect_check", (fun defs -> opt_no_effects := true; defs));
     ("realise_mappings", rewrite_defs_realise_mappings);
+    ("toplevel_string_append", rewrite_defs_toplevel_string_append);
     ("pat_string_append", rewrite_defs_pat_string_append);
     ("mapping_builtins", rewrite_defs_mapping_patterns);
     ("rewrite_undefined", rewrite_undefined_if_gen false);
