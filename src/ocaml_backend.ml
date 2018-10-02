@@ -747,12 +747,11 @@ let ocaml_pp_generators ctx defs orig_types required =
     let out_typ = Rewrites.simple_typ out_typ in
     let types = string "generators" :: List.map print_quant tquants @ [ocaml_typ ctx out_typ] in
     string name ^^ colon ^^ space ^^
-      gen_tyvars_pp ^^ separate (string " -> ") types ^^
-      string ";"
+      gen_tyvars_pp ^^ separate (string " -> ") types
   in
-  let fields = separate hardline (List.map make_gen_field (IdSet.elements required)) in
+  let fields = separate_map (string ";" ^^ break 1) make_gen_field (IdSet.elements required) in
   let gen_record_type_pp =
-    string "type generators = {" ^^ hardline ^^ fields ^^ hardline ^^ string "}"
+    string "type generators = {" ^^ group (nest 2 (break 0 ^^ fields) ^^ break 0) ^^ string "}"
   in
   let make_rand_gen id =
     if Bindings.mem id Type_check.Env.builtin_typs
@@ -806,7 +805,7 @@ let ocaml_pp_generators ctx defs orig_types required =
           | _ -> [typ]
         in
         parens (string "fun g -> " ^^ zencode_upper ctx id ^^ space ^^
-          parens (separate (string ", ") (List.map make_subgen arg_typs)))
+          parens (separate_map (string ", ") make_subgen arg_typs))
       in
       let make_args tqs =
         separate space (string "g"::
@@ -818,31 +817,31 @@ let ocaml_pp_generators ctx defs orig_types required =
         | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
            make_args tqs, gen_type typ
         | TD_variant (_,_,tqs,variants,_) ->
-           empty, string "let c = rand_choice [" ^^ hardline ^^
-                  separate (string ";" ^^ hardline)
-                    (List.map make_variant variants) ^^ hardline ^^
+           empty, string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
+                  separate_map (string ";" ^^ break 1) make_variant variants) ^^
+                    break 0) ^^
                     string "] in fun " ^^ make_args tqs ^^ string " -> c () g" ^^ hardline
         | TD_enum (_,_,variants,_) ->
            empty,
-           string "let c = rand_choice [" ^^ hardline ^^
-             separate (string ";" ^^ hardline)
-               (List.map (zencode_upper ctx) variants) ^^ hardline ^^
+           string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
+             separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^
+               break 0) ^^
                string "] in fun g -> c ()" ^^ hardline
         | _ -> empty, string "TODO"
       in
-      separate space [string "let"; name; top_args] ^^ space ^^ equals ^^ hardline ^^
-        body ^^ hardline
+      hang 2 (separate space [string "let"; name; top_args] ^^ space ^^ equals ^^ break 1 ^^
+        body) ^^ hardline
   in
   let rand_record_pp =
-    string "let rand_gens : generators = {" ^^ hardline ^^
-      separate (string ";" ^^ hardline)
-        (List.map (fun id ->
-             string ("gen_" ^ type_name id) ^^ space ^^ equals ^^ space ^^
-               string ("rand_" ^ type_name id)) (IdSet.elements required)) ^^
-        hardline ^^ string "}" ^^ hardline
+    string "let rand_gens : generators = {" ^^ group (nest 2 (break 0 ^^
+      separate_map (string ";" ^^ break 1)
+        (fun id ->
+          string ("gen_" ^ type_name id) ^^ space ^^ equals ^^ space ^^
+            string ("rand_" ^ type_name id)) (IdSet.elements required)) ^^
+        break 0) ^^ string "}" ^^ hardline
   in
   gen_record_type_pp ^^ hardline ^^ hardline ^^
-    separate hardline (List.map make_rand_gen (IdSet.elements required)) ^^
+    separate_map hardline make_rand_gen (IdSet.elements required) ^^
       rand_record_pp
 
 let ocaml_defs (Defs defs) generator_info =
