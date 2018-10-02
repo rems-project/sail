@@ -71,6 +71,7 @@ let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
+let opt_ocaml_generators = ref ([]:string list)
 
 let options = Arg.align ([
   ( "-o",
@@ -104,6 +105,9 @@ let options = Arg.align ([
   ( "-ocaml-coverage",
     Arg.Set Ocaml_backend.opt_ocaml_coverage,
     " Build ocaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
+  ( "-ocaml_generators",
+    Arg.String (fun s -> opt_ocaml_generators := s::!opt_ocaml_generators),
+    "<types> produce random generators for the given types");
   ( "-latex",
     Arg.Set opt_print_latex,
     " pretty print the input to latex");
@@ -299,8 +303,10 @@ let main() =
     | None, _ -> ()
     end;
 
-    let orig_types_for_ocaml_generator =
-      Ocaml_backend.orig_types_for_ocaml_generator ast
+    let ocaml_generator_info =
+      match !opt_ocaml_generators with
+      | [] -> None
+      | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
     in
 
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
@@ -321,7 +327,7 @@ let main() =
        then
          let ast_ocaml = rewrite_ast_ocaml ast in
          let out = match !opt_file_out with None -> "out" | Some s -> s in
-         Ocaml_backend.ocaml_compile out ast_ocaml orig_types_for_ocaml_generator
+         Ocaml_backend.ocaml_compile out ast_ocaml ocaml_generator_info
        else ());
       (if !(opt_print_c)
        then

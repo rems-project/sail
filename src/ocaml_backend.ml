@@ -649,9 +649,9 @@ let val_spec_typs (Defs defs) =
   !typs
 
 let orig_types_for_ocaml_generator (Defs defs) =
-  Some (Util.map_filter (function
+  Util.map_filter (function
       | DEF_type td -> Some td
-      | _ -> None) defs)
+      | _ -> None) defs
 
 let ocaml_pp_generators ctx defs orig_types required =
   let add_def typemap td =
@@ -852,7 +852,7 @@ required
     separate hardline (List.map make_rand_gen (IdSet.elements required)) ^^
       rand_record_pp
 
-let ocaml_defs (Defs defs) generator_types =
+let ocaml_defs (Defs defs) generator_info =
   let ctx = { register_inits = get_initialize_registers defs;
               externs = get_externs (Defs defs);
               val_specs = val_spec_typs (Defs defs)
@@ -866,9 +866,9 @@ let ocaml_defs (Defs defs) generator_types =
     else empty
   in
   let gen_pp =
-    match generator_types with
+    match generator_info with
     | None -> empty
-    | Some types -> ocaml_pp_generators ctx defs types [mk_id "ast"]
+    | Some (types, req) -> ocaml_pp_generators ctx defs types (List.map mk_id req)
   in
   (string "open Sail_lib;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
