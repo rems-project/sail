@@ -1,6 +1,11 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "elf.h"
 #include "sail.h"
@@ -34,12 +39,13 @@ struct tv_spike_t;
 
 static bool do_dump_dts = false;
 struct tv_spike_t *s = NULL;
+char *term_log = NULL;
 
 static struct option options[] = {
   {"enable-dirty",      no_argument,       0, 'd'},
   {"enable-misaligned", no_argument,       0, 'm'},
   {"dump-dts",          no_argument,       0, 's'},
-  {"verbosity",         required_argument, 0, 'v'},
+  {"terminal-log",      required_argument, 0, 't'},
   {"help",              no_argument,       0, 'h'},
   {0, 0, 0, 0}
 };
@@ -59,7 +65,7 @@ char *process_args(int argc, char **argv)
 {
   int c, idx = 1;
   while(true) {
-    c = getopt_long(argc, argv, "dmsv:h", options, &idx);
+    c = getopt_long(argc, argv, "dmst:v:h", options, &idx);
     if (c == -1) break;
     switch (c) {
     case 'd':
@@ -71,6 +77,9 @@ char *process_args(int argc, char **argv)
     case 's':
       do_dump_dts = true;
       break;
+    case 't':
+      term_log = strdup(optarg);
+      break;
     case 'h':
       print_usage(argv[0], 0);
       break;
@@ -79,8 +88,8 @@ char *process_args(int argc, char **argv)
       print_usage(argv[0], 1);
     }
   }
-
   if (idx >= argc) print_usage(argv[0], 0);
+  if (term_log == NULL) term_log = strdup("term.log");
   return argv[idx];
 }
 
@@ -146,7 +155,7 @@ void init_sail_reset_vector(uint64_t entry)
   for (int i = 0; i < dtb_len; i++)
     write_mem(addr++, dtb[i]);
 #else
-  fprintf(stdout, "Running without rom device tree.\n");
+  fprintf(stderr, "Running without rom device tree.\n");
   /* TODO: write DTB */
 #endif
 
@@ -327,13 +336,32 @@ void run_sail(void)
   finish(diverged);
 
  step_exception:
-  fprintf(stdout, "Sail exception!");
+  fprintf(stderr, "Sail exception!");
   goto dump_state;
+}
+
+void init_logs()
+{
+#ifdef SPIKE
+  // The Spike interface uses stdout for terminal output, and stderr for logs.
+  // Do the same here.
+  int logfd;
+  if (dup2(1, 2) < 0) {
+    fprintf(stderr, "Unable to dup 1 -> 2: %s\n", strerror(errno));
+    exit(1);
+  }
+  if ((term_fd = open(term_log, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IRGRP|S_IROTH|S_IWUSR)) < 0) {
+    fprintf(stderr, "Cannot create terminal log '%s': %s\n", term_log, strerror(errno));
+    exit(1);
+  }
+#endif
 }
 
 int main(int argc, char **argv)
 {
   char *file = process_args(argc, argv);
+  init_logs();
+
   uint64_t entry = load_sail(file);
 
   /* initialize spike before sail so that we can access the device-tree blob,
@@ -345,4 +373,5 @@ int main(int argc, char **argv)
   if (!init_check(s)) finish(1);
 
   run_sail();
+  flush_logs();
 }

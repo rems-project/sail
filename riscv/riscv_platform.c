@@ -48,8 +48,11 @@ unit cancel_reservation(unit u)
   return UNIT;
 }
 
-unit plat_term_write(mach_bits c)
-{ return UNIT; }
+unit plat_term_write(mach_bits s)
+{ char c = s & 0xff;
+  plat_term_write_impl(c);
+  return UNIT;
+}
 
 void plat_insns_per_tick(sail_int *rop, unit u)
 { }
