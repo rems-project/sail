@@ -795,7 +795,7 @@ let ocaml_pp_generators ctx defs orig_types required =
         in
         let args_pp = match args_pp with [] -> empty
                                        | _ -> space ^^ separate space args_pp
-        in string ("g.gen_" ^ typ_str) ^^ space ^^ string "g" ^^ space ^^ args_pp
+        in string ("g.gen_" ^ typ_str) ^^ space ^^ string "g" ^^ args_pp
       in
       let make_variant (Tu_aux (Tu_ty_id (typ,id),_)) =
         let arg_typs = match typ with
@@ -815,21 +815,21 @@ let ocaml_pp_generators ctx defs orig_types required =
         let TD_aux (td,_) = Bindings.find id typemap in
         match td with
         | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
-           make_args tqs, gen_type typ
+           space ^^ make_args tqs, gen_type typ
         | TD_variant (_,_,tqs,variants,_) ->
            empty, string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
                   separate_map (string ";" ^^ break 1) make_variant variants) ^^
                     break 0) ^^
-                    string "] in fun " ^^ make_args tqs ^^ string " -> c () g" ^^ hardline
+                    string "] in fun " ^^ make_args tqs ^^ string " -> c () g"
         | TD_enum (_,_,variants,_) ->
            empty,
            string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
              separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^
                break 0) ^^
-               string "] in fun g -> c ()" ^^ hardline
+               string "] in fun g -> c ()"
         | _ -> empty, string "TODO"
       in
-      hang 2 (separate space [string "let"; name; top_args] ^^ space ^^ equals ^^ break 1 ^^
+      nest 2 (string "let" ^^ space ^^ name ^^ top_args ^^ space ^^ equals ^^ break 1 ^^
         body) ^^ hardline
   in
   let rand_record_pp =
@@ -842,7 +842,7 @@ let ocaml_pp_generators ctx defs orig_types required =
   in
   gen_record_type_pp ^^ hardline ^^ hardline ^^
     separate_map hardline make_rand_gen (IdSet.elements required) ^^
-      rand_record_pp
+      hardline ^^ rand_record_pp
 
 let ocaml_defs (Defs defs) generator_info =
   let ctx = { register_inits = get_initialize_registers defs;
