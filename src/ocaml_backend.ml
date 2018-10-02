@@ -660,7 +660,6 @@ let ocaml_pp_generators ctx defs orig_types required =
   let typemap = List.fold_left add_def Bindings.empty orig_types in
   let required = IdSet.of_list required in
   let rec always_add_req_from_id required id =
-let () = print_endline ("Looking at id " ^ string_of_id id) in
     match Bindings.find id typemap with
     | td -> add_req_from_td (IdSet.add id required) td
     | exception Not_found ->
@@ -673,7 +672,6 @@ let () = print_endline ("Looking at id " ^ string_of_id id) in
     if IdSet.mem id required then required
     else always_add_req_from_id required id
   and add_req_from_typ required (Typ_aux (typ,_) as full_typ) =
-let () = print_endline ("Looking at " ^ string_of_typ full_typ) in
     match typ with
     | Typ_id id -> add_req_from_id required id
     | Typ_var _
@@ -701,18 +699,13 @@ let () = print_endline ("Looking at " ^ string_of_typ full_typ) in
   and add_req_from_td required (TD_aux (td,(l,_))) =
     match td with
     | TD_abbrev (_, _, TypSchm_aux (TypSchm_ts (_,typ),_)) ->
-let () = print_endline ("Looking at alias " ^ string_of_typ typ) in
        add_req_from_typ required typ
     | TD_record (_, _, _, fields, _) ->
-let () = print_endline ("Looking at " ^ string_of_int (List.length fields) ^ " fields") in
        List.fold_left (fun req (typ,_) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, _, variants, _) ->
-let () = print_endline ("Looking at " ^ string_of_int (List.length variants) ^ " variants") in
        List.fold_left (fun req (Tu_aux (Tu_ty_id (typ,_),_)) ->
            add_req_from_typ req typ) required variants
-    | TD_enum _ ->
-let () = print_endline "Nothing to do for enum" in
-required
+    | TD_enum _ -> required
     | TD_bitfield _ -> raise (Reporting_basic.err_todo l "Generators for bitfields not yet supported")
   in
   let required = IdSet.fold (fun id req -> always_add_req_from_id req id) required required in
