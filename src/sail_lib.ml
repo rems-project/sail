@@ -1121,3 +1121,19 @@ let load_raw (paddr, file) =
 
 (* XXX this could count cycles and exit after given limit *)
 let cycle_count () = ()
+
+(* TODO range, atom, register(?), int, nat, bool, real(!), list, string, itself(?) *)
+let rand_zvector (g : 'generators) (size : int) (order : bool) (elem_gen : 'generators -> 'a) : 'a list =
+  List.init size (fun _ -> elem_gen g)
+
+let rand_zbit (g : 'generators) : bit =
+  if Random.bool() then B0 else B1
+
+let rand_zbool (g : 'generators) : bool =
+  Random.bool()
+
+let rand_zunit (g : 'generators) : unit = ()
+
+let rand_choice l =
+  let n = List.length l in
+  fun () -> (List.nth l (Random.int n))

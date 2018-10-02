@@ -299,6 +299,10 @@ let main() =
     | None, _ -> ()
     end;
 
+    let orig_types_for_ocaml_generator =
+      Ocaml_backend.orig_types_for_ocaml_generator ast
+    in
+
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
       (if !(opt_interactive)
@@ -317,7 +321,7 @@ let main() =
        then
          let ast_ocaml = rewrite_ast_ocaml ast in
          let out = match !opt_file_out with None -> "out" | Some s -> s in
-         Ocaml_backend.ocaml_compile out ast_ocaml
+         Ocaml_backend.ocaml_compile out ast_ocaml orig_types_for_ocaml_generator
        else ());
       (if !(opt_print_c)
        then

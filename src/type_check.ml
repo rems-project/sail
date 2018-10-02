@@ -427,6 +427,8 @@ module Env : sig
   val empty : t
 
   val pattern_completeness_ctx : t -> Pattern_completeness.ctx
+
+  val builtin_typs : typquant Bindings.t
 end = struct
   type t =
     { top_val_specs : (typquant * typ) Bindings.t;

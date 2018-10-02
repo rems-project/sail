@@ -648,7 +648,211 @@ let val_spec_typs (Defs defs) =
   ignore (vs_typs defs);
   !typs
 
-let ocaml_defs (Defs defs) =
+let orig_types_for_ocaml_generator (Defs defs) =
+  Some (Util.map_filter (function
+      | DEF_type td -> Some td
+      | _ -> None) defs)
+
+let ocaml_pp_generators ctx defs orig_types required =
+  let add_def typemap td =
+    Bindings.add (id_of_type_def td) td typemap
+  in
+  let typemap = List.fold_left add_def Bindings.empty orig_types in
+  let required = IdSet.of_list required in
+  let rec always_add_req_from_id required id =
+let () = print_endline ("Looking at id " ^ string_of_id id) in
+    match Bindings.find id typemap with
+    | td -> add_req_from_td (IdSet.add id required) td
+    | exception Not_found ->
+       if Bindings.mem id Type_check.Env.builtin_typs
+       then IdSet.add id required
+       else
+         raise (Reporting_basic.err_unreachable (id_loc id) __POS__
+                  ("Required generator of unknown type " ^ string_of_id id))
+  and add_req_from_id required id =
+    if IdSet.mem id required then required
+    else always_add_req_from_id required id
+  and add_req_from_typ required (Typ_aux (typ,_) as full_typ) =
+let () = print_endline ("Looking at " ^ string_of_typ full_typ) in
+    match typ with
+    | Typ_id id -> add_req_from_id required id
+    | Typ_var _
+      -> required
+    | Typ_internal_unknown
+    | Typ_fn _
+    | Typ_bidir _
+      -> raise (Reporting_basic.err_unreachable (typ_loc full_typ) __POS__
+                  ("Required generator for type that should not appear: " ^
+                     string_of_typ full_typ))
+    | Typ_tup typs ->
+       List.fold_left add_req_from_typ required typs
+    | Typ_exist _ ->
+       raise (Reporting_basic.err_todo (typ_loc full_typ)
+                ("Generators for existential types not yet supported: " ^
+                   string_of_typ full_typ))
+    | Typ_app (id,args) ->
+       List.fold_left add_req_from_typarg (add_req_from_id required id) args
+  and add_req_from_typarg required (Typ_arg_aux (arg,_)) =
+    match arg with
+    | Typ_arg_typ typ -> add_req_from_typ required typ
+    | Typ_arg_nexp _
+    | Typ_arg_order _
+      -> required
+  and add_req_from_td required (TD_aux (td,(l,_))) =
+    match td with
+    | TD_abbrev (_, _, TypSchm_aux (TypSchm_ts (_,typ),_)) ->
+let () = print_endline ("Looking at alias " ^ string_of_typ typ) in
+       add_req_from_typ required typ
+    | TD_record (_, _, _, fields, _) ->
+let () = print_endline ("Looking at " ^ string_of_int (List.length fields) ^ " fields") in
+       List.fold_left (fun req (typ,_) -> add_req_from_typ req typ) required fields
+    | TD_variant (_, _, _, variants, _) ->
+let () = print_endline ("Looking at " ^ string_of_int (List.length variants) ^ " variants") in
+       List.fold_left (fun req (Tu_aux (Tu_ty_id (typ,_),_)) ->
+           add_req_from_typ req typ) required variants
+    | TD_enum _ ->
+let () = print_endline "Nothing to do for enum" in
+required
+    | TD_bitfield _ -> raise (Reporting_basic.err_todo l "Generators for bitfields not yet supported")
+  in
+  let required = IdSet.fold (fun id req -> always_add_req_from_id req id) required required in
+  let type_name id = zencode_string (string_of_id id) in
+  let make_gen_field id =
+    let allquants =
+      match Bindings.find id typemap with
+      | TD_aux (td,_) ->
+         (match td with
+          | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) -> tqs
+          | TD_record (_,_,tqs,_,_) -> tqs
+          | TD_variant (_,_,tqs,_,_) -> tqs
+          | TD_enum _ -> TypQ_aux (TypQ_no_forall,Unknown)
+          | TD_bitfield _ -> assert false)
+      | exception Not_found ->
+         Bindings.find id Type_check.Env.builtin_typs
+    in
+    let tquants = quant_kopts allquants in
+    let gen_tyvars = List.map (fun k -> kopt_kid k |> zencode_kid)
+                       (List.filter is_typ_kopt tquants) in
+    let print_quant kindedid =
+      if is_nat_kopt kindedid then string "int" else
+      if is_order_kopt kindedid then string "bool" else
+      parens (separate space [string "generators"; string "->"; zencode_kid (kopt_kid kindedid)])
+    in
+    let name = "gen_" ^ type_name id in
+    let make_tyarg kindedid =
+      if is_nat_kopt kindedid
+      then mk_typ_arg (Typ_arg_nexp (nvar (kopt_kid kindedid)))
+      else if is_order_kopt kindedid
+      then mk_typ_arg (Typ_arg_order (mk_ord (Ord_var (kopt_kid kindedid))))
+      else mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var (kopt_kid kindedid))))
+    in
+    let targs = List.map make_tyarg tquants in
+    let gen_tyvars_pp, out_typ = match gen_tyvars with
+      | [] -> empty, mk_id_typ id
+      | _ -> separate space gen_tyvars ^^ dot ^^ space, mk_typ (Typ_app (id,targs))
+    in
+    let out_typ = Rewrites.simple_typ out_typ in
+    let types = string "generators" :: List.map print_quant tquants @ [ocaml_typ ctx out_typ] in
+    string name ^^ colon ^^ space ^^
+      gen_tyvars_pp ^^ separate (string " -> ") types ^^
+      string ";"
+  in
+  let fields = separate hardline (List.map make_gen_field (IdSet.elements required)) in
+  let gen_record_type_pp =
+    string "type generators = {" ^^ hardline ^^ fields ^^ hardline ^^ string "}"
+  in
+  let make_rand_gen id =
+    if Bindings.mem id Type_check.Env.builtin_typs
+    then empty
+    else
+      let name = string ("rand_" ^ type_name id) in
+      let mk_arg kid = string (zencode_string (string_of_kid kid)) in
+      let rec gen_type (Typ_aux (typ,l) as full_typ) =
+        let typ_str, args_pp = match typ with
+          | Typ_id id -> type_name id, [string "g"]
+          | Typ_app (id,args) -> type_name id, string "g"::List.map typearg args
+          | _ -> raise (Reporting_basic.err_todo l
+                          ("Unsupported type for generators: " ^ string_of_typ full_typ))
+        in
+        let args_pp = match args_pp with [] -> empty
+                                       | _ -> space ^^ separate space args_pp
+        in
+        string ("g.gen_" ^ typ_str) ^^ args_pp
+      and typearg (Typ_arg_aux (arg,_)) =
+        match arg with
+        | Typ_arg_nexp (Nexp_aux (nexp,l) as full_nexp) ->
+           (match nexp with
+            | Nexp_constant c -> string (Big_int.to_string c) (* TODO: overflow *)
+            | Nexp_var v -> mk_arg v
+            | _ -> raise (Reporting_basic.err_todo l
+                            ("Unsupported nexp for generators: " ^ string_of_nexp full_nexp)))
+        | Typ_arg_order (Ord_aux (ord,_)) ->
+           (match ord with
+            | Ord_var v -> mk_arg v
+            | Ord_inc -> string "true"
+            | Ord_dec -> string "false")
+        | Typ_arg_typ typ -> parens (string "fun g -> " ^^ gen_type typ)
+      in
+      let make_subgen (Typ_aux (typ,l) as full_typ) =
+        let typ_str, args_pp =
+          match typ with
+          | Typ_id id -> type_name id, []
+          | Typ_app (id,args) -> type_name id, List.map typearg args
+          | _ -> raise (Reporting_basic.err_todo l
+                          ("Unsupported type for generators: " ^ string_of_typ full_typ))
+        in
+        let args_pp = match args_pp with [] -> empty
+                                       | _ -> space ^^ separate space args_pp
+        in string ("g.gen_" ^ typ_str) ^^ space ^^ string "g" ^^ space ^^ args_pp
+      in
+      let make_variant (Tu_aux (Tu_ty_id (typ,id),_)) =
+        let arg_typs = match typ with
+          | Typ_aux (Typ_fn (Typ_aux (Typ_tup typs,_),_,_),_) -> typs
+          | Typ_aux (Typ_fn (typ,_,_),_) -> [typ]
+          | Typ_aux (Typ_tup typs,_) -> typs
+          | _ -> [typ]
+        in
+        parens (string "fun g -> " ^^ zencode_upper ctx id ^^ space ^^
+          parens (separate (string ", ") (List.map make_subgen arg_typs)))
+      in
+      let make_args tqs =
+        separate space (string "g"::
+          List.map (fun kdid -> mk_arg (kopt_kid kdid)) (quant_kopts tqs))
+      in
+      let top_args, body =
+        let TD_aux (td,_) = Bindings.find id typemap in
+        match td with
+        | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
+           make_args tqs, gen_type typ
+        | TD_variant (_,_,tqs,variants,_) ->
+           empty, string "let c = rand_choice [" ^^ hardline ^^
+                  separate (string ";" ^^ hardline)
+                    (List.map make_variant variants) ^^ hardline ^^
+                    string "] in fun " ^^ make_args tqs ^^ string " -> c () g" ^^ hardline
+        | TD_enum (_,_,variants,_) ->
+           empty,
+           string "let c = rand_choice [" ^^ hardline ^^
+             separate (string ";" ^^ hardline)
+               (List.map (zencode_upper ctx) variants) ^^ hardline ^^
+               string "] in fun g -> c ()" ^^ hardline
+        | _ -> empty, string "TODO"
+      in
+      separate space [string "let"; name; top_args] ^^ space ^^ equals ^^ hardline ^^
+        body ^^ hardline
+  in
+  let rand_record_pp =
+    string "let rand_gens : generators = {" ^^ hardline ^^
+      separate (string ";" ^^ hardline)
+        (List.map (fun id ->
+             string ("gen_" ^ type_name id) ^^ space ^^ equals ^^ space ^^
+               string ("rand_" ^ type_name id)) (IdSet.elements required)) ^^
+        hardline ^^ string "}" ^^ hardline
+  in
+  gen_record_type_pp ^^ hardline ^^ hardline ^^
+    separate hardline (List.map make_rand_gen (IdSet.elements required)) ^^
+      rand_record_pp
+
+let ocaml_defs (Defs defs) generator_types =
   let ctx = { register_inits = get_initialize_registers defs;
               externs = get_externs (Defs defs);
               val_specs = val_spec_typs (Defs defs)
@@ -661,10 +865,16 @@ let ocaml_defs (Defs defs) =
       ^^ ocaml_def_end
     else empty
   in
+  let gen_pp =
+    match generator_types with
+    | None -> empty
+    | Some types -> ocaml_pp_generators ctx defs types [mk_id "ast"]
+  in
   (string "open Sail_lib;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) defs)
   ^^ empty_reg_init
+  ^^ gen_pp
 
 let ocaml_main spec sail_dir =
   let lines = ref [] in
@@ -685,8 +895,9 @@ let ocaml_main spec sail_dir =
        "  try zmain () with _ -> prerr_endline(\"Exiting due to uncaught exception\")\n";])
   |> String.concat "\n"
 
-let ocaml_pp_defs f defs =
-  ToChannel.pretty 1. 80 f (ocaml_defs defs)
+let ocaml_pp_defs f defs generator_types =
+  ToChannel.pretty 1. 80 f (ocaml_defs defs generator_types)
+
 
 let system_checked str =
   match Unix.system str with
@@ -701,7 +912,7 @@ let system_checked str =
      prerr_endline (str ^ " was stopped by a signal");
      exit 1
 
-let ocaml_compile spec defs =
+let ocaml_compile spec defs generator_types =
   let sail_dir =
     try Sys.getenv "SAIL_DIR" with
     | Not_found ->
@@ -722,7 +933,7 @@ let ocaml_compile spec defs =
   let out_chan = open_out (spec ^ ".ml") in
   if !opt_ocaml_coverage then 
     ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
-  ocaml_pp_defs out_chan defs;
+  ocaml_pp_defs out_chan defs generator_types;
   close_out out_chan;
   if IdSet.mem (mk_id "main") (Initial_check.val_spec_ids defs)
   then
