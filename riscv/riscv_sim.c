@@ -300,23 +300,24 @@ void run_sail(void)
         fprintf(stdout, "Sail done (exit-code %ld), but not Spike!\n", zhtif_exit_code);
         exit(1);
       }
-      /* check exit code */
-      if (zhtif_exit_code == 0)
-        fprintf(stdout, "SUCCESS\n");
-      else
-        fprintf(stdout, "FAILURE: %ld\n", zhtif_exit_code);
     } else {
       if (spike_done) {
         fprintf(stdout, "Spike done, but not Sail!\n");
         exit(1);
       }
-
-      if (!compare_states(s)) {
-        diverged = true;
-        break;
-      }
+    }
+    if (!compare_states(s)) {
+      diverged = true;
+      break;
     }
 #endif
+    if (zhtif_done) {
+      /* check exit code */
+      if (zhtif_exit_code == 0)
+        fprintf(stdout, "SUCCESS\n");
+      else
+        fprintf(stdout, "FAILURE: %ld\n", zhtif_exit_code);
+    }
 
     if (insn_cnt == rv_insns_per_tick) {
       insn_cnt = 0;
