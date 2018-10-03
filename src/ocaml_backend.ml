@@ -808,28 +808,32 @@ let ocaml_pp_generators ctx defs orig_types required =
           parens (separate_map (string ", ") make_subgen arg_typs))
       in
       let make_args tqs =
-        separate space (string "g"::
-          List.map (fun kdid -> mk_arg (kopt_kid kdid)) (quant_kopts tqs))
+        string "g" ^^
+        match quant_kopts tqs with
+        | [] -> empty
+        | kopts ->
+           space ^^
+             separate_map space (fun kdid -> mk_arg (kopt_kid kdid)) kopts
       in
-      let top_args, body =
+      let tqs, body =
         let TD_aux (td,_) = Bindings.find id typemap in
         match td with
         | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
-           space ^^ make_args tqs, gen_type typ
+           tqs, gen_type typ
         | TD_variant (_,_,tqs,variants,_) ->
-           empty, string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
+           tqs, string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
                   separate_map (string ";" ^^ break 1) make_variant variants) ^^
                     break 0) ^^
-                    string "] in fun " ^^ make_args tqs ^^ string " -> c () g"
+                    string "] in c g"
         | TD_enum (_,_,variants,_) ->
-           empty,
-           string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
+           TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
+           string "rand_choice [" ^^ group (nest 2 (break 0 ^^
              separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^
                break 0) ^^
-               string "] in fun g -> c ()"
-        | _ -> empty, string "TODO"
+               string "]"
+        | _ -> TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), string "TODO"
       in
-      nest 2 (string "let" ^^ space ^^ name ^^ top_args ^^ space ^^ equals ^^ break 1 ^^
+      nest 2 (separate space [string "let"; name; make_args tqs; equals] ^^ break 1 ^^
         body) ^^ hardline
   in
   let rand_record_pp =

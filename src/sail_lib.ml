@@ -1136,4 +1136,4 @@ let rand_zunit (g : 'generators) : unit = ()
 
 let rand_choice l =
   let n = List.length l in
-  fun () -> (List.nth l (Random.int n))
+  List.nth l (Random.int n)
