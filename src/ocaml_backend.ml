@@ -648,6 +648,14 @@ let val_spec_typs (Defs defs) =
   ignore (vs_typs defs);
   !typs
 
+(* Code to produce test value generators for a given set of types.
+
+   This needs type definitions from the initial type checked Sail so that the
+   full type information is available.  For example, vectors are simplified to
+   lists, so to produce lists of the right length we need to know what the
+   size of the vector is.
+ *)
+
 let orig_types_for_ocaml_generator (Defs defs) =
   Util.map_filter (function
       | DEF_type td -> Some td
@@ -816,7 +824,7 @@ let ocaml_pp_generators ctx defs orig_types required =
              separate_map space (fun kdid -> mk_arg (kopt_kid kdid)) kopts
       in
       let tqs, body =
-        let TD_aux (td,_) = Bindings.find id typemap in
+        let TD_aux (td,(l,_)) = Bindings.find id typemap in
         match td with
         | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
            tqs, gen_type typ
@@ -831,7 +839,8 @@ let ocaml_pp_generators ctx defs orig_types required =
              separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^
                break 0) ^^
                string "]"
-        | _ -> TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), string "TODO"
+        | _ ->
+           raise (Reporting_basic.err_todo l "Generators for records and bitfields not yet supported")
       in
       nest 2 (separate space [string "let"; name; make_args tqs; equals] ^^ break 1 ^^
         body) ^^ hardline
