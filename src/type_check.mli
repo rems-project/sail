@@ -195,6 +195,8 @@ module Env : sig
   val empty : t
 
   val pattern_completeness_ctx : t -> Pattern_completeness.ctx
+
+  val builtin_typs : typquant Bindings.t
 end
 
 (** Push all the type variables and constraints from a typquant into
