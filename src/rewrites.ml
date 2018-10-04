@@ -3044,7 +3044,7 @@ let pexp_rewriters rewrite_pexp =
 let stringappend_counter = ref 0
 
 let fresh_stringappend_id () =
-  let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
+  let id = mk_id ("_s" ^ (string_of_int !stringappend_counter) ^ "#") in
   stringappend_counter := !stringappend_counter + 1;
   id
 
@@ -3321,8 +3321,7 @@ let rec rewrite_defs_pat_string_append =
                  :: pats
                ), psa_annot) ->
 
-       let id = mk_id ("_stringappend_" ^ (string_of_int !stringappend_counter) ^ "#") in
-       stringappend_counter := !stringappend_counter + 1;
+       let id = fresh_stringappend_id () in
 
        (* construct drop expression -- string_drop(s#, strlen("lit")) *)
        let drop_exp = annot_exp (E_app (mk_id "string_drop", [annot_exp (E_id id) unk env string_typ; annot_exp (E_app (mk_id "string_length", [annot_exp (E_lit lit) unk env string_typ])) unk env nat_typ])) unk env string_typ  in
