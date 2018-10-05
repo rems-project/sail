@@ -55,25 +55,13 @@ open Value
 type gstate =
   { registers : value Bindings.t;
     allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
-    boxes : value StringMap.t;
     primops : (value list -> value) StringMap.t;
     letbinds : (Type_check.tannot letbind) list;
     fundefs : (Type_check.tannot fundef) Bindings.t;
   }
 
-let box_count = ref 0
-
-let box_name id =
-  let name = string_of_id id ^ " box_" ^ string_of_int !box_count in
-  incr box_count;
-  name
-
-type variable =
-  | Var_value of value
-  | Var_box of string
-
 type lstate =
-  { locals : variable Bindings.t }
+  { locals : value Bindings.t }
 
 type state = lstate * gstate
 
@@ -200,11 +188,7 @@ let subst id value exp = Ast_util.subst id (exp_of_value value) exp
 
 let local_variable id lstate gstate =
   try
-    match Bindings.find id lstate.locals with
-    | Var_value v -> exp_of_value v
-    | Var_box b ->
-       let v = StringMap.find b gstate.boxes in
-       exp_of_value v
+    Bindings.find id lstate.locals |> exp_of_value
   with
   | Not_found -> failwith ("Could not find local variable " ^ string_of_id id)
 
@@ -323,12 +307,9 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
             if extern = "reg_deref" then
               let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
               gets >>= fun (_, gstate) ->
-              try
-                if gstate.allow_registers
-                then return (exp_of_value (Bindings.find (mk_id regname) gstate.registers))
-                else raise Not_found
-              with
-              | Not_found -> return (exp_of_value (StringMap.find regname gstate.boxes))
+              if gstate.allow_registers
+              then return (exp_of_value (Bindings.find (mk_id regname) gstate.registers))
+              else raise Not_found
             else
               gets >>= fun (_, gstate) ->
               let primop = try StringMap.find extern gstate.primops with Not_found -> failwith ("No primop " ^ extern) in
@@ -392,19 +373,8 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      gets >>= fun (lstate, gstate) ->
      if Bindings.mem id gstate.registers && gstate.allow_registers then
        return (exp_of_value (V_ref (string_of_id id)))
-     else if Bindings.mem id lstate.locals then
-       let b = box_name id in
-       let value = Bindings.find id lstate.locals in
-       match value with
-       | Var_box b ->
-          return (exp_of_value (V_ref b))
-       | Var_value value ->
-          let b = box_name id in
-          puts ({ locals = Bindings.add id (Var_box b) lstate.locals },
-                { gstate with boxes = StringMap.add b value gstate.boxes }) >>
-          return (exp_of_value (V_ref b))
      else
-       failwith ("Could not find variable or register " ^ string_of_id id)
+       failwith ("Could not find register " ^ string_of_id id)
 
   | E_id id ->
      begin
@@ -494,10 +464,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           puts (lstate, { gstate with registers = Bindings.add id (value_of_exp exp) gstate.registers }) >> wrap unit_exp
        | Local (Mutable, _) | Unbound ->
           begin
-            match try Bindings.find id lstate.locals with Not_found -> Var_value V_unit with
-            | Var_value _ -> puts ({ locals = Bindings.add id (Var_value (value_of_exp exp)) lstate.locals }, gstate) >> wrap unit_exp
-            | Var_box b ->
-               puts (lstate, { gstate with boxes = StringMap.add b (value_of_exp exp) gstate.boxes }) >> wrap unit_exp
+            puts ({ locals = Bindings.add id (value_of_exp exp) lstate.locals }, gstate) >> wrap unit_exp
           end
        | _ -> failwith "Assign"
      end
@@ -509,7 +476,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      if Bindings.mem (mk_id name) gstate.registers && gstate.allow_registers then
        puts (lstate, { gstate with registers = Bindings.add (mk_id name) (value_of_exp exp) gstate.registers }) >> wrap unit_exp
      else
-       puts (lstate, { gstate with boxes = StringMap.add name (value_of_exp exp) gstate.boxes }) >> wrap unit_exp
+       failwith "Assign to nonexistent register"
   | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> failwith "Tuple assignment"
   | E_assign (LEXP_aux (LEXP_vector_concat lexps, annot), exp) -> failwith "Vector concat assignment"
      (*
@@ -721,7 +688,6 @@ let eval_exp state exp =
 let initial_gstate primops ast =
   { registers = Bindings.empty;
     allow_registers = true;
-    boxes = StringMap.empty;
     primops = primops;
     letbinds = ast_letbinds ast;
     fundefs = Bindings.empty;
