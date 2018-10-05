@@ -3717,7 +3717,7 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) 
        match Env.lookup_id v env with
        | Local (Immutable, _) | Unbound ->
           begin match Env.lookup_id v other_env with
-          | Local (Immutable, typ) -> annot_mpat (MP_typ (annot_mpat (MP_id v) typ, typ)) typ, env, []
+          | Local (Immutable, typ) -> bind_mpat allow_unknown other_env env (mk_mpat (MP_typ (mk_mpat (MP_id v), typ))) typ
           | Unbound ->
              if allow_unknown then annot_mpat (MP_id v) unknown_typ, env, [] else
                typ_error l ("Cannot infer identifier in mapping-pattern " ^ string_of_mpat mpat ^ " - try adding a type annotation")
