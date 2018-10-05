@@ -494,6 +494,17 @@ mapping reg_name = {
     0b11111 <-> "t6"
 }
 
+mapping creg_name : bits(3) <-> string = {
+  0b000 <-> "s0",
+  0b001 <-> "s1",
+  0b010 <-> "a0",
+  0b011 <-> "a1",
+  0b100 <-> "a2",
+  0b101 <-> "a3",
+  0b110 <-> "a4",
+  0b111 <-> "a5"
+}
+
 val sep : unit <-> string
 mapping sep : unit <-> string = {
   ()     <-> opt_spc() ^ "," ^ def_spc()

@@ -8,20 +8,21 @@ scattered union ast
 val decode : bits(32) -> option(ast) effect pure
 
 val decodeCompressed : bits(16) -> option(ast) effect pure
-scattered function decodeCompressed
+
+val cast print_insn : ast -> string
 
 /* returns whether an instruction was retired, used for computing minstret */
 val execute : ast -> bool effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
 scattered function execute
-
-val cast print_insn : ast -> string
-scattered function print_insn
 
 val assembly : ast <-> string
 scattered mapping assembly
 
 val encdec : ast <-> bits(32)
 scattered mapping encdec
+
+val encdec_compressed : ast <-> bits(16)
+scattered mapping encdec_compressed
 
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
@@ -1158,42 +1159,34 @@ mapping clause assembly = CSR(csr, rs1, rd, true, op) <-> csr_mnemonic(op) ^ "i"
 mapping clause assembly = CSR(csr, rs1, rd, false, op) <-> csr_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ csr_name_map(csr)
 
 /* ****************************************************************** */
-union clause ast = NOP : unit
+union clause ast = C_NOP : unit
 
-function clause decodeCompressed (0b000 @ nzi1 : bits(1) @ 0b00000 @ (nzi0 : bits(5)) @ 0b01) : bits(16) =
-  if   (nzi1 == 0b0) & (nzi0 == 0b00000)
-  then Some(NOP())
-  else None()
+mapping clause encdec_compressed = C_NOP() <-> 0b000 @ 0b0 @ 0b00000 @ 0b00000 @ 0b01
 
-function clause execute NOP() = true
+function clause execute C_NOP() = true
 
-function clause print_insn (NOP()) =
-  "nop"
+mapping clause assembly = C_NOP() <-> "c.nop"
 
 /* ****************************************************************** */
 
 union clause ast = C_ADDI4SPN : (cregbits, bits(8))
 
-function clause decodeCompressed (0b000 @ nz54 : bits(2) @ nz96 : bits(4) @ nz2 : bits(1) @ nz3 : bits(1) @ rd : cregbits @ 0b00) : bits(16) =
-  let  nzimm = (nz96 @ nz54 @ nz3 @ nz2) : bits(8) in
-  if   nzimm == 0b00000000
-  then None()
-  else Some(C_ADDI4SPN(rd, nzimm))
+mapping clause encdec_compressed = C_ADDI4SPN(rd, nz96 @ nz54 @ nz3 @ nz2)
+                                     if nz96 @ nz54 @ nz3 @ nz2 != 0b00000000 <->
+                                   0b000 @ nz54 : bits(2) @ nz96 : bits(4) @ nz2 : bits(1) @ nz3 : bits(1) @ rd : cregbits @ 0b00
+                                     if nz96 @ nz54 @ nz3 @ nz2 != 0b00000000
 
 function clause execute (C_ADDI4SPN(rdc, nzimm)) =
   let imm : bits(12) = (0b00 @ nzimm @ 0b00) in
   let rd = creg2reg_bits(rdc) in
   execute(ITYPE(imm, sp, rd, RISCV_ADDI))
 
-function clause print_insn (C_ADDI4SPN(rdc, nzimm)) =
-  "c.addi4spn " ^ creg2reg_bits(rdc) ^ ", " ^ BitStr(nzimm)
+mapping clause assembly = C_ADDI4SPN(rdc, nzimm) if nzimm != 0b00000000 <-> "c.addi4spn" ^ spc() ^ creg_name(rdc) ^ sep() ^ hex_bits_10(nzimm @ 0b00) if nzimm != 0b00000000
 
 /* ****************************************************************** */
 union clause ast = C_LW : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b010 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rd : cregbits @ 0b00) : bits(16) =
-  let uimm = (ui6 @ ui53 @ ui2) : bits(5) in
-  Some(C_LW(uimm, rs1, rd))
+mapping clause encdec_compressed = C_LW(ui6 @ ui53 @ ui2, rs1, rd) <-> 0b010 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rd : cregbits @ 0b00
 
 function clause execute (C_LW(uimm, rsc, rdc)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
@@ -1201,15 +1194,12 @@ function clause execute (C_LW(uimm, rsc, rdc)) =
   let rs = creg2reg_bits(rsc) in
   execute(LOAD(imm, rs, rd, false, WORD, false, false))
 
-function clause print_insn (C_LW(uimm, rsc, rdc)) =
-  "c.lw   " ^ creg2reg_bits(rdc) ^ ", " ^ creg2reg_bits(rsc) ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_LW(uimm, rsc, rdc) <-> "c.lw" ^ spc() ^ creg_name(rdc) ^ sep() ^ creg_name(rsc) ^ sep() ^ hex_bits_7(uimm @ 0b00)
 
 /* ****************************************************************** */
 union clause ast = C_LD : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b011 @ ui53 : bits(3) @ rs1 : cregbits @ ui76 : bits(2) @ rd : cregbits @ 0b00) : bits(16) =
-  let uimm = (ui76 @ ui53) : bits(5) in
-  Some(C_LD(uimm, rs1, rd))
+mapping clause encdec_compressed = C_LD(ui76 @ ui53, rs1, rd) <-> 0b011 @ ui53 : bits(3) @ rs1 : cregbits @ ui76 : bits(2) @ rd : cregbits @ 0b00
 
 function clause execute (C_LD(uimm, rsc, rdc)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
@@ -1217,15 +1207,12 @@ function clause execute (C_LD(uimm, rsc, rdc)) =
   let rs = creg2reg_bits(rsc) in
   execute(LOAD(imm, rs, rd, false, DOUBLE, false, false))
 
-function clause print_insn (C_LD(uimm, rsc, rdc)) =
-  "c.ld   " ^ creg2reg_bits(rdc) ^ ", " ^ creg2reg_bits(rsc) ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_LD(uimm, rsc, rdc) <-> "c.ld" ^ spc() ^ creg_name(rdc) ^ sep() ^ creg_name(rsc) ^ sep() ^ hex_bits_8(uimm @ 0b000)
 
 /* ****************************************************************** */
 union clause ast = C_SW : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b110 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rs2 : cregbits @ 0b00) : bits(16) =
-  let uimm = (ui6 @ ui53 @ ui2) : bits(5) in
-  Some(C_SW(uimm, rs1, rs2))
+mapping clause encdec_compressed = C_SW(ui6 @ ui53 @ ui2, rs1, rs2) <-> 0b110 @ ui53 : bits(3) @ rs1 : cregbits @ ui2 : bits(1) @ ui6 : bits(1) @ rs2 : cregbits @ 0b00
 
 function clause execute (C_SW(uimm, rsc1, rsc2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
@@ -1233,15 +1220,12 @@ function clause execute (C_SW(uimm, rsc1, rsc2)) =
   let rs2 = creg2reg_bits(rsc2) in
   execute(STORE(imm, rs2, rs1, WORD, false, false))
 
-function clause print_insn (C_SW(uimm, rsc1, rsc2)) =
-  "c.sw   " ^ creg2reg_bits(rsc1) ^ ", " ^ creg2reg_bits(rsc2) ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_SW(uimm, rsc1, rsc2) <-> "c.sw" ^ spc() ^ creg_name(rsc1) ^ sep() ^ creg_name(rsc2) ^ sep() ^ hex_bits_7(uimm @ 0b00)
 
 /* ****************************************************************** */
 union clause ast = C_SD : (bits(5), cregbits, cregbits)
 
-function clause decodeCompressed (0b111 @ ui53 : bits(3) @ rs1 : bits(3) @ ui76 : bits(2) @ rs2 : bits(3) @ 0b00): bits(16) =
-  let uimm = (ui76 @ ui53) : bits(5) in
-  Some(C_SD(uimm, rs1, rs2))
+mapping clause encdec_compressed = C_SD(ui76 @ ui53, rs1, rs2) <-> 0b111 @ ui53 : bits(3) @ rs1 : bits(3) @ ui76 : bits(2) @ rs2 : bits(3) @ 0b00
 
 function clause execute (C_SD(uimm, rsc1, rsc2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
@@ -1249,23 +1233,18 @@ function clause execute (C_SD(uimm, rsc1, rsc2)) =
   let rs2 = creg2reg_bits(rsc2) in
   execute(STORE(imm, rs2, rs1, DOUBLE, false, false))
 
-function clause print_insn (C_SD(uimm, rsc1, rsc2)) =
-  "c.sd   " ^ creg2reg_bits(rsc1) ^ ", " ^ creg2reg_bits(rsc2) ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_SD(uimm, rsc1, rsc2) <-> "c.sd" ^ spc() ^ creg_name(rsc1) ^ sep() ^ creg_name(rsc2) ^ sep() ^ hex_bits_8(uimm @ 0b000)
 
 /* ****************************************************************** */
 union clause ast = C_ADDI : (bits(6), regbits)
 
-function clause decodeCompressed (0b000 @ nzi5 : bits(1) @ rsd : regbits @ nzi40 : bits(5) @ 0b01) : bits(16) =
-  let nzi = (nzi5 @ nzi40) : bits(6) in
-  if (nzi == 0b000000) | (rsd == zreg) then None()
-  else Some(C_ADDI(nzi, rsd))
+mapping clause encdec_compressed = C_ADDI(nzi5 @ nzi40, rsd) if nzi5 @ nzi40 != 0b000000 & rsd != zreg <-> 0b000 @ nzi5 : bits(1) @ rsd : regbits @ nzi40 : bits(5) @ 0b01 if nzi5 @ nzi40 != 0b000000 & rsd != zreg
 
 function clause execute (C_ADDI(nzi, rsd)) =
   let imm : bits(12) = EXTS(nzi) in
   execute(ITYPE(imm, rsd, rsd, RISCV_ADDI))
 
-function clause print_insn (C_ADDI(nzi, rsd)) =
-  "c.addi   " ^ rsd ^ ", " ^ BitStr(nzi)
+mapping clause assembly = C_ADDI(nzi, rsd) if nzi != 0b000000 & rsd != zreg <-> "c.addi" ^ spc() ^ reg_name(rsd) ^ sep() ^ hex_bits_6(nzi) if nzi != 0b000000 & rsd != zreg
 
 /* ****************************************************************** */
 union clause ast = C_JAL : (bits(11))
@@ -1274,8 +1253,7 @@ union clause ast = C_ADDIW : (bits(6), regbits)
 /* FIXME: decoding differs for RVC32/RVC64.  Below, we are assuming
  * RV64, and C_JAL is RV32 only. */
 
-function clause decodeCompressed (0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01) =
-  Some (C_ADDIW((imm5 @ imm40), rsd))
+mapping clause encdec_compressed = C_ADDIW(imm5 @ imm40, rsd) <-> 0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01
 
 function clause execute (C_JAL(imm)) =
   execute(RISCV_JAL(EXTS(imm @ 0b0), ra))
@@ -1288,348 +1266,280 @@ function clause execute (C_ADDIW(imm, rsd)) = {
   true
 }
 
-function clause print_insn (C_JAL(imm)) =
-  "c.jal   " ^ BitStr(imm)
+mapping clause assembly = C_JAL(imm) <-> "c.jal" ^ spc() ^ hex_bits_12(imm @ 0b0)
 
-function clause print_insn (C_ADDIW(imm, rsd)) =
-  "c.addiw " ^ rsd ^ ", " ^ BitStr(imm)
+mapping clause assembly = C_ADDIW(imm, rsd) <-> "c.addiw" ^ spc() ^ reg_name(rsd) ^ sep() ^ hex_bits_6(imm)
 
 /* ****************************************************************** */
 union clause ast = C_LI : (bits(6), regbits)
 
-function clause decodeCompressed (0b010 @ imm5 : bits(1) @ rd : regbits @ imm40 : bits(5) @ 0b01) =
-  if   rd == zreg
-  then None()
-  else Some(C_LI(imm5 @ imm40, rd))
+mapping clause encdec_compressed = C_LI(imm5 @ imm40, rd) if rd != zreg <-> 0b010 @ imm5 : bits(1) @ rd : regbits @ imm40 : bits(5) @ 0b01 if rd != zreg
 
 function clause execute (C_LI(imm, rd)) =
   let imm : bits(12) = EXTS(imm) in
   execute(ITYPE(imm, zreg, rd, RISCV_ADDI))
 
-function clause print_insn (C_LI(imm, rd)) =
-  "c.li  " ^ rd ^ ", " ^ BitStr(imm)
+mapping clause assembly = C_LI(imm, rd) if rd != zreg <-> "c.li" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_6(imm) if rd != zreg
 
 /* ****************************************************************** */
 union clause ast = C_ADDI16SP : (bits(6))
 
-function clause decodeCompressed (0b011 @ nzi9 : bits(1) @ /* x2 */ 0b00010 @ nzi4 : bits(1) @ nzi6 : bits(1) @ nzi87 : bits(2) @ nzi5 : bits(1) @ 0b01) =
-  let  nzimm = nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4 in
-  if   nzimm == 0b000000
-  then None()
-  else Some(C_ADDI16SP(nzimm))
+mapping clause encdec_compressed = C_ADDI16SP(nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4)
+                                       if nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4 != 0b000000
+                                 <-> 0b011 @ nzi9 : bits(1) @ /* x2 */ 0b00010 @ nzi4 : bits(1) @ nzi6 : bits(1) @ nzi87 : bits(2) @ nzi5 : bits(1) @ 0b01
+                                       if nzi9 @ nzi87 @ nzi6 @ nzi5 @ nzi4 != 0b000000
 
 function clause execute (C_ADDI16SP(imm)) =
   let imm : bits(12) = EXTS(imm @ 0x0) in
   execute(ITYPE(imm, sp, sp, RISCV_ADDI))
 
-function clause print_insn (C_ADDI16SP(imm)) =
-  "c.addi16sp  " ^ BitStr(imm)
+mapping clause assembly = C_ADDI16SP(imm) if imm != 0b000000 <-> "c.addi16sp" ^ spc() ^ hex_bits_6(imm) if imm != 0b000000
 
 /* ****************************************************************** */
 union clause ast = C_LUI : (bits(6), regbits)
 
-function clause decodeCompressed (0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01) =
-  if   (rd == zreg) | (rd == sp)
-  then None()
-  else Some(C_LUI(imm17 @ imm1612, rd))
+mapping clause encdec_compressed = C_LUI(imm17 @ imm1612, rd) if rd != zreg & rd != sp <-> 0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01 if rd != zreg & rd != sp
 
 function clause execute (C_LUI(imm, rd)) =
   let res : bits(20) = EXTS(imm) in
   execute(UTYPE(res, rd, RISCV_LUI))
 
-function clause print_insn (C_LUI(imm, rd)) =
-  "c.lui  " ^ rd ^ ", " ^ BitStr(imm)
+mapping clause assembly = C_LUI(imm, rd) if rd != zreg & rd != sp <-> "c.lui" ^ reg_name(rd) ^ sep() ^ hex_bits_6(imm) if rd != zreg & rd != sp
 
 /* ****************************************************************** */
 union clause ast = C_SRLI : (bits(6), cregbits)
 
-function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b00 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) =
-  let  shamt : bits(6) = nzui5 @ nzui40 in
-  if   shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
-  then None()
-  else Some(C_SRLI(shamt, rsd))
+mapping clause encdec_compressed = C_SRLI(nzui5 @ nzui40, rsd) if nzui5 @ nzui40 != 0b000000 <-> 0b100 @ nzui5 : bits(1) @ 0b00 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01 if nzui5 @ nzui40 != 0b000000
 
 function clause execute (C_SRLI(shamt, rsd)) =
   let rsd = creg2reg_bits(rsd)  in
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRLI))
 
-function clause print_insn (C_SRLI(shamt, rsd)) =
-  "c.srli  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(shamt)
+mapping clause assembly = C_SRLI(shamt, rsd) if shamt != 0b000000 <-> "c.srli" ^ spc() ^ creg_name(rsd) ^ sep() ^ hex_bits_6(shamt) if shamt != 0b000000
 
 /* ****************************************************************** */
 union clause ast = C_SRAI : (bits(6), cregbits)
 
-function clause decodeCompressed (0b100 @ nzui5 : bits(1) @ 0b01 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01) =
-  let  shamt : bits(6) = nzui5 @ nzui40 in
-  if   shamt == 0b000000 /* TODO: On RV32, also need shamt[5] == 0 */
-  then None()
-  else Some(C_SRAI(shamt, rsd))
+mapping clause encdec_compressed = C_SRAI(nzui5 @ nzui40, rsd) if nzui5 @ nzui40 != 0b000000 <-> 0b100 @ nzui5 : bits(1) @ 0b01 @ rsd : cregbits @ nzui40 : bits(5) @ 0b01 if nzui5 @ nzui40 != 0b000000
 
 function clause execute (C_SRAI(shamt, rsd)) =
   let rsd = creg2reg_bits(rsd)  in
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SRAI))
 
-function clause print_insn (C_SRAI(shamt, rsd)) =
-  "c.srai  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(shamt)
+mapping clause assembly = C_SRAI(shamt, rsd) if shamt != 0b000000 <-> "c.srai" ^ spc() ^ creg_name(rsd) ^ sep() ^ hex_bits_6(shamt) if shamt != 0b000000
 
 /* ****************************************************************** */
 union clause ast = C_ANDI : (bits(6), cregbits)
 
-function clause decodeCompressed (0b100 @ i5 : bits(1) @ 0b10 @ rsd : cregbits @ i40 : bits(5) @ 0b01) = Some(C_ANDI(i5 @ i40, rsd))
+mapping clause encdec_compressed = C_ANDI(i5 @ i40, rsd) <-> 0b100 @ i5 : bits(1) @ 0b10 @ rsd : cregbits @ i40 : bits(5) @ 0b01
 
 function clause execute (C_ANDI(imm, rsd)) =
   let rsd = creg2reg_bits(rsd) in
   execute(ITYPE(EXTS(imm), rsd, rsd, RISCV_ANDI))
 
-function clause print_insn (C_ANDI(imm, rsd)) =
-  "c.andi  " ^ creg2reg_bits(rsd) ^ ", " ^ BitStr(imm)
+mapping clause assembly = C_ANDI(imm, rsd) <-> "c.andi" ^ spc() ^ creg_name(rsd) ^ sep() ^ hex_bits_6(imm)
 
 /* ****************************************************************** */
 union clause ast = C_SUB : (cregbits, cregbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01) = Some(C_SUB(rsd, rs2))
+mapping clause encdec_compressed = C_SUB(rsd, rs2) <-> 0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01
 
 function clause execute (C_SUB(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_SUB))
 
-function clause print_insn (C_SUB(rsd, rs2)) =
-  "c.sub  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+mapping clause assembly = C_SUB(rsd, rs2) <-> "c.sub" ^ spc() ^ creg_name(rsd) ^ sep() ^ creg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_XOR : (cregbits, cregbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_XOR(rsd, rs2))
+mapping clause encdec_compressed = C_XOR(rsd, rs2) <-> 0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01
 
 function clause execute (C_XOR(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_XOR))
 
-function clause print_insn (C_XOR(rsd, rs2)) =
-  "c.xor  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+mapping clause assembly = C_XOR(rsd, rs2) <-> "c.xor" ^ spc() ^ creg_name(rsd) ^ sep() ^ creg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_OR : (cregbits, cregbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b10 @ rs2 : cregbits @ 0b01) = Some(C_OR(rsd, rs2))
+mapping clause encdec_compressed = C_OR(rsd, rs2) <-> 0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b10 @ rs2 : cregbits @ 0b01
 
 function clause execute (C_OR(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_OR))
 
-function clause print_insn (C_OR(rsd, rs2)) =
-  "c.or   " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+mapping clause assembly = C_OR(rsd, rs2) <-> "c.or" ^ spc() ^ creg_name(rsd) ^ sep() ^ creg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_AND : (cregbits, cregbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b11 @ rs2 : cregbits @ 0b01) = Some(C_AND(rsd, rs2))
+mapping clause encdec_compressed = C_AND(rsd, rs2) <-> 0b100 @ 0b0 @ 0b11 @ rsd : cregbits @ 0b11 @ rs2 : cregbits @ 0b01
 
 function clause execute (C_AND(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPE(rs2, rsd, rsd, RISCV_AND))
 
-function clause print_insn (C_AND(rsd, rs2)) =
-  "c.and  " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+mapping clause assembly = C_AND(rsd, rs2) <-> "c.and" ^ spc() ^ creg_name(rsd) ^ sep() ^ creg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_SUBW : (cregbits, cregbits)
 
 /* TODO: invalid on RV32 */
-function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01) = Some(C_SUBW(rsd, rs2))
+mapping clause encdec_compressed = C_SUBW(rsd, rs2) <-> 0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b00 @ rs2 : cregbits @ 0b01
 
 function clause execute (C_SUBW(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPEW(rs2, rsd, rsd, RISCV_SUBW))
 
-function clause print_insn (C_SUBW(rsd, rs2)) =
-  "c.subw " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+mapping clause assembly = C_SUBW(rsd, rs2) <-> "c.subw" ^ spc() ^ creg_name(rsd) ^ sep() ^ creg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_ADDW : (cregbits, cregbits)
 
 /* TODO: invalid on RV32 */
-function clause decodeCompressed (0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01) = Some(C_ADDW(rsd, rs2))
+mapping clause encdec_compressed = C_ADDW(rsd, rs2) <-> 0b100 @ 0b1 @ 0b11 @ rsd : cregbits @ 0b01 @ rs2 : cregbits @ 0b01
 
 function clause execute (C_ADDW(rsd, rs2)) =
   let rsd = creg2reg_bits(rsd) in
   let rs2 = creg2reg_bits(rs2) in
   execute(RTYPEW(rs2, rsd, rsd, RISCV_ADDW))
 
-function clause print_insn (C_ADDW(rsd, rs2)) =
-  "c.addw " ^ creg2reg_bits(rsd) ^ ", " ^ creg2reg_bits(rs2)
+mapping clause assembly = C_ADDW(rsd, rs2) <-> "c.addw" ^ spc() ^ creg_name(rsd) ^ sep() ^ creg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = C_J : (bits(11))
 
-function clause decodeCompressed (0b101 @ i11 : bits(1) @ i4 : bits(1) @ i98 : bits(2) @ i10 : bits(1) @ i6 : bits(1) @ i7 : bits(1) @ i31 : bits(3) @ i5 : bits(1) @ 0b01) =
-  Some(C_J(i11 @ i10 @ i98 @ i7 @ i6 @ i5 @ i4 @ i31))
+mapping clause encdec_compressed = C_J(i11 @ i10 @ i98 @ i7 @ i6 @ i5 @ i4 @ i31) <-> 0b101 @ i11 : bits(1) @ i4 : bits(1) @ i98 : bits(2) @ i10 : bits(1) @ i6 : bits(1) @ i7 : bits(1) @ i31 : bits(3) @ i5 : bits(1) @ 0b01
 
 function clause execute (C_J(imm)) =
   execute(RISCV_JAL(EXTS(imm @ 0b0), zreg))
 
-function clause print_insn (C_J(imm)) =
-  "c.j    " ^ BitStr(imm)
+mapping clause assembly = C_J(imm) <-> "c.j" ^ spc() ^ hex_bits_11(imm)
 
 /* ****************************************************************** */
 union clause ast = C_BEQZ : (bits(8), cregbits)
 
-function clause decodeCompressed (0b110 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01) =
-  Some(C_BEQZ(i8 @ i76 @ i5 @ i43 @ i21, rs))
+mapping clause encdec_compressed = C_BEQZ(i8 @ i76 @ i5 @ i43 @ i21, rs) <-> 0b110 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01
 
 function clause execute (C_BEQZ(imm, rs)) =
   execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BEQ))
 
-function clause print_insn (C_BEQZ(imm, rs)) =
-  "c.beqz " ^ creg2reg_bits(rs) ^ ", " ^ BitStr(imm)
+mapping clause assembly = C_BEQZ(imm, rs) <-> "c.beqz" ^ spc() ^ creg_name(rs) ^ sep() ^ hex_bits_8(imm)
 
 /* ****************************************************************** */
 union clause ast = C_BNEZ : (bits(8), cregbits)
 
-function clause decodeCompressed (0b111 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01) =
-  Some(C_BNEZ(i8 @ i76 @ i5 @ i43 @ i21, rs))
+mapping clause encdec_compressed = C_BNEZ(i8 @ i76 @ i5 @ i43 @ i21, rs) <-> 0b111 @ i8 : bits(1) @ i43 : bits(2) @ rs : cregbits @ i76 : bits(2) @ i21 : bits(2) @ i5 : bits(1) @ 0b01
 
 function clause execute (C_BNEZ(imm, rs)) =
   execute(BTYPE(EXTS(imm @ 0b0), zreg, creg2reg_bits(rs), RISCV_BNE))
 
-function clause print_insn (C_BNEZ(imm, rs)) =
-  "c.bnez " ^ creg2reg_bits(rs) ^ ", " ^ BitStr(imm)
+mapping clause assembly = C_BNEZ(imm, rs) <-> "c.bnez" ^ spc() ^ creg_name(rs) ^ sep() ^ hex_bits_8(imm)
 
 /* ****************************************************************** */
 union clause ast = C_SLLI : (bits(6), regbits)
 
-function clause decodeCompressed (0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui40 : bits(5) @ 0b10) =
-  let  shamt : bits(6) = nzui5 @ nzui40 in
-  if   shamt == 0b000000 | rsd == zreg /* TODO: On RV32, also need shamt[5] == 0 */
-  then None()
-  else Some(C_SLLI(shamt, rsd))
+/* TODO: On RV32, also need shamt[5] == 0 */
+mapping clause encdec_compressed = C_SLLI(nzui5 @ nzui40, rsd) if nzui5 @ nzui40 != 0b000000 & rsd != zreg
+                                 <-> 0b000 @ nzui5 : bits(1) @ rsd : regbits @ nzui40 : bits(5) @ 0b10 if nzui5 @ nzui40 != 0b000000 & rsd != zreg
 
 function clause execute (C_SLLI(shamt, rsd)) =
   execute(SHIFTIOP(shamt, rsd, rsd, RISCV_SLLI))
 
-function clause print_insn (C_SLLI(shamt, rsd)) =
-  "c.slli " ^ rsd ^ ", " ^ BitStr(shamt)
+mapping clause assembly = C_SLLI(shamt, rsd) if shamt != 0b000000 & rsd != zreg
+                        <-> "c.slli" ^ spc() ^ reg_name(rsd) ^ sep() ^ hex_bits_6(shamt) if shamt != 0b000000 & rsd != zreg
 
 /* ****************************************************************** */
 union clause ast = C_LWSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b010 @ ui5 : bits(1) @ rd : regbits @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10) =
-  let  uimm : bits(6) = ui76 @ ui5 @ ui42 in
-  if   rd == zreg
-  then None()
-  else Some(C_LWSP(uimm, rd))
+mapping clause encdec_compressed = C_LWSP(ui76 @ ui5 @ ui42, rd) if rd != zreg
+                                 <-> 0b010 @ ui5 : bits(1) @ rd : regbits @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10 if rd != zreg
 
 function clause execute (C_LWSP(uimm, rd)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   execute(LOAD(imm, sp, rd, false, WORD, false, false))
 
-function clause print_insn (C_LWSP(uimm, rd)) =
-  "c.lwsp " ^ rd ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_LWSP(uimm, rd) if rd != zreg <-> "c.lwsp" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_6(uimm) if rd != zreg
 
 /* ****************************************************************** */
 union clause ast = C_LDSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b011 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10) =
-  let  uimm : bits(6) = ui86 @ ui5 @ ui43 in
-  if   rd == zreg
-  then None()
-  else Some(C_LDSP(uimm, rd))
+mapping clause encdec_compressed = C_LDSP(ui86 @ ui5 @ ui43, rd) if rd != zreg <-> 0b011 @ ui5 : bits(1) @ rd : regbits @ ui43 : bits(2) @ ui86 : bits(3) @ 0b10 if rd != zreg
 
 function clause execute (C_LDSP(uimm, rd)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
   execute(LOAD(imm, sp, rd, false, DOUBLE, false, false))
 
-function clause print_insn (C_LDSP(uimm, rd)) =
-  "c.ldsp " ^ rd ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_LDSP(uimm, rd) if rd != zreg <-> "c.ldsp" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_6(uimm) if rd != zreg
 
 /* ****************************************************************** */
 union clause ast = C_SWSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ rs2 : regbits @ 0b10) =
-  let uimm : bits(6) = ui76 @ ui52 in
-  Some(C_SWSP(uimm, rs2))
+mapping clause encdec_compressed = C_SWSP(ui76 @ ui52, rs2) <-> 0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ rs2 : regbits @ 0b10
 
 function clause execute (C_SWSP(uimm, rs2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b00) in
   execute(STORE(imm, rs2, sp, WORD, false, false))
 
-function clause print_insn (C_SWSP(uimm, rd)) =
-  "c.swsp " ^ rd ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_SWSP(uimm, rd) <-> "c.swsp" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_6(uimm)
 
 /* ****************************************************************** */
 union clause ast = C_SDSP : (bits(6), regbits)
 
-function clause decodeCompressed (0b111 @ ui53 : bits(3) @ ui86 : bits(3) @ rs2 : regbits @ 0b10) =
-  let uimm : bits(6) = ui86 @ ui53 in
-  Some(C_SDSP(uimm, rs2))
+mapping clause encdec_compressed = C_SDSP(ui86 @ ui53, rs2) <-> 0b111 @ ui53 : bits(3) @ ui86 : bits(3) @ rs2 : regbits @ 0b10
 
 function clause execute (C_SDSP(uimm, rs2)) =
   let imm : bits(12) = EXTZ(uimm @ 0b000) in
   execute(STORE(imm, rs2, sp, DOUBLE, false, false))
 
-function clause print_insn (C_SDSP(uimm, rd)) =
-  "c.sdsp " ^ rd ^ ", " ^ BitStr(uimm)
+mapping clause assembly = C_SDSP(uimm, rs2) <-> "c.sdsp" ^ spc() ^ reg_name(rs2) ^ sep() ^ hex_bits_6(uimm)
 
 /* ****************************************************************** */
 union clause ast = C_JR : (regbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10) =
-  if   rs1 == zreg
-  then None()
-  else Some(C_JR(rs1))
+mapping clause encdec_compressed = C_JR(rs1) if rs1 != zreg <-> 0b100 @ 0b0 @ rs1 : regbits @ 0b00000 @ 0b10 if rs1 != zreg
 
 function clause execute (C_JR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, zreg))
 
-function clause print_insn (C_JR(rs1)) =
-  "c.jr  " ^ rs1
+mapping clause assembly = C_JR(rs1) if rs1 != zreg <-> "c.jr" ^ spc() ^ reg_name(rs1) if rs1 != zreg
 
 /* ****************************************************************** */
 union clause ast = C_JALR : (regbits)
 
-function clause decodeCompressed (0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10) =
-  if   rs1 == zreg
-  then None()
-  else Some(C_JALR(rs1))
+mapping clause encdec_compressed = C_JALR(rs1) if rs1 != zreg <-> 0b100 @ 0b1 @ rs1 : regbits @ 0b00000 @ 0b10 if rs1 != zreg
 
 function clause execute (C_JALR(rs1)) =
   execute(RISCV_JALR(EXTZ(0b0), rs1, ra))
 
-function clause print_insn (C_JALR(rs1)) =
-  "c.jalr  " ^ rs1
+mapping clause assembly = C_JALR(rs1) if rs1 != zreg <-> "c.jalr" ^ spc() ^ reg_name(rs1) if rs1 != zreg
 
 /* ****************************************************************** */
 union clause ast = C_MV : (regbits, regbits)
 
-function clause decodeCompressed (0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0b10) =
-  if   rs2 == zreg | rd == zreg
-  then None()
-  else Some(C_MV(rd, rs2))
+mapping clause encdec_compressed = C_MV(rd, rs2) if rd != zreg & rs2 != zreg <-> 0b100 @ 0b0 @ rd : regbits @ rs2 : regbits @ 0b10 if rd != zreg & rs2 != zreg
 
 function clause execute (C_MV(rd, rs2)) =
   execute(RTYPE(rs2, zreg, rd, RISCV_ADD))
 
-function clause print_insn (C_MV(rd, rs2)) =
-  "c.mv  " ^ rd ^ ", " ^ rs2
+mapping clause assembly = C_MV(rd, rs2) if rd != zreg & rs2 != zreg <-> "c.mv" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs2) if rd != zreg & rs2 != zreg
 
 /* ****************************************************************** */
 union clause ast = C_ADD : (regbits, regbits)
 
-function clause decodeCompressed (0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10) =
-  if   rsd == zreg | rs2 == zreg
-  then None()
-  else Some(C_ADD(rsd, rs2))
+mapping clause encdec_compressed = C_ADD(rsd, rs2) if rsd != zreg & rs2 != zreg <-> 0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10 if rsd != zreg & rs2 != zreg
 
 function clause execute (C_ADD(rsd, rs2)) =
   execute(RTYPE(rs2, rsd, rsd, RISCV_ADD))
 
-function clause print_insn (C_ADD(rsd, rs2)) =
-  "c.add  " ^ rsd ^ ", " ^ rs2
+mapping clause assembly = C_ADD(rsd, rs2) if rsd != zreg & rs2 != zreg <-> "c.add" ^ spc() ^ reg_name(rsd) ^ sep() ^ reg_name(rs2) if rsd != zreg & rs2 != zreg
 
 /* ****************************************************************** */
 
@@ -1640,7 +1550,7 @@ mapping clause encdec = STOP_FETCHING() <-> 0xfade @ 0b00000000 @ 0b0 @ 0b00 @ 0
 
 function clause execute (STOP_FETCHING()) = true
 
-function clause print_insn (STOP_FETCHING()) = "stop_fetching"
+mapping clause assembly = STOP_FETCHING() <-> "stop_fetching"
 
 union clause ast = THREAD_START : unit
 
@@ -1649,7 +1559,7 @@ mapping clause encdec = THREAD_START() <-> 0xc0de @ 0b00000000 @ 0b0 @ 0b00 @ 0b
 
 function clause execute (THREAD_START()) = true
 
-function clause print_insn (THREAD_START()) = "thread_start"
+mapping clause assembly = THREAD_START() <-> "thread_start"
 
 
 /* ****************************************************************** */
@@ -1660,36 +1570,29 @@ mapping clause encdec = ILLEGAL(s) <-> s
 
 function clause execute (ILLEGAL(s)) = { handle_illegal(); false }
 
-function clause print_insn (ILLEGAL(s)) = "illegal " ^ hex_bits_32(s)
-
 mapping clause assembly = ILLEGAL(s) <-> "illegal" ^ spc() ^ hex_bits_32(s)
 
 
 
 /* ****************************************************************** */
 
-union clause ast = C_ILLEGAL : unit
+union clause ast = C_ILLEGAL : half
 
-function clause decodeCompressed (0b0000 @ 0b00000 @ 0b00000 @ 0b00) : bits(16) = Some(C_ILLEGAL())
+mapping clause encdec_compressed = C_ILLEGAL(s) <-> s
 
-function clause execute C_ILLEGAL() = { handle_illegal(); false }
+function clause execute C_ILLEGAL(s) = { handle_illegal(); false }
 
-function clause print_insn (C_ILLEGAL()) =
-  "c.illegal"
+mapping clause assembly = C_ILLEGAL(s) <-> "c.illegal" ^ spc() ^ hex_bits_16(s)
 
 /* ****************************************************************** */
 
 
-function clause decodeCompressed _ = None()
-
 end ast
-end decodeCompressed
 end execute
 end assembly
 end encdec
-
-function clause print_insn insn = assembly(insn)
-
-end print_insn
+end encdec_compressed
 
 function decode bv = Some(encdec(bv))
+function decodeCompressed bv = Some(encdec_compressed(bv))
+function print_insn insn = assembly(insn)
