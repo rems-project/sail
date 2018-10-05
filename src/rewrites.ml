@@ -217,6 +217,14 @@ let find_updated_vars exp =
   fst (fold_exp
     { (compute_exp_alg IdSet.empty IdSet.union) with lEXP_aux = lEXP_aux } exp)
 
+let find_bound_vars exp =
+  fold_exp
+    { (pure_exp_alg IdSet.empty IdSet.union) with
+      pat_alg =
+        { (pure_pat_alg IdSet.empty IdSet.union) with
+          p_id = IdSet.singleton; p_as = (fun (_, id) -> IdSet.singleton id) } }
+    exp
+
 let lookup_equal_kids env =
   let get_eq_kids kid eqs = try KBindings.find kid eqs with Not_found -> KidSet.singleton kid in
   let add_eq_kids kid1 kid2 eqs =
@@ -1935,6 +1943,55 @@ let rewrite_defs_separate_numbs defs = rewrite_defs_base
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs*)
 
+(* Make sure that all final leaves of an expression (e.g. all branches of
+   the last if-expression) are wrapped in a return statement.  This allows
+   the early return rewriting below to uniformly pull these returns back out,
+   even if originally only one of the branches of the last if-expression was a
+   return, and the other an "exit()", for example. *)
+let contains_return exp =
+  let alg = { (pure_exp_alg false (||)) with e_return = (fun _ -> true) } in
+  fold_exp alg exp
+
+let rec add_final_return nested (E_aux (e, annot) as exp) =
+  let rewrap e = E_aux (e, annot) in
+  match e with
+  | E_return _ -> exp
+  | E_cast (typ, e') ->
+     begin
+       let (E_aux (e_aux', annot') as e') = add_final_return nested e' in
+       match e_aux' with
+         | E_return e' -> rewrap (E_return (rewrap (E_cast (typ, e'))))
+         | _ -> rewrap (E_cast (typ, e'))
+     end
+  | E_block ((_ :: _) as es) ->
+     rewrap (E_block (Util.butlast es @ [add_final_return true (Util.last es)]))
+  | E_if (c, t, e) ->
+     rewrap (E_if (c, add_final_return true t, add_final_return true e))
+  | E_let (lb, exp) ->
+     rewrap (E_let (lb, add_final_return true exp))
+  | E_var (lexp, e1, e2) ->
+     rewrap (E_var (lexp, e1, add_final_return true e2))
+  | E_case (e, ps) ->
+     rewrap (E_case (e, List.map (add_final_return_pexp true) ps))
+  | _ ->
+     if nested && not (contains_return exp) && not (is_unit_typ (typ_of exp))
+     then rewrap (E_return exp)
+     else exp
+and add_final_return_pexp nested pexp =
+  let pat, guard, exp, a = destruct_pexp pexp in
+  construct_pexp (pat, guard, add_final_return nested exp, a)
+
+let rewrite_defs_add_final_return (Defs defs) =
+  let rewrite_fun (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) =
+    let rewrite_funcl (FCL_aux (FCL_Funcl(id, pexp), (l, annot))) =
+      FCL_aux (FCL_Funcl(id, add_final_return_pexp true pexp), (l, annot))
+    in
+    FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
+  in
+  rewrite_defs_base
+    { rewriters_base with rewrite_fun = (fun _ -> rewrite_fun) }
+    (Defs defs)
+
 (* Remove redundant return statements, and translate remaining ones into an
    (effectful) call to builtin function "early_return" (in the Lem shallow
    embedding).
@@ -1956,11 +2013,6 @@ let rewrite_defs_early_return (Defs defs) =
   | E_return e -> e
   | E_cast (typ, e) -> E_aux (E_cast (typ, get_return e), annot)
   | _ -> exp in
-
-  let contains_return exp =
-    fst (fold_exp
-    { (compute_exp_alg false (||))
-      with e_return = (fun (_, r) -> (true, E_return r)) } exp) in
 
   let e_if (e1, e2, e3) =
     if is_return e2 && is_return e3 then
@@ -2045,34 +2097,6 @@ let rewrite_defs_early_return (Defs defs) =
          | None -> exp in
        E_aux (E_app (mk_id "early_return", [exp']), (l, tannot'))
     | _ -> full_exp in
-
-  (* Make sure that all final leaves of an expression (e.g. all branches of
-     the last if-expression) are wrapped in a return statement.  This allows
-     the above rewriting to uniformly pull these returns back out, even if
-     originally only one of the branches of the last if-expression was a
-     return, and the other an "exit()", for example. *)
-  let rec add_final_return nested (E_aux (e, annot) as exp) =
-    let rewrap e = E_aux (e, annot) in
-    match e with
-      | E_return _ -> exp
-      | E_cast (typ, e') ->
-         begin
-           let (E_aux (e_aux', annot') as e') = add_final_return nested e' in
-           match e_aux' with
-             | E_return e' -> rewrap (E_return (rewrap (E_cast (typ, e'))))
-             | _ -> rewrap (E_cast (typ, e'))
-         end
-      | E_block ((_ :: _) as es) ->
-         rewrap (E_block (Util.butlast es @ [add_final_return true (Util.last es)]))
-      | E_if (c, t, e) ->
-         rewrap (E_if (c, add_final_return true t, add_final_return true e))
-      | E_let (lb, exp) ->
-         rewrap (E_let (lb, add_final_return true exp))
-      | E_var (lexp, e1, e2) ->
-         rewrap (E_var (lexp, e1, add_final_return true e2))
-      | _ ->
-         if nested && not (contains_return exp) then rewrap (E_return exp) else exp
-  in
 
   let rewrite_funcl_early_return _ (FCL_aux (FCL_Funcl (id, pexp), a)) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
@@ -4030,6 +4054,36 @@ let normalise_funcl_pats_bsv =
   in
   normalise_funcl_pats op
 
+
+(* Rewrite simple let-bindings (to a single, unbound variable) into assignments,
+   and other let-bindings to case-expressions.
+
+   Used for the translation to Bluespec, which does not have let-blocks in this
+   form.
+ *)
+let rewrite_defs_remove_letbinds =
+  let e_let ((LB_aux (LB_val (pat, exp), a) as lb), (E_aux (_, ra) as rhs)) =
+    match untyp_pat pat with
+    | P_aux (P_id id, a'), typ when Env.lookup_id id (env_of exp) = Unbound ->
+       begin
+         let lexp = match typ with
+           | Some typ -> LEXP_aux (LEXP_cast (typ, id), a')
+           | None -> LEXP_aux (LEXP_id id, a')
+         in
+         let assign = E_aux (E_assign (lexp, exp), a) in
+         match rhs with
+         | E_aux (E_block es, _) when not (IdSet.mem id (find_bound_vars rhs)) ->
+            E_block (assign :: es)
+         | _ -> E_block [assign; rhs]
+       end
+    | _, _ ->
+       E_case (exp, [construct_pexp (pat, None, rhs, ra)])
+  in
+  let rewrite_exp _ = fold_exp { id_exp_alg with e_let = e_let } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
+
+
+
 let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   let empty_vec = E_aux (E_vector [], (l,())) in
   let concat_vectors vec1 vec2 =
@@ -4761,6 +4815,7 @@ let rewrite_defs_bsv = [
   ("top_sort_defs", top_sort_defs);
   ("trivial_sizeof", rewrite_trivial_sizeof);
   ("sizeof", rewrite_sizeof);
+  ("add_final_return", rewrite_defs_add_final_return);
   (* ("early_return", rewrite_defs_early_return); *)
   ("fix_val_specs", rewrite_fix_val_specs);
   (* ("remove_blocks", rewrite_defs_remove_blocks); *)
@@ -4769,6 +4824,7 @@ let rewrite_defs_bsv = [
   (* ("internal_lets", rewrite_defs_internal_lets); *)
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
   ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
+  ("remove_letbinds", rewrite_defs_remove_letbinds);
   ("normalise function clauses", normalise_funcl_pats_bsv);
   ("recheck_defs", recheck_defs)
   ]

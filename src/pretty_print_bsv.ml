@@ -55,9 +55,15 @@ open Rewriter
 open PPrint
 open Pretty_print_common
 
+type blocktype = Expression | Action | ActionValue | Recipe
+
 type ctxt = {
+  blocktype : blocktype;
   lvars : IdSet.t;
+  return_sink : bool;
 }
+
+let empty_ctxt = { blocktype = Expression; lvars = IdSet.empty; return_sink = false; }
 
 let keywords = ["signed"; "unsigned"]
 
@@ -183,20 +189,55 @@ and doc_typ_arg (Typ_arg_aux (targ, l)) = match targ with
   | Typ_arg_order _ ->
      raise (Reporting_basic.err_unreachable l __POS__ ("Unprintable order type arg"))
 
-let enclose_block tannot doc =
-  let dopen, dclose = match destruct_tannot tannot with
-    | Some (env, typ, eff) when effectful_effs eff ->
-       if has_mem_eff eff then ("seq", "endseq")
-       else if is_unit_typ typ then ("action", "endaction")
-       else ("actionvalue", "endactionvalue")
-    | _ -> ("begin", "end")
+let exp_uses_lvars ctxt exp =
+  let used_vars =
+    fold_exp
+      { (pure_exp_alg IdSet.empty IdSet.union)
+        with e_id = IdSet.singleton; lEXP_id = IdSet.singleton;
+             lEXP_cast = (fun (_, id) -> IdSet.singleton id) }
+      exp
   in
-  surround 2 1 (string dopen) doc (string dclose)
+  IdSet.exists (fun id -> IdSet.mem id ctxt.lvars) used_vars
 
-let assign_op lhs rhs =
-  if has_eff BE_wreg (effect_of_lexp lhs) then string "<="
+let lexp_assigns_lvars ctxt lexp =
+  let assigned_vars =
+    fold_lexp
+      { (pure_exp_alg IdSet.empty IdSet.union)
+        with lEXP_id = IdSet.singleton;
+             lEXP_cast = (fun (_, id) -> IdSet.singleton id) }
+      lexp
+  in
+  IdSet.exists (fun id -> IdSet.mem id ctxt.lvars) assigned_vars
+
+let lexp_writes_registers lexp = has_eff BE_wreg (effect_of_lexp lexp)
+
+let assign_op ctxt lhs rhs =
+  if lexp_writes_registers lhs || lexp_assigns_lvars ctxt lhs then string "<="
   else if effectful rhs && not (is_unit_typ (typ_of rhs)) then string "<-"
   else string "="
+
+let get_blocktype ctxt exp =
+  let used_vars =
+    fold_exp
+      { (pure_exp_alg IdSet.empty IdSet.union)
+        with e_id = IdSet.singleton; lEXP_id = IdSet.singleton;
+             lEXP_cast = (fun (_, id) -> IdSet.singleton id) }
+      exp
+  in
+  let uses_lvar = IdSet.exists (fun id -> IdSet.mem id ctxt.lvars) used_vars in
+  if has_mem_eff (effect_of exp) then Recipe else
+  if effectful exp || uses_lvar then
+    if is_unit_typ (typ_of exp) then Action else ActionValue
+  else Expression
+
+let enclose_block bt doc =
+  let dopen, dclose = match bt with
+    | Expression -> ("begin", "end")
+    | Action -> ("action", "endaction")
+    | ActionValue -> ("actionvalue", "endactionvalue")
+    | Recipe -> ("`FastSeq", "`End")
+  in
+  surround 2 1 (string dopen) doc (string dclose)
 
 let is_actionvalue exp =
   effectful exp &&
@@ -209,41 +250,124 @@ let rec map_last f f_last = function
   | x :: xs -> f x :: map_last f f_last xs
   | [] -> []
 
-let rec doc_stmt ctxt need_return (E_aux (eaux, (l, annot)) as exp) =
+let rec doc_pat_combinator (P_aux (paux, (l, _)) as pat) = match paux with
+  | P_lit lit -> string "n" ^^ parens (doc_lit lit), []
+  | P_wild -> string "any", []
+  | P_as (p, id) ->
+     let pdoc, vars = doc_pat_combinator p in
+     string "as" ^^ parens (pdoc), ((pat_typ_of pat, id) :: vars)
+  | P_typ (_, pat) -> doc_pat_combinator pat
+  | P_id id -> string "v", [(pat_typ_of pat, id)]
+  | P_var (pat, _) -> doc_pat_combinator pat
+  | P_app (id, ps) ->
+     let pdocs, vars = List.split (List.map doc_pat_combinator ps) in
+     doc_id false (prepend_id "is_" id) ^^ parens (separate comma_sp pdocs),
+     List.concat vars
+  | P_tup ps ->
+     let pdocs, vars = List.split (List.map doc_pat_combinator ps) in
+     string ("tup" ^ string_of_int (List.length ps)) ^^ parens (separate comma_sp pdocs),
+     List.concat vars
+  | _ -> raise (Reporting_basic.err_todo l "doc_pat_combinator: not yet implemented")
+
+let rec ensure_block (E_aux (eaux, a) as exp) =
+  let rewrap e = E_aux (e, a) in
   match eaux with
-  |  E_block es ->
-     let need_return' = is_actionvalue exp in
-     let stmt_docs = map_last (doc_stmt ctxt false) (doc_stmt ctxt need_return') es in
-     let block_doc = enclose_block annot (separate (break 1) stmt_docs) in
-     if need_return then
-       prefix 2 1 (string "return") block_doc ^^ semi
-     else block_doc
-  | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _)) when not need_return ->
-     prefix 2 1 (string "if " ^^ parens (doc_exp ctxt i)) (doc_stmt ctxt false t)
+  | E_block _ -> exp
+  (* | E_if (i, t, e) -> rewrap (E_if (i, ensure_block t, ensure_block e)) *)
+  | E_case (e, ps) ->
+     let ensure_block_pexp pexp =
+       let pat, guard, exp, a = destruct_pexp pexp in
+       construct_pexp (pat, guard, ensure_block exp, a)
+     in
+     rewrap (E_case (e, List.map ensure_block_pexp ps))
+  | _ -> E_aux (E_block [exp], a)
+
+let rec doc_stmt ctxt (E_aux (eaux, (l, annot)) as exp) =
+  match eaux with
+  | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _)) when ctxt.blocktype <> ActionValue ->
+     prefix 2 1 (string "if " ^^ parens (doc_exp ctxt i)) (doc_stmt ctxt t)
   | E_if (i, t, e) ->
      prefix 0 1
-       (prefix 2 1 (string "if " ^^ parens (doc_exp ctxt i)) (doc_stmt ctxt need_return t))
-       (prefix 2 1 (string "else") (doc_stmt ctxt need_return e))
+       (prefix 2 1 (string "if " ^^ parens (doc_exp ctxt i)) (doc_stmt ctxt t))
+       (prefix 2 1 (string "else") (doc_stmt ctxt e))
   | E_case (e, ps) ->
      surround 2 1
        (surround 2 1 (string "case") (parens (doc_exp ctxt e)) (string "matches"))
-       (separate_map hardline (doc_pexp ctxt need_return) ps)
+       (separate_map hardline (doc_pexp ctxt) ps)
        (string "endcase")
-  | E_let (lb, e) ->
-     let block_doc =
-       enclose_block annot
-         (prefix 0 1
-           (doc_letbind ctxt lb ^^ semi)
-           (doc_stmt ctxt (is_actionvalue exp) e))
+  | E_assign (lhs, rhs)
+    when exp_uses_lvars ctxt rhs ||
+         (effectful rhs &&
+          (lexp_writes_registers lhs || lexp_assigns_lvars ctxt lhs)) ->
+     enclose_block Action
+       (separate (break 1)
+          [prefix 2 1 (string "let zresult <-") (doc_exp ctxt rhs) ^^ semi;
+           infix 2 1 (string "<=") (doc_lexp ctxt lhs) (string "zresult") ^^ semi])
+  | E_assign (lhs, rhs) ->
+     separate space [doc_lexp ctxt lhs; assign_op ctxt lhs rhs; doc_exp ctxt rhs] ^^ semi
+  | E_return e when ctxt.return_sink ->
+     string "outsnk.put" ^^ parens (doc_exp ctxt exp) ^^ semi
+  | E_return e when ctxt.blocktype = ActionValue ->
+     prefix 2 1 (string "return") (doc_exp ctxt exp ^^ semi)
+  | _ -> parens (doc_exp ctxt exp) ^^ semi
+and doc_recipe ctxt (E_aux (eaux, (l, annot)) as exp) =
+  match eaux with
+  | E_block _ -> doc_exp ctxt exp
+  | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _)) ->
+     surround 2 1
+       (string "`When" ^^ parens (doc_exp ctxt i))
+       (doc_recipe ctxt t)
+       (string "`End")
+  | E_if (i, t, e) ->
+     prefix 0 1
+       (prefix 2 1 (string "`If" ^^ parens (doc_exp ctxt i)) (doc_recipe ctxt t))
+       (surround 2 1 (string "`Else") (doc_recipe ctxt e) (string "`End"))
+  | E_case (e, ps) ->
+     enclose_block Expression
+       (separate (break 1)
+         [prefix 2 1
+           (string "List#(Guarded#(Recipe)) zpats = switch(pack" ^^ parens (doc_exp ctxt e) ^^ comma)
+           (separate_map (comma ^^ break 1) (doc_pexp_combinator ctxt) ps ^^ string ")" ^^ semi);
+          string "rOneMatch(map(getGuard, zpats), map(getVal, zpats), rAct(noAction));"])
+  | E_assign (lhs, (E_aux (E_app (f, args), _) as rhs))
+  | E_assign (lhs, (E_aux (E_app (f, args), _) as rhs))
+    when has_mem_eff (effect_of rhs) ->
+     let toRecipe doc =
+       string "toRecipe" ^^
+       parens (surround 2 1 (string "action") doc (string "endaction"))
      in
-     if need_return then
-       prefix 2 1 (string "return") block_doc ^^ semi
-     else block_doc
-  | _ when need_return -> prefix 2 1 (string "return") (doc_exp ctxt exp ^^ semi)
-  | _ -> doc_exp ctxt exp ^^ semi
+     let ifc = doc_id false (append_id f "_ifc") in
+     let call =
+       ifc ^^ string ".sink.put" ^^
+       parens (doc_exp ctxt (E_aux (E_tuple args, (l, empty_tannot)))) ^^ semi in
+     let resp =
+       separate (break 1)
+         [prefix 2 1 (string "let zresult <-") (ifc ^^ string ".source.get()") ^^ semi;
+          infix 2 1 (string "<=") (doc_lexp ctxt lhs) (string "zresult") ^^ semi]
+     in
+     surround 2 1
+       (string "`FastSeq")
+       (separate (comma ^^ break 1) [toRecipe call; toRecipe resp])
+       (string "`End")
+  | E_app (f, args) when has_mem_eff (effect_of exp) ->
+     doc_id false (append_id f "_ifc") ^^ string ".sink.put" ^^
+     parens (doc_exp ctxt (E_aux (E_tuple args, (l, empty_tannot))))
+  | _ ->
+     string "toRecipe" ^^
+     parens (doc_exp { ctxt with blocktype = Action; } (ensure_block exp))
 and doc_exp ctxt (E_aux (eaux, (l, annot)) as exp) =
   match eaux with
-  | E_block _ -> doc_stmt ctxt false exp
+  | E_block (_ :: _ as es) ->
+     let ctxt' exp = { ctxt with blocktype = get_blocktype ctxt exp; } in
+     let doc_butlast, doc_last, sep =
+       if ctxt.blocktype = Recipe then
+         (fun exp -> doc_recipe (ctxt' exp) exp), (doc_recipe ctxt), comma
+       else
+         (fun exp -> doc_stmt (ctxt' exp) exp), (doc_stmt ctxt), empty
+     in
+     let docs = map_last doc_butlast doc_last es in
+     enclose_block ctxt.blocktype (separate (sep ^^ break 1) docs)
+  | E_block [] -> enclose_block ctxt.blocktype empty
   | E_id id ->
      (if Env.is_register id (env_of exp) then string "z." else empty) ^^
      doc_id (is_enum id (env_of exp)) id ^^ (if IdSet.mem id ctxt.lvars then string "[1]" else empty)
@@ -271,9 +395,7 @@ and doc_exp ctxt (E_aux (eaux, (l, annot)) as exp) =
             let doc_es = List.map (doc_exp ctxt) es in
             [parens (separate comma_sp (state_arg @ doc_es))]
      in
-     if has_mem_eff fun_effs then
-       string "callServer" ^^ parens (doc_id false (append_id id "_ifc") ^^ comma_sp ^^ argstup)
-     else if union then
+     if union then
        separate space (string "tagged" :: doc_constr_id id :: argslist)
      else
        concat (doc_id false id :: argslist)
@@ -290,27 +412,20 @@ and doc_exp ctxt (E_aux (eaux, (l, annot)) as exp) =
   | E_case (e, ps) ->
      surround 2 1
        (surround 2 1 (string "case") (parens (doc_exp ctxt e)) (string "matches"))
-       (separate_map hardline (doc_pexp ctxt false) ps)
+       (separate_map hardline (doc_pexp ctxt) ps)
        (string "endcase")
   | E_let (lb, e) ->
-     enclose_block annot
+     enclose_block ctxt.blocktype
        (prefix 0 1
          (doc_letbind ctxt lb ^^ semi)
-         (doc_stmt ctxt (is_actionvalue exp) e))
-  | E_assign (LEXP_aux (LEXP_id id, _) as lhs, rhs)
-    when Env.lookup_id id (env_of exp) = Unbound && not (IdSet.mem id ctxt.lvars) ->
-     separate space [string "let"; doc_id false id; assign_op lhs rhs; doc_exp ctxt rhs]
-  | E_assign (LEXP_aux (LEXP_cast (typ, id), _) as lhs, rhs)
-    when Env.lookup_id id (env_of exp) = Unbound && not (IdSet.mem id ctxt.lvars) ->
-     separate space [doc_typ typ; doc_id false id; assign_op lhs rhs; doc_exp ctxt rhs]
-  | E_assign (lhs, rhs) ->
-     separate space [doc_lexp lhs; assign_op lhs rhs; doc_exp ctxt rhs]
+         (doc_stmt ctxt e))
+  | E_return e -> doc_exp ctxt e
   | E_assert (E_aux (E_constraint nc, _), msg) ->
      string "staticAssert" ^^ parens (separate comma_sp [Pretty_print_sail.doc_nc nc; doc_exp ctxt msg])
   | E_assert (c, msg) ->
      string "dynamicAssert" ^^ parens (separate comma_sp [doc_exp ctxt c; doc_exp ctxt msg])
   (* TODO *)
-  | _ -> Pretty_print_sail.doc_exp exp
+  | _ -> raise (Reporting_basic.err_todo l "not implemented")
 and doc_pat (P_aux (p_aux, (l, annot)) as pat) =
   match p_aux with
   | P_lit lit -> doc_lit lit
@@ -329,8 +444,8 @@ and doc_pat (P_aux (p_aux, (l, annot)) as pat) =
   | P_tup ps -> braces (separate_map comma_sp doc_pat ps)
   | P_var (pat, _) | P_typ (_, pat) -> doc_pat pat
   (* TODO *)
-  | _ -> Pretty_print_sail.doc_pat pat
-and doc_pexp ctxt need_return pexp =
+  | _ -> raise (Reporting_basic.err_todo l "not implemented")
+and doc_pexp ctxt pexp =
   let pat, guard, exp, _ = destruct_pexp pexp in
   let gdoc = match guard with
     | Some wh -> [string "&&&"; doc_exp ctxt wh]
@@ -338,7 +453,28 @@ and doc_pexp ctxt need_return pexp =
   in
   prefix 2 1
     (separate space (doc_pat pat :: gdoc @ [string ":"]))
-    (doc_stmt ctxt need_return exp)
+    (doc_stmt ctxt exp)
+and doc_pexp_combinator ctxt pexp =
+  let pat, guard, exp, _ = destruct_pexp pexp in
+  let pdoc, vars = doc_pat_combinator pat in
+  let gdoc = match guard with
+    | Some wh -> string "guarded" ^^ parens (doc_exp ctxt wh ^^ comma_sp ^^ pdoc)
+    | None -> pdoc
+  in
+  let vdoc (typ, id) = doc_typ typ ^^ space ^^ doc_id false id in
+  let varsdoc = parens (separate_map comma_sp vdoc vars) in
+  let fdoc =
+    prefix 2 1
+      (string "function Recipe f " ^^ varsdoc ^^ string " =")
+      (doc_recipe ctxt exp ^^ semi)
+  in
+  let ldoc =
+    surround 2 1
+      (string "begin")
+      (separate hardline [fdoc; string "f;"])
+      (string "end")
+  in
+  prefix 2 1 (string "when(" ^^ gdoc ^^ comma) (ldoc ^^ string ")")
 and doc_letbind ctxt (LB_aux (LB_val (p, e), _)) =
   match untyp_pat p with
   | P_aux (P_id id, _), _ when IdSet.mem id ctxt.lvars ->
@@ -356,12 +492,20 @@ and doc_letbind ctxt (LB_aux (LB_val (p, e), _)) =
         doc_exp ctxt e]
   | _, _ ->
      separate space [string "match"; doc_pat p; string "="; doc_exp ctxt e]
-and doc_lexp (LEXP_aux (l_aux, (l, a)) as lexp) =
+and doc_lexp ctxt (LEXP_aux (l_aux, (l, a)) as lexp) =
+  let env = env_of_annot (l, a) in
   match l_aux with
   | LEXP_cast (_, id) | LEXP_id id ->
-     (if Env.is_register id (env_of_annot (l, a)) then string "z." else empty) ^^
-     doc_id false id
-  | LEXP_field (lexp, id) -> doc_lexp lexp ^^ dot ^^ doc_id false id
+     let state_prefix = if Env.is_register id env then string "z." else empty in
+     let typdecl, creg_suffix =
+       if IdSet.mem id ctxt.lvars then
+         empty, string "[0]"
+       else if Env.lookup_id id env = Unbound then
+         doc_typ (typ_of_annot (l, a)) ^^ space, empty
+       else empty, empty
+     in
+     typdecl ^^ state_prefix ^^ doc_id false id ^^ creg_suffix
+  | LEXP_field (lexp, id) -> doc_lexp ctxt lexp ^^ dot ^^ doc_id false id
   | _ -> raise (Reporting_basic.err_todo l "Unsupported lexp")
 
 let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
@@ -376,9 +520,48 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
             | Typ_fn (targ, tret, eff) -> targ, tret, eff
             | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Unexpected function clause type")
           in
+          let lvars_pat pat = fst (fold_pat
+            { (compute_pat_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with
+              p_aux = (fun ((v, p), annot) ->
+                match p with
+                | P_id id when Env.lookup_id id (env_of_annot annot) = Unbound ->
+                   Bindings.add id (typ_of_annot annot) v, P_aux (p, annot)
+                | _ -> v, P_aux (p, annot))
+            } pat)
+          in
+          let lvars = fst (fold_exp
+            { (compute_exp_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with
+              lEXP_aux = (fun ((v, le), annot) ->
+                match le with
+                | LEXP_id id | LEXP_cast (_, id)
+                  when Env.lookup_id id (env_of_annot annot) = Unbound ->
+                   Bindings.add id (typ_of_annot annot) v, LEXP_aux (le, annot)
+                | _ -> v, LEXP_aux (le, annot));
+              e_let = (fun ((v1, lb), (v2, e)) ->
+                let (LB_aux (LB_val (pat, _), _)) = lb in
+                Bindings.union (fun _ _ r -> Some r)
+                  (Bindings.union (fun _ _ r -> Some r) v1 (lvars_pat pat))
+                  v2,
+                E_let (lb, e))
+            } exp)
+          in
+          let ctxt =
+            { lvars =
+                if has_mem_eff eff
+                then IdSet.of_list (List.map fst (Bindings.bindings lvars))
+                else IdSet.empty;
+              return_sink = has_mem_eff eff;
+              blocktype = get_blocktype empty_ctxt exp;
+            }
+          in
           let state_arg =
             if effectful_effs eff && not (has_mem_eff eff)
             then [string "Regstate z"]
+            else []
+          in
+          let retsnk_arg =
+            if ctxt.return_sink
+            then [string "Sink#" ^^ parens (doc_typ tret) ^^ string " outsnk"]
             else []
           in
           let formals, typs =
@@ -399,51 +582,19 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
                [], []
             | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Unsupported function parameters")
           in
-          let formals_doc = parens (separate comma_sp (state_arg @ formals)) in
+          let formals_doc = parens (separate comma_sp (state_arg @ formals @ retsnk_arg)) in
           let tret_doc =
-            if has_mem_eff eff then string "RStmt#" ^^ parens (doc_typ tret)
+            if has_mem_eff eff then string "Recipe"
             else if effectful_effs eff then
               if is_unit_typ tret
               then string "Action"
               else string "ActionValue#" ^^ parens (doc_typ tret)
             else doc_typ tret
           in
-          let lvars_pat pat = fst (fold_pat
-            { (compute_pat_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with
-              p_aux = (fun ((v, p), annot) ->
-                match p with
-                | P_id id when Env.lookup_id id (env_of_annot annot) = Unbound ->
-                   Bindings.add id (typ_of_annot annot) v, P_aux (p, annot)
-                | _ -> v, P_aux (p, annot))
-            } pat)
-          in
-          let lvars = fst (fold_exp
-            { (compute_exp_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with
-              lEXP_aux = (fun ((v, le), annot) ->
-                match le with
-                | LEXP_id id when Env.lookup_id id (env_of_annot annot) = Unbound ->
-                   Bindings.add id (typ_of_annot annot) v, LEXP_aux (le, annot)
-                | _ -> v, LEXP_aux (le, annot));
-              e_let = (fun ((v1, lb), (v2, e)) ->
-                let (LB_aux (LB_val (pat, _), _)) = lb in
-                Bindings.union (fun _ _ r -> Some r)
-                  (Bindings.union (fun _ _ r -> Some r) v1 (lvars_pat pat))
-                  v2,
-                E_let (lb, e))
-            } exp)
-          in
-          let ctxt =
-            { lvars =
-                if has_mem_eff eff
-                then IdSet.of_list (List.map fst (Bindings.bindings lvars))
-                else IdSet.empty;
-            }
-          in
           let fun_doc =
-            surround 2 1
-              (separate space [string "function"; tret_doc; doc_id false id; formals_doc ^^ string ";"])
-              (doc_stmt ctxt true exp)
-              (string "endfunction")
+              prefix 2 1
+                (separate space [string "function"; tret_doc; doc_id false id; formals_doc; equals])
+                (doc_exp ctxt (if effectful_effs eff then ensure_block exp else exp) ^^ semi)
           in
           if has_mem_eff eff then
             let called_ifcs = fst (fold_exp
@@ -470,7 +621,7 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
             in
             let doc_ifc (id, (targ, tret)) =
               separate space
-                [string "FSMServer#" ^^ parens (separate comma_sp [doc_typ targ; doc_typ tret]);
+                [string "Slave#" ^^ parens (separate comma_sp [doc_typ targ; doc_typ tret]);
                  doc_id false (append_id id "_ifc"); string "<-";
                  doc_id false (prepend_id "mk_" id) ^^ parens (string "z") ^^ semi]
             in
@@ -482,14 +633,14 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
             let doc_lvars = separate_map hardline doc_lvar (Bindings.bindings lvars) in
             let indent doc = string "  " ^^ align doc in
             separate hardline
-              [string "module " ^^ doc_id false (prepend_id "mk_" id) ^^
-                 string " (Regstate z, FSMServer#(" ^^
+              [string "module[Module] " ^^ doc_id false (prepend_id "mk_" id) ^^
+                 string " (Regstate z, Slave#(" ^^
                  doc_typ targ ^^ comma_sp ^^ doc_typ tret ^^
                  string ") ifc);";
                indent doc_lvars; empty;
                indent doc_ifcs; empty;
                indent fun_doc; empty;
-               indent (string "let ifc <- mkFSMServer(" ^^ doc_id false id ^^ string ");");
+               indent (string "let ifc <- mkRecipeFSMSlave(" ^^ doc_id false id ^^ string ");");
                indent (string "return ifc;");
                string "endmodule"]
           else
@@ -560,14 +711,22 @@ let doc_defs (Defs defs) =
   let typdefs, defs = List.partition is_typdef defs in
   separate hardline [
     string "import Assert :: *;";
-    string "import StmtFSM :: *;";
+    string "import BitPat :: *;";
+    string "import MasterSlave :: *;";
+    string "import SourceSink :: *;";
+    string "import Recipe :: *;";
+    string "`include \"RecipeMacros.inc\"";
+    empty;
+    string "function Bool getGuard(Guarded#(a) x) = x.guard;";
+    string "function a getVal(Guarded#(a) x) = x.val;";
     empty;
     separate_map hardline doc_def typdefs;
     separate_map hardline doc_def defs;
     empty;
     string "module top (Empty);";
     string " // TODO";
-    string "endmodule"
+    string "endmodule";
+    empty
   ]
 
 let pp_defs out defs = ToChannel.pretty 1. 80 out (doc_defs defs)
