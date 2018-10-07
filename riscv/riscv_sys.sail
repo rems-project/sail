@@ -375,13 +375,17 @@ function lower_mstatus(m : Mstatus) -> Sstatus = {
 }
 
 function lift_sstatus(m : Mstatus, s : Sstatus) -> Mstatus = {
-  let m = update_SD(m, s.SD());
   // FIXME: This should be parameterized by a platform setting.  For now, match spike.
   // let m = update_UXL(m, s.UXL());
   let m = update_MXR(m, s.MXR());
   let m = update_SUM(m, s.SUM());
+
+  // FIXME: Should XS and FS check whether X and F|D are supported in misa?
   let m = update_XS(m, s.XS());
   let m = update_FS(m, s.FS());
+  let m = update_SD(m, extStatus_of_bits(m.FS()) == Dirty
+                     | extStatus_of_bits(m.XS()) == Dirty);
+
   let m = update_SPP(m, s.SPP());
   let m = update_SPIE(m, s.SPIE());
   let m = update_UPIE(m, s.UPIE());
