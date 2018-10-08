@@ -31,6 +31,7 @@ extern mach_bits
   zx16, zx17, zx18, zx19, zx20, zx21, zx22, zx23,
   zx24, zx25, zx26, zx27, zx28, zx29, zx30, zx31;
 
+extern mach_bits zmstatus;
 extern mach_bits zmepc, zmtval;
 extern mach_bits zsepc, zstval;
 

@@ -247,6 +247,7 @@ int compare_states(struct tv_spike_t *s)
   passed &= tv_check_csr(s, CSR_MCAUSE, zmcause.zMcause_chunk_0);
   passed &= tv_check_csr(s, CSR_MEPC, zmepc);
   passed &= tv_check_csr(s, CSR_MTVAL, zmtval);
+  passed &= tv_check_csr(s, CSR_MSTATUS, zmstatus);
 
   passed &= tv_check_csr(s, CSR_SCAUSE, zscause.zMcause_chunk_0);
   passed &= tv_check_csr(s, CSR_SEPC, zsepc);
