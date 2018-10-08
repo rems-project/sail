@@ -10,6 +10,7 @@
 
 extern bool rv_enable_dirty_update;
 extern bool rv_enable_misaligned;
+extern bool rv_mtval_has_illegal_inst_bits;
 
 extern uint64_t rv_ram_base;
 extern uint64_t rv_ram_size;

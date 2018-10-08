@@ -14,6 +14,9 @@ bool plat_enable_dirty_update(unit u)
 bool plat_enable_misaligned_access(unit u)
 { return rv_enable_misaligned; }
 
+bool plat_mtval_has_illegal_inst_bits(unit u)
+{ return rv_mtval_has_illegal_inst_bits; }
+
 mach_bits plat_ram_base(unit u)
 { return rv_ram_base; }
 

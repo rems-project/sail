@@ -22,6 +22,11 @@ val plat_enable_misaligned_access = {ocaml: "Platform.enable_misaligned_access",
                                      c: "plat_enable_misaligned_access",
                                      lem: "plat_enable_misaligned_access"} : unit -> bool
 
+/* whether mtval stores the bits of a faulting instruction on illegal instruction exceptions */
+val plat_mtval_has_illegal_inst_bits = {ocaml: "Platform.mtval_has_illegal_inst_bits",
+                                        c: "plat_mtval_has_illegal_inst_bits",
+                                        lem: "plat_mtval_has_illegal_inst_bits"} : unit -> bool
+
 /* ROM holding reset vector and device-tree DTB */
 val plat_rom_base   = {ocaml: "Platform.rom_base", c: "plat_rom_base", lem: "plat_rom_base"} : unit -> xlenbits
 val plat_rom_size   = {ocaml: "Platform.rom_size", c: "plat_rom_size", lem: "plat_rom_size"} : unit -> xlenbits
@@ -264,4 +269,15 @@ function init_platform() -> unit = {
 function tick_platform() -> unit = {
   cancel_reservation();
   htif_tick();
+}
+
+/* Platform-specific handling of instruction faults */
+
+function handle_illegal() -> unit = {
+  let info = if plat_mtval_has_illegal_inst_bits ()
+             then Some(instbits)
+             else None();
+  let t : sync_exception = struct { trap    = E_Illegal_Instr,
+                                    excinfo = info };
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 }

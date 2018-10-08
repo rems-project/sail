@@ -42,11 +42,12 @@ struct tv_spike_t *s = NULL;
 char *term_log = NULL;
 
 static struct option options[] = {
-  {"enable-dirty",      no_argument,       0, 'd'},
-  {"enable-misaligned", no_argument,       0, 'm'},
-  {"dump-dts",          no_argument,       0, 's'},
-  {"terminal-log",      required_argument, 0, 't'},
-  {"help",              no_argument,       0, 'h'},
+  {"enable-dirty",                no_argument,       0, 'd'},
+  {"enable-misaligned",           no_argument,       0, 'm'},
+  {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'},
+  {"dump-dts",                    no_argument,       0, 's'},
+  {"terminal-log",                required_argument, 0, 't'},
+  {"help",                        no_argument,       0, 'h'},
   {0, 0, 0, 0}
 };
 
