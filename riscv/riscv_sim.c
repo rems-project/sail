@@ -62,6 +62,24 @@ static void print_usage(const char *argv0, int ec)
   exit(ec);
 }
 
+static void dump_dts(void)
+{
+#ifdef SPIKE
+  size_t dts_len = 0;
+  struct tv_spike_t *s = tv_init("RV64IMAC", 0);
+  tv_get_dts(s, NULL, &dts_len);
+  if (dts_len > 0) {
+    unsigned char *dts = (unsigned char *)malloc(dts_len + 1);
+    dts[dts_len] = '\0';
+    tv_get_dts(s, dts, &dts_len);
+    fprintf(stdout, "%s\n", dts);
+  }
+#else
+  fprintf(stdout, "Spike linkage is currently needed to generate DTS.\n");
+#endif
+  exit(0);
+}
+
 char *process_args(int argc, char **argv)
 {
   int c, idx = 1;
@@ -89,6 +107,7 @@ char *process_args(int argc, char **argv)
       print_usage(argv[0], 1);
     }
   }
+  if (do_dump_dts) dump_dts();
   if (idx >= argc) print_usage(argv[0], 0);
   if (term_log == NULL) term_log = strdup("term.log");
   return argv[idx];
@@ -116,7 +135,7 @@ uint64_t load_sail(char *f)
 void init_spike(const char *f, uint64_t entry)
 {
 #ifdef SPIKE
-  s = tv_init("RV64IMAC");
+  s = tv_init("RV64IMAC", 1);
   tv_set_verbose(s, 1);
   tv_set_dtb_in_rom(s, 1);
   tv_load_elf(s, f);
@@ -149,12 +168,21 @@ void init_sail_reset_vector(uint64_t entry)
   for (int i = 0; i < sizeof(reset_vec); i++)
     write_mem(addr++, (uint64_t)((char *)reset_vec)[i]);
 #ifdef SPIKE
-  const unsigned char *dtb = NULL;
-  int dtb_len;
-  tv_get_dtb(s, &dtb, &dtb_len);
-  fprintf(stderr, "Got %d bytes of dtb at %p\n", dtb_len, dtb);
-  for (int i = 0; i < dtb_len; i++)
-    write_mem(addr++, dtb[i]);
+  unsigned char *dtb = NULL;
+  size_t dtb_len = 0;
+  tv_get_dtb(s, NULL, &dtb_len);
+  if (dtb_len > 0) {
+    dtb = (unsigned char *)malloc(dtb_len + 1);
+    dtb[dtb_len] = '\0';
+    if (!tv_get_dtb(s, dtb, &dtb_len)) {
+      fprintf(stderr, "Got %ld bytes of dtb at %p\n", dtb_len, dtb);
+      for (size_t i = 0; i < dtb_len; i++)
+        write_mem(addr++, dtb[i]);
+    } else {
+      fprintf(stderr, "Error getting DTB!\n");
+      exit(1);
+    }
+  }
 #else
   fprintf(stderr, "Running without rom device tree.\n");
   /* TODO: write DTB */
