@@ -52,6 +52,8 @@ open Ast
 open Ast_util
 open Value
 
+
+
 type gstate =
   { registers : value Bindings.t;
     allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
@@ -123,8 +125,19 @@ type 'a response =
   | Exception of value
   | Assertion_failed of string
   | Call of id * value list * (return_value -> 'a)
-  | Gets of (state -> 'a)
-  | Puts of state * (unit -> 'a)
+  | Fail of string
+  (* TODO *)
+  (* | Read_mem of Sail2_instr_kinds.read_kind * (\* address : *\) value * (\* length : *\) value * (value -> 'a)
+   * | Write_ea of Sail2_instr_kinds.write_kind * (\* address : *\) value * (\* length : *\) value * (unit -> 'a)
+   * | Excl_res of (bool -> 'a)
+   * | Write_memv of value * (bool -> 'a)
+   * | Barrier of Sail2_instr_kinds.barrier_kind * (unit -> 'a) *)
+  | Read_reg of string * (value -> 'a)
+  | Write_reg of string * value * (unit -> 'a)
+  | Get_primop of string * ((value list -> value) -> 'a)
+  | Get_local of string * (value -> 'a)
+  | Put_local of string * value * (unit -> 'a)
+  | Get_global_letbinds of ((Type_check.tannot letbind) list -> 'a)
 
 and 'a monad =
   | Pure of 'a
@@ -134,9 +147,20 @@ let map_response f = function
   | Early_return v -> Early_return v
   | Exception v -> Exception v
   | Assertion_failed str -> Assertion_failed str
-  | Gets g -> Gets (fun s -> f (g s))
-  | Puts (s, cont) -> Puts (s, fun () -> f (cont ()))
   | Call (id, vals, cont) -> Call (id, vals, fun v -> f (cont v))
+  | Fail s -> Fail s
+  (* TODO *)
+  (* | Read_mem (rk, addr, len, cont) -> Read_mem (rk, addr, len, fun v -> f (cont v))
+   * | Write_ea (wk, addr, len, cont) -> Write_ea (wk, addr, len, fun () -> f (cont ()))
+   * | Excl_res cont -> Excl_res (fun b -> f (cont b))
+   * | Write_memv (v, cont) -> Write_memv (v, fun b -> f (cont b))
+   * | Barrier (bk, cont) -> Barrier (bk, fun () -> f (cont ())) *)
+  | Read_reg (name, cont) -> Read_reg (name, fun v -> f (cont v))
+  | Write_reg (name, v, cont) -> Write_reg (name, v, fun () -> f (cont ()))
+  | Get_primop (name, cont) -> Get_primop (name, fun op -> f (cont op))
+  | Get_local (name, cont) -> Get_local (name, fun v -> f (cont v))
+  | Put_local (name, v, cont) -> Put_local (name, v, fun () -> f (cont ()))
+  | Get_global_letbinds cont -> Get_global_letbinds (fun lbs -> f (cont lbs))
 
 let rec liftM f = function
   | Pure x -> Pure (f x)
@@ -170,12 +194,43 @@ let throw v = Yield (Exception v)
 let call (f : id) (args : value list) : return_value monad =
   Yield (Call (f, args, fun v -> Pure v))
 
-let gets : state monad =
-  Yield (Gets (fun s -> Pure s))
+(* TODO *)
+(* let read_mem (rk, addr, len) : value monad =
+ *   Yield (Read_mem (rk, addr, len, (fun v -> Pure v)))
+ * 
+ * let write_ea (wk, addr, len) : unit monad =
+ *   Yield (Write_ea (wk, addr, len, (fun () -> Pure ())))
+ * 
+ * let excl_res () : bool monad =
+ *   Yield (Excl_res (fun b -> Pure b))
+ * 
+ * let write_memv v : bool monad =
+ *   Yield (Write_memv (v, fun b -> Pure b))
+ * 
+ * let barrier bk : unit monad =
+ *   Yield (Barrier (bk, fun () -> Pure ())) *)
 
-let puts (s : state) : unit monad =
-  Yield (Puts (s, fun () -> Pure ()))
+let read_reg name : value monad =
+  Yield (Read_reg (name, fun v -> Pure v))
 
+let write_reg name v : unit monad =
+  Yield (Write_reg (name, v, fun () -> Pure ()))
+
+let fail s =
+  Yield (Fail s)
+
+let get_primop name : (value list -> value) monad =
+  Yield (Get_primop (name, fun op -> Pure op))
+
+let get_local name : value monad =
+  Yield (Get_local (name, fun v -> Pure v))
+
+let put_local name v : unit monad =
+  Yield (Put_local (name, v, fun () -> Pure ()))
+
+let get_global_letbinds () : (Type_check.tannot letbind) list monad =
+  Yield (Get_global_letbinds (fun lbs -> Pure lbs))
+  
 let early_return v = Yield (Early_return v)
 
 let assertion_failed msg = Yield (Assertion_failed msg)
@@ -278,7 +333,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      if matched then
        return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
      else
-       failwith "Match failure"
+       fail "Match failure"
 
   | E_vector_subrange (vec, n, m) ->
      wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
@@ -306,14 +361,9 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
             let extern = get_interpreter_extern id (env_of_annot annot) in
             if extern = "reg_deref" then
               let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
-              gets >>= fun (_, gstate) ->
-              if gstate.allow_registers
-              then return (exp_of_value (Bindings.find (mk_id regname) gstate.registers))
-              else raise Not_found
+              read_reg regname >>= fun v -> return (exp_of_value v)
             else
-              gets >>= fun (_, gstate) ->
-              let primop = try StringMap.find extern gstate.primops with Not_found -> failwith ("No primop " ^ extern) in
-              return (exp_of_value (primop (List.map value_of_exp evaluated)))
+              get_primop extern >>= fun op -> return (exp_of_value (op (List.map value_of_exp evaluated)))
           end
        | [] ->
           call id (List.map value_of_exp evaluated) >>=
@@ -370,33 +420,23 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_exit exp -> step exp >>= fun exp' -> wrap (E_exit exp')
 
   | E_ref id ->
-     gets >>= fun (lstate, gstate) ->
-     if Bindings.mem id gstate.registers && gstate.allow_registers then
-       return (exp_of_value (V_ref (string_of_id id)))
-     else
-       failwith ("Could not find register " ^ string_of_id id)
+     return (exp_of_value (V_ref (string_of_id id)))
 
   | E_id id ->
      begin
        let open Type_check in
-       gets >>= fun (lstate, gstate) ->
        match Env.lookup_id id (env_of_annot annot) with
-       | Register _ when gstate.allow_registers ->
-          let exp =
-            try exp_of_value (Bindings.find id gstate.registers) with
-            | Not_found ->
-               (* Replace with error message? *)
-               let exp = mk_exp (E_app (mk_id ("undefined_" ^ string_of_typ (typ_of orig_exp)), [mk_exp (E_lit (mk_lit (L_unit)))])) in
-               Type_check.check_exp (env_of_annot annot) exp (typ_of orig_exp)
-          in
-          return exp
-       | Local (Mutable, _) -> return (local_variable id lstate gstate)
+       | Register _ ->
+          read_reg (string_of_id id) >>= fun v -> return (exp_of_value v)
+       | Local (Mutable, _) -> get_local (string_of_id id) >>= fun v -> return (exp_of_value v)
        | Local (Immutable, _) ->
-          let chain = build_letchain id gstate.letbinds orig_exp in
+          (* if we get here without already having substituted, it must be a top-level letbind *)
+          get_global_letbinds () >>= fun lbs ->
+          let chain = build_letchain id lbs orig_exp in
           return chain
        | Enum _ ->
           return (exp_of_value (V_ctor (string_of_id id, [])))
-       | _ -> failwith ("Coudln't find id " ^ string_of_id id)
+       | _ -> fail ("Couldn't find id " ^ string_of_id id)
      end
 
   | E_record (FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
@@ -458,25 +498,18 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_assign (LEXP_aux (LEXP_id id, _), exp) | E_assign (LEXP_aux (LEXP_cast (_, id), _), exp) ->
      begin
        let open Type_check in
-       gets >>= fun (lstate, gstate) ->
        match Env.lookup_id id (env_of_annot annot) with
-       | Register _ when gstate.allow_registers ->
-          puts (lstate, { gstate with registers = Bindings.add id (value_of_exp exp) gstate.registers }) >> wrap unit_exp
+       | Register _ ->
+          write_reg (string_of_id id) (value_of_exp exp) >> wrap unit_exp
        | Local (Mutable, _) | Unbound ->
-          begin
-            puts ({ locals = Bindings.add id (value_of_exp exp) lstate.locals }, gstate) >> wrap unit_exp
-          end
+          put_local (string_of_id id) (value_of_exp exp) >> wrap unit_exp
        | _ -> failwith "Assign"
      end
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) when not (is_value reference) ->
      step reference >>= fun reference' -> wrap (E_assign (LEXP_aux (LEXP_deref reference', annot), exp))
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) ->
      let name = coerce_ref (value_of_exp reference) in
-     gets >>= fun (lstate, gstate) ->
-     if Bindings.mem (mk_id name) gstate.registers && gstate.allow_registers then
-       puts (lstate, { gstate with registers = Bindings.add (mk_id name) (value_of_exp exp) gstate.registers }) >> wrap unit_exp
-     else
-       failwith "Assign to nonexistent register"
+     write_reg name (value_of_exp exp) >> wrap unit_exp
   | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> failwith "Tuple assignment"
   | E_assign (LEXP_aux (LEXP_vector_concat lexps, annot), exp) -> failwith "Vector concat assignment"
      (*
@@ -640,34 +673,78 @@ let rec eval_frame' = function
   | Done (state, v) -> Done (state, v)
   | Break frame -> Break frame
   | Step (out, state, m, stack) ->
+     let lstate, gstate = state in
      match (m, stack) with
      | Pure v, [] when is_value v -> Done (state, value_of_exp v)
      | Pure v, (head :: stack') when is_value v ->
-        Step (stack_string head, (stack_state head, snd state), stack_cont head (Return_ok (value_of_exp v)), stack')
+        Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok (value_of_exp v)), stack')
      | Pure exp', _ ->
         let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp')) in
         Step (out', state, step exp', stack)
      | Yield (Call(id, vals, cont)), _ when string_of_id id = "break" ->
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-        let body = exp_of_fundef (Bindings.find id (snd state).fundefs) arg in
-        Break (Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack))
+        let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
+        Break (Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack))
      | Yield (Call(id, vals, cont)), _ ->
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-        let body = exp_of_fundef (Bindings.find id (snd state).fundefs) arg in
-        Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack)
-     | Yield (Gets cont), _ ->
-        eval_frame' (Step (out, state, cont state, stack))
-     | Yield (Puts (state', cont)), _ ->
+        let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
+        Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
+
+     | Yield (Read_reg (name, cont)), _ ->
+        begin
+          let gstate = gstate in
+          if gstate.allow_registers then
+            try
+              eval_frame' (Step (out, state, cont (Bindings.find (mk_id name) gstate.registers), stack))
+            with Not_found ->
+              eval_frame' (Step (out, state, fail ("Read of nonexistent register: " ^ name), stack))
+          else
+            eval_frame' (Step (out, state, fail ("Register read disallowed by allow_registers setting: " ^ name), stack))
+        end
+     | Yield (Write_reg (name, v, cont)), _ ->
+        begin
+          let id = mk_id name in
+          let gstate = gstate in
+          if gstate.allow_registers then
+            (* TODO: check existence of register? would then need to initialise all to undefined below or similar *)
+            (* if Bindings.mem id gstate.registers then *)
+              let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
+              eval_frame' (Step (out, state', cont (), stack))
+            (* else
+             *   eval_frame' (Step (out, state, fail ("Write of nonexistent register: " ^ name), stack)) *)
+          else
+            eval_frame' (Step (out, state, fail ("Register write disallowed by allow_registers setting: " ^ name), stack))
+        end
+     | Yield (Get_primop (name, cont)), _ ->
+        begin
+          try
+            let op = StringMap.find name gstate.primops in
+            eval_frame' (Step (out, state, cont op, stack))
+          with Not_found ->
+            eval_frame' (Step (out, state, fail ("No such primop: " ^ name), stack))
+        end
+     | Yield (Get_local (name, cont)), _ ->
+        begin
+          try
+            eval_frame' (Step (out, state, cont (Bindings.find (mk_id name) lstate.locals), stack))
+          with Not_found ->
+            eval_frame' (Step (out, state, fail ("Local not found: " ^ name), stack))
+        end
+     | Yield (Put_local (name, v, cont)), _ ->
+        let state' = ({ locals = Bindings.add (mk_id name) v lstate.locals }, gstate) in
         eval_frame' (Step (out, state', cont (), stack))
+     | Yield (Get_global_letbinds cont), _ ->
+        eval_frame' (Step (out, state, cont gstate.letbinds, stack))
+
      | Yield (Early_return v), [] -> Done (state, v)
      | Yield (Early_return v), (head :: stack') ->
-        Step (stack_string head, (stack_state head, snd state), stack_cont head (Return_ok v), stack')
-     | Yield (Assertion_failed msg), _ ->
+        Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
+     | Yield (Assertion_failed msg), _ | Yield (Fail msg), _ ->
         failwith msg
      | Yield (Exception v), [] ->
         failwith ("Uncaught Exception" |> Util.cyan |> Util.clear)
      | Yield (Exception v), (head :: stack') ->
-        Step (stack_string head, (stack_state head, snd state), stack_cont head (Return_exception v), stack')
+        Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_exception v), stack')
 
 let eval_frame frame =
   try eval_frame' frame with
