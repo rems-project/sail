@@ -765,7 +765,6 @@ let ocaml_pp_generators ctx defs orig_types required =
     if Bindings.mem id Type_check.Env.builtin_typs
     then empty
     else
-      let name = string ("rand_" ^ type_name id) in
       let mk_arg kid = string (zencode_string (string_of_kid kid)) in
       let rec gen_type (Typ_aux (typ,l) as full_typ) =
         let typ_str, args_pp = match typ with
@@ -812,8 +811,25 @@ let ocaml_pp_generators ctx defs orig_types required =
           | Typ_aux (Typ_tup typs,_) -> typs
           | _ -> [typ]
         in
-        parens (string "fun g -> " ^^ zencode_upper ctx id ^^ space ^^
-          parens (separate_map (string ", ") make_subgen arg_typs))
+        zencode_upper ctx id ^^ space ^^
+          parens (separate_map (string ", ") make_subgen arg_typs)
+      in
+      let rand_variant variant =
+        parens (string "fun g -> " ^^ make_variant variant)
+      in
+      let variant_constructor (Tu_aux (Tu_ty_id (_,id),_)) =
+        dquotes (string (string_of_id id))
+      in
+      let build_constructor variant =
+        separate space [bar; variant_constructor variant; string "->";
+                        make_variant variant]
+      in
+      let enum_constructor id =
+        dquotes (string (string_of_id id))
+      in
+      let build_enum_constructor id =
+        separate space [bar; dquotes (string (string_of_id id)); string "->";
+                        zencode_upper ctx id]
       in
       let make_args tqs =
         string "g" ^^
@@ -823,27 +839,48 @@ let ocaml_pp_generators ctx defs orig_types required =
            space ^^
              separate_map space (fun kdid -> mk_arg (kopt_kid kdid)) kopts
       in
-      let tqs, body =
+      let tqs, body, constructors, builders =
         let TD_aux (td,(l,_)) = Bindings.find id typemap in
         match td with
         | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
-           tqs, gen_type typ
+           tqs, gen_type typ, None, None
         | TD_variant (_,_,tqs,variants,_) ->
-           tqs, string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
-                  separate_map (string ";" ^^ break 1) make_variant variants) ^^
-                    break 0) ^^
-                    string "] in c g"
+           tqs,
+           string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
+             separate_map (string ";" ^^ break 1) rand_variant variants) ^^
+                                                      break 0) ^^
+             string "] in c g",
+           Some (separate_map (string ";" ^^ break 1) variant_constructor variants),
+           Some (separate_map (break 1) build_constructor variants)
         | TD_enum (_,_,variants,_) ->
            TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
            string "rand_choice [" ^^ group (nest 2 (break 0 ^^
              separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^
                break 0) ^^
-               string "]"
+               string "]",
+           Some (separate_map (string ";" ^^ break 1) enum_constructor variants),
+           Some (separate_map (break 1) build_enum_constructor variants)
         | _ ->
            raise (Reporting_basic.err_todo l "Generators for records and bitfields not yet supported")
       in
-      nest 2 (separate space [string "let"; name; make_args tqs; equals] ^^ break 1 ^^
-        body) ^^ hardline
+      let name = type_name id in
+      let constructors_pp = match constructors with
+        | None -> empty
+        | Some pp ->
+           nest 2 (separate space
+                     [string "let"; string ("constructors_" ^ name); equals; lbracket] ^^
+                     break 1 ^^ pp ^^ break 1 ^^ rbracket) ^^ hardline
+      in
+      let build_pp = match builders with
+        | None -> empty
+        | Some pp ->
+           nest 2 (separate space
+                     [string "let"; string ("build_" ^ name); string "g"; string "c"; equals;
+                      string "match c with"] ^^
+                     break 1 ^^ pp) ^^ hardline
+      in
+      nest 2 (separate space [string "let"; string ("rand_" ^ name); make_args tqs; equals] ^^ break 1 ^^
+        body) ^^ hardline ^^ constructors_pp ^^ build_pp
   in
   let rand_record_pp =
     string "let rand_gens : generators = {" ^^ group (nest 2 (break 0 ^^
