@@ -11,17 +11,13 @@ type tagstate = map integer bitU
 type sequential_state 'regs =
   <| regstate : 'regs;
      memstate : memstate;
-     tagstate : tagstate;
-     write_ea : maybe (write_kind * integer * integer);
-     last_exclusive_operation_was_load : bool |>
+     tagstate : tagstate |>
 
 val init_state : forall 'regs. 'regs -> sequential_state 'regs
 let init_state regs =
   <| regstate = regs;
      memstate = Map.empty;
-     tagstate = Map.empty;
-     write_ea = Nothing;
-     last_exclusive_operation_was_load = false |>
+     tagstate = Map.empty |>
 
 type ex 'e =
   | Failure of string
@@ -124,65 +120,56 @@ let read_tagS addr =
   readS (fun s -> fromMaybe B0 (Map.lookup addr s.tagstate)))
 
 (* Read bytes from memory and return in little endian order *)
-val read_mem_bytesS : forall 'regs 'e 'a. Bitvector 'a => read_kind -> 'a -> nat -> monadS 'regs (list memory_byte) 'e
-let read_mem_bytesS read_kind addr sz =
+val read_mem_bytesS : forall 'regs 'e 'a. Bitvector 'a => read_kind -> 'a -> nat -> monadS 'regs (list memory_byte * bitU) 'e
+let read_mem_bytesS _ addr sz =
   maybe_failS "unsigned" (unsigned addr) >>$= (fun addr ->
   let sz = integerFromNat sz in
   let addrs = index_list addr (addr+sz-1) 1 in
   let read_byte s addr = Map.lookup addr s.memstate in
-  readS (fun s -> just_list (List.map (read_byte s) addrs)) >>$= (function
-    | Just mem_val ->
-       updateS (fun s ->
-         if read_is_exclusive read_kind
-         then <| s with last_exclusive_operation_was_load = true |>
-         else s) >>$
-       returnS mem_val
-    | Nothing -> failS "read_memS"
+  let read_tag s addr = Map.findWithDefault addr B0 s.tagstate in
+  readS (fun s ->
+    (just_list (List.map (read_byte s) addrs),
+     List.foldl and_bit B1 (List.map (read_tag s) addrs))) >>$=
+  (function
+    | (Just mem_val, tag) -> returnS (mem_val, tag)
+    | _ -> failS "read_memS"
   end))
 
-val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e
+val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e
 let read_memS rk a sz =
-  read_mem_bytesS rk a (nat_of_int sz) >>$= (fun bytes ->
-  maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)))
+  read_mem_bytesS rk a (nat_of_int sz) >>$= (fun (bytes, tag) ->
+  maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val ->
+  returnS (mem_val, tag)))
 
 val excl_resultS : forall 'regs 'e. unit -> monadS 'regs bool 'e
-let excl_resultS () =
-  readS (fun s -> s.last_exclusive_operation_was_load) >>$= (fun excl_load ->
-  updateS (fun s -> <| s with last_exclusive_operation_was_load = false |>) >>$
-  chooseS (if excl_load then {false; true} else {false}))
+let excl_resultS =
+  (* TODO: This used to be more deterministic, checking a flag in the state
+     whether an exclusive load has occurred before.  However, this does not
+     seem very precise; it might be safer to overapproximate the possible
+     behaviours by always making a nondeterministic choice. *)
+  undefined_boolS
 
-val write_mem_eaS : forall 'regs 'e 'a. Bitvector 'a => write_kind -> 'a -> nat -> monadS 'regs unit 'e
-let write_mem_eaS write_kind addr sz =
+(* Write little-endian list of bytes to given address *)
+val write_mem_bytesS : forall 'regs 'e 'a. Bitvector 'a => write_kind -> 'a -> nat -> list memory_byte -> bitU -> monadS 'regs bool 'e
+let write_mem_bytesS _ addr sz v t =
   maybe_failS "unsigned" (unsigned addr) >>$= (fun addr ->
   let sz = integerFromNat sz in
-  updateS (fun s -> <| s with write_ea = Just (write_kind, addr, sz) |>))
+  let addrs = index_list addr (addr+sz-1) 1 in
+  (*let v = external_mem_value (bits_of v) in*)
+  let a_v = List.zip addrs v in
+  let write_byte mem (addr, v) = Map.insert addr v mem in
+  let write_tag mem addr = Map.insert addr t mem in
+  updateS (fun s ->
+    <| s with memstate = List.foldl write_byte s.memstate a_v;
+              tagstate = List.foldl write_tag s.tagstate addrs |>) >>$
+  returnS true)
 
-(* Write little-endian list of bytes to previously announced address *)
-val write_mem_bytesS : forall 'regs 'e. list memory_byte -> monadS 'regs bool 'e
-let write_mem_bytesS v =
-  readS (fun s -> s.write_ea) >>$= (function
-      | Nothing -> failS "write ea has not been announced yet"
-      | Just (_, addr, sz) ->
-         let addrs = index_list addr (addr+sz-1) 1 in
-         (*let v = external_mem_value (bits_of v) in*)
-         let a_v = List.zip addrs v in
-         let write_byte mem (addr, v) = Map.insert addr v mem in
-         updateS (fun s ->
-           <| s with memstate = List.foldl write_byte s.memstate a_v |>) >>$
-         returnS true
-    end)
-
-val write_mem_valS : forall 'regs 'e 'a. Bitvector 'a => 'a -> monadS 'regs bool 'e
-let write_mem_valS v = match mem_bytes_of_bits v with
-  | Just v -> write_mem_bytesS v
-  | Nothing -> failS "write_mem_val"
+val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> nat -> 'b -> bitU -> monadS 'regs bool 'e
+let write_memS wk addr sz v t = match mem_bytes_of_bits v with
+  | Just v -> write_mem_bytesS wk addr sz v t
+  | Nothing -> failS "write_mem"
 end
-
-val write_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> bitU -> monadS 'regs bool 'e
-let write_tagS addr t =
-   maybe_failS "unsigned" (unsigned addr) >>$= (fun addr ->
-   updateS (fun s -> <| s with tagstate = Map.insert addr t s.tagstate |>) >>$
-   returnS true)
 
 val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e
 let read_regS reg = readS (fun s -> reg.read_from s.regstate)
