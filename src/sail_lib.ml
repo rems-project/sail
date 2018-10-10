@@ -1124,7 +1124,7 @@ let cycle_count () = ()
 
 (* TODO range, atom, register(?), int, nat, bool, real(!), list, string, itself(?) *)
 let rand_zvector (g : 'generators) (size : int) (order : bool) (elem_gen : 'generators -> 'a) : 'a list =
-  List.init size (fun _ -> elem_gen g)
+  Util.list_init size (fun _ -> elem_gen g)
 
 let rand_zbit (g : 'generators) : bit =
   if Random.bool() then B0 else B1
