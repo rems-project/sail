@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 
 #include "elf.h"
@@ -14,6 +15,7 @@
 #include "riscv_platform_impl.h"
 #include "riscv_sail.h"
 
+//#define SPIKE 1
 #ifdef SPIKE
 #include "tv_spike_intf.h"
 #else
@@ -40,12 +42,19 @@ struct tv_spike_t;
 static bool do_dump_dts = false;
 struct tv_spike_t *s = NULL;
 char *term_log = NULL;
+char *dtb_file = NULL;
+unsigned char *dtb = NULL;
+size_t dtb_len = 0;
+
+unsigned char *spike_dtb = NULL;
+size_t spike_dtb_len = 0;
 
 static struct option options[] = {
   {"enable-dirty",                no_argument,       0, 'd'},
   {"enable-misaligned",           no_argument,       0, 'm'},
   {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'},
   {"dump-dts",                    no_argument,       0, 's'},
+  {"device-tree-blob",            required_argument, 0, 'b'},
   {"terminal-log",                required_argument, 0, 't'},
   {"help",                        no_argument,       0, 'h'},
   {0, 0, 0, 0}
@@ -80,11 +89,41 @@ static void dump_dts(void)
   exit(0);
 }
 
+static void read_dtb(const char *path)
+{
+  int fd = open(path, O_RDONLY);
+  if (fd < 0) {
+    fprintf(stderr, "Unable to read DTB file %s: %s\n", path, strerror(errno));
+    exit(1);
+  }
+  struct stat st;
+  if (fstat(fd, &st) < 0) {
+    fprintf(stderr, "Unable to stat DTB file %s: %s\n", path, strerror(errno));
+    exit(1);
+  }
+  char *m = (char *)mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (m == MAP_FAILED) {
+    fprintf(stderr, "Unable to map DTB file %s: %s\n", path, strerror(errno));
+    exit(1);
+  }
+  dtb = (unsigned char *)malloc(st.st_size);
+  if (dtb == NULL) {
+    fprintf(stderr, "Cannot allocate DTB from file %s!\n", path);
+    exit(1);
+  }
+  memcpy(dtb, m, st.st_size);
+  dtb_len = st.st_size;
+  munmap(m, st.st_size);
+  close(fd);
+
+  fprintf(stdout, "Read %ld bytes of DTB from %s.\n", dtb_len, path);
+}
+
 char *process_args(int argc, char **argv)
 {
   int c, idx = 1;
   while(true) {
-    c = getopt_long(argc, argv, "dmst:v:h", options, &idx);
+    c = getopt_long(argc, argv, "dmsb:t:v:h", options, &idx);
     if (c == -1) break;
     switch (c) {
     case 'd':
@@ -93,8 +132,13 @@ char *process_args(int argc, char **argv)
     case 'm':
       rv_enable_misaligned = true;
       break;
+    case 'i':
+      rv_mtval_has_illegal_inst_bits = true;
     case 's':
       do_dump_dts = true;
+      break;
+    case 'b':
+      dtb_file = strdup(optarg);
       break;
     case 't':
       term_log = strdup(optarg);
@@ -110,7 +154,10 @@ char *process_args(int argc, char **argv)
   if (do_dump_dts) dump_dts();
   if (idx >= argc) print_usage(argv[0], 0);
   if (term_log == NULL) term_log = strdup("term.log");
-  return argv[idx];
+  if (dtb_file) read_dtb(dtb_file);
+
+  fprintf(stdout, "Running file %s.\n", argv[optind]);
+  return argv[optind];
 }
 
 uint64_t load_sail(char *f)
@@ -135,15 +182,40 @@ uint64_t load_sail(char *f)
 void init_spike(const char *f, uint64_t entry)
 {
 #ifdef SPIKE
+  /* The initialization order below matters. */
   s = tv_init("RV64IMAC", 1);
   tv_set_verbose(s, 1);
   tv_set_dtb_in_rom(s, 1);
   tv_load_elf(s, f);
   tv_reset(s);
+
   /* sync the insns per tick */
   rv_insns_per_tick = tv_get_insns_per_tick(s);
+
+  /* get DTB from spike */
+  tv_get_dtb(s, NULL, &spike_dtb_len);
+  if (spike_dtb_len > 0) {
+    spike_dtb = (unsigned char *)malloc(spike_dtb_len + 1);
+    dtb[spike_dtb_len] = '\0';
+    if (!tv_get_dtb(s, spike_dtb, &spike_dtb_len)) {
+      fprintf(stderr, "Got %ld bytes of dtb at %p\n", spike_dtb_len, spike_dtb);
+    } else {
+      fprintf(stderr, "Error getting DTB from Spike.\n");
+      exit(1);
+    }
+  } else {
+    fprintf(stderr, "No DTB available from Spike.\n");
+  }
 #else
   s = NULL;
+#endif
+}
+
+void tick_spike()
+{
+#ifdef SPIKE
+  tv_tick_clock(s);
+  tv_step_io(s);
 #endif
 }
 
@@ -167,25 +239,33 @@ void init_sail_reset_vector(uint64_t entry)
   uint64_t addr = rv_rom_base;
   for (int i = 0; i < sizeof(reset_vec); i++)
     write_mem(addr++, (uint64_t)((char *)reset_vec)[i]);
+
+  if (dtb && dtb_len) {
+    for (size_t i = 0; i < dtb_len; i++)
+      write_mem(addr++, dtb[i]);
+  }
+
 #ifdef SPIKE
-  unsigned char *dtb = NULL;
-  size_t dtb_len = 0;
-  tv_get_dtb(s, NULL, &dtb_len);
-  if (dtb_len > 0) {
-    dtb = (unsigned char *)malloc(dtb_len + 1);
-    dtb[dtb_len] = '\0';
-    if (!tv_get_dtb(s, dtb, &dtb_len)) {
-      fprintf(stderr, "Got %ld bytes of dtb at %p\n", dtb_len, dtb);
+  if (dtb && dtb_len) {
+    // Ensure that Spike's DTB matches the one provided.
+    bool matched = dtb_len == spike_dtb_len;
+    if (matched) {
       for (size_t i = 0; i < dtb_len; i++)
-        write_mem(addr++, dtb[i]);
-    } else {
-      fprintf(stderr, "Error getting DTB!\n");
+        matched = matched && (dtb[i] == spike_dtb[i]);
+    }
+    if (!matched) {
+      fprintf(stderr, "Provided DTB does not match Spike's!\n");
       exit(1);
     }
+  } else {
+    if (spike_dtb_len > 0) {
+      // Use the DTB from Spike.
+      for (size_t i = 0; i < spike_dtb_len; i++)
+        write_mem(addr++, spike_dtb[i]);
+    } else {
+      fprintf(stderr, "Running without rom device tree.\n");
+    }
   }
-#else
-  fprintf(stderr, "Running without rom device tree.\n");
-  /* TODO: write DTB */
 #endif
 
   /* zero-fill to page boundary */
@@ -353,10 +433,8 @@ void run_sail(void)
       insn_cnt = 0;
       ztick_clock(UNIT);
       ztick_platform(UNIT);
-#ifdef SPIKE
-      tv_tick_clock(s);
-      tv_step_io(s);
-#endif
+
+      tick_spike();
     }
   }
 
@@ -376,16 +454,16 @@ void init_logs()
 #ifdef SPIKE
   // The Spike interface uses stdout for terminal output, and stderr for logs.
   // Do the same here.
-  int logfd;
   if (dup2(1, 2) < 0) {
     fprintf(stderr, "Unable to dup 1 -> 2: %s\n", strerror(errno));
     exit(1);
   }
+#endif
+
   if ((term_fd = open(term_log, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IRGRP|S_IROTH|S_IWUSR)) < 0) {
     fprintf(stderr, "Cannot create terminal log '%s': %s\n", term_log, strerror(errno));
     exit(1);
   }
-#endif
 }
 
 int main(int argc, char **argv)
