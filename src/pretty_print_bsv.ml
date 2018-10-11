@@ -251,18 +251,26 @@ let rec map_last f f_last = function
   | [] -> []
 
 let rec doc_pat_combinator (P_aux (paux, (l, _)) as pat) = match paux with
-  | P_lit lit -> string "n" ^^ parens (doc_lit lit), []
-  | P_wild -> string "any", []
+  | P_lit lit -> string "litPat" ^^ parens (doc_lit lit), []
+  | P_wild -> string "wildPat", []
   | P_as (p, id) ->
      let pdoc, vars = doc_pat_combinator p in
-     string "as" ^^ parens (pdoc), ((pat_typ_of pat, id) :: vars)
+     string "bindPat" ^^ parens (pdoc), ((pat_typ_of pat, id) :: vars)
   | P_typ (_, pat) -> doc_pat_combinator pat
-  | P_id id -> string "v", [(pat_typ_of pat, id)]
+  | P_id id when is_enum id (pat_env_of pat) ->
+     string "litPat" ^^ parens (doc_id false id), []
+  | P_id id ->
+     string "varPat", [(pat_typ_of pat, id)]
   | P_var (pat, _) -> doc_pat_combinator pat
   | P_app (id, ps) ->
-     let pdocs, vars = List.split (List.map doc_pat_combinator ps) in
-     doc_id false (prepend_id "is_" id) ^^ parens (separate comma_sp pdocs),
-     List.concat vars
+     let pdoc, vars = match ps with
+       | [] -> empty, []
+       | [p] when is_unit_typ (pat_typ_of p) -> empty, []
+       | _ ->
+          let pdocs, vars = List.split (List.map doc_pat_combinator ps) in
+          parens (separate comma_sp pdocs), List.concat vars
+     in
+     doc_id false (prepend_id "pat_" id) ^^ pdoc, vars
   | P_tup ps ->
      let pdocs, vars = List.split (List.map doc_pat_combinator ps) in
      string ("tup" ^ string_of_int (List.length ps)) ^^ parens (separate comma_sp pdocs),
@@ -323,12 +331,11 @@ and doc_recipe ctxt (E_aux (eaux, (l, annot)) as exp) =
        (prefix 2 1 (string "`If" ^^ parens (doc_exp ctxt i)) (doc_recipe ctxt t))
        (surround 2 1 (string "`Else") (doc_recipe ctxt e) (string "`End"))
   | E_case (e, ps) ->
-     enclose_block Expression
-       (separate (break 1)
-         [prefix 2 1
-           (string "List#(Guarded#(Recipe)) zpats = switch(pack" ^^ parens (doc_exp ctxt e) ^^ comma)
-           (separate_map (comma ^^ break 1) (doc_pexp_combinator ctxt) ps ^^ string ")" ^^ semi);
-          string "rOneMatch(map(getGuard, zpats), map(getVal, zpats), rAct(noAction));"])
+     let doc_p p tail =
+       string "Cons" ^^ parens (doc_pexp_combinator ctxt p ^^ comma ^^ break 1 ^^ tail)
+     in
+     let doc_ps = List.fold_right doc_p ps (string "Nil") in
+     prefix 2 1 (string "rCase(" ^^ parens (doc_exp ctxt e) ^^ comma) (doc_ps ^^ string ")")
   | E_assign (lhs, (E_aux (E_app (f, args), _) as rhs))
   | E_assign (lhs, (E_aux (E_app (f, args), _) as rhs))
     when has_mem_eff (effect_of rhs) ->
@@ -352,6 +359,8 @@ and doc_recipe ctxt (E_aux (eaux, (l, annot)) as exp) =
   | E_app (f, args) when has_mem_eff (effect_of exp) ->
      doc_id false (append_id f "_ifc") ^^ string ".sink.put" ^^
      parens (doc_exp ctxt (E_aux (E_tuple args, (l, empty_tannot))))
+  | E_return e when ctxt.return_sink ->
+     string "toRecipe" ^^ parens (string "outsnk.put" ^^ parens (doc_exp ctxt exp))
   | _ ->
      string "toRecipe" ^^
      parens (doc_exp { ctxt with blocktype = Action; } (ensure_block exp))
@@ -649,19 +658,65 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
      end
   | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Multiple function clauses should have been merged")
 
+let doc_kopt k_id =
+  if is_nat_kopt k_id then [string ("numeric type " ^ bsv_kid (kopt_kid k_id))]
+  else if is_typ_kopt k_id then [string ("type " ^ bsv_kid (kopt_kid k_id))]
+  else []
+
+let doc_tq tq =
+  if quant_items tq = [] then empty
+  else begin
+    let qis = quant_kopts tq |> List.map doc_kopt |> List.concat |> separate comma_sp in
+    string "#" ^^ parens qis
+  end
+
+let doc_union_pat_combinator tid tq members =
+  let doc_mem (Tu_aux (Tu_ty_id (typ, cid), _)) =
+    let argtyps = match typ with
+      | Typ_aux (Typ_tup typs, _) -> typs
+      | _ -> [typ]
+    in
+    let var p i = string (p ^ string_of_int i) in
+    let pat_typ typ i j = string "Pat#" ^^ parens (separate comma_sp [typ; var "t" i; var "t" j]) in
+    let doc_arg i typ = pat_typ (doc_typ typ) i (i + 1) ^^ space ^^ var "p" i in
+    let doc_pats = match argtyps with
+      | [] -> empty
+      | _ -> braces (separate comma_sp (List.mapi (fun i _ -> dot ^^ var "x" i) argtyps))
+    in
+    let app i v = var "p" i ^^ parens v in
+    let rec doc_app = function
+      | [(i, v)] -> app i v
+      | (i, v) :: vs -> string "app" ^^ parens (app i v ^^ comma_sp ^^ doc_app vs)
+      | [] -> string "none"
+    in
+    let doc_apps = doc_app (List.mapi (fun i _ -> (i, var "x" i)) argtyps) in
+    let doc_apps_undef = doc_app (List.mapi (fun i _ -> (i, string "?")) argtyps) in
+    let cont =
+      prefix 2 1
+        (separate space
+          [string "function";
+           string "Cont#" ^^ parens (var "t" 0 ^^ comma_sp ^^ var "t" (List.length argtyps));
+           string "k" ^^ parens (doc_typ_id tid ^^ doc_tq tq ^^ space ^^ string "s");
+           equals])
+        (surround 2 1
+          (string "case (s) matches")
+          (separate space [string "tagged"; doc_constr_id cid; doc_pats; colon; doc_apps ^^ semi] ^^
+           break 1 ^^
+           separate space [string ".*"; colon; string "fail" ^^ parens (doc_apps_undef) ^^ semi])
+          (string "endcase;"))
+    in
+    surround 2 1
+      (separate space
+        [string "function";
+         pat_typ (doc_typ_id tid ^^ doc_tq tq) 0 (List.length argtyps);
+         doc_id false (prepend_id "pat_" cid);
+         parens (separate comma_sp (List.mapi doc_arg argtyps)) ^^ semi])
+      (cont ^^ break 1 ^^ string "return k;")
+      (string "endfunction")
+  in
+  separate_map (hardline) doc_mem members
+
 let doc_typdef (TD_aux (td, _)) =
-  let doc_kopt k_id =
-    if is_nat_kopt k_id then [string ("numeric type " ^ bsv_kid (kopt_kid k_id))]
-    else if is_typ_kopt k_id then [string ("type " ^ bsv_kid (kopt_kid k_id))]
-    else []
-  in
-  let doc_tq tq =
-    if quant_items tq = [] then empty
-    else begin
-      let qis = quant_kopts tq |> List.map doc_kopt |> List.concat |> separate comma_sp in
-      string "#" ^^ parens qis
-    end
-  in
   let builtins = ["option"] in
   match td with
   | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (tq, typ), _))
@@ -692,7 +747,9 @@ let doc_typdef (TD_aux (td, _)) =
      surround 2 1
        (string "typedef union tagged {")
        (align doc_members)
-       (string "} " ^^ doc_typ_id id ^^ doc_tq tq) ^^ semi
+       (string "} " ^^ doc_typ_id id ^^ doc_tq tq) ^^ semi ^^
+     hardline ^^
+     doc_union_pat_combinator id tq members
   | TD_enum (id, _, members, _)
     when not (List.mem (string_of_id id) builtins) ->
      separate space
@@ -710,15 +767,14 @@ let doc_defs (Defs defs) =
   let is_typdef = function | DEF_type _ -> true | _ -> false in
   let typdefs, defs = List.partition is_typdef defs in
   separate hardline [
+    string "import List :: *;";
     string "import Assert :: *;";
     string "import BitPat :: *;";
     string "import MasterSlave :: *;";
     string "import SourceSink :: *;";
     string "import Recipe :: *;";
+    string "import Sail :: *;";
     string "`include \"RecipeMacros.inc\"";
-    empty;
-    string "function Bool getGuard(Guarded#(a) x) = x.guard;";
-    string "function a getVal(Guarded#(a) x) = x.val;";
     empty;
     separate_map hardline doc_def typdefs;
     separate_map hardline doc_def defs;
