@@ -264,7 +264,7 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   match t with
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> tyvars_of_nexp (orig_nexp (nvar kid))
-  | Typ_fn (t1,t2,_) -> KidSet.union (trec t1) (trec t2)
+  | Typ_fn (t1,t2,_) -> List.fold_left KidSet.union (trec t2) (List.map trec t1)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (trec t))
        KidSet.empty ts
@@ -395,15 +395,12 @@ let doc_typ, doc_atomic_typ =
   let rec typ ty = fn_typ true ty
     and typ' ty = fn_typ false ty
     and fn_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_fn(arg,ret,efct) ->
+      | Typ_fn(args,ret,efct) ->
          let ret_typ =
            if effectful efct
            then separate space [string "M"; fn_typ true ret]
            else separate space [fn_typ false ret] in
-         let arg_typs = match arg with
-           | Typ_aux (Typ_tup typs, _) ->
-              List.map (app_typ false) typs
-           | _ -> [tup_typ false arg] in
+         let arg_typs = List.map (app_typ false) args in
          let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
@@ -641,7 +638,7 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
   | Typ_id _
   | Typ_var _
     -> NexpSet.empty
-  | Typ_fn (t1,t2,_) -> NexpSet.union (typeclass_nexps t1) (typeclass_nexps t2)
+  | Typ_fn (t1,t2,_) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
   | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
   | Typ_app (Id_aux (Id "vector",_),
              [Typ_arg_aux (Typ_arg_nexp size_nexp,_);
@@ -689,18 +686,12 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
         (* Following the type checker to get the subpattern types, TODO perhaps ought
            to persuade the type checker to output these somehow. *)
        let (typq, ctor_typ) = Env.get_val_spec id env in
-       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
-         | Typ_tup [Typ_aux (Typ_tup typs,_)] -> typs
-         | Typ_tup typs -> typs
-         | _ -> [typ]
-       in
        let arg_typs =
          match Env.expand_synonyms env ctor_typ with
-         | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
+         | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
             (* The FIXME comes from the typechecker code, not sure what it's about... *)
             let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
-            let arg_typ' = subst_unifiers unifiers arg_typ in
-            untuple arg_typ'
+            List.map (subst_unifiers unifiers) arg_typs
          | _ -> assert false
        in
        let ppp = doc_unop (doc_id_ctor id)
@@ -1144,10 +1135,7 @@ let doc_exp, doc_let =
             else doc_id f, false, false in
           let (tqs,fn_ty) = Env.get_val_spec_orig f env in
           let arg_typs, ret_typ, eff = match fn_ty with
-            | Typ_aux (Typ_fn (arg_typ,ret_typ,eff),_) ->
-               (match arg_typ with
-               | Typ_aux (Typ_tup typs,_) -> typs, ret_typ, eff
-               | _ -> [arg_typ], ret_typ, eff)
+            | Typ_aux (Typ_fn (arg_typs,ret_typ,eff),_) -> arg_typs, ret_typ, eff
             | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Function not a function type")
           in
           let inst =
@@ -1923,8 +1911,8 @@ let merge_var_patterns map pats =
 let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
-  let (arg_typ, ret_typ, eff) = match typ with
-    | Typ_aux (Typ_fn (arg_typ, ret_typ, eff),_) -> arg_typ, ret_typ, eff
+  let (arg_typs, ret_typ, eff) = match typ with
+    | Typ_aux (Typ_fn (arg_typs, ret_typ, eff),_) -> arg_typs, ret_typ, eff
     | _ -> failwith ("Function " ^ string_of_id id ^ " does not have function type")
   in
   let build_ex, ret_typ = replace_atom_return_type ret_typ in
@@ -1935,7 +1923,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let ids_to_avoid = all_ids pexp in
   let bound_kids = tyvars_of_typquant tq in
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
-  let pats, bind = untuple_args_pat arg_typ pat in
+  let pats, bind = untuple_args_pat (mk_typ (Typ_tup arg_typs)) pat in (* FIXME is this needed any more? *)
   let pats, binds = List.split (Util.list_mapi demote_as_pattern pats) in
   let eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
@@ -2135,7 +2123,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
 let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
   let typ_env = add_typquant l tqs typ_env in
   match typ with
-  | Typ_aux (Typ_fn (args_ty, ret_ty, eff),l') ->
+  | Typ_aux (Typ_fn (typs, ret_ty, eff),l') ->
      let check_typ (args,used) typ =
        match Type_check.destruct_atom_nexp typ_env typ with
        | Some (Nexp_aux (Nexp_var kid,_)) ->
@@ -2144,7 +2132,6 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
        | Some _ -> args, used
        | _ -> args, KidSet.union used (tyvars_of_typ typ)
      in
-     let typs = match args_ty with Typ_aux (Typ_tup typs,_) -> typs | _ -> [args_ty] in
      let args, used = List.fold_left check_typ (KidSet.empty, KidSet.empty) typs in
      let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
      let tqs = match tqs with

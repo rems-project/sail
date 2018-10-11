@@ -182,9 +182,16 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
                                  | K_infer -> k.k <- K_Typ; Typ_var v
                                  | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
                    | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
-               | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
-                                                            (to_ast_typ k_env def_ord ret),
-                                                            (to_ast_effects k_env efct))
+               | Parse_ast.ATyp_fn(arg,ret,efct) ->
+                  begin match arg with
+                  | Parse_ast.ATyp_aux (Parse_ast.ATyp_tup args, _) ->
+                     Typ_fn (List.map (to_ast_typ k_env def_ord) args,
+                             (to_ast_typ k_env def_ord ret),
+                             (to_ast_effects k_env efct))
+                  | _ -> Typ_fn ([to_ast_typ k_env def_ord arg],
+                                 (to_ast_typ k_env def_ord ret),
+                                 (to_ast_effects k_env efct))
+                  end
                | Parse_ast.ATyp_bidir (typ1, typ2) -> Typ_bidir ( (to_ast_typ k_env def_ord typ1),
                                                                   (to_ast_typ k_env def_ord typ2))
                | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
@@ -1093,11 +1100,11 @@ let quant_item_arg = function
 let undefined_typschm id typq =
   let qis = quant_items typq in
   if qis = [] then
-    mk_typschm typq (mk_typ (Typ_fn (unit_typ, mk_typ (Typ_id id), mk_effect [BE_undef])))
+    mk_typschm typq (function_typ [unit_typ] (mk_typ (Typ_id id)) (mk_effect [BE_undef]))
   else
-    let arg_typ = mk_typ (Typ_tup (List.concat (List.map quant_item_typ qis))) in
+    let arg_typs = List.concat (List.map quant_item_typ qis) in
     let ret_typ = app_typ id (List.concat (List.map quant_item_arg qis)) in
-    mk_typschm typq (mk_typ (Typ_fn (arg_typ, ret_typ, mk_effect [BE_undef])))
+    mk_typschm typq (function_typ arg_typs ret_typ (mk_effect [BE_undef]))
 
 let have_undefined_builtins = ref false
 
@@ -1132,6 +1139,10 @@ let generate_undefineds vs_ids (Defs defs) =
        mk_exp (E_app (id, List.map (fun _ -> mk_lit_exp L_undef) typs))
     | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_lit_exp L_undef]))
   in
+  let p_tup = function
+    | [pat] -> pat
+    | pats -> mk_pat (P_tup pats)
+  in
   let undefined_td = function
     | TD_enum (id, _, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let typschm = typschm_of_string dec_ord ("unit -> " ^ string_of_id id ^ " effect {undef}") in
@@ -1144,13 +1155,13 @@ let generate_undefineds vs_ids (Defs defs) =
                                mk_exp (E_app (mk_id "internal_pick",
                                               [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
     | TD_record (id, _, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-       let pat = mk_pat (P_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))) in
+       let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
        [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
                             (mk_exp (E_record (mk_fexps (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields))))]]
     | TD_variant (id, _, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-       let pat = mk_pat (P_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))) in
+       let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
        let body =
          if !opt_fast_undefined && List.length tus > 0 then
            undefined_tu (List.hd tus)
@@ -1256,7 +1267,7 @@ let generate_enum_functions vs_ids (Defs defs) =
          else
            [ enum_val_spec name
               [mk_qi_id BK_int kid; mk_qi_nc (range_constraint kid)]
-              (function_typ (atom_typ (nvar kid)) (mk_typ (Typ_id id)) no_effect);
+              (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)) no_effect);
              mk_fundef [funcl] ]
        in
 
@@ -1273,7 +1284,7 @@ let generate_enum_functions vs_ids (Defs defs) =
          in
          if IdSet.mem name vs_ids then []
          else
-           [ enum_val_spec name [] (function_typ (mk_typ (Typ_id id)) to_typ no_effect);
+           [ enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ no_effect);
              mk_fundef [funcl] ]
        in
        enum :: to_enum @ from_enum @ gen_enums defs

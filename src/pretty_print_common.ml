@@ -128,8 +128,8 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   (* following the structure of parser for precedence *)
   let rec typ ty = fn_typ ty
   and fn_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_fn(arg,ret,efct) ->
-     separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
+  | Typ_fn(args,ret,efct) ->
+     separate space [parens (separate_map (comma ^^ space) tup_typ args); arrow; fn_typ ret; string "effect"; doc_effects efct]
   | Typ_bidir (t1, t2) ->
      separate space [tup_typ t1; bidir; tup_typ t2]
   | _ -> tup_typ ty

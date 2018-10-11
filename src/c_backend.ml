@@ -568,8 +568,7 @@ let cdef_ctyps ctx = function
   | CDEF_fundef (id, _, _, instrs) ->
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
@@ -803,8 +802,7 @@ let compile_funcall l ctx id args typ =
       c_debug (lazy ("Falling back to global env for " ^ string_of_id id)); Env.get_val_spec id ctx.tc_env
   in
   let arg_typs, ret_typ = match fn_typ with
-    | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-    | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+    | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
     | _ -> assert false
   in
   let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
@@ -1304,7 +1302,6 @@ let compile_type_def ctx (TD_aux (type_def, _)) =
 
   | TD_variant (id, _, _, tus, _) ->
      let compile_tu = function
-       | Tu_aux (Tu_ty_id (Typ_aux (Typ_fn (typ, _, _), _), id), _) -> ctyp_of_typ ctx typ, id
        | Tu_aux (Tu_ty_id (typ, id), _) -> ctyp_of_typ ctx typ, id
      in
      let ctus = List.fold_left (fun ctus (ctyp, id) -> Bindings.add id ctyp ctus) Bindings.empty (List.map compile_tu tus) in
@@ -1540,8 +1537,7 @@ let rec compile_def ctx = function
      c_debug (lazy "Compiling VS");
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
      let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } in
@@ -1556,8 +1552,8 @@ let rec compile_def ctx = function
        with Type_error _ ->
          c_debug (lazy ("Falling back to global env for " ^ string_of_id id)); Env.get_val_spec id ctx.tc_env
      in
-     let arg_typ, ret_typ = match fn_typ with
-       | Typ_fn (arg_typ, ret_typ, _) -> arg_typ, ret_typ
+     let arg_typs, ret_typ = match fn_typ with
+       | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
 
@@ -1567,10 +1563,7 @@ let rec compile_def ctx = function
      (* The context must be updated before we call ctyp_of_typ on the argument types. *)
      let ctx = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
 
-     let arg_ctyps = match arg_typ with
-       | Typ_aux (Typ_tup arg_typs, _) -> List.map (ctyp_of_typ ctx) arg_typs
-       | _ -> [ctyp_of_typ ctx arg_typ]
-     in
+     let arg_ctyps =  List.map (ctyp_of_typ ctx) arg_typs in
      let ret_ctyp = ctyp_of_typ ctx ret_typ in
 
      (* Optimize and compile the expression to ANF. *)
@@ -2790,8 +2783,7 @@ let codegen_def' ctx = function
      (* Extract type information about the function from the environment. *)
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
      let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } in

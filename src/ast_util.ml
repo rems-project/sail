@@ -296,7 +296,7 @@ let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tup typs)
-let function_typ typ1 typ2 eff = mk_typ (Typ_fn (typ1, typ2, eff))
+let function_typ arg_typs ret_typ eff = mk_typ (Typ_fn (arg_typs, ret_typ, eff))
 
 let vector_typ n ord typ =
   mk_typ (Typ_app (mk_id "vector",
@@ -613,8 +613,11 @@ and string_of_typ_aux = function
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
   | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
-  | Typ_fn (typ_arg, typ_ret, eff) ->
-     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
+  | Typ_fn ([typ_arg], typ_ret, eff) ->
+     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff     
+  | Typ_fn (typ_args, typ_ret, eff) ->
+     "(" ^ string_of_list ", " string_of_typ typ_args ^ ") -> "
+     ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
   | Typ_bidir (typ1, typ2) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
@@ -901,8 +904,8 @@ module Typ = struct
     | Typ_internal_unknown, Typ_internal_unknown -> 0
     | Typ_id id1, Typ_id id2 -> Id.compare id1 id2
     | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2
-    | Typ_fn (t1,t2,e1), Typ_fn (t3,t4,e2) ->
-       (match compare t1 t3 with
+    | Typ_fn (ts1,t2,e1), Typ_fn (ts3,t4,e2) ->
+       (match Util.compare_list compare ts1 ts3 with
        | 0 -> (match compare t2 t4 with
          | 0 -> effect_compare e1 e2
          | n -> n)
@@ -1084,7 +1087,7 @@ let rec tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_internal_unknown -> KidSet.empty
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
-  | Typ_fn (t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_fn (ts, t, _) -> List.fold_left KidSet.union (tyvars_of_typ t) (List.map tyvars_of_typ ts)
   | Typ_bidir (t1, t2) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
@@ -1345,7 +1348,8 @@ let rec locate_typ l (Typ_aux (typ_aux, _)) =
     | Typ_internal_unknown -> Typ_internal_unknown
     | Typ_id id -> Typ_id (locate_id l id)
     | Typ_var kid -> Typ_var (locate_kid l kid)
-    | Typ_fn (arg_typ, ret_typ, effect) -> Typ_fn (locate_typ l arg_typ, locate_typ l ret_typ, locate_effect l effect)
+    | Typ_fn (arg_typs, ret_typ, effect) ->
+       Typ_fn (List.map (locate_typ l) arg_typs, locate_typ l ret_typ, locate_effect l effect)
     | Typ_bidir (typ1, typ2) -> Typ_bidir (locate_typ l typ1, locate_typ l typ2)
     | Typ_tup typs -> Typ_tup (List.map (locate_typ l) typs)
     | Typ_exist (kids, constr, typ) -> Typ_exist (List.map (locate_kid l) kids, locate_nc l constr, locate_typ l typ)

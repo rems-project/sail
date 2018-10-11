@@ -142,7 +142,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_app (id, []) -> ocaml_typ_id ctx id
   | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
-  | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
+  | Typ_fn (typs, typ, _) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
   | Typ_bidir (t1, t2) -> raise (Reporting_basic.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
@@ -455,15 +455,15 @@ let ocaml_funcls ctx =
   function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pexp),_)] ->
-     let typ1, typ2 =
+     let arg_typs, ret_typ =
        match Bindings.find id ctx.val_specs with
-       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | Typ_aux (Typ_fn (typs, typ, _), _) -> (typs, typ)
        | _ -> failwith "Found val spec which was not a function!"
      in
      (* Any remaining type variables after simple_typ rewrite should
         indicate Type-polymorphism. If we have it, we need to generate
         explicit type signatures with universal quantification. *)
-     let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
+     let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
      let pat_sym = gensym () in
      let pat, exp =
        match pexp with
@@ -473,7 +473,7 @@ let ocaml_funcls ctx =
      let annot_pat =
        let pat =
          if KidSet.is_empty kids then
-           parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1)
+           parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tup arg_typs)))
          else
            ocaml_pat ctx pat
        in
@@ -482,18 +482,18 @@ let ocaml_funcls ctx =
        else pat
      in
      let call_header = function_header () in
-     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
+     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tup arg_typs)) ret_typ in
      let call =
        if KidSet.is_empty kids then
          separate space [call_header; zencode ctx id;
-                         annot_pat; colon; ocaml_typ ctx typ2; equals;
+                         annot_pat; colon; ocaml_typ ctx ret_typ; equals;
                          sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
          ^//^ ocaml_exp ctx exp
          ^^ rparen
        else
          separate space [call_header; zencode ctx id; colon;
                          separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot;
-                         ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2; equals;
+                         ocaml_typ ctx (mk_typ (Typ_tup arg_typs)); string "->"; ocaml_typ ctx ret_typ; equals;
                          string "fun"; annot_pat; string "->";
                          sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
          ^//^ ocaml_exp ctx exp
@@ -502,18 +502,18 @@ let ocaml_funcls ctx =
      ocaml_funcl call string_of_arg string_of_ret
   | funcls ->
      let id = funcls_id funcls in
-     let typ1, typ2 =
+     let arg_typs, ret_typ =
        match Bindings.find id ctx.val_specs with
-       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | Typ_aux (Typ_fn (typs, typ, _), _) -> (typs, typ)
        | _ -> failwith "Found val spec which was not a function!"
      in
-     let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
+     let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
      if not (KidSet.is_empty kids) then failwith "Cannot handle polymorphic multi-clause function in OCaml backend" else ();
      let pat_sym = gensym () in
      let call_header = function_header () in
-     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
+     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tup arg_typs)) ret_typ in
      let call =
-       separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1); equals;
+       separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tup arg_typs))); equals;
                        sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
        ^//^ (separate space [string "match"; pat_sym; string "with"] ^^ hardline ^^ ocaml_funcl_matches ctx funcls)
        ^^ rparen
@@ -806,8 +806,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       in
       let make_variant (Tu_aux (Tu_ty_id (typ,id),_)) =
         let arg_typs = match typ with
-          | Typ_aux (Typ_fn (Typ_aux (Typ_tup typs,_),_,_),_) -> typs
-          | Typ_aux (Typ_fn (typ,_,_),_) -> [typ]
+          | Typ_aux (Typ_fn (typs,_,_),_) -> typs
           | Typ_aux (Typ_tup typs,_) -> typs
           | _ -> [typ]
         in
