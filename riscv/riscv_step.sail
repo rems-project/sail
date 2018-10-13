@@ -21,7 +21,7 @@ function fetch() -> FetchResult =
        * well as to generate precise fault addresses in any fetch
        * exceptions.
        */
-      match checked_mem_read(Instruction, ppclo, 2) {
+      match checked_mem_read(Instruction, ppclo, 2, false, false, false) {
         MemException(e) => F_Error(E_Fetch_Access_Fault, PC),
         MemValue(ilo) => {
           if isRVC(ilo) then F_RVC(ilo)
@@ -30,7 +30,7 @@ function fetch() -> FetchResult =
             match translateAddr(PChi, Execute, Instruction) {
               TR_Failure(e) => F_Error(e, PChi),
               TR_Address(ppchi) => {
-                match checked_mem_read(Instruction, ppchi, 2) {
+                match checked_mem_read(Instruction, ppchi, 2, false, false, false) {
                   MemException(e) => F_Error(E_Fetch_Access_Fault, PChi),
                   MemValue(ihi) => F_Base(append(ihi, ilo))
                 }
