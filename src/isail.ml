@@ -179,6 +179,8 @@ let help = function
      ":help <command> - Get a description of <command>. Commands are prefixed with a colon, e.g. :help :type."
   | ":elf" ->
      ":elf <file> - Load an ELF file."
+  | ":bin" ->
+     ":bin <address> <file> - Load a binary file at the given address."
   | ":r" | ":run" ->
      "(:r | :run) - Completely evaluate the currently evaluating expression."
   | ":s" | ":step" ->
@@ -256,7 +258,7 @@ let handle_input' input =
          | ":commands" ->
             let commands =
               [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output :option";
-                "Normal mode commands - :elf :(l)oad :(u)nload";
+                "Normal mode commands - :elf :bin :(l)oad :(u)nload";
                 "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
                 "";
                 ":(c)ommand can be called as either :c or :command." ]
@@ -320,6 +322,16 @@ let handle_input' input =
           begin
             match cmd with
             | ":elf" -> Elf_loader.load_elf arg
+            | ":bin" ->
+               begin
+                 let args = Util.split_on_char ' ' arg in
+                 match args with
+                 | [addr_s; filename] ->
+                    let addr = Big_int.of_string addr_s in
+                    Elf_loader.load_binary addr filename
+                 | _ ->
+                    print_endline "Invalid argument for :bin, expected <addr> <filename>"
+               end
             | ":l" | ":load" ->
                let files = Util.split_on_char ' ' arg in
                let (_, ast, env) = load_files !interactive_env files in
