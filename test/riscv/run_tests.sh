@@ -61,9 +61,9 @@ fi
 for test in $DIR/tests/*.elf; do
     if $SAILDIR/riscv/platform "$test" >"${test/.elf/.out}" 2>&1 && grep -q SUCCESS "${test/.elf/.out}"
     then
-       green "$(basename $test)" "ok"
+       green "$(basename $test)_ocaml" "ok"
     else
-       red "$(basename $test)" "fail"
+       red "$(basename $test)_ocaml" "fail"
     fi
 done
 
@@ -78,9 +78,27 @@ for test in $DIR/tests/*.elf; do
     $SAILDIR/sail -elf $test -o ${test%.elf}.bin 2> /dev/null;
     if timeout 5 $SAILDIR/riscv/riscv_c --binary=0x1000,reset_vec.bin --image=${test%.elf}.bin > ${test%.elf}.cout 2>&1 && grep -q SUCCESS ${test%.elf}.cout
     then
-	green "$(basename $test)" "ok"
+	green "$(basename $test)_c" "ok"
     else
-	red "$(basename $test)" "fail"
+	red "$(basename $test)_c" "fail"
+    fi
+done
+
+printf "Interpreting RISCV specification...\n"
+
+for test in $DIR/tests/*.elf; do
+    if {
+        timeout 30 $SAILDIR/sail -i $SAILDIR/riscv/riscv_all.sail $SAILDIR/riscv/main.sail > ${test%.elf}.iout 2>&1 <<EOF
+:bin 0x1000 $SAILDIR/riscv/reset_vec.bin
+:elf $test
+main()
+:run
+EOF
+    } && grep -q SUCCESS ${test%.elf}.iout
+    then
+        green "$(basename $test)_interpreter" "ok"
+    else
+        red "$(basename $test)_interpreter" "fail"
     fi
 done
 
