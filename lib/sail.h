@@ -327,6 +327,7 @@ void random_real(real *rop, unit);
 
 void string_length(sail_int *len, sail_string s);
 void string_drop(sail_string *dst, sail_string s, sail_int len);
+void string_take(sail_string *dst, sail_string s, sail_int len);
 
 /* ***** Printing ***** */
 

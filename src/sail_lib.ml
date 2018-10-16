@@ -530,6 +530,13 @@ let string_startswith (str1, str2) = String.length str1 >= String.length str2 &&
 
 let string_drop (str, n) = if (Big_int.less_equal (Big_int.of_int (String.length str)) n) then "" else let n = Big_int.to_int n in String.sub str n (String.length str - n)
 
+let string_take (str, n) =
+  let n = Big_int.to_int n in
+  if String.length str <= n then
+    str
+  else
+    String.sub str 0 n
+
 let string_length str = Big_int.of_int (String.length str)
 
 let string_append (s1, s2) = s1 ^ s2
@@ -703,28 +710,6 @@ let speculate_conditional_success () = true
 
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
-
-let rec n_leading_spaces s =
-  match String.length s with
-  | 0 -> 0
-  | 1 -> begin match s with
-         | " " -> 1
-         | _ -> 0
-         end
-  | len -> begin match String.get s 0 with
-           | ' ' -> 1 + (n_leading_spaces (String.sub s 1 (len - 1)))
-           | _ -> 0
-           end
-
-
-let opt_spc_matches_prefix s =
-  ZSome ((), n_leading_spaces s |> Big_int.of_int)
-
-let spc_matches_prefix s =
-  let n = n_leading_spaces s in
-  match n with
-  | 0 -> ZNone ()
-  | n -> ZSome ((), Big_int.of_int n)
 
 (* Python:
 f = """let hex_bits_{0}_matches_prefix s =
