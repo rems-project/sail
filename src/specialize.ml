@@ -65,7 +65,8 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
     | Typ_tup typs -> Typ_tup (List.map nexp_simp_typ typs)
     | Typ_app (f, args) -> Typ_app (f, List.map nexp_simp_typ_arg args)
     | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, nexp_simp_typ typ)
-    | Typ_fn (typ1, typ2, effect) -> Typ_fn (nexp_simp_typ typ1, nexp_simp_typ typ2, effect)
+    | Typ_fn (arg_typs, ret_typ, effect) ->
+       Typ_fn (List.map nexp_simp_typ arg_typs, nexp_simp_typ ret_typ, effect)
     | Typ_bidir (t1, t2) -> Typ_bidir (nexp_simp_typ t1, nexp_simp_typ t2)
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   in
@@ -137,8 +138,8 @@ let string_of_instantiation instantiation =
     | Typ_var kid -> kid_name kid
     | Typ_tup typs -> "(" ^ Util.string_of_list ", " string_of_typ typs ^ ")"
     | Typ_app (id, args) -> string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_typ_arg args ^ ")"
-    | Typ_fn (typ_arg, typ_ret, eff) ->
-       string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
+    | Typ_fn (arg_typs, ret_typ, eff) ->
+       "(" ^ Util.string_of_list ", " string_of_typ arg_typs ^ ") -> " ^ string_of_typ ret_typ ^ " effect " ^ string_of_effect eff
     | Typ_bidir (t1, t2) ->
        string_of_typ t1 ^ " <-> " ^ string_of_typ t2
     | Typ_exist (kids, nc, typ) ->
@@ -257,7 +258,8 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
   | Typ_exist (kids, nc, typ) -> typ_frees ~exs:(KidSet.of_list kids) typ
-  | Typ_fn (typ1, typ2, _) -> KidSet.union (typ_frees ~exs:exs typ1) (typ_frees ~exs:exs typ2)
+  | Typ_fn (arg_typs, ret_typ, _) ->
+     List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_frees ~exs:exs t1) (typ_frees ~exs:exs t2)
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_frees ?exs:(exs=KidSet.empty) (Typ_arg_aux (typ_arg_aux, l)) =
@@ -273,7 +275,8 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_int_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_int_frees ~exs:exs) args)
   | Typ_exist (kids, nc, typ) -> typ_int_frees ~exs:(KidSet.of_list kids) typ
-  | Typ_fn (typ1, typ2, _) -> KidSet.union (typ_int_frees ~exs:exs typ1) (typ_int_frees ~exs:exs typ2)
+  | Typ_fn (arg_typs, ret_typ, _) ->
+     List.fold_left KidSet.union (typ_int_frees ~exs:exs ret_typ) (List.map (typ_int_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_int_frees ~exs:exs t1) (typ_int_frees ~exs:exs t2)
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_int_frees ?exs:(exs=KidSet.empty) (Typ_arg_aux (typ_arg_aux, l)) =

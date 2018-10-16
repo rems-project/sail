@@ -151,7 +151,25 @@ void string_drop(sail_string *dst, sail_string s, sail_int ns)
     *dst = realloc(*dst, (len - n) + 1);
     memcpy(*dst, s + n, len - n);
     (*dst)[len - n] = '\0';
+  } else {
+    *dst = realloc(*dst, 1);
+    **dst = '\0';
   }
+}
+
+void string_take(sail_string *dst, sail_string s, sail_int ns)
+{
+  size_t len = strlen(s);
+  mach_int n = CREATE_OF(mach_int, sail_int)(ns);
+  mach_int to_copy;
+  if (len <= n) {
+    to_copy = len;
+  } else {
+    to_copy = n;
+  }
+  *dst = realloc(*dst, to_copy + 1);
+  memcpy(*dst, s, to_copy);
+  *dst[to_copy] = '\0';
 }
 
 /* ***** Sail integers ***** */

@@ -219,7 +219,7 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   match t with
   | Typ_id _ -> NexpSet.empty
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
-  | Typ_fn (t1,t2,_) -> NexpSet.union (trec t1) (trec t2)
+  | Typ_fn (t1,t2,_) -> List.fold_left NexpSet.union (trec t2) (List.map trec t1)
   | Typ_tup ts ->
      List.fold_left (fun s t -> NexpSet.union s (trec t))
        NexpSet.empty ts
@@ -258,15 +258,12 @@ let doc_typ_lem, doc_atomic_typ_lem =
   let rec typ ty = fn_typ true ty
     and typ' ty = fn_typ false ty
     and fn_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_fn(arg,ret,efct) ->
+      | Typ_fn(args,ret,efct) ->
          let ret_typ =
            if effectful efct
            then separate space [string "M"; fn_typ true ret]
            else separate space [fn_typ false ret] in
-         let arg_typs = match arg with
-           | Typ_aux (Typ_tup typs, _) ->
-              List.map (app_typ false) typs
-           | _ -> [tup_typ false arg] in
+         let arg_typs = List.map (app_typ false) args in
          let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
@@ -443,7 +440,7 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
     | Typ_id _
     | Typ_var _
       -> NexpSet.empty
-    | Typ_fn (t1,t2,_) -> NexpSet.union (typeclass_nexps t1) (typeclass_nexps t2)
+    | Typ_fn (ts,t,_) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
     | Typ_app (Id_aux (Id "vector",_),
                [Typ_arg_aux (Typ_arg_nexp size_nexp,_);
@@ -531,7 +528,7 @@ let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
   | Typ_tup ts -> List.exists typ_needs_printed ts
   | Typ_app (Id_aux (Id "itself",_),_) -> true
   | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists typ_needs_printed_arg targs
-  | Typ_fn (t1,t2,_) -> typ_needs_printed t1 || typ_needs_printed t2
+  | Typ_fn (ts,t,_) -> List.exists typ_needs_printed ts || typ_needs_printed t
   | Typ_exist (kids,_,t) ->
      let visible_kids = KidSet.inter (KidSet.of_list kids) (lem_tyvars_of_typ t) in
      typ_needs_printed t && KidSet.is_empty visible_kids

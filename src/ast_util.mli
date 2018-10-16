@@ -132,7 +132,7 @@ val vector_typ : nexp -> order -> typ -> typ
 val list_typ : typ -> typ
 val exc_typ : typ
 val tuple_typ : typ list -> typ
-val function_typ : typ -> typ -> effect -> typ
+val function_typ : typ list -> typ -> effect -> typ
 
 val no_effect : effect
 val mk_effect : base_effect_aux list -> effect

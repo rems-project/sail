@@ -183,7 +183,7 @@ and strip_typ_aux : typ_aux -> typ_aux = function
   | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id id -> Typ_id (strip_id id)
   | Typ_var kid -> Typ_var (strip_kid kid)
-  | Typ_fn (typ1, typ2, effect) -> Typ_fn (strip_typ typ1, strip_typ typ2, strip_effect effect)
+  | Typ_fn (arg_typs, ret_typ, effect) -> Typ_fn (List.map strip_typ arg_typs, strip_typ ret_typ, strip_effect effect)
   | Typ_bidir (typ1, typ2) -> Typ_bidir (strip_typ typ1, strip_typ typ2)
   | Typ_tup typs -> Typ_tup (List.map strip_typ typs)
   | Typ_exist (kids, constr, typ) -> Typ_exist ((List.map strip_kid kids), strip_n_constraint constr, strip_typ typ)
@@ -253,7 +253,7 @@ and typ_subst_nexp_aux sv subst = function
   | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id v -> Typ_id v
   | Typ_var kid -> Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2, effs)
+  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_nexp sv subst) arg_typs, typ_subst_nexp sv subst ret_typ, effs)
   | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_nexp sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
@@ -270,7 +270,7 @@ and typ_subst_typ_aux sv subst = function
   | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id v -> Typ_id v
   | Typ_var kid -> if Kid.compare kid sv = 0 then subst else Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2, effs)
+  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_typ sv subst) arg_typs, typ_subst_typ sv subst ret_typ, effs)
   | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_typ sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_typ sv subst) args)
@@ -293,7 +293,7 @@ and typ_subst_order_aux sv subst = function
   | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id v -> Typ_id v
   | Typ_var kid -> Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_order sv subst typ1, typ_subst_order sv subst typ2, effs)
+  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_order sv subst) arg_typs, typ_subst_order sv subst ret_typ, effs)
   | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_order sv subst typ1, typ_subst_order sv subst typ2)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_order sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_order sv subst) args)
@@ -309,7 +309,7 @@ and typ_subst_kid_aux sv subst = function
   | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id v -> Typ_id v
   | Typ_var kid -> if Kid.compare kid sv = 0 then Typ_var subst else Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2, effs)
+  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_kid sv subst) arg_typs, typ_subst_kid sv subst ret_typ, effs)
   | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_kid sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_kid sv subst) args)
@@ -602,7 +602,7 @@ end = struct
     match typ with
     | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
-    | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
+    | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map (expand_synonyms env) arg_typs, expand_synonyms env ret_typ, effs), l)
     | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2), l)
     | Typ_app (id, args) ->
        begin
@@ -658,7 +658,7 @@ end = struct
     match typ_aux with
     | Typ_internal_unknown
     | Typ_id _ | Typ_var _ -> typ
-    | Typ_fn (arg_typ, ret_typ, effect) -> Typ_aux (Typ_fn (map_nexps f arg_typ, map_nexps f ret_typ, effect), l)
+    | Typ_fn (arg_typs, ret_typ, effect) -> Typ_aux (Typ_fn (List.map (map_nexps f) arg_typs, map_nexps f ret_typ, effect), l)
     | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (map_nexps f typ1, map_nexps f typ2), l)
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (map_nexps f) typs), l)
     | Typ_exist (kids, nc, typ) -> Typ_aux (Typ_exist (kids, nc, map_nexps f typ), l)
@@ -699,8 +699,8 @@ end = struct
 
   let rec canonicalize env typ =
     match typ with
-    | Typ_aux (Typ_fn (arg_typ, ret_typ, effects), l) when is_canonical env arg_typ ->
-       Typ_aux (Typ_fn (arg_typ, canonicalize env ret_typ, effects), l)
+    | Typ_aux (Typ_fn (arg_typs, ret_typ, effects), l) when List.for_all (is_canonical env) arg_typs ->
+       Typ_aux (Typ_fn (arg_typs, canonicalize env ret_typ, effects), l)
     | Typ_aux (Typ_fn _, l) -> typ_error l ("Function type " ^ string_of_typ typ ^ " is not canonical")
     | _ ->
        let existentials, constrs, (Typ_aux (typ_aux, l) as typ) = canonical env typ in
@@ -735,7 +735,7 @@ end = struct
       | exception Not_found ->
          typ_error l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
     end
-    | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
+    | Typ_fn (arg_typs, ret_typ, effs) -> List.iter (wf_typ ~exs:exs env) arg_typs; wf_typ ~exs:exs env ret_typ
     | Typ_bidir (typ1, typ2) when strip_typ typ1 = strip_typ typ2 ->
        typ_error l "Bidirectional types cannot be the same on both sides"
     | Typ_bidir (typ1, typ2) -> wf_typ ~exs:exs env typ1; wf_typ ~exs:exs env typ2
@@ -859,10 +859,10 @@ end = struct
       let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
       let backwards_id = mk_id (string_of_id id ^ "_backwards") in
       let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
-      let forwards_typ = Typ_aux (Typ_fn (typ1, typ2, no_effect), Parse_ast.Unknown) in
-      let forwards_matches_typ = Typ_aux (Typ_fn (typ1, bool_typ, no_effect), Parse_ast.Unknown) in
-      let backwards_typ = Typ_aux (Typ_fn (typ2, typ1, no_effect), Parse_ast.Unknown) in
-      let backwards_matches_typ = Typ_aux (Typ_fn (typ2, bool_typ, no_effect), Parse_ast.Unknown) in
+      let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), Parse_ast.Unknown) in
+      let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), Parse_ast.Unknown) in
+      let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), Parse_ast.Unknown) in
+      let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), Parse_ast.Unknown) in
       let env =
         { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
         |> add_val_spec forwards_id (typq, forwards_typ)
@@ -872,10 +872,10 @@ end = struct
       in
       let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
       begin if strip_typ typ1 = string_typ then
-              let forwards_prefix_typ = Typ_aux (Typ_fn (typ1, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+              let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
               add_val_spec prefix_id (typq, forwards_prefix_typ) env
             else if strip_typ typ2 = string_typ then
-              let backwards_prefix_typ = Typ_aux (Typ_fn (typ2, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+              let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
               add_val_spec prefix_id (typq, backwards_prefix_typ) env
             else
               env
@@ -946,7 +946,7 @@ end = struct
           | args -> mk_typ (Typ_app (id, args))
         in
         let fold_accessors accs (typ, fid) =
-          let acc_typ = mk_typ (Typ_fn (rectyp, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          let acc_typ = mk_typ (Typ_fn ([rectyp], typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
           typ_print (lazy (indent 1 ^ "Adding accessor " ^ string_of_id id ^ "." ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ)));
           Bindings.add (field_name id fid) (typq, acc_typ) accs
         in
@@ -962,7 +962,8 @@ end = struct
 
   let get_accessor rec_id id env =
     match get_accessor_fn rec_id id env with
-    | (typq, Typ_aux (Typ_fn (rec_typ, field_typ, effect), _)) ->
+    (* All accessors should have a single argument (the record itself) *)
+    | (typq, Typ_aux (Typ_fn ([rec_typ], field_typ, effect), _)) ->
        (typq, rec_typ, field_typ, effect)
     | _ -> typ_error (id_loc id) ("Accessor with non-function type found for " ^ string_of_id (field_name rec_id id))
 
@@ -1144,8 +1145,8 @@ end = struct
     let rec aux (Typ_aux (t,a)) =
       let rewrap t = Typ_aux (t,a) in
       match t with
-      | Typ_fn (t1, t2, eff) ->
-        rewrap (Typ_fn (aux t1, aux t2, eff))
+      | Typ_fn (arg_typs, ret_typ, eff) ->
+        rewrap (Typ_fn (List.map aux arg_typs, aux ret_typ, eff))
       | Typ_tup ts ->
         rewrap (Typ_tup (List.map aux ts))
       | Typ_app (r, [Typ_arg_aux (Typ_arg_typ rtyp,_)]) when string_of_id r = "register" ->
@@ -1288,7 +1289,7 @@ let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   | Typ_id _ -> true
   | Typ_tup typs -> List.for_all is_typ_monomorphic typs
   | Typ_app (id, args) -> List.for_all is_typ_arg_monomorphic args
-  | Typ_fn (typ1, typ2, _) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
+  | Typ_fn (arg_typs, ret_typ, _) -> List.for_all is_typ_monomorphic arg_typs && is_typ_monomorphic ret_typ
   | Typ_bidir (typ1, typ2) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
   | Typ_exist _ | Typ_var _ -> false
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
@@ -1450,8 +1451,8 @@ let rec typ_nexps (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> List.concat (List.map typ_nexps typs)
   | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
   | Typ_exist (kids, nc, typ) -> typ_nexps typ
-  | Typ_fn (typ1, typ2, _) ->
-     typ_nexps typ1 @ typ_nexps typ2
+  | Typ_fn (arg_typs, ret_typ, _) ->
+     List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
   | Typ_bidir (typ1, typ2) ->
      typ_nexps typ1 @ typ_nexps typ2
 and typ_arg_nexps (Typ_arg_aux (typ_arg_aux, l)) =
@@ -1469,7 +1470,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
   | Typ_exist (kids, nc, typ) -> typ_frees ~exs:(KidSet.of_list kids) typ
-  | Typ_fn (typ1, typ2, _) -> KidSet.union (typ_frees ~exs:exs typ1) (typ_frees ~exs:exs typ2)
+  | Typ_fn (arg_typs, ret_typ, _) -> List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
   | Typ_bidir (typ1, typ2) -> KidSet.union (typ_frees ~exs:exs typ1) (typ_frees ~exs:exs typ2)
 and typ_arg_frees ?exs:(exs=KidSet.empty) (Typ_arg_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
@@ -1517,8 +1518,9 @@ let typ_identical env typ1 typ2 =
     match typ1, typ2 with
     | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
     | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
-    | Typ_fn (arg_typ1, ret_typ1, eff1), Typ_fn (arg_typ2, ret_typ2, eff2) ->
-       typ_identical' arg_typ1 arg_typ2
+    | Typ_fn (arg_typs1, ret_typ1, eff1), Typ_fn (arg_typs2, ret_typ2, eff2)
+         when List.length arg_typs1 = List.length arg_typs2 ->
+       List.for_all2 typ_identical' arg_typs1 arg_typs2
        && typ_identical' ret_typ1 ret_typ2
        && strip_effect eff1 = strip_effect eff2
     | Typ_bidir (typ1, typ2), Typ_bidir (typ3, typ4) ->
@@ -1850,7 +1852,7 @@ let rec alpha_equivalent env typ1 typ2 =
       match aux with
       | Typ_internal_unknown -> Typ_internal_unknown
       | Typ_id _ | Typ_var _ -> aux
-      | Typ_fn (typ1, typ2, eff) -> Typ_fn (relabel typ1, relabel typ2, eff)
+      | Typ_fn (arg_typs, ret_typ, eff) -> Typ_fn (List.map relabel arg_typs, relabel ret_typ, eff)
       | Typ_bidir (typ1, typ2) -> Typ_bidir (relabel typ1, relabel typ2)
       | Typ_tup typs -> Typ_tup (List.map relabel typs)
       | Typ_exist (kids, nc, typ) ->
@@ -2236,7 +2238,8 @@ let rec filter_casts env from_typ to_typ casts =
      begin
        let (quant, cast_typ) = Env.get_val_spec cast env in
        match cast_typ with
-       | Typ_aux (Typ_fn (cast_from_typ, cast_to_typ, _), _)
+       (* A cast should be a function A -> B and have only a single argument type. *)
+       | Typ_aux (Typ_fn ([cast_from_typ], cast_to_typ, _), _)
             when match_typ env from_typ cast_from_typ && match_typ env to_typ cast_to_typ ->
           typ_print (lazy ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ));
           cast :: filter_casts env from_typ to_typ casts
@@ -2400,11 +2403,11 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         print_endline ("Solved " ^ string_of_nexp nexp ^ " = " ^ Big_int.to_string n);
         annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      end
-  (* All constructors are treated as having one argument so Ctor(x, y)
-     is checked as Ctor((x, y)) *)
-  | E_app (ctor, x :: y :: zs), _ when Env.is_union_constructor ctor env ->
-     typ_print (lazy ("Checking multiple argument constructor: " ^ string_of_id ctor));
-     crule check_exp env (mk_exp ~loc:l (E_app (ctor, [mk_exp ~loc:l (E_tuple (x :: y :: zs))]))) typ
+  (* All constructors and mappings are treated as having one argument
+     so Ctor(x, y) is checked as Ctor((x, y)) *)
+  | E_app (f, x :: y :: zs), _ when Env.is_union_constructor f env || Env.is_mapping f env ->
+     typ_print (lazy ("Checking multiple argument constructor or mapping: " ^ string_of_id f));
+     crule check_exp env (mk_exp ~loc:l (E_app (f, [mk_exp ~loc:l (E_tuple (x :: y :: zs))]))) typ
   | E_app (mapping, xs), _ when Env.is_mapping mapping env ->
      let forwards_id = mk_id (string_of_id mapping ^ "_forwards") in
      let backwards_id = mk_id (string_of_id mapping ^ "_backwards") in
@@ -2725,7 +2728,9 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             | Invalid_argument _ -> typ_error l "Tuple pattern and tuple type have different length"
           in
           annot_pat (P_tup (List.rev tpats)) typ, env, guards
-       | _ -> typ_error l "Cannot bind tuple pattern against non tuple type"
+       | _ ->
+          typ_error l (Printf.sprintf "Cannot bind tuple pattern %s against non tuple type %s"
+                         (string_of_pat pat) (string_of_typ typ))
      end
   | P_app (f, pats) when Env.is_union_constructor f env ->
      begin
@@ -2734,14 +2739,10 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
          | Typ_tup typs -> typs
          | _ -> [typ]
-       in
+       in       
        match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
+       | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
           begin
-            let arg_typ = match arg_typ with
-              | Typ_aux (Typ_tup [arg_typ], _) -> arg_typ
-              | _ -> arg_typ
-            in
             try
               typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
@@ -3473,10 +3474,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   in
   let quants, typ_args, typ_ret, eff =
     match Env.expand_synonyms env f_typ with
-    | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
-       quant_items typq, typ_args, typ_ret, eff
-    | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
-       quant_items typq, [typ_arg], typ_ret, eff
+    | Typ_aux (Typ_fn (typ_args, typ_ret, eff), _) -> quant_items typq, typ_args, typ_ret, eff
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
   in
   let unifiers = instantiate_simple_equations quants in
@@ -3610,12 +3608,8 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
          | _ -> [typ]
        in
        match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
+       | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
           begin
-            let arg_typ = match arg_typ with
-              | Typ_aux (Typ_tup [arg_typ], _) -> arg_typ
-              | _ -> arg_typ
-            in
             try
               typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
@@ -4185,7 +4179,7 @@ let check_letdef orig_env (LB_aux (letbind, (l, _))) =
 
 let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
   match typ with
-  | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
+  | Typ_aux (Typ_fn (typ_args, typ_ret, eff), _) ->
      begin
        let env = Env.add_ret_typ typ_ret env in
        (* We want to forbid polymorphic undefined values in all cases,
@@ -4199,7 +4193,16 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
          then Env.allow_polymorphic_undefineds env
          else env
        in
-       let typed_pexp, prop_eff = propagate_pexp_effect (check_case env typ_arg (strip_pexp pexp) typ_ret) in
+       (* This is one of the cases where we are allowed to treat
+          function arguments as like a tuple, and maybe we
+          shouldn't. *)
+       let typed_pexp, prop_eff =
+         match typ_args with
+         | [typ_arg] ->
+            propagate_pexp_effect (check_case env typ_arg (strip_pexp pexp) typ_ret)
+         | _ ->
+            propagate_pexp_effect (check_case env (Typ_aux (Typ_tup typ_args, l)) (strip_pexp pexp) typ_ret)
+       in
        FCL_aux (FCL_Funcl (id, typed_pexp), (l, Some ((env, typ, prop_eff), Some typ)))
      end
   | _ -> typ_error l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
@@ -4251,7 +4254,6 @@ let mapcl_effect (MCL_aux (_, (l, annot))) =
   | Some ((_, _, eff), _) -> eff
   | None -> no_effect (* Maybe could be assert false. This should never happen *)
 
-
 let infer_funtyp l env tannotopt funcls =
   match tannotopt with
   | Typ_annot_opt_aux (Typ_annot_opt_some (quant, ret_typ), _) ->
@@ -4266,8 +4268,15 @@ let infer_funtyp l env tannotopt funcls =
        match funcls with
        | [FCL_aux (FCL_Funcl (_, Pat_aux (pexp,_)), _)] ->
           let pat = match pexp with Pat_exp (pat,_) | Pat_when (pat,_,_) -> pat in
-          let arg_typ = typ_from_pat pat in
-          let fn_typ = mk_typ (Typ_fn (arg_typ, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          (* The function syntax lets us bind multiple function
+             arguments with a single pattern, hence why we need to do
+             this. But perhaps we don't want to allow this? *)
+          let arg_typs =
+            match typ_from_pat pat with
+            | Typ_aux (Typ_tup arg_typs, _) -> arg_typs
+            | arg_typ -> [arg_typ]
+          in
+          let fn_typ = mk_typ (Typ_fn (arg_typs, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
           (quant, fn_typ)
        | _ -> typ_error l "Cannot infer function type for function with multiple clauses"
      end
@@ -4308,8 +4317,8 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
        let (quant, typ) = infer_funtyp l env tannotopt funcls in
        false, (quant, typ), env
   in
-  let vtyp_arg, vtyp_ret, declared_eff, vl = match typ with
-    | Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) -> vtyp_arg, vtyp_ret, declared_eff, vl
+  let vtyp_args, vtyp_ret, declared_eff, vl = match typ with
+    | Typ_aux (Typ_fn (vtyp_args, vtyp_ret, declared_eff), vl) -> vtyp_args, vtyp_ret, declared_eff, vl
     | _ -> typ_error l "Function val spec was not a function type"
   in
   check_tannotopt env quant vtyp_ret tannotopt;
@@ -4320,7 +4329,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   let vs_def, env, declared_eff =
     if not have_val_spec
     then
-      let typ = Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, eff), vl) in
+      let typ = Typ_aux (Typ_fn (vtyp_args, vtyp_ret, eff), vl) in
       [mk_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env, eff
     else [], env, declared_eff
   in
@@ -4429,15 +4438,8 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
      env
      |> Env.add_union_id v (typq, typ)
      |> Env.add_val_spec v (typq, typ)
-  | Tu_ty_id (typ, v) ->
-     (* If a constructor type is a tuple we need to wrap it again in a
-        dummy tuple constructor so that it actually gets treated as a
-        tuple and not a multiple argument function! *)
-     let tuple = match typ with
-       | Typ_aux (Typ_tup _, _) -> mk_typ (Typ_tup [typ])
-       | _ -> typ
-     in
-     let typ' = mk_typ (Typ_fn (tuple, ret_typ, no_effect)) in
+  | Tu_ty_id (arg_typ, v) ->
+     let typ' = mk_typ (Typ_fn ([arg_typ], ret_typ, no_effect)) in
      env
      |> Env.add_union_id v (typq, typ')
      |> Env.add_val_spec v (typq, typ')
@@ -4564,11 +4566,11 @@ let initial_env =
   |> Env.add_val_spec (mk_id "size_itself_int")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
-       function_typ (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))])
+       function_typ [app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))]]
          (atom_typ (nvar (mk_kid "n"))) no_effect)
   |> Env.add_extern (mk_id "make_the_value") (fun _ -> Some "make_the_value")
   |> Env.add_val_spec (mk_id "make_the_value")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
-       function_typ (atom_typ (nvar (mk_kid "n")))
+       function_typ [atom_typ (nvar (mk_kid "n"))]
          (app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))]) no_effect)

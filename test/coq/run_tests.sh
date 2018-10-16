@@ -56,7 +56,8 @@ function check_tests_dir {
     do
         if $SAILDIR/sail -coq -dcoq_undef_axioms -o out $TESTSDIR/$i &>/dev/null;
         then
-    	if coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out_types.v out.v &>/dev/null;
+    	if coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out_types.v &>/dev/null &&
+    	   coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out.v &>/dev/null;
     	then
     	    green "tested $i expecting pass" "pass"
     	else

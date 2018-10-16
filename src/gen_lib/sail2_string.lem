@@ -20,6 +20,10 @@ val string_drop : string -> ii -> string
 let string_drop str n =
   toString (drop (natFromInteger n) (toCharList str))
 
+val string_take : string -> ii -> string
+let string_take str n =
+  toString (take (natFromInteger n) (toCharList str))
+
 val string_length : string -> ii
 let string_length s = integerFromNat (stringLength s)
 

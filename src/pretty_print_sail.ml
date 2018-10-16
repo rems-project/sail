@@ -134,7 +134,7 @@ let doc_nc =
     | _ -> atomic_nc nc
   in
   nc0
-
+  
 let rec doc_typ (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
@@ -154,11 +154,11 @@ let rec doc_typ (Typ_aux (typ_aux, l)) =
      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
   | Typ_exist (kids, nc, typ) ->
      braces (separate_map space doc_kid kids ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
-  | Typ_fn (typ1, typ2, Effect_aux (Effect_set [], _)) ->
-     separate space [doc_typ typ1; string "->"; doc_typ typ2]
-  | Typ_fn (typ1, typ2, Effect_aux (Effect_set effs, _)) ->
+  | Typ_fn (typs, typ, Effect_aux (Effect_set [], _)) ->
+     separate space [doc_arg_typs typs; string "->"; doc_typ typ]
+  | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
      let ocaml_eff = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs)) in
-     separate space [doc_typ typ1; string "->"; doc_typ typ2; string "effect"; ocaml_eff]
+     separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
   | Typ_bidir (typ1, typ2) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
   | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
@@ -167,6 +167,9 @@ and doc_typ_arg (Typ_arg_aux (ta_aux, _)) =
   | Typ_arg_typ typ -> doc_typ typ
   | Typ_arg_nexp nexp -> doc_nexp nexp
   | Typ_arg_order o -> doc_ord o
+and doc_arg_typs = function
+  | [typ] -> doc_typ typ
+  | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
 
 let doc_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =

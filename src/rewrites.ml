@@ -255,8 +255,8 @@ let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
 
 let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
   let rec rewrite_typ env (Typ_aux (typ, l) as typ_aux) = match typ with
-    | Typ_fn (arg_t, ret_t, eff) ->
-       Typ_aux (Typ_fn (rewrite_typ env arg_t, rewrite_typ env ret_t, eff), l)
+    | Typ_fn (arg_ts, ret_t, eff) ->
+       Typ_aux (Typ_fn (List.map (rewrite_typ env) arg_ts, rewrite_typ env ret_t, eff), l)
     | Typ_tup ts ->
        Typ_aux (Typ_tup (List.map (rewrite_typ env) ts), l)
     | Typ_exist (kids, c, typ) ->
@@ -658,14 +658,8 @@ let rewrite_sizeof (Defs defs) =
         let kid_typs = List.map (fun kid -> atom_typ (nvar kid))
                                 (KidSet.elements (Bindings.find id params_map)) in
         let typ' = match typ with
-          | Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) ->
-             let vtyp_arg' = begin
-                 match vtyp_arg with
-                 | Typ_aux (Typ_tup typs, vl) ->
-                    Typ_aux (Typ_tup (kid_typs @ typs), vl)
-                 | _ -> Typ_aux (Typ_tup (kid_typs @ [vtyp_arg]), vl)
-               end in
-             Typ_aux (Typ_fn (vtyp_arg', vtyp_ret, declared_eff), vl)
+          | Typ_aux (Typ_fn (vtyp_args, vtyp_ret, declared_eff), vl) ->
+             Typ_aux (Typ_fn (kid_typs @ vtyp_args, vtyp_ret, declared_eff), vl)
           | _ ->
             raise (Reporting_basic.err_typ l "val spec with non-function type") in
         TypSchm_aux (TypSchm_ts (tq, typ'), l)
@@ -2139,7 +2133,11 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
              | P_aux (P_app (constr_id, args), pannot) ->
                 let argstup_typ = tuple_typ (List.map pat_typ_of args) in
                 let pannot' = swaptyp argstup_typ pannot in
-                let pat' = P_aux (P_tup args, pannot') in
+                let pat' =
+                  match args with
+                  | [arg] -> arg
+                  | _ -> P_aux (P_tup args, pannot')
+                in
                 let pexp' = construct_pexp (pat', guard, exp, annot) in
                 let aux_fun_id = prepend_id (fun_name ^ "_") constr_id in
                 let aux_funcl = FCL_aux (FCL_Funcl (aux_fun_id, pexp'), pannot') in
@@ -2185,7 +2183,15 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
            union_effects eff (effect_of exp))
         no_effect funcls
       in
-      let fun_typ = function_typ args_typ ret_typ eff in
+      let fun_typ =
+        (* Because we got the argument type from a pattern we need to
+           do this. *)
+        match args_typ with
+        | Typ_aux (Typ_tup (args_typs), _) ->
+           function_typ args_typs ret_typ eff
+        | _ ->
+           function_typ [args_typ] ret_typ eff
+      in
       let quant_new_tyvars qis =
         let quant_tyvars = List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_quant_item qis) in
         let typ_tyvars = tyvars_of_typ fun_typ in
@@ -2283,7 +2289,7 @@ let rewrite_fix_val_specs (Defs defs) =
             type synonyms nested in existentials might cause problems).
             A more robust solution would be to make the (global) environment
             more easily available to the pretty-printer. *)
-         let args_t' = Env.expand_synonyms (env_of exp) args_t in
+         let args_t' = List.map (Env.expand_synonyms (env_of exp)) args_t in
          let ret_t' = Env.expand_synonyms (env_of exp) ret_t in
          (tq, Typ_aux (Typ_fn (args_t', ret_t', eff'), a)), eff'
       | _ -> assert false (* find_vs must return a function type *)
@@ -2457,7 +2463,7 @@ and simple_typ_aux = function
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
      Typ_id (mk_id "int")
   | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (simple_typ typ1, simple_typ typ2, effs)
+  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map simple_typ arg_typs, simple_typ ret_typ, effs)
   | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
   | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
   | typ_aux -> typ_aux
@@ -3145,7 +3151,7 @@ let construct_toplevel_string_append_func env f_id pat =
                                                                        | typs -> tuple_typ typs
                                                             ), unk)]
   in
-  let fun_typ = (mk_typ (Typ_fn (string_typ, option_typ, no_effect))) in
+  let fun_typ = (mk_typ (Typ_fn ([string_typ], option_typ, no_effect))) in
   let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, (fun _ -> None), false), unkt) in
   let new_val_spec, env = Type_check.check_val_spec env new_val_spec in
   let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
@@ -3705,8 +3711,6 @@ let rewrite_defs_pat_lits rewrite_lit =
     let counter = ref 0 in
 
     let rewrite_pat = function
-      (* HACK: ignore strings for now *)
-      | P_lit (L_aux (L_string _, _)) as p_aux, p_annot -> P_aux (p_aux, p_annot)
       (* Matching on unit is always the same as matching on wildcard *)
       | P_lit (L_aux (L_unit, _) as lit), p_annot when rewrite_lit lit ->
          P_aux (P_wild, p_annot)
@@ -4028,7 +4032,7 @@ let remove_reference_types exp =
     | Typ_app (Id_aux (Id "reg",_), [Typ_arg_aux (Typ_arg_typ (Typ_aux (t_aux2, _)), _)]) ->
       rewrite_t_aux t_aux2
     | Typ_app (name,t_args) -> Typ_app (name,List.map rewrite_t_arg t_args)
-    | Typ_fn (t1,t2,eff) -> Typ_fn (rewrite_t t1,rewrite_t t2,eff)
+    | Typ_fn (arg_typs, ret_typ, eff) -> Typ_fn (List.map rewrite_t arg_typs, rewrite_t ret_typ, eff)
     | Typ_tup ts -> Typ_tup (List.map rewrite_t ts)
     | _ -> t_aux
   and rewrite_t_arg t_arg = match t_arg with
@@ -4336,10 +4340,10 @@ let rewrite_defs_realise_mappings (Defs defs) =
       | Typ_aux (Typ_bidir (typ1, typ2), l) -> typ1, typ2, l
       | _ -> Type_check.typ_error l "non-bidir type of mapping?"
     in
-    let forwards_typ = Typ_aux (Typ_fn (typ1, typ2, no_effect), l) in
-    let forwards_matches_typ = Typ_aux (Typ_fn (typ1, bool_typ, no_effect), l) in
-    let backwards_typ = Typ_aux (Typ_fn (typ2, typ1, no_effect), l) in
-    let backwards_matches_typ = Typ_aux (Typ_fn (typ2, bool_typ, no_effect), l) in
+    let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), l) in
+    let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), l) in
+    let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), l) in
+    let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), l) in
 
     let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
     let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
@@ -4377,7 +4381,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let prefix_wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_exp (E_lit (mk_lit L_unit))])))) in
     let string_defs =
       begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
-              let forwards_prefix_typ = Typ_aux (Typ_fn (typ1, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+              let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
               let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
               let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
@@ -4387,7 +4391,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
               forwards_prefix_spec @ forwards_prefix_fun
             else
               if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
-                let backwards_prefix_typ = Typ_aux (Typ_fn (typ2, app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+                let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
                 let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
                 let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
@@ -4512,9 +4516,7 @@ let make_cstr_mappings env ids m =
     (fun id ->
       let _,ty = Env.get_val_spec id env in
       let args = match ty with
-        | Typ_aux (Typ_fn (Typ_aux (Typ_tup [Typ_aux (Typ_tup tys,_)],_),_,_),_)
-        | Typ_aux (Typ_fn (Typ_aux (Typ_tup tys,_),_,_),_)
-          -> List.map (fun _ -> RP_any) tys
+        | Typ_aux (Typ_fn (tys,_,_),_) -> List.map (fun _ -> RP_any) tys
         | _ -> [RP_any]
       in RP_app (id,args)) ids in
   let rec aux ids acc l =
@@ -4972,7 +4974,7 @@ let rewrite_defs_c = [
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
-  ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
+  ("pat_lits", rewrite_defs_pat_lits (fun _ -> true));
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);

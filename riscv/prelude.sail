@@ -13,6 +13,7 @@ val hex_bits : forall 'n . (atom('n), bits('n)) <-> string
 
 val string_startswith = "string_startswith" : (string, string) -> bool
 val string_drop = "string_drop" : (string, nat) -> string
+val string_take = "string_take" : (string, nat) -> string
 val string_length = "string_length" : string -> nat
 val string_append = {c: "concat_str", _: "string_append"} : (string, string) -> string
 val maybe_int_of_prefix = "maybe_int_of_prefix" : string -> option((int, nat))
@@ -710,29 +711,6 @@ function hex_bits_64_backwards s =
   }
 
 
-
-val spc_forwards : unit -> string
-function spc_forwards () = " "
-val spc_backwards : string -> unit
-function spc_backwards s = ()
-
-val spc_matches_prefix = "spc_matches_prefix" : string -> option((unit, nat))
-
-val opt_spc_forwards : unit -> string
-function opt_spc_forwards () = ""
-val opt_spc_backwards : string -> unit
-function opt_spc_backwards s = ()
-
-val opt_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
-
-val def_spc_forwards : unit -> string
-function def_spc_forwards () = " "
-val def_spc_backwards : string -> unit
-function def_spc_backwards s = ()
-
-val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
-
-
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -1153,3 +1131,42 @@ function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
 /* Special version of zero_extend that the Lem back-end knows will be at a
    case split on 'm and uses a more generic type for.  (Temporary hack, honest) */
 val zero_extend_type_hack = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+
+
+val n_leading_spaces : string -> nat
+function n_leading_spaces s =
+  match s {
+    "" => 0,
+    _ => match string_take(s, 1) {
+      " " => 1 + n_leading_spaces(string_drop(s, 1)),
+      _ => 0
+    }
+  }
+
+val spc_forwards : unit -> string
+function spc_forwards () = " "
+val spc_backwards : string -> unit
+function spc_backwards s = ()
+val spc_matches_prefix : string -> option((unit, nat))
+function spc_matches_prefix s = {
+  let n = n_leading_spaces(s);
+  match n {
+    0 => None(),
+    _ => Some((), n)
+  }
+}
+
+val opt_spc_forwards : unit -> string
+function opt_spc_forwards () = ""
+val opt_spc_backwards : string -> unit
+function opt_spc_backwards s = ()
+val opt_spc_matches_prefix : string -> option((unit, nat))
+function opt_spc_matches_prefix s =
+  Some((), n_leading_spaces(s))
+
+val def_spc_forwards : unit -> string
+function def_spc_forwards () = " "
+val def_spc_backwards : string -> unit
+function def_spc_backwards s = ()
+val def_spc_matches_prefix : string -> option((unit, nat))
+function def_spc_matches_prefix s = opt_spc_matches_prefix(s)

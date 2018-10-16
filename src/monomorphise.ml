@@ -135,7 +135,7 @@ let subst_src_typ substs t =
     | Typ_id _
     | Typ_var _
       -> ty
-    | Typ_fn (t1,t2,e) -> re (Typ_fn (s_styp substs t1, s_styp substs t2,e))
+    | Typ_fn (t1,t2,e) -> re (Typ_fn (List.map (s_styp substs) t1, s_styp substs t2,e))
     | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
@@ -353,7 +353,7 @@ let rec contains_exist (Typ_aux (ty,l)) =
   | Typ_id _
   | Typ_var _
     -> false
-  | Typ_fn (t1,t2,_) -> contains_exist t1 || contains_exist t2
+  | Typ_fn (t1,t2,_) -> List.exists contains_exist t1 || contains_exist t2
   | Typ_bidir (t1, t2) -> contains_exist t1 || contains_exist t2
   | Typ_tup ts -> List.exists contains_exist ts
   | Typ_app (_,args) -> List.exists contains_exist_arg args
@@ -519,7 +519,8 @@ let refine_constructor refinements l env id args =
   | (_,irefinements) -> begin
     let (_,constr_ty) = Env.get_val_spec id env in
     match constr_ty with
-    | Typ_aux (Typ_fn (constr_ty,_,_),_) -> begin
+    (* A constructor should always have a single argument. *)
+    | Typ_aux (Typ_fn ([constr_ty],_,_),_) -> begin
        let arg_ty = typ_of_args args in
        match Type_check.destruct_exist env constr_ty with
        | None -> None
@@ -2302,14 +2303,9 @@ let rewrite_size_parameters env (Defs defs) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
     let env = env_of_annot (l,ann) in
     let _, typ = Env.get_val_spec_orig id env in
-    let typ = match typ with
-      | Typ_aux (Typ_fn (arg_typ,_,_),_) -> arg_typ
-      | _ -> typ (* TODO: error *)
-    in
-    let types =
-      match pat, Env.expand_synonyms env typ with
-      | P_aux (P_tup ps,_), Typ_aux (Typ_tup ts,_) -> ts
-      | _, _ -> [typ]
+    let types = match typ with
+      | Typ_aux (Typ_fn (arg_typs,_,_),_) -> List.map (Env.expand_synonyms env) arg_typs
+      | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Function clause does not have a function type")
     in
     let add_parameter (i,nmap) typ =
       let nmap =
@@ -2451,10 +2447,8 @@ in *)
             let typschm = match typschm with
               | TypSchm_aux (TypSchm_ts (tq,typ),l) ->
                  let typ = match typ with
-                   | Typ_aux (Typ_fn (Typ_aux (Typ_tup ts,l),t2,eff),l2) ->
-                      Typ_aux (Typ_fn (Typ_aux (Typ_tup (mapat (replace_type env) to_change ts),l),t2,eff),l2)
-                   | Typ_aux (Typ_fn (typ,t2,eff),l2) ->
-                      Typ_aux (Typ_fn (replace_type env typ,t2,eff),l2)
+                   | Typ_aux (Typ_fn (ts,t2,eff),l2) ->
+                      Typ_aux (Typ_fn (mapat (replace_type env) to_change ts,t2,eff),l2)
                    | _ -> replace_type env typ
                  in TypSchm_aux (TypSchm_ts (tq,typ),l)
             in
@@ -4168,9 +4162,10 @@ let replace_nexp_in_typ env typ orig new_nexp =
     | Typ_var _
         -> false, typ
     | Typ_fn (arg,res,eff) ->
-       let f1, arg = aux arg in
+       let arg' = List.map aux arg in
+       let f1 = List.exists fst arg' in
        let f2, res = aux res in
-       f1 || f2, Typ_aux (Typ_fn (arg, res, eff),l)
+       f1 || f2, Typ_aux (Typ_fn (List.map snd arg', res, eff),l)
     | Typ_bidir (t1, t2) ->
        let f1, t1 = aux t1 in
        let f2, t2 = aux t2 in
@@ -4223,9 +4218,10 @@ let rewrite_toplevel_nexps (Defs defs) =
   let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
     match t with
     | Typ_fn (args,res,eff) ->
-       let nexp_map, args = rewrite_typ_in_spec env nexp_map args in
+       let args' = List.map (rewrite_typ_in_spec env nexp_map) args in
+       let nexp_map = List.concat (List.map fst args') in
        let nexp_map, res = rewrite_typ_in_spec env nexp_map res in
-       nexp_map, Typ_aux (Typ_fn (args,res,eff),ann)
+       nexp_map, Typ_aux (Typ_fn (List.map snd args',res,eff),ann)
     | Typ_tup typs ->
        let nexp_map, typs =
          List.fold_right (fun typ (nexp_map,t) ->
