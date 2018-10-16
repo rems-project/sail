@@ -3711,8 +3711,6 @@ let rewrite_defs_pat_lits rewrite_lit =
     let counter = ref 0 in
 
     let rewrite_pat = function
-      (* HACK: ignore strings for now *)
-      | P_lit (L_aux (L_string _, _)) as p_aux, p_annot -> P_aux (p_aux, p_annot)
       (* Matching on unit is always the same as matching on wildcard *)
       | P_lit (L_aux (L_unit, _) as lit), p_annot when rewrite_lit lit ->
          P_aux (P_wild, p_annot)
@@ -4976,7 +4974,7 @@ let rewrite_defs_c = [
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
-  ("pat_lits", rewrite_defs_pat_lits rewrite_no_strings);
+  ("pat_lits", rewrite_defs_pat_lits (fun _ -> true));
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
   ("simple_assignments", rewrite_simple_assignments);
