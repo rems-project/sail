@@ -18,7 +18,7 @@ lemma Value_liftState_Run:
   assumes "(Value a, s') \<in> liftState r m s"
   obtains t where "Run m t a"
   by (use assms in \<open>induction r m arbitrary: s s' rule: liftState.induct\<close>;
-      auto simp add: failS_def throwS_def returnS_def simp del: read_regvalS.simps;
+      simp add: failS_def throwS_def returnS_def del: read_regvalS.simps;
       blast elim: Value_bindS_elim)
 
 lemmas liftState_if_distrib[liftState_simp] = if_distrib[where f = "liftState ra" for ra]
@@ -82,7 +82,10 @@ lemma liftState_read_mem_BC:
   assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
   shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
   using assms
-  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def liftState_simp split: option.splits)
+  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def
+                 prod.case_distrib option.case_distrib[where h = "liftState r"]
+                 option.case_distrib[where h = "\<lambda>c. c \<bind>\<^sub>S f" for f] liftState_simp
+           cong: option.case_cong)
 
 lemma liftState_read_mem[liftState_simp]:
   "\<And>a. liftState r (read_mem BC_mword BC_mword rk a sz) = read_memS BC_mword BC_mword rk a sz"
@@ -91,17 +94,22 @@ lemma liftState_read_mem[liftState_simp]:
 
 lemma liftState_write_mem_ea_BC:
   assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
-  shows "liftState r (write_mem_ea BCa rk a sz) = write_mem_eaS BCa rk a (nat sz)"
-  using assms by (auto simp: write_mem_ea_def write_mem_eaS_def)
+  shows "liftState r (write_mem_ea BCa rk a sz) = returnS ()"
+  using assms by (auto simp: write_mem_ea_def)
 
 lemma liftState_write_mem_ea[liftState_simp]:
-  "\<And>a. liftState r (write_mem_ea BC_mword rk a sz) = write_mem_eaS BC_mword rk a (nat sz)"
-  "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = write_mem_eaS BC_bitU_list rk a (nat sz)"
+  "\<And>a. liftState r (write_mem_ea BC_mword rk a sz) = returnS ()"
+  "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = returnS ()"
   by (auto simp: liftState_write_mem_ea_BC)
 
+lemma write_mem_bytesS_def_BC_bitU_list_BC_mword[simp]:
+  "write_mem_bytesS BC_bitU_list wk (bits_of_method BC_mword addr) sz v t =
+   write_mem_bytesS BC_mword wk addr sz v t"
+  by (auto simp: write_mem_bytesS_def)
+
 lemma liftState_write_mem_val[liftState_simp]:
-  "liftState r (write_mem_val BC v) = write_mem_valS BC v"
-  by (auto simp: write_mem_val_def write_mem_valS_def liftState_simp split: option.splits)
+  "liftState r (write_mem BC_mword BCv wk addr sz v t) = write_memS BC_mword BCv wk addr sz v t"
+  by (auto simp: write_mem_def write_memS_def liftState_simp split: option.splits)
 
 lemma liftState_read_reg_readS:
   assumes "\<And>s. Option.bind (get_regval' (name reg) s) (of_regval reg) = Some (read_from reg s)"

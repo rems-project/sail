@@ -205,24 +205,27 @@ lemma no_throw_basic_builtins[simp]:
 
 lemmas ignore_throw_option_case_distrib =
   option.case_distrib[where h = "\<lambda>c. ignore_throw c s" and option = "c s" for c s]
+  option.case_distrib[where h = "\<lambda>c. ignore_throw c" and option = "c" for c]
+
+lemma ignore_throw_let_distrib: "ignore_throw (let x = y in f x) = (let x = y in ignore_throw (f x))"
+  by auto
 
 lemma no_throw_mem_builtins:
   "\<And>BC rk a sz s. ignore_throw (read_mem_bytesS BC rk a sz) s = read_mem_bytesS BC rk a sz s"
   "\<And>BC a s. ignore_throw (read_tagS BC a) s = read_tagS BC a s"
-  "\<And>BC wk a sz s. ignore_throw (write_mem_eaS BC wk a sz) s = write_mem_eaS BC wk a sz s"
-  "\<And>v s. ignore_throw (write_mem_bytesS v) s = write_mem_bytesS v s"
-  "\<And>BC v s. ignore_throw (write_mem_valS BC v) s = write_mem_valS BC v s"
-  "\<And>BC a t s. ignore_throw (write_tagS BC a t) s = write_tagS BC a t s"
+  "\<And>BC wk addr sz v t s. ignore_throw (write_mem_bytesS BC wk addr sz v t) s = write_mem_bytesS BC wk addr sz v t s"
+  "\<And>BC_a BC_v wk addr sz v t s. ignore_throw (write_memS BC_a BC_v wk addr sz v t) s = write_memS BC_a BC_v wk addr sz v t s"
   "\<And>s. ignore_throw (excl_resultS ()) s = excl_resultS () s"
   "\<And>s. ignore_throw (undefined_boolS ()) s = undefined_boolS () s"
-  unfolding read_mem_bytesS_def read_memS_def read_tagS_def write_mem_eaS_def
-  unfolding write_mem_valS_def write_mem_bytesS_def write_tagS_def
-  unfolding excl_resultS_def undefined_boolS_def
+  unfolding read_mem_bytesS_def read_memS_def read_tagS_def write_memS_def
+  unfolding write_mem_bytesS_def
+  unfolding excl_resultS_def undefined_boolS_def maybe_failS_def
+  unfolding ignore_throw_bindS
   by (auto cong: bindS_cong bindS_ext_cong ignore_throw_cong option.case_cong
-           simp: option.case_distrib prod.case_distrib ignore_throw_option_case_distrib comp_def)
+           simp: prod.case_distrib ignore_throw_option_case_distrib ignore_throw_let_distrib comp_def)
 
 lemma no_throw_read_memS: "ignore_throw (read_memS BCa BCb rk a sz) s = read_memS BCa BCb rk a sz s"
-  by (auto simp: read_memS_def no_throw_mem_builtins cong: bindS_ext_cong)
+  by (auto simp: read_memS_def no_throw_mem_builtins prod.case_distrib comp_def cong: bindS_ext_cong)
 
 lemma no_throw_read_regvalS: "ignore_throw (read_regvalS r reg_name) s = read_regvalS r reg_name s"
   by (cases r) (auto simp: option.case_distrib cong: bindS_cong option.case_cong)

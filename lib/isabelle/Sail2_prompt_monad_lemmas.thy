@@ -30,42 +30,17 @@ lemma All_try_catch_dom: "try_catch_dom (m, h)"
 termination try_catch using All_try_catch_dom by auto
 lemmas try_catch_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Write_ea Barrier Write_reg Fail Exception] = try_catch.induct
 
-datatype 'regval event =
-  (* Request to read memory *)
-    e_read_mem read_kind "bitU list" nat "memory_byte list"
-  | e_read_tag "bitU list" bitU
-  (* Write is imminent, at address lifted, of size nat *)
-  | e_write_ea write_kind "bitU list" nat
-  (* Request the result of store-exclusive *)
-  | e_excl_res bool
-  (* Request to write memory at last signalled address. Memory value should be 8
-     times the size given in ea signal *)
-  | e_write_memv "memory_byte list" bool
-  | e_write_tag "bitU list" bitU bool
-  (* Tell the system to dynamically recalculate dependency footprint *)
-  | e_footprint
-  (* Request a memory barrier *)
-  | e_barrier " barrier_kind "
-  (* Request to read register *)
-  | e_read_reg string 'regval
-  (* Request to write register *)
-  | e_write_reg string 'regval
-  | e_undefined bool
-  | e_print string
-
 inductive_set T :: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a, 'e) monad) set" where
-  Read_mem: "((Read_mem rk addr sz k), e_read_mem rk addr sz v, k v) \<in> T"
-| Read_tag: "((Read_tag addr k), e_read_tag addr v, k v) \<in> T"
-| Write_ea: "((Write_ea wk addr sz k), e_write_ea wk addr sz, k) \<in> T"
-| Excl_res: "((Excl_res k), e_excl_res r, k r) \<in> T"
-| Write_memv: "((Write_memv v k), e_write_memv v r, k r) \<in> T"
-| Write_tag: "((Write_tag a v k), e_write_tag a v r, k r) \<in> T"
-| Footprint: "((Footprint k), e_footprint, k) \<in> T"
-| Barrier: "((Barrier bk k), e_barrier bk, k) \<in> T"
-| Read_reg: "((Read_reg r k), e_read_reg r v, k v) \<in> T"
-| Write_reg: "((Write_reg r v k), e_write_reg r v, k) \<in> T"
-| Undefined: "((Undefined k), e_undefined v, k v) \<in> T"
-| Print: "((Print msg k), e_print msg, k) \<in> T"
+  Read_mem: "((Read_mem rk addr sz k), E_read_mem rk addr sz v, k v) \<in> T"
+| Write_ea: "((Write_ea wk addr sz k), E_write_ea wk addr sz, k) \<in> T"
+| Excl_res: "((Excl_res k), E_excl_res r, k r) \<in> T"
+| Write_mem: "((Write_mem wk addr sz v t k), E_write_mem wk addr sz v t r, k r) \<in> T"
+| Footprint: "((Footprint k), E_footprint, k) \<in> T"
+| Barrier: "((Barrier bk k), E_barrier bk, k) \<in> T"
+| Read_reg: "((Read_reg r k), E_read_reg r v, k v) \<in> T"
+| Write_reg: "((Write_reg r v k), E_write_reg r v, k) \<in> T"
+| Undefined: "((Undefined k), E_undefined v, k v) \<in> T"
+| Print: "((Print msg k), E_print msg, k) \<in> T"
 
 inductive_set Traces :: "(('rv, 'a, 'e) monad \<times> 'rv event list \<times> ('rv, 'a, 'e) monad) set" where
   Nil: "(s, [], s) \<in> Traces"
@@ -85,25 +60,28 @@ lemma Traces_cases:
   fixes m :: "('rv, 'a, 'e) monad"
   assumes Run: "(m, t, m') \<in> Traces"
   obtains (Nil) a where "m = m'" and "t = []"
-  | (Read_mem) rk addr s k t' v where "m = Read_mem rk addr s k" and "t = e_read_mem rk addr s v # t'" and "(k v, t', m') \<in> Traces"
-  | (Read_tag) addr k t' v where "m = Read_tag addr k" and "t = e_read_tag addr v # t'" and "(k v, t', m') \<in> Traces"
-  | (Write_memv) val k t' v where "m = Write_memv val k" and "t = e_write_memv val v # t'" and "(k v, t', m') \<in> Traces"
-  | (Write_tag) a val k t' v where "m = Write_tag a val k" and "t = e_write_tag a val v # t'" and "(k v, t', m') \<in> Traces"
-  | (Barrier) bk k t' v where "m = Barrier bk k" and "t = e_barrier bk # t'" and "(k, t', m') \<in> Traces"
-  | (Read_reg) reg k t' v where "m = Read_reg reg k" and "t = e_read_reg reg v # t'" and "(k v, t', m') \<in> Traces"
-  | (Excl_res) k t' v where "m = Excl_res k" and "t = e_excl_res v # t'" and "(k v, t', m') \<in> Traces"
-  | (Write_ea) wk addr s k t' where "m = Write_ea wk addr s k" and "t = e_write_ea wk addr s # t'" and "(k, t', m') \<in> Traces"
-  | (Footprint) k t' where "m = Footprint k" and "t = e_footprint # t'" and "(k, t', m') \<in> Traces"
-  | (Write_reg) reg v k t' where "m = Write_reg reg v k" and "t = e_write_reg reg v # t'" and "(k, t', m') \<in> Traces"
-  | (Undefined) xs v k t' where "m = Undefined k" and "t = e_undefined v # t'" and "(k v, t', m') \<in> Traces"
-  | (Print) msg k t' where "m = Print msg k" and "t = e_print msg # t'" and "(k, t', m') \<in> Traces"
+  | (Read_mem) rk addr s k t' v tag where "m = Read_mem rk addr s k" and "t = E_read_mem rk addr s (v, tag) # t'" and "(k (v, tag), t', m') \<in> Traces"
+  | (Write_mem) wk addr sz val tag k t' v where "m = Write_mem wk addr sz val tag k" and "t = E_write_mem wk addr sz val tag v # t'" and "(k v, t', m') \<in> Traces"
+  | (Barrier) bk k t' v where "m = Barrier bk k" and "t = E_barrier bk # t'" and "(k, t', m') \<in> Traces"
+  | (Read_reg) reg k t' v where "m = Read_reg reg k" and "t = E_read_reg reg v # t'" and "(k v, t', m') \<in> Traces"
+  | (Excl_res) k t' v where "m = Excl_res k" and "t = E_excl_res v # t'" and "(k v, t', m') \<in> Traces"
+  | (Write_ea) wk addr s k t' where "m = Write_ea wk addr s k" and "t = E_write_ea wk addr s # t'" and "(k, t', m') \<in> Traces"
+  | (Footprint) k t' where "m = Footprint k" and "t = E_footprint # t'" and "(k, t', m') \<in> Traces"
+  | (Write_reg) reg v k t' where "m = Write_reg reg v k" and "t = E_write_reg reg v # t'" and "(k, t', m') \<in> Traces"
+  | (Undefined) xs v k t' where "m = Undefined k" and "t = E_undefined v # t'" and "(k v, t', m') \<in> Traces"
+  | (Print) msg k t' where "m = Print msg k" and "t = E_print msg # t'" and "(k, t', m') \<in> Traces"
 proof (use Run in \<open>cases m t m' set: Traces\<close>)
   case Nil
   then show ?thesis by (auto intro: that(1))
 next
   case (Step e m'' t')
-  from \<open>(m, e, m'') \<in> T\<close> and \<open>t = e # t'\<close> and \<open>(m'', t', m') \<in> Traces\<close>
-  show ?thesis by (cases m e m'' rule: T.cases; elim that; blast)
+  note t = \<open>t = e # t'\<close>
+  note m' = \<open>(m'', t', m') \<in> Traces\<close>
+  from \<open>(m, e, m'') \<in> T\<close> and t and m'
+  show ?thesis proof (cases m e m'' rule: T.cases)
+    case (Read_mem rk addr sz k v)
+    then show ?thesis using t m' by (cases v; elim that; blast)
+  qed (elim that; blast)+
 qed
 
 abbreviation Run :: "('rv, 'a, 'e) monad \<Rightarrow> 'rv event list \<Rightarrow> 'a \<Rightarrow> bool"
