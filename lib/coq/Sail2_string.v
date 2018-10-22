@@ -11,6 +11,10 @@ Definition string_drop s (n : {n : Z & ArithFact (n >= 0)}) :=
   let n := Z.to_nat (projT1 n) in
   String.substring n (String.length s - n) s.
 
+Definition string_take s (n : {n : Z & ArithFact (n >= 0)}) :=
+  let n := Z.to_nat (projT1 n) in
+  String.substring 0 n s.
+
 Definition string_length s : {n : Z & ArithFact (n >= 0)} :=
  build_ex (Z.of_nat (String.length s)).
 

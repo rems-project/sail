@@ -1,6 +1,43 @@
---- riscv.v	2018-10-01 18:21:50.121189040 +0100
-+++ riscv.v.good	2018-10-01 18:21:24.485040512 +0100
-@@ -10537,14 +10537,13 @@
+--- riscv.v.orig	2018-10-22 17:27:20.456069232 +0100
++++ riscv.v	2018-10-22 17:29:35.588974872 +0100
+@@ -1366,7 +1366,7 @@
+ 
+ Definition ex_nat (n : ({n : Z & ArithFact (n >= 0)})) 
+ : {syn_n : Z & ArithFact (syn_n >= 0)} :=
+-   build_ex(n).
++   (n).
+ 
+ Definition ex_int (n : (Z))  : {syn_n : Z & ArithFact (True)} := build_ex(n).
+ 
+@@ -1441,6 +1441,9 @@
+    let v64 : bits 64 := EXTS 64 v in
+    subrange_vec_dec (shift_bits_right v64 shift) 31 0.
+ 
++Definition n_leading_spaces s : {n : Z & ArithFact (n >= 0)} :=
++ build_ex (Z.of_nat (n_leading_spaces s)).
++(*
+ Fixpoint n_leading_spaces (arg0 : string) 
+ : {n : Z & ArithFact (n >= 0)} :=
+    build_ex(let s := (arg0) in
+@@ -1456,7 +1459,7 @@
+                                                                                 (build_ex 1)))))))
+                   : {n : Z & ArithFact (n >= 0)}))))
+      else 0).
+-
++*)
+ Definition spc_forwards '(tt : (unit))  : string := " ".
+ 
+ Definition spc_backwards (arg0 : string) 
+@@ -1470,7 +1473,7 @@
+    let 'n := projT1 (n_leading_spaces s) in
+    let p0_ := n in
+    if sumbool_of_bool ((Z.eqb p0_ 0)) then None
+-   else Some ((tt, n)).
++   else Some ((tt, build_ex n)).
+ 
+ Definition opt_spc_forwards '(tt : (unit))  : string := "".
+ 
+@@ -11079,14 +11082,13 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
@@ -17,7 +54,7 @@
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
     (phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false) >>= fun w__0 : MemoryOpResult (mword (8 * 8)) =>
-@@ -10557,27 +10556,27 @@
+@@ -11099,27 +11101,27 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
         (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure (PTW_Invalid_PTE))  : PTW_Result )
          else if ((isPTEPtr pbits)) then
@@ -51,7 +88,7 @@
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
                          PTW_Failure
-@@ -10587,10 +10586,10 @@
+@@ -11129,10 +11131,10 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
                          PTW_Success
@@ -64,7 +101,7 @@
             : PTW_Result))
          : M (PTW_Result)
      end)
-@@ -10716,7 +10715,7 @@
+@@ -11258,7 +11260,7 @@
          : M (TR39_Result)
      | None =>
         (curPTB39 tt) >>= fun w__6 : mword 56 =>
@@ -73,12 +110,13 @@
         (match w__7 with
          | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -15425,137 +15424,143 @@
+@@ -15511,138 +15513,145 @@
     returnm (true
      : bool).
  
--Fixpoint execute (merge_var : ast) 
+-Fixpoint execute (arg0 : ast) 
 -: M (bool) :=
+-   let merge_var := (arg0) in
 -   match merge_var with
 +Definition expand_ast (i : ast) : ast :=
 +match i with
@@ -270,36 +308,37 @@
 +| i => i
 +end.
 +
-+Fixpoint execute (merge_var : ast) 
++Fixpoint execute (arg0 : ast) 
 +: M (bool) :=
++   let merge_var := (arg0) in
 +let merge_var := expand_ast merge_var in
 +   match merge_var with
++
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
     | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -15595,6 +15600,7 @@
+@@ -15682,6 +15691,7 @@
     | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
-    | C_ILLEGAL (arg0) => (execute_C_ILLEGAL arg0)  : M (bool)
+    | C_ILLEGAL (s) => (execute_C_ILLEGAL s)  : M (bool)
 +| _ => Fail "Unexpanded instruction"
     end.
  
- Definition assembly_forwards (arg_ : ast) 
-@@ -27093,7 +27099,7 @@
-     else returnm (tt  : unit)) >>
+ Definition assembly_forwards (arg0 : ast) 
+@@ -36869,6 +36879,7 @@
     returnm (stepped
      : bool).
--
+ 
 +(*
- Definition loop '(tt : unit) 
+ Definition loop '(tt : (unit)) 
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
-@@ -27135,7 +27141,7 @@
+@@ -36909,7 +36920,7 @@
+            : M (Z)) >>= fun i : Z =>
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt
-     : unit).
--
-+*)
- Definition read_kind_of_num (arg_ : Z) `{ArithFact (0 <= arg_ /\ arg_ <= 11)} 
+-    : unit).
++    : unit).*)
+ 
+ Definition read_kind_of_num (arg0 : Z) `{ArithFact (0 <= arg0 /\ arg0 <= 11)} 
  : read_kind :=
-    let p0_ := arg_ in
