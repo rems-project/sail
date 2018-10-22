@@ -354,6 +354,7 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_throw exp -> string "throw" ^^ parens (doc_exp exp)
   | E_try (exp, pexps) ->
      separate space [string "try"; doc_exp exp; string "catch"; doc_pexps pexps]
+  | E_return (E_aux (E_lit (L_aux (L_unit, _)), _)) -> string "return()"
   | E_return exp -> string "return" ^^ parens (doc_exp exp)
   | E_internal_return exp -> string "internal_return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
@@ -367,8 +368,8 @@ and doc_infix n (E_aux (e_aux, _) as exp) =
          match Bindings.find op !fixities with
          | (Infix, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r]
          | (Infix, m) -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
-         | (InfixL, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r]
-         | (InfixL, m) -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
+         | (InfixL, m) when m >= n -> separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r]
+         | (InfixL, m) -> parens (separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r])
          | (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r]
          | (InfixR, m) -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r])
        with
