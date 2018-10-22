@@ -694,6 +694,13 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
             List.map (subst_unifiers unifiers) arg_typs
          | _ -> assert false
        in
+       (* Constructors that were specified without a return type might get
+          an extra tuple in their type; expand that here if necessary.
+          TODO: this should go away if we enforce proper arities. *)
+       let arg_typs = match pats, arg_typs with
+         | _::_::_, [Typ_aux (Typ_tup typs,_)] -> typs
+         | _,_ -> arg_typs
+       in
        let ppp = doc_unop (doc_id_ctor id)
          (parens (separate_map comma (doc_pat ctxt true true) (List.combine pats arg_typs))) in
        if apat_needed then parens ppp else ppp

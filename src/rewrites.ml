@@ -4595,7 +4595,16 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
      (match res_pat with
      | RP_app (id',residual_args) ->
         if Id.compare id id' == 0 then
-          let res_pats' = subpats args residual_args in
+          let res_pats' =
+            (* Constructors that were specified without a return type might get
+               an extra tuple in their type; expand that here if necessary.
+               TODO: this should go away if we enforce proper arities. *)
+            match args, residual_args with
+            | [], [RP_any]
+            | _::_::_, [RP_any]
+              -> subpats args (List.map (fun _ -> RP_any) args)
+            | _,_ ->
+               subpats args residual_args in
           List.map (fun rps -> RP_app (id,rps)) res_pats'
         else [res_pat]
      | RP_any ->
