@@ -524,11 +524,15 @@
   | CSET wreg COMMA COND
     { if not (isregzr $2) then error_registers ("expected " ^ $1.txt ^ " <Wd>, <cond>")
       else if ($4 = 0b1110 || $4 = 0b1111) then error_arg "<cond> must not be AL or NV"
-      else `AArch64ConditionalSelect($2,W ZR,W ZR,Set32,$4,$1.else_inv,$1.else_inc) }
+      else
+        let invert = (lxor) 0b0001 in
+        `AArch64ConditionalSelect($2,W ZR,W ZR,Set32,invert $4,$1.else_inv,$1.else_inc) }
   | CSET xreg COMMA COND
     { if not (isregzr $2) then error_registers ("expected " ^ $1.txt ^ " <Xd>, <cond>")
       else if ($4 = 0b1110 || $4 = 0b1111) then error_arg "<cond> must not be AL or NV"
-      else `AArch64ConditionalSelect($2,X ZR,X ZR,Set64,$4,$1.else_inv,$1.else_inc) }
+      else
+        let invert = (lxor) 0b0001 in
+        `AArch64ConditionalSelect($2,X ZR,X ZR,Set64,invert $4,$1.else_inv,$1.else_inc) }
 
   /* DMB/DSB */
 
