@@ -159,7 +159,7 @@ let make_dtb dts = (* Call the dtc compiler, assumed to be at /usr/bin/dtc *)
 (* Terminal I/O *)
 
 let term_write char =
-  ignore (Unix.write_substring Unix.stdout (String.make 1 char) 0 1)
+  ignore (Unix.write_substring Unix.stderr (String.make 1 char) 0 1)
 
 let rec term_read () =
   let buf = Bytes.make 1 '\000' in
