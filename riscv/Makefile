@@ -1,6 +1,15 @@
-SAIL_INSTS = riscv.sail
-SAIL_INST_SRCS = riscv_insts_begin.sail $(SAIL_INSTS) riscv_insts_end.sail
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail $(SAIL_INST_SRCS) riscv_step.sail riscv_analysis.sail
+SAIL_SEQ_INST  = riscv.sail riscv_jalr_seq.sail
+SAIL_RMEM_INST = riscv.sail riscv_jalr_rmem.sail
+
+SAIL_SEQ_INST_SRCS  = riscv_insts_begin.sail $(SAIL_SEQ_INST) riscv_insts_end.sail
+SAIL_RMEM_INST_SRCS = riscv_insts_begin.sail $(SAIL_RMEM_INST) riscv_insts_end.sail
+
+# non-instruction sources
+SAIL_OTHER_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail
+
+SAIL_SRCS      = $(SAIL_OTHER_SRCS) $(SAIL_SEQ_INST_SRCS)  riscv_step.sail riscv_analysis.sail
+SAIL_RMEM_SRCS = $(SAIL_OTHER_SRCS) $(SAIL_RMEM_INST_SRCS) riscv_step.sail riscv_analysis.sail
+
 PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
