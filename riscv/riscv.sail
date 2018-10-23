@@ -1,29 +1,3 @@
-/* Instruction definitions.
- *
- * This includes decoding, execution, and assembly parsing and printing.
- */
-
-scattered union ast
-
-val decode : bits(32) -> option(ast) effect pure
-
-val decodeCompressed : bits(16) -> option(ast) effect pure
-
-val cast print_insn : ast -> string
-
-/* returns whether an instruction was retired, used for computing minstret */
-val execute : ast -> bool effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
-scattered function execute
-
-val assembly : ast <-> string
-scattered mapping assembly
-
-val encdec : ast <-> bits(32)
-scattered mapping encdec
-
-val encdec_compressed : ast <-> bits(16)
-scattered mapping encdec_compressed
-
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
 
@@ -1585,14 +1559,3 @@ function clause execute C_ILLEGAL(s) = { handle_illegal(); false }
 mapping clause assembly = C_ILLEGAL(s) <-> "c.illegal" ^ spc() ^ hex_bits_16(s)
 
 /* ****************************************************************** */
-
-
-end ast
-end execute
-end assembly
-end encdec
-end encdec_compressed
-
-function decode bv = Some(encdec(bv))
-function decodeCompressed bv = Some(encdec_compressed(bv))
-function print_insn insn = assembly(insn)
