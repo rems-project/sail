@@ -5,10 +5,9 @@ open import Sail2_prompt
 open import Sail2_state_monad
 open import {isabelle} `Sail2_state_monad_lemmas`
 
-(* State monad wrapper around prompt monad *)
-
+(* Lifting from prompt monad to state monad *)
 val liftState : forall 'regval 'regs 'a 'e. register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e
-let rec liftState ra s = match s with
+let rec liftState ra m = match m with
   | (Done a)                  -> returnS a
   | (Read_mem rk a sz k)      -> bindS (read_mem_bytesS rk a sz)      (fun v -> liftState ra (k v))
   | (Write_mem wk a sz v t k) -> bindS (write_mem_bytesS wk a sz v t) (fun v -> liftState ra (k v))
@@ -22,4 +21,26 @@ let rec liftState ra s = match s with
   | (Print _ k)               -> liftState ra k (* TODO *)
   | (Fail descr)              -> failS descr
   | (Exception e)             -> throwS e
+end
+
+val runTraceS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> trace 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)
+let rec runTraceS ra t s =
+  match t with
+  | [] -> Just s
+  | E_read_mem _ addr sz (v, tag) :: t' ->
+     Maybe.bind (unsigned addr) (fun addr ->
+     Maybe.bind (get_mem_bytes addr sz s) (fun (v', tag') ->
+     if v' = v && tag' = tag then runTraceS ra t' s else Nothing))
+  | E_write_mem _ addr sz v tag _ :: t' ->
+     Maybe.bind (unsigned addr) (fun addr ->
+     runTraceS ra t' (put_mem_bytes addr sz v tag s))
+  | E_read_reg r v :: t' ->
+     let (read_reg, _) = ra in
+     Maybe.bind (read_reg r s.regstate) (fun v' ->
+     if v' = v then runTraceS ra t' s else Nothing)
+  | E_write_reg r v :: t' ->
+     let (_, write_reg) = ra in
+     Maybe.bind (write_reg r v s.regstate) (fun s' ->
+     runTraceS ra t' <| s with regstate = s' |>)
+  | _ :: t' -> runTraceS ra t' s
 end

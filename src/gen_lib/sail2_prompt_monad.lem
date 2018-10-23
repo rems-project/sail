@@ -48,6 +48,8 @@ type event 'regval =
   | E_undefined of bool
   | E_print of string
 
+type trace 'regval = list (event 'regval)
+
 val return : forall 'rv 'a 'e. 'a -> monad 'rv 'a 'e
 let return a = Done a
 
@@ -217,6 +219,62 @@ let barrier bk = Barrier bk (Done ())
 
 val footprint : forall 'rv 'e. unit -> monad 'rv unit 'e
 let footprint _ = Footprint (Done ())
+
+(* Event traces *)
+
+val emitEvent : forall 'regval 'a 'e. Eq 'regval => monad 'regval 'a 'e -> event 'regval -> maybe (monad 'regval 'a 'e)
+let emitEvent m e = match (e, m) with
+  | (E_read_mem rk a sz v, Read_mem rk' a' sz' k) ->
+     if rk' = rk && a' = a && sz' = sz then Just (k v) else Nothing
+  | (E_write_mem wk a sz v tag r, Write_mem wk' a' sz' v' tag' k) ->
+     if wk' = wk && a' = a && sz' = sz && v' = v && tag' = tag then Just (k r) else Nothing
+  | (E_read_reg r v, Read_reg r' k) ->
+     if r' = r then Just (k v) else Nothing
+  | (E_write_reg r v, Write_reg r' v' k) ->
+     if r' = r && v' = v then Just k else Nothing
+  | (E_write_ea wk a sz, Write_ea wk' a' sz' k) ->
+     if wk' = wk && a' = a && sz' = sz then Just k else Nothing
+  | (E_barrier bk, Barrier bk' k) ->
+     if bk' = bk then Just k else Nothing
+  | (E_print m, Print m' k) ->
+     if m' = m then Just k else Nothing
+  | (E_excl_res v, Excl_res k) -> Just (k v)
+  | (E_undefined v, Undefined k) -> Just (k v)
+  | (E_footprint, Footprint k) -> Just k
+  | _ -> Nothing
+end
+
+val runTrace : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> maybe (monad 'regval 'a 'e)
+let rec runTrace t m = match t with
+  | [] -> Just m
+  | e :: t' -> Maybe.bind (emitEvent m e) (runTrace t')
+end
+
+val final : forall 'regval 'a 'e. monad 'regval 'a 'e -> bool
+let final = function
+  | Done _ -> true
+  | Fail _ -> true
+  | Exception _ -> true
+  | _ -> false
+end
+
+val hasTrace : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool
+let hasTrace t m = match runTrace t m with
+  | Just m -> final m
+  | Nothing -> false
+end
+
+val hasException : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool
+let hasException t m = match runTrace t m with
+  | Just (Exception _) -> true
+  | _ -> false
+end
+
+val hasFailure : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool
+let hasFailure t m = match runTrace t m with
+  | Just (Fail _) -> true
+  | _ -> false
+end
 
 (* Define a type synonym that also takes the register state as a type parameter,
    in order to make switching to the state monad without changing generated
