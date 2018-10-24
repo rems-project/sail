@@ -1,0 +1,5 @@
+Type error at file "constraint_sym/v3.sail", line 7, character 42 to line 7, character 43
+
+val foo : forall ('n : Type), where Size([41m'n[0m). int('n) -> unit
+
+Constraint is badly formed, 'n has kind Type but should have kind Int

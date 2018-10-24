@@ -123,6 +123,7 @@ let doc_nc =
     | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
     | NC_set (kid, ints) ->
        separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
+    | NC_app (id, nexps) -> string "where" ^^ space ^^ doc_id id ^^ parens (separate_map (comma ^^ space) doc_nexp nexps)
     | _ -> parens (nc0 nc)
   and nc0 (NC_aux (nc_aux, _) as nc) =
     match nc_aux with
@@ -134,7 +135,7 @@ let doc_nc =
     | _ -> atomic_nc nc
   in
   nc0
-  
+
 let rec doc_typ (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
@@ -586,6 +587,8 @@ let rec doc_def def = group (match def with
   | DEF_fixity (prec, n, id) ->
      fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
+  | DEF_constraint (id, kids, nc) ->
+     separate space [string "constraint"; doc_id id; parens (separate_map (comma ^^ space) doc_kid kids); equals; doc_nc nc]
   | DEF_overload (id, ids) ->
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
   ) ^^ hardline

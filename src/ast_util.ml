@@ -329,7 +329,7 @@ let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
 let nc_true = mk_nc NC_true
 let nc_false = mk_nc NC_false
 
-let rec nc_negate (NC_aux (nc, _)) =
+let rec nc_negate (NC_aux (nc, l)) =
   match nc with
   | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
   | NC_bounded_le (n1, n2) -> nc_gt n1 n2
@@ -343,6 +343,8 @@ let rec nc_negate (NC_aux (nc, _)) =
   | NC_set (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
   | NC_set (kid, int :: ints) ->
      mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
+  | NC_app _ ->
+     raise (Reporting_basic.err_unreachable l __POS__ "tried to negate constraint with unexpanded synonym")
 
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
 
@@ -378,6 +380,10 @@ let quant_split typq =
   in
   let qis = quant_items typq in
   List.concat (List.map qi_kopt qis), List.concat (List.map qi_nc qis)
+
+let quant_map_items f = function
+  | TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_no_forall, l)
+  | TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (List.map f qis), l)
 
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
@@ -523,8 +529,8 @@ let def_loc = function
   | DEF_scattered (SD_aux (_, (l, _)))
   | DEF_reg_dec (DEC_aux (_, (l, _)))
   | DEF_fixity (_, _, Id_aux (_, l))
-  | DEF_overload (Id_aux (_, l), _) ->
-    l
+  | DEF_overload (Id_aux (_, l), _) -> l
+  | DEF_constraint (Id_aux (_, l), _, _) -> l
   | DEF_internal_mutrec _ -> Parse_ast.Unknown
 
 let string_of_id = function
@@ -638,12 +644,17 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+  | NC_aux (NC_app (id, nexps), _) ->
+     "where " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_nexp nexps ^ ")"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
+let string_of_kinded_id = function
+  | KOpt_aux (KOpt_none kid, _) -> string_of_kid kid
+  | KOpt_aux (KOpt_kind (k, kid), _) -> "(" ^ string_of_kid kid ^ " : " ^ string_of_kind k ^ ")"
+
 let string_of_quant_item_aux = function
-  | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid
-  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> "(" ^ string_of_kid kid ^ " :: " ^ string_of_kind k ^ ")"
+  | QI_id kopt -> string_of_kinded_id kopt
   | QI_const constr -> string_of_n_constraint constr
 
 let string_of_quant_item = function
@@ -884,6 +895,8 @@ module NC = struct
     | NC_or (nc1,nc2), NC_or (nc3,nc4)
     | NC_and (nc1,nc2), NC_and (nc3,nc4)
       -> lex_ord compare compare nc1 nc3 nc2 nc4
+    | NC_app (id1, nexps1), NC_app (id2, nexps2)
+      -> lex_ord (Id.compare) (Util.compare_list Nexp.compare) id1 id2 nexps1 nexps2
     | NC_true, NC_true
     | NC_false, NC_false
       -> 0
@@ -894,6 +907,7 @@ module NC = struct
     | NC_set _, _ -> -1        | _, NC_set _ -> 1
     | NC_or _, _ -> -1         | _, NC_or _ -> 1
     | NC_and _, _ -> -1        | _, NC_and _ -> 1
+    | NC_app _, _ -> -1        | _, NC_app _ -> 1
     | NC_true, _ -> -1         | _, NC_true -> 1
 end
 
@@ -1079,6 +1093,8 @@ let rec tyvars_of_nc (NC_aux (nc, _)) =
   | NC_or (nc1, nc2)
   | NC_and (nc1, nc2) ->
      KidSet.union (tyvars_of_nc nc1) (tyvars_of_nc nc2)
+  | NC_app (id, nexps) ->
+     List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_nexp nexps)
   | NC_true
   | NC_false -> KidSet.empty
 
@@ -1338,6 +1354,7 @@ let rec locate_nc l (NC_aux (nc_aux, _)) =
     | NC_set (kid, nums) -> NC_set (locate_kid l kid, nums)
     | NC_or (nc1, nc2) -> NC_or (locate_nc l nc1, locate_nc l nc2)
     | NC_and (nc1, nc2) -> NC_and (locate_nc l nc1, locate_nc l nc2)
+    | NC_app (id, nexps) -> NC_app (id, List.map (locate_nexp l) nexps)
     | NC_true -> NC_true
     | NC_false -> NC_false
   in

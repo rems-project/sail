@@ -370,6 +370,9 @@ and to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) 
                 NC_or (to_ast_nexp_constraint k_env nc1, to_ast_nexp_constraint k_env nc2)
              | Parse_ast.NC_and (nc1, nc2) ->
                 NC_and (to_ast_nexp_constraint k_env nc1, to_ast_nexp_constraint k_env nc2)
+             | Parse_ast.NC_app (id, typs) ->
+                let nexps = List.map (to_ast_nexp k_env) typs in
+                NC_app (to_ast_id id, nexps)
              | Parse_ast.NC_true -> NC_true
              | Parse_ast.NC_false -> NC_false
     ), l)
@@ -907,6 +910,11 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
   | Parse_ast.DEF_reg_dec(dec) ->
      let d = to_ast_dec envs dec in
      ((Finished(DEF_reg_dec(d))),envs),partial_defs
+  | Parse_ast.DEF_constraint (id, kids, nc) ->
+     let id = to_ast_id id in
+     let kids = List.map to_ast_var kids in
+     let nc = to_ast_nexp_constraint k_env nc in
+     ((Finished (DEF_constraint (id, kids, nc))), envs), partial_defs
   | Parse_ast.DEF_pragma (_, _, l) ->
      typ_error l "Encountered preprocessor directive in initial check" None None None
   | Parse_ast.DEF_internal_mutrec _ ->
