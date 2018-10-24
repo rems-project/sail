@@ -386,6 +386,8 @@ val propagate_exp_effect : tannot exp -> tannot exp
 
 val propagate_pexp_effect : tannot pexp -> tannot pexp * effect
 
+val big_int_of_nexp : nexp -> Big_int.num option
+
 (** {2 Checking full AST} *)
 
 (** Fully type-check an AST

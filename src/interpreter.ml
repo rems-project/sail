@@ -282,6 +282,15 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_block (exp :: exps) ->
      step exp >>= fun exp' -> wrap (E_block (exp' :: exps))
 
+  | E_lit (L_aux (L_undef, _)) ->
+     begin
+       let env = Type_check.env_of_annot annot in
+       let typ = Type_check.typ_of_annot annot in
+       let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> ()) typ in
+       let undef_exp = Type_check.check_exp env undef_exp typ in
+       return undef_exp
+     end
+
   | E_lit lit ->
      begin
        try return (exp_of_value (value_of_lit lit))
@@ -577,7 +586,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_for (id, exp_from, exp_to, exp_step, ord, body) ->
      step exp_step >>= fun exp_step' -> wrap (E_for (id, exp_from, exp_to, exp_step', ord, body))
 
-  | E_sizeof _ | E_constraint _ -> assert false (* Must be re-written before interpreting *)
+  | E_sizeof nexp ->
+     begin
+       match Type_check.big_int_of_nexp nexp with
+       | Some n -> return (exp_of_value (V_int n))
+       | None -> fail "Sizeof unevaluable nexp"
+     end
 
   | _ -> fail ("Unimplemented " ^ string_of_exp orig_exp)
 
@@ -739,12 +753,11 @@ let rec eval_frame' = function
           let id = mk_id name in
           let gstate = gstate in
           if gstate.allow_registers then
-            (* TODO: check existence of register? would then need to initialise all to undefined below or similar *)
-            (* if Bindings.mem id gstate.registers then *)
+            if Bindings.mem id gstate.registers then
               let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
               eval_frame' (Step (out, state', cont (), stack))
-            (* else
-             *   eval_frame' (Step (out, state, fail ("Write of nonexistent register: " ^ name), stack)) *)
+            else
+              eval_frame' (Step (out, state, fail ("Write of nonexistent register: " ^ name), stack))
           else
             eval_frame' (Step (out, state, fail ("Register write disallowed by allow_registers setting: " ^ name), stack))
         end
@@ -805,6 +818,14 @@ let initial_gstate primops ast =
 
 let rec initialize_registers gstate =
   let process_def = function
+    | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), annot)) ->
+       begin
+         let env = Type_check.env_of_annot annot in
+         let typ = Type_check.Env.expand_synonyms env typ in
+         let exp = mk_exp (E_cast (typ, mk_exp (E_lit (mk_lit (L_undef))))) in
+         let exp = Type_check.check_exp env exp typ in
+         { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
+       end
     | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
        { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
     | DEF_fundef fdef ->
