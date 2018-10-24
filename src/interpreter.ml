@@ -266,12 +266,11 @@ let rec build_letchain id lbs (E_aux (_, annot) as exp) =
 
 let is_interpreter_extern id env =
   let open Type_check in
-  Env.is_extern id env "interpreter" || Env.is_extern id env "ocaml"
+  Env.is_extern id env "interpreter"
 
 let get_interpreter_extern id env =
   let open Type_check in
-  try Env.get_extern id env "interpreter" with
-  | Type_error _ -> Env.get_extern id env "ocaml"
+  Env.get_extern id env "interpreter"
 
 let rec step (E_aux (e_aux, annot) as orig_exp) =
   let wrap e_aux' = return (E_aux (e_aux', annot)) in

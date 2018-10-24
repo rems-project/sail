@@ -9,6 +9,7 @@ val "eq_bit" : (bit, bit) -> bool
 
 val eq_bits = {
   ocaml: "eq_list",
+  interpreter: "eq_list",
   lem: "eq_vec",
   c: "eq_bits",
   coq: "eq_vec"
@@ -20,6 +21,7 @@ val bitvector_length = {coq: "length_mword", _:"length"} : forall 'n. bits('n) -
 
 val vector_length = {
   ocaml: "length",
+  interpreter: "length",
   lem: "length_list",
   c: "length",
   coq: "length_list"
@@ -37,6 +39,7 @@ val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
 val truncate = {
   ocaml: "vector_truncate",
+  interpreter: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
   c: "truncate"
@@ -48,7 +51,7 @@ function mask(len, v) = if len <= length(v) then truncate(v, len) else zero_exte
 
 overload operator ^ = {mask}
 
-val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append", coq: "concat_vec"} : forall ('n : Int) ('m : Int).
+val bitvector_concat = {ocaml: "append", interpreter: "append", lem: "concat_vec", c: "append", coq: "concat_vec"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
 
 overload append = {bitvector_concat}
@@ -58,6 +61,7 @@ val "append_64" : forall 'n. (bits('n), bits(64)) -> bits('n + 64)
 
 val bitvector_access = {
   ocaml: "access",
+  interpreter: "access",
   lem: "access_vec_inc",
   coq: "access_vec_inc",
   c: "vector_access"
@@ -65,6 +69,7 @@ val bitvector_access = {
 
 val plain_vector_access = {
   ocaml: "access",
+  interpreter: "access",
   lem: "access_list_inc",
   coq: "access_list_inc",
   c: "vector_access"
@@ -74,6 +79,7 @@ overload vector_access = {bitvector_access, plain_vector_access}
 
 val bitvector_update = {
   ocaml: "update",
+  interpreter: "update",
   lem: "update_vec_inc",
   coq: "update_vec_inc",
   c: "vector_update"
@@ -81,6 +87,7 @@ val bitvector_update = {
 
 val plain_vector_update = {
   ocaml: "update",
+  interpreter: "update",
   lem: "update_list_inc",
   coq: "update_list_inc",
   c: "vector_update"
@@ -90,11 +97,12 @@ overload vector_update = {bitvector_update, plain_vector_update}
 
 val add_bits = {
   ocaml: "add_vec",
+  interpreter: "add_vec",
   c: "add_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val add_bits_int = {
-  ocaml: "add_vec_int",
+  ocaml: "add_vec_int", interpreter: "add_vec_int",
   c: "add_bits_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
@@ -102,6 +110,7 @@ overload operator + = {add_bits, add_bits_int}
 
 val vector_subrange = {
   ocaml: "subrange",
+  interpreter: "subrange",
   lem: "subrange_vec_inc",
   c: "vector_subrange",
   coq: "subrange_vec_inc"
@@ -110,6 +119,7 @@ val vector_subrange = {
 
 val vector_update_subrange = {
   ocaml: "update_subrange",
+  interpreter: "update_subrange",
   lem: "update_subrange_vec_inc",
   c: "vector_update_subrange",
   coq: "update_subrange_vec_inc"

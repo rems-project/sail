@@ -274,6 +274,10 @@ let value_or_vec = function
   | [v1; v2] -> mk_vector (Sail_lib.or_vec (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value not_vec"
 
+let value_xor_vec = function
+  | [v1; v2] -> mk_vector (Sail_lib.xor_vec (coerce_bv v1, coerce_bv v2))
+  | _ -> failwith "value xor_vec"
+
 let value_uint = function
   | [v] -> V_int (Sail_lib.uint (coerce_bv v))
   | _ -> failwith "value uint"
@@ -407,6 +411,14 @@ let value_shiftr = function
   | [v1; v2] -> mk_vector (Sail_lib.shiftr (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value shiftr"
 
+let value_shift_bits_left = function
+  | [v1; v2] -> mk_vector (Sail_lib.shift_bits_left (coerce_bv v1, coerce_bv v2))
+  | _ -> failwith "value shift_bits_left"
+
+let value_shift_bits_right = function
+  | [v1; v2] -> mk_vector (Sail_lib.shift_bits_right (coerce_bv v1, coerce_bv v2))
+  | _ -> failwith "value shift_bits_right"
+
 let value_vector_truncate = function
   | [v1; v2] -> mk_vector (Sail_lib.vector_truncate (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value vector_truncate"
@@ -498,6 +510,14 @@ let value_round_down = function
   | [v] -> V_int (Sail_lib.round_down (coerce_real v))
   | _ -> failwith "value round_down"
 
+let value_quot_round_zero = function
+  | [v1; v2] -> V_int (Sail_lib.quot_round_zero (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value quot_round_zero"
+
+let value_rem_round_zero = function
+  | [v1; v2] -> V_int (Sail_lib.rem_round_zero (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value rem_round_zero"
+
 let value_eq_real = function
   | [v1; v2] -> V_bool (Sail_lib.eq_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value eq_real"
@@ -522,6 +542,10 @@ let value_string_append = function
   | [v1; v2] -> V_string (Sail_lib.string_append (coerce_string v1, coerce_string v2))
   | _ -> failwith "value string_append"
 
+let value_decimal_string_of_bits = function
+  | [v] -> V_string (Sail_lib.decimal_string_of_bits (coerce_bv v))
+  | _ -> failwith "value decimal_string_of_bits"
+       
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -536,6 +560,7 @@ let primops =
       ("putchar", value_putchar);
       ("string_of_int", fun vs -> V_string (string_of_value (List.hd vs)));
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
+      ("decimal_string_of_bits", value_decimal_string_of_bits);
       ("print_bits", value_print_bits);
       ("print_int", value_print_int);
       ("print_string", value_print_string);
@@ -568,6 +593,7 @@ let primops =
       ("not_vec", value_not_vec);
       ("and_vec", value_and_vec);
       ("or_vec", value_or_vec);
+      ("xor_vec", value_xor_vec);
       ("uint", value_uint);
       ("sint", value_sint);
       ("get_slice_int", value_get_slice_int);
@@ -579,6 +605,8 @@ let primops =
       ("zeros", value_zeros);
       ("shiftr", value_shiftr);
       ("shiftl", value_shiftl);
+      ("shift_bits_left", value_shift_bits_left);
+      ("shift_bits_right", value_shift_bits_right);
       ("add_int", value_add_int);
       ("sub_int", value_sub_int);
       ("div_int", value_quotient);
@@ -610,6 +638,8 @@ let primops =
       ("gteq_real", value_gt_real);
       ("round_up", value_round_up);
       ("round_down", value_round_down);
+      ("quot_round_zero", value_quot_round_zero);
+      ("rem_round_zero", value_rem_round_zero);
       ("quotient_real", value_quotient_real);
       ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
@@ -625,4 +655,5 @@ let primops =
       ("string_length", value_string_length);
       ("string_startswith", value_string_startswith);
       ("string_drop", value_string_drop);
+      ("skip", fun _ -> V_unit);
     ]
