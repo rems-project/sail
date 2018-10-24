@@ -105,6 +105,9 @@ sail.native: sail
 sail.byte: ast.ml bytecode.ml share_directory.ml
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
+isail.byte: ast.ml bytecode.ml share_directory.ml
+	ocamlbuild -use-ocamlfind isail.byte
+
 interpreter: lem_interp/interp_ast.lem
 	ocamlbuild -use-ocamlfind lem_interp/extract.cmxa
 	ocamlbuild -use-ocamlfind lem_interp/extract.cma
