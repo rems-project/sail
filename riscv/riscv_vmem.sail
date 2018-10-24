@@ -291,7 +291,7 @@ union TR39_Result = {
   TR39_Failure : PTW_Error
 }
 
-val translate39 : (vaddr39, AccessType, Privilege, bool, bool, nat) -> TR39_Result effect {rreg, wreg, wmv, escape, rmem}
+val translate39 : (vaddr39, AccessType, Privilege, bool, bool, nat) -> TR39_Result effect {rreg, wreg, eamem, wmv, escape, rmem}
 function translate39(vAddr, ac, priv, mxr, do_sum, level) = {
   let asid = curAsid64();
   match lookupTLB39(asid, vAddr) {
@@ -313,9 +313,13 @@ function translate39(vAddr, ac, priv, mxr, do_sum, level) = {
               n_ent.pte = update_BITS(ent.pte, pbits.bits());
               writeTLB39(idx, n_ent);
               /* update page table */
-              match checked_mem_write(EXTZ(ent.pteAddr), 8, ent.pte.bits()) {
-                MemValue(_) => (),
-                MemException(e) => internal_error("invalid physical address in TLB")
+              match mem_write_ea(EXTZ(ent.pteAddr), 8, false, false, false) {
+                MemValue(_) =>
+                  match checked_mem_write(EXTZ(ent.pteAddr), 8, ent.pte.bits(), false, false, false) {
+                    MemValue(_) => (),
+                    MemException(e) => internal_error("invalid physical address in TLB")
+                  },
+                _ => internal_error("invalid physical address in TLB")
               };
               TR39_Address(ent.pAddr | EXTZ(vAddr & ent.vAddrMask))
             }
@@ -339,15 +343,20 @@ function translate39(vAddr, ac, priv, mxr, do_sum, level) = {
                 TR39_Failure(PTW_PTE_Update)
               } else {
                 w_pte : SV39_PTE = update_BITS(pte, pbits.bits());
-                match checked_mem_write(EXTZ(pteAddr), 8, w_pte.bits()) {
-                  MemValue(_) => {
-                    addToTLB39(asid, vAddr, pAddr, w_pte, pteAddr, level, global);
-                    TR39_Address(pAddr)
-                  },
-                  MemException(e) => {
-                    /* pte is not in valid memory */
+                match mem_write_ea(EXTZ(pteAddr), 8, false, false, false) {
+                  MemValue(_) =>
+                    match checked_mem_write(EXTZ(pteAddr), 8, w_pte.bits(), false, false, false) {
+                      MemValue(true) => {
+                        addToTLB39(asid, vAddr, pAddr, w_pte, pteAddr, level, global);
+                        TR39_Address(pAddr)
+                      },
+                      _ => {
+                        /* pte is not in valid memory */
+                        TR39_Failure(PTW_Access)
+                      }
+                    },
+                  _ =>
                     TR39_Failure(PTW_Access)
-                  }
                 }
               }
           }
@@ -384,7 +393,7 @@ union TR_Result = {
 
 /* Top-level address translation dispatcher */
 
-val translateAddr : (xlenbits, AccessType, ReadType) -> TR_Result effect {escape, rmem, rreg, wmv, wreg}
+val translateAddr : (xlenbits, AccessType, ReadType) -> TR_Result effect {escape, rmem, rreg, eamem, wmv, wreg}
 function translateAddr(vAddr, ac, rt) = {
   let effPriv : Privilege = match rt {
     Instruction => cur_privilege,

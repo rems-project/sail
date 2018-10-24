@@ -9,7 +9,7 @@ union FetchResult = {
 function isRVC(h : half) -> bool =
  ~ (h[1 .. 0] == 0b11)
 
-val fetch : unit -> FetchResult effect {escape, rmem, rreg, wmv, wreg}
+val fetch : unit -> FetchResult effect {escape, rmem, rreg, eamem, wmv, wreg}
 function fetch() -> FetchResult =
   /* check for legal PC */
   if (PC[0] != 0b0 | (PC[1] != 0b0 & (~ (haveRVC()))))

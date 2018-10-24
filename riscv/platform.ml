@@ -113,6 +113,29 @@ let cancel_reservation () =
   Printf.eprintf "reservation <- none\n";
   reservation := "none"
 
+(* memory *)
+
+let read_mem (rk, addr, len) =
+  Sail_lib.read_ram (List.length addr, len, [], addr)
+
+let last_write_ea = ref (None : (Sail_lib.bit list * Big_int.num) option)
+
+let write_ea (wk, addr, len) =
+  last_write_ea := Some (addr, len)
+
+let write_memv data =
+  match !last_write_ea with
+  | Some (addr, len) ->
+     if Big_int.mul len (Big_int.of_int 8) = Big_int.of_int (List.length data) then
+       Sail_lib.write_ram (List.length addr, len, [], addr, data)
+     else
+       failwith "write_memv with length mismatch to preceding write_ea"
+  | None ->
+     failwith "write_memv without preceding write_ea"
+
+let barrier bk =
+  ()
+
 (* terminal I/O *)
 
 let term_write char_bits =

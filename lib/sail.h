@@ -329,6 +329,8 @@ void string_length(sail_int *len, sail_string s);
 void string_drop(sail_string *dst, sail_string s, sail_int len);
 void string_take(sail_string *dst, sail_string s, sail_int len);
 
+void opt_spc_matches_prefix(zoption *dst, sail_string s);
+
 /* ***** Printing ***** */
 
 void string_of_int(sail_string *str, const sail_int i);

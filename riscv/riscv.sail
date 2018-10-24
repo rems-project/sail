@@ -627,15 +627,15 @@ mapping clause encdec = FENCE(pred, succ) <-> 0b0000 @ pred @ succ @ 0b00000 @ 0
 
 function clause execute (FENCE(pred, succ)) = {
   match (pred, succ) {
-    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b11) => MEM_fence_rw_rw(),
-    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b11) => MEM_fence_r_rw(),
-    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b10) => MEM_fence_r_r(),
-    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b01) => MEM_fence_rw_w(),
-    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b01) => MEM_fence_w_w(),
-    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b11) => MEM_fence_w_rw(),
-    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b10) => MEM_fence_rw_r(),
-    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b01) => MEM_fence_r_w(),
-    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b10) => MEM_fence_w_r(),
+    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b11) => mem_barrier(Barrier_RISCV_rw_rw),
+    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b11) => mem_barrier(Barrier_RISCV_r_rw),
+    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b10) => mem_barrier(Barrier_RISCV_r_r),
+    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b01) => mem_barrier(Barrier_RISCV_rw_w),
+    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b01) => mem_barrier(Barrier_RISCV_w_w),
+    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b11) => mem_barrier(Barrier_RISCV_w_rw),
+    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b10) => mem_barrier(Barrier_RISCV_rw_r),
+    (_ : bits(2) @ 0b10, _ : bits(2) @ 0b01) => mem_barrier(Barrier_RISCV_r_w),
+    (_ : bits(2) @ 0b01, _ : bits(2) @ 0b10) => mem_barrier(Barrier_RISCV_w_r),
 
     (_ : bits(2) @ 0b00, _ : bits(2) @ 0b00) => (),
 

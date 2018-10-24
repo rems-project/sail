@@ -1,3 +1,6 @@
+$ifndef _REGFP
+$define _REGFP
+
 /* iR : input registers,
  * oR : output registers,
  * aR : registers feeding into the memory address */
@@ -98,3 +101,17 @@ union instruction_kind = {
   IK_trans : trans_kind,
   IK_simple : unit
 }
+
+val __read_mem = { ocaml: "Platform.read_mem", _: "read_mem" } : forall 'n, 'n > 0. (read_kind, bits(64), int('n)) -> bits(8 * 'n) effect {rmem}
+val __write_ea = { ocaml: "Platform.write_ea", _: "write_ea" } : forall 'n, 'n > 0. (write_kind, bits(64), int('n)) -> unit effect {eamem}
+val __write_memv = { ocaml: "Platform.write_memv", _: "write_memv" } : forall 'n, 'n > 0. bits('n) -> bool effect {wmv}
+val __excl_res = { ocaml: "Platform.excl_res", _: "excl_res" }: unit -> bool effect {exmem}
+val __barrier = { ocaml: "Platform.barrier", _: "barrier" } : barrier_kind -> unit effect {barr}
+
+val __write_mem : forall 'n, 'n > 0. (write_kind, bits(64), int('n), bits(8 * 'n)) -> bool effect {eamem,wmv}
+function __write_mem (wk, addr, len, value) = {
+  __write_ea(wk, addr, len);
+  __write_memv(value)
+}
+
+$endif

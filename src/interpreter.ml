@@ -60,6 +60,7 @@ type gstate =
     primops : (value list -> value) StringMap.t;
     letbinds : (Type_check.tannot letbind) list;
     fundefs : (Type_check.tannot fundef) Bindings.t;
+    last_write_ea : (value * value * value) option;
   }
 
 type lstate =
@@ -127,12 +128,11 @@ type 'a response =
   | Assertion_failed of string
   | Call of id * value list * (return_value -> 'a)
   | Fail of string
-  (* TODO *)
-  (* | Read_mem of Sail2_instr_kinds.read_kind * (\* address : *\) value * (\* length : *\) value * (value -> 'a)
-   * | Write_ea of Sail2_instr_kinds.write_kind * (\* address : *\) value * (\* length : *\) value * (unit -> 'a)
-   * | Excl_res of (bool -> 'a)
-   * | Write_memv of value * (bool -> 'a)
-   * | Barrier of Sail2_instr_kinds.barrier_kind * (unit -> 'a) *)
+  | Read_mem of (* read_kind : *) value * (* address : *) value * (* length : *) value * (value -> 'a)
+  | Write_ea of (* write_kind : *) value * (* address : *) value * (* length : *) value * (unit -> 'a)
+  | Excl_res of (bool -> 'a)
+  | Write_memv of value * (bool -> 'a)
+  | Barrier of (* barrier_kind : *) value * (unit -> 'a)
   | Read_reg of string * (value -> 'a)
   | Write_reg of string * value * (unit -> 'a)
   | Get_primop of string * ((value list -> value) -> 'a)
@@ -150,12 +150,11 @@ let map_response f = function
   | Assertion_failed str -> Assertion_failed str
   | Call (id, vals, cont) -> Call (id, vals, fun v -> f (cont v))
   | Fail s -> Fail s
-  (* TODO *)
-  (* | Read_mem (rk, addr, len, cont) -> Read_mem (rk, addr, len, fun v -> f (cont v))
-   * | Write_ea (wk, addr, len, cont) -> Write_ea (wk, addr, len, fun () -> f (cont ()))
-   * | Excl_res cont -> Excl_res (fun b -> f (cont b))
-   * | Write_memv (v, cont) -> Write_memv (v, fun b -> f (cont b))
-   * | Barrier (bk, cont) -> Barrier (bk, fun () -> f (cont ())) *)
+  | Read_mem (rk, addr, len, cont) -> Read_mem (rk, addr, len, fun v -> f (cont v))
+  | Write_ea (wk, addr, len, cont) -> Write_ea (wk, addr, len, fun () -> f (cont ()))
+  | Excl_res cont -> Excl_res (fun b -> f (cont b))
+  | Write_memv (v, cont) -> Write_memv (v, fun b -> f (cont b))
+  | Barrier (bk, cont) -> Barrier (bk, fun () -> f (cont ()))
   | Read_reg (name, cont) -> Read_reg (name, fun v -> f (cont v))
   | Write_reg (name, v, cont) -> Write_reg (name, v, fun () -> f (cont ()))
   | Get_primop (name, cont) -> Get_primop (name, fun op -> f (cont op))
@@ -195,21 +194,21 @@ let throw v = Yield (Exception v)
 let call (f : id) (args : value list) : return_value monad =
   Yield (Call (f, args, fun v -> Pure v))
 
-(* TODO *)
-(* let read_mem (rk, addr, len) : value monad =
- *   Yield (Read_mem (rk, addr, len, (fun v -> Pure v)))
- * 
- * let write_ea (wk, addr, len) : unit monad =
- *   Yield (Write_ea (wk, addr, len, (fun () -> Pure ())))
- * 
- * let excl_res () : bool monad =
- *   Yield (Excl_res (fun b -> Pure b))
- * 
- * let write_memv v : bool monad =
- *   Yield (Write_memv (v, fun b -> Pure b))
- * 
- * let barrier bk : unit monad =
- *   Yield (Barrier (bk, fun () -> Pure ())) *)
+
+let read_mem rk addr len : value monad =
+  Yield (Read_mem (rk, addr, len, (fun v -> Pure v)))
+
+let write_ea wk addr len : unit monad =
+  Yield (Write_ea (wk, addr, len, (fun () -> Pure ())))
+
+let excl_res () : bool monad =
+  Yield (Excl_res (fun b -> Pure b))
+
+let write_memv v : bool monad =
+  Yield (Write_memv (v, fun b -> Pure b))
+
+let barrier bk : unit monad =
+  Yield (Barrier (bk, fun () -> Pure ()))
 
 let read_reg name : value monad =
   Yield (Read_reg (name, fun v -> Pure v))
@@ -372,11 +371,47 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | [] when is_interpreter_extern id (env_of_annot annot) ->
           begin
             let extern = get_interpreter_extern id (env_of_annot annot) in
-            if extern = "reg_deref" then
-              let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
-              read_reg regname >>= fun v -> return (exp_of_value v)
-            else
-              get_primop extern >>= fun op -> return (exp_of_value (op (List.map value_of_exp evaluated)))
+            match extern with
+            | "reg_deref" ->
+               let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
+               read_reg regname >>= fun v -> return (exp_of_value v)
+            | "read_mem" ->
+               begin match evaluated with
+               | [rk; addr; len] ->
+                  read_mem (value_of_exp rk) (value_of_exp addr) (value_of_exp len) >>= fun v -> return (exp_of_value v)
+               | _ ->
+                  fail "Wrong number of parameters to read_mem intrinsic"
+               end
+            | "write_ea" ->
+               begin match evaluated with
+               | [wk; addr; len] ->
+                  write_ea (value_of_exp wk) (value_of_exp addr) (value_of_exp len) >> wrap unit_exp
+               | _ ->
+                  fail "Wrong number of parameters to write_ea intrinsic"
+               end
+            | "excl_res" ->
+               begin match evaluated with
+               | [] ->
+                  excl_res () >>= fun b -> return (exp_of_value (V_bool b))
+               | _ ->
+                  fail "Wrong number of parameters to excl_res intrinsic"
+               end
+            | "write_memv" ->
+               begin match evaluated with
+               | [v] ->
+                  write_memv (value_of_exp v) >>= fun b -> return (exp_of_value (V_bool b))
+               | _ ->
+                  fail "Wrong number of parameters to write_memv intrinsic"
+               end
+            | "barrier" ->
+               begin match evaluated with
+               | [bk] ->
+                  barrier (value_of_exp bk) >> wrap unit_exp
+               | _ ->
+                  fail "Wrong number of parameters to barrier intrinsic"
+               end
+            | _ ->
+               get_primop extern >>= fun op -> return (exp_of_value (op (List.map value_of_exp evaluated)))
           end
        | [] ->
           call id (List.map value_of_exp evaluated) >>=
@@ -694,6 +729,61 @@ let rec ast_letbinds (Defs defs) =
   | DEF_val lb :: defs -> lb :: ast_letbinds (Defs defs)
   | _ :: defs -> ast_letbinds (Defs defs)
 
+let rk_of_string = function
+  | "Read_plain" -> Sail2_instr_kinds.Read_plain
+  | "Read_reserve" -> Sail2_instr_kinds.Read_reserve
+  | "Read_acquire" -> Sail2_instr_kinds.Read_acquire
+  | "Read_exclusive" -> Sail2_instr_kinds.Read_exclusive
+  | "Read_exclusive_acquire" -> Sail2_instr_kinds.Read_exclusive_acquire
+  | "Read_stream" -> Sail2_instr_kinds.Read_stream
+  | "Read_RISCV_acquire" -> Sail2_instr_kinds.Read_RISCV_acquire
+  | "Read_RISCV_strong_acquire" -> Sail2_instr_kinds.Read_RISCV_strong_acquire
+  | "Read_RISCV_reserved" -> Sail2_instr_kinds.Read_RISCV_reserved
+  | "Read_RISCV_reserved_acquire" -> Sail2_instr_kinds.Read_RISCV_reserved_acquire
+  | "Read_RISCV_reserved_strong_acquire" -> Sail2_instr_kinds.Read_RISCV_reserved_strong_acquire
+  | "Read_X86_locked" -> Sail2_instr_kinds.Read_X86_locked
+  | s -> failwith ("Unknown read kind: " ^ s)
+
+let wk_of_string = function
+  | "Write_plain" -> Sail2_instr_kinds.Write_plain
+  | "Write_conditional" -> Sail2_instr_kinds.Write_conditional
+  | "Write_release" -> Sail2_instr_kinds.Write_release
+  | "Write_exclusive" -> Sail2_instr_kinds.Write_exclusive
+  | "Write_exclusive_release" -> Sail2_instr_kinds.Write_exclusive_release
+  | "Write_RISCV_release" -> Sail2_instr_kinds.Write_RISCV_release
+  | "Write_RISCV_strong_release" -> Sail2_instr_kinds.Write_RISCV_strong_release
+  | "Write_RISCV_conditional" -> Sail2_instr_kinds.Write_RISCV_conditional
+  | "Write_RISCV_conditional_release" -> Sail2_instr_kinds.Write_RISCV_conditional_release
+  | "Write_RISCV_conditional_strong_release" -> Sail2_instr_kinds.Write_RISCV_conditional_strong_release
+  | "Write_X86_locked" -> Sail2_instr_kinds.Write_X86_locked
+  | s -> failwith ("Unknown write kind: " ^ s)
+
+let bk_of_string = function
+  | "Barrier_Sync" -> Sail2_instr_kinds.Barrier_Sync
+  | "Barrier_LwSync" -> Sail2_instr_kinds.Barrier_LwSync
+  | "Barrier_Eieio" -> Sail2_instr_kinds.Barrier_Eieio
+  | "Barrier_Isync" -> Sail2_instr_kinds.Barrier_Isync
+  | "Barrier_DMB" -> Sail2_instr_kinds.Barrier_DMB
+  | "Barrier_DMB_ST" -> Sail2_instr_kinds.Barrier_DMB_ST
+  | "Barrier_DMB_LD" -> Sail2_instr_kinds.Barrier_DMB_LD
+  | "Barrier_DSB" -> Sail2_instr_kinds.Barrier_DSB
+  | "Barrier_DSB_ST" -> Sail2_instr_kinds.Barrier_DSB_ST
+  | "Barrier_DSB_LD" -> Sail2_instr_kinds.Barrier_DSB_LD
+  | "Barrier_ISB" -> Sail2_instr_kinds.Barrier_ISB
+  | "Barrier_MIPS_SYNC" -> Sail2_instr_kinds.Barrier_MIPS_SYNC
+  | "Barrier_RISCV_rw_rw" -> Sail2_instr_kinds.Barrier_RISCV_rw_rw
+  | "Barrier_RISCV_r_rw" -> Sail2_instr_kinds.Barrier_RISCV_r_rw
+  | "Barrier_RISCV_r_r" -> Sail2_instr_kinds.Barrier_RISCV_r_r
+  | "Barrier_RISCV_rw_w" -> Sail2_instr_kinds.Barrier_RISCV_rw_w
+  | "Barrier_RISCV_w_w" -> Sail2_instr_kinds.Barrier_RISCV_w_w
+  | "Barrier_RISCV_w_rw" -> Sail2_instr_kinds.Barrier_RISCV_w_rw
+  | "Barrier_RISCV_rw_r" -> Sail2_instr_kinds.Barrier_RISCV_rw_r
+  | "Barrier_RISCV_r_w" -> Sail2_instr_kinds.Barrier_RISCV_r_w
+  | "Barrier_RISCV_w_r" -> Sail2_instr_kinds.Barrier_RISCV_w_r
+  | "Barrier_RISCV_i" -> Sail2_instr_kinds.Barrier_RISCV_i
+  | "Barrier_x86_MFENCE" -> Sail2_instr_kinds.Barrier_x86_MFENCE
+  | s -> failwith ("Unknown barrier kind: " ^ s)
+
 let initial_lstate =
   { locals = Bindings.empty }
 
@@ -781,6 +871,39 @@ let rec eval_frame' = function
         eval_frame' (Step (out, state', cont (), stack))
      | Yield (Get_global_letbinds cont), _ ->
         eval_frame' (Step (out, state, cont gstate.letbinds, stack))
+     | Yield (Read_mem (rk, addr, len, cont)), _ ->
+        (* all read-kinds treated the same in single-threaded interpreter *)
+        let addr' = coerce_bv addr in
+        let len' = coerce_int len in
+        let result = mk_vector (Sail_lib.read_ram (List.length addr', len', [], addr')) in
+        eval_frame' (Step (out, state, cont result, stack))
+     | Yield (Write_ea (wk, addr, len, cont)), _ ->
+        (* just store the values for the next Write_memv *)
+        let state' = (lstate, { gstate with last_write_ea = Some (wk, addr, len) }) in
+        eval_frame' (Step (out, state', cont (), stack))
+     | Yield (Excl_res cont), _ ->
+        (* always succeeds in single-threaded interpreter *)
+        eval_frame' (Step (out, state, cont true, stack))
+     | Yield (Write_memv (v, cont)), _ ->
+        begin
+          match gstate.last_write_ea with
+          | Some (wk, addr, len) ->
+             let state' = (lstate, { gstate with last_write_ea = None }) in
+             (* all write-kinds treated the same in single-threaded interpreter *)
+             let addr' = coerce_bv addr in
+             let len' = coerce_int len in
+             let v' = coerce_bv v in
+             if Big_int.mul len' (Big_int.of_int 8) = Big_int.of_int (List.length v') then
+               let b = Sail_lib.write_ram (List.length addr', len', [], addr', v') in
+               eval_frame' (Step (out, state', cont b, stack))
+             else
+               eval_frame' (Step (out, state, fail "Write_memv with length mismatch to preceding Write_ea", stack))
+          | None ->
+             eval_frame' (Step (out, state, fail "Write_memv without preceding Write_ea", stack))
+        end
+     | Yield (Barrier (bk, cont)), _ ->
+     (* no-op in single-threaded interpreter *)
+        eval_frame' (Step (out, state, cont (), stack))
 
      | Yield (Early_return v), [] -> Done (state, v)
      | Yield (Early_return v), (head :: stack') ->
@@ -814,6 +937,7 @@ let initial_gstate primops ast =
     primops = primops;
     letbinds = ast_letbinds ast;
     fundefs = Bindings.empty;
+    last_write_ea = None;
   }
 
 let rec initialize_registers gstate =

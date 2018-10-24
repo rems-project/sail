@@ -763,11 +763,29 @@ function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
  * where cancellation can be performed.
  */
 
-val load_reservation = {ocaml: "Platform.load_reservation", c: "load_reservation", lem: "load_reservation"} : xlenbits -> unit
+register reservation : option(xlenbits)
 
-val match_reservation = {ocaml: "Platform.match_reservation", lem: "speculate_conditional_success", c: "match_reservation"} : xlenbits -> bool effect {exmem}
+val load_reservation = {ocaml: "Platform.load_reservation", c: "load_reservation", lem: "load_reservation"} : xlenbits -> unit effect {wreg}
+function load_reservation bv = {
+  print("reservation <- " ^ BitStr(bv));
+  reservation = Some(bv)
+}
 
-val cancel_reservation = {ocaml: "Platform.cancel_reservation", c: "cancel_reservation", lem: "cancel_reservation"} : unit -> unit
+val match_reservation = {ocaml: "Platform.match_reservation", lem: "speculate_conditional_success", c: "match_reservation"} : xlenbits -> bool effect {rreg}
+function match_reservation bv = {
+  let current : string = match reservation {
+    Some(r) => BitStr(r),
+    None() => "none"
+  };
+  print("reservation: " ^ current ^ ", key=" ^ BitStr(bv)); 
+  (reservation == Some(bv))
+}
+
+val cancel_reservation = {ocaml: "Platform.cancel_reservation", c: "cancel_reservation", lem: "cancel_reservation"} : unit -> unit effect {wreg}
+function cancel_reservation () = {
+  print("reservation <- none");
+  reservation = None()
+}
 
 /* Exception delegation: given an exception and the privilege at which
  * it occured, returns the privilege at which it should be handled.
