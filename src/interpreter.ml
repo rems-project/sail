@@ -93,7 +93,8 @@ let value_of_lit (L_aux (l_aux, _)) =
         V_real (Rational.add whole frac)
      | _ -> failwith "could not parse real literal"
      end
-  | _ -> failwith "Unimplemented value_of_lit" (* TODO *)
+  | L_undef -> failwith "value_of_lit of undefined"
+
 
 let is_value = function
   | (E_aux (E_internal_value _, _)) -> true
@@ -281,7 +282,11 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_block (exp :: exps) ->
      step exp >>= fun exp' -> wrap (E_block (exp' :: exps))
 
-  | E_lit lit -> return (exp_of_value (value_of_lit lit))
+  | E_lit lit ->
+     begin
+       try return (exp_of_value (value_of_lit lit))
+       with Failure s -> fail ("Failure: " ^ s)
+     end
 
   | E_if (exp, then_exp, else_exp) when is_true exp -> return then_exp
   | E_if (exp, then_exp, else_exp) when is_false exp -> return else_exp
@@ -293,7 +298,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | E_assert (exp, msg) when is_true exp -> wrap unit_exp
   | E_assert (exp, msg) when is_false exp && is_value msg ->
-     failwith (coerce_string (value_of_exp msg))
+     assertion_failed (coerce_string (value_of_exp msg))
   | E_assert (exp, msg) when is_false exp ->
      step msg >>= fun msg' -> wrap (E_assert (exp, msg'))
   | E_assert (exp, msg) ->
@@ -392,22 +397,28 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | E_case (exp, pexps) when not (is_value exp) ->
      step exp >>= fun exp' -> wrap (E_case (exp', pexps))
-  | E_case (_, []) -> failwith "Pattern matching failed"
+  | E_case (_, []) -> fail "Pattern matching failed"
   | E_case (exp, Pat_aux (Pat_exp (pat, body), _) :: pexps) ->
-     let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
-     if matched then
-       return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
-     else
-       wrap (E_case (exp, pexps))
+     begin try
+         let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
+         if matched then
+           return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
+         else
+           wrap (E_case (exp, pexps))
+       with Failure s -> fail ("Failure: " ^ s)
+     end
   | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when not (is_value guard) ->
-     let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
-     if matched then
-       let guard = List.fold_left (fun guard (id, v) -> subst id v guard) guard (Bindings.bindings bindings) in
-       let body = List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings) in
-       step guard >>= fun guard' ->
-       wrap (E_case (exp, Pat_aux (Pat_when (pat, guard', body), pat_annot) :: pexps))
-     else
-       wrap (E_case (exp, pexps))
+     begin try
+         let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
+         if matched then
+           let guard = List.fold_left (fun guard (id, v) -> subst id v guard) guard (Bindings.bindings bindings) in
+           let body = List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings) in
+           step guard >>= fun guard' ->
+           wrap (E_case (exp, Pat_aux (Pat_when (pat, guard', body), pat_annot) :: pexps))
+         else
+           wrap (E_case (exp, pexps))
+       with Failure s -> fail ("Failure: " ^ s)
+     end
   | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_true guard -> return body
   | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_false guard -> wrap (E_case (exp, pexps))
 
@@ -479,38 +490,51 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_assign (lexp, exp) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_assign (lexp, exp'))
   | E_assign (LEXP_aux (LEXP_memory (id, args), _), exp) -> wrap (E_app (id, args @ [exp]))
   | E_assign (LEXP_aux (LEXP_field (lexp, id), ul), exp) ->
-     let open Type_check in
-     let lexp_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp lexp)) in
-     let exp' = E_aux (E_record_update (lexp_exp, FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), ul)], false), ul)), ul) in
-     wrap (E_assign (lexp, exp'))
+     begin try
+         let open Type_check in
+         let lexp_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp lexp)) in
+         let exp' = E_aux (E_record_update (lexp_exp, FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), ul)], false), ul)), ul) in
+         wrap (E_assign (lexp, exp'))
+       with Failure s -> fail ("Failure: " ^ s)
+     end
   | E_assign (LEXP_aux (LEXP_vector (vec, n), lexp_annot), exp) ->
-     let open Type_check in
-     let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
-     let exp' = E_aux (E_vector_update (vec_exp, n, exp), lexp_annot) in
-     wrap (E_assign (vec, exp'))
+     begin try
+         let open Type_check in
+         let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
+         let exp' = E_aux (E_vector_update (vec_exp, n, exp), lexp_annot) in
+         wrap (E_assign (vec, exp'))
+       with Failure s -> fail ("Failure: " ^ s)
+     end
   | E_assign (LEXP_aux (LEXP_vector_range (vec, n, m), lexp_annot), exp) ->
-     let open Type_check in
-     let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
-     (* FIXME: let the type checker check this *)
-     let exp' = E_aux (E_vector_update_subrange (vec_exp, n, m, exp), lexp_annot) in
-     wrap (E_assign (vec, exp'))
+     begin try
+         let open Type_check in
+         let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
+         (* FIXME: let the type checker check this *)
+         let exp' = E_aux (E_vector_update_subrange (vec_exp, n, m, exp), lexp_annot) in
+         wrap (E_assign (vec, exp'))
+       with Failure s -> fail ("Failure: " ^ s)
+     end
   | E_assign (LEXP_aux (LEXP_id id, _), exp) | E_assign (LEXP_aux (LEXP_cast (_, id), _), exp) ->
      begin
        let open Type_check in
+       let name = string_of_id id in
        match Env.lookup_id id (env_of_annot annot) with
        | Register _ ->
-          write_reg (string_of_id id) (value_of_exp exp) >> wrap unit_exp
+          write_reg name (value_of_exp exp) >> wrap unit_exp
        | Local (Mutable, _) | Unbound ->
-          put_local (string_of_id id) (value_of_exp exp) >> wrap unit_exp
-       | _ -> failwith "Assign"
+          put_local name (value_of_exp exp) >> wrap unit_exp
+       | Local (Immutable, _) ->
+          fail ("Assignment to immutable local: " ^ name)
+       | Enum _ ->
+          fail ("Assignment to union constructor: " ^ name)
      end
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) when not (is_value reference) ->
      step reference >>= fun reference' -> wrap (E_assign (LEXP_aux (LEXP_deref reference', annot), exp))
   | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) ->
      let name = coerce_ref (value_of_exp reference) in
      write_reg name (value_of_exp exp) >> wrap unit_exp
-  | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> failwith "Tuple assignment"
-  | E_assign (LEXP_aux (LEXP_vector_concat lexps, annot), exp) -> failwith "Vector concat assignment"
+  | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> fail "Tuple assignment"
+  | E_assign (LEXP_aux (LEXP_vector_concat lexps, annot), exp) -> fail "Vector concat assignment"
      (*
      let values = coerce_tuple (value_of_exp exp) in
      wrap (E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), (Parse_ast.Unknown, None))) lexps values))
@@ -544,7 +568,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
            wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_sub_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
         | _ -> assert false
         end
-     | Ord_aux (Ord_var _, _) -> failwith "Polymorphic order in foreach"
+     | Ord_aux (Ord_var _, _) -> fail "Polymorphic order in foreach"
      end
   | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_to && is_value exp_step ->
      step exp_from >>= fun exp_from' -> wrap (E_for (id, exp_from', exp_to, exp_step, ord, body))
@@ -555,7 +579,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | E_sizeof _ | E_constraint _ -> assert false (* Must be re-written before interpreting *)
 
-  | _ -> failwith ("Unimplemented " ^ string_of_exp orig_exp)
+  | _ -> fail ("Unimplemented " ^ string_of_exp orig_exp)
 
 and combine _ v1 v2 =
   match (v1, v2) with
@@ -681,13 +705,23 @@ let rec eval_frame' = function
         let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp')) in
         Step (out', state, step exp', stack)
      | Yield (Call(id, vals, cont)), _ when string_of_id id = "break" ->
-        let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-        let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
-        Break (Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack))
+        begin
+          let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
+          try
+            let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
+            Break (Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack))
+          with Not_found ->
+            Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
+        end
      | Yield (Call(id, vals, cont)), _ ->
-        let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-        let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
-        Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
+        begin
+          let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
+          try
+            let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
+            Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
+          with Not_found ->
+            Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
+        end
 
      | Yield (Read_reg (name, cont)), _ ->
         begin
