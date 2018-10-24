@@ -46,6 +46,7 @@ lib/hol/sail-heap
 /test/lem/out.lem
 /test/lem/out_types.lem
 /test/*/tests.xml
+/test/riscv/tests/*.iout
 
 /language/*.pdf
 /language/*.uo
@@ -92,6 +93,7 @@ lib/hol/sail-heap
 /riscv/platform
 /riscv/riscv.c
 /riscv/riscv_c
+/riscv/z3_problems
 
 /x86/x86.lem
 /x86/x86.ml
