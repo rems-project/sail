@@ -63,7 +63,8 @@ function step(step_no) = {
             match decodeCompressed(h) {
               None() => {
                 print("[" ^ string_of_int(step_no) ^ "] [" ^ cur_privilege ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") <no-decode>");
-                handle_decode_exception(EXTZ(h));
+                instbits = EXTZ(h);
+                handle_illegal();
                 (false, true)
               },
               Some(ast) => {
@@ -77,7 +78,8 @@ function step(step_no) = {
             match decode(w) {
               None() => {
                 print("[" ^ string_of_int(step_no) ^ "] [" ^ cur_privilege ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") <no-decode>");
-                handle_decode_exception(EXTZ(w));
+                instbits = EXTZ(w);
+                handle_illegal();
                 (false, true)
               },
               Some(ast) => {

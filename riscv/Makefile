@@ -1,10 +1,36 @@
-SAIL_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail riscv.sail riscv_step.sail riscv_analysis.sail
+SAIL_SEQ_INST  = riscv.sail riscv_jalr_seq.sail
+SAIL_RMEM_INST = riscv.sail riscv_jalr_rmem.sail
+
+SAIL_SEQ_INST_SRCS  = riscv_insts_begin.sail $(SAIL_SEQ_INST) riscv_insts_end.sail
+SAIL_RMEM_INST_SRCS = riscv_insts_begin.sail $(SAIL_RMEM_INST) riscv_insts_end.sail
+
+# non-instruction sources
+SAIL_OTHER_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail
+
+SAIL_SRCS      = $(SAIL_OTHER_SRCS) $(SAIL_SEQ_INST_SRCS)  riscv_step.sail riscv_analysis.sail
+SAIL_RMEM_SRCS = $(SAIL_OTHER_SRCS) $(SAIL_RMEM_INST_SRCS) riscv_step.sail riscv_analysis.sail
+
 PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
 C_WARNINGS ?=
 #-Wall -Wextra -Wno-unused-label -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
-C_SRCS = riscv_prelude.c riscv_platform.c
+C_FLAGS = -I ../lib
+C_INCS = riscv_prelude.h riscv_platform_impl.h riscv_platform.h
+C_SRCS = riscv_prelude.c riscv_platform_impl.c riscv_platform.c
+
+ENABLE_SPIKE = 0
+TV_SPIKE_DIR = /home/mundkur/src/hw/l3/l3riscv
+SPIKE_FLAGS = -I $(TV_SPIKE_DIR)/src/cpp
+SPIKE_LIBS  = -L $(TV_SPIKE_DIR) -ltv_spike -Wl,-rpath=$(TV_SPIKE_DIR)
+SPIKE_LIBS += -L $(RISCV)/lib -lfesvr -lriscv -Wl,-rpath=$(RISCV)/lib
+
+C_LIBS = -lgmp -lz
+
+ifeq ($(ENABLE_SPIKE),1)
+C_FLAGS += $(SPIKE_FLAGS)
+C_LIBS  += $(SPIKE_LIBS)
+endif
 
 export SAIL_DIR
 
@@ -38,8 +64,14 @@ coverage: _sbuild/coverage.native
 riscv.c: $(SAIL_SRCS) main.sail Makefile
 	$(SAIL) -O -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h $(SAIL_SRCS) main.sail 1> $@
 
-riscv_c: riscv.c riscv_prelude.h $(C_SRCS) Makefile
+riscv_c: riscv.c $(C_INCS) $(C_SRCS) Makefile
 	gcc $(C_WARNINGS) -O2 riscv.c $(C_SRCS) ../lib/*.c -lgmp -lz -I ../lib -o riscv_c
+
+riscv_model.c: $(SAIL_SRCS) main.sail Makefile
+	$(SAIL) -O -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h -c_no_main $(SAIL_SRCS) main.sail 1> $@
+
+riscv_sim: riscv_model.c riscv_sim.c $(C_INCS) $(C_SRCS) $(CPP_SRCS) Makefile
+	gcc -g $(C_WARNINGS) $(C_FLAGS) -O2 riscv_model.c riscv_sim.c $(C_SRCS) ../lib/*.c $(C_LIBS) -o $@
 
 latex: $(SAIL_SRCS) Makefile
 	$(SAIL) -latex -latex_prefix sail -o sail_ltx $(SAIL_SRCS)
@@ -108,6 +140,6 @@ clean:
 	-rm -f platform_main.native platform coverage.native
 	-rm -f riscv.vo riscv_types.vo riscv_extras.vo riscv.v riscv_types.v
 	-rm -f riscv_duopod.vo riscv_duopod_types.vo riscv_duopod.v riscv_duopod_types.v
-	-rm -f riscv.c
+	-rm -f riscv.c riscv_model.c riscv_sim
 	-Holmake cleanAll
 	ocamlbuild -clean

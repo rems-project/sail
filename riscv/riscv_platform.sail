@@ -22,6 +22,11 @@ val plat_enable_misaligned_access = {ocaml: "Platform.enable_misaligned_access",
                                      c: "plat_enable_misaligned_access",
                                      lem: "plat_enable_misaligned_access"} : unit -> bool
 
+/* whether mtval stores the bits of a faulting instruction on illegal instruction exceptions */
+val plat_mtval_has_illegal_inst_bits = {ocaml: "Platform.mtval_has_illegal_inst_bits",
+                                        c: "plat_mtval_has_illegal_inst_bits",
+                                        lem: "plat_mtval_has_illegal_inst_bits"} : unit -> bool
+
 /* ROM holding reset vector and device-tree DTB */
 val plat_rom_base   = {ocaml: "Platform.rom_base", c: "plat_rom_base", lem: "plat_rom_base"} : unit -> xlenbits
 val plat_rom_size   = {ocaml: "Platform.rom_size", c: "plat_rom_size", lem: "plat_rom_size"} : unit -> xlenbits
@@ -42,15 +47,28 @@ function phys_mem_segments() =
 
 /* Physical memory map predicates */
 
-function within_phys_mem(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+function within_phys_mem(addr : xlenbits, width : atom('n)) -> forall 'n. bool = {
+  let ram_base = plat_ram_base ();
+  let rom_base = plat_rom_base ();
+  let ram_size = plat_ram_size ();
+  let rom_size = plat_rom_size ();
+
   /* todo: iterate over segment list */
-  if (  plat_ram_base() <=_u addr
-      & (addr + sizeof('n)) <=_u (plat_ram_base() + plat_ram_size ()))
+  if (  ram_base <=_u addr
+      & (addr + sizeof('n)) <=_u (ram_base + ram_size))
        then true
-  else if (  plat_rom_base() <=_u addr
-           & (addr + sizeof('n)) <=_u (plat_rom_base() + plat_rom_size()))
+  else if (  rom_base <=_u addr
+           & (addr + sizeof('n)) <=_u (rom_base + rom_size))
        then true
-  else false
+  else {
+    print("within_phys_mem: " ^ BitStr(addr) ^ " not within phys-mem:");
+    print("  plat_rom_base: " ^ BitStr(rom_base));
+    print("  plat_rom_size: " ^ BitStr(rom_size));
+    print("  plat_ram_base: " ^ BitStr(ram_base));
+    print("  plat_ram_size: " ^ BitStr(ram_size));
+    false
+  }
+}
 
 function within_clint(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
     plat_clint_base() <=_u addr
@@ -251,4 +269,15 @@ function init_platform() -> unit = {
 function tick_platform() -> unit = {
   cancel_reservation();
   htif_tick();
+}
+
+/* Platform-specific handling of instruction faults */
+
+function handle_illegal() -> unit = {
+  let info = if plat_mtval_has_illegal_inst_bits ()
+             then Some(instbits)
+             else None();
+  let t : sync_exception = struct { trap    = E_Illegal_Instr,
+                                    excinfo = info };
+  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 }

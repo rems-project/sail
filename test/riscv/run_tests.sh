@@ -67,7 +67,7 @@ for test in $DIR/tests/*.elf; do
     fi
 done
 
-if make -C $SAILDIR/riscv riscv_c;
+if make -C $SAILDIR/riscv riscv_sim;
 then
     green "Building RISCV specification to C" "ok"
 else
@@ -75,8 +75,7 @@ else
 fi
 
 for test in $DIR/tests/*.elf; do
-    $SAILDIR/sail -elf $test -o ${test%.elf}.bin 2> /dev/null;
-    if timeout 5 $SAILDIR/riscv/riscv_c --binary=0x1000,reset_vec.bin --image=${test%.elf}.bin > ${test%.elf}.cout 2>&1 && grep -q SUCCESS ${test%.elf}.cout
+    if timeout 5 $SAILDIR/riscv/riscv_sim $test > ${test%.elf}.cout 2>&1 && grep -q SUCCESS ${test%.elf}.cout
     then
 	green "$(basename $test)" "ok"
     else
