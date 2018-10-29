@@ -237,7 +237,7 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   (* P_var short form sugar *)
   | P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)) when Id.compare (id_of_kid kid) id == 0 ->
      doc_kid kid
-  | P_var (pat, tpat) -> separate space [doc_pat pat; string "as"; doc_typ_pat tpat]
+  | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
   | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
   | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
   | P_wild -> string "_"
@@ -286,7 +286,6 @@ let fixities =
 let rec doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_block [] -> string "()"
-  | E_block [exp] -> doc_exp exp
   | E_block exps -> surround 2 0 lbrace (doc_block exps) rbrace
   | E_nondet exps -> assert false
   (* This is mostly for the -convert option *)
