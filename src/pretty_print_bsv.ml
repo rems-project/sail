@@ -384,6 +384,12 @@ and doc_exp ctxt (E_aux (eaux, (l, annot)) as exp) =
   | E_cast (t, e) -> separate space [doc_typ t; string "\'"; parens (doc_exp ctxt e)]
   | E_app (id, es) ->
      let union = Env.is_union_constructor id (env_of exp) in
+     let call = match destruct_tannot annot with
+       | Some (env, _, _) when Env.is_extern id (env_of exp) "bsv" ->
+          string (Env.get_extern id (env_of exp) "bsv")
+       | _ when union -> doc_constr_id id
+       | _ -> doc_id false id
+     in
      let fun_effs =
        try
          match unaux_typ (snd (Env.get_val_spec_orig id (env_of exp))) with
@@ -405,9 +411,9 @@ and doc_exp ctxt (E_aux (eaux, (l, annot)) as exp) =
             [parens (separate comma_sp (state_arg @ doc_es))]
      in
      if union then
-       separate space (string "tagged" :: doc_constr_id id :: argslist)
+       separate space (string "tagged" :: call :: argslist)
      else
-       concat (doc_id false id :: argslist)
+       concat (call :: argslist)
   | E_tuple [] -> string "?"
   | E_tuple [e] -> doc_exp ctxt e
   | E_tuple es ->
@@ -605,6 +611,7 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
                 (separate space [string "function"; tret_doc; doc_id false id; formals_doc; equals])
                 (doc_exp ctxt (if effectful_effs eff then ensure_block exp else exp) ^^ semi)
           in
+          if Env.is_extern id (env_of_annot (l, annot)) "bsv" then empty else
           if has_mem_eff eff then
             let called_ifcs = fst (fold_exp
               { (compute_exp_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with

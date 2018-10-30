@@ -31,3 +31,13 @@ function Pat#(Maybe#(a), t0, t0) pat_None();
     endcase;
   return k;
 endfunction
+
+function Bool not_bool(Bool b) = !b;
+function Bool and_bool(Bool a, Bool b) = (a && b);
+function Bool eq_bool(Bool a, Bool b) = (a == b);
+function Bool eq_vec(Bit#(n) a, Bit#(n) b) = (a == b);
+function Bool eq_anything(t a, t b) provisos (Eq#(t)) = (a == b);
+function Bit#(n) add_vec(Bit#(n) a, Bit#(n) b) = (a + b);
+function Bit#(m) sign_extend(Bit#(n) a, t len) provisos (Add#(k, n, m)) = signExtend(a);
+function Bit#(m) zzzero_extend(Bit#(n) a, t len) provisos (Add#(k, n, m)) = zeroExtend(a);
+function Bit#(m) vector_subrange(Bit#(n) a, Integer hi, Integer lo) = a[lo:hi];

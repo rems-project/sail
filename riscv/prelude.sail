@@ -467,8 +467,8 @@ val print_string = "print_string" : (string, string) -> unit
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
-val EXTS : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
-val EXTZ : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val EXTS = {bsv: "signExtend"} : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val EXTZ = {bsv: "zeroExtend"} : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 
 function EXTS v = sign_extend(v, sizeof('m))
 function EXTZ v = zero_extend(v, sizeof('m))
