@@ -121,7 +121,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   | Typ_bidir (t1, t2) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
-  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
+  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
@@ -143,10 +143,10 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typs, typ, _) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
-  | Typ_bidir (t1, t2) -> raise (Reporting_basic.err_general l "Ocaml doesn't support bidir types")
+  | Typ_bidir (t1, t2) -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
-  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
+  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and ocaml_typ_arg ctx (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_typ typ -> ocaml_typ ctx typ
@@ -674,7 +674,7 @@ let ocaml_pp_generators ctx defs orig_types required =
        if Bindings.mem id Type_check.Env.builtin_typs
        then IdSet.add id required
        else
-         raise (Reporting_basic.err_unreachable (id_loc id) __POS__
+         raise (Reporting.err_unreachable (id_loc id) __POS__
                   ("Required generator of unknown type " ^ string_of_id id))
   and add_req_from_id required id =
     if IdSet.mem id required then required
@@ -687,13 +687,13 @@ let ocaml_pp_generators ctx defs orig_types required =
     | Typ_internal_unknown
     | Typ_fn _
     | Typ_bidir _
-      -> raise (Reporting_basic.err_unreachable (typ_loc full_typ) __POS__
+      -> raise (Reporting.err_unreachable (typ_loc full_typ) __POS__
                   ("Required generator for type that should not appear: " ^
                      string_of_typ full_typ))
     | Typ_tup typs ->
        List.fold_left add_req_from_typ required typs
     | Typ_exist _ ->
-       raise (Reporting_basic.err_todo (typ_loc full_typ)
+       raise (Reporting.err_todo (typ_loc full_typ)
                 ("Generators for existential types not yet supported: " ^
                    string_of_typ full_typ))
     | Typ_app (id,args) ->
@@ -714,7 +714,7 @@ let ocaml_pp_generators ctx defs orig_types required =
        List.fold_left (fun req (Tu_aux (Tu_ty_id (typ,_),_)) ->
            add_req_from_typ req typ) required variants
     | TD_enum _ -> required
-    | TD_bitfield _ -> raise (Reporting_basic.err_todo l "Generators for bitfields not yet supported")
+    | TD_bitfield _ -> raise (Reporting.err_todo l "Generators for bitfields not yet supported")
   in
   let required = IdSet.fold (fun id req -> always_add_req_from_id req id) required required in
   let type_name id = zencode_string (string_of_id id) in
@@ -770,7 +770,7 @@ let ocaml_pp_generators ctx defs orig_types required =
         let typ_str, args_pp = match typ with
           | Typ_id id -> type_name id, [string "g"]
           | Typ_app (id,args) -> type_name id, string "g"::List.map typearg args
-          | _ -> raise (Reporting_basic.err_todo l
+          | _ -> raise (Reporting.err_todo l
                           ("Unsupported type for generators: " ^ string_of_typ full_typ))
         in
         let args_pp = match args_pp with [] -> empty
@@ -783,7 +783,7 @@ let ocaml_pp_generators ctx defs orig_types required =
            (match nexp with
             | Nexp_constant c -> string (Big_int.to_string c) (* TODO: overflow *)
             | Nexp_var v -> mk_arg v
-            | _ -> raise (Reporting_basic.err_todo l
+            | _ -> raise (Reporting.err_todo l
                             ("Unsupported nexp for generators: " ^ string_of_nexp full_nexp)))
         | Typ_arg_order (Ord_aux (ord,_)) ->
            (match ord with
@@ -797,7 +797,7 @@ let ocaml_pp_generators ctx defs orig_types required =
           match typ with
           | Typ_id id -> type_name id, []
           | Typ_app (id,args) -> type_name id, List.map typearg args
-          | _ -> raise (Reporting_basic.err_todo l
+          | _ -> raise (Reporting.err_todo l
                           ("Unsupported type for generators: " ^ string_of_typ full_typ))
         in
         let args_pp = match args_pp with [] -> empty
@@ -860,7 +860,7 @@ let ocaml_pp_generators ctx defs orig_types required =
            Some (separate_map (string ";" ^^ break 1) enum_constructor variants),
            Some (separate_map (break 1) build_enum_constructor variants)
         | _ ->
-           raise (Reporting_basic.err_todo l "Generators for records and bitfields not yet supported")
+           raise (Reporting.err_todo l "Generators for records and bitfields not yet supported")
       in
       let name = type_name id in
       let constructors_pp = match constructors with

@@ -170,7 +170,7 @@ let rec pp_type_error = function
      ^/^ string "in context"
      ^/^ bullet pp_n_constraint constrs
      ^/^ string "where"
-     ^/^ bullet (fun (kid, l) -> string (string_of_kid kid ^ " bound at " ^ Reporting_basic.loc_to_string l ^ "\n")) (KBindings.bindings locs)
+     ^/^ bullet (fun (kid, l) -> string (string_of_kid kid ^ " bound at " ^ Reporting.loc_to_string l ^ "\n")) (KBindings.bindings locs)
 
   | Err_no_num_ident id ->
      string "No num identifier" ^^ space ^^ string (string_of_id id)
@@ -192,4 +192,4 @@ let rec string_of_type_error err =
 let check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
   fun env defs ->
   try Type_check.check env defs with
-  | Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))
+  | Type_error (l, err) -> raise (Reporting.err_typ l (string_of_type_error err))

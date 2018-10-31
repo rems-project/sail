@@ -50,7 +50,7 @@
 
 (** Basic error reporting
 
-  [Reporting_basic] contains functions to report errors and warnings. 
+  [Reporting] contains functions to report errors and warnings. 
   It contains functions to print locations ([Parse_ast.l] and [Ast.l]) and lexing positions.
 
   The main functionality is reporting errors. This is done by raising a

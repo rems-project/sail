@@ -75,7 +75,7 @@ let c_debug str =
   if !c_verbosity > 0 then prerr_endline (Lazy.force str) else ()
 
 let c_error ?loc:(l=Parse_ast.Unknown) message =
-  raise (Reporting_basic.err_general l ("\nC backend: " ^ message))
+  raise (Reporting.err_general l ("\nC backend: " ^ message))
 
 let zencode_id = function
   | Id_aux (Id str, l) -> Id_aux (Id (Util.zencode_string str), l)

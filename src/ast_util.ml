@@ -344,7 +344,7 @@ let rec nc_negate (NC_aux (nc, l)) =
   | NC_set (kid, int :: ints) ->
      mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
   | NC_app _ ->
-     raise (Reporting_basic.err_unreachable l __POS__ "tried to negate constraint with unexpanded synonym")
+     raise (Reporting.err_unreachable l __POS__ "tried to negate constraint with unexpanded synonym")
 
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
 
@@ -828,13 +828,13 @@ let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
            (fun (FCL_aux (FCL_Funcl (id, _), _)) id' ->
              match id' with
              | Some id' -> if string_of_id id' = string_of_id id then Some id'
-                           else raise (Reporting_basic.err_typ l
+                           else raise (Reporting.err_typ l
                              ("Function declaration expects all definitions to have the same name, "
                               ^ string_of_id id ^ " differs from other definitions of " ^ string_of_id id'))
              | None -> Some id) funcls None)
   with
   | Some id -> id
-  | None -> raise (Reporting_basic.err_typ l "funcl list is empty")
+  | None -> raise (Reporting.err_typ l "funcl list is empty")
 
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
@@ -959,7 +959,7 @@ module TypMap = Map.Make(Typ)
 
 let rec nexp_frees (Nexp_aux (nexp, l)) =
   match nexp with
-  | Nexp_id _ -> raise (Reporting_basic.err_typ l "Unimplemented Nexp_id in nexp_frees")
+  | Nexp_id _ -> raise (Reporting.err_typ l "Unimplemented Nexp_id in nexp_frees")
   | Nexp_var kid -> KidSet.singleton kid
   | Nexp_constant _ -> KidSet.empty
   | Nexp_times (n1, n2) -> KidSet.union (nexp_frees n1) (nexp_frees n2)
@@ -977,7 +977,7 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
     let get_id (LEXP_aux(lexp,((l,_) as annot)) as le) = match lexp with
       | LEXP_id id | LEXP_cast (_, id) -> E_aux (E_id id, annot)
       | _ ->
-        raise (Reporting_basic.err_unreachable l __POS__
+        raise (Reporting.err_unreachable l __POS__
          ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple")) in
     rewrap (E_tuple (List.map get_id les))
   | LEXP_vector (lexp, e) -> rewrap (E_vector_access (lexp_to_exp lexp, e))
@@ -1016,7 +1016,7 @@ let typ_app_args_of = function
   | Typ_aux (Typ_app (Id_aux (Id c,_), targs), l) ->
     (c, List.map (fun (Typ_arg_aux (a,_)) -> a) targs, l)
   | Typ_aux (_, l) as typ ->
-     raise (Reporting_basic.err_typ l
+     raise (Reporting.err_typ l
        ("typ_app_args_of called on non-app type " ^ string_of_typ typ))
 
 let rec vector_typ_args_of typ = match typ_app_args_of typ with
@@ -1024,7 +1024,7 @@ let rec vector_typ_args_of typ = match typ_app_args_of typ with
      (nexp_simp len, ord, etyp)
   | ("register", [Typ_arg_typ rtyp], _) -> vector_typ_args_of rtyp
   | (_, _, l) ->
-     raise (Reporting_basic.err_typ l
+     raise (Reporting.err_typ l
        ("vector_typ_args_of called on non-vector type " ^ string_of_typ typ))
 
 let vector_start_index typ =
@@ -1032,13 +1032,13 @@ let vector_start_index typ =
   match ord with
   | Ord_aux (Ord_inc, _) -> nint 0
   | Ord_aux (Ord_dec, _) -> nexp_simp (nminus len (nint 1))
-  | _ -> raise (Reporting_basic.err_typ (typ_loc typ) "Can't calculate start index without order")
+  | _ -> raise (Reporting.err_typ (typ_loc typ) "Can't calculate start index without order")
 
 let is_order_inc = function
   | Ord_aux (Ord_inc, _) -> true
   | Ord_aux (Ord_dec, _) -> false
   | Ord_aux (Ord_var _, l) ->
-    raise (Reporting_basic.err_unreachable l __POS__ "is_order_inc called on vector with variable ordering")
+    raise (Reporting.err_unreachable l __POS__ "is_order_inc called on vector with variable ordering")
 
 let is_bit_typ = function
   | Typ_aux (Typ_id (Id_aux (Id "bit", _)), _) -> true
@@ -1506,7 +1506,7 @@ and nexp_subst_aux sv subst = function
   | Nexp_neg nexp -> Nexp_neg (nexp_subst sv subst nexp)
 
 let rec nexp_set_to_or l subst = function
-  | [] -> raise (Reporting_basic.err_unreachable l __POS__ "Empty set in constraint")
+  | [] -> raise (Reporting.err_unreachable l __POS__ "Empty set in constraint")
   | [int] -> NC_equal (subst, nconstant int)
   | (int :: ints) -> NC_or (mk_nc (NC_equal (subst, nconstant int)), mk_nc (nexp_set_to_or l subst ints))
 

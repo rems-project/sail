@@ -405,7 +405,7 @@ Some invariants that will hold of a fully checked AST are:
    for them to have type annotations.
 
    check throws type_errors rather than Sail generic errors from
-   Reporting_basic. For a function that uses generic errors, use
+   Reporting. For a function that uses generic errors, use
    Type_error.check *)
 val check : Env.t -> 'a defs -> tannot defs * Env.t
 

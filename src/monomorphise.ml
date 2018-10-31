@@ -115,7 +115,7 @@ let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
        | Nexp_aux (Nexp_constant i,_) ->
           if List.exists (fun j -> Big_int.equal i j) is then re NC_true else re NC_false
        | nexp -> 
-          raise (Reporting_basic.err_general l
+          raise (Reporting.err_general l
                    ("Unable to substitute " ^ string_of_nexp nexp ^
                        " into set constraint " ^ string_of_n_constraint n_constraint))
        | exception Not_found -> n_constraint
@@ -180,7 +180,7 @@ let rec is_value (E_aux (e,(l,annot))) =
   let is_constructor id =
     match destruct_tannot annot with
     | None ->
-       (Reporting_basic.print_err false true l "Monomorphisation"
+       (Reporting.print_err false true l "Monomorphisation"
           ("Missing type information for identifier " ^ string_of_id id);
         false) (* Be conservative if we have no info *)
     | Some (env,_,_) ->
@@ -281,7 +281,7 @@ let extract_set_nc l var nc =
        | None, Some (is,nc2') -> Some (is, re (NC_and (nc1,nc2')))
        | Some (is,nc1'), None -> Some (is, re (NC_and (nc1',nc2)))
        | Some _, Some _ ->
-          raise (Reporting_basic.err_general l ("Multiple set constraints for " ^ string_of_kid var)))
+          raise (Reporting.err_general l ("Multiple set constraints for " ^ string_of_kid var)))
     | NC_or _ ->
        (match aux_or nc_full with
        | Some is -> Some (is, re NC_true)
@@ -290,7 +290,7 @@ let extract_set_nc l var nc =
   in match aux nc with
   | Some is -> is
   | None ->
-     raise (Reporting_basic.err_general l ("No set constraint for " ^ string_of_kid var ^
+     raise (Reporting.err_general l ("No set constraint for " ^ string_of_kid var ^
                                               " in " ^ string_of_n_constraint nc))
 
 let rec peel = function
@@ -315,9 +315,9 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
   | Typ_var _
     -> insts,typ
   | Typ_fn _ ->
-     raise (Reporting_basic.err_general l "Function type in constructor")
+     raise (Reporting.err_general l "Function type in constructor")
   | Typ_bidir _ ->
-     raise (Reporting_basic.err_general l "Mapping type in constructor")
+     raise (Reporting.err_general l "Mapping type in constructor")
   | Typ_tup ts ->
      let insts,ts = 
        List.fold_right
@@ -393,9 +393,9 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
     | Typ_var _
       -> (KidSet.empty,[[],typ])
     | Typ_fn _ ->
-       raise (Reporting_basic.err_general l ("Function type in constructor " ^ i))
+       raise (Reporting.err_general l ("Function type in constructor " ^ i))
     | Typ_bidir _ ->
-       raise (Reporting_basic.err_general l ("Mapping type in constructor " ^ i))
+       raise (Reporting.err_general l ("Mapping type in constructor " ^ i))
     | Typ_tup ts ->
        let (vars,tys) = List.split (List.map size_nvars_ty ts) in
        let insttys = List.map (fun x -> let (insts,tys) = List.split x in
@@ -450,10 +450,10 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
                 | Typ_aux (Typ_tup _,_) -> Typ_aux (Typ_tup [ty],Unknown)
                 | _ -> ty) tys in
             if contains_exist t then
-              raise (Reporting_basic.err_general l
+              raise (Reporting.err_general l
                        "Only prenex types in unions are supported by monomorphisation")
             else if List.length kids > 1 then
-              raise (Reporting_basic.err_general l
+              raise (Reporting.err_general l
                        "Only single-variable existential types in unions are currently supported by monomorphisation")
             else tys
        end
@@ -465,7 +465,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
   | [] -> None
   | sample::__ ->
      let () = if List.length variants > size_set_limit then
-         raise (Reporting_basic.err_general ql
+         raise (Reporting.err_general ql
                   (string_of_int (List.length variants) ^ "variants for constructor " ^ i ^
                      "bigger than limit " ^ string_of_int size_set_limit)) else ()
      in
@@ -490,7 +490,7 @@ let reduce_nexp subst ne =
     | Nexp_exp n -> Big_int.shift_left (eval n) 1
     | Nexp_neg n -> Big_int.negate (eval n)
     | _ ->
-       raise (Reporting_basic.err_general Unknown ("Couldn't turn nexp " ^
+       raise (Reporting.err_general Unknown ("Couldn't turn nexp " ^
                                                       string_of_nexp nexp ^ " into concrete value"))
   in eval ne
 
@@ -539,7 +539,7 @@ let refine_constructor refinements l env id args =
           match List.find matches_refinement irefinements with
           | (_,new_id,_) -> Some (E_app (new_id,args))
           | exception Not_found ->
-             (Reporting_basic.print_err false true l "Monomorphisation"
+             (Reporting.print_err false true l "Monomorphisation"
                 ("Unable to refine constructor " ^ string_of_id id);
               None)
     end
@@ -723,7 +723,7 @@ let fabricate_nexp_exist env l typ kids nc typ' =
       when Kid.compare kid kid'' = 0 &&
         Kid.compare kid kid''' = 0 ->
      nint 32
-  | _ -> raise (Reporting_basic.err_general l
+  | _ -> raise (Reporting.err_general l
                   ("Undefined value at unsupported type " ^ string_of_typ typ))
 
 let fabricate_nexp l tannot =
@@ -753,7 +753,7 @@ let reduce_cast typ exp l annot =
      let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
-     else raise (Reporting_basic.err_unreachable l __POS__
+     else raise (Reporting.err_unreachable l __POS__
                    ("Constant propagation error: literal " ^ Big_int.to_string n ^
                        " does not satisfy constraint " ^ string_of_n_constraint nc))
   | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
@@ -1154,10 +1154,10 @@ let apply_pat_choices choices =
           List.fold_left (fun e (id,e') ->
             E_let (LB_aux (LB_val (P_aux (P_id id, dummyannot),e'),dummyannot),E_aux (e,dummyannot))) e subst
        | Pat_aux (Pat_when _,(l,_)) ->
-          raise (Reporting_basic.err_unreachable l __POS__
+          raise (Reporting.err_unreachable l __POS__
                    "Pattern acquired a guard after analysis!")
        | exception Not_found ->
-          raise (Reporting_basic.err_unreachable (exp_loc e) __POS__
+          raise (Reporting.err_unreachable (exp_loc e) __POS__
                    "Unable to find case I found earlier!"))
     | exception Not_found -> E_case (e,cases)
   in
@@ -1458,7 +1458,7 @@ let split_defs all_errors splits defs =
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _
-      -> raise (Reporting_basic.err_unreachable l __POS__
+      -> raise (Reporting.err_unreachable l __POS__
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
   and const_prop_fexps ref_vars substs assigns (FES_aux (FES_Fexps (fes,flag), annot)) =
     FES_aux (FES_Fexps (List.map (const_prop_fexp ref_vars substs assigns) fes, flag), annot)
@@ -1528,7 +1528,7 @@ let split_defs all_errors splits defs =
 
   and can_match_with_env ref_vars env (E_aux (e,(l,annot)) as exp0) cases (substs,ksubsts) assigns =
     let rec findpat_generic check_pat description assigns = function
-      | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
+      | [] -> (Reporting.print_err false true l "Monomorphisation"
                  ("Failed to find a case for " ^ description); None)
       | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
       | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
@@ -1575,7 +1575,7 @@ let split_defs all_errors splits defs =
             | P_aux (P_app (id',[]),_) ->
                if Id.compare id id' = 0 then DoesMatch ([],[]) else DoesNotMatch
             | P_aux (_,(l',_)) ->
-               (Reporting_basic.print_err false true l' "Monomorphisation"
+               (Reporting.print_err false true l' "Monomorphisation"
                   "Unexpected kind of pattern for enumeration"; GiveUp)
           in findpat_generic checkpat (string_of_id id) assigns cases
        | _ -> None)
@@ -1598,11 +1598,11 @@ let split_defs all_errors splits defs =
                  DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,empty_tannot))),(l,empty_tannot))],
                             [kid,nexp])
               | _ ->
-                 (Reporting_basic.print_err false true lit_l "Monomorphisation"
+                 (Reporting.print_err false true lit_l "Monomorphisation"
                     "Unexpected kind of literal for var match"; GiveUp)
             end
          | P_aux (_,(l',_)) ->
-            (Reporting_basic.print_err false true l' "Monomorphisation"
+            (Reporting.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
        in findpat_generic checkpat "literal" assigns cases
     | E_vector es when List.for_all (function (E_aux (E_lit _,_)) -> true | _ -> false) es ->
@@ -1622,11 +1622,11 @@ let split_defs all_errors splits defs =
               | _ -> DoesNotMatch) (DoesMatch ([],[])) matches in
             (match final with
             | GiveUp ->
-               (Reporting_basic.print_err false true l "Monomorphisation"
+               (Reporting.print_err false true l "Monomorphisation"
                   "Unexpected kind of pattern for vector literal"; GiveUp)
             | _ -> final)
          | _ ->
-            (Reporting_basic.print_err false true l "Monomorphisation"
+            (Reporting.print_err false true l "Monomorphisation"
                "Unexpected kind of pattern for vector literal"; GiveUp)
        in findpat_generic checkpat "vector literal" assigns cases
 
@@ -1644,7 +1644,7 @@ let split_defs all_errors splits defs =
             DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,empty_tannot))],
                        KBindings.bindings ksubst)
          | P_aux (_,(l',_)) ->
-            (Reporting_basic.print_err false true l' "Monomorphisation"
+            (Reporting.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
        in findpat_generic checkpat "literal" assigns cases
     | _ -> None
@@ -1670,7 +1670,7 @@ let split_defs all_errors splits defs =
     let new_l = Generated l in
     let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
     let cannot msg =
-      let open Reporting_basic in
+      let open Reporting in
       let error =
         Err_general (pat_l,
                      ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
@@ -1726,7 +1726,7 @@ let split_defs all_errors splits defs =
            let nc = List.fold_left nc_and nc_true ncs in
            (match extract_set_nc l kvar nc with
            | (is,_) -> List.map (mk_lit (Some kvar)) is
-           | exception Reporting_basic.Fatal_error (Reporting_basic.Err_general (_,msg)) -> cannot msg)
+           | exception Reporting.Fatal_error (Reporting.Err_general (_,msg)) -> cannot msg)
          | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
        end
     | _ -> cannot ("unsupported type " ^ string_of_typ typ)
@@ -1799,10 +1799,10 @@ let split_defs all_errors splits defs =
         | P_not p ->
            (* todo: not sure that I can't split - but can't figure out how at
             * the moment *)
-           raise (Reporting_basic.err_general l
+           raise (Reporting.err_general l
                     ("Cannot split on 'not' pattern"))
         | P_as (p',id) when id_match id <> None ->
-           raise (Reporting_basic.err_general l
+           raise (Reporting.err_general l
                     ("Cannot split " ^ string_of_id id ^ " on 'as' pattern"))
         | P_as (p',id) ->
            re (fun p -> P_as (p,id)) p'
@@ -1907,7 +1907,7 @@ let split_defs all_errors splits defs =
                    match args with
                    | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
                    | _ -> 
-                      raise (Reporting_basic.err_general l
+                      raise (Reporting.err_general l
                                "Pattern match not currently supported by monomorphisation")
                  in
                  let map_inst (insts,id',_) =
@@ -1941,7 +1941,7 @@ let split_defs all_errors splits defs =
          let overlap = List.exists (fun (v,_) -> List.mem v pvs) lvs in
          let () =
            if overlap then
-             Reporting_basic.print_err false true l "Monomorphisation"
+             Reporting.print_err false true l "Monomorphisation"
                "Splitting a singleton pattern is not possible"
          in p
     in
@@ -1949,7 +1949,7 @@ let split_defs all_errors splits defs =
     let check_split_size lst l =
       let size = List.length lst in
       if size > size_set_limit then
-        let open Reporting_basic in
+        let open Reporting in
         let error =
           Err_general (l, "Case split is too large (" ^ string_of_int size ^
             " > limit " ^ string_of_int size_set_limit ^ ")")
@@ -2184,9 +2184,9 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
   | Typ_id _
   | Typ_var _
     -> KidSet.empty
-  | Typ_fn _ -> raise (Reporting_basic.err_general l
+  | Typ_fn _ -> raise (Reporting.err_general l
                          "Function type on expression")
-  | Typ_bidir _ -> raise (Reporting_basic.err_general l "Mapping type on expression")
+  | Typ_bidir _ -> raise (Reporting.err_general l "Mapping type on expression")
   | Typ_tup typs -> kidset_bigunion (List.map sizes_of_typ typs)
   | Typ_exist (kids,_,typ) ->
      List.fold_left (fun s k -> KidSet.remove k s) (sizes_of_typ typ) kids
@@ -2221,7 +2221,7 @@ let change_parameter_pat i = function
                            mk_id "==",
                            E_aux (E_lit lit,annot)), annot) in
      P_aux (P_id var, (l,empty_tannot)), ([],[test])
-  | P_aux (_,(l,_)) -> raise (Reporting_basic.err_unreachable l __POS__
+  | P_aux (_,(l,_)) -> raise (Reporting.err_unreachable l __POS__
                                 "Expected variable pattern")
 
 (* TODO: make more precise, preferably with a proper free variables function
@@ -2277,7 +2277,7 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),_) ->
      mk_exp nexp l l'
-  | _ -> raise (Reporting_basic.err_unreachable l __POS__
+  | _ -> raise (Reporting.err_unreachable l __POS__
                   "atom stopped being an atom?")
 
 let replace_type env typ =
@@ -2291,7 +2291,7 @@ let replace_type env typ =
                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]) ->
      Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
                        [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
-  | _ -> raise (Reporting_basic.err_unreachable l __POS__
+  | _ -> raise (Reporting.err_unreachable l __POS__
                   "atom stopped being an atom?")
 
 
@@ -2305,7 +2305,7 @@ let rewrite_size_parameters env (Defs defs) =
     let _, typ = Env.get_val_spec_orig id env in
     let types = match typ with
       | Typ_aux (Typ_fn (arg_typs,_,_),_) -> List.map (Env.expand_synonyms env) arg_typs
-      | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Function clause does not have a function type")
+      | _ -> raise (Reporting.err_unreachable l __POS__ "Function clause does not have a function type")
     in
     let add_parameter (i,nmap) typ =
       let nmap =
@@ -2628,7 +2628,7 @@ let string_of_callerkidset s =
 let string_of_dep = function
   | Have (args,extras) ->
      "Have (" ^ string_of_argsplits args ^ ";" ^ string_of_extra_splits extras ^ ")"
-  | Unknown (l,msg) -> "Unknown " ^ msg ^ " at " ^ Reporting_basic.loc_to_string l
+  | Unknown (l,msg) -> "Unknown " ^ msg ^ " at " ^ Reporting.loc_to_string l
 
 (* If a callee uses a type variable as a size, does it need to be split in the
    current function, or is it also a parameter?  (Note that there may be multiple
@@ -2902,8 +2902,8 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
           with
           | Some pats ->
              if l = Parse_ast.Unknown then
-               (Reporting_basic.print_error
-                  (Reporting_basic.Err_general
+               (Reporting.print_error
+                  (Reporting.Err_general
                      (l, "No location for pattern match: " ^ string_of_exp exp));
                 None)
              else
@@ -3165,7 +3165,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _
-      -> raise (Reporting_basic.err_unreachable l __POS__
+      -> raise (Reporting.err_unreachable l __POS__
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
 
     | E_var (lexp,e1,e2) ->
@@ -3500,7 +3500,7 @@ let print_result r =
   let _ = print_endline ("  kid_in_caller: " ^ string_of_callerkidset r.kid_in_caller) in
   let _ = print_endline ("  failures: \n    " ^
                             (String.concat "\n    "
-                               (List.map (fun (l,s) -> Reporting_basic.loc_to_string l ^ ":\n     " ^
+                               (List.map (fun (l,s) -> Reporting.loc_to_string l ^ ":\n     " ^
                                  String.concat "\n      " (StringSet.elements s))
                                   (Failures.bindings r.failures)))) in
   ()
@@ -3585,7 +3585,7 @@ let analyse_defs debug env (Defs defs) =
   then (true,splits,extras) else
     begin
       Failures.iter (fun l msgs ->
-        Reporting_basic.print_err false false l "Monomorphisation" (String.concat "\n" (StringSet.elements msgs)))
+        Reporting.print_err false false l "Monomorphisation" (String.concat "\n" (StringSet.elements msgs)))
         fails;
       (false, splits,extras)
     end
@@ -3610,7 +3610,7 @@ let add_extra_splits extras (Defs defs) =
          let loc = match Analysis.translate_loc l with
            | Some l -> l
            | None ->
-              (Reporting_basic.print_err false false l "Monomorphisation"
+              (Reporting.print_err false false l "Monomorphisation"
                  "Internal error: bad location for added case";
                ("",0))
          in
@@ -4134,7 +4134,7 @@ let add_bitvector_casts (Defs defs) =
       match typ with
       | Typ_aux (Typ_fn (_,ret,_),_) -> ret
       | Typ_aux (_,l) as typ ->
-         raise (Reporting_basic.err_unreachable l __POS__
+         raise (Reporting.err_unreachable l __POS__
                   ("Function clause must have function type: " ^ string_of_typ typ ^
                       " is not a function type"))
     in
@@ -4356,19 +4356,19 @@ let monomorphise opts splits defs =
       let f,r,ex = Analysis.analyse_defs opts.debug_analysis env defs in
       if f || opts.all_split_errors || opts.continue_anyway
       then f, r, ex
-      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+      else raise (Reporting.err_general Unknown "Unable to monomorphise program")
     else true, [], Analysis.ExtraSplits.empty in
   let splits = new_splits @ (List.map (fun (loc,id) -> (loc,id,None)) splits) in
   let ok_extras, defs, extra_splits = add_extra_splits extra_splits defs in
   let splits = splits @ extra_splits in
   let () = if ok_extras || opts.all_split_errors || opts.continue_anyway
       then ()
-      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+      else raise (Reporting.err_general Unknown "Unable to monomorphise program")
   in
   let ok_split, defs = split_defs opts.all_split_errors splits defs in
   let () = if (ok_analysis && ok_extras && ok_split) || opts.continue_anyway
       then ()
-      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+      else raise (Reporting.err_general Unknown "Unable to monomorphise program")
   in defs
 
 let add_bitvector_casts = BitvectorSizeCasts.add_bitvector_casts

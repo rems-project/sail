@@ -189,7 +189,7 @@ let read_from_file_pos2 p1 p2 =
 
 (* Destruct a location by splitting all the Internal strings except possibly the
    last one into a string list and keeping only the last location *)
-let dest_loc (l : Parse_ast.l) : (Parse_ast.l * string list) = 
+let dest_loc (l : Parse_ast.l) : (Parse_ast.l * string list) =
   let rec aux acc l = match l with
     | Parse_ast.Int(s, Some l') -> aux (s::acc) l'
     | _ -> (l, acc)
@@ -207,12 +207,12 @@ let rec format_loc_aux ff l =
   in
   ()
 
-let format_loc_source ff l = 
-  match dest_loc l with 
-  | (Parse_ast.Range (p1, p2), _) -> 
+let format_loc_source ff l =
+  match dest_loc l with
+  | (Parse_ast.Range (p1, p2), _) ->
     begin
       let (s, multi_line) = read_from_file_pos2 p1 p2 in
-      if multi_line then 
+      if multi_line then
         Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
       else
         Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
@@ -265,9 +265,12 @@ type error =
   | Err_type of Parse_ast.l * string
   | Err_type_dual of Parse_ast.l * Parse_ast.l * string
 
+let issues = "\n\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
+
 let dest_err = function
   | Err_general (l, m) -> ("Error", false, Loc l, m)
-  | Err_unreachable (l, (file, line, _, _), m) -> ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m)
+  | Err_unreachable (l, (file, line, _, _), m) ->
+     ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m ^ issues)
   | Err_todo (l, m) -> ("Todo" ^ m, false, Loc l, "")
   | Err_syntax (p, m) -> ("Syntax error", false, Pos p, m)
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)
@@ -284,7 +287,7 @@ let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l,m))
 let err_typ_dual l1 l2 m = Fatal_error (Err_type_dual (l1,l2,m))
 
-let report_error e = 
+let report_error e =
   let (m1, verb_pos, pos_l, m2) = dest_err e in
   (print_err_internal verb_pos false pos_l m1 m2; exit 1)
 

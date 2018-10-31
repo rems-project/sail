@@ -319,8 +319,8 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_assert(e1,e2) -> rewrap (E_assert(rewrite e1,rewrite e2))
   | E_var (lexp, e1, e2) ->
      rewrap (E_var (rewriters.rewrite_lexp rewriters lexp, rewriters.rewrite_exp rewriters e1, rewriters.rewrite_exp rewriters e2))
-  | E_internal_return _ -> raise (Reporting_basic.err_unreachable l __POS__ "Internal return found before it should have been introduced")
-  | E_internal_plet _ -> raise (Reporting_basic.err_unreachable l __POS__ " Internal plet found before it should have been introduced")
+  | E_internal_return _ -> raise (Reporting.err_unreachable l __POS__ "Internal return found before it should have been introduced")
+  | E_internal_plet _ -> raise (Reporting.err_unreachable l __POS__ " Internal plet found before it should have been introduced")
   | _ -> rewrap exp
 
 let rewrite_let rewriters (LB_aux(letbind,(l,annot))) =
@@ -358,7 +358,7 @@ let rewrite_def rewriters d = match d with
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
-  | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewritter")
+  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewritter")
 
 let rewrite_defs_base rewriters (Defs defs) =
   let rec rewrite ds = match ds with

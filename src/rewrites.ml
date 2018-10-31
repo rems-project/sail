@@ -169,16 +169,16 @@ let vector_string_to_bit_list l lit =
     | 'D' -> ['1';'1';'0';'1']
     | 'E' -> ['1';'1';'1';'0']
     | 'F' -> ['1';'1';'1';'1']
-    | _ -> raise (Reporting_basic.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character") in
+    | _ -> raise (Reporting.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character") in
 
   let s_bin = match lit with
     | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
     | L_bin s_bin -> explode s_bin
-    | _ -> raise (Reporting_basic.err_unreachable l __POS__ "s_bin given non vector literal") in
+    | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal") in
 
   List.map (function '0' -> L_aux (L_zero, gen_loc l)
                    | '1' -> L_aux (L_one, gen_loc l)
-                   | _ -> raise (Reporting_basic.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")) s_bin
+                   | _ -> raise (Reporting.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")) s_bin
 
 let find_used_vars exp =
   (* Overapproximates the set of used identifiers, but for the use cases below
@@ -461,7 +461,7 @@ let rewrite_sizeof (Defs defs) =
          let inst =
            try instantiation_of orig_exp with
            | Type_error (l, err) ->
-             raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err)) in
+             raise (Reporting.err_typ l (Type_error.string_of_type_error err)) in
          (* Rewrite the inst using orig_kid so that each type variable has it's
             original name rather than a mangled typechecker name *)
          let inst = KBindings.fold (fun kid uvar b -> KBindings.add (orig_kid kid) uvar b) inst KBindings.empty in
@@ -474,13 +474,13 @@ let rewrite_sizeof (Defs defs) =
                 let sizeof = E_aux (E_sizeof nexp, (l, mk_tannot env (atom_typ nexp) no_effect)) in
                 (try rewrite_trivial_sizeof_exp sizeof with
                 | Type_error (l, err) ->
-                  raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err)))
+                  raise (Reporting.err_typ l (Type_error.string_of_type_error err)))
              (* If the type variable is Not_found then it was probably
                 introduced by a P_var pattern, so it likely exists as
                 a variable in scope. It can't be an existential because the assert rules that out. *)
              | None -> annot_exp (E_id (id_of_kid (orig_kid kid))) l env (atom_typ (nvar (orig_kid kid)))
              | _ ->
-                raise (Reporting_basic.err_unreachable l __POS__
+                raise (Reporting.err_unreachable l __POS__
                                                        ("failed to infer nexp for type variable " ^ string_of_kid kid ^
                                                           " of function " ^ string_of_id f))
            end in
@@ -605,10 +605,10 @@ let rewrite_sizeof (Defs defs) =
               | P_as (_, id) | P_id id ->
                  (* adding parameters here would change the type of id;
               we should remove the P_as/P_id here and add a let-binding to the body *)
-                 raise (Reporting_basic.err_todo l
+                 raise (Reporting.err_todo l
                                                  "rewriting as- or id-patterns for sizeof expressions not yet implemented")
               | _ ->
-                 raise (Reporting_basic.err_unreachable l __POS__
+                 raise (Reporting.err_unreachable l __POS__
                                                         "unexpected pattern while rewriting function parameters for sizeof expressions"))
           | ptyp ->
              let ptyp' = Typ_aux (Typ_tup (kid_typs @ [ptyp]), l) in
@@ -661,7 +661,7 @@ let rewrite_sizeof (Defs defs) =
           | Typ_aux (Typ_fn (vtyp_args, vtyp_ret, declared_eff), vl) ->
              Typ_aux (Typ_fn (kid_typs @ vtyp_args, vtyp_ret, declared_eff), vl)
           | _ ->
-            raise (Reporting_basic.err_typ l "val spec with non-function type") in
+            raise (Reporting.err_typ l "val spec with non-function type") in
         TypSchm_aux (TypSchm_ts (tq, typ'), l)
       else ts in
     match def with
@@ -758,7 +758,7 @@ let remove_vector_concat_pat pat =
            P_aux (P_app (id, List.map aux pats), a)
         | _ ->
            raise
-             (Reporting_basic.err_unreachable
+             (Reporting.err_unreachable
                 l __POS__ "name_vector_concat_elements: Non-vector in vector-concat pattern") in
       P_vector_concat (List.map aux pats) in
     {id_pat_alg with p_vector_concat = p_vector_concat} in
@@ -806,7 +806,7 @@ let remove_vector_concat_pat pat =
                      then Big_int.sub (Big_int.add start length) (Big_int.of_int 1)
                      else Big_int.add (Big_int.sub start length) (Big_int.of_int 1))
           | _ ->
-            raise (Reporting_basic.err_unreachable (fst rannot') __POS__
+            raise (Reporting.err_unreachable (fst rannot') __POS__
               ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern"))) in
          let rec aux typ_opt (pos,pat_acc,decl_acc) (P_aux (p,cannot),is_last) =
            let ctyp = Env.base_typ_of (env_of_annot cannot) (typ_of_annot cannot) in
@@ -820,7 +820,7 @@ let remove_vector_concat_pat pat =
                 if is_last then (pos,last_idx)
                 else
                   raise
-                    (Reporting_basic.err_unreachable
+                    (Reporting.err_unreachable
                        l __POS__ ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern")) in
            (match p with
             (* if we see a named vector pattern, remove the name and remember to
@@ -930,7 +930,7 @@ let remove_vector_concat_pat pat =
           | _, _ ->
             (*if is_last then*) acc @ [wild Big_int.zero]
         else raise
-          (Reporting_basic.err_unreachable l __POS__
+          (Reporting.err_unreachable l __POS__
             ("remove_vector_concats: Non-vector in vector-concat pattern " ^
               string_of_typ (typ_of_annot annot))) in
 
@@ -1160,7 +1160,7 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   let typ = typ_of_pat p_aux in
   match pat with
   | P_lit lit -> rewrap (E_lit lit)
-  | P_wild -> raise (Reporting_basic.err_unreachable l __POS__
+  | P_wild -> raise (Reporting.err_unreachable l __POS__
       "pat_to_exp given wildcard pattern")
   | P_or(pat1, pat2) -> (* todo: insert boolean or *) pat_to_exp pat1 
   | P_not(pat) -> (* todo: insert boolean not *) pat_to_exp pat
@@ -1248,7 +1248,7 @@ let rewrite_guarded_clauses l cs =
       | ((pat,guard,body,annot) as c) :: cs ->
           group_aux (remove_wildcards "g__" pat, [c], annot) [] cs
       | _ ->
-          raise (Reporting_basic.err_unreachable l __POS__
+          raise (Reporting.err_unreachable l __POS__
             "group given empty list in rewrite_guarded_clauses") in
     let add_group cs groups = (if_pexp (groups @ fallthrough) cs) :: groups in
     List.fold_right add_group groups []
@@ -1260,7 +1260,7 @@ let rewrite_guarded_clauses l cs =
         let (Pat_aux (_,annot)) = pexp in
         (pat, body, annot)
     | [] ->
-        raise (Reporting_basic.err_unreachable l __POS__
+        raise (Reporting.err_unreachable l __POS__
             "if_pexp given empty list in rewrite_guarded_clauses"))
   and if_exp fallthrough current_pat = (function
     | (pat,guard,body,annot) :: ((pat',guard',body',annot') as c') :: cs ->
@@ -1284,7 +1284,7 @@ let rewrite_guarded_clauses l cs =
               fix_eff_exp (annot_exp (E_if (exp,body,else_exp)) (fst annot) (env_of exp) (typ_of body))
           | _, _ -> body)
     | [] ->
-        raise (Reporting_basic.err_unreachable l __POS__
+        raise (Reporting.err_unreachable l __POS__
             "if_exp given empty list in rewrite_guarded_clauses")) in
   group [] cs
 
@@ -1419,7 +1419,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       let start_idx = match start with
       | Nexp_aux (Nexp_constant s, _) -> s
       | _ ->
-        raise (Reporting_basic.err_unreachable l __POS__
+        raise (Reporting.err_unreachable l __POS__
           "guard_bitvector_pat called on pattern with non-constant start index") in
       let add_bit_pat (idx, current, guards, dls) pat =
         let idx' =
@@ -1727,9 +1727,9 @@ let rec rewrite_lexp_to_rhs ((LEXP_aux(lexp,((l,_) as annot))) as le) =
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
           let field_update exp = FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), annot)], false), annot) in
           (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, field_update exp), lannot))))
-       | _ -> raise (Reporting_basic.err_unreachable l __POS__ ("Unsupported lexp: " ^ string_of_lexp le))
+       | _ -> raise (Reporting.err_unreachable l __POS__ ("Unsupported lexp: " ^ string_of_lexp le))
      end
-  | _ -> raise (Reporting_basic.err_unreachable l __POS__ ("Unsupported lexp: " ^ string_of_lexp le))
+  | _ -> raise (Reporting.err_unreachable l __POS__ ("Unsupported lexp: " ^ string_of_lexp le))
 
 let updates_vars exp =
   let e_assign ((_, lexp), (u, exp)) =
@@ -2093,7 +2093,7 @@ let rewrite_defs_early_return (Defs defs) =
 
 let swaptyp typ (l,tannot) = match destruct_tannot tannot with
   | Some (env, typ', eff) -> (l, mk_tannot env typ eff)
-  | _ -> raise (Reporting_basic.err_unreachable l __POS__ "swaptyp called with empty type annotation")
+  | _ -> raise (Reporting.err_unreachable l __POS__ "swaptyp called with empty type annotation")
 
 let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
   let pat,guard,exp,pannot = destruct_pexp pexp in
@@ -2174,7 +2174,7 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
            let pat, _, exp, _ = destruct_pexp pexp in
            env_of exp, typ_of_pat pat, typ_of exp
         | _ ->
-           raise (Reporting_basic.err_unreachable l __POS__
+           raise (Reporting.err_unreachable l __POS__
              "rewrite_split_fun_constr_pats: empty auxiliary function")
       in
       let eff = List.fold_left
@@ -2242,7 +2242,7 @@ let rewrite_fix_val_specs (Defs defs) =
        begin
          try Env.get_val_spec id env with
          | _ ->
-            raise (Reporting_basic.err_unreachable (Parse_ast.Unknown) __POS__
+            raise (Reporting.err_unreachable (Parse_ast.Unknown) __POS__
               ("No val spec found for " ^ string_of_id id))
        end
   in
@@ -2570,7 +2570,7 @@ let rewrite_vector_concat_assignments defs =
          begin
            try check_exp env e_aux unit_typ with
            | Type_error (l, err) ->
-             raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
+             raise (Reporting.err_typ l (Type_error.string_of_type_error err))
          end
        else E_aux (e_aux, annot)
     | _ -> E_aux (e_aux, annot)
@@ -2596,7 +2596,7 @@ let rewrite_tuple_assignments defs =
        begin
          try check_exp env let_exp unit_typ with
          | Type_error (l, err) ->
-           raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
+           raise (Reporting.err_typ l (Type_error.string_of_type_error err))
        end
     | _ -> E_aux (e_aux, annot)
   in
@@ -2672,7 +2672,7 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
      let body = body (annot_exp (E_id id) l env typ) in
      fix_eff_exp (annot_exp (E_let (lb, body)) l env (typ_of body))
   | None ->
-     raise (Reporting_basic.err_unreachable l __POS__ "no type information")
+     raise (Reporting.err_unreachable l __POS__ "no type information")
 
 
 let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list -> 'a exp) : 'a exp = 
@@ -2968,7 +2968,7 @@ let rewrite_defs_internal_lets =
     | LEXP_id id -> P_aux (P_id id, annot)
     | LEXP_cast (typ, id) -> add_p_typ typ (P_aux (P_id id, annot))
     | LEXP_tup lexps -> P_aux (P_tup (List.map pat_of_local_lexp lexps), annot)
-    | _ -> raise (Reporting_basic.err_unreachable l __POS__ "unexpected local lexp") in
+    | _ -> raise (Reporting.err_unreachable l __POS__ "unexpected local lexp") in
 
   let e_let (lb,body) =
     match lb with
@@ -3834,7 +3834,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let ord_exp, kids, constr, lower, upper, lower_exp, upper_exp =
          match destruct_numeric env (typ_of exp1), destruct_numeric env (typ_of exp2) with
            | None, _ | _, None ->
-              raise (Reporting_basic.err_unreachable el __POS__ "Could not determine loop bounds")
+              raise (Reporting.err_unreachable el __POS__ "Could not determine loop bounds")
            | Some (kids1, constr1, n1), Some (kids2, constr2, n2) ->
               let kids = kids1 @ kids2 in
               let constr = nc_and constr1 constr2 in
@@ -3940,7 +3940,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              let pannot = (l, mk_tannot (env_of exp) (typ_of exp) (effect_of exp)) in
              Pat_aux (Pat_exp (pat, exp), pannot)
            | Pat_when _ ->
-             raise (Reporting_basic.err_unreachable l __POS__
+             raise (Reporting.err_unreachable l __POS__
                "Guarded patterns should have been rewritten already") in
          let ps = List.map rewrite_pexp ps in
          let expaux = if is_case then E_case (e1, ps) else E_try (e1, ps) in
@@ -3954,7 +3954,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          | Local (_, typ) ->
             add_p_typ typ (annot_pat (P_id id) pl env typ)
          | _ ->
-            raise (Reporting_basic.err_unreachable pl __POS__
+            raise (Reporting.err_unreachable pl __POS__
               ("Failed to look up type of variable " ^ string_of_id id)) in
        if effectful exp then
          Same_vars (E_aux (E_assign (lexp,vexp),annot))
@@ -4000,7 +4000,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        | LEXP_aux (LEXP_cast (typ, id), _) ->
           unaux_pat (add_p_typ typ (annot_pat (P_id id) l env (typ_of v))), typ
        | _ ->
-         raise (Reporting_basic.err_unreachable l __POS__
+         raise (Reporting.err_unreachable l __POS__
            "E_var with a lexp that is not a variable") in
      let lb = fix_eff_lb (annot_letbind (paux, v) l env typ) in
      let exp = fix_eff_exp (annot_exp (E_let (lb, body)) l env (typ_of body)) in
@@ -4553,7 +4553,7 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
     in aux [] res_pats res_pats'
   in
   let inconsistent () =
-    raise (Reporting_basic.err_unreachable (fst ann) __POS__
+    raise (Reporting.err_unreachable (fst ann) __POS__
              ("Inconsistency during exhaustiveness analysis with " ^
                  string_of_rp res_pat))
   in
@@ -4637,12 +4637,12 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
         rp' @ List.map (function [rp1;rp2] -> RP_cons (rp1,rp2) | _ -> assert false) res_pats
   end
   | P_record _ ->
-     raise (Reporting_basic.err_unreachable (fst ann) __POS__
+     raise (Reporting.err_unreachable (fst ann) __POS__
               "Record pattern not supported")
   | P_vector _
   | P_vector_concat _
   | P_string_append _ ->
-     raise (Reporting_basic.err_unreachable (fst ann) __POS__
+     raise (Reporting.err_unreachable (fst ann) __POS__
               "Found pattern that should have been rewritten away in earlier stage")
 
   (*in let _ = printprefix := String.sub (!printprefix) 0 (String.length !printprefix - 2)
@@ -4658,7 +4658,7 @@ let process_pexp env =
   | Pat_aux (Pat_exp (p,_),_) -> 
      List.concat (List.map (remove_clause_from_pattern ctx p) rps)
   | Pat_aux (Pat_when _,(l,_)) ->
-     raise (Reporting_basic.err_unreachable l __POS__
+     raise (Reporting.err_unreachable l __POS__
               "Guarded pattern should have been rewritten away")
 
 (* We do some minimal redundancy checking to remove bogus wildcard patterns here *)
@@ -4666,7 +4666,7 @@ let check_cases process is_wild loc_of cases =
   let rec aux rps acc = function
     | [] -> acc, rps
     | [p] when is_wild p && match rps with [] -> true | _ -> false ->
-      let () = Reporting_basic.print_err false false
+      let () = Reporting.print_err false false
         (loc_of p) "Match checking" "Redundant wildcard clause" in
       acc, []
     | h::t -> aux (process rps h) (h::acc) t
@@ -4706,7 +4706,7 @@ let rewrite_case (e,ann) =
 
         let _ =
           if !opt_coq_warn_nonexhaustive
-          then Reporting_basic.print_err false false
+          then Reporting.print_err false false
             (fst ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example) in
 
         let l = Parse_ast.Generated Parse_ast.Unknown in
@@ -4726,7 +4726,7 @@ let rewrite_case (e,ann) =
      | (example::_) ->
         let _ =
           if !opt_coq_warn_nonexhaustive
-          then Reporting_basic.print_err false false
+          then Reporting.print_err false false
             (fst ann) "Non-exhaustive let" ("Example: " ^ string_of_rp example) in
         let l = Parse_ast.Generated Parse_ast.Unknown in
         let p = P_aux (P_wild, (l, empty_tannot)) in
@@ -4742,7 +4742,7 @@ let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
   let id,fcl_ann =
     match fcls with
     | FCL_aux (FCL_Funcl (id,_),ann) :: _ -> id,ann
-    | [] -> raise (Reporting_basic.err_unreachable (fst f_ann) __POS__
+    | [] -> raise (Reporting.err_unreachable (fst f_ann) __POS__
                  "Empty function")
   in
   let env = env_of_annot fcl_ann in
@@ -4756,7 +4756,7 @@ let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
   | (example::_) ->
      let _ =
        if !opt_coq_warn_nonexhaustive
-       then Reporting_basic.print_err false false
+       then Reporting.print_err false false
               (fst f_ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example) in
 
      let l = Parse_ast.Generated Parse_ast.Unknown in
@@ -5021,12 +5021,12 @@ let rewrite_check_annot =
       let typ1 = typ_of exp in
       let typ2 = Env.expand_synonyms (env_of exp) (typ_of exp) in
       (if not (alpha_equivalent (env_of exp) typ1 typ2)
-       then raise (Reporting_basic.err_typ Parse_ast.Unknown
+       then raise (Reporting.err_typ Parse_ast.Unknown
                     ("Found synonym in annotation " ^ string_of_typ typ1 ^ " vs " ^ string_of_typ typ2))
        else ());
       exp
     with
-      Type_error (l, err) -> raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
+      Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
   in
   let check_pat pat =
     prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (typ_of_pat pat));

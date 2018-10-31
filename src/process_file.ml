@@ -65,7 +65,7 @@ let get_lexbuf f =
   lexbuf, in_chan
 
 let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : Parse_ast.defs =
-  let open Reporting_basic in
+  let open Reporting in
   try
     let lexbuf, in_chan = get_lexbuf f in
     begin
@@ -111,7 +111,7 @@ let cond_pragma l defs =
        decr depth; push_def def; scan defs
     | def :: defs ->
        push_def def; scan defs
-    | [] -> raise (Reporting_basic.err_general l "$ifdef or $ifndef never ended by $endif")
+    | [] -> raise (Reporting.err_general l "$ifdef or $ifndef never ended by $endif")
   in
   scan defs
 
@@ -123,19 +123,24 @@ let parseid_to_string (Parse_ast.Id_aux (id, _)) =
   match id with
   | Parse_ast.Id x | Parse_ast.DeIid x -> x
 
-let rec realise_union_anon_rec_types (Parse_ast.TD_variant (union_id, name_scm_opt, typq, _, flag) as orig_union) arms =
-  match arms with
-  | [] -> []
-  | arm :: arms ->
-     match arm with
-     | (Parse_ast.Tu_aux ((Parse_ast.Tu_ty_id _), _)) -> (None, arm) :: realise_union_anon_rec_types orig_union arms
-     | (Parse_ast.Tu_aux ((Parse_ast.Tu_ty_anon_rec (fields, id)), l)) ->
-        let open Parse_ast in
-        let record_str = "_" ^ parseid_to_string union_id ^ "_" ^ parseid_to_string id ^ "_record" in
-        let record_id = Id_aux (Id record_str, Generated l) in
-        let new_arm = Tu_aux ((Tu_ty_id ((ATyp_aux (ATyp_id record_id, Generated l)), id)), Generated l) in
-        let new_rec_def = DEF_type (TD_aux (TD_record (record_id, name_scm_opt, typq, fields, flag), Generated l)) in
-        (Some new_rec_def, new_arm) :: (realise_union_anon_rec_types orig_union arms)
+let rec realise_union_anon_rec_types orig_union arms =
+  match orig_union with
+  | Parse_ast.TD_variant (union_id, name_scm_opt, typq, _, flag) ->
+     begin match arms with
+     | [] -> []
+     | arm :: arms ->
+        match arm with
+        | (Parse_ast.Tu_aux ((Parse_ast.Tu_ty_id _), _)) -> (None, arm) :: realise_union_anon_rec_types orig_union arms
+        | (Parse_ast.Tu_aux ((Parse_ast.Tu_ty_anon_rec (fields, id)), l)) ->
+           let open Parse_ast in
+           let record_str = "_" ^ parseid_to_string union_id ^ "_" ^ parseid_to_string id ^ "_record" in
+           let record_id = Id_aux (Id record_str, Generated l) in
+           let new_arm = Tu_aux ((Tu_ty_id ((ATyp_aux (ATyp_id record_id, Generated l)), id)), Generated l) in
+           let new_rec_def = DEF_type (TD_aux (TD_record (record_id, name_scm_opt, typq, fields, flag), Generated l)) in
+           (Some new_rec_def, new_arm) :: (realise_union_anon_rec_types orig_union arms)
+     end
+  | _ ->
+     raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Non union type-definition passed to realise_union_anon_rec_typs")
 
 let rec preprocess opts = function
   | [] -> []
@@ -149,10 +154,9 @@ let rec preprocess opts = function
          let args = Str.split (Str.regexp " +") command in
          Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) opts (fun _ -> ()) "";
        with
-       | Arg.Bad message | Arg.Help message -> raise (Reporting_basic.err_general l message)
+       | Arg.Bad message | Arg.Help message -> raise (Reporting.err_general l message)
      end;
      preprocess opts defs
-
 
   | Parse_ast.DEF_pragma ("ifndef", symbol, l) :: defs ->
      let then_defs, else_defs, defs = cond_pragma l defs in
@@ -309,7 +313,7 @@ let output_lem filename libs defs =
     open_output_with_check_unformatted (filename ^ ".lem") in
   (Pretty_print.pp_defs_lem
      (ot, base_imports)
-     (o, base_imports @ (String.capitalize types_module :: libs))
+     (o, base_imports @ (String.capitalize_ascii types_module :: libs))
      defs generated_line);
   close_output_with_check ext_ot;
   close_output_with_check ext_o;
@@ -378,7 +382,7 @@ let rewrite_step defs (name,rewriter) =
 let rewrite rewriters defs =
   try List.fold_left rewrite_step defs rewriters with
   | Type_check.Type_error (l, err) ->
-     raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
+     raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
 let rewrite_undefined bitvectors = rewrite [("undefined", fun x -> Rewrites.rewrite_undefined bitvectors x)]

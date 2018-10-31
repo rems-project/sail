@@ -80,7 +80,7 @@ let rec user_input callback =
      mode_clear ();
      begin
        try callback v with
-       | Reporting_basic.Fatal_error e -> Reporting_basic.report_error e
+       | Reporting.Fatal_error e -> Reporting.report_error e
      end;
      user_input callback
 
@@ -390,8 +390,8 @@ let handle_input input =
   try handle_input' input with
   | Type_check.Type_error (l, err) ->
      print_endline (Type_error.string_of_type_error err)
-  | Reporting_basic.Fatal_error err ->
-     Reporting_basic.print_error err
+  | Reporting.Fatal_error err ->
+     Reporting.print_error err
   | exn ->
      print_endline (Printexc.to_string exn)
 

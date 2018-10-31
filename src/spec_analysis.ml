@@ -598,7 +598,7 @@ let def_of_component graph defset comp =
        | DEF_fundef fundef -> [fundef]
        | DEF_internal_mutrec fundefs -> fundefs
        | _ ->
-          raise (Reporting_basic.err_unreachable (def_loc def) __POS__
+          raise (Reporting.err_unreachable (def_loc def) __POS__
             "Trying to merge non-function definition with mutually recursive functions") in
      let fundefs = List.concat (List.map get_fundefs defs) in
      print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs);

@@ -373,6 +373,6 @@ let main() =
 let _ =  try
     begin
       try ignore(main ())
-      with  Failure(s) -> raise (Reporting_basic.err_general Parse_ast.Unknown ("Failure "^s))
+      with  Failure(s) -> raise (Reporting.err_general Parse_ast.Unknown ("Failure "^s))
     end
-  with Reporting_basic.Fatal_error e -> Reporting_basic.report_error e
+  with Reporting.Fatal_error e -> Reporting.report_error e

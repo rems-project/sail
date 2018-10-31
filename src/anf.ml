@@ -58,7 +58,7 @@ open PPrint
 module Big_int = Nat_big_num
 
 let anf_error ?loc:(l=Parse_ast.Unknown) message =
-  raise (Reporting_basic.err_general l ("\nANF translation: " ^ message))
+  raise (Reporting.err_general l ("\nANF translation: " ^ message))
 
 (**************************************************************************)
 (* 1. Conversion to A-normal form (ANF)                                   *)
@@ -510,7 +510,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
 
   | E_block [] ->
-     Util.warn (Reporting_basic.loc_to_string l
+     Util.warn (Reporting.loc_to_string l
                 ^ "\n\nTranslating empty block (possibly assigning to an uninitialized variable at the end of a block?)");
      mk_aexp (ae_lit (L_aux (L_unit, l)) (typ_of exp))
   | E_block exps ->

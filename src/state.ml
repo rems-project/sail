@@ -187,12 +187,12 @@ let rec regval_constr_id mwords (Typ_aux (t, l) as typ) = match t with
        | Typ_arg_order (Ord_aux (Ord_inc, _)) -> "inc"
        | Typ_arg_order (Ord_aux (Ord_dec, _)) -> "dec"
        | _ ->
-          raise (Reporting_basic.err_typ l "Unsupported register type")
+          raise (Reporting.err_typ l "Unsupported register type")
      in
      let builtins = IdSet.of_list (List.map mk_id ["vector"; "list"; "option"]) in
      if IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) then id else
      append_id id (String.concat "_" ("" :: List.map name_arg args))
-  | _ -> raise (Reporting_basic.err_typ l "Unsupported register type")
+  | _ -> raise (Reporting.err_typ l "Unsupported register type")
 
 let register_base_types mwords typs =
   let rec add_base_typs typs (Typ_aux (t, _) as typ) =

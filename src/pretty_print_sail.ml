@@ -162,7 +162,7 @@ let rec doc_typ (Typ_aux (typ_aux, l)) =
      separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
   | Typ_bidir (typ1, typ2) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
-  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
+  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and doc_typ_arg (Typ_arg_aux (ta_aux, _)) =
   match ta_aux with
   | Typ_arg_typ typ -> doc_typ typ

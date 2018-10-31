@@ -105,7 +105,7 @@ let latex_loc no_loc l =
      begin
        let using_color = !Util.opt_colors in
        Util.opt_colors := false;
-       let code = Util.split_on_char '\n' (Reporting_basic.loc_to_string l) in
+       let code = Util.split_on_char '\n' (Reporting.loc_to_string l) in
        let doc = match code with
          | _ :: _ :: code -> string (add_links (String.concat "\n" code))
          | _ -> empty

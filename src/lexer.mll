@@ -163,7 +163,6 @@ let kw_table =
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
-     ("tuple",                   (fun _ -> Tuple));
      ("where",                   (fun _ -> Where));
 
      ("barr",                    (fun x -> Barr));
@@ -329,12 +328,12 @@ and string pos b = parse
   | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; string pos b lexbuf }
   | escape_sequence as i                { Buffer.add_string b i; string pos b lexbuf }
   | '\\' '\n' ws                        { Lexing.new_line lexbuf; string pos b lexbuf }
-  | '\\'                                { assert false (*raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos,
+  | '\\'                                { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                             "illegal backslash escape in string"*) }
   | '"'                                 { let s = unescaped(Buffer.contents b) in
                                           (*try Ulib.UTF8.validate s; s
                                           with Ulib.UTF8.Malformed_code ->
-                                            raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos,
+                                            raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                               "String literal is not valid utf8"))) *) s }
-  | eof                                 { assert false (*raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos,
+  | eof                                 { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                             "String literal not terminated")))*) }
