@@ -1617,7 +1617,7 @@ let rec compile_def ctx = function
 
   | DEF_val (LB_aux (LB_val (pat, exp), _)) ->
      c_debug (lazy ("Compiling letbind " ^ string_of_pat pat));
-     let ctyp = ctyp_of_typ ctx (pat_typ_of pat) in
+     let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
      let aexp = analyze_functions ctx analyze_primop (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let apat = anf_pat ~global:true pat in

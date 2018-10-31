@@ -76,7 +76,7 @@ val opt_constraint_synonyms : bool ref
 type type_error =
   | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
-  | Err_unresolved_quants of id * quant_item list
+  | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
@@ -95,7 +95,7 @@ module Env : sig
   type t
 
   (** Note: Most get_ functions assume the identifiers exist, and throw
-     type errors if it doesn't. *)
+     type errors if they don't. *)
 
   (** Get the quantifier and type for a function identifier, freshening
       type variables. *)
@@ -321,9 +321,8 @@ val env_of_annot : Ast.l * tannot -> Env.t
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 
-
-val pat_typ_of : tannot pat -> typ
-val pat_env_of : tannot pat -> Env.t
+val typ_of_pat : tannot pat -> typ
+val env_of_pat : tannot pat -> Env.t
 
 val typ_of_pexp : tannot pexp -> typ
 val env_of_pexp : tannot pexp -> Env.t
@@ -366,11 +365,6 @@ type uvar =
 val string_of_uvar : uvar -> string
 
 val subst_unifiers : uvar KBindings.t -> typ -> typ
-
-val typ_subst_nexp : kid -> nexp_aux -> typ -> typ
-val typ_subst_typ : kid -> typ_aux -> typ -> typ
-val typ_subst_order : kid -> order_aux -> typ -> typ
-val typ_subst_kid : kid -> kid -> typ -> typ
 
 val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option
 

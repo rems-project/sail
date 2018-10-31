@@ -592,7 +592,7 @@ let rewrite_sizeof (Defs defs) =
         let penv = env_of_annot pannot in
         let peff = effect_of_annot (snd pannot) in
         if KidSet.is_empty nvars then paux else
-          match pat_typ_of paux with
+          match typ_of_pat paux with
           | Typ_aux (Typ_tup typs, _) ->
              let ptyp' = Typ_aux (Typ_tup (kid_typs @ typs), l) in
              (match pat with
@@ -1156,8 +1156,8 @@ let subst_id_exp exp (id1,id2) =
 
 let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   let rewrap e = E_aux (e,(l,annot)) in
-  let env = pat_env_of p_aux in
-  let typ = pat_typ_of p_aux in
+  let env = env_of_pat p_aux in
+  let typ = typ_of_pat p_aux in
   match pat with
   | P_lit lit -> rewrap (E_lit lit)
   | P_wild -> raise (Reporting_basic.err_unreachable l __POS__
@@ -1322,7 +1322,7 @@ let contains_bitvector_pexp = function
 
 let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
 
-  let env = try pat_env_of pat with _ -> Env.empty in
+  let env = try env_of_pat pat with _ -> Env.empty in
 
   (* first introduce names for bitvector patterns *)
   let name_bitvector_roots =
@@ -1360,7 +1360,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     } in
   let pat, env = bind_pat_no_guard env
     (strip_pat ((fold_pat name_bitvector_roots pat) false))
-    (pat_typ_of pat) in
+    (typ_of_pat pat) in
 
   (* Then collect guard expressions testing whether the literal bits of a
      bitvector pattern match those of a given bitvector, and collect let
@@ -1607,7 +1607,7 @@ let rewrite_defs_remove_numeral_pats =
     fold_pat { (compute_pat_alg None compose_guard_opt) with p_lit = p_lit outer_env } in
   let pat_aux (pexp_aux, a) =
     let pat,guard,exp,a = destruct_pexp (Pat_aux (pexp_aux, a)) in
-    let guard',pat = guard_pat (pat_env_of pat) pat in
+    let guard',pat = guard_pat (env_of_pat pat) pat in
     match compose_guard_opt guard guard' with
     | Some g -> Pat_aux (Pat_when (pat, g, exp), a)
     | None -> Pat_aux (Pat_exp (pat, exp), a) in
@@ -2131,7 +2131,7 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
            let pat, guard, exp, annot = destruct_pexp pexp in
            match pat with
              | P_aux (P_app (constr_id, args), pannot) ->
-                let argstup_typ = tuple_typ (List.map pat_typ_of args) in
+                let argstup_typ = tuple_typ (List.map typ_of_pat args) in
                 let pannot' = swaptyp argstup_typ pannot in
                 let pat' =
                   match args with
@@ -2172,7 +2172,7 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
       let env, args_typ, ret_typ = match funcls with
         | FCL_aux (FCL_Funcl (_, pexp), _) :: _ ->
            let pat, _, exp, _ = destruct_pexp pexp in
-           env_of exp, pat_typ_of pat, typ_of exp
+           env_of exp, typ_of_pat pat, typ_of exp
         | _ ->
            raise (Reporting_basic.err_unreachable l __POS__
              "rewrite_split_fun_constr_pats: empty auxiliary function")
@@ -3032,13 +3032,13 @@ let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (annot: tannot anno
        | [] -> pexp
        | gs ->
           let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp gs |> fold_guards, strip_exp exp)) in
-          check_case (pat_env_of pat) (pat_typ_of pat) unchecked_pexp (typ_of exp)
+          check_case (env_of_pat pat) (typ_of_pat pat) unchecked_pexp (typ_of exp)
      end
   | Pat_when (pat, guard, exp) ->
      begin
        let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
        let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp !guards |> fold_guards, strip_exp exp)) in
-       check_case (pat_env_of pat) (pat_typ_of pat) unchecked_pexp (typ_of exp)
+       check_case (env_of_pat pat) (typ_of_pat pat) unchecked_pexp (typ_of exp)
      end
 
 
@@ -3077,7 +3077,7 @@ let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
   | P_record _ -> failwith "record patterns not yet implemented"
   (* we assume the type-checker has already checked the two sides have the same bindings *)
   | P_or (left, right) -> bindings_of_pat left
-  | P_as (p, id) -> [annot_pat (P_id id) unk (pat_env_of p) (pat_typ_of p)]
+  | P_as (p, id) -> [annot_pat (P_id id) unk (env_of_pat p) (typ_of_pat p)]
   | P_cons (left, right) -> bindings_of_pat left @ bindings_of_pat right
   (* todo: is this right for negated patterns? *)
   | P_not p
@@ -3093,11 +3093,11 @@ let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
 let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
   match p_aux with
   | P_lit _ | P_wild -> []
-  | P_id id -> [pat_typ_of pat]
+  | P_id id -> [typ_of_pat pat]
   | P_record _ -> failwith "record patterns not yet implemented"
   (* we assume the type-checker has already checked the two sides have the same bindings *)
   | P_or (left, right) -> binding_typs_of_pat left
-  | P_as (p, id) -> [pat_typ_of p]
+  | P_as (p, id) -> [typ_of_pat p]
   | P_cons (left, right) -> binding_typs_of_pat left @ binding_typs_of_pat right
   (* todo: is this right for negated patterns? *)
   | P_not p
@@ -3226,7 +3226,7 @@ let construct_toplevel_string_append_func env f_id pat =
        let tup_arg_pat = match arg_pats with
          | [] -> assert false
          | [arg_pat] -> arg_pat
-         | arg_pats -> annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map pat_typ_of arg_pats))
+         | arg_pats -> annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map typ_of_pat arg_pats))
        in
 
        let some_pat = annot_pat (P_app (mk_id "Some",
@@ -3402,7 +3402,7 @@ let rec rewrite_defs_pat_string_append =
        let tup_arg_pat = match arg_pats with
          | [] -> assert false
          | [arg_pat] -> arg_pat
-         | arg_pats -> annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map pat_typ_of arg_pats))
+         | arg_pats -> annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map typ_of_pat arg_pats))
        in
 
        let some_pat = annot_pat (P_app (mk_id "Some",
@@ -3450,13 +3450,13 @@ let rec rewrite_defs_pat_string_append =
          | [] -> assert false
          | [arg_pat] -> annot_letbind
                           (P_tup [arg_pat; annot_pat (P_id len_id) unk env nat_typ], new_binding)
-                          unk env (tuple_typ [pat_typ_of arg_pat; nat_typ])
+                          unk env (tuple_typ [typ_of_pat arg_pat; nat_typ])
          | arg_pats -> annot_letbind
                          (P_tup
-                            [annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map pat_typ_of arg_pats));
+                            [annot_pat (P_tup arg_pats) unk env (tuple_typ (List.map typ_of_pat arg_pats));
                              annot_pat (P_id len_id) unk env nat_typ],
                           new_binding)
-                         unk env (tuple_typ [tuple_typ (List.map pat_typ_of arg_pats); nat_typ])
+                         unk env (tuple_typ [tuple_typ (List.map typ_of_pat arg_pats); nat_typ])
        in
        let new_let = annot_exp (E_let (new_letbind, new_match)) unk env (typ_of expr) in
 
@@ -3562,7 +3562,7 @@ let rewrite_defs_mapping_patterns =
       expr_ref := e;
       p
     in
-    let env = pat_env_of pat in
+    let env = env_of_pat pat in
     match pat with
       (*
           mapping(args) if g => expr ----> s# if mapping_matches(s#)
@@ -3769,10 +3769,10 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
   let tuple_pat = function
     | [] -> annot_pat P_wild l env unit_typ
     | [pat] ->
-       let typ = pat_typ_of pat in
+       let typ = typ_of_pat pat in
        add_p_typ typ pat
     | pats ->
-       let typ = tuple_typ (List.map pat_typ_of pats) in
+       let typ = tuple_typ (List.map typ_of_pat pats) in
        add_p_typ typ (annot_pat (P_tup pats) l env typ) in
 
   let rec add_vars overwrite ((E_aux (expaux,annot)) as exp) vars =
@@ -5029,8 +5029,8 @@ let rewrite_check_annot =
       Type_error (l, err) -> raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
   in
   let check_pat pat =
-    prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (pat_typ_of pat));
-    let _, _ = bind_pat_no_guard (pat_env_of pat) (strip_pat pat) (pat_typ_of pat) in
+    prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (typ_of_pat pat));
+    let _, _ = bind_pat_no_guard (env_of_pat pat) (strip_pat pat) (typ_of_pat pat) in
     pat
   in
 

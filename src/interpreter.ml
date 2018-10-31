@@ -592,13 +592,13 @@ and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
         recursive call that has an empty_tannot we must not use the
         annotation in the whole vector_concat pattern. *)
      let open Type_check in
-     begin match destruct_vector (pat_env_of pat) (pat_typ_of pat) with
+     begin match destruct_vector (env_of_pat pat) (typ_of_pat pat) with
      | Some (Nexp_aux (Nexp_constant n, _), _, _) ->
         let init, rest = Util.take (Big_int.to_int n) (coerce_gv value), Util.drop (Big_int.to_int n) (coerce_gv value) in
         let init_match, init_bind = pattern_match env pat (V_vector init) in
         let rest_match, rest_bind = pattern_match env (P_aux (P_vector_concat pats, (l, empty_tannot))) (V_vector rest) in
         init_match && rest_match, Bindings.merge combine init_bind rest_bind
-     | _ -> failwith ("Bad vector annotation " ^ string_of_typ (Type_check.pat_typ_of pat))
+     | _ -> failwith ("Bad vector annotation " ^ string_of_typ (Type_check.typ_of_pat pat))
      end
   | P_tup [pat] -> pattern_match env pat value
   | P_tup pats | P_list pats ->

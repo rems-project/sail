@@ -320,6 +320,7 @@ val union_effects : effect -> effect -> effect
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
+val tyvars_of_constraint : n_constraint -> KidSet.t
 val tyvars_of_quant_item : quant_item -> KidSet.t
 val is_kid_generated : kid -> bool
 
@@ -353,7 +354,6 @@ val subst : id -> 'a exp -> 'a exp -> 'a exp
 
 val hex_to_bin : string -> string
 
-
 (** locate takes an expression and recursively sets the location in
    every subexpression to the provided location. Expressions build
    using mk_exp and similar do not have locations, so they can then be
@@ -366,3 +366,30 @@ val locate_pat : l -> 'a pat -> 'a pat
 val locate_lexp : l -> 'a lexp -> 'a lexp
 
 val locate_typ : l -> typ -> typ
+
+(** Substitutions *)
+
+(* The function X_subst_Y substitutes a Y into something of type X, if
+   X = Y then the function is just X_subst. Substitutions are always
+   unwrapped from their aux constructors. *)
+val nexp_subst : kid -> nexp_aux -> nexp -> nexp
+val nc_subst_nexp : kid -> nexp_aux -> n_constraint -> n_constraint
+val order_subst : kid -> order_aux -> order -> order
+
+(* kid must be Int-kinded *)
+val typ_subst_nexp : kid -> nexp_aux -> typ -> typ
+val typ_subst_arg_nexp : kid -> nexp_aux -> typ_arg -> typ_arg
+
+(* kid must be Type-kinded *)
+val typ_subst_typ : kid -> typ_aux -> typ -> typ
+val typ_subst_arg_typ : kid -> typ_aux -> typ_arg -> typ_arg
+
+(* kid must be Order-kinded *)
+val typ_subst_order : kid -> order_aux -> typ -> typ
+val typ_subst_arg_order : kid -> order_aux -> typ_arg -> typ_arg
+
+val typ_subst_kid : kid -> kid -> typ -> typ
+val typ_subst_arg_kid : kid -> kid -> typ_arg -> typ_arg
+
+val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
+val typquant_subst_kid : kid -> kid -> typquant -> typquant

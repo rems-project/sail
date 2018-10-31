@@ -103,7 +103,7 @@ let rec remove_p_typ = function
   | pat -> pat
 
 let add_p_typ typ (P_aux (paux, annot) as pat) =
-  let typ' = resolve_generated_kids (pat_env_of pat) typ in
+  let typ' = resolve_generated_kids (env_of_pat pat) typ in
   if KidSet.is_empty (generated_kids typ') then
     P_aux (P_typ (typ', remove_p_typ pat), annot)
   else pat

@@ -458,17 +458,17 @@ let rec split_block l = function
 let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   let mk_apat aux = AP_aux (aux, env_of_annot annot, fst annot) in
   match p_aux with
-  | P_id id when global -> mk_apat (AP_global (id, pat_typ_of pat))
-  | P_id id -> mk_apat (AP_id (id, pat_typ_of pat))
-  | P_wild -> mk_apat (AP_wild (pat_typ_of pat))
+  | P_id id when global -> mk_apat (AP_global (id, typ_of_pat pat))
+  | P_id id -> mk_apat (AP_id (id, typ_of_pat pat))
+  | P_wild -> mk_apat (AP_wild (typ_of_pat pat))
   | P_tup pats -> mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats))
-  | P_app (id, [subpat]) -> mk_apat (AP_app (id, anf_pat ~global:global subpat, pat_typ_of pat))
-  | P_app (id, pats) -> mk_apat (AP_app (id, mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats)), pat_typ_of pat))
+  | P_app (id, [subpat]) -> mk_apat (AP_app (id, anf_pat ~global:global subpat, typ_of_pat pat))
+  | P_app (id, pats) -> mk_apat (AP_app (id, mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats)), typ_of_pat pat))
   | P_typ (_, pat) -> anf_pat ~global:global pat
   | P_var (pat, _) -> anf_pat ~global:global pat
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global:global hd_pat, anf_pat ~global:global tl_pat))
-  | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (pat_typ_of pat)))
-  | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (pat_typ_of pat))
+  | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (typ_of_pat pat)))
+  | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | _ -> anf_error ~loc:(fst annot) ("Could not convert pattern to ANF: " ^ string_of_pat pat)
 
 let rec apat_globals (AP_aux (aux, _, _)) =

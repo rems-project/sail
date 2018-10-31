@@ -1811,7 +1811,7 @@ let split_defs all_errors splits defs =
            (match spl p' with
            | None -> None
            | Some ps ->
-              let kids = equal_kids (pat_env_of p') kid in
+              let kids = equal_kids (env_of_pat p') kid in
               Some (List.map (fun (p,sub,pchoices,ksub) ->
                 P_aux (P_var (p,tp),(l,annot)), sub, pchoices,
                 List.concat
@@ -2325,7 +2325,7 @@ let rewrite_size_parameters env (Defs defs) =
     let (_,nexp_map) = List.fold_left add_parameter (0,NexpMap.empty) types in
     let nexp_list = NexpMap.bindings nexp_map in
 (* let () =
- print_endline ("Type of pattern for " ^ string_of_id id ^": " ^string_of_typ (pat_typ_of pat));
+ print_endline ("Type of pattern for " ^ string_of_id id ^": " ^string_of_typ (typ_of_pat pat));
  print_endline ("Types : " ^ String.concat ", " (List.map string_of_typ types));
  print_endline ("Nexp map for " ^ string_of_id id);
  List.iter (fun (nexp, i) -> print_endline ("  " ^ string_of_nexp nexp ^ " -> " ^ string_of_int i)) nexp_list
@@ -2871,7 +2871,7 @@ let mk_subrange_pattern vannot vstart vend =
           let end_len = Big_int.pred (Big_int.sub len vend) in
           (* Wrap pat in its type; in particular the type checker won't
              manage P_wild in the middle of a P_vector_concat *)
-          let pat = P_aux (P_typ (pat_typ_of pat, pat),(Generated (pat_loc pat),empty_tannot)) in
+          let pat = P_aux (P_typ (typ_of_pat pat, pat),(Generated (pat_loc pat),empty_tannot)) in
           let pats = if Big_int.greater end_len Big_int.zero then
               [pat;P_aux (P_typ (vector_typ (nconstant end_len) ord typ,
                                  P_aux (P_wild,(dummyl,empty_tannot))),(dummyl,empty_tannot))]
@@ -3373,7 +3373,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
     else
       (* When there's no argument to case split on for a kid, we'll add a
          case expression instead *)
-      let env = pat_env_of pat in
+      let env = env_of_pat pat in
       let split = default_split (mk_tannot env int_typ no_effect) (KidSet.singleton kid) in
       let extra_splits = ExtraSplits.singleton (fn_id, fn_l)
         (KBindings.singleton kid split) in

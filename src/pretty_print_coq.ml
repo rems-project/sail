@@ -1817,7 +1817,7 @@ let demote_as_pattern i (P_aux (_,p_annot) as pat,typ) =
    that they've been merged. *)
 
 let rec atom_constraint ctxt (pat, typ) =
-  let typ = Env.base_typ_of (pat_env_of pat) typ in
+  let typ = Env.base_typ_of (env_of_pat pat) typ in
   match pat, typ with
   | P_aux (P_id id, _),
       Typ_aux (Typ_app (Id_aux (Id "atom",_),
