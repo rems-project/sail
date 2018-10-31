@@ -1320,174 +1320,189 @@ let hex_to_bin hex =
 
 (* Functions for working with locations *)
 
-let locate_id l (Id_aux (name, _)) = Id_aux (name, l)
+let locate_id f (Id_aux (name, l)) = Id_aux (name, f l)
 
-let locate_kid l (Kid_aux (name, _)) = Kid_aux (name, l)
+let locate_kid f (Kid_aux (name, l)) = Kid_aux (name, f l)
 
-let locate_lit l (L_aux (lit, _)) = L_aux (lit, l)
+let locate_lit f (L_aux (lit, l)) = L_aux (lit, f l)
 
-let locate_base_effect l (BE_aux (base_effect, _)) = BE_aux (base_effect, l)
+let locate_base_effect f (BE_aux (base_effect, l)) = BE_aux (base_effect, f l)
 
-let locate_effect l (Effect_aux (Effect_set effects, _)) =
-  Effect_aux (Effect_set (List.map (locate_base_effect l) effects), l)
+let locate_effect f (Effect_aux (Effect_set effects, l)) =
+  Effect_aux (Effect_set (List.map (locate_base_effect f) effects), f l)
 
-let rec locate_nexp l (Nexp_aux (nexp_aux, _)) =
-  let nexp_aux = match nexp_aux with
-    | Nexp_id id -> Nexp_id (locate_id l id)
-    | Nexp_var kid -> Nexp_var (locate_kid l kid)
-    | Nexp_constant n -> Nexp_constant n
-    | Nexp_app (id, nexps) -> Nexp_app (locate_id l id, List.map (locate_nexp l) nexps)
-    | Nexp_times (nexp1, nexp2) -> Nexp_times (locate_nexp l nexp1, locate_nexp l nexp2)
-    | Nexp_sum (nexp1, nexp2) -> Nexp_sum (locate_nexp l nexp1, locate_nexp l nexp2)
-    | Nexp_minus (nexp1, nexp2) -> Nexp_minus (locate_nexp l nexp1, locate_nexp l nexp2)
-    | Nexp_exp nexp -> Nexp_exp (locate_nexp l nexp)
-    | Nexp_neg nexp -> Nexp_neg (locate_nexp l nexp)
+let locate_order f (Ord_aux (ord_aux, l)) =
+  let ord_aux = match ord_aux with
+    | Ord_inc -> Ord_inc
+    | Ord_dec -> Ord_dec
+    | Ord_var v -> Ord_var (locate_kid f v)
   in
-  Nexp_aux (nexp_aux, l)
+  Ord_aux (ord_aux, f l)
 
-let rec locate_nc l (NC_aux (nc_aux, _)) =
+let rec locate_nexp f (Nexp_aux (nexp_aux, l)) =
+  let nexp_aux = match nexp_aux with
+    | Nexp_id id -> Nexp_id (locate_id f id)
+    | Nexp_var kid -> Nexp_var (locate_kid f kid)
+    | Nexp_constant n -> Nexp_constant n
+    | Nexp_app (id, nexps) -> Nexp_app (locate_id f id, List.map (locate_nexp f) nexps)
+    | Nexp_times (nexp1, nexp2) -> Nexp_times (locate_nexp f nexp1, locate_nexp f nexp2)
+    | Nexp_sum (nexp1, nexp2) -> Nexp_sum (locate_nexp f nexp1, locate_nexp f nexp2)
+    | Nexp_minus (nexp1, nexp2) -> Nexp_minus (locate_nexp f nexp1, locate_nexp f nexp2)
+    | Nexp_exp nexp -> Nexp_exp (locate_nexp f nexp)
+    | Nexp_neg nexp -> Nexp_neg (locate_nexp f nexp)
+  in
+  Nexp_aux (nexp_aux, f l)
+
+let rec locate_nc f (NC_aux (nc_aux, l)) =
   let nc_aux = match nc_aux with
-    | NC_equal (nexp1, nexp2) -> NC_equal (locate_nexp l nexp1, locate_nexp l nexp2)
-    | NC_bounded_ge (nexp1, nexp2) -> NC_bounded_ge (locate_nexp l nexp1, locate_nexp l nexp2)
-    | NC_bounded_le (nexp1, nexp2) -> NC_bounded_le (locate_nexp l nexp1, locate_nexp l nexp2)
-    | NC_not_equal (nexp1, nexp2) -> NC_not_equal (locate_nexp l nexp1, locate_nexp l nexp2)
-    | NC_set (kid, nums) -> NC_set (locate_kid l kid, nums)
-    | NC_or (nc1, nc2) -> NC_or (locate_nc l nc1, locate_nc l nc2)
-    | NC_and (nc1, nc2) -> NC_and (locate_nc l nc1, locate_nc l nc2)
-    | NC_app (id, nexps) -> NC_app (id, List.map (locate_nexp l) nexps)
+    | NC_equal (nexp1, nexp2) -> NC_equal (locate_nexp f nexp1, locate_nexp f nexp2)
+    | NC_bounded_ge (nexp1, nexp2) -> NC_bounded_ge (locate_nexp f nexp1, locate_nexp f nexp2)
+    | NC_bounded_le (nexp1, nexp2) -> NC_bounded_le (locate_nexp f nexp1, locate_nexp f nexp2)
+    | NC_not_equal (nexp1, nexp2) -> NC_not_equal (locate_nexp f nexp1, locate_nexp f nexp2)
+    | NC_set (kid, nums) -> NC_set (locate_kid f kid, nums)
+    | NC_or (nc1, nc2) -> NC_or (locate_nc f nc1, locate_nc f nc2)
+    | NC_and (nc1, nc2) -> NC_and (locate_nc f nc1, locate_nc f nc2)
+    | NC_app (id, nexps) -> NC_app (id, List.map (locate_nexp f) nexps)
     | NC_true -> NC_true
     | NC_false -> NC_false
   in
-  NC_aux (nc_aux, l)
+  NC_aux (nc_aux, f l)
 
-let rec locate_typ l (Typ_aux (typ_aux, _)) =
+let rec locate_typ f (Typ_aux (typ_aux, l)) =
   let typ_aux = match typ_aux with
     | Typ_internal_unknown -> Typ_internal_unknown
-    | Typ_id id -> Typ_id (locate_id l id)
-    | Typ_var kid -> Typ_var (locate_kid l kid)
+    | Typ_id id -> Typ_id (locate_id f id)
+    | Typ_var kid -> Typ_var (locate_kid f kid)
     | Typ_fn (arg_typs, ret_typ, effect) ->
-       Typ_fn (List.map (locate_typ l) arg_typs, locate_typ l ret_typ, locate_effect l effect)
-    | Typ_bidir (typ1, typ2) -> Typ_bidir (locate_typ l typ1, locate_typ l typ2)
-    | Typ_tup typs -> Typ_tup (List.map (locate_typ l) typs)
-    | Typ_exist (kids, constr, typ) -> Typ_exist (List.map (locate_kid l) kids, locate_nc l constr, locate_typ l typ)
-    | Typ_app (id, typ_args) -> Typ_app (locate_id l id, List.map (locate_typ_arg l) typ_args)
+       Typ_fn (List.map (locate_typ f) arg_typs, locate_typ f ret_typ, locate_effect f effect)
+    | Typ_bidir (typ1, typ2) -> Typ_bidir (locate_typ f typ1, locate_typ f typ2)
+    | Typ_tup typs -> Typ_tup (List.map (locate_typ f) typs)
+    | Typ_exist (kids, constr, typ) -> Typ_exist (List.map (locate_kid f) kids, locate_nc f constr, locate_typ f typ)
+    | Typ_app (id, typ_args) -> Typ_app (locate_id f id, List.map (locate_typ_arg f) typ_args)
   in
-  Typ_aux (typ_aux, l)
+  Typ_aux (typ_aux, f l)
 
-and locate_typ_arg l (Typ_arg_aux (typ_arg_aux, _)) =
+and locate_typ_arg f (Typ_arg_aux (typ_arg_aux, l)) =
   let typ_arg_aux = match typ_arg_aux with
-    | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
-    | Typ_arg_typ typ -> Typ_arg_typ (locate_typ l typ)
-    | Typ_arg_order ord -> Typ_arg_order ord
+    | Typ_arg_nexp nexp -> Typ_arg_nexp (locate_nexp f nexp)
+    | Typ_arg_typ typ -> Typ_arg_typ (locate_typ f typ)
+    | Typ_arg_order ord -> Typ_arg_order (locate_order f ord)
   in
-  Typ_arg_aux (typ_arg_aux, l)
+  Typ_arg_aux (typ_arg_aux, f l)
 
-let rec locate_typ_pat l (TP_aux (tp_aux, _)) =
+let rec locate_typ_pat f (TP_aux (tp_aux, l)) =
   let tp_aux = match tp_aux with
     | TP_wild -> TP_wild
-    | TP_var kid -> TP_var (locate_kid l kid)
-    | TP_app (id, tps) -> TP_app (locate_id l id, List.map (locate_typ_pat l) tps)
+    | TP_var kid -> TP_var (locate_kid f kid)
+    | TP_app (id, tps) -> TP_app (locate_id f id, List.map (locate_typ_pat f) tps)
   in
-  TP_aux (tp_aux, l)
+  TP_aux (tp_aux, f l)
 
-let rec locate_pat : 'a. l -> 'a pat -> 'a pat = fun l (P_aux (p_aux, (_, annot))) ->
+let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat = fun f (P_aux (p_aux, (l, annot))) ->
   let p_aux = match p_aux with
-    | P_lit lit -> P_lit (locate_lit l lit)
+    | P_lit lit -> P_lit (locate_lit f lit)
     | P_wild -> P_wild
-    | P_or (pat1, pat2) -> P_or (locate_pat l pat1, locate_pat l pat2)
-    | P_not pat -> P_not (locate_pat l pat)
-    | P_as (pat, id) -> P_as (locate_pat l pat, locate_id l id)
-    | P_typ (typ, pat) -> P_typ (locate_typ l typ, locate_pat l pat)
-    | P_id id -> P_id (locate_id l id)
-    | P_var (pat, typ_pat) -> P_var (locate_pat l pat, locate_typ_pat l typ_pat)
-    | P_app (id, pats) -> P_app (locate_id l id, List.map (locate_pat l) pats)
-    | P_record (fpats, semi) -> P_record (List.map (locate_fpat l) fpats, semi)
-    | P_vector pats -> P_vector (List.map (locate_pat l) pats)
-    | P_vector_concat pats -> P_vector_concat (List.map (locate_pat l) pats)
-    | P_tup pats -> P_tup (List.map (locate_pat l) pats)
-    | P_list pats -> P_list (List.map (locate_pat l) pats)
-    | P_cons (hd_pat, tl_pat) -> P_cons (locate_pat l hd_pat, locate_pat l tl_pat)
-    | P_string_append pats -> P_string_append (List.map (locate_pat l) pats)
+    | P_or (pat1, pat2) -> P_or (locate_pat f pat1, locate_pat f pat2)
+    | P_not pat -> P_not (locate_pat f pat)
+    | P_as (pat, id) -> P_as (locate_pat f pat, locate_id f id)
+    | P_typ (typ, pat) -> P_typ (locate_typ f typ, locate_pat f pat)
+    | P_id id -> P_id (locate_id f id)
+    | P_var (pat, typ_pat) -> P_var (locate_pat f pat, locate_typ_pat f typ_pat)
+    | P_app (id, pats) -> P_app (locate_id f id, List.map (locate_pat f) pats)
+    | P_record (fpats, semi) -> P_record (List.map (locate_fpat f) fpats, semi)
+    | P_vector pats -> P_vector (List.map (locate_pat f) pats)
+    | P_vector_concat pats -> P_vector_concat (List.map (locate_pat f) pats)
+    | P_tup pats -> P_tup (List.map (locate_pat f) pats)
+    | P_list pats -> P_list (List.map (locate_pat f) pats)
+    | P_cons (hd_pat, tl_pat) -> P_cons (locate_pat f hd_pat, locate_pat f tl_pat)
+    | P_string_append pats -> P_string_append (List.map (locate_pat f) pats)
   in
-  P_aux (p_aux, (l, annot))
+  P_aux (p_aux, (f l, annot))
 
-and locate_fpat : 'a. l -> 'a fpat -> 'a fpat = fun l (FP_aux (FP_Fpat (id, pat), (_, annot))) ->
-  FP_aux (FP_Fpat (locate_id l id, locate_pat l pat), (l, annot))
+and locate_fpat : 'a. (l -> l) -> 'a fpat -> 'a fpat = fun f (FP_aux (FP_Fpat (id, pat), (l, annot))) ->
+  FP_aux (FP_Fpat (locate_id f id, locate_pat f pat), (f l, annot))
 
-let rec locate : 'a. l -> 'a exp -> 'a exp = fun l (E_aux (e_aux, (_, annot))) ->
+let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, annot))) ->
   let e_aux = match e_aux with
-    | E_block exps -> E_block (List.map (locate l) exps)
-    | E_nondet exps -> E_nondet (List.map (locate l) exps)
-    | E_id id -> E_id (locate_id l id)
-    | E_lit lit -> E_lit (locate_lit l lit)
-    | E_cast (typ, exp) -> E_cast (locate_typ l typ, locate l exp)
-    | E_app (f, exps) -> E_app (locate_id l f, List.map (locate l) exps)
-    | E_app_infix (exp1, op, exp2) -> E_app_infix (locate l exp1, locate_id l op, locate l exp2)
-    | E_tuple exps -> E_tuple (List.map (locate l) exps)
-    | E_if (cond_exp, then_exp, else_exp) -> E_if (locate l cond_exp, locate l then_exp, locate l else_exp)
-    | E_loop (loop, cond, body) -> E_loop (loop, locate l cond, locate l body)
+    | E_block exps -> E_block (List.map (locate f) exps)
+    | E_nondet exps -> E_nondet (List.map (locate f) exps)
+    | E_id id -> E_id (locate_id f id)
+    | E_lit lit -> E_lit (locate_lit f lit)
+    | E_cast (typ, exp) -> E_cast (locate_typ f typ, locate f exp)
+    | E_app (id, exps) -> E_app (locate_id f id, List.map (locate f) exps)
+    | E_app_infix (exp1, op, exp2) -> E_app_infix (locate f exp1, locate_id f op, locate f exp2)
+    | E_tuple exps -> E_tuple (List.map (locate f) exps)
+    | E_if (cond_exp, then_exp, else_exp) -> E_if (locate f cond_exp, locate f then_exp, locate f else_exp)
+    | E_loop (loop, cond, body) -> E_loop (loop, locate f cond, locate f body)
     | E_for (id, exp1, exp2, exp3, ord, exp4) ->
-       E_for (locate_id l id, locate l exp1, locate l exp2, locate l exp3, ord, locate l exp4)
-    | E_vector exps -> E_vector (List.map (locate l) exps)
-    | E_vector_access (exp1, exp2) -> E_vector_access (locate l exp1, locate l exp2)
-    | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (locate l exp1, locate l exp2, locate l exp3)
-    | E_vector_update (exp1, exp2, exp3) -> E_vector_update (locate l exp1, locate l exp2, locate l exp3)
+       E_for (locate_id f id, locate f exp1, locate f exp2, locate f exp3, ord, locate f exp4)
+    | E_vector exps -> E_vector (List.map (locate f) exps)
+    | E_vector_access (exp1, exp2) -> E_vector_access (locate f exp1, locate f exp2)
+    | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (locate f exp1, locate f exp2, locate f exp3)
+    | E_vector_update (exp1, exp2, exp3) -> E_vector_update (locate f exp1, locate f exp2, locate f exp3)
     | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-       E_vector_update_subrange (locate l exp1, locate l exp2, locate l exp3, locate l exp4)
+       E_vector_update_subrange (locate f exp1, locate f exp2, locate f exp3, locate f exp4)
     | E_vector_append (exp1, exp2) ->
-       E_vector_append (locate l exp1, locate l exp2)
-    | E_list exps -> E_list (List.map (locate l) exps)
-    | E_cons (exp1, exp2) -> E_cons (locate l exp1, locate l exp2)
-    | E_record fexps -> E_record (locate_fexps l fexps)
-    | E_record_update (exp, fexps) -> E_record_update (locate l exp, locate_fexps l fexps)
-    | E_field (exp, id) -> E_field (locate l exp, locate_id l id)
-    | E_case (exp, cases) -> E_case (locate l exp, List.map (locate_pexp l) cases)
-    | E_let (letbind, exp) -> E_let (locate_letbind l letbind, locate l exp)
-    | E_assign (lexp, exp) -> E_assign (locate_lexp l lexp, locate l exp)
-    | E_sizeof nexp -> E_sizeof (locate_nexp l nexp)
-    | E_return exp -> E_return (locate l exp)
-    | E_exit exp -> E_exit (locate l exp)
-    | E_ref id -> E_ref (locate_id l id)
-    | E_throw exp -> E_throw (locate l exp)
-    | E_try (exp, cases) -> E_try (locate l exp, List.map (locate_pexp l) cases)
-    | E_assert (exp, message) -> E_assert (locate l exp, locate l message)
-    | E_constraint constr -> E_constraint (locate_nc l constr)
-    | E_var (lexp, exp1, exp2) -> E_var (locate_lexp l lexp, locate l exp1, locate l exp2)
-    | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (locate_pat l pat, locate l exp1, locate l exp2)
-    | E_internal_return exp -> E_internal_return (locate l exp)
+       E_vector_append (locate f exp1, locate f exp2)
+    | E_list exps -> E_list (List.map (locate f) exps)
+    | E_cons (exp1, exp2) -> E_cons (locate f exp1, locate f exp2)
+    | E_record fexps -> E_record (locate_fexps f fexps)
+    | E_record_update (exp, fexps) -> E_record_update (locate f exp, locate_fexps f fexps)
+    | E_field (exp, id) -> E_field (locate f exp, locate_id f id)
+    | E_case (exp, cases) -> E_case (locate f exp, List.map (locate_pexp f) cases)
+    | E_let (letbind, exp) -> E_let (locate_letbind f letbind, locate f exp)
+    | E_assign (lexp, exp) -> E_assign (locate_lexp f lexp, locate f exp)
+    | E_sizeof nexp -> E_sizeof (locate_nexp f nexp)
+    | E_return exp -> E_return (locate f exp)
+    | E_exit exp -> E_exit (locate f exp)
+    | E_ref id -> E_ref (locate_id f id)
+    | E_throw exp -> E_throw (locate f exp)
+    | E_try (exp, cases) -> E_try (locate f exp, List.map (locate_pexp f) cases)
+    | E_assert (exp, message) -> E_assert (locate f exp, locate f message)
+    | E_constraint constr -> E_constraint (locate_nc f constr)
+    | E_var (lexp, exp1, exp2) -> E_var (locate_lexp f lexp, locate f exp1, locate f exp2)
+    | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (locate_pat f pat, locate f exp1, locate f exp2)
+    | E_internal_return exp -> E_internal_return (locate f exp)
     | E_internal_value value -> E_internal_value value
   in
-  E_aux (e_aux, (l, annot))
+  E_aux (e_aux, (f l, annot))
 
-and locate_letbind : 'a. l -> 'a letbind -> 'a letbind = fun l (LB_aux (LB_val (pat, exp), (_, annot))) ->
-  LB_aux (LB_val (locate_pat l pat, locate l exp), (l, annot))
+and locate_letbind : 'a. (l -> l) -> 'a letbind -> 'a letbind = fun f (LB_aux (LB_val (pat, exp), (l, annot))) ->
+  LB_aux (LB_val (locate_pat f pat, locate f exp), (f l, annot))
 
-and locate_pexp : 'a. l -> 'a pexp -> 'a pexp = fun l (Pat_aux (pexp_aux, (_, annot))) ->
+and locate_pexp : 'a. (l -> l) -> 'a pexp -> 'a pexp = fun f (Pat_aux (pexp_aux, (l, annot))) ->
   let pexp_aux = match pexp_aux with
-    | Pat_exp (pat, exp) -> Pat_exp (locate_pat l pat, locate l exp)
-    | Pat_when (pat, guard, exp) -> Pat_when (locate_pat l pat, locate l guard, locate l exp)
+    | Pat_exp (pat, exp) -> Pat_exp (locate_pat f pat, locate f exp)
+    | Pat_when (pat, guard, exp) -> Pat_when (locate_pat f pat, locate f guard, locate f exp)
   in
-  Pat_aux (pexp_aux, (l, annot))
+  Pat_aux (pexp_aux, (f l, annot))
 
-and locate_lexp : 'a. l -> 'a lexp -> 'a lexp = fun l (LEXP_aux (lexp_aux, (_, annot))) ->
+and locate_lexp : 'a. (l -> l) -> 'a lexp -> 'a lexp = fun f (LEXP_aux (lexp_aux, (l, annot))) ->
   let lexp_aux = match lexp_aux with
-    | LEXP_id id -> LEXP_id (locate_id l id)
-    | LEXP_deref exp -> LEXP_deref (locate l exp)
-    | LEXP_memory (id, exps) -> LEXP_memory (locate_id l id, List.map (locate l) exps)
-    | LEXP_cast (typ, id) -> LEXP_cast (locate_typ l typ, locate_id l id)
-    | LEXP_tup lexps -> LEXP_tup (List.map (locate_lexp l) lexps)
-    | LEXP_vector_concat lexps -> LEXP_vector_concat (List.map (locate_lexp l) lexps)
-    | LEXP_vector (lexp, exp) -> LEXP_vector (locate_lexp l lexp, locate l exp)
-    | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (locate_lexp l lexp, locate l exp1, locate l exp2)
-    | LEXP_field (lexp, id) -> LEXP_field (locate_lexp l lexp, locate_id l id)
+    | LEXP_id id -> LEXP_id (locate_id f id)
+    | LEXP_deref exp -> LEXP_deref (locate f exp)
+    | LEXP_memory (id, exps) -> LEXP_memory (locate_id f id, List.map (locate f) exps)
+    | LEXP_cast (typ, id) -> LEXP_cast (locate_typ f typ, locate_id f id)
+    | LEXP_tup lexps -> LEXP_tup (List.map (locate_lexp f) lexps)
+    | LEXP_vector_concat lexps -> LEXP_vector_concat (List.map (locate_lexp f) lexps)
+    | LEXP_vector (lexp, exp) -> LEXP_vector (locate_lexp f lexp, locate f exp)
+    | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (locate_lexp f lexp, locate f exp1, locate f exp2)
+    | LEXP_field (lexp, id) -> LEXP_field (locate_lexp f lexp, locate_id f id)
   in
-  LEXP_aux (lexp_aux, (l, annot))
+  LEXP_aux (lexp_aux, (f l, annot))
 
-and locate_fexps : 'a. l -> 'a fexps -> 'a fexps = fun l (FES_aux (FES_Fexps (fexps, semi), (_, annot))) ->
-  FES_aux (FES_Fexps (List.map (locate_fexp l) fexps, semi), (l, annot))
+and locate_fexps : 'a. (l -> l) -> 'a fexps -> 'a fexps = fun f (FES_aux (FES_Fexps (fexps, semi), (l, annot))) ->
+  FES_aux (FES_Fexps (List.map (locate_fexp f) fexps, semi), (f l, annot))
 
-and locate_fexp : 'a. l -> 'a fexp -> 'a fexp = fun l (FE_aux (FE_Fexp (id, exp), (_, annot))) ->
-  FE_aux (FE_Fexp (locate_id l id, locate l exp), (l, annot))
+and locate_fexp : 'a. (l -> l) -> 'a fexp -> 'a fexp = fun f (FE_aux (FE_Fexp (id, exp), (l, annot))) ->
+  FE_aux (FE_Fexp (locate_id f id, locate f exp), (f l, annot))
+
+let unique_ref = ref 0
+
+let unique l =
+  let l = Parse_ast.Unique (!unique_ref, l) in
+  incr unique_ref;
+  l
 
 (**************************************************************************)
 (* 1. Substitutions                                                       *)

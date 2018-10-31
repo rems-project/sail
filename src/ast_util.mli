@@ -355,17 +355,22 @@ val subst : id -> 'a exp -> 'a exp -> 'a exp
 val hex_to_bin : string -> string
 
 (** locate takes an expression and recursively sets the location in
-   every subexpression to the provided location. Expressions build
-   using mk_exp and similar do not have locations, so they can then be
-   annotated as e.g. locate (gen_loc l) (mk_exp ...) where l is the
-   location from which the code is being generated. *)
-val locate : l -> 'a exp -> 'a exp
+   every subexpression using a function that takes the orginal
+   location as an argument. Expressions build using mk_exp and similar
+   do not have locations, so they can then be annotated as e.g. locate
+   (gen_loc l) (mk_exp ...) where l is the location from which the
+   code is being generated. *)
+val locate : (l -> l) -> 'a exp -> 'a exp
 
-val locate_pat : l -> 'a pat -> 'a pat
+val locate_pat : (l -> l) -> 'a pat -> 'a pat
 
-val locate_lexp : l -> 'a lexp -> 'a lexp
+val locate_lexp : (l -> l) -> 'a lexp -> 'a lexp
 
-val locate_typ : l -> typ -> typ
+val locate_typ : (l -> l) -> typ -> typ
+
+(* Make a unique location by giving it a Parse_ast.Unique wrapper with
+   a generated number. *)
+val unique : l -> l
 
 (** Substitutions *)
 

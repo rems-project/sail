@@ -56,7 +56,7 @@ type text = string
 
 type l =
   | Unknown
-  | Int of string * l option
+  | Unique of int * l
   | Generated of l
   | Range of Lexing.position * Lexing.position
   | Documented of string * l

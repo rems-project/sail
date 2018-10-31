@@ -1737,8 +1737,8 @@ let split_defs all_errors splits defs =
 
   let map_locs ls (Defs defs) =
     let rec match_l = function
-      | Unknown
-      | Int _ -> []
+      | Unknown -> []
+      | Unique (_, l) -> match_l l
       | Generated l -> [] (* Could do match_l l, but only want to split user-written patterns *)
       | Documented (_,l) -> match_l l
       | Range (p,q) ->
@@ -2602,8 +2602,7 @@ let string_of_lx lx =
 
 let rec simple_string_of_loc = function
   | Parse_ast.Unknown -> "Unknown"
-  | Parse_ast.Int (s,None) -> "Int(" ^ s ^ ",None)"
-  | Parse_ast.Int (s,Some l) -> "Int(" ^ s ^ ",Some("^simple_string_of_loc l^"))"
+  | Parse_ast.Unique (n, l) -> "Unique(" ^ string_of_int n ^ ", " ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"

@@ -187,36 +187,20 @@ let read_from_file_pos2 p1 p2 =
   let _ = close_in ic in
   (buf, not (multi = None))
 
-(* Destruct a location by splitting all the Internal strings except possibly the
-   last one into a string list and keeping only the last location *)
-let dest_loc (l : Parse_ast.l) : (Parse_ast.l * string list) =
-  let rec aux acc l = match l with
-    | Parse_ast.Int(s, Some l') -> aux (s::acc) l'
-    | _ -> (l, acc)
-  in
-  aux [] l
+let rec format_loc_aux ff = function
+  | Parse_ast.Unknown -> Format.fprintf ff "no location information available"
+  | Parse_ast.Generated l -> Format.fprintf ff "code generated: original nearby source is "; (format_loc_aux ff l)
+  | Parse_ast.Unique (n, l) -> Format.fprintf ff "code unique (%d): original nearby source is " n; (format_loc_aux ff l)
+  | Parse_ast.Range (p1,p2) -> format_pos2 ff p1 p2
+  | Parse_ast.Documented (_, l) -> format_loc_aux ff l
 
-let rec format_loc_aux ff l =
-  let (l_org, mod_s) = dest_loc l in
-  let _ = match l_org with
-    | Parse_ast.Unknown -> Format.fprintf ff "no location information available"
-    | Parse_ast.Generated l -> Format.fprintf ff "code generated: original nearby source is "; (format_loc_aux ff l)
-    | Parse_ast.Range(p1,p2) -> format_pos2 ff p1 p2
-    | Parse_ast.Int(s,_) -> Format.fprintf ff "code in lib from: %s" s
-    | Parse_ast.Documented(_, l) -> format_loc_aux ff l
-  in
-  ()
-
-let format_loc_source ff l =
-  match dest_loc l with
-  | (Parse_ast.Range (p1, p2), _) ->
-    begin
-      let (s, multi_line) = read_from_file_pos2 p1 p2 in
-      if multi_line then
-        Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
-      else
-        Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
-    end
+let format_loc_source ff = function
+  | Parse_ast.Range (p1, p2) ->
+     let (s, multi_line) = read_from_file_pos2 p1 p2 in
+     if multi_line then
+       Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
+     else
+       Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
   | _ -> ()
 
 let format_loc ff l =
