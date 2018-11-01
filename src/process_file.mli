@@ -61,6 +61,7 @@ val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_coq : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_c : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_bsv : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_interpreter : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 

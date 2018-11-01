@@ -717,16 +717,16 @@ val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -
 val lt_atom = {coq: "Z.ltb", _: "lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = {coq: "Z.gtb", _: "gt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val eq_int = {ocaml: "eq_int", lem: "eq", coq: "Z.eqb", c: "eq_int"} : (int, int) -> bool
-val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit", coq: "eq_bit"} : (bit, bit) -> bool
+val eq_int = {ocaml: "eq_int", lem: "eq", coq: "Z.eqb", c: "eq_int", bsv: "eq"} : (int, int) -> bool
+val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit", coq: "eq_bit", bsv: "eq"} : (bit, bit) -> bool
 
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec", coq: "eq_vec", c: "eq_bits"} : forall 'n. (bits('n), bits('n)) -> bool
+val eq_vec = {ocaml: "eq_list", lem: "eq_vec", coq: "eq_vec", c: "eq_bits", bsv: "eq"} : forall 'n. (bits('n), bits('n)) -> bool
 
-val eq_string = {c: "eq_string", ocaml: "eq_string", lem: "eq", coq: "generic_eq"} : (string, string) -> bool
+val eq_string = {c: "eq_string", ocaml: "eq_string", lem: "eq", coq: "generic_eq", bsv: "eq"} : (string, string) -> bool
 
-val eq_real = {ocaml: "eq_real", lem: "eq"} : (real, real) -> bool
+val eq_real = {ocaml: "eq_real", lem: "eq", bsv: "eq"} : (real, real) -> bool
 
-val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq"} : forall ('a : Type). ('a, 'a) -> bool
+val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", bsv: "eq"} : forall ('a : Type). ('a, 'a) -> bool
 
 val bitvector_length = {ocaml: "length", lem: "length", coq: "length_mword"} : forall 'n. bits('n) -> atom('n)
 val vector_length = {ocaml: "length", lem: "length_list", coq: "vec_length"} : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
@@ -788,11 +788,11 @@ val not_vec = {c: "not_bits", _: "not_vec"} : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
+val neq_vec = {lem: "neq", bsv: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
 
-val neq_anything = {lem: "neq", coq: "generic_neq"} : forall ('a : Type). ('a, 'a) -> bool
+val neq_anything = {lem: "neq", coq: "generic_neq", bsv: "neq"} : forall ('a : Type). ('a, 'a) -> bool
 
 function neq_anything (x, y) = not_bool(x == y)
 
@@ -1064,8 +1064,8 @@ val print_string = "print_string" : (string, string) -> unit
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
-val EXTS : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
-val EXTZ : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val EXTS = {bsv: "signExtend"} : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
+val EXTZ = {bsv: "zeroExtend"} : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 
 function EXTS v = sign_extend(v, sizeof('m))
 function EXTZ v = zero_extend(v, sizeof('m))

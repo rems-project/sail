@@ -335,6 +335,7 @@ val env_of_mpexp : tannot mpexp -> Env.t
 
 val effect_of : tannot exp -> effect
 val effect_of_pat : tannot pat -> effect
+val effect_of_lexp : tannot lexp -> effect
 val effect_of_annot : tannot -> effect
 val add_effect_annot : tannot -> effect -> tannot
 

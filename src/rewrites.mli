@@ -85,6 +85,9 @@ val opt_coq_warn_nonexhaustive : bool ref
 (* Perform rewrites to exclude AST nodes not supported for C compilation *)
 val rewrite_defs_c : (string * (tannot defs -> tannot defs)) list
 
+(* Perform rewrites to exclude AST nodes not supported for Bluespec output *)
+val rewrite_defs_bsv : (string * (tannot defs -> tannot defs)) list
+
 (* This is a special rewriter pass that checks AST invariants without
    actually doing any re-writing *)
 val rewrite_defs_check : (string * (tannot defs -> tannot defs)) list
