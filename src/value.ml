@@ -317,6 +317,14 @@ let value_negate = function
   | [v1] -> V_int (Sail_lib.negate (coerce_int v1))
   | _ -> failwith "value negate"
 
+let value_pow2 = function
+  | [v1] -> V_int (Sail_lib.pow2 (coerce_int v1))
+  | _ -> failwith "value pow2"
+
+let value_int_power = function
+  | [v1; v2] -> V_int (Sail_lib.int_power (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value int_power"
+
 let value_mult = function
   | [v1; v2] -> V_int (Sail_lib.mult (coerce_int v1, coerce_int v2))
   | _ -> failwith "value mult"
@@ -615,6 +623,8 @@ let primops =
       ("quotient", value_quotient);
       ("modulus", value_modulus);
       ("negate", value_negate);
+      ("pow2", value_pow2);
+      ("int_power", value_int_power);
       ("shr_int", value_shr_int);
       ("shl_int", value_shl_int);
       ("max_int", value_max_int);
