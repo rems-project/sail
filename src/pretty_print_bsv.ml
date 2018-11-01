@@ -527,6 +527,7 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
   match funcls with
   | [] -> failwith "Empty function clause list"
   | [FCL_aux (FCL_Funcl (id, Pat_aux (pexp, _)), (l, annot)) as funcl] ->
+     if Env.is_extern id (env_of_annot (l, annot)) "bsv" then empty else
      begin
        match pexp, destruct_tannot annot with
        | Pat_exp (pat, exp), Some (env, funcl_typ, _) ->
@@ -616,7 +617,6 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
                 (separate space [string "function"; tret_doc; doc_id false id; formals_doc; equals])
                 (doc_exp ctxt (if effectful_effs eff then ensure_block exp else exp) ^^ semi)
           in
-          if Env.is_extern id (env_of_annot (l, annot)) "bsv" then empty else
           if has_mem_eff eff then
             let called_ifcs = fst (fold_exp
               { (compute_exp_alg Bindings.empty (Bindings.union (fun _ _ r -> Some r))) with

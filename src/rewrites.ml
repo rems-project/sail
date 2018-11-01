@@ -402,6 +402,12 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
   in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rewrite_e_sizeof true)) }, rewrite_e_aux true
 
+let fundef_is_extern backend (FD_aux (FD_function (_, _, _, funcls), _)) =
+  let funcl_is_extern (FCL_aux (FCL_Funcl (id, _), a)) =
+    Env.is_extern id (env_of_annot a) backend
+  in
+  List.for_all funcl_is_extern funcls
+
 (* Rewrite sizeof expressions with type-level variables to
    term-level expressions
 
@@ -409,7 +415,7 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
    be directly extracted from existing parameters of the surrounding function,
    a further parameter is added; calls to the function are rewritten
    accordingly (possibly causing further rewriting in the calling function) *)
-let rewrite_sizeof (Defs defs) =
+let rewrite_sizeof (skip_fd : tannot fundef -> bool) (Defs defs) =
   let sizeof_frees exp =
     fst (fold_exp
            { (compute_exp_alg KidSet.empty KidSet.union) with
@@ -645,13 +651,17 @@ let rewrite_sizeof (Defs defs) =
     (params_map, FD_aux (FD_function (rec_opt,tannot,eff,funcls),annot)) in
 
   let rewrite_sizeof_def (params_map, defs) = function
-    | DEF_fundef fd ->
+    | DEF_fundef fd when not (skip_fd fd) ->
        let (params_map', fd') = rewrite_sizeof_fun params_map fd in
        (params_map', defs @ [DEF_fundef fd'])
     | DEF_internal_mutrec fds ->
        let rewrite_fd (params_map, fds) fd =
-         let (params_map', fd') = rewrite_sizeof_fun params_map fd in
-         (params_map', fds @ [fd']) in
+         if skip_fd fd then
+           (params_map, fds @ [fd])
+         else
+           let (params_map', fd') = rewrite_sizeof_fun params_map fd in
+           (params_map', fds @ [fd'])
+       in
        (* TODO Split rewrite_sizeof_fun into an analysis and a rewrite pass,
           so that we can call the analysis until a fixpoint is reached and then
           rewrite the mutually recursive functions *)
@@ -5090,7 +5100,7 @@ let rewrite_defs_lem = [
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", top_sort_defs);
   ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
+  ("sizeof", rewrite_sizeof (fundef_is_extern "lem"));
   ("early_return", rewrite_defs_early_return);
   ("fix_val_specs", rewrite_fix_val_specs);
   (* early_return currently breaks the types *)
@@ -5138,7 +5148,7 @@ let rewrite_defs_bsv = [
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", top_sort_defs);
   ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
+  ("sizeof", rewrite_sizeof (fundef_is_extern "bsv"));
   ("add_final_return", rewrite_defs_add_final_return);
   (* ("early_return", rewrite_defs_early_return); *)
   ("fix_val_specs", rewrite_fix_val_specs);
@@ -5182,7 +5192,7 @@ let rewrite_defs_coq = [
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", top_sort_defs);
   ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
+  ("sizeof", rewrite_sizeof (fundef_is_extern "coq"));
   ("early_return", rewrite_defs_early_return);
   ("make_cases_exhaustive", MakeExhaustive.rewrite);
   ("fix_val_specs", rewrite_fix_val_specs);
@@ -5218,7 +5228,7 @@ let rewrite_defs_ocaml = [
   ("top_sort_defs", top_sort_defs);
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
+  ("sizeof", rewrite_sizeof (fundef_is_extern "ocaml"));
   ("simple_types", rewrite_simple_types);
   ("overload_cast", rewrite_overload_cast);
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
@@ -5243,7 +5253,7 @@ let rewrite_defs_c = [
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("constraint", rewrite_constraint);
   ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
+  ("sizeof", rewrite_sizeof (fundef_is_extern "c"));
   ("merge_function_clauses", merge_funcls);
   ("recheck_defs", recheck_defs)
   ]
@@ -5260,7 +5270,8 @@ let rewrite_defs_interpreter = [
     ("simple_assignments", rewrite_simple_assignments);
     ("constraint", rewrite_constraint);
     ("trivial_sizeof", rewrite_trivial_sizeof);
-    ("sizeof", rewrite_sizeof);
+    ("sizeof", rewrite_sizeof (fun fd -> fundef_is_extern "interpreter" fd ||
+                                         fundef_is_extern "ocaml" fd));
   ]
 
 let rewrite_check_annot =
