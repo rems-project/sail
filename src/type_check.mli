@@ -67,6 +67,10 @@ val opt_no_effects : bool ref
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
+(** [opt_constraint_synonyms] allows constraint synonyms as toplevel
+   definitions *)
+val opt_constraint_synonyms : bool ref
+
 (** {2 Type errors} *)
 
 type type_error =

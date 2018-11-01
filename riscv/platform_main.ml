@@ -73,6 +73,9 @@ let options = Arg.align ([("-dump-dts",
                           ("-enable-misaligned-access",
                            Arg.Set P.config_enable_misaligned_access,
                            " enable misaligned accesses without M-mode traps");
+                          ("-mtval-has-illegal-inst-bits",
+                           Arg.Set P.config_mtval_has_illegal_inst_bits,
+                           " mtval stores instruction bits on an illegal instruction exception");
                           ("-with-dtc",
                            Arg.String PI.set_dtc,
                            " full path to dtc to use")

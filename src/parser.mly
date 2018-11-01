@@ -175,7 +175,7 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
+%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op Tuple Where
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
@@ -331,6 +331,8 @@ nc_and:
     { $1 }
 
 atomic_nc:
+  | Where id Lparen typ_list Rparen
+    { mk_nc (NC_app ($2, $4)) $startpos $endpos }
   | True
     { mk_nc NC_true $startpos $endpos }
   | False
@@ -1402,6 +1404,8 @@ def:
     { DEF_scattered (mk_sd (SD_scattered_end $2) $startpos $endpos) }
   | default_def
     { DEF_default $1 }
+  | Constraint id Lparen kid_list Rparen Eq nc
+    { DEF_constraint ($2, $4, $7) }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | Pragma

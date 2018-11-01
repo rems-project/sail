@@ -1228,42 +1228,35 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
             else empty)
     | _ -> raise (Reporting_basic.err_unreachable l __POS__ "register with non-constant indices")
 
-let args_of_typ l env typ =
-  let typs = match typ with
-    | Typ_aux (Typ_tup typs, _) -> typs
-    | typ -> [typ] in
+let args_of_typs l env typs =
   let arg i typ =
     let id = mk_id ("arg" ^ string_of_int i) in
     P_aux (P_id id, (l, mk_tannot env typ no_effect)),
     E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
   List.split (List.mapi arg typs)
 
-let rec untuple_args_pat fun_typ (P_aux (paux, ((l, _) as annot)) as pat) =
+let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
+  let env = env_of_annot annot in
   let identity = (fun body -> body) in
-  let env = env_of_annot annot in 
-  (* Hack until we get proper multiple-argument-patterns *)
-  match fun_typ with
-  | Typ_aux(Typ_fn([_], _, _), _) -> [pat], identity
-  | _ -> begin
-      let (Typ_aux (taux, _)) = typ_of_annot annot in
-      match paux, taux with
-      | P_tup [], _ ->
-         let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
-         [P_aux (P_lit (mk_lit L_unit), annot)], identity
-      | P_tup pats, _ -> pats, identity
-      | P_wild, Typ_tup typs ->
-         let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)) in
-         List.map wild typs, identity
-      | P_typ (_, pat), _ -> untuple_args_pat fun_typ pat
-      | P_as _, Typ_tup _ | P_id _, Typ_tup _ ->
-         let argpats, argexps = args_of_typ l env (pat_typ_of pat) in
-         let argexp = E_aux (E_tuple argexps, annot) in
-         let bindargs (E_aux (_, bannot) as body) =
-           E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
-         argpats, bindargs
-      | _, _ ->
-         [pat], identity
-    end
+  match paux, arg_typs with
+  | P_tup [], _ ->
+     let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
+     [P_aux (P_lit (mk_lit L_unit), annot)], identity
+  | P_wild, [Typ_aux (Typ_tup typs, _)] ->
+     let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)) in
+     List.map wild typs, identity
+  | P_typ (_, pat), _ -> untuple_args_pat pat arg_typs
+  | P_as _, [Typ_aux (Typ_tup _, _)]
+    | P_id _, [Typ_aux (Typ_tup _, _)]
+    | P_tup _, [Typ_aux (Typ_tup _, _)] ->
+     let argpats, argexps = args_of_typs l env arg_typs in
+     let argexp = E_aux (E_tuple argexps, annot) in
+     let bindargs (E_aux (_, bannot) as body) =
+       E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
+     argpats, bindargs
+  | P_tup pats, _ -> pats, identity
+  | _, _ ->
+     [pat], identity
 
 let doc_rec_lem force_rec (Rec_aux(r,_)) = match r with
   | Rec_nonrec when not force_rec -> space
@@ -1281,12 +1274,16 @@ let doc_fun_body_lem ctxt exp =
 
 let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let typ = typ_of_annot annot in
+  let arg_typs = match typ with
+    | Typ_aux (Typ_fn (arg_typs, typ_ret, _), _) -> arg_typs
+    | Typ_aux (_, l) -> raise (unreachable l __POS__ "Non-function type for funcl")
+  in
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
   let ctxt =
     { early_ret = contains_early_return exp;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
       top_env = env_of_annot annot } in
-  let pats, bind = untuple_args_pat (typ_of_annot annot) pat in
+  let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
   let _ = match guard with
     | None -> ()

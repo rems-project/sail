@@ -67,7 +67,7 @@ for test in $DIR/tests/*.elf; do
     fi
 done
 
-if make -C $SAILDIR/riscv riscv_c;
+if make -C $SAILDIR/riscv riscv_sim;
 then
     green "Building RISCV specification to C" "ok"
 else
@@ -75,8 +75,7 @@ else
 fi
 
 for test in $DIR/tests/*.elf; do
-    $SAILDIR/sail -elf $test -o ${test%.elf}.bin 2> /dev/null;
-    if timeout 5 $SAILDIR/riscv/riscv_c --binary=0x1000,reset_vec.bin --image=${test%.elf}.bin > ${test%.elf}.cout 2>&1 && grep -q SUCCESS ${test%.elf}.cout
+    if timeout 5 $SAILDIR/riscv/riscv_sim $test > ${test%.elf}.cout 2>&1 && grep -q SUCCESS ${test%.elf}.cout
     then
 	green "$(basename $test)_c" "ok"
     else
@@ -84,23 +83,23 @@ for test in $DIR/tests/*.elf; do
     fi
 done
 
-printf "Interpreting RISCV specification...\n"
+# printf "Interpreting RISCV specification...\n"
 
-for test in $DIR/tests/*.elf; do
-    if {
-        timeout 30 $SAILDIR/sail -i $SAILDIR/riscv/riscv_all.sail $SAILDIR/riscv/main.sail > ${test%.elf}.iout 2>&1 <<EOF
-:bin 0x1000 $SAILDIR/riscv/reset_vec.bin
-:elf $test
-main()
-:run
-EOF
-    } && grep -q SUCCESS ${test%.elf}.iout
-    then
-        green "$(basename $test)_interpreter" "ok"
-    else
-        red "$(basename $test)_interpreter" "fail"
-    fi
-done
+# for test in $DIR/tests/*.elf; do
+#     if {
+#         timeout 30 $SAILDIR/sail -i $SAILDIR/riscv/riscv_all.sail $SAILDIR/riscv/main.sail > ${test%.elf}.iout 2>&1 <<EOF
+# :bin 0x1000 $SAILDIR/riscv/reset_vec.bin
+# :elf $test
+# main()
+# :run
+# EOF
+#     } && grep -q SUCCESS ${test%.elf}.iout
+#     then
+#         green "$(basename $test)_interpreter" "ok"
+#     else
+#         red "$(basename $test)_interpreter" "fail"
+#     fi
+# done
 
 finish_suite "RISCV tests"
 

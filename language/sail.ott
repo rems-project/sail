@@ -293,6 +293,7 @@ n_constraint :: 'NC_' ::=
   | kid 'IN' { num1 , ... , numn }              :: :: set
   | n_constraint \/ n_constraint'               :: :: or
   | n_constraint /\ n_constraint'               :: :: and
+  | id ( nexp1 , ... , nexpn )                  :: :: app
   | true                                        :: :: true
   | false                                       :: :: false
 
@@ -1012,29 +1013,30 @@ prec :: '' ::=
 def :: 'DEF_' ::=
   {{ com top-level definition }}
   {{ auxparam 'a }}
-  | kind_def                                         :: :: kind
+  | kind_def                                           :: :: kind
     {{ com definition of named kind identifiers }}
-  | type_def                                         :: :: type
+  | type_def                                           :: :: type
     {{ com type definition }}
-  | fundef                                           :: :: fundef
+  | fundef                                             :: :: fundef
     {{ com function definition }}
-  | mapdef                                           :: :: mapdef
+  | mapdef                                             :: :: mapdef
     {{ com mapping definition }}
-  | letbind                                          :: :: val
+  | letbind                                            :: :: val
     {{ com value definition }}
-  | val_spec                                         :: :: spec
+  | val_spec                                           :: :: spec
     {{ com top-level type constraint }}
-  | fix prec num id                                  :: :: fixity
+  | fix prec num id                                    :: :: fixity
     {{ com fixity declaration }}
-  |  overload id [ id1 ; ... ; idn ]                 :: :: overload
+  |  overload id [ id1 ; ... ; idn ]                   :: :: overload
     {{ com operator overload specification }}
-  | default_spec                                     :: :: default
+  | default_spec                                       :: :: default
     {{ com default kind and type assumptions }}
-  | scattered_def                                    :: :: scattered
+  | scattered_def                                      :: :: scattered
     {{ com scattered function and type definition }}
-  | dec_spec                                         :: :: reg_dec
+  | dec_spec                                           :: :: reg_dec
     {{ com register declaration }}
-  | fundef1 .. fundefn                               :: I :: internal_mutrec
+  | constraint id ( kid1 , ... , kidn ) = n_constraint :: :: constraint
+  | fundef1 .. fundefn                                 :: I :: internal_mutrec
     {{ com internal representation of mutually recursive functions }}
 
 defs :: '' ::=

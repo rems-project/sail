@@ -239,6 +239,7 @@ val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 (* Terminal color codes *)
 val termcode : int -> string
 val bold : string -> string
+val darkgray : string -> string
 val green : string -> string
 val red : string -> string
 val red_bg : string -> string

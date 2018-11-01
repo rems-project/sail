@@ -2,4 +2,4 @@ Type error at file "global_type_var/v3.sail", line 9, character 19 to line 9, ch
 
 val test : forall [41m'size[0m. atom('size) -> unit
 
-Kind identifier 'size is already bound
+type variable 'size is already bound

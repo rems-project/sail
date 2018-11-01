@@ -237,6 +237,9 @@ let options = Arg.align ([
   ( "-dmagic_hash",
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
+  ( "-Xconstraint_synonyms",
+    Arg.Set Type_check.opt_constraint_synonyms,
+    " (extension) allow constraint synonyms");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

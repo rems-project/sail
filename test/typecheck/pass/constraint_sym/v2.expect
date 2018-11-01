@@ -1,0 +1,5 @@
+Type error at file "constraint_sym/v2.sail", line 7, character 22 to line 7, character 34
+
+val foo : forall 'n, [41mwhere Siz('n)[0m. int('n) -> unit
+
+Constraint synonym Siz is not defined

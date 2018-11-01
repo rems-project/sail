@@ -1,29 +1,3 @@
-/* Instruction definitions.
- *
- * This includes decoding, execution, and assembly parsing and printing.
- */
-
-scattered union ast
-
-val decode : bits(32) -> option(ast) effect pure
-
-val decodeCompressed : bits(16) -> option(ast) effect pure
-
-val cast print_insn : ast -> string
-
-/* returns whether an instruction was retired, used for computing minstret */
-val execute : ast -> bool effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
-scattered function execute
-
-val assembly : ast <-> string
-scattered mapping assembly
-
-val encdec : ast <-> bits(32)
-scattered mapping encdec
-
-val encdec_compressed : ast <-> bits(16)
-scattered mapping encdec_compressed
-
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
 
@@ -87,24 +61,10 @@ union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
 
 mapping clause encdec = RISCV_JALR(imm, rs1, rd) <-> imm @ rs1 @ 0b000 @ rd @ 0b1100111
 
-function clause execute (RISCV_JALR(imm, rs1, rd)) = {
-  /* write rd before anything else to prevent unintended strength */
-  X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
-  let newPC : xlenbits = X(rs1) + EXTS(imm);
-/*  RMEM FIXME: For the sequential model, the above definition doesn't work directly
-    if rs1 = rd.  We would effectively have to keep a regfile for reads and another for
-    writes, and swap on instruction fetch.  This could perhaps be optimized in
-    some manner, but for now, we just reorder the previous two lines to improve simulator
-    performance in the sequential model, as below:
-  let newPC : xlenbits = X(rs1) + EXTS(imm);
-  X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
-*/
-  nextPC = newPC[63..1] @ 0b0;
-  true
-}
-
 mapping clause assembly = RISCV_JALR(imm, rs1, rd)
                       <-> "jalr" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
+
+/* see riscv_jalr_seq.sail or riscv_jalr_rmem.sail for the execute clause. */
 
 /* ****************************************************************** */
 union clause ast = BTYPE : (bits(13), regbits, regbits, bop)
@@ -851,7 +811,7 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
        }
 
 mapping clause assembly = LOADRES(aq, rl, rs1, size, rd)
-                      <-> "lr." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
+                      <-> "lr" ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
 
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
@@ -916,7 +876,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   }
 }
 
-mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc" ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = AMO : (amoop, bool, bool, regbits, regbits, word_width, regbits)
@@ -1585,14 +1545,3 @@ function clause execute C_ILLEGAL(s) = { handle_illegal(); false }
 mapping clause assembly = C_ILLEGAL(s) <-> "c.illegal" ^ spc() ^ hex_bits_16(s)
 
 /* ****************************************************************** */
-
-
-end ast
-end execute
-end assembly
-end encdec
-end encdec_compressed
-
-function decode bv = Some(encdec(bv))
-function decodeCompressed bv = Some(encdec_compressed(bv))
-function print_insn insn = assembly(insn)

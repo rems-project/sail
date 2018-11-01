@@ -1,68 +1,68 @@
 #include "sail.h"
 #include "rts.h"
 #include "riscv_prelude.h"
+#include "riscv_platform_impl.h"
+
+/* This file contains the definitions of the C externs of Sail model. */
+
+static mach_bits reservation = 0;
+static bool reservation_valid = false;
 
 bool plat_enable_dirty_update(unit u)
-{ return false; }
+{ return rv_enable_dirty_update; }
 
 bool plat_enable_misaligned_access(unit u)
-{ return false; }
+{ return rv_enable_misaligned; }
+
+bool plat_mtval_has_illegal_inst_bits(unit u)
+{ return rv_mtval_has_illegal_inst_bits; }
 
 mach_bits plat_ram_base(unit u)
-{
-  return UINT64_C(0x80000000);
-}
+{ return rv_ram_base; }
 
 mach_bits plat_ram_size(unit u)
-{
-  return UINT64_C(0x80000000);
-}
+{ return rv_ram_size; }
 
 mach_bits plat_rom_base(unit u)
-{
-  return UINT64_C(0x1000);
-}
+{ return rv_rom_base; }
 
 mach_bits plat_rom_size(unit u)
-{
-  return UINT64_C(0x100);
-}
+{ return rv_rom_size; }
 
 mach_bits plat_clint_base(unit u)
-{
-  return UINT64_C(0x2000000);
-}
+{ return rv_clint_base; }
 
 mach_bits plat_clint_size(unit u)
-{
-  return UINT64_C(0xc0000);
-}
-
-bool within_phys_mem(mach_bits addr, sail_int len)
-{
-  printf("within_phys_mem\n");
-  exit(EXIT_FAILURE);
-  return 0;
-}
+{ return rv_clint_size; }
 
 unit load_reservation(mach_bits addr)
-{ return UNIT; }
+{
+  reservation = addr;
+  reservation_valid = true;
+  return UNIT;
+}
 
 bool match_reservation(mach_bits addr)
-{ return false; }
+{ return reservation_valid && reservation == addr; }
 
 unit cancel_reservation(unit u)
-{ return UNIT; }
+{
+  reservation_valid = false;
+  return UNIT;
+}
 
-unit plat_term_write(mach_bits c)
-{ return UNIT; }
+unit plat_term_write(mach_bits s)
+{ char c = s & 0xff;
+  plat_term_write_impl(c);
+  return UNIT;
+}
 
 void plat_insns_per_tick(sail_int *rop, unit u)
 { }
 
 mach_bits plat_htif_tohost(unit u)
 {
-  return UINT64_C(0x80001000);
+  return rv_htif_tohost;
 }
 
 unit memea(mach_bits len, sail_int n)

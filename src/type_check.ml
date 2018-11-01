@@ -69,6 +69,10 @@ let opt_no_effects = ref false
    assignments in l-expressions *)
 let opt_no_lexp_bounds_check = ref false
 
+(* opt_constraint_synonyms allows constraint synonyms as toplevel
+   definitions *)
+let opt_constraint_synonyms = ref false
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -163,6 +167,7 @@ and strip_n_constraint_aux = function
   | NC_set (kid, nums) -> NC_set (strip_kid kid, nums)
   | NC_or (nc1, nc2) -> NC_or (strip_n_constraint nc1, strip_n_constraint nc2)
   | NC_and (nc1, nc2) -> NC_and (strip_n_constraint nc1, strip_n_constraint nc2)
+  | NC_app (id, nexps) -> NC_app (strip_id id, List.map strip_nexp nexps)
   | NC_true -> NC_true
   | NC_false -> NC_false
 and strip_n_constraint = function
@@ -245,6 +250,7 @@ and nc_subst_nexp_aux l sv subst = function
      else set_nc
   | NC_or (nc1, nc2) -> NC_or (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
   | NC_and (nc1, nc2) -> NC_and (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
+  | NC_app (id, nexps) -> NC_app (id, List.map (nexp_subst sv subst) nexps)
   | NC_false -> NC_false
   | NC_true -> NC_true
 
@@ -336,6 +342,8 @@ let typquant_subst_kid_aux sv subst = function
 
 let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
 
+let adding = Util.("Adding " |> darkgray |> clear)
+
 (**************************************************************************)
 (* 2. Environment                                                         *)
 (**************************************************************************)
@@ -378,6 +386,7 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> (t -> typ_arg list -> typ) -> t -> t
   val get_typ_synonym : id -> t -> t -> typ_arg list -> typ
+  val add_constraint_synonym : id -> kid list -> n_constraint -> t -> t
   val add_num_def : id -> nexp -> t -> t
   val get_num_def : id -> t -> nexp
   val add_overloads : id -> id list -> t -> t
@@ -400,7 +409,11 @@ module Env : sig
   val polymorphic_undefineds : t -> bool
   val lookup_id : ?raw:bool -> id -> t -> typ lvar
   val fresh_kid : ?kid:kid -> t -> kid
+
   val expand_synonyms : t -> typ -> typ
+  val expand_constraint_synonyms : t -> n_constraint -> n_constraint
+  val expand_typquant_synonyms : t -> typquant -> typquant
+
   val canonicalize : t -> typ -> typ
   val base_typ_of : t -> typ -> typ
   val add_smt_op : id -> string -> t -> t
@@ -448,6 +461,7 @@ end = struct
       accessors : (typquant * typ) Bindings.t;
       externs : (string -> string option) Bindings.t;
       smt_ops : string Bindings.t;
+      constraint_synonyms : (kid list * n_constraint) Bindings.t;
       casts : id list;
       allow_casts : bool;
       allow_bindings : bool;
@@ -477,6 +491,7 @@ end = struct
       accessors = Bindings.empty;
       externs = Bindings.empty;
       smt_ops = Bindings.empty;
+      constraint_synonyms = Bindings.empty;
       casts = [];
       allow_bindings = true;
       allow_casts = true;
@@ -495,11 +510,11 @@ end = struct
 
   let get_typ_var kid env =
     try snd (KBindings.find kid env.typ_vars) with
-    | Not_found -> typ_error (kid_loc kid) ("No kind identifier " ^ string_of_kid kid)
+    | Not_found -> typ_error (kid_loc kid) ("No type variable " ^ string_of_kid kid)
 
   let get_typ_var_loc kid env =
     try fst (KBindings.find kid env.typ_vars) with
-    | Not_found -> typ_error (kid_loc kid) ("No kind identifier " ^ string_of_kid kid)
+    | Not_found -> typ_error (kid_loc kid) ("No type variable " ^ string_of_kid kid)
 
   let get_typ_vars env = KBindings.map snd env.typ_vars
   let get_typ_var_locs env = KBindings.map fst env.typ_vars
@@ -545,12 +560,12 @@ end = struct
     | Not_found -> []
 
   let add_overloads id ids env =
-    typ_print (lazy ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"));
+    typ_print (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"));
     let existing = try Bindings.find id env.overloads with Not_found -> [] in
     { env with overloads = Bindings.add id (existing @ ids) env.overloads }
 
   let add_smt_op id str env =
-    typ_print (lazy ("Adding smt binding " ^ string_of_id id ^ " to " ^ str));
+    typ_print (lazy (adding ^ "smt binding " ^ string_of_id id ^ " to " ^ str));
     { env with smt_ops = Bindings.add id str env.smt_ops }
 
   let get_smt_op (Id_aux (_, l) as id) env =
@@ -597,8 +612,28 @@ end = struct
     then ()
     else typ_error (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
+  let rec expand_constraint_synonyms env (NC_aux (nc_aux, l) as nc) =
+    let expand = expand_constraint_synonyms env in
+    match nc_aux with
+    | NC_app (id, nexps) ->
+       begin
+         try
+           let kids, nc = Bindings.find id env.constraint_synonyms in
+           let nc = List.fold_left2 (fun nc kid nexp -> nc_subst_nexp kid (unaux_nexp nexp) nc) nc kids nexps in
+           expand nc
+         with Not_found -> typ_error l ("Could not expand constraint synonym in " ^ string_of_n_constraint nc)
+       end
+    | NC_and (nc1, nc2) -> NC_aux (NC_and (expand nc1, expand nc2), l)
+    | NC_or (nc1, nc2) -> NC_aux (NC_or (expand nc1, expand nc2), l)
+    | NC_true | NC_false | NC_set _ | NC_equal _ | NC_not_equal _ | NC_bounded_le _ | NC_bounded_ge _  -> nc
+
+  let expand_quant_item_synonyms env = function
+    | QI_aux (QI_id kopt, l) -> QI_aux (QI_id kopt, l)
+    | QI_aux (QI_const nc, l) -> QI_aux (QI_const (expand_constraint_synonyms env nc), l)
+
+  let expand_typquant_synonyms env = quant_map_items (expand_quant_item_synonyms env)
+
   let rec expand_synonyms env (Typ_aux (typ, l) as t) =
-    (* typ_debug (lazy ("Expanding synonyms for " ^ string_of_typ t)); *)
     match typ with
     | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
@@ -644,7 +679,7 @@ end = struct
        let kids = List.map rename_kid kids in
        let nc = List.fold_left (fun nc kid -> nc_subst_nexp kid (Nexp_var (prepend_kid "syn#" kid)) nc) nc !rebindings in
        let typ = List.fold_left (fun typ kid -> typ_subst_nexp kid (Nexp_var (prepend_kid "syn#" kid)) typ) typ !rebindings in
-       typ_print (lazy ("Synonym existential: {" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"));
+       typ_debug (lazy ("Synonym existential: {" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"));
        let env = { env with constraints = nc :: env.constraints } in
        Typ_aux (Typ_exist (kids, nc, expand_synonyms env typ), l)
     | Typ_var v -> Typ_aux (Typ_var v, l)
@@ -718,7 +753,7 @@ end = struct
   (* Check if a type, order, n-expression or constraint is
      well-formed. Throws a type error if the type is badly formed. *)
   let rec wf_typ ?exs:(exs=KidSet.empty) env typ =
-    typ_debug (lazy ("Well-formed " ^ string_of_typ typ));
+    typ_debug (lazy ("well-formed " ^ string_of_typ typ));
     let (Typ_aux (typ_aux, l)) = expand_synonyms env typ in
     match typ_aux with
     | Typ_id id when bound_typ_id env id ->
@@ -755,7 +790,8 @@ end = struct
     | Typ_arg_nexp nexp -> wf_nexp ~exs:exs env nexp
     | Typ_arg_typ typ -> wf_typ ~exs:exs env typ
     | Typ_arg_order ord -> wf_order env ord
-  and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l)) =
+  and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
+    typ_debug (lazy ("well-formed nexp " ^ string_of_nexp nexp));
     match nexp_aux with
     | Nexp_id _ -> ()
     | Nexp_var kid when KidSet.mem kid exs -> ()
@@ -765,7 +801,7 @@ end = struct
          | BK_int -> ()
          | kind -> typ_error l ("Constraint is badly formed, "
                                 ^ string_of_kid kid ^ " has kind "
-                                ^ string_of_base_kind_aux kind ^ " but should have kind Nat")
+                                ^ string_of_base_kind_aux kind ^ " but should have kind Int")
        end
     | Nexp_constant _ -> ()
     | Nexp_app (id, nexps) ->
@@ -787,15 +823,28 @@ end = struct
                                 ^ string_of_base_kind_aux kind ^ " but should have kind Order")
        end
     | Ord_inc | Ord_dec -> ()
-  and wf_constraint ?exs:(exs=KidSet.empty) env (NC_aux (nc, _)) =
-    match nc with
+  and wf_constraint ?exs:(exs=KidSet.empty) env (NC_aux (nc_aux, l) as nc) =
+    typ_debug (lazy ("well-formed constraint " ^ string_of_n_constraint nc));
+    match nc_aux with
     | NC_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_not_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_bounded_ge (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_bounded_le (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
-    | NC_set (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
+    | NC_set (kid, _) when KidSet.mem kid exs -> ()
+    | NC_set (kid, _) -> begin
+        match get_typ_var kid env with
+        | BK_int -> ()
+        | kind -> typ_error l ("Set constraint is badly formed, "
+                               ^ string_of_kid kid ^ " has kind "
+                               ^ string_of_base_kind_aux kind ^ " but should have kind Int")
+      end
     | NC_or (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
     | NC_and (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
+    | NC_app (id, nexps) ->
+       if not (Bindings.mem id env.constraint_synonyms) then
+         typ_error l ("Constraint synonym " ^ string_of_id id ^ " is not defined")
+       else ();
+       List.iter (wf_nexp ~exs:exs env) nexps
     | NC_true | NC_false -> ()
 
   let counter = ref 0
@@ -834,7 +883,8 @@ end = struct
   let rec update_val_spec id (typq, typ) env =
     begin
       let typ = expand_synonyms env typ in
-      typ_print (lazy ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind (typq, typ)));
+      let typq = expand_typquant_synonyms env typq in
+      typ_print (lazy (adding ^ "val spec " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
       let env = match typ with
         | Typ_aux (Typ_bidir (typ1, typ2), _) -> add_mapping id (typq, typ1, typ2) env
         | _ -> env
@@ -854,7 +904,7 @@ end = struct
         env
   and add_mapping id (typq, typ1, typ2) env =
     begin
-      typ_print (lazy ("Adding mapping " ^ string_of_id id));
+      typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
       let forwards_id = mk_id (string_of_id id ^ "_forwards") in
       let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
       let backwards_id = mk_id (string_of_id id ^ "_backwards") in
@@ -912,7 +962,7 @@ end = struct
     then typ_error (id_loc id) ("Cannot create enum " ^ string_of_id id ^ ", type name is already bound")
     else
       begin
-        typ_print (lazy ("Adding enum " ^ string_of_id id));
+        typ_print (lazy (adding ^ "enum " ^ string_of_id id));
         { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
       end
 
@@ -930,7 +980,7 @@ end = struct
     then typ_error (id_loc id) ("Cannot create record " ^ string_of_id id ^ ", type name is already bound")
     else
       begin
-        typ_print (lazy ("Adding record " ^ string_of_id id));
+        typ_print (lazy (adding ^ "record " ^ string_of_id id));
         let rec record_typ_args = function
           | [] -> []
           | ((QI_aux (QI_id kopt, _)) :: qis) when is_nat_kopt kopt ->
@@ -947,7 +997,7 @@ end = struct
         in
         let fold_accessors accs (typ, fid) =
           let acc_typ = mk_typ (Typ_fn ([rectyp], typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
-          typ_print (lazy (indent 1 ^ "Adding accessor " ^ string_of_id id ^ "." ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ)));
+          typ_print (lazy (indent 1 ^ adding ^ "accessor " ^ string_of_id id ^ "." ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ)));
           Bindings.add (field_name id fid) (typq, acc_typ) accs
         in
         { env with records = Bindings.add id (typq, fields) env.records;
@@ -987,19 +1037,19 @@ end = struct
       if Bindings.mem id env.top_val_specs then
         typ_error (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
       else ();
-      typ_print (lazy ("Adding local binding " ^ string_of_id id ^ " :: " ^ string_of_mtyp mtyp));
+      typ_print (lazy (adding ^ "local binding " ^ string_of_id id ^ " : " ^ string_of_mtyp mtyp));
       { env with locals = Bindings.add id mtyp env.locals }
     end
 
   let add_variant id variant env =
     begin
-      typ_print (lazy ("Adding variant " ^ string_of_id id));
+      typ_print (lazy (adding ^ "variant " ^ string_of_id id));
       { env with variants = Bindings.add id variant env.variants }
     end
 
   let add_union_id id bind env =
     begin
-      typ_print (lazy ("Adding union identifier binding " ^ string_of_id id ^ " :: " ^ string_of_bind bind));
+      typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
       { env with union_ids = Bindings.add id bind env.union_ids }
     end
 
@@ -1008,7 +1058,7 @@ end = struct
     | Not_found -> fun typ -> typ
 
   let add_flow id f env =
-    typ_print (lazy ("Adding flow constraints for " ^ string_of_id id));
+    typ_print (lazy (adding ^ "flow constraints for " ^ string_of_id id));
     { env with flow = Bindings.add id (fun typ -> f (get_flow id env typ)) env.flow }
 
   let remove_flow id env =
@@ -1046,7 +1096,7 @@ end = struct
     then typ_error (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
     else
       begin
-        typ_print (lazy ("Adding register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ));
+        typ_print (lazy (adding ^ "register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ));
         { env with registers = Bindings.add id (reff, weff, typ) env.registers }
       end
 
@@ -1072,10 +1122,10 @@ end = struct
 
   let add_typ_var l kid k env =
     if KBindings.mem kid env.typ_vars
-    then typ_error (kid_loc kid) ("Kind identifier " ^ string_of_kid kid ^ " is already bound")
+    then typ_error (kid_loc kid) ("type variable " ^ string_of_kid kid ^ " is already bound")
     else
       begin
-        typ_print (lazy ("Adding kind identifier " ^ string_of_kid kid ^ " :: " ^ string_of_base_kind_aux k));
+        typ_print (lazy (adding ^ "type variable " ^ string_of_kid kid ^ " : " ^ string_of_base_kind_aux k));
         { env with typ_vars = KBindings.add kid (l, k) env.typ_vars }
       end
 
@@ -1084,7 +1134,7 @@ end = struct
     then typ_error (id_loc id) ("Num identifier " ^ string_of_id id ^ " is already bound")
     else
       begin
-        typ_print (lazy ("Adding Num identifier " ^ string_of_id id ^ " :: " ^ string_of_nexp nexp));
+        typ_print (lazy (adding ^ "Num identifier " ^ string_of_id id ^ " : " ^ string_of_nexp nexp));
         { env with num_defs = Bindings.add id nexp env.num_defs }
       end
 
@@ -1099,7 +1149,8 @@ end = struct
     match nc_aux with
     | NC_true -> env
     | _ ->
-       typ_print (lazy ("Adding constraint " ^ string_of_n_constraint constr));
+       let constr = expand_constraint_synonyms env constr in
+       typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
        { env with constraints = constr :: env.constraints }
 
   let get_ret_typ env = env.ret_typ
@@ -1114,7 +1165,7 @@ end = struct
   let no_bindings env = { env with allow_bindings = false }
 
   let add_cast cast env =
-    typ_print (lazy ("Adding cast " ^ string_of_id cast));
+    typ_print (lazy (adding ^ "cast " ^ string_of_id cast));
     { env with casts = cast :: env.casts }
 
   let add_typ_synonym id synonym env =
@@ -1122,11 +1173,21 @@ end = struct
     then typ_error (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
     else
       begin
-        typ_print (lazy ("Adding type synonym " ^ string_of_id id));
+        typ_print (lazy (adding ^ "type synonym " ^ string_of_id id));
         { env with typ_synonyms = Bindings.add id synonym env.typ_synonyms }
       end
 
   let get_typ_synonym id env = Bindings.find id env.typ_synonyms
+
+  let add_constraint_synonym id kids nc env =
+    if Bindings.mem id env.constraint_synonyms
+    then typ_error (id_loc id) ("Constraint synonym " ^ string_of_id id ^ " already exists")
+    else
+      begin
+        typ_print (lazy (adding ^ "constraint synonym " ^ string_of_id id));
+        wf_constraint ~exs:(KidSet.of_list kids) env nc;
+        { env with constraint_synonyms = Bindings.add id (kids, nc) env.constraint_synonyms }
+      end
 
   let get_default_order env =
     match env.default_order with
@@ -1185,6 +1246,10 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
   match quant with
   | TypQ_aux (TypQ_no_forall, _) -> env
   | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
+
+let expand_bind_synonyms l env (typq, typ) =
+  Env.expand_typquant_synonyms env typq, Env.expand_synonyms (add_typquant l typq env) typ
+
 
 (* Create vectors with the default order from the environment *)
 
@@ -1356,6 +1421,7 @@ let rec nc_constraint env var_of (NC_aux (nc, l)) =
                     (List.map (fun i -> Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant i)) ints)
   | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
   | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
+  | NC_app (id, nexps) -> raise (Reporting_basic.err_unreachable l __POS__ "constraint synonym reached smt generation")
   | NC_false -> Constraint.literal false
   | NC_true -> Constraint.literal true
 
@@ -2034,7 +2100,6 @@ let rec instantiate_quants quants kid uvar = match quants with
           if is_typ_kid kid kinded_id
           then instantiate_quants quants kid uvar
           else quant :: instantiate_quants quants kid uvar
-       | _ -> typ_error Parse_ast.Unknown "Cannot instantiate quantifier"
      end
   | ((QI_aux (QI_const nc, l)) :: quants) ->
      begin
@@ -2307,7 +2372,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
             let checked_msg = crule check_exp env assert_msg string_typ in
             let env = match assert_constraint env true constr_exp with
               | Some nc ->
-                 typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));
+                 typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint nc ^ " for assert"));
                  Env.add_constraint nc env
               | None -> env
             in
@@ -2739,7 +2804,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
          | Typ_tup typs -> typs
          | _ -> [typ]
-       in       
+       in
        match Env.expand_synonyms env ctor_typ with
        | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
           begin
@@ -4382,31 +4447,26 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)
 let check_val_spec env (VS_aux (vs, (l, _))) =
-  let annotate vs typ eff = DEF_spec (VS_aux (vs, (l, Some ((env,typ,eff), None)))) in
-  let (id, quants, typ, env) = match vs with
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _) as typschm, id, ext_opt, is_cast) ->
-       typ_debug (lazy ("VS typschm: " ^ string_of_id id ^ ", " ^ string_of_typschm typschm));
+  let annotate vs typ eff = DEF_spec (VS_aux (vs, (l, Some ((env, typ, eff), None)))) in
+  let vs, id, typq, typ, env = match vs with
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, ext_opt, is_cast) ->
+       typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
        let env = match (ext_opt "smt", ext_opt "#") with
          | Some op, None -> Env.add_smt_op id op env
          | _, _ -> env
        in
-       Env.wf_typ (add_typquant l quants env) typ;
-       typ_debug (lazy "CHECKED WELL-FORMED VAL SPEC");
-       let env =
-       (* match ext_opt with
-         | None -> env
-         | Some ext -> *)
-         Env.add_extern id ext_opt env
-       in
+       let env = Env.add_extern id ext_opt env in
        let env = if is_cast then Env.add_cast id env else env in
-       (id, quants, typ, env)
+       let typq, typ = expand_bind_synonyms ts_l env (typq, typ) in
+       let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, ext_opt, is_cast) in
+       (vs, id, typq, typ, env)
   in
   let eff =
     match typ with
-    | Typ_aux (Typ_fn (_,_,eff),_) -> eff
+    | Typ_aux (Typ_fn (_, _, eff), _) -> eff
     | _ -> no_effect
   in
-  [annotate vs typ eff], Env.add_val_spec id (quants, Env.expand_synonyms (add_typquant l quants env) typ) env
+  [annotate vs typ eff], Env.add_val_spec id (typq, typ) env
 
 let check_default env (DT_aux (ds, l)) =
   match ds with
@@ -4521,6 +4581,10 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_fixity (prec, n, op) -> [DEF_fixity (prec, n, op)], env
   | DEF_fundef fdef -> check_fundef env fdef
   | DEF_mapdef mdef -> check_mapdef env mdef
+  | DEF_constraint (id, kids, nc) when !opt_constraint_synonyms ->
+     [], Env.add_constraint_synonym id kids nc env
+  | DEF_constraint (id, _, _) ->
+     typ_error (id_loc id) "Use -Xconstraint_synonyms to enable constraint synonyms"
   | DEF_internal_mutrec fdefs ->
      let defs = List.concat (List.map (fun fdef -> fst (check_fundef env fdef)) fdefs) in
      let split_fundef (defs, fdefs) def = match def with

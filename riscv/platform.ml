@@ -56,6 +56,7 @@ module Elf = Elf_loader;;
 
 let config_enable_dirty_update = ref false
 let config_enable_misaligned_access = ref false
+let config_mtval_has_illegal_inst_bits = ref false
 
 (* Mapping to Sail externs *)
 
@@ -82,6 +83,7 @@ let make_rom start_pc =
 
 let enable_dirty_update () = !config_enable_dirty_update
 let enable_misaligned_access () = !config_enable_misaligned_access
+let mtval_has_illegal_inst_bits () = !config_mtval_has_illegal_inst_bits
 
 let rom_base () = bits_of_int64 P.rom_base
 let rom_size () = bits_of_int   !rom_size_ref

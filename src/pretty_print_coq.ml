@@ -694,6 +694,13 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
             List.map (subst_unifiers unifiers) arg_typs
          | _ -> assert false
        in
+       (* Constructors that were specified without a return type might get
+          an extra tuple in their type; expand that here if necessary.
+          TODO: this should go away if we enforce proper arities. *)
+       let arg_typs = match pats, arg_typs with
+         | _::_::_, [Typ_aux (Typ_tup typs,_)] -> typs
+         | _,_ -> arg_typs
+       in
        let ppp = doc_unop (doc_id_ctor id)
          (parens (separate_map comma (doc_pat ctxt true true) (List.combine pats arg_typs))) in
        if apat_needed then parens ppp else ppp
@@ -1761,33 +1768,28 @@ let args_of_typ l env typs =
     E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
   List.split (List.mapi arg typs)
 
-let rec untuple_args_pat typ (P_aux (paux, ((l, _) as annot)) as pat) =
+let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   let env = env_of_annot annot in
-  let tup_typs = match typ with
-    | Typ_aux (Typ_tup typs, _) -> Some typs
-    | _ -> match Env.expand_synonyms env typ with
-      | Typ_aux (Typ_tup typs, _) -> Some typs
-      | _ -> None
-  in
   let identity = (fun body -> body) in
-  match paux, tup_typs with
+  match paux, typs with
   | P_tup [], _ ->
      let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
      [P_aux (P_lit (mk_lit L_unit), annot), unit_typ], identity
-  | P_tup pats, Some typs -> List.combine pats typs, identity
-  | P_tup pats, _ -> raise (Reporting_basic.err_unreachable l __POS__ "Tuple pattern against non-tuple type")
-  | P_wild, Some typs ->
+  | P_tup pats, _ -> List.combine pats typs, identity
+  | P_wild, _ ->
      let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)), typ in
      List.map wild typs, identity
-  | P_typ (_, pat), _ -> untuple_args_pat typ pat
-  | P_as _, Some typs | P_id _, Some typs ->
+  | P_typ (_, pat), _ -> untuple_args_pat typs pat
+  | P_as _, _::_::_ | P_id _, _::_::_ ->
      let argpats, argexps = args_of_typ l env typs in
      let argexp = E_aux (E_tuple argexps, annot) in
      let bindargs (E_aux (_, bannot) as body) =
        E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
      argpats, bindargs
-  | _, _ ->
+  | _, [typ] ->
      [pat,typ], identity
+  | _, _ ->
+     unreachable l __POS__ "Unexpected pattern/type combination"
 
 let doc_rec (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> string "Definition"
@@ -1923,7 +1925,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let ids_to_avoid = all_ids pexp in
   let bound_kids = tyvars_of_typquant tq in
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
-  let pats, bind = untuple_args_pat (mk_typ (Typ_tup arg_typs)) pat in (* FIXME is this needed any more? *)
+  let pats, bind = untuple_args_pat arg_typs pat in (* FIXME is this needed any more? *)
   let pats, binds = List.split (Util.list_mapi demote_as_pattern pats) in
   let eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
@@ -1950,6 +1952,10 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let doc_binder (P_aux (p,ann) as pat, typ) =
     let env = env_of_annot ann in
     let exp_typ = Env.expand_synonyms env typ in
+    let () =
+      debug ctxt (lazy (" pattern " ^ string_of_pat pat));
+      debug ctxt (lazy (" with expanded type " ^ string_of_typ exp_typ))
+    in
     match p with
     | P_id id
     | P_typ (_,P_aux (P_id id,_))

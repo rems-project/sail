@@ -97,6 +97,10 @@ val plat_enable_misaligned_access : unit -> bool
 let plat_enable_misaligned_access () = false
 declare ocaml target_rep function plat_enable_misaligned_access = `Platform.enable_misaligned_access`
 
+val plat_mtval_has_illegal_inst_bits : unit -> bool
+let plat_mtval_has_illegal_inst_bits () = false
+declare ocaml target_rep function plat_mtval_has_illegal_inst_bits = `Platform.mtval_has_illegal_inst_bits`
+
 val plat_insns_per_tick : unit -> integer
 let plat_insns_per_tick () = 1
 declare ocaml target_rep function plat_insns_per_tick = `Platform.insns_per_tick`
