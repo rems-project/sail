@@ -52,6 +52,8 @@ open Ast
 open Ast_util
 open PPrint
 
+let opt_use_heuristics = ref false
+
 module Big_int = Nat_big_num
 
 let doc_op symb a b = infix 2 1 symb a b
@@ -124,11 +126,26 @@ let doc_nc =
     | NC_set (kid, ints) ->
        separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
     | NC_app (id, nexps) -> string "where" ^^ space ^^ doc_id id ^^ parens (separate_map (comma ^^ space) doc_nexp nexps)
-    | _ -> parens (nc0 nc)
-  and nc0 (NC_aux (nc_aux, _) as nc) =
-    match nc_aux with
-    | NC_or (c1, c2) -> separate space [nc0 c1; string "|"; nc1 c2]
-    | _ -> nc1 nc
+    | _ -> nc0 ~parenthesize:true nc
+  and nc0 ?parenthesize:(parenthesize=false) (NC_aux (nc_aux, _) as nc) =
+    (* Rather than parens (nc0 x) we use nc0 ~parenthesize:true x, because if
+       we rewrite a disjunction as a set constraint, then we can
+       always omit the parens. *)
+    let parens' = if parenthesize then parens else (fun x -> x) in
+    let disjs = constraint_disj nc in
+    let collect_constants kid = function
+      | NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant c, _)), _) when Kid.compare kid kid' = 0 -> Some c
+      | _ -> None
+    in
+    match disjs with
+    | NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant c, _)), _) :: ncs ->
+       let constants = List.map (collect_constants kid) ncs in
+       begin match Util.option_all (List.map (collect_constants kid) ncs) with
+       | None | Some [] -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
+       | Some cs ->
+          separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int (c :: cs))]
+       end
+    | _ -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
   and nc1 (NC_aux (nc_aux, _) as nc) =
     match nc_aux with
     | NC_and (c1, c2) -> separate space [nc1 c1; string "&"; atomic_nc c2]
@@ -146,6 +163,7 @@ let rec doc_typ (Typ_aux (typ_aux, l)) =
   | Typ_app (id, [_; len; _; Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id tid, _)), _)]) when Id.compare (mk_id "vector") id == 0 && Id.compare (mk_id "bit") tid == 0->
      string "bits" ^^ parens (doc_typ_arg len)
                *)
+  | Typ_app (id, typs) when Id.compare id (mk_id "atom") = 0 -> string "int" ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_app (id, typs) -> doc_id id ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_tup typs -> parens (separate_map (string ", ") doc_typ typs)
   | Typ_var kid -> doc_kid kid
@@ -172,6 +190,12 @@ and doc_arg_typs = function
   | [typ] -> doc_typ typ
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
 
+let doc_kopt = function
+  | KOpt_aux (KOpt_none kid, _) -> doc_kid kid
+  | kopt when is_nat_kopt kopt -> doc_kid (kopt_kid kopt)
+  | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
+  | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
+
 let doc_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
@@ -193,14 +217,22 @@ let doc_quants quants =
   | [nc] -> kdoc ^^ comma ^^ space ^^ doc_nc nc
   | nc :: ncs -> kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
-
-
-let doc_binding (TypQ_aux (tq_aux, _), typ) =
+let doc_binding ((TypQ_aux (tq_aux, _) as typq), typ) =
   match tq_aux with
   | TypQ_no_forall -> doc_typ typ
   | TypQ_tq [] -> doc_typ typ
   | TypQ_tq qs ->
-     string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ typ
+     if !opt_use_heuristics && String.length (string_of_typquant typq) > 60 then
+       let kopts, ncs = quant_split typq in
+       if ncs = [] then
+         string "forall" ^^ space ^^ separate_map space doc_kopt kopts ^^ dot
+         ^//^ doc_typ typ
+       else
+         string "forall" ^^ space ^^ separate_map space doc_kopt kopts ^^ comma
+         ^//^ (separate_map (space ^^ string "&" ^^ space) doc_nc ncs ^^ dot
+               ^^ hardline ^^ doc_typ typ)
+     else
+       string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ typ
 
 let doc_typschm (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding (typq, typ)
 

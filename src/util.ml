@@ -232,6 +232,15 @@ let rec option_these = function
   | None :: xs -> option_these xs
   | [] -> []
 
+let rec option_all = function
+  | [] -> Some []
+  | None :: _ -> None
+  | Some x :: xs ->
+     begin match option_all xs with
+     | None -> None
+     | Some xs -> Some (x :: xs)
+     end
+
 let changed2 f g x h y =
   match (g x, h y) with
     | (None,None) -> None

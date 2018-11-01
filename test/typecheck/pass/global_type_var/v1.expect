@@ -2,9 +2,9 @@ Type error at file "global_type_var/v1.sail", line 23, character 14 to line 23, 
 
 let _ = test([41m32[0m)
 
-Tried performing type coercion from atom(32) to atom('size) on 32
+Tried performing type coercion from int(32) to int('size) on 32
 Failed because
-[1matom(32) is not a subtype of atom('size)[21m
+[1mint(32) is not a subtype of int('size)[21m
 in context
 * 'size = 'ex8#
 * ('ex8# = 32 | 'ex8# = 64)

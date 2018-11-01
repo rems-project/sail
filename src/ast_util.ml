@@ -270,6 +270,47 @@ and nexp_simp_aux = function
      end
   | nexp -> nexp
 
+let rec constraint_simp (NC_aux (nc_aux, l)) =
+  let nc_aux = match nc_aux with
+    | NC_equal (nexp1, nexp2) ->
+       let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
+       if nexp_identical nexp1 nexp2 then
+         NC_true
+       else
+         NC_equal (nexp1, nexp2)
+
+    | NC_and (nc1, nc2) ->
+       let nc1, nc2 = constraint_simp nc1, constraint_simp nc2 in
+       begin match nc1, nc2 with
+       | NC_aux (NC_true, _), NC_aux (nc, _) -> nc
+       | NC_aux (nc, _), NC_aux (NC_true, _) -> nc
+       | _, _ -> NC_and (nc1, nc2)
+       end
+
+    | NC_or (nc1, nc2) ->
+       let nc1, nc2 = constraint_simp nc1, constraint_simp nc2 in
+       begin match nc1, nc2 with
+       | NC_aux (NC_false, _), NC_aux (nc, _) -> nc
+       | NC_aux (nc, _), NC_aux (NC_false, _) -> nc
+       | NC_aux (NC_true, _), NC_aux (nc, _) -> NC_true
+       | NC_aux (nc, _), NC_aux (NC_true, _) -> NC_true
+       | _, _ -> NC_or (nc1, nc2)
+       end
+
+    | _ -> nc_aux
+  in
+  NC_aux (nc_aux, l)
+
+let rec constraint_conj (NC_aux (nc_aux, l) as nc) =
+  match nc_aux with
+  | NC_and (nc1, nc2) -> constraint_conj nc1 @ constraint_conj nc2
+  | _ -> [nc]
+
+let rec constraint_disj (NC_aux (nc_aux, l) as nc) =
+  match nc_aux with
+  | NC_or (nc1, nc2) -> constraint_disj nc1 @ constraint_disj nc2
+  | _ -> [nc]
+
 let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
 let mk_typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown)
 let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
@@ -618,9 +659,10 @@ and string_of_typ_aux = function
   | Typ_id id -> string_of_id id
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
+  | Typ_app (id, args) when Id.compare id (mk_id "atom") = 0 -> "int(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_fn ([typ_arg], typ_ret, eff) ->
-     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff     
+     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
   | Typ_fn (typ_args, typ_ret, eff) ->
      "(" ^ string_of_list ", " string_of_typ typ_args ^ ") -> "
      ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff

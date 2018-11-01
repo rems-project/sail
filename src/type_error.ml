@@ -100,6 +100,56 @@ and nc_subst_nexp_aux l sv subst = function
   | NC_false -> NC_false
   | NC_true -> NC_true
 
+type suggestion =
+  | Suggest_add_constraint of n_constraint
+  | Suggest_none
+
+(* Temporary hack while I work on using these suggestions in asl_parser *)
+let rec analyze_unresolved_quant2 locals ncs = function
+  | QI_aux (QI_const nc, _) ->
+     let gen_kids = List.filter is_kid_generated (KidSet.elements (tyvars_of_constraint nc)) in
+     if gen_kids = [] then
+       Suggest_add_constraint nc
+     else
+       (* If there are generated kind-identifiers in the constraint,
+          we don't want to make a suggestion based on them, so try to
+          look for generated kid free nexps in the set of constraints
+          that are equal to the generated identifier. This often
+          occurs due to how the type-checker introduces new type
+          variables. *)
+       let is_subst v = function
+         | NC_aux (NC_equal (Nexp_aux (Nexp_var v', _), nexp), _)
+              when Kid.compare v v' = 0 && not (KidSet.exists is_kid_generated (tyvars_of_nexp nexp)) ->
+            [(v, nexp)]
+         | NC_aux (NC_equal (nexp, Nexp_aux (Nexp_var v', _)), _)
+              when Kid.compare v v' = 0 && not (KidSet.exists is_kid_generated (tyvars_of_nexp nexp)) ->
+            [(v, nexp)]
+         | _ -> []
+       in
+       let substs = List.concat (List.map (fun v -> List.concat (List.map (fun nc -> is_subst v nc) ncs)) gen_kids) in
+       let nc = List.fold_left (fun nc (v, nexp) -> nc_subst_nexp v (unaux_nexp nexp) nc) nc substs in
+       if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then
+         Suggest_add_constraint nc
+       else
+         (* If we have a really anonymous type-variable, try to find a
+            regular variable that corresponds to it. *)
+         let is_linked v = function
+           | (id, (Immutable, (Typ_aux (Typ_app (ty_id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var v', _)), _)]), _) as typ)))
+                when Id.compare ty_id (mk_id "atom") = 0 && Kid.compare v v' = 0 ->
+              [(v, nid id, typ)]
+           | (id, (mut, typ)) ->
+              []
+         in
+         let substs = List.concat (List.map (fun v -> List.concat (List.map (fun nc -> is_linked v nc) (Bindings.bindings locals))) gen_kids) in
+         let nc = List.fold_left (fun nc (v, nexp, _) -> nc_subst_nexp v (unaux_nexp nexp) nc) nc substs in
+         if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then
+           Suggest_none
+         else
+           Suggest_none
+
+  | QI_aux (QI_id kopt, _) ->
+     Suggest_none
+
 let rec analyze_unresolved_quant locals ncs = function
   | QI_aux (QI_const nc, _) ->
      let gen_kids = List.filter is_kid_generated (KidSet.elements (tyvars_of_constraint nc)) in
@@ -133,7 +183,6 @@ let rec analyze_unresolved_quant locals ncs = function
                 when Id.compare ty_id (mk_id "atom") = 0 && Kid.compare v v' = 0 ->
               [(v, nid id, typ)]
            | (id, (mut, typ)) ->
-              prerr_endline (string_of_id id ^ " : " ^ string_of_typ typ);
               []
          in
          let substs = List.concat (List.map (fun v -> List.concat (List.map (fun nc -> is_linked v nc) (Bindings.bindings locals))) gen_kids) in

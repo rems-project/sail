@@ -105,6 +105,11 @@ val option_get_exn : exn -> 'a option -> 'a
     wrapped in [Some]. *)
 val option_these : 'a option list -> 'a list
 
+(** [option_all xs] extracts the elements of the list [xs] if all of
+   them are wrapped in Some. If any are None then the result is None is
+   None. [option_all []] is [Some []] *)
+val option_all : 'a option list -> 'a list option
+
 (** [changed2 f g x h y] applies [g] to [x] and [h] to [y].
     If both function applications return [None], then [None] is
     returned. Otherwise [f] is applied to the results. For this

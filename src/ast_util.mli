@@ -138,6 +138,12 @@ val no_effect : effect
 val mk_effect : base_effect_aux list -> effect
 
 val nexp_simp : nexp -> nexp
+val constraint_simp : n_constraint -> n_constraint
+
+(* If a constraint is a conjunction, return a list of all the top-level conjuncts *)
+val constraint_conj : n_constraint -> n_constraint list
+(* Same as constraint_conj but for disjunctions *)
+val constraint_disj : n_constraint -> n_constraint list
 
 (* Utilities for building n-expressions *)
 val nconstant : Big_int.num -> nexp
