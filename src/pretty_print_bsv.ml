@@ -728,8 +728,30 @@ let doc_union_pat_combinator tid tq members =
   in
   separate_map (hardline) doc_mem members
 
+let typdef_aux_is_recursive td =
+  let rec typ_uses id (Typ_aux (t, _)) = match t with
+    | Typ_id id' -> Id.compare id' id = 0
+    | Typ_fn (targs, tret, _) ->
+       typ_uses id tret || List.exists (typ_uses id) targs
+    | Typ_bidir (l, r) -> typ_uses id l || typ_uses id r
+    | Typ_tup ts -> List.exists (typ_uses id) ts
+    | Typ_exist (_, _, t) -> typ_uses id t
+    | Typ_app (id', targs) ->
+       Id.compare id' id = 0 || List.exists (typ_arg_uses id) targs
+    | _ -> false
+  and typ_arg_uses id (Typ_arg_aux (ta, _)) = match ta with
+    | Typ_arg_typ t -> typ_uses id t
+    | _ -> false
+  in
+  match td with
+  | TD_variant (id, _, _, members, _) ->
+     List.exists (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ_uses id typ) members
+  | _ -> false
+
 let doc_typdef (TD_aux (td, _)) =
   let builtins = ["option"] in
+  let deriving = "Eq" :: (if typdef_aux_is_recursive td then [] else ["Bits"]) in
+  let deriving_doc = separate space [string "deriving"; parens (separate_map comma_sp string deriving)] in
   match td with
   | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (tq, typ), _))
     when not (List.mem (string_of_id id) builtins) ->
@@ -737,6 +759,7 @@ let doc_typdef (TD_aux (td, _)) =
   | TD_record (id, _, tq, fields, _)
     when not (List.mem (string_of_id id) builtins) ->
      let regstate = string_of_id id = "regstate" in
+     let deriving_doc = if regstate then empty else deriving_doc in
      let doc_field (typ, id) =
        let typ =
          if regstate
@@ -749,7 +772,7 @@ let doc_typdef (TD_aux (td, _)) =
      surround 2 1
        (string "typedef struct {")
        (align doc_fields)
-       (string "} " ^^ doc_typ_id id ^^ doc_tq tq) ^^ semi
+       (string "} " ^^ doc_typ_id id ^^ doc_tq tq ^^ space ^^ deriving_doc) ^^ semi
   | TD_variant (id, _, tq, members, _)
     when not (List.mem (string_of_id id) builtins) ->
      let doc_mem (Tu_aux (Tu_ty_id (typ, id), _)) =
@@ -759,7 +782,7 @@ let doc_typdef (TD_aux (td, _)) =
      surround 2 1
        (string "typedef union tagged {")
        (align doc_members)
-       (string "} " ^^ doc_typ_id id ^^ doc_tq tq) ^^ semi ^^
+       (string "} " ^^ doc_typ_id id ^^ doc_tq tq ^^ space ^^ deriving_doc) ^^ semi ^^
      hardline ^^
      doc_union_pat_combinator id tq members
   | TD_enum (id, _, members, _)
@@ -767,7 +790,7 @@ let doc_typdef (TD_aux (td, _)) =
      separate space
        [string "typedef enum {";
         separate_map comma_sp doc_typ_id members;
-        string "}"; doc_typ_id id] ^^ semi
+        string "}"; doc_typ_id id; deriving_doc] ^^ semi
   | _ -> empty
 
 let doc_def = function
