@@ -304,7 +304,7 @@ let rec doc_stmt ctxt (E_aux (eaux, (l, annot)) as exp) =
        (separate_map hardline (doc_pexp ctxt) ps)
        (string "endcase")
   | E_assign (lhs, rhs)
-    when exp_uses_lvars ctxt rhs ||
+    when (*exp_uses_lvars ctxt rhs ||*)
          (effectful rhs &&
           (lexp_writes_registers lhs || lexp_assigns_lvars ctxt lhs)) ->
      enclose_block Action
@@ -604,6 +604,10 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
             | _ -> raise (Reporting.err_unreachable l __POS__ "Unsupported function parameters")
           in
           let formals_doc = parens (separate comma_sp (state_arg @ formals @ retsnk_arg)) in
+          let targs_doc = match targs with
+            | [targ] -> doc_typ targ
+            | targs -> doc_typ (mk_typ (Typ_tup targs))
+          in
           let tret_doc =
             if has_mem_eff eff then string "Recipe"
             else if effectful_effs eff then
@@ -656,7 +660,7 @@ let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), (l, _))) =
             separate hardline
               [string "module[Module] " ^^ doc_id false (prepend_id "mk_" id) ^^
                  string " (Regstate z, Slave#(" ^^
-                 doc_typ (mk_typ (Typ_tup targs)) ^^ comma_sp ^^ doc_typ tret ^^
+                 targs_doc ^^ comma_sp ^^ doc_typ tret ^^
                  string ") ifc);";
                indent doc_lvars; empty;
                indent doc_ifcs; empty;
