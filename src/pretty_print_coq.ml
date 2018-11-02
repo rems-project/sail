@@ -800,11 +800,18 @@ let rec nexp_const_eval (Nexp_aux (n,l) as nexp) =
 
 (* Decide whether two nexps used in a vector size are similar; if not
    a cast will be inserted *)
-let similar_nexps env n1 n2 =
+let similar_nexps ctxt env n1 n2 =
   let rec same_nexp_shape (Nexp_aux (n1,_)) (Nexp_aux (n2,_)) =
     match n1, n2 with
     | Nexp_id _, Nexp_id _ -> true
-    | Nexp_var k1, Nexp_var k2 -> prove env (nc_eq (nvar k1) (nvar k2))
+    (* TODO: this is really just an approximation to what we really want:
+       will the Coq types have the same names?  We could probably do better
+       by tracking which existential kids are equal to bound kids. *)
+    | Nexp_var k1, Nexp_var k2 ->
+       Kid.compare k1 k2 == 0 ||
+         (prove env (nc_eq (nvar k1) (nvar k2)) && (
+            not (KidSet.mem k1 ctxt.bound_nvars) ||
+              not (KidSet.mem k2 ctxt.bound_nvars)))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
     | Nexp_app (f1,args1), Nexp_app (f2,args2) ->
        Id.compare f1 f2 == 0 && List.for_all2 same_nexp_shape args1 args2
@@ -923,7 +930,7 @@ let doc_exp, doc_let =
                match in_typ, out_typ with
                | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
                  Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
-                  not (similar_nexps (env_of exp) n1 n2)
+                  not (similar_nexps ctxt (env_of exp) n1 n2)
                | _ -> false
            in
            let exp_pp = expV (want_parens || autocast || build_ex) exp in
@@ -1176,7 +1183,7 @@ let doc_exp, doc_let =
               match typ_of_arg', typ_from_fn' with
               | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
                 Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
-                 not (similar_nexps env n1 n2)
+                 not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in
             let want_parens1 = want_parens || autocast in
@@ -1226,7 +1233,7 @@ let doc_exp, doc_let =
               match in_typ, out_typ with
               | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
                 Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
-                 not (similar_nexps env n1 n2)
+                 not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in pack,unpack,autocast
           in
@@ -1324,7 +1331,7 @@ let doc_exp, doc_let =
            match outer_typ', cast_typ' with
            | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
          Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
-              not (similar_nexps env n1 n2)
+              not (similar_nexps ctxt env n1 n2)
            | _ -> false
        in
        let effects = effectful (effect_of e) in
