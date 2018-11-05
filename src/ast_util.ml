@@ -888,6 +888,13 @@ let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
 let id_of_val_spec (VS_aux (VS_val_spec (_, id, _, _), _)) = id
 
+let id_of_dec_spec (DEC_aux (ds_aux, _)) =
+  match ds_aux with
+  | DEC_reg (_, id) -> id
+  | DEC_config (id, _, _) -> id
+  | DEC_alias (id, _) -> id
+  | DEC_typ_alias (_, id, _) -> id
+
 let ids_of_def = function
   | DEF_kind (KD_aux (KD_nabbrev (_, id, _, _), _)) -> IdSet.singleton id
   | DEF_type td -> IdSet.singleton (id_of_type_def td)

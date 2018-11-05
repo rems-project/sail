@@ -447,15 +447,26 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
       else init_env name in
     init_env (name ^ "/end"), uses
 
-let fv_of_rd consider_var (DEC_aux (d,_)) = match d with
-  | DEC_reg(t,id) ->
-    init_env (string_of_id id), fv_of_typ consider_var mt mt t
-  | DEC_config(id,t,exp) ->
-    init_env (string_of_id id), fv_of_typ consider_var mt mt t
-  | DEC_alias(id,alias) ->
-    init_env (string_of_id id),mt
-  | DEC_typ_alias(t,id,alias) ->
-    init_env (string_of_id id), mt
+let fv_of_rd consider_var (DEC_aux (d, annot)) =
+  (* When we get the free variables of a register, we have to ensure
+     that we expand all synonyms so we can pick up dependencies with
+     undefined_type function, even when type is indirected through a
+     synonym. *)
+  let open Type_check in
+  let env = env_of_annot annot in
+  match d with
+  | DEC_reg(t, id) ->
+     let t' = Env.expand_synonyms env t in
+     init_env (string_of_id id),
+     Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
+  | DEC_config(id, t, exp) ->
+     let t' = Env.expand_synonyms env t in
+     init_env (string_of_id id),
+     Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
+  | DEC_alias(id, alias) ->
+     init_env (string_of_id id), mt
+  | DEC_typ_alias(t, id, alias) ->
+     init_env (string_of_id id), mt
 
 let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_kind kdef -> fv_of_kind_def consider_var kdef
