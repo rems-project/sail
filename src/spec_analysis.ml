@@ -475,6 +475,8 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      List.fold_left Nameset.union Nameset.empty (List.map snd fvs)
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
+  | DEF_constraint (id, _, _) ->
+     raise (Reporting.err_unreachable (id_loc id) __POS__ "Constraint should be re-written")
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
@@ -549,6 +551,15 @@ let scc ?(original_order : string list option) (g : graph) =
 
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
+  let used = match d with
+    | DEF_reg_dec _ ->
+       (* For a register, we need to ensure that any undefined_type
+          functions for types used by the register are placed before
+          the register declaration. *)
+       let undefineds = Nameset.map (fun name -> "undefined_" ^ name) used in
+       Nameset.union undefineds used
+    | _ -> used
+  in
   try
     (* A definition may bind multiple identifiers, e.g. "let (x, y) = ...".
        We add all identifiers to the dependency graph as a cycle.  The actual
