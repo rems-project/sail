@@ -566,12 +566,15 @@ let cdef_ctyps ctx = function
   | CDEF_reg_dec (_, ctyp, instrs) -> ctyp :: List.concat (List.map instr_ctyps instrs)
   | CDEF_spec (_, ctyps, ctyp) -> ctyp :: ctyps
   | CDEF_fundef (id, _, _, instrs) ->
-     let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
+     let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
        | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
-     let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
+     let arg_ctyps, ret_ctyp =
+       List.map (ctyp_of_typ ctx) arg_typs,
+       ctyp_of_typ { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } ret_typ
+     in
      ret_ctyp :: arg_ctyps @ List.concat (List.map instr_ctyps instrs)
 
   | CDEF_startup (id, instrs) | CDEF_finish (id, instrs) -> List.concat (List.map instr_ctyps instrs)
