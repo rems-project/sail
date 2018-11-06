@@ -260,3 +260,4 @@ val zencode_string : string -> string
 val zencode_upper_string : string -> string
 
 val log_line : string -> int -> string -> string
+val header : string -> int -> string

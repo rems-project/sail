@@ -455,3 +455,5 @@ let warn str =
 
 let log_line str line msg =
   "\n[" ^ (str ^ ":" ^ string_of_int line |> blue |> clear) ^ "] " ^ msg
+
+let header str n = "\n" ^ str ^ "\n" ^ String.make (String.length str - 9 * n) '='

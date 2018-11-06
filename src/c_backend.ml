@@ -61,7 +61,8 @@ open Anf
 module Big_int = Nat_big_num
 
 let c_verbosity = ref 0
-let opt_ddump_flow_graphs = ref false
+let opt_debug_flow_graphs = ref false
+let opt_debug_function = ref ""
 let opt_trace = ref false
 let opt_static = ref false
 let opt_no_main = ref false
@@ -357,6 +358,8 @@ let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
        let aexp2 = analyze_functions ctx f aexp2 in
        let aexp3 = analyze_functions ctx f aexp3 in
        let aexp4 = analyze_functions ctx f aexp4 in
+       (* Currently we assume that loop indexes are always safe to put into an int64 *)
+       let ctx = { ctx with locals = Bindings.add id (Immutable, CT_int64) ctx.locals } in
        AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
 
     | AE_case (aval, cases, typ) ->
@@ -1227,14 +1230,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      cleanup
 
   | AE_for (loop_var, loop_from, loop_to, loop_step, Ord_aux (ord, _), body) ->
-     (* This is a bit of a hack, we force loop_var to be CT_int64 by
-        forcing it's type to be a known nexp that will map to
-        CT_int64. *)
-     let make_small _ _ = function
-       | AV_id (id, Local (Immutable, typ)) when Id.compare id loop_var = 0 -> AV_id (id, Local (Immutable, atom_typ (nint 0)))
-       | aval -> aval
-     in
-     let body = map_aval make_small body in
+     (* We assume that all loop indices are safe to put in a CT_int64. *)
+     let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_int64) ctx.locals } in
 
      let is_inc = match ord with
        | Ord_inc -> true
@@ -1573,7 +1570,18 @@ let rec compile_def ctx = function
      let aexp = no_shadow (pat_ids pat) (anf exp) in
      c_debug (lazy (Pretty_print_sail.to_string (pp_aexp aexp)));
      let aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp) in
-     c_debug (lazy (Pretty_print_sail.to_string (pp_aexp aexp)));
+
+     if Id.compare (mk_id !opt_debug_function) id = 0 then
+       let header =
+         Printf.sprintf "Sail ANF for %s %s %s. (%s) -> %s" Util.("function" |> red |> clear) (string_of_id id)
+                        (string_of_typquant quant)
+                        Util.(string_of_list ", " (fun typ -> string_of_typ typ |> yellow |> clear) arg_typs)
+                        Util.(string_of_typ ret_typ |> yellow |> clear)
+
+       in
+       prerr_endline (Util.header header (List.length arg_typs + 2));
+       prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp))
+     else ();
 
      (* Compile the function arguments as patterns. *)
      let arg_setup, compiled_args, arg_cleanup = compile_arg_pats ctx fundef_label pat arg_ctyps in
@@ -2779,9 +2787,7 @@ let codegen_def' ctx = function
        string (Printf.sprintf "%svoid %s(%s *rop, %s);" static (sgen_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
-     if !opt_ddump_flow_graphs then make_dot id (instrs_graph instrs) else ();
-
-     c_debug (lazy (Pretty_print_sail.to_string (separate_map hardline pp_instr instrs)));
+     if !opt_debug_flow_graphs then make_dot id (instrs_graph instrs) else ();
 
      (* Extract type information about the function from the environment. *)
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
@@ -2798,6 +2804,18 @@ let codegen_def' ctx = function
                                  ^ Util.string_of_list ", " string_of_id args
                                  ^ " matched against type "
                                  ^ Util.string_of_list ", " string_of_ctyp arg_ctyps)
+     else ();
+
+     (* If this function is set as opt_debug_function, then output its IR *)
+     if Id.compare (mk_id !opt_debug_function) id = 0 then
+       let header =
+         Printf.sprintf "Sail IR for %s %s(%s) : (%s) -> %s" Util.("function" |> red |> clear) (string_of_id id)
+                        (Util.string_of_list ", " string_of_id args)
+                        (Util.string_of_list ", " (fun ctyp -> Util.(string_of_ctyp ctyp |> yellow |> clear)) arg_ctyps)
+                        Util.(string_of_ctyp ret_ctyp |> yellow |> clear)
+       in
+       prerr_endline (Util.header header (List.length arg_ctyps + 2));
+       prerr_endline (Pretty_print_sail.to_string (separate_map hardline pp_instr instrs))
      else ();
 
      let instrs = add_local_labels instrs in
