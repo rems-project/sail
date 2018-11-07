@@ -4483,6 +4483,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
      let checked_exp = crule check_exp env (strip_exp exp) typ in
      let env = Env.add_register id no_effect (mk_effect [BE_config]) typ env in
      [DEF_reg_dec (DEC_aux (DEC_config (id, typ, checked_exp), (l, Some ((env, typ, no_effect), Some typ))))], env
+  | DEF_pragma (pragma, arg, l) -> [DEF_pragma (pragma, arg, l)], env
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Scattered given to type checker")

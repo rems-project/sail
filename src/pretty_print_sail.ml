@@ -567,7 +567,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | _ -> string "TYPEDEF"
 
 
-let doc_spec (VS_aux (v, annot)) =
+let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
     let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
       utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
@@ -576,7 +576,7 @@ let doc_spec (VS_aux (v, annot)) =
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->
-     docstring annot
+     if comment then docstring annot else empty
      ^^ string "val" ^^ space
      ^^ (if is_cast then (string "cast" ^^ space) else empty)
      ^^ doc_id id ^^ space
@@ -615,6 +615,8 @@ let rec doc_def def = group (match def with
      ^^ hardline ^^ string "}"
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
+  | DEF_pragma (pragma, arg, l) ->
+     string ("$" ^ pragma ^ " " ^ arg)
   | DEF_fixity (prec, n, id) ->
      fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
