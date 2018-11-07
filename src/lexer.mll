@@ -97,8 +97,7 @@ let operators = ref
   (List.fold_left
      (fun r (x, y) -> M.add x y r)
      M.empty
-     [ ("==", mk_operator Infix 4 "==");
-       ("/", mk_operator InfixL 7 "/");
+     [ ("/", mk_operator InfixL 7 "/");
        ("%", mk_operator InfixL 7 "%");
      ])
 
@@ -224,9 +223,7 @@ rule token = parse
   | ","                                 { Comma }
   | ".."                                { DotDot }
   | "."                                 { Dot }
-  | "==" as op
-    { try M.find op !operators
-      with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
+  | "=="                                { EqEq(r"==") }
   | "="                                 { (Eq(r"=")) }
   | ">"					{ (Gt(r">")) }
   | "-"					{ Minus }

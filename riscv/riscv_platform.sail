@@ -47,7 +47,7 @@ function phys_mem_segments() =
 
 /* Physical memory map predicates */
 
-function within_phys_mem(addr : xlenbits, width : atom('n)) -> forall 'n. bool = {
+function within_phys_mem forall 'n. (addr : xlenbits, width : atom('n)) -> bool = {
   let ram_base = plat_ram_base ();
   let rom_base = plat_rom_base ();
   let ram_size = plat_ram_size ();
@@ -70,14 +70,14 @@ function within_phys_mem(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
   }
 }
 
-function within_clint(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+function within_clint forall 'n. (addr : xlenbits, width : atom('n)) -> bool =
     plat_clint_base() <=_u addr
   & (addr + sizeof('n)) <=_u (plat_clint_base() + plat_clint_size())
 
-function within_htif_writable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+function within_htif_writable forall 'n. (addr : xlenbits, width : atom('n)) -> bool =
     plat_htif_tohost() == addr
 
-function within_htif_readable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+function within_htif_readable forall 'n. (addr : xlenbits, width : atom('n)) -> bool =
     plat_htif_tohost() == addr
 
 /* CLINT (Core Local Interruptor), based on Spike. */
@@ -238,20 +238,20 @@ function htif_tick() = {
 
 /* Top-level MMIO dispatch */
 
-function within_mmio_readable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+function within_mmio_readable forall 'n. (addr : xlenbits, width : atom('n)) -> bool =
   within_clint(addr, width) | (within_htif_readable(addr, width) & 1 <= 'n)
 
-function within_mmio_writable(addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+function within_mmio_writable forall 'n. (addr : xlenbits, width : atom('n)) -> bool =
   within_clint(addr, width) | (within_htif_writable(addr, width) & 'n <= 8)
 
-function mmio_read(addr : xlenbits, width : atom('n)) -> forall 'n, 'n > 0. MemoryOpResult(bits(8 * 'n)) =
+function mmio_read forall 'n, 'n > 0. (addr : xlenbits, width : atom('n)) -> MemoryOpResult(bits(8 * 'n)) =
   if   within_clint(addr, width)
   then clint_load(addr, width)
   else if within_htif_readable(addr, width) & (1 <= 'n)
   then htif_load(addr, width)
   else MemException(E_Load_Access_Fault)
 
-function mmio_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(bool) =
+function mmio_write forall 'n, 'n > 0. (addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> MemoryOpResult(bool) =
   if   within_clint(addr, width)
   then clint_store(addr, width, data)
   else if within_htif_writable(addr, width) & 'n <= 8
