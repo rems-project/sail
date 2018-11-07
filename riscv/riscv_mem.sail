@@ -4,11 +4,11 @@
  * to MMIO regions can be dispatched.
  */
 
-function is_aligned_addr (addr : xlenbits, width : atom('n)) -> forall 'n. bool =
+function is_aligned_addr forall 'n. (addr : xlenbits, width : atom('n)) -> bool =
   unsigned(addr) % width == 0
 
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : bool, rl: bool, res : bool) -> forall 'n, 'n >= 0. MemoryOpResult(bits(8 * 'n)) =
+function phys_mem_read forall 'n, 'n >= 0. (t : ReadType, addr : xlenbits, width : atom('n), aq : bool, rl: bool, res : bool) -> MemoryOpResult(bits(8 * 'n)) =
   match (t, __RISCV_read(addr, width, aq, rl, res)) {
     (Instruction, None()) => MemException(E_Fetch_Access_Fault),
     (Data, None())        => MemException(E_Load_Access_Fault),
@@ -16,7 +16,7 @@ function phys_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : boo
                                MemValue(v) }
   }
 
-function checked_mem_read(t : ReadType, addr : xlenbits, width : atom('n), aq : bool, rl : bool, res: bool) -> forall 'n, 'n > 0. MemoryOpResult(bits(8 * 'n)) =
+function checked_mem_read forall 'n, 'n > 0. (t : ReadType, addr : xlenbits, width : atom('n), aq : bool, rl : bool, res: bool) -> MemoryOpResult(bits(8 * 'n)) =
   /* treat MMIO regions as not executable for now. TODO: this should actually come from PMP/PMA. */
   if   t == Data & within_mmio_readable(addr, width)
   then mmio_read(addr, width)
@@ -89,13 +89,13 @@ function mem_write_ea (addr, width, aq, rl, con) = {
 }
 
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n. MemoryOpResult(bool) = {
+function phys_mem_write forall 'n. (addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> MemoryOpResult(bool) = {
   print("mem[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
   MemValue(__RISCV_write(addr, width, data))
 }
 
 // dispatches to MMIO regions or physical memory regions depending on physical memory map
-function checked_mem_write(addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> forall 'n, 'n > 0. MemoryOpResult(bool) =
+function checked_mem_write forall 'n, 'n > 0. (addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> MemoryOpResult(bool) =
   if   within_mmio_writable(addr, width)
   then mmio_write(addr, width, data)
   else if within_phys_mem(addr, width)

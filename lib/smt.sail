@@ -9,7 +9,7 @@ val div = {
   lem: "integerDiv",
   c: "tdiv_int",
   coq: "div_with_eq"
-} : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = div('n, 'm). atom('o)}
+} : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o == div('n, 'm). atom('o)}
 
 overload operator / = {div}
 
@@ -19,7 +19,7 @@ val mod = {
   lem: "integerMod",
   c: "tmod_int",
   coq: "mod_with_eq"
-} : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o = mod('n, 'm). atom('o)}
+} : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o == mod('n, 'm). atom('o)}
 
 overload operator % = {mod}
 
@@ -29,7 +29,7 @@ val abs_atom = {
   lem: "abs_int",
   c: "abs_int",
   coq: "abs_with_eq"
-} : forall 'n. atom('n) -> {'o, 'o = abs_atom('n). atom('o)}
+} : forall 'n. atom('n) -> {'o, 'o == abs_atom('n). atom('o)}
 
 $ifdef TEST
 

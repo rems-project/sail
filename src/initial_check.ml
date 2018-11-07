@@ -251,6 +251,11 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
                   let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
                   let exist_typ = to_ast_typ k_env def_ord atyp in
                   Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
+               | Parse_ast.ATyp_with (atyp, nc) ->
+                  let exist_typ = to_ast_typ k_env def_ord atyp in
+                  let kids = KidSet.elements (tyvars_of_typ exist_typ) in
+                  let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
+                  Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
                | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
               ), l)
 

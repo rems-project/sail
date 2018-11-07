@@ -197,6 +197,7 @@ let rec desugar_rchain chain s e =
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
 %token <string> Colon ColonColon (* CaretCaret *) TildeTilde ExclEq
+%token <string> EqEq
 %token <string> GtEq
 %token <string> LtEq
 
@@ -260,6 +261,7 @@ id:
   | Op Plus { mk_id (DeIid "+") $startpos $endpos }
   | Op Minus { mk_id (DeIid "-") $startpos $endpos }
   | Op Star { mk_id (DeIid "*") $startpos $endpos }
+  | Op EqEq { mk_id (DeIid "==") $startpos $endpos }
   | Op ExclEq { mk_id (DeIid "!=") $startpos $endpos }
   | Op Lt { mk_id (DeIid "<") $startpos $endpos }
   | Op Gt { mk_id (DeIid ">") $startpos $endpos }
@@ -337,15 +339,50 @@ atomic_nc:
     { mk_nc NC_true $startpos $endpos }
   | False
     { mk_nc NC_false $startpos $endpos }
-  | typ Eq typ
+  | typ0 Eq typ0
+    { Util.warn ("Deprecated syntax, use == instead at " ^ Reporting.loc_to_string (loc $startpos($2) $endpos($2)) ^ "\n");
+      mk_nc (NC_equal ($1, $3)) $startpos $endpos }
+  | typ0 EqEq typ0
     { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
-  | typ ExclEq typ
+  | typ0 ExclEq typ0
     { mk_nc (NC_not_equal ($1, $3)) $startpos $endpos }
   | nc_lchain
     { desugar_lchain $1 $startpos $endpos }
   | nc_rchain
     { desugar_rchain $1 $startpos $endpos }
   | Lparen nc Rparen
+    { $2 }
+  | kid In Lcurly num_list Rcurly
+    { mk_nc (NC_set ($1, $4)) $startpos $endpos }
+
+new_nc:
+  | new_nc Bar new_nc_and
+    { mk_nc (NC_or ($1, $3)) $startpos $endpos }
+  | nc_and
+    { $1 }
+
+new_nc_and:
+  | new_nc_and Amp new_atomic_nc
+    { mk_nc (NC_and ($1, $3)) $startpos $endpos }
+  | new_atomic_nc
+    { $1 }
+
+new_atomic_nc:
+  | Where id Lparen typ_list Rparen
+    { mk_nc (NC_app ($2, $4)) $startpos $endpos }
+  | True
+    { mk_nc NC_true $startpos $endpos }
+  | False
+    { mk_nc NC_false $startpos $endpos }
+  | typ0 EqEq typ0
+    { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
+  | typ0 ExclEq typ0
+    { mk_nc (NC_not_equal ($1, $3)) $startpos $endpos }
+  | nc_lchain
+    { desugar_lchain $1 $startpos $endpos }
+  | nc_rchain
+    { desugar_rchain $1 $startpos $endpos }
+  | Lparen new_nc Rparen
     { $2 }
   | kid In Lcurly num_list Rcurly
     { mk_nc (NC_set ($1, $4)) $startpos $endpos }
@@ -357,28 +394,30 @@ num_list:
     { $1 :: $3 }
 
 nc_lchain:
-  | typ LtEq typ
+  | typ0 LtEq typ0
     { [LC_nexp $1; LC_lteq; LC_nexp $3] }
-  | typ Lt typ
+  | typ0 Lt typ0
     { [LC_nexp $1; LC_lt; LC_nexp $3] }
-  | typ LtEq nc_lchain
+  | typ0 LtEq nc_lchain
     { LC_nexp $1 :: LC_lteq :: $3 }
-  | typ Lt nc_lchain
+  | typ0 Lt nc_lchain
     { LC_nexp $1 :: LC_lt :: $3 }
 
 nc_rchain:
-  | typ GtEq typ
+  | typ0 GtEq typ0
     { [RC_nexp $1; RC_gteq; RC_nexp $3] }
-  | typ Gt typ
+  | typ0 Gt typ0
     { [RC_nexp $1; RC_gt; RC_nexp $3] }
-  | typ GtEq nc_rchain
+  | typ0 GtEq nc_rchain
     { RC_nexp $1 :: RC_gteq :: $3 }
-  | typ Gt nc_rchain
+  | typ0 Gt nc_rchain
     { RC_nexp $1 :: RC_gt :: $3 }
 
 typ:
   | typ0
     { $1 }
+  | typ0 With new_nc
+    { mk_typ (ATyp_with ($1, $3)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in types, with both left, right and non-associative operators */
@@ -677,8 +716,8 @@ pat_string_append:
 pat1:
   | atomic_pat
     { $1 }
-  | atomic_pat Bar pat1
-    { mk_pat (P_or ($1, $3)) $startpos $endpos }
+  (* | atomic_pat Bar pat1
+    { mk_pat (P_or ($1, $3)) $startpos $endpos } *)
   | atomic_pat At pat_concat
     { mk_pat (P_vector_concat ($1 :: $3)) $startpos $endpos }
   | atomic_pat ColonColon pat1
@@ -890,6 +929,7 @@ exp4:
   | exp5 LtEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id "<=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp5 GtEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id ">=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp5 ExclEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id "!=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 EqEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id "==") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp4l op4l exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp5 op4r exp4r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp5 { $1 }
@@ -1104,12 +1144,14 @@ funcl_patexp:
 funcl_patexp_typ:
   | pat Eq exp
     { (mk_pexp (Pat_exp ($1, $3)) $startpos $endpos, mk_tannotn) }
-  | pat MinusGt funcl_typ Eq exp
-    { (mk_pexp (Pat_exp ($1, $5)) $startpos $endpos, $3) }
+  | pat MinusGt typ Eq exp
+    { (mk_pexp (Pat_exp ($1, $5)) $startpos $endpos, mk_tannot mk_typqn $3 $startpos $endpos($3)) }
+  | Forall typquant Dot pat MinusGt typ Eq exp
+    { (mk_pexp (Pat_exp ($4, $8)) $startpos $endpos, mk_tannot $2 $6 $startpos $endpos($6)) }
   | Lparen pat If_ exp Rparen Eq exp
     { (mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos, mk_tannotn) }
-  | Lparen pat If_ exp Rparen MinusGt funcl_typ Eq exp
-    { (mk_pexp (Pat_when ($2, $4, $9)) $startpos $endpos, $7) }
+  | Forall typquant Dot Lparen pat If_ exp Rparen MinusGt typ Eq exp
+    { (mk_pexp (Pat_when ($5, $7, $12)) $startpos $endpos, mk_tannot $2 $10 $startpos $endpos($10)) }
 
 funcl:
   | id funcl_patexp

@@ -156,6 +156,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
  | ATyp_exist of kid list * n_constraint * atyp
+ | ATyp_with of atyp * n_constraint
 
 and atyp = 
    ATyp_aux of atyp_aux * l
