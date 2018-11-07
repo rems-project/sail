@@ -182,8 +182,23 @@ uint64_t load_sail(char *f)
 void init_spike(const char *f, uint64_t entry)
 {
 #ifdef SPIKE
-  /* The initialization order below matters. */
+  bool mismatch = false;
   s = tv_init("RV64IMAC", 1);
+  if (tv_is_dirty_enabled(s) != rv_enable_dirty_update) {
+    mismatch = true;
+    fprintf(stderr, "inconsistent enable-dirty-update setting: spike %s, sail %s\n",
+            tv_is_dirty_enabled(s) ? "on" : "off",
+            rv_enable_dirty_update ? "on" : "off");
+  }
+  if (tv_is_misaligned_enabled(s) != rv_enable_misaligned) {
+    mismatch = true;
+    fprintf(stderr, "inconsistent enable-misaligned-access setting: spike %s, sail %s\n",
+            tv_is_misaligned_enabled(s) ? "on" : "off",
+            rv_enable_misaligned        ? "on" : "off");
+  }
+  if (mismatch) exit(1);
+
+  /* The initialization order below matters. */
   tv_set_verbose(s, 1);
   tv_set_dtb_in_rom(s, 1);
   tv_load_elf(s, f);
@@ -196,7 +211,7 @@ void init_spike(const char *f, uint64_t entry)
   tv_get_dtb(s, NULL, &spike_dtb_len);
   if (spike_dtb_len > 0) {
     spike_dtb = (unsigned char *)malloc(spike_dtb_len + 1);
-    dtb[spike_dtb_len] = '\0';
+    spike_dtb[spike_dtb_len] = '\0';
     if (!tv_get_dtb(s, spike_dtb, &spike_dtb_len)) {
       fprintf(stderr, "Got %ld bytes of dtb at %p\n", spike_dtb_len, spike_dtb);
     } else {
