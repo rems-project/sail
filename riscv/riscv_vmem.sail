@@ -50,7 +50,7 @@ function update_PTE_Bits(p : PTE_Bits, a : AccessType) -> option(PTE_Bits) = {
   let update_a = p.A() == false;                                 // accessed-bit
   if update_d | update_a then {
     let np = update_A(p, true);
-    let np = if update_d then update_D(p, true) else np;
+    let np = if update_d then update_D(np, true) else np;
     Some(np)
   } else None()
 }
