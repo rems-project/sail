@@ -1492,6 +1492,16 @@ function clause execute (C_MV(rd, rs2)) =
 mapping clause assembly = C_MV(rd, rs2) if rd != zreg & rs2 != zreg <-> "c.mv" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs2) if rd != zreg & rs2 != zreg
 
 /* ****************************************************************** */
+union clause ast = C_EBREAK : unit
+
+mapping clause encdec_compressed = C_EBREAK() <-> 0b100 @ 0b1 @ 0b00000 @ 0b00000 @ 0b10
+
+function clause execute C_EBREAK() =
+  execute(EBREAK())
+
+mapping clause assembly = C_EBREAK() <-> "c.ebreak"
+
+/* ****************************************************************** */
 union clause ast = C_ADD : (regbits, regbits)
 
 mapping clause encdec_compressed = C_ADD(rsd, rs2) if rsd != zreg & rs2 != zreg <-> 0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10 if rsd != zreg & rs2 != zreg
