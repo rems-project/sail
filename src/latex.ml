@@ -127,6 +127,10 @@ let category_name = function
      "fcl" ^ String.sub str 1 (String.length str - 1) ^ unique_postfix n
   | FunclApp str -> "fcl" ^ str
 
+let category_name_val = function
+  | Val -> ""
+  | cat -> category_name cat
+
 (* Generate a unique latex identifier from a Sail identifier. We store
    a mapping from identifiers to strings in state so we always return
    the same latex id for a sail id. *)
@@ -417,8 +421,17 @@ let defs (Defs defs) =
     ^ "}"
     |> string
   in
+  let ref_command cat ids =
+    sprintf "\\newcommand{\\%sref%s}[2]{\n  " !opt_prefix (category_name cat)
+    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\hyperref[%s%s]{#2}}{}" (string_of_id id) (category_name_val cat) (refcode_id id))
+                          (IdSet.elements ids)
+    ^ "}"
+    |> string
+  in
 
   tex
   ^^ separate (twice hardline) [id_command Val !valspecs;
-                                id_command Function !fundefs]
+                                ref_command Val !valspecs;
+                                id_command Function !fundefs;
+                                ref_command Function !fundefs]
   ^^ hardline
