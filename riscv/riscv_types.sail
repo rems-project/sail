@@ -114,6 +114,17 @@ function rX r = match r {
   31 => x31
 }
 
+$ifdef RVFI_DII
+val rvfi_wX : forall 'n, 0 <= 'n < 32. (regno('n), xlenbits) -> unit effect {wreg}
+function rvfi_wX (r,v) = {
+  rvfi_exec->rvfi_rd_wdata() = v;
+  rvfi_exec->rvfi_rd_addr() = to_bits(8,r);
+}
+$else
+val rvfi_wX : forall 'n, 0 <= 'n < 32. (regno('n), xlenbits) -> unit
+function rvfi_wX (r,v) = ()
+$endif
+
 val wX : forall 'n, 0 <= 'n < 32. (regno('n), xlenbits) -> unit effect {wreg}
 function wX (r, v) = {
   match r {
@@ -151,6 +162,7 @@ function wX (r, v) = {
     31 => x31 = v
   };
   if (r != 0) then {
+     rvfi_wX(r,v);
      // Xs[r] = v;
      print("x" ^ string_of_int(r) ^ " <- " ^ BitStr(v));
   }

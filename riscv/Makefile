@@ -6,9 +6,11 @@ SAIL_RMEM_INST_SRCS = riscv_insts_begin.sail $(SAIL_RMEM_INST) riscv_insts_end.s
 
 # non-instruction sources
 SAIL_OTHER_SRCS = prelude.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail
+SAIL_OTHER_RVFI_SRCS = prelude.sail rvfi_dii.sail riscv_types.sail riscv_sys.sail riscv_platform.sail riscv_mem.sail riscv_vmem.sail
 
 SAIL_SRCS      = $(SAIL_OTHER_SRCS) $(SAIL_SEQ_INST_SRCS)  riscv_step.sail riscv_analysis.sail
 SAIL_RMEM_SRCS = $(SAIL_OTHER_SRCS) $(SAIL_RMEM_INST_SRCS) riscv_step.sail riscv_analysis.sail
+SAIL_RVFI_SRCS = $(SAIL_OTHER_RVFI_SRCS) $(SAIL_SEQ_INST_SRCS)  riscv_step.sail riscv_analysis.sail
 
 PLATFORM_OCAML_SRCS = platform.ml platform_impl.ml platform_main.ml
 SAIL_DIR ?= $(realpath ..)
@@ -72,6 +74,12 @@ riscv_model.c: $(SAIL_SRCS) main.sail Makefile
 
 riscv_sim: riscv_model.c riscv_sim.c $(C_INCS) $(C_SRCS) $(CPP_SRCS) Makefile
 	gcc -g $(C_WARNINGS) $(C_FLAGS) -O2 riscv_model.c riscv_sim.c $(C_SRCS) ../lib/*.c $(C_LIBS) -o $@
+
+riscv_rvfi_model.c: $(SAIL_RVFI_SRCS) main_rvfi.sail Makefile
+	$(SAIL) -O -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h -c_no_main $(SAIL_RVFI_SRCS) main_rvfi.sail 1> $@
+
+riscv_rvfi: riscv_rvfi_model.c riscv_sim.c $(C_INCS) $(C_SRCS) $(CPP_SRCS) Makefile
+	gcc -g $(C_WARNINGS) $(C_FLAGS) -O2 riscv_rvfi_model.c -DRVFI_DII riscv_sim.c $(C_SRCS) ../lib/*.c $(C_LIBS) -o $@
 
 latex: $(SAIL_SRCS) Makefile
 	$(SAIL) -latex -latex_prefix sail -o sail_ltx $(SAIL_SRCS)
@@ -141,5 +149,6 @@ clean:
 	-rm -f riscv.vo riscv_types.vo riscv_extras.vo riscv.v riscv_types.v
 	-rm -f riscv_duopod.vo riscv_duopod_types.vo riscv_duopod.v riscv_duopod_types.v
 	-rm -f riscv.c riscv_model.c riscv_sim
+	-rm -f riscv_rvfi_model.c riscv_rvfi
 	-Holmake cleanAll
 	ocamlbuild -clean

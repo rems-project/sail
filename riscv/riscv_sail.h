@@ -14,6 +14,14 @@ unit zinit_sys(unit);
 bool zstep(sail_int);
 unit ztick_clock(unit);
 unit ztick_platform(unit);
+#ifdef RVFI_DII
+unit zrvfi_set_instr_packet(mach_bits);
+mach_bits zrvfi_get_cmd(unit);
+bool zrvfi_step(sail_int);
+unit zrvfi_zzero_exec_packet(unit);
+unit zrvfi_halt_exec_packet(unit);
+void zrvfi_get_exec_packet(sail_bits *rop, unit);
+#endif
 
 extern bool zhtif_done;
 extern mach_bits zhtif_exit_code;

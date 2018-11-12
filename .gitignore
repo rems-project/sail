@@ -92,8 +92,10 @@ lib/hol/sail-heap
 /riscv/platform
 /riscv/riscv.c
 /riscv/riscv_model.c
+/riscv/riscv_rvfi_model.c
 /riscv/riscv_c
 /riscv/riscv_sim
+/riscv/riscv_rvfi
 
 /x86/x86.lem
 /x86/x86.ml
