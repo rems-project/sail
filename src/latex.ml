@@ -98,18 +98,33 @@ type id_category =
   | Function
   | Val
   | Overload
-  | FunclCtor of id
+  | FunclCtor of id * int
   | FunclNum of int
   | FunclApp of string
+
+let replace_numbers str =
+  let replacements =
+    [ ("0", "Zero");
+      ("1", "One");
+      ("2", "Two");
+      ("3", "Three");
+      ("4", "Four");
+      ("5", "Five");
+      ("6", "Six");
+      ("7", "Seven");
+      ("8", "Eight");
+      ("9", "Nine") ]
+  in
+  List.fold_left (fun str (from, into) -> Str.global_replace (Str.regexp_string from) into str) str replacements
 
 let category_name = function
   | Function -> "fn"
   | Val -> "val"
   | Overload -> "overload"
   | FunclNum n -> "fcl" ^ unique_postfix n
-  | FunclCtor id ->
-     let str = Util.zencode_string (string_of_id id) in
-     "fcl" ^ String.sub str 1 (String.length str - 1)
+  | FunclCtor (id, n) ->
+     let str = replace_numbers (Util.zencode_string (string_of_id id)) in
+     "fcl" ^ String.sub str 1 (String.length str - 1) ^ unique_postfix n
   | FunclApp str -> "fcl" ^ str
 
 (* Generate a unique latex identifier from a Sail identifier. We store
@@ -120,18 +135,6 @@ let latex_id id =
     Bindings.find id state.generated_names
   else
     let str = string_of_id id in
-    let replacements =
-      [ ("0", "Zero");
-        ("1", "One");
-        ("2", "Two");
-        ("3", "Three");
-        ("4", "Four");
-        ("5", "Five");
-        ("6", "Six");
-        ("7", "Seven");
-        ("8", "Eight");
-        ("9", "Nine") ]
-    in
     let r = Str.regexp {|_\([a-zA-Z0-9]\)|} in
     let str =
       (* Convert to CamelCase. OCaml's regexp library is a bit arcane. *)
@@ -148,7 +151,7 @@ let latex_id id =
     let str = Util.zencode_string str in
     let str = String.sub str 1 (String.length str - 1) in
     (* Latex only allows letters in identifiers, so replace all numbers *)
-    let str = List.fold_left (fun str (from, into) -> Str.global_replace (Str.regexp_string from) into str) str replacements in
+    let str = replace_numbers str in
 
     let generated = state.generated_names |> Bindings.bindings |> List.map snd |> StringSet.of_list in
 
@@ -307,13 +310,17 @@ let latex_funcls def =
   let module StringMap = Map.Make(String) in
   let counter = ref 0 in
   let app_codes = ref StringMap.empty in
+  let ctors = ref Bindings.empty in
 
   let rec latex_funcls' def =
     let counter = ref (-1) in
     let next funcls = twice hardline ^^ latex_funcls' def funcls in
     let funcl_command (FCL_Funcl (id, pexp)) =
       match pexp with
-      | Pat_aux (Pat_exp (P_aux (P_app (ctor, _), _), _), _) -> (FunclCtor ctor, id)
+      | Pat_aux (Pat_exp (P_aux (P_app (ctor, _), _), _), _) ->
+         let n = try Bindings.find ctor !ctors with Not_found -> -1 in
+         ctors := Bindings.add ctor (n + 1) !ctors;
+         FunclCtor (ctor, n), id
       | Pat_aux (Pat_exp (_, exp), _) ->
          let ac = app_code exp in
          let n = try StringMap.find ac !app_codes with Not_found -> -1 in
