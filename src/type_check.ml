@@ -2951,9 +2951,19 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
      | _ -> assert false
      end
   | _ ->
-     let inferred_exp = irule infer_exp env exp in
-     let tlexp, env' = bind_lexp env lexp (typ_of inferred_exp) in
-     annot_assign tlexp inferred_exp, env'
+     (* Here we have two options, we can infer the type from the
+        expression, or we can infer the type from the
+        l-expression. Both are useful in different cases, so try
+        both. *)
+     try
+       let inferred_exp = irule infer_exp env exp in
+       let tlexp, env' = bind_lexp env lexp (typ_of inferred_exp) in
+       annot_assign tlexp inferred_exp, env'
+     with
+     | Type_error (_, _) ->
+        let inferred_lexp = infer_lexp env lexp in
+        let checked_exp = crule check_exp env exp (lexp_typ_of inferred_lexp) in
+        annot_assign inferred_lexp checked_exp, env
 
 and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   typ_print (lazy ("Binding mutable " ^ string_of_lexp lexp ^  " to " ^ string_of_typ typ));
