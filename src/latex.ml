@@ -107,7 +107,9 @@ let category_name = function
   | Val -> "val"
   | Overload -> "overload"
   | FunclNum n -> "fcl" ^ unique_postfix n
-  | FunclCtor id ->  Util.zencode_string (string_of_id id) ^ "fcl"
+  | FunclCtor id ->
+     let str = Util.zencode_string (string_of_id id) in
+     "fcl" ^ String.sub str 1 (String.length str - 1)
   | FunclApp str -> "fcl" ^ str
 
 (* Generate a unique latex identifier from a Sail identifier. We store
@@ -208,7 +210,7 @@ let latex_of_markdown str =
     | Url (href, text, "") ->
        sprintf "\\href{%s}{%s}" href (format text)
     | Url (href, text, reference) ->
-       sprintf "%s\footnote{%s~\url{%s}}" (format text) reference href
+       sprintf "%s\\footnote{%s~\\url{%s}}" (format text) reference href
     | Code (_, code) ->
        sprintf "\\lstinline`%s`" code
     | Code_block (lang, code) ->
@@ -295,20 +297,28 @@ let counter = ref 0
 
 let rec app_code (E_aux (exp, _)) =
   match exp with
+  | E_app (f, [exp]) when Id.compare f (mk_id "Some") = 0 -> app_code exp
   | E_app (f, [exp]) -> latex_id f ^ app_code exp
   | E_app (f, _) -> latex_id f
   | E_id id -> latex_id id
   | _ -> ""
 
 let latex_funcls def =
+  let module StringMap = Map.Make(String) in
   let counter = ref 0 in
+  let app_codes = ref StringMap.empty in
 
   let rec latex_funcls' def =
+    let counter = ref (-1) in
     let next funcls = twice hardline ^^ latex_funcls' def funcls in
     let funcl_command (FCL_Funcl (id, pexp)) =
       match pexp with
       | Pat_aux (Pat_exp (P_aux (P_app (ctor, _), _), _), _) -> (FunclCtor ctor, id)
-      | Pat_aux (Pat_exp (_, exp), _) -> (FunclApp (app_code exp), id)
+      | Pat_aux (Pat_exp (_, exp), _) ->
+         let ac = app_code exp in
+         let n = try StringMap.find ac !app_codes with Not_found -> -1 in
+         app_codes := StringMap.add ac (n + 1) !app_codes;
+         FunclApp (ac ^ unique_postfix n), id
       | _ -> incr counter; (FunclNum (!counter + 64), id)
     in
     function
