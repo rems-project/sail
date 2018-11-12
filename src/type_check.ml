@@ -3105,7 +3105,10 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
      in
      let typq, _, ret_typ, _ = Env.get_accessor rec_id fid env in
      annot_lexp_effect (LEXP_field (annot_lexp (LEXP_id v) (mk_id_typ rec_id), fid)) ret_typ weff
-  | _ -> typ_error l ("Unhandled l-expression " ^ string_of_lexp lexp)
+  | LEXP_tup lexps ->
+     let inferred_lexps = List.map (infer_lexp env) lexps in
+     annot_lexp (LEXP_tup inferred_lexps) (tuple_typ (List.map lexp_typ_of inferred_lexps))
+  | _ -> typ_error l ("Could not infer the type of " ^ string_of_lexp lexp)
 
 and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   let annot_exp_effect exp typ eff = E_aux (exp, (l, Some ((env, typ, eff),None))) in
