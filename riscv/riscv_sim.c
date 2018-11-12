@@ -49,6 +49,7 @@ unsigned char *dtb = NULL;
 size_t dtb_len = 0;
 #ifdef RVFI_DII
 static bool rvfi_dii = false;
+static int rvfi_dii_port;
 static int rvfi_dii_sock;
 #endif
 
@@ -63,7 +64,7 @@ static struct option options[] = {
   {"device-tree-blob",            required_argument, 0, 'b'},
   {"terminal-log",                required_argument, 0, 't'},
 #ifdef RVFI_DII
-  {"rvfi-dii",                    no_argument,       0, 'r'},
+  {"rvfi-dii",                    required_argument, 0, 'r'},
 #endif
   {"help",                        no_argument,       0, 'h'},
   {0, 0, 0, 0}
@@ -72,7 +73,7 @@ static struct option options[] = {
 static void print_usage(const char *argv0, int ec)
 {
 #ifdef RVFI_DII
-  fprintf(stdout, "Usage: %s [options] [<elf_file>]\n", argv0);
+  fprintf(stdout, "Usage: %s [options] <elf_file>\n       %s [options] -r <port>\n", argv0, argv0);
 #else
   fprintf(stdout, "Usage: %s [options] <elf_file>\n", argv0);
 #endif
@@ -136,7 +137,7 @@ char *process_args(int argc, char **argv)
 {
   int c, idx = 1;
   while(true) {
-    c = getopt_long(argc, argv, "dmsb:t:v:hr", options, &idx);
+    c = getopt_long(argc, argv, "dmsb:t:v:hr:", options, &idx);
     if (c == -1) break;
     switch (c) {
     case 'd':
@@ -162,6 +163,7 @@ char *process_args(int argc, char **argv)
 #ifdef RVFI_DII
     case 'r':
       rvfi_dii = true;
+      rvfi_dii_port = atoi(optarg);
       break;
 #endif
     default:
@@ -576,7 +578,7 @@ int main(int argc, char **argv)
     struct sockaddr_in addr = {
       .sin_family = AF_INET,
       .sin_addr.s_addr = INADDR_ANY,
-      .sin_port = htons(1234)
+      .sin_port = htons(rvfi_dii_port)
     };
     if (bind(listen_sock, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
       fprintf(stderr, "Unable to set bind socket: %s", strerror(errno));
