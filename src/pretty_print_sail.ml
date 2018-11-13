@@ -119,7 +119,7 @@ let doc_nc =
     match nc_aux with
     | NC_true -> string "true"
     | NC_false -> string "false"
-    | NC_equal (n1, n2) -> nc_op "=" n1 n2
+    | NC_equal (n1, n2) -> nc_op "==" n1 n2
     | NC_not_equal (n1, n2) -> nc_op "!=" n1 n2
     | NC_bounded_ge (n1, n2) -> nc_op ">=" n1 n2
     | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
@@ -318,7 +318,8 @@ let fixities =
 let rec doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_block [] -> string "()"
-  | E_block exps -> surround 2 0 lbrace (doc_block exps) rbrace
+  | E_block exps ->
+     group (lbrace ^^ nest 4 (hardline ^^ doc_block exps) ^^ hardline ^^ rbrace)
   | E_nondet exps -> assert false
   (* This is mostly for the -convert option *)
   | E_app_infix (x, id, y) when Id.compare (mk_id "quot") id == 0 ->
