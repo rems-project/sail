@@ -303,11 +303,6 @@ void init_sail_reset_vector(uint64_t entry)
 
   /* set rom size */
   rv_rom_size = rom_end - rv_rom_base;
-#ifdef RVFI_DII
-  if (rvfi_dii)
-    zPC = entry;
-  else
-#endif
   /* boot at reset vector */
   zPC = rv_rom_base;
 }
@@ -317,6 +312,15 @@ void init_sail(uint64_t elf_entry)
   model_init();
   zinit_platform(UNIT);
   zinit_sys(UNIT);
+#ifdef RVFI_DII
+  if (rvfi_dii) {
+    rv_ram_base = UINT64_C(0x80000000);
+    rv_ram_size = UINT64_C(0x10000);
+    rv_rom_base = UINT64_C(0);
+    rv_rom_size = UINT64_C(0);
+    zPC = elf_entry;
+  } else
+#endif
   init_sail_reset_vector(elf_entry);
 }
 
