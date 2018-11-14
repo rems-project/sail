@@ -122,6 +122,7 @@ type return_value =
   | Return_ok of value
   | Return_exception of value
 
+(* when changing effect arms remember to also update effect_request type below *)
 type 'a response =
   | Early_return of value
   | Exception of value
@@ -795,10 +796,22 @@ type frame =
   | Done of state * value
   | Step of string Lazy.t * state * (Type_check.tannot exp) monad * (string Lazy.t * lstate * (return_value -> (Type_check.tannot exp) monad)) list
   | Break of frame
+  | Effect_request of state * effect_request
+
+(* when changing effect_request remember to also update response type above *)
+and effect_request =
+  | Read_mem of (* read_kind : *) value * (* address : *) value * (* length : *) value * (value -> state -> frame)
+  | Write_ea of (* write_kind : *) value * (* address : *) value * (* length : *) value * (unit -> state -> frame)
+  | Excl_res of (bool -> state -> frame)
+  | Write_memv of value * (bool -> state -> frame)
+  | Barrier of (* barrier_kind : *) value * (unit -> state -> frame)
+  | Read_reg of string * (value -> state -> frame)
+  | Write_reg of string * value * (unit -> state -> frame)
 
 let rec eval_frame' = function
   | Done (state, v) -> Done (state, v)
   | Break frame -> Break frame
+  | Effect_request (state, eff) -> Effect_request (state, eff)
   | Step (out, state, m, stack) ->
      let lstate, gstate = state in
      match (m, stack) with
@@ -828,29 +841,9 @@ let rec eval_frame' = function
         end
 
      | Yield (Read_reg (name, cont)), _ ->
-        begin
-          let gstate = gstate in
-          if gstate.allow_registers then
-            try
-              eval_frame' (Step (out, state, cont (Bindings.find (mk_id name) gstate.registers), stack))
-            with Not_found ->
-              eval_frame' (Step (out, state, fail ("Read of nonexistent register: " ^ name), stack))
-          else
-            eval_frame' (Step (out, state, fail ("Register read disallowed by allow_registers setting: " ^ name), stack))
-        end
+        Effect_request (state, Read_reg (name, fun v state' -> eval_frame' (Step (out, state', cont v, stack))))
      | Yield (Write_reg (name, v, cont)), _ ->
-        begin
-          let id = mk_id name in
-          let gstate = gstate in
-          if gstate.allow_registers then
-            if Bindings.mem id gstate.registers then
-              let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
-              eval_frame' (Step (out, state', cont (), stack))
-            else
-              eval_frame' (Step (out, state, fail ("Write of nonexistent register: " ^ name), stack))
-          else
-            eval_frame' (Step (out, state, fail ("Register write disallowed by allow_registers setting: " ^ name), stack))
-        end
+        Effect_request (state, Write_reg (name, v, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
      | Yield (Get_primop (name, cont)), _ ->
         begin
           try
@@ -872,39 +865,15 @@ let rec eval_frame' = function
      | Yield (Get_global_letbinds cont), _ ->
         eval_frame' (Step (out, state, cont gstate.letbinds, stack))
      | Yield (Read_mem (rk, addr, len, cont)), _ ->
-        (* all read-kinds treated the same in single-threaded interpreter *)
-        let addr' = coerce_bv addr in
-        let len' = coerce_int len in
-        let result = mk_vector (Sail_lib.read_ram (List.length addr', len', [], addr')) in
-        eval_frame' (Step (out, state, cont result, stack))
+        Effect_request (state, Read_mem (rk, addr, len, fun result state' -> eval_frame' (Step (out, state', cont result, stack))))
      | Yield (Write_ea (wk, addr, len, cont)), _ ->
-        (* just store the values for the next Write_memv *)
-        let state' = (lstate, { gstate with last_write_ea = Some (wk, addr, len) }) in
-        eval_frame' (Step (out, state', cont (), stack))
+        Effect_request (state, Write_ea (wk, addr, len, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
      | Yield (Excl_res cont), _ ->
-        (* always succeeds in single-threaded interpreter *)
-        eval_frame' (Step (out, state, cont true, stack))
+        Effect_request (state, Excl_res (fun b state' -> eval_frame' (Step (out, state', cont b, stack))))
      | Yield (Write_memv (v, cont)), _ ->
-        begin
-          match gstate.last_write_ea with
-          | Some (wk, addr, len) ->
-             let state' = (lstate, { gstate with last_write_ea = None }) in
-             (* all write-kinds treated the same in single-threaded interpreter *)
-             let addr' = coerce_bv addr in
-             let len' = coerce_int len in
-             let v' = coerce_bv v in
-             if Big_int.mul len' (Big_int.of_int 8) = Big_int.of_int (List.length v') then
-               let b = Sail_lib.write_ram (List.length addr', len', [], addr', v') in
-               eval_frame' (Step (out, state', cont b, stack))
-             else
-               eval_frame' (Step (out, state, fail "Write_memv with length mismatch to preceding Write_ea", stack))
-          | None ->
-             eval_frame' (Step (out, state, fail "Write_memv without preceding Write_ea", stack))
-        end
+        Effect_request (state, Write_memv (v, fun b state' -> eval_frame' (Step (out, state', cont b, stack))))
      | Yield (Barrier (bk, cont)), _ ->
-     (* no-op in single-threaded interpreter *)
-        eval_frame' (Step (out, state, cont (), stack))
-
+        Effect_request (state, Barrier (bk, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
      | Yield (Early_return v), [] -> Done (state, v)
      | Yield (Early_return v), (head :: stack') ->
         Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
@@ -920,6 +889,68 @@ let eval_frame frame =
   | Type_check.Type_error (l, err) ->
      raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
 
+let default_effect_interp state eff =
+  let lstate, gstate = state in
+  match eff with
+  | Read_mem (rk, addr, len, cont) ->
+     (* all read-kinds treated the same in single-threaded interpreter *)
+     let addr' = coerce_bv addr in
+     let len' = coerce_int len in
+     let result = mk_vector (Sail_lib.read_ram (List.length addr', len', [], addr')) in
+     cont result state
+  | Write_ea (wk, addr, len, cont) ->
+     (* just store the values for the next Write_memv *)
+     let state' = (lstate, { gstate with last_write_ea = Some (wk, addr, len) }) in
+     cont () state'
+  | Excl_res cont ->
+     (* always succeeds in single-threaded interpreter *)
+     cont true state
+  | Write_memv (v, cont) ->
+     begin
+       match gstate.last_write_ea with
+       | Some (wk, addr, len) ->
+          let state' = (lstate, { gstate with last_write_ea = None }) in
+          (* all write-kinds treated the same in single-threaded interpreter *)
+          let addr' = coerce_bv addr in
+          let len' = coerce_int len in
+          let v' = coerce_bv v in
+          if Big_int.mul len' (Big_int.of_int 8) = Big_int.of_int (List.length v') then
+            let b = Sail_lib.write_ram (List.length addr', len', [], addr', v') in
+            cont b state
+          else
+            failwith "Write_memv with length mismatch to preceding Write_ea"
+       | None ->
+          failwith "Write_memv without preceding Write_ea"
+     end
+  | Barrier (bk, cont) ->
+     (* no-op in single-threaded interpreter *)
+     cont () state
+  | Read_reg (name, cont) ->
+     begin
+       if gstate.allow_registers then
+         try
+           cont (Bindings.find (mk_id name) gstate.registers) state
+         with Not_found ->
+           failwith ("Read of nonexistent register: " ^ name)
+       else
+         failwith ("Register read disallowed by allow_registers setting: " ^ name)
+     end
+  | Write_reg (name, v, cont) ->
+     begin
+       let id = mk_id name in
+       if gstate.allow_registers then
+         if Bindings.mem id gstate.registers then
+           let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
+           cont () state'
+         else
+           failwith ("Write of nonexistent register: " ^ name)
+       else
+         failwith ("Register write disallowed by allow_registers setting: " ^ name)
+     end
+
+
+
+
 let rec run_frame frame =
   match frame with
   | Done (state, v) -> v
@@ -927,6 +958,8 @@ let rec run_frame frame =
      run_frame (eval_frame frame)
   | Break frame ->
      run_frame (eval_frame frame)
+  | Effect_request (state, eff) ->
+     run_frame (default_effect_interp state eff)
 
 let eval_exp state exp =
   run_frame (Step (lazy "", state, return exp, []))

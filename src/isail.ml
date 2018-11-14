@@ -137,6 +137,14 @@ let rec run () =
        | Break frame ->
           print_endline "Breakpoint";
           current_mode := Evaluation frame
+       | Effect_request (state, eff) ->
+          begin
+            try
+              current_mode := Evaluation (Interpreter.default_effect_interp state eff)
+            with
+            | Failure str -> print_endline str; current_mode := Normal
+          end;
+          run ()
      end
 
 let rec run_steps n =
@@ -162,6 +170,14 @@ let rec run_steps n =
        | Break frame ->
           print_endline "Breakpoint";
           current_mode := Evaluation frame
+       | Effect_request (state, eff) ->
+          begin
+            try
+              current_mode := Evaluation (Interpreter.default_effect_interp state eff)
+            with
+            | Failure str -> print_endline str; current_mode := Normal
+          end;
+          run_steps (n - 1)
      end
 
 let help = function
@@ -395,6 +411,15 @@ let handle_input' input =
             | Break frame ->
                print_endline "Breakpoint";
                current_mode := Evaluation frame
+            | Effect_request (state, eff) ->
+               begin
+                 try
+                   interactive_state := state;
+                   current_mode := Evaluation (Interpreter.default_effect_interp state eff);
+                   print_program ()
+                 with
+                 | Failure str -> print_endline str; current_mode := Normal
+               end
           end
      end
 
