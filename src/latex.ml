@@ -218,9 +218,11 @@ let latex_of_markdown str =
        | None -> failwith "Cannot create link to THIS"
        end
     | Ref (r, name, alt, _) ->
+       (* special case for [id] (format as code) *)
+       let format_fn = if name = alt then inline_code else replace_this in
        begin match r#get_ref name with
-       | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (replace_this alt)
-       | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (replace_this alt)
+       | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (format_fn alt)
+       | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (format_fn alt)
        end
     | Url (href, text, "") ->
        sprintf "\\href{%s}{%s}" href (format text)
