@@ -131,6 +131,14 @@ let category_name_val = function
   | Val -> ""
   | cat -> category_name cat
 
+let category_name_simple = function
+  | Function -> "fn"
+  | Val -> "val"
+  | Overload -> "overload"
+  | FunclNum _ -> "fcl"
+  | FunclCtor (_, _) -> "fcl"
+  | FunclApp _ -> "fcl"
+
 (* Generate a unique latex identifier from a Sail identifier. We store
    a mapping from identifiers to strings in state so we always return
    the same latex id for a sail id. *)
@@ -293,9 +301,9 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
   output_string chan (Pretty_print_sail.to_string (latex_loc no_loc l));
   close_out chan;
 
-  ksprintf string "\\newcommand{\\sail%s%s}{\\phantomsection%s" (category_name cat) (latex_id id) labelling
-  ^^ docstring l
-  ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}" (Filename.concat !opt_directory code_file)
+  ksprintf string "\\newcommand{\\sail%s%s}{\\phantomsection%s\\saildoc%s{" (category_name cat) (latex_id id) labelling (category_name_simple cat)
+  ^^ docstring l ^^ string "}{"
+  ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}" (Filename.concat !opt_directory code_file)
 
 let latex_label str id =
   string (Printf.sprintf "\\label{%s:%s}" str (Util.zencode_string (string_of_id id)))
