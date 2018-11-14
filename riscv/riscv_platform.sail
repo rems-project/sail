@@ -42,6 +42,7 @@ function plat_enable_misaligned_access () = false
 val plat_mtval_has_illegal_inst_bits = {ocaml: "Platform.mtval_has_illegal_inst_bits",
                                         c: "plat_mtval_has_illegal_inst_bits",
                                         lem: "plat_mtval_has_illegal_inst_bits"} : unit -> bool
+function plat_mtval_has_illegal_inst_bits () = false
 
 /* ROM holding reset vector and device-tree DTB */
 val plat_rom_base   = {ocaml: "Platform.rom_base", c: "plat_rom_base", lem: "plat_rom_base"} : unit -> xlenbits
