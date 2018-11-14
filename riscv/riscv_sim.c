@@ -42,6 +42,7 @@ struct tv_spike_t;
 #define CSR_MIP 0x344
 
 static bool do_dump_dts = false;
+static bool disable_compressed = false;
 struct tv_spike_t *s = NULL;
 char *term_log = NULL;
 char *dtb_file = NULL;
@@ -59,6 +60,7 @@ size_t spike_dtb_len = 0;
 static struct option options[] = {
   {"enable-dirty",                no_argument,       0, 'd'},
   {"enable-misaligned",           no_argument,       0, 'm'},
+  {"disable-compressed",          no_argument,       0, 'C'},
   {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'},
   {"dump-dts",                    no_argument,       0, 's'},
   {"device-tree-blob",            required_argument, 0, 'b'},
@@ -137,7 +139,7 @@ char *process_args(int argc, char **argv)
 {
   int c, idx = 1;
   while(true) {
-    c = getopt_long(argc, argv, "dmsb:t:v:hr:", options, &idx);
+    c = getopt_long(argc, argv, "dmCsb:t:v:hr:", options, &idx);
     if (c == -1) break;
     switch (c) {
     case 'd':
@@ -145,6 +147,9 @@ char *process_args(int argc, char **argv)
       break;
     case 'm':
       rv_enable_misaligned = true;
+      break;
+    case 'C':
+      disable_compressed = true;
       break;
     case 'i':
       rv_mtval_has_illegal_inst_bits = true;
@@ -322,6 +327,8 @@ void init_sail(uint64_t elf_entry)
   } else
 #endif
   init_sail_reset_vector(elf_entry);
+  if (disable_compressed)
+    z_set_Misa_C(&zmisa, 0);
 }
 
 int init_check(struct tv_spike_t *s)
@@ -476,7 +483,8 @@ void run_sail(void)
       if (stepped) {
         need_instr = true;
         rvfi_send_trace();
-      }
+      } else
+        need_instr = false;
     } else
 #endif
     { /* run a Sail step */

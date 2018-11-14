@@ -6,6 +6,9 @@ typedef int unit;
 #define UNIT 0
 typedef uint64_t mach_bits;
 
+struct zMisa {mach_bits zMisa_chunk_0;};
+struct zMisa zmisa;
+
 void model_init(void);
 void model_fini(void);
 
@@ -14,6 +17,8 @@ unit zinit_sys(unit);
 bool zstep(sail_int);
 unit ztick_clock(unit);
 unit ztick_platform(unit);
+unit z_set_Misa_C(struct zMisa*, mach_bits);
+
 #ifdef RVFI_DII
 unit zrvfi_set_instr_packet(mach_bits);
 mach_bits zrvfi_get_cmd(unit);
@@ -47,6 +52,3 @@ struct zMcause {mach_bits zMcause_chunk_0;};
 struct zMcause zmcause, zscause;
 
 extern mach_bits zminstret;
-
-struct zMisa {mach_bits zMisa_chunk_0;};
-struct zMisa zmisa;
