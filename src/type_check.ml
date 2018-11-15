@@ -73,6 +73,10 @@ let opt_no_lexp_bounds_check = ref false
    definitions *)
 let opt_constraint_synonyms = ref false
 
+(* opt_expand_valspec expands typedefs in valspecs during type check.
+   We prefer not to do it for latex output but it is otherwise a good idea. *)
+let opt_expand_valspec = ref true
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -4337,7 +4341,12 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        in
        let env = Env.add_extern id ext_opt env in
        let env = if is_cast then Env.add_cast id env else env in
-       let typq, typ = expand_bind_synonyms ts_l env (typq, typ) in
+       let typq, typ =
+         if !opt_expand_valspec then 
+           expand_bind_synonyms ts_l env (typq, typ)
+         else
+           (typq, typ)
+       in
        let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, ext_opt, is_cast) in
        (vs, id, typq, typ, env)
   in

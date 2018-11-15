@@ -109,7 +109,7 @@ let options = Arg.align ([
     Arg.String (fun s -> opt_ocaml_generators := s::!opt_ocaml_generators),
     "<types> produce random generators for the given types");
   ( "-latex",
-    Arg.Set opt_print_latex,
+    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
     " pretty print the input to latex");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
