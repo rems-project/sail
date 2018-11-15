@@ -296,7 +296,10 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
        | NC_aux (nc, _), NC_aux (NC_true, _) -> NC_true
        | _, _ -> NC_or (nc1, nc2)
        end
-
+    | NC_bounded_ge (nexp1, nexp2) ->
+       NC_bounded_ge (nexp_simp nexp1, nexp_simp nexp2)
+    | NC_bounded_le (nexp1, nexp2) ->
+       NC_bounded_le (nexp_simp nexp1, nexp_simp nexp2)
     | _ -> nc_aux
   in
   NC_aux (nc_aux, l)
