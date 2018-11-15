@@ -113,7 +113,7 @@ let rec doc_nexp =
   in
   nexp0
 
-let doc_nc =
+let doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
   let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
     match nc_aux with
@@ -151,9 +151,9 @@ let doc_nc =
     | NC_and (c1, c2) -> separate space [nc1 c1; string "&"; atomic_nc c2]
     | _ -> atomic_nc nc
   in
-  nc0
+  nc0 (constraint_simp nc)
 
-let rec doc_typ (Typ_aux (typ_aux, l)) =
+let rec doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
@@ -177,7 +177,10 @@ let rec doc_typ (Typ_aux (typ_aux, l)) =
      separate space [doc_arg_typs typs; string "->"; doc_typ typ]
   | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
      let ocaml_eff = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs)) in
-     separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
+     if simple then
+       separate space [doc_arg_typs typs; string "->"; doc_typ ~simple:simple typ]
+     else
+       separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
   | Typ_bidir (typ1, typ2) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
@@ -217,24 +220,24 @@ let doc_quants quants =
   | [nc] -> kdoc ^^ comma ^^ space ^^ doc_nc nc
   | nc :: ncs -> kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
-let doc_binding ((TypQ_aux (tq_aux, _) as typq), typ) =
+let doc_binding ?(simple=false) ((TypQ_aux (tq_aux, _) as typq), typ) =
   match tq_aux with
-  | TypQ_no_forall -> doc_typ typ
-  | TypQ_tq [] -> doc_typ typ
+  | TypQ_no_forall -> doc_typ ~simple:simple typ
+  | TypQ_tq [] -> doc_typ ~simple:simple typ
   | TypQ_tq qs ->
      if !opt_use_heuristics && String.length (string_of_typquant typq) > 60 then
        let kopts, ncs = quant_split typq in
        if ncs = [] then
          string "forall" ^^ space ^^ separate_map space doc_kopt kopts ^^ dot
-         ^//^ doc_typ typ
+         ^//^ doc_typ ~simple:simple typ
        else
          string "forall" ^^ space ^^ separate_map space doc_kopt kopts ^^ comma
          ^//^ (separate_map (space ^^ string "&" ^^ space) doc_nc ncs ^^ dot
-               ^^ hardline ^^ doc_typ typ)
+               ^^ hardline ^^ doc_typ ~simple:simple typ)
      else
-       string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ typ
+       string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ ~simple:simple typ
 
-let doc_typschm (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding (typq, typ)
+let doc_typschm ?(simple=false) (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding ~simple:simple (typq, typ)
 
 let doc_typschm_typ (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) = doc_typ typ
 

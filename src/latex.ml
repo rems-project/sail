@@ -290,6 +290,11 @@ let latex_loc no_loc l =
 
 let commands = ref StringSet.empty
 
+let doc_spec_simple (VS_val_spec(ts,id,ext,is_cast)) =
+     Pretty_print_sail.doc_id id ^^ space
+     ^^ colon ^^ space
+     ^^ Pretty_print_sail.doc_typschm ~simple:true ts
+
 let rec latex_command cat id no_loc ((l, _) as annot) =
   state.this <- Some id;
   let labelling = match cat with
@@ -300,7 +305,8 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
      to put the sail code for each command in a separate file. *)
   let code_file = category_name cat ^ Util.file_encode_string (string_of_id id) ^ ".tex" in
   let chan = open_out (Filename.concat !opt_directory code_file) in
-  output_string chan (Pretty_print_sail.to_string (latex_loc no_loc l));
+  let doc = if cat = Val then no_loc else latex_loc no_loc l in
+  output_string chan (Pretty_print_sail.to_string doc);
   close_out chan;
 
   ksprintf string "\\newcommand{\\sail%s%s}{\\phantomsection%s\\saildoc%s{" (category_name cat) (latex_id id) labelling (category_name_simple cat)
@@ -391,9 +397,9 @@ let defs (Defs defs) =
        Some (latex_command Overload id doc (id_loc id, None))
                                    *)
 
-    | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), annot)) as def ->
+    | DEF_spec (VS_aux (VS_val_spec (_, id, _, _) as vs, annot)) as def ->
        valspecs := IdSet.add id !valspecs;
-       Some (latex_command Val id (Pretty_print_sail.doc_def def) annot)
+       Some (latex_command Val id (doc_spec_simple vs) annot)
 
     | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def ->
        fundefs := IdSet.add id !fundefs;
