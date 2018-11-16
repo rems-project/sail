@@ -68,7 +68,7 @@ let doc_kid kid = string (Ast_util.string_of_kid kid)
 let doc_int n = string (Big_int.to_string n)
 
 let docstring (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string "/**" ^^ string str ^^ string "*/" ^^ hardline
+  | Parse_ast.Documented (str, _) -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline
   | _ -> empty
 
 let doc_ord (Ord_aux(o,_)) = match o with
@@ -483,13 +483,14 @@ let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
 
 let doc_default (DT_aux (DT_order ord, _)) = separate space [string "default"; string "Order"; doc_ord ord]
 
-let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), _)) =
-  match funcls with
-  | [] -> failwith "Empty function list"
-  | _ ->
-     let sep = hardline ^^ string "and" ^^ space in
-     let clauses = separate_map sep doc_funcl funcls in
-     string "function" ^^ space ^^ clauses
+let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), annot)) =
+  docstring annot
+  ^^ match funcls with
+     | [] -> failwith "Empty function list"
+     | _ ->
+        let sep = hardline ^^ string "and" ^^ space in
+        let clauses = separate_map sep doc_funcl funcls in
+        string "function" ^^ space ^^ clauses
 
 let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
   match mp_aux with

@@ -754,17 +754,52 @@ end = struct
     with
     | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
 
+  let ex_counter = ref 0
+
+  (* TODO: Currently this is duplicated with destruct_exist outside of Env and deals with val spec arguments only. *)
+  let fresh_existential ?name:(n="") () =
+    let fresh = Kid_aux (Var ("'all" ^ string_of_int !ex_counter ^ "#" ^ n), Parse_ast.Unknown) in
+    incr ex_counter; fresh
+
+  let destruct_exist env typ =
+    match expand_synonyms env typ with
+    | Typ_aux (Typ_exist (kids, nc, typ), _) ->
+       let fresh_kids = List.map (fun kid -> (kid, fresh_existential ~name:(string_of_id (id_of_kid kid)) ())) kids in
+       let nc = List.fold_left (fun nc (kid, fresh) -> nc_subst_nexp kid (Nexp_var fresh) nc) nc fresh_kids in
+       let typ = List.fold_left (fun typ (kid, fresh) -> typ_subst_nexp kid (Nexp_var fresh) typ) typ fresh_kids in
+       Some (List.map snd fresh_kids, nc, typ)
+    | _ -> None
+
   let rec update_val_spec id (typq, typ) env =
-    begin
-      let typ = expand_synonyms env typ in
-      let typq = expand_typquant_synonyms env typq in
-      typ_print (lazy (adding ^ "val spec " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
-      let env = match typ with
-        | Typ_aux (Typ_bidir (typ1, typ2), _) -> add_mapping id (typq, typ1, typ2) env
-        | _ -> env
-      in
-      { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
+    begin match expand_synonyms env typ with
+    | Typ_aux (Typ_fn (arg_typs, ret_typ, effect), l) ->
+       (* We perform some canonicalisation for function types where existentials appear on the left, so
+          ({'n, 'n >= 2, int('n)}, foo) -> bar
+          would become
+          forall 'n, 'n >= 2. (int('n), foo) -> bar
+          this enforces the invariant that all things on the left of functions are 'base types' (i.e. without existentials)
+        *)
+       let typq = expand_typquant_synonyms env typq in
+       let base_args = List.map (destruct_exist env) arg_typs in
+       let existential_arg typq = function
+         | None -> typq
+         | Some (exs, nc, _) ->
+            List.fold_left (fun typq kid -> quant_add (mk_qi_id BK_int kid) typq) (quant_add (mk_qi_nc nc) typq) exs
+       in
+       let typq = List.fold_left existential_arg typq base_args in
+       let arg_typs = List.map2 (fun typ -> function Some (_, _, typ) -> typ | None -> typ) arg_typs base_args in
+       let typ = Typ_aux (Typ_fn (arg_typs, ret_typ, effect), l) in
+       typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
+       { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
+
+    | Typ_aux (Typ_bidir (typ1, typ2), l) ->
+       let env = add_mapping id (typq, typ1, typ2) env in
+       typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
+       { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
+
+    | _ -> typ_error (id_loc id) "val definition must have a mapping or function type"
     end
+
   and add_val_spec id (bind_typq, bind_typ) env =
     if not (Bindings.mem id env.top_val_specs)
     then update_val_spec id (bind_typq, bind_typ) env
@@ -776,6 +811,7 @@ end = struct
         typ_error (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound as " ^ string_of_bind (existing_typq, existing_typ) ^ ", cannot rebind as " ^ string_of_bind (bind_typq, bind_typ))
       else
         env
+
   and add_mapping id (typq, typ1, typ2) env =
     begin
       typ_print (lazy (adding ^ "mapping " ^ string_of_id id));

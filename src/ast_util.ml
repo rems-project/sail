@@ -399,6 +399,13 @@ let mk_effect effs =
 
 let no_effect = mk_effect []
 
+let quant_add qi typq =
+  match qi, typq with
+  | QI_aux (QI_const (NC_aux (NC_true, _)), _), _ -> typq
+  | QI_aux (QI_id _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qi :: qis), l)
+  | QI_aux (QI_const nc, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
+  | _, TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_tq [qi], l)
+
 let quant_items : typquant -> quant_item list = function
   | TypQ_aux (TypQ_tq qis, _) -> qis
   | TypQ_aux (TypQ_no_forall, _) -> []
