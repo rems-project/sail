@@ -291,6 +291,12 @@ void shl_int(sail_int *rop, const sail_int op1, const sail_int op2)
 }
 
 inline
+mach_int shl_mach_int(const mach_int op1, const mach_int op2)
+{
+  return op1 << op2;
+}
+
+inline
 void shr_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_fdiv_q_2exp(*rop, op1, mpz_get_ui(op2));
@@ -444,6 +450,11 @@ void CREATE_OF(sail_bits, mach_bits)(sail_bits *rop, const uint64_t op, const ui
   rop->bits = malloc(sizeof(mpz_t));
   rop->len = len;
   mpz_init_set_ui(*rop->bits, op);
+}
+
+mach_bits CREATE_OF(mach_bits, sail_bits)(const sail_bits op)
+{
+  return mpz_get_ui(*op.bits);
 }
 
 void RECREATE_OF(sail_bits, mach_bits)(sail_bits *rop, const uint64_t op, const uint64_t len, const bool direction)

@@ -364,8 +364,10 @@ let output libpath out_arg files =
       output1 libpath out_arg f defs)
     files
 
-let rewrite_step defs (name,rewriter) =
+let rewrite_step defs (name, rewriter) =
+  let t = Profile.start () in
   let defs = rewriter defs in
+  Profile.finish ("rewrite " ^ name) t;
   let _ = match !(opt_ddump_rewrite_ast) with
     | Some (f, i) ->
       begin

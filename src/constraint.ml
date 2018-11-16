@@ -219,7 +219,7 @@ let save_digests () =
   DigestMap.iter output !known_problems;
   close_out out_chan
 
-let rec call_z3 constraints : smt_result =
+let call_z3' constraints : smt_result =
   let problems = [constraints] in
   let z3_file = smtlib_of_constraints constraints in
 
@@ -260,6 +260,12 @@ let rec call_z3 constraints : smt_result =
          then (known_problems := DigestMap.add digest Sat !known_problems; Sat)
          else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
     end
+
+let call_z3 constraints =
+  let t = Profile.start_z3 () in
+  let result = call_z3' constraints in
+  Profile.finish_z3 t;
+  result
 
 let rec solve_z3 constraints var =
   let problems = [constraints] in

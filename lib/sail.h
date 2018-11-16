@@ -131,6 +131,7 @@ bool gteq(const sail_int, const sail_int);
 /*
  * Left and right shift for integers
  */
+mach_int shl_mach_int(const mach_int, const mach_int);
 SAIL_INT_FUNCTION(shl_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(shr_int, sail_int, const sail_int, const sail_int);
 
@@ -191,6 +192,8 @@ void RECREATE_OF(sail_bits, mach_bits)(sail_bits *,
 				       const mach_bits op,
 				       const mach_bits len,
 				       const bool direction);
+
+mach_bits CREATE_OF(mach_bits, sail_bits)(const sail_bits);
 
 mach_bits CONVERT_OF(mach_bits, sail_bits)(const sail_bits, const bool);
 void CONVERT_OF(sail_bits, mach_bits)(sail_bits *, const mach_bits, const uint64_t, const bool);

@@ -359,10 +359,10 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
             else ocaml_atomic_exp ctx exp
           in
           separate space [zencode ctx id; string ":="; traced_exp]
-       | _ -> separate space [zencode ctx id; string ":="; ocaml_exp ctx exp]
+       | _ -> separate space [zencode ctx id; string ":="; parens (ocaml_exp ctx exp)]
      end
   | LEXP_deref ref_exp ->
-     separate space [ocaml_atomic_exp ctx ref_exp; string ":="; ocaml_exp ctx exp]
+     separate space [ocaml_atomic_exp ctx ref_exp; string ":="; parens (ocaml_exp ctx exp)]
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
 and ocaml_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
@@ -933,7 +933,7 @@ let ocaml_main spec sail_dir =
    @ [ "  zinitializze_registers ();";
        if !opt_trace_ocaml then "  Sail_lib.opt_trace := true;" else "  ();";
        "  Printexc.record_backtrace true;";
-       "  try zmain () with _ -> prerr_endline(\"Exiting due to uncaught exception\")\n";])
+       "  try zmain () with exn -> prerr_endline(\"Exiting due to uncaught exception:\\n\" ^ Printexc.to_string exn)\n";])
   |> String.concat "\n"
 
 let ocaml_pp_defs f defs generator_types =

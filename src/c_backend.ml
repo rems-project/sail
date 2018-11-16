@@ -306,7 +306,9 @@ let rec c_aval ctx = function
               else
                 v (* id's type went from heap -> stack due to flow typing, so it's really still heap allocated! *)
             with
-              Not_found -> failwith ("could not find " ^ string_of_id id ^ " in local variables")
+              (* Hack: Assuming global letbindings don't change from flow typing... *)
+              Not_found -> AV_C_fragment (F_id id, typ)
+              (* failwith ("could not find " ^ string_of_id id ^ " in local variables") *)
           end
        | Register (_, _, typ) when is_stack_typ ctx typ ->
           AV_C_fragment (F_id id, typ)
@@ -427,9 +429,11 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
+       (*
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] when is_stack_typ ctx typ ->
      let len = F_op (f, "-", F_op (t, "-", v_one)) in
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", t)), typ))
+        *)
 
   | "vector_access", [AV_C_fragment (vec, _); AV_C_fragment (n, _)] ->
      AE_val (AV_C_fragment (F_op (v_one, "&", F_op (vec, ">>", n)), typ))
@@ -437,8 +441,10 @@ let analyze_primop' ctx id args typ =
   | "eq_bit", [AV_C_fragment (a, _); AV_C_fragment (b, _)] ->
      AE_val (AV_C_fragment (F_op (a, "==", b), typ))
 
+            (*
   | "slice", [AV_C_fragment (vec, _); AV_C_fragment (start, _); AV_C_fragment (len, _)] ->
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", start)), typ))
+             *)
 
   | "undefined_bit", _ ->
      AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ))
@@ -2727,7 +2733,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string (Printf.sprintf "  rop->data = malloc(len * sizeof(%s));\n" (sgen_ctyp ctyp))
       ^^ (if not (is_stack_ctyp ctyp) then
             string "  for (int i = 0; i < len; i++) {\n"
-            ^^ string (Printf.sprintf "    CREATE(%s)((rop->data) + i);\n" (sgen_ctyp ctyp))
+            ^^ string (Printf.sprintf "    CREATE(%s)((rop->data) + i);\n" (sgen_ctyp_name ctyp))
             ^^ string "  }\n"
           else empty)
       ^^ string "}"

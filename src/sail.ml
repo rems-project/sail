@@ -240,6 +240,9 @@ let options = Arg.align ([
   ( "-dfunction",
     Arg.String (fun f -> C_backend.opt_debug_function := f),
     " (debug) print debugging output for a single function");
+  ( "-dprofile",
+    Arg.Set Profile.opt_profile,
+    " (debug) provides basic profiling information for rewriting passes within Sail");
   ( "-Xconstraint_synonyms",
     Arg.Set Type_check.opt_constraint_synonyms,
     " (extension) allow constraint synonyms");
@@ -265,14 +268,18 @@ let interactive_env = ref Type_check.initial_env
 let load_files type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
+  let t = Profile.start () in
   let parsed = List.map (fun f -> (f, parse_file f)) files in
   let ast =
     List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
   let ast = convert_ast Ast_util.inc_ord ast in
+  Profile.finish "parsing" t;
 
+  let t = Profile.start () in
   let (ast, type_envs) = check_ast type_envs ast in
+  Profile.finish "type checking" t;
 
   let ast = rewrite_ast ast in
 
