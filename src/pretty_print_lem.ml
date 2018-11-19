@@ -1242,18 +1242,20 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
   | P_tup [], _ ->
      let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
      [P_aux (P_lit (mk_lit L_unit), annot)], identity
-  | P_wild, [Typ_aux (Typ_tup typs, _)] ->
+  | P_wild, (_::_::_) ->
      let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)) in
-     List.map wild typs, identity
+     List.map wild arg_typs, identity
   | P_typ (_, pat), _ -> untuple_args_pat pat arg_typs
-  | P_as _, [Typ_aux (Typ_tup _, _)]
-    | P_id _, [Typ_aux (Typ_tup _, _)]
-    | P_tup _, [Typ_aux (Typ_tup _, _)] ->
+  | P_as _, (_::_::_)
+  | P_id _, (_::_::_) ->
      let argpats, argexps = args_of_typs l env arg_typs in
      let argexp = E_aux (E_tuple argexps, annot) in
      let bindargs (E_aux (_, bannot) as body) =
        E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
      argpats, bindargs
+  (* The type checker currently has a special case for a single arg type; if
+     that is removed, then remove the next case. *)
+  | P_tup pats, [_] -> [pat], identity
   | P_tup pats, _ -> pats, identity
   | _, _ ->
      [pat], identity
