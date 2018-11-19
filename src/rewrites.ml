@@ -649,6 +649,9 @@ let rewrite_sizeof (Defs defs) =
            LB_val (pat, exp') in
          (params_map, defs @ [DEF_val (LB_aux (lb', annot))])
        end
+    | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
+       let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
+       (params_map, defs @ [DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp'), annot))])
     | def ->
        (params_map, defs @ [def]) in
 
