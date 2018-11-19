@@ -1,0 +1,13 @@
+Type error at file "vec_length/v1.sail", line 6, character 11 to line 6, character 15
+
+  let y = [41mx[10][0m;
+
+No overloadings for vector_access, tried:
+  bitvector_access:
+    Could not resolve quantifiers for bitvector_access (0 <= 10 & (10 + 1) <= 8)
+    
+    Try adding the constraint: (0 <= 10 & (10 + 1) <= 8)
+  plain_vector_access:
+    Could not resolve quantifiers for plain_vector_access (0 <= 10 & (10 + 1) <= 8)
+    
+    Try adding the constraint: (0 <= 10 & (10 + 1) <= 8)

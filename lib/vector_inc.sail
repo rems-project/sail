@@ -61,7 +61,7 @@ val bitvector_access = {
   lem: "access_vec_inc",
   coq: "access_vec_inc",
   c: "vector_access"
-} : forall ('n : Int), 'n >= 0. (bits('n), int) -> bit
+} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 
 val plain_vector_access = {
   ocaml: "access",
