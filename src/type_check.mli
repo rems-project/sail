@@ -71,6 +71,10 @@ val opt_no_lexp_bounds_check : bool ref
    definitions *)
 val opt_constraint_synonyms : bool ref
 
+(** opt_expand_valspec expands typedefs in valspecs during type check.
+   We prefer not to do it for latex output but it is otherwise a good idea. *)
+val opt_expand_valspec : bool ref
+
 (** {2 Type errors} *)
 
 type type_error =

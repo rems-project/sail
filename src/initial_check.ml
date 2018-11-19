@@ -920,8 +920,8 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
      let kids = List.map to_ast_var kids in
      let nc = to_ast_nexp_constraint k_env nc in
      ((Finished (DEF_constraint (id, kids, nc))), envs), partial_defs
-  | Parse_ast.DEF_pragma (_, _, l) ->
-     typ_error l "Encountered preprocessor directive in initial check" None None None
+  | Parse_ast.DEF_pragma (pragma, arg, l) ->
+     ((Finished(DEF_pragma (pragma, arg, l))), envs), partial_defs
   | Parse_ast.DEF_internal_mutrec _ ->
      (* Should never occur because of remove_mutrec *)
      typ_error Parse_ast.Unknown "Internal mutual block found when processing scattered defs" None None None

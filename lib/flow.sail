@@ -11,7 +11,7 @@ therefore be included in just about every Sail specification.
 
 val eq_unit : (unit, unit) -> bool
 
-val "eq_bit" : (bit, bit) -> bool
+val eq_bit = { lem : "eq", _ : "eq_bit" } : (bit, bit) -> bool
 
 function eq_unit(_, _) = true
 

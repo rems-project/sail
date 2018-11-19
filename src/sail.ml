@@ -109,7 +109,7 @@ let options = Arg.align ([
     Arg.String (fun s -> opt_ocaml_generators := s::!opt_ocaml_generators),
     "<types> produce random generators for the given types");
   ( "-latex",
-    Arg.Set opt_print_latex,
+    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
     " pretty print the input to latex");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
@@ -167,7 +167,7 @@ let options = Arg.align ([
     Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f::!Pretty_print_coq.opt_debug_on),
     "<function> produce debug messages for Coq output on given function");
   ( "-latex_prefix",
-    Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
+    Arg.String (fun prefix -> Latex.opt_prefix := prefix),
     " set a custom prefix for generated latex command (default sail)");
   ( "-mono_split",
     Arg.String (fun s ->
@@ -366,15 +366,19 @@ let main() =
       (if !(opt_print_latex)
        then
          begin
+           Util.opt_warnings := true;
            let latex_dir = match !opt_file_out with None -> "sail_latex" | Some s -> s in
-           try
-             if not (Sys.is_directory latex_dir) then begin
-                 prerr_endline ("Failure: latex output directory exists but is not a directory: " ^ latex_dir);
-                 exit 1
-               end
-           with Sys_error(_) -> Unix.mkdir latex_dir 0o755;
+           begin
+             try
+               if not (Sys.is_directory latex_dir) then begin
+                   prerr_endline ("Failure: latex output directory exists but is not a directory: " ^ latex_dir);
+                   exit 1
+                 end
+             with Sys_error(_) -> Unix.mkdir latex_dir 0o755
+           end;
+           Latex.opt_directory := latex_dir;
            let chan = open_out (Filename.concat latex_dir "commands.tex") in
-           output_string chan (Pretty_print_sail.to_string (Latex.latex_defs latex_dir ast));
+           output_string chan (Pretty_print_sail.to_string (Latex.defs ast));
            close_out chan
          end
        else ());

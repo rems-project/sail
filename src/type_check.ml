@@ -73,6 +73,10 @@ let opt_no_lexp_bounds_check = ref false
    definitions *)
 let opt_constraint_synonyms = ref false
 
+(* opt_expand_valspec expands typedefs in valspecs during type check.
+   We prefer not to do it for latex output but it is otherwise a good idea. *)
+let opt_expand_valspec = ref true
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -4386,7 +4390,12 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        in
        let env = Env.add_extern id ext_opt env in
        let env = if is_cast then Env.add_cast id env else env in
-       let typq, typ = expand_bind_synonyms ts_l env (typq, typ) in
+       let typq, typ =
+         if !opt_expand_valspec then 
+           expand_bind_synonyms ts_l env (typq, typ)
+         else
+           (typq, typ)
+       in
        let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, ext_opt, is_cast) in
        (vs, id, typq, typ, env)
   in
@@ -4532,6 +4541,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
      let checked_exp = crule check_exp env (strip_exp exp) typ in
      let env = Env.add_register id no_effect (mk_effect [BE_config]) typ env in
      [DEF_reg_dec (DEC_aux (DEC_config (id, typ, checked_exp), (l, Some ((env, typ, no_effect), Some typ))))], env
+  | DEF_pragma (pragma, arg, l) -> [DEF_pragma (pragma, arg, l)], env
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Scattered given to type checker")

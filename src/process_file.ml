@@ -75,7 +75,8 @@ let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : Parse_ast.defs =
       with
       | Parser.Error ->
          let pos = Lexing.lexeme_start_p lexbuf in
-         raise (Fatal_error (Err_syntax (pos, "no information")))
+         let tok = Lexing.lexeme lexbuf in
+         raise (Fatal_error (Err_syntax (pos, "current token: " ^ tok)))
       | Lexer.LexError(s,p) ->
          raise (Fatal_error (Err_lex (p, s)))
     end
@@ -204,8 +205,8 @@ let rec preprocess opts = function
        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
        (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess opts defs)
 
-  | Parse_ast.DEF_pragma (p, arg, _) :: defs ->
-     (Util.warn ("Bad pragma $" ^ p ^ " " ^ arg); preprocess opts defs)
+  | Parse_ast.DEF_pragma (p, arg, l) :: defs ->
+     Parse_ast.DEF_pragma (p, arg, l) :: preprocess opts defs
 
   (* realise any anonymous record arms of variants *)
   | Parse_ast.DEF_type (Parse_ast.TD_aux

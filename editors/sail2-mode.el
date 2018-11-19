@@ -21,7 +21,8 @@
     "uint64_t" "int64_t" "bv_t" "mpz_t"))
 
 (defconst sail2-special
-  '("_prove" "create" "kill" "convert" "undefined" "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif" "$option"))
+  '("_prove" "create" "kill" "convert" "undefined"
+    "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif" "$option" "$latex"))
 
 (defconst sail2-font-lock-keywords
   `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)

@@ -448,6 +448,14 @@ let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.ma
 
 let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (string_to_list str))
 
+(** Encode string for use as a filename. We can't use zencode directly
+   because some operating systems make the mistake of being
+   case-insensitive. *)
+let file_encode_string str =
+  let zstr = zencode_string str in
+  let md5 = Digest.to_hex (Digest.string zstr) in
+  String.lowercase_ascii zstr ^ String.lowercase_ascii md5
+
 let warn str =
   if !opt_warnings then
     prerr_endline (("Warning" |> yellow |> clear) ^ ": " ^ str)

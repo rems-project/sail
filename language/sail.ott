@@ -1038,6 +1038,8 @@ def :: 'DEF_' ::=
   | constraint id ( kid1 , ... , kidn ) = n_constraint :: :: constraint
   | fundef1 .. fundefn                                 :: I :: internal_mutrec
     {{ com internal representation of mutually recursive functions }}
+  | $ string1 string2 l                                :: :: pragma
+    {{ com compiler directive }}
 
 defs :: '' ::=
   {{ com definition sequence }}

@@ -5,8 +5,6 @@ $include <flow.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
-val eq_bit = { lem : "eq", _ : "eq_bit" } : (bit, bit) -> bool
-
 val eq_bits = {
   ocaml: "eq_list",
   lem: "eq_vec",
@@ -135,6 +133,9 @@ val slice = "slice" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm & 0 <= 'n.
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
+/*!
+converts a bit vector of length $n$ to an integer in the range $0$ to $2^n - 1$.
+ */
 val unsigned = {
   ocaml: "uint",
   lem: "uint",
@@ -144,6 +145,9 @@ val unsigned = {
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 /* We need a non-empty vector so that the range makes sense */
+/*!
+converts a bit vector of length $n$ to an integer in the range $-2^{n-1}$ to $2^{n-1} - 1$ using twos-complement.
+ */
 val signed = {
   c: "sail_signed",
   _: "sint"

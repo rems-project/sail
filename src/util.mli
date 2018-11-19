@@ -57,8 +57,8 @@ val opt_colors : bool ref
 val butlast : 'a list -> 'a list
 
 (** Mixed useful things *)
-module Duplicate(S : Set.S) : sig 
-  type dups = 
+module Duplicate(S : Set.S) : sig
+  type dups =
     | No_dups of S.t
     | Has_dups of S.elt
   val duplicates : S.elt list -> dups
@@ -258,6 +258,8 @@ val warn : string -> unit
 
 val zencode_string : string -> string
 val zencode_upper_string : string -> string
+
+val file_encode_string : string -> string
 
 val log_line : string -> int -> string -> string
 val header : string -> int -> string
