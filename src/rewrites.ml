@@ -1739,6 +1739,7 @@ let updates_vars exp =
     (u || lexp_is_local lexp (env_of exp), E_assign (lexp, exp)) in
   fst (fold_exp { (compute_exp_alg false (||)) with e_assign = e_assign } exp)
 
+
 (*Expects to be called after rewrite_defs; thus the following should not appear:
   internal_exp of any form
   lit vectors in patterns or expressions
@@ -1762,72 +1763,18 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
          let effects = union_eff_exps exps' in
          let block = E_aux (E_block exps', (gen_loc l, mk_tannot env unit_typ effects)) in
          [fix_eff_exp (E_aux (E_var(le', e', block), annot))]
-      (*| ((E_aux(E_if(c,t,e),(l,annot))) as exp)::exps ->
-        let vars_t = introduced_variables t in
-        let vars_e = introduced_variables e in
-        let new_vars = Envmap.intersect vars_t vars_e in
-        if Envmap.is_empty new_vars
-         then (rewrite_base exp)::walker exps
-         else
-           let new_nmap = match nmap with
-             | None -> Some(Nexpmap.empty,new_vars)
-             | Some(nm,s) -> Some(nm, Envmap.union new_vars s) in
-           let c' = rewrite_base c in
-           let t' = rewriters.rewrite_exp rewriters new_nmap t in
-           let e' = rewriters.rewrite_exp rewriters new_nmap e in
-           let exps' = walker exps in
-           fst ((Envmap.fold 
-                  (fun (res,effects) i (t,e) ->
-                let bitlit =  E_aux (E_lit (L_aux(L_zero, Parse_ast.Generated l)),
-                                     (Parse_ast.Generated l, simple_annot bit_t)) in
-                let rangelit = E_aux (E_lit (L_aux (L_num 0, Parse_ast.Generated l)),
-                                      (Parse_ast.Generated l, simple_annot nat_t)) in
-                let set_exp =
-                  match t.t with
-                  | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> bitlit
-                  | Tapp("range", _) | Tapp("atom", _) -> rangelit
-                  | Tapp("vector", [_;_;_;TA_typ ( {t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])
-                  | Tapp(("reg"|"register"),[TA_typ ({t = Tapp("vector",
-                                                               [_;_;_;TA_typ ( {t=Tid "bit"}
-                                                                             | {t=Tabbrev(_,{t=Tid "bit"})})])})])
-                  | Tabbrev(_,{t = Tapp("vector",
-                                        [_;_;_;TA_typ ( {t=Tid "bit"}
-                                                      | {t=Tabbrev(_,{t=Tid "bit"})})])}) ->
-                    E_aux (E_vector_indexed([], Def_val_aux(Def_val_dec bitlit,
-                                                            (Parse_ast.Generated l,simple_annot bit_t))),
-                           (Parse_ast.Generated l, simple_annot t))
-                  | _ -> e in
-                let unioneffs = union_effects effects (get_effsum_exp set_exp) in
-                ([E_aux (E_var (LEXP_aux (LEXP_id (Id_aux (Id i, Parse_ast.Generated l)),
-                                                  (Parse_ast.Generated l, (tag_annot t Emp_intro))),
-                                        set_exp,
-                                        E_aux (E_block res, (Parse_ast.Generated l, (simple_annot_efr unit_t effects)))),
-                        (Parse_ast.Generated l, simple_annot_efr unit_t unioneffs))],unioneffs)))
-             (E_aux(E_if(c',t',e'),(Parse_ast.Generated l, annot))::exps',eff_union_exps (c'::t'::e'::exps')) new_vars)*)
       | e::exps -> (rewrite_rec e)::(walker exps)
     in
-    check_exp (env_of full_exp)
-      (E_aux (E_block (List.map strip_exp (walker exps)), (l, ()))) (typ_of full_exp)
+    E_aux (E_block (walker exps), annot)
+
   | E_assign(le,e)
     when lexp_is_local_intro le (env_of full_exp) && not (lexp_is_effectful le) ->
     let (le', re') = rewrite_lexp_to_rhs le in
     let e' = re' (rewrite_base e) in
     let block = annot_exp (E_block []) (gen_loc l) (env_of full_exp) unit_typ in
-    check_exp (env_of full_exp)
-      (strip_exp (E_aux (E_var(le', e', block), annot))) (typ_of full_exp)
+    E_aux (E_var (le', e', block), annot)
+
   | _ -> rewrite_base full_exp
-
-(*let rewrite_lexp_lift_assign_intro rewriters ((LEXP_aux(lexp,annot)) as le) =
-  let rewrap le = LEXP_aux(le,annot) in
-  let rewrite_base = rewrite_lexp rewriters in
-  match lexp, annot with
-  | (LEXP_id id | LEXP_cast (_,id)), (l, Some (env, typ, eff)) ->
-    (match Env.lookup_id id env with
-    | Unbound | Local _ ->
-      LEXP_aux (lexp, (l, Some (env, typ, union_effects eff (mk_effect [BE_lset]))))
-    | _ -> rewrap lexp)
-  | _ -> rewrite_base le*)
-
 
 let rewrite_defs_exp_lift_assign defs = rewrite_defs_base
     {rewrite_exp = rewrite_exp_lift_assign_intro;
@@ -1869,56 +1816,6 @@ let rewrite_register_ref_writes (Defs defs) =
     | [] -> [] in
   Defs (rewrite (write_reg_spec @ defs))
 
-  (* rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
-    (Defs (write_reg_spec @ defs)) *)
-
-
-(*let rewrite_exp_separate_ints rewriters ((E_aux (exp,((l,_) as annot))) as full_exp) =
-  (*let tparms,t,tag,nexps,eff,cum_eff,bounds = match annot with
-    | Base((tparms,t),tag,nexps,eff,cum_eff,bounds) -> tparms,t,tag,nexps,eff,cum_eff,bounds
-    | _ -> [],unit_t,Emp_local,[],pure_e,pure_e,nob in*)
-  let rewrap e = E_aux (e,annot) in
-  (*let rewrap_effects e effsum =
-    E_aux (e,(l,Base ((tparms,t),tag,nexps,eff,effsum,bounds))) in*)
-  let rewrite_rec = rewriters.rewrite_exp rewriters in
-  let rewrite_base = rewrite_exp rewriters in
-  match exp with
-  | E_lit (L_aux (((L_num _) as lit),_)) ->
-    (match (is_within_machine64 t nexps) with
-     | Yes -> let _ = Printf.eprintf "Rewriter of num_const, within 64bit int yes\n" in rewrite_base full_exp
-     | Maybe -> let _ = Printf.eprintf "Rewriter of num_const, within 64bit int maybe\n" in rewrite_base full_exp
-     | No -> let _ = Printf.eprintf "Rewriter of num_const, within 64bit int no\n" in E_aux(E_app(Id_aux (Id "integer_of_int",l),[rewrite_base full_exp]),
-                   (l, Base((tparms,t),External(None),nexps,eff,cum_eff,bounds))))
-  | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite_rec exp))
-  | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite_rec exps))
-  | E_app_infix(el,id,er) -> rewrap (E_app_infix(rewrite_rec el,id,rewrite_rec er))
-  | E_for (id, e1, e2, e3, o, body) ->
-      rewrap (E_for (id, rewrite_rec e1, rewrite_rec e2, rewrite_rec e3, o, rewrite_rec body))
-  | E_vector_access (vec,index) -> rewrap (E_vector_access (rewrite_rec vec,rewrite_rec index))
-  | E_vector_subrange (vec,i1,i2) ->
-    rewrap (E_vector_subrange (rewrite_rec vec,rewrite_rec i1,rewrite_rec i2))
-  | E_vector_update (vec,index,new_v) -> 
-    rewrap (E_vector_update (rewrite_rec vec,rewrite_rec index,rewrite_rec new_v))
-  | E_vector_update_subrange (vec,i1,i2,new_v) ->
-    rewrap (E_vector_update_subrange (rewrite_rec vec,rewrite_rec i1,rewrite_rec i2,rewrite_rec new_v))
-  | E_case (exp ,pexps) -> 
-    rewrap (E_case (rewrite_rec exp,
-                    (List.map 
-                       (fun (Pat_aux (Pat_exp(p,e),pannot)) -> 
-                          Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters nmap p,rewrite_rec e),pannot)) pexps)))
-  | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite_rec body))
-  | E_var (lexp,exp,body) ->
-    rewrap (E_var (rewriters.rewrite_lexp rewriters nmap lexp, rewrite_rec exp, rewrite_rec body))
-  | _ -> rewrite_base full_exp
-
-let rewrite_defs_separate_numbs defs = rewrite_defs_base
-    {rewrite_exp = rewrite_exp_separate_ints;
-     rewrite_pat = rewrite_pat;
-     rewrite_let = rewrite_let; (*will likely need a new one?*)
-     rewrite_lexp = rewrite_lexp; (*will likely need a new one?*)
-     rewrite_fun = rewrite_fun;
-     rewrite_def = rewrite_def;
-     rewrite_defs = rewrite_defs_base} defs*)
 
 (* Remove redundant return statements, and translate remaining ones into an
    (effectful) call to builtin function "early_return" (in the Lem shallow

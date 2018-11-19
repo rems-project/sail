@@ -441,10 +441,8 @@ let analyze_primop' ctx id args typ =
   | "eq_bit", [AV_C_fragment (a, _); AV_C_fragment (b, _)] ->
      AE_val (AV_C_fragment (F_op (a, "==", b), typ))
 
-            (*
-  | "slice", [AV_C_fragment (vec, _); AV_C_fragment (start, _); AV_C_fragment (len, _)] ->
+  | "slice", [AV_C_fragment (vec, _); AV_C_fragment (start, _); AV_C_fragment (len, _)] when is_stack_typ ctx typ ->
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", start)), typ))
-             *)
 
   | "undefined_bit", _ ->
      AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ))

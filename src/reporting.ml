@@ -254,7 +254,7 @@ let issues = "\n\nPlease report this as an issue on GitHub at https://github.com
 let dest_err = function
   | Err_general (l, m) -> ("Error", false, Loc l, m)
   | Err_unreachable (l, (file, line, _, _), m) ->
-     ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m ^ issues)
+     ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)\n" file line), false, Loc l, m ^ issues)
   | Err_todo (l, m) -> ("Todo" ^ m, false, Loc l, "")
   | Err_syntax (p, m) -> ("Syntax error", false, Pos p, m)
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)

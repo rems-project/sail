@@ -57,9 +57,6 @@ open PPrint
 
 module Big_int = Nat_big_num
 
-let anf_error ?loc:(l=Parse_ast.Unknown) message =
-  raise (Reporting.err_general l ("\nANF translation: " ^ message))
-
 (**************************************************************************)
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
@@ -453,7 +450,8 @@ let rec split_block l = function
   | exp :: exps ->
      let exps, last = split_block l exps in
      exp :: exps, last
-  | [] -> anf_error ~loc:l "empty block"
+  | [] ->
+     raise (Reporting.err_unreachable l __POS__ "empty block found when converting to ANF")
 
 let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   let mk_apat aux = AP_aux (aux, env_of_annot annot, fst annot) in
@@ -469,7 +467,9 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global:global hd_pat, anf_pat ~global:global tl_pat))
   | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
-  | _ -> anf_error ~loc:(fst annot) ("Could not convert pattern to ANF: " ^ string_of_pat pat)
+  | _ ->
+     raise (Reporting.err_unreachable (fst annot) __POS__
+       ("Could not convert pattern to ANF: " ^ string_of_pat pat))
 
 let rec apat_globals (AP_aux (aux, _, _)) =
   match aux with
@@ -529,7 +529,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      mk_aexp (AE_assign (id, lvar_typ (Env.lookup_id id (env_of exp)), aexp))
 
   | E_assign (lexp, _) ->
-     failwith ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
+     raise (Reporting.err_unreachable l __POS__
+       ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
 
   | E_loop (loop_typ, cond, exp) ->
      let acond = anf cond in
@@ -665,7 +666,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      mk_aexp (AE_let (Mutable, id, lvar_typ lvar, anf binding, anf body, typ_of exp))
 
   | E_var (lexp, _, _) ->
-     failwith ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
+     raise (Reporting.err_unreachable l __POS__
+       ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
 
   | E_let (LB_aux (LB_val (pat, binding), _), body) ->
      anf (E_aux (E_case (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), exp_annot))
@@ -690,19 +692,19 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
      (* Should be re-written by type checker *)
-     failwith "encountered raw vector operation when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered raw vector operation when converting to ANF")
 
   | E_internal_value _ ->
      (* Interpreter specific *)
-     failwith "encountered E_internal_value when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered E_internal_value when converting to ANF")
 
   | E_sizeof _ | E_constraint _ ->
      (* Sizeof nodes removed by sizeof rewriting pass *)
-     failwith "encountered E_sizeof or E_constraint node when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered E_sizeof or E_constraint node when converting to ANF")
 
   | E_nondet _ ->
      (* We don't compile E_nondet nodes *)
-     failwith "encountered E_nondet node when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered E_nondet node when converting to ANF")
 
   | E_internal_return _ | E_internal_plet _ ->
-     failwith "encountered unexpected internal node when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")
