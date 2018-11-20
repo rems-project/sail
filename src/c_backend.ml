@@ -429,11 +429,9 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
-       (*
   | "vector_subrange", [AV_C_fragment (vec, _); AV_C_fragment (f, _); AV_C_fragment (t, _)] when is_stack_typ ctx typ ->
      let len = F_op (f, "-", F_op (t, "-", v_one)) in
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", t)), typ))
-        *)
 
   | "vector_access", [AV_C_fragment (vec, _); AV_C_fragment (n, _)] ->
      AE_val (AV_C_fragment (F_op (v_one, "&", F_op (vec, ">>", n)), typ))
@@ -2946,7 +2944,6 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_id id)
   | _ -> assert false
 
-       (*
 let instrument_tracing ctx =
   let module StringSet = Set.Make(String) in
   let traceable = StringSet.of_list ["mach_bits"; "sail_string"; "sail_bits"; "sail_int"; "unit"; "bool"] in
@@ -2969,12 +2966,14 @@ let instrument_tracing ctx =
             trace_arg cval :: iraw "trace_argsep();" :: trace_args cvals
        in
        let trace_end = iraw "trace_end();" in
-       let trace_ret =
+       let trace_ret = iraw "trace_unknown();"
+                            (*
          let ctyp_name = sgen_ctyp_name ctyp in
          if StringSet.mem ctyp_name traceable then
            iraw (Printf.sprintf "trace_%s(%s);" (sgen_ctyp_name ctyp) (sgen_clexp_pure clexp))
          else
            iraw "trace_unknown();"
+                             *)
        in
        [trace_start]
        @ trace_args args
@@ -2997,7 +2996,6 @@ let instrument_tracing ctx =
   | CDEF_fundef (function_id, heap_return, args, body) ->
      CDEF_fundef (function_id, heap_return, args, instrument body)
   | cdef -> cdef
-        *)
 
 let bytecode_ast ctx rewrites (Defs defs) =
   let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
@@ -3050,9 +3048,7 @@ let compile_ast ctx c_includes (Defs defs) =
     let cdefs, ctx = specialize_variants ctx [] cdefs in
     let cdefs = sort_ctype_defs cdefs in
     let cdefs = optimize ctx cdefs in
-    (*
     let cdefs = if !opt_trace then List.map (instrument_tracing ctx) cdefs else cdefs in
-     *)
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline

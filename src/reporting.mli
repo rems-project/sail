@@ -62,7 +62,8 @@
 
 (** {2 Auxiliary Functions } *)
 
-val loc_to_string : Parse_ast.l -> string
+(** [loc_to_string] includes code from file if code optional argument is true (default) *)
+val loc_to_string : ?code:bool -> Parse_ast.l -> string
 
 (** [print_err fatal print_loc_source l head mes] prints an error / warning message to
     std-err. It starts with printing location information stored in [l]

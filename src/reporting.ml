@@ -169,6 +169,14 @@ let format_pos2 ff p1 p2 =
     Format.pp_print_flush ff ()
   end
 
+let format_just_pos ff p1 p2 =
+  let open Lexing in
+  Format.fprintf ff "file \"%s\", line %d, character %d to line %d, character %d"
+                 p1.pos_fname
+                 p1.pos_lnum (p1.pos_cnum - p1.pos_bol + 1)
+                 p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
+  Format.pp_print_flush ff ()
+
 (* reads the part between p1 and p2 from the file *)
 
 let read_from_file_pos2 p1 p2 =
@@ -187,12 +195,21 @@ let read_from_file_pos2 p1 p2 =
   let _ = close_in ic in
   (buf, not (multi = None))
 
-let rec format_loc_aux ff = function
-  | Parse_ast.Unknown -> Format.fprintf ff "no location information available"
-  | Parse_ast.Generated l -> Format.fprintf ff "code generated: original nearby source is "; (format_loc_aux ff l)
-  | Parse_ast.Unique (n, l) -> Format.fprintf ff "code unique (%d): original nearby source is " n; (format_loc_aux ff l)
-  | Parse_ast.Range (p1,p2) -> format_pos2 ff p1 p2
-  | Parse_ast.Documented (_, l) -> format_loc_aux ff l
+let rec format_loc_aux ?code:(code=true) ff = function
+  | Parse_ast.Unknown ->
+     Format.fprintf ff "no location information available"
+  | Parse_ast.Generated l ->
+     Format.fprintf ff "code generated: original nearby source is ";
+     format_loc_aux ~code:code ff l
+  | Parse_ast.Unique (n, l) ->
+     Format.fprintf ff "code unique (%d): original nearby source is " n;
+     format_loc_aux ~code:code ff l
+  | Parse_ast.Range (p1, p2) when code ->
+     format_pos2 ff p1 p2
+  | Parse_ast.Range (p1, p2) ->
+     format_just_pos ff p1 p2
+  | Parse_ast.Documented (_, l) ->
+     format_loc_aux ~code:code ff l
 
 let format_loc_source ff = function
   | Parse_ast.Range (p1, p2) ->
@@ -215,9 +232,9 @@ let print_err_loc l =
 let print_pos p = format_pos Format.std_formatter p
 let print_err_pos p = format_pos Format.err_formatter p
 
-let loc_to_string l =
+let loc_to_string ?code:(code=true) l =
   let _ = Format.flush_str_formatter () in
-  let _ = format_loc_aux Format.str_formatter l in
+  let _ = format_loc_aux ~code:code Format.str_formatter l in
   let s = Format.flush_str_formatter () in
   s
 
@@ -254,7 +271,7 @@ let issues = "\n\nPlease report this as an issue on GitHub at https://github.com
 let dest_err = function
   | Err_general (l, m) -> ("Error", false, Loc l, m)
   | Err_unreachable (l, (file, line, _, _), m) ->
-     ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)\n" file line), false, Loc l, m ^ issues)
+     ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m ^ issues)
   | Err_todo (l, m) -> ("Todo" ^ m, false, Loc l, "")
   | Err_syntax (p, m) -> ("Syntax error", false, Pos p, m)
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)

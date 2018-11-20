@@ -2247,6 +2247,14 @@ let irule r env exp =
   with
   | Type_error (l, err) -> decr depth; typ_raise l err
 
+
+(* This function adds useful assertion messages to asserts missing them *)
+let assert_msg test = function
+  | E_aux (E_lit (L_aux (L_string "", _)), (l, _)) ->
+     let open Reporting in
+     locate (fun _ -> l) (mk_lit_exp (L_string (loc_to_string ~code:false l ^ ": " ^ string_of_exp test)))
+  | msg -> msg
+
 let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -> (l, ())) exp
 let strip_pat : 'a pat -> unit pat = function pat -> map_pat_annot (fun (l, _) -> (l, ())) pat
 let strip_pexp : 'a pexp -> unit pexp = function pexp -> map_pexp_annot (fun (l, _) -> (l, ())) pexp
@@ -2281,9 +2289,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          | (E_aux (E_assign (lexp, bind), _) :: exps) ->
             let texp, env = bind_assignment env lexp bind in
             texp :: check_block l env exps typ
-         | ((E_aux (E_assert (constr_exp, assert_msg), _) as exp) :: exps) ->
+         | ((E_aux (E_assert (constr_exp, msg), _) as exp) :: exps) ->
+            let msg = assert_msg constr_exp msg in
             let constr_exp = crule check_exp env constr_exp bool_typ in
-            let checked_msg = crule check_exp env assert_msg string_typ in
+            let checked_msg = crule check_exp env msg string_typ in
             let env = match assert_constraint env true constr_exp with
               | Some nc ->
                  typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint nc ^ " for assert"));
@@ -3291,6 +3300,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let vec_typ = dvector_typ env (nint (List.length vec)) (typ_of inferred_item) in
      annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
   | E_assert (test, msg) ->
+     let msg = assert_msg test msg in
      let checked_test = crule check_exp env test bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
      annot_exp_effect (E_assert (checked_test, checked_msg)) unit_typ (mk_effect [BE_escape])
