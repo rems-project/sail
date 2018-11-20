@@ -93,19 +93,19 @@ lemma liftState_read_mem[liftState_simp]:
   by (auto simp: liftState_read_mem_BC)
 
 lemma liftState_write_mem_ea_BC:
-  assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
+  assumes "unsigned_method BCa a = Some a'"
   shows "liftState r (write_mem_ea BCa rk a sz) = returnS ()"
-  using assms by (auto simp: write_mem_ea_def)
+  using assms by (auto simp: write_mem_ea_def nat_of_bv_def maybe_fail_def)
 
-lemma liftState_write_mem_ea[liftState_simp]:
+(*lemma liftState_write_mem_ea[liftState_simp]:
   "\<And>a. liftState r (write_mem_ea BC_mword rk a sz) = returnS ()"
   "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = returnS ()"
-  by (auto simp: liftState_write_mem_ea_BC)
+  by (auto simp: liftState_write_mem_ea_BC)*)
 
-lemma write_mem_bytesS_def_BC_bitU_list_BC_mword[simp]:
+(*lemma write_mem_bytesS_def_BC_bitU_list_BC_mword[simp]:
   "write_mem_bytesS BC_bitU_list wk (bits_of_method BC_mword addr) sz v t =
    write_mem_bytesS BC_mword wk addr sz v t"
-  by (auto simp: write_mem_bytesS_def)
+  by (auto simp: write_mem_bytesS_def)*)
 
 lemma liftState_write_mem_val[liftState_simp]:
   "liftState r (write_mem BC_mword BCv wk addr sz v t) = write_memS BC_mword BCv wk addr sz v t"

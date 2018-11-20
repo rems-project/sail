@@ -28,12 +28,10 @@ let rec runTraceS ra t s =
   match t with
   | [] -> Just s
   | E_read_mem _ addr sz (v, tag) :: t' ->
-     Maybe.bind (unsigned addr) (fun addr ->
      Maybe.bind (get_mem_bytes addr sz s) (fun (v', tag') ->
-     if v' = v && tag' = tag then runTraceS ra t' s else Nothing))
+     if v' = v && tag' = tag then runTraceS ra t' s else Nothing)
   | E_write_mem _ addr sz v tag _ :: t' ->
-     Maybe.bind (unsigned addr) (fun addr ->
-     runTraceS ra t' (put_mem_bytes addr sz v tag s))
+     runTraceS ra t' (put_mem_bytes addr sz v tag s)
   | E_read_reg r v :: t' ->
      let (read_reg, _) = ra in
      Maybe.bind (read_reg r s.regstate) (fun v' ->

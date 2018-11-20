@@ -625,6 +625,9 @@ let extz_bv n v = extz_bits n (bits_of v)
 val exts_bv : forall 'a. Bitvector 'a => integer -> 'a -> list bitU
 let exts_bv n v = exts_bits n (bits_of v)
 
+val nat_of_bv : forall 'a. Bitvector 'a => 'a -> maybe nat
+let nat_of_bv v = Maybe.map nat_of_int (unsigned v)
+
 val string_of_bv : forall 'a. Bitvector 'a => 'a -> string
 let string_of_bv v = show_bitlist (bits_of v)
 
