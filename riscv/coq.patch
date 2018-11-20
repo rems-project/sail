@@ -1,5 +1,5 @@
---- riscv.v	2018-10-22 18:20:01.512785981 +0100
-+++ riscv.v.good	2018-10-22 18:19:27.556562080 +0100
+--- riscv.v.plain	2018-11-20 14:53:45.400922942 +0000
++++ riscv.v	2018-11-20 15:08:45.661714873 +0000
 @@ -1260,6 +1260,9 @@
     let v64 : bits 64 := EXTS 64 v in
     subrange_vec_dec (shift_bits_right v64 shift) 31 0.
@@ -28,7 +28,7 @@
  
  Definition opt_spc_forwards '(tt : unit)  : string := "".
  
-@@ -10432,14 +10435,13 @@
+@@ -10451,14 +10454,13 @@
     returnm ((EXTZ 56 (shiftl (_get_Satp64_PPN satp64) PAGESIZE_BITS))
      : mword 56).
  
@@ -45,7 +45,7 @@
               (projT1 (sub_range (build_ex SV39_LEVEL_BITS) (build_ex 1))) 0)) PTE39_LOG_SIZE in
     let pte_addr := add_vec ptb pt_ofs in
     (phys_mem_read Data (EXTZ 64 pte_addr) 8 false false false) >>= fun w__0 : MemoryOpResult (mword (8 * 8)) =>
-@@ -10452,27 +10454,27 @@
+@@ -10471,27 +10473,27 @@
         let is_global := orb global (eq_vec (_get_PTE_Bits_G pattr) ((bool_to_bits true)  : mword 1)) in
         (if ((isInvalidPTE pbits)) then returnm ((PTW_Failure (PTW_Invalid_PTE))  : PTW_Result )
          else if ((isPTEPtr pbits)) then
@@ -79,7 +79,7 @@
                        if ((neq_vec (and_vec (_get_SV39_PTE_PPNi pte) mask)
                               (EXTZ 44 (vec_of_bits [B0]  : mword 1)))) then
                          PTW_Failure
-@@ -10482,10 +10484,10 @@
+@@ -10501,10 +10503,10 @@
                            or_vec (_get_SV39_PTE_PPNi pte)
                              (and_vec (EXTZ 44 (_get_SV39_Vaddr_VPNi va)) mask) in
                          PTW_Success
@@ -92,7 +92,7 @@
             : PTW_Result))
          : M (PTW_Result)
      end)
-@@ -10611,7 +10613,7 @@
+@@ -10630,7 +10632,7 @@
          : M (TR39_Result)
      | None =>
         (curPTB39 tt) >>= fun w__6 : mword 56 =>
@@ -101,7 +101,7 @@
         (match w__7 with
          | PTW_Failure (f) => returnm ((TR39_Failure (f))  : TR39_Result )
          | PTW_Success (pAddr,pte,pteAddr,(existT _ level _),global) =>
-@@ -14651,137 +14653,144 @@
+@@ -14670,138 +14672,144 @@
     returnm (true
      : bool).
  
@@ -291,9 +291,11 @@
     | C_JALR (rs1) =>
 -      (execute (RISCV_JALR ((EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra))))  : M (bool)
 -   | C_MV (rd,rs2) => (execute (RTYPE ((rs2, zreg, rd, RISCV_ADD))))  : M (bool)
+-   | C_EBREAK (tt) => (execute (EBREAK (tt)))  : M (bool)
 -   | C_ADD (rsd,rs2) => (execute (RTYPE ((rs2, rsd, rsd, RISCV_ADD))))  : M (bool)
 +      ((RISCV_JALR ((EXTZ 12 (vec_of_bits [B0]  : mword 1), rs1, ra))))  
 +   | C_MV (rd,rs2) => ((RTYPE ((rs2, zreg, rd, RISCV_ADD))))  
++   | C_EBREAK (tt) => ((EBREAK (tt)))  
 +   | C_ADD (rsd,rs2) => ((RTYPE ((rs2, rsd, rsd, RISCV_ADD))))  
 +| i => i
 +end.
@@ -302,19 +304,18 @@
 +: M (bool) :=
 +let merge_var := expand_ast merge_var in
 +   match merge_var with
-+
     | UTYPE (imm,rd,op) => (execute_UTYPE imm rd op)  : M (bool)
     | RISCV_JAL (imm,rd) => (execute_RISCV_JAL imm rd)  : M (bool)
-    | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
-@@ -14821,6 +14830,7 @@
-    | THREAD_START (arg0) => returnm ((execute_THREAD_START arg0)  : bool)
+    | BTYPE (imm,rs2,rs1,op) => (execute_BTYPE imm rs2 rs1 op)  : M (bool)
+@@ -14841,6 +14849,7 @@
     | ILLEGAL (s) => (execute_ILLEGAL s)  : M (bool)
     | C_ILLEGAL (s) => (execute_C_ILLEGAL s)  : M (bool)
+    | RISCV_JALR (imm,rs1,rd) => (execute_RISCV_JALR imm rs1 rd)  : M (bool)
 +| _ => Fail "Unexpanded instruction"
     end.
  
  Definition assembly_forwards (arg_ : ast) 
-@@ -35792,7 +35802,7 @@
+@@ -35883,7 +35892,7 @@
     returnm (stepped
      : bool).
  
@@ -323,7 +324,7 @@
  : M (unit) :=
     let insns_per_tick := plat_insns_per_tick tt in
     let i : Z := 0 in
-@@ -35832,7 +35842,7 @@
+@@ -35923,7 +35932,7 @@
             : M (Z)) >>= fun i : Z =>
         returnm (i, step_no))) >>= fun '(i, step_no) =>
     returnm (tt

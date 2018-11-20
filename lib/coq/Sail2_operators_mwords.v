@@ -471,3 +471,5 @@ Definition set_slice_int len n lo (v : mword len) : Z :=
     let bs : mword (hi + 1) := mword_of_int n in
     (int_of_mword true (update_subrange_vec_dec bs hi lo v))
   else n.
+
+Definition prerr_bits {a} (s : string) (bs : mword a) : unit := tt.
