@@ -77,14 +77,14 @@ val bitvector_update = {
   lem: "update_vec_dec",
   coq: "update_vec_dec",
   c: "vector_update"
-} : forall 'n, 'n >= 0. (bits('n), int, bit) -> bits('n)
+} : forall 'n 'm, 0 <= 'm < 'n. (bits('n), atom('m), bit) -> bits('n)
 
 val plain_vector_update = {
   ocaml: "update",
   lem: "update_list_dec",
   coq: "vec_update_dec",
   c: "vector_update"
-} : forall 'n ('a : Type). (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
+} : forall 'n 'm ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), atom('m), 'a) -> vector('n, dec, 'a)
 
 overload vector_update = {bitvector_update, plain_vector_update}
 
@@ -117,7 +117,7 @@ val vector_update_subrange = {
   lem: "update_subrange_vec_dec",
   c: "vector_update_subrange",
   coq: "update_subrange_vec_dec"
-} : forall 'n 'm 'o. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+} : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
 // Some ARM specific builtins
 

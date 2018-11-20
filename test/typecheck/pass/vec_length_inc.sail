@@ -1,5 +1,5 @@
-default Order dec
-$include <vector_dec.sail>
+default Order inc
+$include <vector_inc.sail>
 
 function main () : unit -> unit = {
   let x : bits(8) = 0xff;
