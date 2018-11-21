@@ -52,6 +52,7 @@ size_t spike_dtb_len = 0;
 static struct option options[] = {
   {"enable-dirty",                no_argument,       0, 'd'},
   {"enable-misaligned",           no_argument,       0, 'm'},
+  {"ram-size",                    required_argument, 0, 'z'},
   {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'},
   {"dump-dts",                    no_argument,       0, 's'},
   {"device-tree-blob",            required_argument, 0, 'b'},
@@ -75,7 +76,7 @@ static void dump_dts(void)
 {
 #ifdef SPIKE
   size_t dts_len = 0;
-  struct tv_spike_t *s = tv_init("RV64IMAC", 0);
+  struct tv_spike_t *s = tv_init("RV64IMAC", rv_ram_size, 0);
   tv_get_dts(s, NULL, &dts_len);
   if (dts_len > 0) {
     unsigned char *dts = (unsigned char *)malloc(dts_len + 1);
@@ -122,20 +123,30 @@ static void read_dtb(const char *path)
 char *process_args(int argc, char **argv)
 {
   int c, idx = 1;
+  uint64_t ram_size = 0;
   while(true) {
-    c = getopt_long(argc, argv, "dmsb:t:v:h", options, &idx);
+    c = getopt_long(argc, argv, "dmsz:b:t:v:h", options, &idx);
     if (c == -1) break;
     switch (c) {
     case 'd':
+      fprintf(stderr, "enabling dirty update.\n");
       rv_enable_dirty_update = true;
       break;
     case 'm':
+      fprintf(stderr, "enabling misaligned access.\n");
       rv_enable_misaligned = true;
       break;
     case 'i':
       rv_mtval_has_illegal_inst_bits = true;
     case 's':
       do_dump_dts = true;
+      break;
+    case 'z':
+      ram_size = atol(optarg);
+      if (ram_size) {
+        fprintf(stderr, "setting ram-size to %ld MB\n", ram_size);
+        rv_ram_size = ram_size << 20;
+      }
       break;
     case 'b':
       dtb_file = strdup(optarg);
@@ -179,11 +190,11 @@ uint64_t load_sail(char *f)
   return entry;
 }
 
-void init_spike(const char *f, uint64_t entry)
+void init_spike(const char *f, uint64_t entry, uint64_t ram_size)
 {
 #ifdef SPIKE
   bool mismatch = false;
-  s = tv_init("RV64IMAC", 1);
+  s = tv_init("RV64IMAC", ram_size, 1);
   if (tv_is_dirty_enabled(s) != rv_enable_dirty_update) {
     mismatch = true;
     fprintf(stderr, "inconsistent enable-dirty-update setting: spike %s, sail %s\n",
@@ -195,6 +206,11 @@ void init_spike(const char *f, uint64_t entry)
     fprintf(stderr, "inconsistent enable-misaligned-access setting: spike %s, sail %s\n",
             tv_is_misaligned_enabled(s) ? "on" : "off",
             rv_enable_misaligned        ? "on" : "off");
+  }
+  if (tv_ram_size(s) != rv_ram_size) {
+    mismatch = true;
+    fprintf(stderr, "inconsistent ram-size setting: spike %lx, sail %lx\n",
+            tv_ram_size(s), rv_ram_size);
   }
   if (mismatch) exit(1);
 
@@ -491,7 +507,7 @@ int main(int argc, char **argv)
   /* initialize spike before sail so that we can access the device-tree blob,
    * until we roll our own.
    */
-  init_spike(file, entry);
+  init_spike(file, entry, rv_ram_size);
   init_sail(entry);
 
   if (!init_check(s)) finish(1);

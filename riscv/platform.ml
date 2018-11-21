@@ -69,7 +69,7 @@ let bits_of_int64 i =
 let rom_size_ref = ref 0
 let make_rom start_pc =
   let reset_vec = List.concat (List.map P.uint32_to_bytes (P.reset_vec_int start_pc)) in
-  let dtb = P.make_dtb P.dts in
+  let dtb = P.make_dtb (P.make_dts ()) in
   let rom = reset_vec @ dtb in
   ( rom_size_ref := List.length rom;
     (*
@@ -89,7 +89,7 @@ let rom_base () = bits_of_int64 P.rom_base
 let rom_size () = bits_of_int   !rom_size_ref
 
 let dram_base () = bits_of_int64 P.dram_base
-let dram_size () = bits_of_int64 P.dram_size
+let dram_size () = bits_of_int64 !P.dram_size_ref
 
 let htif_tohost () =
   bits_of_int64 (Big_int.to_int64 (Elf.elf_tohost ()))
