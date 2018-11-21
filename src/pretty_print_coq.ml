@@ -1645,6 +1645,60 @@ let doc_exp, doc_let =
              (* expose doc_exp and doc_let *)
   in top_exp, let_exp
 
+let types_used_with_generic_eq defs =
+  let rec add_typ idset (Typ_aux (typ,_)) =
+    match typ with
+    | Typ_id id -> IdSet.add id idset
+    | Typ_app (id,args) ->
+       List.fold_left add_typ_arg (IdSet.add id idset) args
+    | Typ_tup ts -> List.fold_left add_typ idset ts
+    | _ -> idset
+  and add_typ_arg idset (Typ_arg_aux (ta,_)) =
+    match ta with
+    | Typ_arg_typ typ -> add_typ idset typ
+    | _ -> idset
+  in
+  let alg =
+    { (Rewriter.compute_exp_alg IdSet.empty IdSet.union) with
+      Rewriter.e_aux = fun ((typs,exp),annot) ->
+        let typs' =
+          match exp with
+          | E_app (f,[arg1;_]) ->
+             if Env.is_extern f (env_of_annot annot) "coq" then
+               let f' = Env.get_extern f (env_of_annot annot) "coq" in
+               if f' = "generic_eq" || f' = "generic_neq" then
+                 add_typ typs (Env.expand_synonyms (env_of arg1) (typ_of arg1))
+               else typs
+             else typs
+          | _ -> typs
+        in typs', E_aux (exp,annot) }
+  in
+  let typs_req_funcl (FCL_aux (FCL_Funcl (_,pexp), _)) =
+    fst (Rewriter.fold_pexp alg pexp)
+  in
+  let typs_req_def = function
+    | DEF_kind _
+    | DEF_type _
+    | DEF_spec _
+    | DEF_fixity _
+    | DEF_overload _
+    | DEF_default _
+    | DEF_constraint _
+    | DEF_pragma _
+    | DEF_reg_dec _
+      -> IdSet.empty
+    | DEF_fundef (FD_aux (FD_function (_,_,_,fcls),_)) ->
+       List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
+    | DEF_mapdef (MD_aux (_,(l,_)))
+    | DEF_scattered (SD_aux (_,(l,_)))
+      -> unreachable l __POS__ "Internal definition found in the Coq back-end"
+    | DEF_internal_mutrec _
+      -> unreachable Unknown __POS__ "Internal definition found in the Coq back-end"
+    | DEF_val lb ->
+       fst (Rewriter.fold_letbind alg lb)
+  in
+  List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
+
 let doc_type_union ctxt typ_name (Tu_aux(Tu_ty_id(typ,id),_)) =
   separate space [doc_id_ctor id; colon;
                   doc_typ ctxt typ; arrow; typ_name]
@@ -1654,7 +1708,7 @@ let rec doc_range (BF_aux(r,_)) = match r with
   | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
-let doc_typdef (TD_aux(td, (l, annot))) = match td with
+let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,nm,(TypSchm_aux (TypSchm_ts (typq, _), _) as typschm)) ->
      doc_op coloneq
        (separate space [string "Definition"; doc_id_type id;
@@ -1698,16 +1752,18 @@ let doc_typdef (TD_aux(td, (l, annot))) = match td with
       string "]." ^^ hardline
     in
     let eq_pp =
-      string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
-      string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y)." ^^
-      hardline ^^ intros_pp "x" ^^ intros_pp "y" ^^
-      separate hardline (List.init numfields
-                           (fun n ->
-                             let ns = string_of_int n in
-                             string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ "."))) ^^
-      hardline ^^
-      string "refine (Build_Decidable _ true _). subst. split; reflexivity." ^^ hardline ^^
-      string "Defined." ^^ hardline
+      if IdSet.mem id generic_eq_types then
+        string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
+        string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y)." ^^
+        hardline ^^ intros_pp "x" ^^ intros_pp "y" ^^
+        separate hardline (List.init numfields
+                             (fun n ->
+                               let ns = string_of_int n in
+                               string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ "."))) ^^
+        hardline ^^
+        string "refine (Build_Decidable _ true _). subst. split; reflexivity." ^^ hardline ^^
+        string "Defined." ^^ hardline
+      else empty
     in
     doc_op coloneq
            (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt parens typq])
@@ -2209,13 +2265,13 @@ let doc_val pat exp =
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
   group (separate space [string "Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
-let rec doc_def unimplemented def =
+let rec doc_def unimplemented generic_eq_types def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> doc_val_spec unimplemented v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
-  | DEF_type t_def -> group (doc_typdef t_def) ^/^ hardline
+  | DEF_type t_def -> group (doc_typdef generic_eq_types t_def) ^/^ hardline
   | DEF_reg_dec dec -> group (doc_dec dec)
 
   | DEF_default df -> empty
@@ -2270,6 +2326,8 @@ try
   let statedefs, defs = List.partition is_state_def defs in
   let register_refs = State.register_refs_coq (State.find_registers defs) in
   let unimplemented = find_unimplemented defs in
+  let generic_eq_types = types_used_with_generic_eq defs in
+  let doc_def = doc_def unimplemented generic_eq_types in
   let () = if !opt_undef_axioms || IdSet.is_empty unimplemented then () else
       Reporting.print_err false false Parse_ast.Unknown "Warning"
         ("The following functions were declared but are undefined:\n" ^
@@ -2280,9 +2338,9 @@ try
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) types_modules;hardline;
-        separate empty (List.map (doc_def unimplemented) typdefs); hardline;
+        separate empty (List.map doc_def typdefs); hardline;
         hardline;
-        separate empty (List.map (doc_def unimplemented) statedefs); hardline;
+        separate empty (List.map doc_def statedefs); hardline;
         hardline;
         register_refs; hardline;
         concat [
@@ -2304,7 +2362,7 @@ try
         string "Section Content.";
         hardline;
         hardline;
-        separate empty (List.map (doc_def unimplemented) defs);
+        separate empty (List.map doc_def defs);
         hardline;
         string "End Content.";
         hardline])
