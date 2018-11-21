@@ -556,6 +556,10 @@ let doc_tannot ctxt env eff typ =
     else string " : " ^^ ta
   in of_typ typ
 
+(* Only double-quotes need escaped - by doubling them. *)
+let coq_escape_string s =
+  Str.global_replace (Str.regexp "\"") "\"\"" s
+   
 let doc_lit (L_aux(lit,l)) =
   match lit with
   | L_unit  -> utf8string "tt"
@@ -570,7 +574,7 @@ let doc_lit (L_aux(lit,l)) =
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
      utf8string "(Fail \"undefined value of unsupported type\")"
-  | L_string s -> utf8string ("\"" ^ s ^ "\"")
+  | L_string s -> utf8string ("\"" ^ (coq_escape_string s) ^ "\"")
   | L_real s ->
     (* Lem does not support decimal syntax, so we translate a string
        of the form "x.y" into the ratio (x * 10^len(y) + y) / 10^len(y).
