@@ -8,9 +8,17 @@ Require Import bbv.Word.
 Require Export List.
 Require Export Sumbool.
 Require Export DecidableClass.
+Require Import Eqdep_dec.
 Import ListNotations.
 
 Open Scope Z.
+
+Module Z_eq_dec.
+Definition U := Z.
+Definition eq_dec := Z.eq_dec.
+End Z_eq_dec.
+Module ZEqdep := DecidableEqDep (Z_eq_dec).
+
 
 (* Constraint solving basics.  A HintDb which unfolding hints and lemmata
    can be added to, and a typeclass to wrap constraint arguments in to
@@ -92,6 +100,22 @@ split.
   apply Bool.andb_true_iff.
   tauto.
 Qed.
+
+Definition generic_dec {T:Type} (x y:T) `{Decidable (x = y)} : {x = y} + {x <> y}.
+refine ((if Decidable_witness as b return (b = true <-> x = y -> _) then fun H' => _ else fun H' => _) Decidable_spec).
+* left. tauto.
+* right. intuition.
+Defined.
+
+(* Used by generated code that builds Decidable equality instances for records. *)
+Ltac cmp_record_field x y :=
+  let H := fresh "H" in
+  case (generic_dec x y);
+  intro H; [ |
+    refine (Build_Decidable _ false _);
+    split; [congruence | intros Z; destruct H; injection Z; auto]
+  ].
+
 
 
 (* Project away range constraints in comparisons *)
@@ -1735,6 +1759,20 @@ assumption.
 Qed.
 
 Definition list_of_vec {A n} (v : vec A n) : list A := projT1 v.
+
+Definition vec_eq_dec {T n} (D : forall x y : T, {x = y} + {x <> y}) (x y : vec T n) :
+  {x = y} + {x <> y}.
+refine (if List.list_eq_dec D (projT1 x) (projT1 y) then left _ else right _).
+* apply eq_sigT_hprop; auto using ZEqdep.UIP.
+* contradict n0. rewrite n0. reflexivity.
+Defined.
+
+Instance Decidable_eq_vec {T : Type} {n} `(DT : forall x y : T, Decidable (x = y)) :
+  forall x y : vec T n, Decidable (x = y) := {
+  Decidable_witness := proj1_sig (bool_of_sumbool (vec_eq_dec (fun x y => generic_dec x y) x y))
+}.
+destruct (vec_eq_dec _ x y); simpl; split; congruence.
+Defined.
 
 Program Definition vec_of_list {A} n (l : list A) : option (vec A n) :=
   if sumbool_of_bool (n =? length_list l) then Some (existT _ l _) else None.

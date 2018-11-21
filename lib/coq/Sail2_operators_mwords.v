@@ -9,12 +9,6 @@ Require Import ZArith.
 Require Import Omega.
 Require Import Eqdep_dec.
 
-Module Z_eq_dec.
-Definition U := Z.
-Definition eq_dec := Z.eq_dec.
-End Z_eq_dec.
-Module ZEqdep := DecidableEqDep (Z_eq_dec).
-
 Fixpoint cast_positive (T : positive -> Type) (p q : positive) : T p -> p = q -> T q.
 refine (
 match p, q with
@@ -443,6 +437,20 @@ Definition ugteq_vec := ugteq_bv.
 Definition sgteq_vec := sgteq_bv.
 
 *)
+
+Definition eq_vec_dec {n} : forall (x y : mword n), {x = y} + {x <> y}.
+refine (match n with
+| Z0 => _
+| Zpos m => _
+| Zneg m => _
+end).
+* simpl. apply Word.weq.
+* simpl. apply Word.weq.
+* simpl. destruct x.
+Defined.
+
+Instance Decidable_eq_mword {n} : forall (x y : mword n), Decidable (x = y) :=
+  Decidable_eq_from_dec eq_vec_dec.
 
 Program Fixpoint reverse_endianness_word {n} (bits : word n) : word n :=
   match n with

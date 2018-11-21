@@ -1690,41 +1690,29 @@ let doc_typdef (TD_aux(td, (l, annot))) = match td with
         space ^^ string "|})."
     in
     let updates_pp = separate hardline (List.map doc_update_field fs) in
-    (* let doc_field (ftyp, fid) =
-      let reftyp =
-        mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
-          [mk_typ_arg (Typ_arg_typ rectyp);
-           mk_typ_arg (Typ_arg_typ ftyp)])) in
-      let rfannot = doc_tannot empty_ctxt env false reftyp in
-      let get, set =
-        string "rec_val" ^^ dot ^^ fname fid,
-        anglebars (space ^^ string "rec_val with " ^^
-          (doc_op equals (fname fid) (string "v")) ^^ space) in
-      let base_ftyp = match annot with
-        | Some (env, _, _) -> Env.base_typ_of env ftyp
-        | _ -> ftyp in
-      let (start, is_inc) =
-        try
-          let start, (_, ord, _) = vector_start_index base_ftyp, vector_typ_args_of base_ftyp in
-          match nexp_simp start with
-          | Nexp_aux (Nexp_constant i, _) -> (i, is_order_inc ord)
-          | _ ->
-            raise (Reporting.err_unreachable Parse_ast.Unknown __POS__
-             ("register " ^ string_of_id id ^ " has non-constant start index " ^ string_of_nexp start))
-        with
-        | _ -> (Big_int.zero, true) in
-      doc_op equals
-        (concat [string "let "; parens (concat [doc_id id; underscore; doc_id fid; rfannot])])
-        (anglebars (concat [space;
-          doc_op equals (string "field_name") (string_lit (doc_id fid)); semi_sp;
-          doc_op equals (string "field_start") (string (Big_int.to_string start)); semi_sp;
-          doc_op equals (string "field_is_inc") (string (if is_inc then "true" else "false")); semi_sp;
-          doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
-          doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in *)
+    let id_pp = doc_id_type id in
+    let numfields = List.length fs in
+    let intros_pp s =
+      string " intros [" ^^
+      separate space (List.init numfields (fun n -> string (s ^ string_of_int n))) ^^
+      string "]." ^^ hardline
+    in
+    let eq_pp =
+      string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
+      string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y)." ^^
+      hardline ^^ intros_pp "x" ^^ intros_pp "y" ^^
+      separate hardline (List.init numfields
+                           (fun n ->
+                             let ns = string_of_int n in
+                             string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ "."))) ^^
+      hardline ^^
+      string "refine (Build_Decidable _ true _). subst. split; reflexivity." ^^ hardline ^^
+      string "Defined." ^^ hardline
+    in
     doc_op coloneq
-           (separate space [string "Record"; doc_id_type id; doc_typquant_items empty_ctxt parens typq])
+           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt parens typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
-      dot ^^ hardline ^^ updates_pp
+      dot ^^ hardline ^^ eq_pp ^^ updates_pp
   | TD_variant(id,nm,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -1766,7 +1754,7 @@ let doc_typdef (TD_aux(td, (l, annot))) = match td with
                         (concat [string "Inductive"; space; id_pp])
                         (enums_doc) in
          let eq1_pp = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
-         let eq2_pp = string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^^ space ^^
+         let eq2_pp = string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
            string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=" ^/^
            string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec." in
           typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline)
