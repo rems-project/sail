@@ -391,7 +391,7 @@ let doc_lit_lem (L_aux(lit,l)) =
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
      utf8string "(return (failwith \"undefined value of unsupported type\"))"
-  | L_string s -> utf8string ("\"" ^ s ^ "\"")
+  | L_string s -> utf8string ("\"" ^ (String.escaped s) ^ "\"")
   | L_real s ->
     (* Lem does not support decimal syntax, so we translate a string
        of the form "x.y" into the ratio (x * 10^len(y) + y) / 10^len(y).
