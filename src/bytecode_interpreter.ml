@@ -51,73 +51,112 @@
 open Ast
 open Ast_util
 open Bytecode
-open Type_check
+open Bytecode_util
 
-(* The A-normal form (ANF) grammar *)
+module StringMap = Map.Make(String)
 
-type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
+type 'a frame = {
+    jump_table : int StringMap.t;
+    locals : 'a Bindings.t;
+    pc : int;
+    instrs : instr array
+  }
 
-and 'a aexp_aux =
-  | AE_val of 'a aval
-  | AE_app of id * ('a aval) list * 'a
-  | AE_cast of 'a aexp * 'a
-  | AE_assign of id * 'a * 'a aexp
-  | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
-  | AE_block of ('a aexp) list * 'a aexp * 'a
-  | AE_return of 'a aval * 'a
-  | AE_throw of 'a aval * 'a
-  | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
-  | AE_field of 'a aval * id * 'a
-  | AE_case of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_record_update of 'a aval * ('a aval) Bindings.t * 'a
-  | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
-  | AE_loop of loop * 'a aexp * 'a aexp
-  | AE_short_circuit of sc_op * 'a aval * 'a aexp
+type 'a gstate = {
+    globals : 'a Bindings.t;
+    cdefs : cdef list
+  }
 
-and sc_op = SC_and | SC_or
+type 'a stack = {
+    top : 'a frame;
+    ret : ('a -> 'a frame) list
+  }
 
-and 'a apat = AP_aux of 'a apat_aux * Env.t * l
+let make_jump_table instrs =
+  let rec aux n = function
+    | I_aux (I_label label, _) :: instrs -> StringMap.add label n (aux (n + 1) instrs)
+    | _ :: instrs -> aux (n + 1) instrs
+    | [] -> StringMap.empty
+  in
+  aux 0 instrs
 
-and 'a apat_aux =
-  | AP_tup of ('a apat) list
-  | AP_id of id * 'a
-  | AP_global of id * 'a
-  | AP_app of id * 'a apat * 'a
-  | AP_cons of 'a apat * 'a apat
-  | AP_nil of 'a
-  | AP_wild of 'a
+let new_gstate cdefs = {
+    globals = Bindings.empty;
+    cdefs = cdefs
+  }
 
-and 'a aval =
-  | AV_lit of lit * 'a
-  | AV_id of id * 'a lvar
-  | AV_ref of id * 'a lvar
-  | AV_tuple of ('a aval) list
-  | AV_list of ('a aval) list * 'a
-  | AV_vector of ('a aval) list * 'a
-  | AV_record of ('a aval) Bindings.t * 'a
-  | AV_C_fragment of fragment * 'a * ctyp
+let new_stack instrs = {
+    top = {
+      jump_table = make_jump_table instrs;
+      locals = Bindings.empty;
+      pc = 0;
+      instrs = Array.of_list instrs
+    };
+    ret = []
+  }
 
-val gensym : unit -> id
+let with_top stack f =
+  { stack with top = f (stack.top) }
 
-(* Functions for transforming ANF expressions *)
+let eval_fragment gstate locals = function
+  | F_id id ->
+     begin match Bindings.find_opt id locals with
+     | Some vl -> vl
+     | None ->
+        begin match Bindings.find_opt id gstate.globals with
+        | Some vl -> vl
+        | None -> failwith "Identifier not found"
+        end
+     end
+  | F_lit vl -> vl
+  | _ -> failwith "Cannot eval fragment"
 
-val map_aval : (Env.t -> Ast.l -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
+let is_function id = function
+  | CDEF_fundef (id', _, _, _) when Id.compare id id' = 0 -> true
+  | _ -> false
 
-val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
+let step (gstate, stack) =
+  let I_aux (instr_aux, (_, l)) = stack.top.instrs.(stack.top.pc) in
+  match instr_aux with
+  | I_decl _ ->
+     gstate, with_top stack (fun frame -> { frame with pc = frame.pc + 1 })
 
-val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
+  | I_init (_, id, (fragment, _)) ->
+     let vl = eval_fragment gstate stack.top.locals fragment in
+     gstate,
+     with_top stack (fun frame -> { frame with pc = frame.pc + 1; locals = Bindings.add id vl frame.locals })
 
-val apat_globals : 'a apat -> (id * 'a) list
+  | I_jump ((fragment, _), label) ->
+     let vl = eval_fragment gstate stack.top.locals fragment in
+     gstate,
+     begin match vl with
+     | V_bool true ->
+        with_top stack (fun frame -> { frame with pc = StringMap.find label frame.jump_table })
+     | V_bool false ->
+        with_top stack (fun frame -> { frame with pc = frame.pc + 1 })
+     | _ ->
+        failwith "Type error"
+     end
 
-val apat_types : 'a apat -> 'a Bindings.t
+  | I_funcall (clexp, _, id, cvals) ->
+     let args = List.map (fun (fragment, _) -> eval_fragment gstate stack.top.locals fragment) cvals in
+     let params, instrs =
+       match List.find_opt (is_function id) gstate.cdefs with
+       | Some (CDEF_fundef (_, _, params, instrs)) -> params, instrs
+       | _ -> failwith "Function not found"
+     in
+     gstate,
+     {
+       top = {
+         jump_table = make_jump_table instrs;
+         locals = List.fold_left2 (fun locals param arg -> Bindings.add param arg locals) Bindings.empty params args;
+         pc = 0;
+         instrs = Array.of_list instrs;
+       };
+       ret = (fun vl -> { stack.top with pc = stack.top.pc + 1 }) :: stack.ret
+     }
 
-(* Compiling to ANF expressions *)
+  | I_goto label ->
+     gstate, with_top stack (fun frame -> { frame with pc = StringMap.find label frame.jump_table })
 
-val anf_pat : ?global:bool -> tannot pat -> typ apat
-
-val anf : tannot exp -> typ aexp
-
-(* Pretty printing ANF expressions *)
-val pp_aval : typ aval -> PPrint.document
-val pp_aexp : typ aexp -> PPrint.document
+  | _ -> raise (Reporting.err_unreachable l __POS__ "Unhandled instruction")

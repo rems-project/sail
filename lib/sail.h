@@ -196,6 +196,7 @@ void RECREATE_OF(sail_bits, mach_bits)(sail_bits *,
 mach_bits CREATE_OF(mach_bits, sail_bits)(const sail_bits);
 
 mach_bits CONVERT_OF(mach_bits, sail_bits)(const sail_bits, const bool);
+
 void CONVERT_OF(sail_bits, mach_bits)(sail_bits *, const mach_bits, const uint64_t, const bool);
 
 void UNDEFINED(sail_bits)(sail_bits *, const sail_int len, const mach_bits bit);
@@ -248,6 +249,8 @@ mach_bits bitvector_access(const sail_bits op, const sail_int n_mpz);
 
 void sail_unsigned(sail_int *rop, const sail_bits op);
 void sail_signed(sail_int *rop, const sail_bits op);
+
+mach_int fast_unsigned(const mach_bits);
 
 void append(sail_bits *rop, const sail_bits op1, const sail_bits op2);
 

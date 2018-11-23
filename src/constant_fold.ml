@@ -100,6 +100,7 @@ let safe_primops =
       "prerr_string";
       "read_ram";
       "write_ram";
+      "get_time_ns";
       "Elf_loader.elf_entry";
       "Elf_loader.elf_tohost"
     ]

@@ -693,6 +693,12 @@ void sail_signed(sail_int *rop, const sail_bits op)
   }
 }
 
+inline
+mach_int fast_unsigned(const mach_bits op)
+{
+  return (mach_int) op;
+}
+
 void append(sail_bits *rop, const sail_bits op1, const sail_bits op2)
 {
   rop->len = op1.len + op2.len;
