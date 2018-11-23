@@ -168,7 +168,7 @@ let rec ctyp_of_typ ctx typ =
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
      | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
-     | n when ctx.optimize_z3 && prove ctx.local_env (nc_lteq n (nint 64)) -> CT_lbits direction (* TODO: CT_sbits direction *)
+     | n when ctx.optimize_z3 && prove ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits direction
      | _ -> CT_lbits direction
      end
 
@@ -372,9 +372,10 @@ let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
 
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, analyze_functions ctx f aexp)
 
-    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) ->
+    | AE_let (mut, id, typ1, aexp1, (AE_aux (_, env2, _) as aexp2), typ2) ->
        let aexp1 = analyze_functions ctx f aexp1 in
-       let ctyp1 = ctyp_of_typ ctx typ1 in
+       (* Use aexp2's environment because it will contain constraints for id *)
+       let ctyp1 = ctyp_of_typ { ctx with local_env = env2 } typ1 in
        let ctx = { ctx with locals = Bindings.add id (mut, ctyp1) ctx.locals } in
        AE_let (mut, id, typ1, aexp1, analyze_functions ctx f aexp2, typ2)
 
@@ -423,12 +424,15 @@ let analyze_primop' ctx id args typ =
   c_debug (lazy ("Analyzing primop " ^ extern ^ "(" ^ Util.string_of_list ", " (fun aval -> Pretty_print_sail.to_string (pp_aval aval)) args ^ ")"));
 
   match extern, args with
-  | "eq_bits", [AV_C_fragment (v1, typ1, _); AV_C_fragment (v2, typ2, _)] ->
+  | "eq_bits", [AV_C_fragment (v1, _, CT_fbits _); AV_C_fragment (v2, _, _)] ->
      AE_val (AV_C_fragment (F_op (v1, "==", v2), typ, CT_bool))
-(*
-  | "neq_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
-     AE_val (AV_C_fragment (F_op (v1, "!=", v2), typ))
- *)
+  | "eq_bits", [AV_C_fragment (v1, _, CT_sbits _); AV_C_fragment (v2, _, _)] ->
+     AE_val (AV_C_fragment (F_call ("eq_sbits", [v1; v2]), typ, CT_bool))
+
+  | "neq_bits", [AV_C_fragment (v1, _, CT_fbits _); AV_C_fragment (v2, _, _)] ->
+     AE_val (AV_C_fragment (F_op (v1, "!=", v2), typ, CT_bool))
+  | "neq_bits", [AV_C_fragment (v1, _, CT_sbits _); AV_C_fragment (v2, _, _)] ->
+     AE_val (AV_C_fragment (F_call ("neq_sbits", [v1; v2]), typ, CT_bool))
 
   | "eq_int", [AV_C_fragment (v1, typ1, _); AV_C_fragment (v2, typ2, _)] ->
      AE_val (AV_C_fragment (F_op (v1, "==", v2), typ, CT_bool))
@@ -444,13 +448,15 @@ let analyze_primop' ctx id args typ =
   | "gteq", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
      AE_val (AV_C_fragment (F_op (v1, ">=", v2), typ, CT_bool))
 
-  | "xor_bits", [AV_C_fragment (v1, typ1, ctyp); AV_C_fragment (v2, typ2, _)] ->
+  | "xor_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
      AE_val (AV_C_fragment (F_op (v1, "^", v2), typ, ctyp))
+  | "xor_bits", [AV_C_fragment (v1, _, (CT_sbits _ as ctyp)); AV_C_fragment (v2, _, CT_sbits _)] ->
+     AE_val (AV_C_fragment (F_call ("xor_sbits", [v1; v2]), typ, ctyp))
 
-  | "or_bits", [AV_C_fragment (v1, typ1, ctyp); AV_C_fragment (v2, typ2, _)] ->
+  | "or_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
      AE_val (AV_C_fragment (F_op (v1, "|", v2), typ, ctyp))
 
-  | "and_bits", [AV_C_fragment (v1, typ1, ctyp); AV_C_fragment (v2, typ2, _)] ->
+  | "and_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
      AE_val (AV_C_fragment (F_op (v1, "&", v2), typ, ctyp))
 
   | "not_bits", [AV_C_fragment (v, _, ctyp)] ->
@@ -461,24 +467,28 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
-  | "vector_subrange", [AV_C_fragment (vec, _, _); AV_C_fragment (f, _, _); AV_C_fragment (t, _, _)]
+  | "vector_subrange", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (f, _, _); AV_C_fragment (t, _, _)]
        when is_fbits_typ ctx typ ->
      let len = F_op (f, "-", F_op (t, "-", v_one)) in
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", t)),
                             typ,
                             ctyp_of_typ ctx typ))
 
-  | "vector_access", [AV_C_fragment (vec, _, _); AV_C_fragment (n, _, _)] ->
+  | "vector_access", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (n, _, _)] ->
      AE_val (AV_C_fragment (F_op (v_one, "&", F_op (vec, ">>", n)), typ, CT_bit))
 
   | "eq_bit", [AV_C_fragment (a, _, _); AV_C_fragment (b, _, _)] ->
      AE_val (AV_C_fragment (F_op (a, "==", b), typ, CT_bool))
 
-  | "slice", [AV_C_fragment (vec, _, _); AV_C_fragment (start, _, _); AV_C_fragment (len, _, _)]
+  | "slice", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (start, _, _); AV_C_fragment (len, _, _)]
        when is_fbits_typ ctx typ ->
      AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", start)),
                             typ,
                             ctyp_of_typ ctx typ))
+
+  | "slice", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (start, _, _); AV_C_fragment (len, _, _)]
+       when is_sbits_typ ctx typ ->
+     AE_val (AV_C_fragment (F_call ("sslice", [vec; start; len]), typ, ctyp_of_typ ctx typ))
 
   | "undefined_bit", _ ->
      AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ, CT_bit))
@@ -1021,8 +1031,8 @@ let pointer_assign ctyp1 ctyp2 =
 let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
-  | AE_let (mut, id, binding_typ, binding, body, body_typ) ->
-     let binding_ctyp = ctyp_of_typ ctx binding_typ in
+  | AE_let (mut, id, binding_typ, binding, (AE_aux (_, body_env, _) as body), body_typ) ->
+     let binding_ctyp = ctyp_of_typ { ctx with local_env = body_env } binding_typ in
      let setup, call, cleanup = compile_aexp ctx binding in
      let letb_setup, letb_cleanup =
        [idecl binding_ctyp id; iblock (setup @ [call (CL_id (id, binding_ctyp))] @ cleanup)], [iclear binding_ctyp id]
@@ -1201,7 +1211,11 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      []
 
   | AE_assign (id, assign_typ, aexp) ->
-     let assign_ctyp = ctyp_of_typ ctx assign_typ in
+     let assign_ctyp =
+       match Bindings.find_opt id ctx.locals with
+       | Some (_, ctyp) -> ctyp
+       | None -> ctyp_of_typ ctx assign_typ
+     in
      let setup, call, cleanup = compile_aexp ctx aexp in
      setup @ [call (CL_id (id, assign_ctyp))], (fun clexp -> icopy l clexp unit_fragment), cleanup
 
@@ -2121,13 +2135,13 @@ let codegen_id id = string (sgen_id id)
 
 let rec sgen_ctyp = function
   | CT_unit -> "unit"
-  | CT_bit -> "mach_bits"
+  | CT_bit -> "fbits"
   | CT_bool -> "bool"
-  | CT_fbits _ -> "mach_bits"
+  | CT_fbits _ -> "fbits"
   | CT_sbits _ -> "sbits"
   | CT_int64 -> "mach_int"
   | CT_int -> "sail_int"
-  | CT_lbits _ -> "sail_bits"
+  | CT_lbits _ -> "lbits"
   | CT_tup _ as tup -> "struct " ^ Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> "struct " ^ sgen_id id
   | CT_enum (id, _) -> "enum " ^ sgen_id id
@@ -2141,13 +2155,13 @@ let rec sgen_ctyp = function
 
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
-  | CT_bit -> "mach_bits"
+  | CT_bit -> "fbits"
   | CT_bool -> "bool"
-  | CT_fbits _ -> "mach_bits"
+  | CT_fbits _ -> "fbits"
   | CT_sbits _ -> "sbits"
   | CT_int64 -> "mach_int"
   | CT_int -> "sail_int"
-  | CT_lbits _ -> "sail_bits"
+  | CT_lbits _ -> "lbits"
   | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> sgen_id id
   | CT_enum (id, _) -> sgen_id id
@@ -2176,7 +2190,7 @@ let rec sgen_clexp = function
   | CL_id (id, _) -> "&" ^ sgen_id id
   | CL_field (clexp, field) -> "&((" ^ sgen_clexp clexp ^ ")->" ^ Util.zencode_string field ^ ")"
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp clexp ^ ")->ztup" ^ string_of_int n ^ ")"
-  | CL_addr clexp -> "*(" ^ sgen_clexp clexp ^ ")"
+  | CL_addr clexp -> "(*(" ^ sgen_clexp clexp ^ "))"
   | CL_have_exception -> "have_exception"
   | CL_current_exception _ -> "current_exception"
 
@@ -2184,7 +2198,7 @@ let rec sgen_clexp_pure = function
   | CL_id (id, _) -> sgen_id id
   | CL_field (clexp, field) -> sgen_clexp_pure clexp ^ "." ^ Util.zencode_string field
   | CL_tuple (clexp, n) -> sgen_clexp_pure clexp ^ ".ztup" ^ string_of_int n
-  | CL_addr clexp -> "*(" ^ sgen_clexp_pure clexp ^ ")"
+  | CL_addr clexp -> "(*(" ^ sgen_clexp_pure clexp ^ "))"
   | CL_have_exception -> "have_exception"
   | CL_current_exception _ -> "current_exception"
 
@@ -2294,26 +2308,26 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
           end
        | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
        | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
-       | "vector_update", CT_fbits _ -> "update_mach_bits"
-       | "vector_update", CT_lbits _ -> "update_sail_bits"
+       | "vector_update", CT_fbits _ -> "update_fbits"
+       | "vector_update", CT_lbits _ -> "update_lbits"
        | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
        | "string_of_bits", _ ->
           begin match cval_ctyp (List.nth args 0) with
-          | CT_fbits _ -> "string_of_mach_bits"
-          | CT_lbits _ -> "string_of_sail_bits"
+          | CT_fbits _ -> "string_of_fbits"
+          | CT_lbits _ -> "string_of_lbits"
           | _ -> assert false
           end
        | "decimal_string_of_bits", _ ->
           begin match cval_ctyp (List.nth args 0) with
-          | CT_fbits _ -> "decimal_string_of_mach_bits"
-          | CT_lbits _ -> "decimal_string_of_sail_bits"
+          | CT_fbits _ -> "decimal_string_of_fbits"
+          | CT_lbits _ -> "decimal_string_of_lbits"
           | _ -> assert false
           end
        | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
-       | "undefined_vector", CT_fbits _ -> "UNDEFINED(mach_bits)"
-       | "undefined_vector", CT_lbits _ -> "UNDEFINED(sail_bits)"
-       | "undefined_bit", _ -> "UNDEFINED(mach_bits)"
+       | "undefined_vector", CT_fbits _ -> "UNDEFINED(fbits)"
+       | "undefined_vector", CT_lbits _ -> "UNDEFINED(lbits)"
+       | "undefined_bit", _ -> "UNDEFINED(fbits)"
        | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
        | fname, _ -> fname
      in
@@ -2338,7 +2352,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        ksprintf string "  %s %s = %s;" (sgen_ctyp ctyp) (sgen_id id) (sgen_cval cval)
      else
        ksprintf string "  %s %s = CREATE_OF(%s, %s)(%s);"
-                (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_cval cval)
+                (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_cval_param cval)
   | I_init (ctyp, id, cval) ->
      ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_id id) ^^ hardline
      ^^ ksprintf string "  CREATE_OF(%s, %s)(&%s, %s);"
@@ -2372,6 +2386,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | CT_bit -> "UINT64_C(0)", []
        | CT_int64 -> "INT64_C(0xdeadc0de)", []
        | CT_fbits _ -> "UINT64_C(0xdeadc0de)", []
+       | CT_sbits _ -> "undefined_sbits()", []
        | CT_bool -> "false", []
        | CT_enum (_, ctor :: _) -> sgen_id ctor, [] 
        | CT_tup ctyps when is_stack_ctyp ctyp ->
@@ -3032,7 +3047,7 @@ let sgen_finish = function
 
 let instrument_tracing ctx =
   let module StringSet = Set.Make(String) in
-  let traceable = StringSet.of_list ["mach_bits"; "sail_string"; "sail_bits"; "sail_int"; "unit"; "bool"] in
+  let traceable = StringSet.of_list ["fbits"; "sail_string"; "lbits"; "sail_int"; "unit"; "bool"] in
   let rec instrument = function
     | (I_aux (I_funcall (clexp, _, id, args), _) as instr) :: instrs ->
        let trace_start =

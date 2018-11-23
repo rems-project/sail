@@ -32,7 +32,7 @@ unit sail_exit(unit u)
 
 static uint64_t g_verbosity = 0;
 
-mach_bits sail_get_verbosity(const unit u)
+fbits sail_get_verbosity(const unit u)
 {
   return g_verbosity;
 }
@@ -214,9 +214,9 @@ void kill_mem()
 
 bool write_ram(const mpz_t addr_size,     // Either 32 or 64
 	       const mpz_t data_size_mpz, // Number of bytes
-	       const sail_bits  hex_ram,       // Currently unused
-	       const sail_bits  addr_bv,
-	       const sail_bits  data)
+	       const lbits  hex_ram,       // Currently unused
+	       const lbits  addr_bv,
+	       const lbits  data)
 {
   uint64_t addr = mpz_get_ui(*addr_bv.bits);
   uint64_t data_size = mpz_get_ui(data_size_mpz);
@@ -238,11 +238,11 @@ bool write_ram(const mpz_t addr_size,     // Either 32 or 64
   return true;
 }
 
-void read_ram(sail_bits *data,
+void read_ram(lbits *data,
 	      const mpz_t addr_size,
 	      const mpz_t data_size_mpz,
-	      const sail_bits hex_ram,
-	      const sail_bits addr_bv)
+	      const lbits hex_ram,
+	      const lbits addr_bv)
 {
   uint64_t addr = mpz_get_ui(*addr_bv.bits);
   uint64_t data_size = mpz_get_ui(data_size_mpz);
@@ -261,7 +261,7 @@ void read_ram(sail_bits *data,
   mpz_clear(byte);
 }
 
-unit load_raw(mach_bits addr, const sail_string file)
+unit load_raw(fbits addr, const sail_string file)
 {
   FILE *fp = fopen(file, "r");
 
@@ -339,7 +339,7 @@ bool is_tracing(const unit u)
   return g_trace_enabled;
 }
 
-void trace_mach_bits(const mach_bits x) {
+void trace_fbits(const fbits x) {
   if (g_trace_enabled) fprintf(stderr, "0x%" PRIx64, x);
 }
 
@@ -355,7 +355,7 @@ void trace_sail_int(const sail_int op) {
   if (g_trace_enabled) mpz_out_str(stderr, 10, op);
 }
 
-void trace_sail_bits(const sail_bits op) {
+void trace_lbits(const lbits op) {
   if (g_trace_enabled) fprint_bits("", op, "", stderr);
 }
 

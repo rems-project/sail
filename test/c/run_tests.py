@@ -63,6 +63,7 @@ xml = '<testsuites>\n'
 xml += test_c('unoptimized C', '', '', True)
 xml += test_c('optimized C', '-O2', '-O', True)
 xml += test_c('constant folding', '', '-Oconstant_fold', True)
+xml += test_c('full optimizations', '-O2 -mbmi2 -DINTRINSICS', '-O -Oconstant_fold', True)
 xml += test_c('address sanitised', '-O2 -fsanitize=undefined', '-O', False)
 
 xml += test_interpreter('interpreter')
