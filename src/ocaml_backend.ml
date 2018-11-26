@@ -830,6 +830,9 @@ let ocaml_pp_generators ctx defs orig_types required =
         separate space [bar; dquotes (string (string_of_id id)); string "->";
                         zencode_upper ctx id]
       in
+      let rand_field (typ,id) =
+        zencode ctx id ^^ space ^^ equals ^^ space ^^ make_subgen typ
+      in
       let make_args tqs =
         string "g" ^^
         match quant_kopts tqs with
@@ -859,8 +862,10 @@ let ocaml_pp_generators ctx defs orig_types required =
                string "]",
            Some (separate_map (string ";" ^^ break 1) enum_constructor variants),
            Some (separate_map (break 1) build_enum_constructor variants)
+        | TD_record (_,_,tqs,fields,_) ->
+           tqs, braces (separate_map (string ";" ^^ break 1) rand_field fields), None, None
         | _ ->
-           raise (Reporting.err_todo l "Generators for records and bitfields not yet supported")
+           raise (Reporting.err_todo l "Generators for bitfields not yet supported")
       in
       let name = type_name id in
       let constructors_pp = match constructors with
