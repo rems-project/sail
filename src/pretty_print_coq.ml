@@ -1645,6 +1645,9 @@ let doc_exp, doc_let =
              (* expose doc_exp and doc_let *)
   in top_exp, let_exp
 
+(* FIXME: A temporary definition of List.init until 4.06 is more standard *)
+let list_init n f = Array.to_list (Array.init n f)
+
 let types_used_with_generic_eq defs =
   let rec add_typ idset (Typ_aux (typ,_)) =
     match typ with
@@ -1748,7 +1751,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
     let numfields = List.length fs in
     let intros_pp s =
       string " intros [" ^^
-      separate space (List.init numfields (fun n -> string (s ^ string_of_int n))) ^^
+      separate space (list_init numfields (fun n -> string (s ^ string_of_int n))) ^^
       string "]." ^^ hardline
     in
     let eq_pp =
@@ -1756,7 +1759,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
         string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
         string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y)." ^^
         hardline ^^ intros_pp "x" ^^ intros_pp "y" ^^
-        separate hardline (List.init numfields
+        separate hardline (list_init numfields
                              (fun n ->
                                let ns = string_of_int n in
                                string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ "."))) ^^
