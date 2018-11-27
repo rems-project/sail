@@ -2118,12 +2118,156 @@ let remove_alias ctx =
      [CDEF_fundef (function_id, heap_return, args, opt body)]
   | cdef -> [cdef]
 
+
+(** This pass ensures that all variables created by I_decl have unique names *)
+let unique_names =
+  let unique_counter = ref 0 in
+  let unique_id () =
+    let id = mk_id ("u#" ^ string_of_int !unique_counter) in
+    incr unique_counter;
+    id
+  in
+
+  let rec opt seen = function
+    | I_aux (I_decl (ctyp, id), aux) :: instrs when IdSet.mem id seen ->
+       let id' = unique_id () in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_decl (ctyp, id'), aux) :: instrs_rename id id' instrs', seen
+
+    | I_aux (I_decl (ctyp, id), aux) :: instrs ->
+       let instrs', seen = opt (IdSet.add id seen) instrs in
+       I_aux (I_decl (ctyp, id), aux) :: instrs', seen
+
+    | I_aux (I_block block, aux) :: instrs ->
+       let block', seen = opt seen block in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_block block', aux) :: instrs', seen
+
+    | I_aux (I_try_block block, aux) :: instrs ->
+       let block', seen = opt seen block in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_try_block block', aux) :: instrs', seen
+
+    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+       let then_instrs', seen = opt seen then_instrs in
+       let else_instrs', seen = opt seen else_instrs in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_if (cval, then_instrs', else_instrs', ctyp), aux) :: instrs', seen
+
+    | instr :: instrs ->
+       let instrs', seen = opt seen instrs in
+       instr :: instrs', seen
+
+    | [] -> [], seen
+  in
+  function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     [CDEF_fundef (function_id, heap_return, args, fst (opt IdSet.empty body))]
+  | CDEF_reg_dec (id, ctyp, instrs) ->
+     [CDEF_reg_dec (id, ctyp, fst (opt IdSet.empty instrs))]
+  | CDEF_let (n, bindings, instrs) ->
+     [CDEF_let (n, bindings, fst (opt IdSet.empty instrs))]
+  | cdef -> [cdef]
+
+(** This optimization looks for patterns of the form
+
+    create x : t;
+    create y : t;
+    // modifications to y, no changes to x
+    x = y;
+    kill y;
+
+    If found we can replace y by x *)
+let combine_variables ctx =
+  let pattern ctyp id =
+    let combine = ref None in
+    let rec scan id n instrs =
+      match n, !combine, instrs with
+      | 0, None, I_aux (I_block block, _) :: instrs ->
+         begin match scan id 0 block with
+         | Some combine -> Some combine
+         | None -> scan id 0 instrs
+         end
+
+      | 0, None, I_aux (I_decl (ctyp', id'), _) :: instrs when ctyp_equal ctyp ctyp' ->
+         combine := Some id';
+         scan id 1 instrs
+
+      | 1, Some c, I_aux (I_copy (CL_id (id', ctyp'), (F_id c', ctyp'')), _) :: instrs
+           when Id.compare c c' = 0 && Id.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
+         scan id 2 instrs
+
+      (* Ignore seemingly early clears of x, as this can happen along exception paths *)
+      | 1, Some c, I_aux (I_clear (_, id'), _) :: instrs
+           when Id.compare id id' = 0 ->
+         scan id 1 instrs
+
+      | 1, Some c, instr :: instrs ->
+         if IdSet.mem id (instr_ids instr) then
+           None
+         else
+           scan id 1 instrs
+
+      | 2, Some c, I_aux (I_clear (ctyp', c'), _) :: instrs
+           when Id.compare c c' = 0 && ctyp_equal ctyp ctyp' ->
+         !combine
+
+      | 2, Some c, instr :: instrs ->
+         if IdSet.mem c (instr_ids instr) then
+           None
+         else
+           scan id 2 instrs
+
+      | 2, Some c, [] -> !combine
+
+      | n, _, _ :: instrs -> scan id n instrs
+      | _, _, [] -> None
+    in
+    scan id 0
+  in
+  let remove_variable id = function
+    | I_aux (I_decl (_, id'), _) when Id.compare id id' = 0 -> removed
+    | I_aux (I_clear (_, id'), _) when Id.compare id id' = 0 -> removed
+    | instr -> instr
+  in
+  let is_not_self_assignment = function
+    | I_aux (I_copy (CL_id (id, _), (F_id id', _)), _) when Id.compare id id' = 0 -> false
+    | _ -> true
+  in
+  let rec opt = function
+    | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs ->
+       begin match pattern ctyp id instrs with
+       | None -> instr :: opt instrs
+       | Some combine ->
+          let instrs = List.map (map_instr (remove_variable combine)) instrs in
+          let instrs = filter_instrs (fun i -> is_not_removed i && is_not_self_assignment i)
+                                     (List.map (instr_rename combine id) instrs) in
+          opt (instr :: instrs)
+       end
+
+    | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (opt block), aux) :: opt instrs
+    | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (opt block), aux) :: opt instrs
+    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+       I_aux (I_if (cval, opt then_instrs, opt else_instrs, ctyp), aux) :: opt instrs
+
+    | instr :: instrs ->
+       instr :: opt instrs
+    | [] -> []
+  in
+  function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     [CDEF_fundef (function_id, heap_return, args, opt body)]
+  | cdef -> [cdef]
+
+
 let concatMap f xs = List.concat (List.map f xs)
 
 let optimize ctx cdefs =
   let nothing cdefs = cdefs in
   cdefs
+  |> (if !optimize_alias then concatMap unique_names else nothing)
   |> (if !optimize_alias then concatMap (remove_alias ctx) else nothing)
+  |> (if !optimize_alias then concatMap (combine_variables ctx) else nothing)
   |> (if !optimize_hoist_allocations then concatMap (hoist_allocations ctx) else nothing)
 
 (**************************************************************************)
@@ -2259,12 +2403,12 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ twice space ^^ codegen_instr fid ctx then_instr
   | I_if (cval, then_instrs, [], ctyp) ->
      string "  if" ^^ space ^^ parens (string (sgen_cval cval)) ^^ space
-     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
+     ^^ surround 0 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
   | I_if (cval, then_instrs, else_instrs, ctyp) ->
      string "  if" ^^ space ^^ parens (string (sgen_cval cval)) ^^ space
-     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
+     ^^ surround 0 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
      ^^ space ^^ string "else" ^^ space
-     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) else_instrs) (twice space ^^ rbrace)
+     ^^ surround 0 0 lbrace (separate_map hardline (codegen_instr fid ctx) else_instrs) (twice space ^^ rbrace)
 
   | I_block instrs ->
      string "  {"

@@ -155,8 +155,11 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
     | I_init (ctyp, id, cval) ->
        I_init (ctyp, id, cval_rename from_id to_id cval)
 
-    | I_if ((frag, ctyp1), then_instrs, else_instrs, ctyp2) ->
-       I_if ((frag_rename from_id to_id frag, ctyp1), then_instrs, else_instrs, ctyp2)
+    | I_if (cval, then_instrs, else_instrs, ctyp2) ->
+       I_if (cval_rename from_id to_id cval,
+             List.map (instr_rename from_id to_id) then_instrs,
+             List.map (instr_rename from_id to_id) else_instrs,
+             ctyp2)
 
     | I_jump (cval, label) -> I_jump (cval_rename from_id to_id cval, label)
 
