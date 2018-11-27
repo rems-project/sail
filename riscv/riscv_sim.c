@@ -423,6 +423,7 @@ void run_sail(void)
       stepped = zstep(sail_step);
       if (have_exception) goto step_exception;
       flush_logs();
+      KILL(sail_int)(&sail_step);
     }
     if (stepped) {
       step_no++;

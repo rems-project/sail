@@ -1249,12 +1249,14 @@ void random_real(real *rop, const unit u)
 
 void string_of_int(sail_string *str, const sail_int i)
 {
+  free(*str);
   gmp_asprintf(str, "%Zd", i);
 }
 
-/* asprinf is a GNU extension, but it should exist on BSD */
+/* asprintf is a GNU extension, but it should exist on BSD */
 void string_of_fbits(sail_string *str, const fbits op)
 {
+  free(*str);
   int bytes = asprintf(str, "0x%" PRIx64, op);
   if (bytes == -1) {
     fprintf(stderr, "Could not print bits 0x%" PRIx64 "\n", op);
@@ -1263,15 +1265,23 @@ void string_of_fbits(sail_string *str, const fbits op)
 
 void string_of_lbits(sail_string *str, const lbits op)
 {
+  free(*str);
   if ((op.len % 4) == 0) {
-    gmp_asprintf(str, "0x%*0Zx", op.len / 4, *op.bits);
+    gmp_asprintf(str, "0x%*0ZX", op.len / 4, *op.bits);
   } else {
-    gmp_asprintf(str, "0b%*0Zb", op.len, *op.bits);
+    *str = (char *) malloc((op.len + 3) * sizeof(char));
+    (*str)[0] = '0';
+    (*str)[1] = 'b';
+    for (int i = 1; i <= op.len; ++i) {
+      (*str)[i + 1] = mpz_tstbit(*op.bits, op.len - i) + 0x30;
+    }
+    (*str)[op.len + 2] = '\0';
   }
 }
 
 void decimal_string_of_fbits(sail_string *str, const fbits op)
 {
+  free(*str);
   int bytes = asprintf(str, "%" PRId64, op);
   if (bytes == -1) {
     fprintf(stderr, "Could not print bits %" PRId64 "\n", op);
@@ -1280,6 +1290,7 @@ void decimal_string_of_fbits(sail_string *str, const fbits op)
 
 void decimal_string_of_lbits(sail_string *str, const lbits op)
 {
+  free(*str);
   gmp_asprintf(str, "%Z", *op.bits);
 }
 

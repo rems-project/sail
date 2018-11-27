@@ -134,6 +134,9 @@ let options = Arg.align ([
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " Apply constant folding optimizations");
+  ( "-Oexperimental",
+    Arg.Set C_backend.optimize_experimental,
+    " turn on additional, experimental optimisations");
   ( "-static",
     Arg.Set C_backend.opt_static,
     " Make generated C functions static");

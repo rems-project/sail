@@ -132,6 +132,7 @@ instr :: 'I_' ::=
   | jump ( cval ) string                           :: :: jump
   | clexp = bool id ( cval0 , ... , cvaln )        :: :: funcall
   | clexp = cval                                   :: :: copy
+  | alias clexp = cval                             :: :: alias
   | clear ctyp id                                  :: :: clear
   | return cval                                    :: :: return
   | { instr0 ; ... ; instrn }                      :: :: block
