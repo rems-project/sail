@@ -86,6 +86,12 @@ type value =
   | V_ref of string
   | V_ctor of string * value list
   | V_record of value StringMap.t
+  (* When constant folding we disable reading registers, so a register
+     read will return a V_attempted_read value. If we try to do
+     anything with this value, we'll get an exception - but if all we
+     do is return it then we can replace the expression we are folding
+     with a direct register read. *)
+  | V_attempted_read of string
 
 let rec eq_value v1 v2 =
   match v1, v2 with
@@ -386,6 +392,7 @@ let rec string_of_value = function
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
      "{" ^ Util.string_of_list ", " (fun (field, v) -> field ^ "=" ^ string_of_value v) (StringMap.bindings record) ^ "}"
+  | V_attempted_read _ -> assert false
 
 let value_sign_extend = function
   | [v1; v2] -> mk_vector (Sail_lib.sign_extend (coerce_bv v1, coerce_int v2))

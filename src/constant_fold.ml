@@ -78,6 +78,7 @@ and exp_of_value =
   | V_tuple vs ->
      mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
+  | V_attempted_read str -> mk_exp (E_id (mk_id str))
   | _ -> failwith "No expression for value"
 
 (* We want to avoid evaluating things like print statements at compile

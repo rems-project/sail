@@ -390,13 +390,15 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                Type_check.check_exp (env_of_annot annot) exp (typ_of orig_exp)
           in
           return exp
+       | Register _ when not gstate.allow_registers ->
+          return (exp_of_value (V_attempted_read (string_of_id id)))
        | Local (Mutable, _) -> return (local_variable id lstate gstate)
        | Local (Immutable, _) ->
           let chain = build_letchain id gstate.letbinds orig_exp in
           return chain
        | Enum _ ->
           return (exp_of_value (V_ctor (string_of_id id, [])))
-       | _ -> failwith ("Coudln't find id " ^ string_of_id id)
+       | _ -> failwith ("Couldn't find id " ^ string_of_id id)
      end
 
   | E_record (FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
