@@ -1040,7 +1040,7 @@ function readCSR csr : csreg -> xlenbits =
     _     => { print_bits("unhandled read to CSR ", csr);
                0x0000_0000_0000_0000 }
   } in {
-    print("CSR " ^ csr ^ " -> " ^ BitStr(res));
+    print_reg("CSR " ^ csr ^ " -> " ^ BitStr(res));
     res
   }
 
@@ -1089,7 +1089,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     _     => None()
   } in
   match res {
-    Some(v) => print("CSR " ^ csr ^ " <- " ^ BitStr(v) ^ " (input: " ^ BitStr(value) ^ ")"),
+    Some(v) => print_reg("CSR " ^ csr ^ " <- " ^ BitStr(v) ^ " (input: " ^ BitStr(value) ^ ")"),
     None()  => print_bits("unhandled write to CSR ", csr)
   }
 

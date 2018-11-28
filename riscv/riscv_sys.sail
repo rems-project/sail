@@ -845,14 +845,14 @@ function curInterrupt(priv : Privilege, pend : Minterrupts, enbl : Minterrupts, 
       let p = if pend.MTI() == true then "1" else "0";
       let e = if enbl.MTI() == true then "1" else "0";
       let d = if delg.MTI() == true then "1" else "0";
-      print(" MTI: pend=" ^ p ^ " enbl=" ^ e ^ " delg=" ^ d);
+      print_platform(" MTI: pend=" ^ p ^ " enbl=" ^ e ^ " delg=" ^ d);
       let eff_mip = en_mip & (~ (delg.bits())); /* retained at M-mode */
       let eff_sip = en_mip & delg.bits();       /* delegated to S-mode */
-      print("mstatus=" ^ BitStr(mstatus.bits())
-            ^ " mie,sie=" ^ BitStr(mstatus.MIE()) ^ "," ^ BitStr(mstatus.SIE())
-            ^ " en_mip=" ^ BitStr(en_mip)
-            ^ " eff_mip=" ^ BitStr(eff_mip)
-            ^ " eff_sip=" ^ BitStr(eff_sip));
+      print_platform("mstatus=" ^ BitStr(mstatus.bits())
+                     ^ " mie,sie=" ^ BitStr(mstatus.MIE()) ^ "," ^ BitStr(mstatus.SIE())
+                     ^ " en_mip=" ^ BitStr(en_mip)
+                     ^ " eff_mip=" ^ BitStr(eff_mip)
+                     ^ " eff_sip=" ^ BitStr(eff_sip));
       None()
     }
   }
@@ -893,7 +893,7 @@ $endif
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
   rvfi_trap();
-  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
+  print_platform("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
 
   match (del_priv) {
     Machine => {
@@ -908,7 +908,7 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        cur_privilege   = del_priv;
 
-       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+       print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
 
        cancel_reservation();
 
@@ -933,7 +933,7 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        cur_privilege   = del_priv;
 
-       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+       print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
 
        cancel_reservation();
 
@@ -952,8 +952,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       let del_priv = exception_delegatee(e.trap, cur_priv);
-      print("trapping from " ^ cur_priv ^ " to " ^ del_priv
-            ^ " to handle " ^ e.trap);
+      print_platform("trapping from " ^ cur_priv ^ " to " ^ del_priv
+                     ^ " to handle " ^ e.trap);
       handle_trap(del_priv, false, e.trap, pc, e.excinfo)
     },
     (_, CTL_MRET())  => {
@@ -963,8 +963,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
 
-      print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
-      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
+      print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+      print_platform("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
 
       cancel_reservation();
       mepc & pc_alignment_mask()
@@ -976,8 +976,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
       mstatus->SPP()  = false;
 
-      print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
-      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
+      print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+      print_platform("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
 
       cancel_reservation();
       sepc & pc_alignment_mask()
@@ -1033,7 +1033,7 @@ function init_sys() -> unit = {
   minstret_written   = false;
 
   // log compatibility with spike
-  print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(EXTZ(0b0) : xlenbits) ^ ")")
+  print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(EXTZ(0b0) : xlenbits) ^ ")")
 }
 
 /* memory access exceptions, defined here for use by the platform model. */

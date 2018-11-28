@@ -58,6 +58,33 @@ let config_enable_dirty_update = ref false
 let config_enable_misaligned_access = ref false
 let config_mtval_has_illegal_inst_bits = ref false
 
+(* logging *)
+
+let config_print_instr       = ref true
+let config_print_reg         = ref true
+let config_print_mem_access  = ref true
+let config_print_platform    = ref true
+
+let print_instr s =
+  if !config_print_instr
+  then print_endline s
+  else ()
+
+let print_reg s =
+  if !config_print_reg
+  then print_endline s
+  else ()
+
+let print_mem_access s =
+  if !config_print_mem_access
+  then print_endline s
+  else ()
+
+let print_platform s =
+  if !config_print_platform
+  then print_endline s
+  else ()
+
 (* Mapping to Sail externs *)
 
 let bits_of_int i =
@@ -74,9 +101,9 @@ let make_rom start_pc =
   ( rom_size_ref := List.length rom;
     (*
     List.iteri (fun i c ->
-                Printf.eprintf "rom[0x%Lx] <- %x\n"
-                               (Int64.add P.rom_base (Int64.of_int i))
-                               c
+                print_mem_access "rom[0x%Lx] <- %x\n"
+                                 (Int64.add P.rom_base (Int64.of_int i))
+                                 c
                ) rom;
      *)
     rom )
@@ -104,15 +131,15 @@ let insns_per_tick () = Big_int.of_int P.insns_per_tick
 let reservation = ref "none"  (* shouldn't match any valid address *)
 
 let load_reservation addr =
-  Printf.eprintf "reservation <- %s\n" (string_of_bits addr);
+  print_platform (Printf.sprintf "reservation <- %s\n" (string_of_bits addr));
   reservation := string_of_bits addr
 
 let match_reservation addr =
-  Printf.eprintf "reservation: %s, key=%s\n" (!reservation) (string_of_bits addr);
+  print_platform (Printf.sprintf "reservation: %s, key=%s\n" (!reservation) (string_of_bits addr));
   string_of_bits addr = !reservation
 
 let cancel_reservation () =
-  Printf.eprintf "reservation <- none\n";
+  print_platform (Printf.sprintf "reservation <- none\n");
   reservation := "none"
 
 (* terminal I/O *)
@@ -129,8 +156,8 @@ let term_read () =
 let init elf_file =
   Elf.load_elf elf_file;
 
-  Printf.eprintf "\nRegistered htif_tohost at 0x%Lx.\n" (Big_int.to_int64 (Elf.elf_tohost ()));
-  Printf.eprintf "Registered clint at 0x%Lx (size 0x%Lx).\n%!" P.clint_base P.clint_size;
+  print_platform (Printf.sprintf "\nRegistered htif_tohost at 0x%Lx.\n" (Big_int.to_int64 (Elf.elf_tohost ())));
+  print_platform (Printf.sprintf "Registered clint at 0x%Lx (size 0x%Lx).\n%!" P.clint_base P.clint_size);
 
   let start_pc = Elf.Big_int.to_int64 (Elf.elf_entry ()) in
   let rom = make_rom start_pc in

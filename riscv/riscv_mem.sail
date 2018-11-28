@@ -12,7 +12,7 @@ function phys_mem_read forall 'n, 'n >= 0. (t : ReadType, addr : xlenbits, width
   match (t, __RISCV_read(addr, width, aq, rl, res)) {
     (Instruction, None()) => MemException(E_Fetch_Access_Fault),
     (Data, None())        => MemException(E_Load_Access_Fault),
-    (_, Some(v))          => { print("mem[" ^ t ^ "," ^ BitStr(addr) ^ "] -> " ^ BitStr(v));
+    (_, Some(v))          => { print_mem("mem[" ^ t ^ "," ^ BitStr(addr) ^ "] -> " ^ BitStr(v));
                                MemValue(v) }
   }
 
@@ -116,7 +116,7 @@ function mem_write_ea (addr, width, aq, rl, con) = {
 
 // only used for actual memory regions, to avoid MMIO effects
 function phys_mem_write forall 'n. (addr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> MemoryOpResult(bool) = {
-  print("mem[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
+  print_mem("mem[" ^ BitStr(addr) ^ "] <- " ^ BitStr(data));
   MemValue(__RISCV_write(addr, width, data))
 }
 

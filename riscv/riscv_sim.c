@@ -57,6 +57,11 @@ static int rvfi_dii_sock;
 unsigned char *spike_dtb = NULL;
 size_t spike_dtb_len = 0;
 
+bool config_print_instr = true;
+bool config_print_reg = true;
+bool config_print_mem_access = true;
+bool config_print_platform = true;
+
 static struct option options[] = {
   {"enable-dirty",                no_argument,       0, 'd'},
   {"enable-misaligned",           no_argument,       0, 'm'},

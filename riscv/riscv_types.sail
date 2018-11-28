@@ -164,7 +164,7 @@ function wX (r, v) = {
   if (r != 0) then {
      rvfi_wX(r,v);
      // Xs[r] = v;
-     print("x" ^ string_of_int(r) ^ " <- " ^ BitStr(v));
+     print_reg("x" ^ string_of_int(r) ^ " <- " ^ BitStr(v));
   }
 }
 
