@@ -385,56 +385,61 @@ int compare_states(struct tv_spike_t *s)
   int passed = 1;
 
 #ifdef SPIKE
+#define TV_CHECK(reg, spike_reg, sail_reg)   \
+  passed &= tv_check_ ## reg(s, spike_reg, sail_reg);
+
   // fix default C enum map for cur_privilege
   uint8_t priv = (zcur_privilege == 2) ? 3 : zcur_privilege;
   passed &= tv_check_priv(s, priv);
 
   passed &= tv_check_pc(s, zPC);
 
-  passed &= tv_check_gpr(s, 1, zx1);
-  passed &= tv_check_gpr(s, 2, zx2);
-  passed &= tv_check_gpr(s, 3, zx3);
-  passed &= tv_check_gpr(s, 4, zx4);
-  passed &= tv_check_gpr(s, 5, zx5);
-  passed &= tv_check_gpr(s, 6, zx6);
-  passed &= tv_check_gpr(s, 7, zx7);
-  passed &= tv_check_gpr(s, 8, zx8);
-  passed &= tv_check_gpr(s, 9, zx9);
-  passed &= tv_check_gpr(s, 10, zx10);
-  passed &= tv_check_gpr(s, 11, zx11);
-  passed &= tv_check_gpr(s, 12, zx12);
-  passed &= tv_check_gpr(s, 13, zx13);
-  passed &= tv_check_gpr(s, 14, zx14);
-  passed &= tv_check_gpr(s, 15, zx15);
-  passed &= tv_check_gpr(s, 15, zx15);
-  passed &= tv_check_gpr(s, 16, zx16);
-  passed &= tv_check_gpr(s, 17, zx17);
-  passed &= tv_check_gpr(s, 18, zx18);
-  passed &= tv_check_gpr(s, 19, zx19);
-  passed &= tv_check_gpr(s, 20, zx20);
-  passed &= tv_check_gpr(s, 21, zx21);
-  passed &= tv_check_gpr(s, 22, zx22);
-  passed &= tv_check_gpr(s, 23, zx23);
-  passed &= tv_check_gpr(s, 24, zx24);
-  passed &= tv_check_gpr(s, 25, zx25);
-  passed &= tv_check_gpr(s, 25, zx25);
-  passed &= tv_check_gpr(s, 26, zx26);
-  passed &= tv_check_gpr(s, 27, zx27);
-  passed &= tv_check_gpr(s, 28, zx28);
-  passed &= tv_check_gpr(s, 29, zx29);
-  passed &= tv_check_gpr(s, 30, zx30);
-  passed &= tv_check_gpr(s, 31, zx31);
+  TV_CHECK(gpr, 1, zx1);
+  TV_CHECK(gpr, 2, zx2);
+  TV_CHECK(gpr, 3, zx3);
+  TV_CHECK(gpr, 4, zx4);
+  TV_CHECK(gpr, 5, zx5);
+  TV_CHECK(gpr, 6, zx6);
+  TV_CHECK(gpr, 7, zx7);
+  TV_CHECK(gpr, 8, zx8);
+  TV_CHECK(gpr, 9, zx9);
+  TV_CHECK(gpr, 10, zx10);
+  TV_CHECK(gpr, 11, zx11);
+  TV_CHECK(gpr, 12, zx12);
+  TV_CHECK(gpr, 13, zx13);
+  TV_CHECK(gpr, 14, zx14);
+  TV_CHECK(gpr, 15, zx15);
+  TV_CHECK(gpr, 15, zx15);
+  TV_CHECK(gpr, 16, zx16);
+  TV_CHECK(gpr, 17, zx17);
+  TV_CHECK(gpr, 18, zx18);
+  TV_CHECK(gpr, 19, zx19);
+  TV_CHECK(gpr, 20, zx20);
+  TV_CHECK(gpr, 21, zx21);
+  TV_CHECK(gpr, 22, zx22);
+  TV_CHECK(gpr, 23, zx23);
+  TV_CHECK(gpr, 24, zx24);
+  TV_CHECK(gpr, 25, zx25);
+  TV_CHECK(gpr, 25, zx25);
+  TV_CHECK(gpr, 26, zx26);
+  TV_CHECK(gpr, 27, zx27);
+  TV_CHECK(gpr, 28, zx28);
+  TV_CHECK(gpr, 29, zx29);
+  TV_CHECK(gpr, 30, zx30);
+  TV_CHECK(gpr, 31, zx31);
 
   /* some selected CSRs for now */
 
-  passed &= tv_check_csr(s, CSR_MCAUSE, zmcause.zMcause_chunk_0);
-  passed &= tv_check_csr(s, CSR_MEPC, zmepc);
-  passed &= tv_check_csr(s, CSR_MTVAL, zmtval);
-  passed &= tv_check_csr(s, CSR_MSTATUS, zmstatus);
+  TV_CHECK(csr, CSR_MCAUSE, zmcause.zMcause_chunk_0);
+  TV_CHECK(csr, CSR_MEPC, zmepc);
+  TV_CHECK(csr, CSR_MTVAL, zmtval);
+  TV_CHECK(csr, CSR_MSTATUS, zmstatus);
 
-  passed &= tv_check_csr(s, CSR_SCAUSE, zscause.zMcause_chunk_0);
-  passed &= tv_check_csr(s, CSR_SEPC, zsepc);
-  passed &= tv_check_csr(s, CSR_STVAL, zstval);
+  TV_CHECK(csr, CSR_SCAUSE, zscause.zMcause_chunk_0);
+  TV_CHECK(csr, CSR_SEPC, zsepc);
+  TV_CHECK(csr, CSR_STVAL, zstval);
+
+#undef TV_CHECK
 #endif
 
   return passed;
