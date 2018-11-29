@@ -246,10 +246,10 @@ mapping clause assembly = RTYPE(rs2, rs1, rd, op)
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
 
-/* I am assuming that load unsigned double wasn't meant to be missing here? */
+/* Load unsigned double is only present in RV128I, not RV64I */
 /* TODO: aq/rl */
-mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false)
-                    <-> imm @ rs1 @ bool_bits(is_unsigned) @ size_bits(size) @ rd @ 0b0000011
+mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false) if size_bits(size) != 0b11 | not_bool(is_unsigned)
+                    <-> imm @ rs1 @ bool_bits(is_unsigned) @ size_bits(size) @ rd @ 0b0000011 if size_bits(size) != 0b11 | not_bool(is_unsigned)
 
 val extend_value : forall 'n, 0 < 'n <= 8. (bool, MemoryOpResult(bits(8 * 'n))) -> MemoryOpResult(xlenbits)
 function extend_value(is_unsigned, value) = match (value) {
