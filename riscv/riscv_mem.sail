@@ -40,10 +40,34 @@ function MEMr_reserved                (addr, width) = checked_mem_read(Data, add
 function MEMr_reserved_acquire        (addr, width) = checked_mem_read(Data, addr, width, true, false, true)
 function MEMr_reserved_strong_acquire (addr, width) = checked_mem_read(Data, addr, width, true, true, true)
 
+$ifdef RVFI_DII
+val rvfi_read : forall 'n, 'n > 0. (xlenbits, atom('n), MemoryOpResult(bits(8 * 'n))) -> unit effect {wreg}
+function rvfi_read (addr, width, result) = {
+  rvfi_exec->rvfi_mem_addr() = addr;
+  match result {
+  MemValue(v) =>
+    if width <= 8
+    then {
+      rvfi_exec->rvfi_mem_wdata() = zero_extend(v,64);
+      rvfi_exec->rvfi_mem_wmask() = to_bits(8,width)
+    } else (),
+  MemException(_) => ()
+  };
+}
+$else
+val rvfi_read : forall 'n, 'n > 0. (xlenbits, atom('n), MemoryOpResult(bits(8 * 'n))) -> unit
+function rvfi_read (addr, width, value) = ()
+$endif
+
 /* NOTE: The rreg effect is due to MMIO. */
+$ifdef RVFI_DII
+val mem_read : forall 'n, 'n > 0. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n)) effect {wreg, rmem, rreg, escape}
+$else
 val mem_read : forall 'n, 'n > 0. (xlenbits, atom('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n)) effect {rmem, rreg, escape}
+$endif
 
 function mem_read (addr, width, aq, rl, res) = {
+ let result : MemoryOpResult(bits(8 * 'n)) =
   if (aq | res) & (~ (is_aligned_addr(addr, width)))
   then MemException(E_Load_Addr_Align)
   else match (aq, rl, res) {
@@ -55,7 +79,9 @@ function mem_read (addr, width, aq, rl, res) = {
     (true,  true,  false) => MEMr_strong_acquire(addr, width),
     (false, true,  true)  => throw(Error_not_implemented("lr.rl")),
     (true,  true,  true)  => MEMr_reserved_strong_acquire(addr, width)
-  }
+  };
+ rvfi_read(addr, width, result);
+ result
 }
 
 val MEMea = {lem: "MEMea", coq: "MEMea", _: "memea"} : forall 'n.
@@ -118,10 +144,26 @@ function MEMval_conditional                (addr, width, data) = checked_mem_wri
 function MEMval_conditional_release        (addr, width, data) = checked_mem_write(addr, width, data)
 function MEMval_conditional_strong_release (addr, width, data) = checked_mem_write(addr, width, data)
 
+
+$ifdef RVFI_DII
+val rvfi_write : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> unit effect {wreg}
+function rvfi_write (addr, width, value) = {
+  rvfi_exec->rvfi_mem_addr() = addr;
+  if width <= 8 then {
+    rvfi_exec->rvfi_mem_wdata() = zero_extend(value,64);
+    rvfi_exec->rvfi_mem_wmask() = to_bits(8,width);
+  }
+}
+$else
+val rvfi_write : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n)) -> unit
+function rvfi_write (addr, width, value) = ()
+$endif
+
 /* NOTE: The wreg effect is due to MMIO, the rreg is due to checking mtime. */
 val mem_write_value : forall 'n, 'n > 0. (xlenbits, atom('n), bits(8 * 'n), bool, bool, bool) -> MemoryOpResult(bool) effect {wmv, rreg, wreg, escape}
 
 function mem_write_value (addr, width, value, aq, rl, con) = {
+  rvfi_write(addr, width, value);
   if (rl | con) & (~ (is_aligned_addr(addr, width)))
   then MemException(E_SAMO_Addr_Align)
   else match (aq, rl, con) {

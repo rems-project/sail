@@ -874,10 +874,20 @@ union ctl_result = {
 /* TODO: CTL_URET */
 }
 
+$ifdef RVFI_DII
+val rvfi_trap : unit -> unit effect {wreg}
+function rvfi_trap () =
+  rvfi_exec->rvfi_trap() = 0x01
+$else
+val rvfi_trap : unit -> unit
+function rvfi_trap () = ()
+$endif
+
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
 
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
+  rvfi_trap();
   print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
 
   match (del_priv) {

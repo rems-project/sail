@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
+#include <netinet/ip.h>
 #include <fcntl.h>
 
 #include "elf.h"
@@ -40,11 +42,17 @@ struct tv_spike_t;
 #define CSR_MIP 0x344
 
 static bool do_dump_dts = false;
+static bool disable_compressed = false;
 struct tv_spike_t *s = NULL;
 char *term_log = NULL;
 char *dtb_file = NULL;
 unsigned char *dtb = NULL;
 size_t dtb_len = 0;
+#ifdef RVFI_DII
+static bool rvfi_dii = false;
+static int rvfi_dii_port;
+static int rvfi_dii_sock;
+#endif
 
 unsigned char *spike_dtb = NULL;
 size_t spike_dtb_len = 0;
@@ -53,17 +61,25 @@ static struct option options[] = {
   {"enable-dirty",                no_argument,       0, 'd'},
   {"enable-misaligned",           no_argument,       0, 'm'},
   {"ram-size",                    required_argument, 0, 'z'},
+  {"disable-compressed",          no_argument,       0, 'C'},
   {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'},
   {"dump-dts",                    no_argument,       0, 's'},
   {"device-tree-blob",            required_argument, 0, 'b'},
   {"terminal-log",                required_argument, 0, 't'},
+#ifdef RVFI_DII
+  {"rvfi-dii",                    required_argument, 0, 'r'},
+#endif
   {"help",                        no_argument,       0, 'h'},
   {0, 0, 0, 0}
 };
 
 static void print_usage(const char *argv0, int ec)
 {
+#ifdef RVFI_DII
+  fprintf(stdout, "Usage: %s [options] <elf_file>\n       %s [options] -r <port>\n", argv0, argv0);
+#else
   fprintf(stdout, "Usage: %s [options] <elf_file>\n", argv0);
+#endif
   struct option *opt = options;
   while (opt->name) {
     fprintf(stdout, "\t -%c\t %s\n", (char)opt->val, opt->name);
@@ -125,7 +141,7 @@ char *process_args(int argc, char **argv)
   int c, idx = 1;
   uint64_t ram_size = 0;
   while(true) {
-    c = getopt_long(argc, argv, "dmsz:b:t:v:h", options, &idx);
+    c = getopt_long(argc, argv, "dmCsz:b:t:v:hr:", options, &idx);
     if (c == -1) break;
     switch (c) {
     case 'd':
@@ -135,6 +151,9 @@ char *process_args(int argc, char **argv)
     case 'm':
       fprintf(stderr, "enabling misaligned access.\n");
       rv_enable_misaligned = true;
+      break;
+    case 'C':
+      disable_compressed = true;
       break;
     case 'i':
       rv_mtval_has_illegal_inst_bits = true;
@@ -157,16 +176,29 @@ char *process_args(int argc, char **argv)
     case 'h':
       print_usage(argv[0], 0);
       break;
+#ifdef RVFI_DII
+    case 'r':
+      rvfi_dii = true;
+      rvfi_dii_port = atoi(optarg);
+      break;
+#endif
     default:
       fprintf(stderr, "Unrecognized optchar %c\n", c);
       print_usage(argv[0], 1);
     }
   }
   if (do_dump_dts) dump_dts();
+#ifdef RVFI_DII
+  if (idx > argc || (idx == argc && !rvfi_dii)) print_usage(argv[0], 0);
+#else
   if (idx >= argc) print_usage(argv[0], 0);
+#endif
   if (term_log == NULL) term_log = strdup("term.log");
   if (dtb_file) read_dtb(dtb_file);
 
+#ifdef RVFI_DII
+  if (!rvfi_dii)
+#endif
   fprintf(stdout, "Running file %s.\n", argv[optind]);
   return argv[optind];
 }
@@ -316,7 +348,18 @@ void init_sail(uint64_t elf_entry)
   model_init();
   zinit_platform(UNIT);
   zinit_sys(UNIT);
+#ifdef RVFI_DII
+  if (rvfi_dii) {
+    rv_ram_base = UINT64_C(0x80000000);
+    rv_ram_size = UINT64_C(0x10000);
+    rv_rom_base = UINT64_C(0);
+    rv_rom_size = UINT64_C(0);
+    zPC = elf_entry;
+  } else
+#endif
   init_sail_reset_vector(elf_entry);
+  if (disable_compressed)
+    z_set_Misa_C(&zmisa, 0);
 }
 
 int init_check(struct tv_spike_t *s)
@@ -405,6 +448,26 @@ void flush_logs(void)
   fflush(stdout);
 }
 
+#ifdef RVFI_DII
+void rvfi_send_trace(void) {
+  sail_bits packet;
+  CREATE(lbits)(&packet);
+  zrvfi_get_exec_packet(&packet, UNIT);
+  if (packet.len % 8 != 0) {
+    fprintf(stderr, "RVFI-DII trace packet not byte aligned: %d\n", (int)packet.len);
+    exit(1);
+  }
+  unsigned char bytes[packet.len / 8];
+  /* mpz_export might not write all of the null bytes */
+  memset(bytes, 0, sizeof(bytes));
+  mpz_export(bytes, NULL, -1, 1, 0, 0, *(packet.bits));
+  if (write(rvfi_dii_sock, bytes, packet.len / 8) == -1) {
+    fprintf(stderr, "Writing RVFI DII trace failed: %s", strerror(errno));
+    exit(1);
+  }
+}
+#endif
+
 void run_sail(void)
 {
   bool spike_done;
@@ -414,8 +477,47 @@ void run_sail(void)
   /* initialize the step number */
   mach_int step_no = 0;
   int insn_cnt = 0;
+#ifdef RVFI_DII
+  bool need_instr = true;
+#endif
 
   while (!zhtif_done) {
+#ifdef RVFI_DII
+    if (rvfi_dii) {
+      if (need_instr) {
+        mach_bits instr_bits;
+        if (read(rvfi_dii_sock, &instr_bits, sizeof(instr_bits)) == -1) {
+          fprintf(stderr, "Reading RVFI DII command failed: %s", strerror(errno));
+          exit(1);
+        }
+        zrvfi_set_instr_packet(instr_bits);
+        zrvfi_zzero_exec_packet(UNIT);
+        mach_bits cmd = zrvfi_get_cmd(UNIT);
+        switch (cmd) {
+        case 0: /* EndOfTrace */
+          zrvfi_halt_exec_packet(UNIT);
+          rvfi_send_trace();
+          return;
+        case 1: /* Instruction */
+          break;
+        default:
+          fprintf(stderr, "Unknown RVFI-DII command: %d\n", (int)cmd);
+          exit(1);
+        }
+      }
+      sail_int sail_step;
+      CREATE(sail_int)(&sail_step);
+      CONVERT_OF(sail_int, mach_int)(&sail_step, step_no);
+      stepped = zrvfi_step(sail_step);
+      if (have_exception) goto step_exception;
+      flush_logs();
+      if (stepped) {
+        need_instr = true;
+        rvfi_send_trace();
+      } else
+        need_instr = false;
+    } else
+#endif
     { /* run a Sail step */
       sail_int sail_step;
       CREATE(sail_int)(&sail_step);
@@ -503,7 +605,46 @@ int main(int argc, char **argv)
   char *file = process_args(argc, argv);
   init_logs();
 
+#ifdef RVFI_DII
+  uint64_t entry;
+  if (rvfi_dii) {
+    entry = 0x80000000;
+    int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_sock == -1) {
+      fprintf(stderr, "Unable to create socket: %s", strerror(errno));
+      return 1;
+    }
+    int opt = 1;
+    if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
+      fprintf(stderr, "Unable to set reuseaddr on socket: %s", strerror(errno));
+      return 1;
+    }
+    struct sockaddr_in addr = {
+      .sin_family = AF_INET,
+      .sin_addr.s_addr = INADDR_ANY,
+      .sin_port = htons(rvfi_dii_port)
+    };
+    if (bind(listen_sock, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+      fprintf(stderr, "Unable to set bind socket: %s", strerror(errno));
+      return 1;
+    }
+    if (listen(listen_sock, 1) == -1) {
+      fprintf(stderr, "Unable to listen on socket: %s", strerror(errno));
+      return 1;
+    }
+    printf("Waiting for connection\n");
+    rvfi_dii_sock = accept(listen_sock, NULL, NULL);
+    if (rvfi_dii_sock == -1) {
+      fprintf(stderr, "Unable to accept connection on socket: %s", strerror(errno));
+      return 1;
+    }
+    close(listen_sock);
+    printf("Connected\n");
+  } else
+    entry = load_sail(file);
+#else
   uint64_t entry = load_sail(file);
+#endif
 
   /* initialize spike before sail so that we can access the device-tree blob,
    * until we roll our own.
@@ -513,6 +654,18 @@ int main(int argc, char **argv)
 
   if (!init_check(s)) finish(1);
 
-  run_sail();
+  do {
+    run_sail();
+#ifndef RVFI_DII
+  } while (0);
+#else
+    if (rvfi_dii) {
+      /* Reset for next test; currently we only quit when the connection breaks
+         and we crash due to SIGPIPE. */
+      model_fini();
+      init_sail(entry);
+    }
+  } while (rvfi_dii);
+#endif
   flush_logs();
 }
