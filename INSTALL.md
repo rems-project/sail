@@ -38,11 +38,13 @@ the package manager - both should work, but we used the install script
 from the website. This should install OCaml 4.05. Don't forget to run
 ```opam init``` after installing OPAM.
 
-We now need ocamlbuild, zarith, and menhir from OPAM.
+We now need the following packages from OPAM.
 ```
 opam install ocamlbuild
+opam install num
 opam install zarith
 opam install menhir
+opam install omd
 ```
 
 Ott
