@@ -46,12 +46,16 @@ but this is difficult
 
 function clause execute (RISCV_JAL(imm, rd)) = {
   let pc : xlenbits = PC;
-  X(rd) = nextPC;  /* compatible with JAL and C.JAL */
-  let offset : xlenbits = EXTS(imm);
-  nextPC = pc + offset;
-  true
+  let newPC : xlenbits = pc + EXTS(imm);
+  if newPC[1] & (~ (haveRVC())) then {
+    handle_mem_exception(newPC, E_Fetch_Addr_Align);
+    false
+  } else {
+    X(rd) = nextPC;  /* compatible with JAL and C.JAL */
+    nextPC = newPC;
+    true
+  }
 }
-
 /* TODO: handle 2-byte-alignment in mappings */
 
 mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_21(imm)
@@ -92,8 +96,16 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) = {
     RISCV_BLTU => rs1_val <_u rs2_val,
     RISCV_BGEU => rs1_val >=_u rs2_val
   };
-  if taken then nextPC = PC + EXTS(imm);
-  true
+  let newPC = PC + EXTS(imm);
+  if taken then {
+    if newPC[1] & (~ (haveRVC())) then {
+      handle_mem_exception(newPC, E_Fetch_Addr_Align);
+      false;
+    } else {
+      nextPC = newPC;
+      true
+    }
+  } else true
 }
 
 mapping btype_mnemonic : bop <-> string = {
