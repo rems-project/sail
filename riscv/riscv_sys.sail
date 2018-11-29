@@ -110,13 +110,18 @@ register mstatus : Mstatus
 
 function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   let m : Mstatus = Mk_Mstatus(v);
+
   /* We don't have any extension context yet. */
   let m = update_XS(m, extStatus_to_bits(Off));
+  let m = update_FS(m, extStatus_to_bits(Off));
+
   let m = update_SD(m, extStatus_of_bits(m.FS()) == Dirty
                      | extStatus_of_bits(m.XS()) == Dirty);
+
   /* For now, we don't allow SXL and UXL to be changed, for Spike compatibility. */
   let m = update_SXL(m, o.SXL());
   let m = update_UXL(m, o.UXL());
+
   /* Hardwired to zero in the absence of 'N'. */
   let m = update_UPIE(m, false);
   let m = update_UIE(m, false);
