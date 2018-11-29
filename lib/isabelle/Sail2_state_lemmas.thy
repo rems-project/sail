@@ -2,6 +2,8 @@ theory Sail2_state_lemmas
   imports Sail2_state Sail2_state_lifting
 begin
 
+text \<open>Monad lifting\<close>
+
 lemma All_liftState_dom: "liftState_dom (r, m)"
   by (induction m) (auto intro: liftState.domintros)
 termination liftState using All_liftState_dom by auto
@@ -309,7 +311,7 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
   qed auto
 qed
 
-(* Simplification rules for monadic Boolean connectives *)
+text \<open>Simplification rules for monadic Boolean connectives\<close>
 
 lemma if_return_return[simp]: "(if a then return True else return False) = return a" by auto
 
@@ -391,5 +393,122 @@ lemma Run_and_boolM_E:
 
 lemma maybe_failS_Some[simp]: "maybe_failS msg (Some v) = returnS v"
   by (auto simp: maybe_failS_def)
+
+text \<open>Event traces\<close>
+
+lemma Some_eq_bind_conv: "Some x = Option.bind f g \<longleftrightarrow> (\<exists>y. f = Some y \<and> g y = Some x)"
+  unfolding bind_eq_Some_conv[symmetric] by auto
+
+lemma if_then_Some_eq_Some: "((if b then Some x else None) = Some y) \<longleftrightarrow> (b \<and> y = x)"
+  by auto
+
+lemma emitEventS_update_cases:
+  assumes "emitEventS ra e s = Some s'"
+  obtains
+    (Write_mem) wk addr sz v tag r
+      where "e = E_write_mem wk addr sz v tag r"
+        and "s' = put_mem_bytes addr sz v tag s"
+  | (Write_reg) r v rs'
+      where "e = E_write_reg r v" and "(snd ra) r v (regstate s) = Some rs'"
+        and "s' = s\<lparr>regstate := rs'\<rparr>"
+  | (Read) "s' = s"
+  using assms
+  by (elim emitEventS.elims) (auto simp: Some_eq_bind_conv bind_eq_Some_conv if_then_Some_eq_Some)
+
+lemma runTraceS_singleton[simp]: "runTraceS ra [e] s = emitEventS ra e s"
+  by (cases "emitEventS ra e s"; auto)
+
+lemma runTraceS_ConsE:
+  assumes "runTraceS ra (e # t) s = Some s'"
+  obtains s'' where "emitEventS ra e s = Some s''" and "runTraceS ra t s'' = Some s'"
+  using assms by (auto simp: bind_eq_Some_conv)
+
+lemma runTraceS_ConsI:
+  assumes "emitEventS ra e s = Some s'" and "runTraceS ra t s' = Some s''"
+  shows "runTraceS ra (e # t) s = Some s''"
+  using assms by auto
+
+lemma runTraceS_Cons_tl:
+  assumes "emitEventS ra e s = Some s'"
+  shows "runTraceS ra (e # t) s = runTraceS ra t s'"
+  using assms by (elim emitEventS.elims) (auto simp: Some_eq_bind_conv bind_eq_Some_conv)
+
+lemma runTraceS_appendE:
+  assumes "runTraceS ra (t @ t') s = Some s'"
+  obtains s'' where "runTraceS ra t s = Some s''" and "runTraceS ra t' s'' = Some s'"
+proof -
+  have "\<exists>s''. runTraceS ra t s = Some s'' \<and> runTraceS ra t' s'' = Some s'"
+  proof (use assms in \<open>induction t arbitrary: s\<close>)
+    case (Cons e t)
+    from Cons.prems
+    obtain s_e where "emitEventS ra e s = Some s_e" and "runTraceS ra (t @ t') s_e = Some s'"
+      by (auto elim: runTraceS_ConsE simp: bind_eq_Some_conv)
+    with Cons.IH[of s_e] show ?case by (auto intro: runTraceS_ConsI)
+  qed auto
+  then show ?thesis using that by blast
+qed
+
+lemma runTraceS_nth_split:
+  assumes "runTraceS ra t s = Some s'" and n: "n < length t"
+  obtains s1 s2 where "runTraceS ra (take n t) s = Some s1"
+    and "emitEventS ra (t ! n) s1 = Some s2"
+    and "runTraceS ra (drop (Suc n) t) s2 = Some s'"
+proof -
+  have "runTraceS ra (take n t @ t ! n # drop (Suc n) t) s = Some s'"
+    using assms
+    by (auto simp: id_take_nth_drop[OF n, symmetric])
+  then show thesis by (blast elim: runTraceS_appendE runTraceS_ConsE intro: that)
+qed
+
+text \<open>Memory accesses\<close>
+
+lemma get_mem_bytes_put_mem_bytes_same_addr:
+  assumes "length v = sz"
+  shows "get_mem_bytes addr sz (put_mem_bytes addr sz v tag s) = Some (v, if sz > 0 then tag else B1)"
+proof (unfold assms[symmetric], induction v rule: rev_induct)
+  case Nil
+  then show ?case by (auto simp: get_mem_bytes_def)
+next
+  case (snoc x xs)
+  then show ?case
+    by (cases tag)
+       (auto simp: get_mem_bytes_def put_mem_bytes_def Let_def and_bit_eq_iff foldl_and_bit_eq_iff
+             cong: option.case_cong split: if_splits option.splits)
+qed
+
+lemma memstate_put_mem_bytes:
+  assumes "length v = sz"
+  shows "memstate (put_mem_bytes addr sz v tag s) addr' =
+         (if addr' \<in> {addr..<addr+sz} then Some (v ! (addr' - addr)) else memstate s addr')"
+  unfolding assms[symmetric]
+  by (induction v rule: rev_induct) (auto simp: put_mem_bytes_def nth_Cons nth_append Let_def)
+
+lemma tagstate_put_mem_bytes:
+  assumes "length v = sz"
+  shows "tagstate (put_mem_bytes addr sz v tag s) addr' =
+         (if addr' \<in> {addr..<addr+sz} then Some tag else tagstate s addr')"
+  unfolding assms[symmetric]
+  by (induction v rule: rev_induct) (auto simp: put_mem_bytes_def nth_Cons nth_append Let_def)
+
+lemma get_mem_bytes_cong:
+  assumes "\<forall>addr'. addr \<le> addr' \<and> addr' < addr + sz \<longrightarrow>
+                   (memstate s' addr' = memstate s addr' \<and> tagstate s' addr' = tagstate s addr')"
+  shows "get_mem_bytes addr sz s' = get_mem_bytes addr sz s"
+proof (use assms in \<open>induction sz\<close>)
+  case 0
+  then show ?case by (auto simp: get_mem_bytes_def)
+next
+  case (Suc sz)
+  then show ?case
+    by (auto simp: get_mem_bytes_def Let_def
+             intro!: map_option_cong map_cong foldl_cong
+                     arg_cong[where f = just_list] arg_cong2[where f = and_bit])
+qed
+
+lemma get_mem_bytes_tagged_tagstate:
+  assumes "get_mem_bytes addr sz s = Some (v, B1)"
+  shows "\<forall>addr' \<in> {addr..<addr + sz}. tagstate s addr' = Some B1"
+  using assms
+  by (auto simp: get_mem_bytes_def foldl_and_bit_eq_iff Let_def split: option.splits)
 
 end

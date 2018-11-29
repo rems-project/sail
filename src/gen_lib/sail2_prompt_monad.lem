@@ -258,6 +258,8 @@ let rec runTrace t m = match t with
   | e :: t' -> Maybe.bind (emitEvent m e) (runTrace t')
 end
 
+declare {isabelle} termination_argument runTrace = automatic
+
 val final : forall 'regval 'a 'e. monad 'regval 'a 'e -> bool
 let final = function
   | Done _ -> true

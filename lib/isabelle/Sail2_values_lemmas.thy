@@ -123,6 +123,9 @@ lemma nth_upto[simp]: "i + int n \<le> j \<Longrightarrow> [i..j] ! n = i + int 
 
 declare index_list.simps[simp del]
 
+lemma genlist_add_upt[simp]: "genlist ((+) start) len = [start..<start + len]"
+  by (auto simp: genlist_def map_add_upt add.commute cong: map_cong)
+
 lemma just_list_map_Some[simp]: "just_list (map Some v) = Some v" by (induction v) auto
 
 lemma just_list_None_iff[simp]: "just_list xs = None \<longleftrightarrow> None \<in> set xs"
@@ -149,6 +152,31 @@ proof (induction n)
 next
   case (neg n)
   then show ?case by (auto simp: repeat.simps)
+qed
+
+lemma and_bit_B1[simp]: "and_bit B1 b = b"
+  by (cases b) auto
+
+lemma and_bit_idem[simp]: "and_bit b b = b"
+  by (cases b) auto
+
+lemma and_bit_eq_iff:
+  "and_bit b b' = B0 \<longleftrightarrow> (b = B0 \<or> b' = B0)"
+  "and_bit b b' = BU \<longleftrightarrow> (b = BU \<or> b' = BU) \<and> b \<noteq> B0 \<and> b' \<noteq> B0"
+  "and_bit b b' = B1 \<longleftrightarrow> (b = B1 \<and> b' = B1)"
+  by (cases b; cases b'; auto)+
+
+lemma foldl_and_bit_eq_iff:
+  shows "foldl and_bit b bs = B0 \<longleftrightarrow> (b = B0 \<or> B0 \<in> set bs)" (is ?B0)
+    and "foldl and_bit b bs = B1 \<longleftrightarrow> (b = B1 \<and> set bs \<subseteq> {B1})" (is ?B1)
+    and "foldl and_bit b bs = BU \<longleftrightarrow> (b = BU \<or> BU \<in> set bs) \<and> b \<noteq> B0 \<and> B0 \<notin> set bs" (is ?BU)
+proof -
+  have "?B0 \<and> ?B1 \<and> ?BU"
+  proof (induction bs arbitrary: b)
+    case (Cons b' bs)
+    show ?case using Cons.IH by (cases b; cases b') auto
+  qed auto
+  then show ?B0 and ?B1 and ?BU by auto
 qed
 
 lemma bool_of_bitU_simps[simp]:

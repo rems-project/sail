@@ -23,22 +23,28 @@ let rec liftState ra m = match m with
   | (Exception e)             -> throwS e
 end
 
-val runTraceS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> trace 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)
-let rec runTraceS ra t s =
-  match t with
-  | [] -> Just s
-  | E_read_mem _ addr sz (v, tag) :: t' ->
+val emitEventS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> event 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)
+let emitEventS ra e s = match e with
+  | E_read_mem _ addr sz (v, tag) ->
      Maybe.bind (get_mem_bytes addr sz s) (fun (v', tag') ->
-     if v' = v && tag' = tag then runTraceS ra t' s else Nothing)
-  | E_write_mem _ addr sz v tag _ :: t' ->
-     runTraceS ra t' (put_mem_bytes addr sz v tag s)
-  | E_read_reg r v :: t' ->
+     if v' = v && tag' = tag then Just s else Nothing)
+  | E_write_mem _ addr sz v tag _ ->
+     Just (put_mem_bytes addr sz v tag s)
+  | E_read_reg r v ->
      let (read_reg, _) = ra in
      Maybe.bind (read_reg r s.regstate) (fun v' ->
-     if v' = v then runTraceS ra t' s else Nothing)
-  | E_write_reg r v :: t' ->
+     if v' = v then Just s else Nothing)
+  | E_write_reg r v ->
      let (_, write_reg) = ra in
-     Maybe.bind (write_reg r v s.regstate) (fun s' ->
-     runTraceS ra t' <| s with regstate = s' |>)
-  | _ :: t' -> runTraceS ra t' s
+     Maybe.bind (write_reg r v s.regstate) (fun rs' ->
+     Just <| s with regstate = rs' |>)
+  | _ -> Just s
 end
+
+val runTraceS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> trace 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)
+let rec runTraceS ra t s = match t with
+  | [] -> Just s
+  | e :: t' -> Maybe.bind (emitEventS ra e s) (runTraceS ra t')
+end
+
+declare {isabelle} termination_argument runTraceS = automatic
