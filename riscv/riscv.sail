@@ -724,10 +724,10 @@ mapping clause encdec = WFI() <-> 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0
 
 function clause execute WFI() =
   match cur_privilege {
-    Machine    => true,
+    Machine    => { platform_wfi(); true },
     Supervisor => if   mstatus.TW() == true
                   then { handle_illegal(); false }
-                  else true,
+                  else { platform_wfi(); true },
     User       => { handle_illegal(); false }
   }
 
