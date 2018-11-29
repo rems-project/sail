@@ -1225,7 +1225,7 @@ union clause ast = C_ADDIW : (bits(6), regbits)
 /* FIXME: decoding differs for RVC32/RVC64.  Below, we are assuming
  * RV64, and C_JAL is RV32 only. */
 
-mapping clause encdec_compressed = C_ADDIW(imm5 @ imm40, rsd) <-> 0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01
+mapping clause encdec_compressed = C_ADDIW(imm5 @ imm40, rsd) if rsd != zreg <-> 0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01 if rsd != zreg
 
 function clause execute (C_JAL(imm)) =
   execute(RISCV_JAL(EXTS(imm @ 0b0), ra))
@@ -1270,13 +1270,13 @@ mapping clause assembly = C_ADDI16SP(imm) if imm != 0b000000 <-> "c.addi16sp" ^ 
 /* ****************************************************************** */
 union clause ast = C_LUI : (bits(6), regbits)
 
-mapping clause encdec_compressed = C_LUI(imm17 @ imm1612, rd) if rd != zreg & rd != sp <-> 0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01 if rd != zreg & rd != sp
+mapping clause encdec_compressed = C_LUI(imm17 @ imm1612, rd) if rd != zreg & rd != sp & imm17 @ imm1612 != 0b000000 <-> 0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01 if rd != zreg & rd != sp & imm17 @ imm1612 != 0b000000
 
 function clause execute (C_LUI(imm, rd)) =
   let res : bits(20) = EXTS(imm) in
   execute(UTYPE(res, rd, RISCV_LUI))
 
-mapping clause assembly = C_LUI(imm, rd) if rd != zreg & rd != sp <-> "c.lui" ^ reg_name(rd) ^ sep() ^ hex_bits_6(imm) if rd != zreg & rd != sp
+mapping clause assembly = C_LUI(imm, rd) if rd != zreg & rd != sp & imm != 0b000000 <-> "c.lui" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_6(imm) if rd != zreg & rd != sp & imm != 0b000000
 
 /* ****************************************************************** */
 union clause ast = C_SRLI : (bits(6), cregbits)
