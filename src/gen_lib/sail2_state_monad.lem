@@ -129,17 +129,27 @@ let get_mem_bytes addr sz s =
     (fun mem_val -> (mem_val, List.foldl and_bit B1 (List.map (read_tag s) addrs)))
     (just_list (List.map (read_byte s) addrs))
 
-val read_mem_bytesS : forall 'regs 'e. read_kind -> nat -> nat -> monadS 'regs (list memory_byte * bitU) 'e
-let read_mem_bytesS _ addr sz =
+val read_tagged_mem_bytesS : forall 'regs 'e. read_kind -> nat -> nat -> monadS 'regs (list memory_byte * bitU) 'e
+let read_tagged_mem_bytesS _ addr sz =
   readS (get_mem_bytes addr sz) >>$=
   maybe_failS "read_memS"
 
-val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e
-let read_memS rk a sz =
+val read_mem_bytesS : forall 'regs 'e. read_kind -> nat -> nat -> monadS 'regs (list memory_byte) 'e
+let read_mem_bytesS rk addr sz =
+  read_tagged_mem_bytesS rk addr sz >>$= (fun (bytes, _) ->
+  returnS bytes)
+
+val read_tagged_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e
+let read_tagged_memS rk a sz =
   maybe_failS "nat_of_bv" (nat_of_bv a) >>$= (fun a ->
-  read_mem_bytesS rk a (nat_of_int sz) >>$= (fun (bytes, tag) ->
+  read_tagged_mem_bytesS rk a (nat_of_int sz) >>$= (fun (bytes, tag) ->
   maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val ->
   returnS (mem_val, tag))))
+
+val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e
+let read_memS rk a sz =
+  read_tagged_memS rk a sz >>$= (fun (bytes, _) ->
+  returnS bytes)
 
 val excl_resultS : forall 'regs 'e. unit -> monadS 'regs bool 'e
 let excl_resultS =

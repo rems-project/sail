@@ -32,6 +32,7 @@ lemmas try_catch_induct[case_names Done Read_mem Write_memv Read_reg Excl_res Wr
 
 inductive_set T :: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a, 'e) monad) set" where
   Read_mem: "((Read_mem rk addr sz k), E_read_mem rk addr sz v, k v) \<in> T"
+| Read_tagged_mem: "((Read_tagged_mem rk addr sz k), E_read_tagged_mem rk addr sz v, k v) \<in> T"
 | Write_ea: "((Write_ea wk addr sz k), E_write_ea wk addr sz, k) \<in> T"
 | Excl_res: "((Excl_res k), E_excl_res r, k r) \<in> T"
 | Write_mem: "((Write_mem wk addr sz v t k), E_write_mem wk addr sz v t r, k r) \<in> T"
@@ -60,7 +61,8 @@ lemma Traces_cases:
   fixes m :: "('rv, 'a, 'e) monad"
   assumes Run: "(m, t, m') \<in> Traces"
   obtains (Nil) a where "m = m'" and "t = []"
-  | (Read_mem) rk addr s k t' v tag where "m = Read_mem rk addr s k" and "t = E_read_mem rk addr s (v, tag) # t'" and "(k (v, tag), t', m') \<in> Traces"
+  | (Read_mem) rk addr s k t' v where "m = Read_mem rk addr s k" and "t = E_read_mem rk addr s v # t'" and "(k v, t', m') \<in> Traces"
+  | (Read_tagged_mem) rk addr s k t' v tag where "m = Read_tagged_mem rk addr s k" and "t = E_read_tagged_mem rk addr s (v, tag) # t'" and "(k (v, tag), t', m') \<in> Traces"
   | (Write_mem) wk addr sz val tag k t' v where "m = Write_mem wk addr sz val tag k" and "t = E_write_mem wk addr sz val tag v # t'" and "(k v, t', m') \<in> Traces"
   | (Barrier) bk k t' v where "m = Barrier bk k" and "t = E_barrier bk # t'" and "(k, t', m') \<in> Traces"
   | (Read_reg) reg k t' v where "m = Read_reg reg k" and "t = E_read_reg reg v # t'" and "(k v, t', m') \<in> Traces"
@@ -79,7 +81,7 @@ next
   note m' = \<open>(m'', t', m') \<in> Traces\<close>
   from \<open>(m, e, m'') \<in> T\<close> and t and m'
   show ?thesis proof (cases m e m'' rule: T.cases)
-    case (Read_mem rk addr sz k v)
+    case (Read_tagged_mem rk addr sz k v)
     then show ?thesis using t m' by (cases v; elim that; blast)
   qed (elim that; blast)+
 qed

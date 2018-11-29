@@ -80,19 +80,20 @@ lemma liftState_bool_of_bitU_nondet[liftState_simp]:
   "liftState r (bool_of_bitU_nondet b) = bool_of_bitU_nondetS b"
   by (cases b; auto simp: bool_of_bitU_nondet_def bool_of_bitU_nondetS_def liftState_simp)
 
-lemma liftState_read_mem_BC:
-  assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
-  shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
-  using assms
-  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def
+lemma liftState_read_tagged_mem[liftState_simp]:
+  shows "liftState r (read_tagged_mem BCa BCb rk a sz) = read_tagged_memS BCa BCb rk a sz"
+  by (auto simp: read_tagged_mem_def read_tagged_mem_bytes_def maybe_failS_def read_tagged_memS_def
                  prod.case_distrib option.case_distrib[where h = "liftState r"]
                  option.case_distrib[where h = "\<lambda>c. c \<bind>\<^sub>S f" for f] liftState_simp
-           cong: option.case_cong)
+           split: option.splits intro: bindS_cong)
 
 lemma liftState_read_mem[liftState_simp]:
-  "\<And>a. liftState r (read_mem BC_mword BC_mword rk a sz) = read_memS BC_mword BC_mword rk a sz"
-  "\<And>a. liftState r (read_mem BC_bitU_list BC_bitU_list rk a sz) = read_memS BC_bitU_list BC_bitU_list rk a sz"
-  by (auto simp: liftState_read_mem_BC)
+  shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
+  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def
+                 read_tagged_memS_def
+                 prod.case_distrib option.case_distrib[where h = "liftState r"]
+                 option.case_distrib[where h = "\<lambda>c. c \<bind>\<^sub>S f" for f] liftState_simp
+           split: option.splits intro: bindS_cong)
 
 lemma liftState_write_mem_ea_BC:
   assumes "unsigned_method BCa a = Some a'"
@@ -399,7 +400,10 @@ text \<open>Event traces\<close>
 lemma Some_eq_bind_conv: "Some x = Option.bind f g \<longleftrightarrow> (\<exists>y. f = Some y \<and> g y = Some x)"
   unfolding bind_eq_Some_conv[symmetric] by auto
 
-lemma if_then_Some_eq_Some: "((if b then Some x else None) = Some y) \<longleftrightarrow> (b \<and> y = x)"
+lemma if_then_Some_eq_Some_iff: "((if b then Some x else None) = Some y) \<longleftrightarrow> (b \<and> y = x)"
+  by auto
+
+lemma Some_eq_if_then_Some_iff: "(Some y = (if b then Some x else None)) \<longleftrightarrow> (b \<and> y = x)"
   by auto
 
 lemma emitEventS_update_cases:
@@ -413,7 +417,8 @@ lemma emitEventS_update_cases:
         and "s' = s\<lparr>regstate := rs'\<rparr>"
   | (Read) "s' = s"
   using assms
-  by (elim emitEventS.elims) (auto simp: Some_eq_bind_conv bind_eq_Some_conv if_then_Some_eq_Some)
+  by (elim emitEventS.elims)
+     (auto simp: Some_eq_bind_conv bind_eq_Some_conv if_then_Some_eq_Some_iff Some_eq_if_then_Some_iff)
 
 lemma runTraceS_singleton[simp]: "runTraceS ra [e] s = emitEventS ra e s"
   by (cases "emitEventS ra e s"; auto)
