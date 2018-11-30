@@ -264,6 +264,10 @@ mach_int fast_unsigned(const fbits);
 
 void append(lbits *rop, const lbits op1, const lbits op2);
 
+sbits append_sf(const sbits, const fbits, const uint64_t);
+sbits append_fs(const fbits, const uint64_t, const sbits);
+sbits append_ss(const sbits, const sbits);
+
 void replicate_bits(lbits *rop, const lbits op1, const sail_int op2);
 fbits fast_replicate_bits(const fbits shift, const fbits v, const mach_int times);
 
@@ -384,3 +388,7 @@ unit sail_putchar(const sail_int op);
 /* ***** Misc ***** */
 
 void get_time_ns(sail_int*, const unit);
+
+/* ***** ARM optimisations ***** */
+
+void arm_align(lbits *, const lbits, const sail_int);

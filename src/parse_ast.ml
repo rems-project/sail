@@ -494,7 +494,7 @@ val_spec_aux =  (* Value type specification *)
 
 type 
 kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
-   KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
+   KD_nabbrev of kind * id * name_scm_opt * atyp (* type abbreviation *)
 
 type 
 dec_spec_aux =  (* Register declarations *)

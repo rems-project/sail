@@ -731,26 +731,12 @@ let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (unit type_de
     let ranges = List.map (fun (id, range) -> (to_ast_id id, to_ast_range range)) ranges in
     TD_aux(TD_bitfield(id,typ,ranges),(l,())), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
 
-let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (unit kind_def) envs_out =
+let to_ast_kdef (names, k_env, def_ord) (td:Parse_ast.kind_def) : unit kind_def =
   match td with
-  | Parse_ast.KD_aux(td,l) ->
-  (match td with
-  | Parse_ast.KD_abbrev(kind,id,name_scm_opt,typschm) ->
-    let id = to_ast_id id in
-    let key = id_to_string id in
-    let (kind,k) = to_ast_kind k_env kind in
-    (match k.k with
-     | K_Nat ->
-       let kd_nabrv =
-         (match typschm with
-          | Parse_ast.TypSchm_aux(Parse_ast.TypSchm_ts(Parse_ast.TypQ_aux(tq,_),atyp),_) ->
-            (match tq with
-             | Parse_ast.TypQ_no_forall ->
-               KD_aux(KD_nabbrev(kind,id,to_ast_namescm name_scm_opt, to_ast_nexp k_env atyp), (l,()))
-             | _ -> typ_error l "Def with kind Nat cannot have universal quantification" None None None)) in
-       kd_nabrv,(names,Envmap.insert k_env (key, k),def_ord)
-     | _ -> assert false
-    ))
+  | Parse_ast.KD_aux (Parse_ast.KD_nabbrev (kind, id, name_scm_opt, atyp), l) ->
+     let id = to_ast_id id in
+     let (kind, k) = to_ast_kind k_env kind in
+     KD_aux (KD_nabbrev (kind, id, to_ast_namescm name_scm_opt, to_ast_nexp k_env atyp), (l, ()))
 
 let to_ast_rec (Parse_ast.Rec_aux(r,l): Parse_ast.rec_opt) : rec_opt =
   Rec_aux((match r with
@@ -892,7 +878,7 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
   | Parse_ast.DEF_fixity (prec, n, op) ->
      ((Finished(DEF_fixity (to_ast_prec prec, n, to_ast_id op)),envs),partial_defs)
   | Parse_ast.DEF_kind(k_def) ->
-     let kd,envs = to_ast_kdef envs k_def in
+     let kd = to_ast_kdef envs k_def in
      ((Finished(DEF_kind(kd))),envs),partial_defs
   | Parse_ast.DEF_type(t_def) ->
      let td,envs = to_ast_typedef envs t_def in

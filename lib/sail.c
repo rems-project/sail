@@ -778,6 +778,30 @@ void append(lbits *rop, const lbits op1, const lbits op2)
   mpz_ior(*rop->bits, *rop->bits, *op2.bits);
 }
 
+sbits append_sf(const sbits op1, const fbits op2, const uint64_t len)
+{
+  sbits rop;
+  rop.bits = (op1.bits << len) | op2;
+  rop.len = op1.len + len;
+  return rop;
+}
+
+sbits append_fs(const fbits op1, const uint64_t len, const sbits op2)
+{
+  sbits rop;
+  rop.bits = (op1 << op2.len) | op2.bits;
+  rop.len = len + op2.len;
+  return rop;
+}
+
+sbits append_ss(const sbits op1, const sbits op2)
+{
+  sbits rop;
+  rop.bits = (op1.bits << op2.len) | op2.bits;
+  rop.len = op1.len + op2.len;
+  return rop;
+}
+
 void replicate_bits(lbits *rop, const lbits op1, const mpz_t op2)
 {
   uint64_t op2_ui = mpz_get_ui(op2);
@@ -1397,4 +1421,15 @@ void get_time_ns(sail_int *rop, const unit u)
   mpz_set_si(*rop, t.tv_sec);
   mpz_mul_ui(*rop, *rop, 1000000000);
   mpz_add_ui(*rop, *rop, t.tv_nsec);
+}
+
+// ARM specific optimisations
+
+void arm_align(lbits *rop, const lbits x_bv, const sail_int y_mpz) {
+  uint64_t x = mpz_get_ui(*x_bv.bits);
+  uint64_t y = mpz_get_ui(y_mpz);
+  uint64_t z = y * (x / y);
+  mp_bitcnt_t n = x_bv.len;
+  mpz_set_ui(*rop->bits, safe_rshift(UINT64_MAX, 64l - (n - 1)) & z);
+  rop->len = n;
 }

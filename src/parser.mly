@@ -178,7 +178,7 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op Where
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
-%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
+%token Undefined Union Newtype With Val Constant Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration
 
@@ -1446,6 +1446,10 @@ def:
     { DEF_scattered (mk_sd (SD_scattered_end $2) $startpos $endpos) }
   | default_def
     { DEF_default $1 }
+  | Constant id Eq typ
+    { DEF_kind (KD_aux (KD_nabbrev (K_aux (K_kind [BK_aux (BK_int, loc $startpos($1) $endpos($1))],
+					   loc $startpos($1) $endpos($1)), $2, mk_namesectn, $4),
+			loc $startpos $endpos)) }
   | Constraint id Lparen kid_list Rparen Eq nc
     { DEF_constraint ($2, $4, $7) }
   | Mutual Lcurly fun_def_list Rcurly

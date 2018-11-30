@@ -238,6 +238,24 @@ let rec string_of_type_error err =
   ToBuffer.pretty 1. 400 b (pp_type_error err);
   "\n" ^ Buffer.contents b
 
+let rec collapse_errors = function
+  | (Err_no_overloading (_, (err :: errs)) as no_collapse) ->
+      let err = collapse_errors (snd err) in
+      let errs = List.map (fun (_, err) -> collapse_errors err) errs in
+      let fold_equal msg err =
+        match msg, err with
+        | Some msg, Err_no_overloading _ -> Some msg
+        | Some msg, Err_other _ -> Some msg
+        | Some msg, Err_no_casts _ -> Some msg
+        | Some msg, err when msg = string_of_type_error err -> Some msg
+        | _, _ -> None
+      in
+      begin match List.fold_left fold_equal (Some (string_of_type_error err)) errs with
+      | Some _ -> err
+      | None -> no_collapse
+      end
+  | err -> err
+
 let check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
   fun env defs ->
   try Type_check.check env defs with

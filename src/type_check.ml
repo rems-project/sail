@@ -2301,6 +2301,11 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
             in
             let texp = annot_exp_effect (E_assert (constr_exp, checked_msg)) unit_typ (mk_effect [BE_escape]) (Some unit_typ) in
             texp :: check_block l env exps typ
+         | ((E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp) :: exps) ->
+            let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
+            let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+            let env = add_opt_constraint (option_map nc_negate (assert_constraint env false cond')) env in
+            texp :: check_block l env exps typ
          | (exp :: exps) ->
             let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
             texp :: check_block l env exps typ
@@ -3400,13 +3405,6 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
            let iuargs = List.map2 (fun utyp (n, uarg) -> (n, crule check_exp env uarg utyp)) utyps uargs in
            (iuargs, ret_typ, env)
          else typ_raise l (Err_unresolved_quants (f, quants, Env.get_locals env, Env.get_constraints env))
-(*
-           typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
-                           ^ " not resolved during application of " ^ string_of_id f
-                           ^ " unresolved args: " ^ string_of_list ", " (fun (_, exp) -> string_of_exp exp) uargs
-                           ^ "\nAll constraints: " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
-                           ^ "\nLocals: " ^ string_of_list ", " (fun (id, (mut, typ)) -> string_of_id id ^ " : " ^ string_of_typ typ) (Bindings.bindings (Env.get_locals env)))
- *)
        end
     | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args))
          when List.for_all (fun kid -> is_bound kid env) (KidSet.elements (typ_frees typ)) ->

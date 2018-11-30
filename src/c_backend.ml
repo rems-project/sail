@@ -494,6 +494,24 @@ let analyze_primop' ctx id args typ =
   | "undefined_bit", _ ->
      AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ, CT_bit))
 
+  (* Optimized routines for all combinations of fixed and small bits
+     appends, where the result is guaranteed to be smaller than 64. *)
+  | "append", [AV_C_fragment (vec1, _, CT_fbits (n1, ord1)); AV_C_fragment (vec2, _, CT_fbits (n2, ord2))]
+       when ord1 = ord2 && n1 + n2 <= 64 ->
+     AE_val (AV_C_fragment (F_op (F_op (vec1, "<<", v_int n2), "|", vec2), typ, CT_fbits (n1 + n2, ord1)))
+
+  | "append", [AV_C_fragment (vec1, _, CT_sbits ord1); AV_C_fragment (vec2, _, CT_fbits (n2, ord2))]
+       when ord1 = ord2 && is_sbits_typ ctx typ ->
+     AE_val (AV_C_fragment (F_call ("append_sf", [vec1; vec2; v_int n2]), typ, ctyp_of_typ ctx typ))
+
+  | "append", [AV_C_fragment (vec1, _, CT_fbits (n1, ord1)); AV_C_fragment (vec2, _, CT_sbits ord2)]
+       when ord1 = ord2 && is_sbits_typ ctx typ ->
+     AE_val (AV_C_fragment (F_call ("append_fs", [vec1; v_int n1; vec2]), typ, ctyp_of_typ ctx typ))
+
+  | "append", [AV_C_fragment (vec1, _, CT_sbits ord1); AV_C_fragment (vec2, _, CT_sbits ord2)]
+       when ord1 = ord2 && is_sbits_typ ctx typ ->
+     AE_val (AV_C_fragment (F_call ("append_ss", [vec1; vec2]), typ, ctyp_of_typ ctx typ))
+
   | "undefined_vector", [AV_C_fragment (len, _, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
@@ -2537,7 +2555,9 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
        | fname, _ -> fname
      in
-     if fname = "reg_deref" then
+     if fname = "sail_assert" && !optimize_experimental then
+       empty
+     else if fname = "reg_deref" then
        if is_stack_ctyp ctyp then
          string (Printf.sprintf  " %s = *(%s);" (sgen_clexp_pure x) c_args)
        else
