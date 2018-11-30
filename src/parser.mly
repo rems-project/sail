@@ -133,6 +133,8 @@ let mk_tannot typq typ n m = Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ), l
 let mk_eannotn = Effect_opt_aux(Effect_opt_pure,Unknown)
 let mk_namesectn = Name_sect_aux(Name_sect_none,Unknown)
 
+let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
+
 type lchain =
   LC_lt
 | LC_lteq
@@ -171,6 +173,8 @@ let rec desugar_rchain chain s e =
     mk_nc (NC_and (nc1, desugar_rchain (RC_nexp n2 :: chain) s e)) s e
   | _ -> assert false
 
+let future_syntax l = Util.warn (Reporting.loc_to_string l ^ "\n\nThis syntax is currently experimental")
+
 %}
 
 /*Terminals with no content*/
@@ -185,7 +189,7 @@ let rec desugar_rchain chain s e =
 %nonassoc Then
 %nonassoc Else
 
-%token Bar Comma Dot Eof Minus Semi Under DotDot
+%token Bar Comma Dot Eof Minus Semi Under DotDot ColonColonLt
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
 %token MinusGt Bidir LtMinus
 
@@ -196,7 +200,7 @@ let rec desugar_rchain chain s e =
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
-%token <string> Colon ColonColon (* CaretCaret *) TildeTilde ExclEq
+%token <string> Colon ColonColon TildeTilde ExclEq
 %token <string> EqEq
 %token <string> GtEq
 %token <string> LtEq
@@ -339,9 +343,6 @@ atomic_nc:
     { mk_nc NC_true $startpos $endpos }
   | False
     { mk_nc NC_false $startpos $endpos }
-  | typ0 Eq typ0
-    { Util.warn ("Deprecated syntax, use == instead at " ^ Reporting.loc_to_string (loc $startpos($2) $endpos($2)) ^ "\n");
-      mk_nc (NC_equal ($1, $3)) $startpos $endpos }
   | typ0 EqEq typ0
     { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
   | typ0 ExclEq typ0
@@ -351,38 +352,6 @@ atomic_nc:
   | nc_rchain
     { desugar_rchain $1 $startpos $endpos }
   | Lparen nc Rparen
-    { $2 }
-  | kid In Lcurly num_list Rcurly
-    { mk_nc (NC_set ($1, $4)) $startpos $endpos }
-
-new_nc:
-  | new_nc Bar new_nc_and
-    { mk_nc (NC_or ($1, $3)) $startpos $endpos }
-  | nc_and
-    { $1 }
-
-new_nc_and:
-  | new_nc_and Amp new_atomic_nc
-    { mk_nc (NC_and ($1, $3)) $startpos $endpos }
-  | new_atomic_nc
-    { $1 }
-
-new_atomic_nc:
-  | Where id Lparen typ_list Rparen
-    { mk_nc (NC_app ($2, $4)) $startpos $endpos }
-  | True
-    { mk_nc NC_true $startpos $endpos }
-  | False
-    { mk_nc NC_false $startpos $endpos }
-  | typ0 EqEq typ0
-    { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
-  | typ0 ExclEq typ0
-    { mk_nc (NC_not_equal ($1, $3)) $startpos $endpos }
-  | nc_lchain
-    { desugar_lchain $1 $startpos $endpos }
-  | nc_rchain
-    { desugar_rchain $1 $startpos $endpos }
-  | Lparen new_nc Rparen
     { $2 }
   | kid In Lcurly num_list Rcurly
     { mk_nc (NC_set ($1, $4)) $startpos $endpos }
@@ -413,11 +382,17 @@ nc_rchain:
   | typ0 Gt nc_rchain
     { RC_nexp $1 :: RC_gt :: $3 }
 
+tyarg:
+  | ColonColonLt typ_list Gt
+    { future_syntax (loc $startpos($1) $endpos($3)); $2, [] }
+  | Lparen typ_list Rparen
+    { [], $2 }
+  | ColonColonLt typ_list Gt Lparen typ_list Rparen
+    { future_syntax (loc $startpos($1) $endpos($3)); $2, $5 }
+
 typ:
   | typ0
     { $1 }
-  | typ0 With new_nc
-    { mk_typ (ATyp_with ($1, $3)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in types, with both left, right and non-associative operators */
@@ -587,8 +562,8 @@ atomic_typ:
     { mk_typ ATyp_dec $startpos $endpos }
   | Inc
     { mk_typ ATyp_inc $startpos $endpos }
-  | id Lparen typ_list Rparen
-    { mk_typ (ATyp_app ($1, $3)) $startpos $endpos }
+  | id tyarg
+    { mk_typ (ATyp_app ($1, snd $2 @ fst $2)) $startpos $endpos }
   | Register Lparen typ Rparen
     { let register_id = mk_id (Id "register") $startpos($1) $endpos($1) in
       mk_typ (ATyp_app (register_id, [$3])) $startpos $endpos }
@@ -1193,14 +1168,43 @@ r_def_body:
   | r_id_def Comma r_def_body
     { $1 :: $3 }
 
+param_kopt:
+  | kid Colon kind
+    { KOpt_aux (KOpt_kind ($3, $1), loc $startpos $endpos) }
+  | kid
+    { KOpt_aux (KOpt_none $1, loc $startpos $endpos) }
+
+param_kopt_list:
+  | param_kopt
+    { [$1] }
+  | param_kopt Comma param_kopt_list
+    { $1 :: $3 }
+
+typaram:
+  | ColonColonLt param_kopt_list Gt Lparen param_kopt_list Rparen Comma nc
+    { future_syntax (loc $startpos($1) $endpos($3));
+      let qi_nc = QI_aux (QI_const $8, loc $startpos($8) $endpos($8)) in
+      mk_typq ($5 @ $2) [qi_nc] $startpos $endpos }
+  | ColonColonLt param_kopt_list Gt Lparen param_kopt_list Rparen
+    { future_syntax (loc $startpos($1) $endpos($3));
+      mk_typq ($5 @ $2) [] $startpos $endpos }
+  | ColonColonLt param_kopt_list Gt
+    { future_syntax (loc $startpos($1) $endpos($3));
+      mk_typq $2 [] $startpos $endpos }
+  | Lparen param_kopt_list Rparen Comma nc
+    { let qi_nc = QI_aux (QI_const $5, loc $startpos($5) $endpos($5)) in
+      mk_typq $2 [qi_nc] $startpos $endpos }
+  | Lparen param_kopt_list Rparen
+    { mk_typq $2 [] $startpos $endpos }
+
 type_def:
-  | Typedef id typquant Eq typ
+  | Typedef id typaram Eq typ
     { mk_td (TD_abbrev ($2, mk_namesectn, mk_typschm $3 $5 $startpos($3) $endpos)) $startpos $endpos }
   | Typedef id Eq typ
     { mk_td (TD_abbrev ($2, mk_namesectn, mk_typschm mk_typqn $4 $startpos($4) $endpos)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
-  | Struct id typquant Eq Lcurly struct_fields Rcurly
+  | Struct id typaram Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, mk_namesectn, $3, $6, false)) $startpos $endpos }
   | Enum id Eq enum_bar
     { mk_td (TD_enum ($2, mk_namesectn, $4, false)) $startpos $endpos }
@@ -1208,11 +1212,11 @@ type_def:
     { mk_td (TD_enum ($2, mk_namesectn, $5, false)) $startpos $endpos }
   | Newtype id Eq type_union
     { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], false)) $startpos $endpos }
-  | Newtype id typquant Eq type_union
+  | Newtype id typaram Eq type_union
     { mk_td (TD_variant ($2, mk_namesectn, $3, [$5], false)) $startpos $endpos }
   | Union id Eq Lcurly type_unions Rcurly
     { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
-  | Union id typquant Eq Lcurly type_unions Rcurly
+  | Union id typaram Eq Lcurly type_unions Rcurly
     { mk_td (TD_variant ($2, mk_namesectn, $3, $6, false)) $startpos $endpos }
   | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
     { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }

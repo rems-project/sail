@@ -6,7 +6,7 @@ $define _OPTION
 // this won't work - also no other type should be created with
 // constructors named Some or None.
 
-union option ('a : Type) = {
+union option('a: Type) = {
   Some : 'a,
   None : unit
 }

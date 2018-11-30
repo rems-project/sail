@@ -496,6 +496,9 @@ let analyze_primop' ctx id args typ =
 
   (* Optimized routines for all combinations of fixed and small bits
      appends, where the result is guaranteed to be smaller than 64. *)
+  | "append", [AV_C_fragment (vec1, _, CT_fbits (0, ord1)); AV_C_fragment (vec2, _, CT_fbits (n2, ord2)) as v2]
+       when ord1 = ord2 ->
+     AE_val v2
   | "append", [AV_C_fragment (vec1, _, CT_fbits (n1, ord1)); AV_C_fragment (vec2, _, CT_fbits (n2, ord2))]
        when ord1 = ord2 && n1 + n2 <= 64 ->
      AE_val (AV_C_fragment (F_op (F_op (vec1, "<<", v_int n2), "|", vec2), typ, CT_fbits (n1 + n2, ord1)))

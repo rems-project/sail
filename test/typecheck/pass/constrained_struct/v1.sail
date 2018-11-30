@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-struct MyStruct 'n, 'n in {32, 64} = {
+struct MyStruct('n), 'n in {32, 64} = {
   field: bits('n)
 }
 

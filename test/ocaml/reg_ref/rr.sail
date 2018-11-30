@@ -33,7 +33,7 @@ overload _mod_GPR = { rGPR, wGPR }
 /* Create a new type which is a pair of a bitvector and a start index
 
    slice('n, 'm) is equivalent to old-sail vector('n, 'm, dec, bit) */
-newtype slice ('n : Int) ('m : Int) = MkSlice : (atom('n), bits('m))
+newtype slice ('n : Int, 'm : Int) = MkSlice : (atom('n), bits('m))
 
 /* Extract the bitvector from a slice */
 val slice_bits : forall 'n 'm. slice('n, 'm) -> bits('m)
@@ -76,7 +76,7 @@ overload _mod_slice = {_set_slice, _set_slice2, vector_slice, slice_slice}
 /* Set up a struct with an aliased LT bit in CR0, mimicing old-style syntax */
 infix 1 ...
 
-type operator ... ('n : Int) ('m : Int) = slice('m, 'n - ('m - 1))
+type operator ...('n : Int, 'm : Int) = slice('m, 'n - ('m - 1))
 
 struct cr = {
   CR0 : 7 ... 4,

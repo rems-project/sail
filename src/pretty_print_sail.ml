@@ -151,7 +151,7 @@ let doc_nc nc =
     | NC_and (c1, c2) -> separate space [nc1 c1; string "&"; atomic_nc c2]
     | _ -> atomic_nc nc
   in
-  nc0 ~parenthesize:true (constraint_simp nc)
+  atomic_nc (constraint_simp nc)
 
 let rec doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
@@ -219,6 +219,27 @@ let doc_quants quants =
   | [nc] -> kdoc ^^ comma ^^ space ^^ doc_nc nc
   | nc :: ncs -> kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
+let doc_param_quants quants =
+  let doc_qi_kopt (QI_aux (qi_aux, _)) =
+    match qi_aux with
+    | QI_id (KOpt_aux (KOpt_none kid, _)) -> [doc_kid kid]
+    | QI_id kopt when is_nat_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
+    | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
+    | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]
+    | QI_const nc -> []
+  in
+  let qi_nc (QI_aux (qi_aux, _)) =
+    match qi_aux with
+    | QI_const nc -> [nc]
+    | _ -> []
+  in
+  let kdoc = separate (comma ^^ space) (List.concat (List.map doc_qi_kopt quants)) in
+  let ncs = List.concat (List.map qi_nc quants) in
+  match ncs with
+  | [] -> parens kdoc
+  | [nc] -> parens kdoc ^^ comma ^^ space ^^ doc_nc nc
+  | nc :: ncs -> parens kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
+
 let doc_binding ?(simple=false) ((TypQ_aux (tq_aux, _) as typq), typ) =
   match tq_aux with
   | TypQ_no_forall -> doc_typ ~simple:simple typ
@@ -244,7 +265,7 @@ let doc_typschm_quants (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _))
   match tq_aux with
   | TypQ_no_forall -> None
   | TypQ_tq [] -> None
-  | TypQ_tq qs -> Some (doc_quants qs)
+  | TypQ_tq qs -> Some (doc_param_quants qs)
 
 let doc_lit (L_aux(l,_)) =
   utf8string (match l with
@@ -547,7 +568,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
      begin
        match doc_typschm_quants typschm with
        | Some qdoc ->
-          doc_op equals (concat [string "type"; space; doc_id id; space; qdoc]) (doc_typschm_typ typschm)
+          doc_op equals (concat [string "type"; space; doc_id id; qdoc]) (doc_typschm_typ typschm)
        | None ->
           doc_op equals (concat [string "type"; space; doc_id id]) (doc_typschm_typ typschm)
      end
@@ -556,12 +577,12 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | TD_record (id, _, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, _, TypQ_aux (TypQ_tq [], _), fields, _) ->
      separate space [string "struct"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
   | TD_record (id, _, TypQ_aux (TypQ_tq qs, _), fields, _) ->
-     separate space [string "struct"; doc_id id; doc_quants qs; equals;
+     separate space [string "struct"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
   | TD_variant (id, _, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, _, TypQ_aux (TypQ_tq [], _), unions, _) ->
      separate space [string "union"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | TD_variant (id, _, TypQ_aux (TypQ_tq qs, _), unions, _) ->
-     separate space [string "union"; doc_id id; doc_quants qs; equals;
+     separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | _ -> string "TYPEDEF"
 

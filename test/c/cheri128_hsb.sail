@@ -14,7 +14,7 @@ val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range", c: "add_
 val sub_range = {ocaml: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
 
-val min = {ocaml: "min_int", lem: "min", coq: "min_atom", c:"min_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
+val min = {ocaml: "min_int", lem: "min", coq: "min_atom", c:"min_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c == 'a | 'c == 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
 overload operator + = {add_range}
 overload operator - = {sub_range}

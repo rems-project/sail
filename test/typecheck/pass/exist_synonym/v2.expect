@@ -2,6 +2,6 @@ Type error at file "exist_synonym/v2.sail", line 6, character 41 to line 6, char
 
 let x : {'n, 0 <= 'n <= 8. regno('n)} = [41m4[0m
 
-Tried performing type coercion from int(4) to {'n, 0 <= 'n & 'n <= 8. regno('n)} on 4
+Tried performing type coercion from int(4) to {'n, (0 <= 'n & 'n <= 8). regno('n)} on 4
 Failed because
 Could not prove constraints (0 <= 'n & ('n + 1) <= 2) in type synonym int('n) with (0 <= 'n & 'n <= 8)
