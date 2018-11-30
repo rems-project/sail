@@ -47,8 +47,8 @@ let seqS m n = bindS m (fun (_ : unit) -> n)
 let inline (>>$=) = bindS
 let inline (>>$) = seqS
 
-val chooseS : forall 'regs 'a 'e. SetType 'a => set 'a -> monadS 'regs 'a 'e
-let chooseS xs s = Set.map (fun x -> (Value x, s)) xs
+val chooseS : forall 'regs 'a 'e. SetType 'a => list 'a -> monadS 'regs 'a 'e
+let chooseS xs s = Set.fromList (List.map (fun x -> (Value x, s)) xs)
 
 val readS : forall 'regs 'a 'e. (sequential_state 'regs -> 'a) -> monadS 'regs 'a 'e
 let readS f = (fun s -> returnS (f s) s)
@@ -59,8 +59,9 @@ let updateS f = (fun s -> returnS () (f s))
 val failS : forall 'regs 'a 'e. string -> monadS 'regs 'a 'e
 let failS msg s = {(Ex (Failure msg), s)}
 
-val undefined_boolS : forall 'regval 'regs 'a 'e. unit -> monadS 'regs bool 'e
-let undefined_boolS () = chooseS {false; true}
+val choose_boolS : forall 'regval 'regs 'a 'e. unit -> monadS 'regs bool 'e
+let choose_boolS () = chooseS [false; true]
+let undefined_boolS = choose_boolS
 
 val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e
 let exitS () = failS "exit"

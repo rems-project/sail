@@ -164,7 +164,7 @@ qed
 lemma PrePost_assert_expS[intro, PrePost_atomI]: "PrePost (if c then P (Value ()) else P (Ex (Failure m))) (assert_expS c m) P"
   unfolding PrePost_def assert_expS_def by (auto simp: returnS_def failS_def)
 
-lemma PrePost_chooseS[intro, PrePost_atomI]: "PrePost (\<lambda>s. \<forall>x \<in> xs. Q (Value x) s) (chooseS xs) Q"
+lemma PrePost_chooseS[intro, PrePost_atomI]: "PrePost (\<lambda>s. \<forall>x \<in> set xs. Q (Value x) s) (chooseS xs) Q"
   by (auto simp: PrePost_def chooseS_def)
 
 lemma PrePost_failS[intro, PrePost_atomI]: "PrePost (Q (Ex (Failure msg))) (failS msg) Q"
@@ -381,7 +381,7 @@ lemma PrePostE_exitS[PrePostE_atomI, intro]: "PrePostE (E (Failure ''exit'')) (e
   unfolding exitS_def PrePostE_def PrePost_def failS_def by auto
 
 lemma PrePostE_chooseS[intro, PrePostE_atomI]:
-  "PrePostE (\<lambda>s. \<forall>x \<in> xs. Q x s) (chooseS xs) Q E"
+  "PrePostE (\<lambda>s. \<forall>x \<in> set xs. Q x s) (chooseS xs) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
 
 lemma PrePostE_throwS[PrePostE_atomI]: "PrePostE (E (Throw e)) (throwS e) Q E"
@@ -488,11 +488,11 @@ lemma PrePostE_liftState_untilM_pure_cond:
   shows "PrePostE (Inv Q vars) (liftState r (untilM vars (return \<circ> cond) body)) Q E"
   using assms by (intro PrePostE_liftState_untilM) (auto simp: comp_def liftState_simp)
 
-lemma PrePostE_undefined_boolS[PrePostE_atomI]:
+lemma PrePostE_choose_boolS_any[PrePostE_atomI]:
   "PrePostE (\<lambda>s. \<forall>b. Q b s)
-            (undefined_boolS unit) Q E"
-  unfolding undefined_boolS_def seqS_def
-  by (auto intro: PrePostE_strengthen_pre PrePostE_chooseS)
+            (choose_boolS unit) Q E"
+  unfolding choose_boolS_def seqS_def
+  by (auto intro: PrePostE_strengthen_pre)
 
 lemma PrePostE_bool_of_bitU_nondetS_any:
   "PrePostE (\<lambda>s. \<forall>b. Q b s) (bool_of_bitU_nondetS b) Q E"
@@ -507,11 +507,19 @@ lemma PrePostE_bools_of_bits_nondetS_any:
             PrePostE_bool_of_bitU_nondetS_any)+)
      auto
 
+lemma PrePostE_choose_boolsS_any:
+  "PrePostE (\<lambda>s. \<forall>bs. Q bs s) (choose_boolsS n) Q E"
+  unfolding choose_boolsS_def genlistS_def Let_def
+  by (rule PrePostE_weaken_post[where B = "\<lambda>_ s. \<forall>bs. Q bs s"], rule PrePostE_strengthen_pre,
+      (rule PrePostE_foreachS_invariant[OF PrePostE_strengthen_pre] PrePostE_bindS PrePostE_returnS
+            PrePostE_choose_boolS_any)+)
+     auto
+
 lemma PrePostE_internal_pick:
   "xs \<noteq> [] \<Longrightarrow> PrePostE (\<lambda>s. \<forall>x \<in> set xs. Q x s) (internal_pickS xs) Q E"
   unfolding internal_pickS_def Let_def
   by (rule PrePostE_strengthen_pre,
-      (rule PrePostE_compositeI PrePostE_atomI PrePostE_bools_of_bits_nondetS_any)+)
+      (rule PrePostE_compositeI PrePostE_atomI PrePostE_choose_boolsS_any)+)
      (auto split: option.splits)
 
 end

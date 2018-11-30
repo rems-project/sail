@@ -29,8 +29,10 @@ type monad 'regval 'a 'e =
   | Read_reg of register_name * ('regval -> monad 'regval 'a 'e)
   (* Request to write register *)
   | Write_reg of register_name * 'regval * monad 'regval 'a 'e
-  (* Request to choose a Boolean, e.g. to resolve an undefined bit *)
-  | Undefined of (bool -> monad 'regval 'a 'e)
+  (* Request to choose a Boolean, e.g. to resolve an undefined bit. The string
+     argument may be used to provide information to the system about what the
+     Boolean is going to be used for. *)
+  | Choose of string * (bool -> monad 'regval 'a 'e)
   (* Print debugging or tracing information *)
   | Print of string * monad 'regval 'a 'e
   (*Result of a failed assert with possible error message to report*)
@@ -48,7 +50,7 @@ type event 'regval =
   | E_footprint
   | E_read_reg of register_name * 'regval
   | E_write_reg of register_name * 'regval
-  | E_undefined of bool
+  | E_choose of string * bool
   | E_print of string
 
 type trace 'regval = list (event 'regval)
@@ -64,7 +66,7 @@ let rec bind m f = match m with
   | Write_mem wk a sz v t k ->   Write_mem wk a sz v t   (fun v -> bind (k v) f)
   | Read_reg descr k ->          Read_reg descr          (fun v -> bind (k v) f)
   | Excl_res k ->                Excl_res                (fun v -> bind (k v) f)
-  | Undefined k ->               Undefined               (fun v -> bind (k v) f)
+  | Choose descr k ->            Choose descr            (fun v -> bind (k v) f)
   | Write_ea wk a sz k ->        Write_ea wk a sz        (bind k f)
   | Footprint k ->               Footprint               (bind k f)
   | Barrier bk k ->              Barrier bk              (bind k f)
@@ -77,8 +79,11 @@ end
 val exit : forall 'rv 'a 'e. unit -> monad 'rv 'a 'e
 let exit () = Fail "exit"
 
+val choose_bool : forall 'rv 'e. string -> monad 'rv bool 'e
+let choose_bool descr = Choose descr return
+
 val undefined_bool : forall 'rv 'e. unit -> monad 'rv bool 'e
-let undefined_bool () = Undefined return
+let undefined_bool () = choose_bool "undefined_bool"
 
 val assert_exp : forall 'rv 'e. bool -> string -> monad 'rv unit 'e
 let assert_exp exp msg = if exp then Done () else Fail msg
@@ -94,7 +99,7 @@ let rec try_catch m h = match m with
   | Write_mem wk a sz v t k ->   Write_mem wk a sz v t   (fun v -> try_catch (k v) h)
   | Read_reg descr k ->          Read_reg descr          (fun v -> try_catch (k v) h)
   | Excl_res k ->                Excl_res                (fun v -> try_catch (k v) h)
-  | Undefined k ->               Undefined               (fun v -> try_catch (k v) h)
+  | Choose descr k ->            Choose descr            (fun v -> try_catch (k v) h)
   | Write_ea wk a sz k ->        Write_ea wk a sz        (try_catch k h)
   | Footprint k ->               Footprint               (try_catch k h)
   | Barrier bk k ->              Barrier bk              (try_catch k h)
@@ -267,7 +272,7 @@ let emitEvent m e = match (e, m) with
   | (E_print m, Print m' k) ->
      if m' = m then Just k else Nothing
   | (E_excl_res v, Excl_res k) -> Just (k v)
-  | (E_undefined v, Undefined k) -> Just (k v)
+  | (E_choose descr v, Choose descr' k) -> if descr' = descr then Just (k v) else Nothing
   | (E_footprint, Footprint k) -> Just k
   | _ -> Nothing
 end

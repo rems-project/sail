@@ -45,6 +45,9 @@ lemma liftState_barrier[liftState_simp]: "liftState r (barrier bk) = returnS ()"
   by (auto simp: barrier_def)
 lemma liftState_footprint[liftState_simp]: "liftState r (footprint ()) = returnS ()"
   by (auto simp: footprint_def)
+lemma liftState_choose_bool[liftState_simp]: "liftState r (choose_bool descr) = choose_boolS ()"
+  by (auto simp: choose_bool_def liftState_simp)
+declare undefined_boolS_def[simp]
 lemma liftState_undefined[liftState_simp]: "liftState r (undefined_bool ()) = undefined_boolS ()"
   by (auto simp: undefined_bool_def liftState_simp)
 lemma liftState_maybe_fail[liftState_simp]: "liftState r (maybe_fail msg x) = maybe_failS msg x"
@@ -149,6 +152,14 @@ lemma liftState_foreachM[liftState_simp]:
   by (induction xs vars "\<lambda>x vars. liftState r (body x vars)" rule: foreachS.induct)
      (auto simp: liftState_simp cong: bindS_cong)
 
+lemma liftState_genlistM[liftState_simp]:
+  "liftState r (genlistM f n) = genlistS (liftState r \<circ> f) n"
+  by (auto simp: genlistM_def genlistS_def liftState_simp cong: bindS_cong)
+
+lemma liftState_choose_bools[liftState_simp]:
+  "liftState r (choose_bools descr n) = choose_boolsS n"
+  by (auto simp: choose_bools_def choose_boolsS_def liftState_simp comp_def)
+
 lemma liftState_bools_of_bits_nondet[liftState_simp]:
   "liftState r (bools_of_bits_nondet bs) = bools_of_bits_nondetS bs"
   unfolding bools_of_bits_nondet_def bools_of_bits_nondetS_def
@@ -157,6 +168,7 @@ lemma liftState_bools_of_bits_nondet[liftState_simp]:
 lemma liftState_internal_pick[liftState_simp]:
   "liftState r (internal_pick xs) = internal_pickS xs"
   by (auto simp: internal_pick_def internal_pickS_def liftState_simp comp_def
+                 chooseM_def
                  option.case_distrib[where h = "liftState r"]
            simp del: repeat.simps
            cong: option.case_cong)

@@ -38,9 +38,8 @@ lemma bindS_updateS: "bindS (updateS f) m = (\<lambda>s. m () (f s))"
 lemma bindS_assertS_True[simp]: "bindS (assert_expS True msg) f = f ()"
   by (auto simp: assert_expS_def)
 
-lemma bindS_chooseS_returnS[simp]: "bindS (chooseS xs) (\<lambda>x. returnS (f x)) = chooseS (f ` xs)"
+lemma bindS_chooseS_returnS[simp]: "bindS (chooseS xs) (\<lambda>x. returnS (f x)) = chooseS (map f xs)"
   by (intro ext) (auto simp: bindS_def chooseS_def returnS_def)
-
 
 lemma result_cases:
   fixes r :: "('a, 'e) result"
@@ -198,9 +197,10 @@ lemma no_throw_basic_builtins[simp]:
   "\<And>f. ignore_throw (readS f) = readS f"
   "\<And>f. ignore_throw (updateS f) = updateS f"
   "ignore_throw (chooseS xs) = chooseS xs"
+  "ignore_throw (choose_boolS ()) = choose_boolS ()"
   "ignore_throw (failS msg) = failS msg"
   "ignore_throw (maybe_failS msg x) = maybe_failS msg x"
-  unfolding ignore_throw_def returnS_def chooseS_def maybe_failS_def failS_def readS_def updateS_def
+  unfolding ignore_throw_def returnS_def chooseS_def maybe_failS_def failS_def readS_def updateS_def choose_boolS_def
   by (intro ext; auto split: option.splits)+
 
 lemmas ignore_throw_option_case_distrib =
