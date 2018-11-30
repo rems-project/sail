@@ -17,21 +17,21 @@ SAIL_DIR ?= $(realpath ..)
 SAIL ?= $(SAIL_DIR)/sail
 C_WARNINGS ?=
 #-Wall -Wextra -Wno-unused-label -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function
-C_FLAGS = -I ../lib
 C_INCS = riscv_prelude.h riscv_platform_impl.h riscv_platform.h
 C_SRCS = riscv_prelude.c riscv_platform_impl.c riscv_platform.c
 
-ENABLE_SPIKE = 0
-TV_SPIKE_DIR = /home/mundkur/src/hw/l3/l3riscv
-SPIKE_FLAGS = -I $(TV_SPIKE_DIR)/src/cpp
-SPIKE_LIBS  = -L $(TV_SPIKE_DIR) -ltv_spike -Wl,-rpath=$(TV_SPIKE_DIR)
-SPIKE_LIBS += -L $(RISCV)/lib -lfesvr -lriscv -Wl,-rpath=$(RISCV)/lib
+C_FLAGS = -I ../lib
+C_LIBS  = -lgmp -lz
 
-C_LIBS = -lgmp -lz
-
-ifeq ($(ENABLE_SPIKE),1)
-C_FLAGS += $(SPIKE_FLAGS)
-C_LIBS  += $(SPIKE_LIBS)
+# The C simulator can be built to be linked against Spike for tandem-verification.
+# This needs the C bindings to Spike from https://github.com/SRI-CSL/l3riscv
+# TV_SPIKE_DIR in the environment should point to the top-level dir of the L3
+# RISC-V, containing the built C bindings to Spike.
+# RISCV should be defined if TV_SPIKE_DIR is.
+ifneq (,$(TV_SPIKE_DIR))
+C_FLAGS += -I $(TV_SPIKE_DIR)/src/cpp -DENABLE_SPIKE
+C_LIBS  += -L $(TV_SPIKE_DIR) -ltv_spike -Wl,-rpath=$(TV_SPIKE_DIR)
+C_LIBS  += -L $(RISCV)/lib -lfesvr -lriscv -Wl,-rpath=$(RISCV)/lib
 endif
 
 export SAIL_DIR

@@ -17,8 +17,7 @@
 #include "riscv_platform_impl.h"
 #include "riscv_sail.h"
 
-//#define SPIKE 1
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
 #include "tv_spike_intf.h"
 #else
 struct tv_spike_t;
@@ -95,7 +94,7 @@ static void print_usage(const char *argv0, int ec)
 
 static void dump_dts(void)
 {
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
   size_t dts_len = 0;
   struct tv_spike_t *s = tv_init("RV64IMAC", rv_ram_size, 0);
   tv_get_dts(s, NULL, &dts_len);
@@ -229,7 +228,7 @@ uint64_t load_sail(char *f)
 
 void init_spike(const char *f, uint64_t entry, uint64_t ram_size)
 {
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
   bool mismatch = false;
   s = tv_init("RV64IMAC", ram_size, 1);
   if (tv_is_dirty_enabled(s) != rv_enable_dirty_update) {
@@ -281,7 +280,7 @@ void init_spike(const char *f, uint64_t entry, uint64_t ram_size)
 
 void tick_spike()
 {
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
   tv_tick_clock(s);
   tv_step_io(s);
 #endif
@@ -313,7 +312,7 @@ void init_sail_reset_vector(uint64_t entry)
       write_mem(addr++, dtb[i]);
   }
 
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
   if (dtb && dtb_len) {
     // Ensure that Spike's DTB matches the one provided.
     bool matched = dtb_len == spike_dtb_len;
@@ -370,7 +369,7 @@ void init_sail(uint64_t elf_entry)
 int init_check(struct tv_spike_t *s)
 {
   int passed = 1;
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
   passed &= tv_check_csr(s, CSR_MISA, zmisa.zMisa_chunk_0);
 #endif
   return passed;
@@ -379,7 +378,7 @@ int init_check(struct tv_spike_t *s)
 void finish(int ec)
 {
   model_fini();
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
   tv_free(s);
 #endif
   exit(ec);
@@ -389,7 +388,7 @@ int compare_states(struct tv_spike_t *s)
 {
   int passed = 1;
 
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
 #define TV_CHECK(reg, spike_reg, sail_reg)   \
   passed &= tv_check_ ## reg(s, spike_reg, sail_reg);
 
@@ -542,7 +541,7 @@ void run_sail(void)
       insn_cnt++;
     }
 
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
     { /* run a Spike step */
       tv_step(s);
       spike_done = tv_is_done(s);
@@ -595,7 +594,7 @@ void run_sail(void)
 
 void init_logs()
 {
-#ifdef SPIKE
+#ifdef ENABLE_SPIKE
   // The Spike interface uses stdout for terminal output, and stderr for logs.
   // Do the same here.
   if (dup2(1, 2) < 0) {
