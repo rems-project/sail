@@ -282,6 +282,10 @@ and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
         (fun e (b,u,s) ->
           fv_of_exp consider_var b u s e) args (bound,used,set) in
     bound,Nameset.add (string_of_id id) used,set
+  | LEXP_vector_concat(args) ->
+     List.fold_right
+       (fun e (b,u,s) ->
+         fv_of_lexp consider_var b u s e) args (bound,used,set)
   | LEXP_field(lexp,_) -> fv_of_lexp consider_var bound used set lexp
   | LEXP_vector(lexp,exp) ->
     let bound_l,used,set = fv_of_lexp consider_var bound used set lexp in
@@ -486,8 +490,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      List.fold_left Nameset.union Nameset.empty (List.map snd fvs)
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
-  | DEF_constraint (id, _, _) ->
-     raise (Reporting.err_unreachable (id_loc id) __POS__ "Constraint should be re-written")
+  | DEF_pragma _ -> mt,mt
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs

@@ -2113,6 +2113,7 @@ let split_defs all_errors splits defs =
       | DEF_reg_dec _
       | DEF_overload _
       | DEF_fixity _
+      | DEF_pragma _
       | DEF_internal_mutrec _
         -> [d]
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]

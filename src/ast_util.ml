@@ -387,8 +387,6 @@ let rec nc_negate (NC_aux (nc, l)) =
   | NC_set (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
   | NC_set (kid, int :: ints) ->
      mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
-  | NC_app _ ->
-     raise (Reporting.err_unreachable l __POS__ "tried to negate constraint with unexpanded synonym")
 
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
 
@@ -581,8 +579,8 @@ let def_loc = function
   | DEF_reg_dec (DEC_aux (_, (l, _)))
   | DEF_fixity (_, _, Id_aux (_, l))
   | DEF_overload (Id_aux (_, l), _) -> l
-  | DEF_constraint (Id_aux (_, l), _, _) -> l
   | DEF_internal_mutrec _ -> Parse_ast.Unknown
+  | DEF_pragma (_, _, l) -> l
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v
@@ -696,8 +694,6 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
-  | NC_aux (NC_app (id, nexps), _) ->
-     "where " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_nexp nexps ^ ")"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
@@ -954,8 +950,6 @@ module NC = struct
     | NC_or (nc1,nc2), NC_or (nc3,nc4)
     | NC_and (nc1,nc2), NC_and (nc3,nc4)
       -> lex_ord compare compare nc1 nc3 nc2 nc4
-    | NC_app (id1, nexps1), NC_app (id2, nexps2)
-      -> lex_ord (Id.compare) (Util.compare_list Nexp.compare) id1 id2 nexps1 nexps2
     | NC_true, NC_true
     | NC_false, NC_false
       -> 0
@@ -966,7 +960,6 @@ module NC = struct
     | NC_set _, _ -> -1        | _, NC_set _ -> 1
     | NC_or _, _ -> -1         | _, NC_or _ -> 1
     | NC_and _, _ -> -1        | _, NC_and _ -> 1
-    | NC_app _, _ -> -1        | _, NC_app _ -> 1
     | NC_true, _ -> -1         | _, NC_true -> 1
 end
 
@@ -1152,8 +1145,6 @@ let rec tyvars_of_constraint (NC_aux (nc, _)) =
   | NC_or (nc1, nc2)
   | NC_and (nc1, nc2) ->
      KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
-  | NC_app (id, nexps) ->
-     List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_nexp nexps)
   | NC_true
   | NC_false -> KidSet.empty
 
@@ -1421,7 +1412,6 @@ let rec locate_nc f (NC_aux (nc_aux, l)) =
     | NC_set (kid, nums) -> NC_set (locate_kid f kid, nums)
     | NC_or (nc1, nc2) -> NC_or (locate_nc f nc1, locate_nc f nc2)
     | NC_and (nc1, nc2) -> NC_and (locate_nc f nc1, locate_nc f nc2)
-    | NC_app (id, nexps) -> NC_app (id, List.map (locate_nexp f) nexps)
     | NC_true -> NC_true
     | NC_false -> NC_false
   in
@@ -1596,7 +1586,6 @@ and nc_subst_nexp_aux l sv subst = function
      else set_nc
   | NC_or (nc1, nc2) -> NC_or (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
   | NC_and (nc1, nc2) -> NC_and (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
-  | NC_app (id, nexps) -> NC_app (id, List.map (nexp_subst sv subst) nexps)
   | NC_false -> NC_false
   | NC_true -> NC_true
 

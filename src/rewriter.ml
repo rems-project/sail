@@ -359,7 +359,6 @@ let rewrite_def rewriters d = match d with
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
-  | DEF_constraint _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_constraint survived to rewritter")
   | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewritter")
 
 let rewrite_defs_base rewriters (Defs defs) =

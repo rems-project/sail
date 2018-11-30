@@ -1686,7 +1686,6 @@ let types_used_with_generic_eq defs =
     | DEF_fixity _
     | DEF_overload _
     | DEF_default _
-    | DEF_constraint _
     | DEF_pragma _
     | DEF_reg_dec _
       -> IdSet.empty
@@ -2284,6 +2283,7 @@ let rec doc_def unimplemented generic_eq_types def =
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"
   | DEF_kind _ -> empty
+  | DEF_pragma _ -> empty
 
 let find_exc_typ defs =
   let is_exc_typ_def = function

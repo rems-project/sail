@@ -247,9 +247,6 @@ let options = Arg.align ([
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provides basic profiling information for rewriting passes within Sail");
-  ( "-Xconstraint_synonyms",
-    Arg.Set Type_check.opt_constraint_synonyms,
-    " (extension) allow constraint synonyms");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

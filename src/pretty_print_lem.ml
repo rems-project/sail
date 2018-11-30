@@ -1420,6 +1420,7 @@ let rec doc_def_lem def =
 
   | DEF_kind _ -> empty
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
+  | DEF_pragma _ -> empty
 
 let find_exc_typ defs =
   let is_exc_typ_def = function

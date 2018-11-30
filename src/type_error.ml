@@ -96,7 +96,6 @@ and nc_subst_nexp_aux l sv subst = function
      else set_nc
   | NC_or (nc1, nc2) -> NC_or (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
   | NC_and (nc1, nc2) -> NC_and (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
-  | NC_app (id, nexps) -> NC_app (id, List.map (nexp_subst sv subst) nexps)
   | NC_false -> NC_false
   | NC_true -> NC_true
 

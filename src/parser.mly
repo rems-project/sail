@@ -337,8 +337,6 @@ nc_and:
     { $1 }
 
 atomic_nc:
-  | Where id Lparen typ_list Rparen
-    { mk_nc (NC_app ($2, $4)) $startpos $endpos }
   | True
     { mk_nc NC_true $startpos $endpos }
   | False
@@ -1454,8 +1452,6 @@ def:
     { DEF_kind (KD_aux (KD_nabbrev (K_aux (K_kind [BK_aux (BK_int, loc $startpos($1) $endpos($1))],
 					   loc $startpos($1) $endpos($1)), $2, mk_namesectn, $4),
 			loc $startpos $endpos)) }
-  | Constraint id Lparen kid_list Rparen Eq nc
-    { DEF_constraint ($2, $4, $7) }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | Pragma

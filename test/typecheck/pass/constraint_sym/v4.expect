@@ -1,5 +1,0 @@
-Type error at file "constraint_sym/v4.sail", line 2, character 12 to line 2, character 15
-
-constraint [41mSize[0m('n) = 'n in {32, 64}
-
-Use -Xconstraint_synonyms to enable constraint synonyms

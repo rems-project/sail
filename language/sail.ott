@@ -293,7 +293,6 @@ n_constraint :: 'NC_' ::=
   | kid 'IN' { num1 , ... , numn }              :: :: set
   | n_constraint \/ n_constraint'               :: :: or
   | n_constraint /\ n_constraint'               :: :: and
-  | id ( nexp1 , ... , nexpn )                  :: :: app
   | true                                        :: :: true
   | false                                       :: :: false
 
@@ -1035,7 +1034,6 @@ def :: 'DEF_' ::=
     {{ com scattered function and type definition }}
   | dec_spec                                           :: :: reg_dec
     {{ com register declaration }}
-  | constraint id ( kid1 , ... , kidn ) = n_constraint :: :: constraint
   | fundef1 .. fundefn                                 :: I :: internal_mutrec
     {{ com internal representation of mutually recursive functions }}
   | $ string1 string2 l                                :: :: pragma

@@ -207,7 +207,6 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
        separate space [nexp_constraint nc1; string "&"; nexp_constraint nc2]
     | NC_true -> string "true"
     | NC_false -> string "false"
-    | NC_app (id, args) -> doc_id id ^^ parens (separate_map (comma ^^ space) nexp args)
 
   (* expose doc_typ, doc_atomic_typ, doc_nexp and doc_nexp_constraint *)
   in typ, atomic_typ, nexp, nexp_constraint

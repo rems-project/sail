@@ -67,10 +67,6 @@ val opt_no_effects : bool ref
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
-(** [opt_constraint_synonyms] allows constraint synonyms as toplevel
-   definitions *)
-val opt_constraint_synonyms : bool ref
-
 (** opt_expand_valspec expands typedefs in valspecs during type check.
    We prefer not to do it for latex output but it is otherwise a good idea. *)
 val opt_expand_valspec : bool ref

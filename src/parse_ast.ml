@@ -177,7 +177,6 @@ n_constraint_aux =  (* constraint over kind $_$ *)
  | NC_set of kid * (Big_int.num) list
  | NC_or of n_constraint * n_constraint
  | NC_and of n_constraint * n_constraint
- | NC_app of id * atyp list
  | NC_true
  | NC_false
 
@@ -568,7 +567,6 @@ def =  (* Top-level definition *)
  | DEF_scattered of scattered_def (* scattered definition *)
  | DEF_reg_dec of dec_spec (* register declaration *)
  | DEF_pragma of string * string * l
- | DEF_constraint of id * kid list * n_constraint
  | DEF_internal_mutrec of fundef list
 
 

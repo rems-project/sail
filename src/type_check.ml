@@ -69,10 +69,6 @@ let opt_no_effects = ref false
    assignments in l-expressions *)
 let opt_no_lexp_bounds_check = ref false
 
-(* opt_constraint_synonyms allows constraint synonyms as toplevel
-   definitions *)
-let opt_constraint_synonyms = ref false
-
 (* opt_expand_valspec expands typedefs in valspecs during type check.
    We prefer not to do it for latex output but it is otherwise a good idea. *)
 let opt_expand_valspec = ref true
@@ -171,7 +167,6 @@ and strip_n_constraint_aux = function
   | NC_set (kid, nums) -> NC_set (strip_kid kid, nums)
   | NC_or (nc1, nc2) -> NC_or (strip_n_constraint nc1, strip_n_constraint nc2)
   | NC_and (nc1, nc2) -> NC_and (strip_n_constraint nc1, strip_n_constraint nc2)
-  | NC_app (id, nexps) -> NC_app (strip_id id, List.map strip_nexp nexps)
   | NC_true -> NC_true
   | NC_false -> NC_false
 and strip_n_constraint = function
@@ -287,11 +282,7 @@ module Env : sig
   val polymorphic_undefineds : t -> bool
   val lookup_id : ?raw:bool -> id -> t -> typ lvar
   val fresh_kid : ?kid:kid -> t -> kid
-
   val expand_synonyms : t -> typ -> typ
-  val expand_constraint_synonyms : t -> n_constraint -> n_constraint
-  val expand_typquant_synonyms : t -> typquant -> typquant
-
   val canonicalize : t -> typ -> typ
   val base_typ_of : t -> typ -> typ
   val add_smt_op : id -> string -> t -> t
@@ -489,27 +480,6 @@ end = struct
     if List.for_all (env.prove env) ncs
     then ()
     else typ_error (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
-
-  let rec expand_constraint_synonyms env (NC_aux (nc_aux, l) as nc) =
-    let expand = expand_constraint_synonyms env in
-    match nc_aux with
-    | NC_app (id, nexps) ->
-       begin
-         try
-           let kids, nc = Bindings.find id env.constraint_synonyms in
-           let nc = List.fold_left2 (fun nc kid nexp -> nc_subst_nexp kid (unaux_nexp nexp) nc) nc kids nexps in
-           expand nc
-         with Not_found -> typ_error l ("Could not expand constraint synonym in " ^ string_of_n_constraint nc)
-       end
-    | NC_and (nc1, nc2) -> NC_aux (NC_and (expand nc1, expand nc2), l)
-    | NC_or (nc1, nc2) -> NC_aux (NC_or (expand nc1, expand nc2), l)
-    | NC_true | NC_false | NC_set _ | NC_equal _ | NC_not_equal _ | NC_bounded_le _ | NC_bounded_ge _  -> nc
-
-  let expand_quant_item_synonyms env = function
-    | QI_aux (QI_id kopt, l) -> QI_aux (QI_id kopt, l)
-    | QI_aux (QI_const nc, l) -> QI_aux (QI_const (expand_constraint_synonyms env nc), l)
-
-  let expand_typquant_synonyms env = quant_map_items (expand_quant_item_synonyms env)
 
   let rec expand_synonyms env (Typ_aux (typ, l) as t) =
     match typ with
@@ -718,11 +688,6 @@ end = struct
       end
     | NC_or (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
     | NC_and (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
-    | NC_app (id, nexps) ->
-       if not (Bindings.mem id env.constraint_synonyms) then
-         typ_error l ("Constraint synonym " ^ string_of_id id ^ " is not defined")
-       else ();
-       List.iter (wf_nexp ~exs:exs env) nexps
     | NC_true | NC_false -> ()
 
   let counter = ref 0
@@ -783,7 +748,6 @@ end = struct
           forall 'n, 'n >= 2. (int('n), foo) -> bar
           this enforces the invariant that all things on the left of functions are 'base types' (i.e. without existentials)
         *)
-       let typq = expand_typquant_synonyms env typq in
        let base_args = List.map (destruct_exist env) arg_typs in
        let existential_arg typq = function
          | None -> typq
@@ -1063,7 +1027,6 @@ end = struct
     match nc_aux with
     | NC_true -> env
     | _ ->
-       let constr = expand_constraint_synonyms env constr in
        typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
        { env with constraints = constr :: env.constraints }
 
@@ -1162,8 +1125,7 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
   | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
 
 let expand_bind_synonyms l env (typq, typ) =
-  Env.expand_typquant_synonyms env typq, Env.expand_synonyms (add_typquant l typq env) typ
-
+  typq, Env.expand_synonyms (add_typquant l typq env) typ
 
 (* Create vectors with the default order from the environment *)
 
@@ -1335,7 +1297,6 @@ let rec nc_constraint env var_of (NC_aux (nc, l)) =
                     (List.map (fun i -> Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant i)) ints)
   | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
   | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
-  | NC_app (id, nexps) -> raise (Reporting.err_unreachable l __POS__ "constraint synonym reached smt generation")
   | NC_false -> Constraint.literal false
   | NC_true -> Constraint.literal true
 
@@ -4527,10 +4488,6 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_fixity (prec, n, op) -> [DEF_fixity (prec, n, op)], env
   | DEF_fundef fdef -> check_fundef env fdef
   | DEF_mapdef mdef -> check_mapdef env mdef
-  | DEF_constraint (id, kids, nc) when !opt_constraint_synonyms ->
-     [], Env.add_constraint_synonym id kids nc env
-  | DEF_constraint (id, _, _) ->
-     typ_error (id_loc id) "Use -Xconstraint_synonyms to enable constraint synonyms"
   | DEF_internal_mutrec fdefs ->
      let defs = List.concat (List.map (fun fdef -> fst (check_fundef env fdef)) fdefs) in
      let split_fundef (defs, fdefs) def = match def with
