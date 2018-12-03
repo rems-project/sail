@@ -162,26 +162,33 @@ let excl_resultS =
 
 (* Write little-endian list of bytes to given address *)
 val put_mem_bytes : forall 'regs. nat -> nat -> list memory_byte -> bitU -> sequential_state 'regs -> sequential_state 'regs
-let put_mem_bytes addr sz v t s =
+let put_mem_bytes addr sz v tag s =
   let addrs = genlist (fun n -> addr + n) sz in
   let a_v = List.zip addrs v in
   let write_byte mem (addr, v) = Map.insert addr v mem in
-  let write_tag mem addr = Map.insert addr t mem in
+  let write_tag mem addr = Map.insert addr tag mem in
   <| s with memstate = List.foldl write_byte s.memstate a_v;
             tagstate = List.foldl write_tag s.tagstate addrs |>
 
-val write_mem_bytesS : forall 'regs 'e. write_kind -> nat -> nat -> list memory_byte -> bitU -> monadS 'regs bool 'e
-let write_mem_bytesS _ addr sz v t =
+val write_memt_bytesS : forall 'regs 'e. write_kind -> nat -> nat -> list memory_byte -> bitU -> monadS 'regs bool 'e
+let write_memt_bytesS _ addr sz v t =
   updateS (put_mem_bytes addr sz v t) >>$
   returnS true
 
-val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
-  write_kind -> 'a -> nat -> 'b -> bitU -> monadS 'regs bool 'e
-let write_memS wk addr sz v t =
+val write_mem_bytesS : forall 'regs 'e. write_kind -> nat -> nat -> list memory_byte -> monadS 'regs bool 'e
+let write_mem_bytesS wk addr sz v = write_memt_bytesS wk addr sz v B0
+
+val write_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> integer -> 'b -> bitU -> monadS 'regs bool 'e
+let write_memtS wk addr sz v t =
   match (nat_of_bv addr, mem_bytes_of_bits v) with
-    | (Just addr, Just v) -> write_mem_bytesS wk addr sz v t
+    | (Just addr, Just v) -> write_memt_bytesS wk addr (nat_of_int sz) v t
     | _ -> failS "write_mem"
   end
+
+val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> integer -> 'b -> monadS 'regs bool 'e
+let write_memS wk addr sz v = write_memtS wk addr sz v B0
 
 val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e
 let read_regS reg = readS (fun s -> reg.read_from s.regstate)

@@ -113,9 +113,14 @@ lemma liftState_write_mem_ea_BC:
    write_mem_bytesS BC_mword wk addr sz v t"
   by (auto simp: write_mem_bytesS_def)*)
 
-lemma liftState_write_mem_val[liftState_simp]:
-  "liftState r (write_mem BC_mword BCv wk addr sz v t) = write_memS BC_mword BCv wk addr sz v t"
-  by (auto simp: write_mem_def write_memS_def liftState_simp split: option.splits)
+lemma liftState_write_memt[liftState_simp]:
+  "liftState r (write_memt BCa BCv wk addr sz v t) = write_memtS BCa BCv wk addr sz v t"
+  by (auto simp: write_memt_def write_memtS_def liftState_simp split: option.splits)
+
+lemma liftState_write_mem[liftState_simp]:
+  "liftState r (write_mem BCa BCv wk addr sz v) = write_memS BCa BCv wk addr sz v"
+  by (auto simp: write_mem_def write_memS_def write_memtS_def write_mem_bytesS_def liftState_simp
+           split: option.splits)
 
 lemma liftState_read_reg_readS:
   assumes "\<And>s. Option.bind (get_regval' (name reg) s) (of_regval reg) = Some (read_from reg s)"
@@ -422,7 +427,7 @@ lemma emitEventS_update_cases:
   assumes "emitEventS ra e s = Some s'"
   obtains
     (Write_mem) wk addr sz v tag r
-      where "e = E_write_memt wk addr sz v tag r"
+      where "e = E_write_memt wk addr sz v tag r \<or> (e = E_write_mem wk addr sz v r \<and> tag = B0)"
         and "s' = put_mem_bytes addr sz v tag s"
   | (Write_reg) r v rs'
       where "e = E_write_reg r v" and "(snd ra) r v (regstate s) = Some rs'"

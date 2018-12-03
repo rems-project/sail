@@ -216,12 +216,14 @@ lemma no_throw_mem_builtins:
   "\<And>BC a s. ignore_throw (read_tagS BC a) s = read_tagS BC a s"
   "\<And>BCa BCv rk a sz s. ignore_throw (read_memS BCa BCv rk a sz) s = read_memS BCa BCv rk a sz s"
   "\<And>BCa BCv rk a sz s. ignore_throw (read_memtS BCa BCv rk a sz) s = read_memtS BCa BCv rk a sz s"
-  "\<And>BC wk addr sz v t s. ignore_throw (write_mem_bytesS wk addr sz v t) s = write_mem_bytesS wk addr sz v t s"
-  "\<And>BCa BCv wk addr sz v t s. ignore_throw (write_memS BCa BCv wk addr sz v t) s = write_memS BCa BCv wk addr sz v t s"
+  "\<And>BC wk addr sz v s. ignore_throw (write_mem_bytesS wk addr sz v) s = write_mem_bytesS wk addr sz v s"
+  "\<And>BC wk addr sz v t s. ignore_throw (write_memt_bytesS wk addr sz v t) s = write_memt_bytesS wk addr sz v t s"
+  "\<And>BCa BCv wk addr sz v s. ignore_throw (write_memS BCa BCv wk addr sz v) s = write_memS BCa BCv wk addr sz v s"
+  "\<And>BCa BCv wk addr sz v t s. ignore_throw (write_memtS BCa BCv wk addr sz v t) s = write_memtS BCa BCv wk addr sz v t s"
   "\<And>s. ignore_throw (excl_resultS ()) s = excl_resultS () s"
   "\<And>s. ignore_throw (undefined_boolS ()) s = undefined_boolS () s"
-  unfolding read_mem_bytesS_def read_memt_bytesS_def read_memtS_def read_memS_def read_tagS_def write_memS_def
-  unfolding write_mem_bytesS_def
+  unfolding read_mem_bytesS_def read_memt_bytesS_def read_memtS_def read_memS_def read_tagS_def
+  unfolding write_memS_def write_memtS_def write_mem_bytesS_def write_memt_bytesS_def
   unfolding excl_resultS_def undefined_boolS_def maybe_failS_def
   unfolding ignore_throw_bindS
   by (auto cong: bindS_cong bindS_ext_cong ignore_throw_cong option.case_cong

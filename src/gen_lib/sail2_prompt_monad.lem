@@ -18,8 +18,9 @@ type monad 'regval 'a 'e =
   | Write_ea of write_kind * nat * nat * monad 'regval 'a 'e
   (* Request the result of store-exclusive *)
   | Excl_res of (bool -> monad 'regval 'a 'e)
-  (* Request to write a memory value of the given size together with a tag
-     at the given address. *)
+  (* Request to write a memory value of the given size at the given address,
+     with or without a tag. *)
+  | Write_mem of write_kind * nat * nat * list memory_byte * (bool -> monad 'regval 'a 'e)
   | Write_memt of write_kind * nat * nat * list memory_byte * bitU * (bool -> monad 'regval 'a 'e)
   (* Tell the system to dynamically recalculate dependency footprint *)
   | Footprint of monad 'regval 'a 'e
@@ -43,6 +44,7 @@ type monad 'regval 'a 'e =
 type event 'regval =
   | E_read_mem of read_kind * nat * nat * list memory_byte
   | E_read_memt of read_kind * nat * nat * (list memory_byte * bitU)
+  | E_write_mem of write_kind * nat * nat * list memory_byte * bool
   | E_write_memt of write_kind * nat * nat * list memory_byte * bitU * bool
   | E_write_ea of write_kind * nat * nat
   | E_excl_res of bool
@@ -63,6 +65,7 @@ let rec bind m f = match m with
   | Done a -> f a
   | Read_mem rk a sz k ->       Read_mem rk a sz       (fun v -> bind (k v) f)
   | Read_memt rk a sz k ->      Read_memt rk a sz      (fun v -> bind (k v) f)
+  | Write_mem wk a sz v k ->    Write_mem wk a sz v    (fun v -> bind (k v) f)
   | Write_memt wk a sz v t k -> Write_memt wk a sz v t (fun v -> bind (k v) f)
   | Read_reg descr k ->         Read_reg descr         (fun v -> bind (k v) f)
   | Excl_res k ->               Excl_res               (fun v -> bind (k v) f)
@@ -96,6 +99,7 @@ let rec try_catch m h = match m with
   | Done a -> Done a
   | Read_mem rk a sz k ->       Read_mem rk a sz       (fun v -> try_catch (k v) h)
   | Read_memt rk a sz k ->      Read_memt rk a sz      (fun v -> try_catch (k v) h)
+  | Write_mem wk a sz v k ->    Write_mem wk a sz v    (fun v -> try_catch (k v) h)
   | Write_memt wk a sz v t k -> Write_memt wk a sz v t (fun v -> try_catch (k v) h)
   | Read_reg descr k ->         Read_reg descr         (fun v -> try_catch (k v) h)
   | Excl_res k ->               Excl_res               (fun v -> try_catch (k v) h)
@@ -188,8 +192,17 @@ let write_mem_ea wk addr sz =
     (fun addr -> Write_ea wk addr (nat_of_int sz) (Done ()))
 
 val write_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> integer -> 'b -> monad 'rv bool 'e
+let write_mem wk addr sz v =
+  match (mem_bytes_of_bits v, nat_of_bv addr) with
+    | (Just v, Just addr) ->
+       Write_mem wk addr (nat_of_int sz) v return
+    | _ -> Fail "write_mem"
+  end
+
+val write_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> bitU -> monad 'rv bool 'e
-let write_mem wk addr sz v tag =
+let write_memt wk addr sz v tag =
   match (mem_bytes_of_bits v, nat_of_bv addr) with
     | (Just v, Just addr) ->
        Write_memt wk addr (nat_of_int sz) v tag return
@@ -259,6 +272,8 @@ val emitEvent : forall 'regval 'a 'e. Eq 'regval => monad 'regval 'a 'e -> event
 let emitEvent m e = match (e, m) with
   | (E_read_mem rk a sz v, Read_mem rk' a' sz' k) ->
      if rk' = rk && a' = a && sz' = sz then Just (k v) else Nothing
+  | (E_write_mem wk a sz v r, Write_mem wk' a' sz' v' k) ->
+     if wk' = wk && a' = a && sz' = sz && v' = v then Just (k r) else Nothing
   | (E_write_memt wk a sz v tag r, Write_memt wk' a' sz' v' tag' k) ->
      if wk' = wk && a' = a && sz' = sz && v' = v && tag' = tag then Just (k r) else Nothing
   | (E_read_reg r v, Read_reg r' k) ->

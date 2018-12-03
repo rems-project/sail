@@ -9,13 +9,14 @@ open import {isabelle} `Sail2_state_monad_lemmas`
 val liftState : forall 'regval 'regs 'a 'e. register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e
 let rec liftState ra m = match m with
   | (Done a)                   -> returnS a
-  | (Read_mem rk a sz k)       -> bindS (read_mem_bytesS rk a sz)      (fun v -> liftState ra (k v))
-  | (Read_memt rk a sz k)      -> bindS (read_memt_bytesS rk a sz)     (fun v -> liftState ra (k v))
-  | (Write_memt wk a sz v t k) -> bindS (write_mem_bytesS wk a sz v t) (fun v -> liftState ra (k v))
-  | (Read_reg r k)             -> bindS (read_regvalS ra r)            (fun v -> liftState ra (k v))
-  | (Excl_res k)               -> bindS (excl_resultS ())              (fun v -> liftState ra (k v))
-  | (Choose _ k)               -> bindS (choose_boolS ())              (fun v -> liftState ra (k v))
-  | (Write_reg r v k)          -> seqS (write_regvalS ra r v)          (liftState ra k)
+  | (Read_mem rk a sz k)       -> bindS (read_mem_bytesS rk a sz)       (fun v -> liftState ra (k v))
+  | (Read_memt rk a sz k)      -> bindS (read_memt_bytesS rk a sz)      (fun v -> liftState ra (k v))
+  | (Write_mem wk a sz v k)    -> bindS (write_mem_bytesS wk a sz v)    (fun v -> liftState ra (k v))
+  | (Write_memt wk a sz v t k) -> bindS (write_memt_bytesS wk a sz v t) (fun v -> liftState ra (k v))
+  | (Read_reg r k)             -> bindS (read_regvalS ra r)             (fun v -> liftState ra (k v))
+  | (Excl_res k)               -> bindS (excl_resultS ())               (fun v -> liftState ra (k v))
+  | (Choose _ k)               -> bindS (choose_boolS ())               (fun v -> liftState ra (k v))
+  | (Write_reg r v k)          -> seqS (write_regvalS ra r v)           (liftState ra k)
   | (Write_ea _ _ _ k)         -> liftState ra k
   | (Footprint k)              -> liftState ra k
   | (Barrier _ k)              -> liftState ra k
@@ -32,6 +33,8 @@ let emitEventS ra e s = match e with
   | E_read_memt _ addr sz (v, tag) ->
      Maybe.bind (get_mem_bytes addr sz s) (fun (v', tag') ->
      if v' = v && tag' = tag then Just s else Nothing)
+  | E_write_mem _ addr sz v success ->
+     if success then Just (put_mem_bytes addr sz v B0 s) else Nothing
   | E_write_memt _ addr sz v tag success ->
      if success then Just (put_mem_bytes addr sz v tag s) else Nothing
   | E_read_reg r v ->
