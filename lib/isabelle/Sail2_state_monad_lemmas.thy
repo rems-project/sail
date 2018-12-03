@@ -212,15 +212,15 @@ lemma ignore_throw_let_distrib: "ignore_throw (let x = y in f x) = (let x = y in
 
 lemma no_throw_mem_builtins:
   "\<And>rk a sz s. ignore_throw (read_mem_bytesS rk a sz) s = read_mem_bytesS rk a sz s"
-  "\<And>rk a sz s. ignore_throw (read_tagged_mem_bytesS rk a sz) s = read_tagged_mem_bytesS rk a sz s"
+  "\<And>rk a sz s. ignore_throw (read_memt_bytesS rk a sz) s = read_memt_bytesS rk a sz s"
   "\<And>BC a s. ignore_throw (read_tagS BC a) s = read_tagS BC a s"
   "\<And>BCa BCv rk a sz s. ignore_throw (read_memS BCa BCv rk a sz) s = read_memS BCa BCv rk a sz s"
-  "\<And>BCa BCv rk a sz s. ignore_throw (read_tagged_memS BCa BCv rk a sz) s = read_tagged_memS BCa BCv rk a sz s"
+  "\<And>BCa BCv rk a sz s. ignore_throw (read_memtS BCa BCv rk a sz) s = read_memtS BCa BCv rk a sz s"
   "\<And>BC wk addr sz v t s. ignore_throw (write_mem_bytesS wk addr sz v t) s = write_mem_bytesS wk addr sz v t s"
   "\<And>BCa BCv wk addr sz v t s. ignore_throw (write_memS BCa BCv wk addr sz v t) s = write_memS BCa BCv wk addr sz v t s"
   "\<And>s. ignore_throw (excl_resultS ()) s = excl_resultS () s"
   "\<And>s. ignore_throw (undefined_boolS ()) s = undefined_boolS () s"
-  unfolding read_mem_bytesS_def read_tagged_mem_bytesS_def read_tagged_memS_def read_memS_def read_tagS_def write_memS_def
+  unfolding read_mem_bytesS_def read_memt_bytesS_def read_memtS_def read_memS_def read_tagS_def write_memS_def
   unfolding write_mem_bytesS_def
   unfolding excl_resultS_def undefined_boolS_def maybe_failS_def
   unfolding ignore_throw_bindS

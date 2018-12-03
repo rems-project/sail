@@ -83,9 +83,9 @@ lemma liftState_bool_of_bitU_nondet[liftState_simp]:
   "liftState r (bool_of_bitU_nondet b) = bool_of_bitU_nondetS b"
   by (cases b; auto simp: bool_of_bitU_nondet_def bool_of_bitU_nondetS_def liftState_simp)
 
-lemma liftState_read_tagged_mem[liftState_simp]:
-  shows "liftState r (read_tagged_mem BCa BCb rk a sz) = read_tagged_memS BCa BCb rk a sz"
-  by (auto simp: read_tagged_mem_def read_tagged_mem_bytes_def maybe_failS_def read_tagged_memS_def
+lemma liftState_read_memt[liftState_simp]:
+  shows "liftState r (read_memt BCa BCb rk a sz) = read_memtS BCa BCb rk a sz"
+  by (auto simp: read_memt_def read_memt_bytes_def maybe_failS_def read_memtS_def
                  prod.case_distrib option.case_distrib[where h = "liftState r"]
                  option.case_distrib[where h = "\<lambda>c. c \<bind>\<^sub>S f" for f] liftState_simp
            split: option.splits intro: bindS_cong)
@@ -93,7 +93,7 @@ lemma liftState_read_tagged_mem[liftState_simp]:
 lemma liftState_read_mem[liftState_simp]:
   shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
   by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def
-                 read_tagged_memS_def
+                 read_memtS_def
                  prod.case_distrib option.case_distrib[where h = "liftState r"]
                  option.case_distrib[where h = "\<lambda>c. c \<bind>\<^sub>S f" for f] liftState_simp
            split: option.splits intro: bindS_cong)
@@ -422,7 +422,7 @@ lemma emitEventS_update_cases:
   assumes "emitEventS ra e s = Some s'"
   obtains
     (Write_mem) wk addr sz v tag r
-      where "e = E_write_mem wk addr sz v tag r"
+      where "e = E_write_memt wk addr sz v tag r"
         and "s' = put_mem_bytes addr sz v tag s"
   | (Write_reg) r v rs'
       where "e = E_write_reg r v" and "(snd ra) r v (regstate s) = Some rs'"
