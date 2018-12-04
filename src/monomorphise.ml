@@ -615,8 +615,8 @@ let nexp_subst_fns substs =
       | E_vector_append (e1,e2) -> re (E_vector_append (s_exp e1,s_exp e2))
       | E_list es -> re (E_list (List.map s_exp es))
       | E_cons (e1,e2) -> re (E_cons (s_exp e1,s_exp e2))
-      | E_record fes -> re (E_record (s_fexps fes))
-      | E_record_update (e,fes) -> re (E_record_update (s_exp e, s_fexps fes))
+      | E_record fes -> re (E_record (List.map s_fexp fes))
+      | E_record_update (e,fes) -> re (E_record_update (s_exp e, List.map s_fexp fes))
       | E_field (e,id) -> re (E_field (s_exp e,id))
       | E_case (e,cases) -> re (E_case (s_exp e, List.map s_pexp cases))
       | E_let (lb,e) -> re (E_let (s_letbind lb, s_exp e))
@@ -629,8 +629,6 @@ let nexp_subst_fns substs =
       | E_internal_return e -> re (E_internal_return (s_exp e))
       | E_throw e -> re (E_throw (s_exp e))
       | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
-    and s_fexps (FES_aux (FES_Fexps (fes,flag), (l,annot))) =
-      FES_aux (FES_Fexps (List.map s_fexp fes, flag), (l,s_tannot annot))
     and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
       FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
     and s_pexp = function
@@ -954,7 +952,7 @@ let referenced_vars exp =
          { (compute_exp_alg IdSet.empty IdSet.union) with
            e_ref = (fun id -> IdSet.singleton id, E_ref id) } exp)
 
-let assigned_vars_in_fexps (FES_aux (FES_Fexps (fes,_), _)) =
+let assigned_vars_in_fexps fes =
   List.fold_left
     (fun vs (FE_aux (FE_Fexp (_,e),_)) -> IdSet.union vs (assigned_vars e))
     IdSet.empty
@@ -1460,8 +1458,8 @@ let split_defs all_errors splits defs =
     | E_internal_value _
       -> raise (Reporting.err_unreachable l __POS__
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
-  and const_prop_fexps ref_vars substs assigns (FES_aux (FES_Fexps (fes,flag), annot)) =
-    FES_aux (FES_Fexps (List.map (const_prop_fexp ref_vars substs assigns) fes, flag), annot)
+  and const_prop_fexps ref_vars substs assigns fes =
+    List.map (const_prop_fexp ref_vars substs assigns) fes
   and const_prop_fexp ref_vars substs assigns (FE_aux (FE_Fexp (id,e), annot)) =
     FE_aux (FE_Fexp (id,fst (const_prop_exp ref_vars substs assigns e)),annot)
   and const_prop_pexp ref_vars substs assigns = function
@@ -1995,8 +1993,8 @@ let split_defs all_errors splits defs =
         | E_vector_append (e1,e2) -> re (E_vector_append (map_exp e1,map_exp e2))
         | E_list es -> re (E_list (List.map map_exp es))
         | E_cons (e1,e2) -> re (E_cons (map_exp e1,map_exp e2))
-        | E_record fes -> re (E_record (map_fexps fes))
-        | E_record_update (e,fes) -> re (E_record_update (map_exp e, map_fexps fes))
+        | E_record fes -> re (E_record (List.map map_fexp fes))
+        | E_record_update (e,fes) -> re (E_record_update (map_exp e, List.map map_fexp fes))
         | E_field (e,id) -> re (E_field (map_exp e,id))
         | E_case (e,cases) -> re (E_case (map_exp e, List.concat (List.map map_pexp cases)))
         | E_let (lb,e) -> re (E_let (map_letbind lb, map_exp e))
@@ -2009,8 +2007,6 @@ let split_defs all_errors splits defs =
         | E_var (le,e1,e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
         | E_internal_plet (p,e1,e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
         | E_internal_return e -> re (E_internal_return (map_exp e))
-      and map_fexps (FES_aux (FES_Fexps (fes,flag), annot)) =
-        FES_aux (FES_Fexps (List.map map_fexp fes, flag), annot)
       and map_fexp (FE_aux (FE_Fexp (id,e), annot)) =
         FE_aux (FE_Fexp (id,map_exp e),annot)
       and map_pexp = function
@@ -3087,11 +3083,11 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_vector_update_subrange (e1,e2,e3,e4) ->
        let ds, assigns, r = non_det [e1;e2;e3;e4] in
        (merge_deps ds, assigns, r)
-    | E_record (FES_aux (FES_Fexps (fexps,_),_)) ->
+    | E_record fexps ->
        let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det es in
        (merge_deps ds, assigns, r)
-    | E_record_update (e,FES_aux (FES_Fexps (fexps,_),_)) ->
+    | E_record_update (e,fexps) ->
        let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det (e::es) in
        (merge_deps ds, assigns, r)

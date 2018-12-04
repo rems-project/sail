@@ -2293,7 +2293,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           annot_exp (E_list checked_xs) typ
        | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
      end
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, ()))), _ ->
+  | E_record_update (exp, fexps), _ ->
      (* TODO: this could also infer exp - also fix code duplication with E_record below *)
      let checked_exp = crule check_exp env exp typ in
      let rectyp_id = match Env.expand_synonyms env typ with
@@ -2308,8 +2308,8 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        let checked_exp = crule check_exp env exp field_typ' in
        FE_aux (FE_Fexp (field, checked_exp), (l, None))
      in
-     annot_exp (E_record_update (checked_exp, FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
-  | E_record (FES_aux (FES_Fexps (fexps, flag), (l, ()))), _ ->
+     annot_exp (E_record_update (checked_exp, List.map check_fexp fexps)) typ
+  | E_record fexps, _ ->
      (* TODO: check record fields are total *)
      let rectyp_id = match Env.expand_synonyms env typ with
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
@@ -2323,7 +2323,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        let checked_exp = crule check_exp env exp field_typ' in
        FE_aux (FE_Fexp (field, checked_exp), (l, None))
      in
-     annot_exp (E_record (FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
+     annot_exp (E_record (List.map check_fexp fexps)) typ
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
      begin
        match letbind with
@@ -3165,7 +3165,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      annot_exp (E_tuple inferred_exps) (mk_typ (Typ_tup (List.map typ_of inferred_exps)))
   | E_assign (lexp, bind) ->
      fst (bind_assignment env lexp bind)
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, ()))) ->
+  | E_record_update (exp, fexps) ->
      let inferred_exp = irule infer_exp env exp in
      let typ = typ_of inferred_exp in
      let rectyp_id = match Env.expand_synonyms env typ with
@@ -3180,7 +3180,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        let inferred_exp = crule check_exp env exp field_typ' in
        FE_aux (FE_Fexp (field, inferred_exp), (l, None))
      in
-     annot_exp (E_record_update (inferred_exp, FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
+     annot_exp (E_record_update (inferred_exp, List.map check_fexp fexps)) typ
   | E_cast (typ, exp) ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
@@ -3857,14 +3857,14 @@ and propagate_exp_effect_aux = function
      let p_cases = List.map propagate_pexp_effect cases in
      let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
      E_case (p_exp, List.map fst p_cases), union_effects (effect_of p_exp) case_eff
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, _))) ->
+  | E_record_update (exp, fexps) ->
      let p_exp = propagate_exp_effect exp in
      let p_fexps = List.map propagate_fexp_effect fexps in
-     E_record_update (p_exp, FES_aux (FES_Fexps (List.map fst p_fexps, flag), (l, None))),
+     E_record_update (p_exp, List.map fst p_fexps),
      List.fold_left union_effects no_effect (effect_of p_exp :: List.map snd p_fexps)
-  | E_record (FES_aux (FES_Fexps (fexps, flag), (l, _))) ->
+  | E_record fexps ->
      let p_fexps = List.map propagate_fexp_effect fexps in
-     E_record (FES_aux (FES_Fexps (List.map fst p_fexps, flag), (l, None))),
+     E_record (List.map fst p_fexps),
      List.fold_left union_effects no_effect (List.map snd p_fexps)
   | E_try (exp, cases) ->
      let p_exp = propagate_exp_effect exp in

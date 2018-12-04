@@ -210,11 +210,11 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_vector_update(v,i,e) -> list_fv bound used set [v;i;e]
   | E_vector_update_subrange(v,i1,i2,e) -> list_fv bound used set [v;i1;i2;e]
   | E_vector_append(e1,e2) | E_cons(e1,e2) -> list_fv bound used set [e1;e2]
-  | E_record (FES_aux(FES_Fexps(fexps,_),_)) ->
+  | E_record fexps ->
      let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
      List.fold_right
        (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
-  | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+  | E_record_update(e, fexps) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     List.fold_right
       (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (b,u,s)

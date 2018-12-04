@@ -242,9 +242,9 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_if (c, t, e) -> separate space [string "if"; ocaml_atomic_exp ctx c;
                                       string "then"; ocaml_atomic_exp ctx t;
                                       string "else"; ocaml_atomic_exp ctx e]
-  | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record fexps ->
      enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp ctx) fexps))
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record_update (exp, fexps) ->
      enclose lbrace rbrace (separate space [ocaml_atomic_exp ctx exp;
                                             string "with";
                                             separate_map (semi ^^ space) (ocaml_fexp ctx) fexps])

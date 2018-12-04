@@ -401,13 +401,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | _ -> failwith ("Couldn't find id " ^ string_of_id id)
      end
 
-  | E_record (FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
+  | E_record fexps ->
      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
      begin
        match unevaluated with
        | FE_aux (FE_Fexp (id, exp), fe_annot) :: fexps ->
           step exp >>= fun exp' ->
-          wrap (E_record (FES_aux (FES_Fexps (evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps, flag), fes_annot)))
+          wrap (E_record (evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps))
        | [] ->
           List.map value_of_fexp fexps
           |> List.fold_left (fun record (field, v) -> StringMap.add field v record) StringMap.empty
@@ -418,13 +418,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | E_record_update (exp, fexps) when not (is_value exp) ->
      step exp >>= fun exp' -> wrap (E_record_update (exp', fexps))
-  | E_record_update (record, FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
+  | E_record_update (record, fexps) ->
      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
      begin
        match unevaluated with
        | FE_aux (FE_Fexp (id, exp), fe_annot) :: fexps ->
           step exp >>= fun exp' ->
-          wrap (E_record_update (record, FES_aux (FES_Fexps (evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps, flag), fes_annot)))
+          wrap (E_record_update (record, evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps))
        | [] ->
           List.map value_of_fexp fexps
           |> List.fold_left (fun record (field, v) -> StringMap.add field v record) (coerce_record (value_of_exp record))
@@ -444,7 +444,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_assign (LEXP_aux (LEXP_field (lexp, id), ul), exp) ->
      let open Type_check in
      let lexp_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp lexp)) in
-     let exp' = E_aux (E_record_update (lexp_exp, FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), ul)], false), ul)), ul) in
+     let exp' = E_aux (E_record_update (lexp_exp, [FE_aux (FE_Fexp (id, exp), ul)]), ul) in
      wrap (E_assign (lexp, exp'))
   | E_assign (LEXP_aux (LEXP_vector (vec, n), lexp_annot), exp) ->
      let open Type_check in

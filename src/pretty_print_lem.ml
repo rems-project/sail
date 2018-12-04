@@ -825,7 +825,7 @@ let doc_exp_lem, doc_let_lem =
     | E_cast(typ,e) -> expV aexp_needed e
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
-    | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
+    | E_record fexps ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _) ->
@@ -835,7 +835,7 @@ let doc_exp_lem, doc_let_lem =
        wrap_parens (anglebars (space ^^ (align (separate_map
                                         (semi_sp ^^ break 1)
                                         (doc_fexp ctxt recordtyp) fexps)) ^^ space))
-    | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+    | E_record_update(e, fexps) ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _)

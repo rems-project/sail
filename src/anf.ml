@@ -569,7 +569,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let aval, wrap = to_aval (anf field_exp) in
      wrap (mk_aexp (AE_field (aval, id, typ_of exp)))
 
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record_update (exp, fexps) ->
      let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap
@@ -679,7 +679,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
      wrap (mk_aexp (AE_val (AV_tuple (List.map fst avals))))
 
-  | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record fexps ->
      let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap

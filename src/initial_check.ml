@@ -595,14 +595,14 @@ and to_ast_case (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.Pat_aux(pex
   | Parse_ast.Pat_when(pat,guard,exp) ->
      Pat_aux (Pat_when (to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord guard, to_ast_exp k_env def_ord exp), (l, ()))
 
-and to_ast_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exps : Parse_ast.exp list) : unit fexps option =
+and to_ast_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exps : Parse_ast.exp list) : unit fexp list option =
   match exps with
-  | [] -> Some(FES_aux(FES_Fexps([],false), (Parse_ast.Unknown,())))
+  | [] -> Some []
   | fexp::exps -> let maybe_fexp,maybe_error = to_ast_record_try k_env def_ord fexp in
                   (match maybe_fexp,maybe_error with
                   | Some(fexp),None ->
                     (match (to_ast_fexps fail_on_error k_env def_ord exps) with
-                    | Some(FES_aux(FES_Fexps(fexps,_),l)) -> Some(FES_aux(FES_Fexps(fexp::fexps,false),l))
+                    | Some(fexps) -> Some(fexp::fexps)
                     | _  -> None)
                   | None,Some(l,msg) ->
                     if fail_on_error
@@ -1138,7 +1138,7 @@ let generate_undefineds vs_ids (Defs defs) =
        [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
-                            (mk_exp (E_record (mk_fexps (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields))))]]
+                            (mk_exp (E_record (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)))]]
     | TD_variant (id, _, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
        let body =

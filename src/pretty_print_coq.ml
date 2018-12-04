@@ -1370,7 +1370,7 @@ let doc_exp, doc_let =
        if aexp_needed then parens epp else epp
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
-    | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
+    | E_record fexps ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _) ->
@@ -1381,7 +1381,7 @@ let doc_exp, doc_let =
                                           (semi_sp ^^ break 1)
                                           (doc_fexp ctxt recordtyp) fexps)) in
        if aexp_needed then parens epp else epp
-    | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+    | E_record_update(e, fexps) ->
        let recordtyp, env = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
          | Some (env, Typ_aux (Typ_app (tid, _), _), _)

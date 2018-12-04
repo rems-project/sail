@@ -683,11 +683,11 @@ exp :: 'E_' ::=
 
 % TODO
 
-  | { fexps }                                         :: :: record
+  | { fexp0 , ... , fexpn }                    :: :: record
     {{ com struct }}
-  | { exp with fexps }                                :: :: record_update
+  | { exp with fexp0 , ... , fexpn }           :: :: record_update
     {{ com functional update of struct }}
-  | exp . id                                          :: :: field
+  | exp . id                                   :: :: field
     {{ com field projection from struct  }}
 
 %Expressions for creating and accessing vectors
@@ -753,11 +753,6 @@ fexp :: 'FE_' ::=
   {{ com field expression }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | id = exp                                            :: :: Fexp
-
-fexps :: 'FES_' ::=
-  {{ com field expression list }}
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
 
 opt_default :: 'Def_val_' ::=
   {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 

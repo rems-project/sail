@@ -453,7 +453,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
   | E_internal_value v -> string (Value.string_of_value v |> Util.green |> Util.clear)
   | _ -> parens (doc_exp exp)
-and doc_fexps (FES_aux (FES_Fexps (fexps, _), _)) =
+and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps
 and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
   separate space [doc_id id; equals; doc_exp exp]

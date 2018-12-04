@@ -393,7 +393,6 @@ let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown
 let mk_typquant qis = TypQ_aux (TypQ_tq qis, Parse_ast.Unknown)
 
 let mk_fexp id exp = FE_aux (FE_Fexp (id, exp), no_annot)
-let mk_fexps fexps = FES_aux (FES_Fexps (fexps, false), no_annot)
 
 let mk_effect effs =
   Effect_aux (Effect_set (List.map (fun be_aux -> BE_aux (be_aux, Parse_ast.Unknown)) effs), Parse_ast.Unknown)
@@ -461,8 +460,8 @@ and map_exp_annot_aux f = function
   | E_vector_append (exp1, exp2) -> E_vector_append (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_list xs -> E_list (List.map (map_exp_annot f) xs)
   | E_cons (exp1, exp2) -> E_cons (map_exp_annot f exp1, map_exp_annot f exp2)
-  | E_record fexps -> E_record (map_fexps_annot f fexps)
-  | E_record_update (exp, fexps) -> E_record_update (map_exp_annot f exp, map_fexps_annot f fexps)
+  | E_record fexps -> E_record (List.map (map_fexp_annot f) fexps)
+  | E_record_update (exp, fexps) -> E_record_update (map_exp_annot f exp, List.map (map_fexp_annot f) fexps)
   | E_field (exp, id) -> E_field (map_exp_annot f exp, id)
   | E_case (exp, cases) -> E_case (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
   | E_try (exp, cases) -> E_try (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
@@ -482,7 +481,6 @@ and map_opt_default_annot f (Def_val_aux (df, annot)) = Def_val_aux (map_opt_def
 and map_opt_default_annot_aux f = function
   | Def_val_empty -> Def_val_empty
   | Def_val_dec exp -> Def_val_dec (map_exp_annot f exp)
-and map_fexps_annot f (FES_aux (FES_Fexps (fexps, b), annot)) = FES_aux (FES_Fexps (List.map (map_fexp_annot f) fexps, b), f annot)
 and map_fexp_annot f (FE_aux (FE_Fexp (id, exp), annot)) = FE_aux (FE_Fexp (id, map_exp_annot f exp), f annot)
 and map_pexp_annot f (Pat_aux (pexp, annot)) = Pat_aux (map_pexp_annot_aux f pexp, f annot)
 and map_pexp_annot_aux f = function
@@ -770,9 +768,9 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[|" ^ string_of_list ", " string_of_exp xs ^ "|]"
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record_update (exp, fexps) ->
      "{ " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
-  | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record fexps ->
      "{ " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_var (lexp, binding, exp) -> "var " ^ string_of_lexp lexp ^ " = " ^ string_of_exp binding ^ " in " ^ string_of_exp exp
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
@@ -1290,8 +1288,8 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_list exps -> E_list (List.map (subst id value) exps)
     | E_cons (exp1, exp2) -> E_cons (subst id value exp1, subst id value exp2)
 
-    | E_record fexps -> E_record (subst_fexps id value fexps)
-    | E_record_update (exp, fexps) -> E_record_update (subst id value exp, subst_fexps id value fexps)
+    | E_record fexps -> E_record (List.map (subst_fexp id value) fexps)
+    | E_record_update (exp, fexps) -> E_record_update (subst id value exp, List.map (subst_fexp id value) fexps)
     | E_field (exp, id') -> E_field (subst id value exp, id')
 
     | E_case (exp, pexps) ->
@@ -1335,10 +1333,6 @@ and subst_pexp id value (Pat_aux (pexp_aux, annot)) =
     | Pat_when (pat, guard, exp) -> Pat_when (pat, subst id value guard, subst id value exp)
   in
   Pat_aux (pexp_aux, annot)
-
-
-and subst_fexps id value (FES_aux (FES_Fexps (fexps, flag), annot)) =
-  FES_aux (FES_Fexps (List.map (subst_fexp id value) fexps, flag), annot)
 
 and subst_fexp id value (FE_aux (FE_Fexp (id', exp), annot)) =
   FE_aux (FE_Fexp (id', subst id value exp), annot)
@@ -1493,8 +1487,8 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, ann
        E_vector_append (locate f exp1, locate f exp2)
     | E_list exps -> E_list (List.map (locate f) exps)
     | E_cons (exp1, exp2) -> E_cons (locate f exp1, locate f exp2)
-    | E_record fexps -> E_record (locate_fexps f fexps)
-    | E_record_update (exp, fexps) -> E_record_update (locate f exp, locate_fexps f fexps)
+    | E_record fexps -> E_record (List.map (locate_fexp f) fexps)
+    | E_record_update (exp, fexps) -> E_record_update (locate f exp, List.map (locate_fexp f) fexps)
     | E_field (exp, id) -> E_field (locate f exp, locate_id f id)
     | E_case (exp, cases) -> E_case (locate f exp, List.map (locate_pexp f) cases)
     | E_let (letbind, exp) -> E_let (locate_letbind f letbind, locate f exp)
@@ -1537,9 +1531,6 @@ and locate_lexp : 'a. (l -> l) -> 'a lexp -> 'a lexp = fun f (LEXP_aux (lexp_aux
     | LEXP_field (lexp, id) -> LEXP_field (locate_lexp f lexp, locate_id f id)
   in
   LEXP_aux (lexp_aux, (f l, annot))
-
-and locate_fexps : 'a. (l -> l) -> 'a fexps -> 'a fexps = fun f (FES_aux (FES_Fexps (fexps, semi), (l, annot))) ->
-  FES_aux (FES_Fexps (List.map (locate_fexp f) fexps, semi), (f l, annot))
 
 and locate_fexp : 'a. (l -> l) -> 'a fexp -> 'a fexp = fun f (FE_aux (FE_Fexp (id, exp), (l, annot))) ->
   FE_aux (FE_Fexp (locate_id f id, locate f exp), (f l, annot))

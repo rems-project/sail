@@ -513,8 +513,8 @@ let rewrite_sizeof (Defs defs) =
     ; e_vector_append = (fun ((e1,e1'),(e2,e2')) -> (E_vector_append (e1,e2), E_vector_append (e1',e2')))
     ; e_list = (fun es -> let (es, es') = List.split es in (E_list es, E_list es'))
     ; e_cons = (fun ((e1,e1'),(e2,e2')) -> (E_cons (e1,e2), E_cons (e1',e2')))
-    ; e_record = (fun (fexps, fexps') -> (E_record fexps, E_record fexps'))
-    ; e_record_update = (fun ((e1,e1'),(fexp,fexp')) -> (E_record_update (e1,fexp), E_record_update (e1',fexp')))
+    ; e_record = (fun fexps -> let (fexps, fexps') = List.split fexps in (E_record fexps, E_record fexps'))
+    ; e_record_update = (fun ((e1,e1'),fexps) -> let (fexps, fexps') = List.split fexps in (E_record_update (e1,fexps), E_record_update (e1',fexps')))
     ; e_field = (fun ((e1,e1'),id) -> (E_field (e1,id), E_field (e1',id)))
     ; e_case = (fun ((e1,e1'),pexps) -> let (pexps, pexps') = List.split pexps in (E_case (e1,pexps), E_case (e1',pexps')))
     ; e_try = (fun ((e1,e1'),pexps) -> let (pexps, pexps') = List.split pexps in (E_try (e1,pexps), E_try (e1',pexps')))
@@ -543,8 +543,6 @@ let rewrite_sizeof (Defs defs) =
     ; lEXP_aux = (fun ((lexp,lexp'),annot) -> (LEXP_aux (lexp,annot), LEXP_aux (lexp',annot)))
     ; fE_Fexp = (fun (id,(e,e')) -> (FE_Fexp (id,e), FE_Fexp (id,e')))
     ; fE_aux = (fun ((fexp,fexp'),annot) -> (FE_aux (fexp,annot), FE_aux (fexp',annot)))
-    ; fES_Fexps = (fun (fexps,b) -> let (fexps, fexps') = List.split fexps in (FES_Fexps (fexps,b), FES_Fexps (fexps',b)))
-    ; fES_aux = (fun ((fexp,fexp'),annot) -> (FES_aux (fexp,annot), FES_aux (fexp',annot)))
     ; def_val_empty = (Def_val_empty, Def_val_empty)
     ; def_val_dec = (fun (e,e') -> (Def_val_dec e, Def_val_dec e'))
     ; def_val_aux = (fun ((defval,defval'),aux) -> (Def_val_aux (defval,aux), Def_val_aux (defval',aux)))
@@ -1173,7 +1171,7 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   | P_id id -> rewrap (E_id id)
   | P_app (id,pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
   | P_record (fpats,b) ->
-      rewrap (E_record (FES_aux (FES_Fexps (List.map fpat_to_fexp fpats,b),(l,annot))))
+      rewrap (E_record (List.map fpat_to_fexp fpats))
   | P_vector pats -> rewrap (E_vector (List.map pat_to_exp pats))
   | P_vector_concat pats -> begin
       let empty_vec = E_aux (E_vector [], (l,())) in
@@ -1728,8 +1726,8 @@ let rec rewrite_lexp_to_rhs ((LEXP_aux(lexp,((l,_) as annot))) as le) =
        let env = env_of_annot lannot in
        match Env.expand_synonyms env (typ_of_annot lannot) with
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
-          let field_update exp = FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), annot)], false), annot) in
-          (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, field_update exp), lannot))))
+          let field_update exp = FE_aux (FE_Fexp (id, exp), annot) in
+          (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, [field_update exp]), lannot))))
        | _ -> raise (Reporting.err_unreachable l __POS__ ("Unsupported lexp: " ^ string_of_lexp le))
      end
   | _ -> raise (Reporting.err_unreachable l __POS__ ("Unsupported lexp: " ^ string_of_lexp le))
@@ -2590,7 +2588,7 @@ let rewrite_defs_letbind_effects =
   and value_optdefault (Def_val_aux (o,_)) = match o with
     | Def_val_empty -> true
     | Def_val_dec e -> value e
-  and value_fexps (FES_aux (FES_Fexps (fexps,_),_)) =
+  and value_fexps fexps =
     List.fold_left (fun b (FE_aux (FE_Fexp (_,e),_)) -> b && value e) true fexps in
 
 
@@ -2620,11 +2618,6 @@ let rewrite_defs_letbind_effects =
 
   and n_pexpL (newreturn : bool) (pexps : 'a pexp list) (k : 'a pexp list -> 'a exp) : 'a exp =
     mapCont (n_pexp newreturn) pexps k
-
-  and n_fexps (fexps : 'a fexps) (k : 'a fexps -> 'a exp) : 'a exp = 
-    let (FES_aux (FES_Fexps (fexps_aux,b),annot)) = fexps in
-    n_fexpL fexps_aux (fun fexps_aux -> 
-    k (fix_eff_fexps (FES_aux (FES_Fexps (fexps_aux,b),annot))))
 
   and n_opt_default (opt_default : 'a opt_default) (k : 'a opt_default -> 'a exp) : 'a exp = 
     let (Def_val_aux (opt_default,annot)) = opt_default in
@@ -2774,11 +2767,11 @@ let rewrite_defs_letbind_effects =
        n_exp_name exp2 (fun exp2 ->
        k (rewrap (E_cons (exp1,exp2)))))
     | E_record fexps ->
-       n_fexps fexps (fun fexps ->
+       n_fexpL fexps (fun fexps ->
        k (rewrap (E_record fexps)))
     | E_record_update (exp1,fexps) ->
        n_exp_name exp1 (fun exp1 ->
-       n_fexps fexps (fun fexps ->
+       n_fexpL fexps (fun fexps ->
        k (rewrap (E_record_update (exp1,fexps)))))
     | E_field (exp1,id) ->
        n_exp_name exp1 (fun exp1 ->
@@ -4155,7 +4148,7 @@ and fexps_of_mfpats mfpats flag annot =
   let fexp_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =
     FE_aux (FE_Fexp (id, exp_of_mpat mpat), annot)
   in
-  FES_aux (FES_Fexps (List.map fexp_of_mfpat mfpats, flag), annot)
+  List.map fexp_of_mfpat mfpats
 
 and pat_of_mpat (MP_aux (mpat, annot)) =
   match mpat with

@@ -89,7 +89,6 @@ val mk_qi_id : kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
-val mk_fexps : (unit fexp) list -> unit fexps
 val mk_letbind : unit pat -> unit exp -> unit letbind
 
 val unaux_exp : 'a exp -> 'a exp_aux
