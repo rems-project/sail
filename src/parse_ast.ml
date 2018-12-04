@@ -70,15 +70,15 @@ type x = text (* identifier *)
 type ix = text (* infix identifier *)
 
 type 
-base_kind_aux =  (* base kind *)
-   BK_type (* kind of types *)
- | BK_int (* kind of natural number size expressions *)
- | BK_order (* kind of vector order specifications *)
+kind_aux =  (* base kind *)
+   K_type (* kind of types *)
+ | K_int (* kind of natural number size expressions *)
+ | K_order (* kind of vector order specifications *)
 
 
 type 
-base_kind = 
-   BK_aux of base_kind_aux * l
+kind =
+   K_aux of kind_aux * l
 
 
 type 
@@ -110,13 +110,7 @@ id_aux =  (* Identifier *)
    Id of x
  | DeIid of x (* remove infix status *)
 
-
-type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind) list
-
-
-type 
+type
 base_effect = 
    BE_aux of base_effect_aux * l
 
@@ -130,13 +124,7 @@ type
 id = 
    Id_aux of id_aux * l
 
-
-type 
-kind = 
-   K_aux of kind_aux * l
-
-
-type 
+type
 atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
    ATyp_id of id (* identifier *)
  | ATyp_var of kid (* ticked variable *)
@@ -425,7 +413,7 @@ name_scm_opt =
 
 type 
 default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
-   DT_order of base_kind * atyp
+   DT_order of kind * atyp
 
 
 type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only constructible parts *)

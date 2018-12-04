@@ -749,7 +749,7 @@ let reduce_cast typ exp l annot =
   let typ' = Env.base_typ_of env typ in
   match exp, destruct_exist env typ' with
   | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nc_env = Env.add_typ_var l kid BK_int env in
+     let nc_env = Env.add_typ_var l kid K_int env in
      let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
@@ -2774,7 +2774,7 @@ let update_env_new_kids env deps typ_env_pre typ_env_post =
   let kbound =
     KBindings.merge (fun k x y ->
       match x,y with
-      | Some bk, None -> Some bk
+      | Some k, None -> Some k
       | _ -> None)
       (Env.get_typ_vars typ_env_post)
       (Env.get_typ_vars typ_env_pre)
@@ -3190,7 +3190,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
             { env with kid_deps =
                 List.fold_left (fun kds kid -> KBindings.add kid deps kds) env.kid_deps kids },
            Env.add_constraint nc
-             (List.fold_left (fun tenv kid -> Env.add_typ_var l kid BK_int tenv) tenv kids),
+             (List.fold_left (fun tenv kid -> Env.add_typ_var l kid K_int tenv) tenv kids),
            typ
        in
        if is_bitvector_typ typ then
@@ -4031,9 +4031,9 @@ let fill_in_type env typ =
   let tyvars = tyvars_of_typ typ in
   let subst = KidSet.fold (fun kid subst ->
     match Env.get_typ_var kid env with
-    | BK_type
-    | BK_order -> subst
-    | BK_int ->
+    | K_type
+    | K_order -> subst
+    | K_int ->
        (match solve env (nvar kid) with
        | None -> subst
        | Some n -> KBindings.add kid (nconstant n) subst)) tyvars KBindings.empty in

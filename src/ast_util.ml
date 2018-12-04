@@ -106,13 +106,13 @@ let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, body),
 
 let mk_qi_nc nc = QI_aux (QI_const nc, Parse_ast.Unknown)
 
-let mk_qi_id bk kid =
+let mk_qi_id k kid =
   let kopt =
-    KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (bk, Parse_ast.Unknown)], Parse_ast.Unknown), kid), Parse_ast.Unknown)
+    KOpt_aux (KOpt_kind (K_aux (k, Parse_ast.Unknown), kid), Parse_ast.Unknown)
   in
   QI_aux (QI_id kopt, Parse_ast.Unknown)
 
-let mk_qi_kopt kopt =QI_aux (QI_id kopt, Parse_ast.Unknown)
+let mk_qi_kopt kopt = QI_aux (QI_id kopt, Parse_ast.Unknown)
 
 let mk_fundef funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
@@ -131,16 +131,16 @@ let kopt_kid (KOpt_aux (kopt_aux, _)) =
   | KOpt_none kid | KOpt_kind (_, kid) -> kid
 
 let is_nat_kopt = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_int, _)], _), _), _) -> true
+  | KOpt_aux (KOpt_kind (K_aux (K_int, _), _), _) -> true
   | KOpt_aux (KOpt_none _, _) -> true
   | _ -> false
 
 let is_order_kopt = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), _), _) -> true
+  | KOpt_aux (KOpt_kind (K_aux (K_order, _), _), _) -> true
   | _ -> false
 
 let is_typ_kopt = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), _), _) -> true
+  | KOpt_aux (KOpt_kind (K_aux (K_type, _), _), _) -> true
   | _ -> false
 
 let string_of_kid = function
@@ -625,14 +625,12 @@ let string_of_base_effect_aux = function
   (*| BE_lset -> "lset"
   | BE_lret -> "lret"*)
 
-let string_of_base_kind_aux = function
-  | BK_type -> "Type"
-  | BK_int -> "Int"
-  | BK_order -> "Order"
+let string_of_kind_aux = function
+  | K_type -> "Type"
+  | K_int -> "Int"
+  | K_order -> "Order"
 
-let string_of_base_kind (BK_aux (bk, _)) = string_of_base_kind_aux bk
-
-let string_of_kind (K_aux (K_kind bks, _)) = string_of_list " -> " string_of_base_kind bks
+let string_of_kind (K_aux (k, _)) = string_of_kind_aux k
 
 let string_of_base_effect = function
   | BE_aux (beff, _) -> string_of_base_effect_aux beff

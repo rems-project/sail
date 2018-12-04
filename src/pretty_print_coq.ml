@@ -598,12 +598,12 @@ let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
   | QI_id (KOpt_aux (KOpt_none kid,_)) ->
      if KBindings.mem kid ctx.kid_id_renames then None else
      Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
-  | QI_id (KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (kind,_)],_),kid),_)) -> begin
+  | QI_id (KOpt_aux (KOpt_kind (K_aux (kind,_),kid),_)) -> begin
     if KBindings.mem kid ctx.kid_id_renames then None else
     match kind with
-    | BK_type -> Some (delimit (separate space [doc_var ctx kid; colon; string "Type"]))
-    | BK_int -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
-    | BK_order -> None
+    | K_type -> Some (delimit (separate space [doc_var ctx kid; colon; string "Type"]))
+    | K_int -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
+    | K_order -> None
   end
   | QI_id _ -> failwith "Quantifier with multiple kinds"
   | QI_const nc -> None

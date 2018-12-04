@@ -114,7 +114,7 @@ let existentialize_annot funcl_annot annot =
        when Id.compare ty_id (mk_id "atom") = 0 ->
      let tyvars = Env.get_typ_vars funcl_env |> KBindings.bindings in
      let toplevel_kids =
-       List.filter (fun (kid, bk) -> match bk with BK_int -> true | _ -> false) tyvars |> List.map fst |> KidSet.of_list
+       List.filter (fun (kid, k) -> match k with K_int -> true | _ -> false) tyvars |> List.map fst |> KidSet.of_list
      in
      let new_kids = KidSet.diff (tyvars_of_nexp nexp) toplevel_kids in
 

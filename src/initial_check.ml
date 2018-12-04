@@ -149,23 +149,11 @@ let to_ast_id (Parse_ast.Id_aux(id, l)) =
 
 let to_ast_var (Parse_ast.Kid_aux(Parse_ast.Var v,l)) = Kid_aux(Var v,l)
 
-let to_ast_base_kind (Parse_ast.BK_aux(k,l')) =
+let to_ast_kind (Parse_ast.K_aux(k,l')) =
   match k with
-  | Parse_ast.BK_type -> BK_aux(BK_type,l'), { k = K_Typ}
-  | Parse_ast.BK_int -> BK_aux(BK_int,l'), { k = K_Nat }
-  | Parse_ast.BK_order -> BK_aux(BK_order,l'), { k = K_Ord }
-
-let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),l)) : (Ast.kind * kind) =
-  match klst with
-  | [] -> raise (Reporting.err_unreachable l __POS__ "Kind with empty kindlist encountered")
-  | [k] -> let k_ast,k_typ = to_ast_base_kind k in
-           K_aux(K_kind([k_ast]),l), k_typ
-  | ks -> let k_pairs = List.map to_ast_base_kind ks in
-          let reverse_typs = List.rev (List.map snd k_pairs) in
-          let ret,args = List.hd reverse_typs, List.rev (List.tl reverse_typs) in
-          match ret.k with
-          | K_Typ -> K_aux(K_kind(List.map fst k_pairs), l), { k = K_Lam(args,ret) }
-          | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
+  | Parse_ast.K_type -> K_aux(K_type,l'), { k = K_Typ}
+  | Parse_ast.K_int -> K_aux(K_int,l'), { k = K_Nat }
+  | Parse_ast.K_order -> K_aux(K_order,l'), { k = K_Ord }
 
 let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp) : Ast.typ =
   (*  let _ = Printf.eprintf "to_ast_typ\n" in*)
@@ -392,7 +380,7 @@ let to_ast_typquant (k_env: kind Envmap.t) (tq : Parse_ast.typquant) : typquant 
       | Parse_ast.KOpt_kind(k,v) ->
 	let v = to_ast_var v in
 	let key = var_to_string v in
-	let kind,ktyp = to_ast_kind k_env k in
+        let kind,ktyp = to_ast_kind k in
 	v,key,Some(kind),Some(ktyp)
     in
     if (Nameset.mem key local_names)
@@ -639,13 +627,13 @@ and to_ast_record_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp
 
 let to_ast_default (names, k_env, default_order) (default : Parse_ast.default_typing_spec) : default_spec envs_out =
   match default with
-  | Parse_ast.DT_aux(Parse_ast.DT_order(bk,o),l) ->
-     let k,k_typ = to_ast_base_kind bk in
+  | Parse_ast.DT_aux(Parse_ast.DT_order(k,o),l) ->
+     let k,k_typ = to_ast_kind k in
      (match (k,o) with
-      | (BK_aux(BK_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_inc,lo)) ->
+      | (K_aux(K_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_inc,lo)) ->
          let default_order = Ord_aux(Ord_inc,lo) in
          DT_aux(DT_order default_order,l),(names,k_env,default_order)
-      | (BK_aux(BK_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_dec,lo)) ->
+      | (K_aux(K_order, _), Parse_ast.ATyp_aux(Parse_ast.ATyp_dec,lo)) ->
          let default_order = Ord_aux(Ord_dec,lo) in
          DT_aux(DT_order default_order,l),(names,k_env,default_order)
       | _ -> typ_error l "Inc and Dec must have kind Order" None None None)
@@ -732,7 +720,7 @@ let to_ast_kdef (names, k_env, def_ord) (td:Parse_ast.kind_def) : unit kind_def 
   match td with
   | Parse_ast.KD_aux (Parse_ast.KD_nabbrev (kind, id, name_scm_opt, atyp), l) ->
      let id = to_ast_id id in
-     let (kind, k) = to_ast_kind k_env kind in
+     let (kind, k) = to_ast_kind kind in
      KD_aux (KD_nabbrev (kind, id, to_ast_namescm name_scm_opt, to_ast_nexp k_env atyp), (l, ()))
 
 let to_ast_rec (Parse_ast.Rec_aux(r,l): Parse_ast.rec_opt) : rec_opt =
@@ -1257,7 +1245,7 @@ let generate_enum_functions vs_ids (Defs defs) =
          if IdSet.mem name vs_ids then []
          else
            [ enum_val_spec name
-              [mk_qi_id BK_int kid; mk_qi_nc (range_constraint kid)]
+              [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
               (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)) no_effect);
              mk_fundef [funcl] ]
        in

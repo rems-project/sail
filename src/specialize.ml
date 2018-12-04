@@ -319,8 +319,8 @@ let specialize_id_valspec instantiations id ast =
        (* Remove type variables from the type quantifier. *)
        let kopts, constraints = quant_split typq in
        let kopts = List.filter (fun kopt -> not (is_typ_kopt kopt || is_order_kopt kopt)) kopts in
-       let typq = mk_typquant (List.map (mk_qi_id BK_type) typ_frees
-                               @ List.map (mk_qi_id BK_int) int_frees
+       let typq = mk_typquant (List.map (mk_qi_id K_type) typ_frees
+                               @ List.map (mk_qi_id K_int) int_frees
                                @ List.map mk_qi_kopt kopts
                                @ List.map mk_qi_nc constraints) in
        let typschm = mk_typschm typq typ in

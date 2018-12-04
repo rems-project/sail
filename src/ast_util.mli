@@ -85,7 +85,7 @@ val mk_fundef : (unit funcl) list -> unit def
 val mk_val_spec : val_spec_aux -> unit def
 val mk_typschm : typquant -> typ -> typschm
 val mk_typquant : quant_item list -> typquant
-val mk_qi_id : base_kind_aux -> kid -> quant_item
+val mk_qi_id : kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
@@ -207,8 +207,7 @@ val def_loc : 'a def -> Parse_ast.l
 val string_of_id : id -> string
 val string_of_kid : kid -> string
 val string_of_base_effect_aux : base_effect_aux -> string
-val string_of_base_kind_aux : base_kind_aux -> string
-val string_of_base_kind : base_kind -> string
+val string_of_kind_aux : kind_aux -> string
 val string_of_kind : kind -> string
 val string_of_base_effect : base_effect -> string
 val string_of_effect : effect -> string

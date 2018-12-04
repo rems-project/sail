@@ -1,4 +1,4 @@
-%%
+%
 %% Grammar for user language. Generates ./src/ast.ml
 %%
 
@@ -169,18 +169,12 @@ kid :: '' ::=
 
 grammar
 
-base_kind :: 'BK_' ::=
+kind :: 'K_' ::=
   {{ com base kind}}
   {{ aux _ l }}
   | Type  :: :: type  {{ com kind of types  }}
   | Int   :: :: int   {{ com kind of natural number size expressions  }}
   | Order :: :: order {{ com kind of vector order specifications  }}
-
-kind :: 'K_' ::=
-  {{ com kinds}}
-  {{ aux _ l }}
-  | base_kind1 -> ... -> base_kindn            :: :: kind
-% we'll never use  ...-> Nat , .. Order , .. or Effects
 
 nexp :: 'Nexp_' ::=
   {{ com numeric expression, of kind Int }}

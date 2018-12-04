@@ -209,11 +209,7 @@ and strip_kinded_id_aux = function
   | KOpt_none kid -> KOpt_none (strip_kid kid)
   | KOpt_kind (kind, kid) -> KOpt_kind (strip_kind kind, strip_kid kid)
 and strip_kind = function
-  | K_aux (k_aux, _) -> K_aux (strip_kind_aux k_aux, Parse_ast.Unknown)
-and strip_kind_aux = function
-  | K_kind base_kinds -> K_kind (List.map strip_base_kind base_kinds)
-and strip_base_kind = function
-  | BK_aux (bk_aux, _) -> BK_aux (bk_aux, Parse_ast.Unknown)
+  | K_aux (k_aux, _) -> K_aux (k_aux, Parse_ast.Unknown)
 
 let adding = Util.("Adding " |> darkgray |> clear)
 
@@ -250,11 +246,11 @@ module Env : sig
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
-  val get_typ_var : kid -> t -> base_kind_aux
+  val get_typ_var : kid -> t -> kind_aux
   val get_typ_var_loc : kid -> t -> Ast.l
-  val get_typ_vars : t -> base_kind_aux KBindings.t
+  val get_typ_vars : t -> kind_aux KBindings.t
   val get_typ_var_locs : t -> Ast.l KBindings.t
-  val add_typ_var : l -> kid -> base_kind_aux -> t -> t
+  val add_typ_var : l -> kid -> kind_aux -> t -> t
   val get_ret_typ : t -> typ option
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> (t -> typ_arg list -> typ) -> t -> t
@@ -320,7 +316,7 @@ end = struct
       registers : (effect * effect * typ) Bindings.t;
       variants : (typquant * type_union list) Bindings.t;
       mappings : (typquant * typ * typ) Bindings.t;
-      typ_vars : (Ast.l * base_kind_aux) KBindings.t;
+      typ_vars : (Ast.l * kind_aux) KBindings.t;
       typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
       num_defs : nexp Bindings.t;
       overloads : (id list) Bindings.t;
@@ -388,26 +384,26 @@ end = struct
   let get_typ_vars env = KBindings.map snd env.typ_vars
   let get_typ_var_locs env = KBindings.map fst env.typ_vars
 
-  let bk_counter = ref 0
-  let bk_name () = let kid = mk_kid ("bk#" ^ string_of_int !bk_counter) in incr bk_counter; kid
+  let k_counter = ref 0
+  let k_name () = let kid = mk_kid ("k#" ^ string_of_int !k_counter) in incr k_counter; kid
 
-  let kinds_typq kinds = mk_typquant (List.map (fun k -> mk_qi_id k (bk_name ())) kinds)
+  let kinds_typq kinds = mk_typquant (List.map (fun k -> mk_qi_id k (k_name ())) kinds)
 
   let builtin_typs =
     List.fold_left (fun m (name, kinds) -> Bindings.add (mk_id name) (kinds_typq kinds) m) Bindings.empty
-      [ ("range", [BK_int; BK_int]);
-        ("atom", [BK_int]);
-        ("vector", [BK_int; BK_order; BK_type]);
-        ("register", [BK_type]);
+      [ ("range", [K_int; K_int]);
+        ("atom", [K_int]);
+        ("vector", [K_int; K_order; K_type]);
+        ("register", [K_type]);
         ("bit", []);
         ("unit", []);
         ("int", []);
         ("nat", []);
         ("bool", []);
         ("real", []);
-        ("list", [BK_type]);
+        ("list", [K_type]);
         ("string", []);
-        ("itself", [BK_int])
+        ("itself", [K_int])
       ]
 
   let builtin_mappings =
@@ -517,10 +513,10 @@ end = struct
          try
            let (l, _) = KBindings.find kid env.typ_vars in
            rebindings := kid :: !rebindings;
-           { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, BK_int) env.typ_vars }
+           { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, K_int) env.typ_vars }
          with
          | Not_found ->
-            { env with typ_vars = KBindings.add kid (l, BK_int) env.typ_vars }
+            { env with typ_vars = KBindings.add kid (l, K_int) env.typ_vars }
        in
 
        let env = List.fold_left add_typ_var env kids in
@@ -612,9 +608,9 @@ end = struct
     | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_var kid -> begin
       match KBindings.find kid env.typ_vars with
-      | (_, BK_type) -> ()
+      | (_, K_type) -> ()
       | (_, k) -> typ_error l ("Kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ
-                               ^ " is " ^ string_of_base_kind_aux k ^ " rather than Type")
+                               ^ " is " ^ string_of_kind_aux k ^ " rather than Type")
       | exception Not_found ->
          typ_error l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
     end
@@ -646,10 +642,10 @@ end = struct
     | Nexp_var kid ->
        begin
          match get_typ_var kid env with
-         | BK_int -> ()
+         | K_int -> ()
          | kind -> typ_error l ("Constraint is badly formed, "
                                 ^ string_of_kid kid ^ " has kind "
-                                ^ string_of_base_kind_aux kind ^ " but should have kind Int")
+                                ^ string_of_kind_aux kind ^ " but should have kind Int")
        end
     | Nexp_constant _ -> ()
     | Nexp_app (id, nexps) ->
@@ -665,10 +661,10 @@ end = struct
     | Ord_var kid ->
        begin
          match get_typ_var kid env with
-         | BK_order -> ()
+         | K_order -> ()
          | kind -> typ_error l ("Order is badly formed, "
                                 ^ string_of_kid kid ^ " has kind "
-                                ^ string_of_base_kind_aux kind ^ " but should have kind Order")
+                                ^ string_of_kind_aux kind ^ " but should have kind Order")
        end
     | Ord_inc | Ord_dec -> ()
   and wf_constraint ?exs:(exs=KidSet.empty) env (NC_aux (nc_aux, l) as nc) =
@@ -681,10 +677,10 @@ end = struct
     | NC_set (kid, _) when KidSet.mem kid exs -> ()
     | NC_set (kid, _) -> begin
         match get_typ_var kid env with
-        | BK_int -> ()
+        | K_int -> ()
         | kind -> typ_error l ("Set constraint is badly formed, "
                                ^ string_of_kid kid ^ " has kind "
-                               ^ string_of_base_kind_aux kind ^ " but should have kind Int")
+                               ^ string_of_kind_aux kind ^ " but should have kind Int")
       end
     | NC_or (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
     | NC_and (nc1, nc2) -> wf_constraint ~exs:exs env nc1; wf_constraint ~exs:exs env nc2
@@ -716,7 +712,7 @@ end = struct
   let get_val_spec id env =
     try
       let bind = Bindings.find id env.top_val_specs in
-      typ_debug (lazy ("get_val_spec: Env has " ^ string_of_list ", " (fun (kid, (_, bk)) -> string_of_kid kid ^ " => " ^ string_of_base_kind_aux bk) (KBindings.bindings env.typ_vars)));
+      typ_debug (lazy ("get_val_spec: Env has " ^ string_of_list ", " (fun (kid, (_, k)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k) (KBindings.bindings env.typ_vars)));
       let bind' = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
       typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind'));
       bind'
@@ -752,7 +748,7 @@ end = struct
        let existential_arg typq = function
          | None -> typq
          | Some (exs, nc, _) ->
-            List.fold_left (fun typq kid -> quant_add (mk_qi_id BK_int kid) typq) (quant_add (mk_qi_nc nc) typq) exs
+            List.fold_left (fun typq kid -> quant_add (mk_qi_id K_int kid) typq) (quant_add (mk_qi_nc nc) typq) exs
        in
        let typq = List.fold_left existential_arg typq base_args in
        let arg_typs = List.map2 (fun typ -> function Some (_, _, typ) -> typ | None -> typ) arg_typs base_args in
@@ -1003,7 +999,7 @@ end = struct
     then typ_error (kid_loc kid) ("type variable " ^ string_of_kid kid ^ " is already bound")
     else
       begin
-        typ_print (lazy (adding ^ "type variable " ^ string_of_kid kid ^ " : " ^ string_of_base_kind_aux k));
+        typ_print (lazy (adding ^ "type variable " ^ string_of_kid kid ^ " : " ^ string_of_kind_aux k));
         { env with typ_vars = KBindings.add kid (l, k) env.typ_vars }
       end
 
@@ -1116,9 +1112,8 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
     | QI_aux (qi, _) -> add_quant_item_aux env qi
   and add_quant_item_aux env = function
     | QI_const constr -> Env.add_constraint constr env
-    | QI_id (KOpt_aux (KOpt_none kid, _)) -> Env.add_typ_var l kid BK_int env
-    | QI_id (KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (k, _)], _), kid), _)) -> Env.add_typ_var l kid k env
-    | QI_id (KOpt_aux (_, l)) -> typ_error l "Type variable had non base kinds!"
+    | QI_id (KOpt_aux (KOpt_none kid, _)) -> Env.add_typ_var l kid K_int env
+    | QI_id (KOpt_aux (KOpt_kind (K_aux (k, _), kid), _)) -> Env.add_typ_var l kid k env
   in
   match quant with
   | TypQ_aux (TypQ_no_forall, _) -> env
@@ -1150,10 +1145,10 @@ let destruct_exist env typ =
   | _ -> None
 
 let add_existential l kids nc env =
-  let env = List.fold_left (fun env kid -> Env.add_typ_var l kid BK_int env) env kids in
+  let env = List.fold_left (fun env kid -> Env.add_typ_var l kid K_int env) env kids in
   Env.add_constraint nc env
 
-let add_typ_vars l kids env = List.fold_left (fun env kid -> Env.add_typ_var l kid BK_int env) env kids
+let add_typ_vars l kids env = List.fold_left (fun env kid -> Env.add_typ_var l kid K_int env) env kids
 
 let is_exist = function
   | Typ_aux (Typ_exist (_, _, _), _) -> true
@@ -1344,7 +1339,7 @@ let solve env nexp =
       try KBindings.find kid !bindings with
       | Not_found -> fresh_var kid
     in
-    let env = Env.add_typ_var Parse_ast.Unknown (mk_kid "solve#") BK_int env in
+    let env = Env.add_typ_var Parse_ast.Unknown (mk_kid "solve#") K_int env in
     let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env))
                                  (nc_constraint env var_of (nc_eq (nvar (mk_kid "solve#")) nexp))
     in
@@ -1868,7 +1863,7 @@ let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as t
      let env = match existential_kids, existential_nc with
        | [], None -> env
        | _, Some enc ->
-          let env = List.fold_left (fun env kid -> Env.add_typ_var l kid BK_int env) env existential_kids in
+          let env = List.fold_left (fun env kid -> Env.add_typ_var l kid K_int env) env existential_kids in
           Env.add_constraint enc env
        | _, None -> assert false (* Cannot have existential_kids without existential_nc *)
      in
@@ -1945,16 +1940,16 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
   | L_undef -> typ_error l "Cannot infer the type of undefined"
 
 let is_nat_kid kid = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_int, _)], _), kid'), _) -> Kid.compare kid kid' = 0
+  | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid'), _) -> Kid.compare kid kid' = 0
   | KOpt_aux (KOpt_none kid', _) -> Kid.compare kid kid' = 0
   | _ -> false
 
 let is_order_kid kid = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), kid'), _) -> Kid.compare kid kid' = 0
+  | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid'), _) -> Kid.compare kid kid' = 0
   | _ -> false
 
 let is_typ_kid kid = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), kid'), _) -> Kid.compare kid kid' = 0
+  | KOpt_aux (KOpt_kind (K_aux (K_type, _), kid'), _) -> Kid.compare kid kid' = 0
   | _ -> false
 
 let rec instantiate_quants quants kid uvar = match quants with
@@ -2883,7 +2878,7 @@ and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) 
      begin
        match typ_nexps typ with
        | [nexp] ->
-          Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var l kid BK_int env)
+          Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var l kid K_int env)
        | [] ->
           typ_error l ("No numeric expressions in " ^ string_of_typ typ ^ " to bind " ^ string_of_kid kid ^ " to")
        | nexps ->
@@ -2896,7 +2891,7 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_arg_aux (typ_
   match typ_pat_aux, typ_arg_aux with
   | TP_wild, _ -> env
   | TP_var kid, Typ_arg_nexp nexp ->
-     Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var l kid BK_int env)
+     Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var l kid K_int env)
   | _, Typ_arg_typ typ -> bind_typ_pat env typ_pat typ
   | _, Typ_arg_order _ -> typ_error l "Cannot bind type pattern against order"
   | _, _ -> typ_error l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
@@ -3238,7 +3233,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match destruct_numeric env (typ_of inferred_f), destruct_numeric env (typ_of inferred_t) with
        | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
           let loop_kid = mk_kid ("loop_" ^ string_of_id v) in
-          let env = List.fold_left (fun env kid -> Env.add_typ_var l kid BK_int env) env (loop_kid :: kids1 @ kids2) in
+          let env = List.fold_left (fun env kid -> Env.add_typ_var l kid K_int env) env (loop_kid :: kids1 @ kids2) in
           let env = Env.add_constraint (nc_and nc1 nc2) env in
           let env = Env.add_constraint (nc_and (nc_lteq nexp1 (nvar loop_kid)) (nc_lteq (nvar loop_kid) nexp2)) env in
           let loop_vtyp = atom_typ (nvar loop_kid) in
@@ -3392,7 +3387,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
              | [], None -> env
              | _, Some enc ->
                 let enc = List.fold_left (fun nc kid -> nc_subst_nexp kid (Nexp_var (prepend_kid ex_tag kid)) nc) enc ex_kids in
-                let env = List.fold_left (fun env kid -> Env.add_typ_var l (prepend_kid ex_tag kid) BK_int env) env ex_kids in
+                let env = List.fold_left (fun env kid -> Env.add_typ_var l (prepend_kid ex_tag kid) K_int env) env ex_kids in
                 Env.add_constraint enc env
              | _, None -> assert false (* Cannot have ex_kids without ex_nc *)
            in
@@ -3428,7 +3423,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          typ_debug (lazy (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers)));
          if ex_kids = [] then () else (typ_debug (lazy ("EX GOAL: " ^ string_of_option string_of_n_constraint ex_nc)); ex_goal := ex_nc);
          record_unifiers unifiers;
-         let env = List.fold_left (fun env kid -> Env.add_typ_var l kid BK_int env) env ex_kids in
+         let env = List.fold_left (fun env kid -> Env.add_typ_var l kid K_int env) env ex_kids in
          let typs' = List.map (subst_unifiers unifiers) typs in
          let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
          let ret_typ' =
@@ -4385,12 +4380,11 @@ let kinded_id_arg kind_id =
   let typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown) in
   match kind_id with
   | KOpt_aux (KOpt_none kid, _) -> typ_arg (Typ_arg_nexp (nvar kid))
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_int, _)], _), kid), _) -> typ_arg (Typ_arg_nexp (nvar kid))
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), kid), _) ->
+  | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> typ_arg (Typ_arg_nexp (nvar kid))
+  | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid), _) ->
      typ_arg (Typ_arg_order (Ord_aux (Ord_var kid, Parse_ast.Unknown)))
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), kid), _) ->
+  | KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _) ->
      typ_arg (Typ_arg_typ (mk_typ (Typ_var kid)))
-  | KOpt_aux (KOpt_kind (K_aux (K_kind kinds, _), kid), l) -> typ_error l "Badly formed kind"
 
 let fold_union_quant quants (QI_aux (qi, l)) =
   match qi with
@@ -4401,7 +4395,7 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
   | Tu_ty_id (Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) as typ, v) ->
-     let typq = mk_typquant (List.map (mk_qi_id BK_type) (KidSet.elements (typ_frees typ))) in
+     let typq = mk_typquant (List.map (mk_qi_id K_type) (KidSet.elements (typ_frees typ))) in
      env
      |> Env.add_union_id v (typq, typ)
      |> Env.add_val_spec v (typq, typ)
@@ -4441,7 +4435,7 @@ let mk_synonym typq typ =
 let check_kinddef env (KD_aux (kdef, (l, _))) =
   let kd_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented kind def") in
   match kdef with
-  | KD_nabbrev ((K_aux(K_kind([BK_aux (BK_int, _)]),_) as kind), id, nmscm, nexp) ->
+  | KD_nabbrev (K_aux (K_int, _) as kind, id, nmscm, nexp) ->
      [DEF_kind (KD_aux (KD_nabbrev (kind, id, nmscm, nexp), (l, None)))],
      Env.add_num_def id nexp env
   | _ -> kd_err ()

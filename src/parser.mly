@@ -585,17 +585,13 @@ typ_list:
   | typ Comma typ_list
     { $1 :: $3 }
 
-base_kind:
-  | Int
-    { BK_aux (BK_int, loc $startpos $endpos) }
-  | TYPE
-    { BK_aux (BK_type, loc $startpos $endpos) }
-  | Order
-    { BK_aux (BK_order, loc $startpos $endpos) }
-
 kind:
-  | base_kind
-    { K_aux (K_kind [$1], loc $startpos $endpos) }
+  | Int
+    { K_aux (K_int, loc $startpos $endpos) }
+  | TYPE
+    { K_aux (K_type, loc $startpos $endpos) }
+  | Order
+    { K_aux (K_order, loc $startpos $endpos) }
 
 kopt:
   | Lparen kid Colon kind Rparen
@@ -1393,9 +1389,9 @@ register_def:
     { mk_reg_dec (DEC_config ($3, $5, $7)) $startpos $endpos }
 
 default_def:
-  | Default base_kind Inc
+  | Default kind Inc
     { mk_default (DT_order ($2, mk_typ ATyp_inc $startpos($3) $endpos)) $startpos $endpos }
-  | Default base_kind Dec
+  | Default kind Dec
     { mk_default (DT_order ($2, mk_typ ATyp_dec $startpos($3) $endpos)) $startpos $endpos }
 
 scattered_def:
@@ -1449,8 +1445,7 @@ def:
   | default_def
     { DEF_default $1 }
   | Constant id Eq typ
-    { DEF_kind (KD_aux (KD_nabbrev (K_aux (K_kind [BK_aux (BK_int, loc $startpos($1) $endpos($1))],
-					   loc $startpos($1) $endpos($1)), $2, mk_namesectn, $4),
+    { DEF_kind (KD_aux (KD_nabbrev (K_aux (K_int, loc $startpos($1) $endpos($1)), $2, mk_namesectn, $4),
 			loc $startpos $endpos)) }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }

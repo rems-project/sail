@@ -2096,7 +2096,7 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
         let quant_tyvars = List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_quant_item qis) in
         let typ_tyvars = tyvars_of_typ fun_typ in
         let new_tyvars = KidSet.diff typ_tyvars quant_tyvars in
-        List.map (mk_qi_id BK_int) (KidSet.elements new_tyvars)
+        List.map (mk_qi_id K_int) (KidSet.elements new_tyvars)
       in
       let typquant = match typquant with
         | TypQ_aux (TypQ_tq qis, l) ->
@@ -2108,7 +2108,7 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
            in
            TypQ_aux (TypQ_tq qis, l)
         | _ ->
-           TypQ_aux (TypQ_tq (List.map (mk_qi_id BK_int) (KidSet.elements (tyvars_of_typ fun_typ))), l)
+           TypQ_aux (TypQ_tq (List.map (mk_qi_id K_int) (KidSet.elements (tyvars_of_typ fun_typ))), l)
       in
       let val_spec =
         VS_aux (VS_val_spec

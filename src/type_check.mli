@@ -127,13 +127,13 @@ module Env : sig
 
   val add_constraint : n_constraint -> t -> t
 
-  val get_typ_var : kid -> t -> base_kind_aux
+  val get_typ_var : kid -> t -> kind_aux
 
-  val get_typ_vars : t -> base_kind_aux KBindings.t
+  val get_typ_vars : t -> kind_aux KBindings.t
 
   val get_typ_var_locs : t -> Ast.l KBindings.t
 
-  val add_typ_var : Ast.l -> kid -> base_kind_aux -> t -> t
+  val add_typ_var : Ast.l -> kid -> kind_aux -> t -> t
 
   val is_record : id -> t -> bool
 
