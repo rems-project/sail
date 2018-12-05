@@ -82,7 +82,7 @@ let fresh_id_pat pre ((l,annot)) =
 
 let get_loc_exp (E_aux (_,(l,_))) = l
 
-let gen_vs (id, spec) = Initial_check.extern_of_string dec_ord (mk_id id) spec
+let gen_vs (id, spec) = Initial_check.extern_of_string (mk_id id) spec
 
 let annot_exp_effect e_aux l env typ effect = E_aux (e_aux, (l, mk_tannot env typ effect))
 let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ no_effect
@@ -4277,7 +4277,8 @@ let rewrite_defs_realise_mappings (Defs defs) =
 
     let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
     let effect_pure = (Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown)) in
-    let env = match mapcls with
+    (* We need to make sure we get the environment for the last mapping clause *)
+    let env = match List.rev mapcls with
       | MCL_aux (_, mapcl_annot) :: _ -> env_of_annot mapcl_annot
       | _ -> Type_check.typ_error l "mapping with no clauses?"
     in

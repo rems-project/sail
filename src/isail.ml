@@ -266,7 +266,7 @@ let handle_input' input =
             Value.output_close ();
             exit 0
          | ":i" | ":infer" ->
-            let exp = Initial_check.exp_of_string dec_ord arg in
+            let exp = Initial_check.exp_of_string arg in
             let exp = Type_check.infer_exp !interactive_env exp in
             pretty_sail stdout (doc_typ (Type_check.typ_of exp));
             print_newline ()
@@ -370,7 +370,7 @@ let handle_input' input =
                Initial_check.have_undefined_builtins := false
             | ":exec" ->
                let open Bytecode_interpreter in
-               let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord arg) in
+               let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string arg) in
                let anf = Anf.anf exp in
                let ctx = C_backend.initial_ctx !interactive_env in
                let ctyp = C_backend.ctyp_of_typ ctx (Type_check.typ_of exp) in
@@ -383,7 +383,7 @@ let handle_input' input =
        | Expression str ->
           (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
-          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord str) in
+          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string str) in
           current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
           print_program ()
        | Empty -> ()

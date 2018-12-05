@@ -3328,8 +3328,8 @@ let instrument_tracing ctx =
   | cdef -> cdef
 
 let bytecode_ast ctx rewrites (Defs defs) =
-  let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
-  let exit_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_exit") "unit -> unit effect {escape}" in
+  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
+  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
 
   let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
   let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
@@ -3370,8 +3370,8 @@ let compile_ast ctx c_includes (Defs defs) =
     let ctx = { ctx with recursive_functions = recursive_functions } in
     c_debug (lazy (Util.string_of_list ", " string_of_id (IdSet.elements recursive_functions)));
 
-    let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
-    let exit_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_exit") "unit -> unit effect {escape}" in
+    let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
+    let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in

@@ -282,6 +282,7 @@ let load_files type_envs files =
   let (ast, type_envs) = check_ast type_envs ast in
   Profile.finish "type checking" t;
 
+  let ast = Scattered.descatter ast in
   let ast = rewrite_ast ast in
 
   let out_name = match !opt_file_out with

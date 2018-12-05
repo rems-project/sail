@@ -494,13 +494,13 @@ dec_spec_aux =  (* Register declarations *)
 type 
 scattered_def_aux =  (* Function and type union definitions that can be spread across
          a file. Each one must end in $_$ *)
-   SD_scattered_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
- | SD_scattered_funcl of funcl (* scattered function definition clause *)
- | SD_scattered_variant of id * name_scm_opt * typquant (* scattered union definition header *)
- | SD_scattered_unioncl of id * type_union (* scattered union definition member *)
- | SD_scattered_mapping of id * tannot_opt
- | SD_scattered_mapcl of id * mapcl
- | SD_scattered_end of id (* scattered definition end *)
+   SD_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
+ | SD_funcl of funcl (* scattered function definition clause *)
+ | SD_variant of id * name_scm_opt * typquant (* scattered union definition header *)
+ | SD_unioncl of id * type_union (* scattered union definition member *)
+ | SD_mapping of id * tannot_opt
+ | SD_mapcl of id * mapcl
+ | SD_end of id (* scattered definition end *)
 
 
 type 

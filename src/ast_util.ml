@@ -436,6 +436,7 @@ let quant_map_items f = function
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
 let unaux_typ (Typ_aux (typ, _)) = typ
+let unaux_kind (K_aux (k, _)) = k
 
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function

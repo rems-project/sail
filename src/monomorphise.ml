@@ -2096,8 +2096,8 @@ let split_defs all_errors splits defs =
     in
     let map_scattered_def sd =
       match sd with
-      | SD_aux (SD_scattered_funcl fcl, annot) ->
-         List.map (fun fcl' -> SD_aux (SD_scattered_funcl fcl', annot)) (map_funcl fcl)
+      | SD_aux (SD_funcl fcl, annot) ->
+         List.map (fun fcl' -> SD_aux (SD_funcl fcl', annot)) (map_funcl fcl)
       | _ -> [sd]
     in
     let map_def d =

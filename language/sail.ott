@@ -954,18 +954,23 @@ default_spec :: 'DT_' ::=
 scattered_def :: 'SD_' ::=
   {{ com scattered function and union type definitions }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | scattered function rec_opt tannot_opt effect_opt id   :: :: scattered_function 
+  | scattered function rec_opt tannot_opt effect_opt id   :: :: function
 {{ texlong }} {{ com scattered function definition header }}
 
-  | function clause funcl  :: :: scattered_funcl  
+  | function clause funcl  :: :: funcl
 {{ texlong }} {{ com scattered function definition clause }}
 
-  | scattered typedef id name_scm_opt = const union typquant :: :: scattered_variant 
+  | scattered typedef id name_scm_opt = const union typquant :: :: variant
 {{ texlong }} {{ com scattered union definition header }}
 
-  | union id member type_union  :: :: scattered_unioncl 
+  | union id member type_union :: :: unioncl
 {{ texlong }} {{ com scattered union definition member }}
-  | end id  :: :: scattered_end
+
+  | scattered mapping id : tannot_opt :: :: mapping
+
+  | mapping clause id = mapcl :: :: mapcl
+
+  | end id  :: :: end
 {{ texlong }} {{ com scattered definition end }}
 
 reg_id :: 'RI_' ::=

@@ -613,13 +613,18 @@ let doc_kind_def (KD_aux (KD_nabbrev (_, id, _, nexp), _)) =
 
 let rec doc_scattered (SD_aux (sd_aux, _)) =
   match sd_aux with
-  | SD_scattered_function (_, _, _, id) ->
+  | SD_function (_, _, _, id) ->
      string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
-  | SD_scattered_funcl funcl ->
+  | SD_funcl funcl ->
      string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl
-  | SD_scattered_end id ->
+  | SD_end id ->
      string "end" ^^ space ^^ doc_id id
-  | _ -> string "SCATTERED"
+  | SD_variant (id, _, TypQ_aux (TypQ_no_forall, _)) ->
+     string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
+  | SD_variant (id, _, TypQ_aux (TypQ_tq quants, _)) ->
+     string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id ^^ doc_param_quants quants
+  | SD_unioncl (id, tu) ->
+     separate space [string "union clause"; doc_id id; equals; doc_union tu]
 
 let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df

@@ -1395,22 +1395,22 @@ default_def:
     { mk_default (DT_order ($2, mk_typ ATyp_dec $startpos($3) $endpos)) $startpos $endpos }
 
 scattered_def:
-  | Union id typquant
-    { mk_sd (SD_scattered_variant($2, mk_namesectn, $3)) $startpos $endpos }
+  | Union id typaram
+    { mk_sd (SD_variant($2, mk_namesectn, $3)) $startpos $endpos }
   | Union id
-    { mk_sd (SD_scattered_variant($2, mk_namesectn, mk_typqn)) $startpos $endpos }
+    { mk_sd (SD_variant($2, mk_namesectn, mk_typqn)) $startpos $endpos }
   | Function_ id
-    { mk_sd (SD_scattered_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
+    { mk_sd (SD_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
   | Mapping id
-    { mk_sd (SD_scattered_mapping ($2, mk_tannotn)) $startpos $endpos }
+    { mk_sd (SD_mapping ($2, mk_tannotn)) $startpos $endpos }
   | Mapping id Colon funcl_typ
-    { mk_sd (SD_scattered_mapping ($2, $4)) $startpos $endpos }
+    { mk_sd (SD_mapping ($2, $4)) $startpos $endpos }
 
 scattered_clause:
   | Doc Function_ Clause funcl
-    { mk_sd_doc (SD_scattered_funcl $4) $1 $startpos($2) $endpos }
+    { mk_sd_doc (SD_funcl $4) $1 $startpos($2) $endpos }
   | Function_ Clause funcl
-    { mk_sd (SD_scattered_funcl $3) $startpos $endpos }
+    { mk_sd (SD_funcl $3) $startpos $endpos }
 
 
 def:
@@ -1437,11 +1437,11 @@ def:
   | scattered_clause
     { DEF_scattered $1 }
   | Union Clause id Eq type_union
-    { DEF_scattered (mk_sd (SD_scattered_unioncl ($3, $5)) $startpos $endpos) }
+    { DEF_scattered (mk_sd (SD_unioncl ($3, $5)) $startpos $endpos) }
   | Mapping Clause id Eq mapcl
-    { DEF_scattered (mk_sd (SD_scattered_mapcl ($3, $5)) $startpos $endpos) }
+    { DEF_scattered (mk_sd (SD_mapcl ($3, $5)) $startpos $endpos) }
   | End id
-    { DEF_scattered (mk_sd (SD_scattered_end $2) $startpos $endpos) }
+    { DEF_scattered (mk_sd (SD_end $2) $startpos $endpos) }
   | default_def
     { DEF_default $1 }
   | Constant id Eq typ

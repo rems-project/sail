@@ -386,17 +386,17 @@ let rec find_scattered_of name = function
   | [] -> []
   | DEF_scattered (SD_aux(sda,_) as sd):: defs ->
     (match sda with
-     | SD_scattered_function(_,_,_,id)
-     | SD_scattered_funcl(FCL_aux(FCL_Funcl(id,_),_))
-     | SD_scattered_unioncl(id,_) ->
+     | SD_function(_,_,_,id)
+     | SD_funcl(FCL_aux(FCL_Funcl(id,_),_))
+     | SD_unioncl(id,_) ->
        if name = string_of_id id
        then [sd] else []
      | _ -> [])@
     (find_scattered_of name defs)
   | _::defs -> find_scattered_of name defs
 
-let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd,_)) = match sd with
-  | SD_scattered_function(_,tannot_opt,_,id) ->
+let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd,(l, _))) = match sd with
+  | SD_function(_,tannot_opt,_,id) ->
     let b,ns = (match tannot_opt with
         | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
           let bindings = if consider_var then typq_bindings typq else mt in
@@ -404,7 +404,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
         | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
           mt, mt) in
     init_env (string_of_id id),ns
-  | SD_scattered_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) ->
+  | SD_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) ->
      begin
        match pexp with
        | Pat_aux(Pat_exp (pat,exp),_) ->
@@ -423,7 +423,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
             | _ -> mt in
           scattered_binds, exp_ns
      end
-  | SD_scattered_variant (id,_,_) ->
+  | SD_variant (id,_,_) ->
     let name = string_of_id id in
     let uses =
       if consider_scatter_as_one
@@ -435,12 +435,12 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
         Nameset.remove name pieces_uses
       else mt in
     init_env name, uses
-  | SD_scattered_unioncl(id, type_union) ->
+  | SD_unioncl(id, type_union) ->
     let typ_name = string_of_id id in
     let b = init_env typ_name in
     let (b,r) = typ_variants consider_var b [type_union] in
     (Nameset.remove typ_name b, Nameset.add typ_name r)
-  | SD_scattered_end id ->
+  | SD_end id ->
     let name = string_of_id id in
     let uses = if consider_scatter_as_one
     (*Note: if this is a function ending, the dec is included *)
@@ -450,6 +450,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
           (List.map (fv_of_scattered consider_var false []) scattered_defs) (init_env name)
       else init_env name in
     init_env (name ^ "/end"), uses
+  | _ -> raise (Reporting.err_unreachable l __POS__ "Tried to find free variables for scattered mapping clause")
 
 let fv_of_rd consider_var (DEC_aux (d, annot)) =
   (* When we get the free variables of a register, we have to ensure

@@ -235,6 +235,9 @@ module Env : sig
   val add_local : id -> mut * typ -> t -> t
   val get_locals : t -> (mut * typ) Bindings.t
   val add_variant : id -> typquant * type_union list -> t -> t
+  val add_scattered_variant : id -> typquant -> t -> t
+  val add_variant_clause : id -> type_union -> t -> t
+  val get_variant : id -> t -> typquant * type_union list
   val add_mapping : id -> typquant * typ * typ -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
   val add_flow : id -> (typ -> typ) -> t -> t
@@ -916,10 +919,22 @@ end = struct
     end
 
   let add_variant id variant env =
-    begin
-      typ_print (lazy (adding ^ "variant " ^ string_of_id id));
-      { env with variants = Bindings.add id variant env.variants }
-    end
+    typ_print (lazy (adding ^ "variant " ^ string_of_id id));
+    { env with variants = Bindings.add id variant env.variants }
+
+  let add_scattered_variant id typq env =
+    typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id));
+    { env with variants = Bindings.add id (typq, []) env.variants }
+
+  let add_variant_clause id tu env =
+    match Bindings.find_opt id env.variants with
+    | Some (typq, tus) -> { env with variants = Bindings.add id (typq, tus @ [tu]) env.variants }
+    | None -> typ_error (id_loc id) ("scattered union " ^ string_of_id id ^ " not found")
+
+  let get_variant id env =
+    match Bindings.find_opt id env.variants with
+    | Some (typq, tus) -> typq, tus
+    | None -> typ_error (id_loc id) ("union " ^ string_of_id id ^ " not found")
 
   let add_union_id id bind env =
     begin
@@ -4339,7 +4354,6 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
   else
     typ_error l ("Mapping not pure (or escape only): " ^ string_of_effect eff ^ " found")
 
-
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)
@@ -4355,7 +4369,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        let env = Env.add_extern id ext_opt env in
        let env = if is_cast then Env.add_cast id env else env in
        let typq, typ =
-         if !opt_expand_valspec then 
+         if !opt_expand_valspec then
            expand_bind_synonyms ts_l env (typq, typ)
          else
            (typq, typ)
@@ -4473,6 +4487,28 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
           typ_error l "Bad bitfield type"
      end
 
+and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t =
+  fun env (SD_aux (sdef, (l, _))) ->
+  match sdef with
+  | SD_function _ | SD_end _ | SD_mapping _ -> [], env
+  | SD_variant (id, namescm, typq) ->
+     [DEF_scattered (SD_aux (SD_variant (id, namescm, typq), (l, None)))], Env.add_scattered_variant id typq env
+  | SD_unioncl (id, tu) ->
+     [DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, None)))],
+     let env = Env.add_variant_clause id tu env in
+     let typq, _ = Env.get_variant id env in
+     check_type_union env id typq tu
+  | SD_funcl (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
+     let typq, typ = Env.get_val_spec id env in
+     let funcl_env = add_typquant l typq env in
+     let funcl = check_funcl funcl_env funcl typ in
+     [DEF_scattered (SD_aux (SD_funcl funcl, (l, None)))], env
+  | SD_mapcl (id, mapcl) ->
+     let typq, typ = Env.get_val_spec id env in
+     let mapcl_env = add_typquant l typq env in
+     let mapcl = check_mapcl mapcl_env mapcl typ in
+     [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
+
 and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   fun env def ->
   let cd_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Case") in
@@ -4503,7 +4539,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_pragma (pragma, arg, l) -> [DEF_pragma (pragma, arg, l)], env
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
-  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Scattered given to type checker")
+  | DEF_scattered sdef -> check_scattered env sdef
 
 and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
   fun env (Defs defs) ->
