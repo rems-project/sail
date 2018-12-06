@@ -122,13 +122,32 @@ kid =
 
 type 
 id = 
-   Id_aux of id_aux * l
+  Id_aux of id_aux * l
+
+type
+lit_aux =  (* Literal constant *)
+   L_unit (* $() : _$ *)
+ | L_zero (* $_ : _$ *)
+ | L_one (* $_ : _$ *)
+ | L_true (* $_ : _$ *)
+ | L_false (* $_ : _$ *)
+ | L_num of Big_int.num (* natural number constant *)
+ | L_hex of string (* bit vector constant, C-style *)
+ | L_bin of string (* bit vector constant, C-style *)
+ | L_undef (* undefined value *)
+ | L_string of string (* string constant *)
+ | L_real of string
+
+type
+lit =
+   L_aux of lit_aux * l
 
 type
 atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
    ATyp_id of id (* identifier *)
  | ATyp_var of kid (* ticked variable *)
- | ATyp_constant of Big_int.num (* constant *)
+ | ATyp_lit of lit (* literal *)
+ | ATyp_nset of kid * (Big_int.num) list (* set type *)
  | ATyp_times of atyp * atyp (* product *)
  | ATyp_sum of atyp * atyp (* sum *)
  | ATyp_minus of atyp * atyp (* subtraction *)
@@ -143,8 +162,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_wild
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
- | ATyp_exist of kid list * n_constraint * atyp
- | ATyp_with of atyp * n_constraint
+ | ATyp_exist of kid list * atyp * atyp
 
 and atyp = 
    ATyp_aux of atyp_aux * l
@@ -155,23 +173,6 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
    KOpt_none of kid (* identifier *)
  | KOpt_kind of kind * kid (* kind-annotated variable *)
 
-
-and 
-n_constraint_aux =  (* constraint over kind $_$ *)
-   NC_equal of atyp * atyp
- | NC_bounded_ge of atyp * atyp
- | NC_bounded_le of atyp * atyp
- | NC_not_equal of atyp * atyp
- | NC_set of kid * (Big_int.num) list
- | NC_or of n_constraint * n_constraint
- | NC_and of n_constraint * n_constraint
- | NC_true
- | NC_false
-
-and
-n_constraint = 
-   NC_aux of n_constraint_aux * l
-
 type 
 kinded_id = 
    KOpt_aux of kinded_id_aux * l
@@ -179,7 +180,7 @@ kinded_id =
 type
 quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of n_constraint (* A constraint for this type *)
+ | QI_const of atyp (* A constraint for this type *)
 
 
 type 
@@ -197,29 +198,9 @@ type
 typquant = 
    TypQ_aux of typquant_aux * l
 
-
-type 
-lit_aux =  (* Literal constant *)
-   L_unit (* $() : _$ *)
- | L_zero (* $_ : _$ *)
- | L_one (* $_ : _$ *)
- | L_true (* $_ : _$ *)
- | L_false (* $_ : _$ *)
- | L_num of Big_int.num (* natural number constant *)
- | L_hex of string (* bit vector constant, C-style *)
- | L_bin of string (* bit vector constant, C-style *)
- | L_undef (* undefined value *)
- | L_string of string (* string constant *)
- | L_real of string
-
-type 
+type
 typschm_aux =  (* type scheme *)
    TypSchm_ts of typquant * atyp
-
-
-type 
-lit = 
-   L_aux of lit_aux * l
 
 
 type 
@@ -285,7 +266,7 @@ exp_aux =  (* Expression *)
  | E_let of letbind * exp (* let expression *)
  | E_assign of exp * exp (* imperative assignment *)
  | E_sizeof of atyp
- | E_constraint of n_constraint
+ | E_constraint of atyp
  | E_exit of exp
  | E_throw of exp
  | E_try of exp * pexp list
@@ -301,12 +282,6 @@ and fexp_aux =  (* Field-expression *)
 
 and fexp = 
    FE_aux of fexp_aux * l
-
-and fexps_aux =  (* Field-expression list *)
-   FES_Fexps of (fexp) list * bool
-
-and fexps = 
-   FES_aux of fexps_aux * l
 
 and opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
    Def_val_empty

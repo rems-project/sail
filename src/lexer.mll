@@ -217,7 +217,6 @@ rule token = parse
   | "@"                                 { (At "@") }
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ (Caret(r"^")) }
-  | "::<"                               { ColonColonLt }
   | "::"                                { ColonColon(r "::") }
   (* | "^^"                                { CaretCaret(r "^^") } *)
   | "~~"                                { TildeTilde(r "~~") }

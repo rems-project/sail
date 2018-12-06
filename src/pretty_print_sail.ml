@@ -146,9 +146,8 @@ let doc_nc nc =
        end
     | _ -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
   and nc1 (NC_aux (nc_aux, _) as nc) =
-    match nc_aux with
-    | NC_and (c1, c2) -> separate space [nc1 c1; string "&"; atomic_nc c2]
-    | _ -> atomic_nc nc
+    let conjs = constraint_conj nc in
+    separate_map (space ^^ string "&" ^^ space) atomic_nc conjs
   in
   atomic_nc (constraint_simp nc)
 

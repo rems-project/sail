@@ -171,7 +171,7 @@ and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
   let aux = match aux with
     | P.ATyp_id id -> Nexp_id (to_ast_id id)
     | P.ATyp_var v -> Nexp_var (to_ast_var v)
-    | P.ATyp_constant c -> Nexp_constant c
+    | P.ATyp_lit (P.L_aux (P.L_num c, _)) -> Nexp_constant c
     | P.ATyp_sum (t1, t2) -> Nexp_sum (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
     | P.ATyp_exp t1 -> Nexp_exp (to_ast_nexp ctx t1)
     | P.ATyp_neg t1 -> Nexp_neg (to_ast_nexp ctx t1)
@@ -189,26 +189,26 @@ and to_ast_order ctx (P.ATyp_aux (aux, l)) =
   | ATyp_dec -> Ord_aux (Ord_dec, l)
   | _ -> raise (Reporting.err_typ l "Invalid order in type")
 
-and to_ast_constraint ctx (P.NC_aux (nc, l)) =
-  let nc = match nc with
-    | P.NC_equal (t1, t2) ->
-       NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-    | P.NC_not_equal (t1, t2) ->
-       NC_not_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-    | P.NC_bounded_ge (t1,t2) ->
-       NC_bounded_ge (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-    | P.NC_bounded_le(t1,t2) ->
-       NC_bounded_le (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-    | P.NC_set(id,bounds) ->
-       NC_set(to_ast_var id, bounds)
-    | P.NC_or (nc1, nc2) ->
-       NC_or (to_ast_constraint ctx nc1, to_ast_constraint ctx nc2)
-    | P.NC_and (nc1, nc2) ->
-       NC_and (to_ast_constraint ctx nc1, to_ast_constraint ctx nc2)
-    | P.NC_true -> NC_true
-    | P.NC_false -> NC_false
+and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
+  let aux = match aux with
+    | P.ATyp_app (Id_aux (DeIid op, _), [t1; t2]) ->
+       begin match op with
+       | "==" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+       | "!=" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+       | ">=" -> NC_bounded_ge (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+       | "<=" -> NC_bounded_le (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+       | ">" -> NC_bounded_ge (to_ast_nexp ctx t1, nsum (to_ast_nexp ctx t2) (nint 1))
+       | "<" -> NC_bounded_le (nsum (to_ast_nexp ctx t1) (nint 1), to_ast_nexp ctx t2)
+       | "&" -> NC_and (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
+       | "|" -> NC_or (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
+       | _ -> raise (Reporting.err_typ l ("Invalid operator in constraint"))
+       end
+    | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
+    | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
+    | P.ATyp_nset (id, bounds) -> NC_set (to_ast_var id, bounds)
+    | _ -> raise (Reporting.err_typ l "Invalid constraint")
   in
-  NC_aux (nc, l)
+  NC_aux (aux, l)
 
 let to_ast_quant_item ctx (P.QI_aux (aux, l)) =
   match aux with

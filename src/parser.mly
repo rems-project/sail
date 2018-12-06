@@ -103,7 +103,6 @@ let mk_typschm_opt ts n m = TypSchm_opt_aux (
 
 let mk_typschm_opt_none = TypSchm_opt_aux (TypSchm_opt_none, Unknown)
 
-let mk_nc nc n m = NC_aux (nc, loc n m)
 let mk_sd s n m = SD_aux (s, loc n m)
 let mk_sd_doc s str n m = SD_aux (s, Documented (str, loc n m))
 let mk_ir r n m = BF_aux (r, loc n m)
@@ -140,18 +139,18 @@ type lchain =
 | LC_lteq
 | LC_nexp of atyp
 
+let tyop op t1 t2 s e = mk_typ (ATyp_app (Id_aux (DeIid op, loc s e), [t1; t2])) s e
+
 let rec desugar_lchain chain s e =
   match chain with
-  | [LC_nexp n1; LC_lteq; LC_nexp n2] ->
-    mk_nc (NC_bounded_le (n1, n2)) s e
-  | [LC_nexp n1; LC_lt; LC_nexp n2] ->
-    mk_nc (NC_bounded_le (mk_typ (ATyp_sum (n1, mk_typ (ATyp_constant (Big_int.of_int 1)) s e)) s e, n2)) s e
+  | [LC_nexp n1; LC_lteq; LC_nexp n2] -> tyop "<=" n1 n2 s e
+  | [LC_nexp n1; LC_lt; LC_nexp n2] -> tyop "<" n1 n2 s e
   | (LC_nexp n1 :: LC_lteq :: LC_nexp n2 :: chain) ->
-    let nc1 = mk_nc (NC_bounded_le (n1, n2)) s e in
-    mk_nc (NC_and (nc1, desugar_lchain (LC_nexp n2 :: chain) s e)) s e
+     let nc1 = tyop "<=" n1 n2 s e in
+     tyop "&" nc1 (desugar_lchain (LC_nexp n2 :: chain) s e) s e
   | (LC_nexp n1 :: LC_lt :: LC_nexp n2 :: chain) ->
-    let nc1 = mk_nc (NC_bounded_le (mk_typ (ATyp_sum (n1, mk_typ (ATyp_constant (Big_int.of_int 1)) s e)) s e, n2)) s e in
-    mk_nc (NC_and (nc1, desugar_lchain (LC_nexp n2 :: chain) s e)) s e
+     let nc1 = tyop "<" n1 n2 s e in
+     tyop "&" nc1 (desugar_lchain (LC_nexp n2 :: chain) s e) s e
   | _ -> assert false
 
 type rchain =
@@ -161,19 +160,15 @@ type rchain =
 
 let rec desugar_rchain chain s e =
   match chain with
-  | [RC_nexp n1; RC_gteq; RC_nexp n2] ->
-    mk_nc (NC_bounded_ge (n1, n2)) s e
-  | [RC_nexp n1; RC_gt; RC_nexp n2] ->
-    mk_nc (NC_bounded_ge (n1, mk_typ (ATyp_sum (n2, mk_typ (ATyp_constant (Big_int.of_int 1)) s e)) s e)) s e
+  | [RC_nexp n1; RC_gteq; RC_nexp n2] -> tyop ">=" n1 n2 s e
+  | [RC_nexp n1; RC_gt; RC_nexp n2] -> tyop ">" n1 n2 s e
   | (RC_nexp n1 :: RC_gteq :: RC_nexp n2 :: chain) ->
-    let nc1 = mk_nc (NC_bounded_ge (n1, n2)) s e in
-    mk_nc (NC_and (nc1, desugar_rchain (RC_nexp n2 :: chain) s e)) s e
+     let nc1 = tyop ">=" n1 n2 s e in
+     tyop "&" nc1 (desugar_rchain (RC_nexp n2 :: chain) s e) s e
   | (RC_nexp n1 :: RC_gt :: RC_nexp n2 :: chain) ->
-    let nc1 = mk_nc (NC_bounded_ge (n1, mk_typ (ATyp_sum (n2, mk_typ (ATyp_constant (Big_int.of_int 1)) s e)) s e)) s e in
-    mk_nc (NC_and (nc1, desugar_rchain (RC_nexp n2 :: chain) s e)) s e
+     let nc1 = tyop ">" n1 n2 s e in
+     tyop "&" nc1 (desugar_rchain (RC_nexp n2 :: chain) s e) s e
   | _ -> assert false
-
-let future_syntax l = Util.warn (Reporting.loc_to_string l ^ "\n\nThis syntax is currently experimental")
 
 %}
 
@@ -189,7 +184,7 @@ let future_syntax l = Util.warn (Reporting.loc_to_string l ^ "\n\nThis syntax is
 %nonassoc Then
 %nonassoc Else
 
-%token Bar Comma Dot Eof Minus Semi Under DotDot ColonColonLt
+%token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
 %token MinusGt Bidir LtMinus
 
@@ -324,69 +319,35 @@ kid_list:
   | kid kid_list
     { $1 :: $2 }
 
-nc:
-  | nc Bar nc_and
-    { mk_nc (NC_or ($1, $3)) $startpos $endpos }
-  | nc_and
-    { $1 }
-
-nc_and:
-  | nc_and Amp atomic_nc
-    { mk_nc (NC_and ($1, $3)) $startpos $endpos }
-  | atomic_nc
-    { $1 }
-
-atomic_nc:
-  | True
-    { mk_nc NC_true $startpos $endpos }
-  | False
-    { mk_nc NC_false $startpos $endpos }
-  | typ0 EqEq typ0
-    { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
-  | typ0 ExclEq typ0
-    { mk_nc (NC_not_equal ($1, $3)) $startpos $endpos }
-  | nc_lchain
-    { desugar_lchain $1 $startpos $endpos }
-  | nc_rchain
-    { desugar_rchain $1 $startpos $endpos }
-  | Lparen nc Rparen
-    { $2 }
-  | kid In Lcurly num_list Rcurly
-    { mk_nc (NC_set ($1, $4)) $startpos $endpos }
-
 num_list:
   | Num
     { [$1] }
   | Num Comma num_list
     { $1 :: $3 }
 
-nc_lchain:
-  | typ0 LtEq typ0
+lchain:
+  | typ5 LtEq typ5
     { [LC_nexp $1; LC_lteq; LC_nexp $3] }
-  | typ0 Lt typ0
+  | typ5 Lt typ5
     { [LC_nexp $1; LC_lt; LC_nexp $3] }
-  | typ0 LtEq nc_lchain
+  | typ5 LtEq lchain
     { LC_nexp $1 :: LC_lteq :: $3 }
-  | typ0 Lt nc_lchain
+  | typ5 Lt lchain
     { LC_nexp $1 :: LC_lt :: $3 }
 
-nc_rchain:
-  | typ0 GtEq typ0
+rchain:
+  | typ5 GtEq typ5
     { [RC_nexp $1; RC_gteq; RC_nexp $3] }
-  | typ0 Gt typ0
+  | typ5 Gt typ5
     { [RC_nexp $1; RC_gt; RC_nexp $3] }
-  | typ0 GtEq nc_rchain
+  | typ5 GtEq rchain
     { RC_nexp $1 :: RC_gteq :: $3 }
-  | typ0 Gt nc_rchain
+  | typ5 Gt rchain
     { RC_nexp $1 :: RC_gt :: $3 }
 
 tyarg:
-  | ColonColonLt typ_list Gt
-    { future_syntax (loc $startpos($1) $endpos($3)); $2, [] }
   | Lparen typ_list Rparen
     { [], $2 }
-  | ColonColonLt typ_list Gt Lparen typ_list Rparen
-    { future_syntax (loc $startpos($1) $endpos($3)); $2, $5 }
 
 typ:
   | typ0
@@ -427,6 +388,7 @@ typ2:
   | typ3 op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ2l op2l typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ3 op2r typ2r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 Bar typ2r { mk_typ (ATyp_app (deinfix (mk_id (Id "|") $startpos($2) $endpos($2)), [$1; $3])) $startpos $endpos }
   | typ3 { $1 }
 typ2l:
   | typ3 op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
@@ -435,12 +397,14 @@ typ2l:
 typ2r:
   | typ3 op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ3 op2r typ2r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 Bar typ2r { mk_typ (ATyp_app (deinfix (mk_id (Id "|") $startpos($2) $endpos($2)), [$1; $3])) $startpos $endpos }
   | typ3 { $1 }
 
 typ3:
   | typ4 op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ3l op3l typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ4 op3r typ3r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 Amp typ3r { mk_typ (ATyp_app (deinfix (mk_id (Id "&") $startpos($2) $endpos($2)), [$1; $3])) $startpos $endpos }
   | typ4 { $1 }
 typ3l:
   | typ4 op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
@@ -449,12 +413,17 @@ typ3l:
 typ3r:
   | typ4 op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ4 op3r typ3r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 Amp typ3r { mk_typ (ATyp_app (deinfix (mk_id (Id "&") $startpos($2) $endpos($2)), [$1; $3])) $startpos $endpos }
   | typ4 { $1 }
 
 typ4:
   | typ5 op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ4l op4l typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ5 op4r typ4r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | lchain { desugar_lchain $1 $startpos $endpos }
+  | rchain { desugar_rchain $1 $startpos $endpos }
+  | typ5 EqEq typ5 { mk_typ (ATyp_app (deinfix (mk_id (Id $2) $startpos($2) $endpos($2)), [$1; $3])) $startpos $endpos }
+  | typ5 ExclEq typ5 { mk_typ (ATyp_app (deinfix (mk_id (Id $2) $startpos($2) $endpos($2)), [$1; $3])) $startpos $endpos }
   | typ5 { $1 }
 typ4l:
   | typ5 op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
@@ -534,6 +503,8 @@ typ8r:
   | typ9 { $1 }
 
 typ9:
+  | kid In Lcurly num_list Rcurly
+    { mk_typ (ATyp_nset ($1, $4)) $startpos $endpos }
   | atomic_typ op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ9l op9l atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | atomic_typ op9r typ9r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
@@ -554,8 +525,8 @@ atomic_typ:
     { mk_typ ATyp_wild $startpos $endpos }
   | kid
     { mk_typ (ATyp_var $1) $startpos $endpos }
-  | Num
-    { mk_typ (ATyp_constant $1) $startpos $endpos }
+  | lit
+    { mk_typ (ATyp_lit $1) $startpos $endpos }
   | Dec
     { mk_typ ATyp_dec $startpos $endpos }
   | Inc
@@ -573,10 +544,10 @@ atomic_typ:
     { let v = mk_kid "n" $startpos $endpos in
       let atom_id = mk_id (Id "atom") $startpos $endpos in
       let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
-      mk_typ (ATyp_exist ([v], NC_aux (NC_set (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
+      mk_typ (ATyp_exist ([v], ATyp_aux (ATyp_nset (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
   | Lcurly kid_list Dot typ Rcurly
-    { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
-  | Lcurly kid_list Comma nc Dot typ Rcurly
+    { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
+  | Lcurly kid_list Comma typ Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
 
 typ_list:
@@ -606,7 +577,7 @@ kopt_list:
     { $1 :: $2 }
 
 typquant:
-  | kopt_list Comma nc
+  | kopt_list Comma typ
     { let qi_nc = QI_aux (QI_const $3, loc $startpos($3) $endpos($3)) in
       TypQ_aux (TypQ_tq (List.map qi_id_of_kopt $1 @ [qi_nc]), loc $startpos $endpos) }
   | kopt_list
@@ -1055,7 +1026,7 @@ atomic_exp:
     { mk_exp (E_exit $3) $startpos $endpos }
   | Sizeof Lparen typ Rparen
     { mk_exp (E_sizeof $3) $startpos $endpos }
-  | Constraint Lparen nc Rparen
+  | Constraint Lparen typ Rparen
     { mk_exp (E_constraint $3) $startpos $endpos }
   | Assert Lparen exp Rparen
     { mk_exp (E_assert ($3, mk_lit_exp (L_string "") $startpos($4) $endpos($4))) $startpos $endpos }
@@ -1175,17 +1146,7 @@ param_kopt_list:
     { $1 :: $3 }
 
 typaram:
-  | ColonColonLt param_kopt_list Gt Lparen param_kopt_list Rparen Comma nc
-    { future_syntax (loc $startpos($1) $endpos($3));
-      let qi_nc = QI_aux (QI_const $8, loc $startpos($8) $endpos($8)) in
-      mk_typq ($5 @ $2) [qi_nc] $startpos $endpos }
-  | ColonColonLt param_kopt_list Gt Lparen param_kopt_list Rparen
-    { future_syntax (loc $startpos($1) $endpos($3));
-      mk_typq ($5 @ $2) [] $startpos $endpos }
-  | ColonColonLt param_kopt_list Gt
-    { future_syntax (loc $startpos($1) $endpos($3));
-      mk_typq $2 [] $startpos $endpos }
-  | Lparen param_kopt_list Rparen Comma nc
+  | Lparen param_kopt_list Rparen Comma typ
     { let qi_nc = QI_aux (QI_const $5, loc $startpos($5) $endpos($5)) in
       mk_typq $2 [qi_nc] $startpos $endpos }
   | Lparen param_kopt_list Rparen
