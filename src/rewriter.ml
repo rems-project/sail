@@ -94,7 +94,7 @@ let lookup_generated_kid env kid =
 let generated_kids typ = KidSet.filter is_kid_generated (tyvars_of_typ typ)
 
 let resolve_generated_kids env typ =
-  let subst_kid kid typ = typ_subst_kid kid (lookup_generated_kid env kid) typ in
+  let subst_kid kid typ = subst_kid typ_subst kid (lookup_generated_kid env kid) typ in
   KidSet.fold subst_kid (generated_kids typ) typ
 
 let rec remove_p_typ = function

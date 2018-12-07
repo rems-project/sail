@@ -85,6 +85,7 @@ let to_ast_kind (P.K_aux (k, l)) =
   | P.K_type  -> K_aux (K_type, l)
   | P.K_int   -> K_aux (K_int, l)
   | P.K_order -> K_aux (K_order, l)
+  | P.K_bool  -> K_aux (K_bool, l)
 
 let to_ast_id (P.Id_aux(id, l)) =
   if string_contains (string_of_parse_id_aux id) '#' && not (!opt_magic_hash) then
@@ -143,6 +144,8 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
     | P.ATyp_tup typs -> Typ_tup (List.map (to_ast_typ ctx) typs)
     | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
        Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int])
+    | P.ATyp_app (P.Id_aux (P.Id "bool", il), [n]) ->
+       Typ_app (Id_aux (Id "atom_bool", il), [to_ast_typ_arg ctx n K_bool])
     | P.ATyp_app (id, args) ->
        let id = to_ast_id id in
        begin match Bindings.find_opt id ctx.type_constructors with
@@ -166,6 +169,7 @@ and to_ast_typ_arg ctx (ATyp_aux (_, l) as atyp) = function
   | K_type  -> Typ_arg_aux (Typ_arg_typ (to_ast_typ ctx atyp), l)
   | K_int   -> Typ_arg_aux (Typ_arg_nexp (to_ast_nexp ctx atyp), l)
   | K_order -> Typ_arg_aux (Typ_arg_order (to_ast_order ctx atyp), l)
+  | K_bool  -> Typ_arg_aux (Typ_arg_bool (to_ast_constraint ctx atyp), l)
 
 and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
   let aux = match aux with
@@ -203,6 +207,17 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
        | "|" -> NC_or (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
        | _ -> raise (Reporting.err_typ l ("Invalid operator in constraint"))
        end
+    | P.ATyp_app (id, args) ->
+       let id = to_ast_id id in
+       begin match Bindings.find_opt id ctx.type_constructors with
+       | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
+       | Some kinds when List.length args <> List.length kinds ->
+          raise (Reporting.err_typ l (sprintf "%s : %s -> Bool expected %d arguments, given %d"
+                                              (string_of_id id) (format_kind_aux_list kinds)
+                                              (List.length kinds) (List.length args)))
+       | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) args kinds)
+       end
+    | P.ATyp_var v -> NC_var (to_ast_var v)
     | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
     | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
     | P.ATyp_nset (id, bounds) -> NC_set (to_ast_var id, bounds)
@@ -490,11 +505,12 @@ let add_constructor id typq ctx =
 
 let to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit type_def ctx_out =
   let aux, ctx = match aux with
-    | P.TD_abbrev (id, namescm_opt, P.TypSchm_aux (P.TypSchm_ts (typq, typ), l)) ->
+    | P.TD_abbrev (id, typq, kind, typ_arg) ->
        let id = to_ast_id id in
        let typq, typq_ctx = to_ast_typquant ctx typq in
-       let typ = to_ast_typ typq_ctx typ in
-       TD_abbrev (id, to_ast_namescm namescm_opt, TypSchm_aux (TypSchm_ts (typq, typ), l)),
+       let kind = to_ast_kind kind in
+       let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
+       TD_abbrev (id, typq, typ_arg),
        add_constructor id typq ctx
 
     | P.TD_record (id, namescm_opt, typq, fields, _) ->

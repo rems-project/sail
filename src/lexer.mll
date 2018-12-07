@@ -140,6 +140,7 @@ let kw_table =
      ("ref",                     (fun _ -> Ref));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
+     ("Bool",                    (fun x -> Bool));
      ("pure",                    (fun x -> Pure));
      ("register",		 (fun x -> Register));
      ("return",                  (fun x -> Return));

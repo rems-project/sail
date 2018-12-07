@@ -97,6 +97,7 @@ val unaux_nexp : nexp -> nexp_aux
 val unaux_order : order -> order_aux
 val unaux_typ : typ -> typ_aux
 val unaux_kind : kind -> kind_aux
+val unaux_constraint : n_constraint -> n_constraint_aux
 
 val untyp_pat : 'a pat -> 'a pat * typ option
 val uncast_exp : 'a exp -> 'a exp * typ option
@@ -154,7 +155,7 @@ val ntimes : nexp -> nexp -> nexp
 val npow2 : nexp -> nexp
 val nvar : kid -> nexp
 val napp : id -> nexp list -> nexp
-val nid : id -> nexp (* NOTE: Nexp_id's don't do anything currently *)
+val nid : id -> nexp
 
 (* Numeric constraint builders *)
 val nc_eq : nexp -> nexp -> n_constraint
@@ -165,15 +166,16 @@ val nc_lt : nexp -> nexp -> n_constraint
 val nc_gt : nexp -> nexp -> n_constraint
 val nc_and : n_constraint -> n_constraint -> n_constraint
 val nc_or : n_constraint -> n_constraint -> n_constraint
+val nc_not : n_constraint -> n_constraint
 val nc_true : n_constraint
 val nc_false : n_constraint
 val nc_set : kid -> Big_int.num list -> n_constraint
 val nc_int_set : kid -> int list -> n_constraint
 
-(* Negate a n_constraint. Note that there's no NC_not constructor, so
-   this flips all the inequalites a the n_constraint leaves and uses
-   de-morgans to switch and to or and vice versa. *)
-val nc_negate : n_constraint -> n_constraint
+val arg_nexp : ?loc:l -> nexp -> typ_arg
+val arg_order : ?loc:l -> order -> typ_arg
+val arg_typ : ?loc:l -> typ -> typ_arg
+val arg_bool : ?loc:l -> n_constraint -> typ_arg
 
 (* Functions for working with type quantifiers *)
 val quant_add : quant_item -> typquant -> typquant
@@ -203,7 +205,6 @@ val def_loc : 'a def -> Parse_ast.l
 
 (* For debugging and error messages only: Not guaranteed to produce
    parseable SAIL, or even print all language constructs! *)
-(* TODO: replace with existing pretty-printer *)
 val string_of_id : id -> string
 val string_of_kid : kid -> string
 val string_of_base_effect_aux : base_effect_aux -> string
@@ -382,27 +383,16 @@ val unique : l -> l
 
 (** Substitutions *)
 
-(* The function X_subst_Y substitutes a Y into something of type X, if
-   X = Y then the function is just X_subst. Substitutions are always
-   unwrapped from their aux constructors. *)
-val nexp_subst : kid -> nexp_aux -> nexp -> nexp
-val nc_subst_nexp : kid -> nexp_aux -> n_constraint -> n_constraint
-val order_subst : kid -> order_aux -> order -> order
+(* The function X_subst substitutes a type argument into something of
+   type X. The type of the type argument determines which kind of type
+   variables willb e replaced *)
+val nexp_subst : kid -> typ_arg -> nexp -> nexp
+val constraint_subst : kid -> typ_arg -> n_constraint -> n_constraint
+val order_subst : kid -> typ_arg -> order -> order
+val typ_subst : kid -> typ_arg -> typ -> typ
+val typ_arg_subst : kid -> typ_arg -> typ_arg -> typ_arg
 
-(* kid must be Int-kinded *)
-val typ_subst_nexp : kid -> nexp_aux -> typ -> typ
-val typ_subst_arg_nexp : kid -> nexp_aux -> typ_arg -> typ_arg
-
-(* kid must be Type-kinded *)
-val typ_subst_typ : kid -> typ_aux -> typ -> typ
-val typ_subst_arg_typ : kid -> typ_aux -> typ_arg -> typ_arg
-
-(* kid must be Order-kinded *)
-val typ_subst_order : kid -> order_aux -> typ -> typ
-val typ_subst_arg_order : kid -> order_aux -> typ_arg -> typ_arg
-
-val typ_subst_kid : kid -> kid -> typ -> typ
-val typ_subst_arg_kid : kid -> kid -> typ_arg -> typ_arg
+val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
 
 val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant

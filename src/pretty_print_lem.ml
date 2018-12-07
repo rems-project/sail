@@ -1006,7 +1006,8 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
 let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
-  | TD_abbrev(id,nm,(TypSchm_aux (TypSchm_ts (typq, _), _) as typschm)) ->
+  | TD_abbrev(id,typq,Typ_arg_aux (Typ_arg_typ typ, _)) ->
+     let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op equals
        (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
        (doc_typschm_lem false typschm)

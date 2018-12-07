@@ -2300,9 +2300,10 @@ let rewrite_constraint =
 let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) =
   Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
 
-let rewrite_type_def_typs rw_typ rw_typquant rw_typschm (TD_aux (td, annot)) =
+let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
   match td with
-  | TD_abbrev (id, nso, typschm) -> TD_aux (TD_abbrev (id, nso, rw_typschm typschm), annot)
+  | TD_abbrev (id, typq, Typ_arg_aux (Typ_arg_typ typ, l)) ->
+     TD_aux (TD_abbrev (id, rw_typquant typq, Typ_arg_aux (Typ_arg_typ (rw_typ typ), l)), annot)
   | TD_record (id, nso, typq, typ_ids, flag) ->
      TD_aux (TD_record (id, nso, rw_typquant typq, List.map (fun (typ, id) -> (rw_typ typ, id)) typ_ids, flag), annot)
   | TD_variant (id, nso, typq, tus, flag) ->
@@ -2396,7 +2397,7 @@ let rewrite_simple_types (Defs defs) =
   in
   let simple_def = function
     | DEF_spec vs -> DEF_spec (simple_vs vs)
-    | DEF_type td -> DEF_type (rewrite_type_def_typs simple_typ simple_typquant simple_typschm td)
+    | DEF_type td -> DEF_type (rewrite_type_def_typs simple_typ simple_typquant td)
     | DEF_reg_dec ds -> DEF_reg_dec (rewrite_dec_spec_typs simple_typ ds)
     | def -> def
   in

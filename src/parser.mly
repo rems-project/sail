@@ -175,7 +175,7 @@ let rec desugar_rchain chain s e =
 /*Terminals with no content*/
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op Where
-%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Cast
+%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constant Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
@@ -563,6 +563,8 @@ kind:
     { K_aux (K_type, loc $startpos $endpos) }
   | Order
     { K_aux (K_order, loc $startpos $endpos) }
+  | Bool
+    { K_aux (K_bool, loc $startpos $endpos) }
 
 kopt:
   | Lparen kid Colon kind Rparen
@@ -1154,9 +1156,13 @@ typaram:
 
 type_def:
   | Typedef id typaram Eq typ
-    { mk_td (TD_abbrev ($2, mk_namesectn, mk_typschm $3 $5 $startpos($3) $endpos)) $startpos $endpos }
+    { mk_td (TD_abbrev ($2, $3, K_aux (K_type, Parse_ast.Unknown), $5)) $startpos $endpos }
   | Typedef id Eq typ
-    { mk_td (TD_abbrev ($2, mk_namesectn, mk_typschm mk_typqn $4 $startpos($4) $endpos)) $startpos $endpos }
+    { mk_td (TD_abbrev ($2, mk_typqn, K_aux (K_type, Parse_ast.Unknown), $4)) $startpos $endpos }
+  | Typedef id typaram MinusGt kind Eq typ
+    { mk_td (TD_abbrev ($2, $3, $5, $7)) $startpos $endpos }
+  | Typedef id Colon kind Eq typ
+    { mk_td (TD_abbrev ($2, mk_typqn, $4, $6)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Struct id typaram Eq Lcurly struct_fields Rcurly

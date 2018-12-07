@@ -49,85 +49,9 @@
 (**************************************************************************)
 
 module Big_int = Nat_big_num
+open Ast
+open Ast_util
 open Util
-
-(* ===== Integer Constraints ===== *)
-
-type nexp_op = string
-
-type nexp =
-  | NFun of (nexp_op * nexp list)
-  | N2n of nexp
-  | NConstant of Big_int.num
-  | NVar of int
-
-let big_int_op : nexp_op -> (Big_int.num -> Big_int.num -> Big_int.num) option = function
-  | "+" -> Some Big_int.add
-  | "-" -> Some Big_int.sub
-  | "*" -> Some Big_int.mul
-  | _ -> None
-
-let rec arith constr =
-  let constr' = match constr with
-    | NFun (op, [x; y]) -> NFun (op, [arith x; arith y])
-    | N2n c -> N2n (arith c)
-    | c -> c
-  in
-  match constr' with
-  | NFun (op, [NConstant x; NConstant y]) as c ->
-     begin
-       match big_int_op op with
-       | Some op -> NConstant (op x y)
-       | None -> c
-     end
-  | N2n (NConstant x) -> NConstant (Big_int.pow_int_positive 2 (Big_int.to_int x))
-  | c -> c
-
-(* ===== Boolean Constraints ===== *)
-
-type constraint_bool_op = And | Or
-
-type constraint_compare_op = Gt | Lt | GtEq | LtEq | Eq | NEq
-
-let negate_comparison = function
-  | Gt -> LtEq
-  | Lt -> GtEq
-  | GtEq -> Lt
-  | LtEq -> Gt
-  | Eq -> NEq
-  | NEq -> Eq
-
-type 'a constraint_bool =
-  | BFun of (constraint_bool_op * 'a constraint_bool * 'a constraint_bool)
-  | Not of 'a constraint_bool
-  | CFun of (constraint_compare_op * 'a * 'a)
-  | Forall of (int list * 'a constraint_bool)
-  | Boolean of bool
-
-let rec pairs (xs : 'a list) (ys : 'a list) : ('a * 'b) list =
-  match xs with
-  | [] -> []
-  | (x :: xs) -> List.map (fun y -> (x, y)) ys @ pairs xs ys
-
-(* Get a set of variables from a constraint *)
-module IntSet = Set.Make(
-  struct
-    let compare = Pervasives.compare
-    type t = int
-  end)
-
-let rec nexp_vars : nexp -> IntSet.t = function
-  | NConstant _ -> IntSet.empty
-  | NVar v -> IntSet.singleton v
-  | NFun (_, xs) -> List.fold_left IntSet.union IntSet.empty (List.map nexp_vars xs)
-  | N2n x -> nexp_vars x
-
-let rec constraint_vars : nexp constraint_bool -> IntSet.t = function
-  | BFun (_, x, y) -> IntSet.union (constraint_vars x) (constraint_vars y)
-  | Not x -> constraint_vars x
-  | CFun (_, x, y) -> IntSet.union (nexp_vars x) (nexp_vars y)
-  | Forall (vars, x) -> IntSet.diff (constraint_vars x) (IntSet.of_list vars)
-  | Boolean _ -> IntSet.empty
 
 (* SMTLIB v2.0 format is based on S-expressions so we have a
    lightweight representation of those here. *)
@@ -139,46 +63,66 @@ let rec pp_sexpr : sexpr -> string = function
   | List xs -> "(" ^ string_of_list " " pp_sexpr xs ^ ")"
   | Atom x -> x
 
-let var_decs constr =
-  constraint_vars constr
-  |> IntSet.elements
-  |> List.map (fun var -> sfun "declare-const" [Atom ("v" ^ string_of_int var); Atom "Int"])
+let zencode_kid kid = Util.zencode_string (string_of_kid kid)
+
+(** Each non-Type/Order kind in Sail mapes to a type in the SMT solver *)
+let smt_type l = function
+  | K_int -> Atom "Int"
+  | K_bool -> Atom "Bool"
+  | _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kinded variable to SMT solver")
+
+let smt_var v = Atom ("v" ^ zencode_kid v)
+
+(** var_decs outputs the list of variables to be used by the SMT
+   solver in SMTLIB v2.0 format. It takes a kind_aux KBindings, as
+   returned by Type_check.get_typ_vars *)
+let var_decs l (vars : kind_aux KBindings.t) : string = vars
+  |> KBindings.bindings
+  |> List.map (fun (v, k) -> sfun "declare-const" [smt_var v; smt_type l k])
   |> string_of_list "\n" pp_sexpr
 
-let cop_sexpr op x y =
-  match op with
-  | Gt -> sfun ">" [x; y]
-  | Lt -> sfun "<" [x; y]
-  | GtEq -> sfun ">=" [x; y]
-  | LtEq -> sfun "<=" [x; y]
-  | Eq -> sfun "=" [x; y]
-  | NEq -> sfun "not" [sfun "=" [x; y]]
+let rec smt_nexp (Nexp_aux (aux, l) : nexp) : sexpr =
+  match aux with
+  | Nexp_id id -> Atom (Util.zencode_string (string_of_id id))
+  | Nexp_var v -> smt_var v
+  | Nexp_constant c -> Atom (Big_int.to_string c)
+  | Nexp_app (id, nexps) -> sfun (string_of_id id) (List.map smt_nexp nexps)
+  | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
+  | Nexp_sum (nexp1, nexp2) -> sfun "+" [smt_nexp nexp1; smt_nexp nexp2]
+  | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
+  | Nexp_exp nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
+  | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
 
-let rec sexpr_of_nexp = function
-  | NFun (op, xs) -> sfun op (List.map sexpr_of_nexp xs)
-  | N2n x -> sfun "^" [Atom "2"; sexpr_of_nexp x]
-  | NConstant c -> Atom (Big_int.to_string c) (* CHECK: do we do negative constants right? *)
-  | NVar var -> Atom ("v" ^ string_of_int var)
+let rec smt_constraint (NC_aux (aux, l) : n_constraint) : sexpr =
+  match aux with
+  | NC_equal (nexp1, nexp2) -> sfun "=" [smt_nexp nexp1; smt_nexp nexp2]
+  | NC_bounded_le (nexp1, nexp2) -> sfun "<=" [smt_nexp nexp1; smt_nexp nexp2]
+  | NC_bounded_ge (nexp1, nexp2) -> sfun ">=" [smt_nexp nexp1; smt_nexp nexp2]
+  | NC_not_equal (nexp1, nexp2) -> sfun "not" [sfun "=" [smt_nexp nexp1; smt_nexp nexp2]]
+  | NC_set (v, ints) ->
+     sfun "or" (List.map (fun i -> sfun "=" [smt_var v; Atom (Big_int.to_string i)]) ints)
+  | NC_or (nc1, nc2) -> sfun "or" [smt_constraint nc1; smt_constraint nc2]
+  | NC_and (nc1, nc2) -> sfun "and" [smt_constraint nc1; smt_constraint nc2]
+  | NC_app (id, args) ->
+     sfun (string_of_id id) (List.map smt_typ_arg args)
+  | NC_true -> Atom "true"
+  | NC_false -> Atom "false"
+  | NC_var v -> smt_var v
 
-let rec sexpr_of_constraint = function
-  | BFun (And, x, y) -> sfun "and" [sexpr_of_constraint x; sexpr_of_constraint y]
-  | BFun (Or, x, y) -> sfun "or" [sexpr_of_constraint x; sexpr_of_constraint y]
-  | Not x -> sfun "not" [sexpr_of_constraint x]
-  | CFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp (arith x)) (sexpr_of_nexp (arith y))
-  | Forall (vars, x) ->
-     sfun "forall" [List (List.map (fun v -> List [Atom ("v" ^ string_of_int v); Atom "Int"]) vars); sexpr_of_constraint x]
-  | Boolean true -> Atom "true"
-  | Boolean false -> Atom "false"
+and smt_typ_arg (Typ_arg_aux (aux, l) : typ_arg) : sexpr =
+  match aux with
+  | Typ_arg_nexp nexp -> smt_nexp nexp
+  | Typ_arg_bool nc -> smt_constraint nc
+  | _ ->
+     raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
 
-let smtlib_of_constraints ?get_model:(get_model=false) constr : string =
+let smtlib_of_constraints ?get_model:(get_model=false) l vars constr : string =
   "(push)\n"
-  ^ var_decs constr ^ "\n"
-  ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; sexpr_of_constraint constr])
+  ^ var_decs l vars ^ "\n"
+  ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; smt_constraint constr])
   ^ "\n(assert constraint)\n(check-sat)"
   ^ (if get_model then "\n(get-model)" else "")
   ^ "\n(pop)"
-
-type t = nexp constraint_bool
 
 type smt_result = Unknown | Sat | Unsat
 
@@ -219,9 +163,9 @@ let save_digests () =
   DigestMap.iter output !known_problems;
   close_out out_chan
 
-let call_z3' constraints : smt_result =
+let call_z3' l vars constraints : smt_result =
   let problems = [constraints] in
-  let z3_file = smtlib_of_constraints constraints in
+  let z3_file = smtlib_of_constraints l vars constraints in
 
   (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
 
@@ -261,15 +205,15 @@ let call_z3' constraints : smt_result =
          else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
     end
 
-let call_z3 constraints =
+let call_z3 l vars constraints =
   let t = Profile.start_z3 () in
-  let result = call_z3' constraints in
+  let result = call_z3' l vars constraints in
   Profile.finish_z3 t;
   result
 
-let rec solve_z3 constraints var =
+let rec solve_z3 l vars constraints var =
   let problems = [constraints] in
-  let z3_file = smtlib_of_constraints ~get_model:true constraints in
+  let z3_file = smtlib_of_constraints ~get_model:true l vars constraints in
 
   (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
 
@@ -289,62 +233,13 @@ let rec solve_z3 constraints var =
   let z3_output = String.concat " " (input_all z3_chan) in
   let _ = Unix.close_process_in z3_chan in
   Sys.remove input_file;
-  let regexp = {|(define-fun v|} ^ string_of_int var ^ {| () Int[ ]+\([0-9]+\))|} in
+  let regexp = {|(define-fun v|} ^ Util.zencode_string (string_of_kid var) ^ {| () Int[ ]+\([0-9]+\))|} in
   try
     let _ = Str.search_forward (Str.regexp regexp) z3_output 0 in
     let result = Big_int.of_string (Str.matched_group 1 z3_output) in
-    begin match call_z3 (BFun (And, constraints, CFun (NEq, NConstant result, NVar var))) with
+    begin match call_z3 l vars (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
     | Unsat -> Some result
     | _ -> None
     end
   with
     Not_found -> None
-
-let string_of constr = smtlib_of_constraints constr
-
-(* ===== Abstract API for building constraints ===== *)
-
-(* These functions are exported from constraint.mli, and ensure that
-   the internal representation of constraints remains opaque. *)
-
-let implies (x : t) (y : t) : t =
-  BFun (Or, Not x, y)
-
-let conj (x : t) (y : t) : t =
-  BFun (And, x, y)
-
-let disj (x : t) (y : t) : t =
-  BFun (Or, x, y)
-
-let forall (vars : int list) (x : t) : t =
-  if vars = [] then x else Forall (vars, x)
-
-let negate (x : t) : t = Not x
-
-let literal (b : bool) : t = Boolean b
-
-let lt x y : t = CFun (Lt, x, y)
-
-let lteq x y : t = CFun (LtEq, x, y)
-
-let gt x y : t = CFun (Gt, x, y)
-
-let gteq x y : t = CFun (GtEq, x, y)
-
-let eq x y : t = CFun (Eq, x, y)
-
-let neq x y : t = CFun (NEq, x, y)
-
-let pow2 x : nexp = N2n x
-
-let add x y : nexp = NFun ("+", [x; y])
-
-let sub x y : nexp = NFun ("-", [x; y])
-
-let mult x y : nexp = NFun ("*", [x; y])
-
-let app f xs : nexp = NFun (f, xs)
-
-let constant (x : Big_int.num) : nexp = NConstant x
-
-let variable (v : int) : nexp = NVar v

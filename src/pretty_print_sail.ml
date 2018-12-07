@@ -259,7 +259,7 @@ let doc_typschm ?(simple=false) (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_
 
 let doc_typschm_typ (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) = doc_typ typ
 
-let doc_typschm_quants (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) =
+let doc_typquant (TypQ_aux (tq_aux, _)) =
   match tq_aux with
   | TypQ_no_forall -> None
   | TypQ_tq [] -> None
@@ -562,13 +562,13 @@ let doc_field (typ, id) =
 let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
 let doc_typdef (TD_aux(td,_)) = match td with
-  | TD_abbrev (id, _, typschm) ->
+  | TD_abbrev (id, typq, typ_arg) ->
      begin
-       match doc_typschm_quants typschm with
+       match doc_typquant typq with
        | Some qdoc ->
-          doc_op equals (concat [string "type"; space; doc_id id; qdoc]) (doc_typschm_typ typschm)
+          doc_op equals (concat [string "type"; space; doc_id id; qdoc]) (doc_typ_arg typ_arg)
        | None ->
-          doc_op equals (concat [string "type"; space; doc_id id]) (doc_typschm_typ typschm)
+          doc_op equals (concat [string "type"; space; doc_id id]) (doc_typ_arg typ_arg)
      end
   | TD_enum (id, _, ids, _) ->
      separate space [string "enum"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]

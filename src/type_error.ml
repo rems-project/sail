@@ -198,13 +198,16 @@ let rec analyze_unresolved_quant locals ncs = function
      empty
 
 let rec pp_type_error = function
-  | Err_no_casts (exp, typ_from, typ_to, trigger, _) ->
+  | Err_no_casts (exp, typ_from, typ_to, trigger, reasons) ->
      let coercion =
        group (string "Tried performing type coercion from" ^/^ Pretty_print_sail.doc_typ typ_from
               ^/^ string "to" ^/^ Pretty_print_sail.doc_typ typ_to
               ^/^ string "on" ^/^ Pretty_print_sail.doc_exp exp)
      in
-     coercion ^^ hardline ^^ (string "Failed because" ^/^ pp_type_error trigger)
+     coercion ^^ hardline
+     ^^ (string "Coercion failed because:" ^//^ pp_type_error trigger)
+     ^^ hardline
+     ^^ (string "Possible reasons:" ^//^ separate_map hardline pp_type_error reasons)
 
   | Err_no_overloading (id, errs) ->
      string ("No overloadings for " ^ string_of_id id ^ ", tried:") ^//^

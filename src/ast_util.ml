@@ -370,23 +370,16 @@ let nc_lt n1 n2 = nc_lteq (nsum n1 (nint 1)) n2
 let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nint 1))
 let nc_and nc1 nc2 = mk_nc (NC_and (nc1, nc2))
 let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
+let nc_var kid = mk_nc (NC_var kid)
 let nc_true = mk_nc NC_true
 let nc_false = mk_nc NC_false
 
-let rec nc_negate (NC_aux (nc, l)) =
-  match nc with
-  | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
-  | NC_bounded_le (n1, n2) -> nc_gt n1 n2
-  | NC_equal (n1, n2) -> nc_neq n1 n2
-  | NC_not_equal (n1, n2) -> nc_eq n1 n2
-  | NC_and (n1, n2) -> mk_nc (NC_or (nc_negate n1, nc_negate n2))
-  | NC_or (n1, n2) -> mk_nc (NC_and (nc_negate n1, nc_negate n2))
-  | NC_false -> mk_nc NC_true
-  | NC_true -> mk_nc NC_false
-  | NC_set (kid, []) -> nc_false
-  | NC_set (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
-  | NC_set (kid, int :: ints) ->
-     mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
+let arg_nexp ?loc:(l=Parse_ast.Unknown) n = Typ_arg_aux (Typ_arg_nexp n, l)
+let arg_order ?loc:(l=Parse_ast.Unknown) ord = Typ_arg_aux (Typ_arg_order ord, l)
+let arg_typ ?loc:(l=Parse_ast.Unknown) typ = Typ_arg_aux (Typ_arg_typ typ, l)
+let arg_bool ?loc:(l=Parse_ast.Unknown) nc = Typ_arg_aux (Typ_arg_bool nc, l)
+
+let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
 
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
 
@@ -437,6 +430,7 @@ let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
 let unaux_typ (Typ_aux (typ, _)) = typ
 let unaux_kind (K_aux (k, _)) = k
+let unaux_constraint (NC_aux (nc, _)) = nc
 
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
@@ -628,6 +622,7 @@ let string_of_kind_aux = function
   | K_type -> "Type"
   | K_int -> "Int"
   | K_order -> "Order"
+  | K_bool -> "Bool"
 
 let string_of_kind (K_aux (k, _)) = string_of_kind_aux k
 
@@ -680,6 +675,7 @@ and string_of_typ_arg_aux = function
   | Typ_arg_nexp n -> string_of_nexp n
   | Typ_arg_typ typ -> string_of_typ typ
   | Typ_arg_order o -> string_of_order o
+  | Typ_arg_bool nc -> string_of_n_constraint nc
 and string_of_n_constraint = function
   | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
@@ -691,6 +687,8 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+  | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
+  | NC_aux (NC_var v, _) -> string_of_kid v
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
@@ -1142,10 +1140,13 @@ let rec tyvars_of_constraint (NC_aux (nc, _)) =
   | NC_or (nc1, nc2)
   | NC_and (nc1, nc2) ->
      KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
+  | NC_app (id, args) ->
+     List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ_arg t)) KidSet.empty args
+  | NC_var kid -> KidSet.singleton kid
   | NC_true
   | NC_false -> KidSet.empty
 
-let rec tyvars_of_typ (Typ_aux (t,_)) =
+and tyvars_of_typ (Typ_aux (t,_)) =
   match t with
   | Typ_internal_unknown -> KidSet.empty
   | Typ_id _ -> KidSet.empty
@@ -1166,6 +1167,7 @@ and tyvars_of_typ_arg (Typ_arg_aux (ta,_)) =
   | Typ_arg_nexp nexp -> tyvars_of_nexp nexp
   | Typ_arg_typ typ -> tyvars_of_typ typ
   | Typ_arg_order _ -> KidSet.empty
+  | Typ_arg_bool nc -> tyvars_of_constraint nc
 
 let tyvars_of_quant_item (QI_aux (qi, _)) = match qi with
   | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
@@ -1547,10 +1549,26 @@ let unique l =
 (* 1. Substitutions                                                       *)
 (**************************************************************************)
 
+let order_subst_aux sv subst = function
+  | Ord_var kid ->
+     begin match subst with
+     | Typ_arg_aux (Typ_arg_order ord, _) when Kid.compare kid sv = 0 ->
+        unaux_order ord
+     | _ -> Ord_var kid
+     end
+  | Ord_inc -> Ord_inc
+  | Ord_dec -> Ord_dec
+
+let order_subst sv subst (Ord_aux (ord, l)) = Ord_aux (order_subst_aux sv subst ord, l)
+
 let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
 and nexp_subst_aux sv subst = function
-  | Nexp_id v -> Nexp_id v
-  | Nexp_var kid -> if Kid.compare kid sv = 0 then subst else Nexp_var kid
+  | Nexp_var kid ->
+     begin match subst with
+     | Typ_arg_aux (Typ_arg_nexp n, _) when Kid.compare kid sv = 0 -> unaux_nexp n
+     | _ -> Nexp_var kid
+     end
+  | Nexp_id id -> Nexp_id id
   | Nexp_constant c -> Nexp_constant c
   | Nexp_times (nexp1, nexp2) -> Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
   | Nexp_sum (nexp1, nexp2) -> Nexp_sum (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
@@ -1564,100 +1582,68 @@ let rec nexp_set_to_or l subst = function
   | [int] -> NC_equal (subst, nconstant int)
   | (int :: ints) -> NC_or (mk_nc (NC_equal (subst, nconstant int)), mk_nc (nexp_set_to_or l subst ints))
 
-let rec nc_subst_nexp sv subst (NC_aux (nc, l)) = NC_aux (nc_subst_nexp_aux l sv subst nc, l)
-and nc_subst_nexp_aux l sv subst = function
+let rec constraint_subst sv subst (NC_aux (nc, l)) = NC_aux (constraint_subst_aux l sv subst nc, l)
+and constraint_subst_aux l sv subst = function
   | NC_equal (n1, n2) -> NC_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_set (kid, ints) as set_nc ->
-     if Kid.compare kid sv = 0
-     then nexp_set_to_or l (mk_nexp subst) ints
-     else set_nc
-  | NC_or (nc1, nc2) -> NC_or (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
-  | NC_and (nc1, nc2) -> NC_and (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
+     begin match subst with
+     | Typ_arg_aux (Typ_arg_nexp n, _) when Kid.compare kid sv = 0 ->
+        nexp_set_to_or l n ints
+     | _ -> set_nc
+     end
+  | NC_or (nc1, nc2) -> NC_or (constraint_subst sv subst nc1, constraint_subst sv subst nc2)
+  | NC_and (nc1, nc2) -> NC_and (constraint_subst sv subst nc1, constraint_subst sv subst nc2)
+  | NC_app (id, args) -> NC_app (id, List.map (typ_arg_subst sv subst) args)
+  | NC_var kid ->
+     begin match subst with
+     | Typ_arg_aux (Typ_arg_bool nc, _) when Kid.compare kid sv = 0 ->
+        unaux_constraint nc
+     | _ -> NC_var kid
+     end
   | NC_false -> NC_false
   | NC_true -> NC_true
 
-let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
-and typ_subst_nexp_aux sv subst = function
+and typ_subst sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_aux sv subst typ, l)
+and typ_subst_aux sv subst = function
   | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id v -> Typ_id v
-  | Typ_var kid -> Typ_var kid
-  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_nexp sv subst) arg_typs, typ_subst_nexp sv subst ret_typ, effs)
-  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2)
-  | Typ_tup typs -> Typ_tup (List.map (typ_subst_nexp sv subst) typs)
-  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
+  | Typ_var kid ->
+     begin match subst with
+     | Typ_arg_aux (Typ_arg_typ typ, _) when Kid.compare kid sv = 0 ->
+        unaux_typ typ
+     | _ -> Typ_var kid
+     end
+  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ, effs)
+  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2)
+  | Typ_tup typs -> Typ_tup (List.map (typ_subst sv subst) typs)
+  | Typ_app (f, args) -> Typ_app (f, List.map (typ_arg_subst sv subst) args)
   | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc_subst_nexp sv subst nc, typ_subst_nexp sv subst typ)
-and typ_subst_arg_nexp sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_nexp_aux sv subst arg, l)
-and typ_subst_arg_nexp_aux sv subst = function
+  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, constraint_subst sv subst nc, typ_subst sv subst typ)
+
+and typ_arg_subst sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_arg_subst_aux sv subst arg, l)
+and typ_arg_subst_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv subst nexp)
-  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_nexp sv subst typ)
-  | Typ_arg_order ord -> Typ_arg_order ord
-
-let rec typ_subst_typ sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_typ_aux sv subst typ, l)
-and typ_subst_typ_aux sv subst = function
-  | Typ_internal_unknown -> Typ_internal_unknown
-  | Typ_id v -> Typ_id v
-  | Typ_var kid -> if Kid.compare kid sv = 0 then subst else Typ_var kid
-  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_typ sv subst) arg_typs, typ_subst_typ sv subst ret_typ, effs)
-  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2)
-  | Typ_tup typs -> Typ_tup (List.map (typ_subst_typ sv subst) typs)
-  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_typ sv subst) args)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_typ sv subst typ)
-and typ_subst_arg_typ sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_typ_aux sv subst arg, l)
-and typ_subst_arg_typ_aux sv subst = function
-  | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
-  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_typ sv subst typ)
-  | Typ_arg_order ord -> Typ_arg_order ord
-
-let order_subst_aux sv subst = function
-  | Ord_var kid -> if Kid.compare kid sv = 0 then subst else Ord_var kid
-  | Ord_inc -> Ord_inc
-  | Ord_dec -> Ord_dec
-
-let order_subst sv subst (Ord_aux (ord, l)) = Ord_aux (order_subst_aux sv subst ord, l)
-
-let rec typ_subst_order sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_order_aux sv subst typ, l)
-and typ_subst_order_aux sv subst = function
-  | Typ_internal_unknown -> Typ_internal_unknown
-  | Typ_id v -> Typ_id v
-  | Typ_var kid -> Typ_var kid
-  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_order sv subst) arg_typs, typ_subst_order sv subst ret_typ, effs)
-  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_order sv subst typ1, typ_subst_order sv subst typ2)
-  | Typ_tup typs -> Typ_tup (List.map (typ_subst_order sv subst) typs)
-  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_order sv subst) args)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_order sv subst typ)
-and typ_subst_arg_order sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_order_aux sv subst arg, l)
-and typ_subst_arg_order_aux sv subst = function
-  | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
-  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_order sv subst typ)
+  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst sv subst typ)
   | Typ_arg_order ord -> Typ_arg_order (order_subst sv subst ord)
+  | Typ_arg_bool nc -> Typ_arg_bool (constraint_subst sv subst nc)
 
-let rec typ_subst_kid sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_kid_aux sv subst typ, l)
-and typ_subst_kid_aux sv subst = function
-  | Typ_internal_unknown -> Typ_internal_unknown
-  | Typ_id v -> Typ_id v
-  | Typ_var kid -> if Kid.compare kid sv = 0 then Typ_var subst else Typ_var kid
-  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst_kid sv subst) arg_typs, typ_subst_kid sv subst ret_typ, effs)
-  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2)
-  | Typ_tup typs -> Typ_tup (List.map (typ_subst_kid sv subst) typs)
-  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_kid sv subst) args)
-  | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc_subst_nexp sv (Nexp_var subst) nc, typ_subst_kid sv subst typ)
-and typ_subst_arg_kid sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_kid_aux sv subst arg, l)
-and typ_subst_arg_kid_aux sv subst = function
-  | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv (Nexp_var subst) nexp)
-  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_kid sv subst typ)
-  | Typ_arg_order ord -> Typ_arg_order (order_subst sv (Ord_var subst) ord)
+let subst_kid subst sv v x =
+  x
+  |> subst sv (mk_typ_arg (Typ_arg_bool (nc_var v)))
+  |> subst sv (mk_typ_arg (Typ_arg_nexp (nvar v)))
+  |> subst sv (mk_typ_arg (Typ_arg_order (Ord_aux (Ord_var v, Parse_ast.Unknown))))
+  |> subst sv (mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var v))))
 
 let quant_item_subst_kid_aux sv subst = function
   | QI_id (KOpt_aux (KOpt_none kid, l)) as qid ->
      if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_none subst, l)) else qid
   | QI_id (KOpt_aux (KOpt_kind (k, kid), l)) as qid ->
      if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_kind (k, subst), l)) else qid
-  | QI_const nc -> QI_const (nc_subst_nexp sv (Nexp_var subst) nc)
+  | QI_const nc ->
+     QI_const (subst_kid constraint_subst sv subst nc)
 
 let quant_item_subst_kid sv subst (QI_aux (quant, l)) = QI_aux (quant_item_subst_kid_aux sv subst quant, l)
 

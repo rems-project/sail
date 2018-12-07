@@ -74,6 +74,7 @@ kind_aux =  (* base kind *)
    K_type (* kind of types *)
  | K_int (* kind of natural number size expressions *)
  | K_order (* kind of vector order specifications *)
+ | K_bool (* kind of constraints *)
 
 
 type 
@@ -443,7 +444,7 @@ fundef_aux =  (* Function definition *)
 
 type 
 type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
+   TD_abbrev of id * typquant * kind * atyp (* type abbreviation *)
  | TD_record of id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
  | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
  | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)

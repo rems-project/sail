@@ -12,7 +12,7 @@
     "mapping" "where" "with"))
 
 (defconst sail2-kinds
-  '("Int" "Type" "Order" "inc" "dec"
+  '("Int" "Type" "Order" "Bool" "inc" "dec"
     "barr" "depend" "rreg" "wreg" "rmem" "rmemt" "wmv" "wmvt" "eamem" "wmem"
     "exmem" "undef" "unspec" "nondet" "escape" "configuration"))
 

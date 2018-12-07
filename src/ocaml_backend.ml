@@ -602,7 +602,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
       ^//^ (bar ^^ space ^^ ocaml_enum ctx ids))
      ^^ ocaml_def_end
      ^^ ocaml_string_of_enum ctx id ids
-  | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (typq, typ), _)) ->
+  | TD_abbrev (id, typq, Typ_arg_aux (Typ_arg_typ typ, _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
      ^^ ocaml_def_end
      ^^ ocaml_string_of_abbrev ctx id typq typ
@@ -706,7 +706,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       -> required
   and add_req_from_td required (TD_aux (td,(l,_))) =
     match td with
-    | TD_abbrev (_, _, TypSchm_aux (TypSchm_ts (_,typ),_)) ->
+    | TD_abbrev (_, _, Typ_arg_aux (Typ_arg_typ typ, _)) ->
        add_req_from_typ required typ
     | TD_record (_, _, _, fields, _) ->
        List.fold_left (fun req (typ,_) -> add_req_from_typ req typ) required fields
@@ -723,10 +723,11 @@ let ocaml_pp_generators ctx defs orig_types required =
       match Bindings.find id typemap with
       | TD_aux (td,_) ->
          (match td with
-          | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) -> tqs
+          | TD_abbrev (_,tqs,Typ_arg_aux (Typ_arg_typ _, _)) -> tqs
           | TD_record (_,_,tqs,_,_) -> tqs
           | TD_variant (_,_,tqs,_,_) -> tqs
           | TD_enum _ -> TypQ_aux (TypQ_no_forall,Unknown)
+          | TD_abbrev (_, _, _) -> assert false
           | TD_bitfield _ -> assert false)
       | exception Not_found ->
          Bindings.find id Type_check.Env.builtin_typs
@@ -844,7 +845,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       let tqs, body, constructors, builders =
         let TD_aux (td,(l,_)) = Bindings.find id typemap in
         match td with
-        | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
+        | TD_abbrev (_,tqs,Typ_arg_aux (Typ_arg_typ typ, _)) ->
            tqs, gen_type typ, None, None
         | TD_variant (_,_,tqs,variants,_) ->
            tqs,

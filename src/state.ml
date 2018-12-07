@@ -127,15 +127,9 @@ let generate_initial_regstate defs =
       | Typ_exist (_, _, typ) -> lookup_init_val vals typ
       | _ -> raise Not_found
     in
-    (* Helper functions to instantiate type arguments *)
-    let typ_subst_targ kid (Typ_arg_aux (arg, _)) typ = match arg with
-      | Typ_arg_nexp (Nexp_aux (nexp, _)) -> typ_subst_nexp kid nexp typ
-      | Typ_arg_typ (Typ_aux (typ', _)) -> typ_subst_typ kid typ' typ
-      | Typ_arg_order (Ord_aux (ord, _)) -> typ_subst_order kid ord typ
-    in
     let typ_subst_quant_item typ (QI_aux (qi, _)) arg = match qi with
       | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
-         typ_subst_targ kid arg typ
+         typ_subst kid arg typ
       | _ -> typ
     in
     let typ_subst_typquant tq args typ =
@@ -152,7 +146,7 @@ let generate_initial_regstate defs =
            string_of_id id1 ^ " (" ^ lookup_init_val vals typ1 ^ ")"
          in
          Bindings.add id init_val vals
-      | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (tq, typ), _)) ->
+      | TD_abbrev (id, tq, Typ_arg_aux (Typ_arg_typ typ, _)) ->
          let init_val args = lookup_init_val vals (typ_subst_typquant tq args typ) in
          Bindings.add id init_val vals
       | TD_record (id, _, tq, fields, _) ->

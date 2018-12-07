@@ -149,7 +149,7 @@ module Env : sig
      won't throw any exceptions. *)
   val get_ret_typ : t -> typ option
 
-  val get_typ_synonym : id -> t -> (t -> typ_arg list -> typ)
+  val get_typ_synonym : id -> t -> (t -> typ_arg list -> typ_arg)
 
   val get_overloads : id -> t -> id list
 
@@ -357,28 +357,21 @@ val destruct_numeric : Env.t -> typ -> (kid list * n_constraint * nexp) option
 
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
-type uvar =
-  | U_nexp of nexp
-  | U_order of order
-  | U_typ of typ
+val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 
-val string_of_uvar : uvar -> string
-
-val subst_unifiers : uvar KBindings.t -> typ -> typ
-
-val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option
+val unify : l -> Env.t -> typ -> typ -> typ_arg KBindings.t * kid list * n_constraint option
 
 val alpha_equivalent : Env.t -> typ -> typ -> bool
 
 (** Throws Invalid_argument if the argument is not a E_app expression *)
-val instantiation_of : tannot exp -> uvar KBindings.t
+val instantiation_of : tannot exp -> typ_arg KBindings.t
 
 (** Doesn't use the type of the expression when calculating instantiations.
     May fail if the arguments aren't sufficient to calculate all unifiers. *)
-val instantiation_of_without_type : tannot exp -> uvar KBindings.t
+val instantiation_of_without_type : tannot exp -> typ_arg KBindings.t
 
 (* Type variable instantiations that inference will extract from constraints *)
-val instantiate_simple_equations : quant_item list -> uvar KBindings.t
+val instantiate_simple_equations : quant_item list -> typ_arg KBindings.t
 
 val propagate_exp_effect : tannot exp -> tannot exp
 

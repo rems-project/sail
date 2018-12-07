@@ -309,7 +309,9 @@ let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
   | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
 
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
-  | TD_abbrev(id,_,typschm) -> init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
+  | TD_abbrev(id,typq,Typ_arg_aux(Typ_arg_typ typ, l)) ->
+     let typschm = TypSchm_aux (TypSchm_ts (typq,typ), l) in
+     init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
   | TD_record(id,_,typq,tids,_) ->
     let binds = init_env (string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in

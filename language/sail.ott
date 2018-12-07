@@ -175,6 +175,7 @@ kind :: 'K_' ::=
   | Type  :: :: type  {{ com kind of types  }}
   | Int   :: :: int   {{ com kind of natural number size expressions  }}
   | Order :: :: order {{ com kind of vector order specifications  }}
+  | Bool  :: :: bool  {{ com kind of constraints }}
 
 nexp :: 'Nexp_' ::=
   {{ com numeric expression, of kind Int }}
@@ -273,22 +274,25 @@ typ :: 'Typ_' ::=
 typ_arg :: 'Typ_arg_' ::=
   {{ com type constructor arguments of all kinds }}
   {{ aux _ l }}
-  | nexp       :: :: nexp
-  | typ        :: :: typ
-  | order      :: :: order
+  | nexp         :: :: nexp
+  | typ          :: :: typ
+  | order        :: :: order
+  | n_constraint :: :: bool
 
 n_constraint :: 'NC_' ::=
   {{ com constraint over kind Int }}
   {{ aux _ l }}
-  | nexp = nexp'                                :: :: equal
-  | nexp >= nexp'                               :: :: bounded_ge
-  | nexp '<=' nexp'                             :: :: bounded_le
-  | nexp != nexp'                               :: :: not_equal
-  | kid 'IN' { num1 , ... , numn }              :: :: set
-  | n_constraint \/ n_constraint'               :: :: or
-  | n_constraint /\ n_constraint'               :: :: and
-  | true                                        :: :: true
-  | false                                       :: :: false
+  | nexp = nexp'                     :: :: equal
+  | nexp >= nexp'                    :: :: bounded_ge
+  | nexp '<=' nexp'                  :: :: bounded_le
+  | nexp != nexp'                    :: :: not_equal
+  | kid 'IN' { num1 , ... , numn }   :: :: set
+  | n_constraint \/ n_constraint'    :: :: or
+  | n_constraint /\ n_constraint'    :: :: and
+  | id ( typ_arg0 , ... , typ_argn ) :: :: app
+  | kid                              :: :: var
+  | true                             :: :: true
+  | false                            :: :: false
 
 % Note only id on the left and constants on the right in a
 % finite-set-bound, as we don't think we need anything more
@@ -366,7 +370,7 @@ type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
 
 type_def_aux  :: 'TD_' ::=
   {{ com type definition body }}
-  | typedef id name_scm_opt = typschm                                        :: :: abbrev
+  | type id typquant = typ_arg                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
   | typedef id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
     {{ com struct type definition }} {{ texlong }}
