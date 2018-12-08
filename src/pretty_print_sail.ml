@@ -165,7 +165,7 @@ let rec doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   (* Resugar set types like {|1, 2, 3|} *)
   | Typ_exist ([kid1],
                NC_aux (NC_set (kid2, ints), _),
-               Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid3, _)), _)]), _))
+               Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid3, _)), _)]), _))
          when Kid.compare kid1 kid2 == 0 && Kid.compare kid2 kid3 == 0 && Id.compare (mk_id "atom") id == 0 ->
      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
   | Typ_exist (kids, nc, typ) ->
@@ -181,11 +181,11 @@ let rec doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   | Typ_bidir (typ1, typ2) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
-and doc_typ_arg (Typ_arg_aux (ta_aux, _)) =
+and doc_typ_arg (A_aux (ta_aux, _)) =
   match ta_aux with
-  | Typ_arg_typ typ -> doc_typ typ
-  | Typ_arg_nexp nexp -> doc_nexp nexp
-  | Typ_arg_order o -> doc_ord o
+  | A_typ typ -> doc_typ typ
+  | A_nexp nexp -> doc_nexp nexp
+  | A_order o -> doc_ord o
 and doc_arg_typs = function
   | [typ] -> doc_typ typ
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)

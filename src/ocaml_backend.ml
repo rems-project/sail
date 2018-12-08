@@ -103,10 +103,10 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   | Typ_id id when string_of_id id = "exception" -> string "Printexc.to_string" ^^ space ^^ arg
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id eid, _)), _)])
+  | Typ_app (id, [A_aux (A_typ (Typ_aux (Typ_id eid, _)), _)])
        when string_of_id id = "list" && string_of_id eid = "bit" ->
      string "string_of_bits" ^^ space ^^ arg
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "list" ->
+  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
      let farg = gensym () in
      separate space [string "string_of_list \", \""; parens (separate space [string "fun"; farg; string "->"; ocaml_string_typ typ farg]); arg]
   | Typ_app (_, _) -> string "\"APP\""
@@ -147,9 +147,9 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
-and ocaml_typ_arg ctx (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
+and ocaml_typ_arg ctx (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
-  | Typ_arg_typ typ -> ocaml_typ ctx typ
+  | A_typ typ -> ocaml_typ ctx typ
   | _ -> failwith ("OCaml: unexpected type argument " ^ string_of_typ_arg typ_arg)
 
 let ocaml_typquant typq =
@@ -602,7 +602,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
       ^//^ (bar ^^ space ^^ ocaml_enum ctx ids))
      ^^ ocaml_def_end
      ^^ ocaml_string_of_enum ctx id ids
-  | TD_abbrev (id, typq, Typ_arg_aux (Typ_arg_typ typ, _)) ->
+  | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
      ^^ ocaml_def_end
      ^^ ocaml_string_of_abbrev ctx id typq typ
@@ -698,15 +698,15 @@ let ocaml_pp_generators ctx defs orig_types required =
                    string_of_typ full_typ))
     | Typ_app (id,args) ->
        List.fold_left add_req_from_typarg (add_req_from_id required id) args
-  and add_req_from_typarg required (Typ_arg_aux (arg,_)) =
+  and add_req_from_typarg required (A_aux (arg,_)) =
     match arg with
-    | Typ_arg_typ typ -> add_req_from_typ required typ
-    | Typ_arg_nexp _
-    | Typ_arg_order _
+    | A_typ typ -> add_req_from_typ required typ
+    | A_nexp _
+    | A_order _
       -> required
   and add_req_from_td required (TD_aux (td,(l,_))) =
     match td with
-    | TD_abbrev (_, _, Typ_arg_aux (Typ_arg_typ typ, _)) ->
+    | TD_abbrev (_, _, A_aux (A_typ typ, _)) ->
        add_req_from_typ required typ
     | TD_record (_, _, _, fields, _) ->
        List.fold_left (fun req (typ,_) -> add_req_from_typ req typ) required fields
@@ -723,7 +723,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       match Bindings.find id typemap with
       | TD_aux (td,_) ->
          (match td with
-          | TD_abbrev (_,tqs,Typ_arg_aux (Typ_arg_typ _, _)) -> tqs
+          | TD_abbrev (_,tqs,A_aux (A_typ _, _)) -> tqs
           | TD_record (_,_,tqs,_,_) -> tqs
           | TD_variant (_,_,tqs,_,_) -> tqs
           | TD_enum _ -> TypQ_aux (TypQ_no_forall,Unknown)
@@ -743,10 +743,10 @@ let ocaml_pp_generators ctx defs orig_types required =
     let name = "gen_" ^ type_name id in
     let make_tyarg kindedid =
       if is_nat_kopt kindedid
-      then mk_typ_arg (Typ_arg_nexp (nvar (kopt_kid kindedid)))
+      then mk_typ_arg (A_nexp (nvar (kopt_kid kindedid)))
       else if is_order_kopt kindedid
-      then mk_typ_arg (Typ_arg_order (mk_ord (Ord_var (kopt_kid kindedid))))
-      else mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var (kopt_kid kindedid))))
+      then mk_typ_arg (A_order (mk_ord (Ord_var (kopt_kid kindedid))))
+      else mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kindedid))))
     in
     let targs = List.map make_tyarg tquants in
     let gen_tyvars_pp, out_typ = match gen_tyvars with
@@ -778,20 +778,20 @@ let ocaml_pp_generators ctx defs orig_types required =
                                        | _ -> space ^^ separate space args_pp
         in
         string ("g.gen_" ^ typ_str) ^^ args_pp
-      and typearg (Typ_arg_aux (arg,_)) =
+      and typearg (A_aux (arg,_)) =
         match arg with
-        | Typ_arg_nexp (Nexp_aux (nexp,l) as full_nexp) ->
+        | A_nexp (Nexp_aux (nexp,l) as full_nexp) ->
            (match nexp with
             | Nexp_constant c -> string (Big_int.to_string c) (* TODO: overflow *)
             | Nexp_var v -> mk_arg v
             | _ -> raise (Reporting.err_todo l
                             ("Unsupported nexp for generators: " ^ string_of_nexp full_nexp)))
-        | Typ_arg_order (Ord_aux (ord,_)) ->
+        | A_order (Ord_aux (ord,_)) ->
            (match ord with
             | Ord_var v -> mk_arg v
             | Ord_inc -> string "true"
             | Ord_dec -> string "false")
-        | Typ_arg_typ typ -> parens (string "fun g -> " ^^ gen_type typ)
+        | A_typ typ -> parens (string "fun g -> " ^^ gen_type typ)
       in
       let make_subgen (Typ_aux (typ,l) as full_typ) =
         let typ_str, args_pp =
@@ -845,7 +845,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       let tqs, body, constructors, builders =
         let TD_aux (td,(l,_)) = Bindings.find id typemap in
         match td with
-        | TD_abbrev (_,tqs,Typ_arg_aux (Typ_arg_typ typ, _)) ->
+        | TD_abbrev (_,tqs,A_aux (A_typ typ, _)) ->
            tqs, gen_type typ, None, None
         | TD_variant (_,_,tqs,variants,_) ->
            tqs,

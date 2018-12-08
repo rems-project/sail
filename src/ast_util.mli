@@ -184,6 +184,9 @@ val quant_kopts : typquant -> kinded_id list
 val quant_split : typquant -> kinded_id list * n_constraint list
 val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
 
+val is_quant_kopt : quant_item -> bool
+val is_quant_constraint : quant_item -> bool
+  
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat

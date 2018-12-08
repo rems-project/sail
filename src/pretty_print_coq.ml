@@ -268,7 +268,7 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (trec t))
        KidSet.empty ts
-  | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
+  | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
      trec etyp
   | Typ_app(Id_aux (Id "implicit", _),_)
   (* TODO: update when complex atom types are sorted out *)
@@ -280,11 +280,11 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   | Typ_exist (kids,_,t) -> trec t
   | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-and coq_nvars_of_typ_arg (Typ_arg_aux (ta,_)) =
+and coq_nvars_of_typ_arg (A_aux (ta,_)) =
   match ta with
-  | Typ_arg_nexp nexp -> tyvars_of_nexp (orig_nexp nexp)
-  | Typ_arg_typ typ -> coq_nvars_of_typ typ
-  | Typ_arg_order _ -> KidSet.empty
+  | A_nexp nexp -> tyvars_of_nexp (orig_nexp nexp)
+  | A_typ typ -> coq_nvars_of_typ typ
+  | A_order _ -> KidSet.empty
 
 (* Follows Coq precedence levels *)
 let rec doc_nc_prop ctx nc =
@@ -353,8 +353,8 @@ let doc_nc_exp ctx nc =
 
 let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
   match typ with
-  | Typ_app(Id_aux (Id "range", _), [Typ_arg_aux(Typ_arg_nexp low,_);
-                                     Typ_arg_aux(Typ_arg_nexp high,_)]) ->
+  | Typ_app(Id_aux (Id "range", _), [A_aux(A_nexp low,_);
+                                     A_aux(A_nexp high,_)]) ->
          (* TODO: avoid name clashes *)
      let kid = mk_kid "rangevar" in
      let var = nvar kid in
@@ -411,16 +411,16 @@ let doc_typ, doc_atomic_typ =
       | _ -> app_typ atyp_needed ty
     and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_app(Id_aux (Id "vector", _), [
-          Typ_arg_aux (Typ_arg_nexp m, _);
-          Typ_arg_aux (Typ_arg_order ord, _);
-          Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
+          A_aux (A_nexp m, _);
+          A_aux (A_order ord, _);
+          A_aux (A_typ elem_typ, _)]) ->
          (* TODO: remove duplication with exists, below *)
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) -> (* TODO: coq-compatible simplification *)
              string "mword " ^^ doc_nexp ctx m
            | _ -> string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx m in
          if atyp_needed then parens tpp else tpp
-      | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
+      | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _), _)
@@ -430,7 +430,7 @@ let doc_typ, doc_atomic_typ =
          | None -> raise (Reporting.err_unreachable l __POS__ "Bad range type"))
       | Typ_app(Id_aux (Id "implicit", _),_) ->
          (string "Z")
-      | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
+      | Typ_app(Id_aux (Id "atom", _), [A_aux(A_nexp n,_)]) ->
          (string "Z")
       | Typ_app(id,args) ->
          let tpp = (doc_id_type id) ^^ space ^^ (separate_map space doc_typ_arg args) in
@@ -457,7 +457,7 @@ let doc_typ, doc_atomic_typ =
           in
           match ty' with
           | Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                              [Typ_arg_aux (Typ_arg_nexp nexp,_)]),_) ->
+                              [A_aux (A_nexp nexp,_)]),_) ->
              begin match nexp, kids with
              | (Nexp_aux (Nexp_var kid,_)), [kid'] when Kid.compare kid kid' == 0 ->
                 braces (separate space [doc_var ctx kid; colon; string "Z";
@@ -469,9 +469,9 @@ let doc_typ, doc_atomic_typ =
                                         ampersand; doc_arithfact ctx ~exists:kids nc])
              end
           | Typ_aux (Typ_app (Id_aux (Id "vector",_),
-                              [Typ_arg_aux (Typ_arg_nexp m, _);
-                               Typ_arg_aux (Typ_arg_order ord, _);
-                               Typ_arg_aux (Typ_arg_typ elem_typ, _)]),_) ->
+                              [A_aux (A_nexp m, _);
+                               A_aux (A_order ord, _);
+                               A_aux (A_typ elem_typ, _)]),_) ->
              (* TODO: proper handling of m, complex elem type, dedup with above *)
              let var = mk_kid "_vec" in (* TODO collision avoid *)
              let kid_set = KidSet.of_list kids in
@@ -515,10 +515,10 @@ let doc_typ, doc_atomic_typ =
         end*)
       | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
       | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-    and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
-      | Typ_arg_typ t -> app_typ true t
-      | Typ_arg_nexp n -> doc_nexp ctx n
-      | Typ_arg_order o -> empty
+    and doc_typ_arg (A_aux(t,_)) = match t with
+      | A_typ t -> app_typ true t
+      | A_nexp n -> doc_nexp ctx n
+      | A_order o -> empty
   in typ', atomic_typ
   in (fun ctx -> (fst (fns ctx))), (fun ctx -> (snd (fns ctx)))
 
@@ -530,10 +530,10 @@ let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
 (* TODO: should we resurrect this?
 let replace_typ_size ctxt env (Typ_aux (t,a)) =
   match t with
-  | Typ_app (Id_aux (Id "vector",_) as id, [Typ_arg_aux (Typ_arg_nexp size,_);ord;typ']) ->
+  | Typ_app (Id_aux (Id "vector",_) as id, [A_aux (A_nexp size,_);ord;typ']) ->
      begin
        let mk_typ nexp =
-         Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
+         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
        in
        match Type_check.solve env size with
        | Some n -> mk_typ (nconstant n)
@@ -645,10 +645,10 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
   | Typ_fn (t1,t2,_) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
   | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
   | Typ_app (Id_aux (Id "vector",_),
-             [Typ_arg_aux (Typ_arg_nexp size_nexp,_);
-              _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
+             [A_aux (A_nexp size_nexp,_);
+              _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
   | Typ_app (Id_aux (Id "itself",_),
-             [Typ_arg_aux (Typ_arg_nexp size_nexp,_)]) ->
+             [A_aux (A_nexp size_nexp,_)]) ->
      let size_nexp = nexp_simp size_nexp in
      if is_nexp_constant size_nexp then NexpSet.empty else
        NexpSet.singleton (orig_nexp size_nexp)
@@ -693,8 +693,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
        let arg_typs =
          match Env.expand_synonyms env ctor_typ with
          | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
-            (* The FIXME comes from the typechecker code, not sure what it's about... *)
-            let unifiers, _, _ (* FIXME! *) = unify l env ret_typ typ in
+            let unifiers = unify l env (tyvars_of_typ ret_typ) ret_typ typ in
             List.map (subst_unifiers unifiers) arg_typs
          | _ -> assert false
        in
@@ -742,14 +741,14 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
         | _ -> parens (separate_map comma_sp (doc_pat ctxt false exists_as_pairs) (List.combine pats typs)))
      | P_list pats ->
         let el_typ = match typ with
-          | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ el_typ,_)]),_)
+          | Typ_aux (Typ_app (f, [A_aux (A_typ el_typ,_)]),_)
               when Id.compare f (mk_id "list") = 0 -> el_typ
           | _ -> raise (Reporting.err_unreachable l __POS__ "list pattern not a list")
         in
         brackets (separate_map semi (fun p -> doc_pat ctxt false true (p, el_typ)) pats)
      | P_cons (p,p') ->
         let el_typ = match typ with
-          | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ el_typ,_)]),_)
+          | Typ_aux (Typ_app (f, [A_aux (A_typ el_typ,_)]),_)
               when Id.compare f (mk_id "list") = 0 -> el_typ
           | _ -> raise (Reporting.err_unreachable l __POS__ "list pattern not a list")
         in
@@ -776,7 +775,7 @@ let find_e_ids exp =
 
 let typ_id_of (Typ_aux (typ, l)) = match typ with
   | Typ_id id -> id
-  | Typ_app (register, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)])
+  | Typ_app (register, [A_aux (A_typ (Typ_aux (Typ_id id, _)), _)])
     when string_of_id register = "register" -> id
   | Typ_app (id, _) -> id
   | _ -> raise (Reporting.err_unreachable l __POS__ "failed to get type id")
@@ -861,16 +860,16 @@ let is_no_Z_proof_fn env id =
 let replace_atom_return_type ret_typ =
   (* TODO: more complex uses of atom *)
   match ret_typ with
-  | Typ_aux (Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp nexp,_)]),l) ->
+  | Typ_aux (Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp nexp,_)]),l) ->
      let kid = mk_kid "_retval" in (* TODO: collision avoidance *)
      true, Typ_aux (Typ_exist ([kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Parse_ast.Generated l)
   | _ -> false, ret_typ
 
 let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
   match argty, fnty with
-  | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux (Typ_arg_nexp nexp,_)]),
-    Typ_app(Id_aux (Id "range", _), [Typ_arg_aux(Typ_arg_nexp low,_);
-                                     Typ_arg_aux(Typ_arg_nexp high,_)]) ->
+  | Typ_app(Id_aux (Id "atom", _), [A_aux (A_nexp nexp,_)]),
+    Typ_app(Id_aux (Id "range", _), [A_aux(A_nexp low,_);
+                                     A_aux(A_nexp high,_)]) ->
      Type_check.prove env (nc_and (nc_eq nexp low) (nc_eq nexp high))
   | _ -> false
 
@@ -932,8 +931,8 @@ let doc_exp, doc_let =
              (* Avoid using helper functions which simplify the nexps *)
              is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
                match in_typ, out_typ with
-               | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
-                 Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
+               | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+                 Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
                   not (similar_nexps ctxt (env_of exp) n1 n2)
                | _ -> false
            in
@@ -1185,8 +1184,8 @@ let doc_exp, doc_let =
               (* Avoid using helper functions which simplify the nexps *)
               is_bitvector_typ typ_of_arg' && is_bitvector_typ typ_from_fn' &&
               match typ_of_arg', typ_from_fn' with
-              | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
-                Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
+              | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+                Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
                  not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in
@@ -1235,8 +1234,8 @@ let doc_exp, doc_let =
               (* Avoid using helper functions which simplify the nexps *)
               is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
               match in_typ, out_typ with
-              | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
-                Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
+              | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+                Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
                  not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in pack,unpack,autocast
@@ -1333,8 +1332,8 @@ let doc_exp, doc_let =
                 (* Avoid using helper functions which simplify the nexps *)
          is_bitvector_typ outer_typ' && is_bitvector_typ cast_typ' &&
            match outer_typ', cast_typ' with
-           | Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n1,_);_;_]),_),
-         Typ_aux (Typ_app (_,[Typ_arg_aux (Typ_arg_nexp n2,_);_;_]),_) ->
+           | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+         Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
               not (similar_nexps ctxt env n1 n2)
            | _ -> false
        in
@@ -1656,9 +1655,9 @@ let types_used_with_generic_eq defs =
        List.fold_left add_typ_arg (IdSet.add id idset) args
     | Typ_tup ts -> List.fold_left add_typ idset ts
     | _ -> idset
-  and add_typ_arg idset (Typ_arg_aux (ta,_)) =
+  and add_typ_arg idset (A_aux (ta,_)) =
     match ta with
-    | Typ_arg_typ typ -> add_typ idset typ
+    | A_typ typ -> add_typ idset typ
     | _ -> idset
   in
   let alg =
@@ -1711,7 +1710,7 @@ let rec doc_range (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
 let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
-  | TD_abbrev(id,typq,Typ_arg_aux (Typ_arg_typ typ, _)) ->
+  | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op coloneq
        (separate space [string "Definition"; doc_id_type id;
@@ -1729,7 +1728,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
         let quant_item = function
           | QI_aux (QI_id (KOpt_aux (KOpt_none kid, _)), l)
           | QI_aux (QI_id (KOpt_aux (KOpt_kind (_, kid), _)), l) ->
-            [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid, l)), l)]
+            [A_aux (A_nexp (Nexp_aux (Nexp_var kid, l)), l)]
           | _ -> [] in
         let targs = List.concat (List.map quant_item qs) in
         mk_typ (Typ_app (id, targs))
@@ -1879,7 +1878,7 @@ let rec atom_constraint ctxt (pat, typ) =
   match pat, typ with
   | P_aux (P_id id, _),
       Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                        [Typ_arg_aux (Typ_arg_nexp nexp,_)]),_) ->
+                        [A_aux (A_nexp nexp,_)]),_) ->
      (match nexp with
        (* When the kid is mapped to the id, we don't need a constraint *)
      | Nexp_aux (Nexp_var kid,_)
@@ -2039,12 +2038,12 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
            match destruct_exist env full_typ with
            | Some ([kid], NC_aux (NC_true,_),
                    Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                                     [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
+                                     [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
                when Kid.compare kid kid' == 0 ->
               parens (separate space [doc_id id; colon; string "Z"])
            | Some ([kid], nc,
                    Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                                     [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
+                                     [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
                when Kid.compare kid kid' == 0 ->
               (used_a_pattern := true;
                squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ]))
@@ -2169,8 +2168,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
     let ftyp = vector_typ (nconstant fsize) dec_ord bit_typ in
     let reftyp =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
-        [mk_typ_arg (Typ_arg_typ (mk_id_typ (mk_id tname)));
-         mk_typ_arg (Typ_arg_typ ftyp)])) in
+        [mk_typ_arg (A_typ (mk_id_typ (mk_id tname)));
+         mk_typ_arg (A_typ ftyp)])) in
     let rfannot = doc_tannot empty_ctxt Env.empty false reftyp in
     doc_op equals
      (concat [string "let "; parens (concat [string tname; underscore; doc_id fid; rfannot])])

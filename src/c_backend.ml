@@ -155,16 +155,16 @@ let rec ctyp_of_typ ctx typ =
         | _ -> CT_int
      end
 
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "list" ->
+  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
      CT_list (ctyp_of_typ ctx typ)
 
   (* When converting a sail bitvector type into C, we have three options in order of efficiency:
      - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
      - If the length is less than 64, then use a small bits type, sbits.
      - If the length may be larger than 64, use a large bits type lbits. *)
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _);
-                  Typ_arg_aux (Typ_arg_order ord, _);
-                  Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id vtyp_id, _)), _)])
+  | Typ_app (id, [A_aux (A_nexp n, _);
+                  A_aux (A_order ord, _);
+                  A_aux (A_typ (Typ_aux (Typ_id vtyp_id, _)), _)])
        when string_of_id id = "vector" && string_of_id vtyp_id = "bit" ->
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
@@ -173,14 +173,14 @@ let rec ctyp_of_typ ctx typ =
      | _ -> CT_lbits direction
      end
 
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n, _);
-                  Typ_arg_aux (Typ_arg_order ord, _);
-                  Typ_arg_aux (Typ_arg_typ typ, _)])
+  | Typ_app (id, [A_aux (A_nexp n, _);
+                  A_aux (A_order ord, _);
+                  A_aux (A_typ typ, _)])
        when string_of_id id = "vector" ->
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      CT_vector (direction, ctyp_of_typ ctx typ)
 
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "register" ->
+  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
      CT_ref (ctyp_of_typ ctx typ)
 
   | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> Bindings.bindings)
@@ -822,7 +822,7 @@ let rec compile_aval l ctx = function
      [iclear (CT_lbits true) gs]
 
   (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
-  | AV_vector (avals, Typ_aux (Typ_app (id, [_; Typ_arg_aux (Typ_arg_order ord, _); Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id bit_id, _)), _)]), _))
+  | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _); A_aux (A_typ (Typ_aux (Typ_id bit_id, _)), _)]), _))
        when string_of_id bit_id = "bit" && string_of_id id = "vector" && List.length avals <= 64 ->
      let len = List.length avals in
      let direction = match ord with
@@ -849,7 +849,7 @@ let rec compile_aval l ctx = function
      []
 
   (* Compiling a vector literal that isn't a bitvector *)
-  | AV_vector (avals, Typ_aux (Typ_app (id, [_; Typ_arg_aux (Typ_arg_order ord, _); Typ_arg_aux (Typ_arg_typ typ, _)]), _))
+  | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _); A_aux (A_typ typ, _)]), _))
        when string_of_id id = "vector" ->
      let len = List.length avals in
      let direction = match ord with
@@ -878,7 +878,7 @@ let rec compile_aval l ctx = function
 
   | AV_list (avals, Typ_aux (typ, _)) ->
      let ctyp = match typ with
-       | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "list" -> ctyp_of_typ ctx typ
+       | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> ctyp_of_typ ctx typ
        | _ -> c_error "Invalid list type"
      in
      let gs = gensym () in

@@ -166,10 +166,10 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
   Typ_aux (aux, l)
 
 and to_ast_typ_arg ctx (ATyp_aux (_, l) as atyp) = function
-  | K_type  -> Typ_arg_aux (Typ_arg_typ (to_ast_typ ctx atyp), l)
-  | K_int   -> Typ_arg_aux (Typ_arg_nexp (to_ast_nexp ctx atyp), l)
-  | K_order -> Typ_arg_aux (Typ_arg_order (to_ast_order ctx atyp), l)
-  | K_bool  -> Typ_arg_aux (Typ_arg_bool (to_ast_constraint ctx atyp), l)
+  | K_type  -> A_aux (A_typ (to_ast_typ ctx atyp), l)
+  | K_int   -> A_aux (A_nexp (to_ast_nexp ctx atyp), l)
+  | K_order -> A_aux (A_order (to_ast_order ctx atyp), l)
+  | K_bool  -> A_aux (A_bool (to_ast_constraint ctx atyp), l)
 
 and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
   let aux = match aux with
@@ -801,8 +801,8 @@ let quant_item_typ = function
   | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [mk_typ (Typ_var (kopt_kid kopt))]
   | _ -> []
 let quant_item_arg = function
-  | QI_aux (QI_id kopt, _) when is_nat_kopt kopt -> [mk_typ_arg (Typ_arg_nexp (nvar (kopt_kid kopt)))]
-  | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var (kopt_kid kopt))))]
+  | QI_aux (QI_id kopt, _) when is_nat_kopt kopt -> [mk_typ_arg (A_nexp (nvar (kopt_kid kopt)))]
+  | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt))))]
   | _ -> []
 let undefined_typschm id typq =
   let qis = quant_items typq in

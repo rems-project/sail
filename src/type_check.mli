@@ -80,6 +80,7 @@ type type_error =
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
+  | Err_because of type_error * type_error
 
 exception Type_error of l * type_error;;
 
@@ -359,7 +360,13 @@ val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 
-val unify : l -> Env.t -> typ -> typ -> typ_arg KBindings.t * kid list * n_constraint option
+(** [unify l env goals typ1 typ2] returns set of typ_arg bindings such
+   that substituting those bindings using every type variable in goals
+   will make typ1 and typ2 equal. Will throw a Unification_error if
+   typ1 and typ2 cannot unification (although unification in Sail is
+   not complete). Will throw a type error if any goals appear in in
+   typ2 (occurs check). *)
+val unify : l -> Env.t -> KidSet.t -> typ -> typ -> typ_arg KBindings.t
 
 val alpha_equivalent : Env.t -> typ -> typ -> bool
 

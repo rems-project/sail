@@ -133,7 +133,7 @@ let rec analyze_unresolved_quant2 locals ncs = function
          (* If we have a really anonymous type-variable, try to find a
             regular variable that corresponds to it. *)
          let is_linked v = function
-           | (id, (Immutable, (Typ_aux (Typ_app (ty_id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var v', _)), _)]), _) as typ)))
+           | (id, (Immutable, (Typ_aux (Typ_app (ty_id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)]), _) as typ)))
                 when Id.compare ty_id (mk_id "atom") = 0 && Kid.compare v v' = 0 ->
               [(v, nid id, typ)]
            | (id, (mut, typ)) ->
@@ -178,7 +178,7 @@ let rec analyze_unresolved_quant locals ncs = function
          (* If we have a really anonymous type-variable, try to find a
             regular variable that corresponds to it. *)
          let is_linked v = function
-           | (id, (Immutable, (Typ_aux (Typ_app (ty_id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var v', _)), _)]), _) as typ)))
+           | (id, (Immutable, (Typ_aux (Typ_app (ty_id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)]), _) as typ)))
                 when Id.compare ty_id (mk_id "atom") = 0 && Kid.compare v v' = 0 ->
               [(v, nid id, typ)]
            | (id, (mut, typ)) ->
@@ -206,18 +206,20 @@ let rec pp_type_error = function
      in
      coercion ^^ hardline
      ^^ (string "Coercion failed because:" ^//^ pp_type_error trigger)
-     ^^ hardline
-     ^^ (string "Possible reasons:" ^//^ separate_map hardline pp_type_error reasons)
+     ^^ if not (reasons = []) then
+          hardline
+          ^^ (string "Possible reasons:" ^//^ separate_map hardline pp_type_error reasons)
+        else
+          empty
 
   | Err_no_overloading (id, errs) ->
      string ("No overloadings for " ^ string_of_id id ^ ", tried:") ^//^
        group (separate_map hardline (fun (id, err) -> string (string_of_id id) ^^ colon ^//^ pp_type_error err) errs)
 
   | Err_subtype (typ1, typ2, constrs, locs) ->
-     enclose (string (Util.termcode 1)) (string (Util.termcode 21))
-             (separate space [ string (string_of_typ typ1);
-                               string "is not a subtype of";
-                               string (string_of_typ typ2) ])
+     (separate space [ string (string_of_typ typ1);
+                       string "is not a subtype of";
+                       string (string_of_typ typ2) ])
      ^/^ string "in context"
      ^/^ bullet pp_n_constraint constrs
      ^/^ string "where"
@@ -232,6 +234,12 @@ let rec pp_type_error = function
      ^^ twice hardline
      ^^ group (separate_map hardline (analyze_unresolved_quant locals ncs) quants)
 
+  (* We only got err, because of previous error, err' *)
+  | Err_because (err, err') ->
+     pp_type_error err
+     ^^ hardline ^^ string "This error occured because of a previous error:"
+     ^//^ pp_type_error err'
+    
   | Err_other str -> string str
 
 let rec string_of_type_error err =

@@ -315,7 +315,7 @@ let rec constraint_disj (NC_aux (nc_aux, l) as nc) =
   | _ -> [nc]
 
 let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
-let mk_typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown)
+let mk_typ_arg arg = A_aux (arg, Parse_ast.Unknown)
 let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
 let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
 
@@ -330,23 +330,23 @@ let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
 let real_typ = mk_id_typ (mk_id "real")
 let app_typ id args = mk_typ (Typ_app (id, args))
-let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (Typ_arg_typ typ)]))
+let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (A_typ typ)]))
 let atom_typ nexp =
-  mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))
+  mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp (nexp_simp nexp))]))
 let range_typ nexp1 nexp2 =
-  mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp1));
-                                   mk_typ_arg (Typ_arg_nexp (nexp_simp nexp2))]))
+  mk_typ (Typ_app (mk_id "range", [mk_typ_arg (A_nexp (nexp_simp nexp1));
+                                   mk_typ_arg (A_nexp (nexp_simp nexp2))]))
 let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
-let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
+let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (A_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tup typs)
 let function_typ arg_typs ret_typ eff = mk_typ (Typ_fn (arg_typs, ret_typ, eff))
 
 let vector_typ n ord typ =
   mk_typ (Typ_app (mk_id "vector",
-                   [mk_typ_arg (Typ_arg_nexp (nexp_simp n));
-                    mk_typ_arg (Typ_arg_order ord);
-                    mk_typ_arg (Typ_arg_typ typ)]))
+                   [mk_typ_arg (A_nexp (nexp_simp n));
+                    mk_typ_arg (A_order ord);
+                    mk_typ_arg (A_typ typ)]))
 
 let exc_typ = mk_id_typ (mk_id "exception")
 
@@ -374,10 +374,10 @@ let nc_var kid = mk_nc (NC_var kid)
 let nc_true = mk_nc NC_true
 let nc_false = mk_nc NC_false
 
-let arg_nexp ?loc:(l=Parse_ast.Unknown) n = Typ_arg_aux (Typ_arg_nexp n, l)
-let arg_order ?loc:(l=Parse_ast.Unknown) ord = Typ_arg_aux (Typ_arg_order ord, l)
-let arg_typ ?loc:(l=Parse_ast.Unknown) typ = Typ_arg_aux (Typ_arg_typ typ, l)
-let arg_bool ?loc:(l=Parse_ast.Unknown) nc = Typ_arg_aux (Typ_arg_bool nc, l)
+let arg_nexp ?loc:(l=Parse_ast.Unknown) n = A_aux (A_nexp n, l)
+let arg_order ?loc:(l=Parse_ast.Unknown) ord = A_aux (A_order ord, l)
+let arg_typ ?loc:(l=Parse_ast.Unknown) typ = A_aux (A_typ typ, l)
+let arg_bool ?loc:(l=Parse_ast.Unknown) nc = A_aux (A_bool nc, l)
 
 let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
 
@@ -426,6 +426,14 @@ let quant_map_items f = function
   | TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_no_forall, l)
   | TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (List.map f qis), l)
 
+let is_quant_kopt = function
+  | QI_aux (QI_id _, _) -> true
+  | _ -> false
+
+let is_quant_constraint = function
+  | QI_aux (QI_const _, _) -> true
+  | _ -> false
+                               
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
 let unaux_typ (Typ_aux (typ, _)) = typ
@@ -670,12 +678,12 @@ and string_of_typ_aux = function
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
-  | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
+  | A_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
 and string_of_typ_arg_aux = function
-  | Typ_arg_nexp n -> string_of_nexp n
-  | Typ_arg_typ typ -> string_of_typ typ
-  | Typ_arg_order o -> string_of_order o
-  | Typ_arg_bool nc -> string_of_n_constraint nc
+  | A_nexp n -> string_of_nexp n
+  | A_typ typ -> string_of_typ typ
+  | A_order o -> string_of_order o
+  | A_bool nc -> string_of_n_constraint nc
 and string_of_n_constraint = function
   | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
@@ -993,13 +1001,13 @@ module Typ = struct
     | Typ_bidir _, _ -> -1 | _, Typ_bidir _ -> 1
     | Typ_tup _, _ -> -1   | _, Typ_tup _ -> 1
     | Typ_exist _, _ -> -1 | _, Typ_exist _ -> 1
-  and arg_compare (Typ_arg_aux (ta1,_)) (Typ_arg_aux (ta2,_)) =
+  and arg_compare (A_aux (ta1,_)) (A_aux (ta2,_)) =
     match ta1, ta2 with
-    | Typ_arg_nexp n1,  Typ_arg_nexp n2  -> Nexp.compare n1 n2
-    | Typ_arg_typ t1,   Typ_arg_typ t2   -> compare t1 t2
-    | Typ_arg_order o1, Typ_arg_order o2 -> order_compare o1 o2
-    | Typ_arg_nexp _, _ -> -1  | _, Typ_arg_nexp _ -> 1
-    | Typ_arg_typ _, _  -> -1  | _, Typ_arg_typ _ -> 1
+    | A_nexp n1,  A_nexp n2  -> Nexp.compare n1 n2
+    | A_typ t1,   A_typ t2   -> compare t1 t2
+    | A_order o1, A_order o2 -> order_compare o1 o2
+    | A_nexp _, _ -> -1  | _, A_nexp _ -> 1
+    | A_typ _, _  -> -1  | _, A_typ _ -> 1
 end
 
 module TypMap = Map.Make(Typ)
@@ -1055,21 +1063,21 @@ let is_ref_typ (Typ_aux (typ_aux, _)) = match typ_aux with
 
 let rec is_vector_typ = function
   | Typ_aux (Typ_app (Id_aux (Id "vector",_), [_;_;_]), _) -> true
-  | Typ_aux (Typ_app (Id_aux (Id "register",_), [Typ_arg_aux (Typ_arg_typ rtyp,_)]), _) ->
+  | Typ_aux (Typ_app (Id_aux (Id "register",_), [A_aux (A_typ rtyp,_)]), _) ->
     is_vector_typ rtyp
   | _ -> false
 
 let typ_app_args_of = function
   | Typ_aux (Typ_app (Id_aux (Id c,_), targs), l) ->
-    (c, List.map (fun (Typ_arg_aux (a,_)) -> a) targs, l)
+    (c, List.map (fun (A_aux (a,_)) -> a) targs, l)
   | Typ_aux (_, l) as typ ->
      raise (Reporting.err_typ l
        ("typ_app_args_of called on non-app type " ^ string_of_typ typ))
 
 let rec vector_typ_args_of typ = match typ_app_args_of typ with
-  | ("vector", [Typ_arg_nexp len; Typ_arg_order ord; Typ_arg_typ etyp], l) ->
+  | ("vector", [A_nexp len; A_order ord; A_typ etyp], l) ->
      (nexp_simp len, ord, etyp)
-  | ("register", [Typ_arg_typ rtyp], _) -> vector_typ_args_of rtyp
+  | ("register", [A_typ rtyp], _) -> vector_typ_args_of rtyp
   | (_, _, l) ->
      raise (Reporting.err_typ l
        ("vector_typ_args_of called on non-vector type " ^ string_of_typ typ))
@@ -1162,12 +1170,12 @@ and tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_exist (kids, nc, t) ->
      let s = KidSet.union (tyvars_of_typ t) (tyvars_of_constraint nc) in
      List.fold_left (fun s k -> KidSet.remove k s) s kids
-and tyvars_of_typ_arg (Typ_arg_aux (ta,_)) =
+and tyvars_of_typ_arg (A_aux (ta,_)) =
   match ta with
-  | Typ_arg_nexp nexp -> tyvars_of_nexp nexp
-  | Typ_arg_typ typ -> tyvars_of_typ typ
-  | Typ_arg_order _ -> KidSet.empty
-  | Typ_arg_bool nc -> tyvars_of_constraint nc
+  | A_nexp nexp -> tyvars_of_nexp nexp
+  | A_typ typ -> tyvars_of_typ typ
+  | A_order _ -> KidSet.empty
+  | A_bool nc -> tyvars_of_constraint nc
 
 let tyvars_of_quant_item (QI_aux (qi, _)) = match qi with
   | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
@@ -1184,7 +1192,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
   | Typ_app (_,[size;_;_]) when mwords && is_bitvector_typ typ ->
      wrap (E_app (mk_id "undefined_bitvector",
        undefined_of_typ_args mwords l annot size)) typ
-  | Typ_app (atom, [Typ_arg_aux (Typ_arg_nexp i, _)]) when string_of_id atom = "atom" ->
+  | Typ_app (atom, [A_aux (A_nexp i, _)]) when string_of_id atom = "atom" ->
      wrap (E_sizeof i) typ
   | Typ_app (id, args) ->
      wrap (E_app (prepend_id "undefined_" id,
@@ -1199,11 +1207,11 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
   | Typ_internal_unknown | Typ_bidir _ | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
-and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
+and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
-  | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
-  | Typ_arg_typ typ -> [undefined_of_typ mwords l annot typ]
-  | Typ_arg_order _ -> []
+  | A_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
+  | A_typ typ -> [undefined_of_typ mwords l annot typ]
+  | A_order _ -> []
 
 let destruct_pexp (Pat_aux (pexp,ann)) =
   match pexp with
@@ -1426,13 +1434,13 @@ let rec locate_typ f (Typ_aux (typ_aux, l)) =
   in
   Typ_aux (typ_aux, f l)
 
-and locate_typ_arg f (Typ_arg_aux (typ_arg_aux, l)) =
+and locate_typ_arg f (A_aux (typ_arg_aux, l)) =
   let typ_arg_aux = match typ_arg_aux with
-    | Typ_arg_nexp nexp -> Typ_arg_nexp (locate_nexp f nexp)
-    | Typ_arg_typ typ -> Typ_arg_typ (locate_typ f typ)
-    | Typ_arg_order ord -> Typ_arg_order (locate_order f ord)
+    | A_nexp nexp -> A_nexp (locate_nexp f nexp)
+    | A_typ typ -> A_typ (locate_typ f typ)
+    | A_order ord -> A_order (locate_order f ord)
   in
-  Typ_arg_aux (typ_arg_aux, f l)
+  A_aux (typ_arg_aux, f l)
 
 let rec locate_typ_pat f (TP_aux (tp_aux, l)) =
   let tp_aux = match tp_aux with
@@ -1552,7 +1560,7 @@ let unique l =
 let order_subst_aux sv subst = function
   | Ord_var kid ->
      begin match subst with
-     | Typ_arg_aux (Typ_arg_order ord, _) when Kid.compare kid sv = 0 ->
+     | A_aux (A_order ord, _) when Kid.compare kid sv = 0 ->
         unaux_order ord
      | _ -> Ord_var kid
      end
@@ -1565,7 +1573,7 @@ let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv s
 and nexp_subst_aux sv subst = function
   | Nexp_var kid ->
      begin match subst with
-     | Typ_arg_aux (Typ_arg_nexp n, _) when Kid.compare kid sv = 0 -> unaux_nexp n
+     | A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> unaux_nexp n
      | _ -> Nexp_var kid
      end
   | Nexp_id id -> Nexp_id id
@@ -1590,7 +1598,7 @@ and constraint_subst_aux l sv subst = function
   | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_set (kid, ints) as set_nc ->
      begin match subst with
-     | Typ_arg_aux (Typ_arg_nexp n, _) when Kid.compare kid sv = 0 ->
+     | A_aux (A_nexp n, _) when Kid.compare kid sv = 0 ->
         nexp_set_to_or l n ints
      | _ -> set_nc
      end
@@ -1599,7 +1607,7 @@ and constraint_subst_aux l sv subst = function
   | NC_app (id, args) -> NC_app (id, List.map (typ_arg_subst sv subst) args)
   | NC_var kid ->
      begin match subst with
-     | Typ_arg_aux (Typ_arg_bool nc, _) when Kid.compare kid sv = 0 ->
+     | A_aux (A_bool nc, _) when Kid.compare kid sv = 0 ->
         unaux_constraint nc
      | _ -> NC_var kid
      end
@@ -1612,7 +1620,7 @@ and typ_subst_aux sv subst = function
   | Typ_id v -> Typ_id v
   | Typ_var kid ->
      begin match subst with
-     | Typ_arg_aux (Typ_arg_typ typ, _) when Kid.compare kid sv = 0 ->
+     | A_aux (A_typ typ, _) when Kid.compare kid sv = 0 ->
         unaux_typ typ
      | _ -> Typ_var kid
      end
@@ -1623,19 +1631,19 @@ and typ_subst_aux sv subst = function
   | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
   | Typ_exist (kids, nc, typ) -> Typ_exist (kids, constraint_subst sv subst nc, typ_subst sv subst typ)
 
-and typ_arg_subst sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_arg_subst_aux sv subst arg, l)
+and typ_arg_subst sv subst (A_aux (arg, l)) = A_aux (typ_arg_subst_aux sv subst arg, l)
 and typ_arg_subst_aux sv subst = function
-  | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv subst nexp)
-  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst sv subst typ)
-  | Typ_arg_order ord -> Typ_arg_order (order_subst sv subst ord)
-  | Typ_arg_bool nc -> Typ_arg_bool (constraint_subst sv subst nc)
+  | A_nexp nexp -> A_nexp (nexp_subst sv subst nexp)
+  | A_typ typ -> A_typ (typ_subst sv subst typ)
+  | A_order ord -> A_order (order_subst sv subst ord)
+  | A_bool nc -> A_bool (constraint_subst sv subst nc)
 
 let subst_kid subst sv v x =
   x
-  |> subst sv (mk_typ_arg (Typ_arg_bool (nc_var v)))
-  |> subst sv (mk_typ_arg (Typ_arg_nexp (nvar v)))
-  |> subst sv (mk_typ_arg (Typ_arg_order (Ord_aux (Ord_var v, Parse_ast.Unknown))))
-  |> subst sv (mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var v))))
+  |> subst sv (mk_typ_arg (A_bool (nc_var v)))
+  |> subst sv (mk_typ_arg (A_nexp (nvar v)))
+  |> subst sv (mk_typ_arg (A_order (Ord_aux (Ord_var v, Parse_ast.Unknown))))
+  |> subst sv (mk_typ_arg (A_typ (mk_typ (Typ_var v))))
 
 let quant_item_subst_kid_aux sv subst = function
   | QI_id (KOpt_aux (KOpt_none kid, l)) as qid ->

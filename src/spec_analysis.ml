@@ -101,7 +101,7 @@ and free_type_names_maybe_t consider_var = function
   | Some t -> free_type_names_t consider_var t
   | None -> mt
 and free_type_names_t_arg consider_var = function
-  | Typ_arg_aux (Typ_arg_typ t, _) -> free_type_names_t consider_var t
+  | A_aux (A_typ t, _) -> free_type_names_t consider_var t
   | _ -> mt
 and free_type_names_t_args consider_var targs =
   nameset_bigunion (List.map (free_type_names_t_arg consider_var) targs)
@@ -129,9 +129,9 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
   | Typ_exist (kids,_,t') -> fv_of_typ consider_var (List.fold_left (fun b (Kid_aux (Var v,_)) -> Nameset.add v b) bound kids) used t'
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 
-and fv_of_targ consider_var bound used (Ast.Typ_arg_aux(targ,_)) : Nameset.t = match targ with
-  | Typ_arg_typ t -> fv_of_typ consider_var bound used t
-  | Typ_arg_nexp n -> fv_of_nexp consider_var bound used n
+and fv_of_targ consider_var bound used (Ast.A_aux(targ,_)) : Nameset.t = match targ with
+  | A_typ t -> fv_of_typ consider_var bound used t
+  | A_nexp n -> fv_of_nexp consider_var bound used n
   | _ -> used
 
 and fv_of_nexp consider_var bound used (Ast.Nexp_aux(n,_)) = match n with
@@ -309,7 +309,7 @@ let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
   | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
 
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
-  | TD_abbrev(id,typq,Typ_arg_aux(Typ_arg_typ typ, l)) ->
+  | TD_abbrev(id,typq,A_aux(A_typ typ, l)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq,typ), l) in
      init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
   | TD_record(id,_,typq,tids,_) ->

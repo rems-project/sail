@@ -224,14 +224,14 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
      List.fold_left (fun s t -> NexpSet.union s (trec t))
        NexpSet.empty ts
   | Typ_app(Id_aux (Id "vector", _), [
-    Typ_arg_aux (Typ_arg_nexp m, _);
-    Typ_arg_aux (Typ_arg_order ord, _);
-    Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
+    A_aux (A_nexp m, _);
+    A_aux (A_order ord, _);
+    A_aux (A_typ elem_typ, _)]) ->
      let m = nexp_simp m in
      if !opt_mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
        NexpSet.singleton (orig_nexp m)
      else trec elem_typ
-  | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
+  | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
      trec etyp
   | Typ_app(Id_aux (Id "range", _),_)
   | Typ_app(Id_aux (Id "implicit", _),_)
@@ -242,11 +242,11 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   | Typ_exist (kids,_,t) -> trec t
   | Typ_bidir _ -> raise (Reporting.err_unreachable l __POS__ "Lem doesn't support bidir types")
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
-and lem_nexps_of_typ_arg (Typ_arg_aux (ta,_)) =
+and lem_nexps_of_typ_arg (A_aux (ta,_)) =
   match ta with
-  | Typ_arg_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
-  | Typ_arg_typ typ -> lem_nexps_of_typ typ
-  | Typ_arg_order _ -> NexpSet.empty
+  | A_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
+  | A_typ typ -> lem_nexps_of_typ typ
+  | A_order _ -> NexpSet.empty
 
 let lem_tyvars_of_typ typ =
   NexpSet.fold (fun nexp ks -> KidSet.union ks (tyvars_of_nexp nexp))
@@ -274,9 +274,9 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | _ -> app_typ atyp_needed ty
     and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_app(Id_aux (Id "vector", _), [
-          Typ_arg_aux (Typ_arg_nexp m, _);
-          Typ_arg_aux (Typ_arg_order ord, _);
-          Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
+          A_aux (A_nexp m, _);
+          A_aux (A_order ord, _);
+          A_aux (A_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when !opt_mwords ->
              string "mword " ^^ doc_nexp_lem (nexp_simp m)
@@ -287,14 +287,14 @@ let doc_typ_lem, doc_atomic_typ_lem =
                 "cannot pretty-print bitvector type with non-constant length")) *)
            | _ -> string "list" ^^ space ^^ typ elem_typ in
          if atyp_needed then parens tpp else tpp
-      | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
+      | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
       | Typ_app(Id_aux (Id "implicit", _),_) ->
          (string "integer")
-      | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
+      | Typ_app(Id_aux (Id "atom", _), [A_aux(A_nexp n,_)]) ->
          (string "integer")
       | Typ_app(id,args) ->
          let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space doc_typ_arg_lem args) in
@@ -325,10 +325,10 @@ let doc_typ_lem, doc_atomic_typ_lem =
         end
       | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
       | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-    and doc_typ_arg_lem (Typ_arg_aux(t,_)) = match t with
-      | Typ_arg_typ t -> app_typ true t
-      | Typ_arg_nexp n -> doc_nexp_lem (nexp_simp n)
-      | Typ_arg_order o -> empty
+    and doc_typ_arg_lem (A_aux(t,_)) = match t with
+      | A_typ t -> app_typ true t
+      | A_nexp n -> doc_nexp_lem (nexp_simp n)
+      | A_order o -> empty
   in typ', atomic_typ
 
 (* Check for variables in types that would be pretty-printed. *)
@@ -338,10 +338,10 @@ let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
 
 let replace_typ_size ctxt env (Typ_aux (t,a)) =
   match t with
-  | Typ_app (Id_aux (Id "vector",_) as id, [Typ_arg_aux (Typ_arg_nexp size,_);ord;typ']) ->
+  | Typ_app (Id_aux (Id "vector",_) as id, [A_aux (A_nexp size,_);ord;typ']) ->
      begin
        let mk_typ nexp =
-         Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
+         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
        in
        match Type_check.solve env size with
        | Some n -> mk_typ (nconstant n)
@@ -443,16 +443,16 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
     | Typ_fn (ts,t,_) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
     | Typ_app (Id_aux (Id "vector",_),
-               [Typ_arg_aux (Typ_arg_nexp size_nexp,_);
-                _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
+               [A_aux (A_nexp size_nexp,_);
+                _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
     | Typ_app (Id_aux (Id "itself",_),
-               [Typ_arg_aux (Typ_arg_nexp size_nexp,_)]) ->
+               [A_aux (A_nexp size_nexp,_)]) ->
        let size_nexp = nexp_simp size_nexp in
        if is_nexp_constant size_nexp then NexpSet.empty else
        NexpSet.singleton (orig_nexp size_nexp)
     | Typ_app (id, args) ->
        let add_arg_nexps nexps = function
-         | Typ_arg_aux (Typ_arg_typ typ, _) ->
+         | A_aux (A_typ typ, _) ->
             NexpSet.union nexps (typeclass_nexps typ)
          | _ -> nexps
        in
@@ -533,8 +533,8 @@ let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
      let visible_kids = KidSet.inter (KidSet.of_list kids) (lem_tyvars_of_typ t) in
      typ_needs_printed t && KidSet.is_empty visible_kids
   | _ -> false
-and typ_needs_printed_arg (Typ_arg_aux (targ, _)) = match targ with
-  | Typ_arg_typ t -> typ_needs_printed t
+and typ_needs_printed_arg (A_aux (targ, _)) = match targ with
+  | A_typ t -> typ_needs_printed t
   | _ -> false
 
 let contains_early_return exp =
@@ -553,7 +553,7 @@ let find_e_ids exp =
 
 let typ_id_of (Typ_aux (typ, l)) = match typ with
   | Typ_id id -> id
-  | Typ_app (register, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)])
+  | Typ_app (register, [A_aux (A_typ (Typ_aux (Typ_id id, _)), _)])
     when string_of_id register = "register" -> id
   | Typ_app (id, _) -> id
   | _ -> raise (Reporting.err_unreachable l __POS__ "failed to get type id")
@@ -1006,7 +1006,7 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
 let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
-  | TD_abbrev(id,typq,Typ_arg_aux (Typ_arg_typ typ, _)) ->
+  | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op equals
        (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
@@ -1022,7 +1022,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
         let quant_item = function
           | QI_aux (QI_id (KOpt_aux (KOpt_none kid, _)), l)
           | QI_aux (QI_id (KOpt_aux (KOpt_kind (_, kid), _)), l) ->
-            [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid, l)), l)]
+            [A_aux (A_nexp (Nexp_aux (Nexp_var kid, l)), l)]
           | _ -> [] in
         let targs = List.concat (List.map quant_item qs) in
         mk_typ (Typ_app (id, targs))
@@ -1031,8 +1031,8 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
     (* let doc_field (ftyp, fid) =
       let reftyp =
         mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
-          [mk_typ_arg (Typ_arg_typ rectyp);
-           mk_typ_arg (Typ_arg_typ ftyp)])) in
+          [mk_typ_arg (A_typ rectyp);
+           mk_typ_arg (A_typ ftyp)])) in
       let rfannot = doc_tannot_lem empty_ctxt env false reftyp in
       let get, set =
         string "rec_val" ^^ dot ^^ fname fid,
@@ -1389,8 +1389,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
     let ftyp = vector_typ (nconstant fsize) dec_ord bit_typ in
     let reftyp =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
-        [mk_typ_arg (Typ_arg_typ (mk_id_typ (mk_id tname)));
-         mk_typ_arg (Typ_arg_typ ftyp)])) in
+        [mk_typ_arg (A_typ (mk_id_typ (mk_id tname)));
+         mk_typ_arg (A_typ ftyp)])) in
     let rfannot = doc_tannot_lem empty_ctxt Env.empty false reftyp in
     doc_op equals
      (concat [string "let "; parens (concat [string tname; underscore; doc_id_lem fid; rfannot])])

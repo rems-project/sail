@@ -140,10 +140,10 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_app(Id_aux (Id "range", _), [
-    Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
-    Typ_arg_aux(Typ_arg_nexp m, _);]) ->
+    A_aux(A_nexp (Nexp_aux(Nexp_constant n, _)), _);
+    A_aux(A_nexp m, _);]) ->
     (squarebars (if Big_int.equal n Big_int.zero then nexp m else doc_op colon (doc_int n) (nexp m)))
-  | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
+  | Typ_app(Id_aux (Id "atom", _), [A_aux(A_nexp n,_)]) ->
      (squarecolons (nexp n))
   | Typ_app(id,args) ->
       (* trailing space to avoid >> token in case of nested app types *)
@@ -158,13 +158,13 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
      group (parens (typ ty))
   | Typ_internal_unknown -> string "UNKNOWN"
 
-  and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
+  and doc_typ_arg (A_aux(t,_)) = match t with
   (* Be careful here because typ_arg is implemented as nexp in the
    * parser - in practice falling through app_typ after all the proper nexp
-   * cases; so Typ_arg_typ has the same precedence as a Typ_app *)
-  | Typ_arg_typ t -> app_typ t
-  | Typ_arg_nexp n -> nexp n
-  | Typ_arg_order o -> doc_ord o
+   * cases; so A_typ has the same precedence as a Typ_app *)
+  | A_typ t -> app_typ t
+  | A_nexp n -> nexp n
+  | A_order o -> doc_ord o
 
   (* same trick to handle precedence of nexp *)
   and nexp ne = sum_typ ne

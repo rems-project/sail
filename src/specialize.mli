@@ -68,6 +68,6 @@ val polymorphic_functions : (kinded_id -> bool) -> 'a defs -> IdSet.t
    which case specialize returns the AST unmodified. *)
 val specialize : tannot defs -> Env.t -> tannot defs * Env.t
 
-val instantiations_of : id -> tannot defs -> uvar KBindings.t list
+val instantiations_of : id -> tannot defs -> typ_arg KBindings.t list
 
-val string_of_instantiation : uvar KBindings.t -> string
+val string_of_instantiation : typ_arg KBindings.t -> string

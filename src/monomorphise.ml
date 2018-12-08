@@ -143,11 +143,11 @@ let subst_src_typ substs t =
        let substs = List.fold_left (fun sub v -> KBindings.remove v sub) substs kids in
        re (Typ_exist (kids,nc,s_styp substs t))
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-  and s_starg substs (Typ_arg_aux (ta,l) as targ) =
+  and s_starg substs (A_aux (ta,l) as targ) =
     match ta with
-    | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (subst_nexp substs ne),l)
-    | Typ_arg_typ t -> Typ_arg_aux (Typ_arg_typ (s_styp substs t),l)
-    | Typ_arg_order _ -> targ
+    | A_nexp ne -> A_aux (A_nexp (subst_nexp substs ne),l)
+    | A_typ t -> A_aux (A_typ (s_styp substs t),l)
+    | A_order _ -> targ
   in s_styp substs t
 
 let make_vector_lit sz i =
@@ -339,14 +339,14 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
      | _ -> insts', Typ_aux (Typ_exist (kids', nc, t'), l)
     end
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-and inst_src_typ_arg insts (Typ_arg_aux (ta,l) as tyarg) =
+and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
   match ta with
-  | Typ_arg_nexp _
-  | Typ_arg_order _
+  | A_nexp _
+  | A_order _
       -> insts, tyarg
-  | Typ_arg_typ typ ->
+  | A_typ typ ->
      let insts', typ' = inst_src_type insts typ in
-     insts', Typ_arg_aux (Typ_arg_typ typ',l)
+     insts', A_aux (A_typ typ',l)
 
 let rec contains_exist (Typ_aux (ty,l)) =
   match ty with
@@ -359,12 +359,12 @@ let rec contains_exist (Typ_aux (ty,l)) =
   | Typ_app (_,args) -> List.exists contains_exist_arg args
   | Typ_exist _ -> true
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-and contains_exist_arg (Typ_arg_aux (arg,_)) =
+and contains_exist_arg (A_aux (arg,_)) =
   match arg with
-  | Typ_arg_nexp _
-  | Typ_arg_order _
+  | A_nexp _
+  | A_order _
       -> false
-  | Typ_arg_typ typ -> contains_exist typ
+  | A_typ typ -> contains_exist typ
 
 let rec size_nvars_nexp (Nexp_aux (ne,_)) =
   match ne with
@@ -402,8 +402,8 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
                                         List.concat insts, Typ_aux (Typ_tup tys,l)) (cross' tys) in
        (kidset_bigunion vars, insttys)
     | Typ_app (Id_aux (Id "vector",_),
-               [Typ_arg_aux (Typ_arg_nexp sz,_);
-                _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+               [A_aux (A_nexp sz,_);
+                _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (KidSet.of_list (size_nvars_nexp sz), [[],typ])
     | Typ_app (_, tas) ->
        (KidSet.empty,[[],typ])  (* We only support sizes for bitvectors mentioned explicitly, not any buried
@@ -525,7 +525,7 @@ let refine_constructor refinements l env id args =
        match Type_check.destruct_exist env constr_ty with
        | None -> None
        | Some (kids,nc,constr_ty) ->
-          let (bindings,_,_) = Type_check.unify l env constr_ty arg_ty in
+          let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty  in
           let find_kid kid = try Some (KBindings.find kid bindings) with Not_found -> None in
           let bindings = List.map find_kid kids in
           let matches_refinement (mapping,_,_) =
@@ -533,7 +533,7 @@ let refine_constructor refinements l env id args =
               (fun v (_,w) ->
                 match v,w with
                 | _,None -> true
-                | Some (U_nexp (Nexp_aux (Nexp_constant n, _))),Some m -> Big_int.equal n m
+                | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)),Some m -> Big_int.equal n m
                 | _,_ -> false) bindings mapping
           in
           match List.find matches_refinement irefinements with
@@ -699,25 +699,25 @@ let fabricate_nexp_exist env l typ kids nc typ' =
   match kids,nc,Env.expand_synonyms env typ' with
   | ([kid],NC_aux (NC_set (kid',i::_),_),
      Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
       when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 ->
      Nexp_aux (Nexp_constant i,Unknown)
   | ([kid],NC_aux (NC_true,_),
      Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
       when Kid.compare kid kid'' = 0 ->
      nint 32
   | ([kid],NC_aux (NC_set (kid',i::_),_),
      Typ_aux (Typ_app (Id_aux (Id "range",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        A_aux (A_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
       when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
         Kid.compare kid kid''' = 0 ->
      Nexp_aux (Nexp_constant i,Unknown)
   | ([kid],NC_aux (NC_true,_),
      Typ_aux (Typ_app (Id_aux (Id "range",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        A_aux (A_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
       when Kid.compare kid kid'' = 0 &&
         Kid.compare kid kid''' = 0 ->
      nint 32
@@ -734,7 +734,7 @@ let fabricate_nexp l tannot =
 
 let atom_typ_kid kid = function
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                      [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_) ->
+                      [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_) ->
      Kid.compare kid kid' = 0
   | _ -> false
 
@@ -850,7 +850,7 @@ let try_app (l,ann) (id,args) =
        E_aux (E_lit L_aux (L_num i,_), _);
        E_aux (E_lit L_aux (L_num len,_), _)] ->
        (match Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) with
-       | Typ_aux (Typ_app (_,[_;Typ_arg_aux (Typ_arg_order ord,_);_]),_) ->
+       | Typ_aux (Typ_app (_,[_;A_aux (A_order ord,_);_]),_) ->
           (match slice_lit lit i len ord with
           | Some lit' -> Some (E_aux (E_lit lit',(l,ann)))
           | None -> None)
@@ -1698,7 +1698,7 @@ let split_defs all_errors splits defs =
               [L_zero; L_one]
          | _ -> cannot ("don't know about type " ^ string_of_id id))
 
-    | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+    | Typ_app (Id_aux (Id "vector",_), [A_aux (A_nexp len,_);_;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
           let lits = make_vectors (Big_int.to_int sz) in
@@ -1709,7 +1709,7 @@ let split_defs all_errors splits defs =
           cannot ("length not constant, " ^ string_of_nexp len)
        )
     (* set constrained numbers *)
-    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (value,_) as nexp),_)]) ->
+    | Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (value,_) as nexp),_)]) ->
        begin
          let mk_lit kid i =
             let lit = L_aux (L_num i,new_l) in
@@ -1844,7 +1844,7 @@ let split_defs all_errors splits defs =
                    let kid_subst = match orig_typ with
                      | Typ_aux
                          (Typ_app (Id_aux (Id "atom",_),
-                                   [Typ_arg_aux (Typ_arg_nexp
+                                   [A_aux (A_nexp
                                                    (Nexp_aux (Nexp_var var,_)),_)]),_) ->
                         [var,nconstant j]
                      | _ -> []
@@ -2188,18 +2188,18 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
   | Typ_exist (kids,_,typ) ->
      List.fold_left (fun s k -> KidSet.remove k s) (sizes_of_typ typ) kids
   | Typ_app (Id_aux (Id "vector",_),
-             [Typ_arg_aux (Typ_arg_nexp size,_);
-              _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+             [A_aux (A_nexp size,_);
+              _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
      KidSet.of_list (size_nvars_nexp size)
   | Typ_app (_,tas) ->
      kidset_bigunion (List.map sizes_of_typarg tas)
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-and sizes_of_typarg (Typ_arg_aux (ta,_)) =
+and sizes_of_typarg (A_aux (ta,_)) =
   match ta with
-    Typ_arg_nexp _
-  | Typ_arg_order _
+    A_nexp _
+  | A_order _
     -> KidSet.empty
-  | Typ_arg_typ typ -> sizes_of_typ typ
+  | A_typ typ -> sizes_of_typ typ
 
 let sizes_of_annot (l, tannot) =
   match destruct_tannot tannot with
@@ -2262,17 +2262,17 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
   let mk_exp nexp l l' =
     let nexp = replace_size nexp in
     E_aux (E_cast (wrap (Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                                           [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated Unknown)),
+                                           [A_aux (A_nexp nexp,l')]),Generated Unknown)),
                    E_aux (E_app (Id_aux (Id "make_the_value",Generated Unknown),[exp]),(Generated l,empty_tannot))),
            (Generated l,empty_tannot))
   in
   match typ with
   | Typ_aux (Typ_app (Id_aux (Id "range",_),
-                      [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp nexp',_)]),_)
+                      [A_aux (A_nexp nexp,l');A_aux (A_nexp nexp',_)]),_)
     when nexp_identical nexp nexp' ->
      mk_exp nexp l l'
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                      [Typ_arg_aux (Typ_arg_nexp nexp,l')]),_) ->
+                      [A_aux (A_nexp nexp,l')]),_) ->
      mk_exp nexp l l'
   | _ -> raise (Reporting.err_unreachable l __POS__
                   "atom stopped being an atom?")
@@ -2281,13 +2281,13 @@ let replace_type env typ =
   let Typ_aux (t,l) = Env.expand_synonyms env typ in
   match t with
   | Typ_app (Id_aux (Id "range",_),
-             [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp _,_)]) ->
+             [A_aux (A_nexp nexp,l');A_aux (A_nexp _,_)]) ->
      Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
+                       [A_aux (A_nexp nexp,l')]),Generated l)
   | Typ_app (Id_aux (Id "atom",_),
-                      [Typ_arg_aux (Typ_arg_nexp nexp,l')]) ->
+                      [A_aux (A_nexp nexp,l')]) ->
      Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
+                       [A_aux (A_nexp nexp,l')]),Generated l)
   | _ -> raise (Reporting.err_unreachable l __POS__
                   "atom stopped being an atom?")
 
@@ -2308,12 +2308,12 @@ let rewrite_size_parameters env (Defs defs) =
       let nmap =
         match Env.base_typ_of env typ with
           Typ_aux (Typ_app(Id_aux (Id "range",_),
-                           [Typ_arg_aux (Typ_arg_nexp nexp,_);
-                            Typ_arg_aux (Typ_arg_nexp nexp',_)]),_)
+                           [A_aux (A_nexp nexp,_);
+                            A_aux (A_nexp nexp',_)]),_)
             when Nexp.compare nexp nexp' = 0 && not (NexpMap.mem nexp nmap) ->
               NexpMap.add nexp i nmap
         | Typ_aux (Typ_app(Id_aux (Id "atom", _),
-                           [Typ_arg_aux (Typ_arg_nexp nexp,_)]), _)
+                           [A_aux (A_nexp nexp,_)]), _)
             when not (NexpMap.mem nexp nmap) ->
            NexpMap.add nexp i nmap
         | _ -> nmap
@@ -2331,7 +2331,7 @@ in *)
       match destruct_tannot tannot with
       | Some (env,typ,_) ->
          begin match Env.base_typ_of env typ with
-         | Typ_aux (Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp size,_);_;_]),_)
+         | Typ_aux (Typ_app (Id_aux (Id "vector",_), [A_aux (A_nexp size,_);_;_]),_)
              when not (is_nexp_constant size) ->
             begin
               match NexpMap.find size nexp_map with
@@ -2845,14 +2845,16 @@ let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
 let deps_of_typ l kid_deps arg_deps typ =
   deps_of_tyvars l kid_deps arg_deps (tyvars_of_typ typ)
 
-let deps_of_uvar l fn_id env arg_deps = function
-  | U_nexp (Nexp_aux (Nexp_var kid,_))
+let deps_of_typ_arg l fn_id env arg_deps (A_aux (aux, _)) =
+  match aux with
+  | A_nexp (Nexp_aux (Nexp_var kid,_))
       when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
      Parents (CallerKidSet.singleton (fn_id,kid))
-  | U_nexp nexp -> InFun (deps_of_nexp l env.kid_deps arg_deps nexp)
-  | U_order _ -> InFun dempty
-  | U_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
-
+  | A_nexp nexp -> InFun (deps_of_nexp l env.kid_deps arg_deps nexp)
+  | A_order _ -> InFun dempty
+  | A_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
+  | A_bool nc -> InFun (deps_of_nc env.kid_deps nc)
+                     
 let mk_subrange_pattern vannot vstart vend =
   let (len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
   match ord with
@@ -2937,8 +2939,8 @@ let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
         | kid -> Nexp_aux (Nexp_var kid,Generated l)
         | exception Not_found -> nexp
 
-let simplify_size_uvar env typ_env = function
-  | U_nexp nexp -> U_nexp (simplify_size_nexp env typ_env nexp)
+let simplify_size_typ_arg env typ_env = function
+  | A_aux (A_nexp nexp, l) -> A_aux (A_nexp (simplify_size_nexp env typ_env nexp), l)
   | x -> x
 
 (* Takes an environment of dependencies on vars, type vars, and flow control,
@@ -3030,10 +3032,10 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          | _ -> Unknown (l, "Effects from function application")
        in
        let kid_inst = instantiation_of exp in
-       let kid_inst = KBindings.map (simplify_size_uvar env typ_env) kid_inst in
+       let kid_inst = KBindings.map (simplify_size_typ_arg env typ_env) kid_inst in
        (* Change kids in instantiation to the canonical ones from the type signature *)
        let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
-       let kid_deps = KBindings.map (deps_of_uvar l fn_id env deps) kid_inst in
+       let kid_deps = KBindings.map (deps_of_typ_arg l fn_id env deps) kid_inst in
        let rdep,r' =
          if Id.compare fn_id id == 0 then
            let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
@@ -3265,7 +3267,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
     let env = env_of_annot annot in
     let Typ_aux (typ,_) = Env.base_typ_of env (typ_of_annot annot) in
     match typ with
-    | Typ_app (Id_aux (Id "atom",_),[Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)]) ->
+    | Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]) ->
        equal_kids env kid
     | _ -> KidSet.empty
   in
@@ -3287,7 +3289,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
   in
   let eqn_instantiations = Type_check.instantiate_simple_equations qs in
   let eqn_kid_deps = KBindings.map (function
-    | U_nexp nexp -> Some (nexp_frees nexp)
+    | A_aux (A_nexp nexp, _) -> Some (nexp_frees nexp)
     | _ -> None) eqn_instantiations
   in
   let arg i pat =
@@ -3944,15 +3946,15 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
        P_aux (P_typ (src_typ, P_aux (P_tup ps,(Generated src_l, src_ann))),(Generated src_l, src_ann)),
        E_aux (E_tuple es,(Generated tar_l, tar_ann))
     | Typ_app (Id_aux (Id "vector",_),
-               [Typ_arg_aux (Typ_arg_nexp size,_); _;
-                Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]),
+               [A_aux (A_nexp size,_); _;
+                A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]),
       Typ_app (Id_aux (Id "vector",_) as t_id,
-               [Typ_arg_aux (Typ_arg_nexp size',l_size'); t_ord;
-                Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_) as t_bit]) -> begin
+               [A_aux (A_nexp size',l_size'); t_ord;
+                A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_) as t_bit]) -> begin
        match simplify_size_nexp env quant_kids size, simplify_size_nexp env quant_kids size' with
        | Some size, Some size' when Nexp.compare size size' <> 0 ->
           let var = fresh () in
-          let tar_typ' = Typ_aux (Typ_app (t_id, [Typ_arg_aux (Typ_arg_nexp size',l_size');t_ord;t_bit]),
+          let tar_typ' = Typ_aux (Typ_app (t_id, [A_aux (A_nexp size',l_size');t_ord;t_bit]),
                                   tar_l) in
           let () = at_least_one := Some tar_typ' in
           P_aux (P_id var,(Generated src_l,src_ann)),
@@ -4052,7 +4054,7 @@ let add_bitvector_casts (Defs defs) =
         let matched_typ = Env.base_typ_of env (typ_of_annot ann') in
         match e',matched_typ with
         | E_sizeof (Nexp_aux (Nexp_var kid,_)), _
-        | _, Typ_aux (Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_) ->
+        | _, Typ_aux (Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_) ->
            let map_case pexp =
              let pat,guard,body,ann = destruct_pexp pexp in
              let body = match pat, guard with
@@ -4176,16 +4178,16 @@ let replace_nexp_in_typ env typ orig new_nexp =
        let fs, targs = List.split (List.map aux_targ targs) in
        List.exists (fun x -> x) fs, Typ_aux (Typ_app (id, targs),l)
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-  and aux_targ (Typ_arg_aux (ta,l) as typ_arg) =
+  and aux_targ (A_aux (ta,l) as typ_arg) =
     match ta with
-    | Typ_arg_nexp nexp ->
+    | A_nexp nexp ->
        if prove env (nc_eq nexp orig)
-       then true, Typ_arg_aux (Typ_arg_nexp new_nexp,l)
+       then true, A_aux (A_nexp new_nexp,l)
        else false, typ_arg
-    | Typ_arg_typ typ ->
+    | A_typ typ ->
        let f, typ = aux typ in
-       f, Typ_arg_aux (Typ_arg_typ typ,l)
-    | Typ_arg_order _ -> false, typ_arg
+       f, A_aux (A_typ typ,l)
+    | A_order _ -> false, typ_arg
   in aux typ
 
 let fresh_nexp_kid nexp =
@@ -4277,13 +4279,13 @@ let rewrite_toplevel_nexps (Defs defs) =
        Typ_aux (Typ_exist (kids,(* TODO? *) nc, aux typ'),l)
     | Typ_app (id,targs) -> Typ_aux (Typ_app (id,List.map aux_targ targs),l)
     | _ -> typ_full
-    and aux_targ (Typ_arg_aux (ta,l) as ta_full) =
+    and aux_targ (A_aux (ta,l) as ta_full) =
       match ta with
-      | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (aux typ),l)
-      | Typ_arg_order _ -> ta_full
-      | Typ_arg_nexp nexp ->
+      | A_typ typ -> A_aux (A_typ (aux typ),l)
+      | A_order _ -> ta_full
+      | A_nexp nexp ->
          match find_nexp env nexp_map nexp with
-         | (kid,_) -> Typ_arg_aux (Typ_arg_nexp (nvar kid),l)
+         | (kid,_) -> A_aux (A_nexp (nvar kid),l)
          | exception Not_found -> ta_full
     in aux typ
   in

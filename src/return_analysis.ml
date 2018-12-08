@@ -110,7 +110,7 @@ let existentialize_annot funcl_annot annot =
   let funcl_env = env_of_annot funcl_annot in
   let env = env_of_annot annot in
   match Env.expand_synonyms env (typ_of_annot annot) with
-  | (Typ_aux (Typ_app (ty_id, [Typ_arg_aux (Typ_arg_nexp nexp, _)]), _) as typ)
+  | (Typ_aux (Typ_app (ty_id, [A_aux (A_nexp nexp, _)]), _) as typ)
        when Id.compare ty_id (mk_id "atom") = 0 ->
      let tyvars = Env.get_typ_vars funcl_env |> KBindings.bindings in
      let toplevel_kids =

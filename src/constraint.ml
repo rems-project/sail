@@ -109,10 +109,10 @@ let rec smt_constraint (NC_aux (aux, l) : n_constraint) : sexpr =
   | NC_false -> Atom "false"
   | NC_var v -> smt_var v
 
-and smt_typ_arg (Typ_arg_aux (aux, l) : typ_arg) : sexpr =
+and smt_typ_arg (A_aux (aux, l) : typ_arg) : sexpr =
   match aux with
-  | Typ_arg_nexp nexp -> smt_nexp nexp
-  | Typ_arg_bool nc -> smt_constraint nc
+  | A_nexp nexp -> smt_nexp nexp
+  | A_bool nc -> smt_constraint nc
   | _ ->
      raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
 

@@ -264,13 +264,13 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
     | Typ_app (id, targs) ->
        Typ_aux (Typ_app (id, List.map (rewrite_typ_arg env) targs), l)
     | _ -> typ_aux
-  and rewrite_typ_arg env (Typ_arg_aux (targ, l) as targ_aux) = match targ with
-    | Typ_arg_nexp nexp ->
-       Typ_arg_aux (Typ_arg_nexp (rewrite_nexp_ids env nexp), l)
-    | Typ_arg_typ typ ->
-       Typ_arg_aux (Typ_arg_typ (rewrite_typ env typ), l)
-    | Typ_arg_order ord ->
-       Typ_arg_aux (Typ_arg_order ord, l)
+  and rewrite_typ_arg env (A_aux (targ, l) as targ_aux) = match targ with
+    | A_nexp nexp ->
+       A_aux (A_nexp (rewrite_nexp_ids env nexp), l)
+    | A_typ typ ->
+       A_aux (A_typ (rewrite_typ env typ), l)
+    | A_order ord ->
+       A_aux (A_order ord, l)
   in
 
   let rewrite_annot (l, tannot) =
@@ -409,7 +409,7 @@ let rewrite_sizeof (Defs defs) =
                | P_id id | P_as (_, id) ->
                   let (Typ_aux (typ,_) as typ_aux) = typ_of_annot annot in
                   (match typ with
-                   | Typ_app (atom, [Typ_arg_aux (Typ_arg_nexp nexp, _)])
+                   | Typ_app (atom, [A_aux (A_nexp nexp, _)])
                         when string_of_id atom = "atom" ->
                       [nexp, E_id id]
                    | Typ_app (vector, _) when string_of_id vector = "vector" ->
@@ -470,7 +470,7 @@ let rewrite_sizeof (Defs defs) =
              assert (not (Str.string_match ex_regex (string_of_kid kid) 0));
              let uvar = try Some (KBindings.find (orig_kid kid) inst) with Not_found -> None in
              match uvar with
-             | Some (U_nexp nexp) ->
+             | Some (A_aux (A_nexp nexp, _)) ->
                 let sizeof = E_aux (E_sizeof nexp, (l, mk_tannot env (atom_typ nexp) no_effect)) in
                 (try rewrite_trivial_sizeof_exp sizeof with
                 | Type_error (l, err) ->
@@ -2302,8 +2302,8 @@ let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) =
 
 let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
   match td with
-  | TD_abbrev (id, typq, Typ_arg_aux (Typ_arg_typ typ, l)) ->
-     TD_aux (TD_abbrev (id, rw_typquant typq, Typ_arg_aux (Typ_arg_typ (rw_typ typ), l)), annot)
+  | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
+     TD_aux (TD_abbrev (id, rw_typquant typq, A_aux (A_typ (rw_typ typ), l)), annot)
   | TD_record (id, nso, typq, typ_ids, flag) ->
      TD_aux (TD_record (id, nso, rw_typquant typq, List.map (fun (typ, id) -> (rw_typ typ, id)) typ_ids, flag), annot)
   | TD_variant (id, nso, typq, tus, flag) ->
@@ -2355,8 +2355,8 @@ let rewrite_undefined_if_gen always_bitvector defs =
 let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
 and simple_typ_aux = function
   | Typ_id id -> Typ_id id
-  | Typ_app (id, [_; _; Typ_arg_aux (Typ_arg_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
-     Typ_app (mk_id "list", [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)])
+  | Typ_app (id, [_; _; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
+     Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 ->
      Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
@@ -2366,9 +2366,9 @@ and simple_typ_aux = function
   | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
   | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
   | typ_aux -> typ_aux
-and simple_typ_arg (Typ_arg_aux (typ_arg_aux, l)) =
+and simple_typ_arg (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
-  | Typ_arg_typ typ -> [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)]
+  | A_typ typ -> [A_aux (A_typ (simple_typ typ), l)]
   | _ -> []
 
 (* This pass aims to remove all the Num quantifiers from the specification. *)
@@ -3010,7 +3010,7 @@ let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
 let construct_toplevel_string_append_call env f_id bindings binding_typs guard expr =
   (* s# if match f#(s#) { Some (bindings) => guard, _ => false) } => let Some(bindings) = f#(s#) in expr *)
   let s_id = fresh_stringappend_id () in
-  let option_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (match binding_typs with
+  let option_typ = app_typ (mk_id "option") [A_aux (A_typ (match binding_typs with
                                                                          | [] -> unit_typ
                                                                          | [typ] -> typ
                                                                          | typs -> tuple_typ typs
@@ -3042,7 +3042,7 @@ let construct_toplevel_string_append_func env f_id pat =
                  else
                    bindings
   in
-  let option_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (match binding_typs with
+  let option_typ = app_typ (mk_id "option") [A_aux (A_typ (match binding_typs with
                                                                        | [] -> unit_typ
                                                                        | [typ] -> typ
                                                                        | typs -> tuple_typ typs
@@ -3102,7 +3102,7 @@ let construct_toplevel_string_append_func env f_id pat =
        in
        let mapping_inner_typ =
          match Env.get_val_spec (mk_id mapping_prefix_func) env with
-         | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [Typ_arg_aux (Typ_arg_typ typ, _)]), _), _), _)) -> typ
+         | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [A_aux (A_typ typ, _)]), _), _), _)) -> typ
          | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
        in
 
@@ -3119,7 +3119,7 @@ let construct_toplevel_string_append_func env f_id pat =
                                         [annot_exp (E_id s_id) unk env string_typ]))
                         unk env mapping_inner_typ in
        (* construct some pattern -- Some (n#, len#) *)
-       let opt_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ mapping_inner_typ, unk)] in
+       let opt_typ = app_typ (mk_id "option") [A_aux (A_typ mapping_inner_typ, unk)] in
        let tup_arg_pat = match arg_pats with
          | [] -> assert false
          | [arg_pat] -> arg_pat
@@ -3278,7 +3278,7 @@ let rec rewrite_defs_pat_string_append =
        in
        let mapping_inner_typ =
          match Env.get_val_spec (mk_id mapping_prefix_func) env with
-         | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [Typ_arg_aux (Typ_arg_typ typ, _)]), _), _), _)) -> typ
+         | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [A_aux (A_typ typ, _)]), _), _), _)) -> typ
          | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
        in
 
@@ -3295,7 +3295,7 @@ let rec rewrite_defs_pat_string_append =
                                         [annot_exp (E_id s_id) unk env string_typ]))
                         unk env mapping_inner_typ in
        (* construct some pattern -- Some (n#, len#) *)
-       let opt_typ = app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ mapping_inner_typ, unk)] in
+       let opt_typ = app_typ (mk_id "option") [A_aux (A_typ mapping_inner_typ, unk)] in
        let tup_arg_pat = match arg_pats with
          | [] -> assert false
          | [arg_pat] -> arg_pat
@@ -3926,14 +3926,14 @@ let remove_reference_types exp =
 
   let rec rewrite_t (Typ_aux (t_aux,a)) = (Typ_aux (rewrite_t_aux t_aux,a))
   and rewrite_t_aux t_aux = match t_aux with
-    | Typ_app (Id_aux (Id "reg",_), [Typ_arg_aux (Typ_arg_typ (Typ_aux (t_aux2, _)), _)]) ->
+    | Typ_app (Id_aux (Id "reg",_), [A_aux (A_typ (Typ_aux (t_aux2, _)), _)]) ->
       rewrite_t_aux t_aux2
     | Typ_app (name,t_args) -> Typ_app (name,List.map rewrite_t_arg t_args)
     | Typ_fn (arg_typs, ret_typ, eff) -> Typ_fn (List.map rewrite_t arg_typs, rewrite_t ret_typ, eff)
     | Typ_tup ts -> Typ_tup (List.map rewrite_t ts)
     | _ -> t_aux
   and rewrite_t_arg t_arg = match t_arg with
-    | Typ_arg_aux (Typ_arg_typ t, a) -> Typ_arg_aux (Typ_arg_typ (rewrite_t t), a)
+    | A_aux (A_typ t, a) -> A_aux (A_typ (rewrite_t t), a)
     | _ -> t_arg in
 
   let rec rewrite_annot (l, tannot) =
@@ -4329,7 +4329,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let prefix_wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_exp (E_lit (mk_lit L_unit))])))) in
     let string_defs =
       begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
-              let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+              let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
               let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
               let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
@@ -4339,7 +4339,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
               forwards_prefix_spec @ forwards_prefix_fun
             else
               if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
-                let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+                let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
                 let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
                 let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
