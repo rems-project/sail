@@ -212,9 +212,11 @@ let rec desugar_rchain chain s e =
 
 %start file
 %start typschm_eof
+%start typ_eof
 %start exp_eof
 %start def_eof
 %type <Parse_ast.typschm> typschm_eof
+%type <Parse_ast.atyp> typ_eof
 %type <Parse_ast.exp> exp_eof
 %type <Parse_ast.def> def_eof
 %type <Parse_ast.defs> file
@@ -348,6 +350,10 @@ rchain:
 tyarg:
   | Lparen typ_list Rparen
     { [], $2 }
+
+typ_eof:
+  | typ Eof
+    { $1 }
 
 typ:
   | typ0

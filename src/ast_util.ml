@@ -368,11 +368,16 @@ let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
 let nc_lt n1 n2 = nc_lteq (nsum n1 (nint 1)) n2
 let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nint 1))
-let nc_and nc1 nc2 = mk_nc (NC_and (nc1, nc2))
 let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
 let nc_var kid = mk_nc (NC_var kid)
 let nc_true = mk_nc NC_true
 let nc_false = mk_nc NC_false
+
+let nc_and nc1 nc2 =
+  match nc1, nc2 with
+  | _, NC_aux (NC_true, _) -> nc1
+  | NC_aux (NC_true, _), _ -> nc2
+  | _, _ -> mk_nc (NC_and (nc1, nc2))
 
 let arg_nexp ?loc:(l=Parse_ast.Unknown) n = A_aux (A_nexp n, l)
 let arg_order ?loc:(l=Parse_ast.Unknown) ord = A_aux (A_order ord, l)
@@ -685,7 +690,7 @@ and string_of_typ_arg_aux = function
   | A_order o -> string_of_order o
   | A_bool nc -> string_of_n_constraint nc
 and string_of_n_constraint = function
-  | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
+  | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " == " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
   | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
   | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2

@@ -777,6 +777,11 @@ let typschm_of_string str =
   let typschm, _ = to_ast_typschm initial_ctx typschm in
   typschm
 
+let typ_of_string str =
+  let typ = Parser.typ_eof Lexer.token (Lexing.from_string str) in
+  let typ = to_ast_typ initial_ctx typ in
+  typ
+
 let extern_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, (fun _ -> Some (string_of_id id)), false))
 let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, (fun _ -> None), false))
 

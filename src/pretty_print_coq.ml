@@ -667,7 +667,7 @@ let is_ctor env id = match Env.lookup_id id env with
 
 let is_auto_decomposed_exist env typ =
   let typ = expand_range_type typ in
-  match destruct_exist env typ with
+  match destruct_exist (Env.expand_synonyms env typ) with
   | Some (_, _, typ') -> Some typ'
   | _ -> None
 
@@ -905,7 +905,7 @@ let doc_exp, doc_let =
         debug ctxt (lazy (" at type " ^ string_of_typ typ))
       in
       let typ = expand_range_type typ in
-      match destruct_exist env typ with
+      match destruct_exist typ with
       | None -> epp
       | Some _ ->
          let epp = string "build_ex" ^/^ epp in
@@ -921,12 +921,12 @@ let doc_exp, doc_let =
         | _ ->
            let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
            let build_ex, out_typ =
-             match destruct_exist env typ' with
+             match destruct_exist typ' with
              | Some (_,_,t) -> true, t
              | None -> false, typ'
            in
            let in_typ = expand_range_type (Env.expand_synonyms (env_of exp) (typ_of exp)) in
-           let in_typ = match destruct_exist env in_typ with Some (_,_,t) -> t | None -> in_typ in
+           let in_typ = match destruct_exist in_typ with Some (_,_,t) -> t | None -> in_typ in
            let autocast =
              (* Avoid using helper functions which simplify the nexps *)
              is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
@@ -1528,7 +1528,7 @@ let doc_exp, doc_let =
                 | P_aux (P_var (P_aux (P_typ (typ, P_aux (P_id id,_)),_),_),_)
                     when not (is_enum (env_of e1) id) ->
                       let full_typ = (expand_range_type typ) in
-                      let binder = match destruct_exist (env_of e1) full_typ with
+                      let binder = match destruct_exist (Env.expand_synonyms (env_of e1) full_typ) with
                         | Some _ ->
                            squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ])
                         | _ ->
@@ -1975,7 +1975,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | _ -> failwith ("Function " ^ string_of_id id ^ " does not have function type")
   in
   let build_ex, ret_typ = replace_atom_return_type ret_typ in
-  let build_ex = match destruct_exist env (expand_range_type ret_typ) with
+  let build_ex = match destruct_exist (Env.expand_synonyms env (expand_range_type ret_typ)) with
     | Some _ -> true
     | _ -> build_ex
   in
@@ -2035,7 +2035,7 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | P_typ (_,P_aux (P_id id,_))
          when not (is_enum env id) -> begin
            let full_typ = (expand_range_type exp_typ) in
-           match destruct_exist env full_typ with
+           match destruct_exist (Env.expand_synonyms env full_typ) with
            | Some ([kid], NC_aux (NC_true,_),
                    Typ_aux (Typ_app (Id_aux (Id "atom",_),
                                      [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
@@ -2255,7 +2255,7 @@ let doc_val pat exp =
     | None -> typpp, exp
     | Some typ ->
        let typ = expand_range_type (Env.expand_synonyms env typ) in
-       match destruct_exist env typ with
+       match destruct_exist typ with
        | None -> typpp, exp
        | Some _ ->
           empty, match exp with

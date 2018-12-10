@@ -3729,7 +3729,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        in
        let exp4 = rewrite_var_updates (add_vars overwrite exp4 vars) in
        let ord_exp, kids, constr, lower, upper, lower_exp, upper_exp =
-         match destruct_numeric env (typ_of exp1), destruct_numeric env (typ_of exp2) with
+         match destruct_numeric (Env.expand_synonyms env (typ_of exp1)), destruct_numeric (Env.expand_synonyms env (typ_of exp2)) with
            | None, _ | _, None ->
               raise (Reporting.err_unreachable el __POS__ "Could not determine loop bounds")
            | Some (kids1, constr1, n1), Some (kids2, constr2, n2) ->

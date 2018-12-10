@@ -300,6 +300,8 @@ val prove : Env.t -> n_constraint -> bool
 
 val solve : Env.t -> nexp -> Big_int.num option
 
+val canonicalize : Env.t -> typ -> typ
+
 val subtype_check : Env.t -> typ -> typ -> bool
 
 val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
@@ -350,11 +352,11 @@ val destruct_atom_nexp : Env.t -> typ -> nexp option
 (** Safely destructure an existential type. Returns None if the type
    is not existential. This function will pick a fresh name for the
    existential to ensure that no name-clashes occur. *)
-val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
+val destruct_exist : typ -> (kid list * n_constraint * typ) option
 
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
-val destruct_numeric : Env.t -> typ -> (kid list * n_constraint * nexp) option
+val destruct_numeric : typ -> (kid list * n_constraint * nexp) option
 
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 

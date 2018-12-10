@@ -522,7 +522,7 @@ let refine_constructor refinements l env id args =
     (* A constructor should always have a single argument. *)
     | Typ_aux (Typ_fn ([constr_ty],_,_),_) -> begin
        let arg_ty = typ_of_args args in
-       match Type_check.destruct_exist env constr_ty with
+       match Type_check.destruct_exist (Type_check.Env.expand_synonyms env constr_ty) with
        | None -> None
        | Some (kids,nc,constr_ty) ->
           let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty  in
@@ -728,7 +728,7 @@ let fabricate_nexp l tannot =
   match destruct_tannot tannot with
   | None -> nint 32
   | Some (env,typ,_) ->
-     match Type_check.destruct_exist env typ with
+     match Type_check.destruct_exist (Type_check.Env.expand_synonyms env typ) with
      | None -> nint 32
      | Some (kids,nc,typ') -> fabricate_nexp_exist env l typ kids nc typ'
 
@@ -745,7 +745,7 @@ let atom_typ_kid kid = function
 let reduce_cast typ exp l annot =
   let env = env_of_annot (l,annot) in
   let typ' = Env.base_typ_of env typ in
-  match exp, destruct_exist env typ' with
+  match exp, destruct_exist (Env.expand_synonyms env typ') with
   | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
      let nc_env = Env.add_typ_var l kid K_int env in
      let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
@@ -3182,7 +3182,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | Some (tenv,typ,_) ->
        let typ = Env.base_typ_of tenv typ in
        let env, tenv, typ =
-         match destruct_exist tenv typ with
+         match destruct_exist (Env.expand_synonyms tenv typ) with
          | None -> env, tenv, typ
          | Some (kids, nc, typ) ->
             { env with kid_deps =

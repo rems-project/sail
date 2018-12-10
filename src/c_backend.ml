@@ -194,7 +194,7 @@ let rec ctyp_of_typ ctx typ =
         ensure that we don't cause any type variable clashes in
         local_env, and that we can optimize the existential based upon
         it's constraints. *)
-     begin match destruct_exist ctx.local_env typ with
+     begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
      | Some (kids, nc, typ) ->
         let env = add_existential l kids nc ctx.local_env in
         ctyp_of_typ { ctx with local_env = env } typ
