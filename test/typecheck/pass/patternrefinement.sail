@@ -3,20 +3,20 @@ default Order dec
 infix 4 ==
 
 val extz = {ocaml: "extz", lem: "extz_vec"}: forall ('n : Int) ('m : Int) ('ord : Order).
-  (atom('m), vector('n, 'ord, bit)) -> vector('m, 'ord, bit)
+  (int('m), vector('n, 'ord, bit)) -> vector('m, 'ord, bit)
 
 val length = {ocaml: "length", lem: "length"}: forall ('m : Int) ('ord : Order) ('a : Type).
-  vector('m, 'ord, 'a) -> atom('m)
+  vector('m, 'ord, 'a) -> int('m)
 
 val eq_vec = {ocaml: "eq_vec", lem: "eq_vec"}: forall ('m : Int) ('ord : Order).
   (vector('m, 'ord, bit), vector('m, 'ord, bit)) -> bool
 
-val eq_atom = {ocaml: "eq_atom", lem: "eq"}: forall ('n : Int) ('m : Int).
-  (atom('n), atom('m)) -> bool
+val eq_int = {ocaml: "eq_atom", lem: "eq"}: forall ('n : Int) ('m : Int).
+  (int('n), int('m)) -> bool
 
 val eq = {ocaml: "eq", lem: "eq"}: forall ('a : Type). ('a, 'a) -> bool
 
-overload operator == = {eq_vec, eq_atom, eq}
+overload operator == = {eq_vec, eq_int, eq}
 
 val test : forall 'n, 'n in {32, 64}.
   vector('n, dec, bit) -> vector(64, dec, bit)

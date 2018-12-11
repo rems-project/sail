@@ -44,18 +44,4 @@ overload operator < = {lt_int}
 overload operator >= = {gteq_int}
 overload operator > = {gt_int}
 
-$ifdef TEST
-
-val __flow_test : forall 'n 'm. (atom('n), atom('m)) -> unit
-
-function __flow_test (x, y) = {
-  if lteq_atom(x, y) then {
-    _prove(constraint('n <= 'm))
-  } else {
-    _prove(constraint('n > 'm))
-  }
-}
-
-$endif
-
 $endif

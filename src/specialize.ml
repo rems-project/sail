@@ -54,7 +54,7 @@ open Rewriter
 open Extra_pervasives
 
 let is_typ_ord_uvar = function
-  | A_aux (A_nexp _, _) -> true
+  | A_aux (A_typ _, _) -> true
   | A_aux (A_order _, _) -> true
   | _ -> false
 
