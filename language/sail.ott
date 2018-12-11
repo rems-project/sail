@@ -847,9 +847,11 @@ tannot_opt :: 'Typ_annot_opt_' ::=
 
 rec_opt :: 'Rec_' ::=
   {{ com optional recursive annotation for functions }}
+  {{ auxparam 'a }}
   {{ aux _ l }}
   |                                             :: :: nonrec {{ com non-recursive }}
-  | rec                                         :: :: rec {{ com recursive }}
+  | rec                                         :: :: rec {{ com recursive without termination measure }}
+  | { pat -> exp }                              :: :: measure {{ com recursive with termination measure }}
 
 effect_opt :: 'Effect_opt_' ::=
   {{ com optional effect annotation for functions }}

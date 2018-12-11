@@ -328,6 +328,7 @@ type
 rec_opt_aux =  (* Optional recursive annotation for functions *)
    Rec_nonrec (* non-recursive *)
  | Rec_rec (* recursive *)
+ | Rec_measure of pat * exp (* recursive with termination measure *)
 
 
 type 

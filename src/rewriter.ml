@@ -346,7 +346,14 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
     (FCL_aux (FCL_Funcl (id, rewrite_pexp rewriters pexp),(l,annot)))
-  in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
+  in
+  let recopt = match recopt with
+    | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
+    | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
+    | Rec_aux (Rec_measure (pat,exp),l) ->
+       Rec_aux (Rec_measure (rewrite_pat rewriters pat, rewrite_exp rewriters exp),l)
+  in
+  FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_def rewriters d = match d with
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->

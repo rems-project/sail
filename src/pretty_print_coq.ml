@@ -71,6 +71,7 @@ type context = {
   kid_id_renames : id KBindings.t; (* tyvar -> argument renames *)
   bound_nvars : KidSet.t;
   build_ex_return : bool;
+  recursive_ids : IdSet.t;
   debug : bool;
 }
 let empty_ctxt = {
@@ -79,6 +80,7 @@ let empty_ctxt = {
   kid_id_renames = KBindings.empty;
   bound_nvars = KidSet.empty;
   build_ex_return = false;
+  recursive_ids = IdSet.empty;
   debug = false;
 }
 
@@ -605,13 +607,33 @@ let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
     | K_int -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
     | K_order -> None
   end
-  | QI_id _ -> failwith "Quantifier with multiple kinds"
+  | QI_const nc -> None
+
+let quant_item_id_name ctx (QI_aux (qi,_)) =
+  match qi with
+  | QI_id (KOpt_aux (KOpt_none kid,_)) ->
+     if KBindings.mem kid ctx.kid_id_renames then None else
+     Some (doc_var ctx kid)
+  | QI_id (KOpt_aux (KOpt_kind (K_aux (kind,_),kid),_)) -> begin
+    if KBindings.mem kid ctx.kid_id_renames then None else
+    match kind with
+    | K_type -> Some (doc_var ctx kid)
+    | K_int -> Some (doc_var ctx kid)
+    | K_order -> None
+  end
   | QI_const nc -> None
 
 let doc_quant_item_constr ctx delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id  _ -> None
   | QI_const nc -> Some (bquote ^^ braces (doc_arithfact ctx nc))
+
+(* At the moment these are all anonymous - when used we rely on Coq to fill
+   them in. *)
+let quant_item_constr_name ctx (QI_aux (qi,_)) =
+  match qi with
+  | QI_id  _ -> None
+  | QI_const nc -> Some underscore
 
 let doc_typquant_items ctx delimit (TypQ_aux (tq,_)) =
   match tq with
@@ -626,6 +648,14 @@ let doc_typquant_items_separate ctx delimit (TypQ_aux (tq,_)) =
      Util.map_filter (doc_quant_item_id ctx delimit) qis,
      Util.map_filter (doc_quant_item_constr ctx delimit) qis
   | TypQ_no_forall -> [], []
+
+let typquant_names_separate ctx (TypQ_aux (tq,_)) =
+  match tq with
+  | TypQ_tq qis ->
+     Util.map_filter (quant_item_id_name ctx) qis,
+     Util.map_filter (quant_item_constr_name ctx) qis
+  | TypQ_no_forall -> [], []
+
 
 let doc_typquant ctx (TypQ_aux(tq,_)) typ = match tq with
 | TypQ_tq ((_ :: _) as qs) ->
@@ -1146,11 +1176,13 @@ let doc_exp, doc_let =
        | _ ->
           let env = env_of_annot (l,annot) in
           let () = debug ctxt (lazy ("Function application " ^ string_of_id f)) in
-          let call, is_extern, is_ctor =
-            if Env.is_union_constructor f env then doc_id_ctor f, false, true else
+          let call, is_extern, is_ctor, is_rec =
+            if Env.is_union_constructor f env then doc_id_ctor f, false, true, false else
             if Env.is_extern f env "coq"
-            then string (Env.get_extern f env "coq"), true, false
-            else doc_id f, false, false in
+            then string (Env.get_extern f env "coq"), true, false, false
+            else if IdSet.mem f ctxt.recursive_ids
+            then string "_rec_" ^^ doc_id f, false, false, true
+            else doc_id f, false, false, false in
           let (tqs,fn_ty) = Env.get_val_spec_orig f env in
           let arg_typs, ret_typ, eff = match fn_ty with
             | Typ_aux (Typ_fn (arg_typs,ret_typ,eff),_) -> arg_typs, ret_typ, eff
@@ -1202,7 +1234,13 @@ let doc_exp, doc_let =
           let epp =
             if is_ctor
             then hang 2 (call ^^ break 1 ^^ parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs)))
-            else hang 2 (flow (break 1) (call :: List.map2 (doc_arg true) args arg_typs)) in
+            else
+              let main_call = call :: List.map2 (doc_arg true) args arg_typs in
+              let all = if is_rec then main_call @
+                                         [parens (string "_limit - 1");
+                                          parens (string "Acc_inv _acc (_limit_is_limit _limit_ok)")]
+                        else main_call
+              in hang 2 (flow (break 1) all) in
 
           (* Decide whether to unpack an existential result, pack one, or cast.
              To do this we compare the expected type stored in the checked expression
@@ -1825,6 +1863,12 @@ let args_of_typ l env typs =
     E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
   List.split (List.mapi arg typs)
 
+(* Sail currently has a single pattern to match against a list of
+   argument types.  We need to tweak everything to match up,
+   especially so that the function is presented in curried form.  In
+   particular, if there's a single binder for multiple arguments
+   (which rewriting can currently introduce) then we need to turn it
+   into multiple binders and reconstruct it in the function body. *)
 let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   let env = env_of_annot annot in
   let identity = (fun body -> body) in
@@ -1848,10 +1892,6 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   | _, _ ->
      unreachable l __POS__ "Unexpected pattern/type combination"
 
-let doc_rec (Rec_aux(r,_)) = match r with
-  | Rec_nonrec -> string "Definition"
-  | Rec_rec -> string "Fixpoint"
-
 let doc_fun_body ctxt exp =
   let doc_exp = doc_exp ctxt false exp in
   if ctxt.early_ret
@@ -1869,6 +1909,28 @@ let demote_as_pattern i (P_aux (_,p_annot) as pat,typ) =
     fun (E_aux (_,e_ann) as e) ->
       E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
   else (pat,typ), fun e -> e
+
+let pat_is_plain_binder env (P_aux (p,_)) =
+  match p with
+  | P_id id
+  | P_typ (_,P_aux (P_id id,_))
+  when not (is_enum env id) -> Some id
+  | _ -> None
+
+let demote_all_patterns env i (P_aux (p,p_annot) as pat,typ) =
+  match pat_is_plain_binder env pat with
+  | Some id ->
+     if Util.is_none (is_auto_decomposed_exist env typ)
+     then (pat,typ), fun e -> e
+     else
+       (P_aux (P_id id, p_annot),typ),
+       fun (E_aux (_,e_ann) as e) ->
+       E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
+  | None ->
+    let id = mk_id ("arg" ^ string_of_int i) in (* TODO: name conflicts *)
+    (P_aux (P_id id, p_annot),typ),
+    fun (E_aux (_,e_ann) as e) ->
+      E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
 
 (* Add equality constraints between arguments and nexps, except in the case
    that they've been merged. *)
@@ -1967,7 +2029,7 @@ let merge_var_patterns map pats =
     | _ -> map, (pat,typ)::pats) (map,[]) pats
   in map, List.rev pats
 
-let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, eff) = match typ with
@@ -1982,17 +2044,31 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let ids_to_avoid = all_ids pexp in
   let bound_kids = tyvars_of_typquant tq in
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
-  let pats, bind = untuple_args_pat arg_typs pat in (* FIXME is this needed any more? *)
-  let pats, binds = List.split (Util.list_mapi demote_as_pattern pats) in
+  let pats, bind = untuple_args_pat arg_typs pat in
+  (* Fixpoint definitions can only use simple binders, but even Definitions
+     can't handle as patterns *)
+  let pattern_elim =
+    match rec_opt with
+    | Rec_aux (Rec_nonrec,_) -> demote_as_pattern
+    | _ -> demote_all_patterns env
+  in
+  let pats, binds = List.split (Util.list_mapi pattern_elim pats) in
   let eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
   let kids_used = KidSet.diff bound_kids eliminated_kids in
+  let is_measured, recursive_ids = match rec_opt with
+    (* No mutual recursion in this backend yet; only change recursive
+       definitions where we have a measure *)
+    | Rec_aux (Rec_measure _,_) -> true, IdSet.singleton id
+    | _ -> false, IdSet.empty
+  in
   let ctxt =
     { early_ret = contains_early_return exp;
       kid_renames = mk_kid_renames ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
       bound_nvars = bound_kids;
       build_ex_return = effectful eff && build_ex;
+      recursive_ids = recursive_ids;
       debug = List.mem (string_of_id id) (!opt_debug_on)
     } in
   let () =
@@ -2013,27 +2089,11 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
       debug ctxt (lazy (" pattern " ^ string_of_pat pat));
       debug ctxt (lazy (" with expanded type " ^ string_of_typ exp_typ))
     in
-    match p with
-    | P_id id
-    | P_typ (_,P_aux (P_id id,_))
-         when Util.is_none (is_auto_decomposed_exist env exp_typ) &&
-              not (is_enum env id) ->
-       parens (separate space [doc_id id; colon; doc_typ ctxt typ])
-(*    | P_id id
-    | P_typ (_,P_aux (P_id id,_))
-         when not (is_enum env id) -> begin
-       match destruct_exist env (expand_range_type exp_typ) with
-       | Some (kids, NC_aux (NC_true,_), typ) ->
-          parens (separate space [doc_id id; colon; doc_typ ctxt typ])
-       | Some (kids, nc, typ) ->
-          parens (separate space [doc_id id; colon; doc_typ ctxt typ]) ^^ space ^^
-          bquote ^^ braces (doc_arithfact ctxt nc)
-       | None ->
-          parens (separate space [doc_id id; colon; doc_typ ctxt typ])
-         end*)
-    | P_id id
-    | P_typ (_,P_aux (P_id id,_))
-         when not (is_enum env id) -> begin
+    match pat_is_plain_binder env pat with
+    | Some id ->
+       if Util.is_none (is_auto_decomposed_exist env exp_typ) then
+         parens (separate space [doc_id id; colon; doc_typ ctxt typ])
+       else begin
            let full_typ = (expand_range_type exp_typ) in
            match destruct_exist env full_typ with
            | Some ([kid], NC_aux (NC_true,_),
@@ -2044,17 +2104,17 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
            | Some ([kid], nc,
                    Typ_aux (Typ_app (Id_aux (Id "atom",_),
                                      [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
-               when Kid.compare kid kid' == 0 ->
+               when Kid.compare kid kid' == 0 && not is_measured ->
               (used_a_pattern := true;
                squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ]))
            | _ ->
               parens (separate space [doc_id id; colon; doc_typ ctxt typ])
          end
-    | _ ->
+    | None ->
        (used_a_pattern := true;
         squote ^^ parens (separate space [doc_pat ctxt true true (pat, exp_typ); colon; doc_typ ctxt typ]))
   in
-  let patspp = separate_map space doc_binder pats in
+  let patspp = flow_map (break 1) doc_binder pats in
   let atom_constrs = Util.map_filter (atom_constraint ctxt) pats in
   let atom_constr_pp = separate space atom_constrs in
   let retpp =
@@ -2062,7 +2122,67 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     then string "M" ^^ space ^^ parens (doc_typ ctxt ret_typ)
     else doc_typ ctxt ret_typ
   in
-  let idpp = doc_id id in
+  let intropp, idpp, accpp, measurepp, fixupspp, postpp = match rec_opt with
+    | Rec_aux (Rec_measure (meas_pat,meas_exp),_) ->
+       let check_ids (arg_pat,_) m_pat =
+         match arg_pat, m_pat with
+         | P_aux ((P_id arg_id | P_typ (_,P_aux (P_id arg_id,_))),_),
+           P_aux ((P_id m_id | P_typ (_,P_aux (P_id m_id,_))),_) ->
+            if Id.compare arg_id m_id == 0 then () else
+              failwith "TODO"
+         | _, P_aux (P_wild,_) -> () (* TODO generalise *)
+         | _ -> failwith "TODO"
+       in
+       let idpp = doc_id id in
+       let recidpp = string "_rec_" ^^ idpp in
+       let patnames = List.map (function
+                          | P_aux (P_id id,_), _ -> doc_id id
+                          | P_aux (P_typ (_,P_aux (P_id id,_)),_), _ -> doc_id id
+                          | p,_ -> raise (Reporting.err_unreachable (pat_loc p) __POS__
+                                          "Pattern has not been reduced to a simple binder"))
+                    pats in
+       let quantnames, constrnames = typquant_names_separate ctxt tq in
+       let atomconstrsnames = List.map (fun _ -> underscore) atom_constrs in
+       let fixupspp = Util.map_filter (fun (pat,typ) ->
+                          match pat_is_plain_binder env pat with
+                          | Some id -> begin
+                             match destruct_exist env (expand_range_type typ) with
+                             | Some (_, NC_aux (NC_true,_), _) -> None
+                             | Some ([kid], nc,
+                                     Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                                                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
+                                  when Kid.compare kid kid' == 0 ->
+                                Some (string "let " ^^ doc_id id ^^ string " := projT1 " ^^ doc_id id ^^ string " in")
+                             | _ -> None
+                            end
+                          | None -> None) pats
+       in
+       let no_fixups = match fixupspp with [] -> true | _ -> false in
+       let measure_pp =
+         match pats, meas_pat with
+         | _, P_aux (P_tup ps,_) when List.length pats = List.length ps ->
+            let () = List.iter2 check_ids pats ps in
+            doc_exp ctxt no_fixups meas_exp
+         | [pat], _ ->
+            let () = check_ids pat meas_pat in
+            doc_exp ctxt no_fixups meas_exp
+         | _, _ -> failwith "TODO"
+       in
+       let measure_pp = match fixupspp with
+           [] -> measure_pp
+         | _ -> parens (flow (break 1) fixupspp ^/^ measure_pp)
+       in
+       string "Fixpoint",
+       recidpp,
+       [parens (string "_limit : Z");
+        parens (string "_acc : Acc (Zwf 0) _limit")],
+       [string "{struct _acc}"],
+       fixupspp,
+       hardline ^^ string "Definition " ^^ idpp ^/^ flow (break 1) (quantspp @ patspp :: constrspp @ atom_constrs) ^/^ coloneq ^/^ recidpp ^/^ flow (break 1) (quantnames @ patnames @ constrnames @ atomconstrsnames) ^/^ measure_pp ^/^ string "(Zwf_well_founded _ _)."
+    | Rec_aux (r,_) ->
+       let d = match r with Rec_nonrec -> "Definition" | _ -> "Fixpoint" in
+       string d, doc_id id, [], [], [], empty
+  in
   (* Work around Coq bug 7975 about pattern binders followed by implicit arguments *)
   let implicitargs =
     if !used_a_pattern && List.length constrspp + List.length atom_constrs > 0 then
@@ -2082,10 +2202,17 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
                "guarded pattern expression should have been rewritten before pretty-printing") in
   let bodypp = doc_fun_body ctxt exp in
   let bodypp = if effectful eff || not build_ex then bodypp else string "build_ex" ^^ parens bodypp in
+  let bodypp = match rec_opt with
+    | Rec_aux (Rec_measure _,_) ->
+       string "assert_exp' (_limit >? 0) \"termination limit reached\" >>= fun _limit_ok =>" ^/^
+         separate (break 1) fixupspp ^/^
+         bodypp
+    | _ -> bodypp
+  in
   group (prefix 3 1
-    (separate space ([idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp]) ^/^
-       separate space [colon; retpp; coloneq])
-    (bodypp ^^ dot)) ^^ implicitargs
+    (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp] @ accpp) ^/^
+       flow (break 1) (measurepp @ [colon; retpp; coloneq]))
+    (bodypp ^^ dot)) ^^ postpp ^^ implicitargs
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -2095,7 +2222,7 @@ let get_id = function
    joined by "and", although it has worked for Isabelle before.  However, all
    the funcls should have been merged by the merge_funcls rewrite now. *)   
 let doc_fundef_rhs (FD_aux(FD_function(r, typa, efa, funcls),fannot)) =
-  separate_map (hardline ^^ string "and ") doc_funcl funcls
+  separate_map (hardline ^^ string "and ") (doc_funcl r) funcls
 
 let doc_mutrec = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
@@ -2108,7 +2235,7 @@ let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
     when not (Env.is_extern id (env_of_annot annot) "coq") ->
-    (doc_rec r) ^^ space ^^ (doc_funcl funcl)
+     doc_funcl r funcl
   | [_] -> empty (* extern *)
   | _ -> failwith "FD_function with more than one clause"
 

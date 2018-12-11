@@ -1,7 +1,7 @@
 (*Require Import Sail_impl_base*)
 Require Import Sail2_values.
 Require Import Sail2_prompt_monad.
-
+Require Export ZArith.Zwf.
 Require Import List.
 Import ListNotations.
 (*
@@ -77,6 +77,13 @@ match b with
   | BU => undefined_bool tt
 end.
 
+(* For termination of recursive functions. *)
+Lemma _limit_is_limit {_limit : Z} : _limit >? 0 = true -> Zwf 0 (_limit - 1) _limit.
+intros.
+prepare_for_solver.
+red.
+omega.
+Qed.
 
 (*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e

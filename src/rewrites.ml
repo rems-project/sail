@@ -2202,9 +2202,11 @@ let rewrite_fix_val_specs (Defs defs) =
     (* Repeat once to cross-propagate effects between clauses *)
     let (val_specs, funcls) = List.fold_left rewrite_funcl (val_specs, []) funcls in
     let recopt =
-      if List.exists is_funcl_rec funcls then
-        Rec_aux (Rec_rec, Parse_ast.Unknown)
-      else recopt
+      match recopt with
+      | Rec_aux ((Rec_rec | Rec_measure _), _) -> recopt
+      | _ when List.exists is_funcl_rec funcls ->
+         Rec_aux (Rec_rec, Parse_ast.Unknown)
+      | _ -> recopt
     in
     let tannotopt = match tannotopt, funcls with
     | Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), l),
@@ -4748,7 +4750,7 @@ let minimise_recursive_functions (Defs defs) =
   let rewrite_function (FD_aux (FD_function (recopt,topt,effopt,funcls),ann) as fd) =
     match recopt with
     | Rec_aux (Rec_nonrec, _) -> fd
-    | Rec_aux (Rec_rec, l) ->
+    | Rec_aux ((Rec_rec | Rec_measure _), l) ->
        if List.exists funcl_is_rec funcls
        then fd
        else FD_aux (FD_function (Rec_aux (Rec_nonrec, Generated l),topt,effopt,funcls),ann)

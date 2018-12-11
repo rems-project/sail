@@ -4300,6 +4300,16 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   in
   check_tannotopt env quant vtyp_ret tannotopt;
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
+  let recopt =
+    match recopt with
+    | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
+    | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
+    | Rec_aux (Rec_measure (measure_p, measure_e), l) ->
+       let typ = match vtyp_args with [x] -> x | _ -> Typ_aux (Typ_tup vtyp_args,Unknown) in
+       let tpat, env = bind_pat_no_guard env (strip_pat measure_p) typ in
+       let texp = check_exp env (strip_exp measure_e) int_typ in
+       Rec_aux (Rec_measure (tpat, texp), l)
+  in
   let funcl_env = add_typquant l quant env in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
   let eff = List.fold_left union_effects no_effect (List.map funcl_effect funcls) in
