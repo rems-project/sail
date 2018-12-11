@@ -199,7 +199,8 @@ function main (() : unit) -> unit = {
   assert(get_slice_int(4, 6, 0) == 4^0x6, "get_slice_int(4, 6, 0) == 4^0x6");
   assert(get_slice_int(4, 7, 0) == 4^0x7, "get_slice_int(4, 7, 0) == 4^0x7");
   assert(get_slice_int(4, 8, 0) == 4^0x8, "get_slice_int(4, 8, 0) == 4^0x8");
-  assert(get_slice_int(4, undefined, 0) == 4^0x0, "get_slice_int(4, undefined, 0) == 4^0x0");
+  // Not sure we want this property!
+  // assert(get_slice_int(4, undefined, 0) == 4^0x0, "get_slice_int(4, undefined, 0) == 4^0x0");
   assert(get_slice_int(5, 0, 0) == 5^0x0, "get_slice_int(5, 0, 0) == 5^0x0");
   assert(get_slice_int(5, 1, 0) == 5^0x1, "get_slice_int(5, 1, 0) == 5^0x1");
   assert(get_slice_int(5, 17, 0) == 5^0x11, "get_slice_int(5, 17, 0) == 5^0x11");

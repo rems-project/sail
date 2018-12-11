@@ -2576,26 +2576,13 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   | I_clear (ctyp, id) ->
      string (Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
 
-  | I_init (ctyp, id, cval) when is_stack_ctyp ctyp ->
-     if ctyp_equal ctyp (cval_ctyp cval) then
-       ksprintf string "  %s %s = %s;" (sgen_ctyp ctyp) (sgen_id id) (sgen_cval cval)
-     else
-       ksprintf string "  %s %s = CREATE_OF(%s, %s)(%s);"
-                (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_cval_param cval)
   | I_init (ctyp, id, cval) ->
-     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_id id) ^^ hardline
-     ^^ ksprintf string "  CREATE_OF(%s, %s)(&%s, %s);"
-                 (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_id id) (sgen_cval_param cval)
+     codegen_instr fid ctx (idecl ctyp id) ^^ hardline
+     ^^ codegen_conversion Parse_ast.Unknown (CL_id (id, ctyp)) cval
 
-  | I_reinit (ctyp, id, cval) when is_stack_ctyp ctyp ->
-     if ctyp_equal ctyp (cval_ctyp cval) then
-       ksprintf string "  %s %s = %s;" (sgen_ctyp ctyp) (sgen_id id) (sgen_cval cval)
-     else
-       ksprintf string "  %s %s = CREATE_OF(%s, %s)(%s);"
-                (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_cval cval)
   | I_reinit (ctyp, id, cval) ->
-     ksprintf string "  RECREATE_OF(%s, %s)(&%s, %s);"
-              (sgen_ctyp_name ctyp) (sgen_ctyp_name (cval_ctyp cval)) (sgen_id id) (sgen_cval_param cval)
+     codegen_instr fid ctx (ireset ctyp id) ^^ hardline
+     ^^ codegen_conversion Parse_ast.Unknown (CL_id (id, ctyp)) cval
 
   | I_reset (ctyp, id) when is_stack_ctyp ctyp ->
      string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_id id))

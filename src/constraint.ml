@@ -63,63 +63,79 @@ let rec pp_sexpr : sexpr -> string = function
   | List xs -> "(" ^ string_of_list " " pp_sexpr xs ^ ")"
   | Atom x -> x
 
-let zencode_kid kid = Util.zencode_string (string_of_kid kid)
-
 (** Each non-Type/Order kind in Sail mapes to a type in the SMT solver *)
 let smt_type l = function
   | K_int -> Atom "Int"
   | K_bool -> Atom "Bool"
   | _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kinded variable to SMT solver")
 
-let smt_var v = Atom ("v" ^ zencode_kid v)
+let to_smt l vars constr =
+  (* Numbering all SMT variables v0, ... vn, rather than generating
+     names based on their Sail names (e.g. using zencode) ensures that
+     alpha-equivalent constraints generate the same SMT problem, which
+     is important for the SMT memoisation to work properly. *)
+  let var_map = ref KBindings.empty in
+  let vnum = ref (-1) in
+  let smt_var v =
+    match KBindings.find_opt v !var_map with
+    | Some n -> Atom ("v" ^ string_of_int n)
+    | None ->
+       let n = !vnum + 1 in
+       var_map := KBindings.add v n !var_map;
+       vnum := n;
+       Atom ("v" ^ string_of_int n)
+  in
 
-(** var_decs outputs the list of variables to be used by the SMT
-   solver in SMTLIB v2.0 format. It takes a kind_aux KBindings, as
-   returned by Type_check.get_typ_vars *)
-let var_decs l (vars : kind_aux KBindings.t) : string = vars
-  |> KBindings.bindings
-  |> List.map (fun (v, k) -> sfun "declare-const" [smt_var v; smt_type l k])
-  |> string_of_list "\n" pp_sexpr
-
-let rec smt_nexp (Nexp_aux (aux, l) : nexp) : sexpr =
-  match aux with
-  | Nexp_id id -> Atom (Util.zencode_string (string_of_id id))
-  | Nexp_var v -> smt_var v
-  | Nexp_constant c -> Atom (Big_int.to_string c)
-  | Nexp_app (id, nexps) -> sfun (string_of_id id) (List.map smt_nexp nexps)
-  | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
-  | Nexp_sum (nexp1, nexp2) -> sfun "+" [smt_nexp nexp1; smt_nexp nexp2]
-  | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
-  | Nexp_exp nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
-  | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
-
-let rec smt_constraint (NC_aux (aux, l) : n_constraint) : sexpr =
-  match aux with
-  | NC_equal (nexp1, nexp2) -> sfun "=" [smt_nexp nexp1; smt_nexp nexp2]
-  | NC_bounded_le (nexp1, nexp2) -> sfun "<=" [smt_nexp nexp1; smt_nexp nexp2]
-  | NC_bounded_ge (nexp1, nexp2) -> sfun ">=" [smt_nexp nexp1; smt_nexp nexp2]
-  | NC_not_equal (nexp1, nexp2) -> sfun "not" [sfun "=" [smt_nexp nexp1; smt_nexp nexp2]]
-  | NC_set (v, ints) ->
-     sfun "or" (List.map (fun i -> sfun "=" [smt_var v; Atom (Big_int.to_string i)]) ints)
-  | NC_or (nc1, nc2) -> sfun "or" [smt_constraint nc1; smt_constraint nc2]
-  | NC_and (nc1, nc2) -> sfun "and" [smt_constraint nc1; smt_constraint nc2]
-  | NC_app (id, args) ->
-     sfun (string_of_id id) (List.map smt_typ_arg args)
-  | NC_true -> Atom "true"
-  | NC_false -> Atom "false"
-  | NC_var v -> smt_var v
-
-and smt_typ_arg (A_aux (aux, l) : typ_arg) : sexpr =
-  match aux with
-  | A_nexp nexp -> smt_nexp nexp
-  | A_bool nc -> smt_constraint nc
-  | _ ->
-     raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
+  (* var_decs outputs the list of variables to be used by the SMT
+     solver in SMTLIB v2.0 format. It takes a kind_aux KBindings, as
+     returned by Type_check.get_typ_vars *)
+  let var_decs l (vars : kind_aux KBindings.t) : string =
+    vars
+    |> KBindings.bindings
+    |> List.map (fun (v, k) -> sfun "declare-const" [smt_var v; smt_type l k])
+    |> string_of_list "\n" pp_sexpr
+  in
+  let rec smt_nexp (Nexp_aux (aux, l) : nexp) : sexpr =
+    match aux with
+    | Nexp_id id -> Atom (Util.zencode_string (string_of_id id))
+    | Nexp_var v -> smt_var v
+    | Nexp_constant c -> Atom (Big_int.to_string c)
+    | Nexp_app (id, nexps) -> sfun (string_of_id id) (List.map smt_nexp nexps)
+    | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
+    | Nexp_sum (nexp1, nexp2) -> sfun "+" [smt_nexp nexp1; smt_nexp nexp2]
+    | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
+    | Nexp_exp nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
+    | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
+  in
+  let rec smt_constraint (NC_aux (aux, l) : n_constraint) : sexpr =
+    match aux with
+    | NC_equal (nexp1, nexp2) -> sfun "=" [smt_nexp nexp1; smt_nexp nexp2]
+    | NC_bounded_le (nexp1, nexp2) -> sfun "<=" [smt_nexp nexp1; smt_nexp nexp2]
+    | NC_bounded_ge (nexp1, nexp2) -> sfun ">=" [smt_nexp nexp1; smt_nexp nexp2]
+    | NC_not_equal (nexp1, nexp2) -> sfun "not" [sfun "=" [smt_nexp nexp1; smt_nexp nexp2]]
+    | NC_set (v, ints) ->
+       sfun "or" (List.map (fun i -> sfun "=" [smt_var v; Atom (Big_int.to_string i)]) ints)
+    | NC_or (nc1, nc2) -> sfun "or" [smt_constraint nc1; smt_constraint nc2]
+    | NC_and (nc1, nc2) -> sfun "and" [smt_constraint nc1; smt_constraint nc2]
+    | NC_app (id, args) ->
+       sfun (string_of_id id) (List.map smt_typ_arg args)
+    | NC_true -> Atom "true"
+    | NC_false -> Atom "false"
+    | NC_var v -> smt_var v
+  and smt_typ_arg (A_aux (aux, l) : typ_arg) : sexpr =
+    match aux with
+    | A_nexp nexp -> smt_nexp nexp
+    | A_bool nc -> smt_constraint nc
+    | _ ->
+       raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
+  in
+  var_decs l vars, smt_constraint constr
 
 let smtlib_of_constraints ?get_model:(get_model=false) l vars constr : string =
+  let variables, problem = to_smt l vars constr in
   "(push)\n"
-  ^ var_decs l vars ^ "\n"
-  ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; smt_constraint constr])
+  ^ variables ^ "\n"
+  ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; problem])
   ^ "\n(assert constraint)\n(check-sat)"
   ^ (if get_model then "\n(get-model)" else "")
   ^ "\n(pop)"

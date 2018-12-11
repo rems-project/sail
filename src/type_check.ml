@@ -722,7 +722,16 @@ end = struct
     with
     | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
 
-  let ex_counter = ref 0
+  let add_union_id id bind env =
+    typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
+    { env with union_ids = Bindings.add id bind env.union_ids }
+
+  let get_union_id id env =
+    try
+      let bind = Bindings.find id env.union_ids in
+      List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+    with
+    | Not_found -> typ_error (id_loc id) ("No union constructor found for " ^ string_of_id id)
 
   let rec update_val_spec id (typq, typ) env =
     begin match expand_synonyms env typ with
@@ -757,6 +766,8 @@ end = struct
     if not (Bindings.mem id env.top_val_specs)
     then update_val_spec id (bind_typq, bind_typ) env
     else
+      env
+        (*
       let (existing_typq, existing_typ) = Bindings.find id env.top_val_specs in
       let existing_cmp = (strip_typq existing_typq, strip_typ existing_typ) in
       let bind_cmp = (strip_typq bind_typq, strip_typ bind_typ) in
@@ -764,36 +775,34 @@ end = struct
         typ_error (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound as " ^ string_of_bind (existing_typq, existing_typ) ^ ", cannot rebind as " ^ string_of_bind (bind_typq, bind_typ))
       else
         env
+         *)
 
   and add_mapping id (typq, typ1, typ2) env =
-    begin
-      typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
-      let forwards_id = mk_id (string_of_id id ^ "_forwards") in
-      let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
-      let backwards_id = mk_id (string_of_id id ^ "_backwards") in
-      let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
-      let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), Parse_ast.Unknown) in
-      let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), Parse_ast.Unknown) in
-      let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), Parse_ast.Unknown) in
-      let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), Parse_ast.Unknown) in
-      let env =
-        { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
-        |> add_val_spec forwards_id (typq, forwards_typ)
-        |> add_val_spec backwards_id (typq, backwards_typ)
-        |> add_val_spec forwards_matches_id (typq, forwards_matches_typ)
-        |> add_val_spec backwards_matches_id (typq, backwards_matches_typ)
-      in
-      let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
-      begin if strip_typ typ1 = string_typ then
-              let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-              add_val_spec prefix_id (typq, forwards_prefix_typ) env
-            else if strip_typ typ2 = string_typ then
-              let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-              add_val_spec prefix_id (typq, backwards_prefix_typ) env
-            else
-              env
-      end
-    end
+    typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
+    let forwards_id = mk_id (string_of_id id ^ "_forwards") in
+    let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
+    let backwards_id = mk_id (string_of_id id ^ "_backwards") in
+    let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
+    let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), Parse_ast.Unknown) in
+    let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), Parse_ast.Unknown) in
+    let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), Parse_ast.Unknown) in
+    let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), Parse_ast.Unknown) in
+    let env =
+      { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
+      |> add_val_spec forwards_id (typq, forwards_typ)
+      |> add_val_spec backwards_id (typq, backwards_typ)
+      |> add_val_spec forwards_matches_id (typq, forwards_matches_typ)
+      |> add_val_spec backwards_matches_id (typq, backwards_matches_typ)
+    in
+    let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
+    if strip_typ typ1 = string_typ then
+      let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+      add_val_spec prefix_id (typq, forwards_prefix_typ) env
+    else if strip_typ typ2 = string_typ then
+      let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+      add_val_spec prefix_id (typq, backwards_prefix_typ) env
+    else
+      env
 
   let define_val_spec id env =
     if IdSet.mem id env.defined_val_specs
@@ -921,18 +930,6 @@ end = struct
     match Bindings.find_opt id env.variants with
     | Some (typq, tus) -> typq, tus
     | None -> typ_error (id_loc id) ("union " ^ string_of_id id ^ " not found")
-
-  let add_union_id id bind env =
-    typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
-    { env with union_ids = Bindings.add id bind env.union_ids }
-
-  let get_union_id id env =
-    try
-      let bind = Bindings.find id env.union_ids in
-      List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
-    with
-    | Not_found -> typ_error (id_loc id) ("No union constructor found for " ^ string_of_id id)
-
   let get_flow id env =
     try Bindings.find id env.flow with
     | Not_found -> fun typ -> typ
@@ -1730,6 +1727,8 @@ let rec subtyp l env typ1 typ2 =
      else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
   | None, None ->
   match typ_aux1, typ_aux2 with
+  | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
+
   | Typ_tup typs1, Typ_tup typs2 when List.length typs1 = List.length typs2 ->
      List.iter2 (subtyp l env) typs1 typs2
 
@@ -2598,7 +2597,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
 
   | P_app (f, pats) when Env.is_mapping f env ->
      begin
-       let (typq, mapping_typ) = Env.get_union_id f env in
+       let (typq, mapping_typ) = Env.get_val_spec f env in
        let quants = quant_items typq in
        let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
          | Typ_tup typs -> typs
@@ -3317,14 +3316,15 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   typ_debug (lazy ("Existentials: " ^ string_of_list ", " string_of_kid existentials));
   typ_debug (lazy ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints));
 
+  let universals = KBindings.bindings universals |> List.map fst |> KidSet.of_list in
   let typ_ret =
-    if KidSet.is_empty (KidSet.of_list existentials) || KidSet.is_empty (typ_frees !typ_ret)
+    if KidSet.is_empty (KidSet.of_list existentials) || KidSet.is_empty (KidSet.diff (typ_frees !typ_ret) universals)
     then !typ_ret
     else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, !typ_ret))
   in
   let typ_ret = simp_typ typ_ret in
   let exp = annot_exp (E_app (f, xs)) typ_ret eff in
-  typ_debug (lazy ("RETURNING: " ^ string_of_exp exp));
+  typ_debug (lazy ("Returning: " ^ string_of_exp exp));
 
   exp, !all_unifiers
 

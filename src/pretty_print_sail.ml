@@ -279,7 +279,7 @@ let doc_lit (L_aux(l,_)) =
   | L_undef -> "undefined"
   | L_string s -> "\"" ^ String.escaped s ^ "\"")
 
-let rec doc_pat (P_aux (p_aux, _) as pat) =
+let rec doc_pat (P_aux (p_aux, (l, _)) as pat) =
   match p_aux with
   | P_id id -> doc_id id
   | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
@@ -297,7 +297,11 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
   | P_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_pat pats ^^ string "|]"
-  | _ -> string (string_of_pat pat)
+  | P_cons (hd_pat, tl_pat) -> separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat]
+  | P_string_append [] -> string "\"\""
+  | P_string_append pats ->
+     parens (separate_map (string " ^ ") doc_pat pats)
+  | P_record _ -> raise (Reporting.err_unreachable l __POS__ "P_record passed to doc_pat")
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this

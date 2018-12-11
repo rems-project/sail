@@ -24,6 +24,6 @@ union Quux('a : Type) = {
 }
 
 function quux(Quux(x as int('x)) : Quux({'n, 'n >= 3. int('n)})) -> unit = {
-  _prove(constraint('x >= 3));
+  _prove(constraint('x >= 4));
   ()
 }

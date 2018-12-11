@@ -233,6 +233,12 @@ void CREATE_OF(sail_int, sail_string)(sail_int *rop, sail_string str)
 }
 
 inline
+void CONVERT_OF(sail_int, sail_string)(sail_int *rop, sail_string str)
+{
+  mpz_set_str(*rop, str, 10);
+}
+
+inline
 void RECREATE_OF(sail_int, sail_string)(mpz_t *rop, sail_string str)
 {
   mpz_set_str(*rop, str, 10);
@@ -1234,6 +1240,23 @@ void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
   int total;
 
   mpq_init(*rop);
+  gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total);
+
+  int len = total - decimal;
+  mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
+  mpz_set(mpq_numref(*rop), sail_lib_tmp2);
+  mpz_set(mpq_denref(*rop), sail_lib_tmp3);
+  mpq_canonicalize(*rop);
+  mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
+  mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
+  mpq_add(*rop, *rop, sail_lib_tmp_real);
+}
+
+void CONVERT_OF(real, sail_string)(real *rop, const sail_string op)
+{
+  int decimal;
+  int total;
+
   gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total);
 
   int len = total - decimal;

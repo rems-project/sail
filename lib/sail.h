@@ -96,6 +96,8 @@ mach_int CREATE_OF(mach_int, sail_int)(const sail_int);
 void CREATE_OF(sail_int, sail_string)(sail_int *, const sail_string);
 void RECREATE_OF(sail_int, sail_string)(mpz_t *, const sail_string);
 
+void CONVERT_OF(sail_int, sail_string)(sail_int *, const sail_string);
+
 mach_int CONVERT_OF(mach_int, sail_int)(const sail_int);
 void CONVERT_OF(sail_int, mach_int)(sail_int *, const mach_int);
 
@@ -317,6 +319,7 @@ typedef mpq_t real;
 SAIL_BUILTIN_TYPE(real);
 
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op);
+void CONVERT_OF(real, sail_string)(real *rop, const sail_string op);
 
 void UNDEFINED(real)(real *rop, unit u);
 

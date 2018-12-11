@@ -67,6 +67,9 @@ let instr_number () =
 let idecl ?loc:(l=Parse_ast.Unknown) ctyp id =
   I_aux (I_decl (ctyp, id), (instr_number (), l))
 
+let ireset ?loc:(l=Parse_ast.Unknown) ctyp id =
+  I_aux (I_reset (ctyp, id), (instr_number (), l))
+
 let iinit ?loc:(l=Parse_ast.Unknown) ctyp id cval =
   I_aux (I_init (ctyp, id, cval), (instr_number (), l))
 
