@@ -1997,6 +1997,10 @@ let rec combine_constraint b f x y = match b, x, y with
   | _, _, _ -> None
 
 let rec assert_constraint env b (E_aux (exp_aux, _) as exp) =
+  match typ_of exp with
+  | Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool nc, _)]), _) ->
+     Some nc
+  | _ ->
   match exp_aux with
   | E_constraint nc ->
      Some nc
