@@ -96,7 +96,7 @@ let to_ast_id (P.Id_aux(id, l)) =
              | P.DeIid x -> DeIid x),
             l)
 
-let to_ast_var (P.Kid_aux(P.Var v,l)) = Kid_aux(Var v,l)
+let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)
 
 let to_ast_effects = function
   | P.ATyp_aux (P.ATyp_set effects, l) ->
@@ -161,6 +161,8 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
        let kids = List.map to_ast_var kids in
        let ctx = { ctx with kinds = List.fold_left (fun kinds kid -> KBindings.add kid K_int kinds) ctx.kinds kids } in
        Typ_exist (kids, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
+    | P.ATyp_base (id, kind, nc) ->
+       raise (Reporting.err_unreachable l __POS__ "TODO")
     | _ -> raise (Reporting.err_typ l "Invalid type")
   in
   Typ_aux (aux, l)
@@ -763,6 +765,7 @@ let initial_ctx = {
           ("atom", [K_int]);
           ("implicit", [K_int]);
           ("itself", [K_int]);
+          ("not", [K_bool]);
         ];
     kinds = KBindings.empty;
     scattereds = Bindings.empty;

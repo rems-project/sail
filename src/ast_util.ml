@@ -143,6 +143,10 @@ let is_typ_kopt = function
   | KOpt_aux (KOpt_kind (K_aux (K_type, _), _), _) -> true
   | _ -> false
 
+let is_bool_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_bool, _), _), _) -> true
+  | _ -> false
+       
 let string_of_kid = function
   | Kid_aux (Var v, _) -> v
 
@@ -320,6 +324,9 @@ let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
 let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
+
+let mk_kopt kind_aux id =
+  KOpt_aux (KOpt_kind (K_aux (kind_aux, Parse_ast.Unknown), id), Parse_ast.Unknown)
 
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
@@ -673,6 +680,7 @@ and string_of_typ_aux = function
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
   | Typ_app (id, args) when Id.compare id (mk_id "atom") = 0 -> "int(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
+  | Typ_app (id, args) when Id.compare id (mk_id "atom_bool") = 0 -> "bool(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_fn ([typ_arg], typ_ret, eff) ->
      string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff

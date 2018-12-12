@@ -449,7 +449,8 @@ end = struct
         ("real", []);
         ("list", [K_type]);
         ("string", []);
-        ("itself", [K_int])
+        ("itself", [K_int]);
+        ("atom_bool", [K_bool])
       ]
 
   let builtin_mappings =
@@ -498,6 +499,8 @@ end = struct
       | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
          subst_args kopts args
       | kopt :: kopts, A_aux (A_order arg, _) :: args when is_order_kopt kopt ->
+         subst_args kopts args
+      | kopt :: kopts, A_aux (A_bool arg, _) :: args when is_bool_kopt kopt ->
          subst_args kopts args
       | [], [] -> ncs
       | _, A_aux (_, l) :: _ -> typ_error l ("Error when processing type quantifer arguments " ^ string_of_typquant typq)
@@ -1624,8 +1627,9 @@ let rec alpha_equivalent env typ1 typ2 =
     in
     Typ_aux (relabelled_aux, l)
   and relabel_arg (A_aux (aux, l) as arg) =
+    (* FIXME relabel constraint *)
     match aux with
-    | A_nexp _ | A_order _ -> arg
+    | A_nexp _ | A_order _ | A_bool _ -> arg
     | A_typ typ -> A_aux (A_typ (relabel typ), l)
   in
 
@@ -1729,6 +1733,8 @@ let rec subtyp l env typ1 typ2 =
   match typ_aux1, typ_aux2 with
   | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
 
+  | Typ_app (id1, _), Typ_id id2 when string_of_id id1 = "atom_bool" && string_of_id id2 = "bool" -> ()
+                                                         
   | Typ_tup typs1, Typ_tup typs2 when List.length typs1 = List.length typs2 ->
      List.iter2 (subtyp l env) typs1 typs2
 

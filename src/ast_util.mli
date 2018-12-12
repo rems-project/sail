@@ -90,6 +90,7 @@ val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
 val mk_letbind : unit pat -> unit exp -> unit letbind
+val mk_kopt : kind_aux -> kid -> kinded_id
 
 val unaux_exp : 'a exp -> 'a exp_aux
 val unaux_pat : 'a pat -> 'a pat_aux
@@ -110,7 +111,8 @@ val kopt_kid : kinded_id -> kid
 val is_nat_kopt : kinded_id -> bool
 val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
-
+val is_bool_kopt : kinded_id -> bool
+  
 (* Some handy utility functions for constructing types. *)
 val mk_typ : typ_aux -> typ
 val mk_typ_arg : typ_arg_aux -> typ_arg

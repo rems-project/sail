@@ -555,6 +555,8 @@ atomic_typ:
     { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kid_list Comma typ Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
+  | Lcurly id Colon typ Dot typ Rcurly
+    { mk_typ (ATyp_base ($2, $4, $6)) $startpos $endpos }
 
 typ_list:
   | typ

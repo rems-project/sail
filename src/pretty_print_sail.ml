@@ -113,7 +113,7 @@ let rec doc_nexp =
   in
   nexp0
 
-let doc_nc nc =
+let rec doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
   let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
     match nc_aux with
@@ -125,7 +125,10 @@ let doc_nc nc =
     | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
     | NC_set (kid, ints) ->
        separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
-    | _ -> nc0 ~parenthesize:true nc
+    | NC_app (id, args) ->
+       doc_id id ^^ parens (separate_map (comma ^^ space) doc_typ_arg args)
+    | NC_var kid -> doc_kid kid
+    | NC_or _ | NC_and _ -> nc0 ~parenthesize:true nc
   and nc0 ?parenthesize:(parenthesize=false) (NC_aux (nc_aux, _) as nc) =
     (* Rather than parens (nc0 x) we use nc0 ~parenthesize:true x, because if
        we rewrite a disjunction as a set constraint, then we can
@@ -151,7 +154,7 @@ let doc_nc nc =
   in
   atomic_nc (constraint_simp nc)
 
-let rec doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
+and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
@@ -186,6 +189,7 @@ and doc_typ_arg (A_aux (ta_aux, _)) =
   | A_typ typ -> doc_typ typ
   | A_nexp nexp -> doc_nexp nexp
   | A_order o -> doc_ord o
+  | A_bool nc -> doc_nc nc
 and doc_arg_typs = function
   | [typ] -> doc_typ typ
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
