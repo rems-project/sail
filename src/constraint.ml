@@ -104,6 +104,8 @@ let to_smt l vars constr =
     | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_sum (nexp1, nexp2) -> sfun "+" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
+    | Nexp_exp (Nexp_aux (Nexp_constant c, _)) when Big_int.greater c Big_int.zero ->
+       Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
     | Nexp_exp nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
   in
@@ -228,7 +230,6 @@ let call_z3 l vars constraints =
   result
 
 let rec solve_z3 l vars constraints var =
-  let problems = [constraints] in
   let z3_file = smtlib_of_constraints ~get_model:true l vars constraints in
 
   (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)

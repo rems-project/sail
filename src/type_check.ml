@@ -1244,28 +1244,17 @@ let prove_z3 env (NC_aux (_, l) as nc) =
   | Constraint.Sat -> typ_debug (lazy "sat"); false
   | Constraint.Unknown -> typ_debug (lazy "unknown"); false
 
-let solve env nexp = failwith "WIP"
-
-  (* typ_print (lazy ("Solve " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_nexp nexp ^ " = ?"));
+let solve env (Nexp_aux (_, l) as nexp) = 
+  typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
+                   ^ " |- " ^ string_of_nexp nexp ^ " = ?"));
   match nexp with
   | Nexp_aux (Nexp_constant n,_) -> Some n
   | _ ->
-    let bindings = ref KBindings.empty  in
-    let fresh_var kid =
-      let n = KBindings.cardinal !bindings in
-      bindings := KBindings.add kid n !bindings;
-      n
-    in
-    let var_of kid =
-      try KBindings.find kid !bindings with
-      | Not_found -> fresh_var kid
-    in
-    let env = Env.add_typ_var Parse_ast.Unknown (mk_kid "solve#") K_int env in
-    let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env))
-                                 (nc_constraint env var_of (nc_eq (nvar (mk_kid "solve#")) nexp))
-    in
-    Constraint.solve_z3 constr (var_of (mk_kid "solve#"))
-   *)
+    let env = Env.add_typ_var Parse_ast.Unknown (mk_kopt K_int (mk_kid "solve#")) env in
+    let vars = Env.get_typ_vars env in
+    let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
+    let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
+    Constraint.solve_z3 l vars constr (mk_kid "solve#")
 
 let prove env nc =
   typ_print (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
@@ -1515,13 +1504,13 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
 
           mod(m, C) = 0 && C != 0 --> (C * n = m <--> n = m / C)
 
-          to help us unify multiplications and divisions.  *)
+          to help us unify multiplications and divisions. 
        let valid n c = prove env (nc_eq (napp (mk_id "mod") [n; c]) (nint 0)) && prove env (nc_neq c (nint 0)) in
        if KidSet.is_empty (nexp_frees n1b) && valid nexp2 n1b then
          unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
        else if KidSet.is_empty (nexp_frees n1a) && valid nexp2 n1a then
-         unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a])
-       else if KidSet.is_empty (nexp_frees n1a) then
+         unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a]) *)
+       if KidSet.is_empty (nexp_frees n1a) then
          begin
            match nexp_aux2 with
            | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_equal (n1a, n2a), Parse_ast.Unknown)) ->
@@ -2329,6 +2318,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         let else_branch' = crule check_exp (Env.add_constraint (nc_not flow) env) else_branch typ in
         annot_exp (E_if (cond', then_branch', else_branch')) typ
      | _ ->
+        let cond' = type_coercion env cond' bool_typ in
         let then_branch' = crule check_exp (add_opt_constraint (assert_constraint env true cond') env) then_branch typ in
         let else_branch' = crule check_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch typ in
         annot_exp (E_if (cond', then_branch', else_branch')) typ
