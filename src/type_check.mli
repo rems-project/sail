@@ -84,7 +84,7 @@ type type_error =
 
 exception Type_error of l * type_error;;
 
-val typ_debug : string Lazy.t -> unit
+val typ_debug : ?level:int -> string Lazy.t -> unit
 val typ_print : string Lazy.t -> unit
 
 (** {2 Environments} *)

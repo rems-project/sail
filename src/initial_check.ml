@@ -129,6 +129,18 @@ let format_kind_aux_list = function
   | [kind] -> string_of_kind_aux kind
   | kinds -> "(" ^ Util.string_of_list ", " string_of_kind_aux kinds ^ ")"
 
+let to_ast_kopt ctx (P.KOpt_aux (aux, l)) =
+  let aux, ctx = match aux with
+    | P.KOpt_none v ->
+       let v = to_ast_var v in
+       KOpt_kind (K_aux (K_int, gen_loc l), v), { ctx with kinds = KBindings.add v K_int ctx.kinds }
+    | P.KOpt_kind (k, v) ->
+       let v = to_ast_var v in
+       let k = to_ast_kind k in
+       KOpt_kind (k, v), { ctx with kinds = KBindings.add v (unaux_kind k) ctx.kinds }
+  in
+  KOpt_aux (aux, l), ctx
+
 let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
   let aux = match aux with
     | P.ATyp_id id -> Typ_id (to_ast_id id)
@@ -157,10 +169,11 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
        | Some kinds ->
           Typ_app (id, List.map2 (to_ast_typ_arg ctx) args kinds)
        end
-    | P.ATyp_exist (kids, nc, atyp) ->
-       let kids = List.map to_ast_var kids in
-       let ctx = { ctx with kinds = List.fold_left (fun kinds kid -> KBindings.add kid K_int kinds) ctx.kinds kids } in
-       Typ_exist (List.map (mk_kopt K_int) kids, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
+    | P.ATyp_exist (kopts, nc, atyp) ->
+       let kopts, ctx =
+         List.fold_right (fun kopt (kopts, ctx) -> let kopt, ctx = to_ast_kopt ctx kopt in (kopt :: kopts, ctx)) kopts ([], ctx)
+       in
+       Typ_exist (kopts, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
     | P.ATyp_base (id, kind, nc) ->
        raise (Reporting.err_unreachable l __POS__ "TODO")
     | _ -> raise (Reporting.err_typ l "Invalid type")
@@ -197,7 +210,7 @@ and to_ast_order ctx (P.ATyp_aux (aux, l)) =
 
 and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
   let aux = match aux with
-    | P.ATyp_app (Id_aux (DeIid op, _), [t1; t2]) ->
+    | P.ATyp_app (Id_aux (DeIid op, _) as id, [t1; t2]) ->
        begin match op with
        | "==" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | "!=" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
@@ -207,7 +220,15 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
        | "<" -> NC_bounded_le (nsum (to_ast_nexp ctx t1) (nint 1), to_ast_nexp ctx t2)
        | "&" -> NC_and (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
        | "|" -> NC_or (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
-       | _ -> raise (Reporting.err_typ l ("Invalid operator in constraint"))
+       | _ ->
+          let id = to_ast_id id in
+          match Bindings.find_opt id ctx.type_constructors with
+          | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
+          | Some kinds when List.length kinds <> 2 ->
+             raise (Reporting.err_typ l (sprintf "%s : %s -> Bool expected %d arguments, given 2"
+                                                 (string_of_id id) (format_kind_aux_list kinds)
+                                                 (List.length kinds)))
+          | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) [t1; t2] kinds)
        end
     | P.ATyp_app (id, args) ->
        let id = to_ast_id id in
@@ -230,17 +251,9 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
 let to_ast_quant_item ctx (P.QI_aux (aux, l)) =
   match aux with
   | P.QI_const nc -> QI_aux (QI_const (to_ast_constraint ctx nc), l), ctx
-  | P.QI_id (KOpt_aux (aux, kopt_l)) ->
-     let aux, ctx = match aux with
-       | P.KOpt_none v ->
-          let v = to_ast_var v in
-          KOpt_kind (K_aux (K_int, gen_loc kopt_l), v), { ctx with kinds = KBindings.add v K_int ctx.kinds }
-       | P.KOpt_kind (k, v) ->
-          let v = to_ast_var v in
-          let k = to_ast_kind k in
-          KOpt_kind (k, v), { ctx with kinds = KBindings.add v (unaux_kind k) ctx.kinds }
-     in
-     QI_aux (QI_id (KOpt_aux (aux, kopt_l)), l), ctx
+  | P.QI_id kopt ->
+     let kopt, ctx = to_ast_kopt ctx kopt in
+     QI_aux (QI_id kopt, l), ctx
 
 let to_ast_typquant ctx (P.TypQ_aux (aux, l)) =
   match aux with

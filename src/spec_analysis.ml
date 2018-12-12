@@ -310,10 +310,13 @@ let typ_variants consider_var bound tunions =
 let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
   | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
 
+let fv_of_abbrev consider_var bound used typq typ_arg =
+  let ts_bound = if consider_var then typq_bindings typq else mt in
+  ts_bound, fv_of_targ consider_var (Nameset.union bound ts_bound) used typ_arg
+
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
-  | TD_abbrev(id,typq,A_aux(A_typ typ, l)) ->
-     let typschm = TypSchm_aux (TypSchm_ts (typq,typ), l) in
-     init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
+  | TD_abbrev(id,typq,typ_arg) ->
+     init_env (string_of_id id), snd (fv_of_abbrev consider_var mt mt typq typ_arg)
   | TD_record(id,_,typq,tids,_) ->
     let binds = init_env (string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in

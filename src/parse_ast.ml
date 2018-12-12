@@ -163,7 +163,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_wild
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
- | ATyp_exist of kid list * atyp * atyp
+ | ATyp_exist of kinded_id list * atyp * atyp
  | ATyp_base of id * atyp * atyp
 
 and atyp = 
@@ -175,7 +175,7 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
    KOpt_none of kid (* identifier *)
  | KOpt_kind of kind * kid (* kind-annotated variable *)
 
-type 
+and
 kinded_id = 
    KOpt_aux of kinded_id_aux * l
 

@@ -271,6 +271,8 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
        A_aux (A_typ (rewrite_typ env typ), l)
     | A_order ord ->
        A_aux (A_order ord, l)
+    | A_bool nc ->
+       A_aux (A_bool nc, l)
   in
 
   let rewrite_annot (l, tannot) =

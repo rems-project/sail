@@ -70,7 +70,7 @@ let doc_kopt = function
   | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
   | kopt when is_order_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
   | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])
-                
+
 let doc_int n = string (Big_int.to_string n)
 
 let docstring (l, _) = match l with
@@ -168,6 +168,8 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
      separate space [doc_typ_arg x; doc_typ_arg y]
   | Typ_app (id, typs) when Id.compare id (mk_id "atom") = 0 ->
      string "int" ^^ parens (separate_map (string ", ") doc_typ_arg typs)
+  | Typ_app (id, typs) when Id.compare id (mk_id "atom_bool") = 0 ->
+     string "bool" ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_app (id, typs) -> doc_id id ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_tup typs -> parens (separate_map (string ", ") doc_typ typs)
   | Typ_var kid -> doc_kid kid
@@ -205,6 +207,7 @@ let doc_quants quants =
     match qi_aux with
     | QI_id kopt when is_nat_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
     | QI_id kopt when is_typ_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])]
+    | QI_id kopt when is_bool_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])]
     | QI_id kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
     | QI_const nc -> []
   in
@@ -225,6 +228,7 @@ let doc_param_quants quants =
     match qi_aux with
     | QI_id kopt when is_nat_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
     | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
+    | QI_id kopt when is_bool_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
     | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]
     | QI_const nc -> []
   in
@@ -567,14 +571,21 @@ let doc_field (typ, id) =
 
 let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
+let doc_typ_arg_kind (A_aux (aux, _)) =
+  match aux with
+  | A_nexp _ -> space ^^ string "->" ^^ space ^^string "Int"
+  | A_bool _ -> space ^^ string "->" ^^ space ^^ string "Bool"
+  | A_order  _ -> space ^^ string "->" ^^ space ^^ string "Order"
+  | A_typ _ -> empty
+
 let doc_typdef (TD_aux(td,_)) = match td with
   | TD_abbrev (id, typq, typ_arg) ->
      begin
        match doc_typquant typq with
        | Some qdoc ->
-          doc_op equals (concat [string "type"; space; doc_id id; qdoc]) (doc_typ_arg typ_arg)
+          doc_op equals (concat [string "type"; space; doc_id id; qdoc; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
        | None ->
-          doc_op equals (concat [string "type"; space; doc_id id]) (doc_typ_arg typ_arg)
+          doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
      end
   | TD_enum (id, _, ids, _) ->
      separate space [string "enum"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]

@@ -247,6 +247,7 @@ and lem_nexps_of_typ_arg (A_aux (ta,_)) =
   | A_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
   | A_typ typ -> lem_nexps_of_typ typ
   | A_order _ -> NexpSet.empty
+  | A_bool _ -> NexpSet.empty
 
 let lem_tyvars_of_typ typ =
   NexpSet.fold (fun nexp ks -> KidSet.union ks (tyvars_of_nexp nexp))
@@ -296,6 +297,8 @@ let doc_typ_lem, doc_atomic_typ_lem =
          (string "integer")
       | Typ_app(Id_aux (Id "atom", _), [A_aux(A_nexp n,_)]) ->
          (string "integer")
+      | Typ_app(Id_aux (Id "atom_bool", _), [A_aux(A_bool nc,_)]) ->
+         (string "bool")
       | Typ_app(id,args) ->
          let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space doc_typ_arg_lem args) in
          if atyp_needed then parens tpp else tpp
@@ -331,6 +334,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | A_typ t -> app_typ true t
       | A_nexp n -> doc_nexp_lem (nexp_simp n)
       | A_order o -> empty
+      | A_bool _ -> empty
   in typ', atomic_typ
 
 (* Check for variables in types that would be pretty-printed. *)
@@ -1013,6 +1017,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
      doc_op equals
        (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
        (doc_typschm_lem false typschm)
+  | TD_abbrev _ -> empty
   | TD_record(id,nm,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]

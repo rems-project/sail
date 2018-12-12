@@ -78,6 +78,8 @@ let prepend_id str1 = function
 let mk_id i n m = Id_aux (i, loc n m)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
+let mk_kopt k n m = KOpt_aux (k, loc n m)
+
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
@@ -550,10 +552,10 @@ atomic_typ:
     { let v = mk_kid "n" $startpos $endpos in
       let atom_id = mk_id (Id "atom") $startpos $endpos in
       let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
-      mk_typ (ATyp_exist ([v], ATyp_aux (ATyp_nset (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
-  | Lcurly kid_list Dot typ Rcurly
+      mk_typ (ATyp_exist ([mk_kopt (KOpt_none v) $startpos $endpos], ATyp_aux (ATyp_nset (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
+  | Lcurly kopt_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
-  | Lcurly kid_list Comma typ Dot typ Rcurly
+  | Lcurly kopt_list Comma typ Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
   | Lcurly id Colon typ Dot typ Rcurly
     { mk_typ (ATyp_base ($2, $4, $6)) $startpos $endpos }

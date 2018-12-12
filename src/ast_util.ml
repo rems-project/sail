@@ -739,6 +739,8 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+  | NC_aux (NC_app (Id_aux (DeIid op, _), [arg1; arg2]), _) ->
+     "(" ^ string_of_typ_arg arg1 ^ " " ^ op ^ " " ^ string_of_typ_arg arg2 ^ ")"
   | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | NC_aux (NC_var v, _) -> string_of_kid v
   | NC_aux (NC_true, _) -> "true"
