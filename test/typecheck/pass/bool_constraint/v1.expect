@@ -1,0 +1,27 @@
+Type error at file "bool_constraint/v1.sail", line 12, character 20 to line 12, character 20
+
+  if b then n else [41m4[0m
+
+Tried performing type coercion from int(4) to {'m, ('b & 'm == 'n | not('b) & 'm == 3). int('m)} on 4
+Coercion failed because:
+  int(4) is not a subtype of {('m : Int), (('b & 'm == 'n) | (not('b) & 'm == 3)). int('m)}
+  in context
+  * 4 == 'ex41#m
+  * not('b)
+  where
+  * 'b bound at file "bool_constraint/v1.sail", line 11, character 1 to line 13, character 1
+
+[41mfunction foo(b, n) = {[0m
+[41m  if b then n else 4[0m
+[41m}[0m
+
+  * 'ex41#m bound at file "bool_constraint/v1.sail", line 12, character 20 to line 12, character 20
+
+  if b then n else [41m4[0m
+
+  * 'n bound at file "bool_constraint/v1.sail", line 11, character 1 to line 13, character 1
+
+[41mfunction foo(b, n) = {[0m
+[41m  if b then n else 4[0m
+[41m}[0m
+

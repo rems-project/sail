@@ -2327,7 +2327,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      | Some (kopts, nc, Typ_aux (Typ_app (ab, [A_aux (A_bool flow, _)]), _)) when string_of_id ab = "atom_bool" ->
         let env = add_existential l kopts nc env in
         let then_branch' = crule check_exp (Env.add_constraint flow env) then_branch typ in
-        let else_branch' = crule check_exp (Env.add_constraint flow env) else_branch typ in
+        let else_branch' = crule check_exp (Env.add_constraint (nc_not flow) env) else_branch typ in
         annot_exp (E_if (cond', then_branch', else_branch')) typ
      | _ ->
         let then_branch' = crule check_exp (add_opt_constraint (assert_constraint env true cond') env) then_branch typ in

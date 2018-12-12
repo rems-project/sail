@@ -2,6 +2,9 @@ default Order dec
 
 $include <prelude.sail>
 
+/* Test returning an existential with a mixed boolean/integer
+constraint */
+
 val foo : forall ('n : Int) ('b : Bool).
   (bool('b), int('n)) -> {'m, 'b & 'm == 'n | not('b) & 'm == 3. int('m)}
 
@@ -21,13 +24,13 @@ infix 1 <-->
 
 type operator <-->('p: Bool, 'q: Bool) -> Bool = ('p --> 'q) & ('q --> 'p)
 
-val my_not = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> {('q : Bool), 'p <--> 'q. bool('q)}
+val my_not = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> {('q : Bool), 'p <--> not('q). bool('q)}
 
 /* This example mimics 32-bit ARM instructions where a flag in the
 function argument restricts a type variable in a specific branch of
 the code */
 
-val test : forall ('n : Int) ('b : Bool), 0 <= 'n <= 15 & implies('b, 'n <= 14).
+val test : forall ('n : Int) ('b : Bool), 0 <= 'n <= 16 & implies('b, 'n <= 15).
   (bool('b), int('n)) -> unit
 
 function test(cond, n) = {
