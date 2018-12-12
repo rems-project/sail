@@ -77,13 +77,14 @@ match b with
   | BU => undefined_bool tt
 end.
 
-(* For termination of recursive functions. *)
-Lemma _limit_is_limit {_limit : Z} : _limit >? 0 = true -> Zwf 0 (_limit - 1) _limit.
-intros.
-prepare_for_solver.
+(* For termination of recursive functions.  We don't name assertions, so use
+   the type class mechanism to find it. *)
+Definition _limit_reduces {_limit} (_acc:Acc (Zwf 0) _limit) `{ArithFact (_limit >= 0)} : Acc (Zwf 0) (_limit - 1).
+refine (Acc_inv _acc _).
+destruct H.
 red.
 omega.
-Qed.
+Defined.
 
 (*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e

@@ -913,6 +913,11 @@ let general_typ_of_annot annot =
 
 let general_typ_of (E_aux (_,annot)) = general_typ_of_annot annot
 
+let is_prefix s s' =
+  let l = String.length s in
+  String.length s' >= l &&
+  String.sub s' 0 l = s
+
 let prefix_recordtype = true
 let report = Reporting.err_unreachable
 let doc_exp, doc_let =
@@ -1181,7 +1186,7 @@ let doc_exp, doc_let =
             if Env.is_extern f env "coq"
             then string (Env.get_extern f env "coq"), true, false, false
             else if IdSet.mem f ctxt.recursive_ids
-            then string "_rec_" ^^ doc_id f, false, false, true
+            then doc_id f, false, false, true
             else doc_id f, false, false, false in
           let (tqs,fn_ty) = Env.get_val_spec_orig f env in
           let arg_typs, ret_typ, eff = match fn_ty with
@@ -1236,10 +1241,13 @@ let doc_exp, doc_let =
             then hang 2 (call ^^ break 1 ^^ parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs)))
             else
               let main_call = call :: List.map2 (doc_arg true) args arg_typs in
-              let all = if is_rec then main_call @
-                                         [parens (string "_limit - 1");
-                                          parens (string "Acc_inv _acc (_limit_is_limit _limit_ok)")]
-                        else main_call
+              let all =
+                if is_rec then main_call @
+                                 [parens (string "_limit_reduces _acc")]
+                else match f with
+                     | Id_aux (Id x,_) when is_prefix "#rec#" x ->
+                        main_call @ [parens (string "Zwf_well_founded _ _")]
+                     | _ ->  main_call
               in hang 2 (flow (break 1) all) in
 
           (* Decide whether to unpack an existential result, pack one, or cast.
@@ -2122,66 +2130,31 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     then string "M" ^^ space ^^ parens (doc_typ ctxt ret_typ)
     else doc_typ ctxt ret_typ
   in
-  let intropp, idpp, accpp, measurepp, fixupspp, postpp = match rec_opt with
-    | Rec_aux (Rec_measure (meas_pat,meas_exp),_) ->
-       let check_ids (arg_pat,_) m_pat =
-         match arg_pat, m_pat with
-         | P_aux ((P_id arg_id | P_typ (_,P_aux (P_id arg_id,_))),_),
-           P_aux ((P_id m_id | P_typ (_,P_aux (P_id m_id,_))),_) ->
-            if Id.compare arg_id m_id == 0 then () else
-              failwith "TODO"
-         | _, P_aux (P_wild,_) -> () (* TODO generalise *)
-         | _ -> failwith "TODO"
-       in
-       let idpp = doc_id id in
-       let recidpp = string "_rec_" ^^ idpp in
-       let patnames = List.map (function
-                          | P_aux (P_id id,_), _ -> doc_id id
-                          | P_aux (P_typ (_,P_aux (P_id id,_)),_), _ -> doc_id id
-                          | p,_ -> raise (Reporting.err_unreachable (pat_loc p) __POS__
-                                          "Pattern has not been reduced to a simple binder"))
-                    pats in
-       let quantnames, constrnames = typquant_names_separate ctxt tq in
-       let atomconstrsnames = List.map (fun _ -> underscore) atom_constrs in
-       let fixupspp = Util.map_filter (fun (pat,typ) ->
-                          match pat_is_plain_binder env pat with
-                          | Some id -> begin
-                             match destruct_exist env (expand_range_type typ) with
-                             | Some (_, NC_aux (NC_true,_), _) -> None
-                             | Some ([kid], nc,
-                                     Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                                                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
-                                  when Kid.compare kid kid' == 0 ->
-                                Some (string "let " ^^ doc_id id ^^ string " := projT1 " ^^ doc_id id ^^ string " in")
-                             | _ -> None
-                            end
-                          | None -> None) pats
-       in
-       let no_fixups = match fixupspp with [] -> true | _ -> false in
-       let measure_pp =
-         match pats, meas_pat with
-         | _, P_aux (P_tup ps,_) when List.length pats = List.length ps ->
-            let () = List.iter2 check_ids pats ps in
-            doc_exp ctxt no_fixups meas_exp
-         | [pat], _ ->
-            let () = check_ids pat meas_pat in
-            doc_exp ctxt no_fixups meas_exp
-         | _, _ -> failwith "TODO"
-       in
-       let measure_pp = match fixupspp with
-           [] -> measure_pp
-         | _ -> parens (flow (break 1) fixupspp ^/^ measure_pp)
+  let idpp = doc_id id in
+  let intropp, accpp, measurepp, fixupspp = match rec_opt with
+    | Rec_aux (Rec_measure _,_) ->
+       let fixupspp =
+         Util.map_filter (fun (pat,typ) ->
+             match pat_is_plain_binder env pat with
+             | Some id -> begin
+                 match destruct_exist env (expand_range_type typ) with
+                 | Some (_, NC_aux (NC_true,_), _) -> None
+                 | Some ([kid], nc,
+                         Typ_aux (Typ_app (Id_aux (Id "atom",_),
+                           [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
+                      when Kid.compare kid kid' == 0 ->
+                    Some (string "let " ^^ doc_id id ^^ string " := projT1 " ^^ doc_id id ^^ string " in")
+                 | _ -> None
+               end
+             | None -> None) pats
        in
        string "Fixpoint",
-       recidpp,
-       [parens (string "_limit : Z");
-        parens (string "_acc : Acc (Zwf 0) _limit")],
+       [parens (string "_acc : Acc (Zwf 0) _rec_limit")],
        [string "{struct _acc}"],
-       fixupspp,
-       hardline ^^ string "Definition " ^^ idpp ^/^ flow (break 1) (quantspp @ patspp :: constrspp @ atom_constrs) ^/^ coloneq ^/^ recidpp ^/^ flow (break 1) (quantnames @ patnames @ constrnames @ atomconstrsnames) ^/^ measure_pp ^/^ string "(Zwf_well_founded _ _)."
+       fixupspp
     | Rec_aux (r,_) ->
        let d = match r with Rec_nonrec -> "Definition" | _ -> "Fixpoint" in
-       string d, doc_id id, [], [], [], empty
+       string d, [], [], []
   in
   (* Work around Coq bug 7975 about pattern binders followed by implicit arguments *)
   let implicitargs =
@@ -2202,17 +2175,11 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
                "guarded pattern expression should have been rewritten before pretty-printing") in
   let bodypp = doc_fun_body ctxt exp in
   let bodypp = if effectful eff || not build_ex then bodypp else string "build_ex" ^^ parens bodypp in
-  let bodypp = match rec_opt with
-    | Rec_aux (Rec_measure _,_) ->
-       string "assert_exp' (_limit >? 0) \"termination limit reached\" >>= fun _limit_ok =>" ^/^
-         separate (break 1) fixupspp ^/^
-         bodypp
-    | _ -> bodypp
-  in
+  let bodypp = separate (break 1) fixupspp ^/^ bodypp in
   group (prefix 3 1
     (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp] @ accpp) ^/^
        flow (break 1) (measurepp @ [colon; retpp; coloneq]))
-    (bodypp ^^ dot)) ^^ postpp ^^ implicitargs
+    (bodypp ^^ dot)) ^^ implicitargs
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
