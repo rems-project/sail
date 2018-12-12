@@ -210,7 +210,6 @@ and strip_qi_aux = function
 and strip_kinded_id = function
   | KOpt_aux (kinded_id_aux, _) -> KOpt_aux (strip_kinded_id_aux kinded_id_aux, Parse_ast.Unknown)
 and strip_kinded_id_aux = function
-  | KOpt_none kid -> KOpt_none (strip_kid kid)
   | KOpt_kind (kind, kid) -> KOpt_kind (strip_kind kind, strip_kid kid)
 and strip_kind = function
   | K_aux (k_aux, _) -> K_aux (k_aux, Parse_ast.Unknown)
@@ -1108,7 +1107,6 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
     | QI_aux (qi, _) -> add_quant_item_aux env qi
   and add_quant_item_aux env = function
     | QI_const constr -> Env.add_constraint constr env
-    | QI_id (KOpt_aux (KOpt_none kid, _)) -> Env.add_typ_var l kid K_int env
     | QI_id (KOpt_aux (KOpt_kind (K_aux (k, _), kid), _)) -> Env.add_typ_var l kid k env
   in
   match quant with
@@ -1823,7 +1821,6 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
 
 let is_nat_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid'), _) -> Kid.compare kid kid' = 0
-  | KOpt_aux (KOpt_none kid', _) -> Kid.compare kid kid' = 0
   | _ -> false
 
 let is_order_kid kid = function
@@ -4228,12 +4225,14 @@ let check_default env (DT_aux (ds, l)) =
 let kinded_id_arg kind_id =
   let typ_arg arg = A_aux (arg, Parse_ast.Unknown) in
   match kind_id with
-  | KOpt_aux (KOpt_none kid, _) -> typ_arg (A_nexp (nvar kid))
-  | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> typ_arg (A_nexp (nvar kid))
+  | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) ->
+     typ_arg (A_nexp (nvar kid))
   | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid), _) ->
      typ_arg (A_order (Ord_aux (Ord_var kid, Parse_ast.Unknown)))
   | KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _) ->
      typ_arg (A_typ (mk_typ (Typ_var kid)))
+  | KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _) ->
+     typ_arg (A_bool (nc_var kid))
 
 let fold_union_quant quants (QI_aux (qi, l)) =
   match qi with
@@ -4403,13 +4402,13 @@ let initial_env =
 
   |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
   |> Env.add_val_spec (mk_id "size_itself_int")
-      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
        function_typ [app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))]]
          (atom_typ (nvar (mk_kid "n"))) no_effect)
   |> Env.add_extern (mk_id "make_the_value") (fun _ -> Some "make_the_value")
   |> Env.add_val_spec (mk_id "make_the_value")
-      (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
+      (TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
        function_typ [atom_typ (nvar (mk_kid "n"))]
          (app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))]) no_effect)

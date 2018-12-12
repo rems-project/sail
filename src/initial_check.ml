@@ -234,7 +234,7 @@ let to_ast_quant_item ctx (P.QI_aux (aux, l)) =
      let aux, ctx = match aux with
        | P.KOpt_none v ->
           let v = to_ast_var v in
-          KOpt_none v, { ctx with kinds = KBindings.add v K_int ctx.kinds }
+          KOpt_kind (K_aux (K_int, gen_loc kopt_l), v), { ctx with kinds = KBindings.add v K_int ctx.kinds }
        | P.KOpt_kind (k, v) ->
           let v = to_ast_var v in
           let k = to_ast_kind k in
@@ -495,11 +495,6 @@ let rec to_ast_range (P.BF_aux(r,l)) = (* TODO add check that ranges are sensibl
 let to_ast_type_union ctx (P.Tu_aux (P.Tu_ty_id (atyp, id), l)) =
   let typ = to_ast_typ ctx atyp in
   Tu_aux (Tu_ty_id (typ, to_ast_id id), l)
-
-let kopt_kind (KOpt_aux (aux, l)) =
-  match aux with
-  | KOpt_none _ -> K_aux (K_int, gen_loc l)
-  | KOpt_kind (k, _) -> k
 
 let add_constructor id typq ctx =
   let kinds = List.map (fun kopt -> unaux_kind (kopt_kind kopt)) (quant_kopts typq) in

@@ -126,13 +126,11 @@ let mk_letbind pat exp = LB_aux (LB_val (pat, exp), no_annot)
 let mk_val_spec vs_aux =
   DEF_spec (VS_aux (vs_aux, no_annot))
 
-let kopt_kid (KOpt_aux (kopt_aux, _)) =
-  match kopt_aux with
-  | KOpt_none kid | KOpt_kind (_, kid) -> kid
+let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
+let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
 
 let is_nat_kopt = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), _), _) -> true
-  | KOpt_aux (KOpt_none _, _) -> true
   | _ -> false
 
 let is_order_kopt = function
@@ -713,9 +711,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
-let string_of_kinded_id = function
-  | KOpt_aux (KOpt_none kid, _) -> string_of_kid kid
-  | KOpt_aux (KOpt_kind (k, kid), _) -> "(" ^ string_of_kid kid ^ " : " ^ string_of_kind k ^ ")"
+let string_of_kinded_id (KOpt_aux (KOpt_kind (k, kid), _)) = "(" ^ string_of_kid kid ^ " : " ^ string_of_kind k ^ ")"
 
 let string_of_quant_item_aux = function
   | QI_id kopt -> string_of_kinded_id kopt
@@ -1192,7 +1188,7 @@ and tyvars_of_typ_arg (A_aux (ta,_)) =
   | A_bool nc -> tyvars_of_constraint nc
 
 let tyvars_of_quant_item (QI_aux (qi, _)) = match qi with
-  | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
+  | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
      KidSet.singleton kid
   | QI_const nc -> tyvars_of_constraint nc
 
@@ -1660,8 +1656,6 @@ let subst_kid subst sv v x =
   |> subst sv (mk_typ_arg (A_typ (mk_typ (Typ_var v))))
 
 let quant_item_subst_kid_aux sv subst = function
-  | QI_id (KOpt_aux (KOpt_none kid, l)) as qid ->
-     if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_none subst, l)) else qid
   | QI_id (KOpt_aux (KOpt_kind (k, kid), l)) as qid ->
      if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_kind (k, subst), l)) else qid
   | QI_const nc ->

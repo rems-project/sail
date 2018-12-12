@@ -264,8 +264,8 @@ n_constraint :: 'NC_' ::=
 kinded_id :: 'KOpt_' ::=
   {{ com optionally kind-annotated identifier }}
   {{ aux _ l }}
-  | kid	 	    		   	      :: :: none {{ com identifier }}
-  | kind kid				      :: :: kind {{ com kind-annotated variable }}
+  | kind kid       :: :: kind {{ com kind-annotated variable }}
+  | kid            :: S :: none {{ ichlo [[kinded_id]] }}
 
 quant_item :: 'QI_' ::=
   {{ com kinded identifier or Int constraint }}

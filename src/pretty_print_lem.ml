@@ -412,7 +412,6 @@ let doc_lit_lem (L_aux(lit,l)) =
 
 (* typ_doc is the doc for the type being quantified *)
 let doc_quant_item vars_included (QI_aux (qi, _)) = match qi with
-| QI_id (KOpt_aux (KOpt_none kid, _))
 | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
    (match vars_included with
      None -> doc_var kid
@@ -1020,7 +1019,6 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
     let rectyp = match typq with
       | TypQ_aux (TypQ_tq qs, _) ->
         let quant_item = function
-          | QI_aux (QI_id (KOpt_aux (KOpt_none kid, _)), l)
           | QI_aux (QI_id (KOpt_aux (KOpt_kind (_, kid), _)), l) ->
             [A_aux (A_nexp (Nexp_aux (Nexp_var kid, l)), l)]
           | _ -> [] in

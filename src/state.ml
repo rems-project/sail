@@ -128,7 +128,7 @@ let generate_initial_regstate defs =
       | _ -> raise Not_found
     in
     let typ_subst_quant_item typ (QI_aux (qi, _)) arg = match qi with
-      | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
+      | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
          typ_subst kid arg typ
       | _ -> typ
     in

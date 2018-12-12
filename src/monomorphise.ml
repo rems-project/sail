@@ -3358,7 +3358,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
     in aux pat
   in
   let quant = function
-    | QI_aux (QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_,kid)),_)),_) ->
+    | QI_aux (QI_id (KOpt_aux (KOpt_kind (_,kid),_)),_) ->
        Some kid
     | QI_aux (QI_const _,_) -> None
   in
@@ -4264,7 +4264,7 @@ let rewrite_toplevel_nexps (Defs defs) =
        match nexp_map with
        | [] -> None
        | _ ->
-          let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (KOpt_aux (KOpt_none kid,Generated Unknown)), Generated tq_l)) nexp_map in
+          let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated tq_l)) nexp_map in
           let new_constraints = List.map (fun (kid,nexp) -> QI_aux (QI_const (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map in
           let tqs = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints),tq_l) in
           let vs =

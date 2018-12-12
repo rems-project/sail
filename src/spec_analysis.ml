@@ -151,7 +151,6 @@ let typq_bindings (TypQ_aux(tq,_)) = match tq with
         match qi with
         | QI_id (KOpt_aux(k,_)) ->
           (match k with
-           | KOpt_none (Kid_aux (Var s,_)) -> Nameset.add s bounds
            | KOpt_kind (_, Kid_aux (Var s,_)) -> Nameset.add s bounds)
         | _ -> bounds) quants mt
   | TypQ_no_forall -> mt  

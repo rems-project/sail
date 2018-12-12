@@ -195,7 +195,6 @@ and doc_arg_typs = function
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
 
 let doc_kopt = function
-  | KOpt_aux (KOpt_none kid, _) -> doc_kid kid
   | kopt when is_nat_kopt kopt -> doc_kid (kopt_kid kopt)
   | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
   | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
@@ -203,7 +202,6 @@ let doc_kopt = function
 let doc_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_id (KOpt_aux (KOpt_none kid, _)) -> [doc_kid kid]
     | QI_id kopt when is_nat_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
     | QI_id kopt when is_typ_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])]
     | QI_id kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
@@ -224,7 +222,6 @@ let doc_quants quants =
 let doc_param_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_id (KOpt_aux (KOpt_none kid, _)) -> [doc_kid kid]
     | QI_id kopt when is_nat_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
     | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
     | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]

@@ -108,6 +108,7 @@ val dec_ord : order
 
 (* Utilites for working with kinded_ids *)
 val kopt_kid : kinded_id -> kid
+val kopt_kind : kinded_id -> kind
 val is_nat_kopt : kinded_id -> bool
 val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
@@ -173,6 +174,7 @@ val nc_true : n_constraint
 val nc_false : n_constraint
 val nc_set : kid -> Big_int.num list -> n_constraint
 val nc_int_set : kid -> int list -> n_constraint
+val nc_var : kid -> n_constraint
 
 val arg_nexp : ?loc:l -> nexp -> typ_arg
 val arg_order : ?loc:l -> order -> typ_arg

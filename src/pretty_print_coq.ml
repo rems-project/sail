@@ -595,9 +595,6 @@ let doc_lit (L_aux(lit,l)) =
 
 let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
   match qi with
-  | QI_id (KOpt_aux (KOpt_none kid,_)) ->
-     if KBindings.mem kid ctx.kid_id_renames then None else
-     Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
   | QI_id (KOpt_aux (KOpt_kind (K_aux (kind,_),kid),_)) -> begin
     if KBindings.mem kid ctx.kid_id_renames then None else
     match kind with
@@ -605,7 +602,6 @@ let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
     | K_int -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
     | K_order -> None
   end
-  | QI_id _ -> failwith "Quantifier with multiple kinds"
   | QI_const nc -> None
 
 let doc_quant_item_constr ctx delimit (QI_aux (qi,_)) =
@@ -1726,7 +1722,6 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
     let rectyp = match typq with
       | TypQ_aux (TypQ_tq qs, _) ->
         let quant_item = function
-          | QI_aux (QI_id (KOpt_aux (KOpt_none kid, _)), l)
           | QI_aux (QI_id (KOpt_aux (KOpt_kind (_, kid), _)), l) ->
             [A_aux (A_nexp (Nexp_aux (Nexp_var kid, l)), l)]
           | _ -> [] in
