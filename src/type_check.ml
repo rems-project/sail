@@ -2321,8 +2321,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let inferred_exp = infer_funapp l env f xs (Some typ) in
      type_coercion env inferred_exp typ
   | E_if (cond, then_branch, else_branch), _ ->
-     (* let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in *)
-     let cond' = irule infer_exp env cond in
+     let cond' = try irule infer_exp env cond with Type_error _ -> crule check_exp env cond bool_typ in
      begin match destruct_exist (typ_of cond') with
      | Some (kopts, nc, Typ_aux (Typ_app (ab, [A_aux (A_bool flow, _)]), _)) when string_of_id ab = "atom_bool" ->
         let env = add_existential l kopts nc env in

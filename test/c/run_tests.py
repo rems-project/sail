@@ -13,9 +13,10 @@ from sailtest import *
 
 def test_c(name, c_opts, sail_opts, valgrind):
     banner('Testing {} with C options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
-    tests = {}
-    for filename in os.listdir('.'):
-        if re.match('.+\.sail', filename):
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
@@ -27,13 +28,15 @@ def test_c(name, c_opts, sail_opts, valgrind):
                     step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=1 ./{}".format(basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
-    return collect_results(name, tests)
+        results.collect(tests)
+    return results.finish()
 
 def test_interpreter(name):
     banner('Testing {}'.format(name))
-    tests = {}
-    for filename in os.listdir('.'):
-        if re.match('.+\.sail', filename):
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
@@ -41,13 +44,15 @@ def test_interpreter(name):
                 step('diff {}.iresult {}.expect'.format(basename, basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
-    return collect_results(name, tests)
+        results.collect(tests)
+    return results.finish()
 
 def test_ocaml(name):
     banner('Testing {}'.format(name))
-    tests = {}
-    for filename in os.listdir('.'):
-        if re.match('.+\.sail', filename):
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
@@ -56,7 +61,8 @@ def test_ocaml(name):
                 step('diff {}.oresult {}.expect'.format(basename, basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
-    return collect_results(name, tests)
+        results.collect(tests)
+    return results.finish()
 
 xml = '<testsuites>\n'
 
