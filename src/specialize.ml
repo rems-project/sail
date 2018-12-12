@@ -100,13 +100,13 @@ let rec polymorphic_functions is_kopt (Defs defs) =
 
 let string_of_instantiation instantiation =
   let open Type_check in
-  let kid_names = ref KBindings.empty in
+  let kid_names = ref KOptMap.empty in
   let kid_counter = ref 0 in
   let kid_name kid =
-    try KBindings.find kid !kid_names with
+    try KOptMap.find kid !kid_names with
     | Not_found -> begin
         let n = string_of_int !kid_counter in
-        kid_names := KBindings.add kid n !kid_names;
+        kid_names := KOptMap.add kid n !kid_names;
         incr kid_counter;
         n
       end
@@ -117,7 +117,7 @@ let string_of_instantiation instantiation =
     | Nexp_aux (nexp, _) -> string_of_nexp_aux nexp
   and string_of_nexp_aux = function
     | Nexp_id id -> string_of_id id
-    | Nexp_var kid -> kid_name kid
+    | Nexp_var kid -> kid_name (mk_kopt K_int kid)
     | Nexp_constant c -> Big_int.to_string c
     | Nexp_times (n1, n2) -> "(" ^ string_of_nexp n1 ^ " * " ^ string_of_nexp n2 ^ ")"
     | Nexp_sum (n1, n2) -> "(" ^ string_of_nexp n1 ^ " + " ^ string_of_nexp n2 ^ ")"
@@ -131,7 +131,7 @@ let string_of_instantiation instantiation =
     | Typ_aux (typ, l) -> string_of_typ_aux typ
   and string_of_typ_aux = function
     | Typ_id id -> string_of_id id
-    | Typ_var kid -> kid_name kid
+    | Typ_var kid -> kid_name (mk_kopt K_type kid)
     | Typ_tup typs -> "(" ^ Util.string_of_list ", " string_of_typ typs ^ ")"
     | Typ_app (id, args) -> string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_typ_arg args ^ ")"
     | Typ_fn (arg_typs, ret_typ, eff) ->
@@ -158,7 +158,7 @@ let string_of_instantiation instantiation =
     | NC_aux (NC_and (nc1, nc2), _) ->
        "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
     | NC_aux (NC_set (kid, ns), _) ->
-       kid_name kid ^ " in {" ^ Util.string_of_list ", " Big_int.to_string ns ^ "}"
+       kid_name (mk_kopt K_int kid) ^ " in {" ^ Util.string_of_list ", " Big_int.to_string ns ^ "}"
     | NC_aux (NC_true, _) -> "true"
     | NC_aux (NC_false, _) -> "false"
   in
@@ -249,7 +249,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_var kid -> KidSet.singleton kid
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
-  | Typ_exist (kids, nc, typ) -> typ_frees ~exs:(KidSet.of_list kids) typ
+  | Typ_exist (kopts, nc, typ) -> typ_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_frees ~exs:exs t1) (typ_frees ~exs:exs t2)
@@ -266,7 +266,7 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_var kid -> KidSet.empty
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_int_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_int_frees ~exs:exs) args)
-  | Typ_exist (kids, nc, typ) -> typ_int_frees ~exs:(KidSet.of_list kids) typ
+  | Typ_exist (kopts, nc, typ) -> typ_int_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_int_frees ~exs:exs ret_typ) (List.map (typ_int_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_int_frees ~exs:exs t1) (typ_int_frees ~exs:exs t2)

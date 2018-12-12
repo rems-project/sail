@@ -160,7 +160,7 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
     | P.ATyp_exist (kids, nc, atyp) ->
        let kids = List.map to_ast_var kids in
        let ctx = { ctx with kinds = List.fold_left (fun kinds kid -> KBindings.add kid K_int kinds) ctx.kinds kids } in
-       Typ_exist (kids, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
+       Typ_exist (List.map (mk_kopt K_int) kids, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
     | P.ATyp_base (id, kind, nc) ->
        raise (Reporting.err_unreachable l __POS__ "TODO")
     | _ -> raise (Reporting.err_typ l "Invalid type")
@@ -984,7 +984,7 @@ let generate_enum_functions vs_ids (Defs defs) =
        (* Create a function that converts from an enum to a number. *)
        let from_enum =
          let kid = mk_kid "e" in
-         let to_typ = mk_typ (Typ_exist ([kid], range_constraint kid, atom_typ (nvar kid))) in
+         let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
          let name = prepend_id "num_of_" id in
          let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
          let funcl =

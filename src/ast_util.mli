@@ -180,6 +180,7 @@ val arg_nexp : ?loc:l -> nexp -> typ_arg
 val arg_order : ?loc:l -> order -> typ_arg
 val arg_typ : ?loc:l -> typ -> typ_arg
 val arg_bool : ?loc:l -> n_constraint -> typ_arg
+val arg_kopt : kinded_id -> typ_arg
 
 (* Functions for working with type quantifiers *)
 val quant_add : quant_item -> typquant -> typquant
@@ -260,6 +261,16 @@ module Kid : sig
   val compare : kid -> kid -> int
 end
 
+module Kind : sig
+  type t = kind
+  val compare : kind -> kind -> int
+end
+
+module KOpt : sig
+  type t = kinded_id
+  val compare : kinded_id -> kinded_id -> int
+end
+
 module Nexp : sig
   type t = nexp
   val compare : nexp -> nexp -> int
@@ -286,6 +297,14 @@ end
 
 module NexpMap : sig
   include Map.S with type key = nexp
+end
+
+module KOptSet : sig
+  include Set.S with type elt = kinded_id
+end
+
+module KOptMap : sig
+  include Map.S with type key = kinded_id
 end
 
 module BESet : sig

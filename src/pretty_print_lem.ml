@@ -313,7 +313,8 @@ let doc_typ_lem, doc_atomic_typ_lem =
           * if we add a new Typ constructor *)
          let tpp = typ ty in
          if atyp_needed then parens tpp else tpp
-      | Typ_exist (kids,_,ty) -> begin
+      | Typ_exist (kopts,_,ty) when List.for_all is_nat_kopt kopts -> begin
+         let kids = List.map kopt_kid kopts in
          let tpp = typ ty in
          let visible_vars = lem_tyvars_of_typ ty in
          match List.filter (fun kid -> KidSet.mem kid visible_vars) kids with
@@ -323,6 +324,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
                                String.concat ", " (List.map string_of_kid bad) ^
                                " escape into Lem"))
         end
+      | Typ_exist _ -> unreachable l __POS__ "Non-integer existentials currently unsupported in Lem" (* TODO *)
       | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
       | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
     and doc_typ_arg_lem (A_aux(t,_)) = match t with
@@ -528,7 +530,8 @@ let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
   | Typ_app (Id_aux (Id "itself",_),_) -> true
   | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists typ_needs_printed_arg targs
   | Typ_fn (ts,t,_) -> List.exists typ_needs_printed ts || typ_needs_printed t
-  | Typ_exist (kids,_,t) ->
+  | Typ_exist (kopts,_,t) ->
+     let kids = List.map kopt_kid kopts in (* TODO: Check this *)
      let visible_kids = KidSet.inter (KidSet.of_list kids) (lem_tyvars_of_typ t) in
      typ_needs_printed t && KidSet.is_empty visible_kids
   | _ -> false

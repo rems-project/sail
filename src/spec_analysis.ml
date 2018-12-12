@@ -94,7 +94,7 @@ let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
                                         (free_type_names_t consider_var t2)
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
-  | Typ_exist (kids,_,t') -> List.fold_left (fun s kid -> Nameset.remove (string_of_kid kid) s) (free_type_names_t consider_var t') kids
+  | Typ_exist (kopts,_,t') -> List.fold_left (fun s kopt -> Nameset.remove (string_of_kid (kopt_kid kopt)) s) (free_type_names_t consider_var t') kopts
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
 and free_type_names_maybe_t consider_var = function
@@ -126,7 +126,10 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
   | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
-  | Typ_exist (kids,_,t') -> fv_of_typ consider_var (List.fold_left (fun b (Kid_aux (Var v,_)) -> Nameset.add v b) bound kids) used t'
+  | Typ_exist (kopts,_,t') ->
+     fv_of_typ consider_var
+       (List.fold_left (fun b (KOpt_aux (KOpt_kind (_, (Kid_aux (Var v,_))), _)) -> Nameset.add v b) bound kopts)
+       used t'
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 
 and fv_of_targ consider_var bound used (Ast.A_aux(targ,_)) : Nameset.t = match targ with

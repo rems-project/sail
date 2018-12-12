@@ -3745,7 +3745,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        (* Bind the loop variable in the body, annotated with constraints *)
        let lvar_kid = mk_kid ("loop_" ^ string_of_id id) in
        let lvar_nc = nc_and constr (nc_and (nc_lteq lower (nvar lvar_kid)) (nc_lteq (nvar lvar_kid) upper)) in
-       let lvar_typ = mk_typ (Typ_exist (lvar_kid :: kids, lvar_nc, atom_typ (nvar lvar_kid))) in
+       let lvar_typ = mk_typ (Typ_exist (List.map (mk_kopt K_int) (lvar_kid :: kids), lvar_nc, atom_typ (nvar lvar_kid))) in
        let lvar_pat = unaux_pat (add_p_typ lvar_typ (annot_pat (P_var (
          annot_pat (P_id id) el env (atom_typ (nvar lvar_kid)),
          TP_aux (TP_var lvar_kid, gen_loc el))) el env lvar_typ)) in

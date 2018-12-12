@@ -139,9 +139,9 @@ let subst_src_typ substs t =
     | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
-    | Typ_exist (kids,nc,t) ->
-       let substs = List.fold_left (fun sub v -> KBindings.remove v sub) substs kids in
-       re (Typ_exist (kids,nc,s_styp substs t))
+    | Typ_exist (kopts,nc,t) ->
+       let substs = List.fold_left (fun sub kopt -> KBindings.remove (kopt_kid kopt) sub) substs kopts in
+       re (Typ_exist (kopts,nc,s_styp substs t))
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   and s_starg substs (A_aux (ta,l) as targ) =
     match ta with
@@ -330,13 +330,15 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
          (fun arg (insts,args) -> let insts,arg = inst_src_typ_arg insts arg in insts,arg::args)
          args (insts,[])
      in insts, Typ_aux (Typ_app (id,ts),l)
-  | Typ_exist (kids, nc, t) -> begin
+  | Typ_exist (kopts, nc, t) -> begin
+      (* TODO handle non-integer existentials *)
+     let kids = List.map kopt_kid kopts in
      let kid_insts, insts' = peel (kids,insts) in
      let kids', t' = apply_kid_insts kid_insts t in
      (* TODO: subst in nc *)
      match kids' with
      | [] -> insts', t'
-     | _ -> insts', Typ_aux (Typ_exist (kids', nc, t'), l)
+     | _ -> insts', Typ_aux (Typ_exist (List.map (mk_kopt K_int) kids', nc, t'), l)
     end
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
@@ -408,7 +410,9 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
     | Typ_app (_, tas) ->
        (KidSet.empty,[[],typ])  (* We only support sizes for bitvectors mentioned explicitly, not any buried
                       inside another type *)
-    | Typ_exist (kids, nc, t) ->
+    | Typ_exist (kopts, nc, t) ->
+       (* TODO handle non integer existentials *)
+       let kids = List.map kopt_kid kopts in
        let (vars,tys) = size_nvars_ty t in
        let find_insts k (insts,nc) =
          let inst,nc' =
@@ -426,7 +430,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
            (* Typ_exist is not allowed an empty list of kids *)
            match kids with
            | [] -> ty
-           | _ -> Typ_aux (Typ_exist (kids, nc', ty),l)
+           | _ -> Typ_aux (Typ_exist (List.map (mk_kopt K_int) kids, nc', ty),l)
          in inst@inst0, ty
        in
        let tys = List.concat (List.map (fun instty -> List.map (ty_and_inst instty) insts) tys) in
@@ -524,7 +528,9 @@ let refine_constructor refinements l env id args =
        let arg_ty = typ_of_args args in
        match Type_check.destruct_exist (Type_check.Env.expand_synonyms env constr_ty) with
        | None -> None
-       | Some (kids,nc,constr_ty) ->
+       | Some (kopts,nc,constr_ty) ->
+          (* TODO: Handle non-integer existentials *)
+          let kids = List.map kopt_kid kopts in
           let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty  in
           let find_kid kid = try Some (KBindings.find kid bindings) with Not_found -> None in
           let bindings = List.map find_kid kids in
@@ -730,7 +736,8 @@ let fabricate_nexp l tannot =
   | Some (env,typ,_) ->
      match Type_check.destruct_exist (Type_check.Env.expand_synonyms env typ) with
      | None -> nint 32
-     | Some (kids,nc,typ') -> fabricate_nexp_exist env l typ kids nc typ'
+     (* TODO: check this *)
+     | Some (kopts,nc,typ') -> fabricate_nexp_exist env l typ (List.map kopt_kid kopts) nc typ'
 
 let atom_typ_kid kid = function
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
@@ -746,23 +753,23 @@ let reduce_cast typ exp l annot =
   let env = env_of_annot (l,annot) in
   let typ' = Env.base_typ_of env typ in
   match exp, destruct_exist (Env.expand_synonyms env typ') with
-  | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nc_env = Env.add_typ_var l kid K_int env in
-     let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
+  | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
+     let nc_env = Env.add_typ_var l kopt env in
+     let nc_env = Env.add_constraint (nc_eq (nvar (kopt_kid kopt)) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
      else raise (Reporting.err_unreachable l __POS__
                    ("Constant propagation error: literal " ^ Big_int.to_string n ^
                        " does not satisfy constraint " ^ string_of_n_constraint nc))
-  | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
-     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+  | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
+     let newtyp = subst_src_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
      E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
   | E_aux (E_cast (_,
                    (E_aux (E_lit (L_aux (L_undef,_)),_) as exp)),_),
-     Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
-     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+     Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
+     let newtyp = subst_src_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
      E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
   | _ -> E_aux (E_cast (typ,exp),(l,annot))
 
@@ -2185,8 +2192,8 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
                          "Function type on expression")
   | Typ_bidir _ -> raise (Reporting.err_general l "Mapping type on expression")
   | Typ_tup typs -> kidset_bigunion (List.map sizes_of_typ typs)
-  | Typ_exist (kids,_,typ) ->
-     List.fold_left (fun s k -> KidSet.remove k s) (sizes_of_typ typ) kids
+  | Typ_exist (kopts,_,typ) ->
+     List.fold_left (fun s k -> KidSet.remove (kopt_kid k) s) (sizes_of_typ typ) kopts
   | Typ_app (Id_aux (Id "vector",_),
              [A_aux (A_nexp size,_);
               _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
@@ -3184,11 +3191,11 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let env, tenv, typ =
          match destruct_exist (Env.expand_synonyms tenv typ) with
          | None -> env, tenv, typ
-         | Some (kids, nc, typ) ->
+         | Some (kopts, nc, typ) ->
             { env with kid_deps =
-                List.fold_left (fun kds kid -> KBindings.add kid deps kds) env.kid_deps kids },
+                List.fold_left (fun kds kopt -> KBindings.add (kopt_kid kopt) deps kds) env.kid_deps kopts },
            Env.add_constraint nc
-             (List.fold_left (fun tenv kid -> Env.add_typ_var l kid K_int tenv) tenv kids),
+             (List.fold_left (fun tenv kopt -> Env.add_typ_var l kopt tenv) tenv kopts),
            typ
        in
        if is_bitvector_typ typ then

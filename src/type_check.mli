@@ -134,7 +134,7 @@ module Env : sig
 
   val get_typ_var_locs : t -> Ast.l KBindings.t
 
-  val add_typ_var : Ast.l -> kid -> kind_aux -> t -> t
+  val add_typ_var : Ast.l -> kinded_id -> t -> t
 
   val is_record : id -> t -> bool
 
@@ -208,9 +208,12 @@ end
    an environment *)
 val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
 
-val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
+(** Safely destructure an existential type. Returns None if the type
+   is not existential. This function will pick a fresh name for the
+   existential to ensure that no name-clashes occur. *)
+val destruct_exist : typ -> (kinded_id list * n_constraint * typ) option
 
-val add_existential : Ast.l -> kid list -> n_constraint -> Env.t -> Env.t
+val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
 
 (** When the typechecker creates new type variables it gives them
    fresh names of the form 'fvXXX#name, where XXX is a number (not
@@ -348,11 +351,6 @@ val expected_typ_of : Ast.l * tannot -> typ option
 (** {2 Utilities } *)
 
 val destruct_atom_nexp : Env.t -> typ -> nexp option
-
-(** Safely destructure an existential type. Returns None if the type
-   is not existential. This function will pick a fresh name for the
-   existential to ensure that no name-clashes occur. *)
-val destruct_exist : typ -> (kid list * n_constraint * typ) option
 
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 

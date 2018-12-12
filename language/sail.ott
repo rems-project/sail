@@ -234,9 +234,10 @@ typ :: 'Typ_' ::=
   | ( typ1 , ... , typn ) -> typ2 effectkw effect :: :: fn {{ com Function (first-order only) }}
   | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
   | ( typ1 , .... , typn )                        :: :: tup {{ com Tuple }}
-  | { kid1 ...  kidn , n_constraint . typ }       :: :: exist
   | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
   | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
+  | { kinded_id1 ...  kinded_idn , n_constraint . typ }
+    :: :: exist
 
 typ_arg :: 'A_' ::=
   {{ com type constructor arguments of all kinds }}

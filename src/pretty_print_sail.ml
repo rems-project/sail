@@ -65,6 +65,12 @@ let doc_id (Id_aux (id_aux, _)) =
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
+let doc_kopt = function
+  | kopt when is_nat_kopt kopt -> doc_kid (kopt_kid kopt)
+  | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
+  | kopt when is_order_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
+  | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])
+                
 let doc_int n = string (Big_int.to_string n)
 
 let docstring (l, _) = match l with
@@ -166,13 +172,13 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> parens (separate_map (string ", ") doc_typ typs)
   | Typ_var kid -> doc_kid kid
   (* Resugar set types like {|1, 2, 3|} *)
-  | Typ_exist ([kid1],
-               NC_aux (NC_set (kid2, ints), _),
-               Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid3, _)), _)]), _))
-         when Kid.compare kid1 kid2 == 0 && Kid.compare kid2 kid3 == 0 && Id.compare (mk_id "atom") id == 0 ->
+  | Typ_exist ([kopt],
+               NC_aux (NC_set (kid1, ints), _),
+               Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _)]), _))
+         when Kid.compare (kopt_kid kopt) kid1 == 0 && Kid.compare kid1 kid2 == 0 && Id.compare (mk_id "atom") id == 0 ->
      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
-  | Typ_exist (kids, nc, typ) ->
-     braces (separate_map space doc_kid kids ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
+  | Typ_exist (kopts, nc, typ) ->
+     braces (separate_map space doc_kopt kopts ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
   | Typ_fn (typs, typ, Effect_aux (Effect_set [], _)) ->
      separate space [doc_arg_typs typs; string "->"; doc_typ typ]
   | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
@@ -193,11 +199,6 @@ and doc_typ_arg (A_aux (ta_aux, _)) =
 and doc_arg_typs = function
   | [typ] -> doc_typ typ
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
-
-let doc_kopt = function
-  | kopt when is_nat_kopt kopt -> doc_kid (kopt_kid kopt)
-  | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
-  | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
 
 let doc_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =

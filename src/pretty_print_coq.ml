@@ -277,7 +277,7 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
      List.fold_left (fun s ta -> KidSet.union s (coq_nvars_of_typ_arg ta))
        KidSet.empty tas
   (* TODO: remove appropriate bound variables *)
-  | Typ_exist (kids,_,t) -> trec t
+  | Typ_exist (_,_,t) -> trec t
   | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and coq_nvars_of_typ_arg (A_aux (ta,_)) =
@@ -359,11 +359,11 @@ let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
      let kid = mk_kid "rangevar" in
      let var = nvar kid in
      let nc = nc_and (nc_lteq low var) (nc_lteq var high) in
-     Some (Typ_aux (Typ_exist ([kid], nc, atom_typ var),Parse_ast.Generated l))
+     Some (Typ_aux (Typ_exist ([mk_kopt K_int kid], nc, atom_typ var),Parse_ast.Generated l))
   | Typ_id (Id_aux (Id "nat",_)) ->
      let kid = mk_kid "n" in
      let var = nvar kid in
-     Some (Typ_aux (Typ_exist ([kid], nc_gteq var (nconstant Nat_big_num.zero), atom_typ var),
+     Some (Typ_aux (Typ_exist ([mk_kopt K_int kid], nc_gteq var (nconstant Nat_big_num.zero), atom_typ var),
                     Parse_ast.Generated l))
   | _ -> None
 
@@ -449,24 +449,25 @@ let doc_typ, doc_atomic_typ =
           * if we add a new Typ constructor *)
          let tpp = typ ty in
          if atyp_needed then parens tpp else tpp
-      | Typ_exist (kids,nc,ty') -> begin
-          let kids,nc,ty' = match maybe_expand_range_type ty' with
-            | Some (Typ_aux (Typ_exist (kids',nc',ty'),_)) ->
-               kids'@kids,nc_and nc nc',ty'
-            | _ -> kids,nc,ty'
+      (* TODO: handle non-integer kopts *)
+      | Typ_exist (kopts,nc,ty') -> begin
+          let kopts,nc,ty' = match maybe_expand_range_type ty' with
+            | Some (Typ_aux (Typ_exist (kopts',nc',ty'),_)) ->
+               kopts'@kopts,nc_and nc nc',ty'
+            | _ -> kopts,nc,ty'
           in
           match ty' with
           | Typ_aux (Typ_app (Id_aux (Id "atom",_),
                               [A_aux (A_nexp nexp,_)]),_) ->
-             begin match nexp, kids with
-             | (Nexp_aux (Nexp_var kid,_)), [kid'] when Kid.compare kid kid' == 0 ->
+             begin match nexp, kopts with
+             | (Nexp_aux (Nexp_var kid,_)), [kopt] when Kid.compare kid (kopt_kid kopt) == 0 ->
                 braces (separate space [doc_var ctx kid; colon; string "Z";
                                         ampersand; doc_arithfact ctx nc])
              | _ ->
                 let var = mk_kid "_atom" in (* TODO collision avoid *)
                 let nc = nice_and (nc_eq (nvar var) nexp) nc in
                 braces (separate space [doc_var ctx var; colon; string "Z";
-                                        ampersand; doc_arithfact ctx ~exists:kids nc])
+                                        ampersand; doc_arithfact ctx ~exists:(List.map kopt_kid kopts) nc])
              end
           | Typ_aux (Typ_app (Id_aux (Id "vector",_),
                               [A_aux (A_nexp m, _);
@@ -474,7 +475,7 @@ let doc_typ, doc_atomic_typ =
                                A_aux (A_typ elem_typ, _)]),_) ->
              (* TODO: proper handling of m, complex elem type, dedup with above *)
              let var = mk_kid "_vec" in (* TODO collision avoid *)
-             let kid_set = KidSet.of_list kids in
+             let kid_set = KidSet.of_list (List.map kopt_kid kopts) in
              let m_pp = doc_nexp ctx ~skip_vars:kid_set m in
              let tpp, len_pp = match elem_typ with
                | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
@@ -489,7 +490,7 @@ let doc_typ, doc_atomic_typ =
              braces (separate space
                        [doc_var ctx var; colon; tpp;
                         ampersand;
-                        doc_arithfact ctx ~exists:kids ?extra:length_constraint_pp nc])
+                        doc_arithfact ctx ~exists:(List.map kopt_kid kopts) ?extra:length_constraint_pp nc])
           | _ ->
              raise (Reporting.err_todo l
                   ("Non-atom existential type not yet supported in Coq: " ^
@@ -858,7 +859,7 @@ let replace_atom_return_type ret_typ =
   match ret_typ with
   | Typ_aux (Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp nexp,_)]),l) ->
      let kid = mk_kid "_retval" in (* TODO: collision avoidance *)
-     true, Typ_aux (Typ_exist ([kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Parse_ast.Generated l)
+     true, Typ_aux (Typ_exist ([mk_kopt K_int kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Parse_ast.Generated l)
   | _ -> false, ret_typ
 
 let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
@@ -2031,15 +2032,15 @@ let doc_funcl (FCL_aux(FCL_Funcl(id, pexp), annot)) =
          when not (is_enum env id) -> begin
            let full_typ = (expand_range_type exp_typ) in
            match destruct_exist (Env.expand_synonyms env full_typ) with
-           | Some ([kid], NC_aux (NC_true,_),
+           | Some ([kopt], NC_aux (NC_true,_),
                    Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                                     [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
-               when Kid.compare kid kid' == 0 ->
+                                     [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_))
+               when Kid.compare (kopt_kid kopt) kid == 0 ->
               parens (separate space [doc_id id; colon; string "Z"])
-           | Some ([kid], nc,
+           | Some ([kopt], nc,
                    Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                                     [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_))
-               when Kid.compare kid kid' == 0 ->
+                                     [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_))
+               when Kid.compare (kopt_kid kopt) kid == 0 ->
               (used_a_pattern := true;
                squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ]))
            | _ ->
