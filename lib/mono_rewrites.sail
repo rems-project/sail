@@ -82,15 +82,13 @@ function subrange_subrange_eq (xs, i, j, ys, i', j') = {
   xs == ys
 }
 
-val subrange_subrange_concat : forall 'n 'o 'p 'm 'q 'r 's, 's == 'o - ('p - 1) + 'q - ('r - 1) & 'n >= 0 & 'm >= 0.
+val subrange_subrange_concat : forall 'n 'o 'p 'm 'q 'r 's, 's >= 0 & 'n >= 0 & 'm >= 0.
   (bits('n), atom('o), atom('p), bits('m), atom('q), atom('r)) -> bits('s) effect pure
 
 function subrange_subrange_concat (xs, i, j, ys, i', j') = {
   let xs = (xs & slice_mask(j,i-j+1)) >> j in
   let ys = (ys & slice_mask(j',i'-j'+1)) >> j' in
-  // We need to avoid sizeof-rewriting
-  // extzv(xs) << (i' - j' + 1) | extzv(ys)
-  extz_vec(i - (j - 1) + i' - (j' - 1), xs) << (i' - j' + 1) | extz_vec(i - (j - 1) + i' - (j' - 1), ys)
+  extzv(xs) << (i' - j' + 1) | extzv(ys)
 }
 
 val place_subrange : forall 'n 'm, 'n >= 0 & 'm >= 0.

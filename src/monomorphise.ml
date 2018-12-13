@@ -3668,6 +3668,11 @@ let is_constant_vec_typ env typ =
 
 let rewrite_app env typ (id,args) =
   let is_append = is_id env (Id "append") in
+  let is_zero_extend =
+    is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id ||
+    is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
+    is_id env (Id "mips_zero_extend") id
+  in
   let try_cast_to_typ (E_aux (e,_) as exp) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
     match size with
@@ -3824,7 +3829,7 @@ let rewrite_app env typ (id,args) =
               [vector1; start1; end1])
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id || is_id env (Id "zero_extend") id then
+  else if is_zero_extend then
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
     let is_zeros = is_id env (Id "Zeros") in
@@ -3846,11 +3851,16 @@ let rewrite_app env typ (id,args) =
       -> E_app (mk_id "place_slice",
                 [vector1; start1; length1; length2])
 
-    (* If we've already rewritten to slice_slice_concat, we can just drop the
-       zero extension because it can do it *)
-    | (E_aux (E_cast (_, (E_aux (E_app (Id_aux (Id "slice_slice_concat",_), args),_))),_))::
+    (* If we've already rewritten to slice_slice_concat or subrange_subrange_concat,
+       we can just drop the zero extension because those functions can do it
+       themselves *)
+    | (E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),_))),_))::
         ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
-      -> E_app (mk_id "slice_slice_concat", args)
+      -> E_app (op, args)
+
+    | (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+      -> E_app (op, args)
 
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
         when is_slice slice1 && not (is_constant length1) ->
