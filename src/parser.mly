@@ -127,6 +127,8 @@ let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
 
 let qi_id_of_kopt (KOpt_aux (kopt_aux, l) as kopt) = QI_aux (QI_id kopt, l)
 
+let mk_recr r n m = (Rec_aux(r, loc n m))
+
 let mk_recn = (Rec_aux((Rec_nonrec), Unknown))
 let mk_typqn = (TypQ_aux(TypQ_no_forall,Unknown))
 let mk_tannotn = Typ_annot_opt_aux(Typ_annot_opt_none,Unknown)
@@ -1232,9 +1234,15 @@ type_unions:
   | type_union Comma type_unions
     { $1 :: $3 }
 
+rec_measure:
+  | Lcurly pat EqGt exp Rcurly
+    { mk_recr (Rec_measure ($2, $4)) $startpos $endpos }
+
 fun_def:
   | Function_ funcls
     { let funcls, tannot = $2 in mk_fun (FD_function (mk_recn, tannot, mk_eannotn, funcls)) $startpos $endpos }
+  | Function_ rec_measure funcls
+    { let funcls, tannot = $3 in mk_fun (FD_function ($2, tannot, mk_eannotn, funcls)) $startpos $endpos }
 
 fun_def_list:
   | fun_def

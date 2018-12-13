@@ -559,10 +559,12 @@ let to_ast_kdef ctx (td:P.kind_def) : unit kind_def =
      let kind = to_ast_kind kind in
      KD_aux (KD_nabbrev (kind, id, to_ast_namescm name_scm_opt, to_ast_nexp ctx atyp), (l, ()))
 
-let to_ast_rec (P.Rec_aux(r,l): P.rec_opt) : rec_opt =
+let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : unit rec_opt =
   Rec_aux((match r with
   | P.Rec_nonrec -> Rec_nonrec
   | P.Rec_rec -> Rec_rec
+  | P.Rec_measure (p,e) ->
+     Rec_measure (to_ast_pat ctx p, to_ast_exp ctx e)
   ),l)
 
 let to_ast_tannot_opt ctx (P.Typ_annot_opt_aux(tp,l)) : tannot_opt ctx_out =
@@ -595,7 +597,7 @@ let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : unit fundef =
   match fd with
   | P.FD_function(rec_opt,tannot_opt,effects_opt,funcls) ->
     let tannot_opt, ctx = to_ast_tannot_opt ctx tannot_opt in
-    FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt effects_opt, List.map (to_ast_funcl ctx) funcls), (l,()))
+    FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, to_ast_effects_opt effects_opt, List.map (to_ast_funcl ctx) funcls), (l,()))
 
 let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
   MP_aux(
@@ -669,7 +671,7 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
     | P.SD_function (rec_opt, tannot_opt, effect_opt, id) ->
        let tannot_opt, _ = to_ast_tannot_opt ctx tannot_opt in
        let effect_opt = to_ast_effects_opt effect_opt in
-       SD_function (to_ast_rec rec_opt, tannot_opt, effect_opt, to_ast_id id), ctx
+       SD_function (to_ast_rec ctx rec_opt, tannot_opt, effect_opt, to_ast_id id), ctx
     | P.SD_funcl funcl ->
        SD_funcl (to_ast_funcl ctx funcl), ctx
     | P.SD_variant (id, namescm_opt, typq) ->
