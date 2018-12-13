@@ -64,6 +64,7 @@ let opt_print_ocaml = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
+let opt_print_cgen = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
@@ -143,6 +144,9 @@ let options = Arg.align ([
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " Instrument ouput with tracing");
+  ( "-cgen",
+    Arg.Set opt_print_cgen,
+    " Generate CGEN source");
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
@@ -351,6 +355,9 @@ let main() =
          let ast_c = Spec_analysis.top_sort_defs ast_c in
          Util.opt_warnings := true;
          C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
+       else ());
+      (if !(opt_print_cgen)
+       then Cgen_backend.output type_envs ast
        else ());
       (if !(opt_print_lem)
        then

@@ -578,8 +578,14 @@ let gteq_real (x, y) = Rational.geq x y
 let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
 let negate_real x = Rational.neg x
 
-let print_real (str, r) = print_string "REAL\n"
-let prerr_real (str, r) = prerr_string "REAL\n"
+let real_to_string x =
+  if Big_int.equal (Rational.den x) (Big_int.of_int 1) then
+    Big_int.to_string (Rational.num x)
+  else
+    Big_int.to_string (Rational.num x) ^ "/" ^ Big_int.to_string (Rational.den x)
+
+let print_real (str, r) = print_endline (str ^ real_to_string r)
+let prerr_real (str, r) = prerr_endline (str ^ real_to_string r)
 
 let round_down x = Rational.floor x (* Num.big_int_of_num (Num.floor_num x) *)
 let round_up x = Rational.ceiling x (* Num.big_int_of_num (Num.ceiling_num x) *)
@@ -591,6 +597,12 @@ let add_real (x, y) = Rational.add x y
 let sub_real (x, y) = Rational.sub x y
 
 let abs_real x = Rational.abs x
+
+let sqrt x =
+  if Big_int.equal (Rational.den x) (Big_int.of_int 1) then
+    Big_int.sqrt (Rational.den x)
+  else
+    failwith "sqrt"
 
 let lt (x, y) = Big_int.less x y
 let gt (x, y) = Big_int.greater x y
@@ -620,8 +632,7 @@ let real_of_string str =
   | [whole] -> Rational.of_int (int_of_string str)
   | _ -> failwith "invalid real literal"
 
-(* Not a very good sqrt implementation *)
-let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt (Num.float_of_num x))) *)
+let sqrt_real x = failwith "sqrt_real"
 
 let print str = Pervasives.print_string str
 

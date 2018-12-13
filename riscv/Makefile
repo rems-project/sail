@@ -41,6 +41,12 @@ all: platform Riscv.thy
 check: $(SAIL_SRCS) main.sail Makefile
 	$(SAIL) $(SAIL_FLAGS) $(SAIL_SRCS) main.sail
 
+interpret: $(SAIL_SRCS)
+	$(SAIL) -i $(SAIL_FLAGS) $(SAIL_SRCS) main.sail
+
+cgen: $(SAIL_SRCS)
+	$(SAIL) -cgen $(SAIL_FLAGS) $(SAIL_SRCS) main.sail
+
 _sbuild/riscv.ml: $(SAIL_SRCS) Makefile main.sail
 	$(SAIL) $(SAIL_FLAGS) -ocaml -ocaml-nobuild -o riscv $(SAIL_SRCS)
 
