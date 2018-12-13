@@ -213,7 +213,7 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
     | P.ATyp_app (Id_aux (DeIid op, _) as id, [t1; t2]) ->
        begin match op with
        | "==" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-       | "!=" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+       | "!=" -> NC_not_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | ">=" -> NC_bounded_ge (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | "<=" -> NC_bounded_le (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | ">" -> NC_bounded_ge (to_ast_nexp ctx t1, nsum (to_ast_nexp ctx t2) (nint 1))
