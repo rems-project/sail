@@ -2897,7 +2897,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           let checked_exp = crule check_exp env exp (lexp_typ_of inferred_lexp) in
           annot_assign inferred_lexp checked_exp, env
         with Type_error (l, err') -> typ_raise l (Err_because (err', err))
-          
+
 and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   typ_print (lazy ("Binding mutable " ^ string_of_lexp lexp ^  " to " ^ string_of_typ typ));
   let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, Some ((env, typ, eff),None))) in
@@ -3260,6 +3260,7 @@ and instantiation_of_without_type (E_aux (exp_aux, (l, _)) as exp) =
   | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
 and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
+  typ_print (lazy (Util.("Function " |> cyan |> clear) ^ string_of_id f));
   let annot_exp exp typ eff = E_aux (exp, (l, Some ((env, typ, eff), expected_ret_typ))) in
   let is_bound env kid = KBindings.mem kid (Env.get_typ_vars env) in
 
@@ -3281,6 +3282,14 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
     | Typ_aux (Typ_fn (typ_args, typ_ret, eff), _) -> ref (quant_items typq), typ_args, ref typ_ret, eff
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
   in
+
+  let unifiers = instantiate_simple_equations !quants in
+  typ_debug (lazy "Instantiating from equations");
+  typ_debug (lazy (string_of_list ", " (fun (kid, arg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg arg) (KBindings.bindings unifiers)));
+  all_unifiers := unifiers;
+  let typ_args = List.map (subst_unifiers unifiers) typ_args in
+  List.iter (fun unifier -> quants := instantiate_quants !quants unifier) (KBindings.bindings unifiers);
+  List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) (KBindings.bindings unifiers);
 
   typ_debug (lazy ("Quantifiers " ^ Util.string_of_list ", " string_of_quant_item !quants));
 
