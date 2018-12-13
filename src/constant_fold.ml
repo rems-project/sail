@@ -96,6 +96,7 @@ let safe_primops =
       "print_bits";
       "print_int";
       "print_string";
+      "print_real";
       "prerr_bits";
       "prerr_int";
       "prerr_string";

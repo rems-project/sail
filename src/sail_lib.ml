@@ -578,20 +578,21 @@ let gteq_real (x, y) = Rational.geq x y
 let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
 let negate_real x = Rational.neg x
 
-let real_to_string x =
+let string_of_real x =
   if Big_int.equal (Rational.den x) (Big_int.of_int 1) then
     Big_int.to_string (Rational.num x)
   else
     Big_int.to_string (Rational.num x) ^ "/" ^ Big_int.to_string (Rational.den x)
 
-let print_real (str, r) = print_endline (str ^ real_to_string r)
-let prerr_real (str, r) = prerr_endline (str ^ real_to_string r)
+let print_real (str, r) = print_endline (str ^ string_of_real r)
+let prerr_real (str, r) = prerr_endline (str ^ string_of_real r)
 
-let round_down x = Rational.floor x (* Num.big_int_of_num (Num.floor_num x) *)
-let round_up x = Rational.ceiling x (* Num.big_int_of_num (Num.ceiling_num x) *)
+let round_down x = Rational.floor x
+let round_up x = Rational.ceiling x
 let quotient_real (x, y) = Rational.div x y
-let mult_real (x, y) = Rational.mul x y (* Num.mult_num x y *)
-let real_power (x, y) = failwith "real_power" (* Num.power_num x (Num.num_of_big_int y) *)
+let div_real (x, y) = Rational.div x y
+let mult_real (x, y) = Rational.mul x y
+let real_power (x, y) = failwith "real_power"
 let int_power (x, y) = Big_int.pow_int x (Big_int.to_int y)
 let add_real (x, y) = Rational.add x y
 let sub_real (x, y) = Rational.sub x y
@@ -599,10 +600,26 @@ let sub_real (x, y) = Rational.sub x y
 let abs_real x = Rational.abs x
 
 let sqrt x =
-  if Big_int.equal (Rational.den x) (Big_int.of_int 1) then
-    Big_int.sqrt (Rational.den x)
+  let precision = 30 in
+  let s = Big_int.sqrt (Rational.num x) in
+  if Big_int.equal (Rational.den x) (Big_int.of_int 1) && Big_int.equal (Big_int.mul s s) (Rational.num x) then
+    to_real s
   else
-    failwith "sqrt"
+    let p = ref (to_real (Big_int.sqrt (Big_int.div (Rational.num x) (Rational.den x)))) in
+    let n = ref (Rational.of_int 0) in
+    let convergence = ref (Rational.div (Rational.of_int 1) (Rational.of_big_int (Big_int.pow_int_positive 10 precision))) in
+    let quit_loop = ref false in
+    while not !quit_loop do
+      n := Rational.div (Rational.add !p (Rational.div x !p)) (Rational.of_int 2);
+
+      if Rational.lt (Rational.abs (Rational.sub !p !n)) !convergence then
+        quit_loop := true
+      else
+        p := !n
+    done;
+    !n
+
+let random_real () = Rational.div (Rational.of_int (Random.bits ())) (Rational.of_int (Random.bits()))
 
 let lt (x, y) = Big_int.less x y
 let gt (x, y) = Big_int.greater x y
