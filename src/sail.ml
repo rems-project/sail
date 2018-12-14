@@ -194,6 +194,9 @@ let options = Arg.align ([
   ( "-enum_casts",
     Arg.Set Initial_check.opt_enum_casts,
     " allow enumerations to be automatically casted to numeric range types");
+  ( "-non_lexical_flow",
+    Arg.Set Nl_flow.opt_nl_flow,
+    " allow non-lexical flow typing");
   ( "-no_lexp_bounds_check",
     Arg.Set Type_check.opt_no_lexp_bounds_check,
     " turn off bounds checking for vector assignments in l-expressions");

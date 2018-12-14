@@ -2156,7 +2156,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        let rec check_block l env exps typ =
          let annot_exp_effect exp typ eff exp_typ = E_aux (exp, (l, Some ((env, typ, eff), exp_typ))) in
          let annot_exp exp typ exp_typ = annot_exp_effect exp typ no_effect exp_typ in
-         match exps with
+         match Nl_flow.analyze exps with
          | [] -> typ_equality l env typ unit_typ; []
          | [exp] -> [crule check_exp env exp typ]
          | (E_aux (E_assign (lexp, bind), _) :: exps) ->
