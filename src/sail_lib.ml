@@ -599,7 +599,7 @@ let sub_real (x, y) = Rational.sub x y
 
 let abs_real x = Rational.abs x
 
-let sqrt x =
+let sqrt_real x =
   let precision = 30 in
   let s = Big_int.sqrt (Rational.num x) in
   if Big_int.equal (Rational.den x) (Big_int.of_int 1) && Big_int.equal (Big_int.mul s s) (Rational.num x) then
@@ -648,8 +648,6 @@ let real_of_string str =
      Rational.add whole frac
   | [whole] -> Rational.of_int (int_of_string str)
   | _ -> failwith "invalid real literal"
-
-let sqrt_real x = failwith "sqrt_real"
 
 let print str = Pervasives.print_string str
 

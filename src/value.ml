@@ -502,7 +502,7 @@ let value_random_real = function
   | _ -> failwith "value random_real"
 
 let value_sqrt_real = function
-  | [v] -> V_real (Sail_lib.sqrt (coerce_real v))
+  | [v] -> V_real (Sail_lib.sqrt_real (coerce_real v))
   | _ -> failwith "value sqrt_real"
 
 let value_quotient_real = function
@@ -645,8 +645,8 @@ let primops =
       ("eq_real", value_eq_real);
       ("lt_real", value_lt_real);
       ("gt_real", value_gt_real);
-      ("lteq_real", value_lt_real);
-      ("gteq_real", value_gt_real);
+      ("lteq_real", value_lteq_real);
+      ("gteq_real", value_gteq_real);
       ("add_real", value_add_real);
       ("sub_real", value_sub_real);
       ("mult_real", value_mult_real);
