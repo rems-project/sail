@@ -35,11 +35,24 @@ val sail_sign_extend = "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('
 
 val sail_zero_extend = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
+/*!
+THIS`(v, n)` truncates `v`, keeping only the _least_ significant `n` bits.
+ */
 val truncate = {
   ocaml: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
   c: "sail_truncate"
+} : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
+
+/*!
+THIS`(v, n)` truncates `v`, keeping only the _most_ significant `n` bits.
+ */
+val truncateLSB = {
+  ocaml: "vector_truncateLSB",
+  lem: "vector_truncateLSB",
+  coq: "vector_truncateLSB",
+  c: "sail_truncateLSB"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 
 val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)

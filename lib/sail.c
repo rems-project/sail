@@ -741,6 +741,16 @@ void sail_truncate(lbits *rop, const lbits op, const sail_int len)
   normalize_lbits(rop);
 }
 
+void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len)
+{
+  uint64_t rlen = mpz_get_ui(len);
+  assert(op.len >= rlen);
+  rop->len = rlen;
+  // similar to vector_subrange_lbits above -- right shift LSBs away
+  mpz_fdiv_q_2exp(*rop->bits, *op.bits, op.len - rlen);
+  normalize_lbits(rop);
+}
+
 fbits bitvector_access(const lbits op, const sail_int n_mpz)
 {
   uint64_t n = mpz_get_ui(n_mpz);

@@ -160,6 +160,8 @@ let update_subrange (xs, n, m, ys) =
 
 let vector_truncate (xs, n) = List.rev (take (Big_int.to_int n) (List.rev xs))
 
+let vector_truncateLSB (xs, n) = take (Big_int.to_int n) xs
+
 let length xs = Big_int.of_int (List.length xs)
 
 let big_int_of_bit = function
@@ -358,6 +360,14 @@ let char_of_bit = function
 let int_of_bit = function
   | B0 -> 0
   | B1 -> 1
+
+let bool_of_bit = function
+  | B0 -> false
+  | B1 -> true
+
+let bit_of_bool = function
+  | false -> B0
+  | true -> B1
 
 let bigint_of_bit b = Big_int.of_int (int_of_bit b)
 
@@ -1138,7 +1148,7 @@ let rand_zvector (g : 'generators) (size : int) (order : bool) (elem_gen : 'gene
   Util.list_init size (fun _ -> elem_gen g)
 
 let rand_zbit (g : 'generators) : bit =
-  if Random.bool() then B0 else B1
+  bit_of_bool (Random.bool())
 
 let rand_zbool (g : 'generators) : bool =
   Random.bool()

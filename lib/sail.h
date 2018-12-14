@@ -256,6 +256,7 @@ void vector_subrange_lbits(lbits *rop,
 			       const sail_int m_mpz);
 
 void sail_truncate(lbits *rop, const lbits op, const sail_int len);
+void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
 
 fbits bitvector_access(const lbits op, const sail_int n_mpz);
 
