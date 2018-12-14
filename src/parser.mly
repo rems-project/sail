@@ -319,12 +319,6 @@ kid:
   | TyVar
     { mk_kid $1 $startpos $endpos }
 
-kid_list:
-  | kid
-    { [$1] }
-  | kid kid_list
-    { $1 :: $2 }
-
 num_list:
   | Num
     { [$1] }

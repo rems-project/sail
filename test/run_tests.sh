@@ -12,6 +12,12 @@ printf "==========================================\n"
 ./typecheck/run_tests.sh
 
 printf "\n==========================================\n"
+printf "Lem tests\n"
+printf "==========================================\n"
+
+./lem/run_tests.sh
+
+printf "\n==========================================\n"
 printf "Ocaml tests\n"
 printf "==========================================\n"
 
@@ -21,19 +27,13 @@ printf "\n==========================================\n"
 printf "C tests\n"
 printf "==========================================\n"
 
-./c/run_tests.py
-
-printf "\n==========================================\n"
-printf "Lem tests\n"
-printf "==========================================\n"
-
-./lem/run_tests.sh
+TEST_PAR=8 ./c/run_tests.py
 
 printf "\n==========================================\n"
 printf "Builtins tests\n"
 printf "==========================================\n"
 
-./builtins/run_tests.py
+TEST_PAR=4 ./builtins/run_tests.py
 
 printf "\n==========================================\n"
 printf "ARM spec tests\n"

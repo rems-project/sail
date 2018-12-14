@@ -46,6 +46,7 @@ def banner(string):
     print '-' * len(string)
     print string
     print '-' * len(string)
+    sys.stdout.flush()
 
 class Results:
     def __init__(self, name):
@@ -63,6 +64,7 @@ class Results:
             else:
                 self.passes += 1
                 self.xml += '    <testcase name="{}"/>\n'.format(test)
+        sys.stdout.flush()
 
     def finish(self):
         print '{}{} passes and {} failures{}'.format(color.NOTICE, self.passes, self.failures, color.END)

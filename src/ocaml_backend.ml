@@ -978,7 +978,7 @@ let ocaml_compile spec defs generator_types =
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/" ^ tags_file ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in
-  if !opt_ocaml_coverage then 
+  if !opt_ocaml_coverage then
     ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
   ocaml_pp_defs out_chan defs generator_types;
   close_out out_chan;
