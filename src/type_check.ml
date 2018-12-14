@@ -264,7 +264,6 @@ let destruct_exist typ =
   | Some (kids, nc, nexp) -> Some (List.map (mk_kopt K_int) kids, nc, atom_typ nexp)
   | None -> destruct_exist' typ
 
-
 let adding = Util.("Adding " |> darkgray |> clear)
 
 (**************************************************************************)
@@ -1327,6 +1326,7 @@ and typ_arg_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   | A_nexp n -> nexp_frees ~exs:exs n
   | A_typ typ -> typ_frees ~exs:exs typ
   | A_order ord -> order_frees ord
+  | A_bool nc -> tyvars_of_constraint nc
 
 let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with

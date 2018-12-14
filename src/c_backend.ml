@@ -139,6 +139,8 @@ let rec ctyp_of_typ ctx typ =
   | Typ_id id when string_of_id id = "string" -> CT_string
   | Typ_id id when string_of_id id = "real"   -> CT_real
 
+  | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
+
   | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
      begin match destruct_range Env.empty typ with
      | None -> assert false (* Checked if range type in guard *)
