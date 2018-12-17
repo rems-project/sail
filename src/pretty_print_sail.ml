@@ -509,14 +509,21 @@ let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
 
 let doc_default (DT_aux (DT_order ord, _)) = separate space [string "default"; string "Order"; doc_ord ord]
 
+let doc_rec (Rec_aux (r,_)) =
+  match r with
+  | Rec_nonrec
+  | Rec_rec -> empty
+  | Rec_measure (pat,exp) -> braces (doc_pat pat ^^ string " => " ^^ doc_exp exp) ^^ space
+
 let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), annot)) =
   docstring annot
   ^^ match funcls with
      | [] -> failwith "Empty function list"
      | _ ->
+        let rec_pp = doc_rec r in
         let sep = hardline ^^ string "and" ^^ space in
         let clauses = separate_map sep doc_funcl funcls in
-        string "function" ^^ space ^^ clauses
+        string "function" ^^ space ^^ rec_pp ^^ clauses
 
 let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
   match mp_aux with

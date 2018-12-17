@@ -1790,11 +1790,11 @@ match a with
 | None => None
 end.
 
-Definition sub_nat (x : {x : Z & ArithFact (x >= 0)}) (y : {y : Z & ArithFact (y >= 0)}) :
+Definition sub_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
   {z : Z & ArithFact (z >= 0)} :=
-  let z := projT1 x - projT1 y in
+  let z := x - y in
   if sumbool_of_bool (z >=? 0) then build_ex z else build_ex 0.
 
-Definition min_nat (x : {x : Z & ArithFact (x >= 0)}) (y : {y : Z & ArithFact (y >= 0)}) :
+Definition min_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
   {z : Z & ArithFact (z >= 0)} :=
-  build_ex (Z.min (projT1 x) (projT1 y)).
+  build_ex (Z.min x y).

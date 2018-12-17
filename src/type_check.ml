@@ -221,7 +221,7 @@ let fresh_existential ?name:(n="") k =
   let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter ^ "#" ^ n), Parse_ast.Unknown) in
   incr ex_counter; mk_kopt k fresh
 
-let destruct_exist' typ =
+let destruct_exist_plain typ =
   match typ with
   | Typ_aux (Typ_exist (kopts, nc, typ), _) ->
      let fresh_kopts =
@@ -243,7 +243,7 @@ let destruct_exist' typ =
    - atom('n) => [], true, 'n
 **)
 let destruct_numeric typ =
-  match destruct_exist' typ, typ with
+  match destruct_exist_plain typ, typ with
   | Some (kids, nc, Typ_aux (Typ_app (id, [A_aux (A_nexp nexp, _)]), _)), _ when string_of_id id = "atom" ->
      Some (List.map kopt_kid kids, nc, nexp)
   | None, Typ_aux (Typ_app (id, [A_aux (A_nexp nexp, _)]), _) when string_of_id id = "atom" ->
@@ -262,7 +262,7 @@ let destruct_numeric typ =
 let destruct_exist typ =
   match destruct_numeric typ with
   | Some (kids, nc, nexp) -> Some (List.map (mk_kopt K_int) kids, nc, atom_typ nexp)
-  | None -> destruct_exist' typ
+  | None -> destruct_exist_plain typ
 
 let adding = Util.("Adding " |> darkgray |> clear)
 
@@ -1736,7 +1736,7 @@ let rec subtyp l env typ1 typ2 =
      if prove env nc2 then ()
      else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
   | _, _ ->
-  match destruct_exist' typ1, destruct_exist (canonicalize env typ2) with
+  match destruct_exist_plain typ1, destruct_exist (canonicalize env typ2) with
   | Some (kopts, nc, typ1), _ ->
      let env = add_existential l kopts nc env in subtyp l env typ1 typ2
   | None, Some (kopts, nc, typ2) ->
@@ -4184,17 +4184,17 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   in
   check_tannotopt env quant vtyp_ret tannotopt;
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
+  let funcl_env = add_typquant l quant env in
   let recopt =
     match recopt with
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
     | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
     | Rec_aux (Rec_measure (measure_p, measure_e), l) ->
        let typ = match vtyp_args with [x] -> x | _ -> Typ_aux (Typ_tup vtyp_args,Unknown) in
-       let tpat, env = bind_pat_no_guard env (strip_pat measure_p) typ in
+       let tpat, env = bind_pat_no_guard funcl_env (strip_pat measure_p) typ in
        let texp = check_exp env (strip_exp measure_e) int_typ in
        Rec_aux (Rec_measure (tpat, texp), l)
   in
-  let funcl_env = add_typquant l quant env in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
   let eff = List.fold_left union_effects no_effect (List.map funcl_effect funcls) in
   let vs_def, env, declared_eff =

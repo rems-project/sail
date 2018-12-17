@@ -7,12 +7,12 @@ Definition string_startswith s expected :=
   let prefix := String.substring 0 (String.length expected) s in
   generic_eq prefix expected.
 
-Definition string_drop s (n : {n : Z & ArithFact (n >= 0)}) :=
-  let n := Z.to_nat (projT1 n) in
+Definition string_drop s (n : Z) `{ArithFact (n >= 0)} :=
+  let n := Z.to_nat n in
   String.substring n (String.length s - n) s.
 
-Definition string_take s (n : {n : Z & ArithFact (n >= 0)}) :=
-  let n := Z.to_nat (projT1 n) in
+Definition string_take s (n : Z) `{ArithFact (n >= 0)} :=
+  let n := Z.to_nat n in
   String.substring 0 n s.
 
 Definition string_length s : {n : Z & ArithFact (n >= 0)} :=

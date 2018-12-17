@@ -210,7 +210,9 @@ val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
 
 (** Safely destructure an existential type. Returns None if the type
    is not existential. This function will pick a fresh name for the
-   existential to ensure that no name-clashes occur. *)
+   existential to ensure that no name-clashes occur. The "plain"
+   version does not treat numeric types as existentials. *)
+val destruct_exist_plain : typ -> (kinded_id list * n_constraint * typ) option
 val destruct_exist : typ -> (kinded_id list * n_constraint * typ) option
 
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
