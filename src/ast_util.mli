@@ -113,7 +113,7 @@ val is_nat_kopt : kinded_id -> bool
 val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
 val is_bool_kopt : kinded_id -> bool
-  
+
 (* Some handy utility functions for constructing types. *)
 val mk_typ : typ_aux -> typ
 val mk_typ_arg : typ_arg_aux -> typ_arg
@@ -127,6 +127,7 @@ val atom_typ : nexp -> typ
 val range_typ : nexp -> nexp -> typ
 val bit_typ : typ
 val bool_typ : typ
+val atom_bool_typ : n_constraint -> typ
 val app_typ : id -> typ_arg list -> typ
 val register_typ : typ -> typ
 val unit_typ : typ
@@ -191,7 +192,7 @@ val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
 
 val is_quant_kopt : quant_item -> bool
 val is_quant_constraint : quant_item -> bool
-  
+
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat

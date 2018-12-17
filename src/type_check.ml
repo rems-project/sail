@@ -259,10 +259,19 @@ let destruct_numeric typ =
      Some ([kid], nc_true, nvar kid)
   | _, _ -> None
 
+let destruct_boolean = function
+  | Typ_aux (Typ_id (Id_aux (Id "bool", _)), _) ->
+     let kid = kopt_kid (fresh_existential K_bool) in
+     Some (kid, nc_var kid)
+  | _ -> None
+
 let destruct_exist typ =
   match destruct_numeric typ with
   | Some (kids, nc, nexp) -> Some (List.map (mk_kopt K_int) kids, nc, atom_typ nexp)
-  | None -> destruct_exist_plain typ
+  | None ->
+     match destruct_boolean typ with
+     | Some (kid, nc) -> Some ([mk_kopt K_bool kid], nc_true, atom_bool_typ nc)
+     | None -> destruct_exist_plain typ
 
 let adding = Util.("Adding " |> darkgray |> clear)
 
@@ -700,8 +709,7 @@ end = struct
     | NC_var kid ->
        begin match get_typ_var kid env with
        | K_bool -> ()
-       | kind -> typ_error l ("Set constraint is badly formed, "
-                              ^ string_of_kid kid ^ " has kind "
+       | kind -> typ_error l (string_of_kid kid ^ " has kind "
                               ^ string_of_kind_aux kind ^ " but should have kind Bool")
        end
     | NC_true | NC_false -> ()
@@ -1243,7 +1251,7 @@ let prove_z3 env (NC_aux (_, l) as nc) =
   | Constraint.Sat -> typ_debug (lazy "sat"); false
   | Constraint.Unknown -> typ_debug (lazy "unknown"); false
 
-let solve env (Nexp_aux (_, l) as nexp) = 
+let solve env (Nexp_aux (_, l) as nexp) =
   typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
                    ^ " |- " ^ string_of_nexp nexp ^ " = ?"));
   match nexp with
@@ -1621,10 +1629,21 @@ and kid_order_arg kind_map (A_aux (aux, l) as arg) =
   | A_order _ -> ([], kind_map)
 and kid_order_constraint kind_map (NC_aux (aux, l) as nc) =
   match aux with
-  | NC_var kid when KBindings.mem kid kind_map ->
+  | NC_var kid | NC_set (kid, _) when KBindings.mem kid kind_map ->
      ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
-  | NC_var _ -> ([], kind_map)
-  | _ -> unreachable l __POS__ "bad constraint type"
+  | NC_var _ | NC_set _ -> ([], kind_map)
+  | NC_true | NC_false -> ([], kind_map)
+  | NC_equal (n1, n2) | NC_not_equal (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2) ->
+     let ord1, kind_map = kid_order_nexp kind_map n1 in
+     let ord2, kind_map = kid_order_nexp kind_map n2 in
+     (ord1 @ ord2, kind_map)
+  | NC_app (_, args) ->
+     List.fold_left (fun (ord, kind_map) arg -> let  ord', kind_map = kid_order_arg kind_map arg in (ord @ ord', kind_map))
+                    ([], kind_map) args
+  | NC_and (nc1, nc2) | NC_or (nc1, nc2) ->
+     let ord1, kind_map = kid_order_constraint kind_map nc1 in
+     let ord2, kind_map = kid_order_constraint kind_map nc2 in
+     (ord1 @ ord2, kind_map)
 
 let rec alpha_equivalent env typ1 typ2 =
   let counter = ref 0 in
@@ -1779,7 +1798,7 @@ and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   | A_nexp n1, A_nexp n2 when prove env (nc_eq n1 n2) -> ()
   | A_typ typ1, A_typ typ2 -> subtyp l env typ1 typ2
   | A_order ord1, A_order ord2 when ord_identical ord1 ord2 -> ()
-  | A_bool nc1, A_bool nc2 when nc_identical nc1 nc2 -> ()
+  | A_bool nc1, A_bool nc2 when prove env (nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1)) -> ()
   | _, _ -> typ_error l "Mismatched argument types in subtype check"
 
 let typ_equality l env typ1 typ2 =
@@ -1827,8 +1846,8 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
   | L_zero -> bit_typ
   | L_one -> bit_typ
   | L_num n -> atom_typ (nconstant n)
-  | L_true -> bool_typ
-  | L_false -> bool_typ
+  | L_true -> atom_bool_typ nc_true
+  | L_false -> atom_bool_typ nc_false
   | L_string _ -> string_typ
   | L_real _ -> real_typ
   | L_bin str ->
@@ -2256,16 +2275,25 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      end
   | E_app_infix (x, op, y), _ ->
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
-  | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "_prove") = 0 ->
+  | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_prove" ->
      Env.wf_constraint env nc;
      if prove env nc
      then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      else typ_error l ("Cannot prove " ^ string_of_n_constraint nc)
-  | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "_not_prove") = 0 ->
+  | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_not_prove" ->
      Env.wf_constraint env nc;
      if prove env nc
      then typ_error l ("Can prove " ^ string_of_n_constraint nc)
      else annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+  | E_app (f, [E_aux (E_cast (typ, exp), _)]), _ when string_of_id f = "_check" ->
+     Env.wf_typ env typ;
+     let _ = crule check_exp env exp typ in
+     annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+  | E_app (f, [E_aux (E_cast (typ, exp), _)]), _ when string_of_id f = "_not_check" ->
+     Env.wf_typ env typ;
+     if (try (ignore (crule check_exp env exp typ); false) with Type_error _ -> true)
+     then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+     else typ_error l (Printf.sprintf "Expected _not_check(%s : %s) to fail" (string_of_exp exp) (string_of_typ typ))
   (* All constructors and mappings are treated as having one argument
      so Ctor(x, y) is checked as Ctor((x, y)) *)
   | E_app (f, x :: y :: zs), _ when Env.is_union_constructor f env || Env.is_mapping f env ->
@@ -3060,7 +3088,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp nexp)])))
   | E_constraint nc ->
      Env.wf_constraint env nc;
-     annot_exp (E_constraint nc) bool_typ
+     annot_exp (E_constraint nc) (atom_bool_typ nc)
   | E_field (exp, field) ->
      begin
        let inferred_exp = irule infer_exp env exp in

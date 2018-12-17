@@ -67,38 +67,6 @@ let pp_nexp, pp_n_constraint =
   in
   pp_nexp', pp_n_constraint'
 
-let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
-and nexp_subst_aux sv subst = function
-  | Nexp_id v -> Nexp_id v
-  | Nexp_var kid -> if Kid.compare kid sv = 0 then subst else Nexp_var kid
-  | Nexp_constant c -> Nexp_constant c
-  | Nexp_times (nexp1, nexp2) -> Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_sum (nexp1, nexp2) -> Nexp_sum (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_minus (nexp1, nexp2) -> Nexp_minus (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_app (id, nexps) -> Nexp_app (id, List.map (nexp_subst sv subst) nexps)
-  | Nexp_exp nexp -> Nexp_exp (nexp_subst sv subst nexp)
-  | Nexp_neg nexp -> Nexp_neg (nexp_subst sv subst nexp)
-
-let rec nexp_set_to_or l subst = function
-  | [] -> typ_error l "Cannot substitute into empty nexp set"
-  | [int] -> NC_equal (subst, nconstant int)
-  | (int :: ints) -> NC_or (mk_nc (NC_equal (subst, nconstant int)), mk_nc (nexp_set_to_or l subst ints))
-
-let rec nc_subst_nexp sv subst (NC_aux (nc, l)) = NC_aux (nc_subst_nexp_aux l sv subst nc, l)
-and nc_subst_nexp_aux l sv subst = function
-  | NC_equal (n1, n2) -> NC_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_set (kid, ints) as set_nc ->
-     if Kid.compare kid sv = 0
-     then nexp_set_to_or l (mk_nexp subst) ints
-     else set_nc
-  | NC_or (nc1, nc2) -> NC_or (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
-  | NC_and (nc1, nc2) -> NC_and (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
-  | NC_false -> NC_false
-  | NC_true -> NC_true
-
 type suggestion =
   | Suggest_add_constraint of n_constraint
   | Suggest_none
@@ -126,7 +94,7 @@ let rec analyze_unresolved_quant2 locals ncs = function
          | _ -> []
        in
        let substs = List.concat (List.map (fun v -> List.concat (List.map (fun nc -> is_subst v nc) ncs)) gen_kids) in
-       let nc = List.fold_left (fun nc (v, nexp) -> nc_subst_nexp v (unaux_nexp nexp) nc) nc substs in
+       let nc = List.fold_left (fun nc (v, nexp) -> constraint_subst v (arg_nexp nexp) nc) nc substs in
        if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then
          Suggest_add_constraint nc
        else
@@ -140,7 +108,7 @@ let rec analyze_unresolved_quant2 locals ncs = function
               []
          in
          let substs = List.concat (List.map (fun v -> List.concat (List.map (fun nc -> is_linked v nc) (Bindings.bindings locals))) gen_kids) in
-         let nc = List.fold_left (fun nc (v, nexp, _) -> nc_subst_nexp v (unaux_nexp nexp) nc) nc substs in
+         let nc = List.fold_left (fun nc (v, nexp, _) -> constraint_subst v (arg_nexp nexp) nc) nc substs in
          if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then
            Suggest_none
          else
@@ -171,7 +139,7 @@ let rec analyze_unresolved_quant locals ncs = function
          | _ -> []
        in
        let substs = List.concat (List.map (fun v -> List.concat (List.map (fun nc -> is_subst v nc) ncs)) gen_kids) in
-       let nc = List.fold_left (fun nc (v, nexp) -> nc_subst_nexp v (unaux_nexp nexp) nc) nc substs in
+       let nc = List.fold_left (fun nc (v, nexp) -> constraint_subst v (arg_nexp nexp) nc) nc substs in
        if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then
          string ("Try adding the constraint " ^ string_of_n_constraint nc)
        else
@@ -188,7 +156,7 @@ let rec analyze_unresolved_quant locals ncs = function
          (string "Try adding named type variables for"
           ^//^ string (Util.string_of_list ", " (fun (_, nexp, typ) -> string_of_nexp nexp ^ " : " ^ string_of_typ typ) substs))
          ^^ twice hardline ^^
-         let nc = List.fold_left (fun nc (v, nexp, _) -> nc_subst_nexp v (unaux_nexp nexp) nc) nc substs in
+         let nc = List.fold_left (fun nc (v, nexp, _) -> constraint_subst v (arg_nexp nexp) nc) nc substs in
          if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then
            string ("The property " ^ string_of_n_constraint nc ^ " must hold")
          else
@@ -239,7 +207,7 @@ let rec pp_type_error = function
      pp_type_error err
      ^^ hardline ^^ string "This error occured because of a previous error:"
      ^//^ pp_type_error err'
-    
+
   | Err_other str -> string str
 
 let rec string_of_type_error err =
@@ -264,6 +232,13 @@ let rec collapse_errors = function
       | Some _ -> err
       | None -> no_collapse
       end
+  | Err_because (err1, err2) as no_collapse ->
+     let err1 = collapse_errors err1 in
+     let err2 = collapse_errors err2 in
+     if string_of_type_error err1 = string_of_type_error err2 then
+       err1
+     else
+       Err_because (err1, err2)
   | err -> err
 
 let check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
