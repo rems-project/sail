@@ -1267,10 +1267,6 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
   | _, _ ->
      [pat], identity
 
-let doc_rec_lem force_rec (Rec_aux(r,_)) = match r with
-  | Rec_nonrec when not force_rec -> space
-  | _ -> space ^^ string "rec" ^^ space
-
 let doc_tannot_opt_lem (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem typ)
   | Typ_annot_opt_none -> empty
@@ -1324,9 +1320,19 @@ let doc_mutrec_lem = function
 let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | FCL_aux (FCL_Funcl(id,_),annot) :: _
-    when not (Env.is_extern id (env_of_annot annot) "lem") ->
-    string "let" ^^ (doc_rec_lem (List.length fcls > 1) r) ^^ (doc_fundef_rhs_lem fd)
+  | FCL_aux (FCL_Funcl(id, pexp),annot) :: _
+     when not (Env.is_extern id (env_of_annot annot) "lem") ->
+    (* Output "rec" modifier if function calls itself.  Mutually recursive
+       functions are handled separately by doc_mutrec_lem. *)
+    let is_funcl_rec =
+      fold_pexp
+        { (pure_exp_alg false (||)) with
+          e_app = (fun (id', args) -> List.fold_left (||) (Id.compare id id' = 0) args);
+          e_app_infix = (fun (l, id', r) -> l || (Id.compare id id' = 0) || r) }
+        pexp
+    in
+    let doc_rec = if is_funcl_rec then [string "rec"] else [] in
+    separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem fd])
   | _ -> empty
 
 
