@@ -24,7 +24,7 @@ function f(n,m) = {
 val f' : forall 'n 'm. (atom('n), atom('m)) -> unit effect {escape}
 
 function f'(n,m) = {
-    assert(constraint(('n = 8 | 'n = 16) & 'm < 'n), "nconstraint");
+    assert(constraint(('n == 8 | 'n == 16) & 'm < 'n), "nconstraint");
     let 'p = 2 * n in
     let x : bits('p) = replicate_bits(0b0,'p) in
     ()

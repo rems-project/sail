@@ -6,13 +6,13 @@
 (defconst sail2-keywords
   '("val" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
-    "overload" "cast" "sizeof" "constraint" "default" "assert" "newtype" "from"
+    "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
-    "mapping"))
+    "mapping" "where" "with"))
 
 (defconst sail2-kinds
-  '("Int" "Type" "Order" "inc" "dec"
+  '("Int" "Type" "Order" "Bool" "inc" "dec"
     "barr" "depend" "rreg" "wreg" "rmem" "rmemt" "wmv" "wmvt" "eamem" "wmem"
     "exmem" "undef" "unspec" "nondet" "escape" "configuration"))
 
@@ -21,7 +21,8 @@
     "uint64_t" "int64_t" "bv_t" "mpz_t"))
 
 (defconst sail2-special
-  '("_prove" "create" "kill" "convert" "undefined" "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif" "$option"))
+  '("_prove" "_not_prove" "create" "kill" "convert" "undefined"
+    "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif" "$option" "$latex"))
 
 (defconst sail2-font-lock-keywords
   `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)
@@ -29,6 +30,7 @@
     (,(regexp-opt sail2-types 'symbols) . font-lock-type-face)
     (,(regexp-opt sail2-special 'symbols) . font-lock-preprocessor-face)
     ("~" . font-lock-negation-char-face)
+    ("\\(::\\)<" 1 font-lock-keyword-face)
     ("@" . font-lock-preprocessor-face)
     ("<->" . font-lock-negation-char-face)
     ("\'[a-zA-Z0-9_]+" . font-lock-variable-name-face)

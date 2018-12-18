@@ -85,18 +85,20 @@ val mk_fundef : (unit funcl) list -> unit def
 val mk_val_spec : val_spec_aux -> unit def
 val mk_typschm : typquant -> typ -> typschm
 val mk_typquant : quant_item list -> typquant
-val mk_qi_id : base_kind_aux -> kid -> quant_item
+val mk_qi_id : kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
-val mk_fexps : (unit fexp) list -> unit fexps
 val mk_letbind : unit pat -> unit exp -> unit letbind
+val mk_kopt : kind_aux -> kid -> kinded_id
 
 val unaux_exp : 'a exp -> 'a exp_aux
 val unaux_pat : 'a pat -> 'a pat_aux
 val unaux_nexp : nexp -> nexp_aux
 val unaux_order : order -> order_aux
 val unaux_typ : typ -> typ_aux
+val unaux_kind : kind -> kind_aux
+val unaux_constraint : n_constraint -> n_constraint_aux
 
 val untyp_pat : 'a pat -> 'a pat * typ option
 val uncast_exp : 'a exp -> 'a exp * typ option
@@ -106,10 +108,12 @@ val dec_ord : order
 
 (* Utilites for working with kinded_ids *)
 val kopt_kid : kinded_id -> kid
+val kopt_kind : kinded_id -> kind
 val is_nat_kopt : kinded_id -> bool
 val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
-
+val is_bool_kopt : kinded_id -> bool
+  
 (* Some handy utility functions for constructing types. *)
 val mk_typ : typ_aux -> typ
 val mk_typ_arg : typ_arg_aux -> typ_arg
@@ -132,12 +136,18 @@ val vector_typ : nexp -> order -> typ -> typ
 val list_typ : typ -> typ
 val exc_typ : typ
 val tuple_typ : typ list -> typ
-val function_typ : typ -> typ -> effect -> typ
+val function_typ : typ list -> typ -> effect -> typ
 
 val no_effect : effect
 val mk_effect : base_effect_aux list -> effect
 
 val nexp_simp : nexp -> nexp
+val constraint_simp : n_constraint -> n_constraint
+
+(* If a constraint is a conjunction, return a list of all the top-level conjuncts *)
+val constraint_conj : n_constraint -> n_constraint list
+(* Same as constraint_conj but for disjunctions *)
+val constraint_disj : n_constraint -> n_constraint list
 
 (* Utilities for building n-expressions *)
 val nconstant : Big_int.num -> nexp
@@ -148,7 +158,7 @@ val ntimes : nexp -> nexp -> nexp
 val npow2 : nexp -> nexp
 val nvar : kid -> nexp
 val napp : id -> nexp list -> nexp
-val nid : id -> nexp (* NOTE: Nexp_id's don't do anything currently *)
+val nid : id -> nexp
 
 (* Numeric constraint builders *)
 val nc_eq : nexp -> nexp -> n_constraint
@@ -159,20 +169,29 @@ val nc_lt : nexp -> nexp -> n_constraint
 val nc_gt : nexp -> nexp -> n_constraint
 val nc_and : n_constraint -> n_constraint -> n_constraint
 val nc_or : n_constraint -> n_constraint -> n_constraint
+val nc_not : n_constraint -> n_constraint
 val nc_true : n_constraint
 val nc_false : n_constraint
 val nc_set : kid -> Big_int.num list -> n_constraint
 val nc_int_set : kid -> int list -> n_constraint
+val nc_var : kid -> n_constraint
 
-(* Negate a n_constraint. Note that there's no NC_not constructor, so
-   this flips all the inequalites a the n_constraint leaves and uses
-   de-morgans to switch and to or and vice versa. *)
-val nc_negate : n_constraint -> n_constraint
+val arg_nexp : ?loc:l -> nexp -> typ_arg
+val arg_order : ?loc:l -> order -> typ_arg
+val arg_typ : ?loc:l -> typ -> typ_arg
+val arg_bool : ?loc:l -> n_constraint -> typ_arg
+val arg_kopt : kinded_id -> typ_arg
 
+(* Functions for working with type quantifiers *)
+val quant_add : quant_item -> typquant -> typquant
 val quant_items : typquant -> quant_item list
 val quant_kopts : typquant -> kinded_id list
 val quant_split : typquant -> kinded_id list * n_constraint list
+val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
 
+val is_quant_kopt : quant_item -> bool
+val is_quant_constraint : quant_item -> bool
+  
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
@@ -194,12 +213,10 @@ val def_loc : 'a def -> Parse_ast.l
 
 (* For debugging and error messages only: Not guaranteed to produce
    parseable SAIL, or even print all language constructs! *)
-(* TODO: replace with existing pretty-printer *)
 val string_of_id : id -> string
 val string_of_kid : kid -> string
 val string_of_base_effect_aux : base_effect_aux -> string
-val string_of_base_kind_aux : base_kind_aux -> string
-val string_of_base_kind : base_kind -> string
+val string_of_kind_aux : kind_aux -> string
 val string_of_kind : kind -> string
 val string_of_base_effect : base_effect -> string
 val string_of_effect : effect -> string
@@ -209,6 +226,7 @@ val string_of_typ : typ -> string
 val string_of_typ_arg : typ_arg -> string
 val string_of_typ_pat : typ_pat -> string
 val string_of_n_constraint : n_constraint -> string
+val string_of_kinded_id : kinded_id -> string
 val string_of_quant_item : quant_item -> string
 val string_of_typquant : typquant -> string
 val string_of_typschm : typschm -> string
@@ -224,6 +242,7 @@ val string_of_index_range : index_range -> string
 val id_of_fundef : 'a fundef -> id
 val id_of_type_def : 'a type_def -> id
 val id_of_val_spec : 'a val_spec -> id
+val id_of_dec_spec : 'a dec_spec -> id
 
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid
@@ -240,6 +259,16 @@ end
 module Kid : sig
   type t = kid
   val compare : kid -> kid -> int
+end
+
+module Kind : sig
+  type t = kind
+  val compare : kind -> kind -> int
+end
+
+module KOpt : sig
+  type t = kinded_id
+  val compare : kinded_id -> kinded_id -> int
 end
 
 module Nexp : sig
@@ -268,6 +297,14 @@ end
 
 module NexpMap : sig
   include Map.S with type key = nexp
+end
+
+module KOptSet : sig
+  include Set.S with type elt = kinded_id
+end
+
+module KOptMap : sig
+  include Map.S with type key = kinded_id
 end
 
 module BESet : sig
@@ -318,6 +355,7 @@ val union_effects : effect -> effect -> effect
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
+val tyvars_of_constraint : n_constraint -> KidSet.t
 val tyvars_of_quant_item : quant_item -> KidSet.t
 val is_kid_generated : kid -> bool
 
@@ -351,16 +389,36 @@ val subst : id -> 'a exp -> 'a exp -> 'a exp
 
 val hex_to_bin : string -> string
 
-
 (** locate takes an expression and recursively sets the location in
-   every subexpression to the provided location. Expressions build
-   using mk_exp and similar do not have locations, so they can then be
-   annotated as e.g. locate (gen_loc l) (mk_exp ...) where l is the
-   location from which the code is being generated. *)
-val locate : l -> 'a exp -> 'a exp
+   every subexpression using a function that takes the orginal
+   location as an argument. Expressions build using mk_exp and similar
+   do not have locations, so they can then be annotated as e.g. locate
+   (gen_loc l) (mk_exp ...) where l is the location from which the
+   code is being generated. *)
+val locate : (l -> l) -> 'a exp -> 'a exp
 
-val locate_pat : l -> 'a pat -> 'a pat
+val locate_pat : (l -> l) -> 'a pat -> 'a pat
 
-val locate_lexp : l -> 'a lexp -> 'a lexp
+val locate_lexp : (l -> l) -> 'a lexp -> 'a lexp
 
-val locate_typ : l -> typ -> typ
+val locate_typ : (l -> l) -> typ -> typ
+
+(* Make a unique location by giving it a Parse_ast.Unique wrapper with
+   a generated number. *)
+val unique : l -> l
+
+(** Substitutions *)
+
+(* The function X_subst substitutes a type argument into something of
+   type X. The type of the type argument determines which kind of type
+   variables willb e replaced *)
+val nexp_subst : kid -> typ_arg -> nexp -> nexp
+val constraint_subst : kid -> typ_arg -> n_constraint -> n_constraint
+val order_subst : kid -> typ_arg -> order -> order
+val typ_subst : kid -> typ_arg -> typ -> typ
+val typ_arg_subst : kid -> typ_arg -> typ_arg -> typ_arg
+
+val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
+
+val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
+val typquant_subst_kid : kid -> kid -> typquant -> typquant

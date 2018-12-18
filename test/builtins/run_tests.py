@@ -13,9 +13,10 @@ from sailtest import *
 
 def test_c_builtins(name, sail_opts):
     banner('Testing builtins: {} Sail options: {}'.format(name, sail_opts))
-    tests = {}
-    for filename in os.listdir('.'):
-        if re.match('.+\.sail', filename):
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
@@ -26,13 +27,16 @@ def test_c_builtins(name, sail_opts):
                 step('rm {}'.format(basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
+        results.collect(tests)
+    return results.finish()
     return collect_results(name, tests)
 
 def test_ocaml_builtins(name, sail_opts):
     banner('Testing builtins: {} Sail options: {}'.format(name, sail_opts))
-    tests = {}
-    for filename in os.listdir('.'):
-        if re.match('.+\.sail', filename):
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
@@ -42,13 +46,16 @@ def test_ocaml_builtins(name, sail_opts):
                 step('rm {}'.format(basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
+        results.collect(tests)
+    return results.finish()
     return collect_results(name, tests)
 
 def test_lem_builtins(name):
     banner('Testing builtins: {}'.format(name))
-    tests = {}
-    for filename in os.listdir('.'):
-        if re.match('.+\.sail', filename):
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
@@ -76,7 +83,8 @@ def test_lem_builtins(name):
 
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
-    return collect_results(name, tests)
+        results.collect(tests)
+    return results.finish()
 
 xml = '<testsuites>\n'
 

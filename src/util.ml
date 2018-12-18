@@ -232,6 +232,15 @@ let rec option_these = function
   | None :: xs -> option_these xs
   | [] -> []
 
+let rec option_all = function
+  | [] -> Some []
+  | None :: _ -> None
+  | Some x :: xs ->
+     begin match option_all xs with
+     | None -> None
+     | Some xs -> Some (x :: xs)
+     end
+
 let changed2 f g x h y =
   match (g x, h y) with
     | (None,None) -> None
@@ -408,6 +417,7 @@ let termcode n =
 
 let bold str = termcode 1 ^ str
 
+let darkgray str = termcode 90 ^ str
 let red str = termcode 91 ^ str
 let green str = termcode 92 ^ str
 let yellow str = termcode 93 ^ str
@@ -438,6 +448,14 @@ let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.ma
 
 let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (string_to_list str))
 
+(** Encode string for use as a filename. We can't use zencode directly
+   because some operating systems make the mistake of being
+   case-insensitive. *)
+let file_encode_string str =
+  let zstr = zencode_string str in
+  let md5 = Digest.to_hex (Digest.string zstr) in
+  String.lowercase_ascii zstr ^ String.lowercase_ascii md5
+
 let warn str =
   if !opt_warnings then
     prerr_endline (("Warning" |> yellow |> clear) ^ ": " ^ str)
@@ -445,3 +463,5 @@ let warn str =
 
 let log_line str line msg =
   "\n[" ^ (str ^ ":" ^ string_of_int line |> blue |> clear) ^ "] " ^ msg
+
+let header str n = "\n" ^ str ^ "\n" ^ String.make (String.length str - 9 * n) '='

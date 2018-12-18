@@ -48,68 +48,115 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(** Basic error reporting
+open Ast
+open Ast_util
+open Bytecode
+open Bytecode_util
 
-  [Reporting_basic] contains functions to report errors and warnings. 
-  It contains functions to print locations ([Parse_ast.l] and [Ast.l]) and lexing positions.
+module StringMap = Map.Make(String)
 
-  The main functionality is reporting errors. This is done by raising a
-  [Fatal_error] exception. This is caught internally and reported via [report_error]. 
-  There are several predefined types of errors which all cause different error
-  messages. If none of these fit, [Err_general] can be used.       
+type 'a frame = {
+    jump_table : int StringMap.t;
+    locals : 'a Bindings.t;
+    pc : int;
+    instrs : instr array
+  }
 
-*)
+type 'a gstate = {
+    globals : 'a Bindings.t;
+    cdefs : cdef list
+  }
 
-(** {2 Auxiliary Functions } *)
+type 'a stack = {
+    top : 'a frame;
+    ret : ('a -> 'a frame) list
+  }
 
-val loc_to_string : Parse_ast.l -> string
+let make_jump_table instrs =
+  let rec aux n = function
+    | I_aux (I_label label, _) :: instrs -> StringMap.add label n (aux (n + 1) instrs)
+    | _ :: instrs -> aux (n + 1) instrs
+    | [] -> StringMap.empty
+  in
+  aux 0 instrs
 
-(** [print_err fatal print_loc_source l head mes] prints an error / warning message to
-    std-err. It starts with printing location information stored in [l]
-    It then prints "head: mes". If [fatal] is set, the program exists with error-code 1 afterwards.
-*)
-val print_err : bool -> bool -> Parse_ast.l -> string -> string -> unit
+let new_gstate cdefs = {
+    globals = Bindings.empty;
+    cdefs = cdefs
+  }
 
-(** {2 Errors } *)
+let new_stack instrs = {
+    top = {
+      jump_table = make_jump_table instrs;
+      locals = Bindings.empty;
+      pc = 0;
+      instrs = Array.of_list instrs
+    };
+    ret = []
+  }
 
-(** Errors stop execution and print a message; they typically have a location and message.
-*)
-type error = 
-  (** General errors, used for multi purpose. If you are unsure, use this one. *)
-  | Err_general of Parse_ast.l * string
+let with_top stack f =
+  { stack with top = f (stack.top) }
 
-  (** Unreachable errors should never be thrown. It means that some
-      code was excuted that the programmer thought of as unreachable *)
-  | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
+let eval_fragment gstate locals = function
+  | F_id id ->
+     begin match Bindings.find_opt id locals with
+     | Some vl -> vl
+     | None ->
+        begin match Bindings.find_opt id gstate.globals with
+        | Some vl -> vl
+        | None -> failwith "Identifier not found"
+        end
+     end
+  | F_lit vl -> vl
+  | _ -> failwith "Cannot eval fragment"
 
-  (** [Err_todo] indicates that some feature is unimplemented; it should be built using [err_todo]. *)
-  | Err_todo of Parse_ast.l * string
+let is_function id = function
+  | CDEF_fundef (id', _, _, _) when Id.compare id id' = 0 -> true
+  | _ -> false
 
-  | Err_syntax of Lexing.position * string
-  | Err_syntax_locn of Parse_ast.l * string
-  | Err_lex of Lexing.position * string
-  | Err_type of Parse_ast.l * string
-  | Err_type_dual of Parse_ast.l * Parse_ast.l * string
-  
-exception Fatal_error of error
+let step (gstate, stack) =
+  let I_aux (instr_aux, (_, l)) = stack.top.instrs.(stack.top.pc) in
+  match instr_aux with
+  | I_decl _ ->
+     gstate, with_top stack (fun frame -> { frame with pc = frame.pc + 1 })
 
-(** [err_todo l m] is an abreviatiation for [Fatal_error (Err_todo (l, m))] *)
-val err_todo : Parse_ast.l -> string -> exn
+  | I_init (_, id, (fragment, _)) ->
+     let vl = eval_fragment gstate stack.top.locals fragment in
+     gstate,
+     with_top stack (fun frame -> { frame with pc = frame.pc + 1; locals = Bindings.add id vl frame.locals })
 
-(** [err_general l m] is an abreviatiation for [Fatal_error (Err_general (b, l, m))] *)
-val err_general : Parse_ast.l -> string -> exn
+  | I_jump ((fragment, _), label) ->
+     let vl = eval_fragment gstate stack.top.locals fragment in
+     gstate,
+     begin match vl with
+     | V_bool true ->
+        with_top stack (fun frame -> { frame with pc = StringMap.find label frame.jump_table })
+     | V_bool false ->
+        with_top stack (fun frame -> { frame with pc = frame.pc + 1 })
+     | _ ->
+        failwith "Type error"
+     end
 
-(** [err_unreachable l __POS__ m] is an abreviatiation for [Fatal_error (Err_unreachable (l, __POS__, m))] *)
-val err_unreachable : Parse_ast.l -> (string * int * int * int) -> string -> exn
+  | I_funcall (clexp, _, id, cvals) ->
+     let args = List.map (fun (fragment, _) -> eval_fragment gstate stack.top.locals fragment) cvals in
+     let params, instrs =
+       match List.find_opt (is_function id) gstate.cdefs with
+       | Some (CDEF_fundef (_, _, params, instrs)) -> params, instrs
+       | _ -> failwith "Function not found"
+     in
+     gstate,
+     {
+       top = {
+         jump_table = make_jump_table instrs;
+         locals = List.fold_left2 (fun locals param arg -> Bindings.add param arg locals) Bindings.empty params args;
+         pc = 0;
+         instrs = Array.of_list instrs;
+       };
+       ret = (fun vl -> { stack.top with pc = stack.top.pc + 1 }) :: stack.ret
+     }
 
-(** [err_typ l m] is an abreviatiation for [Fatal_error (Err_type (l, m))] *)
-val err_typ : Parse_ast.l -> string -> exn
+  | I_goto label ->
+     gstate, with_top stack (fun frame -> { frame with pc = StringMap.find label frame.jump_table })
 
-(** [err_typ_dual l1 l2 m] is an abreviatiation for [Fatal_error (Err_type_dual (l1, l2, m))] *)
-val err_typ_dual : Parse_ast.l ->  Parse_ast.l -> string -> exn
-
-(** Report error should only be used by main to print the error in the end. Everywhere else,
-    raising a [Fatal_error] exception is recommended. *)
-val report_error : error -> 'a
-
-val print_error : error -> unit
+  | _ -> raise (Reporting.err_unreachable l __POS__ "Unhandled instruction")

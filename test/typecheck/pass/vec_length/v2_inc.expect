@@ -1,0 +1,13 @@
+Type error at file "vec_length/v2_inc.sail", line 7, character 11 to line 7, character 25
+
+  let z = [41m[x with 10 = y][0m;
+
+No overloadings for vector_update, tried:
+  bitvector_update:
+    Could not resolve quantifiers for bitvector_update (0 <= 10 & (10 + 1) <= 8)
+    
+    Try adding the constraint: (0 <= 10 & (10 + 1) <= 8)
+  plain_vector_update:
+    Could not resolve quantifiers for plain_vector_update (0 <= 10 & (10 + 1) <= 8)
+    
+    Try adding the constraint: (0 <= 10 & (10 + 1) <= 8)

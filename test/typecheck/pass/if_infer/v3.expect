@@ -1,0 +1,7 @@
+Type error at file "if_infer/v3.sail", line 10, character 11 to line 10, character 38
+
+  let _ = [41m0b1001[if R then 0 else f()][0m;
+
+No overloadings for vector_access, tried:
+  bitvector_access: Numeric type is non-simple
+  plain_vector_access: Numeric type is non-simple

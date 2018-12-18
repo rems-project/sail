@@ -41,10 +41,11 @@ let reset_vec_int start_pc = [
 (* address map *)
 
 let dram_base  = 0x80000000L;;  (* Spike::DRAM_BASE *)
-let dram_size  = Int64.(shift_left 2048L 20)
 let clint_base = 0x02000000L;;  (* Spike::CLINT_BASE *)
 let clint_size = 0x000c0000L;;  (* Spike::CLINT_SIZE *)
 let rom_base   = 0x00001000L;;  (* Spike::DEFAULT_RSTVEC *)
+
+let dram_size_ref = ref (Int64.(shift_left 2048L 20))
 
 type mem_region = {
     addr : Int64.t;
@@ -106,9 +107,10 @@ let spike_dts isa_spec cpu_hz insns_per_rtc_tick mems =
 let cpu_hz = 1000000000;;
 let insns_per_tick = 100;;
 
-let mems = [ { addr = dram_base;
-               size = dram_size } ];;
-let dts = spike_dts "rv64imac" cpu_hz insns_per_tick mems;;
+let make_mems () = [{ addr = dram_base;
+                      size = !dram_size_ref }];;
+
+let make_dts () = spike_dts "rv64imac" cpu_hz insns_per_tick (make_mems ());;
 
 let bytes_to_string bytes =
   String.init (List.length bytes) (fun i -> Char.chr (List.nth bytes i))
@@ -124,6 +126,9 @@ let set_dtc path =
   with Unix.Unix_error (e, _, _) ->
     ( Printf.eprintf "Error accessing %s: %s\n%!" path (Unix.error_message e);
       exit 1)
+
+let set_dram_size mb =
+  dram_size_ref := Int64.(shift_left (Int64.of_int mb) 20)
 
 let make_dtb dts = (* Call the dtc compiler, assumed to be at /usr/bin/dtc *)
   try
@@ -159,7 +164,7 @@ let make_dtb dts = (* Call the dtc compiler, assumed to be at /usr/bin/dtc *)
 (* Terminal I/O *)
 
 let term_write char =
-  ignore (Unix.write_substring Unix.stdout (String.make 1 char) 0 1)
+  ignore (Unix.write_substring Unix.stderr (String.make 1 char) 0 1)
 
 let rec term_read () =
   let buf = Bytes.make 1 '\000' in
@@ -172,8 +177,8 @@ let rec term_read () =
 let show_bytes s =
   output_string stdout s
 
-let dump_dts () = show_bytes dts
-let dump_dtb () = show_bytes (bytes_to_string (make_dtb dts))
+let dump_dts () = show_bytes (make_dts ())
+let dump_dtb () = show_bytes (bytes_to_string (make_dtb (make_dts ())))
 
 (*
 let save_string_to_file s fname =

@@ -86,6 +86,12 @@ type value =
   | V_ref of string
   | V_ctor of string * value list
   | V_record of value StringMap.t
+  (* When constant folding we disable reading registers, so a register
+     read will return a V_attempted_read value. If we try to do
+     anything with this value, we'll get an exception - but if all we
+     do is return it then we can replace the expression we are folding
+     with a direct register read. *)
+  | V_attempted_read of string
 
 let rec eq_value v1 v2 =
   match v1, v2 with
@@ -218,6 +224,10 @@ let value_string_startswith = function
 let value_string_drop = function
   | [v1; v2] -> V_string (Sail_lib.string_drop (coerce_string v1, coerce_int v2))
   | _ -> failwith "value string_drop"
+
+let value_string_take = function
+  | [v1; v2] -> V_string (Sail_lib.string_take (coerce_string v1, coerce_int v2))
+  | _ -> failwith "value string_take"
 
 let value_string_length = function
   | [v] -> V_int (coerce_string v |> Sail_lib.string_length)
@@ -378,10 +388,11 @@ let rec string_of_value = function
   | V_unit -> "()"
   | V_string str -> "\"" ^ str ^ "\""
   | V_ref str -> "ref " ^ str
-  | V_real r -> "REAL" (* No Rational.to_string *)
+  | V_real r -> Sail_lib.string_of_real r
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
      "{" ^ Util.string_of_list ", " (fun (field, v) -> field ^ "=" ^ string_of_value v) (StringMap.bindings record) ^ "}"
+  | V_attempted_read _ -> assert false
 
 let value_sign_extend = function
   | [v1; v2] -> mk_vector (Sail_lib.sign_extend (coerce_bv v1, coerce_int v2))
@@ -482,6 +493,18 @@ let value_to_real = function
   | [v] -> V_real (Sail_lib.to_real (coerce_int v))
   | _ -> failwith "value to_real"
 
+let value_print_real = function
+  | [v1; v2] -> output_endline (coerce_string v1 ^ string_of_value v2); V_unit
+  | _ -> failwith "value print_real"
+
+let value_random_real = function
+  | [_] -> V_real (Sail_lib.random_real ())
+  | _ -> failwith "value random_real"
+
+let value_sqrt_real = function
+  | [v] -> V_real (Sail_lib.sqrt_real (coerce_real v))
+  | _ -> failwith "value sqrt_real"
+
 let value_quotient_real = function
   | [v1; v2] -> V_real (Sail_lib.quotient_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value quotient_real"
@@ -493,6 +516,26 @@ let value_round_up = function
 let value_round_down = function
   | [v] -> V_int (Sail_lib.round_down (coerce_real v))
   | _ -> failwith "value round_down"
+
+let value_add_real = function
+  | [v1; v2] -> V_real (Sail_lib.add_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value add_real"
+
+let value_sub_real = function
+  | [v1; v2] -> V_real (Sail_lib.sub_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value sub_real"
+
+let value_mult_real = function
+  | [v1; v2] -> V_real (Sail_lib.mult_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value mult_real"
+
+let value_div_real = function
+  | [v1; v2] -> V_real (Sail_lib.div_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value div_real"
+
+let value_abs_real = function
+  | [v] -> V_real (Sail_lib.abs_real (coerce_real v))
+  | _ -> failwith "value abs_real"
 
 let value_eq_real = function
   | [v1; v2] -> V_bool (Sail_lib.eq_real (coerce_real v1, coerce_real v2))
@@ -549,6 +592,7 @@ let primops =
       ("eq_string", value_eq_string);
       ("string_startswith", value_string_startswith);
       ("string_drop", value_string_drop);
+      ("string_take", value_string_take);
       ("string_length", value_string_length);
       ("eq_bit", value_eq_bit);
       ("eq_anything", value_eq_anything);
@@ -601,11 +645,19 @@ let primops =
       ("eq_real", value_eq_real);
       ("lt_real", value_lt_real);
       ("gt_real", value_gt_real);
-      ("lteq_real", value_lt_real);
-      ("gteq_real", value_gt_real);
+      ("lteq_real", value_lteq_real);
+      ("gteq_real", value_gteq_real);
+      ("add_real", value_add_real);
+      ("sub_real", value_sub_real);
+      ("mult_real", value_mult_real);
       ("round_up", value_round_up);
       ("round_down", value_round_down);
-      ("quotient_real", value_quotient_real);
+      ("quotient_real", value_div_real);
+      ("abs_real", value_abs_real);
+      ("div_real", value_div_real);
+      ("sqrt_real", value_sqrt_real);
+      ("print_real", value_print_real);
+      ("random_real", value_random_real);
       ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
       ("undefined_int", fun _ -> V_int Big_int.zero);

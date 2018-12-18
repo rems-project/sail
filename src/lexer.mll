@@ -97,8 +97,7 @@ let operators = ref
   (List.fold_left
      (fun r (x, y) -> M.add x y r)
      M.empty
-     [ ("==", mk_operator Infix 4 "==");
-       ("/", mk_operator InfixL 7 "/");
+     [ ("/", mk_operator InfixL 7 "/");
        ("%", mk_operator InfixL 7 "%");
      ])
 
@@ -141,11 +140,13 @@ let kw_table =
      ("ref",                     (fun _ -> Ref));
      ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
+     ("Bool",                    (fun x -> Bool));
      ("pure",                    (fun x -> Pure));
      ("register",		 (fun x -> Register));
      ("return",                  (fun x -> Return));
      ("scattered",               (fun x -> Scattered));
      ("sizeof",                  (fun x -> Sizeof));
+     ("constant",                (fun x -> Constant));
      ("constraint",              (fun x -> Constraint));
      ("struct",                  (fun x -> Struct));
      ("then",                    (fun x -> Then));
@@ -163,6 +164,7 @@ let kw_table =
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
+     ("where",                   (fun _ -> Where));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
@@ -223,9 +225,7 @@ rule token = parse
   | ","                                 { Comma }
   | ".."                                { DotDot }
   | "."                                 { Dot }
-  | "==" as op
-    { try M.find op !operators
-      with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
+  | "=="                                { EqEq(r"==") }
   | "="                                 { (Eq(r"=")) }
   | ">"					{ (Gt(r">")) }
   | "-"					{ Minus }
@@ -327,12 +327,12 @@ and string pos b = parse
   | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; string pos b lexbuf }
   | escape_sequence as i                { Buffer.add_string b i; string pos b lexbuf }
   | '\\' '\n' ws                        { Lexing.new_line lexbuf; string pos b lexbuf }
-  | '\\'                                { assert false (*raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos,
+  | '\\'                                { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                             "illegal backslash escape in string"*) }
   | '"'                                 { let s = unescaped(Buffer.contents b) in
                                           (*try Ulib.UTF8.validate s; s
                                           with Ulib.UTF8.Malformed_code ->
-                                            raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos,
+                                            raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                               "String literal is not valid utf8"))) *) s }
-  | eof                                 { assert false (*raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos,
+  | eof                                 { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                             "String literal not terminated")))*) }

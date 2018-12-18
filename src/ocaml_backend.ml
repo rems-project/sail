@@ -103,10 +103,10 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   | Typ_id id when string_of_id id = "exception" -> string "Printexc.to_string" ^^ space ^^ arg
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id eid, _)), _)])
+  | Typ_app (id, [A_aux (A_typ (Typ_aux (Typ_id eid, _)), _)])
        when string_of_id id = "list" && string_of_id eid = "bit" ->
      string "string_of_bits" ^^ space ^^ arg
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "list" ->
+  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
      let farg = gensym () in
      separate space [string "string_of_list \", \""; parens (separate space [string "fun"; farg; string "->"; ocaml_string_typ typ farg]); arg]
   | Typ_app (_, _) -> string "\"APP\""
@@ -121,7 +121,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   | Typ_bidir (t1, t2) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
-  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
+  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
@@ -142,14 +142,14 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_app (id, []) -> ocaml_typ_id ctx id
   | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
-  | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
-  | Typ_bidir (t1, t2) -> raise (Reporting_basic.err_general l "Ocaml doesn't support bidir types")
+  | Typ_fn (typs, typ, _) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
+  | Typ_bidir (t1, t2) -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
-  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
-and ocaml_typ_arg ctx (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
+  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
+and ocaml_typ_arg ctx (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
-  | Typ_arg_typ typ -> ocaml_typ ctx typ
+  | A_typ typ -> ocaml_typ ctx typ
   | _ -> failwith ("OCaml: unexpected type argument " ^ string_of_typ_arg typ_arg)
 
 let ocaml_typquant typq =
@@ -187,7 +187,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   match pat_aux with
   | P_id id ->
      begin
-       match Env.lookup_id id (pat_env_of pat) with
+       match Env.lookup_id id (env_of_pat pat) with
        | Local (_, _) | Unbound -> zencode ctx id
        | Enum _ -> zencode_upper ctx id
        | _ -> failwith ("Ocaml: Cannot pattern match on register: " ^ string_of_pat pat)
@@ -242,9 +242,9 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_if (c, t, e) -> separate space [string "if"; ocaml_atomic_exp ctx c;
                                       string "then"; ocaml_atomic_exp ctx t;
                                       string "else"; ocaml_atomic_exp ctx e]
-  | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record fexps ->
      enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp ctx) fexps))
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record_update (exp, fexps) ->
      enclose lbrace rbrace (separate space [ocaml_atomic_exp ctx exp;
                                             string "with";
                                             separate_map (semi ^^ space) (ocaml_fexp ctx) fexps])
@@ -359,10 +359,10 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
             else ocaml_atomic_exp ctx exp
           in
           separate space [zencode ctx id; string ":="; traced_exp]
-       | _ -> separate space [zencode ctx id; string ":="; ocaml_exp ctx exp]
+       | _ -> separate space [zencode ctx id; string ":="; parens (ocaml_exp ctx exp)]
      end
   | LEXP_deref ref_exp ->
-     separate space [ocaml_atomic_exp ctx ref_exp; string ":="; ocaml_exp ctx exp]
+     separate space [ocaml_atomic_exp ctx ref_exp; string ":="; parens (ocaml_exp ctx exp)]
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
 and ocaml_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
@@ -455,15 +455,15 @@ let ocaml_funcls ctx =
   function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pexp),_)] ->
-     let typ1, typ2 =
+     let arg_typs, ret_typ =
        match Bindings.find id ctx.val_specs with
-       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | Typ_aux (Typ_fn (typs, typ, _), _) -> (typs, typ)
        | _ -> failwith "Found val spec which was not a function!"
      in
      (* Any remaining type variables after simple_typ rewrite should
         indicate Type-polymorphism. If we have it, we need to generate
         explicit type signatures with universal quantification. *)
-     let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
+     let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
      let pat_sym = gensym () in
      let pat, exp =
        match pexp with
@@ -473,7 +473,7 @@ let ocaml_funcls ctx =
      let annot_pat =
        let pat =
          if KidSet.is_empty kids then
-           parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1)
+           parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tup arg_typs)))
          else
            ocaml_pat ctx pat
        in
@@ -482,18 +482,18 @@ let ocaml_funcls ctx =
        else pat
      in
      let call_header = function_header () in
-     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
+     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tup arg_typs)) ret_typ in
      let call =
        if KidSet.is_empty kids then
          separate space [call_header; zencode ctx id;
-                         annot_pat; colon; ocaml_typ ctx typ2; equals;
+                         annot_pat; colon; ocaml_typ ctx ret_typ; equals;
                          sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
          ^//^ ocaml_exp ctx exp
          ^^ rparen
        else
          separate space [call_header; zencode ctx id; colon;
                          separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot;
-                         ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2; equals;
+                         ocaml_typ ctx (mk_typ (Typ_tup arg_typs)); string "->"; ocaml_typ ctx ret_typ; equals;
                          string "fun"; annot_pat; string "->";
                          sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
          ^//^ ocaml_exp ctx exp
@@ -502,18 +502,18 @@ let ocaml_funcls ctx =
      ocaml_funcl call string_of_arg string_of_ret
   | funcls ->
      let id = funcls_id funcls in
-     let typ1, typ2 =
+     let arg_typs, ret_typ =
        match Bindings.find id ctx.val_specs with
-       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | Typ_aux (Typ_fn (typs, typ, _), _) -> (typs, typ)
        | _ -> failwith "Found val spec which was not a function!"
      in
-     let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
+     let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
      if not (KidSet.is_empty kids) then failwith "Cannot handle polymorphic multi-clause function in OCaml backend" else ();
      let pat_sym = gensym () in
      let call_header = function_header () in
-     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info typ1 typ2 in
+     let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tup arg_typs)) ret_typ in
      let call =
-       separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ1); equals;
+       separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tup arg_typs))); equals;
                        sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
        ^//^ (separate space [string "match"; pat_sym; string "with"] ^^ hardline ^^ ocaml_funcl_matches ctx funcls)
        ^^ rparen
@@ -602,7 +602,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
       ^//^ (bar ^^ space ^^ ocaml_enum ctx ids))
      ^^ ocaml_def_end
      ^^ ocaml_string_of_enum ctx id ids
-  | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (typq, typ), _)) ->
+  | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
      ^^ ocaml_def_end
      ^^ ocaml_string_of_abbrev ctx id typq typ
@@ -674,7 +674,7 @@ let ocaml_pp_generators ctx defs orig_types required =
        if Bindings.mem id Type_check.Env.builtin_typs
        then IdSet.add id required
        else
-         raise (Reporting_basic.err_unreachable (id_loc id) __POS__
+         raise (Reporting.err_unreachable (id_loc id) __POS__
                   ("Required generator of unknown type " ^ string_of_id id))
   and add_req_from_id required id =
     if IdSet.mem id required then required
@@ -687,26 +687,26 @@ let ocaml_pp_generators ctx defs orig_types required =
     | Typ_internal_unknown
     | Typ_fn _
     | Typ_bidir _
-      -> raise (Reporting_basic.err_unreachable (typ_loc full_typ) __POS__
+      -> raise (Reporting.err_unreachable (typ_loc full_typ) __POS__
                   ("Required generator for type that should not appear: " ^
                      string_of_typ full_typ))
     | Typ_tup typs ->
        List.fold_left add_req_from_typ required typs
     | Typ_exist _ ->
-       raise (Reporting_basic.err_todo (typ_loc full_typ)
+       raise (Reporting.err_todo (typ_loc full_typ)
                 ("Generators for existential types not yet supported: " ^
                    string_of_typ full_typ))
     | Typ_app (id,args) ->
        List.fold_left add_req_from_typarg (add_req_from_id required id) args
-  and add_req_from_typarg required (Typ_arg_aux (arg,_)) =
+  and add_req_from_typarg required (A_aux (arg,_)) =
     match arg with
-    | Typ_arg_typ typ -> add_req_from_typ required typ
-    | Typ_arg_nexp _
-    | Typ_arg_order _
+    | A_typ typ -> add_req_from_typ required typ
+    | A_nexp _
+    | A_order _
       -> required
   and add_req_from_td required (TD_aux (td,(l,_))) =
     match td with
-    | TD_abbrev (_, _, TypSchm_aux (TypSchm_ts (_,typ),_)) ->
+    | TD_abbrev (_, _, A_aux (A_typ typ, _)) ->
        add_req_from_typ required typ
     | TD_record (_, _, _, fields, _) ->
        List.fold_left (fun req (typ,_) -> add_req_from_typ req typ) required fields
@@ -714,7 +714,7 @@ let ocaml_pp_generators ctx defs orig_types required =
        List.fold_left (fun req (Tu_aux (Tu_ty_id (typ,_),_)) ->
            add_req_from_typ req typ) required variants
     | TD_enum _ -> required
-    | TD_bitfield _ -> raise (Reporting_basic.err_todo l "Generators for bitfields not yet supported")
+    | TD_bitfield _ -> raise (Reporting.err_todo l "Generators for bitfields not yet supported")
   in
   let required = IdSet.fold (fun id req -> always_add_req_from_id req id) required required in
   let type_name id = zencode_string (string_of_id id) in
@@ -723,10 +723,11 @@ let ocaml_pp_generators ctx defs orig_types required =
       match Bindings.find id typemap with
       | TD_aux (td,_) ->
          (match td with
-          | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) -> tqs
+          | TD_abbrev (_,tqs,A_aux (A_typ _, _)) -> tqs
           | TD_record (_,_,tqs,_,_) -> tqs
           | TD_variant (_,_,tqs,_,_) -> tqs
           | TD_enum _ -> TypQ_aux (TypQ_no_forall,Unknown)
+          | TD_abbrev (_, _, _) -> assert false
           | TD_bitfield _ -> assert false)
       | exception Not_found ->
          Bindings.find id Type_check.Env.builtin_typs
@@ -742,10 +743,10 @@ let ocaml_pp_generators ctx defs orig_types required =
     let name = "gen_" ^ type_name id in
     let make_tyarg kindedid =
       if is_nat_kopt kindedid
-      then mk_typ_arg (Typ_arg_nexp (nvar (kopt_kid kindedid)))
+      then mk_typ_arg (A_nexp (nvar (kopt_kid kindedid)))
       else if is_order_kopt kindedid
-      then mk_typ_arg (Typ_arg_order (mk_ord (Ord_var (kopt_kid kindedid))))
-      else mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var (kopt_kid kindedid))))
+      then mk_typ_arg (A_order (mk_ord (Ord_var (kopt_kid kindedid))))
+      else mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kindedid))))
     in
     let targs = List.map make_tyarg tquants in
     let gen_tyvars_pp, out_typ = match gen_tyvars with
@@ -765,40 +766,39 @@ let ocaml_pp_generators ctx defs orig_types required =
     if Bindings.mem id Type_check.Env.builtin_typs
     then empty
     else
-      let name = string ("rand_" ^ type_name id) in
       let mk_arg kid = string (zencode_string (string_of_kid kid)) in
       let rec gen_type (Typ_aux (typ,l) as full_typ) =
         let typ_str, args_pp = match typ with
           | Typ_id id -> type_name id, [string "g"]
           | Typ_app (id,args) -> type_name id, string "g"::List.map typearg args
-          | _ -> raise (Reporting_basic.err_todo l
+          | _ -> raise (Reporting.err_todo l
                           ("Unsupported type for generators: " ^ string_of_typ full_typ))
         in
         let args_pp = match args_pp with [] -> empty
                                        | _ -> space ^^ separate space args_pp
         in
         string ("g.gen_" ^ typ_str) ^^ args_pp
-      and typearg (Typ_arg_aux (arg,_)) =
+      and typearg (A_aux (arg,_)) =
         match arg with
-        | Typ_arg_nexp (Nexp_aux (nexp,l) as full_nexp) ->
+        | A_nexp (Nexp_aux (nexp,l) as full_nexp) ->
            (match nexp with
             | Nexp_constant c -> string (Big_int.to_string c) (* TODO: overflow *)
             | Nexp_var v -> mk_arg v
-            | _ -> raise (Reporting_basic.err_todo l
+            | _ -> raise (Reporting.err_todo l
                             ("Unsupported nexp for generators: " ^ string_of_nexp full_nexp)))
-        | Typ_arg_order (Ord_aux (ord,_)) ->
+        | A_order (Ord_aux (ord,_)) ->
            (match ord with
             | Ord_var v -> mk_arg v
             | Ord_inc -> string "true"
             | Ord_dec -> string "false")
-        | Typ_arg_typ typ -> parens (string "fun g -> " ^^ gen_type typ)
+        | A_typ typ -> parens (string "fun g -> " ^^ gen_type typ)
       in
       let make_subgen (Typ_aux (typ,l) as full_typ) =
         let typ_str, args_pp =
           match typ with
           | Typ_id id -> type_name id, []
           | Typ_app (id,args) -> type_name id, List.map typearg args
-          | _ -> raise (Reporting_basic.err_todo l
+          | _ -> raise (Reporting.err_todo l
                           ("Unsupported type for generators: " ^ string_of_typ full_typ))
         in
         let args_pp = match args_pp with [] -> empty
@@ -807,13 +807,32 @@ let ocaml_pp_generators ctx defs orig_types required =
       in
       let make_variant (Tu_aux (Tu_ty_id (typ,id),_)) =
         let arg_typs = match typ with
-          | Typ_aux (Typ_fn (Typ_aux (Typ_tup typs,_),_,_),_) -> typs
-          | Typ_aux (Typ_fn (typ,_,_),_) -> [typ]
+          | Typ_aux (Typ_fn (typs,_,_),_) -> typs
           | Typ_aux (Typ_tup typs,_) -> typs
           | _ -> [typ]
         in
-        parens (string "fun g -> " ^^ zencode_upper ctx id ^^ space ^^
-          parens (separate_map (string ", ") make_subgen arg_typs))
+        zencode_upper ctx id ^^ space ^^
+          parens (separate_map (string ", ") make_subgen arg_typs)
+      in
+      let rand_variant variant =
+        parens (string "fun g -> " ^^ make_variant variant)
+      in
+      let variant_constructor (Tu_aux (Tu_ty_id (_,id),_)) =
+        dquotes (string (string_of_id id))
+      in
+      let build_constructor variant =
+        separate space [bar; variant_constructor variant; string "->";
+                        make_variant variant]
+      in
+      let enum_constructor id =
+        dquotes (string (string_of_id id))
+      in
+      let build_enum_constructor id =
+        separate space [bar; dquotes (string (string_of_id id)); string "->";
+                        zencode_upper ctx id]
+      in
+      let rand_field (typ,id) =
+        zencode ctx id ^^ space ^^ equals ^^ space ^^ make_subgen typ
       in
       let make_args tqs =
         string "g" ^^
@@ -823,27 +842,50 @@ let ocaml_pp_generators ctx defs orig_types required =
            space ^^
              separate_map space (fun kdid -> mk_arg (kopt_kid kdid)) kopts
       in
-      let tqs, body =
+      let tqs, body, constructors, builders =
         let TD_aux (td,(l,_)) = Bindings.find id typemap in
         match td with
-        | TD_abbrev (_,_,TypSchm_aux (TypSchm_ts (tqs,typ),_)) ->
-           tqs, gen_type typ
+        | TD_abbrev (_,tqs,A_aux (A_typ typ, _)) ->
+           tqs, gen_type typ, None, None
         | TD_variant (_,_,tqs,variants,_) ->
-           tqs, string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
-                  separate_map (string ";" ^^ break 1) make_variant variants) ^^
-                    break 0) ^^
-                    string "] in c g"
+           tqs,
+           string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
+             separate_map (string ";" ^^ break 1) rand_variant variants) ^^
+                                                      break 0) ^^
+             string "] in c g",
+           Some (separate_map (string ";" ^^ break 1) variant_constructor variants),
+           Some (separate_map (break 1) build_constructor variants)
         | TD_enum (_,_,variants,_) ->
            TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
            string "rand_choice [" ^^ group (nest 2 (break 0 ^^
              separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^
                break 0) ^^
-               string "]"
+               string "]",
+           Some (separate_map (string ";" ^^ break 1) enum_constructor variants),
+           Some (separate_map (break 1) build_enum_constructor variants)
+        | TD_record (_,_,tqs,fields,_) ->
+           tqs, braces (separate_map (string ";" ^^ break 1) rand_field fields), None, None
         | _ ->
-           raise (Reporting_basic.err_todo l "Generators for records and bitfields not yet supported")
+           raise (Reporting.err_todo l "Generators for bitfields not yet supported")
       in
-      nest 2 (separate space [string "let"; name; make_args tqs; equals] ^^ break 1 ^^
-        body) ^^ hardline
+      let name = type_name id in
+      let constructors_pp = match constructors with
+        | None -> empty
+        | Some pp ->
+           nest 2 (separate space
+                     [string "let"; string ("constructors_" ^ name); equals; lbracket] ^^
+                     break 1 ^^ pp ^^ break 1 ^^ rbracket) ^^ hardline
+      in
+      let build_pp = match builders with
+        | None -> empty
+        | Some pp ->
+           nest 2 (separate space
+                     [string "let"; string ("build_" ^ name); string "g"; string "c"; equals;
+                      string "match c with"] ^^
+                     break 1 ^^ pp) ^^ hardline
+      in
+      nest 2 (separate space [string "let"; string ("rand_" ^ name); make_args tqs; equals] ^^ break 1 ^^
+        body) ^^ hardline ^^ constructors_pp ^^ build_pp
   in
   let rand_record_pp =
     string "let rand_gens : generators = {" ^^ group (nest 2 (break 0 ^^
@@ -897,7 +939,7 @@ let ocaml_main spec sail_dir =
    @ [ "  zinitializze_registers ();";
        if !opt_trace_ocaml then "  Sail_lib.opt_trace := true;" else "  ();";
        "  Printexc.record_backtrace true;";
-       "  try zmain () with _ -> prerr_endline(\"Exiting due to uncaught exception\")\n";])
+       "  try zmain () with exn -> prerr_endline(\"Exiting due to uncaught exception:\\n\" ^ Printexc.to_string exn)\n";])
   |> String.concat "\n"
 
 let ocaml_pp_defs f defs generator_types =
@@ -936,7 +978,7 @@ let ocaml_compile spec defs generator_types =
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/" ^ tags_file ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in
-  if !opt_ocaml_coverage then 
+  if !opt_ocaml_coverage then
     ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
   ocaml_pp_defs out_chan defs generator_types;
   close_out out_chan;

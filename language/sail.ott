@@ -1,4 +1,4 @@
-%%
+%
 %% Grammar for user language. Generates ./src/ast.ml
 %%
 
@@ -169,18 +169,13 @@ kid :: '' ::=
 
 grammar
 
-base_kind :: 'BK_' ::=
+kind :: 'K_' ::=
   {{ com base kind}}
   {{ aux _ l }}
   | Type  :: :: type  {{ com kind of types  }}
   | Int   :: :: int   {{ com kind of natural number size expressions  }}
   | Order :: :: order {{ com kind of vector order specifications  }}
-
-kind :: 'K_' ::=
-  {{ com kinds}}
-  {{ aux _ l }}
-  | base_kind1 -> ... -> base_kindn            :: :: kind
-% we'll never use  ...-> Nat , .. Order , .. or Effects
+  | Bool  :: :: bool  {{ com kind of constraints }}
 
 nexp :: 'Nexp_' ::=
   {{ com numeric expression, of kind Int }}
@@ -214,8 +209,8 @@ base_effect :: 'BE_' ::=
   | wmem                                :: :: wmem {{ com write memory }}
   | wmea                                :: :: eamem {{ com signal effective address for writing memory }}
   | exmem                               :: :: exmem {{ com determine if a store-exclusive (ARM) is going to succeed }}
-  | wmv                                 :: :: wmv   {{ com write memory, sending only value }}
-  | wmvt                                :: :: wmvt  {{ com write memory, sending only value and tag }}
+  | wmv                                 :: :: wmv {{ com write memory, sending only value }}
+  | wmvt                                :: :: wmvt {{ com write memory, sending only value and tag }}
   | barr                                :: :: barr {{ com memory barrier }}
   | depend                              :: :: depend {{ com dynamic footprint }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}
@@ -226,84 +221,52 @@ base_effect :: 'BE_' ::=
 
 effect :: 'Effect_' ::=
   {{ aux _ l }}
-  | { base_effect1 , .. , base_effectn }           :: :: set {{ com effect set }}
-  | pure                                           :: M :: pure {{ com sugar for empty effect set }}
+  | { base_effect1 , .. , base_effectn } :: :: set {{ com effect set }}
+  | pure                                 :: M :: pure {{ com sugar for empty effect set }}
     {{ lem (Effect_set []) }}
 
 typ :: 'Typ_' ::=
   {{ com type expressions, of kind Type }}
   {{ aux _ l }}
-  |                                            :: :: internal_unknown
-  | id                                         :: :: id
-    {{ com defined type }}
-  | kid                                         :: :: var
-    {{ com type variable }}
-  | typ1 -> typ2 effectkw effect                        :: :: fn
-    {{ com Function (first-order only in user code) }}
-  | typ1 <-> typ2                                       :: :: bidir
-    {{ com Mapping }}
-% TODO: build first-order restriction into AST or just into type rules? neither - see note
-% TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
-  | ( typ1 , .... , typn )                          :: :: tup
-    {{ com Tuple }}
-  | exist kid1 , .. , kidn , n_constraint . typ :: :: exist
-% TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
-  | id < typ_arg1 , .. , typ_argn >                    :: :: app
-  {{ com type constructor application }}
-  | ( typ )                            :: S :: paren {{ ichlo [[typ]] }} 
-%  | range < nexp1, nexp2> :: :: range  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1 }}
-  | [| nexp |]             :: S :: range1 {{ichlo range <[[nexp]], 0> }} {{ com sugar for \texttt{range<0, nexp>} }}
-  | [| nexp : nexp' |]  :: S :: range2 {{ichlo range <[[nexp]],[[nexp']]> }} {{ com sugar for \texttt{range< nexp, nexp'>} }}
-% | atom < nexp > :: :: atom {{ com equivalent to range<nexp,nexp> }}
-  | [: nexp :]            :: S :: atom1 {{ichlo atom <[[nexp]]> }} {{ com sugar for \texttt{atom<nexp>}=\texttt{range<nexp,nexp>} }}
-% use .. not - to avoid ambiguity with nexp -
-% total maps and vectors indexed by finite subranges of nat
-%  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
-% probably some sugar for vector types, using [ ] similarly to enums:
-% (but with .. not : in the former, to avoid confusion...)
-  | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} 
-{{ com sugar for vector indexed by \texttt{[|} $[[nexp]]$ \texttt{|]} }}
-  | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} 
-{{ com sugar for vector indexed by \texttt{[|} $[[nexp]]$..$[[nexp']]$ \texttt{|]} }}
-  | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector }}
-  | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector }}
-%  | register [ id ] :: S :: register {{ ichlo (Typ_app Id "lteq_atom_atom") }}
-% ...so bit [ nexp ] etc is just an instance of that
-%  | List < typ > :: :: list {{ com list of [[typ]] }}
-%  | Set < typ >  :: :: set  {{ com finite set of [[typ]] }}
-%  | Reg < typ > :: :: reg  {{ com mutable register components holding [[typ]] }}
-% "reg t" is basically the ML "t ref" 
-% not sure how first-class it should be, though
-% use "reg word32" etc for the types of vanilla registers 
+  |                                               :: :: internal_unknown
+  | id                                            :: :: id {{ com defined type }}
+  | kid                                           :: :: var {{ com type variable }}
+  | ( typ1 , ... , typn ) -> typ2 effectkw effect :: :: fn {{ com Function (first-order only) }}
+  | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
+  | ( typ1 , .... , typn )                        :: :: tup {{ com Tuple }}
+  | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
+  | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
+  | { kinded_id1 ...  kinded_idn , n_constraint . typ }
+    :: :: exist
 
-typ_arg :: 'Typ_arg_' ::=
+typ_arg :: 'A_' ::=
   {{ com type constructor arguments of all kinds }}
   {{ aux _ l }}
-  | nexp       :: :: nexp
-  | typ        :: :: typ
-  | order      :: :: order
+  | nexp         :: :: nexp
+  | typ          :: :: typ
+  | order        :: :: order
+  | n_constraint :: :: bool
 
 n_constraint :: 'NC_' ::=
   {{ com constraint over kind Int }}
   {{ aux _ l }}
-  | nexp = nexp'                                :: :: equal
-  | nexp >= nexp'                               :: :: bounded_ge
-  | nexp '<=' nexp'                             :: :: bounded_le
-  | nexp != nexp'                               :: :: not_equal
-  | kid 'IN' { num1 , ... , numn }              :: :: set
-  | n_constraint \/ n_constraint'               :: :: or
-  | n_constraint /\ n_constraint'               :: :: and
-  | true                                        :: :: true
-  | false                                       :: :: false
-
-% Note only id on the left and constants on the right in a
-% finite-set-bound, as we don't think we need anything more
+  | nexp == nexp'                    :: :: equal
+  | nexp >= nexp'                    :: :: bounded_ge
+  | nexp '<=' nexp'                  :: :: bounded_le
+  | nexp != nexp'                    :: :: not_equal
+  | kid 'IN' { num1 , ... , numn }   :: :: set
+  | n_constraint & n_constraint'     :: :: or
+  | n_constraint | n_constraint'     :: :: and
+  | id ( typ_arg0 , ... , typ_argn ) :: :: app
+  | kid                              :: :: var
+  | true                             :: :: true
+  | false                            :: :: false
 
 kinded_id :: 'KOpt_' ::=
   {{ com optionally kind-annotated identifier }}
   {{ aux _ l }}
-  | kid	 	    		   	      :: :: none {{ com identifier }}
-  | kind kid				      :: :: kind {{ com kind-annotated variable }}
+  | kind kid       :: :: kind {{ com kind-annotated variable }}
+  | kid            :: S :: none {{ ichlo [[kinded_id]] }}
 
 quant_item :: 'QI_' ::=
   {{ com kinded identifier or Int constraint }}
@@ -372,7 +335,7 @@ type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
 
 type_def_aux  :: 'TD_' ::=
   {{ com type definition body }}
-  | typedef id name_scm_opt = typschm                                        :: :: abbrev
+  | type id typquant = typ_arg                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
   | typedef id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
     {{ com struct type definition }} {{ texlong }}
@@ -388,8 +351,8 @@ type_def_aux  :: 'TD_' ::=
 kind_def :: 'KD_' ::=
   {{ com Definition body for elements of kind }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | Def kind id name_scm_opt = nexp                                           :: :: nabbrev
-    {{ com $[[Nat]]$-expression abbreviation }}
+  | Def kind id name_scm_opt = nexp :: :: nabbrev
+    {{ com Int-expression abbreviation }}
 
 type_union :: 'Tu_' ::=
   {{ com type union constructors }}
@@ -640,13 +603,9 @@ exp :: 'E_' ::=
 
   | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
   | loop exp1 exp2 :: :: loop
-  | while exp1 do exp2  ::  S :: while        {{ ichlo [[ loop while exp1 exp2 ]] }}
-  | repeat exp1 until exp2 :: S :: until     {{ ichlo [[ loop until exp2 exp1 ]] }}
+  | while exp1 do exp2  :: S :: while        {{ ichlo [[ loop while exp1 exp2 ]] }}
+  | repeat exp1 until exp2 :: S :: until      {{ ichlo [[ loop until exp2 exp1 ]] }}
   | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for {{ com loop }}
-  | foreach ( id from exp1 to exp2 by exp3 ) exp4           :: S :: forup {{ ichlo [[ foreach id from exp1 to exp2 by exp3 in inc exp4 ]] }}
-  | foreach ( id from exp1 to exp2 ) exp3                   :: S :: forupbyone  {{ ichlo [[ foreach id from exp1 to exp2 by 1 in inc exp4 ]] }}
-  | foreach ( id from exp1 downto exp2 by exp3 ) exp4       :: S :: fordown {{ ichlo [[ foreach id from exp1 to exp2 by exp3 in dec exp4 ]] }}
-  | foreach ( id from exp1 downto exp2 ) exp3               :: S :: fordownbyone  {{ ichlo [[ foreach id from exp1 downto exp2 by 1 in dec exp4 ]] }}
 
 % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
@@ -689,11 +648,11 @@ exp :: 'E_' ::=
 
 % TODO
 
-  | { fexps }                                         :: :: record
+  | { fexp0 , ... , fexpn }                    :: :: record
     {{ com struct }}
-  | { exp with fexps }                                :: :: record_update
+  | { exp with fexp0 , ... , fexpn }           :: :: record_update
     {{ com functional update of struct }}
-  | exp . id                                          :: :: field
+  | exp . id                                   :: :: field
     {{ com field projection from struct  }}
 
 %Expressions for creating and accessing vectors
@@ -742,34 +701,26 @@ exp :: 'E_' ::=
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
-    | id                                                  :: :: id {{ com identifier }}
-    | deref exp                                           :: :: deref
-    | id ( exp1 , .. , expn )				  :: :: memory {{ com memory or register write via function call }}
-    | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
-{{ com sugared form of above for explicit tuple $[[exp]]$ }}
-    | ( typ ) id					  :: :: cast
-{{ com cast }}
-    | ( lexp0 , .. , lexpn )                              :: :: tup {{ com multiple (non-memory) assignment }}
-    | lexp1 @ ... @ lexpn                                 :: :: vector_concat {{ com vector concatenation L-exp }}
-    | lexp [ exp ]                                        :: :: vector  {{ com vector element }}
-    | lexp [ exp1 '..' exp2 ]                             :: :: vector_range {{ com subvector }}
-    | lexp . id                                           :: :: field {{ com struct field }}
+    | id                      :: :: id {{ com identifier }}
+    | deref exp               :: :: deref
+    | id ( exp1 , .. , expn ) :: :: memory {{ com memory or register write via function call }}
+    | ( typ ) id	      :: :: cast
+    | ( lexp0 , .. , lexpn )  :: :: tup {{ com multiple (non-memory) assignment }}
+    | lexp1 @ ... @ lexpn     :: :: vector_concat {{ com vector concatenation L-exp }}
+    | lexp [ exp ]            :: :: vector  {{ com vector element }}
+    | lexp [ exp1 '..' exp2 ] :: :: vector_range {{ com subvector }}
+    | lexp . id               :: :: field {{ com struct field }}
 
 fexp :: 'FE_' ::=
   {{ com field expression }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id = exp                                            :: :: Fexp
-
-fexps :: 'FES_' ::=
-  {{ com field expression list }}
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
+  | id = exp                  :: :: Fexp
 
 opt_default :: 'Def_val_' ::=
   {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 
   {{ aux _ annot }} {{ auxparam 'a }}
-  |                                                     :: :: empty
-  | ; default = exp                                       :: :: dec
+  |                           :: :: empty
+  | ; default = exp           :: :: dec
 
 pexp :: 'Pat_' ::=
   {{ com pattern match }}
@@ -858,9 +809,11 @@ tannot_opt :: 'Typ_annot_opt_' ::=
 
 rec_opt :: 'Rec_' ::=
   {{ com optional recursive annotation for functions }}
+  {{ auxparam 'a }}
   {{ aux _ l }}
   |                                             :: :: nonrec {{ com non-recursive }}
-  | rec                                         :: :: rec {{ com recursive }}
+  | rec                                         :: :: rec {{ com recursive without termination measure }}
+  | { pat -> exp }                              :: :: measure {{ com recursive with termination measure }}
 
 effect_opt :: 'Effect_opt_' ::=
   {{ com optional effect annotation for functions }}
@@ -965,18 +918,23 @@ default_spec :: 'DT_' ::=
 scattered_def :: 'SD_' ::=
   {{ com scattered function and union type definitions }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | scattered function rec_opt tannot_opt effect_opt id   :: :: scattered_function 
+  | scattered function rec_opt tannot_opt effect_opt id   :: :: function
 {{ texlong }} {{ com scattered function definition header }}
 
-  | function clause funcl  :: :: scattered_funcl  
+  | function clause funcl  :: :: funcl
 {{ texlong }} {{ com scattered function definition clause }}
 
-  | scattered typedef id name_scm_opt = const union typquant :: :: scattered_variant 
+  | scattered typedef id name_scm_opt = const union typquant :: :: variant
 {{ texlong }} {{ com scattered union definition header }}
 
-  | union id member type_union  :: :: scattered_unioncl 
+  | union id member type_union :: :: unioncl
 {{ texlong }} {{ com scattered union definition member }}
-  | end id  :: :: scattered_end
+
+  | scattered mapping id : tannot_opt :: :: mapping
+
+  | mapping clause id = mapcl :: :: mapcl
+
+  | end id  :: :: end
 {{ texlong }} {{ com scattered definition end }}
 
 reg_id :: 'RI_' ::=
@@ -1012,30 +970,32 @@ prec :: '' ::=
 def :: 'DEF_' ::=
   {{ com top-level definition }}
   {{ auxparam 'a }}
-  | kind_def                                         :: :: kind
+  | kind_def                                           :: :: kind
     {{ com definition of named kind identifiers }}
-  | type_def                                         :: :: type
+  | type_def                                           :: :: type
     {{ com type definition }}
-  | fundef                                           :: :: fundef
+  | fundef                                             :: :: fundef
     {{ com function definition }}
-  | mapdef                                           :: :: mapdef
+  | mapdef                                             :: :: mapdef
     {{ com mapping definition }}
-  | letbind                                          :: :: val
+  | letbind                                            :: :: val
     {{ com value definition }}
-  | val_spec                                         :: :: spec
+  | val_spec                                           :: :: spec
     {{ com top-level type constraint }}
-  | fix prec num id                                  :: :: fixity
+  | fix prec num id                                    :: :: fixity
     {{ com fixity declaration }}
-  |  overload id [ id1 ; ... ; idn ]                 :: :: overload
+  |  overload id [ id1 ; ... ; idn ]                   :: :: overload
     {{ com operator overload specification }}
-  | default_spec                                     :: :: default
+  | default_spec                                       :: :: default
     {{ com default kind and type assumptions }}
-  | scattered_def                                    :: :: scattered
+  | scattered_def                                      :: :: scattered
     {{ com scattered function and type definition }}
-  | dec_spec                                         :: :: reg_dec
+  | dec_spec                                           :: :: reg_dec
     {{ com register declaration }}
-  | fundef1 .. fundefn                               :: I :: internal_mutrec
+  | fundef1 .. fundefn                                 :: I :: internal_mutrec
     {{ com internal representation of mutually recursive functions }}
+  | $ string1 string2 l                                :: :: pragma
+    {{ com compiler directive }}
 
 defs :: '' ::=
   {{ com definition sequence }}

@@ -110,13 +110,18 @@ register mstatus : Mstatus
 
 function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   let m : Mstatus = Mk_Mstatus(v);
+
   /* We don't have any extension context yet. */
   let m = update_XS(m, extStatus_to_bits(Off));
+  let m = update_FS(m, extStatus_to_bits(Off));
+
   let m = update_SD(m, extStatus_of_bits(m.FS()) == Dirty
                      | extStatus_of_bits(m.XS()) == Dirty);
+
   /* For now, we don't allow SXL and UXL to be changed, for Spike compatibility. */
   let m = update_SXL(m, o.SXL());
   let m = update_UXL(m, o.UXL());
+
   /* Hardwired to zero in the absence of 'N'. */
   let m = update_UPIE(m, false);
   let m = update_UIE(m, false);
@@ -375,13 +380,17 @@ function lower_mstatus(m : Mstatus) -> Sstatus = {
 }
 
 function lift_sstatus(m : Mstatus, s : Sstatus) -> Mstatus = {
-  let m = update_SD(m, s.SD());
   // FIXME: This should be parameterized by a platform setting.  For now, match spike.
   // let m = update_UXL(m, s.UXL());
   let m = update_MXR(m, s.MXR());
   let m = update_SUM(m, s.SUM());
+
+  // FIXME: Should XS and FS check whether X and F|D are supported in misa?
   let m = update_XS(m, s.XS());
   let m = update_FS(m, s.FS());
+  let m = update_SD(m, extStatus_of_bits(m.FS()) == Dirty
+                     | extStatus_of_bits(m.XS()) == Dirty);
+
   let m = update_SPP(m, s.SPP());
   let m = update_SPIE(m, s.SPIE());
   let m = update_UPIE(m, s.UPIE());
@@ -836,14 +845,14 @@ function curInterrupt(priv : Privilege, pend : Minterrupts, enbl : Minterrupts, 
       let p = if pend.MTI() == true then "1" else "0";
       let e = if enbl.MTI() == true then "1" else "0";
       let d = if delg.MTI() == true then "1" else "0";
-      print(" MTI: pend=" ^ p ^ " enbl=" ^ e ^ " delg=" ^ d);
+      print_platform(" MTI: pend=" ^ p ^ " enbl=" ^ e ^ " delg=" ^ d);
       let eff_mip = en_mip & (~ (delg.bits())); /* retained at M-mode */
       let eff_sip = en_mip & delg.bits();       /* delegated to S-mode */
-      print("mstatus=" ^ BitStr(mstatus.bits())
-            ^ " mie,sie=" ^ BitStr(mstatus.MIE()) ^ "," ^ BitStr(mstatus.SIE())
-            ^ " en_mip=" ^ BitStr(en_mip)
-            ^ " eff_mip=" ^ BitStr(eff_mip)
-            ^ " eff_sip=" ^ BitStr(eff_sip));
+      print_platform("mstatus=" ^ BitStr(mstatus.bits())
+                     ^ " mie,sie=" ^ BitStr(mstatus.MIE()) ^ "," ^ BitStr(mstatus.SIE())
+                     ^ " en_mip=" ^ BitStr(en_mip)
+                     ^ " eff_mip=" ^ BitStr(eff_mip)
+                     ^ " eff_sip=" ^ BitStr(eff_sip));
       None()
     }
   }
@@ -870,11 +879,21 @@ union ctl_result = {
 /* TODO: CTL_URET */
 }
 
+$ifdef RVFI_DII
+val rvfi_trap : unit -> unit effect {wreg}
+function rvfi_trap () =
+  rvfi_exec->rvfi_trap() = 0x01
+$else
+val rvfi_trap : unit -> unit
+function rvfi_trap () = ()
+$endif
+
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
 
 function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits))
                     -> xlenbits = {
-  print("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
+  rvfi_trap();
+  print_platform("handling " ^ (if intr then "int#" else "exc#") ^ BitStr(c) ^ " at priv " ^ del_priv ^ " with tval " ^ BitStr(tval(info)));
 
   match (del_priv) {
     Machine => {
@@ -889,7 +908,7 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        cur_privilege   = del_priv;
 
-       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+       print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
 
        cancel_reservation();
 
@@ -914,7 +933,7 @@ function handle_trap(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenb
 
        cur_privilege   = del_priv;
 
-       print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+       print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
 
        cancel_reservation();
 
@@ -933,8 +952,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       let del_priv = exception_delegatee(e.trap, cur_priv);
-      print("trapping from " ^ cur_priv ^ " to " ^ del_priv
-            ^ " to handle " ^ e.trap);
+      print_platform("trapping from " ^ cur_priv ^ " to " ^ del_priv
+                     ^ " to handle " ^ e.trap);
       handle_trap(del_priv, false, e.trap, pc, e.excinfo)
     },
     (_, CTL_MRET())  => {
@@ -944,8 +963,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(User);
 
-      print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
-      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
+      print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+      print_platform("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
 
       cancel_reservation();
       mepc & pc_alignment_mask()
@@ -957,8 +976,8 @@ function handle_exception(cur_priv : Privilege, ctl : ctl_result,
       cur_privilege   = if mstatus.SPP() == true then Supervisor else User;
       mstatus->SPP()  = false;
 
-      print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
-      print("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
+      print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(mstatus.bits()) ^ ")"); // Spike compatible log
+      print_platform("ret-ing from " ^ prev_priv ^ " to " ^ cur_privilege);
 
       cancel_reservation();
       sepc & pc_alignment_mask()
@@ -972,20 +991,8 @@ function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
   nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
 }
 
-function handle_decode_exception(instbits : xlenbits) -> unit = {
-  let t : sync_exception = struct { trap    = E_Illegal_Instr,
-                                    excinfo = Some(instbits) };
-  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
-}
-
 function handle_interrupt(i : InterruptType, del_priv : Privilege) -> unit =
   nextPC = handle_trap(del_priv, true, i, PC, None())
-
-function handle_illegal() -> unit = {
-  let t : sync_exception = struct { trap    = E_Illegal_Instr,
-                                    excinfo = None() };
-  nextPC = handle_exception(cur_privilege, CTL_TRAP(t), PC)
-}
 
 /* state state initialization */
 
@@ -1026,7 +1033,7 @@ function init_sys() -> unit = {
   minstret_written   = false;
 
   // log compatibility with spike
-  print("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(EXTZ(0b0) : xlenbits) ^ ")")
+  print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()) ^ " (input: " ^ BitStr(EXTZ(0b0) : xlenbits) ^ ")")
 }
 
 /* memory access exceptions, defined here for use by the platform model. */

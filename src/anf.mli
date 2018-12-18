@@ -96,7 +96,7 @@ and 'a aval =
   | AV_list of ('a aval) list * 'a
   | AV_vector of ('a aval) list * 'a
   | AV_record of ('a aval) Bindings.t * 'a
-  | AV_C_fragment of fragment * 'a
+  | AV_C_fragment of fragment * 'a * ctyp
 
 val gensym : unit -> id
 

@@ -5,8 +5,6 @@ $include <flow.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
-val eq_bit = { lem : "eq", _ : "eq_bit" } : (bit, bit) -> bool
-
 val eq_bits = {
   ocaml: "eq_list",
   lem: "eq_vec",
@@ -37,11 +35,24 @@ val sail_sign_extend = "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('
 
 val sail_zero_extend = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 
+/*!
+THIS`(v, n)` truncates `v`, keeping only the _least_ significant `n` bits.
+ */
 val truncate = {
   ocaml: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
   c: "sail_truncate"
+} : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
+
+/*!
+THIS`(v, n)` truncates `v`, keeping only the _most_ significant `n` bits.
+ */
+val truncateLSB = {
+  ocaml: "vector_truncateLSB",
+  lem: "vector_truncateLSB",
+  coq: "vector_truncateLSB",
+  c: "sail_truncateLSB"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, dec, bit), atom('m)) -> vector('m, dec, bit)
 
 val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, dec, bit)) -> vector('len, dec, bit)
@@ -63,7 +74,7 @@ val bitvector_access = {
   lem: "access_vec_dec",
   coq: "access_vec_dec",
   c: "vector_access"
-} : forall ('n : Int), 'n >= 0. (bits('n), int) -> bit
+} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 
 val plain_vector_access = {
   ocaml: "access",
@@ -79,14 +90,14 @@ val bitvector_update = {
   lem: "update_vec_dec",
   coq: "update_vec_dec",
   c: "vector_update"
-} : forall 'n, 'n >= 0. (bits('n), int, bit) -> bits('n)
+} : forall 'n 'm, 0 <= 'm < 'n. (bits('n), atom('m), bit) -> bits('n)
 
 val plain_vector_update = {
   ocaml: "update",
   lem: "update_list_dec",
   coq: "vec_update_dec",
   c: "vector_update"
-} : forall 'n ('a : Type). (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
+} : forall 'n 'm ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), atom('m), 'a) -> vector('n, dec, 'a)
 
 overload vector_update = {bitvector_update, plain_vector_update}
 
@@ -119,7 +130,7 @@ val vector_update_subrange = {
   lem: "update_subrange_vec_dec",
   c: "vector_update_subrange",
   coq: "update_subrange_vec_dec"
-} : forall 'n 'm 'o. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+} : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
 // Some ARM specific builtins
 
@@ -135,6 +146,9 @@ val slice = "slice" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm & 0 <= 'n.
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
+/*!
+converts a bit vector of length $n$ to an integer in the range $0$ to $2^n - 1$.
+ */
 val unsigned = {
   ocaml: "uint",
   lem: "uint",
@@ -144,6 +158,9 @@ val unsigned = {
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 /* We need a non-empty vector so that the range makes sense */
+/*!
+converts a bit vector of length $n$ to an integer in the range $-2^{n-1}$ to $2^{n-1} - 1$ using twos-complement.
+ */
 val signed = {
   c: "sail_signed",
   _: "sint"

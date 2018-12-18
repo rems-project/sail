@@ -160,6 +160,8 @@ let update_subrange (xs, n, m, ys) =
 
 let vector_truncate (xs, n) = List.rev (take (Big_int.to_int n) (List.rev xs))
 
+let vector_truncateLSB (xs, n) = take (Big_int.to_int n) xs
+
 let length xs = Big_int.of_int (List.length xs)
 
 let big_int_of_bit = function
@@ -359,6 +361,14 @@ let int_of_bit = function
   | B0 -> 0
   | B1 -> 1
 
+let bool_of_bit = function
+  | B0 -> false
+  | B1 -> true
+
+let bit_of_bool = function
+  | false -> B0
+  | true -> B1
+
 let bigint_of_bit b = Big_int.of_int (int_of_bit b)
 
 let string_of_hex = function
@@ -530,6 +540,13 @@ let string_startswith (str1, str2) = String.length str1 >= String.length str2 &&
 
 let string_drop (str, n) = if (Big_int.less_equal (Big_int.of_int (String.length str)) n) then "" else let n = Big_int.to_int n in String.sub str n (String.length str - n)
 
+let string_take (str, n) =
+  let n = Big_int.to_int n in
+  if String.length str <= n then
+    str
+  else
+    String.sub str 0 n
+
 let string_length str = Big_int.of_int (String.length str)
 
 let string_append (s1, s2) = s1 ^ s2
@@ -571,19 +588,48 @@ let gteq_real (x, y) = Rational.geq x y
 let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
 let negate_real x = Rational.neg x
 
-let print_real (str, r) = print_string "REAL\n"
-let prerr_real (str, r) = prerr_string "REAL\n"
+let string_of_real x =
+  if Big_int.equal (Rational.den x) (Big_int.of_int 1) then
+    Big_int.to_string (Rational.num x)
+  else
+    Big_int.to_string (Rational.num x) ^ "/" ^ Big_int.to_string (Rational.den x)
 
-let round_down x = Rational.floor x (* Num.big_int_of_num (Num.floor_num x) *)
-let round_up x = Rational.ceiling x (* Num.big_int_of_num (Num.ceiling_num x) *)
+let print_real (str, r) = print_endline (str ^ string_of_real r)
+let prerr_real (str, r) = prerr_endline (str ^ string_of_real r)
+
+let round_down x = Rational.floor x
+let round_up x = Rational.ceiling x
 let quotient_real (x, y) = Rational.div x y
-let mult_real (x, y) = Rational.mul x y (* Num.mult_num x y *)
-let real_power (x, y) = failwith "real_power" (* Num.power_num x (Num.num_of_big_int y) *)
+let div_real (x, y) = Rational.div x y
+let mult_real (x, y) = Rational.mul x y
+let real_power (x, y) = failwith "real_power"
 let int_power (x, y) = Big_int.pow_int x (Big_int.to_int y)
 let add_real (x, y) = Rational.add x y
 let sub_real (x, y) = Rational.sub x y
 
 let abs_real x = Rational.abs x
+
+let sqrt_real x =
+  let precision = 30 in
+  let s = Big_int.sqrt (Rational.num x) in
+  if Big_int.equal (Rational.den x) (Big_int.of_int 1) && Big_int.equal (Big_int.mul s s) (Rational.num x) then
+    to_real s
+  else
+    let p = ref (to_real (Big_int.sqrt (Big_int.div (Rational.num x) (Rational.den x)))) in
+    let n = ref (Rational.of_int 0) in
+    let convergence = ref (Rational.div (Rational.of_int 1) (Rational.of_big_int (Big_int.pow_int_positive 10 precision))) in
+    let quit_loop = ref false in
+    while not !quit_loop do
+      n := Rational.div (Rational.add !p (Rational.div x !p)) (Rational.of_int 2);
+
+      if Rational.lt (Rational.abs (Rational.sub !p !n)) !convergence then
+        quit_loop := true
+      else
+        p := !n
+    done;
+    !n
+
+let random_real () = Rational.div (Rational.of_int (Random.bits ())) (Rational.of_int (Random.bits()))
 
 let lt (x, y) = Big_int.less x y
 let gt (x, y) = Big_int.greater x y
@@ -612,9 +658,6 @@ let real_of_string str =
      Rational.add whole frac
   | [whole] -> Rational.of_int (int_of_string str)
   | _ -> failwith "invalid real literal"
-
-(* Not a very good sqrt implementation *)
-let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt (Num.float_of_num x))) *)
 
 let print str = Pervasives.print_string str
 
@@ -703,28 +746,6 @@ let speculate_conditional_success () = true
 
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
-
-let rec n_leading_spaces s =
-  match String.length s with
-  | 0 -> 0
-  | 1 -> begin match s with
-         | " " -> 1
-         | _ -> 0
-         end
-  | len -> begin match String.get s 0 with
-           | ' ' -> 1 + (n_leading_spaces (String.sub s 1 (len - 1)))
-           | _ -> 0
-           end
-
-
-let opt_spc_matches_prefix s =
-  ZSome ((), n_leading_spaces s |> Big_int.of_int)
-
-let spc_matches_prefix s =
-  let n = n_leading_spaces s in
-  match n with
-  | 0 -> ZNone ()
-  | n -> ZSome ((), Big_int.of_int n)
 
 (* Python:
 f = """let hex_bits_{0}_matches_prefix s =
@@ -1124,10 +1145,10 @@ let cycle_count () = ()
 
 (* TODO range, atom, register(?), int, nat, bool, real(!), list, string, itself(?) *)
 let rand_zvector (g : 'generators) (size : int) (order : bool) (elem_gen : 'generators -> 'a) : 'a list =
-  List.init size (fun _ -> elem_gen g)
+  Util.list_init size (fun _ -> elem_gen g)
 
 let rand_zbit (g : 'generators) : bit =
-  if Random.bool() then B0 else B1
+  bit_of_bool (Random.bool())
 
 let rand_zbool (g : 'generators) : bool =
   Random.bool()

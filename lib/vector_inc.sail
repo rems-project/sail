@@ -61,7 +61,7 @@ val bitvector_access = {
   lem: "access_vec_inc",
   coq: "access_vec_inc",
   c: "vector_access"
-} : forall ('n : Int), 'n >= 0. (bits('n), int) -> bit
+} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 
 val plain_vector_access = {
   ocaml: "access",
@@ -77,14 +77,14 @@ val bitvector_update = {
   lem: "update_vec_inc",
   coq: "update_vec_inc",
   c: "vector_update"
-} : forall 'n, 'n >= 0. (bits('n), int, bit) -> bits('n)
+} : forall 'n 'm, 0 <= 'm < 'n. (bits('n), atom('m), bit) -> bits('n)
 
 val plain_vector_update = {
   ocaml: "update",
   lem: "update_list_inc",
   coq: "update_list_inc",
   c: "vector_update"
-} : forall 'n ('a : Type). (vector('n, inc, 'a), int, 'a) -> vector('n, inc, 'a)
+} : forall 'n 'm ('a : Type), 0 <= 'm < 'n. (vector('n, inc, 'a), atom('m), 'a) -> vector('n, inc, 'a)
 
 overload vector_update = {bitvector_update, plain_vector_update}
 
@@ -113,7 +113,7 @@ val vector_update_subrange = {
   lem: "update_subrange_vec_inc",
   c: "vector_update_subrange",
   coq: "update_subrange_vec_inc"
-} : forall 'n 'm 'o. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+} : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
 // Some ARM specific builtins
 

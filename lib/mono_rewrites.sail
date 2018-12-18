@@ -63,7 +63,7 @@ function slice_slice_concat (xs, i, l, ys, i', l') = {
   extzv(xs) << l' | extzv(ys)
 }
 
-val slice_zeros_concat : forall 'n 'p 'q 'r, 'r = 'p + 'q & 'n >= 0 & 'p >= 0 & 'q >= 0 & 'r >= 0.
+val slice_zeros_concat : forall 'n 'p 'q 'r, 'r == 'p + 'q & 'n >= 0 & 'p >= 0 & 'q >= 0 & 'r >= 0.
   (bits('n), int, atom('p), atom('q)) -> bits('r) effect pure
 
 function slice_zeros_concat (xs, i, l, l') = {
@@ -82,7 +82,7 @@ function subrange_subrange_eq (xs, i, j, ys, i', j') = {
   xs == ys
 }
 
-val subrange_subrange_concat : forall 'n 'o 'p 'm 'q 'r 's, 's = 'o - ('p - 1) + 'q - ('r - 1) & 'n >= 0 & 'm >= 0.
+val subrange_subrange_concat : forall 'n 'o 'p 'm 'q 'r 's, 's >= 0 & 'n >= 0 & 'm >= 0.
   (bits('n), atom('o), atom('p), bits('m), atom('q), atom('r)) -> bits('s) effect pure
 
 function subrange_subrange_concat (xs, i, j, ys, i', j') = {

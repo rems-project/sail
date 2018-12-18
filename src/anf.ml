@@ -57,9 +57,6 @@ open PPrint
 
 module Big_int = Nat_big_num
 
-let anf_error ?loc:(l=Parse_ast.Unknown) message =
-  raise (Reporting_basic.err_general l ("\nANF translation: " ^ message))
-
 (**************************************************************************)
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
@@ -130,7 +127,7 @@ and 'a aval =
   | AV_list of ('a aval) list * 'a
   | AV_vector of ('a aval) list * 'a
   | AV_record of ('a aval) Bindings.t * 'a
-  | AV_C_fragment of fragment * 'a
+  | AV_C_fragment of fragment * 'a * ctyp
 
 (* Renaming variables in ANF expressions *)
 
@@ -186,7 +183,7 @@ let rec aval_rename from_id to_id = function
   | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
   | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
   | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
-  | AV_C_fragment (fragment, typ) -> AV_C_fragment (frag_rename from_id to_id fragment, typ)
+  | AV_C_fragment (fragment, typ, ctyp) -> AV_C_fragment (frag_rename from_id to_id fragment, typ, ctyp)
 
 let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
   let recur = aexp_rename from_id to_id in
@@ -426,7 +423,8 @@ and pp_aval = function
   | AV_id (id, lvar) -> pp_lvar lvar (pp_id id)
   | AV_tuple avals -> parens (separate_map (comma ^^ space) pp_aval avals)
   | AV_ref (id, lvar) -> string "ref" ^^ space ^^ pp_lvar lvar (pp_id id)
-  | AV_C_fragment (frag, typ) -> pp_annot typ (string (string_of_fragment frag |> Util.cyan |> Util.clear))
+  | AV_C_fragment (frag, typ, ctyp) ->
+     pp_annot typ (string ("(" ^ string_of_ctyp ctyp ^ ")" ^ string_of_fragment frag |> Util.cyan |> Util.clear))
   | AV_vector (avals, typ) ->
      pp_annot typ (string "[" ^^ separate_map (comma ^^ space) pp_aval avals ^^ string "]")
   | AV_list (avals, typ) ->
@@ -453,23 +451,26 @@ let rec split_block l = function
   | exp :: exps ->
      let exps, last = split_block l exps in
      exp :: exps, last
-  | [] -> anf_error ~loc:l "empty block"
+  | [] ->
+     raise (Reporting.err_unreachable l __POS__ "empty block found when converting to ANF")
 
 let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   let mk_apat aux = AP_aux (aux, env_of_annot annot, fst annot) in
   match p_aux with
-  | P_id id when global -> mk_apat (AP_global (id, pat_typ_of pat))
-  | P_id id -> mk_apat (AP_id (id, pat_typ_of pat))
-  | P_wild -> mk_apat (AP_wild (pat_typ_of pat))
+  | P_id id when global -> mk_apat (AP_global (id, typ_of_pat pat))
+  | P_id id -> mk_apat (AP_id (id, typ_of_pat pat))
+  | P_wild -> mk_apat (AP_wild (typ_of_pat pat))
   | P_tup pats -> mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats))
-  | P_app (id, [subpat]) -> mk_apat (AP_app (id, anf_pat ~global:global subpat, pat_typ_of pat))
-  | P_app (id, pats) -> mk_apat (AP_app (id, mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats)), pat_typ_of pat))
+  | P_app (id, [subpat]) -> mk_apat (AP_app (id, anf_pat ~global:global subpat, typ_of_pat pat))
+  | P_app (id, pats) -> mk_apat (AP_app (id, mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats)), typ_of_pat pat))
   | P_typ (_, pat) -> anf_pat ~global:global pat
   | P_var (pat, _) -> anf_pat ~global:global pat
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global:global hd_pat, anf_pat ~global:global tl_pat))
-  | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (pat_typ_of pat)))
-  | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (pat_typ_of pat))
-  | _ -> anf_error ~loc:(fst annot) ("Could not convert pattern to ANF: " ^ string_of_pat pat)
+  | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (typ_of_pat pat)))
+  | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
+  | _ ->
+     raise (Reporting.err_unreachable (fst annot) __POS__
+       ("Could not convert pattern to ANF: " ^ string_of_pat pat))
 
 let rec apat_globals (AP_aux (aux, _, _)) =
   match aux with
@@ -510,7 +511,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
 
   | E_block [] ->
-     Util.warn (Reporting_basic.loc_to_string l
+     Util.warn (Reporting.loc_to_string l
                 ^ "\n\nTranslating empty block (possibly assigning to an uninitialized variable at the end of a block?)");
      mk_aexp (ae_lit (L_aux (L_unit, l)) (typ_of exp))
   | E_block exps ->
@@ -529,7 +530,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      mk_aexp (AE_assign (id, lvar_typ (Env.lookup_id id (env_of exp)), aexp))
 
   | E_assign (lexp, _) ->
-     failwith ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
+     raise (Reporting.err_unreachable l __POS__
+       ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
 
   | E_loop (loop_typ, cond, exp) ->
      let acond = anf cond in
@@ -567,7 +569,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let aval, wrap = to_aval (anf field_exp) in
      wrap (mk_aexp (AE_field (aval, id, typ_of exp)))
 
-  | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record_update (exp, fexps) ->
      let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap
@@ -665,7 +667,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      mk_aexp (AE_let (Mutable, id, lvar_typ lvar, anf binding, anf body, typ_of exp))
 
   | E_var (lexp, _, _) ->
-     failwith ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
+     raise (Reporting.err_unreachable l __POS__
+       ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
 
   | E_let (LB_aux (LB_val (pat, binding), _), body) ->
      anf (E_aux (E_case (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), exp_annot))
@@ -676,7 +679,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
      wrap (mk_aexp (AE_val (AV_tuple (List.map fst avals))))
 
-  | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
+  | E_record fexps ->
      let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap
@@ -690,19 +693,19 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
      (* Should be re-written by type checker *)
-     failwith "encountered raw vector operation when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered raw vector operation when converting to ANF")
 
   | E_internal_value _ ->
      (* Interpreter specific *)
-     failwith "encountered E_internal_value when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered E_internal_value when converting to ANF")
 
   | E_sizeof _ | E_constraint _ ->
      (* Sizeof nodes removed by sizeof rewriting pass *)
-     failwith "encountered E_sizeof or E_constraint node when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered E_sizeof or E_constraint node when converting to ANF")
 
   | E_nondet _ ->
      (* We don't compile E_nondet nodes *)
-     failwith "encountered E_nondet node when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered E_nondet node when converting to ANF")
 
   | E_internal_return _ | E_internal_plet _ ->
-     failwith "encountered unexpected internal node when converting to ANF"
+     raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")

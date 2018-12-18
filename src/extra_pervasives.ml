@@ -49,4 +49,4 @@
 (**************************************************************************)
 
 let unreachable l pos msg =
-  raise (Reporting_basic.err_unreachable l pos msg)
+  raise (Reporting.err_unreachable l pos msg)

@@ -1,29 +1,3 @@
-/* Instruction definitions.
- *
- * This includes decoding, execution, and assembly parsing and printing.
- */
-
-scattered union ast
-
-val decode : bits(32) -> option(ast) effect pure
-
-val decodeCompressed : bits(16) -> option(ast) effect pure
-
-val cast print_insn : ast -> string
-
-/* returns whether an instruction was retired, used for computing minstret */
-val execute : ast -> bool effect {escape, wreg, rreg, wmv, eamem, rmem, barr, exmem}
-scattered function execute
-
-val assembly : ast <-> string
-scattered mapping assembly
-
-val encdec : ast <-> bits(32)
-scattered mapping encdec
-
-val encdec_compressed : ast <-> bits(16)
-scattered mapping encdec_compressed
-
 /* ****************************************************************** */
 union clause ast = UTYPE : (bits(20), regbits, uop)
 
@@ -72,12 +46,16 @@ but this is difficult
 
 function clause execute (RISCV_JAL(imm, rd)) = {
   let pc : xlenbits = PC;
-  X(rd) = nextPC;  /* compatible with JAL and C.JAL */
-  let offset : xlenbits = EXTS(imm);
-  nextPC = pc + offset;
-  true
+  let newPC : xlenbits = pc + EXTS(imm);
+  if newPC[1] & (~ (haveRVC())) then {
+    handle_mem_exception(newPC, E_Fetch_Addr_Align);
+    false
+  } else {
+    X(rd) = nextPC;  /* compatible with JAL and C.JAL */
+    nextPC = newPC;
+    true
+  }
 }
-
 /* TODO: handle 2-byte-alignment in mappings */
 
 mapping clause assembly = RISCV_JAL(imm, rd) <-> "jal" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_21(imm)
@@ -87,24 +65,10 @@ union clause ast = RISCV_JALR : (bits(12), regbits, regbits)
 
 mapping clause encdec = RISCV_JALR(imm, rs1, rd) <-> imm @ rs1 @ 0b000 @ rd @ 0b1100111
 
-function clause execute (RISCV_JALR(imm, rs1, rd)) = {
-  /* write rd before anything else to prevent unintended strength */
-  X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
-  let newPC : xlenbits = X(rs1) + EXTS(imm);
-/*  RMEM FIXME: For the sequential model, the above definition doesn't work directly
-    if rs1 = rd.  We would effectively have to keep a regfile for reads and another for
-    writes, and swap on instruction fetch.  This could perhaps be optimized in
-    some manner, but for now, we just reorder the previous two lines to improve simulator
-    performance in the sequential model, as below:
-  let newPC : xlenbits = X(rs1) + EXTS(imm);
-  X(rd) = nextPC; /* compatible with JALR, C.JR and C.JALR */
-*/
-  nextPC = newPC[63..1] @ 0b0;
-  true
-}
-
 mapping clause assembly = RISCV_JALR(imm, rs1, rd)
                       <-> "jalr" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
+
+/* see riscv_jalr_seq.sail or riscv_jalr_rmem.sail for the execute clause. */
 
 /* ****************************************************************** */
 union clause ast = BTYPE : (bits(13), regbits, regbits, bop)
@@ -132,8 +96,16 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) = {
     RISCV_BLTU => rs1_val <_u rs2_val,
     RISCV_BGEU => rs1_val >=_u rs2_val
   };
-  if taken then nextPC = PC + EXTS(imm);
-  true
+  let newPC = PC + EXTS(imm);
+  if taken then {
+    if newPC[1] & (~ (haveRVC())) then {
+      handle_mem_exception(newPC, E_Fetch_Addr_Align);
+      false;
+    } else {
+      nextPC = newPC;
+      true
+    }
+  } else true
 }
 
 mapping btype_mnemonic : bop <-> string = {
@@ -274,10 +246,10 @@ mapping clause assembly = RTYPE(rs2, rs1, rd, op)
 /* ****************************************************************** */
 union clause ast = LOAD : (bits(12), regbits, regbits, bool, word_width, bool, bool)
 
-/* I am assuming that load unsigned double wasn't meant to be missing here? */
+/* Load unsigned double is only present in RV128I, not RV64I */
 /* TODO: aq/rl */
-mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false)
-                    <-> imm @ rs1 @ bool_bits(is_unsigned) @ size_bits(size) @ rd @ 0b0000011
+mapping clause encdec = LOAD(imm, rs1, rd, is_unsigned, size, false, false) if size_bits(size) != 0b11 | not_bool(is_unsigned)
+                    <-> imm @ rs1 @ bool_bits(is_unsigned) @ size_bits(size) @ rd @ 0b0000011 if size_bits(size) != 0b11 | not_bool(is_unsigned)
 
 val extend_value : forall 'n, 0 < 'n <= 8. (bool, MemoryOpResult(bits(8 * 'n))) -> MemoryOpResult(xlenbits)
 function extend_value(is_unsigned, value) = match (value) {
@@ -752,10 +724,10 @@ mapping clause encdec = WFI() <-> 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0
 
 function clause execute WFI() =
   match cur_privilege {
-    Machine    => true,
+    Machine    => { platform_wfi(); true },
     Supervisor => if   mstatus.TW() == true
                   then { handle_illegal(); false }
-                  else true,
+                  else { platform_wfi(); true },
     User       => { handle_illegal(); false }
   }
 
@@ -851,7 +823,7 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
        }
 
 mapping clause assembly = LOADRES(aq, rl, rs1, size, rd)
-                      <-> "lr." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
+                      <-> "lr." ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
 
 /* ****************************************************************** */
 union clause ast = STORECON : (bool, bool, regbits, regbits, word_width, regbits)
@@ -916,7 +888,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   }
 }
 
-mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^ maybe_aq(aq) ^ maybe_rl(rl) ^ size_mnemonic(size) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
+mapping clause assembly = STORECON(aq, rl, rs2, rs1, size, rd) <-> "sc." ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
 union clause ast = AMO : (amoop, bool, bool, regbits, regbits, word_width, regbits)
@@ -1068,7 +1040,7 @@ function readCSR csr : csreg -> xlenbits =
     _     => { print_bits("unhandled read to CSR ", csr);
                0x0000_0000_0000_0000 }
   } in {
-    print("CSR " ^ csr ^ " -> " ^ BitStr(res));
+    print_reg("CSR " ^ csr ^ " -> " ^ BitStr(res));
     res
   }
 
@@ -1117,7 +1089,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit =
     _     => None()
   } in
   match res {
-    Some(v) => print("CSR " ^ csr ^ " <- " ^ BitStr(v) ^ " (input: " ^ BitStr(value) ^ ")"),
+    Some(v) => print_reg("CSR " ^ csr ^ " <- " ^ BitStr(v) ^ " (input: " ^ BitStr(value) ^ ")"),
     None()  => print_bits("unhandled write to CSR ", csr)
   }
 
@@ -1253,7 +1225,7 @@ union clause ast = C_ADDIW : (bits(6), regbits)
 /* FIXME: decoding differs for RVC32/RVC64.  Below, we are assuming
  * RV64, and C_JAL is RV32 only. */
 
-mapping clause encdec_compressed = C_ADDIW(imm5 @ imm40, rsd) <-> 0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01
+mapping clause encdec_compressed = C_ADDIW(imm5 @ imm40, rsd) if rsd != zreg <-> 0b001 @ imm5 : bits(1) @ rsd : regbits @ imm40 : bits(5) @ 0b01 if rsd != zreg
 
 function clause execute (C_JAL(imm)) =
   execute(RISCV_JAL(EXTS(imm @ 0b0), ra))
@@ -1298,13 +1270,13 @@ mapping clause assembly = C_ADDI16SP(imm) if imm != 0b000000 <-> "c.addi16sp" ^ 
 /* ****************************************************************** */
 union clause ast = C_LUI : (bits(6), regbits)
 
-mapping clause encdec_compressed = C_LUI(imm17 @ imm1612, rd) if rd != zreg & rd != sp <-> 0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01 if rd != zreg & rd != sp
+mapping clause encdec_compressed = C_LUI(imm17 @ imm1612, rd) if rd != zreg & rd != sp & imm17 @ imm1612 != 0b000000 <-> 0b011 @ imm17 : bits(1) @ rd : regbits @ imm1612 : bits(5) @ 0b01 if rd != zreg & rd != sp & imm17 @ imm1612 != 0b000000
 
 function clause execute (C_LUI(imm, rd)) =
   let res : bits(20) = EXTS(imm) in
   execute(UTYPE(res, rd, RISCV_LUI))
 
-mapping clause assembly = C_LUI(imm, rd) if rd != zreg & rd != sp <-> "c.lui" ^ reg_name(rd) ^ sep() ^ hex_bits_6(imm) if rd != zreg & rd != sp
+mapping clause assembly = C_LUI(imm, rd) if rd != zreg & rd != sp & imm != 0b000000 <-> "c.lui" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_6(imm) if rd != zreg & rd != sp & imm != 0b000000
 
 /* ****************************************************************** */
 union clause ast = C_SRLI : (bits(6), cregbits)
@@ -1532,6 +1504,16 @@ function clause execute (C_MV(rd, rs2)) =
 mapping clause assembly = C_MV(rd, rs2) if rd != zreg & rs2 != zreg <-> "c.mv" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs2) if rd != zreg & rs2 != zreg
 
 /* ****************************************************************** */
+union clause ast = C_EBREAK : unit
+
+mapping clause encdec_compressed = C_EBREAK() <-> 0b100 @ 0b1 @ 0b00000 @ 0b00000 @ 0b10
+
+function clause execute C_EBREAK() =
+  execute(EBREAK())
+
+mapping clause assembly = C_EBREAK() <-> "c.ebreak"
+
+/* ****************************************************************** */
 union clause ast = C_ADD : (regbits, regbits)
 
 mapping clause encdec_compressed = C_ADD(rsd, rs2) if rsd != zreg & rs2 != zreg <-> 0b100 @ 0b1 @ rsd : regbits @ rs2 : regbits @ 0b10 if rsd != zreg & rs2 != zreg
@@ -1585,14 +1567,3 @@ function clause execute C_ILLEGAL(s) = { handle_illegal(); false }
 mapping clause assembly = C_ILLEGAL(s) <-> "c.illegal" ^ spc() ^ hex_bits_16(s)
 
 /* ****************************************************************** */
-
-
-end ast
-end execute
-end assembly
-end encdec
-end encdec_compressed
-
-function decode bv = Some(encdec(bv))
-function decodeCompressed bv = Some(encdec_compressed(bv))
-function print_insn insn = assembly(insn)

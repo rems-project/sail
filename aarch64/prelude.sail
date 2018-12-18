@@ -143,12 +143,12 @@ val UInt = {
   interpreter: "uint",
   c: "sail_unsigned",
   coq: "uint"
-} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+} : forall 'n. bits('n) -> {'m, 0 <= 'm <= 2 ^ 'n - 1. int('m)}
 
 val SInt = {
   c: "sail_signed",
   _: "sint"
-} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+} : forall 'n. bits('n) -> {'m, (- (2 ^ ('n - 1))) <= 'm <= 2 ^ ('n - 1) - 1. int('m)}
 
 val hex_slice = "hex_slice" : forall 'n 'm. (string, atom('n), atom('m)) -> bits('n - 'm) effect {escape}
 

@@ -1,0 +1,5 @@
+Type error at file "constraint_ctor/v1.sail", line 10, character 3 to line 10, character 29
+
+  [41m_prove(constraint('x >= 4))[0m;
+
+Cannot prove 'x >= 4

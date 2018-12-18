@@ -1,6 +1,6 @@
 default Order dec
 
-scattered union ast ('datasize : Int) ('destsize : Int) ('regsize : Int)
+scattered union ast('datasize : Int, 'destsize : Int, 'regsize : Int)
 
 val execute : forall ('datasize : Int) ('destsize : Int) ('regsize : Int).
   ast('datasize, 'destsize, 'regsize) -> unit

@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "sail"
-version: "0.3"
+version: "0.6"
 maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
 authors: [
   "Alasdair Armstrong"
@@ -20,7 +20,9 @@ license: "BSD3"
 dev-repo: "https://github.com/rems-project/sail.git"
 build: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail:share}%" "isail"]
 install: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail:share}%" "install"]
-remove: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail:share}%" "uninstall"]
+remove: [
+  make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail:share}%" "uninstall"
+]
 depends: [
   "ocamlfind"
   "ocamlbuild"
@@ -28,7 +30,10 @@ depends: [
   "menhir"
   "linenoise"
   "ott" {>= "0.28"}
-  "lem"
+  "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}
+  "omd"
+  "conf-gmp"
+  "conf-zlib"
 ]
-available: [ocaml-version >= "4.02.3"]
+available: [ocaml-version >= "4.06.0"]

@@ -13,6 +13,7 @@ val hex_bits : forall 'n . (atom('n), bits('n)) <-> string
 
 val string_startswith = "string_startswith" : (string, string) -> bool
 val string_drop = "string_drop" : (string, nat) -> string
+val string_take = "string_take" : (string, nat) -> string
 val string_length = "string_length" : string -> nat
 val string_append = {c: "concat_str", _: "string_append"} : (string, string) -> string
 val maybe_int_of_prefix = "maybe_int_of_prefix" : string -> option((int, nat))
@@ -709,39 +710,6 @@ function hex_bits_64_backwards s =
       Some (bv, n) if n == string_length(s) => bv
   }
 
-
-
-val spc_forwards : unit -> string
-function spc_forwards () = " "
-val spc_backwards : string -> unit
-function spc_backwards s = ()
-
-val spc_matches_prefix = "spc_matches_prefix" : string -> option((unit, nat))
-
-val opt_spc_forwards : unit -> string
-function opt_spc_forwards () = ""
-val opt_spc_backwards : string -> unit
-function opt_spc_backwards s = ()
-
-val opt_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
-
-val def_spc_forwards : unit -> string
-function def_spc_forwards () = " "
-val def_spc_backwards : string -> unit
-function def_spc_backwards s = ()
-
-val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
-
-
-val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lteq_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lt_atom = {coq: "Z.ltb", _: "lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gt_atom = {coq: "Z.gtb", _: "gt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-
-val eq_int = {ocaml: "eq_int", lem: "eq", coq: "Z.eqb", c: "eq_int"} : (int, int) -> bool
-val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit", coq: "eq_bit"} : (bit, bit) -> bool
-
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec", coq: "eq_vec", c: "eq_bits"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {c: "eq_string", ocaml: "eq_string", lem: "eq", coq: "generic_eq"} : (string, string) -> bool
@@ -760,7 +728,7 @@ val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 /* sneaky deref with no effect necessary for bitfield writes */
 val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
-overload operator == = {eq_atom, eq_int, eq_bit, eq_vec, eq_string, eq_real, eq_anything}
+overload operator == = {eq_vec, eq_string, eq_real, eq_anything}
 
 val vector_subrange = {
   ocaml: "subrange",
@@ -867,8 +835,6 @@ function cast_unit_vec b = match b {
   bitone  => 0b1
 }
 
-val print = "print_endline" : string -> unit
-
 val putchar = "putchar" : forall ('a : Type). 'a -> unit
 
 val concat_str = {c: "concat_str", ocaml: "concat_str", lem: "stringAppend", coq: "String.append"} : (string, string) -> string
@@ -890,10 +856,8 @@ val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> r
 
 overload operator ^ = {xor_vec, int_power, real_power, concat_str}
 
-val add_range = {ocaml: "add_int", c: "add_int", lem: "integerAdd", coq: "add_range"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
-
-val add_int = {ocaml: "add_int", c: "add_int", lem: "integerAdd", coq: "Z.add"} : (int, int) -> int
+val add_atom = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
+  (int('n), int('m)) -> int('n + 'm)
 
 val add_vec = {c: "add_bits", _: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -901,10 +865,10 @@ val add_vec_int = {c: "add_bits_int", _: "add_vec_int"} : forall 'n. (bits('n), 
 
 val add_real = {ocaml: "add_real", lem: "realAdd"} : (real, real) -> real
 
-overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
+overload operator + = {add_atom, add_vec, add_vec_int, add_real}
 
-val sub_range = {ocaml: "sub_int", c: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
+val sub_atom = {ocaml: "sub_int", c: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm.
+  (int('n), int('m)) -> int('n - 'm)
 
 val sub_int = {ocaml: "sub_int", c: "sub_int", lem: "integerMinus", coq: "Z.sub"} : (int, int) -> int
 val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
@@ -917,13 +881,13 @@ val sub_vec_int = {c: "sub_bits_int", _: "sub_vec_int"} : forall 'n. (bits('n), 
 
 val sub_real = {ocaml: "sub_real", lem: "realMinus"} : (real, real) -> real
 
-val negate_range = {ocaml: "negate", lem: "integerNegate", coq: "negate_range"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
+val negate_atom = {ocaml: "negate", lem: "integerNegate", coq: "negate_range"} : forall 'n 'm. atom('n) -> atom(- 'n)
 
 val negate_int = {ocaml: "negate", lem: "integerNegate", coq: "Z.opp"} : int -> int
 
 val negate_real = {ocaml: "Num.minus_num", lem: "realNegate"} : real -> real
 
-overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
+overload operator - = {sub_atom, sub_int, sub_vec, sub_vec_int, sub_real}
 
 overload negate = {negate_range, negate_int, negate_real}
 
@@ -938,29 +902,21 @@ overload operator * = {mult_atom, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
-val gteq_int = {coq: "Z.geb", _: "gteq"} : (int, int) -> bool
-
 val gteq_real = {ocaml: "gteq_real", lem: "gteq"} : (real, real) -> bool
 
-overload operator >= = {gteq_atom, gteq_int, gteq_real}
-
-val lteq_int = {coq: "Z.leb", _: "lteq"} : (int, int) -> bool
+overload operator >= = {gteq_real}
 
 val lteq_real = {ocaml: "lteq_real", lem: "lteq"} : (real, real) -> bool
 
-overload operator <= = {lteq_atom, lteq_int, lteq_real}
-
-val gt_int = {coq: "Z.gtb", _: "gt"} : (int, int) -> bool
+overload operator <= = {lteq_real}
 
 val gt_real = {ocaml: "gt_real", lem: "gt"} : (real, real) -> bool
 
-overload operator > = {gt_atom, gt_int, gt_real}
-
-val lt_int = {coq: "Z.ltb", _: "lt"} : (int, int) -> bool
+overload operator > = {gt_real}
 
 val lt_real = {ocaml: "lt_real", lem: "lt"} : (real, real) -> bool
 
-overload operator < = {lt_atom, lt_int, lt_real}
+overload operator < = {lt_real}
 
 val RoundDown = {ocaml: "round_down", lem: "realFloor"} : real -> int
 
@@ -1079,9 +1035,15 @@ val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
 
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
+val print = "print_endline" : string -> unit
 val print_int = "print_int" : (string, int) -> unit
 val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 val print_string = "print_string" : (string, string) -> unit
+
+val print_instr    = {ocaml: "Platform.print_instr", c: "print_instr", _: "print_endline"} : string -> unit
+val print_reg      = {ocaml: "Platform.print_reg",   c: "print_reg", _: "print_endline"} : string -> unit
+val print_mem      = {ocaml: "Platform.print_mem_access", c: "print_mem_access", _: "print_endline"} : string -> unit
+val print_platform = {ocaml: "Platform.print_platform", c: "print_platform", _: "print_endline"} : string -> unit
 
 val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
 val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
@@ -1153,3 +1115,42 @@ function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
 /* Special version of zero_extend that the Lem back-end knows will be at a
    case split on 'm and uses a more generic type for.  (Temporary hack, honest) */
 val zero_extend_type_hack = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+
+
+val n_leading_spaces : string -> {'n, 'n >= 0. int('n)}
+function n_leading_spaces s =
+  match s {
+    "" => 0,
+    _ => match string_take(s, 1) {
+      " " => 1 + n_leading_spaces(string_drop(s, 1)),
+      _ => 0
+    }
+  }
+
+val spc_forwards : unit -> string
+function spc_forwards () = " "
+val spc_backwards : string -> unit
+function spc_backwards s = ()
+val spc_matches_prefix : string -> option((unit, nat))
+function spc_matches_prefix s = {
+  let n = n_leading_spaces(s);
+  match n {
+    0 => None(),
+    _ => Some((), n)
+  }
+}
+
+val opt_spc_forwards : unit -> string
+function opt_spc_forwards () = ""
+val opt_spc_backwards : string -> unit
+function opt_spc_backwards s = ()
+val opt_spc_matches_prefix : string -> option((unit, nat))
+function opt_spc_matches_prefix s =
+  Some((), n_leading_spaces(s))
+
+val def_spc_forwards : unit -> string
+function def_spc_forwards () = " "
+val def_spc_backwards : string -> unit
+function def_spc_backwards s = ()
+val def_spc_matches_prefix : string -> option((unit, nat))
+function def_spc_matches_prefix s = opt_spc_matches_prefix(s)

@@ -103,6 +103,7 @@ uint64_t rev64(uint64_t x) {
 #define PT_LOAD         1  /* Loadable segment */
 
 #define SHT_SYMTAB      2  /* Symbol table type */
+#define SHT_STRTAB      3  /* String table type */
 
 /* How to extract and insert information held in the st_info field.  */
 
@@ -306,7 +307,7 @@ void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int total_f
     }
 }
 
-void loadELFHdr(const char* buffer, const int total_file_size) {
+void checkELFHdr(const char* buffer, const int total_file_size) {
     if (total_file_size < sizeof(Elf32_Ehdr)) {
         fprintf(stderr, "File too small, not big enough even for 32-bit ELF header\n");
         exit(EXIT_FAILURE);
@@ -319,7 +320,6 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
         fprintf(stderr, "Invalid ELF magic bytes. Not an ELF file?\n");
         exit(EXIT_FAILURE);
     }
-
     if (hdr->e_ident[EI_CLASS] == ELFCLASS32) {
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
@@ -329,12 +329,6 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
             fprintf(stderr, "Invalid ELF type or machine for class (32-bit)\n");
             exit(EXIT_FAILURE);
         }
-
-	for(int i = 0; i < rdHalf32(le, ehdr->e_phnum); ++i) {
-	  loadProgHdr32(le, buffer, rdOff32(le, ehdr->e_phoff) + i * rdHalf32(le, ehdr->e_phentsize), total_file_size);
-	}
-
-	return;
     } else if (hdr->e_ident[EI_CLASS] == ELFCLASS64) {
         if (total_file_size < sizeof(Elf64_Ehdr)) {
             fprintf(stderr, "File too small, specifies 64-bit ELF but not big enough for 64-bit ELF header\n");
@@ -348,19 +342,39 @@ void loadELFHdr(const char* buffer, const int total_file_size) {
             fprintf(stderr, "Invalid ELF type or machine for class (64-bit)\n");
             exit(EXIT_FAILURE);
         }
-
-	for(int i = 0; i < rdHalf64(le, ehdr->e_phnum); ++i) {
-	  loadProgHdr64(le, buffer, rdOff64(le, ehdr->e_phoff) + i * rdHalf64(le, ehdr->e_phentsize), total_file_size);
-	}
-
-	return;
     } else {
         fprintf(stderr, "Unrecognized ELF file format\n");
         exit(EXIT_FAILURE);
     }
 }
 
-void load_elf(char *filename) {
+void loadELFHdr(const char* buffer, const int total_file_size, bool *is32bit_p, uint64_t *entry) {
+    checkELFHdr(buffer, total_file_size);
+
+    Elf32_Ehdr *hdr = (Elf32_Ehdr*) &buffer[0];
+    if (hdr->e_ident[EI_CLASS] == ELFCLASS32) {
+        bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
+        Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
+	for(int i = 0; i < rdHalf32(le, ehdr->e_phnum); ++i) {
+	  loadProgHdr32(le, buffer, rdOff32(le, ehdr->e_phoff) + i * rdHalf32(le, ehdr->e_phentsize), total_file_size);
+	}
+        if (is32bit_p) *is32bit_p = true;
+        if (entry) *entry = (uint64_t) ehdr->e_entry;
+    } else if (hdr->e_ident[EI_CLASS] == ELFCLASS64) {
+        bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
+        Elf64_Ehdr *ehdr = (Elf64_Ehdr*) &buffer[0];
+	for(int i = 0; i < rdHalf64(le, ehdr->e_phnum); ++i) {
+	  loadProgHdr64(le, buffer, rdOff64(le, ehdr->e_phoff) + i * rdHalf64(le, ehdr->e_phentsize), total_file_size);
+	}
+        if (is32bit_p) *is32bit_p = false;
+        if (entry) *entry = ehdr->e_entry;
+    } else {
+        fprintf(stderr, "Unrecognized ELF file format\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
     // Read input file into memory
     char* buffer = NULL;
     int   size   = 0;
@@ -377,10 +391,162 @@ void load_elf(char *filename) {
         if (s < 0) { goto fail; }
         read += s;
     }
-
-    loadELFHdr(buffer, read);
+    loadELFHdr(buffer, read, is32bit_p, entry);
     free(buffer);
     return;
+
+fail:
+    fprintf(stderr, "Unable to read file %s\n", filename);
+    exit(EXIT_FAILURE);
+}
+
+// symbol lookup for very simple ELF files (single symtab, two strtabs): looks up a
+// single symbol at a time, but avoids retaining memory.
+
+int lookupSymbol(const char *buffer, const int total_file_size, const char *symname, uint64_t *value) {
+    checkELFHdr(buffer, total_file_size);
+    Elf32_Ehdr *hdr = (Elf32_Ehdr*) &buffer[0];
+    if (hdr->e_ident[EI_CLASS] == ELFCLASS32) {
+        bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
+        Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
+        if (total_file_size < rdOff32(le, ehdr->e_shoff)
+                              + rdHalf32(le, ehdr->e_shnum)*sizeof(Elf32_Shdr)) {
+            fprintf(stderr, "File too small for %d sections from offset %d\n",
+                    rdHalf32(le, ehdr->e_shnum), rdOff32(le, ehdr->e_shoff));
+            exit(EXIT_FAILURE);
+        }
+        if (rdHalf32(le, ehdr->e_shtrndx) >= rdHalf32(le, ehdr->e_shnum)) {
+            fprintf(stderr, "Invalid string section table index %d\n", hdr->e_shtrndx);
+            exit(EXIT_FAILURE);
+        }
+        Elf32_Shdr *shdr = (Elf32_Shdr *)&buffer[ehdr->e_shoff];
+        Elf32_Shdr *shstrtab = (Elf32_Shdr *)&shdr[rdHalf32(le, ehdr->e_shtrndx)];
+        if (total_file_size < rdOff32(le, shstrtab->sh_offset) + rdWord32(le, shstrtab->sh_size)) {
+            fprintf(stderr, "File too small for string section\n");
+            exit(EXIT_FAILURE);
+        }
+        const char *shstrbuf = buffer + rdOff32(le, shstrtab->sh_offset);
+        Elf32_Word strtabidx = 0, symtabidx = 0;
+        for (Elf32_Word i = 0; i < rdHalf32(le, ehdr->e_shnum); i++) {
+            if (rdWord32(le, shdr[i].sh_type) == SHT_SYMTAB) {
+                symtabidx = i;
+            }
+            if (rdWord32(le, shdr[i].sh_type) == SHT_STRTAB) {
+                // skip section name string table
+                if (i != rdHalf32(le, ehdr->e_shtrndx)) {
+                    strtabidx = i;
+                }
+            }
+        }
+        if (!strtabidx || !symtabidx) {
+            fprintf(stderr, "ELF: unable to find string or symbol table\n");
+            return -1;
+        }
+        const char *strtab = buffer + rdOff32(le, shdr[strtabidx].sh_offset);
+        Elf32_Word strtab_size = rdWord32(le, shdr[strtabidx].sh_size);
+        Elf32_Sym *sym_ent = (Elf32_Sym *)(buffer + rdOff32(le, shdr[symtabidx].sh_offset));
+        for (Elf32_Word i = 0; i < rdWord32(le, shdr[symtabidx].sh_size)/sizeof(*sym_ent); i++) {
+            Elf32_Word sidx = rdWord32(le, sym_ent[i].st_name);
+            if (sidx >= strtab_size) {
+                fprintf(stderr, "Symbol name index out of bounds\n");
+                exit(EXIT_FAILURE);
+            }
+            Elf32_Word max_len = strtab_size - sidx;
+            const char *sname = strtab + sidx;
+            if (strnlen(sname, max_len) >= max_len) {
+                fprintf(stderr, "Unterminated symbol name\n");
+                exit(EXIT_FAILURE);
+            }
+            if (!strcmp(sname, symname)) {
+                if (value) *value = (uint64_t) rdAddr32(le, sym_ent[i].st_value);
+                return 0;
+            }
+        }
+        return -1;
+    } else if (hdr->e_ident[EI_CLASS] == ELFCLASS64) {
+        bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
+        Elf64_Ehdr *ehdr = (Elf64_Ehdr*) &buffer[0];
+        if (total_file_size < rdOff64(le, ehdr->e_shoff)
+                              + rdHalf64(le, ehdr->e_shnum)*sizeof(Elf64_Shdr)) {
+            fprintf(stderr, "File too small for %d sections from offset %ld\n",
+                    rdHalf64(le, ehdr->e_shnum), rdOff64(le, ehdr->e_shoff));
+            exit(EXIT_FAILURE);
+        }
+        if (rdHalf64(le, ehdr->e_shtrndx) >= rdHalf64(le, ehdr->e_shnum)) {
+            fprintf(stderr, "Invalid string section table index %d\n", hdr->e_shtrndx);
+            exit(EXIT_FAILURE);
+        }
+        Elf64_Shdr *shdr = (Elf64_Shdr *)&buffer[ehdr->e_shoff];
+        Elf64_Shdr *shstrtab = (Elf64_Shdr *)&shdr[rdHalf64(le, ehdr->e_shtrndx)];
+        if (total_file_size < rdOff64(le, shstrtab->sh_offset) + rdWord64(le, shstrtab->sh_size)) {
+            fprintf(stderr, "File too small for string section\n");
+            exit(EXIT_FAILURE);
+        }
+        const char *shstrbuf = buffer + rdOff64(le, shstrtab->sh_offset);
+        Elf64_Word strtabidx = 0, symtabidx = 0;
+        for (Elf64_Word i = 0; i < rdHalf64(le, ehdr->e_shnum); i++) {
+            if (rdWord64(le, shdr[i].sh_type) == SHT_SYMTAB) {
+                symtabidx = i;
+            }
+            if (rdWord64(le, shdr[i].sh_type) == SHT_STRTAB) {
+                // skip section name string table
+                if (i != rdHalf64(le, ehdr->e_shtrndx)) {
+                    strtabidx = i;
+                }
+            }
+        }
+        if (!strtabidx || !symtabidx) {
+            fprintf(stderr, "ELF: unable to find string or symbol table\n");
+            return -1;
+        }
+        const char *strtab = buffer + rdOff64(le, shdr[strtabidx].sh_offset);
+        Elf64_Xword strtab_size = rdXword64(le, shdr[strtabidx].sh_size);
+        Elf64_Sym *sym_ent = (Elf64_Sym *)(buffer + rdOff64(le, shdr[symtabidx].sh_offset));
+        for (Elf64_Xword i = 0; i < rdXword64(le, shdr[symtabidx].sh_size)/sizeof(*sym_ent); i++) {
+            Elf64_Word sidx = rdWord64(le, sym_ent[i].st_name);
+            if (sidx >= strtab_size) {
+                fprintf(stderr, "Symbol name index out of bounds\n");
+                exit(EXIT_FAILURE);
+            }
+            Elf64_Word max_len = strtab_size - sidx;
+            const char *sname = strtab + sidx;
+            if (strnlen(sname, max_len) >= max_len) {
+                fprintf(stderr, "Unterminated symbol name\n");
+                exit(EXIT_FAILURE);
+            }
+            if (!strcmp(sname, symname)) {
+                if (value) *value = (uint64_t) rdAddr64(le, sym_ent[i].st_value);
+                return 0;
+            }
+        }
+        return -1;
+    } else {
+        fprintf(stderr, "Unrecognized ELF file format\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int lookup_sym(const char *filename, const char *symname, uint64_t *value) {
+    // Read input file into memory
+    char* buffer = NULL;
+    int   size   = 0;
+    int   chunk  = (1<<24); // increments output buffer this much
+    int   read   = 0;
+    int   ret    = 0;
+    gzFile in = gzopen(filename, "rb");
+    if (in == NULL) { goto fail; }
+    while (!gzeof(in)) {
+        size = read + chunk;
+        buffer = (char*)realloc(buffer, size);
+        if (buffer == NULL) { goto fail; }
+
+        int s = gzread(in, buffer+read, size - read);
+        if (s < 0) { goto fail; }
+        read += s;
+    }
+    ret = lookupSymbol(buffer, read, symname, value);
+    free(buffer);
+    return ret;
 
 fail:
     fprintf(stderr, "Unable to read file %s\n", filename);

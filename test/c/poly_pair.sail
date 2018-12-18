@@ -4,7 +4,7 @@ val print = "print_endline" : string -> unit
 
 val "eq_int" : (int, int) -> bool
 
-union test ('a : Type) ('b : Type) = {
+union test('a : Type, 'b : Type) = {
   Ctor1 : ('a, 'b),
   Ctor2 : int
 }

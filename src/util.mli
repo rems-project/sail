@@ -57,8 +57,8 @@ val opt_colors : bool ref
 val butlast : 'a list -> 'a list
 
 (** Mixed useful things *)
-module Duplicate(S : Set.S) : sig 
-  type dups = 
+module Duplicate(S : Set.S) : sig
+  type dups =
     | No_dups of S.t
     | Has_dups of S.elt
   val duplicates : S.elt list -> dups
@@ -104,6 +104,11 @@ val option_get_exn : exn -> 'a option -> 'a
 (** [option_these xs] extracts the elements of the list [xs]
     wrapped in [Some]. *)
 val option_these : 'a option list -> 'a list
+
+(** [option_all xs] extracts the elements of the list [xs] if all of
+   them are wrapped in Some. If any are None then the result is None is
+   None. [option_all []] is [Some []] *)
+val option_all : 'a option list -> 'a list option
 
 (** [changed2 f g x h y] applies [g] to [x] and [h] to [y].
     If both function applications return [None], then [None] is
@@ -239,6 +244,7 @@ val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 (* Terminal color codes *)
 val termcode : int -> string
 val bold : string -> string
+val darkgray : string -> string
 val green : string -> string
 val red : string -> string
 val red_bg : string -> string
@@ -253,4 +259,7 @@ val warn : string -> unit
 val zencode_string : string -> string
 val zencode_upper_string : string -> string
 
+val file_encode_string : string -> string
+
 val log_line : string -> int -> string -> string
+val header : string -> int -> string

@@ -169,6 +169,14 @@ let format_pos2 ff p1 p2 =
     Format.pp_print_flush ff ()
   end
 
+let format_just_pos ff p1 p2 =
+  let open Lexing in
+  Format.fprintf ff "file \"%s\", line %d, character %d to line %d, character %d"
+                 p1.pos_fname
+                 p1.pos_lnum (p1.pos_cnum - p1.pos_bol + 1)
+                 p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
+  Format.pp_print_flush ff ()
+
 (* reads the part between p1 and p2 from the file *)
 
 let read_from_file_pos2 p1 p2 =
@@ -187,36 +195,29 @@ let read_from_file_pos2 p1 p2 =
   let _ = close_in ic in
   (buf, not (multi = None))
 
-(* Destruct a location by splitting all the Internal strings except possibly the
-   last one into a string list and keeping only the last location *)
-let dest_loc (l : Parse_ast.l) : (Parse_ast.l * string list) = 
-  let rec aux acc l = match l with
-    | Parse_ast.Int(s, Some l') -> aux (s::acc) l'
-    | _ -> (l, acc)
-  in
-  aux [] l
+let rec format_loc_aux ?code:(code=true) ff = function
+  | Parse_ast.Unknown ->
+     Format.fprintf ff "no location information available"
+  | Parse_ast.Generated l ->
+     Format.fprintf ff "code generated: original nearby source is ";
+     format_loc_aux ~code:code ff l
+  | Parse_ast.Unique (n, l) ->
+     Format.fprintf ff "code unique (%d): original nearby source is " n;
+     format_loc_aux ~code:code ff l
+  | Parse_ast.Range (p1, p2) when code ->
+     format_pos2 ff p1 p2
+  | Parse_ast.Range (p1, p2) ->
+     format_just_pos ff p1 p2
+  | Parse_ast.Documented (_, l) ->
+     format_loc_aux ~code:code ff l
 
-let rec format_loc_aux ff l =
-  let (l_org, mod_s) = dest_loc l in
-  let _ = match l_org with
-    | Parse_ast.Unknown -> Format.fprintf ff "no location information available"
-    | Parse_ast.Generated l -> Format.fprintf ff "code generated: original nearby source is "; (format_loc_aux ff l)
-    | Parse_ast.Range(p1,p2) -> format_pos2 ff p1 p2
-    | Parse_ast.Int(s,_) -> Format.fprintf ff "code in lib from: %s" s
-    | Parse_ast.Documented(_, l) -> format_loc_aux ff l
-  in
-  ()
-
-let format_loc_source ff l = 
-  match dest_loc l with 
-  | (Parse_ast.Range (p1, p2), _) -> 
-    begin
-      let (s, multi_line) = read_from_file_pos2 p1 p2 in
-      if multi_line then 
-        Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
-      else
-        Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
-    end
+let format_loc_source ff = function
+  | Parse_ast.Range (p1, p2) ->
+     let (s, multi_line) = read_from_file_pos2 p1 p2 in
+     if multi_line then
+       Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
+     else
+       Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
   | _ -> ()
 
 let format_loc ff l =
@@ -231,9 +232,9 @@ let print_err_loc l =
 let print_pos p = format_pos Format.std_formatter p
 let print_err_pos p = format_pos Format.err_formatter p
 
-let loc_to_string l =
+let loc_to_string ?code:(code=true) l =
   let _ = Format.flush_str_formatter () in
-  let _ = format_loc_aux Format.str_formatter l in
+  let _ = format_loc_aux ~code:code Format.str_formatter l in
   let s = Format.flush_str_formatter () in
   s
 
@@ -265,9 +266,12 @@ type error =
   | Err_type of Parse_ast.l * string
   | Err_type_dual of Parse_ast.l * Parse_ast.l * string
 
+let issues = "\n\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
+
 let dest_err = function
   | Err_general (l, m) -> ("Error", false, Loc l, m)
-  | Err_unreachable (l, (file, line, _, _), m) -> ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m)
+  | Err_unreachable (l, (file, line, _, _), m) ->
+     ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m ^ issues)
   | Err_todo (l, m) -> ("Todo" ^ m, false, Loc l, "")
   | Err_syntax (p, m) -> ("Syntax error", false, Pos p, m)
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)
@@ -284,7 +288,7 @@ let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l,m))
 let err_typ_dual l1 l2 m = Fatal_error (Err_type_dual (l1,l2,m))
 
-let report_error e = 
+let report_error e =
   let (m1, verb_pos, pos_l, m2) = dest_err e in
   (print_err_internal verb_pos false pos_l m1 m2; exit 1)
 

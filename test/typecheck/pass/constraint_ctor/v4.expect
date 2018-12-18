@@ -1,0 +1,5 @@
+Type error at file "constraint_ctor/v4.sail", line 17, character 34 to line 17, character 36
+
+function bar(Bar(x as int('x)) : [41mBar[0m(23)) -> unit = {
+
+Could not prove 23 <= 22 for type constructor Bar

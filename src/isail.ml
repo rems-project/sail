@@ -57,6 +57,7 @@ open Pretty_print_sail
 
 type mode =
   | Evaluation of frame
+  | Bytecode of Value2.vl Bytecode_interpreter.gstate * Value2.vl Bytecode_interpreter.stack
   | Normal
 
 let current_mode = ref Normal
@@ -65,6 +66,7 @@ let prompt () =
   match !current_mode with
   | Normal -> "sail> "
   | Evaluation _ -> "eval> "
+  | Bytecode _ -> "ir> "
 
 let eval_clear = ref true
 
@@ -72,6 +74,7 @@ let mode_clear () =
   match !current_mode with
   | Normal -> ()
   | Evaluation _ -> if !eval_clear then LNoise.clear_screen () else ()
+  | Bytecode _ -> () (* if !eval_clear then LNoise.clear_screen () else () *)
 
 let rec user_input callback =
   match LNoise.linenoise (prompt ()) with
@@ -80,7 +83,7 @@ let rec user_input callback =
      mode_clear ();
      begin
        try callback v with
-       | Reporting_basic.Fatal_error e -> Reporting_basic.report_error e
+       | Reporting.Fatal_error e -> Reporting.report_error e
      end;
      user_input callback
 
@@ -105,16 +108,35 @@ let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
 let interactive_state = ref (initial_state !interactive_ast Value.primops)
 
+let interactive_bytecode = ref []
+
+let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
+
 let print_program () =
   match !current_mode with
   | Normal -> ()
   | Evaluation (Step (out, _, _, stack)) ->
-     let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
      List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline (Lazy.force code); print_endline sep);
      print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) ->
      print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
+  | Bytecode (_, stack) ->
+     let open Bytecode_interpreter in
+     let open Bytecode_util in
+     let pc = stack.top.pc in
+     let instrs = stack.top.instrs in
+     for i = 0 to stack.top.pc - 1 do
+       print_endline ("  " ^ Pretty_print_sail.to_string (pp_instr instrs.(i)))
+     done;
+     print_endline (">>  " ^ Pretty_print_sail.to_string (pp_instr instrs.(stack.top.pc)));
+     for i = stack.top.pc + 1 to Array.length instrs - 1 do
+       print_endline ("  " ^ Pretty_print_sail.to_string (pp_instr instrs.(i)))
+     done;
+     print_endline sep;
+     print_endline (Util.string_of_list ", "
+                     (fun (id, vl) -> Printf.sprintf "%s = %s" (string_of_id id) (string_of_value vl))
+                     (Bindings.bindings stack.top.locals))
 
 let rec run () =
   match !current_mode with
@@ -138,6 +160,7 @@ let rec run () =
           print_endline "Breakpoint";
           current_mode := Evaluation frame
      end
+  | Bytecode _ -> ()
 
 let rec run_steps n =
   print_endline ("step " ^ string_of_int n);
@@ -163,6 +186,7 @@ let rec run_steps n =
           print_endline "Breakpoint";
           current_mode := Evaluation frame
      end
+  | Bytecode _ -> ()
 
 let help = function
   | ":t" | ":type" ->
@@ -232,6 +256,8 @@ let handle_input' input =
     | Command (cmd, arg) ->
        begin
          match cmd with
+         | ":n" | ":normal" ->
+            current_mode := Normal
          | ":t" | ":type" ->
             let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !interactive_env in
             pretty_sail stdout (doc_binding (typq, typ));
@@ -240,10 +266,13 @@ let handle_input' input =
             Value.output_close ();
             exit 0
          | ":i" | ":infer" ->
-            let exp = Initial_check.exp_of_string dec_ord arg in
+            let exp = Initial_check.exp_of_string arg in
             let exp = Type_check.infer_exp !interactive_env exp in
             pretty_sail stdout (doc_typ (Type_check.typ_of exp));
             print_newline ()
+         | ":canon" ->
+            let typ = Initial_check.typ_of_string arg in
+            print_endline (string_of_typ (Type_check.canonicalize !interactive_env typ))
          | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
@@ -285,19 +314,26 @@ let handle_input' input =
             interactive_env := env;
             interactive_state := initial_state !interactive_ast Value.primops
          | ":pretty" ->
-            print_endline (Pretty_print_sail.to_string (Latex.latex_defs "sail_latex" !interactive_ast))
-         | ":bytecode" ->
+            print_endline (Pretty_print_sail.to_string (Latex.defs !interactive_ast))
+         | ":compile" ->
             let open PPrint in
             let open C_backend in
             let ast = Process_file.rewrite_ast_c !interactive_ast in
             let ast, env = Specialize.specialize ast !interactive_env in
             let ctx = initial_ctx env in
-            let byte_ast = bytecode_ast ctx (List.map flatten_instrs) ast in
-            let chan = open_out arg in
-            Util.opt_colors := false;
-            Pretty_print_sail.pretty_sail chan (separate_map hardline Bytecode_util.pp_cdef byte_ast);
-            Util.opt_colors := true;
-            close_out chan
+            interactive_bytecode := bytecode_ast ctx (List.map flatten_cdef) ast
+         | ":ir" ->
+            print_endline arg;
+            let open Bytecode in
+            let open Bytecode_util in
+            let open PPrint in
+            let is_cdef = function
+              | CDEF_fundef (id, _, _, _) when Id.compare id (mk_id arg) = 0 -> true
+              | CDEF_spec (id, _, _) when Id.compare id (mk_id arg) = 0 -> true
+              | _ -> false
+            in
+            let cdefs = List.filter is_cdef !interactive_bytecode in
+            print_endline (Pretty_print_sail.to_string (separate_map hardline pp_cdef cdefs))
          | ":ast" ->
             let chan = open_out arg in
             Pretty_print_sail.pp_defs chan !interactive_ast;
@@ -335,63 +371,80 @@ let handle_input' input =
                vs_ids := Initial_check.val_spec_ids !interactive_ast;
                (* See initial_check.mli for an explanation of why we need this. *)
                Initial_check.have_undefined_builtins := false
+            | ":exec" ->
+               let open Bytecode_interpreter in
+               let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string arg) in
+               let anf = Anf.anf exp in
+               let ctx = C_backend.initial_ctx !interactive_env in
+               let ctyp = C_backend.ctyp_of_typ ctx (Type_check.typ_of exp) in
+               let setup, call, cleanup = C_backend.compile_aexp ctx anf in
+               let instrs = C_backend.flatten_instrs (setup @ [call (CL_id (mk_id "interactive#", ctyp))] @ cleanup) in
+               current_mode := Bytecode (new_gstate !interactive_bytecode, new_stack instrs);
+               print_program ()
             | _ -> unrecognised_command cmd
           end
        | Expression str ->
           (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
-          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord str) in
+          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string str) in
           current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
           print_program ()
        | Empty -> ()
      end
   | Evaluation frame ->
-     begin
-       match input with
-       | Command (cmd, arg) ->
-         (* Evaluation mode commands *)
-         begin
-           match cmd with
-           | ":r" | ":run" ->
-              run ()
-           | ":s" | ":step" ->
-              run_steps (int_of_string arg)
-           | ":n" | ":normal" ->
-              current_mode := Normal
-           | _ -> unrecognised_command cmd
-         end
-       | Expression str ->
-          print_endline "Already evaluating expression"
-       | Empty ->
-          (* Empty input will evaluate one step, or switch back to
+     begin match input with
+     | Command (cmd, arg) ->
+        (* Evaluation mode commands *)
+        begin
+          match cmd with
+          | ":r" | ":run" ->
+             run ()
+          | ":s" | ":step" ->
+             run_steps (int_of_string arg)
+          | _ -> unrecognised_command cmd
+        end
+     | Expression str ->
+        print_endline "Already evaluating expression"
+     | Empty ->
+        (* Empty input will evaluate one step, or switch back to
              normal mode when evaluation is completed. *)
-          begin
-            match frame with
-            | Done (state, v) ->
+        begin match frame with
+        | Done (state, v) ->
+           interactive_state := state;
+           print_endline ("Result = " ^ Value.string_of_value v);
+           current_mode := Normal
+        | Step (out, state, _, stack) ->
+           begin
+             try
                interactive_state := state;
-               print_endline ("Result = " ^ Value.string_of_value v);
-               current_mode := Normal
-            | Step (out, state, _, stack) ->
-               begin
-                 try
-                   interactive_state := state;
-                   current_mode := Evaluation (eval_frame frame);
-                   print_program ()
-                 with
-                 | Failure str -> print_endline str; current_mode := Normal
-               end
-            | Break frame ->
-               print_endline "Breakpoint";
-               current_mode := Evaluation frame
-          end
+               current_mode := Evaluation (eval_frame frame);
+               print_program ()
+             with
+             | Failure str -> print_endline str; current_mode := Normal
+           end
+        | Break frame ->
+           print_endline "Breakpoint";
+           current_mode := Evaluation frame
+        end
+     end
+  | Bytecode (gstate, stack) ->
+     begin match input with
+     | Command (cmd, arg) ->
+        ()
+     | Expression str ->
+        print_endline "Evaluating IR, cannot evaluate expression"
+     | Empty ->
+        let gstate, stack = Bytecode_interpreter.step (gstate, stack) in
+        current_mode := Bytecode (gstate, stack);
+        print_program ()
      end
 
 let handle_input input =
   try handle_input' input with
   | Type_check.Type_error (l, err) ->
      print_endline (Type_error.string_of_type_error err)
-  | Reporting_basic.Fatal_error err ->
-     Reporting_basic.print_error err
+  | Reporting.Fatal_error err ->
+     Reporting.print_error err
   | exn ->
      print_endline (Printexc.to_string exn)
 

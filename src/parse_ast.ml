@@ -56,7 +56,7 @@ type text = string
 
 type l =
   | Unknown
-  | Int of string * l option
+  | Unique of int * l
   | Generated of l
   | Range of Lexing.position * Lexing.position
   | Documented of string * l
@@ -70,15 +70,16 @@ type x = text (* identifier *)
 type ix = text (* infix identifier *)
 
 type 
-base_kind_aux =  (* base kind *)
-   BK_type (* kind of types *)
- | BK_int (* kind of natural number size expressions *)
- | BK_order (* kind of vector order specifications *)
+kind_aux =  (* base kind *)
+   K_type (* kind of types *)
+ | K_int (* kind of natural number size expressions *)
+ | K_order (* kind of vector order specifications *)
+ | K_bool (* kind of constraints *)
 
 
 type 
-base_kind = 
-   BK_aux of base_kind_aux * l
+kind =
+   K_aux of kind_aux * l
 
 
 type 
@@ -110,13 +111,7 @@ id_aux =  (* Identifier *)
    Id of x
  | DeIid of x (* remove infix status *)
 
-
-type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind) list
-
-
-type 
+type
 base_effect = 
    BE_aux of base_effect_aux * l
 
@@ -128,19 +123,32 @@ kid =
 
 type 
 id = 
-   Id_aux of id_aux * l
+  Id_aux of id_aux * l
 
+type
+lit_aux =  (* Literal constant *)
+   L_unit (* $() : _$ *)
+ | L_zero (* $_ : _$ *)
+ | L_one (* $_ : _$ *)
+ | L_true (* $_ : _$ *)
+ | L_false (* $_ : _$ *)
+ | L_num of Big_int.num (* natural number constant *)
+ | L_hex of string (* bit vector constant, C-style *)
+ | L_bin of string (* bit vector constant, C-style *)
+ | L_undef (* undefined value *)
+ | L_string of string (* string constant *)
+ | L_real of string
 
-type 
-kind = 
-   K_aux of kind_aux * l
+type
+lit =
+   L_aux of lit_aux * l
 
-
-type 
+type
 atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
    ATyp_id of id (* identifier *)
  | ATyp_var of kid (* ticked variable *)
- | ATyp_constant of Big_int.num (* constant *)
+ | ATyp_lit of lit (* literal *)
+ | ATyp_nset of kid * (Big_int.num) list (* set type *)
  | ATyp_times of atyp * atyp (* product *)
  | ATyp_sum of atyp * atyp (* sum *)
  | ATyp_minus of atyp * atyp (* subtraction *)
@@ -155,7 +163,8 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_wild
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
- | ATyp_exist of kid list * n_constraint * atyp
+ | ATyp_exist of kinded_id list * atyp * atyp
+ | ATyp_base of id * atyp * atyp
 
 and atyp = 
    ATyp_aux of atyp_aux * l
@@ -166,31 +175,14 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
    KOpt_none of kid (* identifier *)
  | KOpt_kind of kind * kid (* kind-annotated variable *)
 
-
-and 
-n_constraint_aux =  (* constraint over kind $_$ *)
-   NC_equal of atyp * atyp
- | NC_bounded_ge of atyp * atyp
- | NC_bounded_le of atyp * atyp
- | NC_not_equal of atyp * atyp
- | NC_set of kid * (Big_int.num) list
- | NC_or of n_constraint * n_constraint
- | NC_and of n_constraint * n_constraint
- | NC_true
- | NC_false
-
 and
-n_constraint = 
-   NC_aux of n_constraint_aux * l
-
-type 
 kinded_id = 
    KOpt_aux of kinded_id_aux * l
 
 type
 quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of n_constraint (* A constraint for this type *)
+ | QI_const of atyp (* A constraint for this type *)
 
 
 type 
@@ -208,29 +200,9 @@ type
 typquant = 
    TypQ_aux of typquant_aux * l
 
-
-type 
-lit_aux =  (* Literal constant *)
-   L_unit (* $() : _$ *)
- | L_zero (* $_ : _$ *)
- | L_one (* $_ : _$ *)
- | L_true (* $_ : _$ *)
- | L_false (* $_ : _$ *)
- | L_num of Big_int.num (* natural number constant *)
- | L_hex of string (* bit vector constant, C-style *)
- | L_bin of string (* bit vector constant, C-style *)
- | L_undef (* undefined value *)
- | L_string of string (* string constant *)
- | L_real of string
-
-type 
+type
 typschm_aux =  (* type scheme *)
    TypSchm_ts of typquant * atyp
-
-
-type 
-lit = 
-   L_aux of lit_aux * l
 
 
 type 
@@ -296,7 +268,7 @@ exp_aux =  (* Expression *)
  | E_let of letbind * exp (* let expression *)
  | E_assign of exp * exp (* imperative assignment *)
  | E_sizeof of atyp
- | E_constraint of n_constraint
+ | E_constraint of atyp
  | E_exit of exp
  | E_throw of exp
  | E_try of exp * pexp list
@@ -312,12 +284,6 @@ and fexp_aux =  (* Field-expression *)
 
 and fexp = 
    FE_aux of fexp_aux * l
-
-and fexps_aux =  (* Field-expression list *)
-   FES_Fexps of (fexp) list * bool
-
-and fexps = 
-   FES_aux of fexps_aux * l
 
 and opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
    Def_val_empty
@@ -364,6 +330,7 @@ type
 rec_opt_aux =  (* Optional recursive annotation for functions *)
    Rec_nonrec (* non-recursive *)
  | Rec_rec (* recursive *)
+ | Rec_measure of pat * exp (* recursive with termination measure *)
 
 
 type 
@@ -424,7 +391,7 @@ name_scm_opt =
 
 type 
 default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
-   DT_order of base_kind * atyp
+   DT_order of kind * atyp
 
 
 type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only constructible parts *)
@@ -479,7 +446,7 @@ fundef_aux =  (* Function definition *)
 
 type 
 type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
+   TD_abbrev of id * typquant * kind * atyp (* type abbreviation *)
  | TD_record of id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
  | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
  | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
@@ -492,7 +459,7 @@ val_spec_aux =  (* Value type specification *)
 
 type 
 kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
-   KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
+   KD_nabbrev of kind * id * name_scm_opt * atyp (* type abbreviation *)
 
 type 
 dec_spec_aux =  (* Register declarations *)
@@ -505,13 +472,13 @@ dec_spec_aux =  (* Register declarations *)
 type 
 scattered_def_aux =  (* Function and type union definitions that can be spread across
          a file. Each one must end in $_$ *)
-   SD_scattered_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
- | SD_scattered_funcl of funcl (* scattered function definition clause *)
- | SD_scattered_variant of id * name_scm_opt * typquant (* scattered union definition header *)
- | SD_scattered_unioncl of id * type_union (* scattered union definition member *)
- | SD_scattered_mapping of id * tannot_opt
- | SD_scattered_mapcl of id * mapcl
- | SD_scattered_end of id (* scattered definition end *)
+   SD_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
+ | SD_funcl of funcl (* scattered function definition clause *)
+ | SD_variant of id * name_scm_opt * typquant (* scattered union definition header *)
+ | SD_unioncl of id * type_union (* scattered union definition member *)
+ | SD_mapping of id * tannot_opt
+ | SD_mapcl of id * mapcl
+ | SD_end of id (* scattered definition end *)
 
 
 type 

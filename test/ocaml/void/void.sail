@@ -1,5 +1,5 @@
 
-val void : forall 'n, 'n = 'n + 1. atom('n) -> unit
+val void : forall 'n, 'n == 'n + 1. atom('n) -> unit
 
 function void _ = ()
 

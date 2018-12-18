@@ -269,7 +269,7 @@ let combine ctx gpat (l, pat) =
      (* This warning liable to false positives as join returns a
         pattern that overapproximates what can match, so we only
         report when the second match is a constructor. *)
-     Util.warn (Printf.sprintf "Possible redundant pattern match at %s\n" (Reporting_basic.loc_to_string l));
+     Util.warn (Printf.sprintf "Possible redundant pattern match at %s\n" (Reporting.loc_to_string l));
      GP_wild
   | _, gpat' -> join ctx gpat gpat'
 
@@ -287,7 +287,7 @@ let shrink_loc = function
 
 let check l ctx cases =
   match cases_to_pats cases with
-  | [] -> Util.warn (Printf.sprintf "No non-guarded patterns at %s\n" (Reporting_basic.loc_to_string (shrink_loc l)))
+  | [] -> Util.warn (Printf.sprintf "No non-guarded patterns at %s\n" (Reporting.loc_to_string (shrink_loc l)))
   | (_, pat) :: pats ->
      let top_pat = List.fold_left (combine ctx) (generalize ctx pat) pats in
      if is_wild top_pat then
@@ -295,7 +295,7 @@ let check l ctx cases =
      else
        let message =
          Printf.sprintf "Possible incomplete pattern match at %s\n\nMost general matched pattern is %s\n"
-                        (Reporting_basic.loc_to_string (shrink_loc l))
+                        (Reporting.loc_to_string (shrink_loc l))
                         (string_of_gpat top_pat |> Util.cyan |> Util.clear)
        in
        Util.warn message

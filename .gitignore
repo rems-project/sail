@@ -85,8 +85,17 @@ lib/hol/sail-heap
 /riscv/Riscv_types.thy
 /riscv/riscv.lem
 /riscv/riscv_types.lem
+/riscv/riscv_sequential.lem
+/riscv/riscv_sequential_types.lem
+/riscv/Riscv_sequential_lemmas.thy
 /riscv/riscv
 /riscv/platform
+/riscv/riscv.c
+/riscv/riscv_model.c
+/riscv/riscv_rvfi_model.c
+/riscv/riscv_c
+/riscv/riscv_sim
+/riscv/riscv_rvfi
 
 /x86/x86.lem
 /x86/x86.ml

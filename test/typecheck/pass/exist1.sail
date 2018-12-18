@@ -22,6 +22,6 @@ function unit_fn x : atom(4) = ()
 
 val s_add : forall 'a. (atom('a), atom('a)) -> atom('a + 'a)
 
-let v7 : {'k, 'k = 4. atom('k)} = 4
+let v7 : {'k, 'k == 4. atom('k)} = 4
 
 let v8 = s_add(v7, 4)
