@@ -1383,7 +1383,11 @@ let doc_exp, doc_let =
          if effects then
            if inner_ex then
              if cast_ex
-             then string "derive_m" ^^ space ^^ epp
+             (* If the types are the same use the cast as a hint to Coq,
+                otherwise derive the new type from the old one. *)
+             then if alpha_equivalent env inner_typ cast_typ
+                  then epp
+                  else string "derive_m" ^^ space ^^ epp
              else string "projT1_m" ^^ space ^^ epp
            else if cast_ex
            then string "build_ex_m" ^^ space ^^ epp

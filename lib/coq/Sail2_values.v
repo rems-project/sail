@@ -1125,6 +1125,10 @@ repeat
   end.
 *)
 
+(* The linear solver doesn't like existentials. *)
+Ltac destruct_exists :=
+  repeat match goal with H:@ex Z _ |- _ => destruct H end.
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
@@ -1134,6 +1138,7 @@ Ltac prepare_for_solver :=
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
+ destruct_exists;
  unbool_comparisons;
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
@@ -1798,3 +1803,7 @@ Definition sub_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
 Definition min_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
   {z : Z & ArithFact (z >= 0)} :=
   build_ex (Z.min x y).
+
+Definition max_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
+  {z : Z & ArithFact (z >= 0)} :=
+  build_ex (Z.max x y).
