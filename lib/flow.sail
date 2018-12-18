@@ -20,6 +20,9 @@ val not_bool = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> bool(no
    or_bool that are not shown here. */
 
 val and_bool = {coq: "andb", _: "and_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)
+
+val and_bool_no_flow = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
+
 val or_bool = {coq: "orb", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
 
 val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)

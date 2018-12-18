@@ -1325,7 +1325,7 @@ let contains_bitvector_pexp = function
 
 let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
 
-  let env = try env_of_pat pat with _ -> Env.empty in
+  let env = try env_of_pat pat with _ -> raise (Reporting.err_unreachable l __POS__ "Pattern without annotation found") in
 
   (* first introduce names for bitvector patterns *)
   let name_bitvector_roots =
@@ -2092,23 +2092,23 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
         | _ ->
            function_typ [args_typ] ret_typ eff
       in
-      let quant_new_tyvars qis =
-        let quant_tyvars = List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_quant_item qis) in
-        let typ_tyvars = tyvars_of_typ fun_typ in
-        let new_tyvars = KidSet.diff typ_tyvars quant_tyvars in
-        List.map (mk_qi_id K_int) (KidSet.elements new_tyvars)
+      let quant_new_kopts qis =
+        let quant_kopts = List.fold_left KOptSet.union KOptSet.empty (List.map kopts_of_quant_item qis) in
+        let typ_kopts = kopts_of_typ fun_typ in
+        let new_kopts = KOptSet.diff typ_kopts quant_kopts in
+        List.map mk_qi_kopt (KOptSet.elements new_kopts)
       in
       let typquant = match typquant with
         | TypQ_aux (TypQ_tq qis, l) ->
            let qis =
              List.filter
-               (fun qi -> KidSet.subset (tyvars_of_quant_item qi) (tyvars_of_typ fun_typ))
+               (fun qi -> KOptSet.subset (kopts_of_quant_item qi) (kopts_of_typ fun_typ))
                qis
-             @ quant_new_tyvars qis
+             @ quant_new_kopts qis
            in
            TypQ_aux (TypQ_tq qis, l)
         | _ ->
-           TypQ_aux (TypQ_tq (List.map (mk_qi_id K_int) (KidSet.elements (tyvars_of_typ fun_typ))), l)
+           TypQ_aux (TypQ_tq (List.map mk_qi_kopt (KOptSet.elements (kopts_of_typ fun_typ))), l)
       in
       let val_spec =
         VS_aux (VS_val_spec
@@ -3016,10 +3016,16 @@ let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
 let construct_toplevel_string_append_call env f_id bindings binding_typs guard expr =
   (* s# if match f#(s#) { Some (bindings) => guard, _ => false) } => let Some(bindings) = f#(s#) in expr *)
   let s_id = fresh_stringappend_id () in
+  let hack_typ (Typ_aux (aux, _) as typ) =
+    match aux with
+    | Typ_app (Id_aux (Id "atom_bool", _), [_]) -> bool_typ
+    | Typ_app (Id_aux (Id "atom", _), [_]) -> int_typ
+    | _ -> typ
+  in
   let option_typ = app_typ (mk_id "option") [A_aux (A_typ (match binding_typs with
                                                                          | [] -> unit_typ
-                                                                         | [typ] -> typ
-                                                                         | typs -> tuple_typ typs
+                                                                         | [typ] -> hack_typ typ
+                                                                         | typs -> tuple_typ (List.map hack_typ typs)
                                                               ), unk)]
   in
   let bindings = if bindings = [] then
@@ -3048,11 +3054,22 @@ let construct_toplevel_string_append_func env f_id pat =
                  else
                    bindings
   in
+  (* AA: Pulling the types out of a pattern with binding_typs_of_pat
+     is broken here because they might contain type variables that
+     were bound locally to the pattern, so we can't lift them out to
+     the top-level. As a hacky fix we can generalise types where this
+     is likely to happen. *)
+  let hack_typ (Typ_aux (aux, _) as typ) =
+    match aux with
+    | Typ_app (Id_aux (Id "atom_bool", _), [_]) -> bool_typ
+    | Typ_app (Id_aux (Id "atom", _), [_]) -> int_typ
+    | _ -> typ
+  in
   let option_typ = app_typ (mk_id "option") [A_aux (A_typ (match binding_typs with
                                                                        | [] -> unit_typ
-                                                                       | [typ] -> typ
-                                                                       | typs -> tuple_typ typs
-                                                            ), unk)]
+                                                                       | [typ] -> hack_typ typ
+                                                                       | typs -> tuple_typ (List.map hack_typ typs)
+                                                          ), unk)]
   in
   let fun_typ = (mk_typ (Typ_fn ([string_typ], option_typ, no_effect))) in
   let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, (fun _ -> None), false), unkt) in
@@ -3135,7 +3152,7 @@ let construct_toplevel_string_append_func env f_id pat =
        let some_pat = annot_pat (P_app (mk_id "Some",
                                         [tup_arg_pat;
                                          annot_pat (P_id len_id) unk env nat_typ]))
-                        unk env opt_typ in
+                                unk env opt_typ in
        let some_pat, some_pat_env, _ = bind_pat env (strip_pat some_pat) opt_typ in
 
        (* need to add the Some(...) env to tup_arg_pats for pat_to_exp below as it calls the typechecker *)
@@ -3520,7 +3537,7 @@ let rewrite_defs_mapping_patterns =
 
        let false_exp = annot_exp (E_lit (L_aux (L_false, unk))) unk env bool_typ in
        let new_other_guards = annot_exp (E_if (new_guard,
-                                               (annot_exp (E_let (new_letbind, fold_typed_guards env guards)) unk env bool_typ),
+                                               (annot_exp (E_let (new_letbind, annot_exp (E_cast (bool_typ, fold_typed_guards env guards)) unk env bool_typ)) unk env bool_typ),
                                                false_exp)) unk env bool_typ in
 
        annot_pat (P_typ (mapping_in_typ, annot_pat (P_id s_id) unk env mapping_in_typ)) unk env mapping_in_typ, [new_guard; new_other_guards], new_let

@@ -1300,11 +1300,6 @@ let rec nexp_frees ?exs:(exs=KidSet.empty) (Nexp_aux (nexp, l)) =
   | Nexp_exp n -> nexp_frees ~exs:exs n
   | Nexp_neg n -> nexp_frees ~exs:exs n
 
-let order_frees (Ord_aux (ord_aux, l)) =
-  match ord_aux with
-  | Ord_var kid -> KidSet.singleton kid
-  | _ -> KidSet.empty
-
 let rec typ_nexps (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_internal_unknown -> []
@@ -1322,24 +1317,6 @@ and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
   | A_nexp n -> [n]
   | A_typ typ -> typ_nexps typ
   | A_order ord -> []
-
-let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
-  match typ_aux with
-  | Typ_internal_unknown -> KidSet.empty
-  | Typ_id v -> KidSet.empty
-  | Typ_var kid when KidSet.mem kid exs -> KidSet.empty
-  | Typ_var kid -> KidSet.singleton kid
-  | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
-  | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
-  | Typ_exist (kopts, nc, typ) -> typ_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
-  | Typ_fn (arg_typs, ret_typ, _) -> List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
-  | Typ_bidir (typ1, typ2) -> KidSet.union (typ_frees ~exs:exs typ1) (typ_frees ~exs:exs typ2)
-and typ_arg_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
-  match typ_arg_aux with
-  | A_nexp n -> nexp_frees ~exs:exs n
-  | A_typ typ -> typ_frees ~exs:exs typ
-  | A_order ord -> order_frees ord
-  | A_bool nc -> tyvars_of_constraint nc
 
 let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with
@@ -1791,7 +1768,7 @@ let rec subtyp l env typ1 typ2 =
      typ_debug (lazy "Subtype check with unification");
      let typ1 = canonicalize env typ1 in
      let env = add_typ_vars l kopts env in
-     let kids' = KidSet.elements (KidSet.diff (KidSet.of_list (List.map kopt_kid kopts)) (typ_frees typ2)) in
+     let kids' = KidSet.elements (KidSet.diff (KidSet.of_list (List.map kopt_kid kopts)) (tyvars_of_typ typ2)) in
      if not (kids' = []) then typ_error l "Universally quantified constraint generated" else ();
      let unifiers =
        try unify l env (KidSet.diff (tyvars_of_typ typ2) (tyvars_of_typ typ1)) typ2 typ1 with
@@ -3256,8 +3233,14 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
         | None -> typ_error l ("Could not infer type of " ^ string_of_exp else_branch)
         end
      | None ->
-        let else_branch' = crule check_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch (typ_of then_branch') in
-        annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
+        begin match typ_of then_branch' with
+        | Typ_aux (Typ_app (f, [_]), _) when string_of_id f = "atom_bool" ->
+           let else_branch' = crule check_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch bool_typ in
+           annot_exp (E_if (cond', then_branch', else_branch')) bool_typ
+        | _ ->
+           let else_branch' = crule check_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch (typ_of then_branch') in
+           annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
+        end
      end
   | E_vector_access (v, n) -> infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ())))
   | E_vector_update (v, n, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, ())))
@@ -3449,7 +3432,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
 
   let universals = KBindings.bindings universals |> List.map fst |> KidSet.of_list in
   let typ_ret =
-    if KidSet.is_empty (KidSet.of_list (List.map kopt_kid existentials)) || KidSet.is_empty (KidSet.diff (typ_frees !typ_ret) universals)
+    if KidSet.is_empty (KidSet.of_list (List.map kopt_kid existentials)) || KidSet.is_empty (KidSet.diff (tyvars_of_typ !typ_ret) universals)
     then !typ_ret
     else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, !typ_ret))
   in
@@ -4386,7 +4369,7 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
   | Tu_ty_id (Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) as typ, v) ->
-     let typq = mk_typquant (List.map (mk_qi_id K_type) (KidSet.elements (typ_frees typ))) in
+     let typq = mk_typquant (List.map (mk_qi_id K_type) (KidSet.elements (tyvars_of_typ typ))) in
      env
      |> Env.add_union_id v (typq, typ)
      |> Env.add_val_spec v (typq, typ)

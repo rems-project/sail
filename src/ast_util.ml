@@ -1173,6 +1173,67 @@ let equal_effects e1 e2 =
   | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
      BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
 
+let rec kopts_of_nexp (Nexp_aux (nexp,_)) =
+  match nexp with
+  | Nexp_id _
+  | Nexp_constant _ -> KOptSet.empty
+  | Nexp_var kid -> KOptSet.singleton (mk_kopt K_int kid)
+  | Nexp_times (n1,n2)
+  | Nexp_sum (n1,n2)
+  | Nexp_minus (n1,n2) -> KOptSet.union (kopts_of_nexp n1) (kopts_of_nexp n2)
+  | Nexp_exp n
+  | Nexp_neg n -> kopts_of_nexp n
+  | Nexp_app (_, nexps) -> List.fold_left KOptSet.union KOptSet.empty (List.map kopts_of_nexp nexps)
+
+let kopts_of_order (Ord_aux (ord, _)) =
+  match ord with
+  | Ord_var kid -> KOptSet.singleton (mk_kopt K_order kid)
+  | Ord_inc | Ord_dec -> KOptSet.empty
+
+let rec kopts_of_constraint (NC_aux (nc, _)) =
+  match nc with
+  | NC_equal (nexp1, nexp2)
+  | NC_bounded_ge (nexp1, nexp2)
+  | NC_bounded_le (nexp1, nexp2)
+  | NC_not_equal (nexp1, nexp2) ->
+     KOptSet.union (kopts_of_nexp nexp1) (kopts_of_nexp nexp2)
+  | NC_set (kid, _) -> KOptSet.singleton (mk_kopt K_int kid)
+  | NC_or (nc1, nc2)
+  | NC_and (nc1, nc2) ->
+     KOptSet.union (kopts_of_constraint nc1) (kopts_of_constraint nc2)
+  | NC_app (id, args) ->
+     List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ_arg t)) KOptSet.empty args
+  | NC_var kid -> KOptSet.singleton (mk_kopt K_bool kid)
+  | NC_true | NC_false -> KOptSet.empty
+
+and kopts_of_typ (Typ_aux (t,_)) =
+  match t with
+  | Typ_internal_unknown -> KOptSet.empty
+  | Typ_id _ -> KOptSet.empty
+  | Typ_var kid -> KOptSet.singleton (mk_kopt K_type kid)
+  | Typ_fn (ts, t, _) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
+  | Typ_bidir (t1, t2) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
+  | Typ_tup ts ->
+     List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ t))
+       KOptSet.empty ts
+  | Typ_app (_,tas) ->
+     List.fold_left (fun s ta -> KOptSet.union s (kopts_of_typ_arg ta))
+       KOptSet.empty tas
+  | Typ_exist (kopts, nc, t) ->
+     let s = KOptSet.union (kopts_of_typ t) (kopts_of_constraint nc) in
+     KOptSet.diff s (KOptSet.of_list kopts)
+and kopts_of_typ_arg (A_aux (ta,_)) =
+  match ta with
+  | A_nexp nexp -> kopts_of_nexp nexp
+  | A_typ typ -> kopts_of_typ typ
+  | A_order ord -> kopts_of_order ord
+  | A_bool nc -> kopts_of_constraint nc
+
+let kopts_of_quant_item (QI_aux (qi, _)) = match qi with
+  | QI_id kopt ->
+     KOptSet.singleton kopt
+  | QI_const nc -> kopts_of_constraint nc
+
 let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
   | Nexp_id _
