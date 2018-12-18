@@ -2365,6 +2365,8 @@ and simple_typ_aux = function
      Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
      Typ_id (mk_id "int")
+  | Typ_app (id, [_]) when Id.compare id (mk_id "atom_bool") = 0 ->
+     Typ_id (mk_id "bool")
   | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
   | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map simple_typ arg_typs, simple_typ ret_typ, effs)
   | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
