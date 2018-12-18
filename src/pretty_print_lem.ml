@@ -327,6 +327,9 @@ let doc_typ_lem, doc_atomic_typ_lem =
                                String.concat ", " (List.map string_of_kid bad) ^
                                " escape into Lem"))
         end
+      (* AA: I think the correct thing is likely to filter out
+         non-integer kinded_id's, then use the above code. *)
+      | Typ_exist (_,_,Typ_aux(Typ_app(id,[_]),_)) when string_of_id id = "atom_bool" -> string "bool"
       | Typ_exist _ -> unreachable l __POS__ "Non-integer existentials currently unsupported in Lem" (* TODO *)
       | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
       | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
