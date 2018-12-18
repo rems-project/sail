@@ -143,7 +143,7 @@ let is_atom_bool (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [_]) when string_of_id f = "atom_bool" -> true
   | _ -> false
-
+       
 let rec strip_id = function
   | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
   | Id_aux (DeIid x, _) -> Id_aux (DeIid x, Parse_ast.Unknown)
@@ -220,36 +220,18 @@ and strip_kinded_id_aux = function
 and strip_kind = function
   | K_aux (k_aux, _) -> K_aux (k_aux, Parse_ast.Unknown)
 
-module StringMap = Map.Make(String);;
+let ex_counter = ref 0
 
-let ex_global = ref false
-let ex_counters = ref StringMap.empty
+let fresh_existential ?name:(n="") k =
+  let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter ^ "#" ^ n), Parse_ast.Unknown) in
+  incr ex_counter; mk_kopt k fresh
 
-let fresh_existential ?name:(name=None) k =
-  let name = match name with None -> "" | Some str -> str in
-  let count = match StringMap.find_opt name !ex_counters with Some c -> c | None -> 0 in
-  let global = if !ex_global then "global#" else "" in
-  ex_counters := StringMap.add name (count + 1) !ex_counters;
-  let fresh = Kid_aux (Var ("'" ^ global ^ name ^ "#" ^ string_of_int count), Parse_ast.Unknown) in
-  mk_kopt k fresh
-
-let rec pat_name (P_aux (aux, _)) =
-  match aux with
-  | P_wild -> "_"
-  | P_id id | P_as (_, id) -> string_of_id id
-  | P_var (pat, _) | P_typ (_, pat) -> pat_name pat
-  | _ -> "ex"
-
-let destruct_exist_plain ?name:(name=None) typ =
-  let gen_name kopt = match name with
-    | None -> Some (string_of_id (id_of_kid (kopt_kid kopt)))
-    | Some str -> Some str
-  in
+let destruct_exist_plain typ =
   match typ with
   | Typ_aux (Typ_exist (kopts, nc, typ), _) ->
      let fresh_kopts =
        List.map (fun kopt -> (kopt_kid kopt,
-                              fresh_existential ~name:(gen_name kopt) (unaux_kind (kopt_kind kopt))))
+                              fresh_existential ~name:(string_of_id (id_of_kid (kopt_kid kopt))) (unaux_kind (kopt_kind kopt))))
          kopts
      in
      let nc = List.fold_left (fun nc (kid, fresh) -> constraint_subst kid (arg_kopt fresh) nc) nc fresh_kopts in
@@ -265,36 +247,36 @@ let destruct_exist_plain ?name:(name=None) typ =
    - int => ['n], true, 'n (where x is fresh)
    - atom('n) => [], true, 'n
 **)
-let destruct_numeric ?name:(name=None) typ =
-  match destruct_exist_plain ~name:name typ, typ with
+let destruct_numeric typ =
+  match destruct_exist_plain typ, typ with
   | Some (kids, nc, Typ_aux (Typ_app (id, [A_aux (A_nexp nexp, _)]), _)), _ when string_of_id id = "atom" ->
      Some (List.map kopt_kid kids, nc, nexp)
   | None, Typ_aux (Typ_app (id, [A_aux (A_nexp nexp, _)]), _) when string_of_id id = "atom" ->
      Some ([], nc_true, nexp)
   | None, Typ_aux (Typ_app (id, [A_aux (A_nexp lo, _); A_aux (A_nexp hi, _)]), _) when string_of_id id = "range" ->
-     let kid = kopt_kid (fresh_existential ~name:name K_int) in
+     let kid = kopt_kid (fresh_existential K_int) in
      Some ([kid], nc_and (nc_lteq lo (nvar kid)) (nc_lteq (nvar kid) hi), nvar kid)
   | None, Typ_aux (Typ_id id, _) when string_of_id id = "nat" ->
-     let kid = kopt_kid (fresh_existential ~name:name K_int) in
+     let kid = kopt_kid (fresh_existential K_int) in
      Some ([kid], nc_lteq (nint 0) (nvar kid), nvar kid)
   | None, Typ_aux (Typ_id id, _) when string_of_id id = "int" ->
-     let kid = kopt_kid (fresh_existential ~name:name K_int) in
+     let kid = kopt_kid (fresh_existential K_int) in
      Some ([kid], nc_true, nvar kid)
   | _, _ -> None
 
-let destruct_boolean ?name:(name=None) = function
+let destruct_boolean = function
   | Typ_aux (Typ_id (Id_aux (Id "bool", _)), _) ->
-     let kid = kopt_kid (fresh_existential ~name:name K_bool) in
+     let kid = kopt_kid (fresh_existential K_bool) in
      Some (kid, nc_var kid)
   | _ -> None
 
-let destruct_exist ?name:(name=None) typ =
-  match destruct_numeric ~name:name typ with
+let destruct_exist typ =
+  match destruct_numeric typ with
   | Some (kids, nc, nexp) -> Some (List.map (mk_kopt K_int) kids, nc, atom_typ nexp)
   | None ->
-     match destruct_boolean ~name:name typ with
+     match destruct_boolean typ with
      | Some (kid, nc) -> Some ([mk_kopt K_bool kid], nc_true, atom_bool_typ nc)
-     | None -> destruct_exist_plain ~name:name typ
+     | None -> destruct_exist_plain typ
 
 let adding = Util.("Adding " |> darkgray |> clear)
 
@@ -790,13 +772,13 @@ end = struct
           forall 'n, 'n >= 2. (int('n), foo) -> bar
           this enforces the invariant that all things on the left of functions are 'base types' (i.e. without existentials)
         *)
-       let base_args = List.map (fun typ -> destruct_exist ~name:(Some "#") (expand_synonyms env typ)) arg_typs in
+       let base_args = List.map (fun typ -> destruct_exist (expand_synonyms env typ)) arg_typs in
        let existential_arg typq = function
          | None -> typq
          | Some (exs, nc, _) ->
             List.fold_left (fun typq kopt -> quant_add (mk_qi_kopt kopt) typq) (quant_add (mk_qi_nc nc) typq) exs
        in
-       let typq = List.fold_left existential_arg typq (List.rev base_args) in
+       let typq = List.fold_left existential_arg typq base_args in
        let arg_typs = List.map2 (fun typ -> function Some (_, _, typ) -> typ | None -> typ) arg_typs base_args in
        let typ = Typ_aux (Typ_fn (arg_typs, ret_typ, effect), l) in
        typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
@@ -1071,7 +1053,7 @@ end = struct
 
   let add_constraint constr env =
     wf_constraint env constr;
-    let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
+    let (NC_aux (nc_aux, l) as constr) = expand_constraint_synonyms env constr in
     match nc_aux with
     | NC_true -> env
     | _ ->
@@ -1192,8 +1174,8 @@ let bind_numeric l typ env =
 
 (** Pull an (potentially)-existentially qualified type into the global
    typing environment **)
-let bind_existential ?name:(name=None) l typ env =
-  match destruct_exist ~name:name (Env.expand_synonyms env typ) with
+let bind_existential l typ env =
+  match destruct_exist (Env.expand_synonyms env typ) with
   | Some (kids, nc, typ) -> typ, add_existential l kids nc env
   | None -> typ, env
 
@@ -1288,7 +1270,7 @@ let solve env (Nexp_aux (_, l) as nexp) =
 
 let prove env nc =
   typ_print (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
-  let (NC_aux (nc_aux, _) as nc) = constraint_simp (Env.expand_constraint_synonyms env nc) in
+  let (NC_aux (nc_aux, _) as nc) = Env.expand_constraint_synonyms env nc in
   typ_debug ~level:2 (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
   let compare_const f (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
     match n1, n2 with
@@ -2543,7 +2525,7 @@ and type_coercion_unify env goals (E_aux (_, (l, _)) as annotated_exp) typ =
         typ_print (lazy ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " for unification"));
         try
           let inferred_cast = irule infer_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) in
-          let ityp, env = bind_existential ~name:(Some "arg") l (typ_of inferred_cast) env in
+          let ityp, env = bind_existential l (typ_of inferred_cast) env in
           inferred_cast, unify l env goals typ ityp, env
         with
         | Type_error (_, err) -> try_casts casts
@@ -2553,7 +2535,7 @@ and type_coercion_unify env goals (E_aux (_, (l, _)) as annotated_exp) typ =
   begin
     try
       typ_debug (lazy ("Coercing unification: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
-      let atyp, env = bind_existential ~name:(Some "arg") l (typ_of annotated_exp) env in
+      let atyp, env = bind_existential l (typ_of annotated_exp) env in
       annotated_exp, unify l env goals typ atyp, env
     with
     | Unification_error (_, m) when Env.allow_casts env ->
@@ -2567,7 +2549,7 @@ and bind_pat_no_guard env (P_aux (_,(l,_)) as pat) typ =
   | tpat, env, [] -> tpat, env
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
-  let (Typ_aux (typ_aux, _) as typ), env = bind_existential ~name:(Some (pat_name pat)) l typ env in
+  let (Typ_aux (typ_aux, _) as typ), env = bind_existential l typ env in
   typ_print (lazy (Util.("Binding " |> yellow |> clear) ^ string_of_pat pat ^  " to " ^ string_of_typ typ));
   let annot_pat pat typ' = P_aux (pat, (l, mk_expected_tannot env typ' no_effect (Some typ))) in
   let switch_typ pat typ = match pat with
@@ -4496,7 +4478,6 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
 
 and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   fun env def ->
-  ex_counters := StringMap.empty;
   let cd_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Case") in
   match def with
   | DEF_kind kdef -> check_kinddef env kdef
@@ -4511,11 +4492,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
        | _ -> (defs @ [def], fdefs) in
      let (defs, fdefs) = List.fold_left split_fundef ([], []) defs in
      (defs @ [DEF_internal_mutrec fdefs]), env
-  | DEF_val letdef ->
-     ex_global := true;
-     let defs, env = check_letdef env letdef in
-     ex_global := false;
-     defs, env
+  | DEF_val letdef -> check_letdef env letdef
   | DEF_spec vs -> check_val_spec env vs
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
