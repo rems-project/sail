@@ -212,8 +212,8 @@ val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
    is not existential. This function will pick a fresh name for the
    existential to ensure that no name-clashes occur. The "plain"
    version does not treat numeric types as existentials. *)
-val destruct_exist_plain : typ -> (kinded_id list * n_constraint * typ) option
-val destruct_exist : typ -> (kinded_id list * n_constraint * typ) option
+val destruct_exist_plain : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
+val destruct_exist : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
 
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
 
@@ -356,7 +356,7 @@ val destruct_atom_nexp : Env.t -> typ -> nexp option
 
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
-val destruct_numeric : typ -> (kid list * n_constraint * nexp) option
+val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * nexp) option
 
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
