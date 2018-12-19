@@ -65,6 +65,20 @@ let opt_debug_on : string list ref = ref []
  * PPrint-based sail-to-coq pprinter
 ****************************************************************************)
 
+(* Data representation:
+ *
+ * In pure computations we keep values with top level existential types
+ * (including ranges and nats) separate from the proofs of the accompanying
+ * constraints, which keeps the terms shorter and more manageable.
+ * Existentials embedded in types (e.g., in tuples or datatypes) are dependent
+ * pairs.
+ *
+ * Monadic values always includes the proof in a dependent pair because the
+ * constraint solving tactic won't see the term that defined the value, and
+ * must rely entirely on the type (like the Sail type checker).
+ *)
+
+
 type context = {
   early_ret : bool;
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames *)
@@ -761,9 +775,9 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
           | _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern doesn't have tuple type")
         in
         (match pats, typs with
-        | [p], [typ'] -> doc_pat ctxt apat_needed exists_as_pairs (p, typ')
+        | [p], [typ'] -> doc_pat ctxt apat_needed true (p, typ')
         | [_], _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern length does not match tuple type length")
-        | _ -> parens (separate_map comma_sp (doc_pat ctxt false exists_as_pairs) (List.combine pats typs)))
+        | _ -> parens (separate_map comma_sp (doc_pat ctxt false true) (List.combine pats typs)))
      | P_list pats ->
         let el_typ = match typ with
           | Typ_aux (Typ_app (f, [A_aux (A_typ el_typ,_)]),_)
@@ -1413,7 +1427,7 @@ let doc_exp, doc_let =
        in
        if aexp_needed then parens epp else epp
     | E_tuple exps ->
-       parens (align (group (separate_map (comma ^^ break 1) expN exps)))
+       construct_dep_pairs (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
     | E_record fexps ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
