@@ -52,6 +52,8 @@ module Big_int = Nat_big_num
 open Ast
 open Ast_util
 
+val opt_smt_verbose : bool ref
+
 type smt_result = Unknown | Sat | Unsat
 
 val load_digests : unit -> unit

@@ -795,6 +795,10 @@ let typ_of_string str =
   let typ = to_ast_typ initial_ctx typ in
   typ
 
+let constraint_of_string str =
+  let atyp = Parser.typ_eof Lexer.token (Lexing.from_string str) in
+  to_ast_constraint initial_ctx atyp
+
 let extern_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, (fun _ -> Some (string_of_id id)), false))
 let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, (fun _ -> None), false))
 

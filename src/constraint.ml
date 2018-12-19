@@ -53,6 +53,8 @@ open Ast
 open Ast_util
 open Util
 
+let opt_smt_verbose = ref false
+
 (* SMTLIB v2.0 format is based on S-expressions so we have a
    lightweight representation of those here. *)
 type sexpr = List of (sexpr list) | Atom of string
@@ -185,7 +187,9 @@ let call_z3' l vars constraints : smt_result =
   let problems = [constraints] in
   let z3_file = smtlib_of_constraints l vars constraints in
 
-  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
+  if !opt_smt_verbose then
+    prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file)
+  else ();
 
   let rec input_lines chan = function
     | 0 -> []

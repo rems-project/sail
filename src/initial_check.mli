@@ -92,3 +92,4 @@ val val_spec_of_string : id -> string -> unit def
 
 val exp_of_string : string -> unit exp
 val typ_of_string : string -> typ
+val constraint_of_string : string -> n_constraint

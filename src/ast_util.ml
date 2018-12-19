@@ -321,10 +321,23 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
        | NC_aux (nc, _), NC_aux (NC_true, _) -> NC_true
        | _, _ -> NC_or (nc1, nc2)
        end
+
     | NC_bounded_ge (nexp1, nexp2) ->
-       NC_bounded_ge (nexp_simp nexp1, nexp_simp nexp2)
+       let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
+       begin match nexp1, nexp2 with
+       | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+          if Big_int.greater_equal c1 c2 then NC_true else NC_false
+       | _, _ -> NC_bounded_ge (nexp1, nexp2)
+       end
+
     | NC_bounded_le (nexp1, nexp2) ->
-       NC_bounded_le (nexp_simp nexp1, nexp_simp nexp2)
+       let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
+       begin match nexp1, nexp2 with
+       | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+          if Big_int.less_equal c1 c2 then NC_true else NC_false
+       | _, _ -> NC_bounded_le (nexp1, nexp2)
+       end
+
     | _ -> nc_aux
   in
   NC_aux (nc_aux, l)

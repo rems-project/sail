@@ -682,12 +682,11 @@ end = struct
     | Nexp_id _ -> ()
     | Nexp_var kid when KidSet.mem kid exs -> ()
     | Nexp_var kid ->
-       begin
-         match get_typ_var kid env with
-         | K_int -> ()
-         | kind -> typ_error l ("Constraint is badly formed, "
-                                ^ string_of_kid kid ^ " has kind "
-                                ^ string_of_kind_aux kind ^ " but should have kind Int")
+       begin match get_typ_var kid env with
+       | K_int -> ()
+       | kind -> typ_error l ("Constraint is badly formed, "
+                              ^ string_of_kid kid ^ " has kind "
+                              ^ string_of_kind_aux kind ^ " but should have kind Int")
        end
     | Nexp_constant _ -> ()
     | Nexp_app (id, nexps) ->
@@ -700,12 +699,11 @@ end = struct
   and wf_order env (Ord_aux (ord_aux, l) as ord) =
     match ord_aux with
     | Ord_var kid ->
-       begin
-         match get_typ_var kid env with
-         | K_order -> ()
-         | kind -> typ_error l ("Order is badly formed, "
-                                ^ string_of_kid kid ^ " has kind "
-                                ^ string_of_kind_aux kind ^ " but should have kind Order")
+       begin match get_typ_var kid env with
+       | K_order -> ()
+       | kind -> typ_error l ("Order is badly formed, "
+                              ^ string_of_kid kid ^ " has kind "
+                              ^ string_of_kind_aux kind ^ " but should have kind Order")
        end
     | Ord_inc | Ord_dec -> ()
   and wf_constraint ?exs:(exs=KidSet.empty) env (NC_aux (nc_aux, l) as nc) =
@@ -1294,17 +1292,9 @@ let solve env (Nexp_aux (_, l) as nexp) =
 
 let prove env nc =
   typ_print (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
-  let (NC_aux (nc_aux, _) as nc) = Env.expand_constraint_synonyms env nc in
+  let (NC_aux (nc_aux, _) as nc) = constraint_simp (Env.expand_constraint_synonyms env nc) in
   typ_debug ~level:2 (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
-  let compare_const f (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
-    match n1, n2 with
-    | Nexp_constant c1, Nexp_constant c2 when f c1 c2 -> true
-    | _, _ -> false
-  in
   match nc_aux with
-  | NC_equal (nexp1, nexp2) when compare_const Big_int.equal (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_bounded_le (nexp1, nexp2) when compare_const Big_int.less_equal (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_bounded_ge (nexp1, nexp2) when compare_const Big_int.greater_equal (nexp_simp nexp1) (nexp_simp nexp2) -> true
   | NC_true -> true
   | _ -> prove_z3 env nc
 

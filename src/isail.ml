@@ -273,6 +273,9 @@ let handle_input' input =
          | ":canon" ->
             let typ = Initial_check.typ_of_string arg in
             print_endline (string_of_typ (Type_check.canonicalize !interactive_env typ))
+         | ":prove" ->
+            let nc = Initial_check.constraint_of_string arg in
+            print_endline (string_of_bool (Type_check.prove !interactive_env nc))
          | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)

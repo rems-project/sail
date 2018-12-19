@@ -239,6 +239,9 @@ let options = Arg.align ([
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
     "<verbosity> (debug) verbose typechecker output: 0 is silent");
+  ( "-dsmt_verbose",
+    Arg.Set Constraint.opt_smt_verbose,
+    " (debug) print SMTLIB constraints sent to Z3");
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");
