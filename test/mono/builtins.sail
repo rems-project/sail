@@ -43,7 +43,7 @@ function test(b) = {
     assert(x != y, "!= by propagation");
     assert(slice(x, 0, 4) == slice(x',0,4), "propagated slice == runtime slice");
     assert(0x3 == slice(y, 4, 4), "literal vs propagated middle slice");
-    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }), "UInt propagation vs literal");
+    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }) : int, "UInt propagation vs literal");
     assert(shl_int(5,2) == shl_int(launder_int(5),2), "shl_int");
 }
 

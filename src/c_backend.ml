@@ -150,7 +150,7 @@ let rec ctyp_of_typ ctx typ =
              when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
            CT_int64
         | n, m when ctx.optimize_z3 ->
-           if prove ctx.local_env (nc_lteq (nconstant min_int64) n) && prove ctx.local_env (nc_lteq m (nconstant max_int64)) then
+           if prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) then
              CT_int64
            else
              CT_int
@@ -171,7 +171,7 @@ let rec ctyp_of_typ ctx typ =
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
      | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
-     | n when ctx.optimize_z3 && prove ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits direction
+     | n when ctx.optimize_z3 && prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits direction
      | _ -> CT_lbits direction
      end
 
@@ -541,7 +541,7 @@ let analyze_primop' ctx id args typ =
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
                when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
            AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_int64))
-        | n, m when prove ctx.local_env (nc_lteq (nconstant min_int64) n) && prove ctx.local_env (nc_lteq m (nconstant max_int64)) ->
+        | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) ->
            AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_int64))
         | _ -> no_change
      end

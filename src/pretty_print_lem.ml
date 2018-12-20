@@ -356,7 +356,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
        | Some n -> mk_typ (nconstant n)
        | None ->
           let is_equal nexp =
-            prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
           in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
           | nexp -> mk_typ nexp
           | exception Not_found -> None

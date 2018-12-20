@@ -100,36 +100,36 @@ let subst_nexp substs nexp =
     | Nexp_app (id,args) -> re (Nexp_app (id,List.map s_snexp args))
   in s_snexp substs nexp
 
-let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
-  let snexp nexp = subst_nexp substs nexp in
-  let snc nc = subst_nc substs nc in
-  let re nc = NC_aux (nc,l) in
-  match nc with
-  | NC_equal (n1,n2) -> re (NC_equal (snexp n1, snexp n2))
-  | NC_bounded_ge (n1,n2) -> re (NC_bounded_ge (snexp n1, snexp n2))
-  | NC_bounded_le (n1,n2) -> re (NC_bounded_le (snexp n1, snexp n2))
-  | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
-  | NC_set (kid,is) ->
-     begin
-       match KBindings.find kid substs with
-       | Nexp_aux (Nexp_constant i,_) ->
-          if List.exists (fun j -> Big_int.equal i j) is then re NC_true else re NC_false
-       | nexp -> 
-          raise (Reporting.err_general l
-                   ("Unable to substitute " ^ string_of_nexp nexp ^
-                       " into set constraint " ^ string_of_n_constraint n_constraint))
-       | exception Not_found -> n_constraint
-     end
-  | NC_or (nc1,nc2) -> re (NC_or (snc nc1, snc nc2))
-  | NC_and (nc1,nc2) -> re (NC_and (snc nc1, snc nc2))
-  | NC_true
-  | NC_false
+let subst_nc, subst_src_typ, subst_src_typ_arg =
+  let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
+    let snexp nexp = subst_nexp substs nexp in
+    let snc nc = subst_nc substs nc in
+    let re nc = NC_aux (nc,l) in
+    match nc with
+    | NC_equal (n1,n2) -> re (NC_equal (snexp n1, snexp n2))
+    | NC_bounded_ge (n1,n2) -> re (NC_bounded_ge (snexp n1, snexp n2))
+    | NC_bounded_le (n1,n2) -> re (NC_bounded_le (snexp n1, snexp n2))
+    | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
+    | NC_set (kid,is) ->
+       begin
+         match KBindings.find kid substs with
+         | Nexp_aux (Nexp_constant i,_) ->
+            if List.exists (fun j -> Big_int.equal i j) is then re NC_true else re NC_false
+         | nexp -> 
+            raise (Reporting.err_general l
+                     ("Unable to substitute " ^ string_of_nexp nexp ^
+                        " into set constraint " ^ string_of_n_constraint n_constraint))
+         | exception Not_found -> n_constraint
+       end
+    | NC_or (nc1,nc2) -> re (NC_or (snc nc1, snc nc2))
+    | NC_and (nc1,nc2) -> re (NC_and (snc nc1, snc nc2))
+    | NC_true
+      | NC_false
       -> n_constraint
-
-
-
-let subst_src_typ substs t =
-  let rec s_styp substs ((Typ_aux (t,l)) as ty) =
+    | NC_var kid -> re (NC_var kid)
+    | NC_app (f, args) ->
+       re (NC_app (f, List.map (s_starg substs) args))
+  and  s_styp substs ((Typ_aux (t,l)) as ty) =
     let re t = Typ_aux (t,l) in
     match t with
     | Typ_id _
@@ -148,7 +148,8 @@ let subst_src_typ substs t =
     | A_nexp ne -> A_aux (A_nexp (subst_nexp substs ne),l)
     | A_typ t -> A_aux (A_typ (s_styp substs t),l)
     | A_order _ -> targ
-  in s_styp substs t
+    | A_bool nc -> A_aux (A_bool (subst_nc substs nc), l)
+  in subst_nc, s_styp, s_starg
 
 let make_vector_lit sz i =
   let f j = if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz-j-1)) (Big_int.of_int 2)) Big_int.zero then '0' else '1' in
@@ -727,8 +728,10 @@ let fabricate_nexp_exist env l typ kids nc typ' =
       when Kid.compare kid kid'' = 0 &&
         Kid.compare kid kid''' = 0 ->
      nint 32
-  | _ -> raise (Reporting.err_general l
-                  ("Undefined value at unsupported type " ^ string_of_typ typ))
+  | ([], _, typ) -> nint 32
+  | (kids, nc, typ) ->
+     raise (Reporting.err_general l
+              ("Undefined value at unsupported type " ^ string_of_typ typ ^ " with " ^ Util.string_of_list ", " string_of_kid kids))
 
 let fabricate_nexp l tannot =
   match destruct_tannot tannot with
@@ -756,7 +759,7 @@ let reduce_cast typ exp l annot =
   | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
      let nc_env = Env.add_typ_var l kopt env in
      let nc_env = Env.add_constraint (nc_eq (nvar (kopt_kid kopt)) (nconstant n)) nc_env in
-     if prove nc_env nc
+     if prove __POS__ nc_env nc
      then exp
      else raise (Reporting.err_unreachable l __POS__
                    ("Constant propagation error: literal " ^ Big_int.to_string n ^
@@ -1176,7 +1179,7 @@ let apply_pat_choices choices =
 let is_env_inconsistent env ksubsts =
   let env = KBindings.fold (fun k nexp env ->
     Env.add_constraint (nc_eq (nvar k) nexp) env) ksubsts env in
-  prove env nc_false
+  prove __POS__ env nc_false
 
 let split_defs all_errors splits defs =
   let no_errors_happened = ref true in
@@ -1663,7 +1666,7 @@ let split_defs all_errors splits defs =
     let substs = bindings_from_list substs, ksubsts in
     fst (const_prop_exp ref_vars substs Bindings.empty exp)
   in
-    
+
   (* Split a variable pattern into every possible value *)
 
   let split var pat_l annot =
@@ -1686,7 +1689,7 @@ let split_defs all_errors splits defs =
         else raise (Fatal_error error)
     in
     match ty with
-    | Typ_id (Id_aux (Id "bool",_)) ->
+    | Typ_id (Id_aux (Id "bool",_)) | Typ_app (Id_aux (Id "atom_bool", _), [_]) ->
        [P_aux (P_lit (L_aux (L_true,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_true,new_l)),(new_l,annot))],[],[];
         P_aux (P_lit (L_aux (L_false,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_false,new_l)),(new_l,annot))],[],[]]
 
@@ -2259,7 +2262,7 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
   let replace_size size = 
     (* TODO: pick simpler nexp when there's a choice (also in pretty printer) *)
     let is_equal nexp =
-      prove env (NC_aux (NC_equal (size,nexp), Parse_ast.Unknown))
+      prove __POS__ env (NC_aux (NC_equal (size,nexp), Parse_ast.Unknown))
     in
     if is_nexp_constant size then size else
       match List.find is_equal bound_nexps with
@@ -2345,9 +2348,9 @@ in *)
               | i -> IntSet.singleton i
               | exception Not_found ->
                  (* Look for equivalent nexps, but only in consistent type env *)
-                 if prove env (NC_aux (NC_false,Unknown)) then IntSet.empty else
+                 if prove __POS__ env (NC_aux (NC_false,Unknown)) then IntSet.empty else
                    match List.find (fun (nexp,i) -> 
-                     prove env (NC_aux (NC_equal (nexp,size),Unknown))) nexp_list with
+                     prove __POS__ env (NC_aux (NC_equal (nexp,size),Unknown))) nexp_list with
                    | _, i -> IntSet.singleton i
                    | exception Not_found -> IntSet.empty
           end
@@ -2848,11 +2851,15 @@ let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
   | NC_true
   | NC_false
     -> dempty
+  | NC_app (Id_aux (Id "mod", _), [A_aux (A_nexp nexp1, _); A_aux (A_nexp nexp2, _)])
+    -> dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
+  | NC_var _ | NC_app _
+    -> dempty
 
-let deps_of_typ l kid_deps arg_deps typ =
+and deps_of_typ l kid_deps arg_deps typ =
   deps_of_tyvars l kid_deps arg_deps (tyvars_of_typ typ)
 
-let deps_of_typ_arg l fn_id env arg_deps (A_aux (aux, _)) =
+and deps_of_typ_arg l fn_id env arg_deps (A_aux (aux, _)) =
   match aux with
   | A_nexp (Nexp_aux (Nexp_var kid,_))
       when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
@@ -2861,7 +2868,7 @@ let deps_of_typ_arg l fn_id env arg_deps (A_aux (aux, _)) =
   | A_order _ -> InFun dempty
   | A_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
   | A_bool nc -> InFun (deps_of_nc env.kid_deps nc)
-                     
+
 let mk_subrange_pattern vannot vstart vend =
   let (len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
   match ord with
@@ -2936,7 +2943,11 @@ let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
   | Some n -> nconstant n
   | None ->
      let is_equal kid =
-       prove typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+       (* AA: top_kids should be changed to top_kopts so we don't end
+          up trying to prove v == nexp for a non-Int v. *)
+       try
+         prove __POS__ typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+       with _ -> false
      in
      match ne with
      | Nexp_var _
@@ -3935,7 +3946,7 @@ let simplify_size_nexp env quant_kids (Nexp_aux (_,l) as nexp) =
   | Some n -> Some (nconstant n)
   | None ->
      let is_equal kid =
-       prove env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+       prove __POS__ env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
      in
      match List.find is_equal quant_kids with
      | kid -> Some (Nexp_aux (Nexp_var kid,Generated l))
@@ -4198,7 +4209,7 @@ let replace_nexp_in_typ env typ orig new_nexp =
   and aux_targ (A_aux (ta,l) as typ_arg) =
     match ta with
     | A_nexp nexp ->
-       if prove env (nc_eq nexp orig)
+       if prove __POS__ env (nc_eq nexp orig)
        then true, A_aux (A_nexp new_nexp,l)
        else false, typ_arg
     | A_typ typ ->
@@ -4227,7 +4238,7 @@ let fresh_nexp_kid nexp =
 
 let rewrite_toplevel_nexps (Defs defs) =
   let find_nexp env nexp_map nexp =
-    let is_equal (kid,nexp') = prove env (nc_eq nexp nexp') in
+    let is_equal (kid,nexp') = prove __POS__ env (nc_eq nexp nexp') in
     List.find is_equal nexp_map
   in
   let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =

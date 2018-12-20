@@ -6336,7 +6336,7 @@ function AArch64_CheckS2Permission (perms, vaddress, ipaddress, 'level, acctype,
 }
 
 function AArch64_CheckAndUpdateDescriptor_SecondStage (result, fault, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk__arg) = {
-  hwupdatewalk = hwupdatewalk__arg;
+  hwupdatewalk : bool = hwupdatewalk__arg;
   hw_update_AF : bool = undefined;
   if result.AF then
     if fault.typ == Fault_None then hw_update_AF = true
@@ -6703,7 +6703,7 @@ function AArch64_SecondStageTranslate (S1, vaddress, acctype, iswrite, wasaligne
 }
 
 function AArch64_CheckAndUpdateDescriptor (result, fault, secondstage, vaddress, acctype, iswrite, s2fs1walk, hwupdatewalk__arg) = {
-  hwupdatewalk = hwupdatewalk__arg;
+  hwupdatewalk : bool = hwupdatewalk__arg;
   hw_update_AF : bool = undefined;
   if result.AF then if fault.typ == Fault_None then hw_update_AF = true else if ConstrainUnpredictable(Unpredictable_AFUPDATE) == Constraint_TRUE then hw_update_AF = true else hw_update_AF = false else ();
   hw_update_AP : bool = undefined;
@@ -6740,7 +6740,7 @@ function AArch64_StateMatch (SSC__arg, HMC__arg, PxC__arg, linked__arg, LBN, isb
   HMC = HMC__arg;
   PxC = PxC__arg;
   SSC = SSC__arg;
-  linked = linked__arg;
+  linked : bool = linked__arg;
   c : Constraint = undefined;
   if (((((((HMC @ SSC) @ PxC) & 0b11100) == 0b01100 | (((HMC @ SSC) @ PxC) & 0b11101) == 0b10000 | (((HMC @ SSC) @ PxC) & 0b11101) == 0b10100 | ((HMC @ SSC) @ PxC) == 0b11010 | ((HMC @ SSC) @ PxC) == 0b11101 | (((HMC @ SSC) @ PxC) & 0b11110) == 0b11110) | (HMC == 0b0 & PxC == 0b00) & (~(isbreakpnt) | ~(HaveAArch32EL(EL1)))) | (SSC == 0b01 | SSC == 0b10) & ~(HaveEL(EL3))) | (((HMC @ SSC) != 0b000 & (HMC @ SSC) != 0b111) & ~(HaveEL(EL3))) & ~(HaveEL(EL2))) | ((HMC @ SSC) @ PxC) == 0b11100 & ~(HaveEL(EL2)) then {
     __tmp_5 : bits(5) = undefined;
@@ -9202,7 +9202,7 @@ function aarch64_memory_single_general_register (acctype, 'datasize, extend_type
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
-  wback = wback__arg;
+  wback : bool = wback__arg;
   offset : bits(64) = ExtendReg(m, extend_type, shift);
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -9258,7 +9258,7 @@ function aarch64_memory_single_general_immediate_unsigned (acctype, 'datasize, m
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
-  wback = wback__arg;
+  wback : bool = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   wb_unknown : bool = false;
@@ -9313,7 +9313,7 @@ function aarch64_memory_single_general_immediate_signed_postidx (acctype, 'datas
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
-  wback = wback__arg;
+  wback : bool = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   wb_unknown : bool = false;
@@ -9364,7 +9364,7 @@ function aarch64_memory_single_general_immediate_signed_postidx (acctype, 'datas
 val aarch64_memory_single_general_immediate_signed_pac : (int, bits(64), int, bool, bool) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function aarch64_memory_single_general_immediate_signed_pac ('n, offset, 't, use_key_a, wback__arg) = {
-  wback = wback__arg;
+  wback : bool = wback__arg;
   address : bits(64) = undefined;
   data : bits(64) = undefined;
   wb_unknown : bool = false;
@@ -9400,7 +9400,7 @@ function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
-  wback = wback__arg;
+  wback : bool = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   wb_unknown : bool = false;
@@ -9455,7 +9455,7 @@ function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
-  wback = wback__arg;
+  wback : bool = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   wb_unknown : bool = false;
@@ -9611,7 +9611,7 @@ val aarch64_memory_pair_general_postidx : forall ('datasize : Int).
 function aarch64_memory_pair_general_postidx (acctype, datasize, memop, n, offset, postindex, signed, t, t2, wback__arg) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
-  wback = wback__arg;
+  wback : bool = wback__arg;
   address : bits(64) = undefined;
   data1 : bits('datasize) = undefined;
   data2 : bits('datasize) = undefined;

@@ -542,7 +542,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
        | Some n -> mk_typ (nconstant n)
        | None ->
           let is_equal nexp =
-            prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
           in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
           | nexp -> mk_typ nexp
           | exception Not_found -> None
@@ -837,7 +837,7 @@ let similar_nexps ctxt env n1 n2 =
        by tracking which existential kids are equal to bound kids. *)
     | Nexp_var k1, Nexp_var k2 ->
        Kid.compare k1 k2 == 0 ||
-         (prove env (nc_eq (nvar k1) (nvar k2)) && (
+         (prove __POS__ env (nc_eq (nvar k1) (nvar k2)) && (
             not (KidSet.mem k1 ctxt.bound_nvars) ||
               not (KidSet.mem k2 ctxt.bound_nvars)))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
@@ -895,7 +895,7 @@ let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
   | Typ_app(Id_aux (Id "atom", _), [A_aux (A_nexp nexp,_)]),
     Typ_app(Id_aux (Id "range", _), [A_aux(A_nexp low,_);
                                      A_aux(A_nexp high,_)]) ->
-     Type_check.prove env (nc_and (nc_eq nexp low) (nc_eq nexp high))
+     Type_check.prove __POS__ env (nc_and (nc_eq nexp low) (nc_eq nexp high))
   | _ -> false
 
 (* Get a more general type for an annotation/expression - i.e.,

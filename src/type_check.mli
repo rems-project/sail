@@ -301,7 +301,7 @@ val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 
 val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
 
-val prove : Env.t -> n_constraint -> bool
+val prove : (string * int * int * int) -> Env.t -> n_constraint -> bool
 
 val solve : Env.t -> nexp -> Big_int.num option
 

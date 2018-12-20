@@ -1290,10 +1290,15 @@ let solve env (Nexp_aux (_, l) as nexp) =
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
     Constraint.solve_z3 l vars constr (mk_kid "solve#")
 
-let prove env nc =
+let debug_pos (file, line, _, _) =
+  "(" ^ file ^ "/" ^ string_of_int line ^ ") "
+
+let prove pos env nc =
   typ_print (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
   let (NC_aux (nc_aux, _) as nc) = constraint_simp (Env.expand_constraint_synonyms env nc) in
-  typ_debug ~level:2 (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
+  if !Constraint.opt_smt_verbose then
+    prerr_endline (Util.("Prove " |> red |> clear) ^ debug_pos pos ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc)
+  else ();
   match nc_aux with
   | NC_true -> true
   | _ -> prove_z3 env nc
@@ -1480,7 +1485,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
   if KidSet.is_empty (KidSet.inter (nexp_frees nexp1) goals)
   then
     begin
-      if prove env (NC_aux (NC_equal (nexp1, nexp2), Parse_ast.Unknown))
+      if prove __POS__ env (NC_aux (NC_equal (nexp1, nexp2), Parse_ast.Unknown))
       then KBindings.empty
       else unify_error l ("Nexp " ^ string_of_nexp nexp1 ^ " and " ^ string_of_nexp nexp2 ^ " are not equal")
     end
@@ -1513,7 +1518,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
           mod(m, C) = 0 && C != 0 --> (C * n = m <--> n = m / C)
 
           to help us unify multiplications and divisions. 
-       let valid n c = prove env (nc_eq (napp (mk_id "mod") [n; c]) (nint 0)) && prove env (nc_neq c (nint 0)) in
+       let valid n c = prove __POS__ env (nc_eq (napp (mk_id "mod") [n; c]) (nint 0)) && prove __POS__ env (nc_neq c (nint 0)) in
        if KidSet.is_empty (nexp_frees n1b) && valid nexp2 n1b then
          unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
        else if KidSet.is_empty (nexp_frees n1a) && valid nexp2 n1a then
@@ -1521,7 +1526,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
        if KidSet.is_empty (nexp_frees n1a) then
          begin
            match nexp_aux2 with
-           | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_equal (n1a, n2a), Parse_ast.Unknown)) ->
+           | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1a, n2a), Parse_ast.Unknown)) ->
               unify_nexp l env goals n1b n2b
            | Nexp_constant c2 ->
               begin
@@ -1535,7 +1540,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
        else if KidSet.is_empty (nexp_frees n1b) then
          begin
            match nexp_aux2 with
-           | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
+           | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
               unify_nexp l env goals n1a n2a
            | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
@@ -1751,14 +1756,14 @@ let rec subtyp l env typ1 typ2 =
   (* Special cases for two numeric (atom) types *)
   | Some (kids1, nc1, nexp1), Some ([], _, nexp2) ->
      let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
-     if prove env (nc_eq nexp1 nexp2) then () else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+     if prove __POS__ env (nc_eq nexp1 nexp2) then () else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
   | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
      let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
      let env = add_typ_vars l (List.map (mk_kopt K_int) (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2)))) env in
      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
      if not (kids2 = []) then typ_error l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2) else ();
      let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
-     if prove env nc2 then ()
+     if prove __POS__ env nc2 then ()
      else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
   | _, _ ->
   match typ_aux1, typ_aux2 with
@@ -1794,17 +1799,17 @@ let rec subtyp l env typ1 typ2 =
      in
      let nc = List.fold_left (fun nc (kid, uvar) -> constraint_subst kid uvar nc) nc (KBindings.bindings unifiers) in
      let env = List.fold_left unifier_constraint env (KBindings.bindings unifiers) in
-     if prove env nc then ()
+     if prove __POS__ env nc then ()
      else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
   | None, None -> typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
 
 and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   typ_print (lazy (("Subtype arg " |> Util.green |> Util.clear) ^ string_of_typ_arg arg1 ^ " and " ^ string_of_typ_arg arg2));
   match aux1, aux2 with
-  | A_nexp n1, A_nexp n2 when prove env (nc_eq n1 n2) -> ()
+  | A_nexp n1, A_nexp n2 when prove __POS__ env (nc_eq n1 n2) -> ()
   | A_typ typ1, A_typ typ2 -> subtyp l env typ1 typ2
   | A_order ord1, A_order ord2 when ord_identical ord1 ord2 -> ()
-  | A_bool nc1, A_bool nc2 when prove env (nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1)) -> ()
+  | A_bool nc1, A_bool nc2 when prove __POS__ env (nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1)) -> ()
   | _, _ -> typ_error l "Mismatched argument types in subtype check"
 
 let typ_equality l env typ1 typ2 =
@@ -2101,7 +2106,7 @@ let rec add_constraints constrs env =
 
 let solve_quant env = function
   | QI_aux (QI_id _, _) -> false
-  | QI_aux (QI_const nc, _) -> prove env nc
+  | QI_aux (QI_const nc, _) -> prove __POS__ env nc
 
 (* When doing implicit type coercion, for performance reasons we want
    to filter out the possible casts to only those that could
@@ -2274,12 +2279,12 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_prove" ->
      Env.wf_constraint env nc;
-     if prove env nc
+     if prove __POS__ env nc
      then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      else typ_error l ("Cannot prove " ^ string_of_n_constraint nc)
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_not_prove" ->
      Env.wf_constraint env nc;
-     if prove env nc
+     if prove __POS__ env nc
      then typ_error l ("Can prove " ^ string_of_n_constraint nc)
      else annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
   | E_app (f, [E_aux (E_cast (typ, exp), _)]), _ when string_of_id f = "_check" ->
@@ -2390,7 +2395,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_vector vec, _ ->
      let (len, ord, vtyp) = destruct_vec_typ l env typ in
      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
-     if prove env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
+     if prove __POS__ env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
      else typ_error l "List length didn't match" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
      if is_typ_monomorphic typ || Env.polymorphic_undefineds env
@@ -3047,10 +3052,10 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
           let nexp2, env = bind_numeric l (typ_of inferred_exp2) env in
           begin match ord with
-          | Ord_aux (Ord_inc, _) when !opt_no_lexp_bounds_check || prove env (nc_lteq nexp1 nexp2) ->
+          | Ord_aux (Ord_inc, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_lteq nexp1 nexp2) ->
              let len = nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)) in
              annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (vector_typ len ord elem_typ)
-          | Ord_aux (Ord_dec, _) when !opt_no_lexp_bounds_check || prove env (nc_gteq nexp1 nexp2) ->
+          | Ord_aux (Ord_dec, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_gteq nexp1 nexp2) ->
              let len = nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)) in
              annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (vector_typ len ord elem_typ)
           | _ -> typ_error l ("Could not infer length of vector slice assignment " ^ string_of_lexp lexp)
@@ -3066,7 +3071,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
             when Id.compare id (mk_id "vector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
-          if !opt_no_lexp_bounds_check || prove env (nc_and (nc_lteq (nint 0) nexp) (nc_lteq nexp (nexp_simp (nminus len (nint 1))))) then
+          if !opt_no_lexp_bounds_check || prove __POS__ env (nc_and (nc_lteq (nint 0) nexp) (nc_lteq nexp (nexp_simp (nminus len (nint 1))))) then
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) elem_typ
           else
             typ_error l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
@@ -3126,7 +3131,8 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | Unbound -> typ_error l ("Identifier " ^ string_of_id v ^ " is unbound")
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
-  | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp nexp)])))
+  | E_sizeof nexp ->
+     annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp nexp)])))
   | E_constraint nc ->
      Env.wf_constraint env nc;
      annot_exp (E_constraint nc) (atom_bool_typ nc)
@@ -4425,7 +4431,7 @@ let mk_synonym typq typ_arg =
   in
   fun env args ->
     let typ_arg, ncs = subst_args kopts args in
-    if List.for_all (prove env) ncs
+    if List.for_all (prove __POS__ env) ncs
     then typ_arg
     else typ_error Parse_ast.Unknown ("Could not prove constraints " ^ string_of_list ", " string_of_n_constraint ncs
                                       ^ " in type synonym " ^ string_of_typ_arg typ_arg
@@ -4537,7 +4543,7 @@ and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
 
 let initial_env =
   Env.empty
-  |> Env.add_prover prove
+  |> Env.add_prover (prove __POS__)
   (* |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args))) *)
 
   (* Internal functions for Monomorphise.AtomToItself *)
