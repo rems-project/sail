@@ -1180,6 +1180,8 @@ prepare_for_solver;
  [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; constructor; exact (I : (fun _ => True) _) end
  | apply ArithFact_mword; assumption
  | constructor; omega with Z
+   (* Try sail hints before dropping the existential *)
+ | constructor; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
