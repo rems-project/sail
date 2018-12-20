@@ -191,7 +191,7 @@ let rec preprocess opts = function
        let sail_dir =
          try Sys.getenv "SAIL_DIR" with
          | Not_found ->
-            let share_dir = Share_directory.d in
+            let share_dir = Manifest.dir in
             if Sys.file_exists share_dir then
               share_dir
             else

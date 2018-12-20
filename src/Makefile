@@ -62,7 +62,7 @@ endif
 endif
 
 
-.PHONY: all sail sail.native sail.byte test clean doc lib power test_power test_idempotence
+.PHONY: all sail sail.native sail.byte manifest.ml test clean doc lib power test_power test_idempotence
 
 # set to -p on command line to enable gprof profiling
 OCAML_OPTS?=
@@ -90,19 +90,22 @@ bytecode.ml: bytecode.lem
 lem_interp/interp_ast.lem: ../language/l2.ott
 	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
 
-share_directory.ml:
-	echo "(* Generated file -- do not edit. *)" > share_directory.ml
-	echo let d=\"$(SHARE_DIR)\" >> share_directory.ml
+manifest.ml:
+	echo "(* Generated file -- do not edit. *)" > manifest.ml
+	echo let dir=\"$(SHARE_DIR)\" >> manifest.ml
+	echo let commit=\"$(shell git rev-parse HEAD)\" >> manifest.ml
+	echo let branch=\"$(shell  git rev-parse --abbrev-ref HEAD)\" >> manifest.ml
+	echo let version=\"$(shell git describe)\" >> manifest.ml
 
-sail: ast.ml bytecode.ml share_directory.ml
+sail: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
-isail: ast.ml bytecode.ml share_directory.ml
+isail: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind isail.native
 
 sail.native: sail
 
-sail.byte: ast.ml bytecode.ml share_directory.ml
+sail.byte: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
 interpreter: lem_interp/interp_ast.lem
@@ -148,7 +151,7 @@ clean:
 	-rm -f bytecode.ml
 	-rm -f bytecode.lem
 	-rm -f bytecode.ml.bak
-	-rm -f share_directory.ml
+	-rm -f manifest.ml
 
 doc:
 	ocamlbuild -use-ocamlfind sail.docdir/index.html
