@@ -76,14 +76,8 @@ copyright ARM Ltd. See https://github.com/meriac/archex, and the
 The hand-written ARMv8 model, in arm/, is distributed under the
 2-clause BSD licence in the headers of those files.
 
-The MIPS and CHERI models, in mips/ and cheri/, are distributed under
-the 2-clause BSD licence in the headers of those files.
-
 The x86 model in x86/ is distributed under the 2-clause BSD licence in
 the headers of those files.
 
 The POWER model in power/ is distributed under the 2-clause BSD licence in
 the headers of those files.
-
-The RISC-V model in riscv/ model is also distributed under the
-2-clause BSD licence.
