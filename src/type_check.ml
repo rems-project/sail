@@ -4327,7 +4327,7 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
   typ_debug (lazy ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let vs_def, env =
     if not have_val_spec then
-      [mk_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env
+      [mk_val_spec env quant (Env.expand_synonyms env typ) id], Env.add_val_spec id (quant, typ) env
     else
       [], env
   in
