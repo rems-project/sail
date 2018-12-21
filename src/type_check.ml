@@ -143,7 +143,7 @@ let is_atom_bool (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [_]) when string_of_id f = "atom_bool" -> true
   | _ -> false
-       
+
 let rec strip_id = function
   | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
   | Id_aux (DeIid x, _) -> Id_aux (DeIid x, Parse_ast.Unknown)
@@ -1242,10 +1242,55 @@ and is_typ_arg_monomorphic (A_aux (arg, _)) =
 (* 2. Subtyping and constraint solving                                    *)
 (**************************************************************************)
 
+type ('a, 'b) filter =
+  | Keep of 'a
+  | Remove of 'b
+
+let rec filter_keep = function
+  | Keep x :: xs -> x :: filter_keep xs
+  | Remove _ :: xs -> filter_keep xs
+  | [] -> []
+
+let rec filter_remove = function
+  | Keep _ :: xs -> filter_remove xs
+  | Remove x :: xs -> x :: filter_remove xs
+  | [] -> []
+
+let filter_split f g xs =
+  let xs = List.map f xs in
+  filter_keep xs, g (filter_remove xs)
+
 let rec simp_typ (Typ_aux (typ_aux, l)) = Typ_aux (simp_typ_aux typ_aux, l)
 and simp_typ_aux = function
   | Typ_exist (kids1, nc1, Typ_aux (Typ_exist (kids2, nc2, typ), _)) ->
-     Typ_exist (kids1 @ kids2, nc_and nc1 nc2, typ)
+     simp_typ_aux (Typ_exist (kids1 @ kids2, nc_and nc1 nc2, typ))
+
+  (* This removes redundant boolean variables in existentials, such
+     that {('p: Bool) ('q:Bool) ('r: Bool), nc('r). bool('p & 'q & 'r)}
+     would become {('s:Bool) ('r: Bool), nc('r). bool('s & 'r)},
+     wherein all the redundant boolean variables have been combined
+     into a single one. Making this simplification allows us to avoid
+     having to pass large numbers of pointless variables to Z3 if we
+     ever bind this existential. *)
+  | Typ_exist (vars, nc, Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool b, _)]), _)) ->
+     let kids = KidSet.of_list (List.map kopt_kid vars) in
+     let constrained = tyvars_of_constraint nc in
+     let conjs = constraint_conj b in
+     let is_redundant = function
+       | NC_aux (NC_var v, _) when KidSet.mem v kids && not (KidSet.mem v constrained) -> Remove v
+       | nc -> Keep nc
+     in
+     let conjs, redundant = filter_split is_redundant KidSet.of_list conjs in
+     begin match conjs with
+     | [] -> Typ_id (mk_id "bool")
+     | conj :: conjs when KidSet.is_empty redundant ->
+        Typ_exist (vars, nc, atom_bool_typ (List.fold_left nc_and conj conjs))
+     | conjs ->
+        let vars = List.filter (fun v -> not (KidSet.mem (kopt_kid v) redundant)) vars in
+        let var = fresh_existential K_bool in
+        Typ_exist (var :: vars, nc, atom_bool_typ (List.fold_left nc_and (nc_var (kopt_kid var)) conjs))
+     end
+
   | typ_aux -> typ_aux
 
 (* Here's how the constraint generation works for subtyping
