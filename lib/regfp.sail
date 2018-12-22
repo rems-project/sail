@@ -79,6 +79,7 @@ enum barrier_kind = {
   Barrier_RISCV_rw_r,
   Barrier_RISCV_r_w,
   Barrier_RISCV_w_r,
+  Barrier_RISCV_tso,
   Barrier_RISCV_i,
   Barrier_x86_MFENCE
 }
