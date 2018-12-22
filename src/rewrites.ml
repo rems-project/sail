@@ -462,7 +462,7 @@ let rewrite_sizeof (Defs defs) =
            for the given parameters in the original environment *)
          let inst =
            try instantiation_of orig_exp with
-           | Type_error (l, err) ->
+           | Type_error (_, l, err) ->
              raise (Reporting.err_typ l (Type_error.string_of_type_error err)) in
          (* Rewrite the inst using orig_kid so that each type variable has it's
             original name rather than a mangled typechecker name *)
@@ -475,7 +475,7 @@ let rewrite_sizeof (Defs defs) =
              | Some (A_aux (A_nexp nexp, _)) ->
                 let sizeof = E_aux (E_sizeof nexp, (l, mk_tannot env (atom_typ nexp) no_effect)) in
                 (try rewrite_trivial_sizeof_exp sizeof with
-                | Type_error (l, err) ->
+                | Type_error (_, l, err) ->
                   raise (Reporting.err_typ l (Type_error.string_of_type_error err)))
              (* If the type variable is Not_found then it was probably
                 introduced by a P_var pattern, so it likely exists as
@@ -2474,7 +2474,7 @@ let rewrite_vector_concat_assignments defs =
                mk_exp (E_assign (lexp, tup)))) in
          begin
            try check_exp env e_aux unit_typ with
-           | Type_error (l, err) ->
+           | Type_error (_, l, err) ->
              raise (Reporting.err_typ l (Type_error.string_of_type_error err))
          end
        else E_aux (e_aux, annot)
@@ -2503,7 +2503,7 @@ let rewrite_tuple_assignments defs =
        let let_exp = mk_exp (E_let (letbind, block)) in
        begin
          try check_exp env let_exp unit_typ with
-         | Type_error (l, err) ->
+         | Type_error (_, l, err) ->
            raise (Reporting.err_typ l (Type_error.string_of_type_error err))
        end
     | _ -> E_aux (e_aux, annot)
@@ -3126,7 +3126,7 @@ let construct_toplevel_string_append_func env f_id pat =
        let mapping_inner_typ =
          match Env.get_val_spec (mk_id mapping_prefix_func) env with
          | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [A_aux (A_typ typ, _)]), _), _), _)) -> typ
-         | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
+         | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "mapping prefix func without correct function type?")
        in
 
        let s_id = fresh_stringappend_id () in
@@ -3302,7 +3302,7 @@ let rec rewrite_defs_pat_string_append =
        let mapping_inner_typ =
          match Env.get_val_spec (mk_id mapping_prefix_func) env with
          | (_, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [A_aux (A_typ typ, _)]), _), _), _)) -> typ
-         | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
+         | _ -> typ_error env Parse_ast.Unknown "mapping prefix func without correct function type?"
        in
 
        let s_id = fresh_stringappend_id () in
@@ -4304,12 +4304,12 @@ let rewrite_defs_realise_mappings (Defs defs) =
     (* We need to make sure we get the environment for the last mapping clause *)
     let env = match List.rev mapcls with
       | MCL_aux (_, mapcl_annot) :: _ -> env_of_annot mapcl_annot
-      | _ -> Type_check.typ_error l "mapping with no clauses?"
+      | _ -> raise (Reporting.err_unreachable l __POS__ "mapping with no clauses?")
     in
     let (typq, bidir_typ) = Env.get_val_spec id env in
     let (typ1, typ2, l) = match bidir_typ with
       | Typ_aux (Typ_bidir (typ1, typ2), l) -> typ1, typ2, l
-      | _ -> Type_check.typ_error l "non-bidir type of mapping?"
+      | _ -> raise (Reporting.err_unreachable l __POS__ "non-bidir type of mapping?")
     in
     let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), l) in
     let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), l) in
@@ -5144,7 +5144,7 @@ let rewrite_check_annot =
        else ());
       exp
     with
-      Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+      Type_error (_, l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
   in
   let check_pat pat =
     prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (typ_of_pat pat));

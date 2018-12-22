@@ -80,9 +80,11 @@ type type_error =
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_because of type_error * type_error
+  | Err_because of type_error * Ast.l * type_error
 
-exception Type_error of l * type_error;;
+type env
+
+exception Type_error of env * l * type_error;;
 
 val typ_debug : ?level:int -> string Lazy.t -> unit
 val typ_print : string Lazy.t -> unit
@@ -93,7 +95,7 @@ val typ_print : string Lazy.t -> unit
    contains functions that operate on that state. *)
 module Env : sig
   (** Env.t is the type of environments *)
-  type t
+  type t = env
 
   (** Note: Most get_ functions assume the identifiers exist, and throw
      type errors if they don't. *)
@@ -316,7 +318,7 @@ val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp lis
    on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
 
-val typ_error : Ast.l -> string -> 'a
+val typ_error : Env.t -> Ast.l -> string -> 'a
 
 (** {2 Destructuring type annotations} Partial functions: The
    expressions and patterns passed to these functions must be

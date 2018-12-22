@@ -2457,7 +2457,7 @@ try
         hardline;
         string "End Content.";
         hardline])
-with Type_check.Type_error (l,err) ->
+with Type_check.Type_error (env,l,err) ->
   let extra =
     "\nError during Coq printing\n" ^
     if Printexc.backtrace_status ()

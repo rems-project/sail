@@ -1,35 +1,11 @@
-Type error at file "global_type_var/v3.sail", line 15, character 24 to line 15, character 27
-
-    let y : atom(64) = [41msize[0m in
-
-Tried performing type coercion from int('_size) to int(64) on size
-Coercion failed because:
-  int('_size) is not a subtype of int(64)
-  in context
-  * not('fv10#size == 32)
-  * 'size == '_size
-  * ('_size == 32 | '_size == 64)
-  * ('_size#0 == 32 | '_size#0 == 64)
-  where
-  * '_size bound at file "global_type_var/v3.sail", line 5, character 6 to line 5, character 18
-
-let ([41msize as 'size[0m) : {|32, 64|} = 32
-
-  * '_size#0 bound at file "global_type_var/v3.sail", line 5, character 5 to line 5, character 32
-
-let [41m(size as 'size) : {|32, 64|}[0m = 32
-
-  * 'fv10#size bound at file "global_type_var/v3.sail", line 11, character 1 to line 17, character 3
-
-[41mfunction test x =[0m
-[41m  if x == 32 then {[0m
-[41m    ()[0m
-[41m  } else {[0m
-[41m    let y : atom(64) = size in[0m
-[41m    ()[0m
-[41m  }[0m
-
-  * 'size bound at file "global_type_var/v3.sail", line 5, character 14 to line 5, character 18
-
-let (size as [41m'size[0m) : {|32, 64|} = 32
-
+[[96mglobal_type_var/v3.sail[0m]:15:23-27
+15[96m |[0m    let y : atom(64) = size in
+  [91m |[0m                       [91m^--^[0m
+  [91m |[0m Tried performing type coercion from int('_size) to int(64) on size
+  [91m |[0m Coercion failed because:
+  [91m |[0m int('_size) is not a subtype of int(64)
+  [91m |[0m [[96mglobal_type_var/v3.sail[0m]:5:5-18
+  [91m |[0m 5[96m |[0mlet (size as 'size) : {|32, 64|} = 32
+  [91m |[0m  [93m |[0m     [93m^-----------^[0m
+  [91m |[0m  [93m |[0m '_size bound here
+  [91m |[0m 

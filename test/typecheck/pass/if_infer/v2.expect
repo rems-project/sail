@@ -1,17 +1,11 @@
-Type error at file "if_infer/v2.sail", line 10, character 11 to line 10, character 38
-
-  let _ = [41m0b1001[if R then 0 else f()][0m;
-
-No overloadings for vector_access, tried:
-  bitvector_access:
-    Could not resolve quantifiers for bitvector_access (0 <= 'ex40# & ('ex40# + 1) <= 4)
-    
-    Try adding named type variables for 
-    
-    
-  plain_vector_access:
-    Could not resolve quantifiers for plain_vector_access (0 <= 'ex43# & ('ex43# + 1) <= 4)
-    
-    Try adding named type variables for 
-    
-    
+[[96mif_infer/v2.sail[0m]:10:10-38
+10[96m |[0m  let _ = 0b1001[if R then 0 else f()];
+  [91m |[0m          [91m^--------------------------^[0m
+  [91m |[0m No overloading for vector_access, tried:
+  [91m |[0m [94m*[0m bitvector_access
+  [91m |[0m    Could not resolve quantifiers for bitvector_access
+  [91m |[0m    [94m*[0m (0 <= 'ex40# & ('ex40# + 1) <= 4)
+  [91m |[0m [94m*[0m plain_vector_access
+  [91m |[0m    Could not resolve quantifiers for plain_vector_access
+  [91m |[0m    [94m*[0m (0 <= 'ex43# & ('ex43# + 1) <= 4)
+  [91m |[0m 

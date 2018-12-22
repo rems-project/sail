@@ -90,13 +90,15 @@ let rec user_input callback =
 let sail_logo =
   let banner str = str |> Util.bold |> Util.red |> Util.clear in
   let logo =
-    [ {|    ___       ___       ___       ___ |};
-      {|   /\  \     /\  \     /\  \     /\__\|};
-      {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
-      {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/ |};
-      {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \ |};
-      {|  \::/  /    /:/  /   \:\__\    \:\__\|};
-      {|   \/__/     \/__/     \/__/     \/__/|} ]
+    if !Interactive.opt_suppress_banner then []
+    else
+      [ {|    ___       ___       ___       ___ |};
+        {|   /\  \     /\  \     /\  \     /\__\|};
+        {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
+        {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/ |};
+        {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \ |};
+        {|  \::/  /    /:/  /   \:\__\    \:\__\|};
+        {|   \/__/     \/__/     \/__/     \/__/|} ]
   in
   let help =
     [ "Type :commands for a list of commands, and :help <command> for help.";
@@ -104,9 +106,9 @@ let sail_logo =
   in
   List.map banner logo @ [""] @ help @ [""]
 
-let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
+let vs_ids = ref (Initial_check.val_spec_ids !Interactive.ast)
 
-let interactive_state = ref (initial_state !interactive_ast Value.primops)
+let interactive_state = ref (initial_state !Interactive.ast Value.primops)
 
 let interactive_bytecode = ref []
 
@@ -259,7 +261,7 @@ let handle_input' input =
          | ":n" | ":normal" ->
             current_mode := Normal
          | ":t" | ":type" ->
-            let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !interactive_env in
+            let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !Interactive.env in
             pretty_sail stdout (doc_binding (typq, typ));
             print_newline ();
          | ":q" | ":quit" ->
@@ -267,15 +269,15 @@ let handle_input' input =
             exit 0
          | ":i" | ":infer" ->
             let exp = Initial_check.exp_of_string arg in
-            let exp = Type_check.infer_exp !interactive_env exp in
+            let exp = Type_check.infer_exp !Interactive.env exp in
             pretty_sail stdout (doc_typ (Type_check.typ_of exp));
             print_newline ()
          | ":canon" ->
             let typ = Initial_check.typ_of_string arg in
-            print_endline (string_of_typ (Type_check.canonicalize !interactive_env typ))
+            print_endline (string_of_typ (Type_check.canonicalize !Interactive.env typ))
          | ":prove" ->
             let nc = Initial_check.constraint_of_string arg in
-            print_endline (string_of_bool (Type_check.prove __POS__ !interactive_env nc))
+            print_endline (string_of_bool (Type_check.prove __POS__ !Interactive.env nc))
          | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
@@ -301,7 +303,7 @@ let handle_input' input =
               | "Order" -> is_order_kopt
               | _ -> failwith "Invalid kind"
             in
-            let ids = Specialize.polymorphic_functions is_kopt !interactive_ast in
+            let ids = Specialize.polymorphic_functions is_kopt !Interactive.ast in
             List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements ids)
          | ":option" ->
             begin
@@ -312,17 +314,17 @@ let handle_input' input =
               | Arg.Bad message | Arg.Help message -> print_endline message
             end;
          | ":spec" ->
-            let ast, env = Specialize.specialize !interactive_ast !interactive_env in
-            interactive_ast := ast;
-            interactive_env := env;
-            interactive_state := initial_state !interactive_ast Value.primops
+            let ast, env = Specialize.specialize !Interactive.ast !Interactive.env in
+            Interactive.ast := ast;
+            Interactive.env := env;
+            interactive_state := initial_state !Interactive.ast Value.primops
          | ":pretty" ->
-            print_endline (Pretty_print_sail.to_string (Latex.defs !interactive_ast))
+            print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
          | ":compile" ->
             let open PPrint in
             let open C_backend in
-            let ast = Process_file.rewrite_ast_c !interactive_ast in
-            let ast, env = Specialize.specialize ast !interactive_env in
+            let ast = Process_file.rewrite_ast_c !Interactive.ast in
+            let ast, env = Specialize.specialize ast !Interactive.env in
             let ctx = initial_ctx env in
             interactive_bytecode := bytecode_ast ctx (List.map flatten_cdef) ast
          | ":ir" ->
@@ -339,7 +341,7 @@ let handle_input' input =
             print_endline (Pretty_print_sail.to_string (separate_map hardline pp_cdef cdefs))
          | ":ast" ->
             let chan = open_out arg in
-            Pretty_print_sail.pp_defs chan !interactive_ast;
+            Pretty_print_sail.pp_defs chan !Interactive.ast;
             close_out chan
          | ":output" ->
             let chan = open_out arg in
@@ -361,24 +363,24 @@ let handle_input' input =
             | ":elf" -> Elf_loader.load_elf arg
             | ":l" | ":load" ->
                let files = Util.split_on_char ' ' arg in
-               let (_, ast, env) = load_files !interactive_env files in
+               let (_, ast, env) = load_files !Interactive.env files in
                let ast = Process_file.rewrite_ast_interpreter ast in
-               interactive_ast := append_ast !interactive_ast ast;
-               interactive_state := initial_state !interactive_ast Value.primops;
-               interactive_env := env;
-               vs_ids := Initial_check.val_spec_ids !interactive_ast
+               Interactive.ast := append_ast !Interactive.ast ast;
+               interactive_state := initial_state !Interactive.ast Value.primops;
+               Interactive.env := env;
+               vs_ids := Initial_check.val_spec_ids !Interactive.ast
             | ":u" | ":unload" ->
-               interactive_ast := Ast.Defs [];
-               interactive_env := Type_check.initial_env;
-               interactive_state := initial_state !interactive_ast Value.primops;
-               vs_ids := Initial_check.val_spec_ids !interactive_ast;
+               Interactive.ast := Ast.Defs [];
+               Interactive.env := Type_check.initial_env;
+               interactive_state := initial_state !Interactive.ast Value.primops;
+               vs_ids := Initial_check.val_spec_ids !Interactive.ast;
                (* See initial_check.mli for an explanation of why we need this. *)
                Initial_check.have_undefined_builtins := false
             | ":exec" ->
                let open Bytecode_interpreter in
-               let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string arg) in
+               let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string arg) in
                let anf = Anf.anf exp in
-               let ctx = C_backend.initial_ctx !interactive_env in
+               let ctx = C_backend.initial_ctx !Interactive.env in
                let ctyp = C_backend.ctyp_of_typ ctx (Type_check.typ_of exp) in
                let setup, call, cleanup = C_backend.compile_aexp ctx anf in
                let instrs = C_backend.flatten_instrs (setup @ [call (CL_id (mk_id "interactive#", ctyp))] @ cleanup) in
@@ -389,7 +391,7 @@ let handle_input' input =
        | Expression str ->
           (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
-          let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string str) in
+          let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string str) in
           current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
           print_program ()
        | Empty -> ()
@@ -444,7 +446,7 @@ let handle_input' input =
 
 let handle_input input =
   try handle_input' input with
-  | Type_check.Type_error (l, err) ->
+  | Type_check.Type_error (env, l, err) ->
      print_endline (Type_error.string_of_type_error err)
   | Reporting.Fatal_error err ->
      Reporting.print_error err
@@ -491,7 +493,7 @@ let () =
   LNoise.history_load ~filename:"sail_history" |> ignore;
   LNoise.history_set ~max_length:100 |> ignore;
 
-  if !opt_interactive then
+  if !Interactive.opt_interactive then
     begin
       List.iter print_endline sail_logo;
       user_input handle_input

@@ -54,7 +54,6 @@ module Big_int = Nat_big_num
 
 let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
-let opt_interactive = ref false
 let opt_interactive_script : string option ref = ref None
 let opt_print_version = ref false
 let opt_print_initial_env = ref false
@@ -79,10 +78,10 @@ let options = Arg.align ([
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
   ( "-i",
-    Arg.Tuple [Arg.Set opt_interactive; Arg.Set Initial_check.opt_undefined_gen],
+    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.Set Initial_check.opt_undefined_gen],
     " start interactive interpreter");
   ( "-is",
-    Arg.Tuple [Arg.Set opt_interactive; Arg.Set Initial_check.opt_undefined_gen;
+    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.Set Initial_check.opt_undefined_gen;
                Arg.String (fun s -> opt_interactive_script := Some s)],
     "<filename> start interactive interpreter and execute commands in script");
   ( "-iout",
@@ -273,8 +272,6 @@ let _ =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
-let interactive_ast = ref (Ast.Defs [])
-let interactive_env = ref Type_check.initial_env
 
 let load_files type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
@@ -349,9 +346,9 @@ let main() =
 
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
-      (if !(opt_interactive)
+      (if !(Interactive.opt_interactive)
        then
-         (interactive_ast := Process_file.rewrite_ast_interpreter ast; interactive_env := type_envs)
+         (Interactive.ast := Process_file.rewrite_ast_interpreter ast; Interactive.env := type_envs)
        else ());
       (if !(opt_sanity)
        then
@@ -414,7 +411,10 @@ let main() =
 
 let _ =  try
     begin
-      try ignore(main ())
-      with  Failure(s) -> raise (Reporting.err_general Parse_ast.Unknown ("Failure "^s))
+      try ignore (main ())
+      with Failure s -> raise (Reporting.err_general Parse_ast.Unknown ("Failure " ^ s))
     end
-  with Reporting.Fatal_error e -> Reporting.report_error e
+  with Reporting.Fatal_error e ->
+    Reporting.report_error e;
+    Interactive.opt_suppress_banner := true;
+    if !Interactive.opt_interactive then () else exit 1

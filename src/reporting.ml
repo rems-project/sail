@@ -238,20 +238,15 @@ let loc_to_string ?code:(code=true) l =
   let s = Format.flush_str_formatter () in
   s
 
-type pos_or_loc = Loc of Parse_ast.l | LocD of Parse_ast.l * Parse_ast.l | Pos of Lexing.position
+type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
 let print_err_internal fatal verb_loc p_l m1 m2 =
-  Format.eprintf "%s at " m1;
-  let _ = (match p_l with Pos p -> print_err_pos p
-                        | Loc l -> print_err_loc l
-                        | LocD (l1,l2) ->
-                          print_err_loc l1; Format.fprintf Format.err_formatter " and "; print_err_loc l2) in
-  Format.eprintf "%s\n" m2;
-  if verb_loc then (match p_l with Loc l ->
-      format_loc_source Format.err_formatter l;
-      Format.pp_print_newline Format.err_formatter (); | _ -> ());
-  Format.pp_print_flush Format.err_formatter ();
-  if fatal then (exit 1) else ()
+  let open Error_format in
+  begin match p_l with
+  | Loc l -> format_message (Location (l, Line m2)) err_formatter
+  | _ -> failwith "Pos"
+  end;
+  if fatal then exit 1 else ()
 
 let print_err fatal verb_loc l m1 m2 =
   print_err_internal fatal verb_loc (Loc l) m1 m2
@@ -264,7 +259,6 @@ type error =
   | Err_syntax_locn of Parse_ast.l * string
   | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
-  | Err_type_dual of Parse_ast.l * Parse_ast.l * string
 
 let issues = "\n\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
@@ -277,7 +271,6 @@ let dest_err = function
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)
   | Err_lex (p, s) -> ("Lexical error", false, Pos p, s)
   | Err_type (l, m) -> ("Type error", false, Loc l, m)
-  | Err_type_dual(l1,l2,m) -> ("Type error", false, LocD (l1,l2), m)
 
 exception Fatal_error of error
 
@@ -286,11 +279,10 @@ let err_todo l m = Fatal_error (Err_todo (l, m))
 let err_unreachable l ocaml_pos m = Fatal_error (Err_unreachable (l, ocaml_pos, m))
 let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l,m))
-let err_typ_dual l1 l2 m = Fatal_error (Err_type_dual (l1,l2,m))
 
 let report_error e =
   let (m1, verb_pos, pos_l, m2) = dest_err e in
-  (print_err_internal verb_pos false pos_l m1 m2; exit 1)
+  print_err_internal verb_pos false pos_l m1 m2
 
 let print_error e =
   let (m1, verb_pos, pos_l, m2) = dest_err e in

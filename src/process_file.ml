@@ -384,7 +384,7 @@ let rewrite_step defs (name, rewriter) =
 
 let rewrite rewriters defs =
   try List.fold_left rewrite_step defs rewriters with
-  | Type_check.Type_error (l, err) ->
+  | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]

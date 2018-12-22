@@ -1,3 +1,1 @@
-Type error at no location information available
-
-Could not prove constraints (0 <= 'n & ('n + 1) <= 32) in type synonym int('n) with (0 <= 'n & 'n <= 100), (0 <= '_x & '_x <= 8), (0 <= '_x#0 & '_x#0 <= 8)
+Fatal error: exception Failure("No location")

@@ -673,7 +673,7 @@ let rec eval_frame' = function
 
 let eval_frame frame =
   try eval_frame' frame with
-  | Type_check.Type_error (l, err) ->
+  | Type_check.Type_error (env, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let rec run_frame frame =

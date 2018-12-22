@@ -3460,4 +3460,4 @@ let compile_ast ctx c_includes (Defs defs) =
                                  ^^ model_main)
     |> print_endline
   with
-    Type_error (l, err) -> c_error ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)
+    Type_error (_, l, err) -> c_error ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)

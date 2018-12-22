@@ -1,24 +1,11 @@
-Type error at file "global_type_var/v2.sail", line 23, character 14 to line 23, character 15
-
-let _ = test([41m64[0m)
-
-Tried performing type coercion from int(64) to int('size) on 64
-Coercion failed because:
-  int(64) is not a subtype of int('size)
-  in context
-  * 'size == '_size
-  * ('_size == 32 | '_size == 64)
-  * ('_size#0 == 32 | '_size#0 == 64)
-  where
-  * '_size bound at file "global_type_var/v2.sail", line 5, character 6 to line 5, character 18
-
-let ([41msize as 'size[0m) : {|32, 64|} = 32
-
-  * '_size#0 bound at file "global_type_var/v2.sail", line 5, character 5 to line 5, character 32
-
-let [41m(size as 'size) : {|32, 64|}[0m = 32
-
-  * 'size bound at file "global_type_var/v2.sail", line 5, character 14 to line 5, character 18
-
-let (size as [41m'size[0m) : {|32, 64|} = 32
-
+[[96mglobal_type_var/v2.sail[0m]:23:13-15
+23[96m |[0mlet _ = test(64)
+  [91m |[0m             [91m^^[0m
+  [91m |[0m Tried performing type coercion from int(64) to int('size) on 64
+  [91m |[0m Coercion failed because:
+  [91m |[0m int(64) is not a subtype of int('size)
+  [91m |[0m [[96mglobal_type_var/v2.sail[0m]:5:13-18
+  [91m |[0m 5[96m |[0mlet (size as 'size) : {|32, 64|} = 32
+  [91m |[0m  [93m |[0m             [93m^---^[0m
+  [91m |[0m  [93m |[0m 'size bound here
+  [91m |[0m 

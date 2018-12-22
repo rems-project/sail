@@ -1,5 +1,5 @@
-Type error at file "constraint_ctor/v3.sail", line 18, character 3 to line 18, character 30
-
-  [41m_prove(constraint('x >= 23))[0m;
-
-Cannot prove 'x >= 23
+[[96mconstraint_ctor/v3.sail[0m]:18:2-30
+18[96m |[0m  _prove(constraint('x >= 23));
+  [91m |[0m  [91m^--------------------------^[0m
+  [91m |[0m Cannot prove 'x >= 23
+  [91m |[0m 

@@ -1,5 +1,5 @@
-Type error at file "not_pattern/v1.sail", line 12, character 7 to line 12, character 7
-
-    ~([41my[0m) => (),
-
-Bindings are not allowed in this context
+[[96mnot_pattern/v1.sail[0m]:12:6-7
+12[96m |[0m    ~(y) => (),
+  [91m |[0m      [91m^[0m
+  [91m |[0m Bindings are not allowed in this context
+  [91m |[0m 
