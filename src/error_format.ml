@@ -46,6 +46,28 @@ let format_code_single' fname in_chan lnum cnum_from cnum_to contents ppf =
   format_endline (blank_prefix ^ underline_single ppf.loc_color cnum_from cnum_to) ppf;
   contents { ppf with indent = blank_prefix ^ " " }
 
+let underline_double_from color cnum_from eol =
+  Util.(String.make cnum_from ' ' ^ clear (color ("^" ^ String.make (eol - cnum_from - 1) '-')))
+
+let underline_double_to color cnum_to =
+  Util.(clear (color (String.make (cnum_to - 1) '-' ^ "^")))
+
+let format_code_double' fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf =
+  skip_lines in_chan (lnum_from - 1);
+  let line_from = input_line in_chan in
+  skip_lines in_chan (lnum_to - lnum_from - 1);
+  let line_to = input_line in_chan in
+  let line_to_prefix = string_of_int lnum_to ^ Util.(clear (cyan " |")) in
+  let line_from_padding = String.make (String.length (string_of_int lnum_to) - String.length (string_of_int lnum_from)) ' ' in
+  let line_from_prefix = string_of_int lnum_from ^ line_from_padding ^ Util.(clear (cyan " |")) in
+  let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
+  format_endline (Printf.sprintf "[%s]:%d:%d-%d:%d" Util.(fname |> cyan |> clear) lnum_from cnum_from lnum_to cnum_to) ppf;
+  format_endline (line_from_prefix ^ line_from) ppf;
+  format_endline (blank_prefix ^ underline_double_from ppf.loc_color cnum_from (String.length line_from)) ppf;
+  format_endline (line_to_prefix ^ line_to) ppf;
+  format_endline (blank_prefix ^ underline_double_to ppf.loc_color cnum_to) ppf;
+  contents { ppf with indent = blank_prefix ^ " " }
+
 let format_code_single fname lnum cnum_from cnum_to contents ppf =
   try
     let in_chan = open_in fname in
@@ -57,17 +79,31 @@ let format_code_single fname lnum cnum_from cnum_to contents ppf =
   with
   | _ -> ()
 
+let format_code_double fname lnum_from cnum_from lnum_to cnum_to contents ppf =
+  try
+    let in_chan = open_in fname in
+    begin
+      try format_code_double' fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf
+      with
+      | _ -> close_in_noerr in_chan; ()
+    end
+  with
+  | _ -> ()
+
 let format_pos p1 p2 contents ppf =
   let open Lexing in
   if p1.pos_lnum == p2.pos_lnum
   then format_code_single p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol) contents ppf
-  else failwith "Range"
+  else format_code_double p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol) contents ppf
 
-let format_loc l contents =
+let rec format_loc l contents =
   match l with
-  | Parse_ast.Unknown -> failwith "No location"
+  | Parse_ast.Unknown -> contents
   | Parse_ast.Range (p1, p2) -> format_pos p1 p2 contents
-  | _ -> failwith "not range"
+  | Parse_ast.Unique (_, l) -> format_loc l contents
+  | Parse_ast.Documented (_, l) -> format_loc l contents
+  | Parse_ast.Generated l ->
+     fun ppf -> (format_endline "Code generated nearby:" ppf; format_loc l contents ppf)
 
 type message =
   | Location of Parse_ast.l * message

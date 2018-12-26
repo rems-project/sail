@@ -95,158 +95,25 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
-let rec skip_lines in_chan = function
-  | n when n <= 0 -> ()
-  | n -> ignore (input_line in_chan); skip_lines in_chan (n - 1)
-
-let rec read_lines in_chan = function
-  | n when n <= 0 -> []
-  | n ->
-     let l = input_line in_chan in
-     let ls = read_lines in_chan (n - 1) in
-     l :: ls
-
-let termcode n = "\x1B[" ^ string_of_int n ^ "m"
-
-let print_code1 ff fname lnum1 cnum1 cnum2 =
-  try
-    let in_chan = open_in fname in
-    begin
-      try
-        skip_lines in_chan (lnum1 - 1);
-        let line = input_line in_chan in
-        Format.fprintf ff "%s%s%s"
-                       (Str.string_before line cnum1)
-                       Util.(Str.string_before (Str.string_after line cnum1) (cnum2 - cnum1) |> red_bg |> clear)
-                       (Str.string_after line cnum2);
-        close_in in_chan
-      with e -> (close_in_noerr in_chan;
-                 prerr_endline (Printf.sprintf "print_code1: %s %d %d %d %s" fname lnum1 cnum1 cnum2 (Printexc.to_string e)))
-    end
-  with _ -> ()
-
-let format_pos ff p =
-  let open Lexing in
-  begin
-    Format.fprintf ff "file \"%s\", line %d, character %d:\n\n"
-                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol);
-    print_code1 ff p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) (p.pos_cnum - p.pos_bol + 1);
-    Format.fprintf ff "\n\n";
-    Format.pp_print_flush ff ()
-  end
-
-let print_code2 ff fname lnum1 cnum1 lnum2 cnum2 =
-  try
-    let in_chan = open_in fname in
-    begin
-      try
-        skip_lines in_chan (lnum1 - 1);
-        let line = input_line in_chan in
-        Format.fprintf ff "%s%s\n"
-                       (Str.string_before line cnum1)
-                       Util.(Str.string_after line cnum1 |> red_bg |> clear);
-        let lines = read_lines in_chan (lnum2 - lnum1 - 1) in
-        List.iter (fun l -> Format.fprintf ff "%s\n" Util.(l |> red_bg |> clear)) lines;
-        let line = input_line in_chan in
-        Format.fprintf ff "%s%s"
-                       Util.(Str.string_before line cnum2 |> red_bg |> clear)
-                       (Str.string_after line cnum2);
-        close_in in_chan
-      with e -> (close_in_noerr in_chan; prerr_endline (Printexc.to_string e))
-    end
-  with _ -> ()
-
-let format_pos2 ff p1 p2 =
-  let open Lexing in
-  begin
-    Format.fprintf ff "file \"%s\", line %d, character %d to line %d, character %d\n\n"
-                   p1.pos_fname
-                   p1.pos_lnum (p1.pos_cnum - p1.pos_bol + 1)
-                   p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
-    if p1.pos_lnum == p2.pos_lnum
-    then print_code1 ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol)
-    else print_code2 ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
-    Format.pp_print_flush ff ()
-  end
-
-let format_just_pos ff p1 p2 =
-  let open Lexing in
-  Format.fprintf ff "file \"%s\", line %d, character %d to line %d, character %d"
-                 p1.pos_fname
-                 p1.pos_lnum (p1.pos_cnum - p1.pos_bol + 1)
-                 p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
-  Format.pp_print_flush ff ()
-
-(* reads the part between p1 and p2 from the file *)
-
-let read_from_file_pos2 p1 p2 =
-  let (s, e, multi) = if p1.Lexing.pos_lnum = p2.Lexing.pos_lnum then
-                  (* everything in the same line, so really only read this small part*)
-                  (p1.Lexing.pos_cnum, p2.Lexing.pos_cnum, None) 
-               else (*multiline, so start reading at beginning of line *)
-                  (p1.Lexing.pos_bol, p2.Lexing.pos_cnum, Some (p1.Lexing.pos_cnum - p1.Lexing.pos_bol)) in
-
-  let ic = open_in p1.Lexing.pos_fname in
-  let _ = seek_in ic s in
-  let l = (e - s) in
-  let buf = Bytes.create l in
-  let _ = input ic buf 0 l in
-  let _ = match multi with None -> () | Some sk -> Bytes.fill buf 0 sk ' ' in
-  let _ = close_in ic in
-  (buf, not (multi = None))
-
-let rec format_loc_aux ?code:(code=true) ff = function
-  | Parse_ast.Unknown ->
-     Format.fprintf ff "no location information available"
-  | Parse_ast.Generated l ->
-     Format.fprintf ff "code generated: original nearby source is ";
-     format_loc_aux ~code:code ff l
-  | Parse_ast.Unique (n, l) ->
-     Format.fprintf ff "code unique (%d): original nearby source is " n;
-     format_loc_aux ~code:code ff l
-  | Parse_ast.Range (p1, p2) when code ->
-     format_pos2 ff p1 p2
-  | Parse_ast.Range (p1, p2) ->
-     format_just_pos ff p1 p2
-  | Parse_ast.Documented (_, l) ->
-     format_loc_aux ~code:code ff l
-
-let format_loc_source ff = function
-  | Parse_ast.Range (p1, p2) ->
-     let (s, multi_line) = read_from_file_pos2 p1 p2 in
-     if multi_line then
-       Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
-     else
-       Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
-  | _ -> ()
-
-let format_loc ff l =
- (format_loc_aux ff l;
-  Format.pp_print_newline ff ();
-  Format.pp_print_flush ff ()
-);;
-
-let print_err_loc l = 
-   (format_loc Format.err_formatter l)
-
-let print_pos p = format_pos Format.std_formatter p
-let print_err_pos p = format_pos Format.err_formatter p
-
-let loc_to_string ?code:(code=true) l =
-  let _ = Format.flush_str_formatter () in
-  let _ = format_loc_aux ~code:code Format.str_formatter l in
-  let s = Format.flush_str_formatter () in
-  s
-
 type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
 let print_err_internal fatal verb_loc p_l m1 m2 =
   let open Error_format in
+  prerr_endline (m1 ^ ":");
   begin match p_l with
   | Loc l -> format_message (Location (l, Line m2)) err_formatter
-  | _ -> failwith "Pos"
+  | Pos p -> format_message (Location (Parse_ast.Range (p, p), Line m2)) err_formatter
   end;
   if fatal then exit 1 else ()
+
+let loc_to_string ?code:(code=true) l =
+  let open Error_format in
+  if code then
+    let b = Buffer.create 160 in
+    format_message (Location (l, Line "")) (buffer_formatter b);
+    Buffer.contents b
+  else
+    "LOC"
 
 let print_err fatal verb_loc l m1 m2 =
   print_err_internal fatal verb_loc (Loc l) m1 m2

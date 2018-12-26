@@ -1,1 +1,20 @@
-Fatal error: exception Failure("No location")
+Type error:
+[[96mbool_constraint/v1.sail[0m]:12:19-20
+12[96m |[0m  if b then n else 4
+  [91m |[0m                   [91m^[0m
+  [91m |[0m Tried performing type coercion from int(4) to {('m : Int), (('b & 'm == 'n) | (not('b) & 'm == 3)). int('m)} on 4
+  [91m |[0m Coercion failed because:
+  [91m |[0m int(4) is not a subtype of {('m : Int), (('b & 'm == 'n) | (not('b) & 'm == 3)). int('m)}
+  [91m |[0m [[96mbool_constraint/v1.sail[0m]:11:0-13:1
+  [91m |[0m 11[96m |[0mfunction foo(b, n) = {
+  [91m |[0m   [93m |[0m[93m^---------------------[0m
+  [91m |[0m 13[96m |[0m}
+  [91m |[0m   [93m |[0m[93m^[0m
+  [91m |[0m   [93m |[0m 'b bound here
+  [91m |[0m [[96mbool_constraint/v1.sail[0m]:11:0-13:1
+  [91m |[0m 11[96m |[0mfunction foo(b, n) = {
+  [91m |[0m   [93m |[0m[93m^---------------------[0m
+  [91m |[0m 13[96m |[0m}
+  [91m |[0m   [93m |[0m[93m^[0m
+  [91m |[0m   [93m |[0m 'n bound here
+  [91m |[0m 
