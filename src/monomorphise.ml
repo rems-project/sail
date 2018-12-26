@@ -1192,9 +1192,9 @@ let split_defs all_errors splits defs =
     in
     let sc_type_def ((TD_aux (tda,annot)) as td) =
       match tda with
-      | TD_variant (id,nscm,quant,tus,flag) ->
+      | TD_variant (id,quant,tus,flag) ->
          let (refinements, tus') = List.split (List.map (sc_type_union quant) tus) in
-         (List.concat refinements, TD_aux (TD_variant (id,nscm,quant,List.concat tus',flag),annot))
+         (List.concat refinements, TD_aux (TD_variant (id,quant,List.concat tus',flag),annot))
       | _ -> ([],td)
     in
     let sc_def d =
@@ -2111,7 +2111,6 @@ let split_defs all_errors splits defs =
     in
     let map_def d =
       match d with
-      | DEF_kind _
       | DEF_type _
       | DEF_spec _
       | DEF_default _

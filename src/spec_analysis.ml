@@ -306,9 +306,6 @@ let typ_variants consider_var bound tunions =
     tunions
     (bound,mt)
 
-let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
-  | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
-
 let fv_of_abbrev consider_var bound used typq typ_arg =
   let ts_bound = if consider_var then typq_bindings typq else mt in
   ts_bound, fv_of_targ consider_var (Nameset.union bound ts_bound) used typ_arg
@@ -316,14 +313,14 @@ let fv_of_abbrev consider_var bound used typq typ_arg =
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
   | TD_abbrev(id,typq,typ_arg) ->
      init_env (string_of_id id), snd (fv_of_abbrev consider_var mt mt typq typ_arg)
-  | TD_record(id,_,typq,tids,_) ->
+  | TD_record(id,typq,tids,_) ->
     let binds = init_env (string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in
     binds, List.fold_right (fun (t,_) n -> fv_of_typ consider_var bounds n t) tids mt
-  | TD_variant(id,_,typq,tunions,_) ->
+  | TD_variant(id,typq,tunions,_) ->
     let bindings = Nameset.add (string_of_id id) (if consider_var then typq_bindings typq else mt) in
     typ_variants consider_var bindings tunions
-  | TD_enum(id,_,ids,_) ->
+  | TD_enum(id,ids,_) ->
     Nameset.of_list (List.map string_of_id (id::ids)),mt
   | TD_bitfield(id,typ,_) ->
     init_env (string_of_id id), Nameset.empty (* fv_of_typ consider_var mt typ *)
@@ -429,7 +426,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
             | _ -> mt in
           scattered_binds, exp_ns
      end
-  | SD_variant (id,_,_) ->
+  | SD_variant (id,_) ->
     let name = string_of_id id in
     let uses =
       if consider_scatter_as_one
@@ -480,7 +477,6 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
      init_env (string_of_id id), mt
 
 let fv_of_def consider_var consider_scatter_as_one all_defs = function
-  | DEF_kind kdef -> fv_of_kind_def consider_var kdef
   | DEF_type tdef -> fv_of_type_def consider_var tdef
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
   | DEF_mapdef mdef -> mt,mt (* fv_of_map consider_var mdef *)

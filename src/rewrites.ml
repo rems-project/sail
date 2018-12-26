@@ -2307,11 +2307,11 @@ let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
   match td with
   | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
      TD_aux (TD_abbrev (id, rw_typquant typq, A_aux (A_typ (rw_typ typ), l)), annot)
-  | TD_record (id, nso, typq, typ_ids, flag) ->
-     TD_aux (TD_record (id, nso, rw_typquant typq, List.map (fun (typ, id) -> (rw_typ typ, id)) typ_ids, flag), annot)
-  | TD_variant (id, nso, typq, tus, flag) ->
-     TD_aux (TD_variant (id, nso, rw_typquant typq, List.map (rewrite_type_union_typs rw_typ) tus, flag), annot)
-  | TD_enum (id, nso, ids, flag) -> TD_aux (TD_enum (id, nso, ids, flag), annot)
+  | TD_record (id, typq, typ_ids, flag) ->
+     TD_aux (TD_record (id, rw_typquant typq, List.map (fun (typ, id) -> (rw_typ typ, id)) typ_ids, flag), annot)
+  | TD_variant (id, typq, tus, flag) ->
+     TD_aux (TD_variant (id, rw_typquant typq, List.map (rewrite_type_union_typs rw_typ) tus, flag), annot)
+  | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
   | TD_bitfield _ -> assert false (* Processed before re-writing *)
 
 (* FIXME: other reg_dec types *)

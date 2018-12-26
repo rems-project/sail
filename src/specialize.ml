@@ -171,7 +171,7 @@ let id_of_instantiation id instantiation =
 
 let rec variant_generic_typ id (Defs defs) =
   match defs with
-  | DEF_type (TD_aux (TD_variant (id', _, typq, _, _), _)) :: _ when Id.compare id id' = 0 ->
+  | DEF_type (TD_aux (TD_variant (id', typq, _, _), _)) :: _ when Id.compare id id' = 0 ->
      mk_typ (Typ_app (id', List.map (fun kopt -> mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt))))) (quant_kopts typq)))
   | _ :: defs -> variant_generic_typ id (Defs defs)
   | [] -> failwith ("No variant with id " ^ string_of_id id)

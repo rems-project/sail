@@ -594,16 +594,16 @@ let doc_typdef (TD_aux(td,_)) = match td with
        | None ->
           doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
      end
-  | TD_enum (id, _, ids, _) ->
+  | TD_enum (id, ids, _) ->
      separate space [string "enum"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
-  | TD_record (id, _, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, _, TypQ_aux (TypQ_tq [], _), fields, _) ->
+  | TD_record (id, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, TypQ_aux (TypQ_tq [], _), fields, _) ->
      separate space [string "struct"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
-  | TD_record (id, _, TypQ_aux (TypQ_tq qs, _), fields, _) ->
+  | TD_record (id, TypQ_aux (TypQ_tq qs, _), fields, _) ->
      separate space [string "struct"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
-  | TD_variant (id, _, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, _, TypQ_aux (TypQ_tq [], _), unions, _) ->
+  | TD_variant (id, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, TypQ_aux (TypQ_tq [], _), unions, _) ->
      separate space [string "union"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
-  | TD_variant (id, _, TypQ_aux (TypQ_tq qs, _), unions, _) ->
+  | TD_variant (id, TypQ_aux (TypQ_tq qs, _), unions, _) ->
      separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | _ -> string "TYPEDEF"
@@ -631,9 +631,6 @@ let doc_prec = function
   | InfixL -> string "infixl"
   | InfixR -> string "infixr"
 
-let doc_kind_def (KD_aux (KD_nabbrev (_, id, _, nexp), _)) =
-  separate space [string "integer"; doc_id id; equals; doc_nexp nexp]
-
 let rec doc_scattered (SD_aux (sd_aux, _)) =
   match sd_aux with
   | SD_function (_, _, _, id) ->
@@ -642,9 +639,9 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
      string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl
   | SD_end id ->
      string "end" ^^ space ^^ doc_id id
-  | SD_variant (id, _, TypQ_aux (TypQ_no_forall, _)) ->
+  | SD_variant (id, TypQ_aux (TypQ_no_forall, _)) ->
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
-  | SD_variant (id, _, TypQ_aux (TypQ_tq quants, _)) ->
+  | SD_variant (id, TypQ_aux (TypQ_tq quants, _)) ->
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id ^^ doc_param_quants quants
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
@@ -653,7 +650,6 @@ let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
-  | DEF_kind k_def -> doc_kind_def k_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind

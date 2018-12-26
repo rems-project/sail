@@ -4483,30 +4483,22 @@ let mk_synonym typq typ_arg =
                                       ^ " in type synonym " ^ string_of_typ_arg typ_arg
                                       ^ " with " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env))
 
-let check_kinddef env (KD_aux (kdef, (l, _))) =
-  let kd_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented kind def") in
-  match kdef with
-  | KD_nabbrev (K_aux (K_int, _) as kind, id, nmscm, nexp) ->
-     [DEF_kind (KD_aux (KD_nabbrev (kind, id, nmscm, nexp), (l, None)))],
-     Env.add_num_def id nexp env
-  | _ -> kd_err ()
-
 let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
   fun env (TD_aux (tdef, (l, _))) ->
   let td_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Typedef") in
   match tdef with
   | TD_abbrev (id, typq, typ_arg) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (mk_synonym typq typ_arg) env
-  | TD_record (id, nmscm, typq, fields, _) ->
+  | TD_record (id, typq, fields, _) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_record id typq fields env
-  | TD_variant (id, nmscm, typq, arms, _) ->
+  | TD_variant (id, typq, arms, _) ->
      let env =
        env
        |> Env.add_variant id (typq, arms)
        |> (fun env -> List.fold_left (fun env tu -> check_type_union env id typq tu) env arms)
      in
      [DEF_type (TD_aux (tdef, (l, None)))], env
-  | TD_enum (id, nmscm, ids, _) ->
+  | TD_enum (id, ids, _) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
   | TD_bitfield (id, typ, ranges) ->
      let typ = Env.expand_synonyms env typ in
@@ -4528,8 +4520,8 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
   fun env (SD_aux (sdef, (l, _))) ->
   match sdef with
   | SD_function _ | SD_end _ | SD_mapping _ -> [], env
-  | SD_variant (id, namescm, typq) ->
-     [DEF_scattered (SD_aux (SD_variant (id, namescm, typq), (l, None)))], Env.add_scattered_variant id typq env
+  | SD_variant (id, typq) ->
+     [DEF_scattered (SD_aux (SD_variant (id, typq), (l, None)))], Env.add_scattered_variant id typq env
   | SD_unioncl (id, tu) ->
      [DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, None)))],
      let env = Env.add_variant_clause id tu env in
@@ -4550,7 +4542,6 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   fun env def ->
   let cd_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Case") in
   match def with
-  | DEF_kind kdef -> check_kinddef env kdef
   | DEF_type tdef -> check_typedef env tdef
   | DEF_fixity (prec, n, op) -> [DEF_fixity (prec, n, op)], env
   | DEF_fundef fdef -> check_fundef env fdef

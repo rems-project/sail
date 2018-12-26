@@ -490,13 +490,6 @@ let to_ast_spec ctx (val_:P.val_spec) : (unit val_spec) ctx_out =
       let typschm, _ = to_ast_typschm ctx ts in
       VS_aux(VS_val_spec(typschm,to_ast_id id,ext,is_cast),(l,())),ctx)
 
-let to_ast_namescm (P.Name_sect_aux(ns,l)) =
-  Name_sect_aux(
-    (match ns with
-    | P.Name_sect_none -> Name_sect_none
-    | P.Name_sect_some(s) -> Name_sect_some(s)
-    ),l)
-
 let rec to_ast_range (P.BF_aux(r,l)) = (* TODO add check that ranges are sensible for some definition of sensible *)
   BF_aux(
     (match r with
@@ -523,24 +516,24 @@ let to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit type_def ctx_out 
        TD_abbrev (id, typq, typ_arg),
        add_constructor id typq ctx
 
-    | P.TD_record (id, namescm_opt, typq, fields, _) ->
+    | P.TD_record (id, typq, fields, _) ->
        let id = to_ast_id id in
        let typq, typq_ctx = to_ast_typquant ctx typq in
        let fields = List.map (fun (atyp, id) -> to_ast_typ typq_ctx atyp, to_ast_id id) fields in
-       TD_record (id, to_ast_namescm namescm_opt, typq, fields, false),
+       TD_record (id, typq, fields, false),
        add_constructor id typq ctx
 
-    | P.TD_variant (id, namescm_opt, typq, arms, _) ->
+    | P.TD_variant (id, typq, arms, _) ->
        let id = to_ast_id id in
        let typq, typq_ctx = to_ast_typquant ctx typq in
        let arms = List.map (to_ast_type_union typq_ctx) arms in
-       TD_variant (id, to_ast_namescm namescm_opt, typq, arms, false),
+       TD_variant (id, typq, arms, false),
        add_constructor id typq ctx
 
-    | P.TD_enum (id, namescm_opt, enums, _) ->
+    | P.TD_enum (id, enums, _) ->
        let id = to_ast_id id in
        let enums = List.map to_ast_id enums in
-       TD_enum (id, to_ast_namescm namescm_opt, enums, false),
+       TD_enum (id, enums, false),
        { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
 
     | P.TD_bitfield (id, typ, ranges) ->
@@ -551,13 +544,6 @@ let to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit type_def ctx_out 
        { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
   in
   TD_aux (aux, (l, ())), ctx
-
-let to_ast_kdef ctx (td:P.kind_def) : unit kind_def =
-  match td with
-  | P.KD_aux (P.KD_nabbrev (kind, id, name_scm_opt, atyp), l) ->
-     let id = to_ast_id id in
-     let kind = to_ast_kind kind in
-     KD_aux (KD_nabbrev (kind, id, to_ast_namescm name_scm_opt, to_ast_nexp ctx atyp), (l, ()))
 
 let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : unit rec_opt =
   Rec_aux((match r with
@@ -674,10 +660,10 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
        SD_function (to_ast_rec ctx rec_opt, tannot_opt, effect_opt, to_ast_id id), ctx
     | P.SD_funcl funcl ->
        SD_funcl (to_ast_funcl ctx funcl), ctx
-    | P.SD_variant (id, namescm_opt, typq) ->
+    | P.SD_variant (id, typq) ->
        let id = to_ast_id id in
        let typq, typq_ctx = to_ast_typquant ctx typq in
-       SD_variant (id, to_ast_namescm namescm_opt, typq),
+       SD_variant (id, typq),
        add_constructor id typq { ctx with scattereds = Bindings.add id typq_ctx ctx.scattereds }
     | P.SD_unioncl (id, tu) ->
        let id = to_ast_id id in
@@ -710,9 +696,6 @@ let to_ast_def ctx def : unit def ctx_out =
      DEF_overload (to_ast_id id, List.map to_ast_id ids), ctx
   | P.DEF_fixity (prec, n, op) ->
      DEF_fixity (to_ast_prec prec, n, to_ast_id op), ctx
-  | P.DEF_kind k_def ->
-     let kd = to_ast_kdef ctx k_def in
-     DEF_kind kd, ctx
   | P.DEF_type(t_def) ->
      let td, ctx = to_ast_typedef ctx t_def in
      DEF_type td, ctx
@@ -873,7 +856,7 @@ let generate_undefineds vs_ids (Defs defs) =
     | pats -> mk_pat (P_tup pats)
   in
   let undefined_td = function
-    | TD_enum (id, _, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
+    | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let typschm = typschm_of_string ("unit -> " ^ string_of_id id ^ " effect {undef}") in
        [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, (fun _ -> None), false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
@@ -883,13 +866,13 @@ let generate_undefineds vs_ids (Defs defs) =
                              else
                                mk_exp (E_app (mk_id "internal_pick",
                                               [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
-    | TD_record (id, _, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
+    | TD_record (id, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
        [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
                             (mk_exp (E_record (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)))]]
-    | TD_variant (id, _, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
+    | TD_variant (id, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
        let body =
          if !opt_fast_undefined && List.length tus > 0 then
@@ -967,7 +950,7 @@ let generate_initialize_registers vs_ids (Defs defs) =
 
 let generate_enum_functions vs_ids (Defs defs) =
   let rec gen_enums = function
-    | DEF_type (TD_aux (TD_enum (id, _, elems, _), _)) as enum :: defs ->
+    | DEF_type (TD_aux (TD_enum (id, elems, _), _)) as enum :: defs ->
        let enum_val_spec name quants typ =
          mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, (fun _ -> None), !opt_enum_casts))
        in

@@ -1720,7 +1720,6 @@ let types_used_with_generic_eq defs =
     fst (Rewriter.fold_pexp alg pexp)
   in
   let typs_req_def = function
-    | DEF_kind _
     | DEF_type _
     | DEF_spec _
     | DEF_fixity _
@@ -1758,7 +1757,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
                         doc_typquant_items empty_ctxt parens typq;
                         colon; string "Type"])
        (doc_typschm empty_ctxt false typschm) ^^ dot
-  | TD_record(id,nm,typq,fs,_) ->
+  | TD_record(id,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
                     then concat [doc_id id;string "_";doc_id_type fid;]
                     else doc_id_type fid in
@@ -1811,7 +1810,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
            (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt parens typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
       dot ^^ hardline ^^ eq_pp ^^ updates_pp
-  | TD_variant(id,nm,typq,ar,_) ->
+  | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -1835,7 +1834,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
             type, so undo that here. *)
          let resetimplicit = separate space [string "Arguments"; id_pp; colon; string "clear implicits."] in
          typ_pp ^^ dot ^^ hardline ^^ resetimplicit ^^ hardline ^^ hardline)
-  | TD_enum(id,nm,enums,_) ->
+  | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -2370,7 +2369,6 @@ let rec doc_def unimplemented generic_eq_types def =
   | DEF_val (LB_aux (LB_val (pat, exp), _)) -> doc_val pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"
-  | DEF_kind _ -> empty
   | DEF_pragma _ -> empty
 
 let find_exc_typ defs =

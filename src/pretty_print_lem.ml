@@ -1021,7 +1021,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
        (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
        (doc_typschm_lem false typschm)
   | TD_abbrev _ -> empty
-  | TD_record(id,nm,typq,fs,_) ->
+  | TD_record(id,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
                     else doc_id_lem_type fid in
@@ -1073,7 +1073,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
            ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline
     (* if !opt_sequential && string_of_id id = "regstate" then empty
     else separate_map hardline doc_field fs *)
-  | TD_variant(id,nm,typq,ar,_) ->
+  | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -1145,7 +1145,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
              fromInterpValuePP ^^ hardline ^^ hardline ^^
                fromToInterpValuePP ^^ hardline
            else empty)
-  | TD_enum(id,nm,enums,_) ->
+  | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -1428,7 +1428,6 @@ let rec doc_def_lem def =
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
-  | DEF_kind _ -> empty
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
   | DEF_pragma _ -> empty
 

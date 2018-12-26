@@ -134,7 +134,6 @@ let mk_typqn = (TypQ_aux(TypQ_no_forall,Unknown))
 let mk_tannotn = Typ_annot_opt_aux(Typ_annot_opt_none,Unknown)
 let mk_tannot typq typ n m = Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ), loc n m)
 let mk_eannotn = Effect_opt_aux(Effect_opt_pure,Unknown)
-let mk_namesectn = Name_sect_aux(Name_sect_none,Unknown)
 
 let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
 
@@ -181,7 +180,7 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op Where
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
-%token Undefined Union Newtype With Val Constant Constraint Throw Try Catch Exit Bitfield
+%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration
 
@@ -1170,21 +1169,21 @@ type_def:
   | Typedef id Colon kind Eq typ
     { mk_td (TD_abbrev ($2, mk_typqn, $4, $6)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
-    { mk_td (TD_record ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
+    { mk_td (TD_record ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Struct id typaram Eq Lcurly struct_fields Rcurly
-    { mk_td (TD_record ($2, mk_namesectn, $3, $6, false)) $startpos $endpos }
+    { mk_td (TD_record ($2, $3, $6, false)) $startpos $endpos }
   | Enum id Eq enum_bar
-    { mk_td (TD_enum ($2, mk_namesectn, $4, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, $4, false)) $startpos $endpos }
   | Enum id Eq Lcurly enum Rcurly
-    { mk_td (TD_enum ($2, mk_namesectn, $5, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, $5, false)) $startpos $endpos }
   | Newtype id Eq type_union
-    { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], false)) $startpos $endpos }
   | Newtype id typaram Eq type_union
-    { mk_td (TD_variant ($2, mk_namesectn, $3, [$5], false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, $3, [$5], false)) $startpos $endpos }
   | Union id Eq Lcurly type_unions Rcurly
-    { mk_td (TD_variant ($2, mk_namesectn, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Union id typaram Eq Lcurly type_unions Rcurly
-    { mk_td (TD_variant ($2, mk_namesectn, $3, $6, false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, $3, $6, false)) $startpos $endpos }
   | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
     { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }
 
@@ -1375,9 +1374,9 @@ default_def:
 
 scattered_def:
   | Union id typaram
-    { mk_sd (SD_variant($2, mk_namesectn, $3)) $startpos $endpos }
+    { mk_sd (SD_variant($2, $3)) $startpos $endpos }
   | Union id
-    { mk_sd (SD_variant($2, mk_namesectn, mk_typqn)) $startpos $endpos }
+    { mk_sd (SD_variant($2, mk_typqn)) $startpos $endpos }
   | Function_ id
     { mk_sd (SD_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
   | Mapping id
@@ -1423,9 +1422,6 @@ def:
     { DEF_scattered (mk_sd (SD_end $2) $startpos $endpos) }
   | default_def
     { DEF_default $1 }
-  | Constant id Eq typ
-    { DEF_kind (KD_aux (KD_nabbrev (K_aux (K_int, loc $startpos($1) $endpos($1)), $2, mk_namesectn, $4),
-			loc $startpos $endpos)) }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | Pragma

@@ -1390,16 +1390,16 @@ and compile_block ctx = function
    it returns a ctypdef * ctx pair. **)
 let compile_type_def ctx (TD_aux (type_def, _)) =
   match type_def with
-  | TD_enum (id, _, ids, _) ->
+  | TD_enum (id, ids, _) ->
      CTD_enum (id, ids),
      { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums }
 
-  | TD_record (id, _, _, ctors, _) ->
+  | TD_record (id, _, ctors, _) ->
      let ctors = List.fold_left (fun ctors (typ, id) -> Bindings.add id (ctyp_of_typ ctx typ) ctors) Bindings.empty ctors in
      CTD_struct (id, Bindings.bindings ctors),
      { ctx with records = Bindings.add id ctors ctx.records }
 
-  | TD_variant (id, _, _, tus, _) ->
+  | TD_variant (id, _, tus, _) ->
      let compile_tu = function
        | Tu_aux (Tu_ty_id (typ, id), _) -> ctyp_of_typ ctx typ, id
      in

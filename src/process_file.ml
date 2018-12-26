@@ -126,7 +126,7 @@ let parseid_to_string (Parse_ast.Id_aux (id, _)) =
 
 let rec realise_union_anon_rec_types orig_union arms =
   match orig_union with
-  | Parse_ast.TD_variant (union_id, name_scm_opt, typq, _, flag) ->
+  | Parse_ast.TD_variant (union_id, typq, _, flag) ->
      begin match arms with
      | [] -> []
      | arm :: arms ->
@@ -137,7 +137,7 @@ let rec realise_union_anon_rec_types orig_union arms =
            let record_str = "_" ^ parseid_to_string union_id ^ "_" ^ parseid_to_string id ^ "_record" in
            let record_id = Id_aux (Id record_str, Generated l) in
            let new_arm = Tu_aux ((Tu_ty_id ((ATyp_aux (ATyp_id record_id, Generated l)), id)), Generated l) in
-           let new_rec_def = DEF_type (TD_aux (TD_record (record_id, name_scm_opt, typq, fields, flag), Generated l)) in
+           let new_rec_def = DEF_type (TD_aux (TD_record (record_id, typq, fields, flag), Generated l)) in
            (Some new_rec_def, new_arm) :: (realise_union_anon_rec_types orig_union arms)
      end
   | _ ->
@@ -210,7 +210,7 @@ let rec preprocess opts = function
 
   (* realise any anonymous record arms of variants *)
   | Parse_ast.DEF_type (Parse_ast.TD_aux
-                          (Parse_ast.TD_variant (id, name_scm_opt, typq, arms, flag) as union, l)
+                          (Parse_ast.TD_variant (id, typq, arms, flag) as union, l)
                        ) :: defs ->
      let records_and_arms = realise_union_anon_rec_types union arms in
      let rec filter_records = function [] -> []
@@ -219,7 +219,7 @@ let rec preprocess opts = function
      in
      let generated_records = filter_records (List.map fst records_and_arms) in
      let rewritten_arms = List.map snd records_and_arms in
-     let rewritten_union = Parse_ast.TD_variant (id, name_scm_opt, typq, rewritten_arms, flag) in
+     let rewritten_union = Parse_ast.TD_variant (id, typq, rewritten_arms, flag) in
      generated_records @ (Parse_ast.DEF_type (Parse_ast.TD_aux (rewritten_union, l))) :: preprocess opts defs
 
   | (Parse_ast.DEF_default (Parse_ast.DT_aux (Parse_ast.DT_order (_, Parse_ast.ATyp_aux (atyp, _)), _)) as def) :: defs ->

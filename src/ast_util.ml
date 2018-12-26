@@ -623,7 +623,6 @@ let exp_loc = function
   | E_aux (_, (l, _)) -> l
 
 let def_loc = function
-  | DEF_kind (KD_aux (_, (l, _)))
   | DEF_type (TD_aux (_, (l, _)))
   | DEF_fundef (FD_aux (_, (l, _)))
   | DEF_mapdef (MD_aux (_, (l, _)))
@@ -948,9 +947,9 @@ let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
 
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
-  | TD_record (id, _, _, _, _)
-  | TD_variant (id, _, _, _, _)
-  | TD_enum (id, _, _, _)
+  | TD_record (id, _, _, _)
+  | TD_variant (id, _, _, _)
+  | TD_enum (id, _, _)
   | TD_bitfield (id, _, _) -> id
 let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
@@ -964,7 +963,6 @@ let id_of_dec_spec (DEC_aux (ds_aux, _)) =
   | DEC_typ_alias (_, id, _) -> id
 
 let ids_of_def = function
-  | DEF_kind (KD_aux (KD_nabbrev (_, id, _, _), _)) -> IdSet.singleton id
   | DEF_type td -> IdSet.singleton (id_of_type_def td)
   | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
   | DEF_val (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
