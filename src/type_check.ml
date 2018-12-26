@@ -52,7 +52,6 @@ open Ast
 open Util
 open Ast_util
 open Lazy
-open Extra_pervasives
 
 module Big_int = Nat_big_num
 
@@ -671,7 +670,7 @@ end = struct
        wf_constraint ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env nc;
        wf_typ ~exs:(KidSet.of_list (List.map kopt_kid kopts)) { env with constraints = nc :: env.constraints } typ
     | Typ_exist (_, _, _) -> typ_error env l ("Nested existentials are not allowed")
-    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   and wf_typ_arg ?exs:(exs=KidSet.empty) env (A_aux (typ_arg_aux, _)) =
     match typ_arg_aux with
     | A_nexp nexp -> wf_nexp ~exs:exs env nexp
@@ -1232,7 +1231,7 @@ let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   | Typ_fn (arg_typs, ret_typ, _) -> List.for_all is_typ_monomorphic arg_typs && is_typ_monomorphic ret_typ
   | Typ_bidir (typ1, typ2) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
   | Typ_exist _ | Typ_var _ -> false
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and is_typ_arg_monomorphic (A_aux (arg, _)) =
   match arg with
   | A_nexp _ -> true
@@ -1678,7 +1677,7 @@ let rec kid_order kind_map (Typ_aux (aux, l) as typ) =
   | Typ_app (_, args) ->
      List.fold_left (fun (ord, kids) arg -> let (ord', kids) = kid_order_arg kids arg in (ord @ ord', kids)) ([], kind_map) args
   | Typ_fn _ | Typ_bidir _ | Typ_exist _ -> typ_error Env.empty l ("Existential or function type cannot appear within existential type: " ^ string_of_typ typ)
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and kid_order_arg kind_map (A_aux (aux, l) as arg) =
   match aux with
   | A_typ typ -> kid_order kind_map typ

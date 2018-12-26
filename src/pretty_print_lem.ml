@@ -51,10 +51,10 @@
 open Type_check
 open Ast
 open Ast_util
+open Reporting
 open Rewriter
 open PPrint
 open Pretty_print_common
-open Extra_pervasives
 
 (****************************************************************************
  * PPrint-based sail-to-lem pprinter

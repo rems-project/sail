@@ -97,26 +97,22 @@
 
 type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
-let print_err_internal fatal verb_loc p_l m1 m2 =
+let print_err_internal p_l m1 m2 =
   let open Error_format in
   prerr_endline (m1 ^ ":");
   begin match p_l with
   | Loc l -> format_message (Location (l, Line m2)) err_formatter
   | Pos p -> format_message (Location (Parse_ast.Range (p, p), Line m2)) err_formatter
-  end;
-  if fatal then exit 1 else ()
+  end
 
 let loc_to_string ?code:(code=true) l =
   let open Error_format in
-  if code then
-    let b = Buffer.create 160 in
-    format_message (Location (l, Line "")) (buffer_formatter b);
-    Buffer.contents b
-  else
-    "LOC"
+  let b = Buffer.create 160 in
+  format_message (Location (l, Line "")) (buffer_formatter b);
+  Buffer.contents b
 
-let print_err fatal verb_loc l m1 m2 =
-  print_err_internal fatal verb_loc (Loc l) m1 m2
+let print_err l m1 m2 =
+  print_err_internal (Loc l) m1 m2
 
 type error =
   | Err_general of Parse_ast.l * string
@@ -130,14 +126,14 @@ type error =
 let issues = "\n\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
 let dest_err = function
-  | Err_general (l, m) -> ("Error", false, Loc l, m)
+  | Err_general (l, m) -> ("Error", Loc l, m)
   | Err_unreachable (l, (file, line, _, _), m) ->
-     ((Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line), false, Loc l, m ^ issues)
-  | Err_todo (l, m) -> ("Todo" ^ m, false, Loc l, "")
-  | Err_syntax (p, m) -> ("Syntax error", false, Pos p, m)
-  | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)
-  | Err_lex (p, s) -> ("Lexical error", false, Pos p, s)
-  | Err_type (l, m) -> ("Type error", false, Loc l, m)
+     (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ issues)
+  | Err_todo (l, m) -> ("Todo" ^ m, Loc l, "")
+  | Err_syntax (p, m) -> ("Syntax error", Pos p, m)
+  | Err_syntax_locn (l, m) -> ("Syntax error", Loc l, m)
+  | Err_lex (p, s) -> ("Lexical error", Pos p, s)
+  | Err_type (l, m) -> ("Type error", Loc l, m)
 
 exception Fatal_error of error
 
@@ -147,10 +143,9 @@ let err_unreachable l ocaml_pos m = Fatal_error (Err_unreachable (l, ocaml_pos, 
 let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l,m))
 
-let report_error e =
-  let (m1, verb_pos, pos_l, m2) = dest_err e in
-  print_err_internal verb_pos false pos_l m1 m2
+let unreachable l pos msg =
+  raise (err_unreachable l pos msg)
 
 let print_error e =
-  let (m1, verb_pos, pos_l, m2) = dest_err e in
-  print_err_internal verb_pos false pos_l m1 m2
+  let (m1, pos_l, m2) = dest_err e in
+  print_err_internal pos_l m1 m2

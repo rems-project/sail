@@ -69,13 +69,13 @@ val loc_to_string : ?code:bool -> Parse_ast.l -> string
     std-err. It starts with printing location information stored in [l]
     It then prints "head: mes". If [fatal] is set, the program exists with error-code 1 afterwards.
 *)
-val print_err : bool -> bool -> Parse_ast.l -> string -> string -> unit
+val print_err : Parse_ast.l -> string -> string -> unit
 
 (** {2 Errors } *)
 
 (** Errors stop execution and print a message; they typically have a location and message.
 *)
-type error = 
+type error =
   (** General errors, used for multi purpose. If you are unsure, use this one. *)
   | Err_general of Parse_ast.l * string
 
@@ -105,8 +105,6 @@ val err_unreachable : Parse_ast.l -> (string * int * int * int) -> string -> exn
 (** [err_typ l m] is an abreviatiation for [Fatal_error (Err_type (l, m))] *)
 val err_typ : Parse_ast.l -> string -> exn
 
-(** Report error should only be used by main to print the error in the end. Everywhere else,
-    raising a [Fatal_error] exception is recommended. *)
-val report_error : error -> unit
+val unreachable : Parse_ast.l -> (string * int * int * int) -> string -> 'a
 
 val print_error : error -> unit

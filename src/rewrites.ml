@@ -54,7 +54,6 @@ open Ast_util
 open Type_check
 open Spec_analysis
 open Rewriter
-open Extra_pervasives
 
 let (>>) f g = fun x -> g(f(x))
 
@@ -4637,7 +4636,7 @@ let check_cases process is_wild loc_of cases =
   let rec aux rps acc = function
     | [] -> acc, rps
     | [p] when is_wild p && match rps with [] -> true | _ -> false ->
-      let () = Reporting.print_err false false
+      let () = Reporting.print_err
         (loc_of p) "Match checking" "Redundant wildcard clause" in
       acc, []
     | h::t -> aux (process rps h) (h::acc) t
@@ -4677,7 +4676,7 @@ let rewrite_case (e,ann) =
 
         let _ =
           if !opt_coq_warn_nonexhaustive
-          then Reporting.print_err false false
+          then Reporting.print_err
             (fst ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example) in
 
         let l = Parse_ast.Generated Parse_ast.Unknown in
@@ -4697,7 +4696,7 @@ let rewrite_case (e,ann) =
      | (example::_) ->
         let _ =
           if !opt_coq_warn_nonexhaustive
-          then Reporting.print_err false false
+          then Reporting.print_err
             (fst ann) "Non-exhaustive let" ("Example: " ^ string_of_rp example) in
         let l = Parse_ast.Generated Parse_ast.Unknown in
         let p = P_aux (P_wild, (l, empty_tannot)) in
@@ -4727,7 +4726,7 @@ let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
   | (example::_) ->
      let _ =
        if !opt_coq_warn_nonexhaustive
-       then Reporting.print_err false false
+       then Reporting.print_err
               (fst f_ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example) in
 
      let l = Parse_ast.Generated Parse_ast.Unknown in
@@ -4738,7 +4737,6 @@ let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
      let default = FCL_aux (FCL_Funcl (id,Pat_aux (Pat_exp (p,b),(l,empty_tannot))),fcl_ann) in
 
      FD_aux (FD_function (r,t,e,fcls'@[default]),f_ann)
-  
 
 let rewrite =
   let alg = { id_exp_alg with e_aux = rewrite_case } in

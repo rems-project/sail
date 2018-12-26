@@ -415,6 +415,6 @@ let _ =  try
       with Failure s -> raise (Reporting.err_general Parse_ast.Unknown ("Failure " ^ s))
     end
   with Reporting.Fatal_error e ->
-    Reporting.report_error e;
+    Reporting.print_error e;
     Interactive.opt_suppress_banner := true;
     if !Interactive.opt_interactive then () else exit 1

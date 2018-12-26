@@ -51,7 +51,6 @@
 open Ast
 open Ast_util
 open Rewriter
-open Extra_pervasives
 
 let is_typ_ord_uvar = function
   | A_aux (A_typ _, _) -> true
@@ -68,7 +67,7 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
     | Typ_fn (arg_typs, ret_typ, effect) ->
        Typ_fn (List.map nexp_simp_typ arg_typs, nexp_simp_typ ret_typ, effect)
     | Typ_bidir (t1, t2) -> Typ_bidir (nexp_simp_typ t1, nexp_simp_typ t2)
-    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   in
   Typ_aux (typ_aux, l)
 and nexp_simp_typ_arg (A_aux (typ_arg_aux, l)) =
@@ -253,7 +252,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_frees ~exs:exs t1) (typ_frees ~exs:exs t2)
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> KidSet.empty
@@ -270,7 +269,7 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_int_frees ~exs:exs ret_typ) (List.map (typ_int_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_int_frees ~exs:exs t1) (typ_int_frees ~exs:exs t2)
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> KidSet.diff (tyvars_of_nexp n) exs

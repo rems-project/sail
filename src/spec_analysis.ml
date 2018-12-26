@@ -51,7 +51,6 @@
 open Ast
 open Util
 open Ast_util
-open Extra_pervasives
 
 module Nameset = Set.Make(String)
 
@@ -95,7 +94,7 @@ let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kopts,_,t') -> List.fold_left (fun s kopt -> Nameset.remove (string_of_kid (kopt_kid kopt)) s) (free_type_names_t consider_var t') kopts
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
 and free_type_names_maybe_t consider_var = function
   | Some t -> free_type_names_t consider_var t
@@ -130,7 +129,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
      fv_of_typ consider_var
        (List.fold_left (fun b (KOpt_aux (KOpt_kind (_, (Kid_aux (Var v,_))), _)) -> Nameset.add v b) bound kopts)
        used t'
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 
 and fv_of_targ consider_var bound used (Ast.A_aux(targ,_)) : Nameset.t = match targ with
   | A_typ t -> fv_of_typ consider_var bound used t

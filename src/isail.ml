@@ -83,7 +83,7 @@ let rec user_input callback =
      mode_clear ();
      begin
        try callback v with
-       | Reporting.Fatal_error e -> Reporting.report_error e
+       | Reporting.Fatal_error e -> Reporting.print_error e
      end;
      user_input callback
 

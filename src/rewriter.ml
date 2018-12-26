@@ -382,29 +382,6 @@ let rewriters_base =
 
 let rewrite_defs (Defs defs) = rewrite_defs_base rewriters_base (Defs defs)
 
-module Envmap = Finite_map.Fmap_map(String)
-
-(* TODO: This seems to only consider a single assignment (or possibly two, in
-   separate branches of an if-expression). Hence, it seems the result is always
-   at most one variable. Is this intended?
-   It is only used below when pulling out local variables inside if-expressions
-   into the outer scope, which seems dubious. I comment it out for now. *)
-(*let rec introduced_variables (E_aux (exp,(l,annot))) =
-  match exp with
-  | E_cast (typ, exp) -> introduced_variables exp
-  | E_if (c,t,e) -> Envmap.intersect (introduced_variables t) (introduced_variables e)
-  | E_assign (lexp,exp) -> introduced_vars_le lexp exp
-  | _ -> Envmap.empty
-
-and introduced_vars_le (LEXP_aux(lexp,annot)) exp =
-  match lexp with
-  | LEXP_id (Id_aux (Id id,_))  | LEXP_cast(_,(Id_aux (Id id,_))) ->
-    (match annot with
-     | Base((_,t),Emp_intro,_,_,_,_) ->
-       Envmap.insert Envmap.empty (id,(t,exp))
-     | _ -> Envmap.empty)
-  | _ -> Envmap.empty*)
-
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
   ; p_wild           : 'pat_aux

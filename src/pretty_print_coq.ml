@@ -51,10 +51,10 @@
 open Type_check
 open Ast
 open Ast_util
+open Reporting
 open Rewriter
 open PPrint
 open Pretty_print_common
-open Extra_pervasives
 
 module StringSet = Set.Make(String)
 
@@ -2008,8 +2008,8 @@ let merge_kids_atoms pats =
       match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
       | Some (Nexp_aux (Nexp_var kid,l)) ->
          if KidSet.mem kid seen then
-           let () = 
-             Reporting.print_err false true l "merge_kids_atoms"
+           let () =
+             Reporting.print_err l "merge_kids_atoms"
                ("want to merge tyvar and argument for " ^ string_of_kid kid ^
                    " but rearranging arguments isn't supported yet") in
            gone,map,seen
@@ -2420,7 +2420,7 @@ try
   let generic_eq_types = types_used_with_generic_eq defs in
   let doc_def = doc_def unimplemented generic_eq_types in
   let () = if !opt_undef_axioms || IdSet.is_empty unimplemented then () else
-      Reporting.print_err false false Parse_ast.Unknown "Warning"
+      Reporting.print_err Parse_ast.Unknown "Warning"
         ("The following functions were declared but are undefined:\n" ^
             String.concat "\n" (List.map string_of_id (IdSet.elements unimplemented)))
   in
