@@ -62,7 +62,7 @@ endif
 endif
 
 
-.PHONY: all sail sail.native sail.byte manifest.ml test clean doc lib power test_power test_idempotence
+.PHONY: all sail coverage sail.native sail.byte manifest.ml test clean doc lib power test_power test_idempotence
 
 # set to -p on command line to enable gprof profiling
 OCAML_OPTS?=
@@ -102,6 +102,9 @@ sail: ast.ml bytecode.ml manifest.ml
 
 isail: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind isail.native
+
+coverage: ast.ml bytecode.ml manifest.ml
+	BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' isail.native
 
 sail.native: sail
 

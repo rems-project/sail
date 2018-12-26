@@ -1,8 +1,9 @@
 true: -traverse, debug, use_menhir
-<**/*.ml>: bin_annot, annot
+<**/parser.ml>: bin_annot, annot
+<**/*.ml> and not <**/parser.ml>: bin_annot, annot, coverage
 
 <sail.{byte,native}>: package(zarith), package(linksem), package(lem), package(omd), use_pprint
-<isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), package(omd), use_pprint
+<isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), package(omd), use_pprint, coverage
 
 <isail.ml>: package(linenoise)
 <elf_loader.ml>: package(linksem)
