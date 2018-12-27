@@ -1262,14 +1262,29 @@ let doc_exp, doc_let =
                  not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in
-            let want_parens1 = want_parens || autocast in
-            let arg_pp =
-              construct_dep_pairs env want_parens1 arg typ_from_fn
+            (* If the argument is an integer that can be inferred from the
+               context in a different form, let Coq fill it in.  E.g.,
+               when "64" is really "8 * width".  Avoid cases where the
+               type checker has introduced a phantom type variable while
+               calculating the instantiations. *)
+            let vars_in_env n =
+              let ekids = Env.get_typ_vars env in
+              KidSet.for_all (fun kid -> KBindings.mem kid ekids) (nexp_frees n)
             in
-            if autocast && false
-            then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
-                 if want_parens then parens arg_pp else arg_pp
-            else arg_pp
+            match typ_of_arg, typ_from_fn with
+            | Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n1,_)]),_),
+              Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n2,_)]),_)
+                 when vars_in_env n2 && not (similar_nexps ctxt env n1 n2) ->
+               underscore
+            | _ ->
+               let want_parens1 = want_parens || autocast in
+               let arg_pp =
+                 construct_dep_pairs env want_parens1 arg typ_from_fn
+               in
+               if autocast && false
+               then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
+                    if want_parens then parens arg_pp else arg_pp
+               else arg_pp
           in
           let epp =
             if is_ctor
