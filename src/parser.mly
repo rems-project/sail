@@ -1330,7 +1330,7 @@ val_spec_def:
   | Val Cast id Colon typschm
     { mk_vs (VS_val_spec ($5, $3, [], true)) $startpos $endpos }
   | Val id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($6, $2, [], false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($6, $2, [("_", $4)], false)) $startpos $endpos }
   | Val Cast id Eq String Colon typschm
     { mk_vs (VS_val_spec ($7, $3, [("_", $5)], true)) $startpos $endpos }
   | Val String Colon typschm
