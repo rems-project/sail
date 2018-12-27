@@ -368,9 +368,6 @@ module Env : sig
   val add_variant : id -> typquant * type_union list -> t -> t
   val add_mapping : id -> typquant * typ * typ -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
-  val add_flow : id -> (typ -> typ) -> t -> t
-  val get_flow : id -> t -> typ -> typ
-  val remove_flow : id -> t -> t
   val is_register : id -> t -> bool
   val get_register : id -> t -> effect * effect * typ
   val add_register : id -> effect -> effect -> typ -> t -> t
@@ -455,7 +452,6 @@ end = struct
       typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
       num_defs : nexp Bindings.t;
       overloads : (id list) Bindings.t;
-      flow : (typ -> typ) Bindings.t;
       enums : IdSet.t Bindings.t;
       records : (typquant * (typ * id) list) Bindings.t;
       accessors : (typquant * typ) Bindings.t;
@@ -485,7 +481,6 @@ end = struct
       typ_synonyms = Bindings.empty;
       num_defs = Bindings.empty;
       overloads = Bindings.empty;
-      flow = Bindings.empty;
       enums = Bindings.empty;
       records = Bindings.empty;
       accessors = Bindings.empty;
@@ -1053,18 +1048,6 @@ end = struct
       { env with union_ids = Bindings.add id bind env.union_ids }
     end
 
-  let get_flow id env =
-    try Bindings.find id env.flow with
-    | Not_found -> fun typ -> typ
-
-  let add_flow id f env =
-    typ_print (lazy (adding ^ "flow constraints for " ^ string_of_id id));
-    { env with flow = Bindings.add id (fun typ -> f (get_flow id env typ)) env.flow }
-
-  let remove_flow id env =
-    typ_print (lazy ("Removing flow constraints for " ^ string_of_id id));
-    { env with flow = Bindings.remove id env.flow }
-
   let is_register id env =
     Bindings.mem id env.registers
 
@@ -1105,8 +1088,7 @@ end = struct
   let lookup_id ?raw:(raw=false) id env =
     try
       let (mut, typ) = Bindings.find id env.locals in
-      let flow = get_flow id env in
-      Local (mut, if raw then typ else flow typ)
+      Local (mut, typ)
     with
     | Not_found ->
     try
@@ -3114,7 +3096,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      begin match Env.lookup_id ~raw:true v env with
      | Local (Immutable, _) | Enum _ ->
         typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
-     | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, Env.remove_flow v env
+     | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
      | Register (_, weff, vtyp) -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ weff, env
      | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
      end
