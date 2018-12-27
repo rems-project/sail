@@ -1488,3 +1488,13 @@ and locate_fexps : 'a. l -> 'a fexps -> 'a fexps = fun l (FES_aux (FES_Fexps (fe
 
 and locate_fexp : 'a. l -> 'a fexp -> 'a fexp = fun l (FE_aux (FE_Fexp (id, exp), (_, annot))) ->
   FE_aux (FE_Fexp (locate_id l id, locate l exp), (l, annot))
+
+
+let extern_assoc backend exts =
+  try
+    try
+      Some (List.assoc backend exts)
+    with Not_found ->
+      Some (List.assoc "_" exts)
+  with Not_found ->
+    None

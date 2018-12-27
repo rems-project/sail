@@ -538,9 +538,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
 
 let doc_spec (VS_aux (v, annot)) =
   let doc_extern ext =
-    let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
-      utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
-    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"; "smt"; "interpreter"; "c"]) in
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
     if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with

@@ -943,8 +943,8 @@ val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
 
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
-  {{ ocaml  VS_val_spec of typschm * id * (string -> string option) * bool }}
-  {{ lem VS_val_spec of typschm * id * (string -> maybe string) * bool }}
+  {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
+  {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
   | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
     {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }} {{ lem }}

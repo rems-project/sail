@@ -366,3 +366,6 @@ val locate_pat : l -> 'a pat -> 'a pat
 val locate_lexp : l -> 'a lexp -> 'a lexp
 
 val locate_typ : l -> typ -> typ
+
+
+val extern_assoc : string -> (string * string) list -> string option

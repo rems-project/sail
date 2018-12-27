@@ -1349,7 +1349,7 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
 
 let doc_spec_lem (VS_aux (valspec,annot)) =
   match valspec with
-  | VS_val_spec (typschm,id,ext,_) when ext "lem" = None ->
+  | VS_val_spec (typschm,id,exts,_) when Ast_util.extern_assoc "lem" exts = None ->
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
      doc_docstring_lem annot ^^

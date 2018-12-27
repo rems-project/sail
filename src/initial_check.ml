@@ -1078,8 +1078,8 @@ let typschm_of_string order str =
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
-let extern_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, (fun _ -> Some (string_of_id id)), false))
-let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, (fun _ -> None), false))
+let extern_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, [("_", string_of_id id)], false))
+let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, [], false))
 
 let val_spec_ids (Defs defs) =
   let val_spec_id (VS_aux (vs_aux, _)) =
@@ -1154,7 +1154,7 @@ let generate_undefineds vs_ids (Defs defs) =
   let undefined_td = function
     | TD_enum (id, _, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let typschm = typschm_of_string dec_ord ("unit -> " ^ string_of_id id ^ " effect {undef}") in
-       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, (fun _ -> None), false));
+       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, [], false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             (mk_pat (P_lit (mk_lit L_unit)))
                             (if !opt_fast_undefined && List.length ids > 0 then
@@ -1164,7 +1164,7 @@ let generate_undefineds vs_ids (Defs defs) =
                                               [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
     | TD_record (id, _, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, [], false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
                             (mk_exp (E_record (mk_fexps (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields))))]]
@@ -1212,7 +1212,7 @@ let generate_undefineds vs_ids (Defs defs) =
              (mk_exp (E_app (mk_id "internal_pick",
                              [mk_exp (E_list (List.map (make_constr typ_to_var) constr_args))]))) letbinds
        in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, [], false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                       pat
                       body]]
@@ -1248,7 +1248,7 @@ let generate_enum_functions vs_ids (Defs defs) =
   let rec gen_enums = function
     | DEF_type (TD_aux (TD_enum (id, _, elems, _), _)) as enum :: defs ->
        let enum_val_spec name quants typ =
-         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, (fun _ -> None), !opt_enum_casts))
+         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, [], !opt_enum_casts))
        in
        let range_constraint kid = nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1))) in
 

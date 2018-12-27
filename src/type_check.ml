@@ -392,7 +392,7 @@ module Env : sig
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
-  val add_extern : id -> (string -> string option) -> t -> t
+  val add_extern : id -> (string * string) list -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
   val set_default_order : order_aux -> t -> t
@@ -459,7 +459,7 @@ end = struct
       enums : IdSet.t Bindings.t;
       records : (typquant * (typ * id) list) Bindings.t;
       accessors : (typquant * typ) Bindings.t;
-      externs : (string -> string option) Bindings.t;
+      externs : (string * string) list Bindings.t;
       smt_ops : string Bindings.t;
       constraint_synonyms : (kid list * n_constraint) Bindings.t;
       casts : id list;
@@ -1073,7 +1073,7 @@ end = struct
     | Not_found -> typ_error (id_loc id) ("No register binding found for " ^ string_of_id id)
 
   let is_extern id env backend =
-    try not (Bindings.find id env.externs backend = None) with
+    try not (Ast_util.extern_assoc backend (Bindings.find id env.externs) = None) with
     | Not_found -> false
     (* Bindings.mem id env.externs *)
 
@@ -1082,7 +1082,7 @@ end = struct
 
   let get_extern id env backend =
     try
-      match Bindings.find id env.externs backend with
+      match Ast_util.extern_assoc backend (Bindings.find id env.externs) with
       | Some ext -> ext
       | None -> typ_error (id_loc id) ("No extern binding found for " ^ string_of_id id)
     with
@@ -4353,7 +4353,7 @@ let mk_val_spec env typq typ id =
     | Typ_aux (Typ_fn (_,_,eff),_) -> eff
     | _ -> no_effect
   in
-  DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, (fun _ -> None), false), (Parse_ast.Unknown, Some ((env,typ,eff),None))))
+  DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, [], false), (Parse_ast.Unknown, Some ((env,typ,eff),None))))
 
 let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
@@ -4449,16 +4449,16 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let annotate vs typ eff = DEF_spec (VS_aux (vs, (l, Some ((env, typ, eff), None)))) in
   let vs, id, typq, typ, env = match vs with
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, ext_opt, is_cast) ->
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, exts, is_cast) ->
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
-       let env = match (ext_opt "smt", ext_opt "#") with
+       let env = match (Ast_util.extern_assoc "smt" exts, Ast_util.extern_assoc "#" exts) with
          | Some op, None -> Env.add_smt_op id op env
          | _, _ -> env
        in
-       let env = Env.add_extern id ext_opt env in
+       let env = Env.add_extern id exts env in
        let env = if is_cast then Env.add_cast id env else env in
        let typq, typ = expand_bind_synonyms ts_l env (typq, typ) in
-       let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, ext_opt, is_cast) in
+       let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, exts, is_cast) in
        (vs, id, typq, typ, env)
   in
   let eff =
@@ -4626,13 +4626,13 @@ let initial_env =
   (* |> Env.add_val_spec (mk_id "int")
    *      (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), Typ_aux (Typ_bidir (int_typ, string_typ), Parse_ast.Unknown)) *)
 
-  |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
+  |> Env.add_extern (mk_id "size_itself_int") [("_", "size_itself_int")]
   |> Env.add_val_spec (mk_id "size_itself_int")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
        function_typ [app_typ (mk_id "itself") [mk_typ_arg (Typ_arg_nexp (nvar (mk_kid "n")))]]
          (atom_typ (nvar (mk_kid "n"))) no_effect)
-  |> Env.add_extern (mk_id "make_the_value") (fun _ -> Some "make_the_value")
+  |> Env.add_extern (mk_id "make_the_value") [("_", "make_the_value")]
   |> Env.add_val_spec (mk_id "make_the_value")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (KOpt_aux (KOpt_none (mk_kid "n"),Parse_ast.Unknown)),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),

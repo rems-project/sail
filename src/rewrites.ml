@@ -2212,7 +2212,7 @@ let rewrite_split_fun_constr_pats fun_name (Defs defs) =
       in
       let val_spec =
         VS_aux (VS_val_spec
-          (mk_typschm typquant fun_typ, id, (fun _ -> None), false),
+          (mk_typschm typquant fun_typ, id, [], false),
           (Parse_ast.Unknown, empty_tannot))
       in
       let fundef = FD_aux (FD_function (r_o, t_o, e_o, funcls), fdannot) in
@@ -3152,7 +3152,7 @@ let construct_toplevel_string_append_func env f_id pat =
                                                             ), unk)]
   in
   let fun_typ = (mk_typ (Typ_fn ([string_typ], option_typ, no_effect))) in
-  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, (fun _ -> None), false), unkt) in
+  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, [], false), unkt) in
   let new_val_spec, env = Type_check.check_val_spec env new_val_spec in
   let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
   let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
@@ -4345,10 +4345,10 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), l) in
     let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), l) in
 
-    let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
-    let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
-    let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
-    let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
+    let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, [], false), (Parse_ast.Unknown,())) in
+    let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, [], false), (Parse_ast.Unknown,())) in
+    let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, [], false), (Parse_ast.Unknown,())) in
+    let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, [], false), (Parse_ast.Unknown,())) in
 
     let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
     let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
@@ -4382,7 +4382,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
     let string_defs =
       begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
               let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-              let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
+              let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
               let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
               let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
@@ -4392,7 +4392,7 @@ let rewrite_defs_realise_mappings (Defs defs) =
             else
               if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
                 let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [Typ_arg_aux (Typ_arg_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-                let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
+                let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
                 let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
                 let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in

@@ -2235,8 +2235,8 @@ let find_exc_typ defs =
 
 let find_unimplemented defs =
   let adjust_def unimplemented = function
-    | DEF_spec (VS_aux (VS_val_spec (_,id,ext,_),_)) -> begin
-      match ext "coq" with
+    | DEF_spec (VS_aux (VS_val_spec (_,id,exts,_),_)) -> begin
+      match Ast_util.extern_assoc "coq" exts with
       | Some _ -> unimplemented
       | None -> IdSet.add id unimplemented
     end

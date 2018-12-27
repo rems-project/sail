@@ -615,8 +615,8 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
  | _ -> failwith "Unsupported typedef"
 
 let get_externs (Defs defs) =
-  let extern_id (VS_aux (VS_val_spec (typschm, id, ext, _), _)) =
-    match ext "ocaml" with
+  let extern_id (VS_aux (VS_val_spec (typschm, id, exts, _), _)) =
+    match Ast_util.extern_assoc "ocaml" exts with
     | None -> []
     | Some ext -> [(id, mk_id ext)]
   in

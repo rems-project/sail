@@ -1316,31 +1316,31 @@ let_def:
 
 externs:
   | id Colon String
-    { ([(string_of_id $1, $3)], None) }
+    { [(string_of_id $1, $3)] }
   | Under Colon String
-    { ([], Some $3) }
+    { [("_", $3)] }
   | id Colon String Comma externs
-    { cons_fst (string_of_id $1, $3) $5 }
+    { (string_of_id $1, $3) :: $5 }
 
 val_spec_def:
   | Doc val_spec_def
     { doc_vs $1 $2 }
   | Val id Colon typschm
-    { mk_vs (VS_val_spec ($4, $2, (fun _ -> None), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, $2, [], false)) $startpos $endpos }
   | Val Cast id Colon typschm
-    { mk_vs (VS_val_spec ($5, $3, (fun _ -> None), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($5, $3, [], true)) $startpos $endpos }
   | Val id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($6, $2, (fun _ -> Some $4), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($6, $2, [], false)) $startpos $endpos }
   | Val Cast id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($7, $3, (fun _ -> Some $5), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($7, $3, [("_", $5)], true)) $startpos $endpos }
   | Val String Colon typschm
-    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), (fun _ -> Some $2), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), [("_", $2)], false)) $startpos $endpos }
   | Val Cast String Colon typschm
-    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), (fun _ -> Some $3), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), [("_", $3)], true)) $startpos $endpos }
   | Val id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($8, $2, (fun backend -> (assoc_opt backend $5)), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($8, $2, $5, false)) $startpos $endpos }
   | Val Cast id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($9, $3, (fun backend -> (assoc_opt backend $6)), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($9, $3, $6, true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ
