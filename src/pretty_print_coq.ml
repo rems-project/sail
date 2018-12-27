@@ -1196,13 +1196,39 @@ let doc_exp, doc_let =
             else if IdSet.mem f ctxt.recursive_ids
             then doc_id f, false, false, true
             else doc_id f, false, false, false in
-          let (tqs,fn_ty) = Env.get_val_spec_orig f env in
+          let (tqs,fn_ty) = Env.get_val_spec f env in
+          (* Calculate the renaming *)
+          let tqs_map = List.fold_left
+                          (fun m k ->
+                            let kid = kopt_kid k in
+                            KBindings.add (orig_kid kid) kid m)
+                          KBindings.empty (quant_kopts tqs) in
           let arg_typs, ret_typ, eff = match fn_ty with
             | Typ_aux (Typ_fn (arg_typs,ret_typ,eff),_) -> arg_typs, ret_typ, eff
             | _ -> raise (Reporting.err_unreachable l __POS__ "Function not a function type")
           in
           let inst =
-            match instantiation_of_without_type full_exp with
+            (* We attempt to get an instantiation of the function signature's
+               type variables which agrees with Coq by
+               1. using dummy variables with the expected type of each argument
+                  (avoiding the inferred type, which might have (e.g.) stripped
+                  out an existential quantifier)
+               2. calculating the instantiation without using the expected
+                  return type, so that we can work out if we need a cast around
+                  the function call. *)
+            let dummy_args =
+              Util.list_mapi (fun i exp -> mk_id ("#coq#arg" ^ string_of_int i),
+                                           general_typ_of exp) args
+            in
+            let dummy_exp = mk_exp (E_app (f, List.map (fun (id,_) -> mk_exp (E_id id)) dummy_args)) in
+            let dummy_env = List.fold_left (fun env (id,typ) -> Env.add_local id (Immutable,typ) env) env dummy_args in
+            let inst_exp =
+              try infer_exp dummy_env dummy_exp
+              with ex ->
+                debug ctxt (lazy (" cannot infer dummy application " ^ Printexc.to_string ex));
+                full_exp
+            in
+            match instantiation_of_without_type inst_exp with
             | x -> x
             (* Not all function applications can be inferred, so try falling back to the
                type inferred when we know the target type.
@@ -1210,7 +1236,8 @@ let doc_exp, doc_let =
                to cast. *)
             | exception _ -> instantiation_of full_exp
           in
-          let inst = KBindings.fold (fun k u m -> KBindings.add (orig_kid k) u m) inst KBindings.empty in
+          let inst = KBindings.fold (fun k u m -> KBindings.add (KBindings.find (orig_kid k) tqs_map) u m) inst KBindings.empty in
+          let () = debug ctxt (lazy (" instantiations: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
 
           (* Insert existential packing of arguments where necessary *)
           let doc_arg want_parens arg typ_from_fn =
