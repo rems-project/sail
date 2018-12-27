@@ -997,3 +997,47 @@ let rec initialize_registers gstate =
   | Defs [] -> gstate
 
 let initial_state ast env primops = initial_lstate, initialize_registers (initial_gstate primops ast env) ast
+
+type value_result =
+  | Value_success of value
+  | Value_error of exn
+
+let decode_instruction state bv =
+  try
+    let env = (snd state).typecheck_env in
+    let untyped = mk_exp (E_app ((mk_id "decode"), [mk_exp (E_vector (List.map mk_lit_exp bv))])) in
+    let typed = Type_check.check_exp
+                  env untyped (app_typ (mk_id "option")
+                                 [Typ_arg_aux (Typ_arg_typ (mk_typ (Typ_id (mk_id "ast"))), Parse_ast.Unknown)]) in
+    let evaled = eval_exp state typed in
+    match evaled with
+    | V_ctor ("Some", [v]) -> Value_success v
+    | V_ctor ("None", _) -> failwith "decode returned None"
+    | _ -> failwith "decode returned wrong value type"
+  with _ as exn ->
+    Value_error exn
+
+let annot_exp_effect e_aux l env typ effect = E_aux (e_aux, (l, Type_check.mk_tannot env typ effect))
+let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ no_effect
+let id_typ id = mk_typ (Typ_id (mk_id id))
+
+let analyse_instruction state ast =
+  try
+    let env = (snd state).typecheck_env in
+    let unk = Parse_ast.Unknown in
+    let typed = annot_exp
+                  (E_app (mk_id "initial_analysis", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env
+                  (tuple_typ [id_typ "regfps"; id_typ "regfps"; id_typ "regfps"; id_typ "niafps"; id_typ "diafp"; id_typ "instruction_kind"])
+    in
+    let evaled = eval_exp state typed in
+    Value_success evaled
+  with _ as exn ->
+    Value_error exn
+
+let execute_instruction state ast =
+  let env = (snd state).typecheck_env in
+  let unk = Parse_ast.Unknown in
+  let typed = annot_exp
+                (E_app (mk_id "execute", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env unit_typ
+  in
+  Step (lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp typed)), state, return typed, [])
