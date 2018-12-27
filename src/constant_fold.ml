@@ -141,13 +141,13 @@ let rec run frame =
    - Throws an exception that isn't caught.
  *)
 
-let rec rewrite_constant_function_calls' ast =
+let rec rewrite_constant_function_calls' env ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
 
   let lstate, gstate =
-    Interpreter.initial_state ast safe_primops
+    Interpreter.initial_state ast env safe_primops
   in
   let gstate = { gstate with Interpreter.allow_registers = false } in
 
@@ -202,11 +202,11 @@ let rec rewrite_constant_function_calls' ast =
   let ast = rewrite_defs_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)
   if !rewrite_count > 0
-  then rewrite_constant_function_calls' ast
+  then rewrite_constant_function_calls' env ast
   else ast
 
-let rewrite_constant_function_calls ast =
+let rewrite_constant_function_calls env ast =
   if !optimize_constant_fold then
-    rewrite_constant_function_calls' ast
+    rewrite_constant_function_calls' env ast
   else
     ast

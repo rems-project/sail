@@ -103,7 +103,7 @@ let sail_logo =
 
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
-let interactive_state = ref (initial_state !interactive_ast Value.primops)
+let interactive_state = ref (initial_state !interactive_ast !interactive_env Value.primops)
 
 let print_program () =
   match !current_mode with
@@ -301,13 +301,13 @@ let handle_input' input =
             let ast, env = Specialize.specialize !interactive_ast !interactive_env in
             interactive_ast := ast;
             interactive_env := env;
-            interactive_state := initial_state !interactive_ast Value.primops
+            interactive_state := initial_state !interactive_ast !interactive_env Value.primops
          | ":pretty" ->
             print_endline (Pretty_print_sail.to_string (Latex.latex_defs "sail_latex" !interactive_ast))
          | ":bytecode" ->
             let open PPrint in
             let open C_backend in
-            let ast = Process_file.rewrite_ast_c !interactive_ast in
+            let ast = Process_file.rewrite_ast_c !interactive_env !interactive_ast in
             let ast, env = Specialize.specialize ast !interactive_env in
             let ctx = initial_ctx env in
             let byte_ast = bytecode_ast ctx (List.map flatten_instrs) ast in
@@ -351,15 +351,15 @@ let handle_input' input =
             | ":l" | ":load" ->
                let files = Util.split_on_char ' ' arg in
                let (_, ast, env) = load_files !interactive_env files in
-               let ast = Process_file.rewrite_ast_interpreter ast in
+               let ast = Process_file.rewrite_ast_interpreter env ast in
                interactive_ast := append_ast !interactive_ast ast;
-               interactive_state := initial_state !interactive_ast Value.primops;
+               interactive_state := initial_state !interactive_ast !interactive_env Value.primops;
                interactive_env := env;
                vs_ids := Initial_check.val_spec_ids !interactive_ast
             | ":u" | ":unload" ->
                interactive_ast := Ast.Defs [];
                interactive_env := Type_check.initial_env;
-               interactive_state := initial_state !interactive_ast Value.primops;
+               interactive_state := initial_state !interactive_ast !interactive_env Value.primops;
                vs_ids := Initial_check.val_spec_ids !interactive_ast;
                (* See initial_check.mli for an explanation of why we need this. *)
                Initial_check.have_undefined_builtins := false

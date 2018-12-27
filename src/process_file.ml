@@ -375,7 +375,7 @@ let rewrite_step defs (name,rewriter) =
     | _ -> () in
   defs
 
-let rewrite rewriters defs =
+let rewrite rewriters env defs =
   try List.fold_left rewrite_step defs rewriters with
   | Type_check.Type_error (l, err) ->
      raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
@@ -385,10 +385,10 @@ let rewrite_undefined bitvectors = rewrite [("undefined", fun x -> Rewrites.rewr
 let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
 let rewrite_ast_coq = rewrite Rewrites.rewrite_defs_coq
 let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
-let rewrite_ast_c ast =
+let rewrite_ast_c env ast =
   ast
-  |> rewrite Rewrites.rewrite_defs_c
-  |> rewrite [("constant_fold", Constant_fold.rewrite_constant_function_calls)]
+  |> rewrite Rewrites.rewrite_defs_c env
+  |> rewrite [("constant_fold", Constant_fold.rewrite_constant_function_calls env)] env
 
 let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
 let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check

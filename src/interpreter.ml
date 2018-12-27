@@ -61,6 +61,7 @@ type gstate =
     letbinds : (Type_check.tannot letbind) list;
     fundefs : (Type_check.tannot fundef) Bindings.t;
     last_write_ea : (value * value * value) option;
+    typecheck_env : Type_check.Env.t;
   }
 
 type lstate =
@@ -964,13 +965,14 @@ let rec run_frame frame =
 let eval_exp state exp =
   run_frame (Step (lazy "", state, return exp, []))
 
-let initial_gstate primops ast =
+let initial_gstate primops ast env =
   { registers = Bindings.empty;
     allow_registers = true;
     primops = primops;
     letbinds = ast_letbinds ast;
     fundefs = Bindings.empty;
     last_write_ea = None;
+    typecheck_env = env;
   }
 
 let rec initialize_registers gstate =
@@ -994,4 +996,4 @@ let rec initialize_registers gstate =
      initialize_registers (process_def def) (Defs defs)
   | Defs [] -> gstate
 
-let initial_state ast primops = initial_lstate, initialize_registers (initial_gstate primops ast) ast
+let initial_state ast env primops = initial_lstate, initialize_registers (initial_gstate primops ast env) ast
