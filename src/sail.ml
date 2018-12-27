@@ -72,6 +72,7 @@ let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
+let opt_marshal_defs = ref false
 
 let options = Arg.align ([
   ( "-o",
@@ -111,6 +112,9 @@ let options = Arg.align ([
   ( "-latex",
     Arg.Set opt_print_latex,
     " pretty print the input to latex");
+  ( "-marshal",
+    Arg.Set opt_marshal_defs,
+    " OCaml-marshal out the rewritten AST to a file");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -366,6 +370,18 @@ let main() =
            let chan = open_out (Filename.concat latex_dir "commands.tex") in
            output_string chan (Pretty_print_sail.to_string (Latex.latex_defs latex_dir ast));
            close_out chan
+         end
+       else ());
+      (if !(opt_marshal_defs)
+       then
+         begin
+           let ast_marshal = rewrite_ast_ocaml type_envs ast in
+           let out_filename = match !opt_file_out with None -> "out" | Some s -> s in
+           let f = open_out_bin (out_filename ^ ".defs") in
+           Marshal.to_string ast_marshal [Marshal.No_sharing; Marshal.Compat_32]
+           |> B64.encode
+           |> output_string f;
+           close_out f
          end
        else ());
     end

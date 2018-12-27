@@ -30,5 +30,6 @@ depends: [
   "ott" {>= "0.28"}
   "lem"
   "linksem" {>= "0.3"}
+  "base64"
 ]
 available: [ocaml-version >= "4.02.3"]

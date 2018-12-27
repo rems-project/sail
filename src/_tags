@@ -1,12 +1,12 @@
 true: -traverse, debug, use_menhir
 <**/*.ml>: bin_annot, annot
 
-<sail.{byte,native}>: package(zarith), package(linksem), package(lem), use_pprint
-<isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), use_pprint
+<sail.{byte,native}>: package(zarith), package(linksem), package(lem), package(base64), use_pprint
+<isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), package(base64), use_pprint
 
 <isail.ml>: package(linenoise)
 <elf_loader.ml>: package(linksem)
-<**/*.m{l,li}>: package(lem)
+<**/*.m{l,li}>: package(lem), package(base64)
 
 <gen_lib>: include
 <pprint> or <pprint/src>: include
