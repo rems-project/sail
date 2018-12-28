@@ -1008,7 +1008,7 @@ let decode_instruction state bv =
     let untyped = mk_exp (E_app ((mk_id "decode"), [mk_exp (E_vector (List.map mk_lit_exp bv))])) in
     let typed = Type_check.check_exp
                   env untyped (app_typ (mk_id "option")
-                                 [Typ_arg_aux (Typ_arg_typ (mk_typ (Typ_id (mk_id "ast"))), Parse_ast.Unknown)]) in
+                                 [A_aux (A_typ (mk_typ (Typ_id (mk_id "ast"))), Parse_ast.Unknown)]) in
     let evaled = eval_exp state typed in
     match evaled with
     | V_ctor ("Some", [v]) -> Value_success v
